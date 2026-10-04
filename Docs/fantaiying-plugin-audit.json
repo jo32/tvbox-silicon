@@ -1,0 +1,78 @@
+{
+  "file": "tvbox-fan.jar",
+  "bytes": 1115265,
+  "sha256": "d9e77852563eb609bff49158e698fbf895764d78ce176bab1cac06b6148f7840",
+  "md5": "2cc088afa757ba8bafffcfbab4b73ccc",
+  "entries": [
+    {
+      "name": "classes.dex",
+      "bytes": 36852,
+      "dex": {
+        "version": "035",
+        "classes": 75,
+        "method_references": 352,
+        "native_methods": [
+          "Lcom/github/catvod/spider/DexNative;->calcResult",
+          "Lcom/github/catvod/spider/DexNative;->decrypt",
+          "Lcom/github/catvod/spider/DexNative;->encrypt",
+          "Lcom/github/catvod/spider/DexNative;->getLoader",
+          "Lcom/github/catvod/spider/DexNative;->getSpider",
+          "Lcom/github/catvod/spider/DexNative;->native_ting_md5",
+          "Lcom/github/catvod/spider/DexNative;->noxSign",
+          "Lcom/github/catvod/spider/DexNative;->proxyInvoke"
+        ],
+        "android_type_references": [
+          "Landroid/app/Application;",
+          "Landroid/content/Context;",
+          "Landroid/content/SharedPreferences$Editor;",
+          "Landroid/content/SharedPreferences;",
+          "Landroid/content/pm/ApplicationInfo;",
+          "Landroid/os/Build$VERSION;",
+          "Landroid/os/Build;",
+          "Landroid/util/Log;",
+          "Ldalvik/system/DexClassLoader;"
+        ]
+      }
+    },
+    {
+      "name": "META-INF/MANIFEST.MF",
+      "bytes": 73
+    },
+    {
+      "name": "assets/ftyguard_v7.so",
+      "bytes": 81520,
+      "native": {
+        "format": "ELF",
+        "bits": 32,
+        "machine": "ARM",
+        "needed_libraries": [
+          "libdl.so",
+          "liblog.so",
+          "libandroid.so",
+          "libc.so",
+          "libm.so"
+        ]
+      }
+    },
+    {
+      "name": "assets/ftyguard_v8.so",
+      "bytes": 102440,
+      "native": {
+        "format": "ELF",
+        "bits": 64,
+        "machine": "AArch64",
+        "needed_libraries": [
+          "liblog.so",
+          "libandroid.so",
+          "libc.so",
+          "libm.so",
+          "libdl.so"
+        ]
+      }
+    },
+    {
+      "name": "assets/ftyshinidie.guard",
+      "bytes": 995353
+    }
+  ]
+}

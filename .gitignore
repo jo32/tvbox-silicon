@@ -1,0 +1,16 @@
+.DS_Store
+.build/
+build/
+DerivedData/
+reference/
+*.xcuserstate
+xcuserdata/
+
+Runtime/**/target/
+hs_err_pid*.log
+hs_err_pid*.jfr
+
+__pycache__/
+*.pyc
+
+Review/

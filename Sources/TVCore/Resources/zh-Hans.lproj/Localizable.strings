@@ -1,0 +1,329 @@
+// Shared UI and user-facing errors. English is the source language.
+"Yingxia" = "映匣";
+"Yingxia / TVBOX" = "映匣 / TVBOX";
+"Watch Now" = "现在观看";
+"Live TV" = "直播";
+"Sources" = "点播源";
+"Favorites" = "收藏";
+"Settings" = "设置";
+"Unable to Complete" = "暂时无法完成";
+"OK" = "好";
+"Your cinema,\non every screen." = "大屏小屏，\n都是你的放映厅。";
+"Connect your subscription to watch on Mac, iPhone, iPad, and Apple TV." = "连接你的订阅，在 Mac、iPhone、iPad 和 Apple TV 上观看。";
+"Importing…" = "正在导入…";
+"Import Subscription" = "导入订阅";
+"Browse Live TV" = "浏览直播";
+"Live Playlists" = "直播列表";
+"Favorite Channels" = "收藏频道";
+"Subscription Compatibility" = "订阅兼容性";
+"Direct live streams and standard JSON sources are supported. The Mac app includes a local JAR runtime; plugin and source compatibility is still being tested." = "支持直播直链和标准 JSON 点播。Mac 版已内置 JAR 运行环境，插件兼容性与站点可用性仍在逐源验证。";
+"View All Sources" = "查看全部点播源";
+"Updated %@" = "更新于 %@";
+"You can also enter another TVBox JSON subscription URL in Settings." = "也可以在设置中输入其他 TVBox JSON 订阅地址。";
+"Subscription" = "订阅";
+"TVBox JSON URL" = "TVBox JSON 地址";
+"Save and Refresh" = "保存并更新订阅";
+"Use Default URL" = "使用默认地址";
+"Current subscription: %@" = "当前订阅：%@";
+"Play a URL" = "播放链接";
+"HTTP / HTTPS media URL" = "HTTP / HTTPS 媒体地址";
+"Open Player" = "打开播放器";
+"URL Playback" = "链接播放";
+"Plugins" = "插件";
+"JAR Runtime and Compatibility" = "JAR 运行环境与兼容性检测";
+"About Yingxia" = "关于映匣";
+"macOS · iOS · tvOS / Native SwiftUI + AVPlayer" = "macOS · iOS · tvOS / 原生 SwiftUI + AVPlayer";
+"Open Source Licenses" = "开源许可";
+"Supports TVBox JSON subscriptions, M3U / TXT live playlists, and standard type 1 / type 4 JSON APIs. Media formats depend on the device. Local JAR and JavaScript plugins are experimental on Mac; compatibility varies by source. Plugin playback is not yet available on iPhone or Apple TV." = "支持 TVBox JSON 订阅、M3U / TXT 直播列表与 type 1 / type 4 标准 JSON 接口。媒体格式取决于设备。Mac 版提供实验性本地 JAR 和 JavaScript 插件支持，兼容情况因视频源而异。iPhone 和 Apple TV 暂不支持插件播放。";
+"No Favorites Yet" = "还没有收藏";
+"Tap the heart next to a live channel to save it on this device." = "在直播频道旁点爱心，收藏会保存在这台设备上。";
+"Remove %@ from favorites" = "取消收藏 %@";
+"Add %@ to favorites" = "收藏 %@";
+"Connect a Live Subscription" = "连接直播订阅";
+"Import a TVBox configuration containing live playlists in Settings first." = "先在设置中导入包含 lives 的 TVBox 配置。";
+"All" = "全部";
+"Group" = "分组";
+"Channels: %lld" = "频道数：%lld";
+"Loading channels…" = "正在加载频道…";
+"Unable to Load Channels" = "频道加载失败";
+"Retry" = "重试";
+"No Matching Channels" = "没有匹配的频道";
+"Search channels" = "搜索频道";
+"Refresh" = "刷新";
+"Built-in Runtime · Experimental" = "应用内置运行时 · 实验阶段";
+"The app includes a DEX interpreter without JIT and a test JAR. Mac also includes a JVM and Android native library compatibility layer for JAR plugins. The test below checks the basic DEX interpreter." = "已集成不使用 JIT 的 DEX 解释器，并提供测试 JAR 执行验证。Mac 版另外内置 JVM 和 Android 原生库兼容层，可在点播源页面执行实际插件；下面的测试针对基础 DEX 解释器。";
+"Run Built-in Test JAR" = "运行内置测试 JAR";
+"Bytecode executed: returned 42 after %llu instructions" = "字节码已执行：返回 42，执行 %llu 条指令";
+"Test failed: %@" = "测试未通过：%@";
+"Current Subscription Plugin" = "当前订阅插件";
+"Download and Check Compatibility" = "下载并检测插件兼容性";
+"Import a subscription with a spider field first." = "先导入包含 spider 字段的订阅。";
+"DEX files: %lld · Classes: %lld · Android libraries: %lld" = "DEX：%lld 个 · 类：%lld 个 · Android 原生库：%lld 个";
+"This plugin requires Android native libraries" = "此插件依赖 Android 原生库";
+"Inspection does not confirm execution. Mac uses an additional local compatibility layer on the Sources screen; other platforms do not support it yet." = "检测成功不代表执行成功。Mac 版会在点播源页面调用额外的本地兼容层；其他平台尚不支持。";
+"No bundled .so libraries found. CatVod APIs, Android APIs, and dynamic loading still need verification before playback can be confirmed." = "未发现内置 .so。仍需验证 CatVod 接口、Android API 与动态加载依赖，不能据此认定可以点播。";
+"Working…" = "正在处理…";
+"JAR Runtime" = "JAR 运行环境";
+"The test JAR could not be found." = "未找到测试 JAR。";
+"Imported sources: %lld · Live playlists: %lld" = "已导入点播源：%lld 个 · 直播列表：%lld 个";
+"Import failed: %@" = "导入失败：%@";
+"No Sources Yet" = "尚未导入点播源";
+"Add a TVBox subscription in Settings." = "在设置中添加 TVBox 订阅。";
+"Find a source" = "查找订阅中的站点";
+"This source uses a plugin that requires Android DEX and native libraries. This platform does not yet have the required compatibility layer.\n\n%@" = "这个站点的内容由插件生成，需要 Android DEX 和原生库。此平台尚未完成所需的兼容层。\n\n%@";
+"Search videos" = "搜索影片";
+"Search" = "搜索";
+"Loading…" = "加载中…";
+"No Videos" = "没有影片";
+"Try selecting a category or searching." = "尝试选择分类或搜索。";
+"Previous" = "上一页";
+"Next" = "下一页";
+"Page %lld of %lld" = "第 %lld / %lld 页";
+"No playable sources were found for this video." = "此影片没有可识别的播放线路。";
+"Loading details…" = "正在获取详情…";
+"Resolving playback URL…" = "正在解析播放地址…";
+"Video Details" = "影片详情";
+"This media cannot be played. Try another channel or source." = "媒体无法播放，请尝试其他频道或线路。";
+"Playback was interrupted." = "播放中断。";
+"Close" = "关闭";
+"Connecting…" = "正在连接…";
+"Enter a valid HTTP or HTTPS URL." = "请输入有效的 HTTP 或 HTTPS 地址。";
+"No valid TVBox sources or live playlists were found." = "没有找到有效的 TVBox 站点或直播列表。";
+"No HTTP/HTTPS channels were found in this playlist." = "列表中没有可识别的 HTTP/HTTPS 频道。";
+"The server returned HTTP %lld." = "服务器返回 HTTP %lld。";
+"Standard API" = "标准接口";
+"Local JAR · Experimental" = "本地 JAR · 兼容测试中";
+"Requires Android plugin" = "需要 Android 插件";
+"Requires script engine" = "需要脚本引擎";
+"Unsupported API" = "暂不支持此接口";
+"Ungrouped" = "未分组";
+"Unnamed channel" = "未命名频道";
+"Play" = "播放";
+"Source %lld" = "线路 %lld";
+"%@: this source cannot run in this version." = "%@，此版本尚不能执行该点播源。";
+"The API did not return video details." = "接口没有返回影片详情。";
+"This source requires web video detection or additional parsing. Only resolved media URLs are supported." = "此线路需要网页嗅探或额外解析，当前播放器只接受已解析的媒体地址。";
+"The API did not return a single playback URL." = "接口没有返回单一播放地址。";
+"This source requires additional parsing that is not yet supported." = "此源需要额外解析，暂不支持。";
+"The playlist exceeds 20 MB. Use a smaller subscription." = "列表超过 20 MB，请使用较小的订阅。";
+"Live playlists must use UTF-8 encoding." = "直播列表需要使用 UTF-8 编码。";
+"The local JAR runtime is not installed." = "本地 JAR 运行环境尚未安装。";
+"The plugin request timed out after 60 seconds. Retry or choose another source." = "插件请求超过 60 秒，请重试或切换来源。";
+"The plugin returned no content. Try another source." = "插件没有返回内容，请尝试其他来源。";
+"This configuration has no global spider JAR." = "此配置没有全局 spider JAR。";
+"The plugin MD5 does not match the subscription. Refresh the subscription before checking again." = "插件 MD5 与订阅不一致，请先更新订阅后再检测。";
+"The source %@ returned HTTP %lld." = "站点 %@ 返回 HTTP %lld。";
+"This plugin is not supported: ftyguard_v8.so is missing." = "此插件尚未适配：缺少 ftyguard_v8.so。";
+"Plugin error: %@" = "插件错误：%@";
+"Connect to the local media and subscription services you configure." = "连接你配置的局域网媒体和订阅服务。";
+
+"The source %@ could not be reached. Retry later." = "无法连接来源 %@。请稍后重试。";
+
+"The plugin stopped unexpectedly. Retry this source." = "插件意外停止。请重试此来源。";
+
+"This source returned a magnet link. Torrent playback is not supported." = "此来源返回磁力链接。目前不支持种子播放。";
+
+"This source needs a playback proxy that is not supported yet." = "此来源需要尚未支持的播放代理。";
+
+"This source requires a JavaScript engine, which is not supported yet." = "此来源需要尚未支持的 JavaScript 引擎。";
+
+// Desktop playback
+"Buffering…" = "正在缓冲…";
+"Back 10 seconds (←)" = "后退 10 秒（←）";
+"Forward 10 seconds (→)" = "前进 10 秒（→）";
+"Loop Playback" = "循环播放";
+"Fill Window" = "填满窗口";
+"Float on Top" = "窗口置顶";
+"Enter / Exit Full Screen" = "进入 / 退出全屏";
+"Space: Play / Pause" = "空格：播放 / 暂停";
+"← / →: Seek 10s · Shift: 60s" = "← / →：跳转 10 秒 · Shift：60 秒";
+"↑ / ↓: Volume · M: Mute · F: Full Screen" = "↑ / ↓：音量 · M：静音 · F：全屏";
+"Playback Options" = "播放选项";
+
+"Choose quality" = "选择画质";
+
+"This video has no single MP4 stream available for this account." = "当前账号无法获取此视频的单一 MP4 流。";
+
+"Local JavaScript · Experimental" = "本地 JavaScript · 实验性";
+
+// Source error recovery
+"Unable to load this source" = "暂时无法加载此来源";
+"Try again, or choose another source to keep watching." = "可以重新尝试，或换个来源继续观看。";
+"Back to sources" = "返回来源列表";
+"Show details" = "查看错误详情";
+"Hide details" = "收起错误详情";
+"Unable to load video details" = "暂时无法加载影片详情";
+"Unable to start playback" = "暂时无法播放";
+"Try again, or go back and choose another video." = "可以重新尝试，或返回选择其他影片。";
+"Try another episode or playback source." = "请尝试其他剧集或播放线路。";
+"Go back" = "返回上一页";
+
+"Diagnostic Logs" = "诊断日志";
+
+"View Logs" = "查看日志";
+
+"Log Level" = "日志级别";
+
+"All Logs" = "全部日志";
+
+"Live Logs" = "实时刷新";
+
+"Refresh Logs" = "刷新";
+
+"Export Logs" = "导出日志";
+
+"Share Logs" = "分享日志";
+
+"Open Log Folder" = "打开日志文件夹";
+
+"No Logs" = "暂无日志";
+
+"Search Logs" = "搜索日志";
+
+"Log overload: %lld events dropped" = "日志过多：已丢弃 %lld 条";
+
+"Shows the latest 1,000 events from this run. Export includes retained log files." = "显示本次运行最近 1,000 条记录，导出包含保留的历史日志。";
+
+"Global Search" = "全局搜索";
+
+"Recommendations" = "推荐";
+
+"Recommendation Source" = "推荐来源";
+
+"Search all available sources in your subscription." = "搜索订阅中所有可用的视频源。";
+
+"Recent Searches" = "搜索历史";
+
+"Clear" = "清空";
+
+"Stop" = "停止";
+
+"Searched %lld of %lld sources" = "已搜索 %lld / %lld 个源";
+
+"No searchable sources are available on this device." = "当前设备没有可搜索的视频源。";
+
+"Search failed" = "搜索失败";
+
+"Try another keyword or retry failed sources." = "请更换关键词，或重试搜索。";
+
+"This source has no recommendations. Choose another source or use Global Search." = "此源暂无推荐，请切换来源或使用全局搜索。";
+
+"Runtime Activity" = "运行记录";
+
+"Inspect plugin requests and errors." = "查看插件请求与异常记录。";
+
+"Pause Logs" = "暂停更新";
+
+"Resume Logs" = "继续更新";
+
+"Newest first · Updates every 2 seconds" = "最新在前 · 每 2 秒更新";
+
+"Updates paused" = "已暂停更新";
+
+"Exporting Logs…" = "正在导出…";
+
+"Log Files" = "日志文件";
+
+"Clear Search" = "清除搜索";
+
+"Debug Logs" = "调试";
+
+"Info Logs" = "信息";
+
+"Warning Logs" = "警告";
+
+"Error Logs" = "错误";
+
+"Plugin activity will appear here." = "插件运行后，记录会显示在这里。";
+
+"Try another level or search term." = "试试其他级别或搜索词。";
+
+"Log Time" = "时间";
+
+"Log Module" = "模块";
+
+"Log Message" = "内容";
+
+"Searching for “%@”…" = "正在搜索“%@”…";
+
+"Results appear as each source responds." = "找到结果后会立即显示。";
+
+"More from %@" = "查看更多「%@」的结果";
+
+"Clear search" = "清除搜索";
+
+"%lld results" = "%lld 个结果";
+
+"Search paused" = "搜索已暂停";
+
+"Continue search" = "继续搜索";
+
+"%lld unavailable" = "%lld 个源不可用";
+
+"All Sources" = "全部来源";
+
+"Unavailable Sources" = "不可用的来源";
+
+"Done" = "完成";
+
+"Retry failed sources" = "重试失败来源";
+
+"Choose a title to find it across your sources." = "点击片名，在所有来源中查找片源。";
+
+"More" = "更多";
+
+"Show Less" = "收起";
+"Show Full Synopsis" = "展开完整简介";
+
+"This source format is not supported. Choose another source." = "暂不支持此视频源格式，请选择其他视频源。";
+
+"Playback error" = "播放出错";
+
+
+"This URL is a subscription directory. Import an individual subscription URL from it." = "此地址是订阅目录，请导入其中的单个订阅地址。";
+"The subscription server returned a web page instead of a configuration." = "订阅服务器返回了网页，而非配置文件。";
+"This subscription uses an encrypted configuration that is not supported yet." = "此订阅使用了尚未支持的加密配置。";
+"The plugin took too long to initialize. Retry or choose another source." = "插件初始化超时，请重试或选择其他源。";
+"This source requires Android features that the Mac plugin runtime does not support yet." = "此源依赖 Mac 插件运行时尚未支持的 Android 功能。";
+"Scroll sources left" = "向左滚动来源";
+"Scroll sources right" = "向右滚动来源";
+
+// Cloud drive accounts
+"Cloud Drive Accounts" = "网盘账号";
+"Manage Cloud Accounts" = "管理网盘账号";
+"Sign in on the provider's official page, then save the login. Supported plugins use these accounts for cloud playback." = "在网盘官方页面登录后保存登录信息。兼容的插件会使用这些账号播放网盘内容。";
+"Sign In to Quark" = "登录夸克网盘";
+"Sign In to UC" = "登录 UC 网盘";
+"Quark Cookie" = "夸克 Cookie";
+"UC Cookie" = "UC Cookie";
+"UC Token (optional)" = "UC Token（可选）";
+"Aliyun Refresh Token" = "阿里云盘 Refresh Token";
+"You can also paste existing credentials. They are stored locally and supplied to the subscription plugins you run. Saving restarts plugin sessions." = "也可粘贴已有的登录凭据。信息保存在本机，并提供给你运行的订阅插件。保存会重新启动插件会话。";
+"Save Accounts" = "保存账号";
+"Accounts saved. Retry the video source." = "账号已保存，请重新尝试播放。";
+"Save Login" = "保存登录";
+"Finish signing in before saving the login." = "请先完成登录，再保存登录信息。";
+"Cancel" = "取消";
+"Browse" = "浏览";
+"Library" = "资料库";
+"Episodes" = "选集";
+"Couldn't play %@" = "无法播放 %@";
+"This source plays from %@ and needs you to sign in first." = "此来源通过%@网盘播放，需要先登录。";
+"Quark" = "夸克";
+"Try Anyway" = "仍然尝试";
+"Dismiss" = "关闭";
+"Signed In" = "已登录";
+"Not Signed In" = "未登录";
+"Sign In" = "登录";
+"Sign Out" = "退出登录";
+"Accounts" = "账户";
+"Playback" = "播放";
+"Advanced" = "高级";
+"About" = "关于";
+"Version %@" = "版本 %@";
+"Paste Credentials Manually" = "手动粘贴凭据";
+"Sign in on the provider's official page. Yingxia stores the login on this Mac and supplies it to the plugins you run." = "在官方页面登录。映匣会将登录信息保存在这台 Mac 上，并提供给你运行的插件。";
+"Sources: %lld · Live playlists: %lld" = "来源：%lld · 直播列表：%lld";
+"Last updated %@" = "上次更新 %@";
+"Run Test" = "运行测试";
+"Check" = "检查";

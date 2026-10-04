@@ -1,0 +1,329 @@
+// Shared UI and user-facing errors. English is the source language.
+"Yingxia" = "映匣";
+"Yingxia / TVBOX" = "映匣 / TVBOX";
+"Watch Now" = "今すぐ観る";
+"Live TV" = "ライブ TV";
+"Sources" = "配信ソース";
+"Favorites" = "お気に入り";
+"Settings" = "設定";
+"Unable to Complete" = "操作を完了できません";
+"OK" = "OK";
+"Your cinema,\non every screen." = "どの画面も、\nあなたの映画館に。";
+"Connect your subscription to watch on Mac, iPhone, iPad, and Apple TV." = "配信設定を読み込んで、Mac、iPhone、iPad、Apple TV で視聴できます。";
+"Importing…" = "読み込み中…";
+"Import Subscription" = "配信設定を読み込む";
+"Browse Live TV" = "ライブ TV を見る";
+"Live Playlists" = "ライブ再生リスト";
+"Favorite Channels" = "お気に入りのチャンネル";
+"Subscription Compatibility" = "配信設定の互換性";
+"Direct live streams and standard JSON sources are supported. The Mac app includes a local JAR runtime; plugin and source compatibility is still being tested." = "ライブ配信の直接 URL と標準 JSON ソースに対応しています。Mac 版には JAR の実行環境が内蔵されています。プラグインと配信ソースの互換性は検証中です。";
+"View All Sources" = "すべてのソースを表示";
+"Updated %@" = "更新日時：%@";
+"You can also enter another TVBox JSON subscription URL in Settings." = "設定で別の TVBox JSON 配信設定 URL を入力することもできます。";
+"Subscription" = "配信設定";
+"TVBox JSON URL" = "TVBox JSON URL";
+"Save and Refresh" = "保存して更新";
+"Use Default URL" = "既定の URL を使用";
+"Current subscription: %@" = "現在の配信設定：%@";
+"Play a URL" = "URL を再生";
+"HTTP / HTTPS media URL" = "HTTP / HTTPS メディア URL";
+"Open Player" = "プレーヤーを開く";
+"URL Playback" = "URL の再生";
+"Plugins" = "プラグイン";
+"JAR Runtime and Compatibility" = "JAR 実行環境と互換性";
+"About Yingxia" = "映匣について";
+"macOS · iOS · tvOS / Native SwiftUI + AVPlayer" = "macOS · iOS · tvOS / ネイティブ SwiftUI + AVPlayer";
+"Open Source Licenses" = "オープンソースライセンス";
+"Supports TVBox JSON subscriptions, M3U / TXT live playlists, and standard type 1 / type 4 JSON APIs. Media formats depend on the device. Local JAR and JavaScript plugins are experimental on Mac; compatibility varies by source. Plugin playback is not yet available on iPhone or Apple TV." = "TVBox JSON 配信設定、M3U / TXT ライブ再生リスト、type 1 / type 4 の標準 JSON API に対応しています。メディア形式はデバイスによって異なります。Mac のローカル JAR と JavaScript プラグインは試験対応で、互換性は配信元によって異なります。iPhone と Apple TV ではプラグイン再生に未対応です。";
+"No Favorites Yet" = "お気に入りはまだありません";
+"Tap the heart next to a live channel to save it on this device." = "ライブチャンネルの横にあるハートを押すと、このデバイスに保存できます。";
+"Remove %@ from favorites" = "%@ をお気に入りから削除";
+"Add %@ to favorites" = "%@ をお気に入りに追加";
+"Connect a Live Subscription" = "ライブ配信設定を追加";
+"Import a TVBox configuration containing live playlists in Settings first." = "まず設定で、ライブ再生リスト（lives）を含む TVBox 設定を読み込んでください。";
+"All" = "すべて";
+"Group" = "グループ";
+"Channels: %lld" = "チャンネル数：%lld";
+"Loading channels…" = "チャンネルを読み込み中…";
+"Unable to Load Channels" = "チャンネルを読み込めません";
+"Retry" = "再試行";
+"No Matching Channels" = "一致するチャンネルがありません";
+"Search channels" = "チャンネルを検索";
+"Refresh" = "更新";
+"Built-in Runtime · Experimental" = "内蔵実行環境 · 試験段階";
+"The app includes a DEX interpreter without JIT and a test JAR. Mac also includes a JVM and Android native library compatibility layer for JAR plugins. The test below checks the basic DEX interpreter." = "JIT を使わない DEX インタープリターとテスト用 JAR を内蔵しています。Mac 版には JAR プラグイン用の JVM と Android ネイティブライブラリ互換レイヤーも含まれます。以下のテストは基本的な DEX インタープリターを確認します。";
+"Run Built-in Test JAR" = "内蔵のテスト JAR を実行";
+"Bytecode executed: returned 42 after %llu instructions" = "バイトコード実行完了：%llu 命令を実行し、42 を返しました";
+"Test failed: %@" = "テスト失敗：%@";
+"Current Subscription Plugin" = "現在の配信設定のプラグイン";
+"Download and Check Compatibility" = "ダウンロードして互換性を確認";
+"Import a subscription with a spider field first." = "まず spider フィールドを含む配信設定を読み込んでください。";
+"DEX files: %lld · Classes: %lld · Android libraries: %lld" = "DEX ファイル：%lld · クラス：%lld · Android ライブラリ：%lld";
+"This plugin requires Android native libraries" = "このプラグインには Android ネイティブライブラリが必要です";
+"Inspection does not confirm execution. Mac uses an additional local compatibility layer on the Sources screen; other platforms do not support it yet." = "検査の成功は実行の成功を保証しません。Mac 版はソース画面で追加のローカル互換レイヤーを使用します。他のプラットフォームは未対応です。";
+"No bundled .so libraries found. CatVod APIs, Android APIs, and dynamic loading still need verification before playback can be confirmed." = "内蔵の .so ライブラリは見つかりませんでした。再生を確認するには、CatVod API、Android API、動的読み込みの検証が必要です。";
+"Working…" = "処理中…";
+"JAR Runtime" = "JAR 実行環境";
+"The test JAR could not be found." = "テスト JAR が見つかりません。";
+"Imported sources: %lld · Live playlists: %lld" = "読み込んだソース：%lld · ライブ再生リスト：%lld";
+"Import failed: %@" = "読み込み失敗：%@";
+"No Sources Yet" = "ソースはまだありません";
+"Add a TVBox subscription in Settings." = "設定で TVBox 配信設定を追加してください。";
+"Find a source" = "ソースを検索";
+"This source uses a plugin that requires Android DEX and native libraries. This platform does not yet have the required compatibility layer.\n\n%@" = "このソースは Android DEX とネイティブライブラリを必要とするプラグインを使用しています。このプラットフォームは必要な互換レイヤーにまだ対応していません。\n\n%@";
+"Search videos" = "動画を検索";
+"Search" = "検索";
+"Loading…" = "読み込み中…";
+"No Videos" = "動画がありません";
+"Try selecting a category or searching." = "カテゴリーを選ぶか、検索してください。";
+"Previous" = "前へ";
+"Next" = "次へ";
+"Page %lld of %lld" = "%lld / %lld ページ";
+"No playable sources were found for this video." = "この動画の再生可能なソースが見つかりませんでした。";
+"Loading details…" = "詳細を読み込み中…";
+"Resolving playback URL…" = "再生 URL を取得中…";
+"Video Details" = "動画の詳細";
+"This media cannot be played. Try another channel or source." = "このメディアは再生できません。別のチャンネルやソースをお試しください。";
+"Playback was interrupted." = "再生が中断されました。";
+"Close" = "閉じる";
+"Connecting…" = "接続中…";
+"Enter a valid HTTP or HTTPS URL." = "有効な HTTP または HTTPS URL を入力してください。";
+"No valid TVBox sources or live playlists were found." = "有効な TVBox ソースまたはライブ再生リストが見つかりませんでした。";
+"No HTTP/HTTPS channels were found in this playlist." = "この再生リストに HTTP/HTTPS のチャンネルが見つかりませんでした。";
+"The server returned HTTP %lld." = "サーバーが HTTP %lld を返しました。";
+"Standard API" = "標準 API";
+"Local JAR · Experimental" = "ローカル JAR · 試験段階";
+"Requires Android plugin" = "Android プラグインが必要です";
+"Requires script engine" = "スクリプトエンジンが必要です";
+"Unsupported API" = "未対応の API";
+"Ungrouped" = "未分類";
+"Unnamed channel" = "名称未設定のチャンネル";
+"Play" = "再生";
+"Source %lld" = "ソース %lld";
+"%@: this source cannot run in this version." = "%@：このバージョンではこのソースを実行できません。";
+"The API did not return video details." = "API から動画の詳細が返されませんでした。";
+"This source requires web video detection or additional parsing. Only resolved media URLs are supported." = "このソースには Web 動画検出または追加の解析が必要です。解決済みのメディア URL のみに対応しています。";
+"The API did not return a single playback URL." = "API から単一の再生 URL が返されませんでした。";
+"This source requires additional parsing that is not yet supported." = "このソースは未対応の追加解析を必要とします。";
+"The playlist exceeds 20 MB. Use a smaller subscription." = "再生リストが 20 MB を超えています。より小さい配信設定を使用してください。";
+"Live playlists must use UTF-8 encoding." = "ライブ再生リストは UTF-8 である必要があります。";
+"The local JAR runtime is not installed." = "ローカル JAR 実行環境がインストールされていません。";
+"The plugin request timed out after 60 seconds. Retry or choose another source." = "プラグインのリクエストが 60 秒でタイムアウトしました。再試行するか、別のソースを選んでください。";
+"The plugin returned no content. Try another source." = "プラグインからコンテンツが返されませんでした。別のソースをお試しください。";
+"This configuration has no global spider JAR." = "この設定には共通の spider JAR がありません。";
+"The plugin MD5 does not match the subscription. Refresh the subscription before checking again." = "プラグインの MD5 が配信設定と一致しません。配信設定を更新してから再確認してください。";
+"The source %@ returned HTTP %lld." = "ソース %@ が HTTP %lld を返しました。";
+"This plugin is not supported: ftyguard_v8.so is missing." = "このプラグインは未対応です：ftyguard_v8.so がありません。";
+"Plugin error: %@" = "プラグインエラー：%@";
+"Connect to the local media and subscription services you configure." = "設定したローカルネットワークのメディアや配信設定サービスに接続します。";
+
+"The source %@ could not be reached. Retry later." = "ソース %@ に接続できませんでした。後でもう一度お試しください。";
+
+"The plugin stopped unexpectedly. Retry this source." = "プラグインが予期せず停止しました。このソースを再試行してください。";
+
+"This source returned a magnet link. Torrent playback is not supported." = "このソースはマグネットリンクを返しました。トレント再生には対応していません。";
+
+"This source needs a playback proxy that is not supported yet." = "このソースには未対応の再生プロキシが必要です。";
+
+"This source requires a JavaScript engine, which is not supported yet." = "このソースには未対応の JavaScript エンジンが必要です。";
+
+// Desktop playback
+"Buffering…" = "バッファリング中…";
+"Back 10 seconds (←)" = "10秒戻る（←）";
+"Forward 10 seconds (→)" = "10秒進む（→）";
+"Loop Playback" = "リピート再生";
+"Fill Window" = "ウインドウに合わせて拡大";
+"Float on Top" = "常に手前に表示";
+"Enter / Exit Full Screen" = "フルスクリーン切り替え";
+"Space: Play / Pause" = "スペース：再生 / 一時停止";
+"← / →: Seek 10s · Shift: 60s" = "← / →：10秒移動 · Shift：60秒";
+"↑ / ↓: Volume · M: Mute · F: Full Screen" = "↑ / ↓：音量 · M：消音 · F：フルスクリーン";
+"Playback Options" = "再生オプション";
+
+"Choose quality" = "画質を選択";
+
+"This video has no single MP4 stream available for this account." = "このアカウントでは、この動画の単一 MP4 ストリームを利用できません。";
+
+"Local JavaScript · Experimental" = "ローカル JavaScript・試験的";
+
+// Source error recovery
+"Unable to load this source" = "このソースを読み込めません";
+"Try again, or choose another source to keep watching." = "再試行するか、別のソースを選んで視聴を続けてください。";
+"Back to sources" = "ソース一覧に戻る";
+"Show details" = "エラーの詳細を表示";
+"Hide details" = "エラーの詳細を隠す";
+"Unable to load video details" = "作品情報を読み込めません";
+"Unable to start playback" = "再生を開始できません";
+"Try again, or go back and choose another video." = "再試行するか、戻って別の作品を選んでください。";
+"Try another episode or playback source." = "別のエピソードや再生ソースをお試しください。";
+"Go back" = "前に戻る";
+
+"Diagnostic Logs" = "診断ログ";
+
+"View Logs" = "ログを表示";
+
+"Log Level" = "ログレベル";
+
+"All Logs" = "すべて";
+
+"Live Logs" = "自動更新";
+
+"Refresh Logs" = "更新";
+
+"Export Logs" = "ログを書き出す";
+
+"Share Logs" = "ログを共有";
+
+"Open Log Folder" = "ログフォルダを開く";
+
+"No Logs" = "ログがありません";
+
+"Search Logs" = "ログを検索";
+
+"Log overload: %lld events dropped" = "ログ過多：%lld 件を破棄";
+
+"Shows the latest 1,000 events from this run. Export includes retained log files." = "今回の実行の最新 1,000 件を表示します。書き出しには保持された過去のログも含まれます。";
+
+"Global Search" = "横断検索";
+
+"Recommendations" = "おすすめ";
+
+"Recommendation Source" = "おすすめのソース";
+
+"Search all available sources in your subscription." = "登録した利用可能なすべてのソースを検索します。";
+
+"Recent Searches" = "検索履歴";
+
+"Clear" = "クリア";
+
+"Stop" = "停止";
+
+"Searched %lld of %lld sources" = "%lld / %lld ソースを検索済み";
+
+"No searchable sources are available on this device." = "このデバイスで検索できるソースはありません。";
+
+"Search failed" = "検索に失敗しました";
+
+"Try another keyword or retry failed sources." = "別のキーワードを試すか、再検索してください。";
+
+"This source has no recommendations. Choose another source or use Global Search." = "このソースにはおすすめがありません。別のソースを選ぶか横断検索をお使いください。";
+
+"Runtime Activity" = "実行ログ";
+
+"Inspect plugin requests and errors." = "プラグインのリクエストとエラーを確認。";
+
+"Pause Logs" = "更新を一時停止";
+
+"Resume Logs" = "更新を再開";
+
+"Newest first · Updates every 2 seconds" = "新しい順 · 2 秒ごとに更新";
+
+"Updates paused" = "更新を一時停止中";
+
+"Exporting Logs…" = "書き出し中…";
+
+"Log Files" = "ログファイル";
+
+"Clear Search" = "検索をクリア";
+
+"Debug Logs" = "デバッグ";
+
+"Info Logs" = "情報";
+
+"Warning Logs" = "警告";
+
+"Error Logs" = "エラー";
+
+"Plugin activity will appear here." = "プラグインの実行ログがここに表示されます。";
+
+"Try another level or search term." = "別のレベルや検索語をお試しください。";
+
+"Log Time" = "時刻";
+
+"Log Module" = "モジュール";
+
+"Log Message" = "内容";
+
+"Searching for “%@”…" = "「%@」を検索中…";
+
+"Results appear as each source responds." = "ソースから応答が届き次第、結果を表示します。";
+
+"More from %@" = "%@ の結果をもっと見る";
+
+"Clear search" = "検索をクリア";
+
+"%lld results" = "%lld 件の結果";
+
+"Search paused" = "検索を一時停止しました";
+
+"Continue search" = "検索を続ける";
+
+"%lld unavailable" = "%lld ソースが利用不可";
+
+"All Sources" = "すべてのソース";
+
+"Unavailable Sources" = "利用できないソース";
+
+"Done" = "完了";
+
+"Retry failed sources" = "失敗したソースを再検索";
+
+"Choose a title to find it across your sources." = "作品を選ぶと、すべてのソースから検索します。";
+
+"More" = "その他";
+
+"Show Less" = "折りたたむ";
+"Show Full Synopsis" = "あらすじをすべて表示";
+
+"This source format is not supported. Choose another source." = "この配信元の形式には対応していません。別の配信元を選んでください。";
+
+"Playback error" = "再生エラー";
+
+
+"This URL is a subscription directory. Import an individual subscription URL from it." = "このURLは購読ディレクトリです。中の個別の購読URLを読み込んでください。";
+"The subscription server returned a web page instead of a configuration." = "購読サーバーが設定ファイルではなくウェブページを返しました。";
+"This subscription uses an encrypted configuration that is not supported yet." = "この購読は未対応の暗号化設定を使用しています。";
+"The plugin took too long to initialize. Retry or choose another source." = "プラグインの初期化がタイムアウトしました。再試行するか、別の配信ソースを選んでください。";
+"This source requires Android features that the Mac plugin runtime does not support yet." = "この配信ソースは、Macのプラグイン実行環境で未対応のAndroid機能を必要とします。";
+"Scroll sources left" = "ソースを左にスクロール";
+"Scroll sources right" = "ソースを右にスクロール";
+
+// Cloud drive accounts
+"Cloud Drive Accounts" = "クラウドドライブのアカウント";
+"Manage Cloud Accounts" = "アカウントを管理";
+"Sign in on the provider's official page, then save the login. Supported plugins use these accounts for cloud playback." = "公式ページでログインしてから保存してください。対応プラグインが再生に使用します。";
+"Sign In to Quark" = "Quark にログイン";
+"Sign In to UC" = "UC にログイン";
+"Quark Cookie" = "Quark Cookie";
+"UC Cookie" = "UC Cookie";
+"UC Token (optional)" = "UC Token（任意）";
+"Aliyun Refresh Token" = "Aliyun Refresh Token";
+"You can also paste existing credentials. They are stored locally and supplied to the subscription plugins you run. Saving restarts plugin sessions." = "既存の認証情報も貼り付けられます。情報はローカルに保存され、実行するプラグインに渡されます。保存するとプラグインが再起動します。";
+"Save Accounts" = "アカウントを保存";
+"Accounts saved. Retry the video source." = "保存しました。動画ソースを再試行してください。";
+"Save Login" = "ログインを保存";
+"Finish signing in before saving the login." = "ログインを完了してから保存してください。";
+"Cancel" = "キャンセル";
+"Browse" = "ブラウズ";
+"Library" = "ライブラリ";
+"Episodes" = "エピソード";
+"Couldn't play %@" = "%@ を再生できません";
+"This source plays from %@ and needs you to sign in first." = "このソースは%@ドライブから再生されるため、先にサインインが必要です。";
+"Quark" = "Quark";
+"Try Anyway" = "それでも試す";
+"Dismiss" = "閉じる";
+"Signed In" = "サインイン済み";
+"Not Signed In" = "未サインイン";
+"Sign In" = "サインイン";
+"Sign Out" = "サインアウト";
+"Accounts" = "アカウント";
+"Playback" = "再生";
+"Advanced" = "詳細";
+"About" = "情報";
+"Version %@" = "バージョン %@";
+"Paste Credentials Manually" = "認証情報を手動で貼り付け";
+"Sign in on the provider's official page. Yingxia stores the login on this Mac and supplies it to the plugins you run." = "公式ページでサインインしてください。映匣はログイン情報をこの Mac に保存し、実行するプラグインに渡します。";
+"Sources: %lld · Live playlists: %lld" = "ソース：%lld · ライブプレイリスト：%lld";
+"Last updated %@" = "最終更新 %@";
+"Run Test" = "テストを実行";
+"Check" = "確認";

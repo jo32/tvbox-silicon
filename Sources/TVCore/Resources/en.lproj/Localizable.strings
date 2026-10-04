@@ -1,0 +1,329 @@
+// Shared UI and user-facing errors. English is the source language.
+"Yingxia" = "Yingxia";
+"Yingxia / TVBOX" = "Yingxia / TVBOX";
+"Watch Now" = "Watch Now";
+"Live TV" = "Live TV";
+"Sources" = "Sources";
+"Favorites" = "Favorites";
+"Settings" = "Settings";
+"Unable to Complete" = "Unable to Complete";
+"OK" = "OK";
+"Your cinema,\non every screen." = "Your cinema,\non every screen.";
+"Connect your subscription to watch on Mac, iPhone, iPad, and Apple TV." = "Connect your subscription to watch on Mac, iPhone, iPad, and Apple TV.";
+"Importing…" = "Importing…";
+"Import Subscription" = "Import Subscription";
+"Browse Live TV" = "Browse Live TV";
+"Live Playlists" = "Live Playlists";
+"Favorite Channels" = "Favorite Channels";
+"Subscription Compatibility" = "Subscription Compatibility";
+"Direct live streams and standard JSON sources are supported. The Mac app includes a local JAR runtime; plugin and source compatibility is still being tested." = "Direct live streams and standard JSON sources are supported. The Mac app includes a local JAR runtime; plugin and source compatibility is still being tested.";
+"View All Sources" = "View All Sources";
+"Updated %@" = "Updated %@";
+"You can also enter another TVBox JSON subscription URL in Settings." = "You can also enter another TVBox JSON subscription URL in Settings.";
+"Subscription" = "Subscription";
+"TVBox JSON URL" = "TVBox JSON URL";
+"Save and Refresh" = "Save and Refresh";
+"Use Default URL" = "Use Default URL";
+"Current subscription: %@" = "Current subscription: %@";
+"Play a URL" = "Play a URL";
+"HTTP / HTTPS media URL" = "HTTP / HTTPS media URL";
+"Open Player" = "Open Player";
+"URL Playback" = "URL Playback";
+"Plugins" = "Plugins";
+"JAR Runtime and Compatibility" = "JAR Runtime and Compatibility";
+"About Yingxia" = "About Yingxia";
+"macOS · iOS · tvOS / Native SwiftUI + AVPlayer" = "macOS · iOS · tvOS / Native SwiftUI + AVPlayer";
+"Open Source Licenses" = "Open Source Licenses";
+"Supports TVBox JSON subscriptions, M3U / TXT live playlists, and standard type 1 / type 4 JSON APIs. Media formats depend on the device. Local JAR and JavaScript plugins are experimental on Mac; compatibility varies by source. Plugin playback is not yet available on iPhone or Apple TV." = "Supports TVBox JSON subscriptions, M3U / TXT live playlists, and standard type 1 / type 4 JSON APIs. Media formats depend on the device. Local JAR and JavaScript plugins are experimental on Mac; compatibility varies by source. Plugin playback is not yet available on iPhone or Apple TV.";
+"No Favorites Yet" = "No Favorites Yet";
+"Tap the heart next to a live channel to save it on this device." = "Tap the heart next to a live channel to save it on this device.";
+"Remove %@ from favorites" = "Remove %@ from favorites";
+"Add %@ to favorites" = "Add %@ to favorites";
+"Connect a Live Subscription" = "Connect a Live Subscription";
+"Import a TVBox configuration containing live playlists in Settings first." = "Import a TVBox configuration containing live playlists in Settings first.";
+"All" = "All";
+"Group" = "Group";
+"Channels: %lld" = "Channels: %lld";
+"Loading channels…" = "Loading channels…";
+"Unable to Load Channels" = "Unable to Load Channels";
+"Retry" = "Retry";
+"No Matching Channels" = "No Matching Channels";
+"Search channels" = "Search channels";
+"Refresh" = "Refresh";
+"Built-in Runtime · Experimental" = "Built-in Runtime · Experimental";
+"The app includes a DEX interpreter without JIT and a test JAR. Mac also includes a JVM and Android native library compatibility layer for JAR plugins. The test below checks the basic DEX interpreter." = "The app includes a DEX interpreter without JIT and a test JAR. Mac also includes a JVM and Android native library compatibility layer for JAR plugins. The test below checks the basic DEX interpreter.";
+"Run Built-in Test JAR" = "Run Built-in Test JAR";
+"Bytecode executed: returned 42 after %llu instructions" = "Bytecode executed: returned 42 after %llu instructions";
+"Test failed: %@" = "Test failed: %@";
+"Current Subscription Plugin" = "Current Subscription Plugin";
+"Download and Check Compatibility" = "Download and Check Compatibility";
+"Import a subscription with a spider field first." = "Import a subscription with a spider field first.";
+"DEX files: %lld · Classes: %lld · Android libraries: %lld" = "DEX files: %lld · Classes: %lld · Android libraries: %lld";
+"This plugin requires Android native libraries" = "This plugin requires Android native libraries";
+"Inspection does not confirm execution. Mac uses an additional local compatibility layer on the Sources screen; other platforms do not support it yet." = "Inspection does not confirm execution. Mac uses an additional local compatibility layer on the Sources screen; other platforms do not support it yet.";
+"No bundled .so libraries found. CatVod APIs, Android APIs, and dynamic loading still need verification before playback can be confirmed." = "No bundled .so libraries found. CatVod APIs, Android APIs, and dynamic loading still need verification before playback can be confirmed.";
+"Working…" = "Working…";
+"JAR Runtime" = "JAR Runtime";
+"The test JAR could not be found." = "The test JAR could not be found.";
+"Imported sources: %lld · Live playlists: %lld" = "Imported sources: %lld · Live playlists: %lld";
+"Import failed: %@" = "Import failed: %@";
+"No Sources Yet" = "No Sources Yet";
+"Add a TVBox subscription in Settings." = "Add a TVBox subscription in Settings.";
+"Find a source" = "Find a source";
+"This source uses a plugin that requires Android DEX and native libraries. This platform does not yet have the required compatibility layer.\n\n%@" = "This source uses a plugin that requires Android DEX and native libraries. This platform does not yet have the required compatibility layer.\n\n%@";
+"Search videos" = "Search videos";
+"Search" = "Search";
+"Loading…" = "Loading…";
+"No Videos" = "No Videos";
+"Try selecting a category or searching." = "Try selecting a category or searching.";
+"Previous" = "Previous";
+"Next" = "Next";
+"Page %lld of %lld" = "Page %lld of %lld";
+"No playable sources were found for this video." = "No playable sources were found for this video.";
+"Loading details…" = "Loading details…";
+"Resolving playback URL…" = "Resolving playback URL…";
+"Video Details" = "Video Details";
+"This media cannot be played. Try another channel or source." = "This media cannot be played. Try another channel or source.";
+"Playback was interrupted." = "Playback was interrupted.";
+"Close" = "Close";
+"Connecting…" = "Connecting…";
+"Enter a valid HTTP or HTTPS URL." = "Enter a valid HTTP or HTTPS URL.";
+"No valid TVBox sources or live playlists were found." = "No valid TVBox sources or live playlists were found.";
+"No HTTP/HTTPS channels were found in this playlist." = "No HTTP/HTTPS channels were found in this playlist.";
+"The server returned HTTP %lld." = "The server returned HTTP %lld.";
+"Standard API" = "Standard API";
+"Local JAR · Experimental" = "Local JAR · Experimental";
+"Requires Android plugin" = "Requires Android plugin";
+"Requires script engine" = "Requires script engine";
+"Unsupported API" = "Unsupported API";
+"Ungrouped" = "Ungrouped";
+"Unnamed channel" = "Unnamed channel";
+"Play" = "Play";
+"Source %lld" = "Source %lld";
+"%@: this source cannot run in this version." = "%@: this source cannot run in this version.";
+"The API did not return video details." = "The API did not return video details.";
+"This source requires web video detection or additional parsing. Only resolved media URLs are supported." = "This source requires web video detection or additional parsing. Only resolved media URLs are supported.";
+"The API did not return a single playback URL." = "The API did not return a single playback URL.";
+"This source requires additional parsing that is not yet supported." = "This source requires additional parsing that is not yet supported.";
+"The playlist exceeds 20 MB. Use a smaller subscription." = "The playlist exceeds 20 MB. Use a smaller subscription.";
+"Live playlists must use UTF-8 encoding." = "Live playlists must use UTF-8 encoding.";
+"The local JAR runtime is not installed." = "The local JAR runtime is not installed.";
+"The plugin request timed out after 60 seconds. Retry or choose another source." = "The plugin request timed out after 60 seconds. Retry or choose another source.";
+"The plugin returned no content. Try another source." = "The plugin returned no content. Try another source.";
+"This configuration has no global spider JAR." = "This configuration has no global spider JAR.";
+"The plugin MD5 does not match the subscription. Refresh the subscription before checking again." = "The plugin MD5 does not match the subscription. Refresh the subscription before checking again.";
+"The source %@ returned HTTP %lld." = "The source %@ returned HTTP %lld.";
+"This plugin is not supported: ftyguard_v8.so is missing." = "This plugin is not supported: ftyguard_v8.so is missing.";
+"Plugin error: %@" = "Plugin error: %@";
+"Connect to the local media and subscription services you configure." = "Connect to the local media and subscription services you configure.";
+
+"The source %@ could not be reached. Retry later." = "The source %@ could not be reached. Retry later.";
+
+"The plugin stopped unexpectedly. Retry this source." = "The plugin stopped unexpectedly. Retry this source.";
+
+"This source returned a magnet link. Torrent playback is not supported." = "This source returned a magnet link. Torrent playback is not supported.";
+
+"This source needs a playback proxy that is not supported yet." = "This source needs a playback proxy that is not supported yet.";
+
+"This source requires a JavaScript engine, which is not supported yet." = "This source requires a JavaScript engine, which is not supported yet.";
+
+// Desktop playback
+"Buffering…" = "Buffering…";
+"Back 10 seconds (←)" = "Back 10 seconds (←)";
+"Forward 10 seconds (→)" = "Forward 10 seconds (→)";
+"Loop Playback" = "Loop Playback";
+"Fill Window" = "Fill Window";
+"Float on Top" = "Float on Top";
+"Enter / Exit Full Screen" = "Enter / Exit Full Screen";
+"Space: Play / Pause" = "Space: Play / Pause";
+"← / →: Seek 10s · Shift: 60s" = "← / →: Seek 10s · Shift: 60s";
+"↑ / ↓: Volume · M: Mute · F: Full Screen" = "↑ / ↓: Volume · M: Mute · F: Full Screen";
+"Playback Options" = "Playback Options";
+
+"Choose quality" = "Choose quality";
+
+"This video has no single MP4 stream available for this account." = "This video has no single MP4 stream available for this account.";
+
+"Local JavaScript · Experimental" = "Local JavaScript · Experimental";
+
+// Source error recovery
+"Unable to load this source" = "Unable to load this source";
+"Try again, or choose another source to keep watching." = "Try again, or choose another source to keep watching.";
+"Back to sources" = "Back to sources";
+"Show details" = "Show details";
+"Hide details" = "Hide details";
+"Unable to load video details" = "Unable to load video details";
+"Unable to start playback" = "Unable to start playback";
+"Try again, or go back and choose another video." = "Try again, or go back and choose another video.";
+"Try another episode or playback source." = "Try another episode or playback source.";
+"Go back" = "Go back";
+
+"Diagnostic Logs" = "Diagnostic Logs";
+
+"View Logs" = "View Logs";
+
+"Log Level" = "Log Level";
+
+"All Logs" = "All Logs";
+
+"Live Logs" = "Live Logs";
+
+"Refresh Logs" = "Refresh Logs";
+
+"Export Logs" = "Export Logs";
+
+"Share Logs" = "Share Logs";
+
+"Open Log Folder" = "Open Log Folder";
+
+"No Logs" = "No Logs";
+
+"Search Logs" = "Search Logs";
+
+"Log overload: %lld events dropped" = "Log overload: %lld events dropped";
+
+"Shows the latest 1,000 events from this run. Export includes retained log files." = "Shows the latest 1,000 events from this run. Export includes retained log files.";
+
+"Global Search" = "Global Search";
+
+"Recommendations" = "Recommendations";
+
+"Recommendation Source" = "Recommendation Source";
+
+"Search all available sources in your subscription." = "Search all available sources in your subscription.";
+
+"Recent Searches" = "Recent Searches";
+
+"Clear" = "Clear";
+
+"Stop" = "Stop";
+
+"Searched %lld of %lld sources" = "Searched %lld of %lld sources";
+
+"No searchable sources are available on this device." = "No searchable sources are available on this device.";
+
+"Search failed" = "Search failed";
+
+"Try another keyword or retry failed sources." = "Try another keyword or retry failed sources.";
+
+"This source has no recommendations. Choose another source or use Global Search." = "This source has no recommendations. Choose another source or use Global Search.";
+
+"Runtime Activity" = "Runtime Activity";
+
+"Inspect plugin requests and errors." = "Inspect plugin requests and errors.";
+
+"Pause Logs" = "Pause Logs";
+
+"Resume Logs" = "Resume Logs";
+
+"Newest first · Updates every 2 seconds" = "Newest first · Updates every 2 seconds";
+
+"Updates paused" = "Updates paused";
+
+"Exporting Logs…" = "Exporting Logs…";
+
+"Log Files" = "Log Files";
+
+"Clear Search" = "Clear Search";
+
+"Debug Logs" = "Debug Logs";
+
+"Info Logs" = "Info Logs";
+
+"Warning Logs" = "Warning Logs";
+
+"Error Logs" = "Error Logs";
+
+"Plugin activity will appear here." = "Plugin activity will appear here.";
+
+"Try another level or search term." = "Try another level or search term.";
+
+"Log Time" = "Log Time";
+
+"Log Module" = "Log Module";
+
+"Log Message" = "Log Message";
+
+"Searching for “%@”…" = "Searching for “%@”…";
+
+"Results appear as each source responds." = "Results appear as each source responds.";
+
+"More from %@" = "More from %@";
+
+"Clear search" = "Clear search";
+
+"%lld results" = "%lld results";
+
+"Search paused" = "Search paused";
+
+"Continue search" = "Continue search";
+
+"%lld unavailable" = "%lld unavailable";
+
+"All Sources" = "All Sources";
+
+"Unavailable Sources" = "Unavailable Sources";
+
+"Done" = "Done";
+
+"Retry failed sources" = "Retry failed sources";
+
+"Choose a title to find it across your sources." = "Choose a title to find it across your sources.";
+
+"More" = "More";
+
+"Show Less" = "Show Less";
+"Show Full Synopsis" = "Show Full Synopsis";
+
+"This source format is not supported. Choose another source." = "This source format is not supported. Choose another source.";
+
+"Playback error" = "Playback error";
+
+
+"This URL is a subscription directory. Import an individual subscription URL from it." = "This URL is a subscription directory. Import an individual subscription URL from it.";
+"The subscription server returned a web page instead of a configuration." = "The subscription server returned a web page instead of a configuration.";
+"This subscription uses an encrypted configuration that is not supported yet." = "This subscription uses an encrypted configuration that is not supported yet.";
+"The plugin took too long to initialize. Retry or choose another source." = "The plugin took too long to initialize. Retry or choose another source.";
+"This source requires Android features that the Mac plugin runtime does not support yet." = "This source requires Android features that the Mac plugin runtime does not support yet.";
+"Scroll sources left" = "Scroll sources left";
+"Scroll sources right" = "Scroll sources right";
+
+// Cloud drive accounts
+"Cloud Drive Accounts" = "Cloud Drive Accounts";
+"Manage Cloud Accounts" = "Manage Cloud Accounts";
+"Sign in on the provider's official page, then save the login. Supported plugins use these accounts for cloud playback." = "Sign in on the provider's official page, then save the login. Supported plugins use these accounts for cloud playback.";
+"Sign In to Quark" = "Sign In to Quark";
+"Sign In to UC" = "Sign In to UC";
+"Quark Cookie" = "Quark Cookie";
+"UC Cookie" = "UC Cookie";
+"UC Token (optional)" = "UC Token (optional)";
+"Aliyun Refresh Token" = "Aliyun Refresh Token";
+"You can also paste existing credentials. They are stored locally and supplied to the subscription plugins you run. Saving restarts plugin sessions." = "You can also paste existing credentials. They are stored locally and supplied to the subscription plugins you run. Saving restarts plugin sessions.";
+"Save Accounts" = "Save Accounts";
+"Accounts saved. Retry the video source." = "Accounts saved. Retry the video source.";
+"Save Login" = "Save Login";
+"Finish signing in before saving the login." = "Finish signing in before saving the login.";
+"Cancel" = "Cancel";
+"Browse" = "Browse";
+"Library" = "Library";
+"Episodes" = "Episodes";
+"Couldn't play %@" = "Couldn't play %@";
+"This source plays from %@ and needs you to sign in first." = "This source plays from %@ and needs you to sign in first.";
+"Quark" = "Quark";
+"Try Anyway" = "Try Anyway";
+"Dismiss" = "Dismiss";
+"Signed In" = "Signed In";
+"Not Signed In" = "Not Signed In";
+"Sign In" = "Sign In";
+"Sign Out" = "Sign Out";
+"Accounts" = "Accounts";
+"Playback" = "Playback";
+"Advanced" = "Advanced";
+"About" = "About";
+"Version %@" = "Version %@";
+"Paste Credentials Manually" = "Paste Credentials Manually";
+"Sign in on the provider's official page. Yingxia stores the login on this Mac and supplies it to the plugins you run." = "Sign in on the provider's official page. Yingxia stores the login on this Mac and supplies it to the plugins you run.";
+"Sources: %lld · Live playlists: %lld" = "Sources: %lld · Live playlists: %lld";
+"Last updated %@" = "Last updated %@";
+"Run Test" = "Run Test";
+"Check" = "Check";

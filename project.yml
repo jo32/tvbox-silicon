@@ -1,0 +1,71 @@
+name: TVBox
+options:
+  bundleIdPrefix: com.tvbox
+  developmentLanguage: en
+  knownRegions: [en, zh-Hans, zh-Hant, ja]
+  deploymentTarget:
+    macOS: '26.0'
+    iOS: '26.0'
+    tvOS: '26.0'
+settings:
+  base:
+    SWIFT_VERSION: '6.0'
+    MARKETING_VERSION: '1.0'
+    CURRENT_PROJECT_VERSION: '1'
+    GENERATE_INFOPLIST_FILE: YES
+    INFOPLIST_KEY_CFBundleDisplayName: Yingxia
+    INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.entertainment
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ''
+packages:
+  TVCore:
+    path: .
+targetTemplates:
+  SharedApp:
+    type: application
+    sources:
+      - path: App
+    dependencies:
+      - package: TVCore
+    info:
+      path: Config/Info-${target_name}.plist
+      properties:
+        CFBundleDisplayName: Yingxia
+        CFBundleDevelopmentRegion: en
+        CFBundleLocalizations: [en, zh-Hans, zh-Hant, ja]
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSLocalNetworkUsageDescription: Connect to the local media and subscription services you configure.
+        UILaunchScreen: {}
+        UIBackgroundModes: [audio]
+targets:
+  TVBox-macOS:
+    templates: [SharedApp]
+    platform: macOS
+    sources:
+      - path: App
+      - path: Config/macOS/Assets.xcassets
+      - path: build/ScriptHost
+        type: folder
+        buildPhase: resources
+      - path: build/JavaHost
+        type: folder
+        buildPhase: resources
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.tvbox.yingxia.mac
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  TVBox-iOS:
+    templates: [SharedApp]
+    platform: iOS
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.tvbox.yingxia.ios
+      TARGETED_DEVICE_FAMILY: '1,2'
+    info:
+      properties:
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+  TVBox-tvOS:
+    templates: [SharedApp]
+    platform: tvOS
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.tvbox.yingxia.tv
