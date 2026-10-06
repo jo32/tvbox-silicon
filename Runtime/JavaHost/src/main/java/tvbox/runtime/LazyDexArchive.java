@@ -18,8 +18,11 @@ public final class LazyDexArchive {
     private final Path folder;
 
     public LazyDexArchive(String path, String cache) throws Exception {
-        byte[] bytes = Files.readAllBytes(Path.of(path));
-        reader = MultiDexFileReader.open(bytes);
+        String hash = sha256(Path.of(path));
+        String fallback = Path.of(HostEnvironment.cache(cache),"converted").toString();
+        folder = Path.of(HostEnvironment.converted(fallback),hash+"."+BytecodeCompatibility.VERSION+"-lazy1");
+        Files.createDirectories(folder);
+        reader = mapped(Path.of(path), folder);
         List<String> names = reader.getClassNames();
         for (int i=0;i<names.size();i++) indexes.put(names.get(i),i);
         reader.accept(new DexFileVisitor() {
@@ -28,11 +31,68 @@ public final class LazyDexArchive {
                 return null; // Index only; skip every method body.
             }
         }, DexFileReader.SKIP_CODE | DexFileReader.SKIP_DEBUG | DexFileReader.SKIP_ANNOTATION);
-        String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
-        String fallback = Path.of(HostEnvironment.cache(cache),"converted").toString();
-        folder = Path.of(HostEnvironment.converted(fallback),hash+"."+BytecodeCompatibility.VERSION+"-lazy1");
-        Files.createDirectories(folder);
-        System.err.println("DEX_INDEX_READY classes="+indexes.size());
+        System.err.println("DEX_INDEX_READY classes="+indexes.size()+" "+HeapBudget.describe());
+    }
+
+    private static String sha256(Path path) throws Exception {
+        var digest = MessageDigest.getInstance("SHA-256");
+        try (var input = Files.newInputStream(path)) {
+            byte[] buffer = new byte[64 * 1024];
+            for (int count; (count = input.read(buffer)) > 0; ) digest.update(buffer, 0, count);
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    /**
+     * The reader stays alive for the runtime's lifetime (classes convert on demand). Reading the
+     * archive into the heap kept a whole copy of every DEX there, and growing that copy briefly
+     * needed about three times its size. Extract each DEX once next to the converted classes and
+     * map it instead: the pages live outside the Java heap, and the OS can drop and reload them.
+     */
+    private static BaseDexFileReader mapped(Path archive, Path folder) throws Exception {
+        byte[] magic = new byte[4];
+        try (var input = Files.newInputStream(archive)) { input.readNBytes(magic, 0, 4); }
+        if (magic[0] == 'd' && magic[1] == 'e' && magic[2] == 'x') return new DexFileReader(map(archive));
+        // Same entries and order as MultiDexFileReader.open: classes*.dex, sorted by name.
+        var dexes = new TreeMap<String, DexFileReader>();
+        try (var zip = new java.util.zip.ZipFile(archive.toFile())) {
+            var entries = zip.entries();
+            while (entries.hasMoreElements()) {
+                var entry = entries.nextElement();
+                String name = entry.getName();
+                if (entry.isDirectory() || !name.startsWith("classes") || !name.endsWith(".dex") || name.contains("/")) continue;
+                Path extracted = folder.resolve(name);
+                if (!Files.isRegularFile(extracted) || Files.size(extracted) != entry.getSize()) extract(zip, entry, extracted);
+                DexFileReader dex;
+                try { dex = new DexFileReader(map(extracted)); }
+                catch (RuntimeException damaged) {
+                    // A damaged copy with the right size: replace it from the archive once.
+                    extract(zip, entry, extracted);
+                    dex = new DexFileReader(map(extracted));
+                }
+                dexes.put(name, dex);
+            }
+        }
+        if (dexes.isEmpty()) throw new java.io.IOException("Can not find classes.dex in " + archive);
+        return dexes.size() == 1 ? dexes.firstEntry().getValue() : new MultiDexFileReader(dexes.values());
+    }
+
+    /** Readers of an earlier copy keep their mapping; the replacement is moved in atomically. */
+    private static void extract(java.util.zip.ZipFile zip, java.util.zip.ZipEntry entry, Path extracted) throws java.io.IOException {
+        Path pending = Files.createTempFile(extracted.getParent(), entry.getName(), ".tmp");
+        try {
+            try (var input = zip.getInputStream(entry)) { Files.copy(input, pending, StandardCopyOption.REPLACE_EXISTING); }
+            if (Files.size(pending) != entry.getSize()) throw new java.io.IOException("Truncated " + entry.getName());
+            try (var channel = FileChannel.open(pending, StandardOpenOption.WRITE)) { channel.force(true); }
+            Files.move(pending, extracted, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } finally { Files.deleteIfExists(pending); }
+    }
+
+    private static java.nio.ByteBuffer map(Path file) throws java.io.IOException {
+        // The mapping outlives the channel.
+        try (var channel = FileChannel.open(file, StandardOpenOption.READ)) {
+            return channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
+        }
     }
     public boolean contains(String name) { return indexes.containsKey("L"+name.replace('.','/')+";"); }
     /**

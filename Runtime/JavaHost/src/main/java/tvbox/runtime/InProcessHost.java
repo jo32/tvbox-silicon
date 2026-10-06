@@ -54,12 +54,26 @@ public final class InProcessHost {
         } catch (java.io.IOException unreadable) { return false; }
     }
 
+    /**
+     * {@code {"command":"trim"}} releases idle runtimes and sources (the OS reported memory
+     * pressure). Any other input is a plugin request.
+     */
     public static String request(String inputText) {
         try {
             JSONObject input = new JSONObject(inputText);
-            var lock = gate.readLock();
-            lock.lock();
-            try { return perform(input); } finally { lock.unlock(); }
+            if ("trim".equals(input.optString("command"))) return new JSONObject().put("result", trim("memory pressure", true)).toString();
+            for (int attempt = 1; ; attempt++) {
+                try {
+                    var lock = gate.readLock();
+                    lock.lock();
+                    try { return perform(input); } finally { lock.unlock(); }
+                } catch (Throwable error) {
+                    // The heap is shared by every source. Free what no request is using and try
+                    // once more, rather than leaving every later request to fail the same way.
+                    if (attempt > 1 || !HeapBudget.outOfMemory(error)) throw error;
+                    trim("out of memory", true);
+                }
+            }
         } catch (Throwable error) {
             while (error instanceof InvocationTargetException && error.getCause() != null) error = error.getCause();
             // Before a runtime exists (bad input, runtime start-up): the parent loader's classes apply.
@@ -101,6 +115,7 @@ public final class InProcessHost {
                         }
                     }
                 } catch (Throwable error) {
+                    if (HeapBudget.outOfMemory(error)) throw new OutOfMemoryError("Java heap space");
                     return runtimeFailure(runtime, error);
                 }
                 return new JSONObject().put("result", result).toString();
@@ -146,8 +161,12 @@ public final class InProcessHost {
         return runtime;
     }
 
-    /** Frees a slot for one more runtime. Guarded by the class lock; only an opener calls it. */
+    /**
+     * Frees a slot for one more runtime: at most two stay open, fewer while the heap is short.
+     * Guarded by the class lock; only an opener calls it.
+     */
     private static void makeRoom() throws Exception {
+        if (!runtimes.isEmpty() && HeapBudget.low()) trimLocked("opening another plugin", false);
         while (runtimes.size() >= 2) {
             var iterator = runtimes.entrySet().iterator();
             boolean waiting = false;
@@ -161,6 +180,45 @@ public final class InProcessHost {
             // Both slots are serving other searches; wait for one to finish rather than fail.
             InProcessHost.class.wait();
         }
+    }
+
+    private static synchronized String trim(String reason, boolean everything) {
+        return trimLocked(reason, everything);
+    }
+
+    /**
+     * Releases what no request is using, least recently used first: idle spiders of each
+     * archive, then whole idle runtimes. Without {@code everything} it stops once the heap has
+     * its reserve again. After an OutOfMemoryError or an OS memory warning it releases all of
+     * it: a runtime that ran out of memory mid-initialization may be left broken. Anything
+     * serving a request or a playback proxy stays. Guarded by the class lock.
+     */
+    private static String trimLocked(String reason, boolean everything) {
+        String before = HeapBudget.describe();
+        int sources = 0, closed = 0;
+        for (var entry : runtimes.entrySet()) {
+            if (!entry.getValue().shared()) continue;
+            try { sources += (Integer) entry.getValue().host().getClass().getMethod("trim").invoke(entry.getValue().host()); }
+            catch (Exception error) { error.printStackTrace(System.err); }
+            if (!everything && !HeapBudget.low()) break;
+        }
+        var iterator = runtimes.entrySet().iterator();
+        // HeapBudget.low() may run a full collection: check again only after closing something.
+        boolean needed = everything || HeapBudget.low();
+        while (needed && iterator.hasNext()) {
+            var entry = iterator.next();
+            try {
+                if (busy.containsKey(entry.getKey()) || streaming(entry.getValue())) continue;
+                iterator.remove(); closed++;
+                close(entry.getValue());
+            } catch (Exception error) { error.printStackTrace(System.err); }
+            needed = everything || HeapBudget.low();
+        }
+        // Collected heap is also returned to the OS (MaxHeapFreeRatio), which memory pressure needs.
+        if (everything) System.gc();
+        String summary = "released " + sources + " sources and " + closed + " runtimes (" + reason + "): " + before + " -> " + HeapBudget.describe();
+        System.err.println("HEAP_TRIM " + summary);
+        return summary;
     }
 
     private static Runtime open(boolean shared, JSONObject input) throws Throwable {

@@ -37,7 +37,7 @@ public final class SharedPluginRuntime {
         if (!guards.isEmpty()) System.err.println("ANDROID_GUARDS " + guards.keySet());
         long start = System.nanoTime();
         var runtime = NativeProbe.openStandard(jar, cache, new File(cache, "profile"));
-        System.err.printf("PLUGIN_RUNTIME_READY %.3fs%n", (System.nanoTime() - start) / 1e9);
+        System.err.printf("PLUGIN_RUNTIME_READY %.3fs %s%n", (System.nanoTime() - start) / 1e9, HeapBudget.describe());
         return new SharedPluginRuntime(runtime);
     }
 
@@ -59,6 +59,8 @@ public final class SharedPluginRuntime {
             synchronized (opening) {
                 synchronized (this) { source = claim(id); }
                 if (source == null) {
+                    // Make room first: spider init allocates, and a full heap fails it.
+                    synchronized (this) { if (HeapBudget.low()) release(false); }
                     Source opened = openSource(input, cache);
                     synchronized (this) {
                         sources.put(id, opened);
@@ -99,7 +101,7 @@ public final class SharedPluginRuntime {
             input.put("ext", bridge.extension(input.optString("ext"), accounts));
             long start = System.nanoTime();
             var session = NativeProbe.createStandardSession(runtime, input, bridge, accounts);
-            System.err.printf("PLUGIN_SOURCE_READY %s %.3fs%n", input.optString("key"), (System.nanoTime() - start) / 1e9);
+            System.err.printf("PLUGIN_SOURCE_READY %s %.3fs %s%n", input.optString("key"), (System.nanoTime() - start) / 1e9, HeapBudget.describe());
             return new Source(session, bridge, cache);
         } catch (Throwable failure) {
             bridge.close();
@@ -107,6 +109,7 @@ public final class SharedPluginRuntime {
         }
     }
 
+    /** Guarded by this. */
     private void evict() {
         var iterator = sources.entrySet().iterator();
         while (sources.size() > SOURCE_LIMIT && iterator.hasNext()) {
@@ -116,6 +119,28 @@ public final class SharedPluginRuntime {
             iterator.remove();
             try { oldest.session().closeSource(); } catch (Exception error) { error.printStackTrace(System.err); }
         }
+    }
+
+    /** Closes every idle spider (the heap ran short or the OS asked for memory); returns how many. */
+    public synchronized int trim() { return release(true); }
+
+    /**
+     * Closes idle spiders, least recently used first: all of them, or only until the heap has its
+     * reserve again. Busy and streaming sources stay. Guarded by this.
+     */
+    private int release(boolean all) {
+        int released = 0;
+        var iterator = sources.entrySet().iterator();
+        // HeapBudget.low() may run a full collection: check again only after releasing something.
+        boolean needed = all || HeapBudget.low();
+        while (needed && iterator.hasNext()) {
+            var entry = iterator.next();
+            if (busy.containsKey(entry.getKey()) || streaming(entry.getValue().cache())) continue;
+            iterator.remove(); released++;
+            try { entry.getValue().session().closeSource(); } catch (Exception error) { error.printStackTrace(System.err); }
+            needed = all || HeapBudget.low();
+        }
+        return released;
     }
 
     private static boolean streaming(Path cache) {

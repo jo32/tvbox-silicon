@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <os/proc.h>
+#include <TargetConditionals.h>
 
 // Called from the app's plugin worker threads (several at once for searches), never the UI thread.
 // Only VM startup needs a lock; each later call attaches its own thread.
@@ -15,6 +17,37 @@ static char *failure(const char *message) {
     NSData *data = [NSJSONSerialization dataWithJSONObject:@{@"error": @(message)} options:0 error:NULL];
     return strdup([[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding].UTF8String);
 }
+char *TVAppleRuntimeRequest(const char *resourcePath, const char *requestJSON);
+
+// The Java heap is sized from what this process may still use, not fixed: iOS kills an app over
+// its memory limit, and the limit differs by device. Native code (interpreter, plugins' guard
+// libraries, video) needs the rest, so the heap gets about a third, between 384 MB and 1 GB.
+static NSString *heapLimit(void) {
+    unsigned long long available = 0;
+#if (TARGET_OS_IOS || TARGET_OS_TV) && !TARGET_OS_SIMULATOR
+    // Simulators report no limit; they fall back to a share of the Mac's memory below.
+    if (@available(iOS 13.0, tvOS 13.0, *)) available = os_proc_available_memory();
+#endif
+    if (available == 0) available = NSProcessInfo.processInfo.physicalMemory / 4;
+    unsigned long long megabytes = available / 3 / (1024 * 1024);
+    if (megabytes < 384) megabytes = 384;
+    if (megabytes > 1024) megabytes = 1024;
+    return [NSString stringWithFormat:@"-Xmx%llum", megabytes];
+}
+
+// On a memory warning, idle plugin runtimes and sources are closed and the freed heap returned.
+static void watchMemoryPressure(const char *resourcePath) {
+    static dispatch_source_t source;
+    NSString *resources = @(resourcePath);
+    dispatch_queue_t queue = dispatch_get_global_queue(QOS_CLASS_UTILITY, 0);
+    source = dispatch_source_create(DISPATCH_SOURCE_TYPE_MEMORYPRESSURE, 0, DISPATCH_MEMORYPRESSURE_WARN | DISPATCH_MEMORYPRESSURE_CRITICAL, queue);
+    dispatch_source_set_event_handler(source, ^{
+        char *result = TVAppleRuntimeRequest(resources.UTF8String, "{\"command\":\"trim\"}");
+        free(result);
+    });
+    dispatch_resume(source);
+}
+
 char *TVAppleRuntimeRequest(const char *resourcePath, const char *requestJSON) {
     @autoreleasepool {
         if (failed) return failure("The plugin runtime failed. Restart the app to retry.");
@@ -34,7 +67,10 @@ char *TVAppleRuntimeRequest(const char *resourcePath, const char *requestJSON) {
             for (NSString *file in [[[NSFileManager defaultManager] contentsOfDirectoryAtPath:[host stringByAppendingPathComponent:@"lib"] error:NULL] sortedArrayUsingSelector:@selector(compare:)]) {
                 if ([file.pathExtension isEqualToString:@"jar"]) classpath = [classpath stringByAppendingFormat:@":%@/lib/%@", host, file];
             }
-            NSArray<NSString *> *arguments = @[@"-Xmx512m", @"-Xms32m", @"-Xss2m", @"-XX:+UseSerialGC", @"-XX:+DisableAttachMechanism", @"-Xrs",
+            NSString *heap = heapLimit();
+            fprintf(stderr, "Java heap limit %s\n", heap.UTF8String);
+            // Shrink the committed heap after collections, so memory freed in Java goes back to iOS.
+            NSArray<NSString *> *arguments = @[heap, @"-Xms32m", @"-Xss2m", @"-XX:+UseSerialGC", @"-XX:MinHeapFreeRatio=10", @"-XX:MaxHeapFreeRatio=30", @"-XX:+DisableAttachMechanism", @"-Xrs",
                 @"--add-opens=java.base/java.lang=ALL-UNNAMED", @"--enable-native-access=ALL-UNNAMED",
                 @"-Dorg.slf4j.simpleLogger.defaultLogLevel=error",
                 [@"-Djava.home=" stringByAppendingString:[root stringByAppendingPathComponent:@"lib"]],
@@ -48,6 +84,7 @@ char *TVAppleRuntimeRequest(const char *resourcePath, const char *requestJSON) {
             jclass local=(*env)->FindClass(env,"tvbox/runtime/AppleBootstrap");
             if (local) { bootstrap=(*env)->NewGlobalRef(env,local); (*env)->DeleteLocalRef(env,local); }
             if (bootstrap) requestMethod=(*env)->GetStaticMethodID(env,bootstrap,"request","(Ljava/lang/String;)Ljava/lang/String;");
+            if (requestMethod) watchMemoryPressure(resourcePath);
         }
         pthread_mutex_unlock(&startLock);
         if (!env && (*runtimeVM)->AttachCurrentThread(runtimeVM,(void **)&env,NULL) != JNI_OK) {
