@@ -18,6 +18,7 @@ import Observation
     public private(set) var error: String?
     public private(set) var request: Request = .home
     private var generation = 0
+    private var pending: Task<CatalogPage, Error>?
     public init() {}
 
     public func load(_ request: Request, client: CatalogClient) async {
@@ -29,7 +30,8 @@ import Observation
         }
     }
 
-    public func load(_ request: Request, fetch: @Sendable (Request) async throws -> CatalogPage) async {
+    public func load(_ request: Request, fetch: @escaping @Sendable (Request) async throws -> CatalogPage) async {
+        pending?.cancel()
         generation += 1
         let current = generation
         self.request = request
@@ -39,16 +41,21 @@ import Observation
         case let .list(category, query, page): self.category = category ?? ""; self.query = query; self.page = page
         }
         videos = []; pageCount = 1
-        defer { if generation == current { busy = false; if !Task.isCancelled { loaded = true } } }
+        defer { if generation == current { pending = nil; busy = false; if !Task.isCancelled { loaded = true } } }
+        func perform(_ request: Request) async throws -> CatalogPage {
+            let task = Task { try await fetch(request) }
+            pending = task
+            return try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
+        }
         do {
-            var result = try await fetch(request)
+            var result = try await perform(request)
             guard generation == current, !Task.isCancelled else { return }
             if request == .home {
                 categories = result.categories
                 if result.videos.isEmpty, let first = categories.first {
                     category = first.id
                     self.request = .list(category: first.id, query: "", page: 1)
-                    result = try await fetch(self.request)
+                    result = try await perform(self.request)
                 }
             }
             guard generation == current, !Task.isCancelled else { return }

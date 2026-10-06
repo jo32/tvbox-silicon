@@ -24,11 +24,19 @@ extension View {
 
 // Content-first surfaces: neutral backgrounds, quiet controls, and strong selection contrast.
 
+/// Warm palette: an apricot accent on espresso and cream canvases.
 enum Brand {
-    static let accent = Color.primary
-    static let indigo = Color(white: 0.38)
-    static let amber = Color(red: 1.0, green: 0.66, blue: 0.28)
-    static let rose = Color(red: 1.0, green: 0.36, blue: 0.48)
+    /// Apricot on dark canvases; a deeper burnt orange on light ones so text and links keep contrast.
+    /// A real hue, not `.primary`: as a tint, `.primary` turned prominent buttons white-on-white.
+    static let accent = Color(light: Color(red: 0.76, green: 0.33, blue: 0.06), dark: Color(red: 1.0, green: 0.62, blue: 0.30))
+    /// Label colour on an accent fill.
+    static let onAccent = Color(light: .white, dark: Color(red: 0.20, green: 0.09, blue: 0.02))
+    static let terracotta = Color(red: 0.86, green: 0.40, blue: 0.30)
+    static let amber = Color(red: 1.0, green: 0.76, blue: 0.30)
+    static let rose = Color(red: 0.95, green: 0.38, blue: 0.42)
+    /// Yingxia's own credit. Third-party notices keep their authors' copyright lines unchanged.
+    static let copyright = "© 2026 getmegaportal.com"
+    static let website = URL(string: "https://www.getmegaportal.com")!
 }
 
 enum Layout {
@@ -39,9 +47,20 @@ enum Layout {
     static let gutter: CGFloat = 24, posterMin: CGFloat = 174, cardMin: CGFloat = 280, tileMin: CGFloat = 220
     static let heroTitle: CGFloat = 48, detailPoster: CGFloat = 210, episodeMin: CGFloat = 120
     #else
-    static let gutter: CGFloat = 16, posterMin: CGFloat = 140, cardMin: CGFloat = 280, tileMin: CGFloat = 160
+    static let gutter: CGFloat = 16, posterMin: CGFloat = 104, cardMin: CGFloat = 280, tileMin: CGFloat = 160
     static let heroTitle: CGFloat = 34, detailPoster: CGFloat = 130, episodeMin: CGFloat = 90
     #endif
+    /// Poster grid gaps: three columns on a phone need tighter spacing than a TV wall.
+    #if os(tvOS)
+    static let gridSpacing: CGFloat = 40, gridRowSpacing: CGFloat = 48
+    #elseif os(macOS)
+    static let gridSpacing: CGFloat = 18, gridRowSpacing: CGFloat = 22
+    #else
+    static let gridSpacing: CGFloat = 10, gridRowSpacing: CGFloat = 18
+    #endif
+    static var posterColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: posterMin), spacing: gridSpacing, alignment: .top)]
+    }
     #if os(tvOS)
     static let maxWidth: CGFloat = 1800
     static let settingsWidth: CGFloat = 1200
@@ -55,23 +74,24 @@ enum Layout {
 struct Backdrop: View {
     @Environment(\.colorScheme) private var scheme
     var body: some View {
-        ZStack {
-            (scheme == .dark ? Color(white: 0.06) : Color(white: 0.97))
-            RadialGradient(colors: [Color(red: 0.25, green: 0.55, blue: 0.95).opacity(scheme == .dark ? 0.30 : 0.20), .clear], center: .topLeading, startRadius: 0, endRadius: 620)
-            RadialGradient(colors: [Color(red: 0.62, green: 0.35, blue: 0.95).opacity(scheme == .dark ? 0.26 : 0.16), .clear], center: .bottomTrailing, startRadius: 0, endRadius: 560)
-        }.ignoresSafeArea()
+        // Flat warm canvas (espresso / cream); artwork supplies the rest of the colour.
+        (scheme == .dark ? Color(red: 0.086, green: 0.063, blue: 0.047) : Color(red: 0.98, green: 0.965, blue: 0.94)).ignoresSafeArea()
     }
 }
 
 struct Surface: View {
     @Environment(\.colorScheme) private var scheme
     var body: some View {
-        (scheme == .dark ? Color(white: 0.13) : Color(white: 0.96))
+        (scheme == .dark ? Color(red: 0.17, green: 0.13, blue: 0.10) : Color(red: 0.955, green: 0.93, blue: 0.895))
     }
 }
 
 extension View {
-    func screenBackdrop() -> some View { background { Backdrop() } }
+    /// Fills the screen first: applied to a bare `ContentUnavailableView` the backdrop would
+    /// otherwise shrink to that view and show as a box.
+    func screenBackdrop() -> some View {
+        frame(maxWidth: .infinity, maxHeight: .infinity).background { Backdrop() }
+    }
 
     @ViewBuilder func screenTitle(_ title: String, width: CGFloat = Layout.maxWidth) -> some View {
         #if os(tvOS)
@@ -89,7 +109,6 @@ extension View {
         navigationTitle(title)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.visible, for: .navigationBar)
             #endif
         #endif
     }
@@ -158,7 +177,7 @@ struct IconTile: View {
             .font(.system(size: size * 0.42, weight: .semibold))
             .foregroundStyle(tint)
             .frame(width: size, height: size)
-            .glassEffect(.regular.tint(tint.opacity(0.18)), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
     }
 }
 
@@ -197,14 +216,13 @@ struct StatusNotice: View {
 #if !os(tvOS)
 private struct FilterChipStyle: ButtonStyle {
     let selected: Bool
-    @Environment(\.colorScheme) private var scheme
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.subheadline.weight(.semibold))
-            .foregroundStyle(selected ? (scheme == .dark ? Color.black : .white) : .primary)
+            .foregroundStyle(selected ? Brand.onAccent : .primary)
             .padding(.horizontal, 12).padding(.vertical, 8)
             .frame(minHeight: 44)
-            .glassEffect(selected ? .regular.tint(scheme == .dark ? .white.opacity(0.9) : .black.opacity(0.85)).interactive() : .regular.interactive(), in: Capsule())
+            .glassEffect(selected ? .regular.tint(Brand.accent).interactive() : .regular.interactive(), in: Capsule())
             .contentShape(Capsule())
             .opacity(configuration.isPressed ? 0.8 : 1)
     }
@@ -232,6 +250,20 @@ struct Chip: View {
     }
 }
 
+/// Two-line card title that always takes two lines of height (so cards in a grid row match)
+/// but centres a one-line title instead of leaving a gap under it.
+struct CardTitle: View {
+    let text: String
+    var body: some View {
+        Text(text).lineLimit(2, reservesSpace: true).hidden()
+            .overlay(alignment: .leading) {
+                Text(text).lineLimit(2).foregroundStyle(.primary)
+            }
+            .font(.headline).multilineTextAlignment(.leading)
+            .accessibilityElement(children: .ignore).accessibilityLabel(text)
+    }
+}
+
 struct SectionHeader: View {
     private var sectionFont: Font {
         #if os(tvOS)
@@ -248,9 +280,15 @@ struct SectionHeader: View {
                 HStack(spacing: 6) {
                     Text(title).font(sectionFont)
                     Image(systemName: "chevron.right").font(.subheadline.weight(.bold)).foregroundStyle(.secondary)
+                    #if !os(tvOS)
                     Spacer(minLength: 0)
+                    #endif
                 }.contentShape(Rectangle()).foregroundStyle(.primary)
             }.buttonStyle(.plain)
+            #if os(tvOS)
+            // The focus highlight hugs the title instead of spanning the screen.
+            .frame(maxWidth: .infinity, alignment: .leading)
+            #endif
         } else {
             Text(title).font(sectionFont)
         }
@@ -339,7 +377,7 @@ struct PosterCard: View {
                     }
                 }
             Text(name).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-                .lineLimit(2, reservesSpace: true).multilineTextAlignment(.leading)
+                .lineLimit(2).multilineTextAlignment(.leading)
         }
     }
 }
@@ -388,7 +426,7 @@ struct SkeletonBlock: View {
 struct PosterSkeletonGrid: View {
     var count = 12
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.posterMin), spacing: 18, alignment: .top)], spacing: 22) {
+        LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
             ForEach(0..<count, id: \.self) { _ in
                 VStack(alignment: .leading, spacing: 10) {
                     Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit).overlay { SkeletonBlock(cornerRadius: 20) }
@@ -452,16 +490,90 @@ struct DetailSkeleton: View {
     }
 }
 
-struct LoadingPill: View {
-    let text: String
-    var body: some View {
-        HStack(spacing: 10) {
-            ProgressView().controlSize(.small)
-            Text(text).font(.subheadline.weight(.medium))
+/// What a loading card shows. `reason` explains a slow load and appears after `LoadingCard.patience`.
+struct LoadingProgress {
+    var title: String
+    var detail: String? = nil
+    var fraction: Double? = nil
+    var reason: String? = nil
+}
+
+extension LoadingProgress {
+    /// A source request: the plugin's live stage and the server it waits on, or the site's server.
+    static func source(_ site: Site, origin: URL, title: String) -> LoadingProgress {
+        if site.type == 3, site.api.hasPrefix("csp_") {
+            guard let state = PluginPreparation.snapshot(site: site, origin: origin) else { return LoadingProgress(title: title) }
+            return LoadingProgress(title: state.stage == .loading ? title : state.stage.title,
+                                   detail: state.detail, fraction: state.fraction, reason: state.reason)
         }
-        .padding(.horizontal, 18).padding(.vertical, 10)
-        .glassEffect(.regular, in: Capsule())
-        .frame(maxWidth: .infinity)
+        return server(URL(string: site.api)?.host(), title: title)
+    }
+
+    /// A plain request to one server.
+    static func server(_ host: String?, title: String) -> LoadingProgress {
+        guard let host, !host.isEmpty else { return LoadingProgress(title: title) }
+        return LoadingProgress(title: title, detail: L10n.text("Waiting for %@", host),
+                               reason: L10n.text("%@ is responding slowly. The server may be busy or far away; you can keep waiting or try another source.", host))
+    }
+}
+
+/// Time since this view appeared, for inline waits too small for a `LoadingCard`.
+struct ElapsedTime: View {
+    @State private var started = Date()
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            Text(Duration.seconds(max(0, Int(timeline.date.timeIntervalSince(started)))).formatted(.time(pattern: .minuteSecond)))
+                .monospacedDigit().foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Every wait shows how long it has run; past `patience` seconds it also says why it is still
+/// loading. A compact card in the page column, re-polled twice a second.
+struct LoadingCard: View {
+    static let patience: TimeInterval = 10
+    /// Hides the card for waits shorter than this, such as the brief stall after every seek.
+    var appearAfter: TimeInterval = 0
+    let progress: () -> LoadingProgress
+    @State private var started = Date()
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { timeline in
+            let elapsed = max(0, timeline.date.timeIntervalSince(started))
+            if elapsed >= appearAfter {
+                card(progress(), elapsed: Int(elapsed))
+            }
+        }
+    }
+
+    private func card(_ state: LoadingProgress, elapsed: Int) -> some View {
+        let explains = Double(elapsed) >= Self.patience && state.reason != nil
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 14) {
+                ProgressView().controlSize(.small)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(state.title).font(.callout.weight(.semibold)).lineLimit(1)
+                    if let detail = state.detail {
+                        Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 16)
+                Text(Duration.seconds(elapsed).formatted(.time(pattern: .minuteSecond)))
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }
+            if let fraction = state.fraction {
+                ProgressView(value: fraction).progressViewStyle(.linear).tint(Brand.accent)
+            }
+            if explains, let reason = state.reason {
+                Text(reason).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 18).padding(.vertical, 14)
+        .frame(maxWidth: 620, alignment: .leading)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .animation(.smooth(duration: 0.25), value: state.title)
+        .animation(.smooth(duration: 0.25), value: explains)
     }
 }
 
@@ -562,17 +674,25 @@ struct ErrorStateCard: View {
 
 #if os(tvOS)
 enum TVStyle {
-    static let background = Color(white: 0.06)
-    static let surface = Color(white: 0.14)
+    static let background = Color(red: 0.086, green: 0.063, blue: 0.047)
+    static let surface = Color(red: 0.18, green: 0.14, blue: 0.11)
+    static let raised = Color(red: 0.25, green: 0.195, blue: 0.15)
 }
 private struct TVCardStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View { Card(configuration: configuration) }
     private struct Card: View {
         let configuration: ButtonStyleConfiguration
         @Environment(\.isFocused) private var focused
+        /// The focus plate bleeds into the grid gutter so the title gets inner padding
+        /// without the card's layout size changing.
+        private let inset: CGFloat = 14
         var body: some View {
+            let plate = RoundedRectangle(cornerRadius: 10 + inset, style: .continuous)
             configuration.label
-                .overlay { RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(focused ? 1 : 0), lineWidth: 3) }
+                .padding(inset)
+                .background { plate.fill(TVStyle.raised.opacity(focused ? 1 : 0)) }
+                .overlay { plate.strokeBorder(.white.opacity(focused ? 1 : 0), lineWidth: 3) }
+                .padding(-inset)
                 .scaleEffect(configuration.isPressed ? 0.98 : focused ? 1.02 : 1)
                 .shadow(color: .black.opacity(focused ? 0.4 : 0), radius: 20, y: 12)
                 .animation(.easeOut(duration: 0.18), value: focused)
@@ -582,8 +702,14 @@ private struct TVCardStyle: ButtonStyle {
 #endif
 
 extension View {
+    /// Solid, high-contrast controls. Glass styles take their fill from the tint, which made
+    /// prominent labels vanish against a white fill.
     @ViewBuilder func controlButton(prominent: Bool = false) -> some View {
-        if prominent { buttonStyle(.glassProminent) } else { buttonStyle(.glass) }
+        #if os(tvOS)
+        buttonStyle(TVControlStyle(prominent: prominent))
+        #else
+        buttonStyle(ContentControlStyle(prominent: prominent))
+        #endif
     }
     @ViewBuilder func controlBackdrop() -> some View {
         #if os(tvOS)
@@ -605,10 +731,11 @@ private struct TVControlStyle: ButtonStyle {
         var body: some View {
             configuration.label
                 .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(focused || prominent ? Color.black : Color.white)
+                .foregroundStyle(focused ? Color.black : prominent ? Brand.onAccent : Color.white)
                 .padding(.horizontal, 24).padding(.vertical, 15)
                 .frame(minHeight: 62)
-                .background(focused ? Color.white : prominent ? Color(white: 0.86) : TVStyle.surface, in: RoundedRectangle(cornerRadius: 14))
+                // Focus stays white, as everywhere on tvOS; the primary action wears the brand cyan.
+                .background(focused ? Color.white : prominent ? Brand.accent : TVStyle.surface, in: RoundedRectangle(cornerRadius: 14))
                 .opacity(enabled ? 1 : 0.35)
                 .scaleEffect(configuration.isPressed ? 0.97 : focused ? 1.02 : 1)
                 .animation(.easeOut(duration: 0.18), value: focused)
@@ -630,24 +757,32 @@ extension View {
 #if !os(tvOS)
 private struct ContentControlStyle: ButtonStyle {
     var prominent: Bool
-    @Environment(\.colorScheme) private var scheme
     @Environment(\.isEnabled) private var enabled
     @Environment(\.controlSize) private var size
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(prominent ? (scheme == .dark ? Color.black : Color.white) : Color.primary)
+            .font(size == .large ? .body.weight(.semibold) : .subheadline.weight(.semibold))
+            .foregroundStyle(prominent ? Brand.onAccent : Color.primary)
             .padding(.horizontal, size == .large ? 20 : 14)
             .padding(.vertical, 10)
             .frame(minHeight: 44)
-            .background {
-                if prominent {
-                    (scheme == .dark ? Color.white : Color(white: 0.06)).clipShape(Capsule())
-                } else {
-                    Surface().clipShape(Capsule())
-                }
-            }
+            // Secondary fill is relative to the page so it stays visible on light and dark canvases.
+            .background(prominent ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(Color.primary.opacity(0.08)), in: Capsule())
+            .contentShape(Capsule())
             .opacity(enabled ? (configuration.isPressed ? 0.72 : 1) : 0.38)
     }
 }
 #endif
+
+extension Color {
+    /// A colour that follows the current light/dark appearance.
+    init(light: Color, dark: Color) {
+        #if os(macOS)
+        self.init(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(dark) : NSColor(light)
+        })
+        #else
+        self.init(uiColor: UIColor { traits in traits.userInterfaceStyle == .dark ? UIColor(dark) : UIColor(light) })
+        #endif
+    }
+}

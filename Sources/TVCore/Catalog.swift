@@ -27,8 +27,8 @@ public struct Video: Identifiable, Hashable, Sendable {
         self.id = id; name = json["vod_name"]?.string ?? id
         let artwork = json["vod_pic"]?.string.flatMap { PosterResource(address: $0, origin: origin) }
         poster = artwork?.url; posterHeaders = artwork?.headers ?? [:]
-        remarks = json["vod_remarks"]?.string ?? ""
-        synopsis = (json["vod_content"]?.string ?? "").replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        remarks = HTMLText.plain(json["vod_remarks"]?.string ?? "")
+        synopsis = HTMLText.plain(json["vod_content"]?.string ?? "")
         let flags = (json["vod_play_from"]?.string ?? "").components(separatedBy: "$$$")
         var episodes: [Episode] = []
         for (groupIndex, group) in (json["vod_play_url"]?.string ?? "").components(separatedBy: "$$$").enumerated() {
@@ -41,6 +41,47 @@ public struct Video: Identifiable, Hashable, Sendable {
         self.episodes = episodes
     }
 }
+/// Plugins pass through site HTML, often entity-escaped twice ("&amp;nbsp;"), so decode until stable before stripping tags.
+enum HTMLText {
+    private static let entity = try! NSRegularExpression(pattern: "&(#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[a-zA-Z]{2,8});?")
+    private static let named: [String: String] = [
+        "amp": "&", "lt": "<", "gt": ">", "quot": "\"", "apos": "'", "nbsp": " ",
+        "ldquo": "\u{201C}", "rdquo": "\u{201D}", "lsquo": "\u{2018}", "rsquo": "\u{2019}",
+        "hellip": "\u{2026}", "mdash": "\u{2014}", "ndash": "\u{2013}", "middot": "\u{00B7}",
+    ]
+
+    static func plain(_ html: String) -> String {
+        var text = html
+        for _ in 0..<3 {
+            let decoded = decodeEntities(text)
+            if decoded == text { break }
+            text = decoded
+        }
+        return text
+            .replacingOccurrences(of: "<br\\s*/?>|</p>", with: "\n", options: [.regularExpression, .caseInsensitive])
+            .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "[ \\t\u{00A0}\u{3000}]+", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: " *\n\\s*", with: "\n", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func decodeEntities(_ text: String) -> String {
+        guard text.contains("&") else { return text }
+        let source = text as NSString
+        var output = "", cursor = 0
+        for match in entity.matches(in: text, range: NSRange(location: 0, length: source.length)) {
+            let body = source.substring(with: match.range(at: 1))
+            let scalar: UInt32? = body.hasPrefix("#x") || body.hasPrefix("#X") ? UInt32(body.dropFirst(2), radix: 16)
+                : body.hasPrefix("#") ? UInt32(body.dropFirst()) : nil
+            guard let replacement = scalar.flatMap(Unicode.Scalar.init).map({ String(Character($0)) }) ?? named[body.lowercased()]
+            else { continue }
+            output += source.substring(with: NSRange(location: cursor, length: match.range.location - cursor)) + replacement
+            cursor = match.range.location + match.range.length
+        }
+        return output + source.substring(from: cursor)
+    }
+}
+
 public struct CatalogPage: Sendable {
     public let categories: [Category]
     public let videos: [Video]
@@ -81,10 +122,12 @@ public struct CatalogClient: Sendable {
         if site.type == 3, !site.api.hasPrefix("csp_") {
             return try await LocalJarHost.shared.request(site: site, jarURL: WebAddress.resolve(site.api, relativeTo: origin), params: params, http: http, scriptOrigin: origin)
         }
-        if site.type == 3, let plugin = try site.pluginURL(origin: origin, fallback: jarURL) {
-            return try await LocalJarHost.shared.request(site: site, jarURL: plugin, params: params, http: http, configurationOrigin: origin)
-        }
         #endif
+        if site.type == 3, site.api.hasPrefix("csp_"), let plugin = try site.pluginURL(origin: origin, fallback: jarURL) {
+            let progress = PluginPreparation(site: site, origin: origin)
+            defer { progress.finish() }
+            return try await EmbeddedJarHost.shared.request(site: site, jarURL: plugin, params: params, http: http, configurationOrigin: origin, progress: progress)
+        }
         let (data, _) = try await http.get(requestURL(params), headers: site.raw["header"]?.object?.compactMapValues(\.string) ?? [:])
         return try JSONDecoder().decode([String: JSONValue].self, from: data)
     }

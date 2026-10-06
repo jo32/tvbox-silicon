@@ -87,13 +87,12 @@ struct PlaybackView: View {
             }
             .padding(30).glassPanel(cornerRadius: 30).padding(30)
             #endif
-        } else if session.loading {
-            HStack(spacing: 12) {
-                ProgressView()
-                Text(L10n.text("Connecting…")).font(.subheadline.weight(.medium))
-            }
-            .padding(.horizontal, 22).padding(.vertical, 14)
-            .glassEffect(.regular, in: Capsule())
+        } else if session.loading || session.buffering {
+            // Top of the frame, clear of the transport bar. Seeks stall briefly; only longer waits show.
+            LoadingCard(appearAfter: session.loading ? 0 : 1.5) { session.loadingProgress }
+                .padding(.horizontal, 24).padding(.top, 48)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .allowsHitTesting(false)
         }
     }
 }
@@ -109,7 +108,7 @@ private struct TVPlaybackFailureView: View {
 
     var body: some View {
         ZStack {
-            Color(white: 0.075).ignoresSafeArea()
+            TVStyle.background.ignoresSafeArea()
             VStack(spacing: 0) {
                 Image(systemName: "video.slash")
                     .font(.system(size: 64, weight: .light))
@@ -166,7 +165,7 @@ private struct TVPlaybackRecoveryStyle: ButtonStyle {
                 .padding(.horizontal, 32).padding(.vertical, 20)
                 .frame(minWidth: 220)
                 .foregroundStyle(focused ? Color.black : Color.white)
-                .background(focused ? Color.white : Color(white: 0.2), in: Capsule())
+                .background(focused ? Color.white : TVStyle.raised, in: Capsule())
                 .scaleEffect(configuration.isPressed ? 0.97 : 1)
                 .animation(.easeOut(duration: 0.12), value: focused)
         }
@@ -332,12 +331,10 @@ private struct DesktopPlaybackView: View {
                     .padding(24).frame(maxWidth: 440)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18)).padding()
                 } else if session.loading || session.buffering {
-                    HStack(spacing: 12) {
-                        ProgressView().controlSize(.small)
-                        Text(L10n.text(session.loading ? "Connecting…" : "Buffering…"))
-                    }
-                    .padding(16).background(.regularMaterial, in: Capsule())
-                    .allowsHitTesting(false)
+                    LoadingCard(appearAfter: session.loading ? 0 : 1.5) { session.loadingProgress }
+                        .padding(.horizontal, 24).padding(.top, 56)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .allowsHitTesting(false)
                 }
             }
             topBar

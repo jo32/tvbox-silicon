@@ -15,6 +15,13 @@ public final class CloudDriveBridge implements AutoCloseable {
     @FunctionalInterface public interface DriveProxy { Object[] invoke(Map<String,String> params, String path, Map<String,String> headers) throws Exception; }
     private volatile DriveProxy driveProxy;
     private static volatile CloudDriveBridge current;
+    // Concurrent searches run on separate worker threads; each must see its own source's proxy.
+    // `current` stays as the fallback for threads a plugin starts itself.
+    private static final ThreadLocal<CloudDriveBridge> active = new ThreadLocal<>();
+    private static CloudDriveBridge bridge() {
+        CloudDriveBridge local = active.get();
+        return local != null ? local : current;
+    }
     private final HttpServer server;
     private final ExecutorService workers = Executors.newFixedThreadPool(4, r -> { Thread t = new Thread(r, "cloud-proxy"); t.setDaemon(true); return t; });
     private final String capability = UUID.randomUUID().toString();
@@ -99,13 +106,15 @@ public final class CloudDriveBridge implements AutoCloseable {
     }
     private String base() { return "http://127.0.0.1:" + server.getAddress().getPort() + "/" + capability + "/"; }
     public static String getUrl() {
-        if (current == null) throw new IllegalStateException("Plugin proxy is not initialized");
-        return current.base() + "media";
+        CloudDriveBridge bridge = bridge();
+        if (bridge == null) throw new IllegalStateException("Plugin proxy is not initialized");
+        return bridge.base() + "media";
     }
     public static String getOwnProxyUrl() { return getOwnProxyUrl(""); }
     public static String getOwnProxyUrl(String name) {
-        if (current == null) throw new IllegalStateException("Plugin proxy is not initialized");
-        return current.base() + "drive/" + (name.isEmpty() ? "" : "proxy/" + name + "/");
+        CloudDriveBridge bridge = bridge();
+        if (bridge == null) throw new IllegalStateException("Plugin proxy is not initialized");
+        return bridge.base() + "drive/" + (name.isEmpty() ? "" : "proxy/" + name + "/");
     }
     public void setDriveProxy(ClassLoader loader) {
         driveProxy = (params, path, headers) -> (Object[])loader.loadClass("com.github.catvod.spider.ProxyOrigin")
@@ -169,5 +178,9 @@ public final class CloudDriveBridge implements AutoCloseable {
         }
         return result.toString();
     }
-    @Override public void close() { server.stop(0); workers.shutdownNow(); }
+    /** Sources sharing one plugin runtime each keep a bridge; the running request selects its own. */
+    public void activate() { current = this; active.set(this); }
+    public static void deactivate() { active.remove(); }
+    public static void closeCurrent() { if (current != null) current.close(); }
+    @Override public void close() { server.stop(0); workers.shutdownNow(); if (current == this) current = null; }
 }

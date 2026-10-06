@@ -15,8 +15,7 @@ public abstract class Spider {
                 var response = chain.proceed(request);
                 System.err.println("HTTP_RESULT " + response.code());
                 if (!response.isSuccessful() && !request.url().host().equals("127.0.0.1") && !request.url().host().equals("localhost")) {
-                    tvbox.runtime.HttpDiagnostics.host = request.url().host();
-                    tvbox.runtime.HttpDiagnostics.status = response.code();
+                    tvbox.runtime.HttpDiagnostics.recordStatus(request.url().host(), response.code());
                 }
                 return response;
             } catch (Exception error) { error.printStackTrace(System.err); throw error; }

@@ -6,6 +6,21 @@ import TVCore
 /// A private loopback endpoint for HLS framing compatibility. Only URLs found
 /// in this playback's playlists are registered; it is not an open web proxy.
 actor HLSProxy {
+    /// Upstream transfer counters for the player's loading card. AVPlayer only sees a segment once
+    /// the proxy has all of it, so live speed and upstream errors must come from here.
+    final class Stats: @unchecked Sendable {
+        struct Snapshot { var received: Int64 = 0; var host: String?; var status: Int?; var failure: String? }
+        private let lock = NSLock()
+        private var value = Snapshot()
+        var snapshot: Snapshot { lock.withLock { value } }
+        func received(_ count: Int, from host: String?) {
+            lock.withLock { value.received += Int64(count); value.host = host ?? value.host; value.status = nil; value.failure = nil }
+        }
+        func failed(_ host: String?, status: Int?, message: String?) {
+            lock.withLock { value.host = host ?? value.host; value.status = status; value.failure = message }
+        }
+    }
+    nonisolated let stats = Stats()
     private let token = UUID().uuidString
     private let headers: [String: String]
     private let queue = DispatchQueue(label: "tvbox.hls")
@@ -75,8 +90,21 @@ actor HLSProxy {
         do {
             var upstream = URLRequest(url: url, timeoutInterval: 25)
             headers.forEach { upstream.setValue($1, forHTTPHeaderField: $0) }
-            let (raw, response) = try await URLSession.shared.data(for: upstream)
-            guard let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode) else { send(connection, code: 502, data: Data()); return }
+            let (stream, reply) = try await URLSession.shared.bytes(for: upstream)
+            guard let response = reply as? HTTPURLResponse else { send(connection, code: 502, data: Data()); return }
+            guard (200..<300).contains(response.statusCode) else {
+                // Pass the real status on, so AVPlayer and the loading card can tell an expired link from a dead server.
+                stats.failed(url.host(), status: response.statusCode, message: nil)
+                send(connection, code: (400..<600).contains(response.statusCode) ? response.statusCode : 502, data: Data()); return
+            }
+            var raw = Data()
+            if response.expectedContentLength > 0 { raw.reserveCapacity(Int(min(response.expectedContentLength, 64 << 20))) }
+            var pending = 0
+            for try await byte in stream {
+                raw.append(byte); pending += 1
+                if pending == 32 << 10 { stats.received(pending, from: url.host()); pending = 0 }
+            }
+            stats.received(pending, from: url.host())
             var data = raw
             var mime = response.mimeType ?? "application/octet-stream"
             if let playlist = String(data: raw, encoding: .utf8), playlist.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("#EXTM3U") {
@@ -92,7 +120,10 @@ actor HLSProxy {
                 if high >= low { extra = "Content-Range: bytes \(low)-\(high)/\(data.count)\r\n"; data = Data(data[low...high]); code = 206 }
             }
             send(connection, code: code, data: data, mime: mime, extra: extra, head: fields[0] == "HEAD")
-        } catch { send(connection, code: 502, data: Data()) }
+        } catch {
+            stats.failed(url.host(), status: nil, message: error.localizedDescription)
+            send(connection, code: 502, data: Data())
+        }
     }
     private func rewrite(_ text: String, origin: URL) -> String {
         text.components(separatedBy: .newlines).map { line in

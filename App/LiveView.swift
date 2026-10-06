@@ -23,11 +23,8 @@ struct SourceCard: View {
     var body: some View {
         RouteLink { ChannelListView(source: source) } label: {
             HStack(spacing: 14) {
-                IconTile(symbol: "antenna.radiowaves.left.and.right", tint: Brand.indigo, size: 46)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(source.name).font(.headline).foregroundStyle(.primary).lineLimit(2, reservesSpace: true).multilineTextAlignment(.leading)
-                    Text(source.url.host ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
+                IconTile(symbol: "antenna.radiowaves.left.and.right", tint: Brand.accent, size: 46)
+                CardTitle(text: source.name)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
             }
@@ -68,7 +65,10 @@ struct ChannelListView: View {
                 }
                 #endif
                 if !channels.isEmpty { filterBar } else if waiting { ChipSkeletonRow() }
-                if waiting { ChannelSkeletonGrid() }
+                if waiting {
+                    LoadingCard { .server(source.url.host(), title: L10n.text("Loading channels…")) }
+                    ChannelSkeletonGrid()
+                }
                 if let error {
                     ErrorStateCard(
                         title: L10n.text("Unable to Load Channels"),
@@ -171,7 +171,7 @@ private struct TVChannelGuide: View {
                     }.frame(maxWidth: .infinity, alignment: .leading)
                     TVGuideLogo(channel: channel, size: 112)
                         .frame(width: 350, height: 198)
-                        .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 10))
+                        .background(TVStyle.surface, in: RoundedRectangle(cornerRadius: 10))
                 }.frame(height: 218)
             }
 
@@ -187,7 +187,8 @@ private struct TVChannelGuide: View {
             }
 
             if loading {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingCard { .server(source.url.host(), title: L10n.text("Loading channels…")) }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error {
                 ErrorStateCard(title: L10n.text("Unable to Load Channels"),
                                message: L10n.text("Try again, or choose another source to keep watching."),
@@ -282,12 +283,12 @@ private struct TVGuideLogo: View {
             if let url = channel.logo {
                 AsyncImage(url: url) { phase in
                     if let image = phase.image {
-                        image.resizable().scaledToFit().padding(5).background(Color(white: 0.18))
+                        image.resizable().scaledToFit().padding(5).background(TVStyle.raised)
                     }
                 }
             }
         }.frame(width: size, height: size)
-            .background(Color(white: 0.18), in: RoundedRectangle(cornerRadius: 8))
+            .background(TVStyle.raised, in: RoundedRectangle(cornerRadius: 8))
             .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 }
@@ -300,7 +301,7 @@ private struct TVGuideRowStyle: ButtonStyle {
         var body: some View {
             configuration.label
                 .foregroundStyle(focused ? Color.black : Color.white)
-                .background(focused ? Color.white : Color(white: 0.13), in: RoundedRectangle(cornerRadius: 8))
+                .background(focused ? Color.white : TVStyle.surface, in: RoundedRectangle(cornerRadius: 8))
                 .scaleEffect(configuration.isPressed ? 0.99 : 1)
                 .animation(.easeOut(duration: 0.12), value: focused)
         }
@@ -317,8 +318,8 @@ private struct TVGuideCategoryStyle: ButtonStyle {
         var body: some View {
             configuration.label.font(.system(size: 23, weight: .semibold))
                 .padding(.horizontal, 24).padding(.vertical, 13)
-                .foregroundStyle(selected ? Color.black : Color.white)
-                .background(selected ? Color.white : Color(white: 0.16), in: Capsule())
+                .foregroundStyle(selected ? Brand.onAccent : Color.white)
+                .background(selected ? Brand.accent : TVStyle.raised, in: Capsule())
                 .overlay { Capsule().strokeBorder(focused ? Color.white : .clear, lineWidth: 3).padding(-5) }
                 .scaleEffect(configuration.isPressed ? 0.97 : 1)
         }
@@ -348,9 +349,9 @@ struct ChannelLogo: View {
     let channel: Channel
     var size: CGFloat = 50
     private static let palette: [[Color]] = [
-        [Brand.accent, Color(red: 0.05, green: 0.45, blue: 0.55)], [Brand.indigo, Color(red: 0.25, green: 0.22, blue: 0.70)],
+        [Brand.accent, Color(red: 0.80, green: 0.36, blue: 0.10)], [Brand.terracotta, Color(red: 0.62, green: 0.24, blue: 0.18)],
         [Brand.rose, Color(red: 0.75, green: 0.20, blue: 0.40)], [Brand.amber, Color(red: 0.85, green: 0.42, blue: 0.15)],
-        [Color(red: 0.35, green: 0.70, blue: 0.95), Color(red: 0.15, green: 0.40, blue: 0.80)],
+        [Color(red: 0.85, green: 0.65, blue: 0.40), Color(red: 0.55, green: 0.36, blue: 0.20)],
     ]
     private var colors: [Color] {
         Self.palette[channel.name.unicodeScalars.reduce(0) { $0 &+ Int($1.value) } % Self.palette.count]

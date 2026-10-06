@@ -1,0 +1,38 @@
+diff --git a/unicorn-engine-sys-tci/CMakeLists.txt b/unicorn-engine-sys-tci/CMakeLists.txt
+index 4ba0e22..ade9a6e 100644
+--- a/unicorn-engine-sys-tci/CMakeLists.txt
++++ b/unicorn-engine-sys-tci/CMakeLists.txt
+@@ -288,7 +288,7 @@ else()
+         set(UNICORN_TARGET_ARCH "tci")
+     endif()
+ 
+-    set(EXTRA_CFLAGS "--extra-cflags=")
++    set(EXTRA_CFLAGS "--extra-cflags=${CMAKE_C_FLAGS} ")
+     if(UNICORN_HAS_X86)
+         set(EXTRA_CFLAGS "${EXTRA_CFLAGS}-DUNICORN_HAS_X86 ")
+     endif()
+@@ -391,7 +391,11 @@ else()
+         ${TARGET_LIST}
+         ${UNICORN_EXECUTION_MODE}
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
++        RESULT_VARIABLE UNICORN_CONFIGURE_RESULT
+     )
++    if(NOT UNICORN_CONFIGURE_RESULT EQUAL 0)
++        message(FATAL_ERROR "QEMU configuration failed; see config.log")
++    endif()
+     execute_process(COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/qemu/scripts/create_config
+         INPUT_FILE ${CMAKE_BINARY_DIR}/config-host.mak
+         OUTPUT_FILE ${CMAKE_BINARY_DIR}/config-host.h
+diff --git a/unicorn-engine-sys-tci/qemu/configure b/unicorn-engine-sys-tci/qemu/configure
+index 608334b..ea2c47d 100755
+--- a/unicorn-engine-sys-tci/qemu/configure
++++ b/unicorn-engine-sys-tci/qemu/configure
+@@ -603,7 +603,7 @@ Darwin)
+     QEMU_CFLAGS="-arch x86_64 $QEMU_CFLAGS"
+     QEMU_LDFLAGS="-arch x86_64 $QEMU_LDFLAGS"
+   fi
+-  QEMU_LDFLAGS="-framework CoreFoundation -framework IOKit $QEMU_LDFLAGS"
++  QEMU_LDFLAGS="-framework CoreFoundation $QEMU_LDFLAGS"
+   libs_softmmu="-F/System/Library/Frameworks -framework -framework IOKit $libs_softmmu"
+   # Disable attempts to use ObjectiveC features in os/object.h since they
+   # won't work when we're compiling with gcc as a C compiler.

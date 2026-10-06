@@ -90,6 +90,11 @@ private func fixture(_ name: String, _ ext: String) throws -> Data {
     #expect(video.episodes[2].address == "opaque-id")
     #expect(video.synopsis == "Hello")
 }
+@Test func synopsisDecodesDoubleEscapedEntities() {
+    #expect(HTMLText.plain("该剧改编。 &amp;nbsp; &amp;nbsp;&amp;nbsp") == "该剧改编。")
+    #expect(HTMLText.plain("<p>Tom &amp;amp; Jerry&#39;s &ldquo;day&rdquo;</p><br/>Part&#x20;2") == "Tom & Jerry's “day”\nPart 2")
+    #expect(HTMLText.plain("R&D &unknown; a&b") == "R&D &unknown; a&b")
+}
 @Test func dexJarActuallyExecutesBytecode() async throws {
     let runtime = JarRuntime()
     let jar = try fixture("runtime-probe", "jar")

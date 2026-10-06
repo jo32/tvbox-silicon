@@ -24,11 +24,13 @@ struct SitesView: View {
 struct SiteCard: View {
     let site: Site
     var body: some View {
+        let label = SourceLabel(site.name)
         HStack(spacing: 14) {
-            IconTile(symbol: site.native ? "checkmark.seal.fill" : "puzzlepiece.extension.fill", tint: site.native ? Brand.accent : Brand.amber, size: 46)
+            // Most sources work, so only the exceptions carry a badge.
+            IconTile(symbol: site.native ? "film.stack" : "puzzlepiece.extension.fill", tint: site.native ? Brand.terracotta : Brand.amber, size: 46)
             VStack(alignment: .leading, spacing: 6) {
-                Text(site.name).font(.headline).foregroundStyle(.primary).lineLimit(2, reservesSpace: true).multilineTextAlignment(.leading)
-                Pill(text: site.compatibility, tint: site.native ? Brand.accent : Brand.amber)
+                CardTitle(text: label.text)
+                if !site.native { Pill(text: site.compatibility, tint: Brand.amber) }
             }
             Spacer(minLength: 0)
             Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
@@ -74,6 +76,9 @@ struct SiteView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 20) {
                         if !browser.categories.isEmpty { categoryBar } else if initialLoading { ChipSkeletonRow() }
+                        if browser.busy {
+                            LoadingCard { .source(site, origin: origin, title: L10n.text("Loading source content…")) }
+                        }
                         if initialLoading { PosterSkeletonGrid() }
                         if let error = browser.error {
                             ErrorStateCard(
@@ -87,7 +92,7 @@ struct SiteView: View {
                             .padding(.vertical, browser.videos.isEmpty ? 24 : 8)
                         }
                         if browser.videos.isEmpty && browser.loaded && !browser.busy && browser.error == nil { ContentUnavailableView(L10n.text("No Videos"), systemImage: "film", description: Text(L10n.text("Try selecting a category or searching."))).frame(maxWidth: .infinity) }
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.posterMin), spacing: 18, alignment: .top)], spacing: 22) {
+                        LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
                             ForEach(browser.videos) { video in
                                 RouteLink { VideoDetailView(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
                             }
@@ -173,9 +178,7 @@ struct VideoDetailView: View {
     @State private var loadingEpisode: Episode.ID?
     /// A failed or blocked playback attempt, shown as an inline banner beside the artwork.
     @State private var playbackIssue: PlaybackIssue?
-    #if os(macOS)
-    @State private var signingIn: CloudProvider?
-    #endif
+    @State private var signingIn: CloudDrive?
     private var flags: [String] {
         var seen = Set<String>()
         return (detail?.episodes ?? []).map(\.flag).filter { seen.insert($0).inserted }
@@ -226,18 +229,32 @@ struct VideoDetailView: View {
                 }
             }
         }
+        .safeAreaInset(edge: .bottom) {
+            if busy {
+                // Keyed by the step, so the timer restarts when details turn into resolving a link.
+                LoadingCard { .source(client.site, origin: client.origin, title: busyTitle) }
+                    .id(busyTitle)
+                    .frame(maxWidth: .infinity).padding(.horizontal, Layout.gutter).padding(.bottom, 24)
+            }
+        }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
         .screenBackdrop()
         .screenTitle(video.name).task { if detail == nil { await loadDetail() } }
         .onChange(of: choosingQuality) { _, open in if !open && !busy { loadingEpisode = nil } }
-        #if os(macOS)
         // Sign in where playback failed, then resume the episode that needed the account.
-        .sheet(item: $signingIn) { provider in
-            CloudLoginView(provider: provider) { cookie in
+        #if os(macOS)
+        .sheet(item: $signingIn) { drive in
+            CloudLoginView(provider: drive.provider) { cookie in
                 Task {
-                    do { try await provider.saveLogin(cookie) } catch { return }
+                    do { try await drive.provider.saveLogin(cookie) } catch { return }
                     if let episode = playbackIssue?.episode { await play(episode) }
                 }
+            }
+        }
+        #else
+        .fullScreenCover(item: $signingIn) { drive in
+            CloudQRLoginView(drive: drive.qrDrive) {
+                if let episode = playbackIssue?.episode { Task { await play(episode) } }
             }
         }
         #endif
@@ -265,18 +282,21 @@ struct VideoDetailView: View {
                             .fixedSize(horizontal: false, vertical: true).selectable()
                     }
                     HStack(spacing: 8) {
-                        #if os(macOS)
                         if let drive = issue.drive {
-                            Button(drive.signInTitle) { signingIn = drive.provider }.settingsButton(prominent: true)
+                            Button(drive.signInTitle) { signingIn = drive }.settingsButton(prominent: true)
                         }
-                        #endif
                         Button(L10n.text(issue.blockedBeforeRequest ? "Try Anyway" : "Retry")) {
                             Task { await play(issue.episode, skipAccountCheck: true) }
                         }
                         .settingsButton(prominent: issue.drive == nil)
+                        #if os(tvOS)
+                        // A focusable action instead of the small corner close button.
+                        Button(L10n.text("Dismiss")) { withAnimation(.smooth(duration: 0.2)) { playbackIssue = nil } }.settingsButton()
+                        #endif
                     }
                 }
                 Spacer(minLength: 0)
+                #if !os(tvOS)
                 Button { withAnimation(.smooth(duration: 0.2)) { playbackIssue = nil } } label: {
                     Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
                         .frame(width: 22, height: 22)
@@ -284,6 +304,7 @@ struct VideoDetailView: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain).accessibilityLabel(L10n.text("Dismiss")).help(L10n.text("Dismiss"))
+                #endif
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -304,6 +325,11 @@ struct VideoDetailView: View {
                         busy: busy,
                         backTitle: L10n.text("Go back")
                     )
+    }
+    private var busyTitle: String {
+        if detail == nil { return L10n.text("Loading video details…") }
+        let episode = detail?.episodes.first { $0.id == loadingEpisode }
+        return episode.map { L10n.text("Getting the video link for %@…", EpisodeRow.title($0.name)) } ?? L10n.text("Getting the video link…")
     }
     private func loadDetail() async {
         guard !busy else { return }
@@ -358,6 +384,13 @@ struct VideoDetailView: View {
         #endif
     }
     private var isWide: Bool { containerWidth >= wideMinWidth }
+    private var heroTitleSize: CGFloat {
+        #if os(tvOS)
+        52
+        #else
+        34
+        #endif
+    }
     @ViewBuilder private var playControl: some View {
         if let detail {
             if let first = detail.episodes.first(where: { $0.flag == activeFlag }) ?? detail.episodes.first {
@@ -391,7 +424,7 @@ struct VideoDetailView: View {
                                 .shadow(color: .black.opacity(0.45), radius: 20, y: 10)
                                 .frame(height: max(proxy.size.height - 56, 60))
                             VStack(alignment: .leading, spacing: 14) {
-                                Text(video.name).font(.system(size: 34, weight: .bold)).lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                                Text(video.name).font(.system(size: heroTitleSize, weight: .bold)).lineLimit(3).fixedSize(horizontal: false, vertical: true)
                                 if !video.remarks.isEmpty { Text(video.remarks).font(.title3).foregroundStyle(.white.opacity(0.75)) }
                                 playControl.padding(.top, 6)
                             }
@@ -524,8 +557,14 @@ struct VideoDetailView: View {
     private func fail(_ episode: Episode, _ error: Error) {
         guard !(error is CancellationError) else { return }
         withAnimation(.smooth(duration: 0.25)) {
-            playbackIssue = PlaybackIssue(episode: episode, message: error.localizedDescription,
-                                          drive: CloudDrive.missingLogin(forFlag: episode.flag), blockedBeforeRequest: false)
+            // Plugins report a missing or expired drive login in their own words ("夸克授权失败，请扫码登录");
+            // say what happened and offer the sign-in instead of echoing them.
+            if let drive = CloudDrive(flag: episode.flag), CloudDrive.isLoginFailure(error.localizedDescription) {
+                playbackIssue = PlaybackIssue(episode: episode, message: drive.expiredHint, drive: drive, blockedBeforeRequest: false)
+            } else {
+                playbackIssue = PlaybackIssue(episode: episode, message: error.localizedDescription,
+                                              drive: CloudDrive.missingLogin(forFlag: episode.flag), blockedBeforeRequest: false)
+            }
         }
     }
 }
@@ -539,8 +578,9 @@ private struct PlaybackIssue {
 }
 
 /// Cloud drives whose plugins need a saved login before they can return a stream.
-private enum CloudDrive {
+private enum CloudDrive: String, Identifiable {
     case quark, uc
+    var id: String { rawValue }
     init?(flag: String) {
         let text = flag.lowercased()
         if text.contains("夸克") || text.contains("quark") { self = .quark }
@@ -551,17 +591,20 @@ private enum CloudDrive {
     var signInTitle: String { L10n.text(self == .quark ? "Sign In to Quark" : "Sign In to UC") }
     #if os(macOS)
     var provider: CloudProvider { self == .quark ? .quark : .uc }
+    #else
+    var qrDrive: CloudDriveQRLogin.Drive { self == .quark ? .quark : .uc }
     #endif
     var loginHint: String { L10n.text("This source plays from %@ and needs you to sign in first.", name) }
+    var expiredHint: String { L10n.text("Your %@ sign-in is missing or has expired. Sign in again to play this episode.", name) }
     static func missingLogin(forFlag flag: String) -> CloudDrive? {
-        #if os(macOS)
         guard let drive = CloudDrive(flag: flag) else { return nil }
         let accounts = (try? CloudDriveAccounts.load()) ?? CloudDriveAccounts()
         let cookie = drive == .quark ? accounts.quarkCookie : accounts.ucCookie
         return cookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? drive : nil
-        #else
-        return nil
-        #endif
+    }
+    static func isLoginFailure(_ message: String) -> Bool {
+        let text = message.lowercased()
+        return ["授权", "登录", "扫码", "cookie", "login", "unauthorized"].contains { text.contains($0) }
     }
 }
 
@@ -576,6 +619,16 @@ private struct EpisodeRow: View {
         return (name, nil)
     }
     static func title(_ name: String) -> String { split(name).title }
+    /// Row type and height per platform: a Mac list size is unreadable from a sofa.
+    private static var metrics: (text: CGFloat, icon: CGFloat, height: CGFloat, inset: CGFloat) {
+        #if os(tvOS)
+        (28, 18, 42, 0) // TVControlStyle adds its own padding and focus fill
+        #elseif os(iOS)
+        (15, 11, 44, 14)
+        #else
+        (13, 10, 36, 12)
+        #endif
+    }
     private var parts: (title: String, detail: String?) { Self.split(name) }
     var body: some View {
         let parts = parts
@@ -583,17 +636,17 @@ private struct EpisodeRow: View {
             HStack(spacing: 10) {
                 ZStack {
                     if loading { ProgressView().controlSize(.mini) }
-                    else { Image(systemName: "play.fill").font(.system(size: 10)).foregroundStyle(hovering ? .primary : .tertiary) }
+                    else { Image(systemName: "play.fill").font(.system(size: Self.metrics.icon)).foregroundStyle(hovering ? .primary : .tertiary) }
                 }
-                .frame(width: 16)
-                Text(parts.title).font(.system(size: 13, weight: loading ? .semibold : .medium))
+                .frame(width: Self.metrics.icon + 6)
+                Text(parts.title).font(.system(size: Self.metrics.text, weight: loading ? .semibold : .medium))
                     .lineLimit(2).multilineTextAlignment(.leading)
                 Spacer(minLength: 8)
                 if let detail = parts.detail {
                     Text(detail).font(.caption).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
                 }
             }
-            .padding(.horizontal, 12).frame(minHeight: 36)
+            .padding(.horizontal, Self.metrics.inset).frame(minHeight: Self.metrics.height)
             .frame(maxWidth: .infinity, alignment: .leading)
             #if !os(tvOS)
             .background(Color.primary.opacity(loading ? 0.12 : (hovering ? 0.08 : 0.04)),

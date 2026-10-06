@@ -204,7 +204,6 @@
 
 "Search failed" = "Search failed";
 
-"Try another keyword or retry failed sources." = "Try another keyword or retry failed sources.";
 
 "This source has no recommendations. Choose another source or use Global Search." = "This source has no recommendations. Choose another source or use Global Search.";
 
@@ -284,7 +283,6 @@
 "The subscription server returned a web page instead of a configuration." = "The subscription server returned a web page instead of a configuration.";
 "This subscription uses an encrypted configuration that is not supported yet." = "This subscription uses an encrypted configuration that is not supported yet.";
 "The plugin took too long to initialize. Retry or choose another source." = "The plugin took too long to initialize. Retry or choose another source.";
-"This source requires Android features that the Mac plugin runtime does not support yet." = "This source requires Android features that the Mac plugin runtime does not support yet.";
 "Scroll sources left" = "Scroll sources left";
 "Scroll sources right" = "Scroll sources right";
 
@@ -327,3 +325,68 @@
 "Last updated %@" = "Last updated %@";
 "Run Test" = "Run Test";
 "Check" = "Check";
+
+"The plugin exceeds 20 MB." = "The plugin exceeds 20 MB.";
+"Components prepared: %lld · reused: %lld" = "Components prepared: %lld · reused: %lld";
+"Checking saved plugin…" = "Checking saved plugin…";
+"Downloading plugin…" = "Downloading plugin…";
+"Checking plugin content…" = "Checking plugin content…";
+"Reusing saved plugin…" = "Reusing saved plugin…";
+"Waiting for the plugin runtime…" = "Waiting for the plugin runtime…";
+"Preparing plugin…" = "Preparing plugin…";
+"Building plugin components…" = "Building plugin components…";
+"Loading source content…" = "Loading source content…";
+"Searching…" = "Searching…";
+"Preparing plugins for first use. Later searches are much faster." = "Preparing plugins for first use. Later searches are much faster.";
+"About %lld min left" = "About %lld min left";
+"Less than a minute left" = "Less than a minute left";
+"%@ of %@" = "%@ of %@";
+"On-device Plugin Runtime" = "On-device Plugin Runtime";
+"Plugin sources run on this device without a server. First use prepares and caches the required classes. Some Android features are not supported." = "Plugin sources run on this device without a server. First use prepares and caches the required classes. Some Android features are not supported.";
+"Java Plugin Support" = "Java Plugin Support";
+"Installed · Experimental" = "Installed · Experimental";
+"Not installed in this build" = "Not installed in this build";
+"This small test checks basic DEX instructions. Open a source to test the full plugin runtime." = "This small test checks basic DEX instructions. Open a source to test the full plugin runtime.";
+"Inspection does not confirm execution. Open the source to test its Android library compatibility." = "Inspection does not confirm execution. Open the source to test its Android library compatibility.";
+"Most Sources Unavailable" = "Most Sources Unavailable";
+"%lld of %lld sources didn't respond, so results may be incomplete." = "%lld of %lld sources didn't respond, so results may be incomplete.";
+"Try another keyword." = "Try another keyword.";
+"Show Details" = "Show Details";
+"%lld of %lld sources responded" = "%lld of %lld sources responded";
+"First-time setup can take a few minutes. Keep the app open." = "First-time setup can take a few minutes. Keep the app open.";
+"This source requires Android features that the plugin runtime does not support yet." = "This source requires Android features that the plugin runtime does not support yet.";
+"This source needs an Android feature that isn't supported yet: %@." = "This source needs an Android feature that isn't supported yet: %@.";
+"This plugin couldn't be prepared on this device (missing %@)." = "This plugin couldn't be prepared on this device (missing %@).";
+"The source's plugin crashed. The site may have changed; try another source." = "The source's plugin crashed. The site may have changed; try another source.";
+
+/* Loading status */
+"Waiting for %@" = "Waiting for %@";
+"The plugin is waiting for %@ to respond. The source's server may be slow or busy." = "The plugin is waiting for %@ to respond. The source's server may be slow or busy.";
+"The plugin file is still downloading from the subscription server." = "The plugin file is still downloading from the subscription server.";
+"Other plugin requests are using every slot. This one starts as soon as one finishes." = "Other plugin requests are using every slot. This one starts as soon as one finishes.";
+"This plugin is running for the first time, so its code is being converted for this device. Next time is much faster." = "This plugin is running for the first time, so its code is being converted for this device. Next time is much faster.";
+"The plugin is still working. Plugins run much slower on this device than on Android." = "The plugin is still working. Plugins run much slower on this device than on Android.";
+"%@ is responding slowly. The server may be busy or far away; you can keep waiting or try another source." = "%@ is responding slowly. The server may be busy or far away; you can keep waiting or try another source.";
+"Loading video details…" = "Loading video details…";
+"Getting the video link for %@…" = "Getting the video link for %@…";
+"Getting the video link…" = "Getting the video link…";
+"Loading recommendations…" = "Loading recommendations…";
+"%@ · needs %@" = "%@ · needs %@";
+"Downloading at %@" = "Downloading at %@";
+"The video server" = "The video server";
+"%@ returned an error (%@). The link may have expired: go back and play the episode again, or choose another line." = "%@ returned an error (%@). The link may have expired: go back and play the episode again, or choose another line.";
+"%@ sends %@, but this video needs about %@. Try another line, or wait without skipping." = "%@ sends %@, but this video needs about %@. Try another line, or wait without skipping.";
+"The player is filling its buffer before playback continues." = "The player is filling its buffer before playback continues.";
+"%@/s" = "%@/s";
+"The plugin runtime is starting. This takes about half a minute after the app opens." = "The plugin runtime is starting. This takes about half a minute after the app opens.";
+"%@ hasn't delivered the first part of the video yet. The server may be slow or down; try another line." = "%@ hasn't delivered the first part of the video yet. The server may be slow or down; try another line.";
+"Couldn't load video from %@ (%@). Check the connection, or choose another line." = "Couldn't load video from %@ (%@). Check the connection, or choose another line.";
+"Couldn't get a sign-in code. Try again." = "Couldn't get a sign-in code. Try again.";
+"Sign-in was approved, but the drive didn't return a login. Try again." = "Sign-in was approved, but the drive didn't return a login. Try again.";
+"Open the %@ app on your phone, scan this code, and confirm the sign-in." = "Open the %@ app on your phone, scan this code, and confirm the sign-in.";
+"Open %@" = "Open %@";
+"Get New Code" = "Get New Code";
+"This code has expired." = "This code has expired.";
+"Waiting for you to scan…" = "Waiting for you to scan…";
+"Sign-in code" = "Sign-in code";
+"Your %@ sign-in is missing or has expired. Sign in again to play this episode." = "Your %@ sign-in is missing or has expired. Sign in again to play this episode.";

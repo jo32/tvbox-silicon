@@ -62,7 +62,20 @@ public class PluginLoadingTest {
                     if (params.has("wd")) check(payload.getJSONArray("list").getJSONObject(0).getString("vod_name").equals("中文搜索"), "Search query lost");
                 } finally { if (process.isAlive()) process.destroyForcibly(); }
             }
-            System.out.println("Plain plugin home/search, Init isolation, and assets passed without any native library.");
+            try {
+                for (int i=0;i<4;i++) {
+                    Path job=Files.createTempDirectory(root,"embedded-");
+                    JSONObject input=new JSONObject().put("session","fixture-"+i).put("jar",jar.toString()).put("cache",job.toString())
+                        .put("conversionCache",root.resolve("converted").toString()).put("api","csp_PlainFixture").put("params",new JSONObject());
+                    JSONObject response=new JSONObject(InProcessHost.request(input.toString()));
+                    check(!response.has("error"),"In-process source failed: "+response);
+                    check(new JSONObject(response.getString("result")).getJSONArray("list").length()==1,"In-process home lost videos");
+                    input.put("params",new JSONObject().put("wd","中文😀搜索"));
+                    response=new JSONObject(InProcessHost.request(input.toString()));
+                    check(new JSONObject(response.getString("result")).getJSONArray("list").getJSONObject(0).getString("vod_name").equals("中文😀搜索"),"In-process query lost Unicode");
+                }
+            } finally { InProcessHost.closeAll(); }
+            System.out.println("Plain plugin process/in-process home/search, session eviction, Init isolation, Unicode and assets passed.");
         } finally {
             try (var paths = Files.walk(root)) {
                 for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(path);

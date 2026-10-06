@@ -30,6 +30,17 @@ import Testing
     #expect(channels[0].group.isEmpty)
     #expect(channels[0].id == "|News|https://example.com/live.m3u8")
 }
+@Test func pluginFailuresExplainTheReasonAndKeepTheTrace() {
+    let crash: [String: JSONValue] = ["error": .string("java.lang.ArrayIndexOutOfBoundsException"), "errorCode": .string("plugin_crash"),
+                                      "trace": .string("java.lang.ArrayIndexOutOfBoundsException\n\tat com.github.catvod.spider.Xb6v.searchContent(Unknown Source)")]
+    #expect(PluginFailure.message(crash, language: "en") == "The source's plugin crashed. The site may have changed; try another source.")
+    #expect(PluginFailure.diagnostic(source: "Xb6v", crash).hasPrefix("source=Xb6v code=plugin_crash java.lang.ArrayIndexOutOfBoundsException\n"))
+    #expect(PluginFailure.diagnostic(source: "Xb6v", crash).contains("Xb6v.searchContent"))
+    let android: [String: JSONValue] = ["error": .string("NoClassDefFoundError"), "errorCode": .string("unsupported_android"), "missingClass": .string("android.util.AtomicFile")]
+    #expect(PluginFailure.message(android, language: "en") == "This source needs an Android feature that isn't supported yet: android.util.AtomicFile.")
+    #expect(PluginFailure.diagnostic(source: "Luck", android) == "source=Luck code=unsupported_android NoClassDefFoundError missingClass=android.util.AtomicFile")
+    #expect(PluginFailure.message(["error": .string("boom")], language: "en") == "Plugin error: boom")
+}
 #if os(macOS)
 @Test func structuredPluginFailuresAreLocalizedWithoutChangingHostOrStatus() {
     let failure: [String: JSONValue] = ["error": .string("raw diagnostic"), "errorCode": .string("source_http"), "host": .string("example.com"), "status": .number(403)]

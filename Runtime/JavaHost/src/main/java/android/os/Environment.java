@@ -13,7 +13,7 @@ public final class Environment {
     public static File getExternalStorageDirectory() {
         var application = android.app.ActivityThread.currentApplication();
         File root = application == null
-            ? new File(System.getProperty("tvbox.cache", System.getProperty("java.io.tmpdir")), "profile")
+            ? new File(tvbox.runtime.HostEnvironment.cache(System.getProperty("java.io.tmpdir")), "profile")
             : application.getFilesDir().getParentFile();
         File directory = new File(root, "external");
         directory.mkdirs();

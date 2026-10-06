@@ -42,16 +42,18 @@ public final class AndroidNativeRuntime {
         new AndroidModule(emulator, vm).register(emulator.getMemory());
     }
 
+    public static synchronized void close() throws java.io.IOException {
+        if (emulator != null) emulator.close();
+        emulator = null; vm = null; loaded.clear(); loader = null; plugin = null; cache = null;
+    }
+
     public static synchronized void load(String path) {
         try {
             File file = new File(path).getCanonicalFile();
             if (loaded.contains(file.getPath())) return;
             byte[] header;
             try (var stream = Files.newInputStream(file.toPath())) { header = stream.readNBytes(20); }
-            if (header.length != 20 || header[0] != 127 || header[1] != 'E' || header[2] != 'L' || header[3] != 'F'
-                || header[4] != 2 || header[5] != 1 || (header[18] & 255) != 183 || header[19] != 0) {
-                throw new UnsupportedOperationException("The plugin native library requires an unsupported ABI: " + file.getName());
-            }
+            NativeLibraries.validateARM64(header, file.getName());
             initialize();
             vm.loadLibrary(file, true).callJNI_OnLoad(emulator);
             loaded.add(file.getPath());
@@ -59,16 +61,9 @@ public final class AndroidNativeRuntime {
     }
 
     public static synchronized void loadLibrary(String name) {
-        try (var zip = new java.util.zip.ZipFile(plugin)) {
-            for (String candidate : new String[]{"lib/arm64-v8a/lib" + name + ".so", "assets/lib" + name + ".so", "assets/" + name + ".so"}) {
-                var entry = zip.getEntry(candidate);
-                if (entry == null) continue;
-                File target = File.createTempFile("native-", ".so", cache);
-                try (var stream = zip.getInputStream(entry)) { Files.copy(stream, target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING); }
-                load(target.getPath()); return;
-            }
+        try {
+            load(NativeLibraries.resolve(plugin, name, cache.toPath().resolve("native")).toString());
         } catch (Exception error) { throw new IllegalStateException("Cannot load bundled Android library: " + name, error); }
-        throw new UnsupportedOperationException("Plugin archive has no arm64 library: " + name);
     }
 
     public static synchronized Object invoke(String owner, String signature, Object receiver, Object[] values) {

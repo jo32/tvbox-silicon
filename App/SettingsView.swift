@@ -38,9 +38,11 @@ enum SettingsStyle {
     static let radius: CGFloat = 12
     static let groupFill = Color.primary.opacity(0.05)
     #if os(tvOS)
-    static let rowHeight: CGFloat = 76
+    static let rowHeight: CGFloat = 88
+    static let icon: CGFloat = 48, iconSymbol: CGFloat = 24, chevron: CGFloat = 22, field: CGFloat = 66
     #else
     static let rowHeight: CGFloat = 52
+    static let icon: CGFloat = 28, iconSymbol: CGFloat = 13, chevron: CGFloat = 12, field: CGFloat = 36
     #endif
 }
 
@@ -54,9 +56,9 @@ struct SettingsRow<Trailing: View>: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: symbol)
-                .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
-                .frame(width: 28, height: 28)
-                .background(tint.gradient, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .font(.system(size: SettingsStyle.iconSymbol, weight: .semibold)).foregroundStyle(.white)
+                .frame(width: SettingsStyle.icon, height: SettingsStyle.icon)
+                .background(tint.gradient, in: RoundedRectangle(cornerRadius: SettingsStyle.icon * 0.25, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.body).foregroundStyle(.primary).lineLimit(2)
@@ -89,7 +91,7 @@ struct SettingsLinkRow<Destination: View>: View {
     var body: some View {
         let link = RouteLink(destination: destination) {
             SettingsRow(symbol: symbol, tint: tint, title: title, subtitle: subtitle) {
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(.tertiary)
+                Image(systemName: "chevron.right").font(.system(size: SettingsStyle.chevron, weight: .semibold)).foregroundStyle(.tertiary)
             }
         }
         #if os(tvOS)
@@ -117,16 +119,15 @@ private struct SettingsRowStyle: ButtonStyle {
 /// Compact capsule buttons used inside settings groups.
 struct SettingsButtonStyle: ButtonStyle {
     var prominent = false
-    @Environment(\.colorScheme) private var scheme
     @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .semibold))
             .lineLimit(1)
-            .foregroundStyle(prominent ? (scheme == .dark ? Color.black : .white) : Color.primary)
+            .foregroundStyle(prominent ? Brand.onAccent : Color.primary)
             .padding(.horizontal, 14)
             .frame(minHeight: 30)
-            .background(prominent ? AnyShapeStyle(Color.primary) : AnyShapeStyle(Color.primary.opacity(0.08)), in: Capsule())
+            .background(prominent ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(Color.primary.opacity(0.08)), in: Capsule())
             .contentShape(Capsule())
             .opacity(enabled ? (configuration.isPressed ? 0.75 : 1) : 0.4)
     }
@@ -153,7 +154,7 @@ struct SettingsField: View {
             #if os(iOS)
             .textInputAutocapitalization(.never).keyboardType(.URL)
             #endif
-            .padding(.horizontal, 12).frame(minHeight: 34)
+            .padding(.horizontal, 12).frame(minHeight: SettingsStyle.field)
             .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay { RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.primary.opacity(0.08)) }
     }
@@ -177,7 +178,6 @@ struct SettingsPage<Content: View>: View {
 // MARK: Settings
 
 struct SettingsView: View {
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(Store.self) private var store
     @State private var directURL = ""
     @State private var cloudSummary = ""
@@ -192,16 +192,10 @@ struct SettingsView: View {
             SettingsGroup(title: L10n.text("Subscription"), footer: store.notice) {
                 VStack(alignment: .leading, spacing: 12) {
                     SettingsField(prompt: L10n.text("TVBox JSON URL"), text: $store.subscriptionAddress)
-                    settingsActionsLayout {
-                        Button { Task { await store.importSubscription() } } label: {
-                            HStack(spacing: 6) {
-                                if store.importing { ProgressView().controlSize(.mini) }
-                                Text(store.importing ? L10n.text("Importing…") : L10n.text("Save and Refresh"))
-                            }
-                        }
-                        .settingsButton(prominent: true)
-                        .disabled(store.importing || store.subscriptionAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        Button(L10n.text("Use Default URL")) { store.subscriptionAddress = Store.defaultURL }.settingsButton()
+                    // One row whenever it fits; stack only when a narrow width or large text needs it.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 8) { subscriptionActions }
+                        VStack(alignment: .leading, spacing: 8) { subscriptionActions }
                     }
                 }
                 .padding(14)
@@ -213,12 +207,12 @@ struct SettingsView: View {
             }
             #if os(macOS)
             SettingsGroup(title: L10n.text("Accounts")) {
-                SettingsLinkRow(symbol: "externaldrive.fill.badge.person.crop", tint: .teal,
+                SettingsLinkRow(symbol: "externaldrive.fill.badge.person.crop", tint: .brown,
                                 title: L10n.text("Cloud Drive Accounts"), subtitle: cloudSummary) { CloudDriveView() }
             }
             #endif
             SettingsGroup(title: L10n.text("Playback")) {
-                SettingsRow(symbol: "play.fill", tint: .indigo, title: L10n.text("Play a URL"))
+                SettingsRow(symbol: "play.fill", tint: Brand.terracotta, title: L10n.text("Play a URL"))
                 HStack(spacing: 10) {
                     SettingsField(prompt: L10n.text("HTTP / HTTPS media URL"), text: $directURL)
                     Button(L10n.text("Open Player")) {
@@ -237,7 +231,7 @@ struct SettingsView: View {
             SettingsGroup(title: L10n.text("About"),
                           footer: L10n.text("Supports TVBox JSON subscriptions, M3U / TXT live playlists, and standard type 1 / type 4 JSON APIs. Media formats depend on the device. Local JAR and JavaScript plugins are experimental on Mac; compatibility varies by source. Plugin playback is not yet available on iPhone or Apple TV.")) {
                 SettingsRow(symbol: "play.tv.fill", tint: .pink, title: L10n.text("Yingxia"),
-                            subtitle: [version, L10n.text("macOS · iOS · tvOS / Native SwiftUI + AVPlayer")].compactMap { $0 }.joined(separator: " · "))
+                            subtitle: [version, Brand.copyright].compactMap { $0 }.joined(separator: " · "))
                 SettingsLinkRow(symbol: "doc.plaintext.fill", tint: .gray, title: L10n.text("Open Source Licenses")) { LicensesView() }
             }
         }
@@ -245,11 +239,17 @@ struct SettingsView: View {
         .task { cloudSummary = CloudProvider.summary() }
         #endif
     }
-    private var settingsActionsLayout: AnyLayout {
-        #if os(iOS)
-        if sizeClass == .compact { return AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) }
-        #endif
-        return AnyLayout(HStackLayout(spacing: 8))
+    @ViewBuilder private var subscriptionActions: some View {
+        Button { Task { await store.importSubscription() } } label: {
+            HStack(spacing: 6) {
+                if store.importing { ProgressView().controlSize(.mini) }
+                Text(store.importing ? L10n.text("Importing…") : L10n.text("Save and Refresh"))
+                if store.importing { ElapsedTime() }
+            }
+        }
+        .settingsButton(prominent: true)
+        .disabled(store.importing || store.subscriptionAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        Button(L10n.text("Use Default URL")) { store.subscriptionAddress = Store.defaultURL }.settingsButton()
     }
 }
 
@@ -261,6 +261,9 @@ struct LicensesView: View {
         #if os(tvOS)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
+                Text("Yingxia \(Brand.copyright)").font(.headline)
+                    .padding(22).frame(maxWidth: .infinity, alignment: .leading)
+                    .contentPanel(cornerRadius: 18).focusable()
                 ForEach(Array(notices.components(separatedBy: "\n\n").enumerated()), id: \.offset) { _, paragraph in
                     Text(paragraph).font(.body)
                         .padding(22).frame(maxWidth: .infinity, alignment: .leading)
@@ -272,6 +275,13 @@ struct LicensesView: View {
         .screenTitle(L10n.text("Open Source Licenses"))
         #else
         SettingsPage(title: L10n.text("Open Source Licenses")) {
+            SettingsGroup {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Yingxia \(Brand.copyright)").font(.headline)
+                    Link("www.getmegaportal.com", destination: Brand.website).font(.subheadline)
+                }
+                .padding(18).frame(maxWidth: .infinity, alignment: .leading)
+            }
             SettingsGroup {
                 Text(notices)
                     .font(.system(.footnote, design: .monospaced)).foregroundStyle(.secondary).selectable()

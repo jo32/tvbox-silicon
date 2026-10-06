@@ -51,3 +51,31 @@ private func page(_ name: String) -> CatalogPage {
     #expect(model.category == "movies")
     #expect(model.videos.first?.name == "browse")
 }
+
+private actor FetchCancellationProbe {
+    var started = false
+    var cancelled = false
+    func start() { started = true }
+    func cancel() { cancelled = true }
+}
+
+@MainActor @Test func supersededCatalogRequestCancelsItsFetch() async throws {
+    let model = CatalogBrowser()
+    let probe = FetchCancellationProbe()
+    let older = Task {
+        await model.load(.list(category: nil, query: "old", page: 1)) { _ in
+            await probe.start()
+            do { try await Task.sleep(for: .seconds(10)) }
+            catch { await probe.cancel(); throw error }
+            return page("old")
+        }
+    }
+    while !(await probe.started) { await Task.yield() }
+    let started = ContinuousClock.now
+    await model.load(.list(category: nil, query: "new", page: 1)) { _ in page("new") }
+    await older.value
+    #expect(await probe.cancelled)
+    #expect(started.duration(to: .now) < .seconds(1))
+    #expect(model.videos.first?.name == "new")
+    #expect(model.error == nil)
+}

@@ -23,7 +23,7 @@ public actor LocalJarHost {
         Set(sessions.values.filter { $0.ready && Date().timeIntervalSince($0.lastUse) < 300 }.map(\.sourceKey))
     }
 
-    public func request(site: Site, jarURL: URL, params: [String: String], http: HTTPClient, scriptOrigin: URL? = nil, configurationOrigin: URL? = nil) async throws -> [String: JSONValue] {
+    public func request(site: Site, jarURL: URL, params: [String: String], http: HTTPClient, scriptOrigin: URL? = nil, configurationOrigin: URL? = nil, progress: PluginPreparation? = nil) async throws -> [String: JSONValue] {
         let trace = String(UUID().uuidString.prefix(8))
         let started = ContinuousClock.now
         let context = "request=\(trace) source=\(site.key)"
@@ -33,10 +33,20 @@ public actor LocalJarHost {
             Diagnostics.shared.record(.error, "jar.runtime", "\(context) runtime unavailable")
             throw TVError.unsupported(L10n.text("The local JAR runtime is not installed."))
         }
+        let pluginData: Data?
+        if script { pluginData = nil }
+        else {
+            pluginData = try await PluginDownloads.shared.data(at: jarURL, http: http) { stage, received, expected in
+                progress?.report(stage, received: received, expected: expected)
+            }
+            try Task.checkCancellation()
+            progress?.report(.verifying)
+        }
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
         let configuration = try encoder.encode(site.raw)
         let identity = Data((jarURL.absoluteString + "\n" + site.key + "\n" + site.api + "\n" + ((scriptOrigin ?? configurationOrigin)?.absoluteString ?? "")).utf8) + configuration
-        let key = SHA256.hash(data: identity).map { String(format: "%02x", $0) }.joined()
+        let profileKey = PluginChecksum.sha256(identity)
+        let key = profileKey + (pluginData.map { "-" + PluginChecksum.sha256($0) } ?? "")
         // Evict only idle sources. An in-flight request must not be killed by navigation elsewhere.
         for (other, entry) in sessions.sorted(by: { $0.value.lastUse < $1.value.lastUse }) where other != key && entry.active == 0 {
             if let process = try? await entry.task.value, process.hasRecentMediaActivity { continue }
@@ -57,7 +67,9 @@ public actor LocalJarHost {
                 try FileManager.default.createDirectory(at: job, withIntermediateDirectories: true)
                 do {
                     Diagnostics.shared.record(.info, "jar.download", "\(context) downloading host=\(jarURL.host ?? "local")")
-                    let data = try await PluginDownloads.shared.data(at: jarURL, http: http)
+                    let data: Data
+                    if let pluginData { data = pluginData }
+                    else { data = try await PluginDownloads.shared.data(at: jarURL, http: http) }
                     Diagnostics.shared.record(.info, "jar.download", "\(context) downloaded bytes=\(data.count)")
                     try Task.checkCancellation()
                     let jar = job.appendingPathComponent("plugin.jar")
@@ -65,7 +77,7 @@ public actor LocalJarHost {
                     var ext: String
                     if let value = try site.pluginExtension(origin: scriptOrigin ?? configurationOrigin) { ext = try value.string ?? String(data: encoder.encode(value), encoding: .utf8) ?? "" } else { ext = "" }
                     if let scriptOrigin, !ext.isEmpty, !ext.hasPrefix("{") { ext = (try? WebAddress.resolve(ext, relativeTo: scriptOrigin).absoluteString) ?? ext }
-                    let input: [String: Any] = ["script": jar.path, "jar": jar.path, "cache": job.path, "conversionCache": root.appendingPathComponent("Converted", isDirectory: true).path, "profile": root.appendingPathComponent("Profiles/" + key).path, "api": script ? jarURL.absoluteString : site.api, "key": site.key, "ext": ext, "cloudAccounts": CloudDriveAccounts.fileURL.path]
+                    let input: [String: Any] = ["script": jar.path, "jar": jar.path, "cache": job.path, "conversionCache": root.appendingPathComponent("Converted", isDirectory: true).path, "profile": root.appendingPathComponent("Profiles/" + profileKey).path, "api": script ? jarURL.absoluteString : site.api, "key": site.key, "ext": ext, "cloudAccounts": CloudDriveAccounts.fileURL.path]
                     let request = job.appendingPathComponent("request.json")
                     try JSONSerialization.data(withJSONObject: input).write(to: request)
                     return try LocalJarProcess(host: resources.appendingPathComponent(script ? "ScriptHost" : "JavaHost"), job: job, request: request, context: "source=\(site.key) session=\(job.lastPathComponent)", script: script)
@@ -77,6 +89,9 @@ public actor LocalJarHost {
         defer { entry.active -= 1; entry.lastUse = Date() }
         do {
             let process = try await entry.task.value
+            progress?.report(entry.ready ? .loading : .preparing)
+            let monitor = progress?.observe(process.preparationURL)
+            defer { monitor?.cancel() }
             try Task.checkCancellation()
             var envelope = try await process.request(params, trace: trace)
             entry.ready = true
@@ -113,20 +128,7 @@ public actor LocalJarHost {
     }
 
     static func errorMessage(_ envelope: [String: JSONValue], language: String? = nil) -> String? {
-        guard let detail = envelope["error"]?.string else { return nil }
-        switch envelope["errorCode"]?.string {
-        case "source_http":
-            if let host = envelope["host"]?.string, let status = envelope["status"]?.int {
-                return L10n.text("The source %@ returned HTTP %lld.", host, status, language: language)
-            }
-        case "source_network":
-            if let host = envelope["host"]?.string { return L10n.text("The source %@ could not be reached. Retry later.", host, language: language) }
-        case "source_empty": return L10n.text("The plugin returned no content. Try another source.", language: language)
-        case "unsupported_native_library": return L10n.text("This plugin is not supported: ftyguard_v8.so is missing.", language: language)
-        case "unsupported_android": return L10n.text("This source requires Android features that the Mac plugin runtime does not support yet.", language: language)
-        default: break
-        }
-        return L10n.text("Plugin error: %@", detail, language: language)
+        PluginFailure.message(envelope, language: language)
     }
 }
 
@@ -144,6 +146,7 @@ final class LocalJarProcess: @unchecked Sendable {
     private let timeout: TimeInterval
     private let startupTimeout: TimeInterval
     var isRunning: Bool { process.isRunning }
+    var preparationURL: URL { job.appendingPathComponent("preparation-progress.json") }
     var hasRecentMediaActivity: Bool {
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: job.appendingPathComponent("proxy-active").path),
               let date = attributes[.modificationDate] as? Date else { return false }

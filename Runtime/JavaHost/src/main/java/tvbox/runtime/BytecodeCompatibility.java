@@ -7,12 +7,13 @@ import java.util.zip.*;
 
 /** Repairs JVM interface references emitted by the DEX converter and observes plugin HTTP calls. */
 public final class BytecodeCompatibility {
-    public static final String VERSION = "host-v9";
+    // v11: frames no longer reference the nonexistent java/util/Object; re-convert cached classes.
+    public static final String VERSION = "host-v11";
 
     private static final String BRIDGES = "tvbox/runtime/generated/InterfaceCalls";
     private record CallSite(String owner, String name, String descriptor) { }
 
-    private static byte[] transform(byte[] bytes, java.util.Map<CallSite, String> bridges) {
+    private static byte[] transform(byte[] bytes, java.util.Map<CallSite, String> bridges, String bridgeOwner) {
         ClassReader reader = new ClassReader(bytes);
         ClassWriter writer = new ClassWriter(reader, 0);
         boolean newCz = reader.getClassName().equals("com/github/catvod/spider/NewCz");
@@ -58,7 +59,7 @@ public final class BytecodeCompatibility {
                                     // static interface methods even with the right constant tag.
                                     var call = new CallSite(owner, name, descriptor);
                                     String bridge = bridges.computeIfAbsent(call, key -> "call" + bridges.size());
-                                    super.visitMethodInsn(Opcodes.INVOKESTATIC, BRIDGES, bridge, descriptor, false);
+                                    super.visitMethodInsn(Opcodes.INVOKESTATIC, bridgeOwner, bridge, descriptor, false);
                                     return;
                                 }
                             } catch (ClassNotFoundException ignored) { }
@@ -119,6 +120,9 @@ public final class BytecodeCompatibility {
     }
 
     public static void rewrite(Path original, Path destination) throws IOException {
+        rewrite(original, destination, BRIDGES);
+    }
+    public static void rewrite(Path original, Path destination, String bridgeOwner) throws IOException {
         Path temporary = Files.createTempFile(destination.getParent(), "compatible-", ".jar");
         try {
             var bridges = new java.util.LinkedHashMap<CallSite, String>();
@@ -127,12 +131,12 @@ public final class BytecodeCompatibility {
                     ZipEntry entry = entries.nextElement();
                     byte[] bytes;
                     try (InputStream stream = input.getInputStream(entry)) { bytes = stream.readAllBytes(); }
-                    if (entry.getName().endsWith(".class")) bytes = transform(bytes, bridges);
+                    if (entry.getName().endsWith(".class")) bytes = transform(bytes, bridges, bridgeOwner);
                     output.putNextEntry(new ZipEntry(entry.getName())); output.write(bytes); output.closeEntry();
                 }
                 if (!bridges.isEmpty()) {
                     ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-                    writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, BRIDGES, null, "java/lang/Object", null);
+                    writer.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL, bridgeOwner, null, "java/lang/Object", null);
                     for (var entry : bridges.entrySet()) {
                         CallSite call = entry.getKey();
                         MethodVisitor method = writer.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, entry.getValue(), call.descriptor(), null, null);
@@ -146,7 +150,7 @@ public final class BytecodeCompatibility {
                         method.visitMaxs(0, 0); method.visitEnd();
                     }
                     writer.visitEnd();
-                    output.putNextEntry(new ZipEntry(BRIDGES + ".class")); output.write(writer.toByteArray()); output.closeEntry();
+                    output.putNextEntry(new ZipEntry(bridgeOwner + ".class")); output.write(writer.toByteArray()); output.closeEntry();
                 }
             }
             Files.move(temporary, destination, StandardCopyOption.REPLACE_EXISTING);

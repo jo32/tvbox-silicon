@@ -20,6 +20,12 @@ public final class PluginSession {
     }
 
     public String request(JSONObject params) throws Exception {
+        PreparationProgress.loading();
+        try { return performRequest(params); }
+        finally { PreparationProgress.loading(); } // Flush the final throttled counters, also on failure.
+    }
+
+    private String performRequest(JSONObject params) throws Exception {
         HttpDiagnostics.reset();
         if (params.has("play")) {
             String required = params.optString("detailID", "");
@@ -45,6 +51,25 @@ public final class PluginSession {
         if (videos != null && videos.length() > 0) home.put("list", videos);
         checkInitialization(home);
         return home.toString();
+    }
+
+    /** Releases this source only; a shared plugin runtime and its native guard stay loaded. */
+    public void closeSource() throws Exception {
+        try { spider.destroy(); }
+        finally { if (bridge != null) bridge.close(); }
+    }
+
+    public void close() throws Exception {
+        try { spider.destroy(); }
+        finally {
+            android.os.Looper.shutdown();
+            if (bridge != null) bridge.close();
+            AndroidNativeRuntime.close();
+            if (NativeCalls.emulator != null) {
+                NativeCalls.emulator.close(); NativeCalls.emulator = null; NativeCalls.vm = null; NativeCalls.nativeClass = null;
+            }
+            if (spider.getClass().getClassLoader() instanceof java.net.URLClassLoader loader) loader.close();
+        }
     }
 
     private String content(Operation operation, boolean emptyAllowed) throws Exception {

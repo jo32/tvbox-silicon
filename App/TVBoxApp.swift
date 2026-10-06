@@ -15,8 +15,14 @@ import TVCore
     var body: some Scene {
         WindowGroup {
             RootView().environment(store)
+                #if !os(tvOS)
+                // tvOS draws plain buttons and section links in the tint, so it keeps the neutral default.
                 .tint(Brand.accent)
+                #endif
                 .task { Diagnostics.shared.record(.info, "app", "Application scene opened") }
+                #if DEBUG
+                .task { await QALaunch.start(store) }
+                #endif
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background {
                         Task { _ = await Diagnostics.shared.snapshot() }
