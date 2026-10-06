@@ -13,6 +13,41 @@ public enum TVError: LocalizedError, Sendable {
     }
 }
 
+/// A plugin host's error envelope: a user-facing reason, plus a diagnostics line that keeps the
+/// error code and stack trace so a failing source can be fixed later without reproducing it.
+public enum PluginFailure {
+    public static func message(_ envelope: [String: JSONValue], language: String? = nil) -> String? {
+        guard let detail = envelope["error"]?.string else { return nil }
+        let missing = envelope["missingClass"]?.string
+        switch envelope["errorCode"]?.string {
+        case "source_http":
+            if let host = envelope["host"]?.string, let status = envelope["status"]?.int {
+                return L10n.text("The source %@ returned HTTP %lld.", host, status, language: language)
+            }
+        case "source_network":
+            if let host = envelope["host"]?.string { return L10n.text("The source %@ could not be reached. Retry later.", host, language: language) }
+        case "source_empty": return L10n.text("The plugin returned no content. Try another source.", language: language)
+        case "unsupported_native_library": return L10n.text("This plugin is not supported: ftyguard_v8.so is missing.", language: language)
+        case "unsupported_android":
+            if let missing { return L10n.text("This source needs an Android feature that isn't supported yet: %@.", missing, language: language) }
+            return L10n.text("This source requires Android features that the plugin runtime does not support yet.", language: language)
+        case "class_conversion":
+            return L10n.text("This plugin couldn't be prepared on this device (missing %@).", missing ?? detail, language: language)
+        case "plugin_crash":
+            return L10n.text("The source's plugin crashed. The site may have changed; try another source.", language: language)
+        default: break
+        }
+        return L10n.text("Plugin error: %@", detail, language: language)
+    }
+
+    public static func diagnostic(source: String, _ envelope: [String: JSONValue]) -> String {
+        var line = "source=\(source) code=\(envelope["errorCode"]?.string ?? "unclassified") \(envelope["error"]?.string ?? "")"
+        if let missing = envelope["missingClass"]?.string { line += " missingClass=\(missing)" }
+        if let trace = envelope["trace"]?.string, !trace.isEmpty { line += "\n" + trace }
+        return line
+    }
+}
+
 public enum JSONValue: Codable, Equatable, Sendable {
     case string(String), number(Double), bool(Bool), object([String: JSONValue]), array([JSONValue]), null
     public init(from decoder: Decoder) throws {
@@ -95,6 +130,8 @@ public struct Site: Identifiable, Codable, Hashable, Sendable {
         if native { return L10n.text("Standard API") }
         #if os(macOS)
         if type == 3 { return api.hasPrefix("csp_") ? L10n.text("Local JAR · Experimental") : L10n.text("Local JavaScript · Experimental") }
+        #elseif os(iOS) || os(tvOS)
+        if type == 3, api.hasPrefix("csp_"), EmbeddedJarHost.available { return L10n.text("Local JAR · Experimental") }
         #endif
         if type == 3 { return api.hasPrefix("csp_") ? L10n.text("Requires Android plugin") : L10n.text("Requires script engine") }
         return L10n.text("Unsupported API")

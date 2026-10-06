@@ -47,15 +47,9 @@ struct RootView: View {
             }
             .onChange(of: store.section) { detailPath = NavigationPath() }
             #else
-            #if os(iOS)
-            if sizeClass == .compact {
-                compactNavigation
-            } else {
-                platformTabs
-            }
-            #else
+            // The system tab bar on every size class: iOS 26 floats it over content and
+            // collapses extra sections into More, which a hand-built bar imitated poorly.
             platformTabs
-            #endif
             #endif
         }
         .modifier(PlayerPresentation(playing: $store.playing))
@@ -84,8 +78,7 @@ struct RootView: View {
             }
             .tabViewStyle(.sidebarAdaptable)
             #if os(iOS)
-            .tabBarMinimizeBehavior(.never)
-            .toolbarBackground(.visible, for: .tabBar)
+            .tabBarMinimizeBehavior(.onScrollDown)
             .onChange(of: store.section) { _, section in
                 if sizeClass == .compact && (section == .favorites || section == .settings) {
                     moreSection = section; morePath = NavigationPath([section])
@@ -102,49 +95,16 @@ struct RootView: View {
     }
     #endif
 
-    #if os(iOS)
-    private var compactNavigation: some View {
-        TabView(selection: Binding(get: { store.section }, set: { store.section = $0 })) {
-            ForEach(tabs) { item in
-                Group {
-                    if item == .more {
-                        NavigationStack(path: $morePath) {
-                            content(.more).routeDestinations()
-                                .navigationDestination(for: AppSection.self) { destination in
-                                    if destination == .favorites { FavoritesView() }
-                                    else { SettingsView() }
-                                }
-                        }
-                    } else { NavigationStack { content(item).routeDestinations() } }
-                }.tag(item).toolbar(.hidden, for: .tabBar)
-            }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            HStack(spacing: 0) {
-                ForEach(tabs) { item in
-                    Button { store.section = item } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: item.icon).font(.system(size: 20, weight: store.section == item ? .semibold : .regular))
-                            Text(item.title).font(.system(size: 10, weight: store.section == item ? .semibold : .regular)).lineLimit(1)
-                        }
-                        .foregroundStyle(store.section == item ? Color.primary : .secondary)
-                        .frame(maxWidth: .infinity).frame(height: 54).contentShape(Rectangle())
-                    }.buttonStyle(.plain)
-                        .accessibilityAddTraits(store.section == item ? [.isSelected] : [])
-                }
-            }
-            .padding(.horizontal, 8)
-            .background { Color.clear.glassEffect(.regular, in: .rect).ignoresSafeArea(edges: .bottom) }
-        }
-        .onChange(of: store.section) { _, section in
-            if section == .favorites || section == .settings {
-                moreSection = section; morePath = NavigationPath([section]); store.section = .more
-            }
-        }
-    }
-    #endif
 
     @ViewBuilder private func content(_ section: AppSection) -> some View {
+        #if DEBUG
+        if QALaunch.overrides(section) { QALaunch.page(for: section, store: store) } else { sectionRoot(section) }
+        #else
+        sectionRoot(section)
+        #endif
+    }
+
+    @ViewBuilder private func sectionRoot(_ section: AppSection) -> some View {
         switch section {
         case .home: HomeView()
         case .search: GlobalSearchView()
@@ -161,7 +121,7 @@ struct RootView: View {
             .scrollContentBackground(.hidden)
             #endif
             .screenBackdrop()
-            .navigationTitle(L10n.text("More"))
+            .screenTitle(L10n.text("More"))
         }
     }
 }
@@ -198,7 +158,6 @@ private struct MacSidebar: View {
         let ordered = groups.flatMap(\.items)
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                brand
                 ForEach(groups, id: \.title) { group in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(group.title)
@@ -219,20 +178,6 @@ private struct MacSidebar: View {
         }
         .scrollIndicators(.never)
         .safeAreaInset(edge: .bottom, spacing: 0) { SidebarStatus() }
-    }
-
-    private var brand: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "play.tv.fill")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.background)
-                .frame(width: 26, height: 26)
-                .background(Color.primary, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            Text(L10n.text("Yingxia")).font(.system(size: 15, weight: .bold))
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10).padding(.top, 4)
-        .accessibilityElement(children: .combine)
     }
 }
 

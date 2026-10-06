@@ -11,6 +11,8 @@ import Observation
     public var keyword = ""
     public var stopped = false
     public var scrollID: String?
+    /// When the current run began and how many sources were already done, for a time estimate.
+    public private(set) var runStart: (date: Date, completed: Int)?
     private var generation = UUID()
     private(set) var task: Task<Void, Never>?
 
@@ -76,6 +78,7 @@ import Observation
         let keyword = keyword
         stopped = false; busy = !sites.isEmpty
         guard busy else { return }
+        runStart = (Date(), completed)
         task = Task {
             var ordered = sites
             #if os(macOS)

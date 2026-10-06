@@ -10,7 +10,6 @@ private struct SearchPoster: Identifiable {
 struct GlobalSearchView: View {
     @Environment(Store.self) private var store
     @FocusState private var inputFocused: Bool
-    @Environment(\.colorScheme) private var colorScheme
     @State private var showFailures = false
     @AppStorage("videoSearchHistory") private var historyData = Data()
     private var model: SearchModel { store.searchModel }
@@ -81,10 +80,10 @@ struct GlobalSearchView: View {
                                     Text(L10n.text("Results appear as each source responds.")).foregroundStyle(.secondary)
                                 }.frame(maxWidth: .infinity).padding(.vertical, 70)
                             } else {
-                                ContentUnavailableView(L10n.text("No Videos"), systemImage: "magnifyingglass", description: Text(L10n.text("Try another keyword or retry failed sources.")))
+                                emptyResults(config)
                             }
                         } else {
-                            LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.posterMin), spacing: 18, alignment: .top)], spacing: 24) {
+                            LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
                                 resultLinks(config)
                             }.scrollTargetLayout()
                             if let selected = model.matches.first(where: { $0.id == model.selectedSource }) {
@@ -100,6 +99,28 @@ struct GlobalSearchView: View {
                 }
             }.pageContainer()
         }
+    }
+
+    /// Separates "nothing matched" from "most sources never answered" so the empty state does not blame the keyword.
+    private func emptyResults(_ config: Subscription) -> some View {
+        let mostlyFailed = model.failures.count * 2 > model.completed
+        return ContentUnavailableView {
+            Label(L10n.text(mostlyFailed ? "Most Sources Unavailable" : "No Videos"),
+                  systemImage: mostlyFailed ? "wifi.exclamationmark" : "magnifyingglass")
+        } description: {
+            Text(mostlyFailed
+                 ? L10n.text("%lld of %lld sources didn't respond, so results may be incomplete.", model.failures.count, model.total)
+                 : L10n.text("Try another keyword."))
+        } actions: {
+            if !model.failures.isEmpty {
+                HStack(spacing: 16) {
+                    Button(L10n.text("Retry failed sources")) { model.resume(config: config, retryFailures: true) }
+                        .controlButton(prominent: true)
+                    Button(L10n.text("Show Details")) { showFailures = true }.controlButton()
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 420)
     }
 
     private func searchHeader(_ config: Subscription) -> some View {
@@ -123,9 +144,9 @@ struct GlobalSearchView: View {
                 if !trimmed.isEmpty && trimmed != model.keyword {
                     Button(L10n.text("Search")) { submit(config) }
                         .buttonStyle(.plain).font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
+                        .foregroundStyle(Brand.onAccent)
                         .padding(.horizontal, 14).frame(height: 30)
-                        .background(Color.primary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .background(Brand.accent, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
             }
@@ -161,6 +182,9 @@ struct GlobalSearchView: View {
                         searchActions(config)
                     }
                 }
+                if model.busy {
+                    SearchActivityList(origin: config.origin, completed: model.completed, total: model.total, runStart: model.runStart)
+                }
                 if !model.matches.isEmpty {
                     #if os(tvOS)
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -186,22 +210,29 @@ struct GlobalSearchView: View {
         .frame(maxWidth: model.keyword.isEmpty ? 760 : Layout.maxWidth - Layout.gutter * 2)
         .frame(maxWidth: .infinity)
         .padding(.horizontal, Layout.gutter).padding(.vertical, 16)
-        #if os(tvOS)
-        .background(model.keyword.isEmpty ? AnyShapeStyle(.clear) : AnyShapeStyle(.regularMaterial))
-        #endif
     }
 
     private var searchSummary: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        // A spinner has no text baseline, so it centers on the row; only the two labels share a baseline.
+        HStack(alignment: .center, spacing: 12) {
             #if os(tvOS)
             if model.busy { ProgressView().controlSize(.small) }
             #endif
-            Text(L10n.text("%lld results", model.videoCount)).font(.headline)
-            Text(model.stopped ? L10n.text("Search paused") : L10n.text("Searched %lld of %lld sources", model.completed, model.total))
-                .font(.subheadline).foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(L10n.text("%lld results", model.videoCount)).font(.headline)
+                Text(summaryDetail)
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
         }
         .monospacedDigit()
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Failed sources count as "completed", so once the search ends report how many actually answered.
+    private var summaryDetail: String {
+        if model.stopped { return L10n.text("Search paused") }
+        if model.busy || model.failures.isEmpty { return L10n.text("Searched %lld of %lld sources", model.completed, model.total) }
+        return L10n.text("%lld of %lld sources responded", model.completed - model.failures.count, model.total)
     }
 
     private func searchActions(_ config: Subscription) -> some View {
@@ -345,6 +376,71 @@ struct GlobalSearchView: View {
         model.search(keyword, config: config)
     }
 }
+/// What a running search is doing: overall progress, a time estimate, and one row per plugin
+/// source in flight. A first search can spend minutes building plugin components, and the
+/// summary count alone looks stuck.
+private struct SearchActivityList: View {
+    let origin: URL
+    let completed: Int
+    let total: Int
+    let runStart: (date: Date, completed: Int)?
+    /// The on-device plugin worker runs at most this many searches at once.
+    private let limit = 5
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { timeline in
+            let active = Array(PluginPreparation.active(origin: origin).prefix(limit))
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 14) {
+                    ProgressView(value: Double(completed), total: Double(max(total, 1)))
+                        .progressViewStyle(.linear).tint(Brand.accent)
+                    if let remaining = remaining(at: timeline.date) {
+                        Text(remaining).foregroundStyle(.secondary).monospacedDigit().fixedSize()
+                    }
+                    if let runStart {
+                        Text(Duration.seconds(max(0, Int(timeline.date.timeIntervalSince(runStart.date))))
+                                .formatted(.time(pattern: .minuteSecond)))
+                            .foregroundStyle(.secondary).monospacedDigit().fixedSize()
+                    }
+                }
+                if active.contains(where: { $0.snapshot.stage == .converting || $0.snapshot.converted > 0 }) {
+                    Label(L10n.text("Preparing plugins for first use. Later searches are much faster."), systemImage: "hourglass")
+                        .foregroundStyle(.secondary)
+                }
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
+                    ForEach(active) { item in
+                        GridRow {
+                            Text(item.name).fontWeight(.semibold).lineLimit(1)
+                            Text(status(item.snapshot)).foregroundStyle(.secondary).lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Text(Duration.seconds(max(0, Int(timeline.date.timeIntervalSince(item.snapshot.started))))
+                                    .formatted(.time(pattern: .minuteSecond)))
+                                .monospacedDigit().foregroundStyle(.secondary)
+                                .gridColumnAlignment(.trailing)
+                        }
+                    }
+                }
+            }
+            .font(.subheadline)
+            .accessibilityElement(children: .combine)
+            .animation(.smooth(duration: 0.25), value: active.map(\.id))
+        }
+    }
+    /// While searching, the plugin's "loading" stage is the search itself.
+    private func status(_ snapshot: PluginPreparation.Snapshot) -> String {
+        let title = snapshot.stage == .loading ? L10n.text("Searching…") : snapshot.stage.title
+        return snapshot.detail.map { "\(title) · \($0)" } ?? title
+    }
+    /// Extrapolates this run's finishing rate; hidden until a few sources have answered.
+    private func remaining(at now: Date) -> String? {
+        guard let runStart, total > completed else { return nil }
+        let done = completed - runStart.completed
+        let elapsed = now.timeIntervalSince(runStart.date)
+        guard done >= 3, elapsed >= 20 else { return nil }
+        let minutes = Int((elapsed / Double(done) * Double(total - completed) / 60).rounded(.up))
+        return minutes <= 1 ? L10n.text("Less than a minute left") : L10n.text("About %lld min left", minutes)
+    }
+}
+
 #if !os(tvOS)
 private struct QuietPillStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -471,6 +567,9 @@ struct RecommendationsView: View {
                 }
             }
             #endif
+            if model.busy, let site {
+                LoadingCard { .source(site, origin: config.origin, title: L10n.text("Loading recommendations…")) }
+            }
             if model.busy && model.items.isEmpty { PosterSkeletonGrid() }
             if let error = model.error {
                 Text(error).foregroundStyle(.secondary)
@@ -484,7 +583,7 @@ struct RecommendationsView: View {
                 if (loadedSite.raw["indexs"]?.int ?? 0) == 1 {
                     Text(L10n.text("Choose a title to find it across your sources.")).font(.subheadline).foregroundStyle(.secondary)
                 }
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.posterMin), spacing: 18)], spacing: 22) {
+                LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
                     ForEach(model.items) { item in
                         switch item.destination {
                         case .search(let keyword):
@@ -641,7 +740,6 @@ private struct SourceChip: View {
     let selected: Bool
     let action: () -> Void
     @State private var hovering = false
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let label = SourceLabel(name)
@@ -652,7 +750,7 @@ private struct SourceChip: View {
                 if let count { Text("\(count)").monospacedDigit().opacity(0.55) }
             }
             .font(.system(size: 13, weight: selected ? .semibold : .medium))
-            .foregroundStyle(selected ? (scheme == .dark ? Color.black : .white) : Color.primary.opacity(0.82))
+            .foregroundStyle(selected ? Brand.onAccent : Color.primary.opacity(0.82))
             .padding(.horizontal, 12)
             .frame(height: SourceStrip.controlSize)
             .background(fill, in: Capsule())
@@ -668,7 +766,7 @@ private struct SourceChip: View {
     }
 
     private var fill: Color {
-        if selected { return scheme == .dark ? .white : Color(white: 0.1) }
+        if selected { return Brand.accent }
         return Color.primary.opacity(hovering ? 0.12 : 0.06)
     }
 }

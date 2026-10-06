@@ -13,6 +13,7 @@ struct HomeView: View {
                     if !store.favorites.isEmpty { favorites }
                     if !config.lives.isEmpty { playlists(config) }
                 } else if store.importing {
+                    LoadingCard { .server(URL(string: store.subscriptionAddress)?.host(), title: L10n.text("Importing…")) }
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.tileMin), spacing: 16)], spacing: 16) {
                         ForEach(0..<3, id: \.self) { _ in SkeletonBlock(cornerRadius: 26).frame(height: 82) }
                     }
@@ -27,14 +28,6 @@ struct HomeView: View {
         .screenTitle(L10n.text("Watch Now"))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        #endif
-        #if !os(tvOS)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { Task { await store.importSubscription(address: store.subscription?.origin.absoluteString) } } label: { Label(L10n.text("Refresh"), systemImage: "arrow.clockwise") }
-                    .disabled(store.importing)
-            }
-        }
         #endif
     }
 
@@ -51,7 +44,7 @@ struct HomeView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Text(L10n.text("Connect your subscription to watch on Mac, iPhone, iPad, and Apple TV."))
                 .font(.title3).foregroundStyle(.white.opacity(0.78))
-                .frame(maxWidth: 560, alignment: .leading)
+                .frame(maxWidth: Layout.heroTitle * 16, alignment: .leading)
             GlassEffectContainer(spacing: 12) {
                 HStack(spacing: 12) {
                     if store.subscription == nil {
@@ -86,7 +79,7 @@ struct HomeView: View {
     }
 
     private var heroArt: some View {
-        Color(white: 0.10)
+        Color(red: 0.12, green: 0.09, blue: 0.07)
     }
 
     // MARK: Sections

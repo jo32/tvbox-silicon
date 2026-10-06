@@ -10,9 +10,16 @@ struct RuntimeView: View {
     private let runtime = JarRuntime()
     var body: some View {
         SettingsPage(title: L10n.text("JAR Runtime")) {
+            #if os(iOS) || os(tvOS)
+            SettingsGroup(title: L10n.text("On-device Plugin Runtime"),
+                          footer: L10n.text("Plugin sources run on this device without a server. First use prepares and caches the required classes. Some Android features are not supported.")) {
+                SettingsRow(symbol: "cpu.fill", tint: Brand.terracotta, title: L10n.text("Java Plugin Support"),
+                            subtitle: EmbeddedJarHost.available ? L10n.text("Installed · Experimental") : L10n.text("Not installed in this build"))
+            }
+            #endif
             SettingsGroup(title: L10n.text("Built-in Runtime · Experimental"),
-                          footer: L10n.text("The app includes a DEX interpreter without JIT and a test JAR. Mac also includes a JVM and Android native library compatibility layer for JAR plugins. The test below checks the basic DEX interpreter.")) {
-                SettingsRow(symbol: "cpu.fill", tint: .indigo, title: L10n.text("Run Built-in Test JAR"), subtitle: probeSummary) {
+                          footer: L10n.text("This small test checks basic DEX instructions. Open a source to test the full plugin runtime.")) {
+                SettingsRow(symbol: "cpu.fill", tint: Brand.terracotta, title: L10n.text("Run Built-in Test JAR"), subtitle: probeSummary) {
                     Button(L10n.text("Run Test")) { Task { await runProbe() } }.settingsButton().disabled(busy)
                 }
             }
@@ -35,7 +42,7 @@ struct RuntimeView: View {
                 SettingsLinkRow(symbol: "doc.text.magnifyingglass", tint: .gray, title: L10n.text("Diagnostic Logs")) { DiagnosticsView() }
             }
             if busy {
-                HStack(spacing: 8) { ProgressView().controlSize(.small); Text(L10n.text("Working…")).foregroundStyle(.secondary) }
+                HStack(spacing: 8) { ProgressView().controlSize(.small); Text(L10n.text("Working…")).foregroundStyle(.secondary); ElapsedTime() }
             }
             if let error { Label(error, systemImage: "exclamationmark.triangle.fill").font(.callout).foregroundStyle(Brand.amber) }
         }
@@ -53,7 +60,7 @@ struct RuntimeView: View {
     private var reportFootnote: String? {
         guard let report, report.status == 0 else { return nil }
         return report.needsAndroidNativeRuntime
-            ? L10n.text("Inspection does not confirm execution. Mac uses an additional local compatibility layer on the Sources screen; other platforms do not support it yet.")
+            ? L10n.text("Inspection does not confirm execution. Open the source to test its Android library compatibility.")
             : L10n.text("No bundled .so libraries found. CatVod APIs, Android APIs, and dynamic loading still need verification before playback can be confirmed.")
     }
     private func runProbe() async {

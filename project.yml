@@ -57,7 +57,23 @@ targets:
   TVBox-iOS:
     templates: [SharedApp]
     platform: iOS
+    sources:
+      - path: Runtime/AppleRuntime/Native/AppleRuntime.m
+    postBuildScripts:
+      - name: Embed on-device Java runtime
+        script: |
+          set -eu
+          RUNTIME="$SRCROOT/build/AppleRuntime/$PLATFORM_NAME"
+          test -f "$RUNTIME/lib/libTVAppleRuntime.a"
+          rsync -a "$RUNTIME/Resources/lib/" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/lib/"
+          rsync -a --delete "$RUNTIME/Resources/JavaHost/" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/JavaHost/"
+        basedOnDependencyAnalysis: false
     settings:
+      HEADER_SEARCH_PATHS: $(inherited) $(SRCROOT)/build/AppleRuntime/$(PLATFORM_NAME)/include
+      OTHER_LDFLAGS: $(inherited) -Wl,-force_load,$(SRCROOT)/build/AppleRuntime/$(PLATFORM_NAME)/lib/libTVAppleRuntime.a -Wl,-export_dynamic -lc++ -lz -liconv -framework Security -framework CoreGraphics
+      ENABLE_USER_SCRIPT_SANDBOXING: NO
+      ENABLE_DEBUG_DYLIB: NO
+      ARCHS: arm64
       PRODUCT_BUNDLE_IDENTIFIER: com.tvbox.yingxia.ios
       TARGETED_DEVICE_FAMILY: '1,2'
     info:
@@ -67,5 +83,21 @@ targets:
   TVBox-tvOS:
     templates: [SharedApp]
     platform: tvOS
+    sources:
+      - path: Runtime/AppleRuntime/Native/AppleRuntime.m
+    postBuildScripts:
+      - name: Embed on-device Java runtime
+        script: |
+          set -eu
+          RUNTIME="$SRCROOT/build/AppleRuntime/$PLATFORM_NAME"
+          test -f "$RUNTIME/lib/libTVAppleRuntime.a"
+          rsync -a "$RUNTIME/Resources/lib/" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/lib/"
+          rsync -a --delete "$RUNTIME/Resources/JavaHost/" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/JavaHost/"
+        basedOnDependencyAnalysis: false
     settings:
+      HEADER_SEARCH_PATHS: $(inherited) $(SRCROOT)/build/AppleRuntime/$(PLATFORM_NAME)/include
+      OTHER_LDFLAGS: $(inherited) -Wl,-force_load,$(SRCROOT)/build/AppleRuntime/$(PLATFORM_NAME)/lib/libTVAppleRuntime.a -Wl,-export_dynamic -lc++ -lz -liconv -framework Security -framework CoreGraphics
+      ENABLE_USER_SCRIPT_SANDBOXING: NO
+      ENABLE_DEBUG_DYLIB: NO
+      ARCHS: arm64
       PRODUCT_BUNDLE_IDENTIFIER: com.tvbox.yingxia.tv

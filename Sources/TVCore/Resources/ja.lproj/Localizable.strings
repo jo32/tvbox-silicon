@@ -204,7 +204,6 @@
 
 "Search failed" = "検索に失敗しました";
 
-"Try another keyword or retry failed sources." = "別のキーワードを試すか、再検索してください。";
 
 "This source has no recommendations. Choose another source or use Global Search." = "このソースにはおすすめがありません。別のソースを選ぶか横断検索をお使いください。";
 
@@ -284,7 +283,6 @@
 "The subscription server returned a web page instead of a configuration." = "購読サーバーが設定ファイルではなくウェブページを返しました。";
 "This subscription uses an encrypted configuration that is not supported yet." = "この購読は未対応の暗号化設定を使用しています。";
 "The plugin took too long to initialize. Retry or choose another source." = "プラグインの初期化がタイムアウトしました。再試行するか、別の配信ソースを選んでください。";
-"This source requires Android features that the Mac plugin runtime does not support yet." = "この配信ソースは、Macのプラグイン実行環境で未対応のAndroid機能を必要とします。";
 "Scroll sources left" = "ソースを左にスクロール";
 "Scroll sources right" = "ソースを右にスクロール";
 
@@ -327,3 +325,68 @@
 "Last updated %@" = "最終更新 %@";
 "Run Test" = "テストを実行";
 "Check" = "確認";
+
+"The plugin exceeds 20 MB." = "プラグインが20 MBを超えています。";
+"Components prepared: %lld · reused: %lld" = "準備済み %lld 個・再利用 %lld 個";
+"Checking saved plugin…" = "保存済みプラグインを確認中…";
+"Downloading plugin…" = "プラグインをダウンロード中…";
+"Checking plugin content…" = "プラグインの内容を確認中…";
+"Reusing saved plugin…" = "保存済みプラグインを再利用中…";
+"Waiting for the plugin runtime…" = "プラグインの実行を待機中…";
+"Preparing plugin…" = "プラグインを準備中…";
+"Building plugin components…" = "プラグインのコンポーネントを構築中…";
+"Loading source content…" = "ソースの内容を読み込み中…";
+"Searching…" = "検索中…";
+"Preparing plugins for first use. Later searches are much faster." = "初回利用のためプラグインを準備しています。次回以降の検索はずっと速くなります。";
+"About %lld min left" = "残り約 %lld 分";
+"Less than a minute left" = "残り1分未満";
+"%@ of %@" = "%@ / %@";
+"On-device Plugin Runtime" = "端末内プラグイン実行環境";
+"Plugin sources run on this device without a server. First use prepares and caches the required classes. Some Android features are not supported." = "プラグインはサーバーを使わず端末上で動作します。初回利用時に必要なコンポーネントを準備して保存します。一部の Android 機能には対応していません。";
+"Java Plugin Support" = "Java プラグイン対応";
+"Installed · Experimental" = "インストール済み・実験的機能";
+"Not installed in this build" = "このビルドには未インストール";
+"This small test checks basic DEX instructions. Open a source to test the full plugin runtime." = "このテストは基本的な DEX 命令を確認します。プラグイン全体の動作を確認するにはソースを開いてください。";
+"Inspection does not confirm execution. Open the source to test its Android library compatibility." = "検査だけでは実行を確認できません。ソースを開いて Android ライブラリの互換性を確認してください。";
+"Most Sources Unavailable" = "ほとんどのソースが利用できません";
+"%lld of %lld sources didn't respond, so results may be incomplete." = "%lld / %lld ソースが応答しませんでした。結果が不完全な可能性があります。";
+"Try another keyword." = "別のキーワードを試してください。";
+"Show Details" = "詳細を表示";
+"%lld of %lld sources responded" = "%lld / %lld ソースが応答";
+"First-time setup can take a few minutes. Keep the app open." = "初回の準備には数分かかることがあります。アプリを開いたままにしてください。";
+"This source requires Android features that the plugin runtime does not support yet." = "この配信ソースは、プラグイン実行環境で未対応のAndroid機能を必要とします。";
+"This source needs an Android feature that isn't supported yet: %@." = "このソースには未対応のAndroid機能が必要です：%@。";
+"This plugin couldn't be prepared on this device (missing %@)." = "この端末でプラグインを準備できませんでした（%@ がありません）。";
+"The source's plugin crashed. The site may have changed; try another source." = "ソースのプラグインがクラッシュしました。サイトが変更された可能性があります。別のソースをお試しください。";
+
+/* Loading status */
+"Waiting for %@" = "%@ を待機中";
+"The plugin is waiting for %@ to respond. The source's server may be slow or busy." = "プラグインは %@ の応答を待っています。ソースのサーバーが遅いか混雑している可能性があります。";
+"The plugin file is still downloading from the subscription server." = "プラグインファイルを購読サーバーからダウンロード中です。";
+"Other plugin requests are using every slot. This one starts as soon as one finishes." = "ほかのプラグイン要求ですべての枠が使用中です。1 つ終わり次第開始します。";
+"This plugin is running for the first time, so its code is being converted for this device. Next time is much faster." = "このプラグインは初回実行のため、コードをこのデバイス向けに変換しています。次回からはずっと速くなります。";
+"The plugin is still working. Plugins run much slower on this device than on Android." = "プラグインはまだ処理中です。このデバイスでは Android よりかなり遅く動作します。";
+"%@ is responding slowly. The server may be busy or far away; you can keep waiting or try another source." = "%@ の応答が遅れています。サーバーが混雑しているか遠い可能性があります。待つか、別のソースを試してください。";
+"Loading video details…" = "動画の詳細を読み込み中…";
+"Getting the video link for %@…" = "%@ の再生リンクを取得中…";
+"Getting the video link…" = "再生リンクを取得中…";
+"Loading recommendations…" = "おすすめを読み込み中…";
+"%@ · needs %@" = "%@ · 必要 %@";
+"Downloading at %@" = "ダウンロード速度 %@";
+"The video server" = "動画サーバー";
+"%@ returned an error (%@). The link may have expired: go back and play the episode again, or choose another line." = "%@ がエラーを返しました（%@）。リンクの期限が切れている可能性があります。戻ってもう一度再生するか、別の回線を選んでください。";
+"%@ sends %@, but this video needs about %@. Try another line, or wait without skipping." = "%@ の速度は %@ ですが、この動画には約 %@ が必要です。別の回線を試すか、スキップせずにお待ちください。";
+"The player is filling its buffer before playback continues." = "再生を続ける前にバッファを読み込んでいます。";
+"%@/s" = "%@/秒";
+"The plugin runtime is starting. This takes about half a minute after the app opens." = "プラグインの実行環境を起動中です。アプリを開いてから約 30 秒かかります。";
+"%@ hasn't delivered the first part of the video yet. The server may be slow or down; try another line." = "%@ から動画の最初の部分がまだ届いていません。サーバーが遅いか停止している可能性があります。別の回線を試してください。";
+"Couldn't load video from %@ (%@). Check the connection, or choose another line." = "%@ から動画を読み込めません（%@）。接続を確認するか、別の回線を選んでください。";
+"Couldn't get a sign-in code. Try again." = "ログイン用コードを取得できませんでした。もう一度お試しください。";
+"Sign-in was approved, but the drive didn't return a login. Try again." = "ログインは承認されましたが、ドライブからログイン情報が返されませんでした。もう一度お試しください。";
+"Open the %@ app on your phone, scan this code, and confirm the sign-in." = "スマートフォンで%@アプリを開き、このコードをスキャンしてログインを確認してください。";
+"Open %@" = "%@を開く";
+"Get New Code" = "新しいコードを取得";
+"This code has expired." = "このコードは期限切れです。";
+"Waiting for you to scan…" = "スキャンを待っています…";
+"Sign-in code" = "ログイン用コード";
+"Your %@ sign-in is missing or has expired. Sign in again to play this episode." = "%@のログインがないか期限切れです。もう一度ログインすると再生できます。";

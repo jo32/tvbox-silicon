@@ -19,7 +19,7 @@ public class PackageManager {
         ApplicationInfo info = new ApplicationInfo();
         info.packageName = packageName; info.name = "Yingxia";
         info.dataDir = application.getFilesDir().getParent();
-        info.sourceDir = System.getProperty("tvbox.plugin", ""); info.publicSourceDir = info.sourceDir;
+        info.sourceDir = tvbox.runtime.HostEnvironment.plugin(); info.publicSourceDir = info.sourceDir;
         return info;
     }
     public boolean hasSystemFeature(String name) { return false; }

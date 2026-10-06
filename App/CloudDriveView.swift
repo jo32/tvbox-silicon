@@ -66,6 +66,7 @@ struct CloudDriveView: View {
             do {
                 try accounts.save()
                 await LocalJarHost.shared.reloadCloudAccounts()
+                await EmbeddedJarHost.shared.reloadCloudAccounts()
                 notice = L10n.text("Accounts saved. Retry the video source.")
             } catch { self.error = error.localizedDescription }
         }
@@ -96,6 +97,7 @@ enum CloudProvider: String, Identifiable, CaseIterable {
         set(cookie, in: &accounts)
         try accounts.save()
         await LocalJarHost.shared.reloadCloudAccounts()
+        await EmbeddedJarHost.shared.reloadCloudAccounts()
     }
     /// "Signed In · Quark" style summary for the Settings row.
     static func summary() -> String {
@@ -127,7 +129,10 @@ struct CloudLoginView: View {
                     Text(L10n.text(provider == .quark ? "Sign In to Quark" : "Sign In to UC")).font(.headline)
                     Text(provider.url.host ?? "").font(.caption).foregroundStyle(.secondary)
                 }
-                if loading { ProgressView().controlSize(.small).padding(.leading, 4) }
+                if loading {
+                    ProgressView().controlSize(.small).padding(.leading, 4)
+                    ElapsedTime().font(.caption)
+                }
                 Spacer()
                 Button { error = nil; loading = true; webView.load(URLRequest(url: provider.url)) } label: {
                     Image(systemName: "arrow.clockwise")

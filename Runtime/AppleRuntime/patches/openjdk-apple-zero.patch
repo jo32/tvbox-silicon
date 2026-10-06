@@ -1,0 +1,171 @@
+diff --git a/src/hotspot/os/posix/os_posix.cpp b/src/hotspot/os/posix/os_posix.cpp
+index 91a881bca..9695457db 100644
+--- a/src/hotspot/os/posix/os_posix.cpp
++++ b/src/hotspot/os/posix/os_posix.cpp
+@@ -2149,7 +2149,7 @@ char** os::get_environ() { return environ; }
+ //        -this function is unsafe to use in non-error situations, mainly
+ //         because the child process will inherit all parent descriptors.
+ int os::fork_and_exec(const char* cmd) {
+-#ifndef __BIONIC__
++#if !defined(__BIONIC__) && !defined(__IOS__)
+   const char* argv[4] = {"sh", "-c", cmd, nullptr};
+   pid_t pid = -1;
+   char** env = os::get_environ();
+diff --git a/src/hotspot/os/posix/signals_posix.cpp b/src/hotspot/os/posix/signals_posix.cpp
+index bdce5c40f..634eb0041 100644
+--- a/src/hotspot/os/posix/signals_posix.cpp
++++ b/src/hotspot/os/posix/signals_posix.cpp
+@@ -1378,7 +1378,7 @@ static void install_signal_handlers() {
+     assert(ret == 0, "check");
+   }
+ 
+-#if defined(__APPLE__)
++#if defined(__APPLE__) && !defined(ZERO)
+   // lldb (gdb) installs both standard BSD signal handlers, and mach exception
+   // handlers. By replacing the existing task exception handler, we disable lldb's mach
+   // exception handling, while leaving the standard BSD signal handlers functional.
+diff --git a/src/hotspot/os_cpu/bsd_zero/os_bsd_zero.cpp b/src/hotspot/os_cpu/bsd_zero/os_bsd_zero.cpp
+index 94d3260c4..c43670ee9 100644
+--- a/src/hotspot/os_cpu/bsd_zero/os_bsd_zero.cpp
++++ b/src/hotspot/os_cpu/bsd_zero/os_bsd_zero.cpp
+@@ -273,7 +273,7 @@ int os::extra_bang_size_in_bytes() {
+   return 0;
+ }
+ 
+-#if defined(AARCH64) && defined(__APPLE__)
++#ifdef MACOS_AARCH64
+ void os::current_thread_enable_wx(WXMode mode) {
+ #ifndef __IOS__
+   pthread_jit_write_protect_np(mode == WXExec);
+diff --git a/src/hotspot/share/memory/memoryReserver.cpp b/src/hotspot/share/memory/memoryReserver.cpp
+index b6f151ead..fc9f452a7 100644
+--- a/src/hotspot/share/memory/memoryReserver.cpp
++++ b/src/hotspot/share/memory/memoryReserver.cpp
+@@ -290,7 +290,7 @@ ReservedSpace CodeMemoryReserver::reserve(size_t size,
+                                  size,
+                                  alignment,
+                                  page_size,
+-                                 ExecMem,
++                                 NOT_ZERO(ExecMem) ZERO_ONLY(!ExecMem),
+                                  mtCode);
+ }
+ 
+diff --git a/src/hotspot/share/runtime/thread.inline.hpp b/src/hotspot/share/runtime/thread.inline.hpp
+index ded5e166f..fb13bfa87 100644
+--- a/src/hotspot/share/runtime/thread.inline.hpp
++++ b/src/hotspot/share/runtime/thread.inline.hpp
+@@ -60,7 +60,7 @@ inline void Thread::set_threads_hazard_ptr(ThreadsList* new_list) {
+   AtomicAccess::release_store_fence(&_threads_hazard_ptr, new_list);
+ }
+ 
+-#if defined(__APPLE__) && defined(AARCH64)
++#ifdef MACOS_AARCH64
+ 
+ static void dummy() { }
+ 
+diff --git a/src/hotspot/share/utilities/macros.hpp b/src/hotspot/share/utilities/macros.hpp
+index 09b67a131..fd4a34b18 100644
+--- a/src/hotspot/share/utilities/macros.hpp
++++ b/src/hotspot/share/utilities/macros.hpp
+@@ -518,9 +518,12 @@
+ #define AARCH64_PORT_ONLY(code)
+ #endif
+ 
+-#define MACOS_AARCH64_ONLY(x) MACOS_ONLY(AARCH64_ONLY(x))
+-#if defined(__APPLE__) && defined(AARCH64)
++// Zero interprets bytecode and has no write/execute JIT transition helpers.
++#if defined(__APPLE__) && defined(AARCH64) && !defined(ZERO)
++#define MACOS_AARCH64_ONLY(x) x
+ #define MACOS_AARCH64 1
++#else
++#define MACOS_AARCH64_ONLY(x)
+ #endif
+ 
+ #if defined(RISCV32) || defined(RISCV64)
+diff --git a/src/java.base/unix/native/libjava/ProcessImpl_md.c b/src/java.base/unix/native/libjava/ProcessImpl_md.c
+index e473f5533..34da2bbba 100644
+--- a/src/java.base/unix/native/libjava/ProcessImpl_md.c
++++ b/src/java.base/unix/native/libjava/ProcessImpl_md.c
+@@ -32,6 +32,18 @@
+ #include "jni_util.h"
+ #include "io_util.h"
+ 
++#ifdef __IOS__
++// Apple mobile hosts are in-process; never attempt fork or spawn.
++JNIEXPORT void JNICALL Java_java_lang_ProcessImpl_init(JNIEnv *env, jclass clazz) {}
++JNIEXPORT jint JNICALL
++Java_java_lang_ProcessImpl_forkAndExec(JNIEnv *env, jobject process, jint mode,
++        jbyteArray helperpath, jbyteArray prog, jbyteArray argBlock, jint argc,
++        jbyteArray envBlock, jint envc, jbyteArray dir, jintArray std_fds,
++        jboolean redirectErrorStream) {
++    JNU_ThrowIOException(env, "Child processes are unavailable on Apple mobile platforms");
++    return -1;
++}
++#else
+ /*
+  * Platform-specific support for java.lang.Process
+  */
+@@ -899,3 +911,5 @@ Java_java_lang_ProcessImpl_forkAndExec(JNIEnv *env,
+     closeSafely(err[0]); err[0] = -1;
+     goto Finally;
+ }
++
++#endif // __IOS__
+diff --git a/src/java.base/unix/native/libjava/childproc.c b/src/java.base/unix/native/libjava/childproc.c
+index 6bc15dfb4..a6331f588 100644
+--- a/src/java.base/unix/native/libjava/childproc.c
++++ b/src/java.base/unix/native/libjava/childproc.c
+@@ -23,6 +23,7 @@
+  * questions.
+  */
+ 
++#ifndef __IOS__
+ #include <assert.h>
+ #include <dirent.h>
+ #include <errno.h>
+@@ -528,3 +529,5 @@ void jtregSimulateCrash(pid_t child, int stage) {
+     }
+ }
+ #endif
++
++#endif // !__IOS__
+diff --git a/src/java.base/unix/native/libjava/childproc_errorcodes.c b/src/java.base/unix/native/libjava/childproc_errorcodes.c
+index 4dc8e9276..631d51fbd 100644
+--- a/src/java.base/unix/native/libjava/childproc_errorcodes.c
++++ b/src/java.base/unix/native/libjava/childproc_errorcodes.c
+@@ -23,6 +23,7 @@
+  * questions.
+  */
+ 
++#ifndef __IOS__
+ #include <assert.h>
+ #include <stdbool.h>
+ 
+@@ -61,3 +62,5 @@ bool sendAlivePing(int fd) {
+     buildErrorCode(&errcode, ESTEP_CHILD_ALIVE, getpid(), 0);
+     return sendErrorCode(fd, errcode);
+ }
++
++#endif // !__IOS__
+diff --git a/src/java.base/unix/native/libjli/java_md.c b/src/java.base/unix/native/libjli/java_md.c
+index a75795af5..22b10af17 100644
+--- a/src/java.base/unix/native/libjli/java_md.c
++++ b/src/java.base/unix/native/libjli/java_md.c
+@@ -433,6 +433,9 @@ CreateExecutionEnvironment(int *pargc, char ***pargv,
+         JLI_TraceLauncher("TRACER_MARKER:About to EXEC\n");
+         (void) fflush(stdout);
+         (void) fflush(stderr);
++#ifdef __IOS__
++        errno = ENOTSUP; // Embedded Apple runtimes never re-exec the app.
++#else
+ #ifdef SETENV_REQUIRED
+         if (mustsetenv) {
+             execve(newexec, argv, newenvp);
+@@ -442,6 +445,7 @@ CreateExecutionEnvironment(int *pargc, char ***pargv,
+ #else /* !SETENV_REQUIRED */
+         execv(newexec, argv);
+ #endif /* SETENV_REQUIRED */
++#endif // __IOS__
+         JLI_ReportErrorMessageSys(LAUNCHER_ERROR4, newexec);
+     }
+     exit(1);

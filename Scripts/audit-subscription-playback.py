@@ -13,7 +13,10 @@ p.add_argument('--inputs',default=str(ROOT/'Fixtures/subscription-audit.txt'))
 p.add_argument('--output',default=str(ROOT/'build/playback-audit'))
 p.add_argument('--workers',type=int,default=3)
 p.add_argument('--resume',action='store_true')
+p.add_argument('--all-sources',action='store_true',help='Continue after a successful source for source-by-source comparison')
+p.add_argument('--source-workers',type=int,default=1,help='Concurrent sources per subscription with --all-sources (default: 1)')
 a=p.parse_args();OUT=pathlib.Path(a.output).resolve();OUT.mkdir(parents=True,exist_ok=True)
+if a.source_workers < 1:p.error('--source-workers must be at least 1')
 
 def save(path,data):path.write_text(json.dumps(data,ensure_ascii=False,indent=2))
 def log(text):print(text,flush=True)
@@ -136,14 +139,21 @@ def test_subscription(pair):
   if a.resume:
    for f in folder.glob('source-*/result.json'):
     old=json.loads(f.read_text());existing[old['key']]=(old,f.parent)
-  for i,s in enumerate(sites):
+  def run_source(s):
    subfolder=folder/('source-'+hashlib.sha256(s['key'].encode()).hexdigest()[:10])
    if s['key'] in existing:r,subfolder=existing[s['key']]
    else:r=source_test(s,c,subfolder)
-   row['testedSources'].append({'key':r['key'],'passed':r.get('passed',False),'evidence':str(subfolder/'result.json'),'error':r.get('error')})
-   log(f"{row['index']:02} {row['name']} {i+1}/{len(sites)} {r['key']}: {'MEDIA OK' if r.get('passed') else r.get('error')}")
-   if r.get('passed'):
-    row['passed']=True;row['playbackURL']=r['playbackURL'];row['source']=r['key'];row['title']=r.get('title');break
+   return r,subfolder
+  with concurrent.futures.ThreadPoolExecutor(a.source_workers if a.all_sources else 1) as pool:
+   completed=pool.map(run_source,sites) if a.all_sources else map(run_source,sites)
+   for i,(r,subfolder) in enumerate(completed):
+    row['testedSources'].append({'key':r['key'],'passed':r.get('passed',False),'evidence':str(subfolder/'result.json'),'error':r.get('error')})
+    log(f"{row['index']:02} {row['name']} {i+1}/{len(sites)} {r['key']}: {'MEDIA OK' if r.get('passed') else r.get('error')}")
+    if r.get('passed'):
+     row['passed']=True;row['playbackURL']=r['playbackURL'];row['source']=r['key'];row['title']=r.get('title')
+     if not a.all_sources:break
+ row['passedSources']=sum(r['passed'] for r in row['testedSources'])
+ row['testedSourceCount']=len(row['testedSources'])
  row.setdefault('passed',False);save(final,row);return row
 def main():
  rows=[dict(index=i+1,name=line.split('|',1)[0],url=line.split('|',1)[1]) for i,line in enumerate(pathlib.Path(a.inputs).read_text().splitlines()) if line.strip()]

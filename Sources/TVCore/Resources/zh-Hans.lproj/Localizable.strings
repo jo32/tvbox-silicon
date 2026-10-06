@@ -204,7 +204,6 @@
 
 "Search failed" = "搜索失败";
 
-"Try another keyword or retry failed sources." = "请更换关键词，或重试搜索。";
 
 "This source has no recommendations. Choose another source or use Global Search." = "此源暂无推荐，请切换来源或使用全局搜索。";
 
@@ -284,7 +283,6 @@
 "The subscription server returned a web page instead of a configuration." = "订阅服务器返回了网页，而非配置文件。";
 "This subscription uses an encrypted configuration that is not supported yet." = "此订阅使用了尚未支持的加密配置。";
 "The plugin took too long to initialize. Retry or choose another source." = "插件初始化超时，请重试或选择其他源。";
-"This source requires Android features that the Mac plugin runtime does not support yet." = "此源依赖 Mac 插件运行时尚未支持的 Android 功能。";
 "Scroll sources left" = "向左滚动来源";
 "Scroll sources right" = "向右滚动来源";
 
@@ -327,3 +325,68 @@
 "Last updated %@" = "上次更新 %@";
 "Run Test" = "运行测试";
 "Check" = "检查";
+
+"The plugin exceeds 20 MB." = "插件超过 20 MB。";
+"Components prepared: %lld · reused: %lld" = "已准备 %lld 个组件 · 已复用 %lld 个";
+"Checking saved plugin…" = "正在检查本地插件…";
+"Downloading plugin…" = "正在下载插件…";
+"Checking plugin content…" = "正在校验插件内容…";
+"Reusing saved plugin…" = "正在复用本地插件…";
+"Waiting for the plugin runtime…" = "正在等待插件运行…";
+"Preparing plugin…" = "正在准备插件…";
+"Building plugin components…" = "正在构建插件组件…";
+"Loading source content…" = "正在加载源内容…";
+"Searching…" = "搜索中…";
+"Preparing plugins for first use. Later searches are much faster." = "首次使用，正在准备插件。之后的搜索会快很多。";
+"About %lld min left" = "大约还需 %lld 分钟";
+"Less than a minute left" = "不到 1 分钟";
+"%@ of %@" = "%@ / %@";
+"On-device Plugin Runtime" = "本机插件运行时";
+"Plugin sources run on this device without a server. First use prepares and caches the required classes. Some Android features are not supported." = "插件源在本机运行，无需服务器。首次使用会准备并缓存所需组件。部分 Android 功能暂不支持。";
+"Java Plugin Support" = "Java 插件支持";
+"Installed · Experimental" = "已安装 · 实验性";
+"Not installed in this build" = "当前版本未安装";
+"This small test checks basic DEX instructions. Open a source to test the full plugin runtime." = "此测试只检查基本 DEX 指令。请打开一个源测试完整插件运行时。";
+"Inspection does not confirm execution. Open the source to test its Android library compatibility." = "检查通过不代表能够运行。请打开该源测试其 Android 库的兼容性。";
+"Most Sources Unavailable" = "大部分源不可用";
+"%lld of %lld sources didn't respond, so results may be incomplete." = "%lld / %lld 个源未响应，结果可能不完整。";
+"Try another keyword." = "请更换关键词。";
+"Show Details" = "查看详情";
+"%lld of %lld sources responded" = "%lld / %lld 个源已响应";
+"First-time setup can take a few minutes. Keep the app open." = "首次准备可能需要几分钟，请保持 App 打开。";
+"This source requires Android features that the plugin runtime does not support yet." = "此源依赖插件运行时尚未支持的 Android 功能。";
+"This source needs an Android feature that isn't supported yet: %@." = "此源需要尚未支持的 Android 功能：%@。";
+"This plugin couldn't be prepared on this device (missing %@)." = "无法在本机准备此插件（缺少 %@）。";
+"The source's plugin crashed. The site may have changed; try another source." = "该源的插件崩溃了，网站可能已变更。请换一个源。";
+
+/* Loading status */
+"Waiting for %@" = "正在等待 %@";
+"The plugin is waiting for %@ to respond. The source's server may be slow or busy." = "插件正在等待 %@ 响应。该来源的服务器可能较慢或繁忙。";
+"The plugin file is still downloading from the subscription server." = "插件文件仍在从订阅服务器下载。";
+"Other plugin requests are using every slot. This one starts as soon as one finishes." = "其他插件请求占用了所有位置，有一个完成后此请求就会开始。";
+"This plugin is running for the first time, so its code is being converted for this device. Next time is much faster." = "这是该插件首次运行，正在为本设备转换其代码。下次会快很多。";
+"The plugin is still working. Plugins run much slower on this device than on Android." = "插件仍在运行。插件在本设备上比在 Android 上慢得多。";
+"%@ is responding slowly. The server may be busy or far away; you can keep waiting or try another source." = "%@ 响应缓慢。服务器可能繁忙或距离较远；你可以继续等待或换一个来源。";
+"Loading video details…" = "正在加载视频详情…";
+"Getting the video link for %@…" = "正在获取 %@ 的播放地址…";
+"Getting the video link…" = "正在获取播放地址…";
+"Loading recommendations…" = "正在加载推荐…";
+"%@ · needs %@" = "%@ · 需要 %@";
+"Downloading at %@" = "下载速度 %@";
+"The video server" = "视频服务器";
+"%@ returned an error (%@). The link may have expired: go back and play the episode again, or choose another line." = "%@ 返回了错误（%@）。链接可能已过期：请返回重新播放这一集，或选择其他线路。";
+"%@ sends %@, but this video needs about %@. Try another line, or wait without skipping." = "%@ 的速度为 %@，但此视频需要约 %@。请尝试其他线路，或耐心等待、不要拖动进度。";
+"The player is filling its buffer before playback continues." = "播放器正在缓冲，完成后将继续播放。";
+"%@/s" = "%@/秒";
+"The plugin runtime is starting. This takes about half a minute after the app opens." = "插件运行环境正在启动。打开 App 后大约需要半分钟。";
+"%@ hasn't delivered the first part of the video yet. The server may be slow or down; try another line." = "%@ 尚未传来视频的第一部分。服务器可能很慢或已停止服务；请尝试其他线路。";
+"Couldn't load video from %@ (%@). Check the connection, or choose another line." = "无法从 %@ 加载视频（%@）。请检查网络，或选择其他线路。";
+"Couldn't get a sign-in code. Try again." = "无法获取登录二维码，请重试。";
+"Sign-in was approved, but the drive didn't return a login. Try again." = "已在手机上确认登录，但网盘未返回登录信息，请重试。";
+"Open the %@ app on your phone, scan this code, and confirm the sign-in." = "在手机上打开%@ App，扫描此二维码并确认登录。";
+"Open %@" = "打开%@";
+"Get New Code" = "获取新二维码";
+"This code has expired." = "二维码已过期。";
+"Waiting for you to scan…" = "等待扫码…";
+"Sign-in code" = "登录二维码";
+"Your %@ sign-in is missing or has expired. Sign in again to play this episode." = "%@网盘未登录或登录已过期，重新登录后即可播放。";

@@ -708,3 +708,59 @@ may consider it more useful to permit linking proprietary applications with
 the library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.  But first, please read
 <https://www.gnu.org/licenses/why-not-lgpl.html>.
+
+======================================================================
+On-device Java and ARM64 runtime (development builds)
+======================================================================
+
+OpenJDK mobile, revision c1ed06aaef34c8dccf71e236d1ffa20918a77cfb
+https://github.com/openjdk/mobile
+GPL version 2 with the Classpath Exception. Local platform patches are in
+Runtime/AppleRuntime/patches/openjdk-apple-zero.patch.
+
+Unicorn TCI, revision e3f075a62742913bb734a55a474aec65c9e5745e
+https://github.com/1rhino2/unicorn-tci
+GPL version 2; QEMU-derived components carry their accompanying licences.
+The interpreter executes Android guest instructions as data, without JIT.
+
+Keystone assembler, revision 0d9567f08c0c23e8f604b2cad3d49450c93cfb40
+https://github.com/keystone-engine/keystone
+GPL version 2. LLVM-derived components retain their upstream licence.
+The assembler emits guest instructions only, never host executable code.
+
+Capstone, revision aecd7d0b2bee96643f7ed2c100399afde6d44bce
+https://github.com/zhkl0228/capstone
+BSD licence; LLVM-derived components retain their upstream licence.
+
+Java Native Access (JNA) 5.10.0
+https://github.com/java-native-access/jna
+Apache License 2.0 (selected from the upstream dual licence).
+
+libffi 3.4.8
+https://github.com/libffi/libffi
+MIT licence. Apple static trampoline tables are used.
+
+unidbg 0.9.8
+https://github.com/zhkl0228/unidbg
+Apache License 2.0.
+
+dex2jar 2.4.37 (de.femtopedia fork)
+https://github.com/ThexXTURBOXx/dex2jar
+Apache License 2.0. The local RemoveLocalFromSSA change bounds phi-root
+propagation memory and compacts removed locals in one pass. UnSSATransformer
+avoids boxed-index lookups for sparse frames and uses bit sets for exclusions.
+The local Dex2jar change permits selective class output
+while preserving the complete inheritance metadata for stack-map frames, and its
+frame fallback names java/lang/Object instead of the nonexistent java/util/Object.
+
+sardine-android 0.9
+https://github.com/thegrizzlylabs/sardine-android
+Apache License 2.0. Provided to plugins that use WebDAV, as Android hosts do.
+
+Simple XML 2.7.1
+https://simple.sourceforge.net
+Apache License 2.0. Runtime dependency of sardine-android.
+
+Exact source revisions, source URLs, build inputs and platform modifications
+are recorded in Scripts/build-apple-*.sh and Runtime/AppleRuntime/patches.
+These notices do not replace the accompanying upstream licence texts.

@@ -204,7 +204,6 @@
 
 "Search failed" = "搜尋失敗";
 
-"Try another keyword or retry failed sources." = "請更換關鍵字，或重試搜尋。";
 
 "This source has no recommendations. Choose another source or use Global Search." = "此來源暫無推薦，請切換來源或使用全域搜尋。";
 
@@ -284,7 +283,6 @@
 "The subscription server returned a web page instead of a configuration." = "訂閱伺服器回傳了網頁，而非設定檔。";
 "This subscription uses an encrypted configuration that is not supported yet." = "此訂閱使用了尚未支援的加密設定。";
 "The plugin took too long to initialize. Retry or choose another source." = "外掛初始化逾時，請重試或選擇其他來源。";
-"This source requires Android features that the Mac plugin runtime does not support yet." = "此來源依賴 Mac 外掛執行環境尚未支援的 Android 功能。";
 "Scroll sources left" = "向左捲動來源";
 "Scroll sources right" = "向右捲動來源";
 
@@ -327,3 +325,68 @@
 "Last updated %@" = "上次更新 %@";
 "Run Test" = "執行測試";
 "Check" = "檢查";
+
+"The plugin exceeds 20 MB." = "外掛超過 20 MB。";
+"Components prepared: %lld · reused: %lld" = "已準備 %lld 個元件 · 已重用 %lld 個";
+"Checking saved plugin…" = "正在檢查本機外掛…";
+"Downloading plugin…" = "正在下載外掛…";
+"Checking plugin content…" = "正在驗證外掛內容…";
+"Reusing saved plugin…" = "正在重用本機外掛…";
+"Waiting for the plugin runtime…" = "正在等待外掛執行…";
+"Preparing plugin…" = "正在準備外掛…";
+"Building plugin components…" = "正在建置外掛元件…";
+"Loading source content…" = "正在載入來源內容…";
+"Searching…" = "搜尋中…";
+"Preparing plugins for first use. Later searches are much faster." = "首次使用，正在準備外掛。之後的搜尋會快很多。";
+"About %lld min left" = "大約還需 %lld 分鐘";
+"Less than a minute left" = "不到 1 分鐘";
+"%@ of %@" = "%@ / %@";
+"On-device Plugin Runtime" = "本機外掛執行環境";
+"Plugin sources run on this device without a server. First use prepares and caches the required classes. Some Android features are not supported." = "外掛來源在本機執行，無需伺服器。首次使用會準備並快取所需元件。部分 Android 功能暫不支援。";
+"Java Plugin Support" = "Java 外掛支援";
+"Installed · Experimental" = "已安裝 · 實驗性";
+"Not installed in this build" = "目前版本未安裝";
+"This small test checks basic DEX instructions. Open a source to test the full plugin runtime." = "此測試僅檢查基本 DEX 指令。請開啟一個來源測試完整外掛執行環境。";
+"Inspection does not confirm execution. Open the source to test its Android library compatibility." = "檢查通過不代表能夠執行。請開啟該來源測試其 Android 函式庫的相容性。";
+"Most Sources Unavailable" = "大部分來源無法使用";
+"%lld of %lld sources didn't respond, so results may be incomplete." = "%lld / %lld 個來源未回應，結果可能不完整。";
+"Try another keyword." = "請更換關鍵字。";
+"Show Details" = "查看詳細資訊";
+"%lld of %lld sources responded" = "%lld / %lld 個來源已回應";
+"First-time setup can take a few minutes. Keep the app open." = "首次準備可能需要幾分鐘，請保持 App 開啟。";
+"This source requires Android features that the plugin runtime does not support yet." = "此來源依賴外掛執行環境尚未支援的 Android 功能。";
+"This source needs an Android feature that isn't supported yet: %@." = "此來源需要尚未支援的 Android 功能：%@。";
+"This plugin couldn't be prepared on this device (missing %@)." = "無法在本機準備此外掛（缺少 %@）。";
+"The source's plugin crashed. The site may have changed; try another source." = "此來源的外掛崩潰了，網站可能已變更。請換一個來源。";
+
+/* Loading status */
+"Waiting for %@" = "正在等待 %@";
+"The plugin is waiting for %@ to respond. The source's server may be slow or busy." = "外掛正在等待 %@ 回應。該來源的伺服器可能較慢或忙碌。";
+"The plugin file is still downloading from the subscription server." = "外掛檔案仍在從訂閱伺服器下載。";
+"Other plugin requests are using every slot. This one starts as soon as one finishes." = "其他外掛請求佔用了所有位置，有一個完成後此請求就會開始。";
+"This plugin is running for the first time, so its code is being converted for this device. Next time is much faster." = "這是該外掛首次執行，正在為本裝置轉換其程式碼。下次會快很多。";
+"The plugin is still working. Plugins run much slower on this device than on Android." = "外掛仍在執行。外掛在本裝置上比在 Android 上慢得多。";
+"%@ is responding slowly. The server may be busy or far away; you can keep waiting or try another source." = "%@ 回應緩慢。伺服器可能忙碌或距離較遠；你可以繼續等待或換一個來源。";
+"Loading video details…" = "正在載入影片詳情…";
+"Getting the video link for %@…" = "正在取得 %@ 的播放位址…";
+"Getting the video link…" = "正在取得播放位址…";
+"Loading recommendations…" = "正在載入推薦…";
+"%@ · needs %@" = "%@ · 需要 %@";
+"Downloading at %@" = "下載速度 %@";
+"The video server" = "影片伺服器";
+"%@ returned an error (%@). The link may have expired: go back and play the episode again, or choose another line." = "%@ 傳回了錯誤（%@）。連結可能已過期：請返回重新播放這一集，或選擇其他線路。";
+"%@ sends %@, but this video needs about %@. Try another line, or wait without skipping." = "%@ 的速度為 %@，但此影片需要約 %@。請嘗試其他線路，或耐心等待、不要拖動進度。";
+"The player is filling its buffer before playback continues." = "播放器正在緩衝，完成後將繼續播放。";
+"%@/s" = "%@/秒";
+"The plugin runtime is starting. This takes about half a minute after the app opens." = "外掛執行環境正在啟動。開啟 App 後大約需要半分鐘。";
+"%@ hasn't delivered the first part of the video yet. The server may be slow or down; try another line." = "%@ 尚未傳來影片的第一部分。伺服器可能很慢或已停止服務；請嘗試其他線路。";
+"Couldn't load video from %@ (%@). Check the connection, or choose another line." = "無法從 %@ 載入影片（%@）。請檢查網路，或選擇其他線路。";
+"Couldn't get a sign-in code. Try again." = "無法取得登入 QR 碼，請重試。";
+"Sign-in was approved, but the drive didn't return a login. Try again." = "已在手機上確認登入，但網盤未傳回登入資訊，請重試。";
+"Open the %@ app on your phone, scan this code, and confirm the sign-in." = "在手機上開啟%@ App，掃描此 QR 碼並確認登入。";
+"Open %@" = "開啟%@";
+"Get New Code" = "取得新 QR 碼";
+"This code has expired." = "QR 碼已過期。";
+"Waiting for you to scan…" = "等待掃描…";
+"Sign-in code" = "登入 QR 碼";
+"Your %@ sign-in is missing or has expired. Sign in again to play this episode." = "%@網盤未登入或登入已過期，重新登入後即可播放。";
