@@ -45,9 +45,27 @@ function wbi(params) {
     return query + '&w_rid=' + md5(query + mixinKey);
 }
 
+// Bilibili answers bursts of searches with a rate-limit code (-412 blocked, -352 risk control,
+// -799 too frequent) and no results. QuickJS cannot sleep, so wait briefly in place and retry;
+// risk control also gets a fresh buvid cookie.
+const LIMITED = new Set([-412, -352, -799]);
+function pause(ms) { const end = Date.now() + ms; while (Date.now() < end) { /* wait */ } }
+function searchApi(params) {
+    let reply = {};
+    for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt) pause(1200 * attempt);
+        try { reply = api('https://api.bilibili.com/x/web-interface/wbi/search/type?' + wbi(params)); } catch { reply = {}; }
+        const code = Number(reply.code);
+        if (code === 0 && reply.data) return reply;
+        if (code === -352) { cookie = cookie.replace(/;?\s*buvid[34]=[^;]*/g, ''); saved.set('cookie', cookie); ensureCookie(); }
+        if (!LIMITED.has(code) && !isNaN(code) && reply.code !== undefined) return reply;
+    }
+    return reply;
+}
+
 function searchVideos(keyword, page, extra = {}) {
     ensureCookie();
-    const data = api('https://api.bilibili.com/x/web-interface/wbi/search/type?' + wbi({ search_type: 'video', keyword, page, ...extra })).data || {};
+    const data = searchApi({ search_type: 'video', keyword, page, ...extra }).data || {};
     return {
         list: (data.result || []).filter(v => v.bvid).map(v => ({ vod_id: v.bvid, vod_name: clean(v.title), vod_pic: pic(v.pic), vod_remarks: String(v.duration || '') })),
         pagecount: Number(data.numPages) || 1
@@ -58,7 +76,7 @@ function searchSeasons(keyword) {
     ensureCookie();
     const list = [];
     for (const type of ['media_bangumi', 'media_ft']) {
-        const data = api('https://api.bilibili.com/x/web-interface/wbi/search/type?' + wbi({ search_type: type, keyword, page: 1, web_location: 1430654 })).data || {};
+        const data = searchApi({ search_type: type, keyword, page: 1, web_location: 1430654 }).data || {};
         for (const s of data.result || []) {
             if (!s.season_id) continue;
             const score = s.media_score && s.media_score.score ? ` ${s.media_score.score}分` : '';
