@@ -1,4 +1,4 @@
-// 听世界 (csp_TingShijie): an audiobook app API; chapter URLs need md5(md5(t + SALT) + SALT).
+// 听世界 (csp_TingShijie, fty csp_Tingshu275Guard): an audiobook app API; chapter URLs need md5(md5(t + SALT) + SALT).
 // ext: API base (optional; otherwise read from the published config).
 import { md5 } from './_lite.js';
 
@@ -24,10 +24,14 @@ const category = (id, page) => { const data = api(`appHomeByCategory?categoryId=
 export default {
     init(ext) {
         if (ext) { base = normalize(ext); return; }
-        try {
-            const text = (globalThis.req('http://101.43.48.231:8090/config/tingchina2025.txt', { headers: { 'User-Agent': UA } }).content || '').trim();
-            base = normalize(text || DEFAULT);
-        } catch { base = DEFAULT; }
+        base = DEFAULT;
+        // The JAR versions publish the same config on different hosts (csp_TingShijie, fty csp_Tingshu275Guard).
+        for (const host of ['101.43.48.231', '117.72.112.234']) {
+            try {
+                const text = (globalThis.req(`http://${host}:8090/config/tingchina2025.txt`, { headers: { 'User-Agent': UA }, timeout: 8000 }).content || '').trim();
+                if (text.startsWith('http')) { base = normalize(text); return; }
+            } catch {}
+        }
     },
     home() { return { class: CLASSES.map(([type_id, type_name]) => ({ type_id, type_name })), list: category('6', '1') }; },
     category(tid, pg) {

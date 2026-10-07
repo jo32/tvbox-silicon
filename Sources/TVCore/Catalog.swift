@@ -128,9 +128,25 @@ public struct CatalogClient: Sendable {
         return url
     }
     private func request(_ params: [String: String]) async throws -> [String: JSONValue] {
-        // Bundled lite ports run in-process on QuickJS everywhere, including macOS.
-        if let script = site.liteScript {
-            return try await ScriptRuntime.shared.request(site: site, scriptURL: script, params: params, http: http, origin: origin)
+        // A bundled lite port runs first, in-process on QuickJS everywhere; when it fails or answers
+        // with nothing usable, the source's JAR spider answers instead.
+        if let script = site.liteScript, ScriptRuntime.available, await LiteFallback.shared.prefersPort(site.key) {
+            let jarReady = EmbeddedJarHost.available && (try? site.pluginURL(origin: origin, fallback: jarURL)) != nil
+            let reason: String
+            do {
+                #if DEBUG
+                // TVBOX_LITE_FAIL=<source key> fails that source's port, to exercise the JAR fallback.
+                if ProcessInfo.processInfo.environment["TVBOX_LITE_FAIL"] == site.key { throw TVError.unsupported("forced port failure") }
+                #endif
+                let json = try await ScriptRuntime.shared.request(site: site, scriptURL: script, params: params, http: http, origin: origin)
+                guard jarReady, let problem = LiteSites.unusable(json, params: params) else { return json }
+                reason = problem
+            } catch {
+                if !jarReady || error is CancellationError { throw error }
+                reason = error.localizedDescription
+            }
+            await LiteFallback.shared.record(site.key)
+            Diagnostics.shared.record(.warning, "lite.fallback", "\(site.key) \(site.api): port failed (\(reason)); using the JAR")
         }
         #if os(macOS)
         if site.runtime == .javascript || site.runtime == .python {

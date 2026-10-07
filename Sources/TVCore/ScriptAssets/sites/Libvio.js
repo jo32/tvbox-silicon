@@ -167,7 +167,7 @@ export default {
         const supplied = config.cookie || config.libvio_cookie || config.browser_cookie || config.verify_cookie || (config.headers || config.header || {}).Cookie;
         if (supplied) jar.add(supplied);
         const entries = [];
-        for (const key of ['site', 'fabu', 'publish', 'release', 'sites']) {
+        for (const key of ['site', 'siteUrl', 'fabu', 'publish', 'release', 'sites']) {
             const value = config[key];
             if (Array.isArray(value)) entries.push(...value); else if (value) entries.push(value);
         }

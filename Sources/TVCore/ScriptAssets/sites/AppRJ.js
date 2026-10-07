@@ -33,9 +33,10 @@ const FILTER_NAMES = { extend: '类型', area: '地区', year: '年份', lang: '
 
 export default {
     init(ext) {
+        // fty's csp_AppTTGuard passes an encrypted ext the port cannot read; it serves the same host.
         let config = ext;
-        if (typeof config === 'string') config = JSON.parse(config || '{}');
-        site = scheme(String(config.url || ''));
+        if (typeof config === 'string') { try { config = JSON.parse(config || '{}'); } catch { config = {}; } }
+        site = scheme(String((config && config.url) || 'http://v.rbotv.cn'));
     },
     home(filter) {
         const types = api('type/top_type', {}).list || [];

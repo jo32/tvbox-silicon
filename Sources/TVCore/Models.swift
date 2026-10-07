@@ -153,7 +153,6 @@ public struct Site: Identifiable, Codable, Hashable, Sendable {
     public var runtime: SourceRuntime {
         if native { return .api }
         guard type == 3, !missingAPI else { return .unsupported }
-        if liteScript != nil { return .javascript }
         let path = api.lowercased()
         if path.hasSuffix(".js") || path.contains(".js?") { return .javascript }
         if path.contains(".py") || (api.hasPrefix("py_") && raw["ext"]?.string?.lowercased().contains(".py") == true) { return .python }
@@ -161,7 +160,6 @@ public struct Site: Identifiable, Codable, Hashable, Sendable {
     }
     /// The script a JavaScript or Python source runs, relative to the subscription.
     public func scriptURL(origin: URL) throws -> URL {
-        if let liteScript { return liteScript }
         if runtime == .python, api.hasPrefix("py_"), let script = raw["ext"]?.string { return try WebAddress.resolve(script, relativeTo: origin) }
         return try WebAddress.resolve(api, relativeTo: origin)
     }
@@ -178,6 +176,7 @@ public struct Site: Identifiable, Codable, Hashable, Sendable {
             #endif
             return L10n.text("Requires script engine")
         case .jar:
+            if runsLitePort { return L10n.text("Lite JavaScript · JAR fallback") }
             #if os(macOS) || os(iOS) || os(tvOS)
             if EmbeddedJarHost.available { return L10n.text("Local JAR · Experimental") }
             #endif

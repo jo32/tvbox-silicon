@@ -14,7 +14,7 @@ public enum SourceStrategy {
         let keys = usable.map { channel(of: $0.name) }
         for (index, site) in usable.enumerated() {
             let key = keys[index]
-            let rank = site.runtime.rawValue
+            let rank = site.preferredRuntime.rawValue
             if let known = channels[key] { channels[key] = (min(known.rank, rank), known.first) }
             else { channels[key] = (rank, index) }
         }
@@ -22,7 +22,7 @@ public enum SourceStrategy {
             let left = channels[keys[lhs]]!, right = channels[keys[rhs]]!
             if left.rank != right.rank { return left.rank < right.rank }
             if left.first != right.first { return left.first < right.first }
-            let leftRuntime = usable[lhs].runtime.rawValue, rightRuntime = usable[rhs].runtime.rawValue
+            let leftRuntime = usable[lhs].preferredRuntime.rawValue, rightRuntime = usable[rhs].preferredRuntime.rawValue
             return leftRuntime != rightRuntime ? leftRuntime < rightRuntime : lhs < rhs
         }.map { usable[$0] }
     }

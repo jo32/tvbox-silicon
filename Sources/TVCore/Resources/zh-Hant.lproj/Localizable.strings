@@ -145,6 +145,7 @@
 "This video has no single MP4 stream available for this account." = "目前帳號無法取得此影片的單一 MP4 串流。";
 
 "Local JavaScript · Experimental" = "本機 JavaScript · 實驗性";
+"Lite JavaScript · JAR fallback" = "輕量 JavaScript · JAR 備用";
 "Local Python · Experimental" = "本機 Python · 實驗性";
 "This source requires a Python runtime, which is not available on this platform." = "此來源需要 Python 執行環境，此平台尚未支援。";
 

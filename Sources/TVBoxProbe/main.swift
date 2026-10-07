@@ -36,16 +36,50 @@ import TVCore
             print(String(decoding: try encoder.encode(results.sorted { $0.address < $1.address }), as: UTF8.self))
             return
         }
+        if args[1] == "--catalog-check", args.count >= 3 {
+            // Browses sources the way the app does (CatalogClient, so lite ports with their JAR
+            // fallback): home, a category when home has no videos, detail, then playback.
+            let config = try await HTTPClient().subscription(WebAddress.resolve(args[2]))
+            let filters = Array(args.dropFirst(3))
+            let sites = config.sites.filter { site in filters.isEmpty || filters.contains { site.name.contains($0) || site.key.contains($0) } }
+            var passed = 0
+            for site in sites {
+                let client = CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL)
+                var stage = "home"
+                do {
+                    let home = try await client.home()
+                    var videos = home.videos
+                    if videos.isEmpty, let category = home.categories.first {
+                        stage = "category"
+                        videos = try await client.list(category: category.id, query: "", page: 1).videos
+                    }
+                    guard let first = videos.first else { throw TVError.unsupported("no videos") }
+                    stage = "detail"
+                    let video = try await client.detail(first.id)
+                    guard let episode = video.episodes.first else { throw TVError.unsupported("no episodes") }
+                    stage = "play"
+                    let plan = try await client.preparePlayback(episode)
+                    passed += 1
+                    print("OK   \(site.name)  [\(site.compatibility)]  \(home.categories.count) categories, play \(plan.choices[0].address.prefix(90))")
+                } catch {
+                    print("FAIL \(site.name)  [\(site.compatibility)]  [\(stage)] \(error.localizedDescription)")
+                }
+            }
+            for entry in await Diagnostics.shared.snapshot().entries where entry.category == "lite.fallback" { print("     fallback: \(entry.message)") }
+            print("\(passed)/\(sites.count) sources reached playback")
+            return
+        }
         if args[1] == "--script-check", args.count >= 3 {
             // Runs a subscription's JavaScript sources on the in-process QuickJS runtime (as iOS and
             // tvOS do): home, a category when home has no videos, detail, then playback.
             let config = try await HTTPClient().subscription(WebAddress.resolve(args[2]))
             let filters = Array(args.dropFirst(3))
-            let sites = config.sites.filter { site in site.runtime == .javascript && (filters.isEmpty || filters.contains { site.name.contains($0) || site.key.contains($0) }) }
+            let sites = config.sites.filter { site in site.preferredRuntime == .javascript && (filters.isEmpty || filters.contains { site.name.contains($0) || site.key.contains($0) }) }
             var passed = 0
             for site in sites {
                 func call(_ params: [String: String]) async throws -> [String: JSONValue] {
-                    try await ScriptRuntime.shared.request(site: site, scriptURL: site.scriptURL(origin: config.origin), params: params, http: HTTPClient(), origin: config.origin)
+                    // Lite ports run alone here, without the JAR fallback, so the check measures the ports.
+                    try await ScriptRuntime.shared.request(site: site, scriptURL: site.liteScript ?? site.scriptURL(origin: config.origin), params: params, http: HTTPClient(), origin: config.origin)
                 }
                 var stage = "home"
                 do {

@@ -145,6 +145,7 @@
 "This video has no single MP4 stream available for this account." = "このアカウントでは、この動画の単一 MP4 ストリームを利用できません。";
 
 "Local JavaScript · Experimental" = "ローカル JavaScript・試験的";
+"Lite JavaScript · JAR fallback" = "軽量 JavaScript・JAR 予備";
 "Local Python · Experimental" = "ローカル Python・試験的";
 "This source requires a Python runtime, which is not available on this platform." = "このソースには、このプラットフォームでは利用できない Python ランタイムが必要です。";
 

@@ -32,8 +32,9 @@ public actor ScriptRuntime {
         if let value = try site.pluginExtension(origin: origin) {
             ext = try value.string ?? String(decoding: JSONEncoder().encode(value), as: UTF8.self)
         } else { ext = "" }
-        // JavaScript ext names a rule script, resolved like the source's own address.
-        if !ext.isEmpty, !ext.hasPrefix("{") { ext = (try? WebAddress.resolve(ext, relativeTo: origin).absoluteString) ?? ext }
+        // JavaScript ext names a rule script, resolved like the source's own address. A lite port's ext is
+        // its JAR spider's configuration (possibly encrypted text), so it reaches the port unchanged.
+        if !ext.isEmpty, !ext.hasPrefix("{"), site.liteScript == nil { ext = (try? WebAddress.resolve(ext, relativeTo: origin).absoluteString) ?? ext }
         let key = PluginChecksum.sha256(Data((scriptURL.absoluteString + "\n" + site.key + "\n" + ext).utf8))
         if let existing = sessions[key] {
             recent.removeAll { $0 == key }; recent.append(key)

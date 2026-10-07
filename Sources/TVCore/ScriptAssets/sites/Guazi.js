@@ -1,8 +1,9 @@
-// 瓜子影视 (csp_Guazi): an app API. Requests are JSON, AES-CBC encrypted, with the AES key and IV
+// 瓜子影视 (csp_Guazi, fty csp_AppgzGuard): an app API. Requests are JSON, AES-CBC encrypted, with the AES key and IV
 // RSA-encrypted for the server and an MD5 signature. Responses carry an RSA-wrapped AES key.
 import { aesEncrypt, aesDecrypt, rsaEncrypt, rsaDecrypt, md5, randomHex, http, formBody, store, resolutionRank, text } from './_lite.js';
 
-const HOSTS = ['https://apinew.uozvr.com', 'https://api.w32z7vtd.com', 'https://api.6a7nnf7.com', 'https://api.umygrx3.com', 'https://api.rmedphk.com'];
+// fty's csp_AppgzGuard speaks the same API on api.gjjwgp3n.com.
+const HOSTS = ['https://apinew.uozvr.com', 'https://api.gjjwgp3n.com', 'https://api.w32z7vtd.com', 'https://api.6a7nnf7.com', 'https://api.umygrx3.com', 'https://api.rmedphk.com'];
 const AES_KEY = 'OITxa5OqAYjhswxx';
 const AES_IV = 'rCMNwZASNBKZ8mXV';
 const SERVER_KEY = 'MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDUM5+/y8sPsWkd1/RQS64X259EUwxFXFE5HlA65MqrxnPs0JqoSRojSDy5QhwvROlaD6TwRQHKMY2OAZ6SnQeUJsChTEFIR9qUkwrs3/MVUMxjsv6JS6Oe/juclyJGTgVmDhB55EafXsD0SQYVj/QXXsxR6ewR5E2kL52yAAD4yQIDAQAB';

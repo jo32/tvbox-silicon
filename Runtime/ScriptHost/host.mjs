@@ -45,6 +45,12 @@ function nativeCrypto(request) {
         if (request.output === 'text') return { text: result.toString('utf8') };
         return { data: result.toString('base64') };
     }
+    if (request.op === 'inflate') {
+        const result = request.raw ? zlib.inflateRawSync(bytes('data')) : zlib.inflateSync(bytes('data'));
+        if (request.output === 'hex') return { hex: result.toString('hex') };
+        if (request.output === 'base64') return { data: result.toString('base64') };
+        return { text: result.toString('utf8') };
+    }
     if (request.op === 'hash') return { hex: crypto.createHash(alg).update(bytes('data')).digest('hex') };
     if (request.op === 'hmac') return { hex: crypto.createHmac(alg, bytes('key')).update(bytes('data')).digest('hex') };
     if (request.op === 'pow') {

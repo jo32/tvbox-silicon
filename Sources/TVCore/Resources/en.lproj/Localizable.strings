@@ -145,6 +145,7 @@
 "This video has no single MP4 stream available for this account." = "This video has no single MP4 stream available for this account.";
 
 "Local JavaScript · Experimental" = "Local JavaScript · Experimental";
+"Lite JavaScript · JAR fallback" = "Lite JavaScript · JAR fallback";
 "Local Python · Experimental" = "Local Python · Experimental";
 "This source requires a Python runtime, which is not available on this platform." = "This source requires a Python runtime, which is not available on this platform.";
 

@@ -73,7 +73,8 @@ enum QALaunch {
     }
 }
 
-/// Debug-only on-device source sweep: `-qaSection settings -qaSweep 1 [-qaSweepWorkers 1] [-qaSweepFresh 1] [-qaSweepHomeTimeout 60] [-qaSweepRuntime javascript]`.
+/// Debug-only on-device source sweep: `-qaSection settings -qaSweep 1 [-qaSweepWorkers 1] [-qaSweepFresh 1] [-qaSweepHomeTimeout 60] [-qaSweepRuntime javascript] [-qaSweepPorted 1]`.
+/// `-qaSweepPorted 1` runs only sources with a bundled lite port; each record then says whether the port or the JAR answered.
 /// Use one worker for JAR sources: the embedded runtime keeps two plugin runtimes, so parallel sources evict each other.
 /// Runs every source the platform can run through the app's own CatalogClient
 /// (home -> category -> detail -> playback -> first media bytes) and writes
@@ -102,7 +103,8 @@ enum QASweep {
         let recorder = Recorder(file: file, records: previous)
         let done = Set(previous.map(\.key))
         let only = UserDefaults.standard.string(forKey: "qaSweepRuntime")
-        let sites = config.sites.filter { !done.contains($0.key) && (only == nil || "\($0.runtime)" == only) }
+        let ported = UserDefaults.standard.bool(forKey: "qaSweepPorted")
+        let sites = config.sites.filter { !done.contains($0.key) && (only == nil || "\($0.runtime)" == only) && (!ported || $0.runsLitePort) }
         let workers = max(1, UserDefaults.standard.integer(forKey: "qaSweepWorkers").nonZero ?? 3)
         await recorder.status("running \(sites.count) of \(config.sites.count) sources, \(done.count) already done")
         await withTaskGroup(of: Void.self) { group in
@@ -157,6 +159,10 @@ enum QASweep {
             record.ok = true
             record.stage = "done"
         } catch { record.error = describe(error) }
+        if site.runsLitePort {
+            let fallbacks = await Diagnostics.shared.snapshot().entries.filter { $0.category == "lite.fallback" && $0.message.hasPrefix(site.key + " ") }
+            record.steps.append(fallbacks.isEmpty ? "runtime: lite port" : "runtime: JAR fallback (\(fallbacks.last!.message))")
+        }
         return record
     }
 

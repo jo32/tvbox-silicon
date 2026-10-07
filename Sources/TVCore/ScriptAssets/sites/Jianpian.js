@@ -1,11 +1,11 @@
 // 荐片 (csp_Jianpian): the jp3 app API. The API host comes from a DNS TXT record (wangerniu.<domain>), the
 // image host from resourceDomainConfig. Lines are mostly direct m3u8; ftp links become tvbox-xg:ftp.
-// ext: optional URL of a filters JSON (TVBox "filters" object).
+// ext: optional URL of a filters JSON (TVBox "filters" object), or {"filters": url, "prefix": "fan123."} (API host prefix).
 const UA = 'Mozilla/5.0 (Linux; Android 9; V2196A Build/PQ3A.190705.08211809; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36;webank/h5face;webank/1.0;netType:NETWORK_WIFI;appVersion:416;packageName:com.jp3.xg3';
 const FALLBACK = 'https://ev5356.970xw.com';
 const TXT = 'https://dns.alidns.com/resolve?name=swrdsfeiujo25sw.cc&type=TXT';
 
-let api = '', img = '', filtersURL = '';
+let api = '', img = '', filtersURL = '', prefix = 'wangerniu.';
 
 const headers = () => ({ 'User-Agent': UA, Referer: api });
 const fetchText = url => { try { return String(globalThis.req(url, { headers: headers(), timeout: 15000 }).content || ''); } catch { return ''; } };
@@ -40,11 +40,12 @@ const items = data => Array.isArray(data.data) ? data.data.filter(Boolean) : [];
 
 export default {
     init(ext) {
-        api = FALLBACK; img = ''; filtersURL = str(ext).trim();
+        api = FALLBACK; img = ''; filtersURL = str(ext).trim(); prefix = 'wangerniu.';
+        if (filtersURL.startsWith('{')) { try { const c = JSON.parse(filtersURL); filtersURL = str(c.filters).trim(); prefix = str(c.prefix) || prefix; } catch {} }
         try {
             const answer = (JSON.parse(globalThis.req(TXT, {}).content || '{}').Answer || [])[0];
             for (const domain of str(answer && answer.data).replace(/"/g, '').split(',').map(s => s.trim()).filter(Boolean)) {
-                api = 'https://wangerniu.' + domain;
+                api = 'https://' + prefix + domain;
                 const config = fetchText(api + '/api/v2/settings/resourceDomainConfig');
                 if (config) { img = pickImageHost(JSON.parse(config).data.imgDomain); return; }
             }

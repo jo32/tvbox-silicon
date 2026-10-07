@@ -1,6 +1,7 @@
 import Foundation
 import CommonCrypto
 import CryptoKit
+import Compression
 
 /// Native AES, hashes and HMAC for scripts (`nativeCrypto` in the prelude). Pure-JavaScript
 /// crypto is too slow on QuickJS for multi-megabyte payloads such as bridge relays.
@@ -8,9 +9,30 @@ import CryptoKit
 ///          {"op": "hash", "alg": "md5"|"sha1"|"sha256"|"sha512", "data"}
 ///          {"op": "hmac", "alg": ..., "key", "data"}
 ///          {"op": "pow", "alg": "sha256"|"md5", "prefix", "target", "match": "prefix"|"equal", "start", "end", "limitMs"}
+///          {"op": "inflate", "data", "raw": false, "output"}  zlib (or raw deflate) decompression
 /// Each binary field X may be given as X (base64), XText (UTF-8) or XHex. `output` selects the
 /// AES result: "base64" (default), "hex" or "text" (UTF-8). Answer: {"data"|"hex"|"text": ...}.
 enum ScriptCrypto {
+    /// Deflate decompression; Compression's ZLIB codec reads raw deflate, so a zlib header is skipped.
+    static func inflate(_ input: Data, zlibHeader: Bool) throws -> Data {
+        let source = zlibHeader && input.count > 2 ? input.dropFirst(2) : input[...]
+        guard !source.isEmpty else { return Data() }
+        var capacity = max(64 * 1024, source.count * 8)
+        while capacity <= 256 * 1024 * 1024 {
+            var output = Data(count: capacity)
+            let written = output.withUnsafeMutableBytes { out in
+                source.withUnsafeBytes { inp in
+                    compression_decode_buffer(out.bindMemory(to: UInt8.self).baseAddress!, capacity,
+                                              inp.bindMemory(to: UInt8.self).baseAddress!, source.count, nil, COMPRESSION_ZLIB)
+                }
+            }
+            if written == 0 { throw ScriptHostError("inflate failed") }
+            if written < capacity { return output.prefix(written) }
+            capacity *= 4
+        }
+        throw ScriptHostError("inflate output too large")
+    }
+
     static func run(_ json: String) throws -> String {
         let request = try JSONDecoder().decode([String: JSONValue].self, from: Data(json.utf8))
         func bytes(_ name: String) throws -> Data {
@@ -56,6 +78,13 @@ enum ScriptCrypto {
             }
         case "pow":
             answer = ["nonce": proofOfWork(request)]
+        case "inflate":
+            let result = try inflate(bytes("data"), zlibHeader: !flag("raw", false))
+            switch request["output"]?.string {
+            case "hex": answer = ["hex": hex(Array(result))]
+            case "base64": answer = ["data": result.base64EncodedString()]
+            default: answer = ["text": String(decoding: result, as: UTF8.self)]
+            }
         default: throw ScriptHostError("unsupported crypto operation")
         }
         return String(decoding: try JSONSerialization.data(withJSONObject: answer), as: UTF8.self)

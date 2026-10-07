@@ -6,7 +6,7 @@ extension Site {
     public var hidden: Bool { raw["hide"]?.int == 1 }
     public func canBrowse(jarURL: URL?) -> Bool {
         if native { return true }
-        if liteScript != nil { return ScriptRuntime.available }
+        if runsLitePort { return true }
         #if os(macOS)
         let hasPlugin = jarURL != nil || raw["jar"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
         switch runtime {
@@ -45,9 +45,9 @@ public enum GlobalSearch {
         // Each runtime has its own lane, so slow JVM searches never hold up the cheaper sources.
         // The plugin JVM runs at most `searchWidth` plugin searches and turns away callers
         // beyond a short queue, so JAR sources never exceed that width.
-        async let plugins: Void = run(eligible.filter { $0.runtime == .jar }, concurrency: EmbeddedJarHost.searchWidth, origin: origin, jarURL: jarURL,
+        async let plugins: Void = run(eligible.filter { $0.preferredRuntime == .jar }, concurrency: EmbeddedJarHost.searchWidth, origin: origin, jarURL: jarURL,
                                       keyword: keyword, http: http, onResult: onResult)
-        async let scripts: Void = run(eligible.filter { $0.runtime == .javascript || $0.runtime == .python }, concurrency: concurrency,
+        async let scripts: Void = run(eligible.filter { $0.preferredRuntime == .javascript || $0.preferredRuntime == .python }, concurrency: concurrency,
                                       origin: origin, jarURL: jarURL, keyword: keyword, http: http, onResult: onResult)
         await run(eligible.filter(\.native), concurrency: concurrency, origin: origin, jarURL: jarURL,
                   keyword: keyword, http: http, onResult: onResult)

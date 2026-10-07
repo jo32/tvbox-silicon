@@ -145,6 +145,7 @@
 "This video has no single MP4 stream available for this account." = "当前账号无法获取此视频的单一 MP4 流。";
 
 "Local JavaScript · Experimental" = "本地 JavaScript · 实验性";
+"Lite JavaScript · JAR fallback" = "轻量 JavaScript · JAR 备用";
 "Local Python · Experimental" = "本地 Python · 实验性";
 "This source requires a Python runtime, which is not available on this platform." = "此来源需要 Python 运行环境，此平台暂不支持。";
 
