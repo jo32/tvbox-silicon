@@ -56,6 +56,7 @@
 		6B5A97E3471CFF8086F15EB7 /* JNA-Apache2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 8320284C7FB9590C44BA7102 /* JNA-Apache2.txt */; };
 		6B8A35576F3B6D86ACA87047 /* Unicorn-LGPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 77D75493765469B6134467AE /* Unicorn-LGPL2.txt */; };
 		6B940ABF210E7EE756826526 /* OpenJDK-assembly-exception.txt in Resources */ = {isa = PBXBuildFile; fileRef = 4EF42E1957EFE569C0D2CF7D /* OpenJDK-assembly-exception.txt */; };
+		6CE6FB43EF6031C2E216DF33 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F25432F6424C7931768C7B6F /* Assets.xcassets */; };
 		6D108420BB72BBDA68011E7C /* OpenJDK-additional.txt in Resources */ = {isa = PBXBuildFile; fileRef = 49F3577BBD5630331F34E84E /* OpenJDK-additional.txt */; };
 		6D9AB8463C9D2249C0B908FF /* unidbg.txt in Resources */ = {isa = PBXBuildFile; fileRef = 995F5F0DB35FE66B4F90B4FF /* unidbg.txt */; };
 		6DBF1FDBD1FD2889D191197E /* PlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6876ACF1E9D9F80BBC4F22C4 /* PlaybackView.swift */; };
@@ -156,6 +157,7 @@
 		E9129983B00A1F634A9D91FA /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		EBE6334B7CAF1F9B12DD4545 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		F1B927CC6ECB2F8BDFB22287 /* JavaHost */ = {isa = PBXFileReference; lastKnownFileType = folder; name = JavaHost; path = build/JavaHost; sourceTree = SOURCE_ROOT; };
+		F25432F6424C7931768C7B6F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F3BE1C0DDC7E09246C2E0A68 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		F7D32FD5D631B4C58A2C3022 /* TVBox-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "TVBox-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		FFE4BA19E4F4F2797D929A6F /* AppleRuntime.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppleRuntime.m; sourceTree = "<group>"; };
@@ -209,6 +211,15 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		325C70089499C33D3C0ACA33 /* tvOS */ = {
+			isa = PBXGroup;
+			children = (
+				F25432F6424C7931768C7B6F /* Assets.xcassets */,
+			);
+			name = tvOS;
+			path = Config/tvOS;
+			sourceTree = "<group>";
+		};
 		3481683B30DDE3C81FFF2FF1 /* Native */ = {
 			isa = PBXGroup;
 			children = (
@@ -253,6 +264,7 @@
 				1D59E68466D22F2A478A3347 /* macOS */,
 				3481683B30DDE3C81FFF2FF1 /* Native */,
 				A8F2C96E75A8FF40AD9C4F24 /* Packages */,
+				325C70089499C33D3C0ACA33 /* tvOS */,
 				9E42A71049342AE976D26F4C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -415,6 +427,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D8878E7A04E94E6A88CA4DB7 /* Assets.xcassets in Resources */,
+				6CE6FB43EF6031C2E216DF33 /* Assets.xcassets in Resources */,
 				DB55B4EA2085691230ACCE09 /* Capstone-LLVM.txt in Resources */,
 				923AFC544321F7D6A3FFB87E /* Capstone.txt in Resources */,
 				6B01742A91D2CBC1E9895B76 /* InfoPlist.strings in Resources */,

@@ -20,6 +20,8 @@ enum QALaunch {
         }
     }
     static var page: String? { UserDefaults.standard.string(forKey: "qaPage") }
+    /// `-qaScroll live` scrolls Watch Now to that section once recommendations have loaded.
+    static var scrollTarget: String? { UserDefaults.standard.string(forKey: "qaScroll") }
 
     @MainActor static func start(_ store: Store) async {
         guard section != nil || page != nil else { return }

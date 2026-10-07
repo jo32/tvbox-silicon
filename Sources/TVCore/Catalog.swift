@@ -202,12 +202,15 @@ public struct CatalogClient: Sendable {
     public func home() async throws -> CatalogPage {
         CatalogPage(json: try await request(site.type == 4 ? ["filter": "true"] : [:]), origin: origin)
     }
-    public func recommendations() async throws -> [Recommendation] {
+    public func recommendations() async throws -> [Recommendation] { try await recommendationPage().items }
+    /// The home answer as recommendations plus the source's categories, from one plugin call.
+    public func recommendationPage() async throws -> (items: [Recommendation], categories: [Category]) {
         let json = try await request(site.type == 4 ? ["filter": "true"] : [:])
         var seen = Set<String>()
-        return (json["list"]?.array ?? []).compactMap { entry in
+        let items = (json["list"]?.array ?? []).compactMap { entry in
             entry.object.flatMap { Recommendation(json: $0, origin: origin, isIndex: (site.raw["indexs"]?.int ?? 0) == 1) }
         }.filter { seen.insert($0.id).inserted }
+        return (items, CatalogPage(json: json, origin: origin).categories)
     }
     public func list(category: String?, query: String, page: Int) async throws -> CatalogPage {
         var params = ["pg": String(page)]

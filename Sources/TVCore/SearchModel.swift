@@ -10,6 +10,8 @@ import Observation
     public var total = 0
     public var keyword = ""
     public var stopped = false
+    /// Paused because the viewer left the results, not by Stop; `resumeSuspended` continues it.
+    public private(set) var suspended = false
     public var scrollID: String?
     /// When the current run began and how many sources were already done, for a time estimate.
     public private(set) var runStart: (date: Date, completed: Int)?
@@ -41,6 +43,22 @@ import Observation
         generation = UUID()
         task?.cancel(); task = nil
         stopped = busy; busy = false
+        suspended = false
+    }
+
+    /// Pauses a running search while the viewer is on another page (a result's detail, another
+    /// section), so its plugin calls stop competing with what they are looking at. Sources that
+    /// already answered keep their results; the rest run again on `resumeSuspended`.
+    public func suspend() {
+        guard busy else { return }
+        stop()
+        suspended = true
+    }
+
+    public func resumeSuspended(config: Subscription) {
+        guard suspended else { return }
+        suspended = false
+        resume(config: config)
     }
 
     public func reset() {

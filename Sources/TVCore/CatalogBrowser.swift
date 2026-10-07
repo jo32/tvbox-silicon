@@ -30,6 +30,13 @@ import Observation
         }
     }
 
+    /// The category bar for a page that opened on a search: categories only come with the home
+    /// answer, so fetch it without touching the videos on screen.
+    public func loadCategories(client: CatalogClient) async {
+        guard categories.isEmpty, let home = try? await client.home(), !Task.isCancelled, categories.isEmpty else { return }
+        categories = home.categories
+    }
+
     public func load(_ request: Request, fetch: @escaping @Sendable (Request) async throws -> CatalogPage) async {
         pending?.cancel()
         generation += 1

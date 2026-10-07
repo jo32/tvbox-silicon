@@ -11,17 +11,22 @@ struct HomeView: View {
     #endif
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                if let config = store.subscription {
-                    RecommendationsView(config: config)
-                    if !store.favorites.isEmpty { favorites }
-                    if !config.lives.isEmpty { playlists(config) }
-                } else {
-                    welcome
+        ScrollViewReader { reader in
+            ScrollView {
+                VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
+                    if let config = store.subscription {
+                        RecommendationsView(config: config)
+                        if !store.favorites.isEmpty { favorites }
+                        if !config.lives.isEmpty { playlists(config).id("live") }
+                    } else {
+                        welcome
+                    }
                 }
+                .pageContainer()
             }
-            .pageContainer()
+            #if DEBUG
+            .task { if let target = QALaunch.scrollTarget { try? await Task.sleep(for: .seconds(8)); reader.scrollTo(target, anchor: .bottom) } }
+            #endif
         }
         .screenBackdrop()
         #if os(tvOS)
@@ -101,10 +106,10 @@ struct HomeView: View {
     // MARK: Sections
 
     private var favorites: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Layout.headerSpacing) {
             SectionHeader(title: L10n.text("Favorites")) { store.section = .favorites }
             ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 14) {
+                LazyHStack(spacing: Layout.cardSpacing) {
                     ForEach(store.favorites.prefix(12)) { ChannelCard(channel: $0).frame(width: Layout.cardMin) }
                 }.padding(.vertical, 6)
             }
@@ -112,9 +117,9 @@ struct HomeView: View {
     }
 
     private func playlists(_ config: Subscription) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Layout.headerSpacing) {
             SectionHeader(title: L10n.text("Live TV")) { store.section = .live }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.cardMin), spacing: 14)], spacing: 14) {
+            LazyVGrid(columns: Layout.cardColumns, spacing: Layout.cardSpacing) {
                 ForEach(config.lives.prefix(6)) { SourceCard(source: $0) }
             }
         }

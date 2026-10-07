@@ -58,6 +58,18 @@ enum Layout {
     #else
     static let gridSpacing: CGFloat = 10, gridRowSpacing: CGFloat = 18
     #endif
+    /// Space between a page's sections, between a section header and its content, and between cards.
+    /// The TV needs room for the focus lift, so a focused card never touches its neighbours.
+    #if os(tvOS)
+    static let sectionSpacing: CGFloat = 72, headerSpacing: CGFloat = 24, cardSpacing: CGFloat = 40
+    #elseif os(macOS)
+    static let sectionSpacing: CGFloat = 40, headerSpacing: CGFloat = 14, cardSpacing: CGFloat = 16
+    #else
+    static let sectionSpacing: CGFloat = 32, headerSpacing: CGFloat = 12, cardSpacing: CGFloat = 12
+    #endif
+    static var cardColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: cardMin), spacing: cardSpacing)]
+    }
     static var posterColumns: [GridItem] {
         [GridItem(.adaptive(minimum: posterMin), spacing: gridSpacing, alignment: .top)]
     }

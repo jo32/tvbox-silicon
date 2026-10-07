@@ -116,3 +116,24 @@ private func eventually(_ predicate: () -> Bool) async throws {
     await #expect(throws: (any Error).self) { try await worker.request(resources: "app", json: "fail") }
     #expect(try await worker.request(resources: "app", json: "retry") == "retry")
 }
+
+@Test func abandonedRunningWorkTellsTheHostItsRequestID() async throws {
+    let gate = NativeCallGate(); defer { gate.release() }
+    let abandoned = NativeCallGate()
+    let worker = SerializedPluginWorker(abandon: { _, id in _ = abandoned.execute(id) }) { _, json in
+        // The host sees the request id first; keep the call running like a plugin opening.
+        gate.execute(json.contains("\"open\"") ? "blocked:" + json : json)
+    }
+    let task = Task { try await worker.request(resources: "app", json: "{\"open\":1}") }
+    try await eventually { gate.executed.count == 1 }
+    let sent = try #require(gate.executed.first)
+    #expect(sent.hasPrefix("blocked:{\"request\":\"") && sent.hasSuffix(",\"open\":1}"))
+    task.cancel()
+    await #expect(throws: CancellationError.self) { try await task.value }
+    try await eventually { abandoned.executed.count == 1 }
+    let id = try #require(abandoned.executed.first)
+    #expect(sent.contains("\"request\":\"\(id)\""))
+    // A call that still has callers is never abandoned.
+    #expect(try await worker.request(resources: "app", json: "{\"quick\":1}").contains("\"quick\":1"))
+    #expect(abandoned.executed.count == 1)
+}

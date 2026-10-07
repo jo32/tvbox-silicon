@@ -8,7 +8,7 @@ struct SitesView: View {
         Group {
             if let config = store.subscription {
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.cardMin), spacing: 14)], spacing: 14) {
+                    LazyVGrid(columns: Layout.cardColumns, spacing: Layout.cardSpacing) {
                         ForEach(SourceStrategy.arrange(config.sites) { !$0.hidden && $0.canBrowse(jarURL: config.spiderURL) }
                             .filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }) { site in
                             RouteLink { SiteView(site: site, origin: config.origin, jarURL: config.spiderURL) } label: { SiteCard(site: site) }.cardButton()
@@ -73,12 +73,13 @@ struct SiteView: View {
                 .focusable()
                 .onExitCommand { dismiss() }
                 #endif
-            } else if isIndex, let config = store.subscription {
-                ScrollView { RecommendationsView(config: config, fixedSite: site).pageContainer() }
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 20) {
                         if !browser.categories.isEmpty { categoryBar } else if initialLoading { ChipSkeletonRow() }
+                        if isIndex && !browser.videos.isEmpty {
+                            Text(L10n.text("Choose a title to find it across your sources.")).font(.subheadline).foregroundStyle(.secondary)
+                        }
                         if browser.busy {
                             LoadingCard { .source(site, origin: origin, title: L10n.text("Loading source content…")) }
                         }
@@ -97,7 +98,12 @@ struct SiteView: View {
                         if browser.videos.isEmpty && browser.loaded && !browser.busy && browser.error == nil { ContentUnavailableView(L10n.text("No Videos"), systemImage: "film", description: Text(L10n.text("Try selecting a category or searching."))).frame(maxWidth: .infinity) }
                         LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
                             ForEach(browser.videos) { video in
-                                RouteLink { VideoDetailView(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
+                                // An index source (a ranking or list site) names titles; other sources play them.
+                                if isIndex {
+                                    Button { store.searchVideos(video.name) } label: { PosterCard(video: video) }.cardButton()
+                                } else {
+                                    RouteLink { VideoDetailView(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
+                                }
                             }
                         }
                         .opacity(browser.busy && !browser.videos.isEmpty ? 0.55 : 1).animation(.smooth, value: browser.busy)
@@ -113,9 +119,9 @@ struct SiteView: View {
         }
         .screenBackdrop()
         .screenTitle(site.name).task {
-            if canLoad && !isIndex && !browser.loaded {
+            if canLoad && !browser.loaded {
                 if initialQuery.isEmpty { await home() }
-                else { query = initialQuery; await search() }
+                else { query = initialQuery; await search(); await browser.loadCategories(client: client) }
             }
         }
     }

@@ -19,7 +19,7 @@ public final class SharedPluginRuntime {
     /** Requests in flight per source; a busy source is never evicted. Guarded by this. */
     private final java.util.HashMap<String, Integer> busy = new java.util.HashMap<>();
     /** Spider init stays one at a time, but never under this runtime's lock. */
-    private final Object opening = new Object();
+    private final OpeningGate opening = new OpeningGate();
 
     private SharedPluginRuntime(NativeProbe.StandardRuntime runtime) { this.runtime = runtime; }
 
@@ -56,7 +56,11 @@ public final class SharedPluginRuntime {
         Source source;
         synchronized (this) { source = claim(id); }
         if (source == null) {
-            synchronized (opening) {
+            var cancelled = OpeningGate.cancelled(input);
+            // The viewer's own requests init their spider before waiting searches; an abandoned
+            // request stops waiting instead of creating a spider nobody wants.
+            opening.enter(OpeningGate.search(input), cancelled);
+            try {
                 synchronized (this) { source = claim(id); }
                 if (source == null) {
                     // Make room first: spider init allocates, and a full heap fails it.
@@ -69,7 +73,7 @@ public final class SharedPluginRuntime {
                     }
                     source = opened;
                 }
-            }
+            } finally { opening.leave(); }
         }
         try {
             // A spider keeps per-source state (e.g. the detail loaded before playback).

@@ -69,6 +69,25 @@ import TVCore
             print("\(passed)/\(sites.count) sources reached playback")
             return
         }
+        if args[1] == "--home-check", args.count >= 3 {
+            // Loads each source's home the way the app's source page does and reports what its
+            // category bar would show.
+            let config = try await HTTPClient().subscription(WebAddress.resolve(args[2]))
+            let filters = Array(args.dropFirst(3))
+            let sites = config.sites.filter { site in filters.isEmpty || filters.contains { site.name.contains($0) || site.key.contains($0) } }
+            // One at a time: the plugin runtime turns away interactive calls beyond a short queue.
+            for site in sites {
+                let client = CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL)
+                do {
+                    let home = try await client.home()
+                    print("\(home.categories.isEmpty ? "NONE" : "OK  ") \(site.key)  \(site.name)  [\(site.compatibility) \(site.preferredRuntime)]  categories=\(home.categories.count) videos=\(home.videos.count)")
+                } catch {
+                    print("FAIL \(site.key)  \(site.name)  [\(site.compatibility) \(site.preferredRuntime)]  \(error.localizedDescription)")
+                }
+            }
+            for entry in await Diagnostics.shared.snapshot().entries where entry.category == "lite.fallback" { print("     fallback: \(entry.message)") }
+            return
+        }
         if args[1] == "--script-check", args.count >= 3 {
             // Runs a subscription's JavaScript sources on the in-process QuickJS runtime (as iOS and
             // tvOS do): home, a category when home has no videos, detail, then playback.

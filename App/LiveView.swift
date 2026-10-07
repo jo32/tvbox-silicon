@@ -7,7 +7,7 @@ struct LiveView: View {
         Group {
             if let config = store.subscription, !config.lives.isEmpty {
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.cardMin), spacing: 14)], spacing: 14) {
+                    LazyVGrid(columns: Layout.cardColumns, spacing: Layout.cardSpacing) {
                         ForEach(config.lives) { SourceCard(source: $0) }
                     }.pageContainer()
                 }

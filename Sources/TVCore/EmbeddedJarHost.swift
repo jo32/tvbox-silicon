@@ -23,13 +23,19 @@ public actor EmbeddedJarHost {
         #endif
     }
     #if os(macOS)
-    private let worker = SerializedPluginWorker(width: EmbeddedJarHost.searchWidth) { resources, json in
+    private let worker = SerializedPluginWorker(width: EmbeddedJarHost.searchWidth, abandon: { resources, id in
+        _ = PluginProcess.shared.call(resources: resources, json: EmbeddedJarHost.cancelCommand(id))
+    }) { resources, json in
         PluginProcess.shared.call(resources: resources, json: json)
     }
     /// New cloud-drive cookies apply to spiders created afterwards; restart so every source rereads them.
     public func reloadCloudAccounts() { PluginProcess.shared.restart() }
     #else
-    private let worker = SerializedPluginWorker(width: EmbeddedJarHost.searchWidth) { resources, json in
+    private let worker = SerializedPluginWorker(width: EmbeddedJarHost.searchWidth, abandon: { resources, id in
+        resources.withCString { resources in
+            EmbeddedJarHost.cancelCommand(id).withCString { command in free(nativePluginRequest(resources, command)) }
+        }
+    }) { resources, json in
         resources.withCString { resources in
             json.withCString { json in
                 guard let output = nativePluginRequest(resources, json) else {
@@ -41,6 +47,9 @@ public actor EmbeddedJarHost {
         }
     }
     #endif
+    /// Abandons a running request: if it is still waiting to open its plugin, it stops waiting.
+    static func cancelCommand(_ id: String) -> String { "{\"command\":\"cancel\",\"request\":\"\(id)\"}" }
+
     public func request(site: Site, jarURL: URL, params: [String: String], http: HTTPClient, configurationOrigin: URL, progress: PluginPreparation? = nil) async throws -> [String: JSONValue] {
         guard Self.available, let resources = Bundle.main.resourcePath else { throw TVError.unsupported("The on-device plugin runtime is missing from this build.") }
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]

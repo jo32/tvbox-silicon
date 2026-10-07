@@ -22,6 +22,12 @@ public final class InProcessHost {
     private static final java.util.HashMap<String, Integer> busy = new java.util.HashMap<>();
     /** {@code host} is a SharedPluginRuntime when shared, otherwise a single-source PluginSession. */
     private record Runtime(URLClassLoader loader, Object host, boolean shared, java.nio.file.Path cache) {}
+    /**
+     * Cancellation flags of requests in flight, by the app's request id. The app sends
+     * {@code {"command":"cancel","request":id}} when nobody waits for a request any more; a cancel
+     * can arrive before its request does, so either side may create the flag.
+     */
+    private static final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicBoolean> cancellations = new java.util.concurrent.ConcurrentHashMap<>();
 
     public static void closeAll() throws Exception {
         gate.writeLock().lock();
@@ -64,12 +70,17 @@ public final class InProcessHost {
 
     /**
      * {@code {"command":"trim"}} releases idle runtimes and sources (the OS reported memory
-     * pressure). Any other input is a plugin request.
+     * pressure). {@code {"command":"cancel","request":id}} abandons a request: one still waiting to
+     * open its plugin gives up. Any other input is a plugin request.
      */
     public static String request(String inputText) {
+        String requestId = "";
         try {
             JSONObject input = new JSONObject(inputText);
             if ("trim".equals(input.optString("command"))) return new JSONObject().put("result", trim("memory pressure", true)).toString();
+            if ("cancel".equals(input.optString("command"))) return cancel(input.optString("request"));
+            requestId = input.optString("request");
+            if (!requestId.isEmpty()) input.put("cancelled", (Object) cancellations.computeIfAbsent(requestId, id -> new java.util.concurrent.atomic.AtomicBoolean()));
             for (int attempt = 1; ; attempt++) {
                 try {
                     var lock = gate.readLock();
@@ -82,12 +93,35 @@ public final class InProcessHost {
                     trim("out of memory", true);
                 }
             }
+        } catch (java.util.concurrent.CancellationException abandoned) {
+            return cancelled();
         } catch (Throwable error) {
             while (error instanceof InvocationTargetException && error.getCause() != null) error = error.getCause();
             // Before a runtime exists (bad input, runtime start-up): the parent loader's classes apply.
             try { return NativeProbe.failure(error).toString(); }
             catch (Exception impossible) { return "{\"error\":\"Plugin request failed\"}"; }
+        } finally {
+            if (!requestId.isEmpty()) cancellations.remove(requestId);
         }
+    }
+
+    private static String cancel(String requestId) {
+        if (requestId.isEmpty()) return "{\"result\":false}";
+        // A cancel that lost the race with its request's end leaves a set flag behind; keep that bounded.
+        if (cancellations.size() > 256) cancellations.values().removeIf(java.util.concurrent.atomic.AtomicBoolean::get);
+        cancellations.computeIfAbsent(requestId, id -> new java.util.concurrent.atomic.AtomicBoolean()).set(true);
+        System.err.println("PLUGIN_CANCEL " + requestId);
+        synchronized (InProcessHost.class) { InProcessHost.class.notifyAll(); }
+        return "{\"result\":true}";
+    }
+
+    private static String cancelled() {
+        return "{\"error\":\"The app no longer needs this request.\",\"errorCode\":\"cancelled\"}";
+    }
+
+    private static void checkCancelled(JSONObject input) {
+        var flag = OpeningGate.cancelled(input);
+        if (flag != null && flag.get()) throw new java.util.concurrent.CancellationException("The app no longer needs this request.");
     }
 
     /**
@@ -107,8 +141,10 @@ public final class InProcessHost {
     private static String perform(JSONObject input) throws Throwable {
         boolean shared = shareable(input);
         String id = shared ? "runtime:" + input.getString("runtime") : "session:" + input.getString("session");
+        checkCancelled(input);
         Runtime runtime = acquire(id, shared, input);
         try {
+            checkCancelled(input);
             ClassLoader previous = Thread.currentThread().getContextClassLoader();
             try {
                 Thread.currentThread().setContextClassLoader(runtime.loader());
@@ -124,6 +160,9 @@ public final class InProcessHost {
                     }
                 } catch (Throwable error) {
                     if (HeapBudget.outOfMemory(error)) throw new OutOfMemoryError("Java heap space");
+                    Throwable cause = error;
+                    while (cause instanceof InvocationTargetException && cause.getCause() != null) cause = cause.getCause();
+                    if (cause instanceof java.util.concurrent.CancellationException) return cancelled();
                     return runtimeFailure(runtime, error);
                 }
                 return new JSONObject().put("result", result).toString();
@@ -137,7 +176,7 @@ public final class InProcessHost {
     }
 
     /** Serializes runtime start-up without holding the class lock, which every finishing request needs. */
-    private static final Object opening = new Object();
+    private static final OpeningGate opening = new OpeningGate();
 
     /** Finds or opens a runtime and marks it busy. */
     private static Runtime acquire(String id, boolean shared, JSONObject input) throws Throwable {
@@ -146,20 +185,23 @@ public final class InProcessHost {
             if (runtime != null) return runtime;
         }
         // Start-up (DEX indexing, Init, native guards) can take minutes on first use. Only other
-        // openers wait for it; searches on open runtimes keep starting and returning.
-        synchronized (opening) {
+        // openers wait for it; searches on open runtimes keep starting and returning. The viewer's
+        // own requests open before waiting searches, and an abandoned request stops waiting.
+        opening.enter(OpeningGate.search(input), OpeningGate.cancelled(input));
+        try {
             synchronized (InProcessHost.class) {
                 Runtime runtime = claim(id);
                 if (runtime != null) return runtime;
-                makeRoom();
+                makeRoom(input);
             }
+            checkCancelled(input);
             Runtime runtime = open(shared, input);
             synchronized (InProcessHost.class) {
                 runtimes.put(id, runtime);
                 busy.merge(id, 1, Integer::sum);
                 return runtime;
             }
-        }
+        } finally { opening.leave(); }
     }
 
     /** Guarded by the class lock. */
@@ -173,7 +215,7 @@ public final class InProcessHost {
      * Frees a slot for one more runtime: at most two stay open, fewer while the heap is short.
      * Guarded by the class lock; only an opener calls it.
      */
-    private static void makeRoom() throws Exception {
+    private static void makeRoom(JSONObject input) throws Exception {
         if (!runtimes.isEmpty() && HeapBudget.low()) trimLocked("opening another plugin", false);
         while (runtimes.size() >= 2) {
             var iterator = runtimes.entrySet().iterator();
@@ -195,7 +237,8 @@ public final class InProcessHost {
                 close(stale.getValue()); runtimes.remove(stale.getKey()); return;
             }
             // Both slots are serving other searches; wait for one to finish rather than fail.
-            InProcessHost.class.wait();
+            checkCancelled(input);
+            InProcessHost.class.wait(250);
         }
     }
 

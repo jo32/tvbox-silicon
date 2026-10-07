@@ -33,6 +33,8 @@ struct GlobalSearchView: View {
             .onSubmit(of: .search) { if let config = store.subscription { submit(config) } }
             .screenBackdrop()
             .sheet(isPresented: $showFailures) { failureDetails }
+            .onAppear { if let config = store.subscription { model.resumeSuspended(config: config) } }
+            .onDisappear { model.suspend() }
             .task(id: model.draft) {
                 let query = model.draft.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard query != model.keyword else { return }
@@ -55,7 +57,11 @@ struct GlobalSearchView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .sheet(isPresented: $showFailures) { failureDetails }
-            .onAppear { if model.keyword.isEmpty { inputFocused = true } }
+            .onAppear {
+                if model.keyword.isEmpty { inputFocused = true }
+                if let config = store.subscription { model.resumeSuspended(config: config) }
+            }
+            .onDisappear { model.suspend() }
         #endif
     }
 
@@ -477,6 +483,10 @@ struct RecommendationsView: View {
     @State private var revision = 0
     @State private var forceRefresh = false
     @State private var choosingSource = false
+    /// The source category shown instead of its recommendations; nil shows the recommendations.
+    @State private var category: String?
+    @State private var categoryPage = 1
+    @State private var browser = CatalogBrowser()
     private var model: RecommendationModel { store.recommendationModel }
     private var sites: [Site] { fixedSite.map { [$0] } ?? SourceStrategy.arrange(config.sites) { !$0.hidden && $0.canBrowse(jarURL: config.spiderURL) } }
     /// Until the user picks a source, default to the first in strategy order, so opening the app
@@ -577,11 +587,16 @@ struct RecommendationsView: View {
                 Text(error).foregroundStyle(.secondary)
                 Button(L10n.text("Retry")) { forceRefresh = true; revision += 1 }
             }
-            if !model.busy && model.error == nil && model.items.isEmpty {
+            if let loadedSite = model.site, !model.categories.isEmpty {
+                categoryChips(loadedSite).tvFocusSection()
+            }
+            if category != nil, let loadedSite = model.site {
+                categoryContent(loadedSite)
+            } else if !model.busy && model.error == nil && model.items.isEmpty {
                 Text(L10n.text("This source has no recommendations. Choose another source or use Global Search."))
                     .foregroundStyle(.secondary)
             }
-            if !model.items.isEmpty, let loadedSite = model.site {
+            if category == nil, !model.items.isEmpty, let loadedSite = model.site {
                 if (loadedSite.raw["indexs"]?.int ?? 0) == 1 {
                     Text(L10n.text("Choose a title to find it across your sources.")).font(.subheadline).foregroundStyle(.secondary)
                 }
@@ -605,6 +620,66 @@ struct RecommendationsView: View {
             guard let site else { model.reset(); return }
             let refresh = forceRefresh; forceRefresh = false
             await model.load(client: CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL), subscriptionDate: config.importedAt, force: refresh)
+            // A source whose home names only categories (list sites) opens its first one.
+            if category == nil, !model.busy, model.error == nil, model.items.isEmpty, let first = model.categories.first {
+                category = first.id; categoryPage = 1
+            }
+        }
+        .task(id: "\(requestID)|\(category ?? "")|\(categoryPage)") {
+            guard let category, let loadedSite = model.site, loadedSite.key == site?.key else { return }
+            await browser.load(.list(category: category, query: "", page: categoryPage),
+                               client: CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL))
+        }
+        .onChange(of: site?.key) { category = nil; categoryPage = 1 }
+    }
+
+    private func categoryChips(_ loadedSite: Site) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: 8) {
+                if !model.items.isEmpty {
+                    Chip(title: L10n.text("Recommendations"), selected: category == nil) { category = nil; categoryPage = 1 }
+                }
+                ForEach(model.categories) { item in
+                    Chip(title: item.name, selected: category == item.id) { category = item.id; categoryPage = 1 }
+                }
+            }.padding(.vertical, 4)
+        }
+    }
+
+    @ViewBuilder private func categoryContent(_ loadedSite: Site) -> some View {
+        let client = CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL)
+        let isIndex = (loadedSite.raw["indexs"]?.int ?? 0) == 1
+        if browser.busy && browser.videos.isEmpty { PosterSkeletonGrid() }
+        if let error = browser.error {
+            Text(error).foregroundStyle(.secondary)
+            Button(L10n.text("Retry")) { Task { await browser.load(browser.request, client: client) } }
+        }
+        if !browser.videos.isEmpty {
+            if isIndex {
+                Text(L10n.text("Choose a title to find it across your sources.")).font(.subheadline).foregroundStyle(.secondary)
+            }
+            LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
+                ForEach(browser.videos) { video in
+                    if isIndex {
+                        Button { store.searchVideos(video.name) } label: { PosterCard(video: video) }.cardButton()
+                    } else {
+                        RouteLink { VideoDetailView(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .opacity(browser.busy ? 0.55 : 1)
+            .tvFocusSection()
+            if browser.pageCount > 1 {
+                HStack(spacing: 12) {
+                    Button { categoryPage -= 1 } label: { Image(systemName: "chevron.left").frame(width: 22) }
+                        .controlButton().disabled(categoryPage <= 1 || browser.busy).accessibilityLabel(L10n.text("Previous"))
+                    Text(L10n.text("Page %lld of %lld", browser.page, browser.pageCount)).font(.subheadline.weight(.medium).monospacedDigit())
+                    Button { categoryPage += 1 } label: { Image(systemName: "chevron.right").frame(width: 22) }
+                        .controlButton().disabled(categoryPage >= browser.pageCount || browser.busy).accessibilityLabel(L10n.text("Next"))
+                }
+                .frame(maxWidth: .infinity).tvFocusSection()
+            }
         }
     }
 }

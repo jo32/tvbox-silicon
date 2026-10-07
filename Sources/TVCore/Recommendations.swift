@@ -58,11 +58,14 @@ public struct Recommendation: Identifiable, Hashable, Sendable {
 
 @MainActor @Observable public final class RecommendationModel {
     public private(set) var items: [Recommendation] = []
+    /// The source's own categories, browsable beside its recommendations.
+    public private(set) var categories: [Category] = []
     public private(set) var site: Site?
     public private(set) var busy = false
     public private(set) var error: String?
     private struct Cached {
         let items: [Recommendation]
+        let categories: [Category]
         let date: Date
     }
     private var cache: [String: Cached] = [:]
@@ -72,24 +75,24 @@ public struct Recommendation: Identifiable, Hashable, Sendable {
 
     public func reset() {
         generation = UUID(); identity = nil; cache = [:]
-        items = []; site = nil; busy = false; error = nil
+        items = []; categories = []; site = nil; busy = false; error = nil
     }
 
     public func load(client: CatalogClient, subscriptionDate: Date, force: Bool = false) async {
         let key = "\(client.origin)|\(subscriptionDate.timeIntervalSince1970)|\(client.site.key)"
         let token = UUID(); generation = token
-        if identity != key { items = [] }
+        if identity != key { items = []; categories = [] }
         identity = key; site = client.site; error = nil
         if !force, let cached = cache[key], Date().timeIntervalSince(cached.date) < 600 {
-            items = cached.items; busy = false; return
+            items = cached.items; categories = cached.categories; busy = false; return
         }
         busy = true
         do {
-            let result = try await client.recommendations()
+            let result = try await client.recommendationPage()
             try Task.checkCancellation()
             guard generation == token else { return }
-            items = result; busy = false
-            cache[key] = Cached(items: result, date: Date())
+            items = result.items; categories = result.categories; busy = false
+            cache[key] = Cached(items: result.items, categories: result.categories, date: Date())
             if cache.count > 4, let oldest = cache.min(by: { $0.value.date < $1.value.date })?.key { cache[oldest] = nil }
         } catch {
             guard generation == token else { return }

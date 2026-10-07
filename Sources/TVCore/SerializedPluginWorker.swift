@@ -5,13 +5,15 @@ import Foundation
 /// and never waits behind a search burst. Java serializes calls per source, so a detail request
 /// only waits for a search of the same source. Identical in-flight requests share work;
 /// cancelled queued requests are removed before they can enter Java. Running Java is never
-/// interrupted, even when its last caller goes away.
+/// interrupted, but when its last caller goes away the host hears `cancel`: a call still waiting
+/// to open its plugin gives up instead of loading a plugin nobody wants.
 final class SerializedPluginWorker: @unchecked Sendable {
     /// Mutable state is only touched under `lock`.
     private final class Work: @unchecked Sendable {
         let resources: String
         let json: String
         let search: Bool
+        let id = UUID().uuidString
         let queued = ContinuousClock.now
         var waiters: [UUID: CheckedContinuation<String, Error>] = [:]
         init(resources: String, json: String, search: Bool) {
@@ -20,6 +22,9 @@ final class SerializedPluginWorker: @unchecked Sendable {
     }
     private let lock = NSLock()
     private let execute: @Sendable (String, String) -> Result<String, Error>
+    /// Tells the host a running call lost its callers (resources, request id). The id reaches the
+    /// host as the request's `request` field.
+    private let abandon: (@Sendable (String, String) -> Void)?
     private let timeout: TimeInterval
     private let maximumPending: Int
     private let width: Int
@@ -28,9 +33,11 @@ final class SerializedPluginWorker: @unchecked Sendable {
     private var running: [Work] = []
 
     init(timeout: TimeInterval = 900, maximumPending: Int = 2, width: Int = 5, interactiveWidth: Int = 2,
+         abandon: (@Sendable (String, String) -> Void)? = nil,
          execute: @escaping @Sendable (String, String) -> Result<String, Error>) {
         self.timeout = timeout; self.maximumPending = maximumPending
-        self.width = max(1, width); self.interactiveWidth = max(1, interactiveWidth); self.execute = execute
+        self.width = max(1, width); self.interactiveWidth = max(1, interactiveWidth)
+        self.abandon = abandon; self.execute = execute
     }
 
     func request(resources: String, json: String, search: Bool = false) async throws -> String {
@@ -65,7 +72,11 @@ final class SerializedPluginWorker: @unchecked Sendable {
     private func cancel(_ id: UUID) {
         lock.lock()
         var waiter: CheckedContinuation<String, Error>?
-        for work in running where waiter == nil { waiter = work.waiters.removeValue(forKey: id) }
+        var abandoned: Work?
+        for work in running where waiter == nil {
+            waiter = work.waiters.removeValue(forKey: id)
+            if waiter != nil, work.waiters.isEmpty { abandoned = work }
+        }
         if waiter == nil {
             for work in pending {
                 if let removed = work.waiters.removeValue(forKey: id) { waiter = removed; break }
@@ -75,6 +86,10 @@ final class SerializedPluginWorker: @unchecked Sendable {
         }
         lock.unlock()
         waiter?.resume(throwing: CancellationError())
+        if let abandoned, let abandon {
+            Diagnostics.shared.record(.debug, "jar.queue", "abandoned search=\(abandoned.search)")
+            DispatchQueue.global(qos: .utility).async { abandon(abandoned.resources, abandoned.id) }
+        }
     }
 
     /// A slow call (first preparation, heavy plugin crypto on the interpreter) is not a stuck
@@ -111,7 +126,7 @@ final class SerializedPluginWorker: @unchecked Sendable {
         let began = ContinuousClock.now
         let timer = DispatchWorkItem { [self, work] in expire(work) }
         DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: timer)
-        let result = execute(work.resources, work.json)
+        let result = execute(work.resources, abandon == nil ? work.json : Self.tagged(work.json, id: work.id))
         timer.cancel()
         lock.lock()
         running.removeAll { $0 === work }
@@ -121,6 +136,12 @@ final class SerializedPluginWorker: @unchecked Sendable {
         lock.unlock()
         Diagnostics.shared.record(.debug, "jar.timing", "queue=\(work.queued.duration(to: began)) execution=\(began.duration(to: .now)) callers=\(waiters.count) search=\(work.search) alsoRunning=\(concurrent)")
         for waiter in waiters { waiter.resume(with: result) }
+    }
+
+    /// The request with its id as a leading `request` field, so the host can match a later `cancel`.
+    static func tagged(_ json: String, id: String) -> String {
+        guard json.hasPrefix("{"), json.dropFirst().contains(where: { !$0.isWhitespace && $0 != "}" }) else { return json }
+        return "{\"request\":\"\(id)\"," + json.dropFirst()
     }
 
     // Bounded scheduling metrics, also used to synchronize concurrency tests.
