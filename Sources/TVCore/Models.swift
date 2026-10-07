@@ -37,7 +37,19 @@ public enum PluginFailure {
             return L10n.text("The source's plugin crashed. The site may have changed; try another source.", language: language)
         default: break
         }
+        // The spider class is not in the JAR the subscription points at: a subscription error, not a site error.
+        if let name = PluginClassMissing.className(in: detail) {
+            return L10n.text("This subscription's plugin package doesn't include %@. Ask the subscription's maintainer or use another source.", name, language: language)
+        }
         return L10n.text("Plugin error: %@", detail, language: language)
+    }
+
+    /// The plugin itself failed (crash, conversion, Android gap), as opposed to the site or network.
+    static func inPlugin(_ envelope: [String: JSONValue]) -> Bool {
+        switch envelope["errorCode"]?.string {
+        case "plugin_crash", "unsupported_android", "class_conversion", nil: return envelope["error"] != nil
+        default: return false
+        }
     }
 
     public static func diagnostic(source: String, _ envelope: [String: JSONValue]) -> String {
@@ -101,6 +113,14 @@ public enum WebAddress {
     }
 }
 
+/// How a source runs, in preference order. `SourceStrategy` lists, searches, and defaults to lower
+/// ranks first: a standard JSON API is one HTTP request, Python and Node start in well under a
+/// second, and a JAR needs the JVM plus DEX conversion on first use.
+public enum SourceRuntime: Int, Comparable, Sendable {
+    case api, python, javascript, jar, unsupported
+    public static func < (lhs: SourceRuntime, rhs: SourceRuntime) -> Bool { lhs.rawValue < rhs.rawValue }
+}
+
 public struct Site: Identifiable, Codable, Hashable, Sendable {
     public let key: String
     public let name: String
@@ -108,7 +128,9 @@ public struct Site: Identifiable, Codable, Hashable, Sendable {
     public let api: String
     public let raw: [String: JSONValue]
     public var id: String { key }
-    public var native: Bool { type == 1 || type == 4 }
+    public var native: Bool { (type == 1 || type == 4) && !missingAPI }
+    /// Merged subscriptions sometimes carry entries with an empty api; they cannot run anywhere.
+    private var missingAPI: Bool { api.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     public func pluginURL(origin: URL, fallback: URL?) throws -> URL? {
         guard let address = raw["jar"]?.string, !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return fallback }
         return try WebAddress.resolve(address.components(separatedBy: ";md5;")[0], relativeTo: origin)
@@ -126,15 +148,41 @@ public struct Site: Identifiable, Codable, Hashable, Sendable {
         }
         return try raw["ext"].map(resolve)
     }
+    /// Classified like TVBox: a `.js` api runs in the JavaScript host, a `.py` api (or a legacy
+    /// `py_` key whose ext is the script) in the Python host, and any other type 3 api is a JAR class.
+    public var runtime: SourceRuntime {
+        if native { return .api }
+        guard type == 3, !missingAPI else { return .unsupported }
+        if liteScript != nil { return .javascript }
+        let path = api.lowercased()
+        if path.hasSuffix(".js") || path.contains(".js?") { return .javascript }
+        if path.contains(".py") || (api.hasPrefix("py_") && raw["ext"]?.string?.lowercased().contains(".py") == true) { return .python }
+        return .jar
+    }
+    /// The script a JavaScript or Python source runs, relative to the subscription.
+    public func scriptURL(origin: URL) throws -> URL {
+        if let liteScript { return liteScript }
+        if runtime == .python, api.hasPrefix("py_"), let script = raw["ext"]?.string { return try WebAddress.resolve(script, relativeTo: origin) }
+        return try WebAddress.resolve(api, relativeTo: origin)
+    }
     public var compatibility: String {
-        if native { return L10n.text("Standard API") }
-        #if os(macOS)
-        if type == 3 { return api.hasPrefix("csp_") ? L10n.text("Local JAR · Experimental") : L10n.text("Local JavaScript · Experimental") }
-        #elseif os(iOS) || os(tvOS)
-        if type == 3, api.hasPrefix("csp_"), EmbeddedJarHost.available { return L10n.text("Local JAR · Experimental") }
-        #endif
-        if type == 3 { return api.hasPrefix("csp_") ? L10n.text("Requires Android plugin") : L10n.text("Requires script engine") }
-        return L10n.text("Unsupported API")
+        switch runtime {
+        case .api: return L10n.text("Standard API")
+        case .unsupported: return L10n.text("Unsupported API")
+        case .javascript, .python:
+            #if os(macOS)
+            if runtime == .javascript { return L10n.text("Local JavaScript · Experimental") }
+            if LocalJarHost.pythonAvailable { return L10n.text("Local Python · Experimental") }
+            #else
+            if runtime == .javascript, ScriptRuntime.available { return L10n.text("Local JavaScript · Experimental") }
+            #endif
+            return L10n.text("Requires script engine")
+        case .jar:
+            #if os(macOS) || os(iOS) || os(tvOS)
+            if EmbeddedJarHost.available { return L10n.text("Local JAR · Experimental") }
+            #endif
+            return L10n.text("Requires Android plugin")
+        }
     }
     public static func == (lhs: Site, rhs: Site) -> Bool { lhs.key == rhs.key && lhs.raw == rhs.raw }
     public func hash(into hasher: inout Hasher) { hasher.combine(key) }

@@ -26,7 +26,8 @@ for library in Runtime/JavaHost/target/lib/*.jar; do
   cp "$library" "$target.$$.tmp"
   mv -f "$target.$$.tmp" "$target"
 done
-if [ ! -x "$DEST/jre/bin/java" ] || ! "$DEST/jre/bin/java" --list-modules | grep -q '^jdk.httpserver@'; then
+# jdk.charsets carries GBK/GB2312, which many Chinese source sites still serve.
+if [ ! -x "$DEST/jre/bin/java" ] || ! "$DEST/jre/bin/java" --list-modules | grep -q '^jdk.httpserver@' || ! "$DEST/jre/bin/java" --list-modules | grep -q '^jdk.charsets@'; then
   if [ -d "$DEST/jre" ]; then mv "$DEST/jre" "$PWD/build/JavaHost-jre.previous.$$"; fi
-  "$JDK/bin/jlink" --add-modules java.base,java.logging,java.xml,java.desktop,java.management,java.naming,jdk.unsupported,jdk.crypto.ec,jdk.zipfs,jdk.httpserver --strip-debug --no-header-files --no-man-pages --output "$DEST/jre"
+  "$JDK/bin/jlink" --add-modules java.base,java.logging,java.xml,java.desktop,java.management,java.naming,jdk.unsupported,jdk.crypto.ec,jdk.zipfs,jdk.httpserver,jdk.charsets --strip-debug --no-header-files --no-man-pages --output "$DEST/jre"
 fi

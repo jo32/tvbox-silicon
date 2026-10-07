@@ -1,0 +1,160 @@
+{
+ "about": "Lightweight JavaScript ports of TVBox csp_ JAR spiders. Each enabled class runs on the in-process QuickJS runtime (ScriptRuntime) instead of the JVM. Remove a class here to fall back to its JAR spider.",
+ "classes": {
+  "App3Q": {
+   "script": "App3Q.js",
+   "sites": "三秋, 马猴",
+   "status": "browse/detail OK; playback currently rejected upstream (same as the JAR)"
+  },
+  "App88": {
+   "script": "App88.js",
+   "sites": "摆烂, 长泽, 双星动漫",
+   "status": "OK"
+  },
+  "AppRJ": {
+   "script": "AppRJ.js",
+   "sites": "热播",
+   "status": "OK"
+  },
+  "BeiLeHu": {
+   "script": "BeiLeHu.js",
+   "sites": "小虎少儿",
+   "status": "OK"
+  },
+  "Bili": {
+   "script": "Bili.js",
+   "sites": "笔触琉璃, 少儿教育, 小学/初中/高中课堂, 笔璃合集/歌曲",
+   "status": "OK; playback via the app's proxy?do=bili MP4 resolver"
+  },
+  "Buguyy": {
+   "script": "Buguyy.js",
+   "sites": "布谷音乐",
+   "status": "OK"
+  },
+  "C919TY": {
+   "script": "C919TY.js",
+   "sites": "919体育",
+   "status": "OK when matches are live"
+  },
+  "CZ": {
+   "script": "CZ.js",
+   "sites": "厂长",
+   "status": "site behind a SafeLine WAF challenge (fails for the JAR too)"
+  },
+  "DJHub": {
+   "script": "DJHub.js",
+   "sites": "短剧聚合",
+   "status": "OK (七猫, 星芽, 西饭, 围观, 河马, 好看)"
+  },
+  "Duboku": {
+   "script": "Duboku.js",
+   "sites": "独播",
+   "status": "OK"
+  },
+  "FanShu": {
+   "script": "FanShu.js",
+   "sites": "番薯动漫",
+   "status": "OK; search needs the site captcha, so it returns nothing (as the JAR without solving it)"
+  },
+  "Guazi": {
+   "script": "Guazi.js",
+   "sites": "瓜子影视",
+   "status": "OK"
+  },
+  "GuaziTY": {
+   "script": "GuaziTY.js",
+   "sites": "瓜子体育",
+   "status": "OK when matches are live"
+  },
+  "Jianpian": {
+   "script": "Jianpian.js",
+   "sites": "荐片",
+   "status": "OK"
+  },
+  "Kan360": {
+   "script": "Kan360.js",
+   "sites": "三六影视",
+   "status": "OK; web episodes go to the parse page (parse=1), as the JAR"
+  },
+  "Kanqiu": {
+   "script": "Kanqiu.js",
+   "sites": "看球",
+   "status": "web players (parse=1), as the JAR"
+  },
+  "Libvio": {
+   "script": "Libvio.js",
+   "sites": "立播",
+   "status": "OK (online lines); cloud-drive lines omitted"
+  },
+  "NiuLai": {
+   "script": "NiuLai.js",
+   "sites": "素笺, 云岫, 星澜, 茶寮, 竹隐, 玉阶, 香篆, 松庭, 纸鸢, 墨砚",
+   "status": "OK; some lines fail upstream as in the JAR"
+  },
+  "QiutongTY": {
+   "script": "QiutongTY.js",
+   "sites": "球通体育",
+   "status": "OK when the API is up"
+  },
+  "SaoHuo": {
+   "script": "SaoHuo.js",
+   "sites": "骚火",
+   "status": "web players (parse=1), as the JAR"
+  },
+  "Sir88": {
+   "script": "Sir88.js",
+   "sites": "超全体育",
+   "status": "OK when rooms are live"
+  },
+  "TingBook": {
+   "script": "TingBook.js",
+   "sites": "六月有声",
+   "status": "browse OK; chapter API returns System Error upstream (falls back to web page)"
+  },
+  "TingBookJinXia": {
+   "script": "TingBookJinXia.js",
+   "sites": "堇夏有声",
+   "status": "OK"
+  },
+  "TingShijie": {
+   "script": "TingShijie.js",
+   "sites": "听界有声",
+   "status": "OK"
+  },
+  "TuXiaoBei": {
+   "script": "TuXiaoBei.js",
+   "sites": "小兔少儿",
+   "status": "OK"
+  },
+  "TvDy": {
+   "script": "TvDy.js",
+   "sites": "天堂",
+   "status": "site unreachable (as for the JAR)"
+  },
+  "WenCai": {
+   "script": "WenCai.js",
+   "sites": "文才",
+   "status": "OK"
+  },
+  "Wwys": {
+   "script": "Wwys.js",
+   "sites": "糯米",
+   "status": "OK"
+  },
+  "XgAnime": {
+   "script": "XgAnime.js",
+   "sites": "西瓜动漫",
+   "status": "browse OK; episodes need web sniffing"
+  },
+  "XingHui": {
+   "script": "XingHui.js",
+   "sites": "星绘",
+   "status": "OK"
+  },
+  "zhiqiu": {
+   "script": "zhiqiu.js",
+   "sites": "听风知秋",
+   "status": "OK"
+  }
+ }
+}

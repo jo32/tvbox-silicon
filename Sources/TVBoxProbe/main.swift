@@ -36,6 +36,41 @@ import TVCore
             print(String(decoding: try encoder.encode(results.sorted { $0.address < $1.address }), as: UTF8.self))
             return
         }
+        if args[1] == "--script-check", args.count >= 3 {
+            // Runs a subscription's JavaScript sources on the in-process QuickJS runtime (as iOS and
+            // tvOS do): home, a category when home has no videos, detail, then playback.
+            let config = try await HTTPClient().subscription(WebAddress.resolve(args[2]))
+            let filters = Array(args.dropFirst(3))
+            let sites = config.sites.filter { site in site.runtime == .javascript && (filters.isEmpty || filters.contains { site.name.contains($0) || site.key.contains($0) }) }
+            var passed = 0
+            for site in sites {
+                func call(_ params: [String: String]) async throws -> [String: JSONValue] {
+                    try await ScriptRuntime.shared.request(site: site, scriptURL: site.scriptURL(origin: config.origin), params: params, http: HTTPClient(), origin: config.origin)
+                }
+                var stage = "home"
+                do {
+                    let home = CatalogPage(json: try await call(site.type == 4 ? ["filter": "true"] : [:]), origin: config.origin)
+                    var videos = home.videos
+                    if videos.isEmpty, let category = home.categories.first {
+                        stage = "category"
+                        videos = CatalogPage(json: try await call(["pg": "1", "ac": "detail", "t": category.id]), origin: config.origin).videos
+                    }
+                    guard let first = videos.first else { throw TVError.unsupported("no videos") }
+                    stage = "detail"
+                    let detail = CatalogPage(json: try await call(["ac": "detail", "ids": first.id]), origin: config.origin).videos.first
+                    guard let episode = detail?.episodes.first else { throw TVError.unsupported("no episodes") }
+                    stage = "play"
+                    let play = try await call(["play": episode.address, "flag": episode.flag])
+                    let address = play["url"]?.string ?? play["url"]?.array.map { "\($0.count / 2) choices" } ?? "none"
+                    passed += 1
+                    print("OK   \(site.name.prefix(24))  \(home.categories.count) categories, \(videos.count) videos, play \(address.prefix(80))")
+                } catch {
+                    print("FAIL \(site.name.prefix(24))  [\(stage)] \(error.localizedDescription.prefix(160))")
+                }
+            }
+            print("\(passed)/\(sites.count) JavaScript sources reached playback on QuickJS")
+            return
+        }
         if args[1] == "--subscription-export", args.count == 3 {
             do {
                 let config = try await HTTPClient().subscription(WebAddress.resolve(args[2]))

@@ -9,7 +9,8 @@ struct SitesView: View {
             if let config = store.subscription {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.cardMin), spacing: 14)], spacing: 14) {
-                        ForEach(config.sites.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }) { site in
+                        ForEach(SourceStrategy.arrange(config.sites) { !$0.hidden && $0.canBrowse(jarURL: config.spiderURL) }
+                            .filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }) { site in
                             RouteLink { SiteView(site: site, origin: config.origin, jarURL: config.spiderURL) } label: { SiteCard(site: site) }.cardButton()
                         }
                     }.pageContainer()
@@ -62,7 +63,9 @@ struct SiteView: View {
                     if site.type != 3 {
                         Text(L10n.text("This source format is not supported. Choose another source."))
                     } else {
-                        Text(site.api.hasPrefix("csp_") ? L10n.text("This source uses a plugin that requires Android DEX and native libraries. This platform does not yet have the required compatibility layer.\n\n%@", site.api) : L10n.text("This source requires a JavaScript engine, which is not supported yet."))
+                        Text(site.runtime == .jar ? L10n.text("This source uses a plugin that requires Android DEX and native libraries. This platform does not yet have the required compatibility layer.\n\n%@", site.api)
+                             : site.runtime == .python ? L10n.text("This source requires a Python runtime, which is not available on this platform.")
+                             : L10n.text("This source requires a JavaScript engine, which is not supported yet."))
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -79,7 +82,7 @@ struct SiteView: View {
                         if browser.busy {
                             LoadingCard { .source(site, origin: origin, title: L10n.text("Loading source content…")) }
                         }
-                        if initialLoading { PosterSkeletonGrid() }
+                        if initialLoading { PosterSkeletonGrid().loadingFocus { dismiss() } }
                         if let error = browser.error {
                             ErrorStateCard(
                                 title: L10n.text("Unable to load this source"),
@@ -222,7 +225,7 @@ struct VideoDetailView: View {
                         } else if let error {
                             errorCard(error).padding(.top, 12)
                         } else {
-                            DetailSkeleton()
+                            DetailSkeleton().loadingFocus { dismiss() }
                         }
                     }
                     .pageContainer()
@@ -541,7 +544,7 @@ struct VideoDetailView: View {
             if plan.choices.count > 1 {
                 pendingPlan = plan; pendingEpisode = episode; choosingQuality = true
             } else {
-                let resolved = try await client.resolvePlayback(plan, choice: plan.choices[0])
+                let resolved = try await client.with(parses: store.subscription?.parseServices ?? []).resolvePlayback(plan, choice: plan.choices[0])
                 store.playing = Channel(name: "\(video.name) · \(episode.name)", group: resolved.group, url: resolved.url, headers: resolved.headers)
             }
         } catch { fail(episode, error) }
@@ -550,7 +553,7 @@ struct VideoDetailView: View {
         busy = true; loadingEpisode = episode.id
         defer { busy = false; pendingPlan = nil; pendingEpisode = nil; loadingEpisode = nil }
         do {
-            let resolved = try await client.resolvePlayback(plan, choice: choice)
+            let resolved = try await client.with(parses: store.subscription?.parseServices ?? []).resolvePlayback(plan, choice: choice)
             store.playing = Channel(name: "\(video.name) · \(episode.name)", group: resolved.group, url: resolved.url, headers: resolved.headers)
         } catch { fail(episode, error) }
     }

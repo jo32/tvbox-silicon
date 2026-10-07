@@ -17,7 +17,11 @@ public final class AndroidNativeRuntime {
     private static ClassLoader loader;
     private static File plugin;
     private static File cache;
+    private static File guestRoot;
     private static final HashSet<String> loaded = new HashSet<>();
+    /** Libraries loaded from Java code that guest native code called into; see {@link #load}. */
+    private static final java.util.ArrayList<File> deferred = new java.util.ArrayList<>();
+    private static int depth;
 
     public static void configure(ClassLoader classLoader, File archive, File directory) {
         loader = classLoader; plugin = archive; cache = directory;
@@ -26,6 +30,7 @@ public final class AndroidNativeRuntime {
     private static void initialize() {
         if (vm != null) return;
         File root = new File(cache, "android-guest"); root.mkdirs();
+        guestRoot = root;
         emulator = new HeadlessAndroidEmulator(root);
         emulator.setTimeout(10_000_000L);
         emulator.getMemory().setLibraryResolver(new AndroidResolver(23));
@@ -42,22 +47,46 @@ public final class AndroidNativeRuntime {
         new AndroidModule(emulator, vm).register(emulator.getMemory());
     }
 
+    /** Native code writes files inside the guest file system; map such a path back to the host. */
+    public static synchronized String hostPath(String path) {
+        if (path == null || guestRoot == null || new File(path).exists() || !path.startsWith("/")) return path;
+        File guest = new File(guestRoot, path.substring(1));
+        return guest.exists() ? guest.getPath() : path;
+    }
+
     public static synchronized void close() throws java.io.IOException {
         if (emulator != null) emulator.close();
-        emulator = null; vm = null; loaded.clear(); loader = null; plugin = null; cache = null;
+        emulator = null; vm = null; guestRoot = null; loaded.clear(); deferred.clear(); depth = 0; loader = null; plugin = null; cache = null;
     }
 
     public static synchronized void load(String path) {
         try {
-            File file = new File(path).getCanonicalFile();
+            File file = new File(hostPath(path)).getCanonicalFile();
             if (loaded.contains(file.getPath())) return;
             byte[] header;
             try (var stream = Files.newInputStream(file.toPath())) { header = stream.readNBytes(20); }
             NativeLibraries.validateARM64(header, file.getName());
             initialize();
+            if (depth > 0) {
+                // Guest code called Java (e.g. a class initializer) that loads another library. The
+                // emulator cannot start a nested run, so load it once the outer call returns. Copy it
+                // first: plugins often delete the extracted file right after System.load.
+                File copy = new File(new File(cache, "native-deferred"), file.getName());
+                copy.getParentFile().mkdirs();
+                Files.copy(file.toPath(), copy.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                deferred.add(copy);
+                loaded.add(file.getPath());
+                System.err.println("NATIVE_LOAD_DEFERRED " + file.getName());
+                return;
+            }
             vm.loadLibrary(file, true).callJNI_OnLoad(emulator);
             loaded.add(file.getPath());
-        } catch (Exception error) { throw new IllegalStateException("Cannot load Android native library: " + new File(path).getName(), error); }
+        } catch (Exception error) {
+            // Plugins usually catch this and print only the message.
+            System.err.println("NATIVE_LOAD_FAILED " + path);
+            error.printStackTrace(System.err);
+            throw new IllegalStateException("Cannot load Android native library: " + new File(path).getName(), error);
+        }
     }
 
     public static synchronized void loadLibrary(String name) {
@@ -66,8 +95,23 @@ public final class AndroidNativeRuntime {
         } catch (Exception error) { throw new IllegalStateException("Cannot load bundled Android library: " + name, error); }
     }
 
+    private static void loadDeferred() {
+        while (depth == 0 && !deferred.isEmpty()) {
+            File file = deferred.remove(0);
+            try { vm.loadLibrary(file, true).callJNI_OnLoad(emulator); }
+            catch (Exception error) { System.err.println("NATIVE_LOAD_FAILED " + file); error.printStackTrace(System.err); }
+        }
+    }
+
     public static synchronized Object invoke(String owner, String signature, Object receiver, Object[] values) {
         if (vm == null) throw new IllegalStateException("Plugin called JNI before loading its native library: " + owner);
+        loadDeferred();
+        depth++;
+        try { return call(owner, signature, receiver, values); }
+        finally { depth--; loadDeferred(); }
+    }
+
+    private static Object call(String owner, String signature, Object receiver, Object[] values) {
         Type[] types = Type.getArgumentTypes(signature.substring(signature.indexOf('(')));
         Object[] arguments = new Object[values.length];
         for (int i = 0; i < values.length; i++) {

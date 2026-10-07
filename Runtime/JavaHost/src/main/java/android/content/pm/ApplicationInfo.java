@@ -8,4 +8,5 @@ public class ApplicationInfo {
     public String dataDir;
     public int flags;
     public int targetSdkVersion = 23;
+    public CharSequence loadLabel(PackageManager manager) { return "TVBox"; }
 }

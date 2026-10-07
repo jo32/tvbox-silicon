@@ -87,3 +87,56 @@ import Testing
     #expect(ext["script"]?.string == "var path='./unchanged';")
     #expect(try sub.sites[0].pluginExtension(origin: nil) == sub.sites[0].raw["ext"])
 }
+
+@Test func sourcesSelectTheirRuntimeAndRankCheapestFirst() throws {
+    func site(_ type: Int, _ api: String, ext: JSONValue? = nil) -> Site {
+        Site(key: api, name: api, type: type, api: api, raw: ext.map { ["ext": $0] } ?? [:])
+    }
+    #expect(site(1, "https://example.com/api.php/provide/vod/").runtime == .api)
+    #expect(site(4, "https://example.com/api").runtime == .api)
+    #expect(site(3, "http://example.com/lib/drpy2.min.js", ext: .string("./js/rule.js")).runtime == .javascript)
+    #expect(site(3, "./spider.js?v=2").runtime == .javascript)
+    #expect(site(3, "https://example.com/py/永乐视频.py").runtime == .python)
+    #expect(site(3, "py_cctv", ext: .string("https://example.com/lib/py_cctv.py?extend=x")).runtime == .python)
+    #expect(site(3, "csp_XBPQ", ext: .string("https://example.com/rules.json")).runtime == .jar)
+    #expect(site(3, "csp_Bili").runtime == .jar)
+    #expect(site(0, "https://example.com/xml").runtime == .unsupported)
+    #expect([SourceRuntime.jar, .javascript, .api, .python].sorted() == [.api, .python, .javascript, .jar])
+
+    let origin = try #require(URL(string: "https://example.com/config/tv.json"))
+    #expect(try site(3, "py_cctv", ext: .string("../lib/cctv.py")).scriptURL(origin: origin).absoluteString == "https://example.com/lib/cctv.py")
+    #expect(try site(3, "./spider.py").scriptURL(origin: origin).absoluteString == "https://example.com/config/spider.py")
+}
+
+@Test func sourceNamesGroupIntoChannelsAcrossPluginTypes() {
+    for (names, channel) in [(["低端影视", "影视 | 低端影视[js]", "🛣┃低端┃影视", "低端｜影视", "♻️低端(drpy)"], "低端"),
+                             (["LIBVIO[py]", "🐛LIBVIO", "🦋Libvio(XPF)", "影视 | libvio[js]"], "libvio"),
+                             (["影视-瓜子(T4)", "瓜子[py]", "瓜子｜APP", "⭐瓜子┃秒播"], "瓜子"),
+                             (["🐯┃虎牙┃直播", "虎牙直播(JS)"], "虎牙直播")] {
+        for name in names { #expect(SourceStrategy.channel(of: name) == channel, "\(name)") }
+    }
+    // Content words keep a brand's other channels apart, including bracketed ones.
+    #expect(SourceStrategy.channel(of: "🅱️┃哔哩┃听书") != SourceStrategy.channel(of: "🅱️┃哔哩┃影视"))
+    #expect(SourceStrategy.channel(of: "😘多多┃[网盘]") != SourceStrategy.channel(of: "多多影视[py]"))
+}
+
+@Test func sourceStrategyFiltersAndOrdersChannelsByRuntime() {
+    func site(_ key: String, _ name: String, _ type: Int, _ api: String) -> Site { Site(key: key, name: name, type: type, api: api, raw: [:]) }
+    let sites = [
+        site("jar-a", "低端影视", 3, "csp_Ddys"),
+        site("xml", "XML", 0, "https://example.com/xml"),
+        site("js-a", "影视 | 低端影视[js]", 3, "https://example.com/drpy2.min.js"),
+        site("py-other", "其他[py]", 3, "https://example.com/other.py"),
+        site("py-a", "低端[py]", 3, "https://example.com/ddys.py"),
+        site("api-b", "低端(T4)", 4, "https://example.com/b"),
+        site("js-b", "🔥┃低端┃Js", 3, "https://example.com/b.js"),
+        site("api-a", "低端影视", 1, "https://example.com/a"),
+        site("py-b", "低端影视[py]", 3, "https://example.com/ddys2.py"),
+        site("jar-b", "🐞低端影视", 3, "csp_Ddys2"),
+        site("jar-only", "仅JAR", 3, "csp_Only"),
+    ]
+    let arranged = SourceStrategy.arrange(sites) { $0.runtime != .unsupported }
+    // Channel 低端 has a JSON source, so it leads: JSON a, JSON b, Python a, Python b, JS a, JS b, JAR a, JAR b.
+    // Then the Python-only channel, then the JAR-only channel; the XML source is not offered.
+    #expect(arranged.map(\.key) == ["api-b", "api-a", "py-a", "py-b", "js-a", "js-b", "jar-a", "jar-b", "py-other", "jar-only"])
+}

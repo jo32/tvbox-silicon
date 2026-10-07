@@ -59,7 +59,7 @@ sh configure --with-conf-name="$CONF" --disable-warnings-as-errors \
 # Keep java-only targets separate: OpenJDK otherwise skips native prerequisites
 # for the entire make invocation, including static-libs-image.
 make CONF="$CONF" JOBS="${JOBS:-4}" hotspot-static-libs java.base-static-libs java.management-static-libs
-make CONF="$CONF" JOBS="${JOBS:-4}" java.management-java java.logging-java java.naming-java java.security.sasl-java java.xml-java jdk.httpserver-java jdk.zipfs-java jdk.unsupported-java
+make CONF="$CONF" JOBS="${JOBS:-4}" java.management-java java.logging-java java.naming-java java.security.sasl-java java.xml-java jdk.httpserver-java jdk.zipfs-java jdk.unsupported-java jdk.charsets-java
 make CONF="$CONF" static-libs-image-only
 test -f "$SOURCE/build/$CONF/images/static-libs/lib/zero/libjvm.a"
 echo "Zero static libraries: $SOURCE/build/$CONF/images/static-libs/lib"

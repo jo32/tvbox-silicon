@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#include <signal.h>
 #include <jni.h>
 #include <stdlib.h>
 #include <string.h>
@@ -71,7 +72,8 @@ char *TVAppleRuntimeRequest(const char *resourcePath, const char *requestJSON) {
             fprintf(stderr, "Java heap limit %s\n", heap.UTF8String);
             // Shrink the committed heap after collections, so memory freed in Java goes back to iOS.
             NSArray<NSString *> *arguments = @[heap, @"-Xms32m", @"-Xss2m", @"-XX:+UseSerialGC", @"-XX:MinHeapFreeRatio=10", @"-XX:MaxHeapFreeRatio=30", @"-XX:+DisableAttachMechanism", @"-Xrs",
-                @"--add-opens=java.base/java.lang=ALL-UNNAMED", @"--enable-native-access=ALL-UNNAMED",
+                @"--add-opens=java.base/java.lang=ALL-UNNAMED", @"--add-opens=java.base/sun.net.www.protocol.jar=ALL-UNNAMED",
+                @"--enable-native-access=ALL-UNNAMED",
                 @"-Dorg.slf4j.simpleLogger.defaultLogLevel=error",
                 [@"-Djava.home=" stringByAppendingString:[root stringByAppendingPathComponent:@"lib"]],
                 [@"-Djava.class.path=" stringByAppendingString:classpath],
@@ -81,6 +83,11 @@ char *TVAppleRuntimeRequest(const char *resourcePath, const char *requestJSON) {
             JavaVMInitArgs init={.version=JNI_VERSION_1_8,.nOptions=(jint)arguments.count,.options=options,.ignoreUnrecognized=JNI_FALSE};
             jint status=JNI_CreateJavaVM(&runtimeVM,(void **)&env,&init);
             if (status != JNI_OK) { runtimeVM=NULL; failed=YES; pthread_mutex_unlock(&startLock); return failure("Could not start the embedded Java runtime."); }
+            // The JVM handles SIGPIPE and SIGXFSZ only to ignore them, but its handler first reads the
+            // signal's pc, which Zero cannot do, so it aborts the app instead. A write to a closed
+            // socket raises SIGPIPE (the player leaving the media proxy mid-stream); ignore both here
+            // so such writes fail with an IOException as on other platforms.
+            signal(SIGPIPE, SIG_IGN); signal(SIGXFSZ, SIG_IGN);
             jclass local=(*env)->FindClass(env,"tvbox/runtime/AppleBootstrap");
             if (local) { bootstrap=(*env)->NewGlobalRef(env,local); (*env)->DeleteLocalRef(env,local); }
             if (bootstrap) requestMethod=(*env)->GetStaticMethodID(env,bootstrap,"request","(Ljava/lang/String;)Ljava/lang/String;");

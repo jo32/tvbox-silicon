@@ -107,7 +107,7 @@ import Testing
     exit 7
     """.utf8).write(to: executable)
     try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
-    let process = try LocalJarProcess(host: root, job: job, request: job.appendingPathComponent("request.json"), context: "test flood", timeout: 5, script: true)
+    let process = try LocalJarProcess(host: root, job: job, request: job.appendingPathComponent("request.json"), context: "test flood", timeout: 5, runtime: .javascript)
     do {
         _ = try await process.request([:], trace: "flood")
         Issue.record("Expected plugin exit error")

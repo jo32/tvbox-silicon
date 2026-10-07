@@ -65,9 +65,7 @@ public final class PluginSession {
             android.os.Looper.shutdown();
             if (bridge != null) bridge.close();
             AndroidNativeRuntime.close();
-            if (NativeCalls.emulator != null) {
-                NativeCalls.emulator.close(); NativeCalls.emulator = null; NativeCalls.vm = null; NativeCalls.nativeClass = null;
-            }
+            NativeCalls.close();
             if (spider.getClass().getClassLoader() instanceof java.net.URLClassLoader loader) loader.close();
         }
     }

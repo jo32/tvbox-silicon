@@ -34,7 +34,7 @@
 "About Yingxia" = "About Yingxia";
 "macOS · iOS · tvOS / Native SwiftUI + AVPlayer" = "macOS · iOS · tvOS / Native SwiftUI + AVPlayer";
 "Open Source Licenses" = "Open Source Licenses";
-"Supports TVBox JSON subscriptions, M3U / TXT live playlists, and standard type 1 / type 4 JSON APIs. Media formats depend on the device. Local JAR and JavaScript plugins are experimental on Mac; compatibility varies by source. Plugin playback is not yet available on iPhone or Apple TV." = "Supports TVBox JSON subscriptions, M3U / TXT live playlists, and standard type 1 / type 4 JSON APIs. Media formats depend on the device. Local JAR and JavaScript plugins are experimental on Mac; compatibility varies by source. Plugin playback is not yet available on iPhone or Apple TV.";
+"Supports TVBox JSON subscriptions, M3U / TXT live playlists, and standard type 1 / type 4 JSON APIs. Media formats depend on the device. Local JavaScript and Python plugins are experimental on Mac, and JAR plugins are experimental on every platform; compatibility varies by source." = "Supports TVBox JSON subscriptions, M3U / TXT live playlists, and standard type 1 / type 4 JSON APIs. Media formats depend on the device. Local JavaScript and Python plugins are experimental on Mac, and JAR plugins are experimental on every platform; compatibility varies by source.";
 "No Favorites Yet" = "No Favorites Yet";
 "Tap the heart next to a live channel to save it on this device." = "Tap the heart next to a live channel to save it on this device.";
 "Remove %@ from favorites" = "Remove %@ from favorites";
@@ -145,6 +145,8 @@
 "This video has no single MP4 stream available for this account." = "This video has no single MP4 stream available for this account.";
 
 "Local JavaScript · Experimental" = "Local JavaScript · Experimental";
+"Local Python · Experimental" = "Local Python · Experimental";
+"This source requires a Python runtime, which is not available on this platform." = "This source requires a Python runtime, which is not available on this platform.";
 
 // Source error recovery
 "Unable to load this source" = "Unable to load this source";
@@ -390,3 +392,7 @@
 "Waiting for you to scan…" = "Waiting for you to scan…";
 "Sign-in code" = "Sign-in code";
 "Your %@ sign-in is missing or has expired. Sign in again to play this episode." = "Your %@ sign-in is missing or has expired. Sign in again to play this episode.";
+"Use Another URL" = "Use Another URL";
+"The source returned a web page instead of data. It may be offline or blocking apps." = "The source returned a web page instead of data. It may be offline or blocking apps.";
+"This subscription's plugin package doesn't include %@. Ask the subscription's maintainer or use another source." = "This subscription's plugin package doesn't include %@. Ask the subscription's maintainer or use another source.";
+"The plugin download returned a web page instead of a plugin. Its host may be offline." = "The plugin download returned a web page instead of a plugin. Its host may be offline.";

@@ -8,12 +8,14 @@ import java.util.zip.*;
 /** Repairs JVM interface references emitted by the DEX converter and observes plugin HTTP calls. */
 public final class BytecodeCompatibility {
     // v11: frames no longer reference the nonexistent java/util/Object; re-convert cached classes.
-    public static final String VERSION = "host-v11";
+    // v12: objects that R8 initializes through Object.<init> are allocated directly.
+    public static final String VERSION = "host-v12";
 
     private static final String BRIDGES = "tvbox/runtime/generated/InterfaceCalls";
     private record CallSite(String owner, String name, String descriptor) { }
 
     private static byte[] transform(byte[] bytes, java.util.Map<CallSite, String> bridges, String bridgeOwner) {
+        bytes = ConstructorRepair.repair(bytes);
         ClassReader reader = new ClassReader(bytes);
         ClassWriter writer = new ClassWriter(reader, 0);
         boolean newCz = reader.getClassName().equals("com/github/catvod/spider/NewCz");
@@ -42,6 +44,11 @@ public final class BytecodeCompatibility {
                         }
                         if (opcode == Opcodes.INVOKEVIRTUAL && owner.equals("java/lang/reflect/Method") && name.equals("invoke") && descriptor.equals("(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;")) {
                             super.visitMethodInsn(Opcodes.INVOKESTATIC, "tvbox/runtime/ReflectionDiagnostics", name, "(Ljava/lang/reflect/Method;Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;", false);
+                            return;
+                        }
+                        if (opcode == Opcodes.INVOKESTATIC && name.equals("getProxyUrlDo") && descriptor.equals("(Ljava/lang/String;)Ljava/lang/String;")
+                                && (owner.equals("com/github/catvod/spider/Proxy") || owner.equals("com/github/catvod/spider/ProxyOrigin"))) {
+                            super.visitMethodInsn(opcode, "tvbox/runtime/CloudDriveBridge", name, descriptor, false);
                             return;
                         }
                         if (opcode == Opcodes.INVOKESTATIC && owner.equals("java/lang/System") && (name.equals("load") || name.equals("loadLibrary")) && descriptor.equals("(Ljava/lang/String;)V")) {
@@ -123,6 +130,29 @@ public final class BytecodeCompatibility {
         rewrite(original, destination, BRIDGES);
     }
     public static void rewrite(Path original, Path destination, String bridgeOwner) throws IOException {
+        var declared = new java.util.HashMap<String, ConstructorRepair.Declared>();
+        try (ZipFile input = new ZipFile(original.toFile())) {
+            for (var entries = input.entries(); entries.hasMoreElements();) {
+                ZipEntry entry = entries.nextElement();
+                if (!entry.getName().endsWith(".class")) continue;
+                try (InputStream stream = input.getInputStream(entry)) {
+                    ClassReader reader = new ClassReader(stream.readAllBytes());
+                    var constructors = new java.util.LinkedHashSet<String>();
+                    reader.accept(new ClassVisitor(Opcodes.ASM9) {
+                        @Override public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+                            if (name.equals("<init>") && (access & Opcodes.ACC_PRIVATE) == 0) constructors.add(descriptor);
+                            return null;
+                        }
+                    }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                    declared.put(reader.getClassName(), new ConstructorRepair.Declared(reader.getSuperName(), constructors));
+                }
+            }
+        }
+        try { ConstructorRepair.with(declared::get, () -> { rewriteClasses(original, destination, bridgeOwner); return null; }); }
+        catch (IOException | RuntimeException error) { throw error; }
+        catch (Exception error) { throw new IOException(error); }
+    }
+    private static void rewriteClasses(Path original, Path destination, String bridgeOwner) throws IOException {
         Path temporary = Files.createTempFile(destination.getParent(), "compatible-", ".jar");
         try {
             var bridges = new java.util.LinkedHashMap<CallSite, String>();

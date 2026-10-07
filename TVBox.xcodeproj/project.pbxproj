@@ -42,6 +42,7 @@
 		3E782ECA07220E19F2EBDB7C /* ThirdPartyNotices.txt in Resources */ = {isa = PBXBuildFile; fileRef = A3012FC04D8DAD058B1A5168 /* ThirdPartyNotices.txt */; };
 		3F2E64D0FAA75B78026F115A /* RuntimeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2075419FEF0E1C161A31A9F0 /* RuntimeView.swift */; };
 		45ECD9E8EE6888748AC6D46E /* ThirdPartyNotices.txt in Resources */ = {isa = PBXBuildFile; fileRef = A3012FC04D8DAD058B1A5168 /* ThirdPartyNotices.txt */; };
+		4861B86C4B02394CE7FF3DC0 /* PythonHost in Resources */ = {isa = PBXBuildFile; fileRef = 0558AED26E6028C2881DD044 /* PythonHost */; };
 		4C65106175D517040E98330B /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D1010816125FBC3792AF838 /* Store.swift */; };
 		4ECE8586E27A017017F26EDC /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181C983C0018A97F2A086298 /* DiscoveryView.swift */; };
 		522603702A50B36D66B9470E /* Keystone-GPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 084C8344E2997DB3ED8FE974 /* Keystone-GPL2.txt */; };
@@ -68,6 +69,7 @@
 		8EB7EB5EBBC543C38958F165 /* ScriptHost in Resources */ = {isa = PBXBuildFile; fileRef = BB24E05B7991A6EC8248BB34 /* ScriptHost */; };
 		8F795717D0D0DC2F6996B47A /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C911ACB6C027C8F9A096409 /* RootView.swift */; };
 		90F4C8847D5EE49C3388A326 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B442C75C212445F3786397ED /* SettingsView.swift */; };
+		912D01F4DF378FF63945C13D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A0E8559808CF7D11225EB30B /* Assets.xcassets */; };
 		91C07692EFFEE27619AA9FF3 /* CloudQRLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E78573DE76BCF27CABBB20F3 /* CloudQRLoginView.swift */; };
 		923AFC544321F7D6A3FFB87E /* Capstone.txt in Resources */ = {isa = PBXBuildFile; fileRef = E84A48E8E87E4B3CC3DCDA8C /* Capstone.txt */; };
 		930D2E53E04CBCD27E280EBD /* runtime-probe.jar in Resources */ = {isa = PBXBuildFile; fileRef = E19FE970E68D278C15E8DBF8 /* runtime-probe.jar */; };
@@ -93,6 +95,8 @@
 		D10B5A0245BDE1A5E05A6BD7 /* CloudDriveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE19E104EAA6C4F620B8E53 /* CloudDriveView.swift */; };
 		D1BC31CCC2FCC4A6AB834BD5 /* HLSProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B44CBA0E5BBD1D129D5D64E3 /* HLSProxy.swift */; };
 		D5140B80F4BA053665F4D30A /* RuntimeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2075419FEF0E1C161A31A9F0 /* RuntimeView.swift */; };
+		D6CA2441FEC9F02492410BFB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A0E8559808CF7D11225EB30B /* Assets.xcassets */; };
+		D8878E7A04E94E6A88CA4DB7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A0E8559808CF7D11225EB30B /* Assets.xcassets */; };
 		DB55B4EA2085691230ACCE09 /* Capstone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 08B7C43C763200E67A22E365 /* Capstone-LLVM.txt */; };
 		DF010807CD40F2180FDE6793 /* QALaunch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B842401113B0BDFA7B532B4 /* QALaunch.swift */; };
 		E64F015590BDBE0DFC8A216E /* LiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7459A3EBEF2E7C346B508738 /* LiveView.swift */; };
@@ -112,6 +116,7 @@
 
 /* Begin PBXFileReference section */
 		04E8471F5AF8D64B17693833 /* TVBox-tvOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "TVBox-tvOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		0558AED26E6028C2881DD044 /* PythonHost */ = {isa = PBXFileReference; lastKnownFileType = folder; name = PythonHost; path = build/PythonHost; sourceTree = SOURCE_ROOT; };
 		06D9469858E5C5A118DED875 /* libffi.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = libffi.txt; sourceTree = "<group>"; };
 		084C8344E2997DB3ED8FE974 /* Keystone-GPL2.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Keystone-GPL2.txt"; sourceTree = "<group>"; };
 		0880682FDD3D3B413396938B /* tvbox */ = {isa = PBXFileReference; lastKnownFileType = folder; name = tvbox; path = .; sourceTree = SOURCE_ROOT; };
@@ -136,6 +141,7 @@
 		995F5F0DB35FE66B4F90B4FF /* unidbg.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = unidbg.txt; sourceTree = "<group>"; };
 		9B7E929CDDC1F085C6B55693 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		9C911ACB6C027C8F9A096409 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		A0E8559808CF7D11225EB30B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A3012FC04D8DAD058B1A5168 /* ThirdPartyNotices.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ThirdPartyNotices.txt; sourceTree = "<group>"; };
 		ADB3063A14E368A71892DCEE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B442C75C212445F3786397ED /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -215,6 +221,7 @@
 		42F85A68BE50D8E117754B11 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				A0E8559808CF7D11225EB30B /* Assets.xcassets */,
 				CEE19E104EAA6C4F620B8E53 /* CloudDriveView.swift */,
 				E78573DE76BCF27CABBB20F3 /* CloudQRLoginView.swift */,
 				181C983C0018A97F2A086298 /* DiscoveryView.swift */,
@@ -240,6 +247,7 @@
 			isa = PBXGroup;
 			children = (
 				F1B927CC6ECB2F8BDFB22287 /* JavaHost */,
+				0558AED26E6028C2881DD044 /* PythonHost */,
 				BB24E05B7991A6EC8248BB34 /* ScriptHost */,
 				42F85A68BE50D8E117754B11 /* App */,
 				1D59E68466D22F2A478A3347 /* macOS */,
@@ -406,6 +414,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D8878E7A04E94E6A88CA4DB7 /* Assets.xcassets in Resources */,
 				DB55B4EA2085691230ACCE09 /* Capstone-LLVM.txt in Resources */,
 				923AFC544321F7D6A3FFB87E /* Capstone.txt in Resources */,
 				6B01742A91D2CBC1E9895B76 /* InfoPlist.strings in Resources */,
@@ -428,6 +437,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D6CA2441FEC9F02492410BFB /* Assets.xcassets in Resources */,
 				A149AE9D183C5FB64D411761 /* Assets.xcassets in Resources */,
 				95638C5F64B74B017FAB3FD7 /* Capstone-LLVM.txt in Resources */,
 				C6356D3F2510CD921FA3E890 /* Capstone.txt in Resources */,
@@ -439,6 +449,7 @@
 				C1C46AE3262D5E734B72F980 /* OpenJDK-additional.txt in Resources */,
 				2A79FAEF85C485687C54E766 /* OpenJDK-assembly-exception.txt in Resources */,
 				635ADE133C7284D6EF1677C8 /* OpenJDK.txt in Resources */,
+				4861B86C4B02394CE7FF3DC0 /* PythonHost in Resources */,
 				8EB7EB5EBBC543C38958F165 /* ScriptHost in Resources */,
 				45ECD9E8EE6888748AC6D46E /* ThirdPartyNotices.txt in Resources */,
 				82E7112F0FCDD1CEB5A40E59 /* Unicorn-GPL2.txt in Resources */,
@@ -453,6 +464,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				912D01F4DF378FF63945C13D /* Assets.xcassets in Resources */,
 				FF51906A6F86833239C53A33 /* Capstone-LLVM.txt in Resources */,
 				0C95000B36C5B15AF33D6C8C /* Capstone.txt in Resources */,
 				308A38681AA7812EF6DC4DFE /* InfoPlist.strings in Resources */,

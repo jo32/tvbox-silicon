@@ -478,7 +478,9 @@ struct RecommendationsView: View {
     @State private var forceRefresh = false
     @State private var choosingSource = false
     private var model: RecommendationModel { store.recommendationModel }
-    private var sites: [Site] { fixedSite.map { [$0] } ?? config.sites.filter { $0.canBrowse(jarURL: config.spiderURL) } }
+    private var sites: [Site] { fixedSite.map { [$0] } ?? SourceStrategy.arrange(config.sites) { !$0.hidden && $0.canBrowse(jarURL: config.spiderURL) } }
+    /// Until the user picks a source, default to the first in strategy order, so opening the app
+    /// does not start the JVM when a standard API or script source is available.
     private var site: Site? { sites.first(where: { $0.key == sourceKey }) ?? sites.first }
     private var requestID: String { "\(config.origin)|\(config.importedAt)|\(site?.key ?? "")|\(revision)" }
 

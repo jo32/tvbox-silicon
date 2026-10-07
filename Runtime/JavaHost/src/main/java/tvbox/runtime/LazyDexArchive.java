@@ -94,6 +94,29 @@ public final class LazyDexArchive {
             return channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size());
         }
     }
+    private final Map<String, ConstructorRepair.Declared> declared = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Superclass and constructors of a plugin class, read from the DEX without converting it. */
+    private ConstructorRepair.Declared declared(String name) {
+        Integer index = indexes.get("L" + name + ";");
+        if (index == null) return null;
+        return declared.computeIfAbsent(name, key -> {
+            String[] parent = { null };
+            Set<String> constructors = new LinkedHashSet<>();
+            reader.accept(new DexFileVisitor() {
+                @Override public DexClassVisitor visit(int access, String className, String superName, String[] interfaces) {
+                    if (!className.equals("L" + key + ";")) return null;
+                    if (superName != null) parent[0] = superName.substring(1, superName.length() - 1);
+                    return new DexClassVisitor() {
+                        @Override public DexMethodVisitor visitMethod(int accessFlags, com.googlecode.d2j.Method method) {
+                            if (method.getName().equals("<init>") && (accessFlags & 0x2) == 0) constructors.add(method.getDesc());
+                            return null;
+                        }
+                    };
+                }
+            }, index, DexFileReader.SKIP_CODE | DexFileReader.SKIP_DEBUG | DexFileReader.SKIP_ANNOTATION);
+            return new ConstructorRepair.Declared(parent[0], constructors);
+        });
+    }
     public boolean contains(String name) { return indexes.containsKey("L"+name.replace('.','/')+";"); }
     /**
      * FileChannel and NIO writes are interruptible. Plugins interrupt their own worker threads
@@ -171,7 +194,7 @@ public final class LazyDexArchive {
                     } else {
                         System.err.println("DEX_CLASS_RESUME "+name);
                     }
-                    BytecodeCompatibility.rewrite(raw,rewritten,"tvbox/runtime/generated/InterfaceCalls_"+key);
+                    ConstructorRepair.with(this::declared, () -> { BytecodeCompatibility.rewrite(raw,rewritten,"tvbox/runtime/generated/InterfaceCalls_"+key); return null; });
                     if(!valid(rewritten,name))throw new java.io.IOException("Conversion produced no class: "+name);
                     commit(rewritten,result);
                     markVerified(result);

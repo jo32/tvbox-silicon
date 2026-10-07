@@ -29,10 +29,16 @@ SOFTWARE.
 Mac JavaScript runtime
 Node.js — see ScriptHost/LICENSE.node in the application resources for the complete license and third-party notices.
 
+Mac Python runtime
+CPython (python-build-standalone) — PSF License; see PythonHost/python/lib/python3.12/LICENSE.txt in the application resources for the complete license and notices for bundled components.
+requests, urllib3, certifi, charset-normalizer, idna, lxml, beautifulsoup4, soupsieve, pyquery, cssselect, pycryptodome, cryptography, cffi, pycparser, typing-extensions — each library's license is in its *.dist-info directory under PythonHost/site-packages in the application resources.
+
 FongMi/TV JavaScript assets
 https://github.com/FongMi/TV
 Reference commit: c616c0aa3613e87529791587a9f71b78c278c991
 Assets: quickjs/src/main/assets/js/lib/cheerio.min.js and crypto-js.js (unmodified).
+Reference commit: 4a11089cb6a1377cbf437ebccd24468296357132
+Assets: quickjs/src/main/assets/js/lib/cat.js, gbk.js, and similarity.js (unmodified).
 
                     GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007

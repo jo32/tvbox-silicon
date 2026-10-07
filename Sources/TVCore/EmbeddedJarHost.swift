@@ -53,6 +53,11 @@ public actor EmbeddedJarHost {
             progress?.report(stage, received: received, expected: expected)
         }
         try Task.checkCancellation()
+        // Dead or blocked plugin hosts answer with a web page; the archive reader would only say "zip END header not found".
+        let start = String(decoding: data.prefix(256), as: UTF8.self).lowercased()
+        if start.contains("<!doctype") || start.contains("<html") {
+            throw TVError.unsupported(L10n.text("The plugin download returned a web page instead of a plugin. Its host may be offline."))
+        }
         progress?.report(.verifying)
         let digest = PluginChecksum.sha256(data)
         let key = profileKey + "-" + digest
@@ -95,6 +100,10 @@ public actor EmbeddedJarHost {
         }
         if let message = PluginFailure.message(envelope) {
             Diagnostics.shared.record(.error, "jar.request", PluginFailure.diagnostic(source: site.key, envelope))
+            if let name = envelope["error"]?.string.flatMap(PluginClassMissing.className(in:)) {
+                throw PluginClassMissing(className: name, message: message)
+            }
+            if PluginFailure.inPlugin(envelope) { throw PluginIncompatible(message: message) }
             throw TVError.unsupported(message)
         }
         guard let result = envelope["result"]?.string else { throw TVError.unsupported("The plugin returned no content.") }

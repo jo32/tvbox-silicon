@@ -13,7 +13,12 @@ public class DexClassLoader extends URLClassLoader {
     public static DexClassLoader current;
     private tvbox.runtime.LazyDexArchive lazy;
     private final java.util.Map<String, Path> preparedClasses = new java.util.HashMap<>();
+    private final Path archive;
+    private tvbox.runtime.DanglingTypes dangling;
     public DexClassLoader(String path, String optimizedDirectory, String librarySearchPath, ClassLoader parent) throws Exception {
+        this(tvbox.runtime.AndroidNativeRuntime.hostPath(path), optimizedDirectory, parent);
+    }
+    private DexClassLoader(String path, String optimizedDirectory, ClassLoader parent) throws Exception {
         super(Boolean.getBoolean("tvbox.apple") || Boolean.getBoolean("tvbox.lazyDex")
             ? new URL[]{new File(path).toURI().toURL()}
             : new URL[]{convert(path, optimizedDirectory), new File(path).toURI().toURL()}, parent);
@@ -26,10 +31,21 @@ public class DexClassLoader extends URLClassLoader {
             }
             if (dex) lazy = new tvbox.runtime.LazyDexArchive(path, optimizedDirectory);
         }
+        archive = Path.of(path);
         current = this;
         System.err.println("DEX_LOADER_READY " + path);
     }
     @Override protected Class<?> findClass(String name) throws ClassNotFoundException {
+        try { return findPluginClass(name); }
+        catch (ClassNotFoundException missing) {
+            synchronized (this) { if (dangling == null) dangling = tvbox.runtime.DanglingTypes.of(archive); }
+            if (!dangling.contains(name)) throw missing;
+            System.err.println("DEX_PLACEHOLDER " + name);
+            byte[] bytes = dangling.placeholder(name);
+            return defineClass(name, bytes, 0, bytes.length);
+        }
+    }
+    private Class<?> findPluginClass(String name) throws ClassNotFoundException {
         // URLClassLoader otherwise scans every previously converted class JAR on
         // each miss. For N lazy classes that is quadratic archive lookup work.
         Path prepared = preparedClasses.get(name);

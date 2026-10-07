@@ -1,0 +1,17 @@
+# Libraries imported by TVBox Python spiders (requests, Crypto, bs4, pyquery, lxml, cryptography),
+# pinned with their dependencies to the versions validated on macOS arm64 with CPython 3.12.
+beautifulsoup4==4.15.0
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.5.2
+cryptography==50.0.2
+cssselect==1.5.0
+idna==3.20
+lxml==6.1.3
+pycparser==3.0
+pycryptodome==3.24.0
+pyquery==2.1.0
+requests==2.34.2
+soupsieve==2.10
+typing-extensions==4.16.0
+urllib3==2.8.0

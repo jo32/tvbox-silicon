@@ -29,6 +29,38 @@ function envelope(error) {
     return { error: String(error), errorCode: 'script_error' };
 }
 function remoteError(host, status, message) { return Object.assign(new Error(message), { remote: host, status }); }
+
+/** Native AES/hash/HMAC, as ScriptCrypto.swift on QuickJS. Binary fields are base64. */
+function nativeCrypto(request) {
+    const bytes = name => request[name + 'Text'] != null ? Buffer.from(String(request[name + 'Text']), 'utf8')
+        : request[name + 'Hex'] != null ? Buffer.from(String(request[name + 'Hex']), 'hex') : Buffer.from(String(request[name] || ''), 'base64');
+    const alg = String(request.alg || '').toLowerCase();
+    if (request.op === 'aes') {
+        const key = bytes('key'), ecb = String(request.mode || '').toUpperCase() === 'ECB';
+        const name = `aes-${key.length * 8}-${ecb ? 'ecb' : 'cbc'}`;
+        const cipher = (request.encrypt ? crypto.createCipheriv : crypto.createDecipheriv)(name, key, ecb ? null : bytes('iv'));
+        cipher.setAutoPadding(request.padding !== false);
+        const result = Buffer.concat([cipher.update(bytes('data')), cipher.final()]);
+        if (request.output === 'hex') return { hex: result.toString('hex') };
+        if (request.output === 'text') return { text: result.toString('utf8') };
+        return { data: result.toString('base64') };
+    }
+    if (request.op === 'hash') return { hex: crypto.createHash(alg).update(bytes('data')).digest('hex') };
+    if (request.op === 'hmac') return { hex: crypto.createHmac(alg, bytes('key')).update(bytes('data')).digest('hex') };
+    if (request.op === 'pow') {
+        // First nonce whose hex digest of prefix+nonce starts with / equals target (ScriptCrypto.proofOfWork).
+        const target = String(request.target || '').toLowerCase(), prefix = String(request.prefix || '');
+        const end = Number(request.end ?? 2100000), deadline = Date.now() + Number(request.limitMs ?? 20000);
+        for (let nonce = Number(request.start || 0); target && nonce <= end; nonce++) {
+            const hex = crypto.createHash(alg === 'md5' ? 'md5' : 'sha256').update(prefix + nonce).digest('hex');
+            if (request.match === 'equal' ? hex === target : hex.startsWith(target)) return { nonce: String(nonce) };
+            if ((nonce & 1023) === 0 && Date.now() > deadline) break;
+        }
+        return { nonce: '' };
+    }
+    throw new Error('unsupported crypto operation');
+}
+
 function request(address, options = {}) {
     const url = new URL(String(address));
     if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Only HTTP and HTTPS script requests are supported');
@@ -49,12 +81,15 @@ function request(address, options = {}) {
     }
     for (const [key, value] of Object.entries(headers)) {
         if (/[\r\n]/.test(key + value)) throw new Error('Invalid HTTP header');
-        args.push('--header', key + ': ' + String(value));
+        // curl drops "Name: " with an empty value; "Name;" sends it empty.
+        args.push('--header', String(value) === '' ? key + ';' : key + ': ' + String(value));
     }
-    if (body != null && method !== 'GET' && method !== 'HEAD') args.push('--data-binary', '@-');
+    // `bodyBase64` carries binary request bodies (for example protobuf) that a string would corrupt.
+    const input = options.bodyBase64 != null ? Buffer.from(String(options.bodyBase64), 'base64') : body == null ? undefined : String(body);
+    if (input !== undefined && method !== 'GET' && method !== 'HEAD') args.push('--data-binary', '@-');
     args.push('--url', url.href);
     try {
-        const result = spawnSync('/usr/bin/curl', args, { input: body == null ? undefined : String(body), encoding: 'utf8', timeout: (timeout + 2) * 1000, maxBuffer: 1024 * 1024 });
+        const result = spawnSync('/usr/bin/curl', args, { input, encoding: 'utf8', timeout: (timeout + 2) * 1000, maxBuffer: 1024 * 1024 });
         if (result.status !== 0) throw remoteError(url.host, 0, 'Network request failed: ' + (result.stderr || result.error || result.status));
         const [status, effective] = result.stdout.split('\n');
         const code = Number(status);
@@ -107,17 +142,25 @@ const globals = {
     btoa: text => Buffer.from(String(text), 'latin1').toString('base64'),
     atob: text => Buffer.from(String(text), 'base64').toString('latin1'),
     md5X: text => crypto.createHash('md5').update(String(text)).digest('hex'),
+    nativeCrypto,
     gzip: text => zlib.gzipSync(Buffer.from(String(text))).toString('base64'),
     ungzip: text => zlib.gunzipSync(Buffer.from(String(text), 'base64')).toString('utf8'),
     getProxy: () => 'http://127.0.0.1:-1/proxy?do=js', getPort: () => -1,
     s2t: text => text, t2s: text => text
 };
 const context = vm.createContext(globals);
-vm.runInContext('globalThis.global = globalThis; globalThis.window = globalThis; globalThis.self = globalThis;', context);
+// Scripts assign the undeclared global `__JS_SPIDER__`, which strict module code allows only once it exists.
+vm.runInContext('globalThis.global = globalThis; globalThis.window = globalThis; globalThis.self = globalThis; globalThis.__JS_SPIDER__ = undefined;', context);
 const modules = new Map();
+// Widely shared drpy2 builds import their helper libraries from a qu.ax mirror that no longer
+// serves them. They are drpy's standard bundled libraries, so load the bundled copies instead.
+const retiredLibraries = { 'cLFE.js': 'jsencrypt.js', 'kOUW.js': 'node-rsa.js', 'ucoN.js': 'pako.min.js', 'XUKQ.js': '模板.js', 'wYCz.js': 'gbk.js' };
 function moduleURL(specifier, parent) {
     if (specifier.startsWith('lib/')) return 'assets://js/' + specifier;
-    return new URL(specifier, parent).href;
+    const url = new URL(specifier, parent).href;
+    const retired = url.match(/\/qu\.ax\/(\w+\.js)$/);
+    if (retired && retiredLibraries[retired[1]]) return 'assets://js/lib/' + retiredLibraries[retired[1]];
+    return url;
 }
 function sourceFor(url) {
     if (url === input.api) return fs.readFileSync(input.script, 'utf8');

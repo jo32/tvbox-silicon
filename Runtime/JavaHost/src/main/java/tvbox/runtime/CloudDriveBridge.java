@@ -52,43 +52,7 @@ public final class CloudDriveBridge implements AutoCloseable {
                     if (!method.equals("HEAD")) exchange.getResponseBody().write(bytes);
                     return;
                 }
-                if ((!resource.equals("media") || proxy == null) && (!resource.startsWith("drive/") || driveProxy == null)) { exchange.sendResponseHeaders(404, -1); return; }
-                Map<String,String> params = new HashMap<>();
-                String query = exchange.getRequestURI().getRawQuery();
-                if (query != null) for (String pair : query.split("&")) {
-                    String[] parts = pair.split("=", 2);
-                    params.put(URLDecoder.decode(parts[0], StandardCharsets.UTF_8), parts.length == 2 ? URLDecoder.decode(parts[1], StandardCharsets.UTF_8) : "");
-                }
-                Map<String,String> headers = new HashMap<>();
-                exchange.getRequestHeaders().forEach((key, values) -> headers.put(key.toLowerCase(Locale.ROOT), String.join(",", values)));
-                touch();
-                Object[] response;
-                if (resource.startsWith("drive/")) {
-                    String route = resource.substring("drive".length());
-                    if (route.startsWith("/proxy")) route = route.substring("/proxy".length());
-                    response = driveProxy.invoke(params, route, headers);
-                } else { params.putAll(headers); response = proxy.invoke(params); }
-                if (response == null || response.length < 3 || !(response[0] instanceof Number) || !(response[2] instanceof InputStream)) {
-                    exchange.sendResponseHeaders(502, -1); return;
-                }
-                try (InputStream body = (InputStream) response[2]) {
-                    exchange.getResponseHeaders().set("Content-Type", String.valueOf(response[1]));
-                    if (response.length > 3 && response[3] instanceof Map<?,?> responseHeaders) {
-                        for (var entry : responseHeaders.entrySet()) {
-                            String key = String.valueOf(entry.getKey());
-                            if (Set.of("connection", "transfer-encoding", "content-length").contains(key.toLowerCase(Locale.ROOT))) continue;
-                            String value = String.valueOf(entry.getValue());
-                            if (key.equalsIgnoreCase("location")) value = rewriteAddress(value);
-                            exchange.getResponseHeaders().set(key, value);
-                        }
-                    }
-                    int status = ((Number)response[0]).intValue();
-                    exchange.sendResponseHeaders(status, method.equals("HEAD") || status == 204 || status == 304 ? -1 : 0);
-                    if (!method.equals("HEAD")) {
-                        byte[] buffer = new byte[64 * 1024]; int count;
-                        while ((count = body.read(buffer)) != -1) { exchange.getResponseBody().write(buffer, 0, count); touch(); }
-                    }
-                }
+                relay(exchange, resource, method);
             } catch (Exception error) {
                 // Never print request URLs, credentials, or upstream exception messages.
                 System.err.println("CLOUD_PROXY_ERROR " + error.getClass().getSimpleName());
@@ -97,6 +61,94 @@ public final class CloudDriveBridge implements AutoCloseable {
         });
         server.start();
         current = this;
+        startStandardPort();
+    }
+
+    /** Hands a media or drive request to the plugin's proxy and streams its answer back. */
+    private void relay(com.sun.net.httpserver.HttpExchange exchange, String resource, String method) throws Exception {
+        if ((!resource.equals("media") || proxy == null) && (!resource.startsWith("drive/") || driveProxy == null)) { exchange.sendResponseHeaders(404, -1); return; }
+        Map<String,String> params = new HashMap<>();
+        String query = exchange.getRequestURI().getRawQuery();
+        if (query != null) for (String pair : query.split("&")) {
+            String[] parts = pair.split("=", 2);
+            params.put(URLDecoder.decode(parts[0], StandardCharsets.UTF_8), parts.length == 2 ? URLDecoder.decode(parts[1], StandardCharsets.UTF_8) : "");
+        }
+        Map<String,String> headers = new HashMap<>();
+        exchange.getRequestHeaders().forEach((key, values) -> headers.put(key.toLowerCase(Locale.ROOT), String.join(",", values)));
+        touch();
+        Object[] response;
+        if (resource.startsWith("drive/")) {
+            String route = resource.substring("drive".length());
+            if (route.startsWith("/proxy")) route = route.substring("/proxy".length());
+            response = driveProxy.invoke(params, route, headers);
+        } else { params.putAll(headers); response = proxy.invoke(params); }
+        if (response == null || response.length < 3 || !(response[0] instanceof Number) || !(response[2] instanceof InputStream)) {
+            exchange.sendResponseHeaders(502, -1); return;
+        }
+        try (InputStream body = (InputStream) response[2]) {
+            exchange.getResponseHeaders().set("Content-Type", String.valueOf(response[1]));
+            if (response.length > 3 && response[3] instanceof Map<?,?> responseHeaders) {
+                for (var entry : responseHeaders.entrySet()) {
+                    String key = String.valueOf(entry.getKey());
+                    if (Set.of("connection", "transfer-encoding", "content-length").contains(key.toLowerCase(Locale.ROOT))) continue;
+                    String value = String.valueOf(entry.getValue());
+                    if (key.equalsIgnoreCase("location")) value = rewriteAddress(value);
+                    exchange.getResponseHeaders().set(key, value);
+                }
+            }
+            int status = ((Number)response[0]).intValue();
+            exchange.sendResponseHeaders(status, method.equals("HEAD") || status == 204 || status == 304 ? -1 : 0);
+            if (!method.equals("HEAD")) {
+                byte[] buffer = new byte[64 * 1024]; int count;
+                while ((count = body.read(buffer)) != -1) { exchange.getResponseBody().write(buffer, 0, count); touch(); }
+            }
+        }
+    }
+
+    private static HttpServer standard;
+
+    /**
+     * TVBox serves plugin proxies at 127.0.0.1:9978 (or the next free port up to 9999), and plugins
+     * find it by asking /proxy?do=ck for "ok". Without it they build addresses with port -1 inside
+     * playlists and parse URLs that nothing can rewrite. Requests go to the active source's proxy.
+     */
+    private static synchronized void startStandardPort() {
+        if (standard != null) return;
+        for (int port = 9978; port <= 9999; port++) {
+            HttpServer candidate;
+            try { candidate = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 16); }
+            catch (IOException busy) { continue; }
+            candidate.setExecutor(Executors.newFixedThreadPool(4, r -> { Thread t = new Thread(r, "tvbox-proxy"); t.setDaemon(true); return t; }));
+            candidate.createContext("/proxy", exchange -> {
+                try {
+                    String method = exchange.getRequestMethod();
+                    if (exchange.getRequestHeaders().containsKey("Origin")) { exchange.sendResponseHeaders(403, -1); return; }
+                    if (!method.equals("GET") && !method.equals("HEAD")) { exchange.sendResponseHeaders(405, -1); return; }
+                    String query = exchange.getRequestURI().getRawQuery();
+                    if (query != null && (query.equals("do=ck") || query.startsWith("do=ck&"))) {
+                        byte[] ok = "ok".getBytes(StandardCharsets.UTF_8);
+                        exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
+                        exchange.sendResponseHeaders(200, method.equals("HEAD") ? -1 : ok.length);
+                        if (!method.equals("HEAD")) exchange.getResponseBody().write(ok);
+                        return;
+                    }
+                    CloudDriveBridge bridge = current;
+                    if (bridge == null) { exchange.sendResponseHeaders(404, -1); return; }
+                    bridge.relay(exchange, "media", method);
+                } catch (Exception error) {
+                    System.err.println("CLOUD_PROXY_ERROR " + error.getClass().getSimpleName());
+                    try { exchange.sendResponseHeaders(502, -1); } catch (IOException ignored) { }
+                } finally { exchange.close(); }
+            });
+            // The dispatcher thread inherits daemon status from its starter; this server lives for
+            // the whole process and must not keep a plugin process alive after its request.
+            Thread starter = new Thread(candidate::start, "tvbox-proxy-start");
+            starter.setDaemon(true);
+            starter.start();
+            try { starter.join(); } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+            standard = candidate;
+            return;
+        }
     }
     private long lastTouch;
     private synchronized void touch() {
@@ -110,6 +162,8 @@ public final class CloudDriveBridge implements AutoCloseable {
         if (bridge == null) throw new IllegalStateException("Plugin proxy is not initialized");
         return bridge.base() + "media";
     }
+    /** Newer spider bases call Proxy.getProxyUrlDo("x") for the local proxy with do=x; merged JARs may lack it. */
+    public static String getProxyUrlDo(String value) { return getUrl() + "?do=" + value; }
     public static String getOwnProxyUrl() { return getOwnProxyUrl(""); }
     public static String getOwnProxyUrl(String name) {
         CloudDriveBridge bridge = bridge();

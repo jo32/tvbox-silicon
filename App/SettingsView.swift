@@ -229,7 +229,7 @@ struct SettingsView: View {
                 SettingsLinkRow(symbol: "doc.text.magnifyingglass", tint: .gray, title: L10n.text("Diagnostic Logs")) { DiagnosticsView() }
             }
             SettingsGroup(title: L10n.text("About"),
-                          footer: L10n.text("Supports TVBox JSON subscriptions, M3U / TXT live playlists, and standard type 1 / type 4 JSON APIs. Media formats depend on the device. Local JAR and JavaScript plugins are experimental on Mac; compatibility varies by source. Plugin playback is not yet available on iPhone or Apple TV.")) {
+                          footer: L10n.text("Supports TVBox JSON subscriptions, M3U / TXT live playlists, and standard type 1 / type 4 JSON APIs. Media formats depend on the device. Local JavaScript and Python plugins are experimental on Mac, and JAR plugins are experimental on every platform; compatibility varies by source.")) {
                 SettingsRow(symbol: "play.tv.fill", tint: .pink, title: L10n.text("Yingxia"),
                             subtitle: [version, Brand.copyright].compactMap { $0 }.joined(separator: " · "))
                 SettingsLinkRow(symbol: "doc.plaintext.fill", tint: .gray, title: L10n.text("Open Source Licenses")) { LicensesView() }

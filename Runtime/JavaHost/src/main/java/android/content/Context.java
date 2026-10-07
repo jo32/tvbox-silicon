@@ -18,6 +18,11 @@ public class Context {
         return preferences.computeIfAbsent(name, key -> new tvbox.runtime.FilePreferences(new File(getFilesDir(), "prefs/"+safe+".json").toPath()));
     }
     public Context getApplicationContext() { return this; }
+    /** No Android system services exist here; callers already handle an unavailable service. */
+    public Object getSystemService(String name) { return null; }
+    public int checkCallingOrSelfPermission(String permission) { return 0; }
+    public int checkSelfPermission(String permission) { return 0; }
+    public int checkPermission(String permission, int pid, int uid) { return 0; }
     public android.content.pm.PackageManager getPackageManager() { return new android.content.pm.PackageManager(); }
     public ContentResolver getContentResolver() { return new ContentResolver(); }
     public android.content.res.AssetManager getAssets() { return new android.content.res.AssetManager(loader); }

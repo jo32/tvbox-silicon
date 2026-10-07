@@ -2,13 +2,21 @@ import Foundation
 
 extension Site {
     public var searchable: Bool { (raw["searchable"]?.int ?? 1) == 1 }
+    /// TVBox's `hide: 1` keeps a search-only source out of the source lists.
+    public var hidden: Bool { raw["hide"]?.int == 1 }
     public func canBrowse(jarURL: URL?) -> Bool {
         if native { return true }
+        if liteScript != nil { return ScriptRuntime.available }
         #if os(macOS)
         let hasPlugin = jarURL != nil || raw["jar"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        return type == 3 && (api.hasPrefix("csp_") ? hasPlugin && EmbeddedJarHost.available : LocalJarHost.scriptAvailable)
+        switch runtime {
+        case .javascript, .python: return LocalJarHost.available(runtime)
+        case .jar: return hasPlugin && EmbeddedJarHost.available
+        case .api, .unsupported: return false
+        }
         #elseif os(iOS) || os(tvOS)
-        return type == 3 && api.hasPrefix("csp_") && EmbeddedJarHost.available && (jarURL != nil || raw["jar"]?.string?.isEmpty == false)
+        if runtime == .javascript { return ScriptRuntime.available }
+        return runtime == .jar && EmbeddedJarHost.available && (jarURL != nil || raw["jar"]?.string?.isEmpty == false)
         #else
         return false
         #endif
@@ -34,12 +42,16 @@ public enum GlobalSearch {
         Diagnostics.shared.record(.info, "search", "begin sources=\(eligible.count) plugins=\(eligible.filter { !$0.native }.count) skipped=\(sites.count - eligible.count)")
         defer { Diagnostics.shared.record(.info, "search", "end elapsed=\(began.duration(to: .now)) cancelled=\(Task.isCancelled)") }
         #if os(iOS) || os(tvOS) || os(macOS)
+        // Each runtime has its own lane, so slow JVM searches never hold up the cheaper sources.
         // The plugin JVM runs at most `searchWidth` plugin searches and turns away callers
-        // beyond a short queue, so plugin sources never exceed that width.
-        async let plugins: Void = run(eligible.filter { !$0.native }, concurrency: EmbeddedJarHost.searchWidth, origin: origin, jarURL: jarURL,
+        // beyond a short queue, so JAR sources never exceed that width.
+        async let plugins: Void = run(eligible.filter { $0.runtime == .jar }, concurrency: EmbeddedJarHost.searchWidth, origin: origin, jarURL: jarURL,
                                       keyword: keyword, http: http, onResult: onResult)
+        async let scripts: Void = run(eligible.filter { $0.runtime == .javascript || $0.runtime == .python }, concurrency: concurrency,
+                                      origin: origin, jarURL: jarURL, keyword: keyword, http: http, onResult: onResult)
         await run(eligible.filter(\.native), concurrency: concurrency, origin: origin, jarURL: jarURL,
                   keyword: keyword, http: http, onResult: onResult)
+        await scripts
         await plugins
         #else
         await run(eligible, concurrency: concurrency, origin: origin, jarURL: jarURL, keyword: keyword, http: http, onResult: onResult)

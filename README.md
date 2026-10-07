@@ -2,7 +2,7 @@
 
 Yingxia is a native SwiftUI TVBox client for macOS 14+, iOS/iPadOS 17+, and tvOS 17+. The three app targets share subscription handling, browsing, favorites, localization, and AVPlayer playback.
 
-The Mac app includes experimental local execution of JAR and JavaScript plugins. It bundles a JVM, an Android ELF/JNI compatibility layer, and a DEX converter. Several sources have returned real catalogs, and one source has been verified playing 1080p video. Full plugin execution on iOS and tvOS is not implemented. See the [runtime status](Docs/runtime-status.md) for the tested sources and limitations.
+The Mac app includes experimental local execution of JAR, JavaScript, and Python plugins. It bundles a JVM, an Android ELF/JNI compatibility layer, and a DEX converter. Several sources have returned real catalogs, and one source has been verified playing 1080p video. Full plugin execution on iOS and tvOS is not implemented. See the [runtime status](Docs/runtime-status.md) for the tested sources and limitations.
 
 ## Build and run
 
@@ -12,6 +12,7 @@ The Mac app includes experimental local execution of JAR and JavaScript plugins.
 - XcodeGen to regenerate `TVBox.xcodeproj` from `project.yml`.
 - JDK 19 and Maven to build the bundled Mac plugin runtime.
 - A standalone macOS Node.js binary and its distributed LICENSE for the JavaScript host (`NODE_BIN` and `NODE_LICENSE` can select them).
+- [uv](https://docs.astral.sh/uv/) for the Python host. It installs a relocatable python-build-standalone CPython; `PYTHON_HOME` can select another relocatable prefix.
 - Python 3 for localization checks and plugin inspection scripts.
 
 The Mac app uses its bundled Java runtime; users do not need a separate Java installation. Physical iOS and tvOS devices require your own development team and signing configuration in Xcode. No account, certificate, or development team is preset.
@@ -24,6 +25,7 @@ Run these commands from the repository root:
 export JAVA_HOME="$(/usr/libexec/java_home -v 19)"
 Scripts/build-java-host.sh
 Scripts/build-script-host.sh
+Scripts/build-python-host.sh
 xcodegen generate
 ```
 
@@ -37,7 +39,7 @@ Open `TVBox.xcodeproj` and select a scheme:
 | `TVBox-iOS` | iPhone or iPad simulator/device |
 | `TVBox-tvOS` | Apple TV simulator/device |
 
-Each platform uses a separate bundle identifier. Generated app property lists are stored in `Config/`. Regenerate the project after changing `project.yml` or adding app source files or resources. Rebuild the Java host after changing `Runtime/JavaHost/`, and the script host after changing `Runtime/ScriptHost/`. The script build copies Node and its license into `build/ScriptHost/`; this is also a required Mac folder resource.
+Each platform uses a separate bundle identifier. Generated app property lists are stored in `Config/`. Regenerate the project after changing `project.yml` or adding app source files or resources. Rebuild the Java host after changing `Runtime/JavaHost/`, the script host after changing `Runtime/ScriptHost/`, and the Python host after changing `Runtime/PythonHost/`. The script build copies Node and its license into `build/ScriptHost/`, and the Python build assembles CPython, the pinned spider libraries, and the host into `build/PythonHost/`; both are required Mac folder resources.
 
 ### Build the Mac app from the command line
 
@@ -117,7 +119,7 @@ Its execution mode only calls a no-argument static DEX method returning an integ
 Scripts/test-sources.py [subscription-url] [--workers N] [--only text] [--output directory]
 ```
 
-Runs each source through home, category or search, detail, play, and a fetch of the returned media URL, using the same persistent Java and JavaScript hosts as the Mac app (build it first with `Scripts/build-java-host.sh`). It needs the network, takes several minutes for a large subscription, and writes `build/site-test/results.json`. Use `--output` to preserve separate runs and repeat `--only` to select multiple sources. The harness keeps each completed JAR request’s parameters, response, and stderr under `evidence/`, and tries search when a home or category is empty. A pass means the returned media URL responded; it does not establish AVPlayer decoding or every HLS segment’s availability. Some sources are intermittent, so rerun before concluding that one is dead. Current findings are in [Docs/runtime-status.md](Docs/runtime-status.md).
+Runs each source through home, category or search, detail, play, and a fetch of the returned media URL, using the same persistent Java, JavaScript, and Python hosts as the Mac app (build it first with `Scripts/build-java-host.sh`). It needs the network, takes several minutes for a large subscription, and writes `build/site-test/results.json`. Use `--output` to preserve separate runs and repeat `--only` to select multiple sources. The harness keeps each completed JAR request’s parameters, response, and stderr under `evidence/`, and tries search when a home or category is empty. A pass means the returned media URL responded; it does not establish AVPlayer decoding or every HLS segment’s availability. Some sources are intermittent, so rerun before concluding that one is dead. Current findings are in [Docs/runtime-status.md](Docs/runtime-status.md).
 
 ### Inspect a subscription JAR without executing it
 
@@ -145,7 +147,7 @@ CatVod plugins may contain DEX, JVM classes, Android native libraries, or a guar
 
 Plugin JNI calls and native-library loads can run through the Android ARM64 guest rather than macOS `dlopen`. This does not supply a complete Android device: Android UI, unsupported native operations, private guards, login requirements, and unavailable servers can still prevent a source from loading. A successful subscription import or empty home response does not establish successful search or playback.
 
-Each Mac source keeps a reusable process and persistent preferences. Idle processes stop after five minutes; requests have a 60-second deadline. JavaScript spiders use bundled Node with HTTP, HTML parsing, module loading, and preference adapters. Web video detection remains unsupported. The Mac host supports CatVod stream proxy responses and the FTY cloud-drive proxy contract; other plugin-specific proxy implementations may still require adapters.
+Each Mac source keeps a reusable process and persistent preferences. Idle processes stop after five minutes; requests have a 60-second deadline. Each type 3 source is routed like TVBox: a `.js` api runs in bundled Node, a `.py` api (or a legacy `py_` key whose `ext` is the script) runs in bundled CPython, and any other api is a JAR class. JavaScript spiders get HTTP, HTML parsing, module loading, and preference adapters. Python spiders get the CatVod `base.spider` API, `requests`, `lxml`, `bs4`, `pyquery`, `pycryptodome`, and `cryptography`, and their `localProxy` responses are served from a loopback port. Sources follow one strategy (`SourceStrategy`): only sources this platform can run are listed, in runtime order JSON API, Python, JavaScript, then JAR. Sources whose names normalize to the same site (for example `低端影视`, `影视 | 低端影视[js]`, and `🛣┃低端┃影视`) form one channel. Channels are ordered by their best runtime, and a channel's sources by runtime and then subscription order (JSON a, JSON b, Python a, Python b, and so on). The Sources list, the Watch Now source picker and default, and Global Search all use this order; search also runs each runtime in its own lane so slow JVM searches never delay the others. Web video detection remains unsupported. The Mac host supports CatVod stream proxy responses and the FTY cloud-drive proxy contract; other plugin-specific proxy implementations may still require adapters.
 
 The basic DexLoom interpreter remains available for controlled tests on all platforms. It does not provide complete Android plugin compatibility.
 

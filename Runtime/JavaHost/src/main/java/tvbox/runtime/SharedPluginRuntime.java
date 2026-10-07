@@ -155,6 +155,14 @@ public final class SharedPluginRuntime {
         return sources.values().stream().anyMatch(source -> streaming(source.cache()));
     }
 
+    /** When any source of this archive last served proxy traffic, or 0 if none did. */
+    public synchronized long lastStreamed() {
+        return sources.values().stream().mapToLong(source -> {
+            try { return Files.getLastModifiedTime(source.cache().resolve("proxy-active")).toMillis(); }
+            catch (Exception never) { return 0; }
+        }).max().orElse(0);
+    }
+
     public synchronized void close() throws Exception {
         Exception failure = null;
         for (Source source : sources.values()) {

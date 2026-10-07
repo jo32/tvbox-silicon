@@ -48,6 +48,9 @@ targets:
       - path: build/ScriptHost
         type: folder
         buildPhase: resources
+      - path: build/PythonHost
+        type: folder
+        buildPhase: resources
       - path: build/JavaHost
         type: folder
         buildPhase: resources

@@ -20,9 +20,12 @@ import TVCore
                 .tint(Brand.accent)
                 #endif
                 .task { Diagnostics.shared.record(.info, "app", "Application scene opened") }
-                #if DEBUG
-                .task { await QALaunch.start(store) }
-                #endif
+                .task {
+                    #if DEBUG
+                    if QALaunch.section != nil || QALaunch.page != nil { await QALaunch.start(store); return }
+                    #endif
+                    await store.restoreSubscription()
+                }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background {
                         Task { _ = await Diagnostics.shared.snapshot() }

@@ -4,6 +4,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.lang.reflect.InvocationTargetException;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import org.json.JSONObject;
 
 /**
@@ -45,6 +46,13 @@ public final class InProcessHost {
         if (runtime.shared()) return (Boolean) runtime.host().getClass().getMethod("streaming").invoke(runtime.host());
         var activity = runtime.cache().resolve("proxy-active");
         return java.nio.file.Files.exists(activity) && System.currentTimeMillis() - java.nio.file.Files.getLastModifiedTime(activity).toMillis() < 300_000;
+    }
+
+    /** When this runtime's media proxy last served traffic, or 0 if it never did. */
+    private static long lastStreamed(Runtime runtime) throws Exception {
+        if (runtime.shared()) return (Long) runtime.host().getClass().getMethod("lastStreamed").invoke(runtime.host());
+        try { return java.nio.file.Files.getLastModifiedTime(runtime.cache().resolve("proxy-active")).toMillis(); }
+        catch (java.io.IOException never) { return 0; }
     }
 
     private static boolean shareable(JSONObject input) {
@@ -176,7 +184,16 @@ public final class InProcessHost {
                 if (streaming(entry.getValue())) continue;
                 close(entry.getValue()); iterator.remove(); return;
             }
-            if (!waiting) throw new IllegalStateException("Both plugin sources are streaming. Stop playback before opening another source.");
+            if (!waiting) {
+                // Both proxies served media lately, but the app plays one stream at a time: the source
+                // streamed most recently is the one playing. Release the other instead of refusing the
+                // source the viewer just chose (trying a second source after one fails is common).
+                Map.Entry<String, Runtime> stale = null;
+                for (var entry : runtimes.entrySet()) {
+                    if (stale == null || lastStreamed(entry.getValue()) < lastStreamed(stale.getValue())) stale = entry;
+                }
+                close(stale.getValue()); runtimes.remove(stale.getKey()); return;
+            }
             // Both slots are serving other searches; wait for one to finish rather than fail.
             InProcessHost.class.wait();
         }

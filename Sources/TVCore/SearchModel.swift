@@ -24,10 +24,17 @@ import Observation
     }
     private var cache: [String: Cached] = [:]
     private var subscriptionID: String?
+    /// Each source's position in `SourceStrategy` order; matches are listed in this order.
+    private var rank: [String: Int] = [:]
     public init(http: HTTPClient = HTTPClient()) { self.http = http }
 
     public var failures: [SearchSourceResult] { results.filter { $0.error != nil } }
-    public var matches: [SearchSourceResult] { results.filter { $0.page?.videos.isEmpty == false } }
+    public var matches: [SearchSourceResult] {
+        results.filter { $0.page?.videos.isEmpty == false }.enumerated().sorted { lhs, rhs in
+            let left = rank[lhs.element.id] ?? .max, right = rank[rhs.element.id] ?? .max
+            return left == right ? lhs.offset < rhs.offset : left < right
+        }.map(\.element)
+    }
     public var videoCount: Int { matches.reduce(0) { $0 + Set(($1.page?.videos ?? []).map(\.id)).count } }
 
     public func stop() {
@@ -53,6 +60,7 @@ import Observation
         keyword = value; draft = value; results = []; completed = 0
         selectedSource = nil; scrollID = nil
         let sites = config.sites.filter { $0.searchable && $0.canBrowse(jarURL: config.spiderURL) }
+        rank = Dictionary(SourceStrategy.arrange(sites) { _ in true }.enumerated().map { ($1.id, $0) }) { first, _ in first }
         total = sites.count
         if let hit = cache[value], Date().timeIntervalSince(hit.created) < 300 {
             results = hit.results; total = hit.total; completed = results.count; stopped = false
@@ -80,15 +88,13 @@ import Observation
         guard busy else { return }
         runStart = (Date(), completed)
         task = Task {
-            var ordered = sites
+            // Already-running sources first, then `SourceStrategy` order (runtime, channel, subscription).
+            var warm = Set<String>()
             #if os(macOS)
-            let warm = await LocalJarHost.shared.reusableSourceKeys()
-            ordered = sites.enumerated().sorted { lhs, rhs in
-                let left = warm.contains(lhs.element.key) ? 0 : lhs.element.native ? 1 : 2
-                let right = warm.contains(rhs.element.key) ? 0 : rhs.element.native ? 1 : 2
-                return left == right ? lhs.offset < rhs.offset : left < right
-            }.map(\.element)
+            warm = await LocalJarHost.shared.reusableSourceKeys()
             #endif
+            let arranged = SourceStrategy.arrange(sites) { _ in true }
+            let ordered = arranged.filter { warm.contains($0.key) } + arranged.filter { !warm.contains($0.key) }
             guard self.generation == token else { return }
             await GlobalSearch.search(sites: ordered, origin: config.origin, jarURL: config.spiderURL, query: keyword, http: self.http) { result in
                 await self.receive(result, token: token)

@@ -471,6 +471,18 @@ struct ChipSkeletonRow: View {
     }
 }
 
+extension View {
+    /// While a page is still loading it may have no focusable control. tvOS then sends
+    /// the Menu/Back press to the system, which leaves the app instead of going back.
+    @ViewBuilder func loadingFocus(onExit: @escaping () -> Void) -> some View {
+        #if os(tvOS)
+        focusable().onExitCommand(perform: onExit)
+        #else
+        self
+        #endif
+    }
+}
+
 struct DetailSkeleton: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 26) {
@@ -501,7 +513,7 @@ struct LoadingProgress {
 extension LoadingProgress {
     /// A source request: the plugin's live stage and the server it waits on, or the site's server.
     static func source(_ site: Site, origin: URL, title: String) -> LoadingProgress {
-        if site.type == 3, site.api.hasPrefix("csp_") {
+        if site.runtime == .jar {
             guard let state = PluginPreparation.snapshot(site: site, origin: origin) else { return LoadingProgress(title: title) }
             return LoadingProgress(title: state.stage == .loading ? title : state.stage.title,
                                    detail: state.detail, fraction: state.fraction, reason: state.reason)

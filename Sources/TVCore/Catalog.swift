@@ -30,15 +30,20 @@ public struct Video: Identifiable, Hashable, Sendable {
         remarks = HTMLText.plain(json["vod_remarks"]?.string ?? "")
         synopsis = HTMLText.plain(json["vod_content"]?.string ?? "")
         let flags = (json["vod_play_from"]?.string ?? "").components(separatedBy: "$$$")
-        var episodes: [Episode] = []
+        var groups: [[Episode]] = []
         for (groupIndex, group) in (json["vod_play_url"]?.string ?? "").components(separatedBy: "$$$").enumerated() {
             let flag = groupIndex < flags.count ? flags[groupIndex] : ""
+            var episodes: [Episode] = []
             for (index, item) in group.components(separatedBy: "#").enumerated() where !item.isEmpty {
                 let parts = item.split(separator: "$", maxSplits: 1).map(String.init)
                 episodes.append(Episode(id: "\(groupIndex)-\(index)", name: parts.count == 2 ? parts[0] : L10n.text("Play"), address: parts.last ?? item, flag: flag, videoID: id))
             }
+            groups.append(episodes)
         }
-        self.episodes = episodes
+        // Collection APIs often list a web player group (".../share/<id>") before the m3u8 group of the
+        // same episodes, so groups of direct media come first and are what playback starts with.
+        let playable = groups.map { $0.first.map { CatalogClient.isDirectMedia($0.address) } ?? false }
+        self.episodes = groups.indices.sorted { playable[$0] != playable[$1] ? playable[$0] : $0 < $1 }.flatMap { groups[$0] }
     }
 }
 /// Plugins pass through site HTML, often entity-escaped twice ("&amp;nbsp;"), so decode until stable before stripping tags.
@@ -101,8 +106,13 @@ public struct CatalogClient: Sendable {
     public let origin: URL
     public let http: HTTPClient
     public let jarURL: URL?
+    /// The subscription's parse services, used when a source hands back a web player page.
+    public private(set) var parses: [ParseService] = []
     public init(site: Site, origin: URL, http: HTTPClient = HTTPClient(), jarURL: URL? = nil) {
         self.site = site; self.origin = origin; self.http = http; self.jarURL = jarURL
+    }
+    public func with(parses: [ParseService]) -> CatalogClient {
+        var client = self; client.parses = parses; return client
     }
     public func requestURL(_ params: [String: String]) throws -> URL {
         guard site.native else { throw TVError.unsupported(L10n.text("%@: this source cannot run in this version.", site.compatibility)) }
@@ -118,18 +128,60 @@ public struct CatalogClient: Sendable {
         return url
     }
     private func request(_ params: [String: String]) async throws -> [String: JSONValue] {
+        // Bundled lite ports run in-process on QuickJS everywhere, including macOS.
+        if let script = site.liteScript {
+            return try await ScriptRuntime.shared.request(site: site, scriptURL: script, params: params, http: http, origin: origin)
+        }
         #if os(macOS)
-        if site.type == 3, !site.api.hasPrefix("csp_") {
-            return try await LocalJarHost.shared.request(site: site, jarURL: WebAddress.resolve(site.api, relativeTo: origin), params: params, http: http, scriptOrigin: origin)
+        if site.runtime == .javascript || site.runtime == .python {
+            return try await LocalJarHost.shared.request(site: site, jarURL: site.scriptURL(origin: origin), params: params, http: http, scriptOrigin: origin)
+        }
+        #else
+        if site.runtime == .javascript {
+            return try await ScriptRuntime.shared.request(site: site, scriptURL: site.scriptURL(origin: origin), params: params, http: http, origin: origin)
         }
         #endif
-        if site.type == 3, site.api.hasPrefix("csp_"), let plugin = try site.pluginURL(origin: origin, fallback: jarURL) {
-            let progress = PluginPreparation(site: site, origin: origin)
-            defer { progress.finish() }
-            return try await EmbeddedJarHost.shared.request(site: site, jarURL: plugin, params: params, http: http, configurationOrigin: origin, progress: progress)
+        if site.runtime == .jar, var plugin = try site.pluginURL(origin: origin, fallback: jarURL) {
+            func run(_ archive: URL) async throws -> [String: JSONValue] {
+                let progress = PluginPreparation(site: site, origin: origin)
+                defer { progress.finish() }
+                return try await EmbeddedJarHost.shared.request(site: site, jarURL: archive, params: params, http: http, configurationOrigin: origin, progress: progress)
+            }
+            // Only sources on the shared spider borrow; a source's own archive keeps its class version.
+            let ownArchive = site.raw["jar"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            let className = String(site.api.dropFirst("csp_".count))
+            let locator = PluginLocator.shared
+            if !ownArchive {
+                if let known = await locator.known(source: site.key) { plugin = known }
+                else if let known = await locator.known(className) { plugin = known }
+            }
+            do { return try await run(plugin) }
+            catch let missing as PluginClassMissing {
+                // Another archive in the subscription may define the class this one lacks.
+                guard let other = await locator.archive(containing: missing.className, excluding: plugin, http: http) else { throw missing }
+                return try await run(other)
+            } catch let crashed as PluginIncompatible where !ownArchive {
+                // A merged subscription can pair a source's configuration with the wrong version of
+                // its spider; another archive's version may be the one the source was written for.
+                for other in await locator.alternatives(containing: className, excluding: [plugin], limit: 3, http: http) {
+                    if let result = try? await run(other) {
+                        await locator.remember(source: site.key, archive: other)
+                        return result
+                    }
+                }
+                throw crashed
+            }
         }
         let (data, _) = try await http.get(requestURL(params), headers: site.raw["header"]?.object?.compactMapValues(\.string) ?? [:])
-        return try JSONDecoder().decode([String: JSONValue].self, from: data)
+        do { return try JSONDecoder().decode([String: JSONValue].self, from: data) }
+        catch {
+            // Dead or bot-protected sites answer with a web page; say that rather than a decoding error.
+            let start = String(decoding: data.prefix(512), as: UTF8.self).lowercased()
+            if start.contains("<html") || start.contains("<!doctype") || start.contains("<head") {
+                throw TVError.unsupported(L10n.text("The source returned a web page instead of data. It may be offline or blocking apps."))
+            }
+            throw error
+        }
     }
     public func home() async throws -> CatalogPage {
         CatalogPage(json: try await request(site.type == 4 ? ["filter": "true"] : [:]), origin: origin)
@@ -188,6 +240,9 @@ public struct CatalogClient: Sendable {
 
     public func resolvePlayback(_ plan: PlaybackPlan, choice: PlaybackChoice) async throws -> Channel {
         guard !plan.requiresWebDetection || Self.isDirectMedia(choice.address) else {
+            if let found = await WebPlayback.resolve(page: choice.address, headers: plan.headers, parses: parses, http: http) {
+                return Channel(name: choice.name, group: plan.group, url: found.url, headers: found.headers)
+            }
             throw TVError.unsupported(L10n.text("This source requires web video detection or additional parsing. Only resolved media URLs are supported."))
         }
         let address = Self.unwrapPluginProxy(choice.address)

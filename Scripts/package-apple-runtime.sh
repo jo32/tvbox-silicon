@@ -22,7 +22,8 @@ ARCHIVES=("$LIB/zero/libjvm.a")
 for name in java net nio zip jimage verify management; do ARCHIVES+=("$LIB/lib$name.a"); done
 ARCHIVES+=("$WORK/libffi-$TARGET-3.4.8/install/lib/libffi.a" "$WORK/unicorn-tci-$TARGET/libunicorn.a" "$WORK/capstone-$TARGET/libcapstone.a" "$WORK/keystone-$TARGET/llvm/lib/libkeystone.a" "$WORK/native-$TARGET/libapplebindings.a")
 xcrun libtool -static -o "$OUT/lib/libTVAppleRuntime.a" "${ARCHIVES[@]}"
-for module in java.base java.management java.logging java.naming java.security.sasl java.xml jdk.zipfs jdk.httpserver jdk.unsupported; do
+# jdk.charsets carries GBK/GB2312/GB18030/Big5, which many Chinese source sites still serve.
+for module in java.base java.management java.logging java.naming java.security.sasl java.xml jdk.zipfs jdk.httpserver jdk.unsupported jdk.charsets; do
  rsync -a --delete "$JDK/jdk/modules/$module/" "$OUT/Resources/lib/modules/$module/"
 done
 cp "$BOOT/conf/security/java.security" "$OUT/Resources/lib/conf/security/"

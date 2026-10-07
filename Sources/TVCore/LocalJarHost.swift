@@ -8,6 +8,15 @@ public actor LocalJarHost {
     // Bundle resources are fixed for the process lifetime; views query these while rendering.
     public static let available: Bool = Bundle.main.resourceURL.map { FileManager.default.isExecutableFile(atPath: $0.appendingPathComponent("JavaHost/jre/bin/java").path) } ?? false
     public static let scriptAvailable: Bool = Bundle.main.resourceURL.map { FileManager.default.isExecutableFile(atPath: $0.appendingPathComponent("ScriptHost/node").path) } ?? false
+    public static let pythonAvailable: Bool = Bundle.main.resourceURL.map { FileManager.default.isExecutableFile(atPath: $0.appendingPathComponent("PythonHost/python/bin/python3").path) } ?? false
+    static func available(_ runtime: SourceRuntime) -> Bool {
+        switch runtime {
+        case .javascript: scriptAvailable
+        case .python: pythonAvailable
+        case .jar: available
+        case .api, .unsupported: false
+        }
+    }
     private final class Entry {
         let task: Task<LocalJarProcess, Error>
         let sourceKey: String
@@ -28,8 +37,10 @@ public actor LocalJarHost {
         let started = ContinuousClock.now
         let context = "request=\(trace) source=\(site.key)"
         Diagnostics.shared.record(.info, "jar.request", "\(context) begin operation=\(params["ac"] ?? "home")")
-        let script = scriptOrigin != nil
-        guard let resources = Bundle.main.resourceURL, (script ? Self.scriptAvailable : Self.available) else {
+        // A script origin selects the source's script runtime; without one this hosts a JAR.
+        let runtime: SourceRuntime = scriptOrigin == nil ? .jar : site.runtime
+        let script = runtime != .jar
+        guard let resources = Bundle.main.resourceURL, Self.available(runtime) else {
             Diagnostics.shared.record(.error, "jar.runtime", "\(context) runtime unavailable")
             throw TVError.unsupported(L10n.text("The local JAR runtime is not installed."))
         }
@@ -72,15 +83,19 @@ public actor LocalJarHost {
                     else { data = try await PluginDownloads.shared.data(at: jarURL, http: http) }
                     Diagnostics.shared.record(.info, "jar.download", "\(context) downloaded bytes=\(data.count)")
                     try Task.checkCancellation()
-                    let jar = job.appendingPathComponent("plugin.jar")
+                    let jar = job.appendingPathComponent(runtime == .python ? "plugin.py" : runtime == .javascript ? "plugin.js" : "plugin.jar")
                     try data.write(to: jar)
                     var ext: String
                     if let value = try site.pluginExtension(origin: scriptOrigin ?? configurationOrigin) { ext = try value.string ?? String(data: encoder.encode(value), encoding: .utf8) ?? "" } else { ext = "" }
-                    if let scriptOrigin, !ext.isEmpty, !ext.hasPrefix("{") { ext = (try? WebAddress.resolve(ext, relativeTo: scriptOrigin).absoluteString) ?? ext }
+                    // JavaScript ext names a rule script. Python ext is the spider's own string, except that a
+                    // legacy `py_` source's ext is the script itself; the host then reads `?extend=` from it.
+                    if runtime == .python, site.api.hasPrefix("py_") { ext = "" }
+                    if runtime == .javascript, let scriptOrigin, !ext.isEmpty, !ext.hasPrefix("{") { ext = (try? WebAddress.resolve(ext, relativeTo: scriptOrigin).absoluteString) ?? ext }
                     let input: [String: Any] = ["script": jar.path, "jar": jar.path, "cache": job.path, "conversionCache": root.appendingPathComponent("Converted", isDirectory: true).path, "profile": root.appendingPathComponent("Profiles/" + profileKey).path, "api": script ? jarURL.absoluteString : site.api, "key": site.key, "ext": ext, "cloudAccounts": CloudDriveAccounts.fileURL.path]
                     let request = job.appendingPathComponent("request.json")
                     try JSONSerialization.data(withJSONObject: input).write(to: request)
-                    return try LocalJarProcess(host: resources.appendingPathComponent(script ? "ScriptHost" : "JavaHost"), job: job, request: request, context: "source=\(site.key) session=\(job.lastPathComponent)", script: script)
+                    let host = resources.appendingPathComponent(runtime == .python ? "PythonHost" : script ? "ScriptHost" : "JavaHost")
+                    return try LocalJarProcess(host: host, job: job, request: request, context: "source=\(site.key) session=\(job.lastPathComponent)", runtime: runtime)
                 } catch { try? FileManager.default.removeItem(at: job); throw error }
             }
             entry = Entry(task, sourceKey: site.key); sessions[key] = entry
@@ -153,16 +168,20 @@ final class LocalJarProcess: @unchecked Sendable {
         return Date().timeIntervalSince(date) < 300
     }
 
-    init(host: URL, job: URL, request: URL, context: String, timeout: TimeInterval = 60, script: Bool = false) throws {
+    init(host: URL, job: URL, request: URL, context: String, timeout: TimeInterval = 60, runtime: SourceRuntime = .jar) throws {
         self.job = job; self.context = context; self.timeout = timeout
-        self.startupTimeout = script ? timeout : max(timeout, 180)
+        self.startupTimeout = runtime == .jar ? max(timeout, 180) : timeout
         let capturedOutput = DiagnosticOutput(context: context)
         self.capturedOutput = capturedOutput
         process.executableURL = host.appendingPathComponent("jre/bin/java")
         process.arguments = ["--add-opens", "java.base/java.lang=ALL-UNNAMED", "--add-opens", "java.base/sun.net.www.protocol.jar=ALL-UNNAMED", "-Dorg.slf4j.simpleLogger.defaultLogLevel=error", "-cp", host.appendingPathComponent("host.jar").path + ":" + host.appendingPathComponent("lib/*").path, "tvbox.runtime.NativeProbe", "--serve", request.path]
-        if script {
+        if runtime == .javascript {
             process.executableURL = host.appendingPathComponent("node")
             process.arguments = ["--no-warnings", "--experimental-vm-modules", host.appendingPathComponent("host.mjs").path, "--serve", request.path]
+        } else if runtime == .python {
+            // -I ignores user site-packages and PYTHON* variables; -B keeps the signed bundle unmodified.
+            process.executableURL = host.appendingPathComponent("python/bin/python3")
+            process.arguments = ["-I", "-B", "-u", host.appendingPathComponent("host.py").path, "--serve", request.path]
         }
         process.currentDirectoryURL = job
         process.standardInput = input; process.standardOutput = output; process.standardError = output

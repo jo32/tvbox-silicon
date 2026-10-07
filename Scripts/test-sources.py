@@ -2,10 +2,11 @@
 """Test every source of a TVBox subscription the way the app does.
 
 Pipeline per site: home -> (category list) -> detail -> play -> fetch the media URL.
-Type 3 csp_* sites run through the bundled Java host (build/JavaHost), one persistent process per
-source like LocalJarHost. Type 1/4 sites use plain HTTP like CatalogClient.
+Type 3 sites are routed like Site.runtime: `.js` apis run in build/ScriptHost (Node), `.py` apis and
+legacy `py_` keys in build/PythonHost, and other apis in the Java host (build/JavaHost), one
+persistent process per source like LocalJarHost. Type 1/4 sites use plain HTTP like CatalogClient.
 
-Usage: Scripts/test-sources.py [subscription-url] [--workers N] [--only substring]
+Usage: Scripts/test-sources.py [subscription-url] [--workers N] [--only substring] [--runtime javascript|python|jar|api]
 Output: build/site-test/results.json, per-request evidence, and a summary on stdout.
 Use --output to keep separate runs. A successful media fetch is not a decoder test.
 """
@@ -22,7 +23,9 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('subscription', nargs='?', default='https://raw.githubusercontent.com/qist/tvbox/master/fty.json')
 parser.add_argument('--workers', type=int, default=4)
 parser.add_argument('--only', action='append', help='Test sources containing this text (repeat for multiple matches)')
+parser.add_argument('--runtime', action='append', choices=['api', 'javascript', 'python', 'jar'], help='Test sources that run in this runtime (repeatable)')
 parser.add_argument('--output', default=OUT, help='Directory for results and per-request evidence')
+parser.add_argument('--apple-simulator', metavar='UDID', help='Run JAR sources in the SourceSweep app on this booted simulator (Scripts/build-apple-source-sweep.sh), i.e. on the embedded Apple runtime')
 args = parser.parse_args()
 workers, only, SUB, OUT = args.workers, args.only, args.subscription, os.path.abspath(args.output)
 if workers < 1:
@@ -94,6 +97,17 @@ def run_jar(site, jar, params, timeout=60):
         shutil.rmtree(job, ignore_errors=True)
 
 
+def runtime(site):
+    """Mirror Site.runtime in Sources/TVCore/Models.swift."""
+    if site.get('type') in (1, 4): return 'api'
+    if site.get('type') != 3: return 'unsupported'
+    api = str(site.get('api', '')).lower()
+    if api.endswith('.js') or '.js?' in api: return 'javascript'
+    ext = site.get('ext')
+    if '.py' in api or (api.startswith('py_') and isinstance(ext, str) and '.py' in ext.lower()): return 'python'
+    return 'jar'
+
+
 class JarSession:
     """Use the app's persistent request protocol, preserving per-source spider state."""
     def __init__(self, site, jar, base=None):
@@ -108,15 +122,23 @@ class JarSession:
         command = [HOST + '/jre/bin/java', '--add-opens', 'java.base/java.lang=ALL-UNNAMED', '--add-opens', 'java.base/sun.net.www.protocol.jar=ALL-UNNAMED',
                    '-Dorg.slf4j.simpleLogger.defaultLogLevel=error', '-cp', HOST + '/host.jar:' + HOST + '/lib/*',
                    'tvbox.runtime.NativeProbe', '--serve', self.job + '/request.json']
-        if not site['api'].startswith('csp_'):
+        kind = runtime(site)
+        if kind in ('javascript', 'python'):
             from urllib.parse import urljoin
-            api = urljoin(base, site['api'])
-            script = self.job + '/plugin.js'
+            legacy = kind == 'python' and site['api'].startswith('py_')
+            api = urllib.parse.quote(urljoin(base, ext if legacy else site['api']), safe=':/?&=%#+$,;@')
+            script = self.job + ('/plugin.py' if kind == 'python' else '/plugin.js')
             subprocess.run(['/usr/bin/curl', '-fsSL', '--max-time', '30', api, '-o', script], check=True)
+            if legacy: ext = ''
+            elif kind == 'javascript' and ext and not ext.startswith('{'): ext = urljoin(base, ext)
             with open(self.job + '/request.json', 'w') as stream:
-                json.dump({'script': script, 'cache': self.job, 'api': api, 'key': site['key'], 'ext': urljoin(base, ext)}, stream)
-            host = os.path.abspath('build/ScriptHost')
-            command = [host + '/node', '--no-warnings', '--experimental-vm-modules', host + '/host.mjs', '--serve', self.job + '/request.json']
+                json.dump({'script': script, 'cache': self.job, 'api': api, 'key': site['key'], 'ext': ext}, stream)
+            if kind == 'python':
+                host = ROOT + '/build/PythonHost'
+                command = [host + '/python/bin/python3', '-I', '-B', '-u', host + '/host.py', '--serve', self.job + '/request.json']
+            else:
+                host = ROOT + '/build/ScriptHost'
+                command = [host + '/node', '--no-warnings', '--experimental-vm-modules', host + '/host.mjs', '--serve', self.job + '/request.json']
         self.process = subprocess.Popen(command, cwd=self.job, stdin=subprocess.PIPE, stdout=self.log, stderr=self.log, text=True)
 
     def wait(self, path, deadline):
@@ -175,6 +197,65 @@ class JarSession:
             self.log.close(); shutil.rmtree(self.job, ignore_errors=True)
 
 
+class AppleSimulatorSession(JarSession):
+    """JarSession over the SourceSweep app: the same input EmbeddedJarHost sends, on Apple's runtime."""
+    def __init__(self, site, jar, base=None):
+        import hashlib
+        self.site = site
+        self.container = subprocess.check_output(['xcrun', 'simctl', 'get_app_container', args.apple_simulator, 'com.tvbox.yingxia.SourceSweep', 'data'], text=True).strip() + '/Library/Caches'
+        self.sweep = self.container + '/sweep'
+        root = self.container + '/com.tvbox.yingxia/EmbeddedPlugins'
+        data = open(jar, 'rb').read()
+        digest = hashlib.sha256(data).hexdigest()
+        os.makedirs(root + '/Jars', exist_ok=True)
+        archive = root + '/Jars/' + digest + '.jar'
+        if not os.path.exists(archive):
+            open(archive + '.tmp', 'wb').write(data); os.replace(archive + '.tmp', archive)
+        ext = site.get('ext', '')
+        if not isinstance(ext, str): ext = json.dumps(ext, ensure_ascii=False, separators=(',', ':'))
+        key = hashlib.sha256((site['key'] + SUB).encode()).hexdigest() + '-' + digest
+        self.input = {'session': key, 'runtime': digest, 'runtimeCache': root + '/Runtimes/' + digest, 'jar': archive,
+                      'cache': root + '/' + key, 'conversionCache': root + '/Converted', 'profile': root + '/' + key + '/profile',
+                      'api': site['api'], 'key': site['key'], 'ext': ext}
+        os.makedirs(self.input['cache'], exist_ok=True)
+        self.log_path = self.sweep + '/stdout.log'
+        self.offset = os.path.getsize(self.log_path) if os.path.exists(self.log_path) else 0
+
+    def once(self, params):
+        # Guarded plugins prepare on first use: allow the app's patience, not the desktop 60 s.
+        deadline = time.monotonic() + 240
+        ident = str(uuid.uuid4())
+        request = dict(self.input, params=params)
+        inbox = self.sweep + '/inbox/' + ident + '.json'
+        open(inbox + '.tmp', 'w').write(json.dumps(request, ensure_ascii=False)); os.replace(inbox + '.tmp', inbox)
+        path = self.sweep + '/outbox/' + ident + '.json'
+        envelope = None
+        try:
+            while time.monotonic() < deadline and not os.path.exists(path): time.sleep(.1)
+            if not os.path.exists(path): raise Failure('timeout after 240s')
+            envelope = json.load(open(path)); os.unlink(path)
+        finally:
+            stdout = ''
+            if os.path.exists(self.log_path):
+                with open(self.log_path, errors='replace') as stream: stream.seek(self.offset); stdout = stream.read(); self.offset = stream.tell()
+            folder = OUT + '/evidence/' + re.sub(r'[^\w.-]', '_', self.site['key'])
+            os.makedirs(folder, exist_ok=True)
+            stage = 'play' if 'play' in params else 'detail' if 'ids' in params else 'search' if 'wd' in params else 'category' if 't' in params else 'home'
+            prefix = folder + '/' + stage + '-' + ident
+            with open(prefix + '.json', 'w') as stream: json.dump(envelope, stream, ensure_ascii=False)
+            with open(prefix + '.params.json', 'w') as stream: json.dump(params, stream, ensure_ascii=False)
+            with open(prefix + '.stdout.log', 'w') as stream: stream.write(stdout)
+        if envelope.get('error'):
+            suffix = ' [%s HTTP %s]' % (envelope.get('host'), envelope.get('status')) if envelope.get('errorCode') == 'source_http' else ''
+            raise Failure(envelope['error'] + suffix, [], envelope.get('errorCode'))
+        value = envelope.get('result')
+        if not value: raise Failure('plugin returned empty result')
+        try: return json.loads(value)
+        except ValueError: raise Failure('plugin returned non-JSON: ' + value[:120])
+
+    def close(self): pass
+
+
 def run_http(site, base, params):
     endpoint = urllib.parse.urljoin(base, site['api'])
     values = dict(params)
@@ -206,7 +287,7 @@ def num(value):
 
 
 def test_site(site, base, jar):
-    record = {'key': site.get('key'), 'name': site.get('name'), 'type': site.get('type'), 'api': site.get('api'),
+    record = {'key': site.get('key'), 'name': site.get('name'), 'type': site.get('type'), 'api': site.get('api'), 'runtime': runtime(site),
               'ext': site.get('ext') if isinstance(site.get('ext'), str) else None, 'stages': {}}
     started = time.time()
     native = site.get('type') in (1, 4)
@@ -217,7 +298,7 @@ def test_site(site, base, jar):
     session = None
     stage = 'home'
     try:
-        if csp: session = JarSession(site, jar, base)
+        if csp: session = (AppleSimulatorSession if args.apple_simulator and runtime(site) == 'jar' else JarSession)(site, jar, base)
         call = (lambda p: run_http(site, base, p)) if native else session.request
         try:
             home = call({'filter': 'true'} if site.get('type') == 4 else {})
@@ -353,6 +434,7 @@ def main():
         data, _ = http_get(urllib.parse.urljoin(SUB, spider), timeout=60)
         open(jar, 'wb').write(data)
     sites = [s for s in config.get('sites', []) if not only or any(text in json.dumps(s, ensure_ascii=False) for text in only)]
+    if args.runtime: sites = [s for s in sites if runtime(s) in args.runtime]
     print('%d sites, %d workers, jar %s' % (len(sites), workers, jar), flush=True)
     results = []
     with cf.ThreadPoolExecutor(workers) as pool:
