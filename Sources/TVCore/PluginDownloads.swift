@@ -104,10 +104,29 @@ actor PluginDownloads {
         }
         for file in files where file.pathExtension == "bin" && !kept.contains(file.deletingPathExtension().lastPathComponent) { try? FileManager.default.removeItem(at: file) }
     }
+    private var revalidating: Set<URL> = []
     private func fetch(_ url: URL, http: HTTPClient, key: String) async throws -> Data {
         let stored = read(url)
-        if let (meta, data) = stored, meta.expires > Date() {
+        if let (meta, data) = stored {
+            // A verified copy is on disk. Revalidating first made every source wait on the plugin
+            // server after five minutes, and a slow host (e.g. raw.githubusercontent.com on some
+            // networks) left it on "Downloading plugin…". Use the copy; refresh it for next time.
+            if meta.expires <= Date(), !revalidating.contains(url) {
+                revalidating.insert(url)
+                Task.detached(priority: .utility) { [self] in
+                    _ = try? await self.download(url, http: http, key: nil, stored: stored)
+                    await self.revalidated(url)
+                }
+            }
             report(key, .reusing); return data
+        }
+        return try await download(url, http: http, key: key, stored: nil)
+    }
+    private func revalidated(_ url: URL) { revalidating.remove(url) }
+    /// Fetches the plugin, or confirms the stored copy with a conditional request. A nil key reports no progress.
+    private func download(_ url: URL, http: HTTPClient, key: String?, stored: (Metadata, Data)?) async throws -> Data {
+        func report(_ key: String?, _ stage: PluginPreparation.Stage, _ received: Int64 = 0, _ expected: Int64? = nil) {
+            if let key { self.report(key, stage, received, expected) }
         }
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 25)
         request.setValue(HTTPClient.userAgent, forHTTPHeaderField: "User-Agent")
@@ -117,7 +136,7 @@ actor PluginDownloads {
         }
         report(key, .downloading)
         let transfer = PluginTransfer(configuration: http.session.configuration) { received, total in
-            Task { await self.report(key, .downloading, received, total) }
+            if let key { Task { await self.report(key, .downloading, received, total) } }
         }
         let (data, response) = try await transfer.load(request)
         if response.statusCode == 304, let (old, data) = stored {

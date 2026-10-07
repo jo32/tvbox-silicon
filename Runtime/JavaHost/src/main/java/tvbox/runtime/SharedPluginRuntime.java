@@ -93,6 +93,7 @@ public final class SharedPluginRuntime {
     private Source openSource(JSONObject input, Path cache) throws Exception {
         var bridge = new CloudDriveBridge(cache);
         try {
+            if (input.has("subscription")) HostDatabase.subscription = input.getString("subscription");
             JSONObject accounts = null;
             if (input.has("cloudAccounts")) {
                 var accountPath = Path.of(input.getString("cloudAccounts"));

@@ -118,6 +118,7 @@ public class NativeProbe extends AbstractJni {
         HostEnvironment.cache = cache.getAbsolutePath();
         PreparationProgress.begin(cache.toPath());
         HostEnvironment.converted = input.optString("conversionCache", new File(cache, "converted").getPath());
+        if (input.has("subscription")) HostDatabase.subscription = input.getString("subscription");
         var bridge = new CloudDriveBridge(cache.toPath());
         org.json.JSONObject accounts = null;
         if (input.has("cloudAccounts")) {

@@ -110,15 +110,30 @@ private func downloadHTTP() -> HTTPClient {
     let first = PluginDownloads(lifetime: 0, directory: folder)
     let data = try await first.data(at: conditional, http: downloadHTTP())
     let restarted = PluginDownloads(lifetime: 0, directory: folder)
+    // An expired disk copy is used at once and revalidated in the background.
     #expect(try await restarted.data(at: conditional, http: downloadHTTP()) == data)
-    #expect(DownloadProtocol.counts.count(conditional.absoluteString) == 2)
+    try await eventually { DownloadProtocol.counts.count(conditional.absoluteString) == 2 }
     let changed = URL(string: "https://example.com/changed/\(UUID()).jar")!
     let original = try await first.data(at: changed, http: downloadHTTP())
-    let update = try await restarted.data(at: changed, http: downloadHTTP())
-    #expect(update == Data("plugin-v2".utf8))
+    #expect(try await restarted.data(at: changed, http: downloadHTTP()) == original)
+    // The background refresh stores the new content for the next request.
+    let later = PluginDownloads(lifetime: 0, directory: folder)
+    var update = Data()
+    try await eventually {
+        update = (try? await later.data(at: changed, http: downloadHTTP())) ?? Data()
+        return update == Data("plugin-v2".utf8)
+    }
     #expect(PluginChecksum.sha256(update) != PluginChecksum.sha256(original))
     // The old immutable content remains available; existing sessions are not modified in place.
     #expect(try Data(contentsOf: folder.appendingPathComponent(PluginChecksum.sha256(original) + ".bin")) == original)
+}
+
+private func eventually(_ condition: () async throws -> Bool) async throws {
+    let deadline = Date().addingTimeInterval(5)
+    while try await !condition() {
+        guard Date() < deadline else { Issue.record("Condition not met in time"); return }
+        try await Task.sleep(for: .milliseconds(20))
+    }
 }
 
 @Test func pluginBuildProgressIsRequestScopedAndHasNoInventedPercentage() async throws {

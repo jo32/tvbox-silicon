@@ -91,7 +91,7 @@ public actor LocalJarHost {
                     // legacy `py_` source's ext is the script itself; the host then reads `?extend=` from it.
                     if runtime == .python, site.api.hasPrefix("py_") { ext = "" }
                     if runtime == .javascript, let scriptOrigin, !ext.isEmpty, !ext.hasPrefix("{") { ext = (try? WebAddress.resolve(ext, relativeTo: scriptOrigin).absoluteString) ?? ext }
-                    let input: [String: Any] = ["script": jar.path, "jar": jar.path, "cache": job.path, "conversionCache": root.appendingPathComponent("Converted", isDirectory: true).path, "profile": root.appendingPathComponent("Profiles/" + profileKey).path, "api": script ? jarURL.absoluteString : site.api, "key": site.key, "ext": ext, "cloudAccounts": CloudDriveAccounts.fileURL.path]
+                    let input: [String: Any] = ["script": jar.path, "jar": jar.path, "cache": job.path, "conversionCache": root.appendingPathComponent("Converted", isDirectory: true).path, "profile": root.appendingPathComponent("Profiles/" + profileKey).path, "api": script ? jarURL.absoluteString : site.api, "key": site.key, "ext": ext, "cloudAccounts": CloudDriveAccounts.fileURL.path, "subscription": configurationOrigin?.absoluteString ?? ""]
                     let request = job.appendingPathComponent("request.json")
                     try JSONSerialization.data(withJSONObject: input).write(to: request)
                     let host = resources.appendingPathComponent(runtime == .python ? "PythonHost" : script ? "ScriptHost" : "JavaHost")

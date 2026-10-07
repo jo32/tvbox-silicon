@@ -57,7 +57,7 @@ def run_jar(site, jar, params, timeout=60):
         ext = site.get('ext', '')
         if not isinstance(ext, str):
             ext = json.dumps(ext, ensure_ascii=False, separators=(',', ':'))
-        json.dump({'jar': jar, 'cache': job, 'api': site['api'], 'key': site['key'], 'ext': ext, 'params': params}, open(job + '/request.json', 'w'))
+        json.dump({'jar': jar, 'cache': job, 'api': site['api'], 'key': site['key'], 'ext': ext, 'params': params, 'subscription': SUB}, open(job + '/request.json', 'w'))
         command = [HOST + '/jre/bin/java', '--add-opens', 'java.base/java.lang=ALL-UNNAMED', '--add-opens', 'java.base/sun.net.www.protocol.jar=ALL-UNNAMED',
                    '-Dorg.slf4j.simpleLogger.defaultLogLevel=error', '-cp', HOST + '/host.jar:' + HOST + '/lib/*',
                    'tvbox.runtime.NativeProbe', job + '/request.json']
@@ -118,7 +118,7 @@ class JarSession:
         ext = site.get('ext', '')
         if not isinstance(ext, str): ext = json.dumps(ext, ensure_ascii=False, separators=(',', ':'))
         with open(self.job + '/request.json', 'w') as stream:
-            json.dump({'jar': jar, 'cache': self.job, 'api': site['api'], 'key': site['key'], 'ext': ext}, stream)
+            json.dump({'jar': jar, 'cache': self.job, 'api': site['api'], 'key': site['key'], 'ext': ext, 'subscription': SUB}, stream)
         command = [HOST + '/jre/bin/java', '--add-opens', 'java.base/java.lang=ALL-UNNAMED', '--add-opens', 'java.base/sun.net.www.protocol.jar=ALL-UNNAMED',
                    '-Dorg.slf4j.simpleLogger.defaultLogLevel=error', '-cp', HOST + '/host.jar:' + HOST + '/lib/*',
                    'tvbox.runtime.NativeProbe', '--serve', self.job + '/request.json']
@@ -132,7 +132,7 @@ class JarSession:
             if legacy: ext = ''
             elif kind == 'javascript' and ext and not ext.startswith('{'): ext = urljoin(base, ext)
             with open(self.job + '/request.json', 'w') as stream:
-                json.dump({'script': script, 'cache': self.job, 'api': api, 'key': site['key'], 'ext': ext}, stream)
+                json.dump({'script': script, 'cache': self.job, 'api': api, 'key': site['key'], 'ext': ext, 'subscription': SUB}, stream)
             if kind == 'python':
                 host = ROOT + '/build/PythonHost'
                 command = [host + '/python/bin/python3', '-I', '-B', '-u', host + '/host.py', '--serve', self.job + '/request.json']

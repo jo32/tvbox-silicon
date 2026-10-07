@@ -75,6 +75,8 @@ public actor EmbeddedJarHost {
         // Sources from the same archive share one runtime: its Init and native guard load once.
         let runtime = root.appendingPathComponent("Runtimes", isDirectory: true).appendingPathComponent(digest, isDirectory: true)
         var input: [String: JSONValue] = ["session": .string(key), "runtime": .string(digest), "runtimeCache": .string(runtime.path), "jar": .string(jar.path), "cache": .string(job.path), "conversionCache": .string(root.appendingPathComponent("Converted").path), "profile": .string(root.appendingPathComponent(profileKey).appendingPathComponent("profile").path), "api": .string(site.api), "key": .string(site.key), "ext": .string(ext)]
+        // Plugins read the loaded subscription from the host app's database (see HostDatabase.java).
+        input["subscription"] = .string(configurationOrigin.absoluteString)
         // Saved Quark/UC sign-ins; the spider reads them when it is created.
         input["cloudAccounts"] = .string(CloudDriveAccounts.fileURL.path)
         #if !os(macOS)
