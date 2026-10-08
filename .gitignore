@@ -5,6 +5,7 @@ DerivedData/
 reference/
 *.xcuserstate
 xcuserdata/
+.swiftpm/
 
 Runtime/**/target/
 hs_err_pid*.log
