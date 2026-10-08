@@ -53,7 +53,7 @@ Evidence: [fresh-process empty result](../build/source-diagnostics/apptt-traced.
 | --- | --- |
 | 豆豆┃片单 | Home was intermittently empty. Retry returned 20 ranking entries without video IDs; these cannot be opened as videos. |
 | 🗂我的云盘┃配置 | Configuration/login actions, not playable videos; category/search did not produce an openable video. |
-| 👽玩偶哥哥┃4K弹幕 | Search/catalog and detail work; playback returns no media URL and says: 未扫码登录无法观看. |
+| 👽玩偶哥哥┃4K弹幕 | Search/catalog and detail work; playback returns no media URL and says: 未扫码登录无法观看 ("cannot watch without signing in by QR code"). |
 | 🚀叨观荐影┃预告片 | Media fetched successfully. |
 | 🎙️易听音乐┃带歌词 | Host bytecode incompatibility: Comparator.comparingLong must use an InterfaceMethodref constant (IncompatibleClassChangeError). |
 | 💡聚剧┃四盘 | Detail parser expects JSON but gets non-JSON input (JSONException); plugin swallows the error and returns empty content. |
@@ -85,10 +85,10 @@ Evidence: [fresh-process empty result](../build/source-diagnostics/apptt-traced.
 | 🐟斗鱼┃直播 | JavaScript/drpy2 source; the app has no JavaScript spider runtime. |
 | 🎈盘搜┃四盘 | Search works; four sampled detail requests returned empty content. Logs repeatedly report missing android.app.ActivityThread; exact causal link remains unisolated. |
 | 🦋易搜┃四盘 | Search works; four sampled detail requests returned empty content. Logs repeatedly report missing android.app.ActivityThread; exact causal link remains unisolated. |
-| 🐌盘她┃夸父 | Search/catalog and detail work; playback returns no media URL and says: 未扫码登录无法观看. |
-| 🐞盘他┃嘟嘟 | Search/catalog and detail work; playback returns no media URL and says: 超时扫码请点刷新,未扫码授权无法观看. |
-| 🍄抠抠┃搜搜 | Search/catalog and detail work; playback returns no media URL and says: 未扫码登录无法观看. |
-| 🌈优汐┃搜搜 | Search/catalog and detail work; playback returns no media URL and says: 未扫码登录无法观看. |
+| 🐌盘她┃夸父 | Search/catalog and detail work; playback returns no media URL and says: 未扫码登录无法观看 ("cannot watch without signing in by QR code"). |
+| 🐞盘他┃嘟嘟 | Search/catalog and detail work; playback returns no media URL and says: 超时扫码请点刷新,未扫码授权无法观看 ("QR scan timed out, tap refresh; cannot watch without QR authorization"). |
+| 🍄抠抠┃搜搜 | Search/catalog and detail work; playback returns no media URL and says: 未扫码登录无法观看 ("cannot watch without signing in by QR code"). |
+| 🌈优汐┃搜搜 | Search/catalog and detail work; playback returns no media URL and says: 未扫码登录无法观看 ("cannot watch without signing in by QR code"). |
 | 🅱哔哔合集┃弹幕 | Search/detail resolve, but play returns a quality array with /proxy?do=bili URLs; quality selection and the plugin media proxy are unsupported. |
 | 🅱哔哔演唱会┃弹幕 | Search/detail resolve, but play returns a quality array with /proxy?do=bili URLs; quality selection and the plugin media proxy are unsupported. |
 | 📚儿童┃启蒙 | JavaScript/drpy2 source; the app has no JavaScript spider runtime. |

@@ -171,15 +171,15 @@ After building the macOS target into `build/Verify-mac`, `bash Scripts/test-play
 
 Host regression checks: `Scripts/test-java-host.sh` and `python3 Scripts/test-script-host.py`. Run these after preparing the corresponding runtimes.
 
-### 运行诊断日志
+### Runtime diagnostic logs
 
-在「设置 → 诊断日志」或 JAR 运行时页面进入「查看日志」。支持按级别和关键字筛选、暂停实时刷新、手动刷新、导出；Mac 可直接打开日志文件夹。页面显示本次运行最近 1,000 条，导出包含磁盘保留的历史记录。
+Open Settings → Diagnostic Logs, or choose View Logs on the JAR runtime page. The log viewer filters by level and keyword, can pause live refresh, refreshes manually, and exports; on Mac it can also open the log folder directly. The page shows the latest 1,000 entries from the current run; exports include the history retained on disk.
 
-日志位于应用支持目录的 `com.tvbox.yingxia/Logs/`，使用 JSON Lines。记录 JAR 下载、DEX 检查、源/会话/请求关联、请求耗时、重试、超时、进程退出及插件标准输出/错误。不记录完整请求参数或结果；常见凭据、URL 查询串会脱敏，插件自定义输出仍应在分享前检查。
+Logs are stored as JSON Lines under `com.tvbox.yingxia/Logs/` in the app's Application Support directory. They record JAR downloads, DEX inspection, source/session/request correlation, request durations, retries, timeouts, process exits, and plugin stdout/stderr. Full request parameters and results are not logged. Common credentials and URL query strings are redacted, but plugin-specific output should still be checked before sharing.
 
-写入由后台 utility 队列按 250 毫秒批量处理，生产者只追加到有界内存队列，不等待磁盘。单条最多 2,048 字符，队列最多 512 条；过载时优先保留告警/错误，并记录丢弃数。每个日志文件最多约 2 MB，保留 4 个；导出副本最多约 8 MB。插件输出按行重组，超长行截断，持续排空管道，避免日志磁盘写入阻塞插件。查看页面每 2 秒刷新且仅在可见时运行。
+A background utility queue writes logs in 250 ms batches; producers only append to a bounded in-memory queue and never wait for the disk. Each entry is capped at 2,048 characters and the queue at 512 entries; under overload, warnings and errors are kept first and the number of dropped entries is recorded. Each log file holds up to about 2 MB, and 4 files are retained; an exported copy holds up to about 8 MB. Plugin output is reassembled into lines, overlong lines are truncated, and pipes are drained continuously so that log writes to disk never block a plugin. The viewer refreshes every 2 seconds and only while it is visible.
 
-磁盘写入失败不会使解析失败，页面显示错误并保留近期内存日志，30 秒后有新日志时重试。突然退出可能丢失尚未落盘的最后一批；不在每条日志上执行同步刷盘。此改动提供定位问题的证据，不代表已修复所有插件兼容性或上游源故障。
+A disk write failure does not make parsing fail: the page shows the error, keeps recent logs in memory, and retries after 30 seconds when new logs arrive. An abrupt exit may lose the last batch that has not reached the disk; entries are not synced to disk one by one. These logs provide evidence for locating problems; they do not mean that every plugin compatibility issue or upstream source failure has been fixed.
 
 ### tvOS channel guide
 

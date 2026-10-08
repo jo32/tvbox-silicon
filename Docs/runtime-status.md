@@ -22,7 +22,7 @@ Results below combine the full post-fix run and the three-source JavaScript rete
 | --- | --- |
 | 豆豆┃片单 | Index recommendations display title/poster and launch global search by title; they do not supply direct playback IDs. |
 | 🗂我的云盘┃配置 | Configuration/login actions; no openable video. |
-| 👽玩偶哥哥┃4K弹幕 | no single http url: ''; plugin: 未扫码登录无法观看 |
+| 👽玩偶哥哥┃4K弹幕 | no single http url: ''; plugin: 未扫码登录无法观看 ("cannot watch without signing in by QR code") |
 | 🚀叨观荐影┃预告片 | Media fetched. |
 | 🎙️易听音乐┃带歌词 | Media fetched. |
 | 💡聚剧┃四盘 | tvbox.runtime.PluginSession$EmptyContentException: The plugin returned no content |
@@ -54,10 +54,10 @@ Results below combine the full post-fix run and the three-source JavaScript rete
 | 🐟斗鱼┃直播 | needs web sniffing / extra parsing (parse=1 jx=0 playUrl=False) |
 | 🎈盘搜┃四盘 | tvbox.runtime.HttpDiagnostics$SourceHTTPException: The source pc-api.uc.cn returned HTTP 404 [pc-api.uc.cn HTTP 404] |
 | 🦋易搜┃四盘 | tvbox.runtime.HttpDiagnostics$SourceHTTPException: The source pc-api.uc.cn returned HTTP 404 [pc-api.uc.cn HTTP 404] |
-| 🐌盘她┃夸父 | no single http url: ''; plugin: 未扫码登录无法观看 |
-| 🐞盘他┃嘟嘟 | no single http url: ''; plugin: 超时扫码请点刷新,未扫码授权无法观看 |
-| 🍄抠抠┃搜搜 | no single http url: ''; plugin: 未扫码登录无法观看 |
-| 🌈优汐┃搜搜 | no single http url: ''; plugin: 未扫码登录无法观看 |
+| 🐌盘她┃夸父 | no single http url: ''; plugin: 未扫码登录无法观看 ("cannot watch without signing in by QR code") |
+| 🐞盘他┃嘟嘟 | no single http url: ''; plugin: 超时扫码请点刷新,未扫码授权无法观看 ("QR scan timed out, tap refresh; cannot watch without QR authorization") |
+| 🍄抠抠┃搜搜 | no single http url: ''; plugin: 未扫码登录无法观看 ("cannot watch without signing in by QR code") |
+| 🌈优汐┃搜搜 | no single http url: ''; plugin: 未扫码登录无法观看 ("cannot watch without signing in by QR code") |
 | 🅱哔哔合集┃弹幕 | Media fetched. |
 | 🅱哔哔演唱会┃弹幕 | Media fetched. |
 | 📚儿童┃启蒙 | Media fetched. |
@@ -92,7 +92,7 @@ Build both runtimes with `Scripts/build-java-host.sh` and `Scripts/build-script-
 
 ### Bttwoo detail regression correction
 
-A follow-up app test found that rejecting every record containing `action` incorrectly hid Bttwoo details. The exact user-selected title 我不是大师 (`play/ch4lua32z`) returned `action: 杨哲`, meaning screenplay credits. Removed this filter and added a regression test. All 31 Swift tests and the Mac build passed. The corrected Swift app path resolved 19 episodes and AVPlayer produced a decoded frame: [playback evidence](../build/bit-regression/playback.log). The rebuilt app was restarted for testing.
+A follow-up app test found that rejecting every record containing `action` incorrectly hid Bttwoo details. The exact user-selected title 我不是大师 (`play/ch4lua32z`) returned `action: 杨哲` (a screenwriter’s name), meaning screenplay credits. Removed this filter and added a regression test. All 31 Swift tests and the Mac build passed. The corrected Swift app path resolved 19 episodes and AVPlayer produced a decoded frame: [playback evidence](../build/bit-regression/playback.log). The rebuilt app was restarted for testing.
 
 ## Cloud account bridge — 2026-10-04
 
@@ -104,7 +104,7 @@ The baseline login failures above predate the account bridge. Reference behavior
 
 The active subscription's `csp_Wogg` archive (`570c25487b2534db3923ffa6b1fa5d73efaa68b6a9fe7bc0671ae8f5f6796605`) differs from the FTY `WoGGGuard` family. Its cloud ordering uses reflective `Object.clone`; without `java.base/java.lang` opened to the plugin JVM, the plugin swallows the access error and stores a null ordering array. Details then silently return empty `vod_play_from` and `vod_play_url`. The app and audit launchers now include that compatibility option, with a regression check for reflective primitive-array cloning.
 
-For `https://woggpan.888484.xyz/voddetail/131201.html` (兰香如故), the original request returned zero episodes. The repaired host returned 10 lines, with episode counts `[39, 22, 39, 22, 39, 22, 47, 42, 47, 42]`, without account credentials. A separate playback request reached the expected provider message `夸克授权失败，请扫码登录`. The optional Android Go accelerator still cannot run on macOS; its startup failure was not the cause of the empty detail list.
+For `https://woggpan.888484.xyz/voddetail/131201.html` (兰香如故), the original request returned zero episodes. The repaired host returned 10 lines, with episode counts `[39, 22, 39, 22, 39, 22, 47, 42, 47, 42]`, without account credentials. A separate playback request reached the expected provider message `夸克授权失败，请扫码登录` ("Quark authorization failed, please sign in by QR code"). The optional Android Go accelerator still cannot run on macOS; its startup failure was not the cause of the empty detail list.
 
 The inspected Cloud/Quark/UC class contract now receives inline `cookie`, `uccookie`, and `token` values from saved accounts, including when the source extension omitted those keys. This is scoped to that class contract; unrelated sources do not receive credentials. No real account was available for authorized playback verification.
 
