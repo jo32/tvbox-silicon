@@ -29,7 +29,11 @@ enum QALaunch {
         else if store.subscription == nil { await store.importSubscription() }
         if QASweep.enabled, let config = store.subscription { Task.detached(priority: .utility) { await QASweep.run(config) } }
         if let section { store.section = section }
-        if let page, page.hasPrefix("search:") { store.searchVideos(String(page.dropFirst(7))) }
+        if let page, page.hasPrefix("search:") {
+            // Let the tab settle first: switching sections suspends a search that is already running.
+            try? await Task.sleep(for: .seconds(2))
+            store.searchVideos(String(page.dropFirst(7)))
+        }
         if page == "player", let url = URL(string: "http://127.0.0.1:8765/clip.mp4") {
             store.playing = Channel(name: "测试频道 01", url: url)
         }
