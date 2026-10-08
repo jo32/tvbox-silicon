@@ -288,6 +288,8 @@
 "The plugin took too long to initialize. Retry or choose another source." = "プラグインの初期化がタイムアウトしました。再試行するか、別の配信ソースを選んでください。";
 "Scroll sources left" = "ソースを左にスクロール";
 "Scroll sources right" = "ソースを右にスクロール";
+"Scroll left" = "左にスクロール";
+"Scroll right" = "右にスクロール";
 
 // Cloud drive accounts
 "Cloud Drive Accounts" = "クラウドドライブのアカウント";

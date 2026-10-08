@@ -97,9 +97,9 @@ struct ChannelListView: View {
     }
     private var filterBar: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ScrollView(.horizontal, showsIndicators: false) {
+            ChipRow {
                 GlassEffectContainer(spacing: 8) {
-                    LazyHStack(spacing: 8) {
+                    HStack(spacing: 8) {
                         Chip(title: L10n.text("All"), selected: group == nil) { group = nil }
                         ForEach(groups, id: \.self) { value in
                             Chip(title: value.isEmpty ? L10n.text("Ungrouped") : value, selected: group == value) { group = value }
@@ -380,11 +380,12 @@ struct ChannelLogo: View {
 
 struct ChannelCard: View {
     @Environment(Store.self) private var store
+    @Environment(\.stripDrag) private var drag
     let channel: Channel
     var body: some View {
         let favorite = store.isFavorite(channel)
         HStack(spacing: 10) {
-            Button { store.playing = channel } label: {
+            Button { if drag?.active != true { store.playing = channel } } label: {
                 HStack(spacing: 14) {
                     ChannelLogo(channel: channel)
                     VStack(alignment: .leading, spacing: 3) {
@@ -394,7 +395,7 @@ struct ChannelCard: View {
                     Spacer(minLength: 0)
                 }.contentShape(Rectangle())
             }.cardButton()
-            Button { store.toggleFavorite(channel) } label: {
+            Button { if drag?.active != true { store.toggleFavorite(channel) } } label: {
                 Image(systemName: favorite ? "heart.fill" : "heart")
                     .font(.title3).foregroundStyle(favorite ? Brand.rose : .secondary)
                     .frame(width: 44, height: 44).contentTransition(.symbolEffect(.replace))

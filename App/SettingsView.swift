@@ -398,7 +398,7 @@ struct DiagnosticsView: View {
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
             .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
-            ScrollView(.horizontal, showsIndicators: false) {
+            ChipRow {
                 HStack(spacing: 6) {
                     levelButton("all", title: L10n.text("All Logs"), count: entries.count, color: Brand.accent)
                     ForEach(LogLevel.allCases, id: \.rawValue) { item in

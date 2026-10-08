@@ -126,9 +126,9 @@ struct SiteView: View {
         }
     }
     private var categoryBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ChipRow {
             GlassEffectContainer(spacing: 8) {
-                LazyHStack(spacing: 8) {
+                HStack(spacing: 8) {
                     Chip(title: L10n.text("Recommendations"), selected: browser.query.isEmpty && browser.category.isEmpty) { query = ""; Task { await home() } }
                     ForEach(browser.categories) { item in
                         Chip(title: item.name, selected: browser.query.isEmpty && browser.category == item.id) {

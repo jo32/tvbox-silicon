@@ -288,6 +288,8 @@
 "The plugin took too long to initialize. Retry or choose another source." = "外掛初始化逾時，請重試或選擇其他來源。";
 "Scroll sources left" = "向左捲動來源";
 "Scroll sources right" = "向右捲動來源";
+"Scroll left" = "向左捲動";
+"Scroll right" = "向右捲動";
 
 // Cloud drive accounts
 "Cloud Drive Accounts" = "網盤帳號";

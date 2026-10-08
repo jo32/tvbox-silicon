@@ -242,13 +242,31 @@ private struct FilterChipStyle: ButtonStyle {
 #endif
 
 /// Neutral filters reserve high contrast for the current selection.
+/// Set by `ScrollStrip` while the user drags it, so the chip under the pointer ignores the mouse-up.
+@MainActor final class StripDrag { var active = false }
+extension EnvironmentValues { @Entry var stripDrag: StripDrag? = nil }
+
+/// A horizontal chip row: a `ScrollStrip` (drag and arrows on Mac), or a plain focus-driven
+/// scroll view on tvOS.
+struct ChipRow<Content: View>: View {
+    @ViewBuilder let content: Content
+    var body: some View {
+        #if os(tvOS)
+        ScrollView(.horizontal, showsIndicators: false) { content }
+        #else
+        ScrollStrip { content }
+        #endif
+    }
+}
+
 struct Chip: View {
     let title: String
     var selected = false
     var fill = false
     let action: () -> Void
+    @Environment(\.stripDrag) private var drag
     var body: some View {
-        let button = Button(action: action) {
+        let button = Button { if drag?.active != true { action() } } label: {
             HStack(spacing: 5) {
                 if selected { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
                 Text(title).lineLimit(1)

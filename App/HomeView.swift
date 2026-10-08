@@ -108,8 +108,8 @@ struct HomeView: View {
     private var favorites: some View {
         VStack(alignment: .leading, spacing: Layout.headerSpacing) {
             SectionHeader(title: L10n.text("Favorites")) { store.section = .favorites }
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: Layout.cardSpacing) {
+            ChipRow {
+                HStack(spacing: Layout.cardSpacing) {
                     ForEach(store.favorites.prefix(12)) { ChannelCard(channel: $0).frame(width: Layout.cardMin) }
                 }.padding(.vertical, 6)
             }

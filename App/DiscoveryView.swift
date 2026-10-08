@@ -634,8 +634,8 @@ struct RecommendationsView: View {
     }
 
     private func categoryChips(_ loadedSite: Site) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 8) {
+        ChipRow {
+            HStack(spacing: 8) {
                 if !model.items.isEmpty {
                     Chip(title: L10n.text("Recommendations"), selected: category == nil) { category = nil; categoryPage = 1 }
                 }
@@ -701,35 +701,55 @@ struct SourceStrip: View {
     let items: [Item]
     let selection: String
     let select: (String) -> Void
+
+    var body: some View {
+        ScrollStrip(scrollTo: selection, leftLabel: "Scroll sources left", rightLabel: "Scroll sources right") {
+            HStack(spacing: 6) {
+                ForEach(items) { item in
+                    SourceChip(name: item.name, count: item.count, selected: item.id == selection) { select(item.id) }
+                        .id(item.id)
+                }
+            }
+            .padding(.vertical, 4)
+            .scrollTargetLayout()
+        }
+    }
+}
+
+/// A horizontal row of chips or cards. A mouse wheel cannot scroll sideways, so on Mac the row can
+/// also be dragged like a trackpad swipe and shows arrow buttons once it overflows. Elsewhere it is
+/// a plain horizontal scroll view (touch on iOS; tvOS rows stay focus-driven and do not use it).
+struct ScrollStrip<Content: View>: View {
+    let scrollTo: String?
+    let leftLabel: String
+    let rightLabel: String
+    let content: Content
     @State private var position = ScrollPosition(idType: String.self)
     @State private var edges = Edges()
     /// Live geometry and drag state. A plain reference, so updating it never invalidates the view.
     @State private var tracking = Tracking()
+
+    init(scrollTo: String? = nil, leftLabel: String = "Scroll left", rightLabel: String = "Scroll right",
+         @ViewBuilder content: () -> Content) {
+        self.scrollTo = scrollTo
+        self.leftLabel = leftLabel
+        self.rightLabel = rightLabel
+        self.content = content()
+    }
 
     private struct Edges: Equatable { var leading = false, trailing = false }
     private struct Metrics: Equatable { var offset: CGFloat, viewport: CGFloat, maximum: CGFloat }
     @MainActor private final class Tracking {
         var metrics = Metrics(offset: 0, viewport: 0, maximum: 0)
         var dragOrigin: CGFloat?
-        var dragging = false
+        let drag = StripDrag()
         func clamp(_ x: CGFloat) -> CGFloat { min(metrics.maximum, max(0, x)) }
     }
 
     var body: some View {
         HStack(spacing: 8) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(items) { item in
-                        SourceChip(name: item.name, count: item.count, selected: item.id == selection) {
-                            // The chip under the pointer receives the mouse-up that ends a drag.
-                            guard !tracking.dragging else { return }
-                            select(item.id)
-                        }
-                        .id(item.id)
-                    }
-                }
-                .padding(.vertical, 4)
-                .scrollTargetLayout()
+                content
             }
             .scrollPosition($position)
             .onScrollGeometryChange(for: Metrics.self) { geometry in
@@ -751,6 +771,7 @@ struct SourceStrip: View {
                         .frame(width: 28)
                 }
             }
+            .environment(\.stripDrag, tracking.drag)
             #if os(macOS)
             .simultaneousGesture(dragToScroll)
             #endif
@@ -760,7 +781,7 @@ struct SourceStrip: View {
             }
             #endif
         }
-        .onAppear { position.scrollTo(id: selection, anchor: .center) }
+        .onAppear { if let scrollTo { position.scrollTo(id: scrollTo, anchor: .center) } }
     }
 
     #if os(macOS)
@@ -770,7 +791,7 @@ struct SourceStrip: View {
             .onChanged { value in
                 let origin = tracking.dragOrigin ?? tracking.metrics.offset
                 tracking.dragOrigin = origin
-                tracking.dragging = true
+                tracking.drag.active = true
                 position.scrollTo(x: tracking.clamp(origin - value.translation.width))
             }
             .onEnded { value in
@@ -779,16 +800,17 @@ struct SourceStrip: View {
                 withAnimation(.smooth(duration: 0.45)) {
                     position.scrollTo(x: tracking.clamp(origin - value.predictedEndTranslation.width))
                 }
-                let tracking = tracking
+                let drag = tracking.drag
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(120))
-                    tracking.dragging = false
+                    drag.active = false
                 }
             }
     }
 
     private func arrow(forward: Bool) -> some View {
         let enabled = forward ? edges.trailing : edges.leading
+        let label = L10n.text(forward ? rightLabel : leftLabel)
         return Button {
             let step = max(1, tracking.metrics.viewport * 0.8)
             withAnimation(.smooth(duration: 0.3)) {
@@ -804,8 +826,8 @@ struct SourceStrip: View {
         .buttonStyle(.plain)
         .foregroundStyle(enabled ? .primary : .tertiary)
         .disabled(!enabled)
-        .accessibilityLabel(L10n.text(forward ? "Scroll sources right" : "Scroll sources left"))
-        .help(L10n.text(forward ? "Scroll sources right" : "Scroll sources left"))
+        .accessibilityLabel(label)
+        .help(label)
     }
     #endif
 }
@@ -817,10 +839,12 @@ private struct SourceChip: View {
     let selected: Bool
     let action: () -> Void
     @State private var hovering = false
+    @Environment(\.stripDrag) private var drag
 
     var body: some View {
         let label = SourceLabel(name)
-        Button(action: action) {
+        // The chip under the pointer receives the mouse-up that ends a drag.
+        Button { if drag?.active != true { action() } } label: {
             HStack(spacing: 6) {
                 if let symbol = label.symbol { Text(symbol) }
                 Text(label.title).lineLimit(1)

@@ -288,6 +288,8 @@
 "The plugin took too long to initialize. Retry or choose another source." = "The plugin took too long to initialize. Retry or choose another source.";
 "Scroll sources left" = "Scroll sources left";
 "Scroll sources right" = "Scroll sources right";
+"Scroll left" = "Scroll left";
+"Scroll right" = "Scroll right";
 
 // Cloud drive accounts
 "Cloud Drive Accounts" = "Cloud Drive Accounts";

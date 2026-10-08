@@ -288,6 +288,8 @@
 "The plugin took too long to initialize. Retry or choose another source." = "插件初始化超时，请重试或选择其他源。";
 "Scroll sources left" = "向左滚动来源";
 "Scroll sources right" = "向右滚动来源";
+"Scroll left" = "向左滚动";
+"Scroll right" = "向右滚动";
 
 // Cloud drive accounts
 "Cloud Drive Accounts" = "网盘账号";
