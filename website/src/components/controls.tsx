@@ -13,7 +13,7 @@ export function SoonPill({ small = false }: { small?: boolean }) {
 }
 
 /** The current Mac release on download.getmegaportal.com (R2 bucket megaportal-downloads). */
-export const MAC_DOWNLOAD = "https://download.getmegaportal.com/yingxia/1.0/Yingxia-1.0-macos-arm64.dmg";
+export const MAC_DOWNLOAD = "https://download.getmegaportal.com/yingxia/1.0.1/Yingxia-1.0.1-macos-arm64.dmg";
 
 export function DownloadMac({ small = false }: { small?: boolean }) {
   const { t } = useI18n();
