@@ -1,0 +1,241 @@
+<div class="film">
+  <div class="room">
+    <div class="set">
+      <div class="f-tv">
+        <div class="stage" id="stage" role="img" aria-label="Yingxia introduction film">
+          <div class="glow"></div>
+          <div class="chap" id="chap"><i>‹</i><span></span></div>
+
+          <!-- 1 · boot (0-8) -->
+          <section class="scene black" data-s="0" data-e="8" data-ch="">
+            <img class="abs app-icon" src="/assets/icon-512.png" alt="The Yingxia app icon" style="left:42cqw;top:10cqw;width:16cqw;animation:pop .7s cubic-bezier(.2,1.4,.4,1) .4s both,dive 1.6s cubic-bezier(.6,0,.9,.4) 6.2s both">
+            <div class="abs big center" style="top:29cqw;font-size:6.4cqw;animation:up .6s ease 1.3s both,gone .4s ease 6s both">Yingxia <span class="muted" style="font-weight:500">映匣</span></div>
+            <div class="abs center" style="top:38.5cqw;font-size:2.4cqw;animation:up .5s ease 2.1s both,gone .4s ease 6s both"><span class="type" style="--n:33;--d:2.3">All your sources. One big screen.</span></div>
+            <div class="abs center muted" style="top:44cqw;font-size:1.6cqw;animation:up .5s ease 4s both,gone .4s ease 6s both">A native TVBox player for Apple TV</div>
+          </section>
+
+          <!-- 2 · subscriptions (8-19) -->
+          <section class="scene" data-s="8" data-e="19" data-ch="Subscriptions">
+            <div class="panel zoomwin" style="--d:.2;left:4cqw;top:9cqw;width:44cqw;height:26cqw">
+              <h4>tvbox.json</h4>
+              <div class="code">
+                <div class="up" style="--d:.6">{</div>
+                <div class="up" style="--d:.8">&nbsp;&nbsp;<s>"sites"</s>: [</div>
+                <div class="up" style="--d:1">&nbsp;&nbsp;&nbsp;&nbsp;{ <s>"key"</s>: <q>"立播"</q>, <s>"api"</s>: <q>"https://…/api.php"</q> },</div>
+                <div class="up" style="--d:1.2">&nbsp;&nbsp;&nbsp;&nbsp;{ <s>"key"</s>: <q>"短剧"</q>, <s>"api"</s>: <q>"./js/drama.js"</q> },</div>
+                <div class="up" style="--d:1.4">&nbsp;&nbsp;&nbsp;&nbsp;{ <s>"key"</s>: <q>"光影"</q>, <s>"api"</s>: <q>"csp_Guard"</q> }</div>
+                <div class="up" style="--d:1.6">&nbsp;&nbsp;],</div>
+                <div class="up" style="--d:1.8">&nbsp;&nbsp;<s>"lives"</s>: [{ <s>"url"</s>: <q>"./live.m3u"</q> }],</div>
+                <div class="up" style="--d:2">&nbsp;&nbsp;<s>"spider"</s>: <q>"./jar/spider.jar"</q></div>
+                <div class="up" style="--d:2.2">}</div>
+              </div>
+            </div>
+            <div class="panel col zoomwin" style="--d:1;left:52cqw;top:9cqw;width:44cqw;height:26cqw">
+              <h4>Built for Android TV boxes</h4>
+              <div class="row up" style="--d:2.4"><i class="cb flip" style="--d:7.4"></i>JSON APIs</div>
+              <div class="row up" style="--d:2.7"><i class="cb flip" style="--d:7.7"></i>JavaScript plugins</div>
+              <div class="row up" style="--d:3"><i class="cb flip" style="--d:8"></i>JAR spiders</div>
+              <div class="row up" style="--d:3.3"><i class="cb flip" style="--d:8.3"></i>M3U &amp; TXT playlists</div>
+            </div>
+            <div class="alert" style="left:30cqw;top:12.5cqw;width:40cqw;animation:zw .35s ease 4s both,gone .3s ease 6.6s both">
+              <div class="alert-x">✕</div>
+              <b>Apple TV can’t run Android plugins.</b>
+              <div class="muted" style="margin-top:.6cqw">No JVM, no WebView, no APKs.</div>
+              <div class="btn focus" style="margin-top:1.6cqw">OK</div>
+            </div>
+            <div class="abs center" style="top:38.5cqw;display:flex;justify-content:center"><div class="badge pop" style="--d:6.9"><img src="/assets/icon-192.png" alt="">Yingxia</div></div>
+            <div class="subs" style="animation:gone .3s ease 6.4s both"><span class="up" style="--d:.5">TVBox subscriptions are JSON files written for Android TV boxes.</span></div>
+            <div class="subs"><span class="up" style="--d:6.8">Yingxia reads the same subscriptions, natively, on Apple TV.</span></div>
+          </section>
+
+          <!-- 3 · add subscription (19-30) -->
+          <section class="scene" data-s="19" data-e="30" data-ch="Settings">
+            <div class="panel zoomwin" style="--d:.2;left:4cqw;top:8cqw;width:28cqw;height:36cqw;padding:1cqw">
+              <div class="li focus">Subscriptions <small>›</small></div>
+              <div class="li">Sources <small>›</small></div>
+              <div class="li">Runtime <small>›</small></div>
+              <div class="li">Language <small>›</small></div>
+              <div class="li">About <small>›</small></div>
+              <div class="abs muted" style="left:2.4cqw;bottom:1.8cqw;display:flex;align-items:center;gap:.8cqw;font-size:1.2cqw"><img src="/assets/icon-192.png" alt="" style="width:2.4cqw;border-radius:22%">Yingxia · tvOS</div>
+            </div>
+            <div class="panel zoomwin" style="--d:.6;left:35cqw;top:8cqw;width:61cqw;height:36cqw">
+              <h4>Add Subscription</h4>
+              <div class="field" style="animation:ring .2s ease 1.4s both"><span class="type" style="--n:32;--d:2">https://example.com/tvbox.json</span><span class="caret"></span></div>
+              <div class="keys muted up" style="--d:1.5">a b c d e f g h i j k l m n o p q r s t u v w x y z . / :</div>
+              <div style="display:flex;align-items:center;gap:1.6cqw;margin-top:1.4cqw">
+                <div class="btn" style="animation:up .5s ease 3.6s both,focusin .2s ease 3.9s both,press .25s ease 4.2s">Add</div>
+                <div class="muted" style="display:flex;align-items:center;gap:.7cqw;font-size:1.4cqw;animation:fade .2s ease 4.5s both,gone .2s ease 5.6s both"><span class="spin" style="margin:0"></span>Loading subscription…</div>
+              </div>
+              <div class="stats" style="top:19cqw">
+                <div class="stat up" style="--d:5.7"><b class="cnt" data-to="31" data-d="5.8" data-dur="1.2">0</b><span>sites</span></div>
+                <div class="stat up" style="--d:5.9"><b class="cnt" data-to="188" data-d="6" data-dur="1.2">0</b><span>live channels</span></div>
+                <div class="stat up" style="--d:6.1"><b class="cnt" data-to="6" data-d="6.2" data-dur=".8">0</b><span>parsers</span></div>
+              </div>
+              <div class="abs up" style="--d:9.3;left:1.8cqw;bottom:1.8cqw;font-size:1.35cqw"><b class="acc">✓</b> Refresh failed · kept the last working copy</div>
+            </div>
+            <div class="subs" style="animation:gone .3s ease 5.2s both"><span class="up" style="--d:.6">Add your subscription once, by URL.</span></div>
+            <div class="subs" style="animation:gone .3s ease 9s both"><span class="up" style="--d:5.5">Yingxia loads every site, live list and parser inside it.</span></div>
+            <div class="subs"><span class="up" style="--d:9.3">If a refresh ever fails, the last working copy stays.</span></div>
+          </section>
+
+          <!-- 4 · runtimes (30-44) -->
+          <section class="scene" data-s="30" data-e="44" data-ch="Runtime">
+            <div class="abs muted up" style="--d:.3;left:4cqw;top:10.5cqw;font-size:1.3cqw">Source</div>
+            <div class="abs muted up" style="--d:2.3;left:36cqw;top:10.5cqw;font-size:1.3cqw">Runs on device in</div>
+            <div class="abs muted up" style="--d:4.3;left:73cqw;top:10.5cqw;font-size:1.3cqw">Same screens for every source</div>
+
+            <div class="node up" style="--d:.5;left:4cqw;top:13.5cqw">立播 <small>JSON API</small></div>
+            <div class="node up" style="--d:.8;left:4cqw;top:21cqw">短剧 <small>JavaScript</small></div>
+            <div class="node up" style="--d:1.1;left:4cqw;top:28.5cqw">光影 <small>JAR spider</small></div>
+            <div class="node up" style="--d:1.4;left:4cqw;top:36cqw">有声书 <small>Python</small></div>
+
+            <div class="wire draw" style="--d:2;left:27cqw;top:16.5cqw;width:8.5cqw"><i class="pk" style="--d:2.6"></i></div>
+            <div class="wire draw" style="--d:2.1;left:27cqw;top:24cqw;width:8.5cqw"><i class="pk" style="--d:2.8"></i></div>
+            <div class="wire draw" style="--d:2.2;left:27cqw;top:31.5cqw;width:8.5cqw"><i class="pk" style="--d:3"></i></div>
+            <div class="wire draw" style="--d:2.3;left:27cqw;top:39cqw;width:8.5cqw"><i class="pk" style="--d:3.2"></i></div>
+
+            <div class="node rt zoomwin" style="--d:2.5;left:36cqw;top:13.5cqw">Swift HTTP <small>native</small></div>
+            <div class="node rt zoomwin" style="--d:2.7;left:36cqw;top:21cqw">QuickJS <small>in-process</small></div>
+            <div class="node rt zoomwin hi" style="--d:2.9;left:36cqw;top:28.5cqw">Lite JS port <small class="fade" style="--d:7.6">↳ JAR fallback</small></div>
+            <div class="node rt zoomwin" style="--d:3.1;left:36cqw;top:36cqw">CPython <small>Mac</small></div>
+
+            <div class="wire draw" style="--d:4;left:63cqw;top:16.5cqw;width:9cqw"><i class="pk" style="--d:4.6"></i></div>
+            <div class="wire draw" style="--d:4.1;left:63cqw;top:24cqw;width:9cqw"><i class="pk" style="--d:4.8"></i></div>
+            <div class="wire draw" style="--d:4.2;left:63cqw;top:31.5cqw;width:9cqw"><i class="pk" style="--d:5"></i></div>
+            <div class="wire draw" style="--d:4.3;left:63cqw;top:39cqw;width:9cqw"><i class="pk" style="--d:5.2"></i></div>
+
+            <div class="panel rows4 zoomwin" style="--d:4.4;left:73cqw;top:12.75cqw;width:23cqw;height:30cqw">
+              <div class="row"><i class="cb flip" style="--d:5.2"></i>Home</div>
+              <div class="row"><i class="cb flip" style="--d:5.5"></i>Categories</div>
+              <div class="row"><i class="cb flip" style="--d:5.8"></i>Search</div>
+              <div class="row"><i class="cb flip" style="--d:6.1"></i>Playback</div>
+            </div>
+            <div class="subs" style="animation:gone .3s ease 6.8s both"><span class="up" style="--d:.6">Each source runs on the device, in the runtime it needs.</span></div>
+            <div class="subs"><span class="up" style="--d:7.2">Lightweight JavaScript ports go first. The original plugin is the fallback.</span></div>
+          </section>
+
+          <!-- 5 · browse (44-54) -->
+          <section class="scene" data-s="44" data-e="54" data-ch="Sources">
+            <div class="shot zoomwin" style="--d:.2;left:15cqw;top:7.5cqw;width:70cqw">
+              <div class="kb" style="--ox:30%;--oy:62%;--z:1.18;--kd:5.2">
+                <img src="/screenshots/en/site.jpg" alt="A source page in Yingxia with category chips and a poster grid">
+                <i class="focusring" style="top:41.3%;height:41%;width:15.4%;animation:ring5 8.4s linear both,tap .3s ease 8s"></i>
+              </div>
+            </div>
+            <div class="subs" style="animation:gone .3s ease 5s both"><span class="up" style="--d:.6">Every source gets its own shelf: categories, pages and filters.</span></div>
+            <div class="subs"><span class="up" style="--d:5.4">All of it, driven by the Siri Remote.</span></div>
+          </section>
+
+          <!-- 6 · search (54-64) -->
+          <section class="scene" data-s="54" data-e="64" data-ch="Global Search">
+            <div class="shot zoomwin" style="--d:.2;left:4cqw;top:9cqw;width:62cqw">
+              <div class="kb" style="--ox:35%;--oy:65%;--z:1.15;--kd:3"><img src="/screenshots/en/search.jpg" alt="Global search streaming results from many sources"></div>
+            </div>
+            <div class="panel col zoomwin" style="--d:.8;left:69cqw;top:9cqw;width:27cqw;height:34.9cqw">
+              <div class="big"><b class="cnt" data-to="365" data-d="1.4" data-dur="5">0</b> <span style="font-size:1.6cqw;font-weight:500">results</span></div>
+              <div class="bar"><i style="animation:fill 5s linear 1.4s both"></i></div>
+              <div class="muted" style="display:flex;justify-content:space-between;font-size:1.25cqw;margin:.4cqw 0 1cqw"><span>Sources answered</span><span><b class="cnt" data-to="19" data-d="1.4" data-dur="5">0</b> / 31</span></div>
+              <div class="srow up" style="--d:1.8"><span>瓜子</span><b>68</b></div>
+              <div class="srow up" style="--d:2.4"><span>糯米</span><b>20</b></div>
+              <div class="srow up" style="--d:3"><span>奶酪</span><b>20</b></div>
+              <div class="srow up" style="--d:3.6"><span>立播</span><b>12</b></div>
+              <div class="srow up" style="--d:4.2"><span>我的云盘</span><small>waiting…</small></div>
+              <div class="muted up" style="--d:4.6;margin-top:auto;font-size:1.2cqw">Less than a minute left</div>
+            </div>
+            <div class="subs" style="animation:gone .3s ease 5s both"><span class="up" style="--d:.6">One search runs across every source in your subscription.</span></div>
+            <div class="subs"><span class="up" style="--d:5.4">Results appear as each source answers. Slow ones never hold up the rest.</span></div>
+          </section>
+
+          <!-- 7 · player (64-75) -->
+          <section class="scene black" data-s="64" data-e="75" data-ch="Player">
+            <div class="video"><img src="/screenshots/en/home.jpg" alt=""></div>
+            <div class="abs up" style="--d:.9;left:5cqw;bottom:16.5cqw"><div style="font-size:3.2cqw;font-weight:700">星河漫游</div><div class="muted" style="font-size:1.4cqw">Episode 1 · <span class="chip sm">HLS · AVPlayer</span></div></div>
+            <div class="transport up" style="--d:1"><i style="animation:fill 40s linear 1s both"></i></div>
+            <div class="abs muted up" style="--d:1;left:5cqw;bottom:10.4cqw;font-size:1.2cqw">12:04</div>
+            <div class="abs muted up" style="--d:1;right:5cqw;bottom:10.4cqw;font-size:1.2cqw">−1:31:12</div>
+            <div class="scrim" style="animation:fade .3s ease 5.4s both,gone .3s ease 8.1s both"></div>
+            <div class="alert" style="left:31cqw;top:13cqw;width:38cqw;animation:zw .35s ease 5.5s both,gone .3s ease 8.1s both">
+              <div class="alert-x">!</div>
+              <b>Couldn’t play this video.</b>
+              <div class="muted" style="margin-top:.6cqw">The source returned an expired link.</div>
+              <div style="display:flex;gap:1cqw;justify-content:center;margin-top:1.6cqw"><span class="btn focus" style="animation:press .25s ease 7.8s">Retry</span><span class="btn">Back</span></div>
+            </div>
+            <div class="abs center" style="top:6cqw;animation:up .4s ease 8.4s both,gone .3s ease 10.2s both"><span class="toast">▶ Playing</span></div>
+            <div class="subs" style="animation:gone .3s ease 5.1s both"><span class="up" style="--d:.6">Video plays through Apple’s own AVPlayer, with HLS.</span></div>
+            <div class="subs"><span class="up" style="--d:5.6">When a link fails you get a clear screen and Retry, not an endless spinner.</span></div>
+          </section>
+
+          <!-- 8 · live (75-84) -->
+          <section class="scene" data-s="75" data-e="84" data-ch="Live TV">
+            <div class="shot zoomwin" style="--d:.2;left:4cqw;top:9cqw;width:62cqw">
+              <div class="kb"><img src="/screenshots/en/live.jpg" alt="Live TV with channel groups and a channel list">
+                <i class="focusring" style="left:7.7%;width:84.6%;height:8.4%;animation:ring8 4s linear both"></i>
+              </div>
+            </div>
+            <div class="panel col zoomwin" style="--d:.8;left:69cqw;top:9cqw;width:27cqw;height:34.9cqw">
+              <h4>Playlists</h4>
+              <div class="srow up" style="--d:1.2"><span>live.m3u</span><small>188 channels</small></div>
+              <div class="srow up" style="--d:1.5"><span>sports.txt</span><small>42 channels</small></div>
+              <h4 style="margin-top:1.6cqw">Groups</h4>
+              <div class="chips up" style="--d:2"><span class="chip acc">All</span><span class="chip">央视频道</span><span class="chip">卫视频道</span><span class="chip">咪视界</span></div>
+              <div class="srow up" style="--d:4.6;margin-top:auto"><span><b class="acc">♥</b> Favorites</span><small>CCTV1, CCTV2</small></div>
+            </div>
+            <div class="subs" style="animation:gone .3s ease 4.4s both"><span class="up" style="--d:.6">Bring M3U or TXT playlists. Channels are laid out like a TV guide.</span></div>
+            <div class="subs"><span class="up" style="--d:4.8">Search channels and keep your favorites close.</span></div>
+          </section>
+
+          <!-- 9 · devices & privacy (84-92) -->
+          <section class="scene" data-s="84" data-e="92" data-ch="Every screen">
+            <div class="devices" style="top:10cqw">
+              <div class="dev pop" style="--d:.3"><div class="d-tv"></div><span>Apple TV</span></div>
+              <div class="dev pop" style="--d:.6"><div class="d-pad"></div><span>iPad</span></div>
+              <div class="dev pop" style="--d:.9"><div class="d-phone"></div><span>iPhone</span></div>
+              <div class="dev pop" style="--d:1.2"><div class="d-mac"></div><span>Mac</span></div>
+            </div>
+            <div class="panel zoomwin" style="--d:3.6;left:27cqw;top:32cqw;width:46cqw;display:grid;grid-template-columns:1fr 1fr;gap:0 2cqw">
+              <div class="row"><i class="cb flip" style="--d:4.2"></i>No account</div>
+              <div class="row"><i class="cb flip" style="--d:4.5"></i>No analytics</div>
+              <div class="row"><i class="cb flip" style="--d:4.8"></i>Stays on device</div>
+              <div class="row"><i class="cb flip" style="--d:5.1"></i>Logs redact secrets</div>
+            </div>
+            <div class="subs" style="animation:gone .3s ease 3.4s both"><span class="up" style="--d:.6">One app for Apple TV, iPhone, iPad and Mac.</span></div>
+            <div class="subs"><span class="up" style="--d:3.8">No account and no analytics. Everything stays on your device.</span></div>
+          </section>
+
+          <!-- 10 · outro (92-100) -->
+          <section class="scene black" data-s="92" data-e="100" data-ch="">
+            <img class="abs app-icon pop" src="/assets/icon-512.png" alt="" style="--d:.2;left:43cqw;top:6cqw;width:14cqw">
+            <div class="abs big center up" style="--d:.8;top:22cqw;font-size:5.6cqw">Yingxia <span class="muted" style="font-weight:500">映匣</span></div>
+            <div class="abs center up" style="--d:1.2;top:30cqw;font-size:2.2cqw">All your sources. One big screen.</div>
+            <div class="abs center up" style="--d:2;top:36cqw;display:flex;justify-content:center;gap:1cqw"><span class="chip">Apple TV · tvOS 17</span><span class="chip">iPhone &amp; iPad · iOS 17</span><span class="chip">Mac · macOS 26</span></div>
+            <div class="abs center up" style="--d:2.8;top:42cqw"><span class="chip acc" style="font-size:1.6cqw">Coming soon</span></div>
+            <div class="abs center muted up" style="--d:3.6;top:48cqw;font-size:1.2cqw">Yingxia doesn’t host or provide any content. It plays the subscriptions you add.</div>
+            <div class="abs center up" style="--d:4.2;top:51.5cqw;font-size:1.5cqw;font-weight:600">yingxia.getmegaportal.com</div>
+          </section>
+
+        </div>
+      </div>
+      <div class="stand"><i class="neck"></i><i class="foot"></i></div>
+      <div class="shelf">
+        <div class="atv" aria-hidden="true"><i class="atv-led" id="led"></i><span>tv</span></div>
+      </div>
+    </div>
+
+    <div class="remote" aria-hidden="true">
+      <i class="r-siri"></i>
+      <span class="r-btn r-power" data-k="power"><svg viewBox="0 0 24 24"><path d="M12 4v7M7.2 7.4a7 7 0 1 0 9.6 0"/></svg></span>
+      <div class="r-pad"><i data-k="up"></i><i data-k="right"></i><i data-k="down"></i><i data-k="left"></i><b data-k="select"></b></div>
+      <span class="r-btn" data-k="back" style="left:8px;top:98px"><svg viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></svg></span>
+      <span class="r-btn" data-k="tv" style="left:40px;top:98px"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="11" rx="1.5"/><path d="M9 20h6"/></svg></span>
+      <span class="r-btn" data-k="play" style="left:8px;top:126px"><svg viewBox="0 0 24 24"><path class="f" d="M4 6.5l7 5.5-7 5.5z"/><path d="M15 7v10M19 7v10"/></svg></span>
+      <span class="r-btn" data-k="mute" style="left:8px;top:154px"><svg viewBox="0 0 24 24"><path class="f" d="M3.5 9.5h3.5l4.5-4v13l-4.5-4H3.5z"/><path d="M15 9.5l5 5M20 9.5l-5 5"/></svg></span>
+      <span class="r-vol"><svg viewBox="0 0 24 24"><path d="M12 7v10M7 12h10"/></svg><svg viewBox="0 0 24 24"><path d="M7 12h10"/></svg></span>
+    </div>
+  </div>
+
+  <div class="ctl">
+    <button id="pp" type="button">Pause</button>
+    <input id="seek" type="range" min="0" max="100" step="0.05" value="0" aria-label="Seek">
+    <output id="clock">0:00 / 1:40</output>
+  </div>
+</div>

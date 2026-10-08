@@ -1,0 +1,14 @@
+// Static-assets Worker: Cloudflare serves the Vite build directly, no server code.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "yingxia-website",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "not_found_handling": "single-page-application"
+  },
+  // Wrangler creates the DNS record and certificate for this hostname on deploy.
+  "routes": [{ "pattern": "yingxia.getmegaportal.com", "custom_domain": true }],
+  // Only serve the custom domain, not the default *.workers.dev address.
+  "workers_dev": false,
+  "preview_urls": false
+}

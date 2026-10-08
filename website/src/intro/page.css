@@ -1,0 +1,13 @@
+/* The standalone /intro/ page around the film. */
+* { box-sizing: border-box; }
+/* Fit the whole film under the bar: ~122px of chrome plus a 16:9 screen, 136px remote column. */
+:root { --film-w: min(1180px, max(520px, calc((100svh - 110px - 122px) * 16 / 9 + 154px))); }
+body {
+  margin: 0; background: #efece6; color: #121212; -webkit-font-smoothing: antialiased;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "PingFang TC", "Hiragino Sans", "Apple SD Gothic Neo", sans-serif;
+}
+.intro-page { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 20px 16px 28px; }
+.intro-bar { width: 100%; max-width: var(--film-w); margin: 0 auto 18px; display: flex; justify-content: space-between; font-size: 15px; font-weight: 600; }
+.intro-bar a { color: #121212; text-decoration: none; border-bottom: 2px solid #121212; }
+.intro-bar span { color: #66655f; font-weight: 500; }
+#film-host { width: 100%; max-width: var(--film-w); margin: 0 auto; }
