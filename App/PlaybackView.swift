@@ -60,6 +60,7 @@ import TVCore
     func start(_ channel: Channel) {
         stop(); error = nil; loading = true
         let activeGeneration = generation
+        Diagnostics.shared.record(.info, "player", "start name=\(channel.name) group=\(channel.group) url=\(channel.url.absoluteString) headers=\(channel.headers.keys.sorted().joined(separator: ","))")
         preparation = Task { [weak self] in
             guard let self else { return }
             var address = channel.url
@@ -70,6 +71,7 @@ import TVCore
                 do { address = try await adapter.start(url: address) }
                 catch {
                     guard self.generation == activeGeneration, !Task.isCancelled else { return }
+                    Diagnostics.shared.record(.error, "player", "proxy failed host=\(channel.url.host() ?? "-") \(Self.describe(error))")
                     self.error = error.localizedDescription; self.loading = false; return
                 }
             }
@@ -92,16 +94,25 @@ import TVCore
         observation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             let status = item.status
             let message = item.error?.localizedDescription
+            let detail = item.error.map(Self.describe) ?? "-"
             Task { @MainActor [weak self] in
                 guard let self, self.generation == activeGeneration else { return }
-                if status == .readyToPlay { self.loading = false }
-                if status == .failed { self.loading = false; self.error = message ?? L10n.text("This media cannot be played. Try another channel or source.") }
+                if status == .readyToPlay {
+                    self.loading = false
+                    Diagnostics.shared.record(.info, "player", "ready host=\(self.transfer.host ?? channel.url.host() ?? "-")")
+                }
+                if status == .failed {
+                    self.loading = false; self.error = message ?? L10n.text("This media cannot be played. Try another channel or source.")
+                    Diagnostics.shared.record(.error, "player", "failed host=\(self.transfer.host ?? channel.url.host() ?? "-") \(self.transfer.failure.map { "upstream=\($0) " } ?? "")\(detail)")
+                }
             }
         }
         failureObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemFailedToPlayToEndTime, object: item, queue: .main) { [weak self] notification in
-            let message = (notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error)?.localizedDescription
+            let failure = notification.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error
+            let message = failure?.localizedDescription
             Task { @MainActor [weak self] in
                 guard let self, self.generation == activeGeneration else { return }
+                Diagnostics.shared.record(.error, "player", "interrupted host=\(self.transfer.host ?? channel.url.host() ?? "-") at=\(Int(self.player.currentTime().seconds.isFinite ? self.player.currentTime().seconds : -1))s \(failure.map(Self.describe) ?? "-")")
                 self.error = message ?? L10n.text("Playback was interrupted."); self.loading = false
             }
         }
@@ -177,7 +188,21 @@ import TVCore
         }
         return true
     }
+    /// Domain and code of the error and its underlying cause: AVFoundation's messages alone
+    /// ("The operation could not be completed") don't tell an HTTP 403 from a decoder failure.
+    nonisolated static func describe(_ error: Error) -> String {
+        let error = error as NSError
+        var text = "error=\(error.domain) \(error.code): \(error.localizedDescription)"
+        if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError {
+            text += " underlying=\(underlying.domain) \(underlying.code): \(underlying.localizedDescription)"
+        }
+        return text
+    }
     func stop() {
+        if player.currentItem != nil {
+            let seconds = player.currentTime().seconds
+            Diagnostics.shared.record(.info, "player", "stop at=\(seconds.isFinite ? Int(seconds) : -1)s")
+        }
         generation = UUID()
         preparation?.cancel(); preparation = nil
         sampler?.cancel(); sampler = nil

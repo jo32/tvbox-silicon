@@ -22,6 +22,22 @@ import Testing
     #expect(String(decoding: exported, as: UTF8.self).contains("7-29"))
 }
 
+@Test func diagnosticWritersSharingAFileKeepEveryLine() async throws {
+    // The app, a second instance and TVBoxProbe all log to the same directory.
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let first = Diagnostics(directory: root), second = Diagnostics(directory: root)
+    for index in 0..<20 {
+        first.record(.info, "test", "first-\(index) " + String(repeating: "a", count: 200 - index * 5))
+        _ = await first.snapshot()
+        second.record(.info, "test", "second-\(index)")
+        _ = await second.snapshot()
+    }
+    let data = try Data(contentsOf: root.appendingPathComponent("runtime-0.jsonl"))
+    let entries = try data.split(separator: 10).map { try JSONDecoder().decode(LogEntry.self, from: Data($0)) }
+    #expect(entries.count == 40)
+}
+
 @Test func diagnosticOverloadAndRedaction() async throws {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }

@@ -136,11 +136,11 @@ public final class Diagnostics: @unchecked Sendable {
         guard handle == nil else { return }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
                                                attributes: [.posixPermissions: 0o700])
-        let url = file(0)
-        if !FileManager.default.fileExists(atPath: url.path) {
-            guard FileManager.default.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600]) else { throw CocoaError(.fileWriteUnknown) }
-        }
-        handle = try FileHandle(forWritingTo: url)
+        // O_APPEND: other processes (a second app instance, TVBoxProbe, the sweep) share these files;
+        // a plain handle writes at its own stale offset and overwrites their lines.
+        let descriptor = open(file(0).path, O_WRONLY | O_APPEND | O_CREAT, 0o600)
+        guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         size = Int(try handle!.seekToEnd())
     }
 
