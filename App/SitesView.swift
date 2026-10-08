@@ -209,7 +209,7 @@ struct VideoDetailView: View {
     }
     var body: some View {
         Group {
-            if detail != nil && isWide {
+            if splitLayout {
                 // Watch-page split: artwork, Play and synopsis on the left; the episode rail
                 // scrolls on its own so the title and playback state stay in view.
                 HStack(alignment: .top, spacing: Layout.gutter + 8) {
@@ -238,14 +238,10 @@ struct VideoDetailView: View {
                 }
             }
         }
-        .safeAreaInset(edge: .bottom) {
-            if busy {
-                // Keyed by the step, so the timer restarts when details turn into resolving a link.
-                LoadingCard { .source(client.site, origin: client.origin, title: busyTitle) }
-                    .id(busyTitle)
-                    .frame(maxWidth: .infinity).padding(.horizontal, Layout.gutter).padding(.bottom, 24)
-            }
-        }
+        .safeAreaInset(edge: .bottom) { if !splitLayout { loadingCard } }
+        // The split has no outer scroll view to absorb a bottom inset: one appearing when Play
+        // starts pushed both columns up under the toolbar. Float the card over it instead.
+        .overlay(alignment: .bottom) { if splitLayout { loadingCard } }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
         .screenBackdrop()
         .screenTitle(video.name).task { if detail == nil { await loadDetail() } }
@@ -273,6 +269,15 @@ struct VideoDetailView: View {
                     Button(choice.name) { Task { await resolve(plan, choice: choice, episode: episode) } }
                 }
             }
+        }
+    }
+    private var splitLayout: Bool { detail != nil && isWide }
+    @ViewBuilder private var loadingCard: some View {
+        if busy {
+            // Keyed by the step, so the timer restarts when details turn into resolving a link.
+            LoadingCard { .source(client.site, origin: client.origin, title: busyTitle) }
+                .id(busyTitle)
+                .frame(maxWidth: .infinity).padding(.horizontal, Layout.gutter).padding(.bottom, 24)
         }
     }
     @ViewBuilder private var playbackBanner: some View {
