@@ -14,7 +14,9 @@ The Mac version is a regular [signed download](https://yingxia.getmegaportal.com
   | iPhone / iPad | built from `TVBox-iOS` | `com.tvbox.yingxia.ios` |
   | Apple TV | built from `TVBox-tvOS` | `com.tvbox.yingxia.tv` |
 
-  The two IPAs are not interchangeable. Sideloadly installs an existing IPA; it doesn't compile this repository's source code. Look for the IPAs on the [Releases page](https://github.com/jo32/tvbox-silicon/releases), or build them yourself with the [developer guide](DEVELOPMENT.md).
+  The two IPAs are not interchangeable. Sideloadly installs an existing IPA; it doesn't compile this repository's source code.
+
+  **Download:** [iPhone & iPad IPA](https://download.getmegaportal.com/yingxia/1.0.1/Yingxia-1.0.1-ios.ipa) · [Apple TV IPA](https://download.getmegaportal.com/yingxia/1.0.1/Yingxia-1.0.1-tvos.ipa). They're also attached to each [GitHub release](https://github.com/jo32/tvbox-silicon/releases), with SHA-256 checksums. To build your own, see the [developer guide](DEVELOPMENT.md).
 
 ## Install on iPhone or iPad
 

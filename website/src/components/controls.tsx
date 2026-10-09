@@ -15,6 +15,18 @@ export function SoonPill({ small = false }: { small?: boolean }) {
 /** The current Mac release on download.getmegaportal.com (R2 bucket megaportal-downloads). */
 export const MAC_DOWNLOAD = "https://download.getmegaportal.com/yingxia/1.0.1/Yingxia-1.0.1-macos-arm64.dmg";
 
+/** iPhone/iPad and Apple TV IPAs for sideloading, next to the Mac release. */
+export const DOWNLOADS = {
+  mac: MAC_DOWNLOAD,
+  ios: "https://download.getmegaportal.com/yingxia/1.0.1/Yingxia-1.0.1-ios.ipa",
+  tv: "https://download.getmegaportal.com/yingxia/1.0.1/Yingxia-1.0.1-tvos.ipa",
+} as const;
+
+export const SIDELOADLY = "https://sideloadly.io/";
+
+/** The full Sideloadly guide (with troubleshooting) in the public repository. */
+export const INSTALL_GUIDE = "https://github.com/jo32/tvbox-silicon/blob/main/Docs/INSTALL.md";
+
 export function DownloadMac({ small = false }: { small?: boolean }) {
   const { t } = useI18n();
   return (

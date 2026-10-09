@@ -8,10 +8,11 @@ export function Hero() {
   const { t, lang } = useI18n();
   return (
     <section className="hero">
-      <div className="badge">
+      <a className="badge" href="#install">
         <img src="/assets/icon-192.png" alt="" width={20} height={20} />
         <span>{t("hero.badge")}</span>
-      </div>
+        <span className="badge-arrow" aria-hidden="true">→</span>
+      </a>
       <Headline as="h1" lines={["hero.l1", "hero.l2"]} animate />
       <p className="lead">{t("hero.sub")}</p>
       <div className="actions">

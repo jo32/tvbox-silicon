@@ -3,6 +3,7 @@ import { Faq } from "./components/Faq";
 import { Features } from "./components/Features";
 import { ClosingCta, Footer } from "./components/Footer";
 import { Hero } from "./components/Hero";
+import { Install } from "./components/Install";
 import { Nav } from "./components/Nav";
 
 export function App() {
@@ -13,6 +14,7 @@ export function App() {
         <Hero />
         <Features />
         <Details />
+        <Install />
         <Faq />
         <ClosingCta />
       </main>
