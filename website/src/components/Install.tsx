@@ -2,16 +2,16 @@ import { useEffect, useState, type ComponentType } from "react";
 import { useI18n } from "../i18n/I18nProvider";
 import { INSTALL, type Platform } from "../i18n/install-strings";
 import { DOWNLOADS, INSTALL_GUIDE, SIDELOADLY } from "./controls";
-import { LaptopIcon, TabletSmartphoneIcon, TvIcon } from "./icons-devices";
+import { AppleTVIcon, IPhoneIPadIcon, MacIcon } from "./icons-devices";
 import { Reveal } from "./Reveal";
 
 /** Pixel heights of the 1600px-wide mockup images, so the page reserves their space. */
 const MOCKUP_HEIGHT: Record<Platform, number> = { mac: 966, ios: 1886, tv: 994 };
 
 const PLATFORMS: { id: Platform; Icon: ComponentType }[] = [
-  { id: "mac", Icon: LaptopIcon },
-  { id: "ios", Icon: TabletSmartphoneIcon },
-  { id: "tv", Icon: TvIcon },
+  { id: "mac", Icon: MacIcon },
+  { id: "ios", Icon: IPhoneIPadIcon },
+  { id: "tv", Icon: AppleTVIcon },
 ];
 
 // Links like /#install-tv open a specific tab.
@@ -65,7 +65,9 @@ export function Install() {
               className={platform === id ? "tab on" : "tab"}
               onClick={() => setPlatform(id)}
             >
-              <Icon />
+              <span className="tab-icon">
+                <Icon />
+              </span>
               <span>{copy.device[id]}</span>
             </button>
           ))}
