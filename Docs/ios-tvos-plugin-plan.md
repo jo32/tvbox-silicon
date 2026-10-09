@@ -79,7 +79,7 @@ SwiftUI app (iOS / tvOS)
 The Mac is where plugin bugs are fastest to find, so fix them there first.
 
 1. Run `Scripts/audit-subscription-playback.py` against the new subscription; record per-source
-   results like `Docs/runtime-status.md`.
+   results in `Docs/on-device-runtime-status.md`.
 2. Generalize native-guard loading in `NativeProbe.initialize`: detect any
    `assets/*-v8.so` / `*_v8.so` guard (`FishGuard`, `ftyguard`) and its `.md5` file instead of
    one hard-coded name. Map its JNI entry points through `NativeProbe` / `AndroidNativeRuntime`.

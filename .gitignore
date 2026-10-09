@@ -15,3 +15,6 @@ __pycache__/
 *.pyc
 
 Review/
+exports/
+.upload-staging/
+.wrangler/

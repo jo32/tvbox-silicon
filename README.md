@@ -2,7 +2,7 @@
 
 Yingxia is a native SwiftUI TVBox client for macOS 14+, iOS/iPadOS 17+, and tvOS 17+. The three app targets share subscription handling, browsing, favorites, localization, and AVPlayer playback.
 
-The Mac app includes experimental local execution of JAR, JavaScript, and Python plugins. It bundles a JVM, an Android ELF/JNI compatibility layer, and a DEX converter. Several sources have returned real catalogs, and one source has been verified playing 1080p video. Full plugin execution on iOS and tvOS is not implemented. See the [runtime status](Docs/runtime-status.md) for the tested sources and limitations.
+The Mac app includes experimental local execution of JAR, JavaScript, and Python plugins. It bundles a JVM, an Android ELF/JNI compatibility layer, and a DEX converter. Several sources have returned real catalogs, and one source has been verified playing 1080p video. iOS and tvOS run plugin JARs in-process through an embedded JVM; this is verified on arm64 simulators, while physical devices and all-source parity are not yet verified. See the [on-device runtime status](Docs/on-device-runtime-status.md) for measurements and limitations.
 
 ## Build and run
 
@@ -151,8 +151,7 @@ Each Mac source keeps a reusable process and persistent preferences. Idle proces
 
 The basic DexLoom interpreter remains available for controlled tests on all platforms. It does not provide complete Android plugin compatibility.
 
-- [Runtime status and validation evidence](Docs/runtime-status.md)
-- [Static plugin audit](Docs/fantaiying-plugin-audit.json)
+- [On-device runtime status](Docs/on-device-runtime-status.md)
 - [Third-party dependency notes](Docs/THIRD_PARTY_NOTICES.md)
 - [FongMi/TV reference implementation](https://github.com/FongMi/TV), reference commit `c616c0aa3613e87529791587a9f71b78c278c991`, GPL-3.0. An unmodified local reference checkout may exist at `reference/FongMi-TV/`; that directory is ignored by this project.
 - [DexLoom](https://github.com/speedyfriend433/DexLoom), MIT. Its license and version record are retained under `Vendor/DexRuntime/`.
@@ -217,4 +216,4 @@ Open Settings → Cloud Drive Accounts → Manage Cloud Accounts. Quark and UC o
 
 The host supplies `Cloud-drive` JSON (`quarkCookie`, `ucCookie`, `ucToken`, `token`) and existing `cookie`/`uc_cookie`/`token` extension references through a per-process loopback server with an unguessable URL. It preserves other source settings. CatVod proxy responses retain status, headers, range requests, and streaming bodies. FTY `ProxyOrigin.getUrl` and `getOwnProxyUrl` use the host's server, including its separate `proxyDrive` routing. Recent proxy traffic keeps the source process alive.
 
-Validation includes controlled configuration/streaming checks, Swift tests, and a real WoGG initialization with synthetic credentials: all four cloud initializers fetched the configuration, and Quark retained credential state. This does **not** verify account authorization or end-to-end playback. Real playback still needs the user's valid account, provider access, compatible media, and a working source. Android plugin QR dialogs are not emulated; use the account settings login page. iPhone and Apple TV plugin execution remains unavailable.
+Validation includes controlled configuration/streaming checks, Swift tests, and a real WoGG initialization with synthetic credentials: all four cloud initializers fetched the configuration, and Quark retained credential state. This does **not** verify account authorization or end-to-end playback. Real playback still needs the user's valid account, provider access, compatible media, and a working source. Android plugin QR dialogs are not emulated; use the account settings login page.
