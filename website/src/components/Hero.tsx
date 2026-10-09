@@ -1,5 +1,5 @@
 import { useI18n } from "../i18n/I18nProvider";
-import { DownloadMac } from "./controls";
+import { DownloadButton } from "./controls";
 import { Headline } from "./Headline";
 import { HeroFilm } from "./HeroFilm";
 import { Reveal } from "./Reveal";
@@ -16,7 +16,7 @@ export function Hero() {
       <Headline as="h1" lines={["hero.l1", "hero.l2"]} animate />
       <p className="lead">{t("hero.sub")}</p>
       <div className="actions">
-        <DownloadMac />
+        <DownloadButton />
         <a className="link" href="#features">
           {t("hero.more")} <span aria-hidden="true">↓</span>
         </a>

@@ -18,10 +18,15 @@ export interface InstallCopy {
   tag: Record<Platform, string>;
   dl: Record<Platform, string>;
   sideloadly: string;
+  /** Product-style title per platform, e.g. "Yingxia for Mac". */
+  title: Record<Platform, string>;
+  /** Short download button label. */
+  get: string;
+  /** Heading above the steps. */
+  how: string;
   steps: Record<Platform, Step[]>;
   keep: { t: string; b: string; free: string; freeTime: string; paid: string; paidTime: string; tip: string };
   guide: string;
-  cta: string;
 }
 
 export const INSTALL: Record<Lang, InstallCopy> = {
@@ -35,6 +40,9 @@ export const INSTALL: Record<Lang, InstallCopy> = {
     tag: { mac: "Signed & notarized", ios: "Preview · Sideload", tv: "Preview · Sideload" },
     dl: { mac: "Download for Mac", ios: "Download the iPhone & iPad IPA", tv: "Download the Apple TV IPA" },
     sideloadly: "Get Sideloadly",
+    title: { mac: "Yingxia for Mac", ios: "Yingxia for iPhone and iPad", tv: "Yingxia for Apple TV" },
+    get: "Download",
+    how: "Install in a few steps.",
     steps: {
       mac: [
         { t: "Download", b: "Get the disk image. It's signed and notarized by Apple." },
@@ -66,7 +74,6 @@ export const INSTALL: Record<Lang, InstallCopy> = {
       tip: "Reinstall with the same Apple account to keep your favorites and history.",
     },
     guide: "Full guide and troubleshooting",
-    cta: "Install on iPhone, iPad & Apple TV",
   },
   ja: {
     nav: "インストール",
@@ -78,6 +85,9 @@ export const INSTALL: Record<Lang, InstallCopy> = {
     tag: { mac: "署名・公証済み", ios: "プレビュー · サイドロード", tv: "プレビュー · サイドロード" },
     dl: { mac: "Mac 版をダウンロード", ios: "iPhone・iPad 用 IPA をダウンロード", tv: "Apple TV 用 IPA をダウンロード" },
     sideloadly: "Sideloadly を入手",
+    title: { mac: "Mac 版 映匣", ios: "iPhone・iPad 版 映匣", tv: "Apple TV 版 映匣" },
+    get: "ダウンロード",
+    how: "数ステップでインストール。",
     steps: {
       mac: [
         { t: "ダウンロード", b: "Apple による署名・公証済みのディスクイメージを入手します。" },
@@ -109,7 +119,6 @@ export const INSTALL: Record<Lang, InstallCopy> = {
       tip: "同じ Apple アカウントで再インストールすれば、お気に入りや履歴はそのまま残ります。",
     },
     guide: "詳しい手順とトラブルシューティング",
-    cta: "iPhone・iPad・Apple TV にインストール",
   },
   ko: {
     nav: "설치",
@@ -121,6 +130,9 @@ export const INSTALL: Record<Lang, InstallCopy> = {
     tag: { mac: "서명 및 공증 완료", ios: "프리뷰 · 사이드로드", tv: "프리뷰 · 사이드로드" },
     dl: { mac: "Mac용 다운로드", ios: "iPhone·iPad용 IPA 다운로드", tv: "Apple TV용 IPA 다운로드" },
     sideloadly: "Sideloadly 받기",
+    title: { mac: "Mac용 Yingxia", ios: "iPhone·iPad용 Yingxia", tv: "Apple TV용 Yingxia" },
+    get: "다운로드",
+    how: "몇 단계면 설치 완료.",
     steps: {
       mac: [
         { t: "다운로드", b: "Apple의 서명과 공증을 받은 디스크 이미지를 받습니다." },
@@ -152,7 +164,6 @@ export const INSTALL: Record<Lang, InstallCopy> = {
       tip: "같은 Apple 계정으로 다시 설치하면 즐겨찾기와 기록이 그대로 유지됩니다.",
     },
     guide: "전체 가이드 및 문제 해결",
-    cta: "iPhone·iPad·Apple TV에 설치",
   },
   "zh-Hant": {
     nav: "安裝",
@@ -164,6 +175,9 @@ export const INSTALL: Record<Lang, InstallCopy> = {
     tag: { mac: "已簽署並公證", ios: "預覽 · 側載", tv: "預覽 · 側載" },
     dl: { mac: "下載 Mac 版", ios: "下載 iPhone 與 iPad 版 IPA", tv: "下載 Apple TV 版 IPA" },
     sideloadly: "取得 Sideloadly",
+    title: { mac: "映匣 Mac 版", ios: "映匣 iPhone 與 iPad 版", tv: "映匣 Apple TV 版" },
+    get: "下載",
+    how: "幾個步驟就能安裝。",
     steps: {
       mac: [
         { t: "下載", b: "取得經 Apple 簽署與公證的磁碟映像檔。" },
@@ -195,6 +209,5 @@ export const INSTALL: Record<Lang, InstallCopy> = {
       tip: "用同一個 Apple 帳號重新安裝，收藏與紀錄都會保留。",
     },
     guide: "完整指南與疑難排解",
-    cta: "安裝到 iPhone、iPad 與 Apple TV",
   },
 };

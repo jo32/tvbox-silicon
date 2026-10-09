@@ -2,19 +2,18 @@ import { useI18n } from "../i18n/I18nProvider";
 import type { TextKey } from "../i18n/strings";
 import { Headline } from "./Headline";
 import { Reveal } from "./Reveal";
-import { Stage, type StageTone } from "./Stage";
+import { Stage } from "./Stage";
 
 interface Feature {
   shot: string;
-  tone: StageTone;
   title: TextKey;
   body: TextKey;
 }
 
 const FEATURES: Feature[] = [
-  { shot: "live", tone: "dusk", title: "c.live.t", body: "c.live.b" },
-  { shot: "search", tone: "night", title: "c.search.t", body: "c.search.b" },
-  { shot: "site", tone: "dawn", title: "c.site.t", body: "c.site.b" },
+  { shot: "live", title: "c.live.t", body: "c.live.b" },
+  { shot: "search", title: "c.search.t", body: "c.search.b" },
+  { shot: "site", title: "c.site.t", body: "c.site.b" },
 ];
 
 export function Features() {
@@ -33,11 +32,11 @@ export function Features() {
         ))}
       </Reveal>
 
-      {FEATURES.map(({ shot, tone, title, body }) => (
+      {FEATURES.map(({ shot, title, body }) => (
         <Reveal as="article" className="card" key={shot}>
           <h3>{t(title)}</h3>
           <p>{t(body)}</p>
-          <Stage shot={shot} tone={tone} alt={t(title)} />
+          <Stage shot={shot} alt={t(title)} />
         </Reveal>
       ))}
       {t("shots.note") && <p className="note">{t("shots.note")}</p>}

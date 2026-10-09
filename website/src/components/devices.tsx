@@ -1,120 +1,133 @@
-// Device illustrations for the install picker: a MacBook, an iPad with an iPhone, and an Apple TV
-// with its Siri Remote in front of a TV. Each screen shows a tiny poster grid like the app.
+// Product-style device renders for the install section. Each screen shows a real app screenshot.
 
-const POSTERS = ["#ff9f6e", "#7d8cff", "#5ad1c4", "#ff7a9a", "#ffd36e", "#9b7dff"];
+interface Props {
+  /** Screenshot URL shown on the device's screen(s). */
+  shot: string;
+}
 
-/** A row of poster tiles inside a screen rectangle. */
-function Posters({ x, y, w, h, n = 4 }: { x: number; y: number; w: number; h: number; n?: number }) {
-  const gap = w * 0.04;
-  const pw = (w - gap * (n - 1)) / n;
+const Aluminum = ({ id, light = "#e9e9ec", dark = "#b5b6bb" }: { id: string; light?: string; dark?: string }) => (
+  <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stopColor={light} />
+    <stop offset="1" stopColor={dark} />
+  </linearGradient>
+);
+
+/** A screenshot clipped to a rounded screen. */
+function Screen({ id, shot, x, y, w, h, r }: { id: string; shot: string; x: number; y: number; w: number; h: number; r: number }) {
   return (
-    <g>
-      {Array.from({ length: n }, (_, i) => (
-        <rect key={i} x={x + i * (pw + gap)} y={y} width={pw} height={h} rx={Math.min(3, pw / 6)} fill={POSTERS[i % POSTERS.length]} />
-      ))}
-    </g>
+    <>
+      <clipPath id={id}>
+        <rect x={x} y={y} width={w} height={h} rx={r} />
+      </clipPath>
+      <rect x={x} y={y} width={w} height={h} rx={r} fill="#111" />
+      <image href={shot} x={x} y={y} width={w} height={h} preserveAspectRatio="xMidYMid slice" clipPath={`url(#${id})`} />
+      {/* Glass sheen */}
+      <rect x={x} y={y} width={w} height={h} rx={r} fill="url(#dev-sheen)" />
+    </>
   );
 }
 
-function Wallpaper({ id }: { id: string }) {
-  return (
-    <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stopColor="#1d2464" />
-      <stop offset="0.6" stopColor="#2a3c9a" />
-      <stop offset="1" stopColor="#3a7fb8" />
-    </linearGradient>
-  );
-}
+const Sheen = () => (
+  <linearGradient id="dev-sheen" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stopColor="#fff" stopOpacity="0.10" />
+    <stop offset="0.45" stopColor="#fff" stopOpacity="0" />
+  </linearGradient>
+);
 
-export function MacBookArt() {
+const Shadow = ({ cx, cy, rx, ry }: { cx: number; cy: number; rx: number; ry: number }) => (
+  <>
+    <radialGradient id="dev-shadow">
+      <stop offset="0" stopColor="#000" stopOpacity="0.22" />
+      <stop offset="1" stopColor="#000" stopOpacity="0" />
+    </radialGradient>
+    <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="url(#dev-shadow)" />
+  </>
+);
+
+export function MacBookArt({ shot }: Props) {
   return (
-    <svg viewBox="0 0 240 150" aria-hidden="true">
+    <svg viewBox="0 0 800 470" role="img" aria-label="MacBook">
       <defs>
-        <Wallpaper id="art-mac-wall" />
-        <linearGradient id="art-mac-base" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#ececf0" />
-          <stop offset="1" stopColor="#b4b4bc" />
-        </linearGradient>
+        <Aluminum id="mb-lid" light="#d9dade" dark="#bcbdc2" />
+        <Aluminum id="mb-base" light="#ececef" dark="#a9aab0" />
+        <Sheen />
       </defs>
-      <rect x="40" y="14" width="160" height="106" rx="9" fill="#1a1a1d" />
-      <rect x="45" y="19" width="150" height="96" rx="3" fill="url(#art-mac-wall)" />
-      <rect x="112" y="19" width="16" height="4.5" rx="2" fill="#1a1a1d" />
-      {/* App window */}
-      <rect x="58" y="32" width="124" height="72" rx="5" fill="#121214" />
-      <circle cx="64" cy="37" r="1.6" fill="#ff5f57" />
-      <circle cx="69" cy="37" r="1.6" fill="#febc2e" />
-      <circle cx="74" cy="37" r="1.6" fill="#28c840" />
-      <rect x="64" y="44" width="30" height="4" rx="2" fill="#f39a5b" />
-      <Posters x={64} y={53} w={112} h={22} n={5} />
-      <Posters x={64} y={79} w={112} h={20} n={5} />
-      <path d="M14 121h212l-7 8.5a7 7 0 0 1-5.4 2.5H26.4a7 7 0 0 1-5.4-2.5z" fill="url(#art-mac-base)" />
-      <rect x="14" y="119" width="212" height="4" rx="2" fill="#dcdce2" />
-      <rect x="102" y="119" width="36" height="3" rx="1.5" fill="#a7a7af" />
+      <Shadow cx={400} cy={452} rx={380} ry={14} />
+      <rect x="104" y="4" width="592" height="390" rx="26" fill="url(#mb-lid)" />
+      <rect x="108" y="8" width="584" height="382" rx="23" fill="#0b0b0d" />
+      <Screen id="mb-screen" shot={shot} x={122} y={22} w={556} h={350} r={8} />
+      <rect x="378" y="22" width="44" height="11" rx="5.5" fill="#0b0b0d" />
+      <path d="M36 394h728v8c0 14-9 24-24 28-80 14-210 18-340 18s-260-4-340-18c-15-4-24-14-24-28z" fill="url(#mb-base)" />
+      <rect x="36" y="392" width="728" height="6" rx="3" fill="#dfe0e4" />
+      <path d="M340 394h120v3a6 6 0 0 1-6 6H346a6 6 0 0 1-6-6z" fill="#a3a4aa" />
     </svg>
   );
 }
 
-export function IPhoneIPadArt() {
+export function IPhoneIPadArt({ shot }: Props) {
   return (
-    <svg viewBox="0 0 240 150" aria-hidden="true">
+    <svg viewBox="0 0 800 470" role="img" aria-label="iPad and iPhone">
       <defs>
-        <Wallpaper id="art-ios-wall" />
+        <Aluminum id="ipad-frame" light="#e2e3e7" dark="#b9bac0" />
+        <Aluminum id="iphone-frame" light="#5b5b60" dark="#2e2e32" />
+        <Sheen />
       </defs>
+      <Shadow cx={400} cy={455} rx={360} ry={12} />
       {/* iPad, landscape */}
-      <rect x="22" y="16" width="156" height="114" rx="12" fill="#1a1a1d" />
-      <rect x="29" y="23" width="142" height="100" rx="6" fill="url(#art-ios-wall)" />
-      <rect x="38" y="32" width="34" height="5" rx="2.5" fill="#f39a5b" />
-      <Posters x={38} y={44} w={124} h={34} n={5} />
-      <Posters x={38} y={84} w={124} h={30} n={5} />
-      {/* iPhone in front */}
-      <rect x="156" y="36" width="60" height="110" rx="13" fill="#2a2a2e" />
-      <rect x="158.5" y="38.5" width="55" height="105" rx="11" fill="#0e0e10" />
-      <rect x="161.5" y="41.5" width="49" height="99" rx="9" fill="url(#art-ios-wall)" />
-      <rect x="177" y="45" width="18" height="5.5" rx="2.75" fill="#0e0e10" />
-      <rect x="166" y="56" width="20" height="4" rx="2" fill="#f39a5b" />
-      <Posters x={166} y={64} w={40} h={26} n={2} />
-      <Posters x={166} y={95} w={40} h={26} n={2} />
-      <rect x="175" y="133" width="22" height="2" rx="1" fill="#ffffff" opacity="0.7" />
+      <rect x="40" y="34" width="580" height="410" rx="36" fill="url(#ipad-frame)" />
+      <rect x="45" y="39" width="570" height="400" rx="32" fill="#0a0a0c" />
+      <Screen id="ipad-screen" shot={shot} x={64} y={58} w={532} h={362} r={16} />
+      {/* iPhone */}
+      <rect x="560" y="128" width="184" height="330" rx="40" fill="url(#iphone-frame)" />
+      <rect x="564" y="132" width="176" height="322" rx="37" fill="#050506" />
+      <Screen id="iphone-screen" shot={shot} x={572} y={140} w={160} h={306} r={30} />
+      <rect x="630" y="150" width="44" height="13" rx="6.5" fill="#050506" />
     </svg>
   );
 }
 
-export function AppleTVArt() {
+export function AppleTVArt({ shot }: Props) {
   return (
-    <svg viewBox="0 0 240 150" aria-hidden="true">
+    <svg viewBox="0 0 800 470" role="img" aria-label="Apple TV and Siri Remote">
       <defs>
-        <Wallpaper id="art-tv-wall" />
-        <linearGradient id="art-tv-box" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#3a3a3f" />
-          <stop offset="0.18" stopColor="#1b1b1e" />
-          <stop offset="1" stopColor="#0c0c0e" />
+        <Aluminum id="tv-stand" light="#d6d7db" dark="#9fa0a6" />
+        <Aluminum id="remote" light="#f3f3f5" dark="#c4c5cb" />
+        <linearGradient id="atv-box" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#3c3c41" />
+          <stop offset="0.22" stopColor="#18181b" />
+          <stop offset="1" stopColor="#0a0a0b" />
         </linearGradient>
-        <linearGradient id="art-tv-remote" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#c9c9cf" />
-          <stop offset="0.5" stopColor="#f1f1f4" />
-          <stop offset="1" stopColor="#bdbdc4" />
-        </linearGradient>
+        <Sheen />
       </defs>
+      <Shadow cx={400} cy={456} rx={370} ry={12} />
       {/* TV */}
-      <rect x="20" y="8" width="176" height="102" rx="5" fill="#111113" />
-      <rect x="24" y="12" width="168" height="94" rx="2" fill="url(#art-tv-wall)" />
-      <rect x="34" y="20" width="40" height="5" rx="2.5" fill="#f39a5b" />
-      <Posters x={34} y={32} w={148} h={34} n={5} />
-      <Posters x={34} y={72} w={148} h={26} n={5} />
-      <rect x="98" y="110" width="20" height="8" fill="#2b2b30" />
-      <rect x="76" y="117" width="64" height="4" rx="2" fill="#3a3a40" />
-      {/* Apple TV box */}
-      <rect x="40" y="122" width="84" height="22" rx="7" fill="url(#art-tv-box)" />
-      <rect x="44" y="124" width="76" height="2" rx="1" fill="#ffffff" opacity="0.12" />
+      <rect x="60" y="6" width="620" height="358" rx="10" fill="#0b0b0c" />
+      <Screen id="tv-screen" shot={shot} x={67} y={13} w={606} h={341} r={3} />
+      <path d="M340 364h60l10 66h-80z" fill="url(#tv-stand)" />
+      <rect x="270" y="428" width="200" height="10" rx="5" fill="url(#tv-stand)" />
+      {/* Apple TV */}
+      <rect x="86" y="396" width="160" height="52" rx="16" fill="url(#atv-box)" />
+      <rect x="96" y="399" width="140" height="3" rx="1.5" fill="#fff" opacity="0.14" />
       {/* Siri Remote */}
-      <rect x="196" y="56" width="26" height="90" rx="9" fill="url(#art-tv-remote)" stroke="#a9a9b1" strokeWidth="0.8" />
-      <circle cx="209" cy="72" r="10" fill="#dedee3" stroke="#b4b4bb" strokeWidth="0.8" />
-      <circle cx="209" cy="72" r="5.2" fill="#ececf0" stroke="#c2c2c8" strokeWidth="0.6" />
-      <circle cx="203.5" cy="91" r="3.2" fill="#2a2a2e" />
-      <circle cx="214.5" cy="91" r="3.2" fill="#2a2a2e" />
-      <circle cx="203.5" cy="100" r="3.2" fill="#2a2a2e" />
-      <rect x="211.3" y="95" width="6.4" height="17" rx="3.2" fill="#2a2a2e" />
-      <circle cx="203.5" cy="109" r="3.2" fill="#2a2a2e" />
+      <rect x="704" y="296" width="36" height="156" rx="15" fill="url(#remote)" stroke="#b3b4ba" strokeWidth="1" />
+      <circle cx="722" cy="324" r="13.5" fill="#e4e4e8" stroke="#b8b9bf" strokeWidth="0.8" />
+      <circle cx="722" cy="324" r="7" fill="#efeff2" stroke="#c6c7cc" strokeWidth="0.6" />
+      <circle cx="714" cy="351" r="4.5" fill="#1d1d20" />
+      <circle cx="730" cy="351" r="4.5" fill="#1d1d20" />
+      <circle cx="714" cy="364" r="4.5" fill="#1d1d20" />
+      <rect x="725.5" y="359.5" width="9" height="26" rx="4.5" fill="#1d1d20" />
+      <circle cx="714" cy="377" r="4.5" fill="#1d1d20" />
     </svg>
   );
 }
+
+// Small line icons for the tab bar.
+export const MacIcon = () => (
+  <svg viewBox="0 0 36 36" aria-hidden="true"><rect x="7" y="8" width="22" height="15" rx="1.8" /><path d="M3.5 26.5h29" /></svg>
+);
+export const DevicesIcon = () => (
+  <svg viewBox="0 0 36 36" aria-hidden="true"><rect x="4" y="7" width="21" height="16" rx="2.4" /><rect x="22" y="13" width="10" height="17" rx="2.4" /></svg>
+);
+export const TVIcon = () => (
+  <svg viewBox="0 0 36 36" aria-hidden="true"><rect x="4" y="7" width="28" height="17" rx="1.6" /><path d="M14 29h8M18 24v5" /></svg>
+);

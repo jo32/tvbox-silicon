@@ -27,10 +27,11 @@ export const SIDELOADLY = "https://sideloadly.io/";
 /** The full Sideloadly guide (with troubleshooting) in the public repository. */
 export const INSTALL_GUIDE = "https://github.com/jo32/tvbox-silicon/blob/main/Docs/INSTALL.md";
 
-export function DownloadMac({ small = false }: { small?: boolean }) {
+/** Goes to the install section, which offers the Mac download and the iPhone, iPad and Apple TV IPAs. */
+export function DownloadButton({ small = false }: { small?: boolean }) {
   const { t } = useI18n();
   return (
-    <a className={small ? "pill pill-dark pill-sm" : "pill pill-dark"} href={MAC_DOWNLOAD}>
+    <a className={small ? "pill pill-dark pill-sm" : "pill pill-dark"} href="#install">
       <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>
       {t("dl.mac")}
     </a>

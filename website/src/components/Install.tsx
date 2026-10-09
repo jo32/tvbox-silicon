@@ -2,13 +2,13 @@ import { useEffect, useState, type ComponentType } from "react";
 import { useI18n } from "../i18n/I18nProvider";
 import { INSTALL, type Platform } from "../i18n/install-strings";
 import { DOWNLOADS, INSTALL_GUIDE, SIDELOADLY } from "./controls";
-import { AppleTVArt, IPhoneIPadArt, MacBookArt } from "./devices";
+import { AppleTVArt, DevicesIcon, IPhoneIPadArt, MacBookArt, MacIcon, TVIcon } from "./devices";
 import { Reveal } from "./Reveal";
 
-const PLATFORMS: { id: Platform; Art: ComponentType }[] = [
-  { id: "mac", Art: MacBookArt },
-  { id: "ios", Art: IPhoneIPadArt },
-  { id: "tv", Art: AppleTVArt },
+const PLATFORMS: { id: Platform; Icon: ComponentType; Art: ComponentType<{ shot: string }> }[] = [
+  { id: "mac", Icon: MacIcon, Art: MacBookArt },
+  { id: "ios", Icon: DevicesIcon, Art: IPhoneIPadArt },
+  { id: "tv", Icon: TVIcon, Art: AppleTVArt },
 ];
 
 // Links like /#install-tv open a specific tab.
@@ -22,17 +22,12 @@ function initialPlatform(): Platform {
   return hashPlatform() ?? (/iPhone|iPad|iPod/.test(navigator.userAgent) ? "ios" : "mac");
 }
 
-const DownloadGlyph = () => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
-  </svg>
-);
-
 export function Install() {
-  const { lang } = useI18n();
+  const { lang, shot } = useI18n();
   const copy = INSTALL[lang];
   const [platform, setPlatform] = useState<Platform>(initialPlatform);
   const sideload = platform !== "mac";
+  const Art = PLATFORMS.find((p) => p.id === platform)!.Art;
 
   useEffect(() => {
     const onHash = () => {
@@ -56,78 +51,78 @@ export function Install() {
       </Reveal>
 
       <Reveal>
-        <div className="device-picker" role="tablist" aria-label={copy.nav}>
-        {PLATFORMS.map(({ id, Art }) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            id={`install-${id}`}
-            aria-selected={platform === id}
-            aria-controls="install-panel"
-            className={platform === id ? "device on" : "device"}
-            onClick={() => setPlatform(id)}
-          >
-            <span className="device-art">
-              <Art />
-            </span>
-            <span className="device-name">{copy.device[id]}</span>
-            <span className="device-req">{copy.req[id]}</span>
-            <span className={id === "mac" ? "device-tag signed" : "device-tag"}>{copy.tag[id]}</span>
-          </button>
-        ))}
+        <div className="tabnav" role="tablist" aria-label={copy.nav}>
+          {PLATFORMS.map(({ id, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              id={`install-${id}`}
+              aria-selected={platform === id}
+              aria-controls="install-panel"
+              className={platform === id ? "tab on" : "tab"}
+              onClick={() => setPlatform(id)}
+            >
+              <Icon />
+              <span>{copy.device[id]}</span>
+            </button>
+          ))}
         </div>
       </Reveal>
 
-      <div className={`install-panel tone-${platform}`} id="install-panel" role="tabpanel" aria-labelledby={`install-${platform}`}>
-        <div className="install-actions">
-          <a className="pill pill-light" href={DOWNLOADS[platform]}>
-            <DownloadGlyph />
-            {copy.dl[platform]}
-          </a>
-          {sideload && (
-            <a className="pill pill-glass" href={SIDELOADLY} target="_blank" rel="noreferrer">
-              {copy.sideloadly} <span aria-hidden="true">↗</span>
+      <div className="install-panel" id="install-panel" role="tabpanel" aria-labelledby={`install-${platform}`}>
+        <div className="showcase" key={platform}>
+          <div className="showcase-art">
+            <Art shot={shot("home")} />
+          </div>
+          <p className={sideload ? "eyebrow" : "eyebrow signed"}>{copy.tag[platform]}</p>
+          <h3 className="product">{copy.title[platform]}</h3>
+          <p className="product-req">{copy.req[platform]}</p>
+          <div className="product-actions">
+            <a className="btn-blue" href={DOWNLOADS[platform]}>
+              {copy.get}
             </a>
-          )}
+            {sideload && (
+              <a className="link-blue" href={SIDELOADLY} target="_blank" rel="noreferrer">
+                {copy.sideloadly} <span aria-hidden="true">›</span>
+              </a>
+            )}
+          </div>
         </div>
 
-        <ol className="steps" key={platform}>
-          {copy.steps[platform].map((step, i) => (
-            <li className="step" key={i} style={{ animationDelay: `${i * 70}ms` }}>
-              <span className="step-n">{i + 1}</span>
-              <h4>{step.t}</h4>
-              <p>{step.b}</p>
-            </li>
-          ))}
-        </ol>
+        <div className="how">
+          <h3 className="how-title">{copy.how}</h3>
+          <ol className={`steps n${copy.steps[platform].length}`} key={platform}>
+            {copy.steps[platform].map((step, i) => (
+              <li className="step" key={i}>
+                <span className="step-n">{i + 1}</span>
+                <h4>{step.t}</h4>
+                <p>{step.b}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
 
         {sideload && (
           <div className="keep">
-            <div className="keep-text">
-              <h4>{copy.keep.t}</h4>
-              <p>{copy.keep.b}</p>
-              <p className="keep-tip">{copy.keep.tip}</p>
-            </div>
-            <div className="keep-bars">
-              <div className="bar-row">
-                <span>{copy.keep.free}</span>
-                <b>{copy.keep.freeTime}</b>
-                <i className="bar"><i style={{ width: `${(7 / 365) * 100}%` }} /></i>
+            <h3 className="how-title">{copy.keep.t}</h3>
+            <div className="keep-stats">
+              <div className="stat">
+                <span className="stat-value">{copy.keep.freeTime}</span>
+                <span className="stat-label">{copy.keep.free}</span>
               </div>
-              <div className="bar-row">
-                <span>{copy.keep.paid}</span>
-                <b>{copy.keep.paidTime}</b>
-                <i className="bar"><i style={{ width: "100%" }} /></i>
+              <div className="stat">
+                <span className="stat-value">{copy.keep.paidTime}</span>
+                <span className="stat-label">{copy.keep.paid}</span>
               </div>
             </div>
+            <p className="keep-body">
+              {copy.keep.b} {copy.keep.tip}
+            </p>
+            <a className="link-blue" href={INSTALL_GUIDE} target="_blank" rel="noreferrer">
+              {copy.guide} <span aria-hidden="true">›</span>
+            </a>
           </div>
-        )}
-
-        {sideload && (
-          <a className="install-guide" href={INSTALL_GUIDE} target="_blank" rel="noreferrer">
-            {copy.guide} <span aria-hidden="true">→</span>
-          </a>
         )}
       </div>
     </section>

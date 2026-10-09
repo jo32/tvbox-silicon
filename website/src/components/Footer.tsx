@@ -1,21 +1,17 @@
 import { useI18n } from "../i18n/I18nProvider";
-import { INSTALL } from "../i18n/install-strings";
-import { Brand, LanguageSelect, DownloadMac } from "./controls";
+import { Brand, LanguageSelect, DownloadButton } from "./controls";
 import { Headline } from "./Headline";
 import { Reveal } from "./Reveal";
 
 export function ClosingCta() {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   return (
     <Reveal as="section" className="section cta">
       <img className="cta-icon" src="/assets/icon-512.png" alt="" width={96} height={96} />
       <Headline lines={["cta.l1", "cta.l2"]} small />
       <p className="lead">{t("cta.sub")}</p>
       <div className="actions">
-        <DownloadMac />
-        <a className="link" href="#install">
-          {INSTALL[lang].cta} <span aria-hidden="true">→</span>
-        </a>
+        <DownloadButton />
       </div>
     </Reveal>
   );

@@ -1,6 +1,6 @@
 import { useI18n } from "../i18n/I18nProvider";
 import { INSTALL } from "../i18n/install-strings";
-import { Brand, LanguageSelect, DownloadMac } from "./controls";
+import { Brand, LanguageSelect, DownloadButton } from "./controls";
 
 export function Nav() {
   const { t, lang } = useI18n();
@@ -15,7 +15,7 @@ export function Nav() {
         </nav>
         <div className="nav-actions">
           <LanguageSelect />
-          <DownloadMac small />
+          <DownloadButton small />
         </div>
       </div>
     </header>
