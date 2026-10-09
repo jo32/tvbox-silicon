@@ -164,8 +164,7 @@ a.badge:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(0, 0, 0,
   position: relative; font: inherit; font-size: 13px; color: var(--muted); background: none; border: 0; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0 24px 14px; white-space: nowrap; transition: color 0.2s ease;
 }
-.tab img { height: 48px; width: auto; margin-bottom: 4px; transition: transform 0.25s ease; }
-.tab:hover img { transform: translateY(-2px); }
+.tab svg { width: 36px; height: 36px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 .tab:hover, .tab.on { color: var(--ink); }
 .tab.on::after { content: ""; position: absolute; left: 18px; right: 18px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--ink); }
 .tab:focus-visible { outline: 2px solid #0071e3; outline-offset: 2px; border-radius: 8px; }
