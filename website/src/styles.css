@@ -184,7 +184,9 @@ a.badge:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(0, 0, 0,
 .showcase { display: flex; flex-direction: column; align-items: center; text-align: center; animation: showcase-in 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 @keyframes showcase-in { from { opacity: 0; transform: translateY(16px); } }
 .showcase-art { width: min(800px, 100%); }
-.showcase-art svg { display: block; width: 100%; height: auto; }
+.showcase-art img { display: block; width: 100%; height: auto; }
+/* The iPad and iPhone pair is portrait, so keep it about as tall as the landscape mockups. */
+.showcase-art.ios { width: min(480px, 100%); }
 .eyebrow { margin-top: 32px; font-size: 15px; font-weight: 600; color: #bf4800; }
 .eyebrow.signed { color: #1d7d3f; }
 .product { margin-top: 4px; font-size: clamp(32px, 4.4vw, 48px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; }

@@ -2,13 +2,16 @@ import { useEffect, useState, type ComponentType } from "react";
 import { useI18n } from "../i18n/I18nProvider";
 import { INSTALL, type Platform } from "../i18n/install-strings";
 import { DOWNLOADS, INSTALL_GUIDE, SIDELOADLY } from "./controls";
-import { AppleTVArt, DevicesIcon, IPhoneIPadArt, MacBookArt, MacIcon, TVIcon } from "./devices";
+import { DevicesIcon, MacIcon, TVIcon } from "./devices";
 import { Reveal } from "./Reveal";
 
-const PLATFORMS: { id: Platform; Icon: ComponentType; Art: ComponentType<{ shot: string }> }[] = [
-  { id: "mac", Icon: MacIcon, Art: MacBookArt },
-  { id: "ios", Icon: DevicesIcon, Art: IPhoneIPadArt },
-  { id: "tv", Icon: TVIcon, Art: AppleTVArt },
+/** Pixel heights of the 1600px-wide mockup images, so the page reserves their space. */
+const MOCKUP_HEIGHT: Record<Platform, number> = { mac: 966, ios: 1886, tv: 994 };
+
+const PLATFORMS: { id: Platform; Icon: ComponentType }[] = [
+  { id: "mac", Icon: MacIcon },
+  { id: "ios", Icon: DevicesIcon },
+  { id: "tv", Icon: TVIcon },
 ];
 
 // Links like /#install-tv open a specific tab.
@@ -23,11 +26,10 @@ function initialPlatform(): Platform {
 }
 
 export function Install() {
-  const { lang, shot } = useI18n();
+  const { lang, locale } = useI18n();
   const copy = INSTALL[lang];
   const [platform, setPlatform] = useState<Platform>(initialPlatform);
   const sideload = platform !== "mac";
-  const Art = PLATFORMS.find((p) => p.id === platform)!.Art;
 
   useEffect(() => {
     const onHash = () => {
@@ -72,8 +74,9 @@ export function Install() {
 
       <div className="install-panel" id="install-panel" role="tabpanel" aria-labelledby={`install-${platform}`}>
         <div className="showcase" key={platform}>
-          <div className="showcase-art">
-            <Art shot={shot("home")} />
+          <div className={`showcase-art ${platform}`}>
+            {/* Real app screenshots composited into Apple's product bezels (developer.apple.com/design/resources). */}
+            <img src={`/devices/${platform}-${locale.shots}.webp`} alt={copy.title[platform]} width={1600} height={MOCKUP_HEIGHT[platform]} />
           </div>
           <p className={sideload ? "eyebrow" : "eyebrow signed"}>{copy.tag[platform]}</p>
           <h3 className="product">{copy.title[platform]}</h3>
