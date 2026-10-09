@@ -14,6 +14,8 @@
   &nbsp;·&nbsp;
   <a href="https://download.getmegaportal.com/yingxia/1.0.1/Yingxia-1.0.1-macos-arm64.dmg">Download for Mac</a>
   &nbsp;·&nbsp;
+  <a href="Docs/INSTALL.md">Install on iPhone, iPad &amp; Apple TV</a>
+  &nbsp;·&nbsp;
   <a href="Docs/DEVELOPMENT.md">Developer guide</a>
 </p>
 
@@ -56,8 +58,10 @@ Yingxia (映匣) plays your TVBox subscriptions the way an Apple app should: liv
 | Platform | Status |
 | --- | --- |
 | **Mac** (macOS 26+, Apple silicon) | ✅ [Free download](https://download.getmegaportal.com/yingxia/1.0.1/Yingxia-1.0.1-macos-arm64.dmg), signed and notarized |
-| **Apple TV** (tvOS 26+) | 🚧 In development. Build it from source. |
-| **iPhone & iPad** (iOS 26+) | 🚧 In development. Build it from source. |
+| **Apple TV** (tvOS 26+) | 🧪 Preview. [Sideload it with Sideloadly](Docs/INSTALL.md#install-on-apple-tv) |
+| **iPhone & iPad** (iOS 26+) | 🧪 Preview. [Sideload it with Sideloadly](Docs/INSTALL.md#install-on-iphone-or-ipad) |
+
+The iPhone, iPad and Apple TV apps aren't on the App Store yet. The [install guide](Docs/INSTALL.md) walks you through installing them with your own Apple account (a free one works), keeping them signed, and fixing common problems.
 
 ## 🛠️ Build from source
 
@@ -83,7 +87,7 @@ Physical iPhone, iPad and Apple TV builds need your own signing team in Xcode. T
 | `Runtime/` | JVM, JavaScript and Python plugin hosts |
 | `Vendor/` | Vendored DEX interpreter and QuickJS |
 | `website/` | The [yingxia.getmegaportal.com](https://yingxia.getmegaportal.com) site |
-| `Docs/` | Developer guide, runtime status, third-party notices |
+| `Docs/` | Install guide, developer guide, runtime status, third-party notices |
 
 ## 🙏 Acknowledgements
 
