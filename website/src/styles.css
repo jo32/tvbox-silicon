@@ -94,29 +94,18 @@ h1, h2, h3, h4, p { margin: 0; }
 .actions { display: flex; align-items: center; justify-content: center; gap: 28px; margin-top: 36px; flex-wrap: wrap; }
 .meta { margin-top: 20px; font-size: 13px; color: var(--muted); }
 
-/* A TV with its stand, shown plainly on the card */
-.stage { position: relative; padding: 0 4%; }
-.tv-stand { width: 16%; height: 30px; margin: 0 auto; background: linear-gradient(180deg, #c9cacf, #a3a4aa); clip-path: polygon(30% 0, 70% 0, 82% 100%, 18% 100%); }
-/* Keep a whole feature card (title, text and TV) on one screen below the 64px nav: the stage
-   padding is capped at --sp, and the TV gets the 16:9 height left after the card's text (--chrome). */
+/* Feature screenshots on Apple's Apple TV bezel. Keep a whole feature card (title, text and image) on one
+   screen below the 64px nav: the image gets the height left after the card's text (--chrome). */
 :root { --sp: 5svh; }
-.stage { padding-block: min(3%, var(--sp)) 0; }
-.stage .tv, .stage .tv-stand { --tvw: max(200px, calc((100svh - 118px - var(--chrome, 0px) - 2 * var(--sp)) * 16 / 9)); }
-.stage .tv { max-width: var(--tvw); margin-inline: auto; }
-.stage .tv-stand { width: calc(min(100%, var(--tvw)) * 0.16); }
+.stage { padding-top: min(3%, var(--sp)); }
+.stage img { display: block; width: 100%; height: auto; margin-inline: auto; max-width: max(260px, calc((100svh - 104px - var(--chrome, 0px) - var(--sp)) * 1600 / 994)); }
 .card { --chrome: 260px; }
 .hero-stage { width: min(1200px, 100% - 32px); margin-top: 64px; }
-.stage-hero { border-radius: 36px; }
 .hero-film { display: flex; flex-direction: column; align-items: center; gap: 18px; }
 /* The film is ~122px of chrome plus a 16:9 screen, with the 136px remote column beside it:
    cap its width so the whole film fits below the 64px nav on short screens. */
 .hero-film-host { width: 100%; max-width: max(520px, calc((100svh - 64px - 32px - 122px) * 16 / 9 + 154px)); min-height: 200px; }
 .hero-film-link { font-size: 15px; }
-.tv {
-  margin: 0; padding: 0.55%; background: #1d1d1f; border-radius: 12px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 40px 70px -40px rgba(0, 0, 0, 0.55);
-}
-.tv img { width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; background: #151515; }
 
 /* Sections */
 .section { width: min(1200px, 100% - 32px); margin: 0 auto; padding: 140px 0 0; }
@@ -175,7 +164,8 @@ a.badge:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(0, 0, 0,
   position: relative; font: inherit; font-size: 13px; color: var(--muted); background: none; border: 0; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0 24px 14px; white-space: nowrap; transition: color 0.2s ease;
 }
-.tab svg { width: 36px; height: 36px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.tab img { height: 48px; width: auto; margin-bottom: 4px; transition: transform 0.25s ease; }
+.tab:hover img { transform: translateY(-2px); }
 .tab:hover, .tab.on { color: var(--ink); }
 .tab.on::after { content: ""; position: absolute; left: 18px; right: 18px; bottom: -1px; height: 2px; border-radius: 2px; background: var(--ink); }
 .tab:focus-visible { outline: 2px solid #0071e3; outline-offset: 2px; border-radius: 8px; }
@@ -186,7 +176,7 @@ a.badge:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(0, 0, 0,
 .showcase-art { width: min(800px, 100%); }
 .showcase-art img { display: block; width: 100%; height: auto; }
 /* The iPad and iPhone pair is portrait, so keep it about as tall as the landscape mockups. */
-.showcase-art.ios { width: min(480px, 100%); }
+.showcase-art.art-ios { width: min(480px, 100%); }
 .eyebrow { margin-top: 32px; font-size: 15px; font-weight: 600; color: #bf4800; }
 .eyebrow.signed { color: #1d7d3f; }
 .product { margin-top: 4px; font-size: clamp(32px, 4.4vw, 48px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; }
@@ -236,7 +226,6 @@ a.badge:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(0, 0, 0,
   .how { margin-top: 88px; }
   .keep { padding: 44px 20px 40px; }
   .card { padding: 40px 20px 20px; border-radius: 28px; }
-  .stage { padding-inline: 0; }
   .section { padding-top: 104px; }
 }
 @media (max-width: 560px) {
@@ -250,8 +239,6 @@ a.badge:hover { transform: translateY(-1px); box-shadow: 0 0 0 1px rgba(0, 0, 0,
   .product-req { font-size: 17px; }
   .actions { gap: 18px; }
   .hero-stage { margin-top: 48px; }
-  .tv { border-radius: 10px; }
-  .tv img { border-radius: 6px; }
   .footer-top .select { margin-left: 0; }
 }
 

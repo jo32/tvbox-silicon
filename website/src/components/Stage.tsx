@@ -1,21 +1,17 @@
 import { useI18n } from "../i18n/I18nProvider";
 
 interface Props {
-  /** Screenshot name under public/screenshots/<language>/. */
+  /** Screenshot name; the image is public/devices/tv-<shot>-<language>.webp. */
   shot: string;
   alt: string;
-  hero?: boolean;
 }
 
-/** A tvOS screenshot on a TV with its stand, shown plainly like a product shot. */
-export function Stage({ shot, alt, hero = false }: Props) {
-  const { shot: shotURL } = useI18n();
+/** A tvOS screenshot on Apple's Apple TV product bezel (TV, Apple TV 4K and Siri Remote). */
+export function Stage({ shot, alt }: Props) {
+  const { locale } = useI18n();
   return (
-    <div className={hero ? "stage stage-hero" : "stage"}>
-      <figure className="tv">
-        <img src={shotURL(shot)} alt={alt} width={1920} height={1080} loading={hero ? "eager" : "lazy"} />
-      </figure>
-      <div className="tv-stand" aria-hidden="true" />
+    <div className="stage">
+      <img src={`/devices/tv-${shot}-${locale.shots}.webp`} alt={alt} width={1600} height={994} loading="lazy" />
     </div>
   );
 }

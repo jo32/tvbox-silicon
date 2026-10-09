@@ -1,17 +1,17 @@
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/I18nProvider";
 import { INSTALL, type Platform } from "../i18n/install-strings";
 import { DOWNLOADS, INSTALL_GUIDE, SIDELOADLY } from "./controls";
-import { DevicesIcon, MacIcon, TVIcon } from "./devices";
 import { Reveal } from "./Reveal";
 
 /** Pixel heights of the 1600px-wide mockup images, so the page reserves their space. */
 const MOCKUP_HEIGHT: Record<Platform, number> = { mac: 966, ios: 1886, tv: 994 };
 
-const PLATFORMS: { id: Platform; Icon: ComponentType }[] = [
-  { id: "mac", Icon: MacIcon },
-  { id: "ios", Icon: DevicesIcon },
-  { id: "tv", Icon: TVIcon },
+/** Tab images: small product shots cut from the same Apple bezels (width x height at 2x). */
+const PLATFORMS: { id: Platform; w: number }[] = [
+  { id: "mac", w: 159 },
+  { id: "ios", w: 81 },
+  { id: "tv", w: 111 },
 ];
 
 // Links like /#install-tv open a specific tab.
@@ -54,7 +54,7 @@ export function Install() {
 
       <Reveal>
         <div className="tabnav" role="tablist" aria-label={copy.nav}>
-          {PLATFORMS.map(({ id, Icon }) => (
+          {PLATFORMS.map(({ id, w }) => (
             <button
               key={id}
               type="button"
@@ -65,7 +65,7 @@ export function Install() {
               className={platform === id ? "tab on" : "tab"}
               onClick={() => setPlatform(id)}
             >
-              <Icon />
+              <img src={`/devices/tab-${id}.webp`} alt="" width={w / 2} height={48} />
               <span>{copy.device[id]}</span>
             </button>
           ))}
@@ -74,7 +74,7 @@ export function Install() {
 
       <div className="install-panel" id="install-panel" role="tabpanel" aria-labelledby={`install-${platform}`}>
         <div className="showcase" key={platform}>
-          <div className={`showcase-art ${platform}`}>
+          <div className={`showcase-art art-${platform}`}>
             {/* Real app screenshots composited into Apple's product bezels (developer.apple.com/design/resources). */}
             <img src={`/devices/${platform}-${locale.shots}.webp`} alt={copy.title[platform]} width={1600} height={MOCKUP_HEIGHT[platform]} />
           </div>
