@@ -11,7 +11,7 @@ const MOCKUP_HEIGHT: Record<Platform, number> = { mac: 966, ios: 1886, tv: 994 }
 const PLATFORMS: { id: Platform; w: number }[] = [
   { id: "mac", w: 159 },
   { id: "ios", w: 81 },
-  { id: "tv", w: 111 },
+  { id: "tv", w: 155 },
 ];
 
 // Links like /#install-tv open a specific tab.
