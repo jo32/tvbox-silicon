@@ -93,6 +93,16 @@ Physical iPhone, iPad and Apple TV builds need your own signing team in Xcode. T
 
 Yingxia stands on the shoulders of [FongMi/TV](https://github.com/FongMi/TV) (reference implementation), [DexLoom](https://github.com/speedyfriend433/DexLoom), [unidbg](https://github.com/zhkl0228/unidbg), [Unicorn](https://github.com/unicorn-engine/unicorn), [dex2jar](https://github.com/ThexXTURBOXx/dex2jar), [QuickJS-ng](https://github.com/quickjs-ng/quickjs) and others. Licenses and details are in [THIRD_PARTY_NOTICES](Docs/THIRD_PARTY_NOTICES.md).
 
+## License
+
+Yingxia's original code is licensed under the [GNU General Public License v3.0](LICENSE) (`GPL-3.0-only`).
+
+Copyright (C) 2026 jo32 and Yingxia contributors.
+
+You may use, modify, and redistribute Yingxia under the terms of this license. When distributing a covered modified version, you must also provide its corresponding source code under GPL-3.0. The software is provided without warranty.
+
+Third-party code and bundled dependencies retain their own licenses and copyright notices; see [Third-Party Notices](Docs/THIRD_PARTY_NOTICES.md).
+
 ## ⚖️ Disclaimer
 
 Yingxia is a player. It does not host, provide or endorse any media content, and it shows only what the subscriptions you add provide. You are responsible for using sources you have the right to access. Apple TV, iPhone, iPad and Mac are trademarks of Apple Inc. This project is not affiliated with Apple.

@@ -1,5 +1,7 @@
 # Third-Party Dependencies
 
+Yingxia's original code is licensed under GPL-3.0-only; see the root [LICENSE](../LICENSE). This project license does not replace or relicense third-party components. Their existing license texts, copyright notices, and redistribution requirements continue to apply.
+
 ## Shared DEX interpreter
 
 [DexLoom](https://github.com/speedyfriend433/DexLoom) is distributed under the MIT License. The vendored license and version record are retained in `Vendor/DexRuntime/`. The app includes its license text in `App/Resources/ThirdPartyNotices.txt`.
