@@ -63,6 +63,7 @@
 		6F3F7DE9D8CB73FC2C1592D9 /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181C983C0018A97F2A086298 /* DiscoveryView.swift */; };
 		72448F6E6FFCC74EE5950C1A /* Keystone-GPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 084C8344E2997DB3ED8FE974 /* Keystone-GPL2.txt */; };
 		7FB9AB1705559DD6C22EEFAE /* LiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7459A3EBEF2E7C346B508738 /* LiveView.swift */; };
+		8253F7BDC07638BD6F654962 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A90392B70C28DA6CC7497B9F /* Assets.xcassets */; };
 		827566269F191FCBF27F2FEA /* Keystone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 3A398E8AF0C7E4C94787F4B3 /* Keystone-LLVM.txt */; };
 		82E7112F0FCDD1CEB5A40E59 /* Unicorn-GPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = B61DBAA2E8637B976A160D47 /* Unicorn-GPL2.txt */; };
 		84C5345267FA2D8221B2F9FB /* Keystone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 3A398E8AF0C7E4C94787F4B3 /* Keystone-LLVM.txt */; };
@@ -144,6 +145,7 @@
 		9C911ACB6C027C8F9A096409 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		A0E8559808CF7D11225EB30B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A3012FC04D8DAD058B1A5168 /* ThirdPartyNotices.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ThirdPartyNotices.txt; sourceTree = "<group>"; };
+		A90392B70C28DA6CC7497B9F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		ADB3063A14E368A71892DCEE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B442C75C212445F3786397ED /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		B44CBA0E5BBD1D129D5D64E3 /* HLSProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLSProxy.swift; sourceTree = "<group>"; };
@@ -261,6 +263,7 @@
 				0558AED26E6028C2881DD044 /* PythonHost */,
 				BB24E05B7991A6EC8248BB34 /* ScriptHost */,
 				42F85A68BE50D8E117754B11 /* App */,
+				F361880C14567AA8C2E4DA50 /* iOS */,
 				1D59E68466D22F2A478A3347 /* macOS */,
 				3481683B30DDE3C81FFF2FF1 /* Native */,
 				A8F2C96E75A8FF40AD9C4F24 /* Packages */,
@@ -304,6 +307,15 @@
 				995F5F0DB35FE66B4F90B4FF /* unidbg.txt */,
 			);
 			path = RuntimeLicenses;
+			sourceTree = "<group>";
+		};
+		F361880C14567AA8C2E4DA50 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				A90392B70C28DA6CC7497B9F /* Assets.xcassets */,
+			);
+			name = iOS;
+			path = Config/iOS;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -478,6 +490,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				912D01F4DF378FF63945C13D /* Assets.xcassets in Resources */,
+				8253F7BDC07638BD6F654962 /* Assets.xcassets in Resources */,
 				FF51906A6F86833239C53A33 /* Capstone-LLVM.txt in Resources */,
 				0C95000B36C5B15AF33D6C8C /* Capstone.txt in Resources */,
 				308A38681AA7812EF6DC4DFE /* InfoPlist.strings in Resources */,
