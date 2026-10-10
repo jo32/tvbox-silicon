@@ -28,10 +28,12 @@ function initialPlatform(): Platform {
 export function Install() {
   const { lang, locale } = useI18n();
   const copy = INSTALL[lang];
-  const [platform, setPlatform] = useState<Platform>(initialPlatform);
+  // Starts on the Mac tab, as prerendered, then picks the visitor's tab after hydration.
+  const [platform, setPlatform] = useState<Platform>("mac");
   const sideload = platform !== "mac";
 
   useEffect(() => {
+    setPlatform(initialPlatform());
     const onHash = () => {
       const next = hashPlatform();
       if (next) setPlatform(next);

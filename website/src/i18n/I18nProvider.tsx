@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { isHomePath, LANG_PATH, SITE_URL } from "../site";
 import { detectLang, STORAGE_KEY } from "./detect";
 import { LOCALES, type Lang, type Locale, type TextKey } from "./strings";
 
@@ -12,9 +13,19 @@ interface I18n {
 
 const I18nContext = createContext<I18n | null>(null);
 
-export function I18nProvider({ children }: { children: ReactNode }) {
-  const [lang, setLangState] = useState<Lang>(detectLang);
+interface Props {
+  /** The language the page was prerendered in. It renders first, so hydration matches, then the detected language takes over. */
+  renderedLang?: Lang;
+  children: ReactNode;
+}
+
+export function I18nProvider({ renderedLang, children }: Props) {
+  const [lang, setLangState] = useState<Lang>(() => renderedLang ?? detectLang());
   const locale = LOCALES[lang];
+
+  useEffect(() => {
+    if (renderedLang) setLangState(detectLang());
+  }, [renderedLang]);
 
   const setLang = useCallback((next: Lang) => {
     setLangState(next);
@@ -23,15 +34,19 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     } catch {
       // Not persisted; the choice still applies to this visit.
     }
-    const url = new URL(location.href);
-    url.searchParams.set("lang", next);
-    history.replaceState(null, "", url);
   }, []);
 
   useEffect(() => {
     document.documentElement.lang = lang;
     document.title = locale.text["meta.title"];
     document.querySelector('meta[name="description"]')?.setAttribute("content", locale.text["meta.description"]);
+    // Keep the address on the language's own page (/ja/), which also replaces the old ?lang= links.
+    if (!isHomePath(location.pathname)) return;
+    const url = new URL(location.href);
+    url.pathname = LANG_PATH[lang];
+    url.searchParams.delete("lang");
+    if (url.href !== location.href) history.replaceState(null, "", url);
+    document.querySelector('link[rel="canonical"]')?.setAttribute("href", SITE_URL + LANG_PATH[lang]);
   }, [lang, locale]);
 
   const value = useMemo<I18n>(

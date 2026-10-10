@@ -20,6 +20,7 @@ export type TextKey =
   | "faq.l2"
   | "footer.disclaimer"
   | "footer.lang"
+  | "footer.source"
   | "g.devices.b"
   | "g.devices.t"
   | "g.lang.b"
@@ -92,6 +93,7 @@ export const LOCALES: Record<Lang, Locale> = {
       "faq.l2": "answered.",
       "footer.disclaimer": "Yingxia does not host, provide or endorse any media content. Apple TV, iPhone, iPad and Mac are trademarks of Apple Inc. This project is not affiliated with Apple.",
       "footer.lang": "Language",
+      "footer.source": "Open source on GitHub",
       "g.devices.b": "Apple TV, iPhone, iPad and Mac share the same subscriptions and favorites.",
       "g.devices.t": "Every Apple screen",
       "g.lang.b": "English, Japanese, Traditional and Simplified Chinese, following your system setting.",
@@ -111,8 +113,8 @@ export const LOCALES: Record<Lang, Locale> = {
       "hero.meta": "Preview · tvOS 26 · iOS 26 · macOS 26",
       "hero.more": "See how it works",
       "hero.sub": "Yingxia plays your TVBox subscriptions natively on Apple TV, iPhone, iPad and Mac: live channels, on-demand catalogs, and one search across every source.",
-      "meta.description": "A native TVBox player for Apple TV, iPhone, iPad and Mac. Download for Mac now.",
-      "meta.title": "Yingxia — TVBox for Apple TV",
+      "meta.description": "Free, native TVBox player for Apple TV, iPhone, iPad and Mac. Live channels, on-demand catalogs and one search across all your sources.",
+      "meta.title": "Yingxia — TVBox player for Apple TV, iPhone, iPad and Mac",
       "more.l1": "The details",
       "more.l2": "that matter.",
       "nav.faq": "FAQ",
@@ -157,6 +159,7 @@ export const LOCALES: Record<Lang, Locale> = {
       "faq.l2": "質問。",
       "footer.disclaimer": "映匣はいかなるメディアコンテンツもホスト・提供・推奨しません。Apple TV、iPhone、iPad、Mac は Apple Inc. の商標です。本プロジェクトは Apple とは関係ありません。",
       "footer.lang": "言語",
+      "footer.source": "GitHub でオープンソース公開中",
       "g.devices.b": "Apple TV、iPhone、iPad、Mac で同じ配信設定とお気に入りを使えます。",
       "g.devices.t": "すべての Apple の画面で",
       "g.lang.b": "英語、日本語、繁体字・簡体字中国語に対応し、システム設定に従います。",
@@ -176,8 +179,8 @@ export const LOCALES: Record<Lang, Locale> = {
       "hero.meta": "プレビュー · tvOS 26 · iOS 26 · macOS 26",
       "hero.more": "仕組みを見る",
       "hero.sub": "映匣は TVBox の配信設定を Apple TV、iPhone、iPad、Mac でネイティブに再生します。ライブチャンネル、オンデマンド作品、そしてすべてのソースを横断する検索。",
-      "meta.description": "Apple TV、iPhone、iPad、Mac のためのネイティブ TVBox プレーヤー。Mac 版を公開中。",
-      "meta.title": "映匣 — Apple TV のための TVBox",
+      "meta.description": "Apple TV、iPhone、iPad、Mac 向けの無料ネイティブ TVBox プレーヤー。ライブチャンネル、オンデマンド作品、すべてのソースを横断する検索。",
+      "meta.title": "映匣 — Apple TV・iPhone・iPad・Mac 向け TVBox プレーヤー",
       "more.l1": "大切なことを、",
       "more.l2": "細部まで。",
       "nav.faq": "よくある質問",
@@ -222,6 +225,7 @@ export const LOCALES: Record<Lang, Locale> = {
       "faq.l2": "질문.",
       "footer.disclaimer": "Yingxia는 어떠한 미디어 콘텐츠도 호스팅, 제공 또는 보증하지 않습니다. Apple TV, iPhone, iPad, Mac은 Apple Inc.의 상표입니다. 이 프로젝트는 Apple과 관련이 없습니다.",
       "footer.lang": "언어",
+      "footer.source": "GitHub에서 오픈 소스로 공개",
       "g.devices.b": "Apple TV, iPhone, iPad, Mac에서 같은 구독과 즐겨찾기를 사용합니다.",
       "g.devices.t": "모든 Apple 화면에서",
       "g.lang.b": "영어, 일본어, 번체·간체 중국어를 지원하며 시스템 설정을 따릅니다.",
@@ -241,8 +245,8 @@ export const LOCALES: Record<Lang, Locale> = {
       "hero.meta": "프리뷰 · tvOS 26 · iOS 26 · macOS 26",
       "hero.more": "작동 방식 보기",
       "hero.sub": "Yingxia는 TVBox 구독을 Apple TV, iPhone, iPad, Mac에서 네이티브로 재생합니다. 실시간 채널, 주문형 콘텐츠, 그리고 모든 소스를 아우르는 하나의 검색.",
-      "meta.description": "Apple TV, iPhone, iPad, Mac을 위한 네이티브 TVBox 플레이어. 지금 Mac용으로 다운로드하세요.",
-      "meta.title": "Yingxia — Apple TV를 위한 TVBox",
+      "meta.description": "Apple TV, iPhone, iPad, Mac을 위한 무료 네이티브 TVBox 플레이어. 실시간 채널, 주문형 콘텐츠, 모든 소스를 아우르는 하나의 검색.",
+      "meta.title": "Yingxia — Apple TV·iPhone·iPad·Mac용 TVBox 플레이어",
       "more.l1": "중요한 것은",
       "more.l2": "디테일에.",
       "nav.faq": "FAQ",
@@ -287,6 +291,7 @@ export const LOCALES: Record<Lang, Locale> = {
       "faq.l2": "問題。",
       "footer.disclaimer": "映匣不託管、提供或認可任何媒體內容。Apple TV、iPhone、iPad 與 Mac 是 Apple Inc. 的商標。本專案與 Apple 無關。",
       "footer.lang": "語言",
+      "footer.source": "在 GitHub 開放原始碼",
       "g.devices.b": "Apple TV、iPhone、iPad 與 Mac 共用同樣的訂閱與收藏。",
       "g.devices.t": "所有 Apple 螢幕",
       "g.lang.b": "支援英文、日文、繁體與簡體中文，跟隨系統語言設定。",
@@ -306,8 +311,8 @@ export const LOCALES: Record<Lang, Locale> = {
       "hero.meta": "預覽 · tvOS 26 · iOS 26 · macOS 26",
       "hero.more": "看看怎麼用",
       "hero.sub": "映匣在 Apple TV、iPhone、iPad 與 Mac 上原生播放你的 TVBox 訂閱：直播頻道、隨選影片，以及橫跨所有片源的一次搜尋。",
-      "meta.description": "為 Apple TV、iPhone、iPad 與 Mac 打造的原生 TVBox 播放器。Mac 版現已推出。",
-      "meta.title": "映匣 — Apple TV 上的 TVBox",
+      "meta.description": "為 Apple TV、iPhone、iPad 與 Mac 打造的免費原生 TVBox 播放器：直播頻道、隨選影片，以及橫跨所有片源的一次搜尋。",
+      "meta.title": "映匣 — Apple TV、iPhone、iPad 與 Mac 的 TVBox 播放器",
       "more.l1": "重要的，",
       "more.l2": "都在細節裡。",
       "nav.faq": "常見問題",

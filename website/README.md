@@ -1,6 +1,6 @@
 # Yingxia website
 
-The "coming soon" site for Yingxia: React 19 + TypeScript, built with Vite and deployed to Cloudflare as a static-assets Worker (`@cloudflare/vite-plugin` + Wrangler). There is no server code.
+The website for Yingxia: React 19 + TypeScript, built with Vite and deployed to Cloudflare as a static-assets Worker (`@cloudflare/vite-plugin` + Wrangler). There is no server code.
 
 ```sh
 npm install
@@ -10,7 +10,11 @@ npm run typecheck
 npm run deploy     # build, then `wrangler deploy` (run `npx wrangler login` once first)
 ```
 
-The Worker is named `yingxia-website` in `wrangler.jsonc`. Unknown paths fall back to the app (`not_found_handling: single-page-application`). Attach a custom domain in the Cloudflare dashboard or with a `routes` entry in `wrangler.jsonc`.
+The Worker is named `yingxia-website` in `wrangler.jsonc` and serves https://yingxia.getmegaportal.com. Unknown paths get `public/404.html` with a 404 status (`not_found_handling: 404-page`).
+
+## SEO and prerendering
+
+`npm run build:site` (used by `build`, `preview` and `deploy`) runs `vite build`, then `scripts/prerender.mjs`, which renders the homepage once per language into `dist/` (`/`, `/ja/`, `/ko/`, `/zh-hant/`; paths in `src/site.ts`). Each page gets its own title, description, canonical URL, hreflang links, Open Graph tags and JSON-LD (`SoftwareApplication` and `FAQPage`), and the client hydrates it. The root page is English and switches to a saved or browser language after load, moving the address to that language's page; `?lang=` links still work. The script also writes `sitemap.xml` and `llms.txt` from the same strings and download links, so bumping `MAC_DOWNLOAD`/`DOWNLOADS` or editing the FAQ updates them. `public/robots.txt` points to the sitemap. `vite dev` serves the unrendered app.
 
 ## Layout
 
@@ -24,7 +28,7 @@ The Worker is named `yingxia-website` in `wrangler.jsonc`. Unknown paths fall ba
 
 Fonts (Inter, Instrument Serif) are self-hosted through Fontsource. Japanese, Korean, and Chinese headlines use the system's Mincho, Myungjo, or Song serif.
 
-The page says "coming soon" and links nowhere else while the repository is private. When Yingxia launches, replace `SoonPill` in `src/components/controls.tsx` with a real download or repository link, and update the `soon`, `hero.badge`, `hero.meta`, `q6`, and `cta` strings.
+The source repository (`REPO` in `src/components/controls.tsx`) is linked from the nav, the footer, the install guide, the JSON-LD and `llms.txt`.
 
 ## Screenshots
 

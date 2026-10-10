@@ -37,6 +37,11 @@ h1, h2, h3, h4, p { margin: 0; }
 .nav-links { display: flex; gap: 28px; font-size: 14px; color: var(--muted); }
 .nav-links a:hover { color: var(--ink); }
 .nav-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.gh-link { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); }
+.gh-link:hover { color: var(--ink); }
+.gh-link svg { flex: none; }
+.nav-actions .gh-link { width: 32px; height: 32px; justify-content: center; }
+.footer-top .gh-link { font-size: 13px; }
 
 /* Controls */
 .pill {
@@ -123,7 +128,7 @@ h1, h2, h3, h4, p { margin: 0; }
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 56px; }
 .tile { background: var(--card); border-radius: 24px; padding: 30px 28px; }
 .tile svg { width: 28px; height: 28px; fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; margin-bottom: 20px; }
-.tile h4 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.tile h3 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
 .tile p { margin-top: 8px; font-size: 15px; color: var(--muted); }
 
 /* FAQ */

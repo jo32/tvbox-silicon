@@ -25,7 +25,7 @@ export function Details() {
         {TILES.map(({ Icon, title, body }) => (
           <Reveal className="tile" key={title}>
             <Icon />
-            <h4>{t(title)}</h4>
+            <h3>{t(title)}</h3>
             <p>{t(body)}</p>
           </Reveal>
         ))}

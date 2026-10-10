@@ -4,9 +4,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite build && vite preview",
-    "deploy": "vite build && wrangler deploy",
+    "build": "tsc -b && npm run build:site",
+    "build:site": "vite build && node scripts/prerender.mjs",
+    "preview": "npm run build:site && vite preview",
+    "deploy": "npm run build:site && wrangler deploy",
     "typecheck": "tsc -b"
   },
   "dependencies": {

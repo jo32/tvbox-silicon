@@ -4,7 +4,9 @@
   "name": "yingxia-website",
   "compatibility_date": "2026-09-01",
   "assets": {
-    "not_found_handling": "single-page-application"
+    // Every page is a real file (the build prerenders /, /ja/, /ko/, /zh-hant/ and /intro/), so unknown
+    // paths get public/404.html with a 404 status instead of the homepage, and robots.txt stays real.
+    "not_found_handling": "404-page"
   },
   // Wrangler creates the DNS record and certificate for this hostname on deploy.
   "routes": [{ "pattern": "yingxia.getmegaportal.com", "custom_domain": true }],

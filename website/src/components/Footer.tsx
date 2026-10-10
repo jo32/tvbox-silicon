@@ -1,5 +1,5 @@
 import { useI18n } from "../i18n/I18nProvider";
-import { Brand, LanguageSelect, DownloadButton } from "./controls";
+import { Brand, DownloadButton, GitHubLink, LanguageSelect } from "./controls";
 import { Headline } from "./Headline";
 import { Reveal } from "./Reveal";
 
@@ -24,7 +24,10 @@ export function Footer() {
       <div className="footer-inner">
         <div className="footer-top">
           <Brand size={24} />
-          <span className="copyright">© {new Date().getFullYear()}</span>
+          <span className="copyright" suppressHydrationWarning>
+            © {new Date().getFullYear()}
+          </span>
+          <GitHubLink label={t("footer.source")} />
           <LanguageSelect />
         </div>
         <p className="disclaimer">{t("footer.disclaimer")}</p>

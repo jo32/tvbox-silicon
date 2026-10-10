@@ -1,11 +1,14 @@
+import { pathLang } from "../site";
 import { LANGS, type Lang } from "./strings";
 
 export const STORAGE_KEY = "yx-lang";
 
 export const isLang = (value: string | null): value is Lang => LANGS.includes(value as Lang);
 
-// ?lang= wins, then a saved choice, then the browser's preferred languages.
+// A language page (/ja/) wins, then ?lang=, then a saved choice, then the browser's preferred languages.
 export function detectLang(): Lang {
+  const fromPath = pathLang(location.pathname);
+  if (fromPath) return fromPath;
   const param = new URLSearchParams(location.search).get("lang");
   if (isLang(param)) return param;
   try {
