@@ -44,6 +44,11 @@ enum SpiderSandbox {
             return parent.path == url.path ? url.path : canonical(parent) + "/" + url.lastPathComponent
         }
         let home = canonical(FileManager.default.homeDirectoryForCurrentUser)
+        // The JVM binds 127.0.0.1 through a dual-stack IPv6 socket (as ::ffff:127.0.0.1). macOS 15's
+        // Seatbelt doesn't match that against the profile's `localhost` and fails the bind with EPERM,
+        // so no JAR source could start its loopback bridge there. Plain IPv4 sockets, as the Python
+        // host uses, match on every version.
+        let interpreterOptions = executable.lastPathComponent == "java" ? ["-Djava.net.preferIPv4Stack=true"] : []
         var argv = ["-f", profileFile.path,
                     "-D", "RESOURCES=\(canonical(host))",
                     "-D", "CACHE_ROOT=\(canonical(cacheRoot))",
@@ -51,7 +56,7 @@ enum SpiderSandbox {
                     "-D", "PROFILE=\(canonical(profile))",
                     "-D", "ACCOUNTS=\(canonical(CloudDriveAccounts.fileURL))",
                     "-D", "HOME=\(home)",
-                    "--", executable.path]
+                    "--", executable.path] + interpreterOptions
         argv.append(contentsOf: arguments)
         return (sandboxExec, argv)
     }
