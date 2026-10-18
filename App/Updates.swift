@@ -378,18 +378,25 @@ private struct ReleaseArt: View {
 /// TV app's hero glow.
 private struct ReleaseBackdrop: View {
     var animated: Bool
+    private static let top = [Color(red: 0.16, green: 0.62, blue: 0.98), Color(red: 0.10, green: 0.30, blue: 0.86), Color(red: 0.20, green: 0.12, blue: 0.56)]
+    private static let middle = [Color(red: 0.04, green: 0.22, blue: 0.46), Color(red: 0.06, green: 0.12, blue: 0.38), Color(red: 0.06, green: 0.05, blue: 0.22)]
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30, paused: !animated)) { context in
             let drift = Float(sin(context.date.timeIntervalSinceReferenceDate * 0.3)) * 0.12
-            MeshGradient(width: 3, height: 3, points: [
-                [0, 0], [0.5, 0], [1, 0],
-                [0, 0.5], [0.5 + drift, 0.42 - drift / 2], [1, 0.5],
-                [0, 1], [0.5, 1], [1, 1],
-            ], colors: [
-                Color(red: 0.16, green: 0.62, blue: 0.98), Color(red: 0.10, green: 0.30, blue: 0.86), Color(red: 0.20, green: 0.12, blue: 0.56),
-                Color(red: 0.04, green: 0.22, blue: 0.46), Color(red: 0.06, green: 0.12, blue: 0.38), Color(red: 0.06, green: 0.05, blue: 0.22),
-                .black, .black, .black,
-            ])
+            if #available(iOS 18, *) {
+                MeshGradient(width: 3, height: 3, points: [
+                    [0, 0], [0.5, 0], [1, 0],
+                    [0, 0.5], [0.5 + drift, 0.42 - drift / 2], [1, 0.5],
+                    [0, 1], [0.5, 1], [1, 1],
+                ], colors: Self.top + Self.middle + [.black, .black, .black])
+            } else {
+                // No mesh gradients before iOS 18: the top row's colours drift sideways over the middle row's.
+                LinearGradient(colors: Self.top, startPoint: UnitPoint(x: CGFloat(drift), y: 0), endPoint: UnitPoint(x: 1 + CGFloat(drift), y: 0))
+                    .mask { LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.6)) }
+                    .background { LinearGradient(colors: Self.middle, startPoint: .leading, endPoint: .trailing) }
+                    .mask { LinearGradient(colors: [.black, .black, .clear], startPoint: .top, endPoint: .bottom) }
+                    .background(.black)
+            }
         }
         .overlay { LinearGradient(colors: [.black.opacity(0.1), .black.opacity(0.35), .black], startPoint: .top, endPoint: .bottom) }
         .accessibilityHidden(true)

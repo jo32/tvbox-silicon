@@ -57,7 +57,7 @@ struct SectionGlyph: View {
             .font(.system(size: size * 0.46, weight: .semibold))
             .foregroundStyle(.white)
             .frame(width: size, height: size)
-            .background(LinearGradient(colors: [tint.mix(with: .white, by: 0.12), tint.mix(with: .black, by: 0.2)], startPoint: .top, endPoint: .bottom),
+            .background(LinearGradient(colors: [tint.blend(with: .white, by: 0.12), tint.blend(with: .black, by: 0.2)], startPoint: .top, endPoint: .bottom),
                         in: RoundedRectangle(cornerRadius: size * 0.3, style: .continuous))
             .accessibilityHidden(true)
     }

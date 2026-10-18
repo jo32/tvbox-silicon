@@ -291,7 +291,7 @@ struct PlaybackView: View {
                     .font(.system(size: 58, weight: .regular))
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(.white)
-                    .symbolEffect(.breathe, options: .repeat(.periodic(delay: 2.5)))
+                    .breathingSymbol()
                     .shadow(color: .white.opacity(0.22), radius: 26)
                     .frame(height: 70)
                     .accessibilityHidden(true)

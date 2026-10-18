@@ -71,7 +71,7 @@ struct MusicNowPlayingScreen: View {
     }
 
     private var backdrop: some View {
-        LinearGradient(colors: [tint.mix(with: .black, by: 0.2), tint.mix(with: .black, by: 0.62)], startPoint: .top, endPoint: .bottom)
+        LinearGradient(colors: [tint.blend(with: .black, by: 0.2), tint.blend(with: .black, by: 0.62)], startPoint: .top, endPoint: .bottom)
     }
 
     /// Title, artist and the menu; beside a small cover when a panel is open.
@@ -173,7 +173,7 @@ struct MusicNowPlayingScreen: View {
             withAnimation(.spring(response: 0.45, dampingFraction: 0.86)) { panel = on ? nil : target }
         } label: {
             Image(systemName: symbol).font(.body.weight(.semibold))
-                .foregroundStyle(on ? AnyShapeStyle(tint.mix(with: .black, by: 0.4)) : AnyShapeStyle(.secondary))
+                .foregroundStyle(on ? AnyShapeStyle(tint.blend(with: .black, by: 0.4)) : AnyShapeStyle(.secondary))
                 .frame(width: 40, height: 40)
                 .background(on ? Color.white.opacity(0.9) : .clear, in: Circle())
         }
