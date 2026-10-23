@@ -126,31 +126,7 @@ struct RootView: View {
     private var barSlots: Int { PhoneTabs.slots(horizontal: sizeClass, vertical: verticalSizeClass) }
     #endif
     private var platformTabs: some View {
-        @Bindable var store = store
-        return TabView(selection: $store.section) {
-                ForEach(tabs) { item in
-                    Tab(value: item) {
-                        if item == .more {
-                            NavigationStack(path: $morePath) {
-                                content(.more).routeDestinations()
-                                    // Any section can be moved into More, so any can be pushed here.
-                                    .navigationDestination(for: AppSection.self) { content($0) }
-                            }
-                        } else { NavigationStack { content(item).tvDefaultControls().routeDestinations() } }
-                    } label: {
-                        #if os(tvOS)
-                        if item == .nowPlaying { MusicTabLabel() } else { Label(item.title, systemImage: item.icon) }
-                        #else
-                        Label(item.title, systemImage: item.icon)
-                        #endif
-                    }
-                    #if os(iOS)
-                    // tvOS tab bars have no badges; there the launch sheet and Settings carry the news.
-                    .badge(showsUpdateBadge(item) && !updates.available.isEmpty ? Text(L10n.text("New")) : nil)
-                    #endif
-                }
-            }
-            .tabViewStyle(.sidebarAdaptable)
+        tabView
             #if os(tvOS)
             .musicSidebarHeader()
             // Now Playing is not a page: choosing it opens the full-screen player over the section
@@ -187,7 +163,55 @@ struct RootView: View {
             #endif
     }
 
+    @ViewBuilder private var tabView: some View {
+        @Bindable var store = store
+        if #available(iOS 18, *) {
+            TabView(selection: $store.section) {
+                ForEach(tabs) { item in
+                    Tab(value: item) { tabPage(item) } label: { tabLabel(item) }
+                        #if os(iOS)
+                        .badge(tabBadge(item))
+                        #endif
+                }
+            }
+            .tabViewStyle(.sidebarAdaptable)
+        } else {
+            // iOS 17 has no Tab or sidebar: the classic tab bar, on iPad too.
+            TabView(selection: $store.section) {
+                ForEach(tabs) { item in
+                    tabPage(item).tabItem { tabLabel(item) }.tag(item)
+                        #if os(iOS)
+                        .badge(tabBadge(item))
+                        #endif
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func tabPage(_ item: AppSection) -> some View {
+        if item == .more {
+            NavigationStack(path: $morePath) {
+                content(.more).routeDestinations()
+                    // Any section can be moved into More, so any can be pushed here.
+                    .navigationDestination(for: AppSection.self) { content($0) }
+            }
+        } else { NavigationStack { content(item).tvDefaultControls().routeDestinations() } }
+    }
+
+    @ViewBuilder private func tabLabel(_ item: AppSection) -> some View {
+        #if os(tvOS)
+        if item == .nowPlaying { MusicTabLabel() } else { Label(item.title, systemImage: item.icon) }
+        #else
+        Label(item.title, systemImage: item.icon)
+        #endif
+    }
+
     #if os(iOS)
+    // tvOS tab bars have no badges; there the launch sheet and Settings carry the news.
+    private func tabBadge(_ item: AppSection) -> Text? {
+        showsUpdateBadge(item) && !updates.available.isEmpty ? Text(L10n.text("New")) : nil
+    }
+
     /// Software Update lives in Settings, so More carries the badge only while Settings is inside it.
     private func showsUpdateBadge(_ item: AppSection) -> Bool {
         item == .more ? phoneTabs && inMore.contains(.settings) : item.showsUpdateBadge

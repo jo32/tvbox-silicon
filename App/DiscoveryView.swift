@@ -128,7 +128,7 @@ struct GlobalSearchView: View {
                             // Scrolling the end into view asks for the next page; while it stays in view each new page asks again.
                             if model.canLoadMore(model.selectedSource) || model.loadingMore {
                                 ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24)
-                                    .onScrollVisibilityChange(threshold: 0.2) { visible in
+                                    .onScrolledIntoView(threshold: 0.2) { visible in
                                         endVisible = visible
                                         if visible { model.loadMore(model.selectedSource, config: config) }
                                     }
@@ -808,6 +808,9 @@ struct SourceStrip: View {
     }
 }
 
+/// Outside ScrollStrip so measuring it in a sendable closure does not capture the generic content type.
+private struct ScrollStripMetrics: Equatable { var offset: CGFloat, viewport: CGFloat, maximum: CGFloat }
+
 /// A horizontal row of chips or cards. A mouse wheel cannot scroll sideways, so on Mac the row can
 /// also be dragged like a trackpad swipe and shows arrow buttons once it overflows. Elsewhere it is
 /// a plain horizontal scroll view (touch on iOS; tvOS rows stay focus-driven and do not use it).
@@ -820,7 +823,9 @@ struct ScrollStrip<Content: View>: View {
     var overlayArrows = false
     var arrowCenter: CGFloat?
     let content: Content
+    #if os(macOS)
     @State private var position = ScrollPosition(idType: String.self)
+    #endif
     @State private var edges = Edges()
     /// Live geometry and drag state. A plain reference, so updating it never invalidates the view.
     @State private var tracking = Tracking()
@@ -836,7 +841,7 @@ struct ScrollStrip<Content: View>: View {
     }
 
     private struct Edges: Equatable { var leading = false, trailing = false }
-    private struct Metrics: Equatable { var offset: CGFloat, viewport: CGFloat, maximum: CGFloat }
+    private typealias Metrics = ScrollStripMetrics
     @MainActor private final class Tracking {
         var metrics = Metrics(offset: 0, viewport: 0, maximum: 0)
         var dragOrigin: CGFloat?
@@ -845,52 +850,87 @@ struct ScrollStrip<Content: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                content
+        ScrollViewReader { proxy in
+            HStack(spacing: 8) {
+                measured(
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        measuredContent
+                    }
+                    #if os(macOS)
+                    .scrollPosition($position)
+                    #endif
+                )
+                .mask {
+                    HStack(spacing: 0) {
+                        LinearGradient(colors: [edges.leading ? .clear : .black, .black], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: 20)
+                        Rectangle()
+                        LinearGradient(colors: [.black, edges.trailing ? .clear : .black], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: 28)
+                    }
+                }
+                .environment(\.stripDrag, tracking.drag)
+                #if os(macOS)
+                .simultaneousGesture(dragToScroll)
+                .overlay(alignment: arrowCenter == nil ? .center : .top) {
+                    if overlayArrows {
+                        HStack {
+                            if edges.leading { arrow(forward: false) }
+                            Spacer(minLength: 0)
+                            if edges.trailing { arrow(forward: true) }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.top, arrowCenter.map { max(0, $0 - 17) } ?? 0)
+                    }
+                }
+                #endif
+                #if os(macOS)
+                if !overlayArrows, edges.leading || edges.trailing {
+                    HStack(spacing: 4) { arrow(forward: false); arrow(forward: true) }
+                }
+                #endif
             }
-            .scrollPosition($position)
-            .onScrollGeometryChange(for: Metrics.self) { geometry in
+            .onAppear {
+                guard let scrollTo else { return }
+                #if os(macOS)
+                position.scrollTo(id: scrollTo, anchor: .center)
+                #else
+                proxy.scrollTo(scrollTo, anchor: .center)
+                #endif
+            }
+        }
+    }
+
+    private func update(_ metrics: Metrics) {
+        tracking.metrics = metrics
+        let next = Edges(leading: metrics.offset > 1, trailing: metrics.offset < metrics.maximum - 1)
+        if next != edges { edges = next }
+    }
+
+    @ViewBuilder private func measured(_ scrollView: some View) -> some View {
+        if #available(iOS 18, *) {
+            scrollView.onScrollGeometryChange(for: Metrics.self) { geometry in
                 Metrics(offset: geometry.contentOffset.x + geometry.contentInsets.leading,
                         viewport: geometry.containerSize.width,
                         maximum: max(0, geometry.contentSize.width + geometry.contentInsets.leading
                             + geometry.contentInsets.trailing - geometry.containerSize.width))
-            } action: { _, metrics in
-                tracking.metrics = metrics
-                let next = Edges(leading: metrics.offset > 1, trailing: metrics.offset < metrics.maximum - 1)
-                if next != edges { edges = next }
-            }
-            .mask {
-                HStack(spacing: 0) {
-                    LinearGradient(colors: [edges.leading ? .clear : .black, .black], startPoint: .leading, endPoint: .trailing)
-                        .frame(width: 20)
-                    Rectangle()
-                    LinearGradient(colors: [.black, edges.trailing ? .clear : .black], startPoint: .leading, endPoint: .trailing)
-                        .frame(width: 28)
-                }
-            }
-            .environment(\.stripDrag, tracking.drag)
-            #if os(macOS)
-            .simultaneousGesture(dragToScroll)
-            .overlay(alignment: arrowCenter == nil ? .center : .top) {
-                if overlayArrows {
-                    HStack {
-                        if edges.leading { arrow(forward: false) }
-                        Spacer(minLength: 0)
-                        if edges.trailing { arrow(forward: true) }
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.top, arrowCenter.map { max(0, $0 - 17) } ?? 0)
-                }
-            }
-            #endif
-            #if os(macOS)
-            if !overlayArrows, edges.leading || edges.trailing {
-                HStack(spacing: 4) { arrow(forward: false); arrow(forward: true) }
-            }
-            #endif
+            } action: { _, metrics in update(metrics) }
+        } else {
+            scrollView
         }
-        .onAppear { if let scrollTo { position.scrollTo(id: scrollTo, anchor: .center) } }
+    }
+
+    /// Before iOS 18 the scroll view cannot report its geometry, so the content measures the part of
+    /// itself that is on screen.
+    @ViewBuilder private var measuredContent: some View {
+        if #available(iOS 18, *) {
+            content
+        } else {
+            content.onGeometryChange(for: Metrics.self) { geometry in
+                let visible = geometry.bounds(of: .scrollView(axis: .horizontal)) ?? .zero
+                return Metrics(offset: visible.minX, viewport: visible.width, maximum: max(0, geometry.size.width - visible.width))
+            } action: { update($0) }
+        }
     }
 
     #if os(macOS)

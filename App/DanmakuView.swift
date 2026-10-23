@@ -306,10 +306,8 @@ struct DanmakuListView: View {
                     Color.black
                 }
             }
-            .onScrollPhaseChange { _, phase in
-                // Scrolling by hand stops following the video until “Back to Now”.
-                if phase == .interacting { following = false }
-            }
+            // Scrolling by hand stops following the video until “Back to Now”.
+            .onScrollByHand { following = false }
             .overlay {
                 if items.isEmpty {
                     ContentUnavailableView.search(text: query)

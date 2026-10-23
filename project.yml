@@ -5,7 +5,7 @@ options:
   knownRegions: [en, zh-Hans, zh-Hant, ja]
   deploymentTarget:
     macOS: '15.0'
-    iOS: '18.0'
+    iOS: '17.0'
     tvOS: '26.0'
 settings:
   base:
