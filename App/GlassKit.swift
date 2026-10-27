@@ -591,6 +591,7 @@ enum PosterPalette {
         return Color(red: Double(pixel[0]) / 255, green: Double(pixel[1]) / 255, blue: Double(pixel[2]) / 255)
     }
 
+    #if os(macOS)
     /// A few of the cover's most colourful patches, distinct from one another, for backdrops that drift between
     /// them (the detail page's aurora). Empty when the cover can't be read.
     static func colors(_ url: URL, headers: [String: String] = [:], count: Int = 4) async -> [Color] {
@@ -616,6 +617,7 @@ enum PosterPalette {
         }
         return picked.map { Color(red: $0.x, green: $0.y, blue: $0.z) }
     }
+    #endif
 
     /// The cover itself, from the same cache, for the Lock Screen and Control Center.
     static func image(_ url: URL, headers: [String: String] = [:]) async -> CGImage? {

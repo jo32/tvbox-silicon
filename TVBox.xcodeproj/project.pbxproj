@@ -17,7 +17,6 @@
 		0AF3C56A9798DD0C68EC63D8 /* QALaunch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B842401113B0BDFA7B532B4 /* QALaunch.swift */; };
 		0BAEA44063C146779B061BB1 /* ApplePython.c in Sources */ = {isa = PBXBuildFile; fileRef = E740CFD276F4B76892EB0AF1 /* ApplePython.c */; };
 		0C95000B36C5B15AF33D6C8C /* Capstone.txt in Resources */ = {isa = PBXBuildFile; fileRef = E84A48E8E87E4B3CC3DCDA8C /* Capstone.txt */; };
-		0F528756ACB65A437BA32140 /* ColorfulX in Frameworks */ = {isa = PBXBuildFile; productRef = B1397D1F20D34020FF1268DC /* ColorfulX */; };
 		1050D617A22F09CD0A01DE66 /* GlassKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 739A64FB51780D4314D2DDF8 /* GlassKit.swift */; };
 		13A266A0565733CC2C7A66E6 /* Updates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D706229ED242AE96AE52F8 /* Updates.swift */; };
 		13AB1C878E7990BF8FB16849 /* HLSProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B44CBA0E5BBD1D129D5D64E3 /* HLSProxy.swift */; };
@@ -75,7 +74,7 @@
 		3E39031243C9BC9870C143E4 /* OpenJDK.txt in Resources */ = {isa = PBXBuildFile; fileRef = BD71FD8B3E72803C426D91CC /* OpenJDK.txt */; };
 		3E3FA848D0BF2855FEAE2577 /* OpenJDK.txt in Resources */ = {isa = PBXBuildFile; fileRef = BD71FD8B3E72803C426D91CC /* OpenJDK.txt */; };
 		3E782ECA07220E19F2EBDB7C /* ThirdPartyNotices.txt in Resources */ = {isa = PBXBuildFile; fileRef = A3012FC04D8DAD058B1A5168 /* ThirdPartyNotices.txt */; };
-		3EB79F655F119BDD19F30726 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5938F1806109304A4FB816CF /* Sparkle */; };
+		3EB79F655F119BDD19F30726 /* ColorfulX in Frameworks */ = {isa = PBXBuildFile; productRef = 185E90685A8AF7EB8AD7A768 /* ColorfulX */; };
 		3ED898D04E49F78F4DD57109 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31D1816B8ED53D49478FD843 /* MoreView.swift */; };
 		3F2E64D0FAA75B78026F115A /* RuntimeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2075419FEF0E1C161A31A9F0 /* RuntimeView.swift */; };
 		455119517E0FFF07B799E98C /* MusicPlayerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2CD4FD12F4DD3AAE1F8592A /* MusicPlayerViews.swift */; };
@@ -124,7 +123,7 @@
 		6F182F91BDACFBFC8E6B3B0E /* DetailAurora.swift in Sources */ = {isa = PBXBuildFile; fileRef = A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */; };
 		6F3F7DE9D8CB73FC2C1592D9 /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181C983C0018A97F2A086298 /* DiscoveryView.swift */; };
 		6FB75A9CED5DEEB931AD0C9A /* MusicRemoteControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E59EDBC7BE62078557E781 /* MusicRemoteControl.swift */; };
-		722A5C4D2DC5223EB611AC0A /* ColorfulX in Frameworks */ = {isa = PBXBuildFile; productRef = 185E90685A8AF7EB8AD7A768 /* ColorfulX */; };
+		722A5C4D2DC5223EB611AC0A /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5938F1806109304A4FB816CF /* Sparkle */; };
 		72448F6E6FFCC74EE5950C1A /* Keystone-GPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 084C8344E2997DB3ED8FE974 /* Keystone-GPL2.txt */; };
 		7283989DBA1B1F0E96A2C383 /* LiveRoomsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675EA4CF000337C94DF5B1D3 /* LiveRoomsView.swift */; };
 		731566BD0371FFCF447852DD /* DouyinAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB7347843C885A97DFE397DD /* DouyinAccountView.swift */; };
@@ -218,7 +217,6 @@
 		DBC3CE787002095C1BA56C84 /* BilibiliCastController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B1CEF969E4F3D3301A8D61 /* BilibiliCastController.swift */; };
 		DF010807CD40F2180FDE6793 /* QALaunch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B842401113B0BDFA7B532B4 /* QALaunch.swift */; };
 		DF91C748F93013B4CF944A64 /* MusicMiniPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBED9BDC96E5249DBA0BFDB0 /* MusicMiniPlayer.swift */; };
-		E04C0A8B386E9BF57B1CA56E /* ColorfulX in Frameworks */ = {isa = PBXBuildFile; productRef = 876B7424081D3AAE259EEF82 /* ColorfulX */; };
 		E0B7524BAA3500D6675442D7 /* FavoriteControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8F5818C392424F43FF0C9 /* FavoriteControls.swift */; };
 		E64F015590BDBE0DFC8A216E /* LiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7459A3EBEF2E7C346B508738 /* LiveView.swift */; };
 		E691C693ADA5C3F13E48A0B5 /* MusicNowPlayingPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D10D9BAFE11E31196C70422 /* MusicNowPlayingPanels.swift */; };
@@ -350,8 +348,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				1E4B0163BABCB43BA85836D6 /* TVCore in Frameworks */,
-				722A5C4D2DC5223EB611AC0A /* ColorfulX in Frameworks */,
-				3EB79F655F119BDD19F30726 /* Sparkle in Frameworks */,
+				722A5C4D2DC5223EB611AC0A /* Sparkle in Frameworks */,
+				3EB79F655F119BDD19F30726 /* ColorfulX in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -360,7 +358,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				F199C77516C38F5644997AEB /* TVCore in Frameworks */,
-				0F528756ACB65A437BA32140 /* ColorfulX in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -369,7 +366,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				5F05B8FEB75498291DBE83CB /* TVCore in Frameworks */,
-				E04C0A8B386E9BF57B1CA56E /* ColorfulX in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -575,7 +571,6 @@
 			name = "TVBox-iOS";
 			packageProductDependencies = (
 				150E7485ED76FF29A84D7C1D /* TVCore */,
-				876B7424081D3AAE259EEF82 /* ColorfulX */,
 			);
 			productName = "TVBox-iOS";
 			productReference = F7D32FD5D631B4C58A2C3022 /* TVBox-iOS.app */;
@@ -597,8 +592,8 @@
 			name = "TVBox-macOS";
 			packageProductDependencies = (
 				758A0D5359D0622060D86C20 /* TVCore */,
-				185E90685A8AF7EB8AD7A768 /* ColorfulX */,
 				5938F1806109304A4FB816CF /* Sparkle */,
+				185E90685A8AF7EB8AD7A768 /* ColorfulX */,
 			);
 			productName = "TVBox-macOS";
 			productReference = 2278608DE7AE2FEA27EB51C9 /* TVBox-macOS.app */;
@@ -621,7 +616,6 @@
 			name = "TVBox-tvOS";
 			packageProductDependencies = (
 				A72103001ACB22093291D051 /* TVCore */,
-				B1397D1F20D34020FF1268DC /* ColorfulX */,
 			);
 			productName = "TVBox-tvOS";
 			productReference = 04E8471F5AF8D64B17693833 /* TVBox-tvOS.app */;
@@ -1416,19 +1410,9 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = TVCore;
 		};
-		876B7424081D3AAE259EEF82 /* ColorfulX */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = D015483E0AF4B2350CD7C06F /* XCRemoteSwiftPackageReference "ColorfulX" */;
-			productName = ColorfulX;
-		};
 		A72103001ACB22093291D051 /* TVCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = TVCore;
-		};
-		B1397D1F20D34020FF1268DC /* ColorfulX */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = D015483E0AF4B2350CD7C06F /* XCRemoteSwiftPackageReference "ColorfulX" */;
-			productName = ColorfulX;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

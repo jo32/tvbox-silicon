@@ -1,9 +1,11 @@
+#if os(macOS)
 import SwiftUI
 import ColorfulX
 
 /// The detail page's backdrop: the cover's colours drifting slowly behind the page, like the Apple TV and Music
 /// apps' aurora. It starts as the flat backdrop and fades the colours in once the cover is read, from the posters'
-/// cache, so a cover already on screen costs no download.
+/// cache, so a cover already on screen costs no download. Mac only: on iPhone, iPad and Apple TV it looked worse
+/// than the flat backdrop.
 struct DetailAurora: View {
     let poster: URL?
     var headers: [String: String] = [:]
@@ -30,3 +32,4 @@ struct DetailAurora: View {
         }
     }
 }
+#endif
