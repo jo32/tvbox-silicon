@@ -55,6 +55,9 @@ and `sm3.js` are adapted as ES modules under `Sources/TVCore/ScriptAssets/sites/
 The signing algorithms' earlier drpys/hongguoTV attribution, modification record,
 and full GPL license are retained there and bundled with the app. Changes dated
 2026-10-12 replace Node/Electron dependencies with QuickJS and native Apple crypto.
+The built-in Xifan and Hema sources (`Xifan.js`, `Hema.js`) follow its `src/native/xifan.js` and
+`src/native/hema.js` at commit `f210689c4adbf0986e3412cdb12a1c710c5dd611` (v4.1); the record is in the same
+`NOTICE.txt`.
 The catalog adapter and native sample-by-sample CENC media preparation are implemented
 for Yingxia. No Electron, FFmpeg, captured user cookies, or fixed device IDs are bundled
 for this source.

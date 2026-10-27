@@ -226,6 +226,29 @@ import TVCore
             try await Task.sleep(for: .seconds(args.count > 2 ? Double(args[2]) ?? 60 : 60))
             return
         }
+        if args[1] == "--drama-check", args.count > 2 {
+            // --drama-check xifan|hema [keyword]: home, search, a detail and two seconds of its first episode.
+            setvbuf(stdout, nil, _IONBF, 0)
+            let site: Site = args[2] == "hema" ? .hema : .xifan
+            let client = CatalogClient(site: site, origin: URL(string: "https://example.invalid/")!)
+            let home = try await client.home()
+            print("home categories=\(home.categories.count) videos=\(home.videos.count) first=\(home.categories.prefix(3).map(\.name))")
+            let search = try await client.list(category: nil, query: args.count > 3 ? args[3] : "总裁", page: 1)
+            print("search videos=\(search.videos.count) pages=\(search.pageCount)")
+            guard let first = home.videos.first else { throw TVError.emptyPlaylist }
+            let video = try await client.detail(first.id)
+            print("detail \(video.name) episodes=\(video.episodes.count) remarks=\(video.remarks) poster=\(video.poster?.absoluteString ?? "-")")
+            guard let episode = video.episodes.first else { throw TVError.emptyPlaylist }
+            let channel = try await client.playback(episode)
+            print("resolve host=\(channel.url.host ?? "-")")
+            let item = AVPlayerItem(asset: AVURLAsset(url: channel.url, options: ["AVURLAssetHTTPHeaderFieldsKey": channel.headers]))
+            let player = AVPlayer(playerItem: item)
+            player.isMuted = true; player.play()
+            for _ in 0..<75 where player.currentTime().seconds < 2 && item.status != .failed { try await Task.sleep(for: .milliseconds(200)) }
+            print("play status=\(item.status.rawValue) time=\(player.currentTime().seconds) size=\(item.presentationSize) error=\(item.error?.localizedDescription ?? "-")")
+            guard player.currentTime().seconds >= 2 else { throw TVError.emptyPlaylist }
+            return
+        }
         if args[1] == "--hongguo-check" || args[1] == "--hongguo-play" {
             // --hongguo-play <series id> [episode number] isolates playback from catalog/search availability.
             // --hongguo-check [series id] [episode number] also checks the catalog, search and rankings.

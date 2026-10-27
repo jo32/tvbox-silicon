@@ -1068,3 +1068,11 @@
 "Look Up Titles on TMDB" = "Look Up Titles on TMDB";
 "Shows cast, artwork and episode details from TMDB on video pages. Sends the video's title, its details from the source and the source's name to Yingxia's lookup service, never your accounts or subscription addresses." = "Shows cast, artwork and episode details from TMDB on video pages. Sends the video's title, its details from the source and the source's name to Yingxia's lookup service, never your accounts or subscription addresses.";
 "You May Like" = "You May Like";
+
+/* Short-drama sources */
+"Xifan" = "Xifan";
+"Hema" = "Hema";
+"%@ Episodes" = "%@ Episodes";
+"%@ of %@ episodes free" = "%@ of %@ episodes free";
+"%@ returned incomplete data. Please refresh and try again." = "%@ returned incomplete data. Please refresh and try again.";
+"This episode isn't free on %@." = "This episode isn't free on %@.";

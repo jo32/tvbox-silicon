@@ -21,13 +21,14 @@ extension Site {
         return Site(key: Bilibili.siteKey, name: name, type: 3, api: "csp_Bili", raw: raw)
     }()
     /// A source the app provides itself; it never falls back to a subscription's JAR.
-    public var isBuiltIn: Bool { isBilibili || key == Hongguo.siteKey }
+    public var isBuiltIn: Bool { isBilibili || key == Hongguo.siteKey || ShortDramas.keys.contains(key) }
     public var isBilibili: Bool { key == Bilibili.siteKey }
-    public static var builtInSites: [Site] { [.bilibili, .hongguo] }
+    public static var builtInSites: [Site] { [.bilibili, .hongguo, .xifan, .hema] }
     /// Per-source bundled configuration. Bilibili reads the account on each request so login
     /// changes start a new session; Hongguo receives localized labels without account cookies.
     var builtInExtension: JSONValue {
         if key == Hongguo.siteKey { return Hongguo.configuration }
+        if ShortDramas.keys.contains(key) { return ShortDramas.configuration(name: name) }
         return .object(["builtin": .bool(true), "cookie": .string(BilibiliAccount.load().cookie)])
     }
 }

@@ -1068,3 +1068,11 @@
 "Look Up Titles on TMDB" = "TMDB で作品を検索";
 "Shows cast, artwork and episode details from TMDB on video pages. Sends the video's title, its details from the source and the source's name to Yingxia's lookup service, never your accounts or subscription addresses." = "動画のページに TMDB のキャスト、アートワーク、エピソード情報を表示します。動画のタイトル、ソースの説明とエピソード名、ソース名を映匣の検索サービスに送信します。アカウントや購読先アドレスは送信しません。";
 "You May Like" = "あなたへのおすすめ";
+
+/* Short-drama sources */
+"Xifan" = "Xifan";
+"Hema" = "Hema";
+"%@ Episodes" = "全 %@ 話";
+"%@ of %@ episodes free" = "無料 %@/%@ 話";
+"%@ returned incomplete data. Please refresh and try again." = "%@ から届いたデータが不完全です。更新してお試しください。";
+"This episode isn't free on %@." = "このエピソードは %@ では有料です。";

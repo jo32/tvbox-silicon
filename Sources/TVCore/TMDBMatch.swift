@@ -62,7 +62,7 @@ public enum TMDBMatch {
     /// music sources. Each subscription picks its own keys, so a music source is known by its spider (csp_MusicGuard);
     /// never by its name, which would skip video sources that happen to use such a word.
     public static func skipsSource(key: String, api: String) -> Bool {
-        ["builtin.hongguo", "builtin.bilibili", "builtin.douyin"].contains(key) || api.localizedCaseInsensitiveContains("music")
+        ["builtin.hongguo", "builtin.xifan", "builtin.hema", "builtin.bilibili", "builtin.douyin"].contains(key) || api.localizedCaseInsensitiveContains("music")
     }
 
     /// Labels a source puts on AI-generated videos and short dramas, which aren't on TMDB: in the category

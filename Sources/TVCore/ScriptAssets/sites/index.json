@@ -6,6 +6,16 @@
    "sites": "红果短剧",
    "status": "Built-in; web catalog and signed app playback"
   },
+  "YingxiaXifan": {
+   "script": "Xifan.js",
+   "sites": "西饭短剧",
+   "status": "Built-in; public app API, free episodes only"
+  },
+  "YingxiaHema": {
+   "script": "Hema.js",
+   "sites": "河马短剧",
+   "status": "Built-in; website catalog, free episodes only"
+  },
   "App3Q": {
    "script": "App3Q.js",
    "sites": "三秋, 马猴",
