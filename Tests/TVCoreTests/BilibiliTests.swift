@@ -8,8 +8,10 @@ struct BilibiliTests {
         let subscription = try Subscription.parse(data, origin: URL(string: "https://example.com/sub.json")!)
         #expect(subscription.sites.map(\.key) == ["a"])
         let shown = subscription.withBuiltInSites()
-        #expect(shown.sites.map(\.key) == ["a", Bilibili.siteKey, Hongguo.siteKey])
-        #expect(shown.withBuiltInSites().sites.count == 3)
+        // Every built-in source (Bilibili, Hongguo, the short-drama sites) after the subscription's own, each once.
+        #expect(shown.sites.map(\.key) == ["a"] + Site.builtInSites.map(\.key))
+        #expect(shown.sites.map(\.key).starts(with: ["a", Bilibili.siteKey, Hongguo.siteKey]))
+        #expect(shown.withBuiltInSites().sites.count == 1 + Site.builtInSites.count)
         // The built-in live platforms (Bilibili, Douyu, Huya, Douyin), each added once.
         #expect(shown.lives.map(\.platform) == LivePlatform.allCases && shown.withBuiltInSites().lives.count == LivePlatform.allCases.count)
         #expect(BilibiliLive.room(URL(string: "bilibili-live://room/22828499")!) == 22828499)
