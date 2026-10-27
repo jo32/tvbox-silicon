@@ -215,6 +215,11 @@ public struct CatalogClient: Sendable {
             return try await LocalJarHost.shared.request(site: site, jarURL: site.scriptURL(origin: origin), params: params, http: http, scriptOrigin: origin)
         }
         #else
+        #if os(iOS)
+        if site.raw["catPawOpen"] != nil, site.runtime == .javascript {
+            return try await EmbeddedNodeHost.shared.request(site: site, bundleURL: site.scriptURL(origin: origin), params: params, http: http, origin: origin)
+        }
+        #endif
         if site.runtime == .javascript {
             return try await ScriptRuntime.shared.request(site: site, scriptURL: site.scriptURL(origin: origin), params: params, http: http, origin: origin)
         }

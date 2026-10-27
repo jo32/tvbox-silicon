@@ -190,6 +190,8 @@ public struct Site: Identifiable, Codable, Hashable, Sendable {
         if raw["catPawOpen"] != nil {
             #if os(macOS)
             return .javascript
+            #elseif os(iOS)
+            return EmbeddedNodeHost.available ? .javascript : .unsupported
             #else
             return .unsupported
             #endif

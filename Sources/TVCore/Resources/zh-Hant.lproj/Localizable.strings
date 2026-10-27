@@ -1077,4 +1077,5 @@
 "%@ returned incomplete data. Please refresh and try again." = "%@傳回的資料不完整，請重新整理後重試。";
 "This episode isn't free on %@." = "%@的這一集需要付費。";
 "This CatPawOpen bundle lists no video sources." = "此貓源沒有提供影片來源。";
-"CatPawOpen sources only run in the Mac app." = "貓源僅能在 Mac 版中執行。";
+"This device can't run CatPawOpen sources." = "此裝置無法執行貓源。";
+"The CatPawOpen runtime stopped. Quit and reopen the app to use these sources." = "貓源執行環境已停止。請結束並重新開啟 App 後再使用這些來源。";

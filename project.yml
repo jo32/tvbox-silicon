@@ -119,6 +119,9 @@ targets:
       - name: Embed on-device Python runtime
         script: '"$SRCROOT/Scripts/embed-apple-python.sh"'
         basedOnDependencyAnalysis: false
+      - name: Embed on-device Node runtime
+        script: '"$SRCROOT/Scripts/embed-node-mobile.sh"'
+        basedOnDependencyAnalysis: false
     settings:
       HEADER_SEARCH_PATHS: $(inherited) $(SRCROOT)/build/AppleRuntime/$(PLATFORM_NAME)/include
       OTHER_LDFLAGS: $(inherited) -Wl,-force_load,$(SRCROOT)/build/AppleRuntime/$(PLATFORM_NAME)/lib/libTVAppleRuntime.a -Wl,-export_dynamic -lc++ -lz -liconv -framework Security -framework CoreGraphics

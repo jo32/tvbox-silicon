@@ -29,6 +29,9 @@ SOFTWARE.
 Mac JavaScript runtime
 Node.js — see ScriptHost/LICENSE.node in the application resources for the complete license and third-party notices.
 
+iPhone and iPad JavaScript runtime
+nodejs-mobile (Node.js for iOS) — see NodeHost/LICENSE.node in the application resources for the complete license and third-party notices.
+
 Mac Python runtime
 CPython (python-build-standalone) — PSF License; see PythonHost/python/lib/python3.12/LICENSE.txt in the application resources for the complete license and notices for bundled components.
 requests, urllib3, certifi, charset-normalizer, idna, lxml, beautifulsoup4, soupsieve, pyquery, cssselect, pycryptodome, cryptography, cffi, pycparser, typing-extensions — each library's license is in its *.dist-info directory under PythonHost/site-packages in the application resources.
