@@ -270,7 +270,7 @@ private struct TVChannelGuide: View {
             }
 
             if loading {
-                LoadingCard { .server(source.url.host(), title: L10n.text("Loading channels…")) }
+                LoadingCard(maxWidth: LoadingCard.compact) { .server(source.url.host(), title: L10n.text("Loading channels…")) }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error {
                 ErrorStateCard(title: L10n.text("Unable to Load Channels"),
