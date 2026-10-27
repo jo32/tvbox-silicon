@@ -1846,6 +1846,13 @@ struct EdgeSwipeBack: UIViewControllerRepresentable {
         private weak var recognizer: UIGestureRecognizer?
         private weak var previous: UIGestureRecognizerDelegate?
 
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            // Pushed from a search field still active (after Search was pressed), the bar the page hides stayed, and
+            // its Back showed over the page's own.
+            if navigationController?.isNavigationBarHidden == false { navigationController?.setNavigationBarHidden(true, animated: animated) }
+        }
+
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
             // Again after a swipe that was let go halfway, which brings the page back.
