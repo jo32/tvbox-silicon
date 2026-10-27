@@ -854,7 +854,11 @@ struct VideoDetailView: View {
         }
         .safeAreaInset(edge: .bottom) { if !isWatchPage { loadingCard } }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
-        .screenBackdrop()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            // The watch page's player covers the top, so it keeps the flat backdrop.
+            if isWatchPage { Backdrop() } else { DetailAurora(poster: video.poster, headers: video.posterHeaders) }
+        }
         .screenTitle(video.name).task {
             store.searchModel.suspend()
             #if os(iOS)

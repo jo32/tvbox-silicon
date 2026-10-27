@@ -26,6 +26,10 @@ packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     exactVersion: 2.10.0
+  # The detail page's aurora backdrop (App/DetailAurora.swift).
+  ColorfulX:
+    url: https://github.com/Lakr233/ColorfulX
+    exactVersion: 6.2.1
 targetTemplates:
   SharedApp:
     type: application
@@ -36,6 +40,7 @@ targetTemplates:
         buildPhase: resources
     dependencies:
       - package: TVCore
+      - package: ColorfulX
     info:
       path: Config/Info-${target_name}.plist
       properties:

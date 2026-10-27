@@ -1,6 +1,33 @@
 {
-  "originHash" : "4326ec2a87afcfc0681965264c23936ea6455d17e28c710e4d09f8765274d15f",
+  "originHash" : "78fe94507e934d81c7936205c6fe0d3324b69dfd44e89aeecbf9730118d1fb1f",
   "pins" : [
+    {
+      "identity" : "colorfulx",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Lakr233/ColorfulX",
+      "state" : {
+        "revision" : "025be056e59a62d06c6867ad65a7cb03fc63baf1",
+        "version" : "6.2.1"
+      }
+    },
+    {
+      "identity" : "colorvector",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Lakr233/ColorVector.git",
+      "state" : {
+        "revision" : "6dc3839b6060b835aed8dc82d2d620cc3b4ebe33",
+        "version" : "2.0.0"
+      }
+    },
+    {
+      "identity" : "displaylink",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Lakr233/DisplayLink.git",
+      "state" : {
+        "revision" : "41bea2661e04bebcb1c4f15fc0b6197850100fdd",
+        "version" : "3.0.1"
+      }
+    },
     {
       "identity" : "sparkle",
       "kind" : "remoteSourceControl",
@@ -8,6 +35,15 @@
       "state" : {
         "revision" : "eef1a539a373c1f1a320624b1130fc5de7b2e100",
         "version" : "2.10.0"
+      }
+    },
+    {
+      "identity" : "springinterpolation",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Lakr233/SpringInterpolation.git",
+      "state" : {
+        "revision" : "c98d56c895abc41b3f78097dae7ab6dfb015e147",
+        "version" : "3.0.1"
       }
     }
   ],

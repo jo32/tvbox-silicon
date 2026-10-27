@@ -591,6 +591,32 @@ enum PosterPalette {
         return Color(red: Double(pixel[0]) / 255, green: Double(pixel[1]) / 255, blue: Double(pixel[2]) / 255)
     }
 
+    /// A few of the cover's most colourful patches, distinct from one another, for backdrops that drift between
+    /// them (the detail page's aurora). Empty when the cover can't be read.
+    static func colors(_ url: URL, headers: [String: String] = [:], count: Int = 4) async -> [Color] {
+        guard let bitmap = try? await PosterLoader.shared.load(PosterResource(url: url, headers: headers)) else { return [] }
+        // A 6×6 thumbnail: each pixel is a patch of the cover, averaged.
+        let side = 6
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(data: buffer.baseAddress, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return false }
+            context.interpolationQuality = .high
+            context.draw(bitmap.image, in: CGRect(x: 0, y: 0, width: side, height: side))
+            return true
+        }
+        guard drawn else { return [] }
+        let chroma = { (rgb: SIMD3<Double>) in rgb.max() - rgb.min() }
+        let patches = stride(from: 0, to: pixels.count, by: 4)
+            .map { SIMD3(Double(pixels[$0]), Double(pixels[$0 + 1]), Double(pixels[$0 + 2])) / 255 }
+            .sorted { chroma($0) > chroma($1) }
+        var picked: [SIMD3<Double>] = []
+        for patch in patches where picked.count < count && picked.allSatisfy({ (($0 - patch) * ($0 - patch)).sum() > 0.04 }) {
+            picked.append(patch)
+        }
+        return picked.map { Color(red: $0.x, green: $0.y, blue: $0.z) }
+    }
+
     /// The cover itself, from the same cache, for the Lock Screen and Control Center.
     static func image(_ url: URL, headers: [String: String] = [:]) async -> CGImage? {
         try? await PosterLoader.shared.load(PosterResource(url: url, headers: headers)).image
