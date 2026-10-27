@@ -4,7 +4,7 @@
 // JSON lines, the last one the result. TMDB's own answers are cached per data center for a day (src/tmdb.ts).
 // It also works the other way: each matched source video is linked to its TMDB work, so a TMDB title found with
 // /v1/search lists the source videos viewers found it on (/v1/sources).
-import { identify, ModelError, type Source, type Verdict } from "./agent.ts";
+import { identify, ModelError, prefix, type Source, type Verdict } from "./agent.ts";
 import { cacheKey, readSource, readSourceVideo, type SourceVideo, text } from "./source.ts";
 import { brief, details } from "./details.ts";
 import { type Fetcher, image, type MediaType, TMDB, UpstreamError } from "./tmdb.ts";
@@ -99,6 +99,48 @@ function relay(env: Env): Fetcher {
   };
 }
 
+// Gemini's context cache for the prefix every model call starts with (instructions and tools, about 1,600 tokens):
+// cached tokens cost a tenth. One cache serves every run for an hour; D1 keeps its name so other isolates use it too,
+// and a run that finds none (or one about to expire) makes the next. A new prompt, tool or model makes a new one.
+const CACHE_TTL = 3600;
+let prefixCache: { version: string; name: string; expires: number } | null = null;
+
+async function cachedPrefix(env: Env): Promise<string | undefined> {
+  const bytes = new TextEncoder().encode(env.GEMINI_MODEL + JSON.stringify(prefix()));
+  const version = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].slice(0, 8).map((b) => b.toString(16).padStart(2, "0")).join("");
+  const now = Math.floor(Date.now() / 1000);
+  // Five minutes' margin: a run lasts well under that.
+  if (prefixCache?.version === version && prefixCache.expires > now + 300) return prefixCache.name || undefined;
+  const row = await env.DB.prepare("SELECT name, expires FROM gemini_cache WHERE version = ? AND expires > ?").bind(version, now + 300).first<{ name: string; expires: number }>();
+  if (row) {
+    prefixCache = { version, ...row };
+    return row.name;
+  }
+  try {
+    const response = await relay(env)(`${GEMINI}v1beta/cachedContents`, {
+      method: "POST",
+      headers: { "x-goog-api-key": env.GEMINI_API_KEY, "content-type": "application/json" },
+      body: JSON.stringify({ model: `models/${env.GEMINI_MODEL}`, ...prefix(), ttl: `${CACHE_TTL}s` }),
+    });
+    if (!response.ok) throw new Error(`${response.status}: ${(await response.text()).slice(0, 500)}`);
+    const value: any = await response.json();
+    const expires = Math.floor(Date.parse(value.expireTime) / 1000) || now + CACHE_TTL;
+    await env.DB.prepare("INSERT OR REPLACE INTO gemini_cache (version, name, expires) VALUES (?, ?, ?)").bind(version, value.name, expires).run();
+    prefixCache = { version, name: value.name, expires };
+    return value.name;
+  } catch (error) {
+    // Runs work without it, at full price; try again in ten minutes rather than on every run.
+    console.warn("Gemini cache not made:", (error as Error).message);
+    prefixCache = { version, name: "", expires: now + 600 + 300 };
+    return undefined;
+  }
+}
+
+async function forgetPrefix(env: Env, name: string) {
+  prefixCache = null;
+  await env.DB.prepare("DELETE FROM gemini_cache WHERE name = ?").bind(name).run();
+}
+
 // Requests for the same title in this isolate share one agent run.
 const running = new Map<string, Promise<{ verdict: Verdict; candidates: unknown[] }>>();
 
@@ -175,15 +217,17 @@ async function match(request: Request, env: Env, ctx: ExecutionContext): Promise
 
 async function agent(source: Source, key: string, tmdb: TMDB, env: Env, progress: (event: Record<string, unknown>) => void) {
   const started = Date.now();
-  const outcome = await identify(source, tmdb, { key: env.GEMINI_API_KEY, model: env.GEMINI_MODEL, fetcher: relay(env) }, progress);
+  const cache = await cachedPrefix(env);
+  const gemini = { key: env.GEMINI_API_KEY, model: env.GEMINI_MODEL, fetcher: relay(env), cache, cacheLost: () => void forgetPrefix(env, cache!).catch(() => {}) };
+  const outcome = await identify(source, tmdb, gemini, progress);
   const { verdict, seen } = outcome;
   // The candidates as cards (name, year, poster), so a cached answer needs no search to show them.
   const candidates = verdict.candidates.map((item) => seen.get(`${item.mediaType}:${item.id}`)).filter(Boolean);
   const now = Math.floor(Date.now() / 1000);
   await env.DB.prepare(
     `INSERT OR REPLACE INTO matches (key, title, year, type, status, media_type, tmdb_id, season, numbering, episode_offset, confidence, unmatched,
-       reason, candidates, model, turns, requests, tokens, millis, created, expires, hits)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+       reason, candidates, model, turns, requests, tokens, cached_tokens, millis, created, expires, hits)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
   )
     .bind(
       key,
@@ -204,6 +248,7 @@ async function agent(source: Source, key: string, tmdb: TMDB, env: Env, progress
       outcome.turns,
       tmdb.requests,
       outcome.tokens,
+      outcome.cachedTokens,
       Date.now() - started,
       now,
       now + keep(verdict),
@@ -327,6 +372,7 @@ export default {
     const now = Math.floor(Date.now() / 1000);
     await env.DB.batch([
       env.DB.prepare("DELETE FROM matches WHERE expires < ?").bind(now),
+      env.DB.prepare("DELETE FROM gemini_cache WHERE expires < ?").bind(now),
       env.DB.prepare("DELETE FROM usage WHERE day < ?").bind(new Date((now - 60 * DAY) * 1000).toISOString().slice(0, 10)),
     ]);
   },

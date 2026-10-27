@@ -53,7 +53,8 @@ When it could well be a real film or series, search: a known cast, a known studi
 
 How to work:
 - Search with the whole title first, then with it cleaned. Use type tv or movie when the source makes it clear (episodes, 更新至, 全N集 mean a series; a single "正片"/"HD" episode usually a movie), else multi. Try other names (traditional characters, an English or original name from the synopsis) only when needed.
-- Check the best candidates with details before answering, unless one result has exactly the title's name and its year and type agree with the source.
+- The first 3 results of a search come with their details (other names, genres, overview, seasons). Call details only for another result you need to check, unless one result has exactly the title's name and its year and type agree with the source.
+- Call several tools in one turn when they don't depend on each other (a search by the Chinese name and one by the original name; details of two results).
 - Chinese, Korean, Japanese and Western works are often listed on TMDB under their original name, with Chinese only among the other names in details. Compare the source title with every name a candidate goes by.
 - Works with the same name: use the year, type, country, episode count and synopsis to choose. Never take popularity or the first search position as proof.
 - Sequels and remakes are different works: "X 2", "X2", "X：副标题", "新X" are not "X". A shared prefix alone proves nothing.
@@ -63,12 +64,12 @@ How to work:
 - Many variety specials are not on TMDB either: answer notFound rather than a near miss.
 - unmatched: the words of the source title that are not part of the matched TMDB name, verbatim (e.g. "第四季"), or "".
 - matched only with confidence 0.8 or more and no contradicting fact. When two or more works remain plausible, answer ambiguous with them ranked. When nothing fits, notFound.
-Only submit ids you have seen in tool results. Be quick: few searches, few details.`;
+Only submit ids you have seen in tool results. Be quick: few turns, few searches.`;
 
 const declarations = [
   {
     name: "search",
-    description: "Search TMDB by name. Returns up to 20 results per page.",
+    description: "Search TMDB by name. Returns up to 12 results; the first 3 come with their details.",
     parameters: {
       type: "object",
       properties: {
@@ -129,6 +130,19 @@ export interface Gemini {
   model: string;
   fetcher?: Fetcher;
   api?: string;
+  /** A Gemini context cache ("cachedContents/…") holding `prefix()`, shared by runs; see `prefixCache` in index.ts. */
+  cache?: string;
+  /** Called when Gemini no longer knows `cache`: the run carries on without it. */
+  cacheLost?: () => void;
+}
+
+/** What every call starts with: the instructions, the tools and that a tool must be called. The part runs share. */
+export function prefix() {
+  return {
+    systemInstruction: { parts: [{ text: PROMPT }] },
+    tools: [{ functionDeclarations: declarations }],
+    toolConfig: { functionCallingConfig: { mode: "ANY" } },
+  };
 }
 
 async function generate(gemini: Gemini, body: unknown, signal?: AbortSignal) {
@@ -159,7 +173,7 @@ async function generate(gemini: Gemini, body: unknown, signal?: AbortSignal) {
     const value: any = await response.json();
     const content = value?.candidates?.[0]?.content;
     if (!content?.parts?.length) throw new ModelError(`Gemini gave no answer (${value?.candidates?.[0]?.finishReason ?? "?"})`);
-    return { content, tokens: value?.usageMetadata?.totalTokenCount ?? 0 };
+    return { content, tokens: value?.usageMetadata?.totalTokenCount ?? 0, cached: value?.usageMetadata?.cachedContentTokenCount ?? 0 };
   }
 }
 
@@ -185,12 +199,24 @@ export function describe(source: Source) {
 }
 
 const key = (type: string, id: number) => `${type}:${id}`;
+// Search results that come with their details.
+const DETAILED = 3;
 
 export async function identify(source: Source, tmdb: TMDB, gemini: Gemini, progress: Progress, limits = LIMITS, signal?: AbortSignal) {
   // Every work the tools showed, by "type:id": answers may only name these.
   const seen = new Map<string, ReturnType<typeof brief>>();
   const used = { searches: 0, details: 0, seasons: 0 };
+  // Details already fetched, by "type:id": a search's first results come with theirs, and the details tool reuses them.
+  const checked = new Map<string, Promise<any>>();
+  const check = (type: MediaType, id: number) => {
+    const known = checked.get(key(type, id));
+    if (known) return known;
+    const value = facts(tmdb, type, id);
+    checked.set(key(type, id), value);
+    return value;
+  };
   let tokens = 0;
+  let cachedTokens = 0;
   const contents: any[] = [];
 
   async function run(name: string, args: any): Promise<unknown> {
@@ -214,12 +240,15 @@ export async function identify(source: Source, tmdb: TMDB, gemini: Gemini, progr
           .filter((item) => type !== "multi" || item.media_type === "tv" || item.media_type === "movie")
           .map((item) => brief(item, type === "multi" ? undefined : type));
         for (const item of results) seen.set(key(item.mediaType, item.id), item);
-        return {
-          page,
-          pages: value?.total_pages ?? 0,
-          total: value?.total_results ?? 0,
-          results: results.slice(0, 12).map(({ poster, ...rest }) => rest),
-        };
+        // The first results with their details, so the model rarely needs a turn to ask for them.
+        const shown = await Promise.all(
+          results.slice(0, 12).map(async ({ poster, ...rest }, index) => {
+            if (index >= DETAILED) return rest;
+            const value = await check(rest.mediaType, rest.id);
+            return value.error ? rest : { ...value, votes: rest.votes };
+          }),
+        );
+        return { page, pages: value?.total_pages ?? 0, total: value?.total_results ?? 0, results: shown };
       }
       case "details": {
         if (used.details >= limits.details) return { error: "No details left. Submit your answer now." };
@@ -228,7 +257,7 @@ export async function identify(source: Source, tmdb: TMDB, gemini: Gemini, progr
         used.details++;
         const known = seen.get(key(type, id));
         progress({ step: "details", name: known?.name ?? null, year: known?.year ?? null });
-        const value: any = await facts(tmdb, type, id);
+        const value: any = await check(type, id);
         if (!value.error && !known) seen.set(key(type, id), { mediaType: type, id, name: value.name, originalName: value.originalName, year: value.year } as any);
         return value;
       }
@@ -248,29 +277,39 @@ export async function identify(source: Source, tmdb: TMDB, gemini: Gemini, progr
     }
   }
 
+  // One model turn. The shared prefix comes from the cache when there is one; a request that names a cache can't also
+  // set tools or their config, so the last turn, which allows only submit, sends it whole.
+  async function ask(last: boolean) {
+    const generationConfig = { thinkingConfig: { thinkingLevel: "low" } };
+    if (gemini.cache && !last) {
+      try {
+        return await generate(gemini, { cachedContent: gemini.cache, contents, generationConfig }, signal);
+      } catch (error) {
+        // Gone (expired early, deleted, another model): carry on without it.
+        if (!(error instanceof ModelError && /^Gemini (400|403|404)\b/.test(error.message) && /cache/i.test(error.message))) throw error;
+        gemini.cache = undefined;
+        gemini.cacheLost?.();
+      }
+    }
+    const whole = prefix();
+    if (last) whole.toolConfig.functionCallingConfig = { mode: "ANY", allowedFunctionNames: ["submit"] } as any;
+    return generate(gemini, { ...whole, contents, generationConfig }, signal);
+  }
+
   // No search before the model's first turn: an AI-generated video or a short drama shouldn't reach TMDB at all.
   contents.push({ role: "user", parts: [{ text: `Which TMDB work is this source video?\n${describe(source)}` }] });
 
   for (let turn = 0; turn < limits.turns; turn++) {
     const last = turn === limits.turns - 1;
     progress({ step: "thinking", turn });
-    const { content, tokens: spent } = await generate(
-      gemini,
-      {
-        systemInstruction: { parts: [{ text: PROMPT }] },
-        contents,
-        tools: [{ functionDeclarations: declarations }],
-        toolConfig: { functionCallingConfig: { mode: "ANY", ...(last ? { allowedFunctionNames: ["submit"] } : {}) } },
-        generationConfig: { thinkingConfig: { thinkingLevel: "low" } },
-      },
-      signal,
-    );
+    const { content, tokens: spent, cached } = await ask(last);
     tokens += spent;
+    cachedTokens += cached;
     // The model's turn goes back as it came, thought signatures included: Gemini needs them to carry on.
     contents.push(content);
     const calls = (content.parts as any[]).filter((part) => part.functionCall).map((part) => part.functionCall);
     const submit = calls.find((call) => call.name === "submit");
-    if (submit) return { verdict: verdict(submit.args ?? {}, seen), seen, used, tokens, turns: turn + 1 };
+    if (submit) return { verdict: verdict(submit.args ?? {}, seen), seen, used, tokens, cachedTokens, turns: turn + 1 };
     if (calls.length === 0) {
       contents.push({ role: "user", parts: [{ text: "Use a tool, or submit." }] });
       continue;

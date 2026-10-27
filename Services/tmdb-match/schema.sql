@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS matches (
   turns INTEGER NOT NULL,
   requests INTEGER NOT NULL,     -- TMDB requests the run made
   tokens INTEGER NOT NULL,
+  cached_tokens INTEGER NOT NULL DEFAULT 0, -- of those, read from Gemini's context cache (a tenth of the price)
   millis INTEGER NOT NULL,
   created INTEGER NOT NULL,
   expires INTEGER NOT NULL,
@@ -47,3 +48,10 @@ CREATE TABLE IF NOT EXISTS links (
   PRIMARY KEY (source, item)
 );
 CREATE INDEX IF NOT EXISTS links_work ON links (tmdb_id, media_type, seen DESC);
+
+-- Gemini context caches of the agent's prefix (instructions and tools), by a hash of the prefix and model.
+CREATE TABLE IF NOT EXISTS gemini_cache (
+  version TEXT PRIMARY KEY,
+  name TEXT NOT NULL,            -- cachedContents/…
+  expires INTEGER NOT NULL
+);

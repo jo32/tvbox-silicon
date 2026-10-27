@@ -17,6 +17,10 @@ facts and episode stills. Worker `yingxia-tmdb` at https://yingxia-tmdb.getmegap
   `ambiguous`. Budgets per run: 8 searches (pages count), 6 details, 3 seasons, 10 model turns. Before searching it
   decides whether the video can be on TMDB at all: AI-generated videos and short dramas are `notFound` (reason
   `AI-generated: …` / `Short drama: …`), kept 120 days. The app already skips videos whose source labels them so.
+- A search's first 3 results come with their details, so most matches take 2–3 model calls (search, maybe one more
+  check, submit). The instructions and tools every call starts with (about 1,600 tokens) sit in a Gemini context cache
+  shared by all runs: cached tokens cost a tenth. A run that finds no live cache (table `gemini_cache`) makes one for an
+  hour; a changed prompt, tool or model makes a new one. `matches.cached_tokens` shows how much of each run it covered.
 - Gemini refuses requests from some Cloudflare locations ("User location is not supported"), so the calls go through
   the `GeminiRelay` Durable Object, created with a North American location hint.
 - Answers are kept in D1 by `version|title|year|type` for every viewer: matched 120 days, ambiguous 30, not found 7.

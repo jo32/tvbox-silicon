@@ -2,7 +2,7 @@
 import type { Source } from "./agent.ts";
 
 // Part of every cache key: bump it when the prompt or the rules change enough that old answers should go.
-export const VERSION = "1";
+export const VERSION = "2";
 export const text = (value: unknown, max: number) => (typeof value === "string" ? value.trim().slice(0, max) : "");
 
 // Width, case and spacing don't make another title; everything else (numbers, 第四季, 特别篇) does.

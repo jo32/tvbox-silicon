@@ -102,6 +102,55 @@ test("identify can answer before any search, for an AI-generated video", async (
   assert.match(sent[0].contents[0].parts[0].text, /"category": "漫剧"/);
 });
 
+test("search results come with their first results' details, which the details tool reuses", async () => {
+  const requests: string[] = [];
+  const tmdb = new TMDB("t", async (url) => {
+    requests.push(url);
+    if (url.includes("/search/multi")) return json({ results: [1, 2, 3, 4].map((id) => ({ id, media_type: "movie", title: "繁花" + id })) });
+    const id = Number(/\/movie\/(\d+)/.exec(url)?.[1]);
+    return json({ id, title: "繁花" + id, original_title: "Blossoms", release_date: "2023-12-27", genres: [{ name: "剧情" }] });
+  }, null);
+  const { gemini, sent } = model([
+    [call("search", { query: "繁花", type: "multi" })],
+    [call("details", { mediaType: "movie", id: 2 })],
+    [call("submit", { status: "matched", mediaType: "movie", id: 2, confidence: 0.9, reason: "x" })],
+  ]);
+  const outcome = await identify({ title: "繁花" }, tmdb, gemini, () => {});
+  assert.equal(outcome.verdict.id, 2);
+  // One search and the details of its first three results; the details call needed no request of its own.
+  assert.equal(requests.length, 4);
+  const shown = sent[1].contents[2].parts[0].functionResponse.response.result.results;
+  assert.deepEqual(shown.map((item: any) => Boolean(item.genres)), [true, true, true, false]);
+});
+
+test("a cached prefix is named instead of sent, except on the last turn", async () => {
+  const tmdb = new TMDB("t", async () => json({ results: [] }), null);
+  const { gemini, sent } = model([[call("search", { query: "a", type: "tv" }, "a")], [call("submit", { status: "notFound", confidence: 0, reason: "none" })]]);
+  await identify({ title: "x" }, tmdb, { ...gemini, cache: "cachedContents/abc" }, () => {}, { searches: 8, details: 6, seasons: 3, turns: 2 });
+  assert.equal(sent[0].cachedContent, "cachedContents/abc");
+  assert.equal(sent[0].systemInstruction, undefined);
+  assert.equal(sent[0].tools, undefined);
+  assert.equal(sent[1].cachedContent, undefined);
+  assert.deepEqual(sent[1].toolConfig.functionCallingConfig.allowedFunctionNames, ["submit"]);
+});
+
+test("a run whose cache is gone carries on without it", async () => {
+  const tmdb = new TMDB("t", async () => json({ results: [] }), null);
+  const sent: any[] = [];
+  const fetcher = async (_url: string, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body));
+    sent.push(body);
+    if (body.cachedContent) return json({ error: { code: 403, message: "CachedContent not found (or permission denied)" } }, 403);
+    return json({ candidates: [{ content: { role: "model", parts: [call("submit", { status: "notFound", confidence: 0, reason: "none" })] } }] });
+  };
+  let lost = 0;
+  const outcome = await identify({ title: "x" }, tmdb, { key: "k", model: "m", fetcher, cache: "cachedContents/old", cacheLost: () => lost++ }, () => {});
+  assert.equal(outcome.verdict.status, "notFound");
+  assert.equal(lost, 1);
+  assert.equal(sent.length, 2);
+  assert.ok(sent[1].systemInstruction);
+});
+
 test("identify stops when TMDB refuses, instead of answering not found", async () => {
   const tmdb = new TMDB("t", async () => json({ status_message: "Invalid API key" }, 401), null);
   const { gemini } = model([[call("search", { query: "x", type: "multi" })]]);
