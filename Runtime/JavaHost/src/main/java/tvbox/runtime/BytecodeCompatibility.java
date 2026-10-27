@@ -12,7 +12,8 @@ public final class BytecodeCompatibility {
     // v13: HttpURLConnection range requests are observed too (cloud-drive CDN addresses).
     // v14: large constant arrays (fill-array-data) are copied into the array, not out of it (IR2JConverter).
     // v16: static values a class file can't keep as constants (a String in an Object field) are set in <clinit>.
-    public static final String VERSION = "host-v16";
+    // v17: invoke-super naming the calling class itself goes to the superclass, as on ART.
+    public static final String VERSION = "host-v17";
     private static final java.util.Set<String> connections = java.util.Set.of("java/net/URLConnection", "java/net/HttpURLConnection", "javax/net/ssl/HttpsURLConnection");
 
     private static final String BRIDGES = "tvbox/runtime/generated/InterfaceCalls";
@@ -23,6 +24,18 @@ public final class BytecodeCompatibility {
         bytes = ConstructorRepair.repair(bytes);
         ClassReader reader = new ClassReader(bytes);
         ClassWriter writer = new ClassWriter(reader, 0);
+        // Dex's invoke-super may name the calling class itself (Pan.init calls `Pan->init` for its super). ART
+        // starts that lookup at the superclass; invokespecial on the class's own method calls it again, forever.
+        // invoke-direct only reaches constructors and private methods, so other own targets came from invoke-super.
+        var inherited = new java.util.HashSet<String>();
+        if ((reader.getAccess() & Opcodes.ACC_INTERFACE) == 0 && reader.getSuperName() != null) {
+            reader.accept(new ClassVisitor(Opcodes.ASM9) {
+                @Override public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+                    if ((access & (Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC)) == 0 && !name.equals("<init>")) inherited.add(name + descriptor);
+                    return null;
+                }
+            }, ClassReader.SKIP_CODE);
+        }
         boolean newCz = reader.getClassName().equals("com/github/catvod/spider/NewCz");
         var initialValues = new java.util.ArrayList<InitialValue>();
         boolean[] initializer = { false };
@@ -68,6 +81,10 @@ public final class BytecodeCompatibility {
                 }
                 return new MethodVisitor(Opcodes.ASM9, target) {
                     @Override public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) {
+                        if (opcode == Opcodes.INVOKESPECIAL && owner.equals(reader.getClassName()) && inherited.contains(name + descriptor)) {
+                            super.visitMethodInsn(opcode, reader.getSuperName(), name, descriptor, isInterface);
+                            return;
+                        }
                         if (opcode == Opcodes.INVOKEVIRTUAL && owner.equals("java/lang/Class") && (name.equals("getMethod") || name.equals("getDeclaredMethod")) && descriptor.equals("(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;")) {
                             super.visitMethodInsn(Opcodes.INVOKESTATIC, "tvbox/runtime/ReflectionDiagnostics", name, "(Ljava/lang/Class;Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method;", false);
                             return;
