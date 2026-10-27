@@ -374,7 +374,7 @@ struct PlaybackView: View {
         } else if session.loading || session.buffering {
             #if os(macOS)
             // Top of the frame, clear of the transport bar. Seeks stall briefly; only longer waits show.
-            LoadingCard(appearAfter: session.loading ? 0 : 1.5) { session.loadingProgress }
+            LoadingCard(appearAfter: session.loading ? 0 : 1.5, maxWidth: LoadingCard.compact) { session.loadingProgress }
                 .padding(.horizontal, 24).padding(.top, 48)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .allowsHitTesting(false)

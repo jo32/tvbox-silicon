@@ -180,35 +180,21 @@ struct HistoryCard: View {
         #endif
     }
 
-    /// Red remove control. A pointer shows it; the context menu stays for touch and the remote.
+    /// Remove control, rose under the pointer. A pointer shows it; the context menu stays for touch and the remote.
     private var historyRemove: some View {
-        Button {
+        ArtworkBadgeButton(symbol: "xmark", label: L10n.text("Remove from history"), destructive: true) {
             guard drag?.active != true else { return }
             store.playbackHistory.remove(entry.id)
-        } label: {
-            Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.black.opacity(0.8))
-                .frame(width: 22, height: 22)
-                .background(Brand.rose, in: Circle())
-                .contentShape(Circle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.text("Remove from history"))
         .allowsHitTesting(drag?.active != true)
     }
 
     /// Opens the title's page, with its episodes, instead of resuming it. A pointer shows it; the context menu has it too.
     private func detailsButton(_ route: Route) -> some View {
-        Button {
+        ArtworkBadgeButton(symbol: "info", label: L10n.text("Show Details")) {
             guard drag?.active != true else { return }
             openDetails?(route)
-        } label: {
-            Image(systemName: "info").font(.system(size: 10, weight: .bold)).foregroundStyle(.black.opacity(0.8))
-                .frame(width: 22, height: 22)
-                .background(.white.opacity(0.9), in: Circle())
-                .contentShape(Circle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.text("Show Details")).help(L10n.text("Show Details"))
         .allowsHitTesting(drag?.active != true)
     }
 

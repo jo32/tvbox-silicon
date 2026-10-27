@@ -270,7 +270,7 @@ private struct TVChannelGuide: View {
             }
 
             if loading {
-                LoadingCard { .server(source.url.host(), title: L10n.text("Loading channels…")) }
+                LoadingCard(maxWidth: LoadingCard.compact) { .server(source.url.host(), title: L10n.text("Loading channels…")) }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error {
                 ErrorStateCard(title: L10n.text("Unable to Load Channels"),
@@ -614,10 +614,22 @@ private struct FavoriteEpisodeCard: View {
                 .padding(8)
             #endif
         }
-        #if os(macOS)
+        .overlay(alignment: .topTrailing) { if hovering { detailsLink.padding(8).transition(.opacity) } }
+        #if !os(tvOS)
         .onHover { hovering = $0 }
         .animation(.smooth(duration: 0.15), value: hovering)
         #endif
+    }
+
+    /// The title's page, where a click on the card only plays the episode. A pointer shows it, as on history cards.
+    @ViewBuilder private var detailsLink: some View {
+        if let listing = episode.video.listingVideo(), let client = store.catalogClient(for: episode.video) {
+            RouteLink { VideoDetailView(video: listing, client: client) } label: {
+                Image(systemName: "info").font(.system(size: 11, weight: .bold)).foregroundStyle(.white).artworkBadge()
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.text("Show Details")).help(L10n.text("Show Details"))
+        }
     }
 }
 
