@@ -1068,3 +1068,11 @@
 "Look Up Titles on TMDB" = "在 TMDB 上查找作品";
 "Shows cast, artwork and episode details from TMDB on video pages. Sends the video's title, its details from the source and the source's name to Yingxia's lookup service, never your accounts or subscription addresses." = "在视频页面显示来自 TMDB 的演员、海报和剧集信息。会把视频的标题、来源提供的简介和剧集名称，以及来源的名称发送给映匣的查找服务，绝不发送你的账号或订阅地址。";
 "You May Like" = "猜你喜欢";
+
+/* Short-drama sources */
+"Xifan" = "西饭短剧";
+"Hema" = "河马短剧";
+"%@ Episodes" = "共 %@ 集";
+"%@ of %@ episodes free" = "免费 %@/%@ 集";
+"%@ returned incomplete data. Please refresh and try again." = "%@返回的数据不完整，请刷新后重试。";
+"This episode isn't free on %@." = "%@的这一集需要付费。";
