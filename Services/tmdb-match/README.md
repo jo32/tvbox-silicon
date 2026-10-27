@@ -1,7 +1,8 @@
 # TMDB match
 
 Finds the TMDB movie or series behind a source's video, so the app's detail page can show TMDB's artwork, cast,
-facts and episode stills. Worker `yingxia-tmdb` at https://yingxia-tmdb.getmegaportal.com, D1 `yingxia-tmdb`.
+facts, episode stills and "you may like" (TMDB's recommendations, topped up with similar titles, in the same
+TMDB request). Worker `yingxia-tmdb` at https://yingxia-tmdb.getmegaportal.com, D1 `yingxia-tmdb`.
 
 ## How it works
 

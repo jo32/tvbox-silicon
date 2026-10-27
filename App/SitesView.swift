@@ -1113,6 +1113,9 @@ struct VideoDetailView: View {
             VStack(alignment: .leading, spacing: 22) {
                 if !details.cast.isEmpty { TMDBCastRow(cast: details.cast) }
                 TMDBInfoGrid(details: details)
+                if let related = details.recommendations, !related.isEmpty {
+                    TMDBRelatedRow(titles: related) { store.searchVideos($0) }
+                }
                 TMDBFooter(lookup: tmdb, title: currentVideo().name)
             }
             .transition(.opacity.combined(with: .move(edge: .bottom)))

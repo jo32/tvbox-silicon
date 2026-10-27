@@ -1067,3 +1067,4 @@
 "Search TMDB" = "搜尋 TMDB";
 "Look Up Titles on TMDB" = "在 TMDB 上查找作品";
 "Shows cast, artwork and episode details from TMDB on video pages. Sends the video's title, its details from the source and the source's name to Yingxia's lookup service, never your accounts or subscription addresses." = "在影片頁面顯示來自 TMDB 的演員、海報和劇集資訊。會把影片的標題、來源提供的簡介和劇集名稱，以及來源的名稱傳送給映匣的查找服務，絕不傳送你的帳號或訂閱地址。";
+"You May Like" = "猜你喜歡";

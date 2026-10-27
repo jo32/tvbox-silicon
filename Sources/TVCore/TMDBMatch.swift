@@ -191,6 +191,8 @@ public enum TMDBMatch {
         public let networks: [String]
         public let seasons: [SeasonSummary]
         public let season: Season?
+        /// "You may like": TMDB's recommendations, then similar titles. Absent in details saved before it was added.
+        public let recommendations: [Candidate]?
         public let link: URL
     }
 

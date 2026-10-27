@@ -42,17 +42,19 @@ import TVCore
         }
         if let answer = await TMDBMatchStore.shared.answer(for: key) {
             show(answer)
-            if let match = answer.match, match.mediaType == .tv { refreshDetails(match, key: key) }
+            // Details saved before "you may like" was added lack it; a movie fetches its details again just for that.
+            if let match = answer.match, match.mediaType == .tv || answer.details?.recommendations == nil { refreshDetails(match, key: key) }
             return true
         }
         return false
     }
 
     /// A series gets new episodes, and so does the source: a kept answer shows at once, and the series' details are
-    /// fetched again behind it, so the new episodes line up too. A movie's don't change.
+    /// fetched again behind it, so the new episodes line up too. A movie's don't change; one is fetched again only when
+    /// its saved details have no "you may like".
     private func refreshDetails(_ match: TMDBMatch.Match, key: String) {
         Task {
-            guard let fresh = try? await TMDBMatch.details(.tv, id: match.id, season: match.season),
+            guard let fresh = try? await TMDBMatch.details(match.mediaType, id: match.id, season: match.season),
                   self.key == key, !chosen, fresh != details else { return }
             let answer = await TMDBMatchStore.shared.update(fresh, for: key)
             withAnimation(.smooth(duration: 0.35)) {
@@ -317,6 +319,29 @@ struct TMDBCastRow: View {
                 }
             }
             .scrollIndicators(.never)
+        }
+    }
+}
+
+/// TMDB's "you may like". A title here isn't from any source, so choosing one searches the viewer's sources for
+/// it, as an index source's titles do.
+struct TMDBRelatedRow: View {
+    let titles: [TMDBMatch.Candidate]
+    let search: (String) -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(L10n.text("You May Like")).font(.headline)
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: TMDBMetrics.spacing) {
+                    ForEach(titles, id: \.key) { title in
+                        Button { search(title.name) } label: { TMDBCandidateTile(candidate: title) }
+                            .tmdbCardButton()
+                    }
+                }
+                .padding(.vertical, TMDBMetrics.focusRoom)
+            }
+            .scrollIndicators(.never)
+            .scrollClipDisabled()
         }
     }
 }

@@ -25,6 +25,17 @@ export interface EpisodeInfo {
   rating: number | null;
 }
 
+/** A title TMDB suggests beside this one. */
+export interface Related {
+  mediaType: MediaType;
+  id: number;
+  name: string;
+  originalName: string | null;
+  year: number | null;
+  poster: string;
+  overview: string | null;
+}
+
 export interface Details {
   mediaType: MediaType;
   id: number;
@@ -48,6 +59,8 @@ export interface Details {
   networks: string[];
   seasons: SeasonSummary[];
   season: { number: number; name: string; overview: string; poster: string | null; year: number | null; episodes: EpisodeInfo[] } | null;
+  /** "You may like": TMDB's recommendations, topped up with similar titles. */
+  recommendations: Related[];
   link: string;
 }
 
@@ -76,6 +89,33 @@ function translated(translations: any, language: string, field: string) {
   return "";
 }
 
+// What people who liked this went on to watch, then titles like it while there are fewer than `limit`.
+// Only titles with a poster: the app shows them as a row of posters.
+export function related(item: any, type: MediaType, limit = 12): Related[] {
+  const seen = new Set([`${type}:${item.id}`]);
+  const titles: Related[] = [];
+  for (const result of [...list(item.recommendations?.results), ...list(item.similar?.results)]) {
+    if (titles.length >= limit) break;
+    const mediaType: MediaType = result.media_type === "tv" || result.media_type === "movie" ? result.media_type : type;
+    const tv = mediaType === "tv";
+    const name = clip(tv ? result.name : result.title, 120);
+    const poster = image(result.poster_path, "w342");
+    const key = `${mediaType}:${result.id}`;
+    if (result.adult || typeof result.id !== "number" || !name || !poster || seen.has(key)) continue;
+    seen.add(key);
+    titles.push({
+      mediaType,
+      id: result.id,
+      name,
+      originalName: clip(tv ? result.original_name : result.original_title, 120) || null,
+      year: yearOf(tv ? result.first_air_date : result.release_date),
+      poster,
+      overview: clip(result.overview, 200) || null,
+    });
+  }
+  return titles;
+}
+
 // A logo in the viewer's language if there is one, else English, else one without text. PNGs only: the app can't draw SVG.
 function logo(images: any, language: string) {
   const logos = list(images?.logos).filter((entry) => typeof entry.file_path === "string" && entry.file_path.endsWith(".png"));
@@ -88,7 +128,7 @@ export async function details(tmdb: TMDB, type: MediaType, id: number, language:
   const lang = language.split("-")[0];
   const item = await tmdb.get(`/${type}/${id}`, {
     language,
-    append_to_response: type === "tv" ? "aggregate_credits,images,translations" : "credits,images,translations",
+    append_to_response: type === "tv" ? "aggregate_credits,images,translations,recommendations,similar" : "credits,images,translations,recommendations,similar",
     include_image_language: `${lang},en,null`,
   });
   if (!item) return null;
@@ -160,6 +200,7 @@ export async function details(tmdb: TMDB, type: MediaType, id: number, language:
     networks: list(tv ? item.networks : item.production_companies).slice(0, 3).map((entry) => clip(entry.name, 60)),
     seasons,
     season,
+    recommendations: related(item, type),
     link: `https://www.themoviedb.org/${type}/${id}`,
   };
 }

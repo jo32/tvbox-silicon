@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { identify, ModelError, verdict } from "../src/agent.ts";
-import { details } from "../src/details.ts";
+import { details, related } from "../src/details.ts";
 import { cacheKey, comparable, readSource } from "../src/source.ts";
 import { TMDB, UpstreamError } from "../src/tmdb.ts";
 
@@ -28,6 +28,30 @@ test("TMDB text with a web address is left out", async () => {
   const value = await details(tmdb, "tv", 1, "zh-CN", null);
   assert.equal(value!.tagline, "");
   assert.equal(value!.overview, "好看");
+});
+
+test("recommendations come first, then similar titles, each once and only with a poster", () => {
+  const item = {
+    id: 1,
+    recommendations: { results: [
+      { media_type: "movie", id: 2, title: "甲", poster_path: "/a.jpg", release_date: "2020-05-01" },
+      { media_type: "tv", id: 3, name: "乙", poster_path: null },
+      { media_type: "tv", id: 4, name: "丙", poster_path: "/c.jpg", adult: true },
+      { media_type: "tv", id: 1, name: "本剧", poster_path: "/self.jpg" },
+    ] },
+    similar: { results: [
+      { id: 5, name: "丁", original_name: "D", poster_path: "/d.jpg", first_air_date: "2019-01-01" },
+      { id: 6, name: "看片网 x.com", poster_path: "/e.jpg" },
+      { id: 7, name: "戊", poster_path: "/f.jpg" },
+    ] },
+  };
+  const titles = related(item, "tv");
+  assert.deepEqual(titles.map((title) => `${title.mediaType}:${title.id}`), ["movie:2", "tv:5", "tv:7"]);
+  assert.equal(titles[0].year, 2020);
+  assert.equal(titles[1].originalName, "D");
+  assert.match(titles[1].poster, /^https:\/\/image\.tmdb\.org\/t\/p\/w342\/d\.jpg$/);
+  assert.equal(related(item, "tv", 1).length, 1);
+  assert.deepEqual(related({ id: 1 }, "movie"), []);
 });
 
 test("comparable keeps numbers and season words, drops width, case and spacing", () => {
