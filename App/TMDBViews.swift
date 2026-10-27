@@ -40,8 +40,26 @@ import TVCore
             }
             return true
         }
-        if let answer = await TMDBMatchStore.shared.answer(for: key) { show(answer); return true }
+        if let answer = await TMDBMatchStore.shared.answer(for: key) {
+            show(answer)
+            if let match = answer.match, match.mediaType == .tv { refreshDetails(match, key: key) }
+            return true
+        }
         return false
+    }
+
+    /// A series gets new episodes, and so does the source: a kept answer shows at once, and the series' details are
+    /// fetched again behind it, so the new episodes line up too. A movie's don't change.
+    private func refreshDetails(_ match: TMDBMatch.Match, key: String) {
+        Task {
+            guard let fresh = try? await TMDBMatch.details(.tv, id: match.id, season: match.season),
+                  self.key == key, !chosen, fresh != details else { return }
+            let answer = await TMDBMatchStore.shared.update(fresh, for: key)
+            withAnimation(.smooth(duration: 0.35)) {
+                details = fresh
+                if let answer { self.answer = answer }
+            }
+        }
     }
 
     /// Asks the Worker, unless `prepare` already had an answer. Cancelled with the page; the Worker finishes anyway and

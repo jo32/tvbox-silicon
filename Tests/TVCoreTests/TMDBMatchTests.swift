@@ -52,6 +52,15 @@ struct TMDBMatchTests {
         await store.save(answer, for: "a|1", now: now)
         #expect(await store.answer(for: "a|1", now: now.addingTimeInterval(3600)) == answer)
         #expect(await store.answer(for: "a|1", now: now.addingTimeInterval(2 * 86400)) == nil)
+        // Newer details for a match replace the old ones but keep when the match was saved.
+        let matched = TMDBMatch.Answer(status: .matched, match: nil, season: 2, numbering: .season, unmatched: "", candidates: [],
+                                       details: try details(season: 2, episodes: 8, seasons: [(2, 10)]))
+        await store.save(matched, for: "b|1", now: now)
+        let updated = await store.update(try details(season: 2, episodes: 9, seasons: [(2, 10)]), for: "b|1")
+        #expect(updated?.details?.season?.episodes.count == 9)
+        #expect(await store.answer(for: "b|1", now: now.addingTimeInterval(3600))?.details?.season?.episodes.count == 9)
+        #expect(await store.answer(for: "b|1", now: now.addingTimeInterval(8 * 86400)) == nil)
+        #expect(await store.update(try details(season: 2, episodes: 9, seasons: [(2, 10)]), for: "a|1") == nil)
         await store.choose(.work(.tv, 7, season: 2), for: "a|1")
         let reopened = TMDBMatchStore(cacheURL: folder.appending(path: "c.json"), choicesURL: folder.appending(path: "p.json"))
         #expect(await reopened.choice(for: "a|1") == .work(.tv, 7, season: 2))

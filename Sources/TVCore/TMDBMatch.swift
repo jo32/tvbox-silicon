@@ -412,6 +412,19 @@ public actor TMDBMatchStore {
         write(entries, to: cacheURL)
     }
 
+    /// A kept match with newer details (a series' new episodes). It keeps when it was saved: the match still expires.
+    public func update(_ details: TMDBMatch.Details, for key: String) -> TMDBMatch.Answer? {
+        var entries = loadEntries()
+        guard let entry = entries[key], entry.answer.status == .matched else { return nil }
+        let old = entry.answer
+        let answer = TMDBMatch.Answer(status: old.status, match: old.match, season: old.season, numbering: old.numbering,
+                                      unmatched: old.unmatched, candidates: old.candidates, details: details)
+        entries[key] = Entry(answer: answer, saved: entry.saved)
+        self.entries = entries
+        write(entries, to: cacheURL)
+        return answer
+    }
+
     public func choice(for key: String) -> Choice? { loadChoices()[key] }
 
     public func choose(_ choice: Choice?, for key: String) {
