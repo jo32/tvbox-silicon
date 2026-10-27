@@ -25,10 +25,17 @@ public enum Remux {
             .contains((name as NSString).pathExtension.lowercased())
     }
 
-    /// Opens the file and returns the address of its HLS master playlist on a loopback server.
-    public static func open(_ source: RemuxSource) async throws -> URL {
+    /// Opens the file and returns the address of its HLS master playlist on a loopback server. `subtitles`, the
+    /// files beside it, are fetched (with `headers`) while the file opens and join its own subtitles.
+    public static func open(_ source: RemuxSource, subtitles: [ExternalSubtitle] = [], headers: [String: String] = [:]) async throws -> URL {
+        try await open(source, subtitles: subtitles, headers: headers, session: .shared)
+    }
+
+    static func open(_ source: RemuxSource, subtitles: [ExternalSubtitle], headers: [String: String], session subtitleSession: URLSession) async throws -> URL {
+        async let files = SubtitleFile.load(subtitles, headers: headers, session: subtitleSession)
         let session = RemuxSession(source: source)
         try await session.open()
+        session.add(await files)
         RemuxStore.shared.add(session)
         do {
             let base = try await RemuxServer.shared.base()

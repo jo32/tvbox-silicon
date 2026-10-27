@@ -27,6 +27,10 @@ final class RemuxSession: @unchecked Sendable {
     private(set) var playlists: [Int: String] = [:]
     private(set) var initializations: [Int: Data] = [:]
     private(set) var format = ""
+    /// The cues of the subtitle files added after the file's own tracks, by track.
+    private var external: [Int: [RemuxPlan.Cue]] = [:]
+    private var codecs: [Int: String] = [:]
+    private var startTime: Int64 = 0
 
     private let condition = NSCondition()
     private var segments: [Key: RemuxSegment] = [:]
@@ -69,11 +73,34 @@ final class RemuxSession: @unchecked Sendable {
         condition.unlock()
     }
 
+    /// Adds subtitle files as subtitles of the stream, before it is served. Their cues count from the start
+    /// of the picture, which is where the file's clock starts.
+    func add(_ files: [SubtitleFile.Track]) {
+        guard !files.isEmpty else { return }
+        condition.lock()
+        defer { condition.unlock() }
+        let start = startTime
+        for (track, file) in zip(plan.addSubtitles(files), files) {
+            external[track] = file.cues.map { RemuxPlan.Cue(start: $0.start + start, end: $0.end + start, text: $0.text) }
+            playlists[track] = plan.mediaPlaylist(track: track)
+        }
+        master = plan.masterPlaylist(codecs: codecs, supplemental: initializations[0].flatMap(plan.supplementalCodec))
+        Diagnostics.shared.record(.info, "remux", "subtitle files=\(files.count) cues=\(files.map(\.cues.count))")
+    }
+
     /// The segment's bytes as they are written. The caller reads it and then calls `leave`.
     func segment(track: Int, index: Int) -> RemuxSegment? {
         guard let plan, plan.tracks.indices.contains(track), (0..<plan.segments).contains(index), plan.tracks[track].kind != .other else { return nil }
         condition.lock()
         defer { condition.unlock() }
+        // A subtitle file's segment is made from its cues at once; FFmpeg has no part in it.
+        if let cues = external[track] {
+            let segment = RemuxSegment()
+            segment.join()
+            segment.append(Data(RemuxPlan.webVTT(plan.cues(cues, segment: index), offset: Self.offset).utf8))
+            segment.finish()
+            return segment
+        }
         let key = Key(track: track, segment: index)
         let segment: RemuxSegment
         if let existing = segments[key], existing.state != .failed { segment = existing }
@@ -178,7 +205,7 @@ final class RemuxSession: @unchecked Sendable {
         }
         guard let cursor = tvm_cursor_create(input, &tracks, Int32(tracks.count), Self.offset) else { throw TVError.unsupported("remux cursor") }
         self.cursor = cursor
-        var codecs: [Int: String] = [:]
+        startTime = tvm_start_time(input)
         for (index, track) in plan.tracks.enumerated() where track.kind == .video || track.kind == .audio {
             let segment = RemuxSegment()
             writing = [index: segment]
@@ -224,7 +251,7 @@ final class RemuxSession: @unchecked Sendable {
         let recent = asked.filter { Date().timeIntervalSince($0.value) < 30 }.map(\.key)
         let audio = recent.isEmpty ? [plan.defaultAudio].compactMap { $0 } : recent
         writing = [:]
-        for (track, kind) in plan.tracks.map(\.kind).enumerated() {
+        for (track, kind) in plan.tracks.map(\.kind).enumerated() where external[track] == nil {
             let key = Key(track: track, segment: index)
             let existing = segments[key]
             let wanted = existing?.readers ?? 0 > 0 || kind == .video || kind == .subtitle || audio.contains(track)

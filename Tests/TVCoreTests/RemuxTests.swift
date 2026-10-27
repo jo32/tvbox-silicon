@@ -141,6 +141,60 @@ struct RemuxTests {
         #expect(RemuxPlan.languageTag("chi") == "zh" && RemuxPlan.languageTag("und") == nil && RemuxPlan.languageTag("") == nil && RemuxPlan.languageTag("en") == "en")
     }
 
+    @Test func subtitleFilesBecomeCues() throws {
+        // SubRip in GB 18030, as Chinese subtitle files often are, with a cue number and a timing without hours.
+        let srt = "1\r\n00:00:01,500 --> 00:00:03,000\r\n<i>你好</i>\r\n世界\r\n\r\n2\r\n01:02,250 --> 01:04,000\r\nA & B\r\n"
+        let encoding = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)))
+        let gb = try #require(srt.data(using: encoding))
+        #expect(String(data: gb, encoding: .utf8) == nil)
+        #expect(SubtitleFile.cues(gb) == [.init(start: 1_500_000, end: 3_000_000, text: "<i>你好</i>\n世界"),
+                                         .init(start: 62_250_000, end: 64_000_000, text: "A &amp; B")])
+        let vtt = "WEBVTT\n\nNOTE made by hand\n\nintro\n00:00:00.250 --> 00:00:01.000 line:90%\n<c.yellow>Hi</c>\n"
+        #expect(SubtitleFile.cues(Data([0xEF, 0xBB, 0xBF]) + Data(vtt.utf8)) == [.init(start: 250_000, end: 1_000_000, text: "<c.yellow>Hi</c>")])
+        let ass = """
+        [Script Info]
+        ScriptType: v4.00+
+
+        [Events]
+        Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+        Dialogue: 0,0:00:05.10,0:00:07.00,Default,,0,0,0,,{\\an8}第二句\\N, 还有
+        Dialogue: 0,0:00:02.00,0:00:04.00,Default,,0,0,0,,第一句
+        Dialogue: 0,0:00:03.00,0:00:04.00,Sign,,0,0,0,,{\\p1}m 0 0 l 100 0
+        """
+        #expect(SubtitleFile.cues(Data(ass.utf8), format: "text/x-ssa") == [.init(start: 2_000_000, end: 4_000_000, text: "第一句"),
+                                                                            .init(start: 5_100_000, end: 7_000_000, text: "第二句\n, 还有")])
+        #expect(SubtitleFile.cues(Data("not a subtitle".utf8)).isEmpty)
+        // A play result's `subs`: entries without an HTTP address are left out.
+        let subs = JSONValue.array([
+            .object(["name": .string("末世行者.chs.srt"), "url": .string("http://127.0.0.1:9978/proxy?do=quark&type=sub"), "lang": .string("chs"),
+                     "format": .string("application/x-subrip")]),
+            .object(["url": .string("https://cdn.example.com/a.ass")]),
+            .object(["name": .string("bad"), "url": .string("file:///etc/passwd")]),
+        ])
+        let parsed = ExternalSubtitle.parse(subs)
+        #expect(parsed.map(\.name) == ["末世行者.chs.srt", "a.ass"] && parsed[0].language == "chs" && parsed[0].format == "application/x-subrip")
+    }
+
+    @Test func subtitleFilesJoinThePlan() throws {
+        let streams = [Stream(index: 0, kind: .video, codec: "h264", width: 1920, height: 1080), Stream(index: 1, kind: .audio, codec: "aac", channels: 2)]
+        var plan = try #require(RemuxPlan.make(streams: streams, keyframes: [0, 4_000_000, 8_000_000], start: 0, duration: 12_000_000, size: 0, device: .init()))
+        let cue = { (start: Int64) in RemuxPlan.Cue(start: start, end: start + 500_000, text: "\(start)") }
+        let added = plan.addSubtitles([.init(name: "末世行者.chs.srt", language: "chs", cues: [cue(1_000_000)]),
+                                       .init(name: "末世行者.英文.srt", language: "英文", cues: [cue(1_000_000)])])
+        #expect(added == [2, 3] && plan.tracks[2].stream.index < 0 && plan.tracks[2].kind == .subtitle)
+        let master = plan.masterPlaylist(codecs: [:])
+        // The file has no subtitles of its own, so the first file's are on; a language HLS can't take is left out.
+        #expect(master.contains(#"TYPE=SUBTITLES,GROUP-ID="subtitles",NAME="末世行者.chs.srt",LANGUAGE="zh-Hans",DEFAULT=YES"#))
+        #expect(master.contains(#"NAME="末世行者.英文.srt",DEFAULT=NO"#) && master.contains(#"SUBTITLES="subtitles""#))
+        #expect(plan.mediaPlaylist(track: 2).contains("2-0.vtt"))
+        // Each cue goes to the segment it starts in; the first and last take what lies outside the picture.
+        let cues = [cue(-2_000_000), cue(3_900_000), cue(4_000_000), cue(11_000_000), cue(20_000_000)]
+        #expect(plan.segments == 3)
+        #expect(plan.cues(cues, segment: 0).map(\.start) == [-2_000_000, 3_900_000])
+        #expect(plan.cues(cues, segment: 1).map(\.start) == [4_000_000])
+        #expect(plan.cues(cues, segment: 2).map(\.start) == [11_000_000, 20_000_000])
+    }
+
     // MARK: - Playing through FFmpeg
 
     private func fixture(_ name: String) throws -> URL {
@@ -185,6 +239,27 @@ struct RemuxTests {
         #expect(later.contains("Second") && !later.contains("Hello"))
         let played = await ready(url)
         #expect(played.status == .readyToPlay && abs(played.duration - 8) < 0.2)
+    }
+
+    @Test func subtitleFilesPlayAsSubtitlesOfTheStream() async throws {
+        let srt = RangeServer.add("film-\(UUID().uuidString).srt", Data("1\n00:00:07,000 --> 00:00:07,500\n从文件来的字幕\n".utf8))
+        let missing = URL(string: "https://cloud.test/missing.srt")!
+        let url = try await Remux.open(try Remux.fileSource(fixture("remux-copy.mkv")),
+                                       subtitles: [ExternalSubtitle(name: "Chinese", url: srt, language: "chi"), ExternalSubtitle(name: "Gone", url: missing)],
+                                       headers: [:], session: RangeServer.session)
+        defer { Remux.stop(url) }
+        let master = String(decoding: try await fetch(url), as: UTF8.self)
+        // After the file's own subtitles, which stay the default; a file that can't be read is left out.
+        #expect(master.contains(#"NAME="Chinese",LANGUAGE="zh",DEFAULT=NO,AUTOSELECT=YES,FORCED=NO,URI="4.m3u8""#) && !master.contains("Gone"))
+        let playlist = String(decoding: try await fetch(url.deletingLastPathComponent().appending(path: "4.m3u8")), as: UTF8.self)
+        #expect(playlist.contains("4-1.vtt"))
+        let first = String(decoding: try await fetch(url.deletingLastPathComponent().appending(path: "4-0.vtt")), as: UTF8.self)
+        let second = String(decoding: try await fetch(url.deletingLastPathComponent().appending(path: "4-1.vtt")), as: UTF8.self)
+        #expect(first.hasPrefix("WEBVTT") && !first.contains("字幕"))
+        #expect(second.contains("\n从文件来的字幕\n"))
+        // AVFoundation lists it with the file's own, where the player's Subtitles menu finds it.
+        let group = try await AVURLAsset(url: url).loadMediaSelectionGroup(for: .legible)
+        #expect(group?.options.map(\.displayName).contains("Chinese") == true && group?.options.count == 2)
     }
 
     @Test func aviIsConvertedForAVPlayer() async throws {
