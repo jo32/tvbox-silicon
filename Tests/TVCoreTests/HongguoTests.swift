@@ -23,6 +23,7 @@ struct HongguoTests {
         import spider, { routerData, catalog, detail, search, webMedia } from 'assets://sites/Hongguo.js';
         import { fetchAppPlayUrl, deriveContentKey, decryptSpadeUrl } from 'assets://sites/hongguo/app-source.js';
         import { Buffer, crypto } from 'assets://sites/hongguo/crypto.js';
+        import { playbackDevice } from 'assets://sites/hongguo/playback-device.js';
         import sm3 from 'assets://sites/hongguo/sm3.js';
         const sid = '7686713195246930968', vids = ['7686715217652223038', '7686715203864416318', '7686715213118835774', '7686715221196414014'];
         const page = data => '<script>window._ROUTER_DATA = ' + JSON.stringify({ loaderData: { page: data } }) + ';globalThis.untrusted = true;</script>';
@@ -90,22 +91,40 @@ struct HongguoTests {
             checks.spade = decryptSpadeUrl(spade, seed) === media;
             const backup = 'https://v9-reading.fqnovelvod.com/video.mp4';
             const backupSpade = Buffer.concat([Buffer.from([0xa8, 0, 1, 0]), Buffer.from(nativeCrypto({ op: 'aes', encrypt: true, key: material.subarray(0, 16).toString('base64'), iv: material.subarray(16, 32).toString('base64'), dataText: backup }).data, 'base64')]).toString('base64');
-            let calls = 0, wrongEpisode = false, badDestination = false, refused = false;
+            let calls = 0, registrations = 0, wrongEpisode = false, badDestination = false, refused = false, inlineModel = false;
+            const device = '1234567890123456', install = '6543210987654321';
+            const videoList = {
+                unsupported: { codec_type: 'bytevc2', quality_desc: '2160p', main_url: media },
+                selected: { codec_type: 'h264', quality_desc: '1080p', main_url: spade, backup_url_1: backupSpade, backup_url_list: [spade, 'not base64'], spade_a: raw.toString('base64') }
+            };
+            // An inline 1080p row without its key is skipped, not played encrypted.
+            const inlineList = [{ codec_type: 'h264', quality_desc: '1080p', main_url: backup, encrypt_info: { encrypt: true } },
+                { codec_type: 'h264', quality_desc: '720p', main_url: media, spade_a: raw.toString('base64') }];
             const appAnswer = (url, options) => {
                 calls++;
-                if (options.method === 'POST') {
-                    const body = JSON.parse(options.body);
-                    if (body.mixed_video_id_map['1004'][0] !== vids[3] || !options.headers['x-medusa'] || !options.headers['x-gorgon'] || options.redirect !== false) throw new Error('Invalid signed request');
-                    return { code: 200, content: JSON.stringify({ code: 0, data: { [wrongEpisode ? vids[0] : vids[3]]: { video_model: JSON.stringify({ fallback_api: badDestination ? 'https://127.0.0.1/info' : 'https://vod.snssdk.com/info' }) } } }) };
+                if (url.includes('/device_register/')) {
+                    registrations++;
+                    // ttEncrypt: a magic header, 32 random bytes, then whole AES-CBC blocks.
+                    const sent = Buffer.from(options.bodyBase64, 'base64');
+                    if (sent.subarray(0, 6).toString('hex') !== '746305100000' || (sent.length - 38) % 16 !== 0 ||
+                        options.headers['x-ss-stub'] !== crypto.createHash('md5').update(sent).digest('hex').toUpperCase()) throw new Error('Invalid registration');
+                    return { code: 200, content: JSON.stringify({ device_id_str: device, install_id_str: install }) };
                 }
-                return { code: 200, content: JSON.stringify({ video_info: { code: refused ? 10001 : 0, data: { key_seed: seed.toString('base64'), video_list: {
-                    unsupported: { codec_type: 'bytevc2', quality_desc: '2160p', main_url: media },
-                    selected: { codec_type: 'h264', quality_desc: '1080p', main_url: spade, backup_url_1: backupSpade, backup_url_list: [spade, 'not base64'], spade_a: raw.toString('base64') }
-                } } } }) };
+                if (options.method === 'POST') {
+                    const body = JSON.parse(Buffer.from(options.bodyBase64, 'base64').toString('utf8'));
+                    if (body.mixed_video_id_map['1004'][0] !== vids[3] || !url.includes('&device_id=' + device) || !url.includes('&iid=' + install) || options.redirect !== false) throw new Error('Invalid playback request');
+                    const model = inlineModel ? { video_list: inlineList } : { fallback_api: badDestination ? 'https://127.0.0.1/info' : 'https://vod.snssdk.com/info' };
+                    return { code: 200, content: JSON.stringify({ code: 0, data: { [wrongEpisode ? vids[0] : vids[3]]: { video_model: JSON.stringify(model) } } }) };
+                }
+                return { code: 200, content: JSON.stringify({ video_info: { code: refused ? 10001 : 0, data: { key_seed: seed.toString('base64'), video_list: videoList } } }) };
             };
+            // A failed registration is forgotten, so the next episode registers again.
+            let attempts = 0; rejected = false;
+            try { await playbackDevice(async () => { attempts++; throw new Error('offline'); }); } catch { rejected = true; }
+            checks.registrationRetry = rejected && attempts === 1;
             globalThis.req = appAnswer;
             const playback = await fetchAppPlayUrl(vids[3]);
-            checks.app = calls === 2 && playback.contentKey === key && playback.url === media && playback.quality === '1080p';
+            checks.app = calls === 3 && registrations === 1 && playback.contentKey === key && playback.url === media && playback.quality === '1080p';
             checks.backups = JSON.stringify(playback.backups) === JSON.stringify([backup]);
             const sourcePlayback = await spider.play('Hongguo', sid + '/' + vids[3]);
             checks.mediaHeaders = sourcePlayback.header['User-Agent'].startsWith('com.phoenix.read/') && !('Referer' in sourcePlayback.header);
@@ -113,7 +132,7 @@ struct HongguoTests {
             const ids = [];
             globalThis.req = (url, options) => { if (options.method === 'POST') ids.push(url.match(/[?&]device_id=([0-9]+)/)?.[1]); throw new Error('offline'); };
             for (let i = 0; i < 2; i++) { try { await fetchAppPlayUrl(vids[3]); } catch { /* Only the identities matter here. */ } }
-            checks.freshIdentity = ids.length === 2 && ids.every(id => /^[0-9]{16,}$/.test(id)) && ids[0] !== ids[1];
+            checks.oneDevice = ids.length === 2 && ids.every(id => id === device) && registrations === 1;
             refused = true; calls = 0; rejected = false;
             globalThis.req = appAnswer;
             try { await fetchAppPlayUrl(vids[3]); } catch (error) { rejected = /暂未提供/.test(error.message); }
@@ -126,6 +145,9 @@ struct HongguoTests {
             wrongEpisode = false; badDestination = true; calls = 0; rejected = false;
             try { await fetchAppPlayUrl(vids[3]); } catch { rejected = true; }
             checks.destination = rejected && calls === 1;
+            badDestination = false; inlineModel = true; calls = 0;
+            const inlinePlayback = await fetchAppPlayUrl(vids[3]);
+            checks.inline = calls === 1 && inlinePlayback.url === media && inlinePlayback.contentKey === key && inlinePlayback.headers['User-Agent'].startsWith('com.phoenix.read/71532');
             return { checks };
         } };
         """#
@@ -134,7 +156,7 @@ struct HongguoTests {
         let envelope = try await session.call([:])
         let json = try #require(envelope["result"]?.string, "\(envelope)")
         let checks = try #require(JSONDecoder().decode([String: JSONValue].self, from: Data(json.utf8))["checks"]?.object)
-        #expect(checks.count == 28)
+        #expect(checks.count == 30)
         for (name, result) in checks { #expect(result == .bool(true), "\(name)") }
     }
 
