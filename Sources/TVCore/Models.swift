@@ -186,6 +186,14 @@ public struct Site: Identifiable, Codable, Hashable, Sendable {
     public var runtime: SourceRuntime {
         if native { return .api }
         guard type == 3, !missingAPI else { return .unsupported }
+        // A CatPawOpen bundle is a Node server (see CatPawOpen), which only the Mac can run.
+        if raw["catPawOpen"] != nil {
+            #if os(macOS)
+            return .javascript
+            #else
+            return .unsupported
+            #endif
+        }
         let path = api.lowercased()
         if path.hasSuffix(".js") || path.contains(".js?") { return .javascript }
         if path.contains(".py") || (api.hasPrefix("py_") && raw["ext"]?.string?.lowercased().contains(".py") == true) { return .python }

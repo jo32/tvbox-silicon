@@ -1076,3 +1076,5 @@
 "%@ of %@ episodes free" = "免費 %@/%@ 集";
 "%@ returned incomplete data. Please refresh and try again." = "%@傳回的資料不完整，請重新整理後重試。";
 "This episode isn't free on %@." = "%@的這一集需要付費。";
+"This CatPawOpen bundle lists no video sources." = "此貓源沒有提供影片來源。";
+"CatPawOpen sources only run in the Mac app." = "貓源僅能在 Mac 版中執行。";

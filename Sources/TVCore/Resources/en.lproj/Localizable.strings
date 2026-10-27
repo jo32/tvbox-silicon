@@ -1076,3 +1076,5 @@
 "%@ of %@ episodes free" = "%@ of %@ episodes free";
 "%@ returned incomplete data. Please refresh and try again." = "%@ returned incomplete data. Please refresh and try again.";
 "This episode isn't free on %@." = "This episode isn't free on %@.";
+"This CatPawOpen bundle lists no video sources." = "This CatPawOpen bundle lists no video sources.";
+"CatPawOpen sources only run in the Mac app." = "CatPawOpen sources only run in the Mac app.";

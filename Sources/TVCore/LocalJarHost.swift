@@ -55,7 +55,12 @@ public actor LocalJarHost {
         }
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
         let configuration = try encoder.encode(site.raw)
-        let identity = Data((jarURL.absoluteString + "\n" + site.key + "\n" + site.api + "\n" + ((scriptOrigin ?? configurationOrigin)?.absoluteString ?? "")).utf8) + configuration
+        // A CatPawOpen bundle serves all its sources from one process, so each request names its source.
+        let catPawOpen = site.raw["catPawOpen"]?.string
+        var params = params
+        if let catPawOpen { params["catPawOpen"] = catPawOpen }
+        let identity = catPawOpen != nil ? Data((jarURL.absoluteString + "\n" + (scriptOrigin?.absoluteString ?? "")).utf8)
+            : Data((jarURL.absoluteString + "\n" + site.key + "\n" + site.api + "\n" + ((scriptOrigin ?? configurationOrigin)?.absoluteString ?? "")).utf8) + configuration
         let profileKey = PluginChecksum.sha256(identity)
         let key = profileKey + (pluginData.map { "-" + PluginChecksum.sha256($0) } ?? "")
         // Evict only idle sources. An in-flight request must not be killed by navigation elsewhere.
@@ -91,7 +96,7 @@ public actor LocalJarHost {
                     // legacy `py_` source's ext is the script itself; the host then reads `?extend=` from it.
                     if runtime == .python, site.api.hasPrefix("py_") { ext = "" }
                     if runtime == .javascript, let scriptOrigin, !ext.isEmpty, !ext.hasPrefix("{") { ext = (try? WebAddress.resolve(ext, relativeTo: scriptOrigin).absoluteString) ?? ext }
-                    let input: [String: Any] = ["script": jar.path, "jar": jar.path, "cache": job.path, "conversionCache": root.appendingPathComponent("Converted", isDirectory: true).path, "profile": root.appendingPathComponent("Profiles/" + profileKey).path, "api": script ? jarURL.absoluteString : site.api, "key": site.sourceKey, "ext": ext, "cloudAccounts": CloudDriveAccounts.fileURL.path, "subscription": configurationOrigin?.absoluteString ?? ""]
+                    let input: [String: Any] = ["script": jar.path, "jar": jar.path, "cache": job.path, "conversionCache": root.appendingPathComponent("Converted", isDirectory: true).path, "profile": root.appendingPathComponent("Profiles/" + profileKey).path, "api": script ? jarURL.absoluteString : site.api, "key": site.sourceKey, "ext": ext, "cloudAccounts": CloudDriveAccounts.fileURL.path, "subscription": configurationOrigin?.absoluteString ?? "", "catPawOpen": catPawOpen != nil]
                     let request = job.appendingPathComponent("request.json")
                     try JSONSerialization.data(withJSONObject: input).write(to: request)
                     let host = resources.appendingPathComponent(runtime == .python ? "PythonHost" : script ? "ScriptHost" : "JavaHost")

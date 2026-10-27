@@ -1076,3 +1076,5 @@
 "%@ of %@ episodes free" = "無料 %@/%@ 話";
 "%@ returned incomplete data. Please refresh and try again." = "%@ から届いたデータが不完全です。更新してお試しください。";
 "This episode isn't free on %@." = "このエピソードは %@ では有料です。";
+"This CatPawOpen bundle lists no video sources." = "この CatPawOpen バンドルには動画ソースがありません。";
+"CatPawOpen sources only run in the Mac app." = "CatPawOpen のソースは Mac 版でのみ動作します。";
