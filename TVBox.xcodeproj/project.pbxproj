@@ -74,6 +74,7 @@
 		3E39031243C9BC9870C143E4 /* OpenJDK.txt in Resources */ = {isa = PBXBuildFile; fileRef = BD71FD8B3E72803C426D91CC /* OpenJDK.txt */; };
 		3E3FA848D0BF2855FEAE2577 /* OpenJDK.txt in Resources */ = {isa = PBXBuildFile; fileRef = BD71FD8B3E72803C426D91CC /* OpenJDK.txt */; };
 		3E782ECA07220E19F2EBDB7C /* ThirdPartyNotices.txt in Resources */ = {isa = PBXBuildFile; fileRef = A3012FC04D8DAD058B1A5168 /* ThirdPartyNotices.txt */; };
+		3EB79F655F119BDD19F30726 /* ColorfulX in Frameworks */ = {isa = PBXBuildFile; productRef = 185E90685A8AF7EB8AD7A768 /* ColorfulX */; };
 		3ED898D04E49F78F4DD57109 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31D1816B8ED53D49478FD843 /* MoreView.swift */; };
 		3F2E64D0FAA75B78026F115A /* RuntimeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2075419FEF0E1C161A31A9F0 /* RuntimeView.swift */; };
 		455119517E0FFF07B799E98C /* MusicPlayerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2CD4FD12F4DD3AAE1F8592A /* MusicPlayerViews.swift */; };
@@ -119,6 +120,7 @@
 		6DBF1FDBD1FD2889D191197E /* PlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6876ACF1E9D9F80BBC4F22C4 /* PlaybackView.swift */; };
 		6DC63423F08E6141C4B9357A /* PlayOn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226C6E62CA6E50C8609C1EF3 /* PlayOn.swift */; };
 		6DEB6CBDB1E1383EA1947894 /* PlayOn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226C6E62CA6E50C8609C1EF3 /* PlayOn.swift */; };
+		6F182F91BDACFBFC8E6B3B0E /* DetailAurora.swift in Sources */ = {isa = PBXBuildFile; fileRef = A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */; };
 		6F3F7DE9D8CB73FC2C1592D9 /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181C983C0018A97F2A086298 /* DiscoveryView.swift */; };
 		6FB75A9CED5DEEB931AD0C9A /* MusicRemoteControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E59EDBC7BE62078557E781 /* MusicRemoteControl.swift */; };
 		722A5C4D2DC5223EB611AC0A /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5938F1806109304A4FB816CF /* Sparkle */; };
@@ -130,6 +132,7 @@
 		762AAE7DEDF6675A62474B19 /* CatalogPlaybackActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46C4D3FABE1C6E7A7B63BA62 /* CatalogPlaybackActions.swift */; };
 		78CE336AE6714726DFDFDB43 /* CatalogPlaybackActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46C4D3FABE1C6E7A7B63BA62 /* CatalogPlaybackActions.swift */; };
 		7C7B124A35FE1D0AA83DCE0B /* MusicMacBrowse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D442D4FB2D2EB656FBBCB2C /* MusicMacBrowse.swift */; };
+		7DCDDEB6A7774CAF5C85D539 /* DetailAurora.swift in Sources */ = {isa = PBXBuildFile; fileRef = A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */; };
 		7E01798F392A21C413011284 /* MusicRemoteControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E59EDBC7BE62078557E781 /* MusicRemoteControl.swift */; };
 		7EF594A9192339C8A03FB054 /* MusicTVPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5733BA144503E76421BCFD /* MusicTVPlayer.swift */; };
 		7F3C4D27F233572323FAA9A4 /* MobilePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08D7BF6713A8519BEED17EE3 /* MobilePlayer.swift */; };
@@ -220,6 +223,7 @@
 		E8A225058F954A38DDAE052A /* MusicMacBrowse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D442D4FB2D2EB656FBBCB2C /* MusicMacBrowse.swift */; };
 		E8E7D31FA6802352FA66EB56 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 335A7E05458DD9DA9AA04125 /* InfoPlist.strings */; };
 		EA59E4954399A7E5BC6C2348 /* unidbg.txt in Resources */ = {isa = PBXBuildFile; fileRef = 995F5F0DB35FE66B4F90B4FF /* unidbg.txt */; };
+		EBDFAB717675C3CBCA05B75F /* DetailAurora.swift in Sources */ = {isa = PBXBuildFile; fileRef = A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */; };
 		ED3A1F1DAE4D25F3AA743AC7 /* WebSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367AD12D73554C3C3667315D /* WebSignInView.swift */; };
 		ED3BFF07859A99C455624644 /* DanmakuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A5737402EC96F0FBF79243E /* DanmakuView.swift */; };
 		EE40CAB25587252D370219D3 /* PlaybackHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 334B106CCFB47B5E27376A16 /* PlaybackHistoryView.swift */; };
@@ -300,6 +304,7 @@
 		A3012FC04D8DAD058B1A5168 /* ThirdPartyNotices.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ThirdPartyNotices.txt; sourceTree = "<group>"; };
 		A4EB0D74F8DB73E33CC129F8 /* CacheSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheSettingsView.swift; sourceTree = "<group>"; };
 		A90392B70C28DA6CC7497B9F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailAurora.swift; sourceTree = "<group>"; };
 		AB7347843C885A97DFE397DD /* DouyinAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DouyinAccountView.swift; sourceTree = "<group>"; };
 		ADB3063A14E368A71892DCEE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B2CD4FD12F4DD3AAE1F8592A /* MusicPlayerViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlayerViews.swift; sourceTree = "<group>"; };
@@ -344,6 +349,7 @@
 			files = (
 				1E4B0163BABCB43BA85836D6 /* TVCore in Frameworks */,
 				722A5C4D2DC5223EB611AC0A /* Sparkle in Frameworks */,
+				3EB79F655F119BDD19F30726 /* ColorfulX in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -421,6 +427,7 @@
 				4A0D2EAF4F07329DAB40B97D /* CloudFilesView.swift */,
 				E78573DE76BCF27CABBB20F3 /* CloudQRLoginView.swift */,
 				7A5737402EC96F0FBF79243E /* DanmakuView.swift */,
+				A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */,
 				181C983C0018A97F2A086298 /* DiscoveryView.swift */,
 				AB7347843C885A97DFE397DD /* DouyinAccountView.swift */,
 				B45CB8261D922949ADBDBE15 /* DownloadsView.swift */,
@@ -586,6 +593,7 @@
 			packageProductDependencies = (
 				758A0D5359D0622060D86C20 /* TVCore */,
 				5938F1806109304A4FB816CF /* Sparkle */,
+				185E90685A8AF7EB8AD7A768 /* ColorfulX */,
 			);
 			productName = "TVBox-macOS";
 			productReference = 2278608DE7AE2FEA27EB51C9 /* TVBox-macOS.app */;
@@ -649,6 +657,7 @@
 			mainGroup = 9DD837D999788C26D512B710;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				D015483E0AF4B2350CD7C06F /* XCRemoteSwiftPackageReference "ColorfulX" */,
 				937CF4D4BB3B8639DF8523BA /* XCRemoteSwiftPackageReference "Sparkle" */,
 				06AA5CB5721B8F53BE65070A /* XCLocalSwiftPackageReference "Packages/TVCore" */,
 			);
@@ -866,6 +875,7 @@
 				8EB254B55B70CF8A923D1CD0 /* CloudFilesView.swift in Sources */,
 				91C07692EFFEE27619AA9FF3 /* CloudQRLoginView.swift in Sources */,
 				ED3BFF07859A99C455624644 /* DanmakuView.swift in Sources */,
+				6F182F91BDACFBFC8E6B3B0E /* DetailAurora.swift in Sources */,
 				6F3F7DE9D8CB73FC2C1592D9 /* DiscoveryView.swift in Sources */,
 				6D7F63E735B2F3624CD39974 /* DouyinAccountView.swift in Sources */,
 				2B263C305CDC1687A050CCBC /* DownloadsView.swift in Sources */,
@@ -929,6 +939,7 @@
 				1D82C5470FDA73053EAD6398 /* CloudFilesView.swift in Sources */,
 				277D741E2A86C06612A8034A /* CloudQRLoginView.swift in Sources */,
 				2EF5CCF1BA71B68F4DCF2F71 /* DanmakuView.swift in Sources */,
+				7DCDDEB6A7774CAF5C85D539 /* DetailAurora.swift in Sources */,
 				15E3F2F86594F2B8A9CF0175 /* DiscoveryView.swift in Sources */,
 				731566BD0371FFCF447852DD /* DouyinAccountView.swift in Sources */,
 				14FA5947D5B1472F7AF31530 /* DownloadsView.swift in Sources */,
@@ -994,6 +1005,7 @@
 				BA97CE75C2E0DF21635E17EA /* CloudFilesView.swift in Sources */,
 				31D893FEF33876FD07BB58BA /* CloudQRLoginView.swift in Sources */,
 				C10EEC4D7AED0BE564BF2246 /* DanmakuView.swift in Sources */,
+				EBDFAB717675C3CBCA05B75F /* DetailAurora.swift in Sources */,
 				4ECE8586E27A017017F26EDC /* DiscoveryView.swift in Sources */,
 				1D206EDCE9B6412346BCC150 /* DouyinAccountView.swift in Sources */,
 				B351A3B692D2C43212B5F65F /* DownloadsView.swift in Sources */,
@@ -1369,12 +1381,25 @@
 				version = 2.10.0;
 			};
 		};
+		D015483E0AF4B2350CD7C06F /* XCRemoteSwiftPackageReference "ColorfulX" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Lakr233/ColorfulX";
+			requirement = {
+				kind = exactVersion;
+				version = 6.2.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		150E7485ED76FF29A84D7C1D /* TVCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = TVCore;
+		};
+		185E90685A8AF7EB8AD7A768 /* ColorfulX */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D015483E0AF4B2350CD7C06F /* XCRemoteSwiftPackageReference "ColorfulX" */;
+			productName = ColorfulX;
 		};
 		5938F1806109304A4FB816CF /* Sparkle */ = {
 			isa = XCSwiftPackageProductDependency;
