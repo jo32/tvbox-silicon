@@ -1,6 +1,97 @@
 {
   "releases": [
     {
+      "version": "1.8.1",
+      "build": 39,
+      "date": "2026-10-28",
+      "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.1/Yingxia-1.8.1-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.1/Yingxia-1.8.1-macos-x86_64.dmg",
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "photo.on.rectangle.angled",
+          "title": {
+            "en": "Artwork, cast and episode pictures from TMDB",
+            "zh-Hans": "来自 TMDB 的海报、演员和剧照",
+            "zh-Hant": "來自 TMDB 的海報、演員和劇照",
+            "ja": "TMDB のアートワーク、キャスト、エピソード画像"
+          },
+          "detail": {
+            "en": "A video's page now finds the title on TMDB and fades in its banner, cast, facts and a picture for each episode. If it picked the wrong title, choose Not This Title? to pick another. The page is now one scroll on every device: banner, synopsis, episodes, then cast and details.",
+            "zh-Hans": "影片页面现在会在 TMDB 上查找这部作品，找到后淡入显示横幅、演员、作品信息和每一集的剧照。如果认错了，点“不是这部？”即可改选。所有设备上的影片页面现在都是一整页：横幅、简介、选集，然后是演员和详细信息。",
+            "zh-Hant": "影片頁面現在會在 TMDB 上查找這部作品，找到後淡入顯示橫幅、演員、作品資訊和每一集的劇照。如果認錯了，點「不是這部？」即可改選。所有裝置上的影片頁面現在都是一整頁：橫幅、簡介、選集，接著是演員和詳細資訊。",
+            "ja": "作品ページが TMDB で作品を探し、見つかるとバナー、キャスト、作品情報、各エピソードの画像をフェードインで表示します。違う作品だった場合は「この作品ではない？」から選び直せます。作品ページはすべてのデバイスで 1 ページの縦スクロールになりました（バナー、あらすじ、エピソード、キャストと詳細の順）。"
+          }
+        },
+        {
+          "symbol": "play.rectangle",
+          "title": {
+            "en": "Watch on the video's page",
+            "zh-Hans": "在影片页直接观看",
+            "zh-Hant": "在影片頁直接觀看",
+            "ja": "作品ページでそのまま再生"
+          },
+          "detail": {
+            "en": "On iPhone, a video's page now plays it at the top, as in Bilibili. It starts on its own where you left off, with the details and episodes below. Full Screen enlarges the same player without reloading, Continue Watching opens this page, and a swipe from the left edge goes back.",
+            "zh-Hans": "在 iPhone 上，影片页面顶部现在会直接播放视频，就像哔哩哔哩一样。打开后会从上次看到的位置自动播放，简介和选集在下方。“全屏”会放大同一个播放器，无需重新载入；“继续观看”会打开这个页面；从屏幕左边缘轻扫即可返回。",
+            "zh-Hant": "在 iPhone 上，影片頁面頂部現在會直接播放影片，就像嗶哩嗶哩一樣。開啟後會從上次看到的位置自動播放，簡介和選集在下方。「全螢幕」會放大同一個播放器，無需重新載入；「繼續觀看」會開啟這個頁面；從螢幕左邊緣輕掃即可返回。",
+            "ja": "iPhone では、作品ページの上部で動画がそのまま再生されるようになりました（ビリビリと同じスタイル）。開くと前回の続きから自動で再生され、あらすじとエピソードはその下に並びます。「フルスクリーン」は同じプレーヤーを拡大するので読み込み直しは不要です。「視聴を続ける」からもこのページが開き、画面の左端からスワイプすると戻れます。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "text.bubble",
+          "title": {
+            "en": "Subtitles from cloud drives",
+            "zh-Hans": "网盘字幕",
+            "zh-Hant": "雲端硬碟字幕",
+            "ja": "クラウドドライブの字幕"
+          },
+          "detail": {
+            "en": "A film played from a cloud drive such as Quark now comes with the subtitle files saved next to it in the shared folder.",
+            "zh-Hans": "从夸克等网盘播放的影片，现在会带上同一分享文件夹里的字幕文件。",
+            "zh-Hant": "從夸克等雲端硬碟播放的影片，現在會帶上同一分享資料夾裡的字幕檔案。",
+            "ja": "Quark などのクラウドドライブから再生する映画で、同じ共有フォルダに置かれた字幕ファイルも使えるようになりました。"
+          }
+        },
+        {
+          "symbol": "play.rectangle.on.rectangle",
+          "title": {
+            "en": "Two more short-drama sources",
+            "zh-Hans": "新增两个短剧源",
+            "zh-Hant": "新增兩個短劇來源",
+            "ja": "ショートドラマのソースを 2 つ追加"
+          },
+          "detail": {
+            "en": "Xifan (西饭) and Hema (河马) join Hongguo as built-in short-drama sources, with genres, search and details. Only free episodes are listed, and Hema offers just the first few episodes of each drama.",
+            "zh-Hans": "西饭和河马加入红果，成为内置短剧源，可按类型浏览、搜索并查看详情。只列出免费剧集；河马每部剧只提供前几集。",
+            "zh-Hant": "西飯和河馬加入紅果，成為內建短劇來源，可依類型瀏覽、搜尋並查看詳情。只列出免費劇集；河馬每部劇只提供前幾集。",
+            "ja": "西飯（Xifan）と河馬（Hema）が紅果と並ぶ内蔵ショートドラマソースになりました。ジャンル別の閲覧、検索、詳細表示に対応しています。無料のエピソードのみ表示され、河馬は各ドラマの最初の数話のみです。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "Hongguo short dramas play again, and cloud-drive sources that crashed when they opened (such as 即刻) work again. On Apple TV, each favorite on Watch Now is one tile, and you remove a favorite by pressing and holding it. On Mac and iPad, Continue Watching and Playback History cards have Show Details. Each group on the Sources page follows your custom source order, and on iPhone danmaku no longer run under the Dynamic Island.",
+            "zh-Hans": "红果短剧恢复播放；打开时会崩溃的网盘源（如“即刻”）也恢复正常。在 Apple TV 上，“现在观看”里的每个收藏都是一张卡片，按住即可取消收藏。在 Mac 和 iPad 上，“继续观看”和“播放历史”的卡片新增“查看详情”。“点播源”页面中的每个分组现在都会按照你自定义的顺序排列；在 iPhone 上，弹幕不再被灵动岛挡住。",
+            "zh-Hant": "紅果短劇恢復播放；開啟時會當機的雲端硬碟來源（如「即刻」）也恢復正常。在 Apple TV 上，「現在觀看」裡的每個收藏都是一張卡片，按住即可取消收藏。在 Mac 和 iPad 上，「繼續觀看」和「播放歷史」的卡片新增「查看詳情」。「隨選來源」頁面中的每個群組現在都會依照你自訂的順序排列；在 iPhone 上，彈幕不再被動態島擋住。",
+            "ja": "紅果（Hongguo）のショートドラマが再び再生できるようになり、開くとクラッシュしていたクラウドドライブ系ソース（即刻など）も直りました。Apple TV では「今すぐ観る」のお気に入りが 1 枚のタイルになり、長押しでお気に入りから外せます。Mac と iPad では「視聴を続ける」と「再生履歴」のカードに「詳細を表示」が加わりました。「配信ソース」ページの各グループがカスタムの並び順どおりに表示され、iPhone では弾幕コメントが Dynamic Island に隠れなくなりました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.0",
       "build": 36,
       "date": "2026-10-26",

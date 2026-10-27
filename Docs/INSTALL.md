@@ -13,8 +13,8 @@ We recommend **[cider](https://github.com/Battzz/cider-cli)**, a free command-li
 
   | Device | IPA | Bundle identifier |
   | --- | --- | --- |
-  | iPhone / iPad | [Yingxia-1.8.0-ios.ipa](https://download.getmegaportal.com/yingxia/1.8.0/Yingxia-1.8.0-ios.ipa) | `com.jo32.yingxia.ios` |
-  | Apple TV | [Yingxia-1.8.0-tvos.ipa](https://download.getmegaportal.com/yingxia/1.8.0/Yingxia-1.8.0-tvos.ipa) | `com.jo32.yingxia.tv` |
+  | iPhone / iPad | [Yingxia-1.8.1-ios.ipa](https://download.getmegaportal.com/yingxia/1.8.1/Yingxia-1.8.1-ios.ipa) | `com.jo32.yingxia.ios` |
+  | Apple TV | [Yingxia-1.8.1-tvos.ipa](https://download.getmegaportal.com/yingxia/1.8.1/Yingxia-1.8.1-tvos.ipa) | `com.jo32.yingxia.tv` |
 
   From 1.7.8 the bundle identifiers are `com.jo32.yingxia.*`, so 1.7.8 installs next to an earlier Yingxia instead of replacing it: add your subscription in the new app, then delete the old one.
 
@@ -63,7 +63,7 @@ cider account team    # only if your account belongs to several teams
    ```
 3. In the folder with the IPA, sign and install it:
    ```sh
-   cider sign Yingxia-1.8.0-ios.ipa --apple-id --install --refresh
+   cider sign Yingxia-1.8.1-ios.ipa --apple-id --install --refresh
    ```
 4. On the device, open **Settings → General → VPN & Device Management** and trust the developer entry for your Apple account.
 5. If required, turn on **Settings → Privacy & Security → Developer Mode**, then follow the restart and confirmation prompts.
@@ -78,7 +78,7 @@ Apple TV 4K has no USB data connection, so cider installs to it over the network
 3. Pair the Mac with the TV once. cider can only pair over USB, so use Xcode (free in the App Store): open **Window → Devices and Simulators**, select the Apple TV under Discovered, click **Pair** and type the PIN the TV shows. (Sideloadly's **Re-Pair** button works too.)
 4. Find its UDID with `cider device list` (it's listed as `<your TV's name> [WiFi]` with an ID like `00008110-…`), then sign and install:
    ```sh
-   cider sign Yingxia-1.8.0-tvos.ipa --apple-id --install --refresh -u <UDID>
+   cider sign Yingxia-1.8.1-tvos.ipa --apple-id --install --refresh -u <UDID>
    ```
    The IPA is about 140 MB, so the install can take a few minutes over Wi-Fi. It ends with `✓ Installed to <name>`.
 5. Open **Yingxia** on Apple TV. 🎉
