@@ -6,13 +6,27 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Yingxia</title>
         <item>
+            <title>1.8.1</title>
+            <pubDate>Wed, 28 Oct 2026 01:30:41 +0800</pubDate>
+            <sparkle:version>39</sparkle:version>
+            <sparkle:shortVersionString>1.8.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://download.getmegaportal.com/yingxia/1.8.1/Yingxia-1.8.1-macos-arm64.dmg" length="193463324" type="application/octet-stream" sparkle:edSignature="vA09QqbzxGxHDWw6oPrubmaJCThWlhxStyOaYlVyp42o8F9fmoFM/Ybmw0ZDIqUTUwN3sT4GnVxyQbjFUyhbAw=="/>
+            <sparkle:deltas>
+                <enclosure url="https://download.getmegaportal.com/yingxia/1.8.1/Yingxia39-36-arm64.delta" sparkle:deltaFrom="36" length="3000246" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="468528" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="FhrmnaAYeqUyxE1IfDPniMC0M1pnfzpwZd9bMXTJoQ50cflfQ0ffrqJFnLmRog8i2MfyQWJW/xg74xYNqk3dBw=="/>
+                <enclosure url="https://download.getmegaportal.com/yingxia/1.8.1/Yingxia39-32-arm64.delta" sparkle:deltaFrom="32" length="6037638" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="468528" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="0y97r/koHrTnb5zpxo0pMTH2tnSImk+eVp/q31CBsKprBUJEn9XAqtH5hREd3p0GM/c70SBQrUKCnG/XwmipCA=="/>
+                <enclosure url="https://download.getmegaportal.com/yingxia/1.8.1/Yingxia39-31-arm64.delta" sparkle:deltaFrom="31" length="6328390" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="468528" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="4wQUggHetIdxaONyqwHOBTM4giBhv8qE4+gM1+9tW/AKY1YeSWjyRqi2XoZWDimEvAzqZoup5aqI+NDO6/vaAA=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>1.8.0</title>
             <pubDate>Mon, 26 Oct 2026 19:30:25 +0800</pubDate>
             <sparkle:version>36</sparkle:version>
             <sparkle:shortVersionString>1.8.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://download.getmegaportal.com/yingxia/1.8.0/Yingxia-1.8.0-macos-arm64.dmg?b=36" length="194606122" type="application/octet-stream" sparkle:edSignature="FankVVw7QGRlxeZgOD5ghgiRi32fYt9HnJRR1dD1di/IBbedjMYls4V8AWXuCWFeQPu8PgkjlrMJsFYdPawJDA=="/>
+            <enclosure url="https://download.getmegaportal.com/yingxia/1.8.0/Yingxia-1.8.0-macos-arm64.dmg" length="194606122" type="application/octet-stream" sparkle:edSignature="FankVVw7QGRlxeZgOD5ghgiRi32fYt9HnJRR1dD1di/IBbedjMYls4V8AWXuCWFeQPu8PgkjlrMJsFYdPawJDA=="/>
             <sparkle:deltas>
                 <enclosure url="https://download.getmegaportal.com/yingxia/1.8.0/Yingxia36-34-arm64.delta" sparkle:deltaFrom="34" length="2392702" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="468528" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="0juNWOfN4ielpRoT7Ey3HYioSuFHPgyDpZJzkFc05lrVFXa4Zpc/Jz8pxflv+FYB1hg2NJsuDXN9MziochCuAQ=="/>
                 <enclosure url="https://download.getmegaportal.com/yingxia/1.8.0/Yingxia36-32-arm64.delta" sparkle:deltaFrom="32" length="5452778" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="468528" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="/kt6QllgqrrtJoZrL+d+iYKng1+Ffs+bf9tD+9kcO15xtS95OvqT74L8C7rh4MabbSUI0xpbrSHSRsGgwAEZBA=="/>
@@ -36,6 +50,6 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: 2/0/LYIAvXC+JUEZn38FErhuvOaEHFkG6AVDox+gd81pCDJ2jCpJVIJWVvFBgCYc5UuIdOwS0a7ONsHoU2QHAA==
-length: 4310
+edSignature: Xh5CInITaP+fHkG0edP2IqWBjNdD/4Gv0XHXlX5TPF8EIc+U99plGD1sQlMC24Li3ppCOdq9MAnHylqrONTWBg==
+length: 6230
 -->
