@@ -23,7 +23,7 @@
           "buildVersion": "36",
           "date": "2026-10-26",
           "localizedDescription": "• 支持 MKV 等更多格式\n• HDR 视频可以播放\n• Python 点播源全平台可用\n• 点播源不再消失\n• 红果短剧更稳定\n• 选集按钮不再误触\n• 更舒展的影片页面\n• 加入 Telegram 群组\n• 批量移除订阅\n• 其他修复\n\n• Plays MKV and more\n• HDR videos play\n• Python sources everywhere\n• Sources no longer disappear\n• Hongguo loads more reliably\n• Episode buttons out of the way\n• A roomier video page\n• Join the Telegram group\n• Remove subscriptions in bulk\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.0/Yingxia-1.8.0-ios.ipa?b=36",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.0/Yingxia-1.8.0-ios.ipa",
           "size": 98643054,
           "sha256": "cedfa1b766e90560292125d5b384879f180caa9a6ccb890f73fa86b8b2a00f9c",
           "minOSVersion": "17.0"
