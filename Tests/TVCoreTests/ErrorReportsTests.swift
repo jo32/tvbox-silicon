@@ -145,6 +145,16 @@ import Testing
     #expect(ErrorReports.groupKey("app", report) != ErrorReports.groupKey("app", QuitContext.report(browsing, bootTime: 0)!))
 }
 
+@Test func exitCountsReportEachWayTheAppEndedOnScreen() {
+    let found = CrashReports.exits([("memory limit", 2), ("abnormal exit", 0), ("watchdog", 1)], origin: "app=1.7.7 (38)")
+    #expect(found == ["Ended on screen: memory limit (MetricKit)\ncount=2 app=1.7.7 (38)", "Ended on screen: watchdog (MetricKit)\ncount=1 app=1.7.7 (38)"])
+    #expect(CrashReports.exits([("memory limit", 0)], origin: "app=1.7.7 (38)").isEmpty)
+    // One group per way, whatever the count or version.
+    let later = CrashReports.exits([("memory limit", 9)], origin: "app=1.8.0 (40)")[0]
+    #expect(ErrorReports.groupKey("app", found[0]) == ErrorReports.groupKey("app", later))
+    #expect(ErrorReports.groupKey("app", found[0]) != ErrorReports.groupKey("app", found[1]))
+}
+
 @Test func quitContextReadsThisDevice() {
     let now = Int(Date().timeIntervalSince1970)
     #expect(ErrorReports.bootTime > 0 && ErrorReports.bootTime < now)

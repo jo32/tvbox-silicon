@@ -95,6 +95,13 @@ public final class CrashReports: NSObject, @unchecked Sendable {
         return found
     }
 
+    /// How iOS ended the app while it was on screen over a day (MetricKit's foreground exits), one message for
+    /// each way other than a normal exit. A kill for memory and an `exit()` leave no crash diagnostic, so these
+    /// counts are what tell them apart behind "Quit unexpectedly while on screen" (issue #159).
+    static func exits(_ counts: [(kind: String, count: Int)], origin: String) -> [String] {
+        counts.filter { $0.count > 0 }.map { "Ended on screen: \($0.kind) (MetricKit)\ncount=\($0.count) \(origin)" }
+    }
+
     /// The version that crashed: payloads arrive on a later launch, maybe after an update.
     private static func origin(_ meta: [String: Any]) -> String {
         "app=\(meta["appVersion"] as? String ?? "-") (\(meta["appBuildVersion"] as? String ?? "-")) \(meta["platformArchitecture"] as? String ?? "")"
@@ -157,5 +164,21 @@ extension CrashReports: MXMetricManagerSubscriber {
             }
         }
     }
+
+    #if os(iOS)
+    public func didReceive(_ payloads: [MXMetricPayload]) {
+        for payload in payloads {
+            guard let exits = payload.applicationExitMetrics?.foregroundExitData else { continue }
+            let counts: [(kind: String, count: Int)] = [
+                ("memory limit", exits.cumulativeMemoryResourceLimitExitCount), ("abnormal exit", exits.cumulativeAbnormalExitCount),
+                ("watchdog", exits.cumulativeAppWatchdogExitCount), ("bad access", exits.cumulativeBadAccessExitCount),
+                ("illegal instruction", exits.cumulativeIllegalInstructionExitCount)]
+            let origin = "app=\(payload.latestApplicationVersion) (\(payload.metaData?.applicationBuildVersion ?? "-"))"
+            for message in Self.exits(counts, origin: origin) {
+                Diagnostics.shared.record(.error, "app", message)
+            }
+        }
+    }
+    #endif
 }
 #endif
