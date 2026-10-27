@@ -377,6 +377,7 @@
 "%lld of %lld sources responded" = "%lld / %lld 个源已响应";
 "First-time setup can take a few minutes. Keep the app open." = "首次准备可能需要几分钟，请保持 App 打开。";
 "This source requires Android features that the plugin runtime does not support yet." = "此源依赖插件运行时尚未支持的 Android 功能。";
+"This entry opens the source's own settings or sign-in screen (such as a QR code), which Yingxia can't show. Sign in under Settings → Cloud Drive Accounts instead." = "此条目会打开来源自带的设置或登录界面（例如二维码），映匣无法显示。请改在“设置 → 网盘账号”中登录。";
 "This source needs an Android feature that isn't supported yet: %@." = "此源需要尚未支持的 Android 功能：%@。";
 "This plugin couldn't be prepared on this device (missing %@)." = "无法在本机准备此插件（缺少 %@）。";
 "This plugin couldn't be prepared on this device (%@ could not be converted)." = "无法在本机准备此插件（%@ 转换失败）。";

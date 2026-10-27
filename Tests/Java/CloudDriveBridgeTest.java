@@ -67,6 +67,7 @@ public class CloudDriveBridgeTest {
             check(bridge.extension("{\"Cloud-drive\":\"original\"}", new JSONObject()).contains("original"), "Empty credentials replaced existing config");
         }
         cloudFamilyCredentials();
+        pluginCookieFiles();
         ftyFamilyCredentials();
         proxyAddressMethodsUseHost();
         suspendedListenerRecovers();
@@ -308,6 +309,22 @@ public class CloudDriveBridgeTest {
                 check(type.getField(layout.get(4)).get(instance) == null, "External-source account was changed");
             }
         }
+    }
+
+    /** csp_Config's Pan spiders read raw cookies from files/.quark, .uc and .baidu (issue #171). */
+    static void pluginCookieFiles() throws Exception {
+        Path files = Files.createTempDirectory("plugin-cookie-test").resolve("files");
+        CloudDriveBridge.seedDriveCookies(null, files);
+        Files.createDirectories(files);
+        Files.writeString(files.resolve(".uc"), "{}");
+        Files.writeString(files.resolve(".baidu"), "BDUSS=old");
+        var accounts = new JSONObject().put("quarkCookie", " __pus=quark-fixture ").put("ucCookie", "__pus=uc-fixture").put("baiduCookie", "BDUSS=new; STOKEN=s");
+        CloudDriveBridge.seedDriveCookies(accounts, files);
+        check(Files.readString(files.resolve(".quark")).equals("__pus=quark-fixture"), "Quark cookie not seeded");
+        check(Files.readString(files.resolve(".uc")).equals("{}"), "Another plugin's JSON file was overwritten");
+        check(Files.readString(files.resolve(".baidu")).equals("BDUSS=new; STOKEN=s"), "The app's Baidu sign-in did not replace the old one");
+        CloudDriveBridge.seedDriveCookies(new JSONObject(), files);
+        check(Files.readString(files.resolve(".quark")).equals("__pus=quark-fixture"), "A missing account erased the plugin's cookie");
     }
 
     static void cloudFamilyCredentials() throws Exception {

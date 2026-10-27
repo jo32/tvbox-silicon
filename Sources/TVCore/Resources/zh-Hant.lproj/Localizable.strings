@@ -377,6 +377,7 @@
 "%lld of %lld sources responded" = "%lld / %lld 個來源已回應";
 "First-time setup can take a few minutes. Keep the app open." = "首次準備可能需要幾分鐘，請保持 App 開啟。";
 "This source requires Android features that the plugin runtime does not support yet." = "此來源依賴外掛執行環境尚未支援的 Android 功能。";
+"This entry opens the source's own settings or sign-in screen (such as a QR code), which Yingxia can't show. Sign in under Settings → Cloud Drive Accounts instead." = "此項目會開啟來源自帶的設定或登入畫面（例如 QR 碼），映匣無法顯示。請改在「設定 → 網盤帳號」中登入。";
 "This source needs an Android feature that isn't supported yet: %@." = "此來源需要尚未支援的 Android 功能：%@。";
 "This plugin couldn't be prepared on this device (missing %@)." = "無法在本機準備此外掛（缺少 %@）。";
 "This plugin couldn't be prepared on this device (%@ could not be converted)." = "無法在本機準備此外掛（%@ 轉換失敗）。";

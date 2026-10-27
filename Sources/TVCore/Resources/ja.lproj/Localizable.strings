@@ -377,6 +377,7 @@
 "%lld of %lld sources responded" = "%lld / %lld ソースが応答";
 "First-time setup can take a few minutes. Keep the app open." = "初回の準備には数分かかることがあります。アプリを開いたままにしてください。";
 "This source requires Android features that the plugin runtime does not support yet." = "この配信ソースは、プラグイン実行環境で未対応のAndroid機能を必要とします。";
+"This entry opens the source's own settings or sign-in screen (such as a QR code), which Yingxia can't show. Sign in under Settings → Cloud Drive Accounts instead." = "この項目はソース独自の設定画面またはサインイン画面（QRコードなど）を開きますが、映匣では表示できません。代わりに「設定 → クラウドドライブのアカウント」でサインインしてください。";
 "This source needs an Android feature that isn't supported yet: %@." = "このソースには未対応のAndroid機能が必要です：%@。";
 "This plugin couldn't be prepared on this device (missing %@)." = "この端末でプラグインを準備できませんでした（%@ がありません）。";
 "This plugin couldn't be prepared on this device (%@ could not be converted)." = "この端末でプラグインを準備できませんでした（%@ を変換できませんでした）。";

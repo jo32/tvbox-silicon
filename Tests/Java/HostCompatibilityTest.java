@@ -16,7 +16,7 @@ public class HostCompatibilityTest {
             }
             return;
         }
-        reflectiveArrayCloneWorks(); conversionCacheReusesAndRepairs(); partialInitializationDoesNotHideWorkingSources(); recommendationsMerge(); stateSurvivesAndRestores(); interfaceCallsExecute(); sourceFailuresStaySpecific(); cloudLoginReturnsToTheApp(); asyncCloudLoginEndsPlayback(); packageContextExists(); androidLogHasEveryOverload(); pluginKeepsItsOwnSlf4j(); conversionFailuresNameTheClass();
+        reflectiveArrayCloneWorks(); conversionCacheReusesAndRepairs(); partialInitializationDoesNotHideWorkingSources(); recommendationsMerge(); stateSurvivesAndRestores(); interfaceCallsExecute(); sourceFailuresStaySpecific(); androidScreensAreNamed(); cloudLoginReturnsToTheApp(); asyncCloudLoginEndsPlayback(); packageContextExists(); androidLogHasEveryOverload(); pluginKeepsItsOwnSlf4j(); conversionFailuresNameTheClass();
         System.out.println("Java host regression checks passed (state, interface bytecode, HTTP failures, Android context).");
     }
 
@@ -195,6 +195,17 @@ public class HostCompatibilityTest {
             return result.build();
         }).build();
         return client.newCall(new Request.Builder().url("https://source.example/item").build());
+    }
+
+    /** A config center's QR code (issue #171) is a screen the app can't show, not a missing Android feature. */
+    private static void androidScreensAreNamed() throws Exception {
+        var qr = new RuntimeException("Stub!");
+        qr.setStackTrace(new StackTraceElement[]{ new StackTraceElement("android.graphics.Bitmap", "createBitmap", "Bitmap.java", 31),
+            new StackTraceElement("com.github.catvod.spider.PanConfig", "categoryContent", null, -1) });
+        check(NativeProbe.failure(new java.lang.reflect.InvocationTargetException(qr)).optString("errorCode").equals("android_screen"), "QR dialog not named");
+        var media = new RuntimeException("Stub!");
+        media.setStackTrace(new StackTraceElement[]{ new StackTraceElement("android.media.MediaPlayer", "start", null, -1) });
+        check(NativeProbe.failure(media).optString("errorCode").equals("unsupported_android"), "Other Android stubs changed");
     }
 
     private static void sourceFailuresStaySpecific() throws Exception {

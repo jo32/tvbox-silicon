@@ -348,6 +348,29 @@ public final class CloudDriveBridge implements AutoCloseable {
         }
         return ext.toString();
     }
+    /**
+     * Pan spiders of the csp_Config family read raw drive cookies from {@code files/.quark}, {@code .uc}
+     * and {@code .baidu}. Their config center fills these from a phone through a LAN QR code this host
+     * can't serve, and with no cookie they open an Android QR dialog, so the app's accounts go there
+     * before the spider starts. A file holding JSON belongs to another plugin's format and stays.
+     */
+    public static void seedDriveCookies(JSONObject accounts, Path files) {
+        if (accounts == null) return;
+        for (var entry : Map.of(".quark", "quarkCookie", ".uc", "ucCookie", ".baidu", "baiduCookie").entrySet()) {
+            String cookie = accounts.optString(entry.getValue()).trim();
+            if (cookie.isEmpty()) continue;
+            Path file = files.resolve(entry.getKey());
+            try {
+                String saved = Files.isRegularFile(file) ? Files.readString(file, StandardCharsets.UTF_8).trim() : "";
+                if (saved.equals(cookie) || saved.startsWith("{")) continue;
+                Files.createDirectories(files);
+                Files.writeString(file, cookie, StandardCharsets.UTF_8);
+            } catch (IOException unwritable) {
+                System.err.println("CLOUD_ACCOUNT_SEED_FAILED " + entry.getKey());
+            }
+        }
+    }
+
     /** Where the plugin offers the app a sign-in only it has (see syncFtyAccounts). */
     public static final String PLUGIN_ACCOUNTS = "plugin-accounts.json";
 
