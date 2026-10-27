@@ -7,9 +7,15 @@ struct HongguoTests {
         let base = URL(string: "https://example.com/config")!
         for sites in [[Site.bilibili], [Site.hongguo], Site.builtInSites] {
             let config = Subscription(origin: base, importedAt: .now, sites: sites, lives: [], raw: [:]).withBuiltInSites().withBuiltInSites()
-            #expect(Set(config.sites.map(\.key)) == [Bilibili.siteKey, Hongguo.siteKey])
-            #expect(config.sites.count == 2)
+            #expect(Set(config.sites.map(\.key)) == [Bilibili.siteKey, Hongguo.siteKey, ShortDramas.xifanKey, ShortDramas.hemaKey])
+            #expect(config.sites.count == 4)
         }
+        for site in [Site.xifan, Site.hema] {
+            #expect(site.isBuiltIn && site.canBrowse(jarURL: nil) && site.searchable)
+            #expect(try site.pluginExtension(origin: base)?.object?["locked"]?.string?.contains(site.name) == true)
+        }
+        #expect(Site.xifan.liteScript?.absoluteString == "assets://sites/Xifan.js")
+        #expect(Site.hema.liteScript?.absoluteString == "assets://sites/Hema.js")
         #expect(Site.hongguo.isBuiltIn && !Site.hongguo.isBilibili)
         #expect(Site.hongguo.canBrowse(jarURL: nil) && Site.hongguo.searchable)
         #expect(Site.hongguo.liteScript?.absoluteString == "assets://sites/Hongguo.js")

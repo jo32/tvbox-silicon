@@ -1032,3 +1032,47 @@
 "Full Screen" = "フルスクリーン";
 "Exit Full Screen" = "フルスクリーンを終了";
 "Lines" = "再生ライン";
+
+/* TMDB details */
+"Reading the title…" = "タイトルを確認中…";
+"Someone is looking up this title right now…" = "ほかの人がこの作品を検索中です…";
+"Checking %@ (%lld)…" = "「%@」（%lld）を確認中…";
+"Checking %@…" = "「%@」を確認中…";
+"Checking a result…" = "結果を確認中…";
+"Lining up episodes of season %lld…" = "シーズン %lld のエピソードを照合中…";
+"%lld Seasons" = "%lld シーズン";
+"%lldh %lldm" = "%lld時間%lld分";
+"%lld min" = "%lld分";
+"Finding this title on TMDB" = "TMDB でこの作品を検索中";
+"Which one is it?" = "どの作品ですか？";
+"TMDB has more than one title like this. Choose one to see its cast, artwork and episodes." = "TMDB に似た作品が複数あります。選ぶと、キャスト、アートワーク、エピソードが表示されます。";
+"None of These" = "どれでもない";
+"TV Series" = "シリーズ";
+"Movie" = "映画";
+"Cast" = "キャスト";
+"Original Title" = "原題";
+"Created By" = "制作者";
+"Directed By" = "監督";
+"Network" = "放送局";
+"Studio" = "制作会社";
+"First Aired" = "初回放送";
+"Released" = "公開";
+"Country or Region" = "国または地域";
+"Information" = "情報";
+"Details from TMDB" = "詳細は TMDB から";
+"Not This Title?" = "この作品ではない？";
+"This product uses the TMDB API but is not endorsed or certified by TMDB." = "本製品は TMDB API を使用していますが、TMDB による承認や認定を受けたものではありません。";
+"Suggestions" = "候補";
+"TMDB" = "TMDB";
+"Search TMDB" = "TMDB を検索";
+"Look Up Titles on TMDB" = "TMDB で作品を検索";
+"Shows cast, artwork and episode details from TMDB on video pages. Sends the video's title, its details from the source and the source's name to Yingxia's lookup service, never your accounts or subscription addresses." = "動画のページに TMDB のキャスト、アートワーク、エピソード情報を表示します。動画のタイトル、ソースの説明とエピソード名、ソース名を映匣の検索サービスに送信します。アカウントや購読先アドレスは送信しません。";
+"You May Like" = "あなたへのおすすめ";
+
+/* Short-drama sources */
+"Xifan" = "Xifan";
+"Hema" = "Hema";
+"%@ Episodes" = "全 %@ 話";
+"%@ of %@ episodes free" = "無料 %@/%@ 話";
+"%@ returned incomplete data. Please refresh and try again." = "%@ から届いたデータが不完全です。更新してお試しください。";
+"This episode isn't free on %@." = "このエピソードは %@ では有料です。";

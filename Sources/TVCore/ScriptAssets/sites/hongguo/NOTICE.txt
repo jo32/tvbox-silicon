@@ -23,6 +23,13 @@ and registration fields come from tsukiyo-zero/hongguoTV commit
 kotlin-tv/core/src/main/kotlin/com/hongguotv/core/DeviceRegister.kt, adapted
 from charlie901208/HGTV (feat/phone-login). License: GPL-3.0-only.
 
+Xifan.js and Hema.js (in sites/, beside Hongguo.js) follow the endpoints, page data
+and response fields of src/native/xifan.js and src/native/hema.js in the same
+repository at commit f210689c4adbf0986e3412cdb12a1c710c5dd611 (v4.1), rewritten for
+the TVBox spider interface on QuickJS. Upstream credits Hululu007/drpy-node
+(295f2b7047e14122d542a7736cb931e81abcf85c) as its reference for Xifan's API paths
+and response structure. Both list only the episodes their services give away.
+
 Upstream attribution follows:
 
 App playback source and signature attribution

@@ -1032,3 +1032,47 @@
 "Full Screen" = "全螢幕";
 "Exit Full Screen" = "結束全螢幕";
 "Lines" = "線路";
+
+/* TMDB details */
+"Reading the title…" = "正在讀取片名…";
+"Someone is looking up this title right now…" = "其他人正在查找這部作品…";
+"Checking %@ (%lld)…" = "正在核對《%@》（%lld）…";
+"Checking %@…" = "正在核對《%@》…";
+"Checking a result…" = "正在核對結果…";
+"Lining up episodes of season %lld…" = "正在對應第 %lld 季的劇集…";
+"%lld Seasons" = "%lld 季";
+"%lldh %lldm" = "%lld 小時 %lld 分鐘";
+"%lld min" = "%lld 分鐘";
+"Finding this title on TMDB" = "正在 TMDB 上查找這部作品";
+"Which one is it?" = "是哪一部？";
+"TMDB has more than one title like this. Choose one to see its cast, artwork and episodes." = "TMDB 上有多部同名作品。選擇一部，即可查看演員、海報和劇集資訊。";
+"None of These" = "都不是";
+"TV Series" = "劇集";
+"Movie" = "電影";
+"Cast" = "演員";
+"Original Title" = "原名";
+"Created By" = "主創";
+"Directed By" = "導演";
+"Network" = "播出平台";
+"Studio" = "出品公司";
+"First Aired" = "首播";
+"Released" = "上映";
+"Country or Region" = "國家或地區";
+"Information" = "資訊";
+"Details from TMDB" = "詳情來自 TMDB";
+"Not This Title?" = "不是這部？";
+"This product uses the TMDB API but is not endorsed or certified by TMDB." = "本產品使用 TMDB API，但未獲 TMDB 認可或認證。";
+"Suggestions" = "建議";
+"TMDB" = "TMDB";
+"Search TMDB" = "搜尋 TMDB";
+"Look Up Titles on TMDB" = "在 TMDB 上查找作品";
+"Shows cast, artwork and episode details from TMDB on video pages. Sends the video's title, its details from the source and the source's name to Yingxia's lookup service, never your accounts or subscription addresses." = "在影片頁面顯示來自 TMDB 的演員、海報和劇集資訊。會把影片的標題、來源提供的簡介和劇集名稱，以及來源的名稱傳送給映匣的查找服務，絕不傳送你的帳號或訂閱地址。";
+"You May Like" = "猜你喜歡";
+
+/* Short-drama sources */
+"Xifan" = "西飯短劇";
+"Hema" = "河馬短劇";
+"%@ Episodes" = "共 %@ 集";
+"%@ of %@ episodes free" = "免費 %@/%@ 集";
+"%@ returned incomplete data. Please refresh and try again." = "%@傳回的資料不完整，請重新整理後重試。";
+"This episode isn't free on %@." = "%@的這一集需要付費。";

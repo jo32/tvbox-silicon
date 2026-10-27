@@ -23,17 +23,19 @@ public struct Video: Identifiable, Hashable, Sendable, Codable {
     public let remarks: String
     public let synopsis: String
     public let episodes: [Episode]
+    /// The source's category and genre tags (type_name, vod_class, vod_tag), comma-separated; nil when it gave none.
+    public let category: String?
     public init(id: String, name: String, poster: URL? = nil, posterHeaders: [String: String] = [:], year: String? = nil,
-                remarks: String = "", synopsis: String = "", episodes: [Episode] = []) {
+                remarks: String = "", synopsis: String = "", episodes: [Episode] = [], category: String? = nil) {
         self.id = id; self.name = name; self.poster = poster; self.posterHeaders = posterHeaders
-        self.year = year; self.remarks = remarks; self.synopsis = synopsis; self.episodes = episodes
+        self.year = year; self.remarks = remarks; self.synopsis = synopsis; self.episodes = episodes; self.category = category
     }
     /// This video with `poster` when it has none of its own. Many sources leave `vod_pic` out of the detail
     /// answer although their list or search answer had it, and history, favorites and Now Playing keep what plays.
     public func keepingPoster(_ poster: URL?, headers: [String: String]? = nil) -> Video {
         guard self.poster == nil, let poster else { return self }
         return Video(id: id, name: name, poster: poster, posterHeaders: headers ?? [:], year: year,
-                     remarks: remarks, synopsis: synopsis, episodes: episodes)
+                     remarks: remarks, synopsis: synopsis, episodes: episodes, category: category)
     }
     public init?(json: [String: JSONValue], origin: URL) {
         guard let id = json["vod_id"]?.string, !id.isEmpty else { return nil }
@@ -43,6 +45,8 @@ public struct Video: Identifiable, Hashable, Sendable, Codable {
         poster = artwork?.url; posterHeaders = artwork?.headers ?? [:]
         remarks = HTMLText.plain(json["vod_remarks"]?.string ?? "")
         synopsis = HTMLText.plain(json["vod_content"]?.string ?? "")
+        let labels = ["type_name", "vod_class", "vod_tag"].compactMap { json[$0]?.string.map(HTMLText.name) }.filter { !$0.isEmpty }
+        category = labels.isEmpty ? nil : labels.joined(separator: ",")
         let flags = (json["vod_play_from"]?.string ?? "").components(separatedBy: "$$$")
         var groups: [[Episode]] = []
         for (groupIndex, group) in (json["vod_play_url"]?.string ?? "").components(separatedBy: "$$$").enumerated() {
