@@ -96,6 +96,9 @@ import TVCore
         await load(type, id: id, season: season)
     }
 
+    /// A video the page won't look up (AI-generated, a short drama): the page stops waiting for TMDB.
+    func skip() { phase = .off }
+
     /// "None of These": the page goes back to the source's own details, and stays so for this video.
     func reject() async {
         guard let key else { return }
@@ -651,8 +654,77 @@ enum TMDBBannerMetrics {
     #endif
 }
 
-/// An episode with TMDB's still: the picture, the source's name for it and TMDB's title. An episode TMDB has no entry
-/// for keeps the tile's shape, with an empty picture.
+/// Mac and iPad: TMDB's banner made from the source's own cover, until TMDB's backdrop is in and for titles TMDB doesn't
+/// have. The same shape and type as TMDBBanner, so the page doesn't change its layout when that one fades in: a blur of
+/// the cover across it, the cover itself at the trailing edge, the title and actions over the lower leading corner.
+struct PosterBanner<Actions: View>: View {
+    let poster: URL?
+    var headers: [String: String] = [:]
+    let title: String
+    let subtitle: String
+    /// The cover's width over height once it loads; landscape covers are common (Bilibili, short dramas).
+    @Binding var aspect: CGFloat?
+    @ViewBuilder let actions: Actions
+    var body: some View {
+        GeometryReader { proxy in
+            let size = proxy.size, inset = TMDBBannerMetrics.inset
+            let ratio = min(max(aspect ?? 2.0 / 3.0, 0.6), 1.8)
+            // A landscape cover may take at most ~40% of the banner, so the title keeps its room.
+            let artWidth = min(max(size.height - inset * 2, 60) * ratio, size.width * 0.4)
+            ZStack(alignment: .bottomLeading) {
+                Color(white: 0.12)
+                PosterImage(url: poster, headers: headers)
+                    .frame(width: size.width, height: size.height).clipped()
+                    .blur(radius: 40).scaleEffect(1.35)
+                    .overlay(Color.black.opacity(0.35))
+                LinearGradient(stops: [.init(color: .black.opacity(0.55), location: 0), .init(color: .clear, location: 0.6)],
+                               startPoint: .leading, endPoint: .trailing)
+                PosterImage(url: poster, headers: headers, aspect: $aspect)
+                    .frame(width: artWidth, height: artWidth / ratio)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .shadow(color: .black.opacity(0.45), radius: 18, y: 8)
+                    .padding(inset)
+                    .frame(width: size.width, height: size.height, alignment: .trailing)
+                VStack(alignment: .leading, spacing: TMDBBannerMetrics.spacing) {
+                    Text(title).font(.system(size: TMDBBannerMetrics.title, weight: .bold)).lineLimit(2).minimumScaleFactor(0.7)
+                        .shadow(color: .black.opacity(0.4), radius: 8)
+                    if !subtitle.isEmpty {
+                        Text(subtitle).font(TMDBBannerMetrics.factsFont).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
+                    }
+                    actions.padding(.top, 6)
+                }
+                .padding(inset)
+                .frame(maxWidth: min(max(size.width - artWidth - inset * 2, 240), 760), alignment: .leading)
+            }
+        }
+        .foregroundStyle(.white).environment(\.colorScheme, .dark)
+        .clipShape(RoundedRectangle(cornerRadius: TMDBBannerMetrics.corner, style: .continuous))
+    }
+}
+
+/// An episode without a still: its number set large in italics on a soft plate (the name itself when it has no number),
+/// so the tile keeps its shape and the row still reads at a glance.
+struct EpisodeNumberArt: View {
+    let name: String
+    var body: some View {
+        GeometryReader { proxy in
+            let number = TMDBMatch.episodeNumber(name)
+            let height = proxy.size.height
+            ZStack(alignment: .bottomTrailing) {
+                LinearGradient(colors: [Color.primary.opacity(0.05), Color.primary.opacity(0.13)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                Text(number.map { String(format: "%02d", $0) } ?? name)
+                    .font(.system(size: height * (number == nil ? 0.3 : 0.62), weight: .heavy).italic())
+                    .foregroundStyle(Color.primary.opacity(0.78))
+                    .lineLimit(1).minimumScaleFactor(0.3)
+                    .padding(.horizontal, height * 0.12).padding(.bottom, height * (number == nil ? 0.12 : 0.02))
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// An episode with TMDB's still: the picture, the source's name for it and TMDB's title. An episode without a still
+/// keeps the tile's shape, with its number in the picture's place.
 struct TMDBEpisodeTile: View {
     let name: String
     let info: TMDBMatch.EpisodeInfo?
@@ -663,7 +735,9 @@ struct TMDBEpisodeTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
-                .overlay { PosterImage(url: info?.still, symbol: "play.rectangle") }
+                .overlay {
+                    if let still = info?.still { PosterImage(url: still, symbol: "play.rectangle") } else { EpisodeNumberArt(name: name) }
+                }
                 .overlay { if loading { ProgressView().padding(8).background(.black.opacity(0.45), in: Circle()) } }
                 .overlay(alignment: .bottomTrailing) {
                     if let runtime = info?.runtime, runtime > 0 {

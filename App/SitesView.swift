@@ -810,7 +810,6 @@ struct VideoDetailView: View {
     /// Play takes over focus from the loading placeholder; otherwise nothing is focused once details load.
     @FocusState private var playFocused: Bool
     @State private var containerWidth: CGFloat = 0
-    @State private var heroWidth: CGFloat = 0
     /// The cover's width over height once it loads; landscape covers are common (Bilibili, short dramas).
     @State private var artAspect: CGFloat?
     /// The episode whose playback is being prepared; its row and the Play button show progress.
@@ -1060,7 +1059,7 @@ struct VideoDetailView: View {
         let request = TMDBMatch.Request(video: detail.keepingPoster(video.poster), listVideo: video,
                                         source: TMDBMatch.SourceRef(key: client.site.key, name: client.site.name))
         // AI-generated videos and short dramas aren't on TMDB: the page keeps the source's own data.
-        guard !TMDBMatch.labeledNotOnTMDB(request) else { return }
+        guard !TMDBMatch.labeledNotOnTMDB(request) else { tmdb.skip(); return }
         await tmdb.run(key: key, request: request)
     }
     /// TMDB's story when it has one, else the source's synopsis.
@@ -1151,13 +1150,6 @@ struct VideoDetailView: View {
         #endif
     }
     private var isWide: Bool { containerWidth >= wideMinWidth }
-    private var heroTitleSize: CGFloat {
-        #if os(tvOS)
-        52
-        #else
-        heroWidth < 600 ? 26 : 32
-        #endif
-    }
     /// The details, with the list's poster when the details came without one.
     private func currentVideo() -> Video { (detail ?? video).keepingPoster(video.poster, headers: video.posterHeaders) }
 
@@ -1270,7 +1262,7 @@ struct VideoDetailView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .shadow(color: .black.opacity(0.45), radius: 20, y: 10)
                             VStack(alignment: .leading, spacing: 12) {
-                                Text(video.name).font(.system(size: heroTitleSize, weight: .bold))
+                                Text(video.name).font(.system(size: 52, weight: .bold))
                                     .lineLimit(3).minimumScaleFactor(0.7).fixedSize(horizontal: false, vertical: true)
                                 if !video.remarks.isEmpty {
                                     Text(video.remarks).font(.title3).foregroundStyle(.white.opacity(0.75)).lineLimit(2)
@@ -1289,32 +1281,12 @@ struct VideoDetailView: View {
     private var heroStage: some View { Color.clear.frame(maxWidth: .infinity).frame(height: bannerHeight) }
     private var heroInset: CGFloat { 28 }
     #else
-    /// The cover and, beside it, the title and actions, on the page itself. The cover keeps its own shape,
-    /// portrait or landscape, at one height, and the buttons line up with its bottom edge.
+    /// The source's cover in TMDB's banner shape, so the page keeps its layout when TMDB's backdrop fades in, and for
+    /// titles TMDB doesn't have.
     private var hero: some View {
-        let aspect = min(max(artAspect ?? 2.0 / 3.0, 0.6), 1.8)
-        // A landscape cover may take at most ~45% of the row, so the title keeps its room.
-        let artWidth = min((heroWidth < 600 ? 200 : 240) * aspect, heroWidth > 0 ? heroWidth * 0.45 : .infinity)
-        let artHeight = artWidth / aspect
-        return HStack(alignment: .top, spacing: heroWidth < 600 ? 18 : 24) {
-            PosterImage(url: video.poster, headers: video.posterHeaders, aspect: $artAspect)
-                .frame(width: artWidth, height: artHeight)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
-            MinHeightLayout(minHeight: artHeight) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(video.name).font(.system(size: heroTitleSize, weight: .bold))
-                        .lineLimit(3).minimumScaleFactor(0.7).fixedSize(horizontal: false, vertical: true)
-                    if !video.remarks.isEmpty {
-                        Text(video.remarks).font(.title3).foregroundStyle(.secondary).lineLimit(2)
-                    }
-                    Spacer(minLength: 12)
-                    playControl
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { heroWidth = $0 }
+        PosterBanner(poster: video.poster, headers: video.posterHeaders, title: video.name, subtitle: video.remarks,
+                     aspect: $artAspect) { playControl }
+            .frame(height: bannerHeight)
     }
     #endif
     private var header: some View {
@@ -1396,9 +1368,12 @@ struct VideoDetailView: View {
         let longNames = (items.map { $0.name.count }.max() ?? 0) > 6
         // Under a full-width banner, long names fill columns rather than one stretched list.
         let rowColumns = isWide ? [GridItem(.adaptive(minimum: 320), spacing: 8)] : [GridItem(.flexible())]
-        // TMDB's stills, when its season lines up with most of the episodes.
+        // TMDB's stills, when its season lines up with most of the episodes and has pictures for them; without
+        // pictures the small chips read better than empty tiles. While TMDB is still looking, tiles with the episode
+        // numbers, so its stills fade into the same tiles instead of chips turning into tiles.
         let stills = tmdb.episodes(items)
-        let showsStills = items.count > 1 && stills.count * 2 >= items.count
+        let showsStills = items.count > 1
+            && (stills.values.filter { $0.still != nil }.count * 2 >= items.count || (tmdbPending && items.count <= 60))
         let columns = showsStills ? [GridItem(.adaptive(minimum: TMDBMetrics.episodeTile), spacing: TMDBMetrics.spacing, alignment: .top)]
             : longNames ? rowColumns : [GridItem(.adaptive(minimum: episodeMin), spacing: 8)]
         return LazyVGrid(columns: columns, spacing: showsStills ? TMDBMetrics.spacing : longNames ? 4 : 8) {
@@ -1451,11 +1426,20 @@ struct VideoDetailView: View {
         .tvFocusSection()
         .animation(.smooth(duration: 0.4), value: showsStills)
     }
+    /// Mac and iPad, under the banner: TMDB hasn't answered yet. Short-drama-length lists stay chips (see episodeList).
+    private var tmdbPending: Bool {
+        #if os(tvOS)
+        false
+        #else
+        isWide && (tmdb.phase == .looking || (tmdb.phase == .idle && TMDBLookup.applies(to: client.site)))
+        #endif
+    }
     private var episodeMin: CGFloat {
         #if os(tvOS)
         170
         #else
-        74
+        // Room for 第 10 集 / 第01集 without an ellipsis.
+        100
         #endif
     }
     private func download(_ episode: Episode) -> DownloadItem? {
@@ -1750,10 +1734,11 @@ struct VideoDetailView: View {
         }
     }
 
-    /// TMDB's stills for the line's episodes, when its season lines up with most of them; otherwise none.
+    /// TMDB's stills for the line's episodes, when its season lines up with most of them and has pictures for them;
+    /// otherwise none, and the episodes keep their small cards.
     private func watchStills(_ items: [Episode]) -> [Episode.ID: TMDBMatch.EpisodeInfo] {
         let stills = tmdb.episodes(items)
-        return items.count > 1 && stills.count * 2 >= items.count ? stills : [:]
+        return items.count > 1 && stills.values.filter { $0.still != nil }.count * 2 >= items.count ? stills : [:]
     }
 
     /// An episode: a small tile for short names (第1集, 01), a two-line card for long ones, TMDB's still above the name
