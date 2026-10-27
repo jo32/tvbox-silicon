@@ -26,6 +26,10 @@ packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     exactVersion: 2.10.0
+  # The Mac detail page's aurora backdrop (App/DetailAurora.swift).
+  ColorfulX:
+    url: https://github.com/Lakr233/ColorfulX
+    exactVersion: 6.2.1
 targetTemplates:
   SharedApp:
     type: application
@@ -77,6 +81,7 @@ targets:
           - $(DERIVED_FILE_DIR)/java-host-checked
     dependencies:
       - package: Sparkle
+      - package: ColorfulX
     info:
       properties:
         # Sparkle (App/MacUpdater.swift) picks the appcast for the package in code. Every update must be signed

@@ -854,7 +854,12 @@ struct VideoDetailView: View {
         }
         .safeAreaInset(edge: .bottom) { if !isWatchPage { loadingCard } }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
+        #if os(macOS)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background { DetailAurora(poster: video.poster, headers: video.posterHeaders) }
+        #else
         .screenBackdrop()
+        #endif
         .screenTitle(video.name).task {
             store.searchModel.suspend()
             #if os(iOS)
