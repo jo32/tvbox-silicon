@@ -916,11 +916,14 @@ struct ElapsedTime: View {
 }
 
 /// Every wait shows how long it has run; past `patience` seconds it also says why it is still
-/// loading. A compact card in the page column, re-polled twice a second.
+/// loading. A card across the page column, like the rows around it, re-polled twice a second.
 struct LoadingCard: View {
     static let patience: TimeInterval = 10
+    /// The width of a compact card, for one over a video or alone in an empty page.
+    static let compact: CGFloat = 620
     /// Hides the card for waits shorter than this, such as the brief stall after every seek.
     var appearAfter: TimeInterval = 0
+    var maxWidth: CGFloat = .infinity
     let progress: () -> LoadingProgress
     @State private var started = Date()
 
@@ -956,7 +959,7 @@ struct LoadingCard: View {
             }
         }
         .padding(.horizontal, 18).padding(.vertical, 14)
-        .frame(maxWidth: 620, alignment: .leading)
+        .frame(maxWidth: maxWidth, alignment: .leading)
         .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .accessibilityElement(children: .combine)
         .animation(.smooth(duration: 0.25), value: state.title)
