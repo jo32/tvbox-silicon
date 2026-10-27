@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.1",
+          "buildVersion": "39",
+          "date": "2026-10-28",
+          "localizedDescription": "• 来自 TMDB 的海报、演员和剧照\n• 在影片页直接观看\n• 网盘字幕\n• 新增两个短剧源\n• 其他修复\n\n• Artwork, cast and episode pictures from TMDB\n• Watch on the video's page\n• Subtitles from cloud drives\n• Two more short-drama sources\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.1/Yingxia-1.8.1-ios.ipa",
+          "size": 99244426,
+          "sha256": "4830fa6ed2af943efbe36ed5931c95316e999e0f27e9c224a1e08ec1271e2bfc",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.0",
           "buildVersion": "36",
           "date": "2026-10-26",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.7.11/Yingxia-1.7.11-ios.ipa",
           "size": 72166670,
           "sha256": "8d47f0f7d599a0f85645a1eaec2faac2855bedecbabbd29aa52814cc22f3010c",
-          "minOSVersion": "18.0"
-        },
-        {
-          "version": "1.7.10",
-          "buildVersion": "29",
-          "date": "2026-10-24",
-          "localizedDescription": "• 红果短剧搜索恢复正常\n• 来自映匣的消息\n• “更多”中的消息\n\n• Hongguo search works again\n• Messages from Yingxia\n• Messages in More",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.7.10/Yingxia-1.7.10-ios.ipa",
-          "size": 69950478,
-          "sha256": "73a52023cb471d2b4a09a9dfd1ef5acc65c7795fcb4c3dcccb5ffa0a3ce85769",
           "minOSVersion": "18.0"
         }
       ],
