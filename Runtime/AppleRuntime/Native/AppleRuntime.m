@@ -93,6 +93,19 @@ static NSString *heapLimit(void) {
     return [NSString stringWithFormat:@"-Xmx%llum", megabytes];
 }
 
+// A fatal JVM error (a native allocation that failed, say) ends the app with _exit(1), and a plugin's
+// System.exit with exit(): neither leaves a crash log or a MetricKit report, so the app just vanishes
+// (issue #159). The JVM calls these hooks first; abort() instead, so the crash is reported with its stack.
+// The JVM log (embedded-jvm.log) has the fatal error's message.
+static void abortHook(void) {
+    fprintf(stderr, "The Java runtime hit a fatal error\n");
+    abort();
+}
+static void exitHook(jint code) {
+    fprintf(stderr, "Java code called exit(%d)\n", (int)code);
+    abort();
+}
+
 // On a memory warning, idle plugin runtimes and sources are closed and the freed heap returned.
 static void watchMemoryPressure(const char *resourcePath) {
     static dispatch_source_t source;
@@ -143,9 +156,11 @@ char *TVAppleRuntimeRequest(const char *resourcePath, const char *requestJSON) {
                 [@"-Djava.home=" stringByAppendingString:[root stringByAppendingPathComponent:@"lib"]],
                 [@"-Djava.class.path=" stringByAppendingString:classpath],
                 [@"-Djava.io.tmpdir=" stringByAppendingString:NSTemporaryDirectory()]];
-            JavaVMOption options[arguments.count];
+            JavaVMOption options[arguments.count + 2];
             for (NSUInteger i=0;i<arguments.count;i++) { options[i].optionString=(char *)arguments[i].UTF8String; options[i].extraInfo=NULL; }
-            JavaVMInitArgs init={.version=JNI_VERSION_1_8,.nOptions=(jint)arguments.count,.options=options,.ignoreUnrecognized=JNI_FALSE};
+            options[arguments.count]=(JavaVMOption){.optionString="abort",.extraInfo=(void *)abortHook};
+            options[arguments.count + 1]=(JavaVMOption){.optionString="exit",.extraInfo=(void *)exitHook};
+            JavaVMInitArgs init={.version=JNI_VERSION_1_8,.nOptions=(jint)arguments.count + 2,.options=options,.ignoreUnrecognized=JNI_FALSE};
             jint status=JNI_CreateJavaVM(&runtimeVM,(void **)&env,&init);
             if (status != JNI_OK) { runtimeVM=NULL; failed=YES; pthread_mutex_unlock(&startLock); return failure("Could not start the embedded Java runtime."); }
             // The JVM handles SIGPIPE and SIGXFSZ only to ignore them, but its handler first reads the
