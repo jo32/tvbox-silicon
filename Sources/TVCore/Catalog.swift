@@ -350,7 +350,8 @@ public struct CatalogClient: Sendable {
                 }
             }
             return PlaybackPlan(choices: choices, headers: headers, group: episode.flag,
-                                requiresWebDetection: (result["parse"]?.int ?? 0) != 0 || (result["jx"]?.int ?? 0) != 0 || !prefix.isEmpty, click: click, webPlayURL: "")
+                                requiresWebDetection: (result["parse"]?.int ?? 0) != 0 || (result["jx"]?.int ?? 0) != 0 || !prefix.isEmpty, click: click, webPlayURL: "",
+                                subtitles: ExternalSubtitle.parse(result["subs"]))
         }
         let prefix = site.raw["playUrl"]?.string ?? ""
         let click = Self.playbackClick(site: site, result: nil)
@@ -428,7 +429,7 @@ public struct CatalogClient: Sendable {
             }
             throw TVError.unsupported(L10n.text("This source needs a playback proxy that is not supported yet."))
         }
-        return Channel(name: choice.name, group: plan.group, url: try WebAddress.resolve(address), headers: plan.headers)
+        return Channel(name: choice.name, group: plan.group, url: try WebAddress.resolve(address), headers: plan.headers, subtitles: plan.subtitles)
     }
 
     private func sniff(_ plan: PlaybackPlan, choice: PlaybackChoice, target: String, headers: [String: String], click: String) async throws -> Channel {

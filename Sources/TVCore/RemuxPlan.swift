@@ -62,6 +62,28 @@ struct RemuxPlan: Sendable, Equatable {
     /// AAC profiles AVPlayer decodes (LC, HE, HE v2; FFmpeg's numbers), and unknown.
     static let copiedAAC: Set<Int> = [-99, 1, 4, 28]
 
+    /// Subtitle files from beside the video, as text subtitles after the file's own. Their cues aren't the
+    /// file's, so their tracks name no stream. The first is the default when the file has no subtitles: it was
+    /// put there to be read. Returns the tracks' indices.
+    mutating func addSubtitles(_ files: [SubtitleFile.Track]) -> [Int] {
+        let first = tracks.count, unsubtitled = !tracks.contains { $0.kind == .subtitle }
+        for (number, file) in files.enumerated() {
+            // HLS wants a BCP 47 tag; a source's "简体" would make the playlist invalid.
+            let language = file.language.wholeMatch(of: /[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*/) != nil ? file.language : ""
+            tracks.append(Track(stream: Stream(index: -1, kind: .subtitle, codec: "external", language: language, title: file.name,
+                                               isDefault: unsubtitled && number == 0, isText: true)))
+        }
+        return Array(first..<tracks.count)
+    }
+
+    /// The cues of a subtitle file that segment `index` carries: those starting within it, as FFmpeg places
+    /// the file's own. The first and last segments take those before and after the picture too.
+    func cues(_ cues: [Cue], segment index: Int) -> [Cue] {
+        cues.filter { cue in
+            (index == 0 || cue.start >= bounds[index]) && (index == segments - 1 || cue.start < bounds[index + 1])
+        }
+    }
+
     static func make(streams: [Stream], keyframes: [Int64], start: Int64, duration: Int64, size: Int64, device: Device) -> RemuxPlan? {
         guard duration > 0, let video = streams.first(where: { $0.kind == .video && $0.width > 0 && $0.height > 0 }) else { return nil }
         var tracks = [videoTrack(video, device: device)]
@@ -253,7 +275,8 @@ struct RemuxPlan: Sendable, Equatable {
                     "ger": "de", "deu": "de", "spa": "es", "rus": "ru", "ita": "it", "por": "pt", "tha": "th", "vie": "vi",
                     "ara": "ar", "hin": "hi", "ind": "id", "may": "ms", "msa": "ms", "dut": "nl", "nld": "nl", "pol": "pl",
                     "tur": "tr", "swe": "sv", "cze": "cs", "ces": "cs", "gre": "el", "ell": "el", "heb": "he", "hun": "hu",
-                    "dan": "da", "fin": "fi", "nor": "no", "nob": "nb", "ukr": "uk", "rum": "ro", "ron": "ro", "fil": "fil", "tgl": "tl"]
+                    "dan": "da", "fin": "fi", "nor": "no", "nob": "nb", "ukr": "uk", "rum": "ro", "ron": "ro", "fil": "fil", "tgl": "tl",
+                    "chs": "zh-Hans", "cht": "zh-Hant"]
         return tags[code] ?? code
     }
 

@@ -806,7 +806,7 @@ extension PlaybackSession {
 
     /// The repackaged file's address, nil when FFmpeg can't read it.
     fileprivate static func remux(_ source: RemuxSource, channel: Channel) async -> URL? {
-        do { return try await Remux.open(source) }
+        do { return try await Remux.open(source, subtitles: channel.subtitles, headers: channel.headers) }
         catch {
             if !Task.isCancelled { Diagnostics.shared.failure("player", "remux source=\(channel.historyContext?.sourceKey ?? "-")", error) }
             return nil

@@ -28,13 +28,17 @@ public struct PlaybackPlan: Sendable {
     public let click: String
     /// `json:` or `parse:` copied off the front of the address. Empty when the prefix is already joined on, or there is none.
     public let webPlayURL: String
-    public init(choices: [PlaybackChoice], headers: [String: String], group: String, requiresWebDetection: Bool, click: String = "", webPlayURL: String = "") {
+    /// The play result's subtitle files (`subs`).
+    public let subtitles: [ExternalSubtitle]
+    public init(choices: [PlaybackChoice], headers: [String: String], group: String, requiresWebDetection: Bool, click: String = "", webPlayURL: String = "",
+                subtitles: [ExternalSubtitle] = []) {
         self.choices = choices
         self.headers = headers
         self.group = group
         self.requiresWebDetection = requiresWebDetection
         self.click = click
         self.webPlayURL = webPlayURL
+        self.subtitles = subtitles
     }
 }
 

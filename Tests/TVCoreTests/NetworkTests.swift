@@ -35,6 +35,9 @@ private final class MockProtocol: URLProtocol, @unchecked Sendable {
             status = 200; body = #"{"parse":0,"url":"","errMsg":"未扫码登录无法观看"}"#
         } else if path == "/qualities" {
             status = 200; body = #"{"parse":0,"url":["480P","https://example.com/480.mp4","360P","https://example.com/360.mp4"]}"#
+        } else if path == "/subs" {
+            status = 200
+            body = #"{"parse":0,"url":"https://cdn.example.com/film.mkv","subs":[{"name":"film.chs.srt","url":"http://127.0.0.1:9978/proxy?do=quark&type=sub","lang":"chs","format":"application/x-subrip"}]}"#
         } else if path == "/paged" {
             // Three pages of search results; the last page repeats, as some sources do.
             let page = min(3, Int(query.first(where: { $0.name == "pg" })?.value ?? "1") ?? 1)
@@ -111,6 +114,19 @@ private func client() -> HTTPClient {
     #expect(plan.choices.map(\.name) == ["480P", "360P"])
     let channel = try await api.resolvePlayback(plan, choice: plan.choices[1])
     #expect(channel.url.absoluteString == "https://example.com/360.mp4")
+}
+
+@Test func playResultSubtitleFilesReachThePlayer() async throws {
+    let base = URL(string: "https://example.com/config.json")!
+    let sub = try Subscription.parse(Data(#"{"sites":[{"key":"a","type":4,"api":"/subs"}]}"#.utf8), origin: base)
+    let api = CatalogClient(site: sub.sites[0], origin: base, http: client())
+    let channel = try await api.playback(Episode(id: "a", name: "Episode", address: "id", flag: ""))
+    #expect(channel.url.absoluteString == "https://cdn.example.com/film.mkv")
+    #expect(channel.subtitles == [ExternalSubtitle(name: "film.chs.srt", url: URL(string: "http://127.0.0.1:9978/proxy?do=quark&type=sub")!,
+                                                   language: "chs", format: "application/x-subrip")])
+    // Saved channels leave them out: a plugin's addresses last one session.
+    let saved = try JSONDecoder().decode(Channel.self, from: JSONEncoder().encode(channel))
+    #expect(saved.subtitles.isEmpty && saved.url == channel.url)
 }
 
 @Test func biliDashProxyBecomesProgressiveMP4() async throws {
