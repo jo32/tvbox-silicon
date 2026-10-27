@@ -28,6 +28,18 @@ struct FavoriteHeartButton: View {
     }
 }
 
+extension View {
+    /// Apple TV: Unlike in the focused card's menu (press and hold). The remote cannot reach a heart drawn on a card, so
+    /// favorites lists show none there. Elsewhere the heart stays and this does nothing.
+    @ViewBuilder func favoriteMenu(_ item: FavoriteItem, name: String) -> some View {
+        #if os(tvOS)
+        contextMenu { FavoriteMenuButton(item: item, name: name) }
+        #else
+        self
+        #endif
+    }
+}
+
 struct FavoriteMenuButton: View {
     @Environment(Store.self) private var store
     let item: FavoriteItem

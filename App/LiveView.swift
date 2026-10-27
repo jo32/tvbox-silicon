@@ -481,8 +481,11 @@ struct FavoritesView: View {
                         HStack(spacing: 10) {
                             MusicTrackRow(track: track, showsFavoriteMark: false) { store.music.play(track) }
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                            // The row's own menu has Unlike, which is how the remote removes it.
+                            #if !os(tvOS)
                             FavoriteHeartButton(item: .music(track), name: track.title)
                                 .fixedSize()
+                            #endif
                         }
                     }
                 }
@@ -563,9 +566,12 @@ private struct FavoriteFilmCard: View {
                     Text(video.videoName).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
                 }
             }
+            .favoriteMenu(.video(video), name: video.videoName)
+            #if !os(tvOS)
             FavoriteHeartButton(item: .video(video), name: video.videoName, onArtwork: true, revealed: heartRevealed)
                 .fixedSize()
                 .padding(8)
+            #endif
         }
         #if os(macOS)
         .onHover { hovering = $0 }
@@ -601,9 +607,12 @@ private struct FavoriteEpisodeCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .cardButton()
+            .favoriteMenu(.episode(episode), name: episode.video.videoName)
+            #if !os(tvOS)
             FavoriteHeartButton(item: .episode(episode), name: episode.video.videoName, onArtwork: true, revealed: heartRevealed)
                 .fixedSize()
                 .padding(8)
+            #endif
         }
         #if os(macOS)
         .onHover { hovering = $0 }
@@ -625,8 +634,11 @@ private struct FavoriteCloudRow: View {
                 FileRowLabel(symbol: cloud.symbol, tint: cloud.tint, title: file.fileName, subtitle: driveName)
             }
             .glassRow()
+            .favoriteMenu(.cloud(file), name: file.fileName)
+            #if !os(tvOS)
             FavoriteHeartButton(item: .cloud(file), name: file.fileName)
                 .fixedSize()
+            #endif
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)

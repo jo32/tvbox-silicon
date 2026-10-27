@@ -345,7 +345,7 @@ public extension TMDBMatch.Details {
 extension TMDBMatch {
     /// The episode number in a source's episode name: after S01E, EP, E or 第, else the first number that isn't a year
     /// or a resolution (1080P, 4K). nil when there is none.
-    static func episodeNumber(_ name: String) -> Int? {
+    public static func episodeNumber(_ name: String) -> Int? {
         var text = Substring(name)
         // A leading size tag: "[1.18GB] S01E41.mkv".
         if text.hasPrefix("["), let end = text.firstIndex(of: "]") { text = text[text.index(after: end)...] }
