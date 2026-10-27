@@ -85,6 +85,7 @@
 		4ECE8586E27A017017F26EDC /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181C983C0018A97F2A086298 /* DiscoveryView.swift */; };
 		4FDAA1091EFC2C8B0EA634C7 /* FavoriteControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8F5818C392424F43FF0C9 /* FavoriteControls.swift */; };
 		4FF55220DBC7080B2E95C5A8 /* BilibiliCastController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B1CEF969E4F3D3301A8D61 /* BilibiliCastController.swift */; };
+		515742AFC2C7655B651B744A /* TMDBViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F714C204B589F33E2806EDF8 /* TMDBViews.swift */; };
 		51E4D236D0D94E65A7881D6C /* EpisodeSkipSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B451E5612B33CF005EEAAE08 /* EpisodeSkipSettingsView.swift */; };
 		522603702A50B36D66B9470E /* Keystone-GPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 084C8344E2997DB3ED8FE974 /* Keystone-GPL2.txt */; };
 		53F697A2DD9E8D5443E43646 /* SitesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75124CC2471CF95C1FFB168A /* SitesView.swift */; };
@@ -133,6 +134,7 @@
 		7EF594A9192339C8A03FB054 /* MusicTVPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5733BA144503E76421BCFD /* MusicTVPlayer.swift */; };
 		7F3C4D27F233572323FAA9A4 /* MobilePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08D7BF6713A8519BEED17EE3 /* MobilePlayer.swift */; };
 		7FB9AB1705559DD6C22EEFAE /* LiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7459A3EBEF2E7C346B508738 /* LiveView.swift */; };
+		7FBF6A9CDB139D618BC92504 /* TMDBViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F714C204B589F33E2806EDF8 /* TMDBViews.swift */; };
 		80FEC451B80F610A45D9D139 /* MusicTVPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5733BA144503E76421BCFD /* MusicTVPlayer.swift */; };
 		8253F7BDC07638BD6F654962 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A90392B70C28DA6CC7497B9F /* Assets.xcassets */; };
 		827566269F191FCBF27F2FEA /* Keystone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 3A398E8AF0C7E4C94787F4B3 /* Keystone-LLVM.txt */; };
@@ -192,6 +194,7 @@
 		C6D7579CAFFAB9B441C0703C /* CloudDriveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE19E104EAA6C4F620B8E53 /* CloudDriveView.swift */; };
 		C715A188F36F0CC004231464 /* QALaunch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B842401113B0BDFA7B532B4 /* QALaunch.swift */; };
 		C8FF9AAC3D77145A907102ED /* MusicDownloadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F678BCB59DDEA3AD1329B11 /* MusicDownloadsView.swift */; };
+		CAA8462079A5E90B5AF54480 /* TMDBViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F714C204B589F33E2806EDF8 /* TMDBViews.swift */; };
 		CB40EB8463342F91C50AF39E /* libffi.txt in Resources */ = {isa = PBXBuildFile; fileRef = 06D9469858E5C5A118DED875 /* libffi.txt */; };
 		CDC78CAFF04C2753B881F19A /* MacUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ACBC18014BA7190EBA2EDD7 /* MacUpdater.swift */; };
 		CF87282F19A85C58083FC769 /* Unicorn-LGPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 77D75493765469B6134467AE /* Unicorn-LGPL2.txt */; };
@@ -326,6 +329,7 @@
 		F25432F6424C7931768C7B6F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		F3BE1C0DDC7E09246C2E0A68 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		F43A8E3DBB135075D0CF9D44 /* Announcements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Announcements.swift; sourceTree = "<group>"; };
+		F714C204B589F33E2806EDF8 /* TMDBViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TMDBViews.swift; sourceTree = "<group>"; };
 		F7D32FD5D631B4C58A2C3022 /* TVBox-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "TVBox-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		FAA3BD557773609F9C5109CA /* VideoEnhancement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoEnhancement.swift; sourceTree = "<group>"; };
 		FB8C8A2729B74B279EE60736 /* TVCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = TVCore; path = Packages/TVCore; sourceTree = SOURCE_ROOT; };
@@ -456,6 +460,7 @@
 				B442C75C212445F3786397ED /* SettingsView.swift */,
 				75124CC2471CF95C1FFB168A /* SitesView.swift */,
 				2D1010816125FBC3792AF838 /* Store.swift */,
+				F714C204B589F33E2806EDF8 /* TMDBViews.swift */,
 				8A2BB58B1720E9D6D85F93F4 /* TVBoxApp.swift */,
 				90D706229ED242AE96AE52F8 /* Updates.swift */,
 				FAA3BD557773609F9C5109CA /* VideoEnhancement.swift */,
@@ -900,6 +905,7 @@
 				90F4C8847D5EE49C3388A326 /* SettingsView.swift in Sources */,
 				53F697A2DD9E8D5443E43646 /* SitesView.swift in Sources */,
 				1FAC6965CB4F8B33135C85C5 /* Store.swift in Sources */,
+				515742AFC2C7655B651B744A /* TMDBViews.swift in Sources */,
 				01D530B7370C1CB5CFA657BE /* TVBoxApp.swift in Sources */,
 				3917D120CB9602531FA0D44E /* Updates.swift in Sources */,
 				34679295741063A247FA3E48 /* VideoEnhancement.swift in Sources */,
@@ -962,6 +968,7 @@
 				3DB703B04E4659AB8623A1A7 /* SettingsView.swift in Sources */,
 				B0AA965C1DB5AA7CF03E9415 /* SitesView.swift in Sources */,
 				4C65106175D517040E98330B /* Store.swift in Sources */,
+				7FBF6A9CDB139D618BC92504 /* TMDBViews.swift in Sources */,
 				BB4A23786D789829360C242B /* TVBoxApp.swift in Sources */,
 				13A266A0565733CC2C7A66E6 /* Updates.swift in Sources */,
 				D0C9F46261DDBE305F183413 /* VideoEnhancement.swift in Sources */,
@@ -1026,6 +1033,7 @@
 				26A1C218652FCEEE9FC60E0F /* SettingsView.swift in Sources */,
 				F8EB061662C5CB6EB47B41F2 /* SitesView.swift in Sources */,
 				BF897F1F4B399DAA732ED4ED /* Store.swift in Sources */,
+				CAA8462079A5E90B5AF54480 /* TMDBViews.swift in Sources */,
 				17CDC06DD8AD8CE47973B982 /* TVBoxApp.swift in Sources */,
 				090916F463B64788E8F69468 /* Updates.swift in Sources */,
 				C093CB1C1E82F6648ADBC51C /* VideoEnhancement.swift in Sources */,

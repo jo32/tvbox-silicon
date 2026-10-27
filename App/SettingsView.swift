@@ -326,6 +326,7 @@ struct FormSettingsView: View {
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     @AppStorage(ErrorReports.key) private var sendsErrorReports = true
+    @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
     #if os(iOS)
     @State private var addingSubscription = false
     @AppStorage(SpeedBoost.key) private var holdSpeed = SpeedBoost.standard
@@ -546,11 +547,19 @@ struct FormSettingsView: View {
                 }
                 .settingsSwitch()
                 .onChange(of: sendsErrorReports) { _, on in if !on { ErrorReports.shared.discard() } }
+                Toggle(isOn: $looksUpTMDB) {
+                    #if os(iOS)
+                    FormLabel(symbol: "film.stack.fill", tint: .teal, title: L10n.text("Look Up Titles on TMDB"))
+                    #else
+                    FormLabel(symbol: "film.stack.fill", tint: .teal, title: L10n.text("Look Up Titles on TMDB"), subtitle: tmdbNote)
+                    #endif
+                }
+                .settingsSwitch()
             } header: {
                 Text(L10n.text("Advanced"))
             } footer: {
                 #if os(iOS)
-                Text(errorReportsNote)
+                Text(errorReportsNote + "\n\n" + tmdbNote)
                 #endif
             }
 
@@ -714,6 +723,9 @@ struct FormSettingsView: View {
     private var upscaleNote: String { VideoEnhancement.upscaleNote }
     private var smoothNote: String { VideoEnhancement.smoothNote }
     private var pictureNote: String { VideoEnhancement.note }
+    private var tmdbNote: String {
+        L10n.text("Shows cast, artwork and episode details from TMDB on video pages. Sends the video's title, its details from the source and the source's name to Yingxia's lookup service, never your accounts or subscription addresses.")
+    }
     private var errorReportsNote: String { L10n.text("Sends errors to the developer a few times a day so they can be fixed: the error text with web addresses cut to the server name, the app and system versions, and a random ID. Never your accounts, passwords or viewing history.") }
     private func add() { if canAdd { Task { await store.importSubscription() } } }
 
@@ -1323,6 +1335,7 @@ struct TVSettingsView: View {
     @AppStorage(BilibiliCastController.key) private var receivesCasts = true
     @AppStorage(PlayOnController.key) private var receivesPlayOn = true
     @AppStorage(ErrorReports.key) private var sendsErrorReports = true
+    @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
 
     var body: some View {
         TVSettingsLayout {
@@ -1372,6 +1385,7 @@ struct TVSettingsView: View {
                 TVSettingsLink(title: L10n.text("Diagnostic Logs")) { DiagnosticsView() }
                 TVSettingsToggle(title: L10n.text("Send Error Reports"), isOn: $sendsErrorReports)
                     .onChange(of: sendsErrorReports) { _, on in if !on { ErrorReports.shared.discard() } }
+                TVSettingsToggle(title: L10n.text("Look Up Titles on TMDB"), isOn: $looksUpTMDB)
             }
             if updates.available.isEmpty, Updates.channel != .none { updateSection }
             TVSettingsSection(title: L10n.text("About"),

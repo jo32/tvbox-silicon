@@ -1,0 +1,212 @@
+// What the app shows for a title (`Details`), and what the agent reads to check a candidate (`facts`).
+import { image, type MediaType, type TMDB, yearOf } from "./tmdb.ts";
+
+export interface Person {
+  name: string;
+  role: string | null;
+  profile: string | null;
+}
+
+export interface SeasonSummary {
+  number: number;
+  name: string;
+  episodeCount: number;
+  year: number | null;
+  poster: string | null;
+}
+
+export interface EpisodeInfo {
+  number: number;
+  name: string;
+  overview: string;
+  still: string | null;
+  airDate: string | null;
+  runtime: number | null;
+  rating: number | null;
+}
+
+export interface Details {
+  mediaType: MediaType;
+  id: number;
+  name: string;
+  originalName: string;
+  tagline: string;
+  overview: string;
+  year: number | null;
+  date: string | null;
+  genres: string[];
+  runtime: number | null;
+  rating: number | null;
+  voteCount: number;
+  countries: string[];
+  status: string | null;
+  poster: string | null;
+  backdrop: string | null;
+  logo: string | null;
+  cast: Person[];
+  crew: Person[];
+  networks: string[];
+  seasons: SeasonSummary[];
+  season: { number: number; name: string; overview: string; poster: string | null; year: number | null; episodes: EpisodeInfo[] } | null;
+  link: string;
+}
+
+// TMDB is edited by anyone, and spam gets in (a zh-CN tagline once advertised a porn site): text with a web
+// address or the styled letters spammers use to slip past filters (𝟰, 𝐀) is left out.
+const spam = /https?:\/\/|www\.|[a-z0-9-]+\.(?:com|net|org|cc|top|xyz|vip|me|tv|co|info|io|app|club|site|live|link|shop|fun|icu|pw)\b|[\u{1D400}-\u{1D7FF}]/iu;
+const clip = (value: unknown, max: number) => (typeof value === "string" && !spam.test(value) ? value.trim().slice(0, max) : "");
+const list = (value: unknown): any[] => (Array.isArray(value) ? value : []);
+const number = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : null);
+
+// The first of these translations with text: TMDB leaves a field empty where nobody translated it.
+function fallbacks(language: string) {
+  const zh = ["zh-CN", "zh-SG", "zh-TW", "zh-HK"];
+  const first = language.startsWith("zh") ? [language, ...zh.filter((code) => code !== language)] : [language];
+  return [...first, "en-US"];
+}
+
+function translated(translations: any, language: string, field: string) {
+  const items = list(translations?.translations);
+  for (const code of fallbacks(language)) {
+    const [lang, region] = code.split("-");
+    const item = items.find((entry) => entry.iso_639_1 === lang && entry.iso_3166_1 === region) ?? (region ? null : items.find((entry) => entry.iso_639_1 === lang));
+    const text = clip(item?.data?.[field], 2000);
+    if (text) return text;
+  }
+  return "";
+}
+
+// A logo in the viewer's language if there is one, else English, else one without text. PNGs only: the app can't draw SVG.
+function logo(images: any, language: string) {
+  const logos = list(images?.logos).filter((entry) => typeof entry.file_path === "string" && entry.file_path.endsWith(".png"));
+  const lang = language.split("-")[0];
+  const pick = logos.find((entry) => entry.iso_639_1 === lang) ?? logos.find((entry) => entry.iso_639_1 === "en") ?? logos.find((entry) => !entry.iso_639_1);
+  return image(pick?.file_path, "w500");
+}
+
+export async function details(tmdb: TMDB, type: MediaType, id: number, language: string, seasonNumber: number | null): Promise<Details | null> {
+  const lang = language.split("-")[0];
+  const item = await tmdb.get(`/${type}/${id}`, {
+    language,
+    append_to_response: type === "tv" ? "aggregate_credits,images,translations" : "credits,images,translations",
+    include_image_language: `${lang},en,null`,
+  });
+  if (!item) return null;
+  const tv = type === "tv";
+  const credits = tv ? item.aggregate_credits : item.credits;
+  const cast: Person[] = list(credits?.cast)
+    .slice(0, 16)
+    .map((person) => ({
+      name: clip(person.name, 80),
+      role: clip(tv ? person.roles?.[0]?.character : person.character, 80) || null,
+      profile: image(person.profile_path, "w185"),
+    }));
+  const crew: Person[] = tv
+    ? list(item.created_by).slice(0, 4).map((person) => ({ name: clip(person.name, 80), role: "Creator", profile: image(person.profile_path, "w185") }))
+    : list(credits?.crew)
+        .filter((person) => person.job === "Director")
+        .slice(0, 3)
+        .map((person) => ({ name: clip(person.name, 80), role: "Director", profile: image(person.profile_path, "w185") }));
+  const seasons: SeasonSummary[] = list(item.seasons).map((season) => ({
+    number: season.season_number,
+    name: clip(season.name, 80),
+    episodeCount: season.episode_count ?? 0,
+    year: yearOf(season.air_date),
+    poster: image(season.poster_path, "w342"),
+  }));
+  let season: Details["season"] = null;
+  if (tv && seasonNumber !== null && seasons.some((entry) => entry.number === seasonNumber)) {
+    const value = await tmdb.get(`/tv/${id}/season/${seasonNumber}`, { language });
+    if (value) {
+      season = {
+        number: seasonNumber,
+        name: clip(value.name, 80),
+        overview: clip(value.overview, 2000),
+        poster: image(value.poster_path, "w342"),
+        year: yearOf(value.air_date),
+        episodes: list(value.episodes).map((episode) => ({
+          number: episode.episode_number,
+          name: clip(episode.name, 120),
+          overview: clip(episode.overview, 600),
+          still: image(episode.still_path, "w300"),
+          airDate: typeof episode.air_date === "string" ? episode.air_date : null,
+          runtime: number(episode.runtime),
+          rating: episode.vote_count > 0 ? number(episode.vote_average) : null,
+        })),
+      };
+    }
+  }
+  const date = (tv ? item.first_air_date : item.release_date) || null;
+  return {
+    mediaType: type,
+    id,
+    name: clip(tv ? item.name : item.title, 200) || translated(item.translations, language, tv ? "name" : "title"),
+    originalName: clip(tv ? item.original_name : item.original_title, 200),
+    tagline: clip(item.tagline, 300) || translated(item.translations, language, "tagline"),
+    overview: clip(item.overview, 2000) || translated(item.translations, language, "overview"),
+    year: yearOf(date),
+    date,
+    genres: list(item.genres).map((genre) => clip(genre.name, 40)).filter(Boolean),
+    runtime: tv ? number(item.episode_run_time?.[0]) : number(item.runtime),
+    rating: item.vote_count > 0 ? number(item.vote_average) : null,
+    voteCount: item.vote_count ?? 0,
+    countries: tv ? list(item.origin_country).map(String) : list(item.production_countries).map((country) => String(country.iso_3166_1)),
+    status: clip(item.status, 40) || null,
+    poster: image(item.poster_path, "w500"),
+    backdrop: image(item.backdrop_path, "w1280"),
+    logo: logo(item.images, language),
+    cast,
+    crew,
+    networks: list(tv ? item.networks : item.production_companies).slice(0, 3).map((entry) => clip(entry.name, 60)),
+    seasons,
+    season,
+    link: `https://www.themoviedb.org/${type}/${id}`,
+  };
+}
+
+// A candidate as the agent sees it: every name it goes by, and what tells apart works of the same name.
+export async function facts(tmdb: TMDB, type: MediaType, id: number) {
+  const item = await tmdb.get(`/${type}/${id}`, { language: "zh-CN", append_to_response: "alternative_titles,translations" });
+  if (!item) return { error: "No such title." };
+  const tv = type === "tv";
+  const names = new Set<string>();
+  for (const entry of list(tv ? item.alternative_titles?.results : item.alternative_titles?.titles)) names.add(clip(entry.title, 80));
+  for (const entry of list(item.translations?.translations)) names.add(clip(entry.data?.[tv ? "name" : "title"], 80));
+  names.delete("");
+  return {
+    mediaType: type,
+    id,
+    name: tv ? item.name : item.title,
+    originalName: tv ? item.original_name : item.original_title,
+    otherNames: [...names].slice(0, 30),
+    year: yearOf(tv ? item.first_air_date : item.release_date),
+    countries: tv ? item.origin_country : list(item.production_countries).map((country) => country.iso_3166_1),
+    originalLanguage: item.original_language,
+    genres: list(item.genres).map((genre) => genre.name),
+    overview: clip(item.overview, 240) || clip(list(item.translations?.translations).find((entry) => entry.iso_639_1 === "en")?.data?.overview, 240),
+    ...(tv
+      ? {
+          episodes: item.number_of_episodes,
+          seasons: list(item.seasons).map((season) => ({ number: season.season_number, name: season.name, episodes: season.episode_count, year: yearOf(season.air_date) })),
+        }
+      : { runtime: item.runtime, collection: item.belongs_to_collection?.name ?? null }),
+  };
+}
+
+// One search result, short: the agent reads many of these.
+export function brief(result: any, type?: MediaType) {
+  const mediaType: MediaType = type ?? result.media_type;
+  const tv = mediaType === "tv";
+  return {
+    mediaType,
+    id: result.id as number,
+    name: (tv ? result.name : result.title) as string,
+    originalName: (tv ? result.original_name : result.original_title) as string,
+    year: yearOf(tv ? result.first_air_date : result.release_date),
+    countries: tv ? result.origin_country : undefined,
+    originalLanguage: result.original_language,
+    votes: result.vote_count,
+    overview: clip(result.overview, 100),
+    poster: image(result.poster_path, "w342"),
+  };
+}

@@ -819,6 +819,8 @@ struct VideoDetailView: View {
     @State private var choosingDownloads = false
     /// How many episodes were just queued, shown briefly under the header.
     @State private var queuedNotice: Int?
+    /// TMDB's details for the video (TMDBViews.swift). The page shows the source's own until they are in, then fades them in.
+    @State private var tmdb = TMDBLookup()
     private var flags: [String] {
         var seen = Set<String>()
         return (detail?.episodes ?? []).map(\.flag).filter { seen.insert($0).inserted }
@@ -883,6 +885,7 @@ struct VideoDetailView: View {
             #endif
         }
         .onDisappear { requestTask?.cancel() }
+        .task(id: detail?.id) { await startTMDB() }
         .onChange(of: choosingQuality) { _, open in if !open && !busy { loadingEpisode = nil } }
         // Sign in where playback failed, then resume the episode that needed the account.
         #if os(macOS)
@@ -927,7 +930,7 @@ struct VideoDetailView: View {
             // scrolls on its own so the title and playback state stay in view.
             HStack(alignment: .top, spacing: Layout.gutter + 8) {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 18) { header }
+                    VStack(alignment: .leading, spacing: 18) { header; tmdbExtras }
                     .padding(.vertical, Layout.gutter)
                 }
                 .scrollIndicators(.never)
@@ -946,6 +949,7 @@ struct VideoDetailView: View {
                     header
                     if detail != nil {
                         episodePanel(scrolls: false)
+                        tmdbExtras
                     } else if let error {
                         errorCard(error).padding(.top, 12)
                     } else {
@@ -1083,6 +1087,51 @@ struct VideoDetailView: View {
             #endif
         }
     }
+    /// What this device knows shows at once; otherwise the lookup starts once the source's details are in (their
+    /// synopsis and episodes help tell works of the same name apart).
+    private func startTMDB() async {
+        guard TMDBLookup.applies(to: client.site) else { return }
+        let key = TMDBMatchStore.key(source: client.site.key, video: video.id)
+        guard let detail else { _ = await tmdb.prepare(key: key); return }
+        let request = TMDBMatch.Request(video: detail.keepingPoster(video.poster), listVideo: video,
+                                        source: TMDBMatch.SourceRef(key: client.site.key, name: client.site.name))
+        // AI-generated videos and short dramas aren't on TMDB: the page keeps the source's own data.
+        guard !TMDBMatch.labeledNotOnTMDB(request) else { return }
+        await tmdb.run(key: key, request: request)
+    }
+    /// TMDB's story when it has one, else the source's synopsis.
+    private func synopsisText(_ detail: Video) -> String {
+        if let story = tmdb.details?.story, !story.isEmpty { return story }
+        return detail.synopsis
+    }
+    /// The lookup's progress or its question, then TMDB's cast, facts and notice, under the page's own content.
+    @ViewBuilder private var tmdbStatus: some View {
+        TMDBLookupStatus(lookup: tmdb)
+    }
+    @ViewBuilder private var tmdbExtras: some View {
+        if let details = tmdb.details {
+            VStack(alignment: .leading, spacing: 22) {
+                if !details.cast.isEmpty { TMDBCastRow(cast: details.cast) }
+                TMDBInfoGrid(details: details)
+                TMDBFooter(lookup: tmdb, title: currentVideo().name)
+            }
+            .transition(.opacity.combined(with: .move(edge: .bottom)))
+        }
+    }
+    private var bannerHeight: CGFloat { min(max(containerWidth * 0.42, 280), 540) }
+    /// TMDB's backdrop banner once the details are in, the source's cover and title until then.
+    @ViewBuilder private var tmdbHero: some View {
+        if let details = tmdb.details, let backdrop = details.backdrop {
+            let banner = TMDBBanner(details: details, backdrop: backdrop, unmatched: tmdb.answer?.unmatched ?? "") { playControl }
+            #if os(tvOS)
+            banner.aspectRatio(16.0 / 9.0, contentMode: .fit).transition(.opacity)
+            #else
+            banner.frame(height: bannerHeight).transition(.opacity)
+            #endif
+        } else {
+            hero.transition(.opacity)
+        }
+    }
     private var headerLayout: AnyLayout {
         #if os(iOS)
         if sizeClass == .compact { return AnyLayout(HStackLayout(alignment: .top, spacing: 16)) }
@@ -1097,12 +1146,14 @@ struct VideoDetailView: View {
         #endif
     }
     @ViewBuilder private func synopsis(_ detail: Video) -> some View {
-        if !detail.synopsis.isEmpty {
+        let text = synopsisText(detail)
+        if !text.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                Text(detail.synopsis).foregroundStyle(.secondary)
+                Text(text).foregroundStyle(.secondary)
                     .lineLimit(synopsisExpanded ? nil : synopsisLineLimit)
                     .fixedSize(horizontal: false, vertical: true)
-                if detail.synopsis.count > 100 {
+                    .contentTransition(.opacity)
+                if text.count > 100 {
                     let toggle = Button(L10n.text(synopsisExpanded ? "Show Less" : "Show Full Synopsis")) { synopsisExpanded.toggle() }
                     #if os(tvOS)
                     toggle.controlButton()
@@ -1299,9 +1350,10 @@ struct VideoDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 18) {
             if isWide {
-                hero
+                tmdbHero
                 playbackBanner
-                if let detail, !detail.synopsis.isEmpty {
+                tmdbStatus
+                if let detail, !synopsisText(detail).isEmpty {
                     synopsis(detail).font(.body).padding(.horizontal, 18).padding(.vertical, 14)
                         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
@@ -1315,6 +1367,9 @@ struct VideoDetailView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(video.name).font(.title3.weight(.bold)).fixedSize(horizontal: false, vertical: true)
                             if !video.remarks.isEmpty { Text(video.remarks).font(.subheadline).foregroundStyle(.secondary) }
+                            if let facts = tmdb.details?.facts, !facts.isEmpty {
+                                Text(facts).font(.subheadline).foregroundStyle(.secondary).transition(.opacity)
+                            }
                             Spacer(minLength: 0)
                             playControl
                         }
@@ -1322,9 +1377,12 @@ struct VideoDetailView: View {
                     Spacer(minLength: 0)
                 }
                 playbackBanner
+                tmdbStatus
                 if let detail { synopsis(detail) }
             }
         }
+        .animation(.smooth(duration: 0.45), value: tmdb.details)
+        .animation(.smooth(duration: 0.3), value: tmdb.phase)
     }
     @ViewBuilder private func episodePanel(scrolls: Bool) -> some View {
         if let detail {
@@ -1372,11 +1430,23 @@ struct VideoDetailView: View {
         let longNames = splitLayout || (items.map { $0.name.count }.max() ?? 0) > 6
         // Under a full-width banner, long names fill columns rather than one stretched list.
         let rowColumns = isWide && !splitLayout ? [GridItem(.adaptive(minimum: 320), spacing: 8)] : [GridItem(.flexible())]
-        return LazyVGrid(columns: longNames ? rowColumns : [GridItem(.adaptive(minimum: episodeMin), spacing: 8)], spacing: longNames ? 4 : 8) {
+        // TMDB's stills, when its season lines up with most of the episodes.
+        let stills = tmdb.episodes(items)
+        let showsStills = items.count > 1 && stills.count * 2 >= items.count
+        let columns = showsStills ? [GridItem(.adaptive(minimum: TMDBMetrics.episodeTile), spacing: TMDBMetrics.spacing, alignment: .top)]
+            : longNames ? rowColumns : [GridItem(.adaptive(minimum: episodeMin), spacing: 8)]
+        return LazyVGrid(columns: columns, spacing: showsStills ? TMDBMetrics.spacing : longNames ? 4 : 8) {
             ForEach(items) { episode in
                 let saved = download(episode)
                 Group {
-                    if longNames {
+                    if showsStills {
+                        Button { startRequest { await play(episode) } } label: {
+                            TMDBEpisodeTile(name: EpisodeRow.title(episode.name), info: stills[episode.id], loading: loadingEpisode == episode.id, width: nil)
+                        }
+                        .tmdbCardButton()
+                        .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge().padding(4) } }
+                        .accessibilityLabel(episode.name)
+                    } else if longNames {
                         EpisodeRow(name: episode.name, loading: loadingEpisode == episode.id, download: saved) { startRequest { await play(episode) } }
                     } else {
                         Chip(title: episode.name, selected: loadingEpisode == episode.id, fill: true) { startRequest { await play(episode) } }
@@ -1413,6 +1483,7 @@ struct VideoDetailView: View {
         .padding(.trailing, 16).padding(.vertical, 6)
         #endif
         .tvFocusSection()
+        .animation(.smooth(duration: 0.4), value: showsStills)
     }
     private var episodeMin: CGFloat {
         #if os(tvOS)
@@ -1623,6 +1694,9 @@ struct VideoDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(currentVideo().name).font(.title3.weight(.bold)).fixedSize(horizontal: false, vertical: true)
+                if let facts = tmdb.details?.facts, !facts.isEmpty {
+                    Text(facts).font(.subheadline.weight(.medium)).lineLimit(2).transition(.opacity)
+                }
                 let meta = [currentVideo().remarks, currentVideo().year ?? "", SourceLabel(client.site.name).text].filter { !$0.isEmpty }
                 if !meta.isEmpty {
                     Text(meta.joined(separator: " · ")).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
@@ -1632,9 +1706,11 @@ struct VideoDetailView: View {
                 HStack(spacing: 10) { downloadButton(iconOnly: false); videoFavoriteButton }
             }
             playbackBanner
+            tmdbStatus
             if let detail { synopsis(detail) }
             if detail != nil {
                 watchEpisodes
+                tmdbExtras.padding(.top, 6)
             } else if let error {
                 errorCard(error)
             } else {
@@ -1642,6 +1718,8 @@ struct VideoDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(.smooth(duration: 0.45), value: tmdb.details)
+        .animation(.smooth(duration: 0.3), value: tmdb.phase)
     }
 
     /// As in Bilibili's 选集: one row of episodes that scrolls sideways to the one playing, and All for the full list.
@@ -1653,6 +1731,7 @@ struct VideoDetailView: View {
             } else {
                 let items = detail.episodes.filter { $0.flag == activeFlag }
                 let compact = items.allSatisfy { EpisodeRow.title($0.name).count <= 5 }
+                let stills = watchStills(items)
                 VStack(alignment: .leading, spacing: 12) {
                     if items.count > 1 {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -1677,7 +1756,7 @@ struct VideoDetailView: View {
                         // scrollPosition rather than ScrollViewReader: scrollTo also scrolls the page's vertical
                         // scroll view, which pushed the title under the player.
                         ScrollView(.horizontal) {
-                            LazyHStack(spacing: 8) { ForEach(items) { watchEpisodeCard($0, compact: compact) } }
+                            LazyHStack(alignment: .top, spacing: stills.isEmpty ? 8 : 12) { ForEach(items) { watchEpisodeCard($0, compact: compact, info: stills[$0.id]) } }
                                 .scrollTargetLayout()
                                 .padding(.horizontal, 16)
                         }
@@ -1705,9 +1784,16 @@ struct VideoDetailView: View {
         }
     }
 
-    /// An episode: a small tile for short names (第1集, 01), a two-line card for long ones. The one playing is tinted in
-    /// the accent. There is no per-episode favorite on this page.
-    private func watchEpisodeCard(_ episode: Episode, compact: Bool, fill: Bool = false, chosen: (() -> Void)? = nil) -> some View {
+    /// TMDB's stills for the line's episodes, when its season lines up with most of them; otherwise none.
+    private func watchStills(_ items: [Episode]) -> [Episode.ID: TMDBMatch.EpisodeInfo] {
+        let stills = tmdb.episodes(items)
+        return items.count > 1 && stills.count * 2 >= items.count ? stills : [:]
+    }
+
+    /// An episode: a small tile for short names (第1集, 01), a two-line card for long ones, TMDB's still above the name
+    /// when there is one. The one playing is tinted in the accent. There is no per-episode favorite on this page.
+    private func watchEpisodeCard(_ episode: Episode, compact: Bool, fill: Bool = false, info: TMDBMatch.EpisodeInfo? = nil,
+                                  chosen: (() -> Void)? = nil) -> some View {
         let current = episode.id == currentEpisodeID
         let saved = download(episode)
         let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -1717,6 +1803,11 @@ struct VideoDetailView: View {
             guard !(current && watchChannel != nil) else { return }
             startRequest { await play(episode) }
         } label: {
+            if let info {
+                TMDBEpisodeTile(name: EpisodeRow.title(episode.name), info: info, current: current, loading: loadingEpisode == episode.id,
+                                width: fill ? nil : 168)
+                    .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge().padding(4) } }
+            } else {
             HStack(spacing: 6) {
                 if loadingEpisode == episode.id { ProgressView().controlSize(.small) }
                 Text(EpisodeRow.title(episode.name)).lineLimit(compact ? 1 : 2)
@@ -1730,6 +1821,7 @@ struct VideoDetailView: View {
             .background(current ? Brand.accent.opacity(0.14) : Color.primary.opacity(0.06), in: shape)
             .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge() } }
             .contentShape(shape)
+            }
         }
         .buttonStyle(.plain)
         .id(episode.id)
@@ -1751,12 +1843,14 @@ struct VideoDetailView: View {
     private var allEpisodes: some View {
         let items = (detail?.episodes ?? []).filter { $0.flag == activeFlag }
         let compact = items.allSatisfy { EpisodeRow.title($0.name).count <= 5 }
+        let stills = watchStills(items)
         return NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     watchLines
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: compact ? 64 : 150), spacing: 8)], spacing: 8) {
-                        ForEach(items) { watchEpisodeCard($0, compact: compact, fill: true) { showsAllEpisodes = false } }
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: stills.isEmpty ? (compact ? 64 : 150) : 160), spacing: stills.isEmpty ? 8 : 12, alignment: .top)],
+                              spacing: stills.isEmpty ? 8 : 14) {
+                        ForEach(items) { watchEpisodeCard($0, compact: compact, fill: true, info: stills[$0.id]) { showsAllEpisodes = false } }
                     }
                 }
                 .padding(16)

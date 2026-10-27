@@ -429,6 +429,112 @@ import TVCore
             print("\(passed)/\(sites.count) sources reached playback")
             return
         }
+        if args[1] == "--tmdb-sample", args.count >= 4, let perSource = Int(args[3]) {
+            // --tmdb-sample <subscription> <videos per source> [source filters]: one JSON line per video with what
+            // the app sends the TMDB matcher (TMDBMatch.Request), from home and the first categories, for
+            // Scripts/tmdb-sample.py.
+            setvbuf(stdout, nil, _IONBF, 0)
+            let config = try await HTTPClient().subscription(WebAddress.resolve(args[2]))
+            let filters = Array(args.dropFirst(4))
+            let sites = config.sites.filter { site in filters.isEmpty || filters.contains { site.name.contains($0) || site.key.contains($0) } }
+            struct Sample: Encodable { let source: String; let sourceName: String; let id: String; let request: TMDBMatch.Request }
+            func deadline<T: Sendable>(_ seconds: Double, _ work: @escaping @Sendable () async throws -> T) async throws -> T {
+                try await withThrowingTaskGroup(of: T.self) { group in
+                    group.addTask { try await work() }
+                    group.addTask { try await Task.sleep(for: .seconds(seconds)); throw TVError.unsupported("timed out") }
+                    defer { group.cancelAll() }
+                    return try await group.next()!
+                }
+            }
+            for site in sites {
+                let client = CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL)
+                do {
+                    let home = try await deadline(40) { try await client.home() }
+                    // Home often shows one kind only: mix in the first categories (movies, series, anime…).
+                    var lists = [home.videos]
+                    for category in home.categories.prefix(4) {
+                        lists.append((try? await deadline(40) { try await client.list(category: category.id, query: "", page: 1).videos }) ?? [])
+                    }
+                    var videos: [Video] = [], seen = Set<String>()
+                    for index in 0..<40 where videos.count < perSource {
+                        for list in lists where index < list.count && videos.count < perSource && seen.insert(list[index].id).inserted { videos.append(list[index]) }
+                    }
+                    for video in videos {
+                        guard let detail = try? await deadline(40, { try await client.detail(video.id) }) else { continue }
+                        let line = Sample(source: site.key, sourceName: site.name, id: video.id,
+                                          request: TMDBMatch.Request(video: detail.keepingPoster(video.poster), listVideo: video))
+                        print(String(decoding: try JSONEncoder().encode(line), as: UTF8.self))
+                    }
+                } catch {
+                    FileHandle.standardError.write(Data("FAIL \(site.key) \(site.name): \(error.localizedDescription)\n".utf8))
+                }
+            }
+            return
+        }
+        if args[1] == "--tmdb-check", args.count >= 3 {
+            // --tmdb-check <samples.jsonl> [parallel]: asks the TMDB matcher about each --tmdb-sample line through the app's
+            // client (TMDBMatch), and prints one JSON line per video: the answer, its steps and time, and how the
+            // source's episodes line up with TMDB's.
+            setvbuf(stdout, nil, _IONBF, 0)
+            struct Sample: Decodable { let source: String; let sourceName: String; let id: String; let request: TMDBMatch.Request }
+            struct Line: Encodable {
+                let source: String, title: String, year: String?, episodes: Int
+                var status = "", seconds = 0.0, steps: [String] = [], error: String? = nil
+                var work: String? = nil, season: Int? = nil, numbering: String? = nil, unmatched: String? = nil, candidates: [String] = []
+                var tmdbEpisodes: Int? = nil, mapped: Int? = nil, mapping: [String] = []
+            }
+            let samples = try String(contentsOfFile: args[2], encoding: .utf8).split(separator: "\n").compactMap {
+                try? JSONDecoder().decode(Sample.self, from: Data($0.utf8))
+            }
+            let parallel = args.count > 3 ? max(Int(args[3]) ?? 2, 1) : 2
+            final class Steps: @unchecked Sendable { var list: [String] = []; let lock = NSLock()
+                func add(_ step: String) { lock.lock(); list.append(step); lock.unlock() } }
+            func check(_ sample: Sample) async -> Line {
+                var line = Line(source: sample.sourceName, title: sample.request.title, year: sample.request.year, episodes: sample.request.episodes.count)
+                let started = Date(), steps = Steps()
+                do {
+                    let answer = try await TMDBMatch.lookup(sample.request) { step in
+                        switch step {
+                        case .searching(let query): steps.add("search:\(query)")
+                        case .checking(let name, let year): steps.add("details:\(name ?? "?")(\(year.map(String.init) ?? "?"))")
+                        case .season(let number): steps.add("season:\(number)")
+                        default: break
+                        }
+                    }
+                    line.status = answer.status.rawValue
+                    line.unmatched = answer.unmatched.isEmpty ? nil : answer.unmatched
+                    line.candidates = answer.candidates.map { "\($0.mediaType.rawValue):\($0.id) \($0.name) (\($0.year.map(String.init) ?? "?"))" }
+                    if let details = answer.details, let match = answer.match {
+                        line.work = "\(details.mediaType.rawValue):\(details.id) \(details.name) (\(details.year.map(String.init) ?? "?"))"
+                        line.season = match.season; line.numbering = match.numbering.rawValue
+                        if let season = details.season {
+                            line.tmdbEpisodes = season.episodes.count
+                            let mapped = details.episodes(for: sample.request.episodes, numbering: match.numbering, offset: match.offset ?? 0)
+                            line.mapped = mapped.compactMap { $0 }.count
+                            let picks = Array(Set([0, 1, sample.request.episodes.count / 2, sample.request.episodes.count - 1])).sorted()
+                            line.mapping = picks.filter { $0 >= 0 && $0 < mapped.count }.map { index in
+                                "\(sample.request.episodes[index]) → \(mapped[index].map { "E\($0.number) \($0.name)" } ?? "–")"
+                            }
+                        }
+                    }
+                } catch {
+                    line.status = "error"; line.error = error.localizedDescription
+                }
+                line.seconds = (Date().timeIntervalSince(started) * 10).rounded() / 10
+                line.steps = steps.list
+                return line
+            }
+            await withTaskGroup(of: Line.self) { group in
+                var next = 0
+                func add() { if next < samples.count { let sample = samples[next]; next += 1; group.addTask { await check(sample) } } }
+                for _ in 0..<parallel { add() }
+                for await line in group {
+                    print(String(decoding: (try? JSONEncoder().encode(line)) ?? Data(), as: UTF8.self))
+                    add()
+                }
+            }
+            return
+        }
         if args[1] == "--home-check", args.count >= 3 {
             // Loads each source's home the way the app's source page does and reports what its
             // category bar would show.

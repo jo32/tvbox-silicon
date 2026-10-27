@@ -1,0 +1,25 @@
+// Matches source videos to TMDB for the app's detail page (Sources/TVCore/TMDBMatch.swift). See README.md.
+// Deploy: ../../website/node_modules/.bin/wrangler deploy (from this folder).
+{
+  "$schema": "../../website/node_modules/wrangler/config-schema.json",
+  "name": "yingxia-tmdb",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-22",
+  "routes": [{ "pattern": "yingxia-tmdb.getmegaportal.com", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
+  // Gemini's calls go out from the US (GeminiRelay in src/index.ts).
+  "durable_objects": { "bindings": [{ "name": "GEMINI_RELAY", "class_name": "GeminiRelay" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["GeminiRelay"] }],
+  "d1_databases": [{ "binding": "DB", "database_name": "yingxia-tmdb", "database_id": "1128f19d-e5bc-4263-9b2c-8dfa802db320" }],
+  // Per IP address, in memory only. Each viewer opens a title once; a run is a few model turns.
+  "ratelimits": [
+    { "name": "MATCH_LIMITER", "namespace_id": "4201", "simple": { "limit": 20, "period": 60 } },
+    { "name": "DETAILS_LIMITER", "namespace_id": "4202", "simple": { "limit": 60, "period": 60 } }
+  ],
+  // Secrets: GEMINI_API_KEY, TMDB_TOKEN (wrangler secret put).
+  "vars": { "GEMINI_MODEL": "gemini-3.5-flash-lite", "DAILY_RUNS": "2000" },
+  // Daily: drop expired answers.
+  "triggers": { "crons": ["41 3 * * *"] },
+  "observability": { "enabled": false }
+}
