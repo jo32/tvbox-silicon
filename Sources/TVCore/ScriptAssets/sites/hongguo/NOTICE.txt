@@ -14,6 +14,15 @@ Updated 2026-10-25 from the same repository at commit
 195f276baf497e6ba969adece90b25e84198d3ac (v3.3): a new synthetic identity per
 signed request, backup media links, and the status of the second API answer.
 
+Updated 2026-10-27 from the same repository at commit
+a547a97dea3cba9d78b77125023f9aff20509a61 (v4.1): playback-device.js registers
+one anonymous device per session (no account, cookie or captured identity) and
+asks for playback with it; the first answer's inline video list. Its ttEncrypt
+and registration fields come from tsukiyo-zero/hongguoTV commit
+388931852ddc614db8b00775a3dc54c5ede6307f,
+kotlin-tv/core/src/main/kotlin/com/hongguotv/core/DeviceRegister.kt, adapted
+from charlie901208/HGTV (feat/phone-login). License: GPL-3.0-only.
+
 Upstream attribution follows:
 
 App playback source and signature attribution

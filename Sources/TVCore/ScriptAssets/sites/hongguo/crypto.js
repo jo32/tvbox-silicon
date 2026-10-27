@@ -17,8 +17,26 @@ export class Buffer extends globalThis.Buffer {
     writeBigUInt64BE(value, offset = 0) { this.view().setBigUint64(offset, value, false); return offset + 8; }
 }
 
+function aesCBC(encrypt, algorithm, key, iv) {
+    if (algorithm !== 'aes-128-cbc') throw new Error('Unsupported Hongguo cipher');
+    let padding = true;
+    const parts = [];
+    return {
+        setAutoPadding(value) { padding = value; },
+        update(data) { parts.push(Buffer.from(data)); return Buffer.alloc(0); },
+        final() { return Buffer.from(nativeCrypto({ op: 'aes', encrypt, mode: 'CBC', padding,
+            key: key.toString('base64'), iv: iv.toString('base64'), data: Buffer.concat(parts).toString('base64') }).data, 'base64'); },
+    };
+}
+
 export const crypto = {
     randomBytes(count) { return Buffer.from(nativeCrypto({ op: 'random', count }).data, 'base64'); },
+    randomUUID() {
+        const bytes = crypto.randomBytes(16);
+        bytes[6] = (bytes[6] & 0x0f) | 0x40; bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        const hex = bytes.toString('hex');
+        return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    },
     createHash(alg) {
         const parts = [];
         return {
@@ -29,15 +47,6 @@ export const crypto = {
             },
         };
     },
-    createDecipheriv(algorithm, key, iv) {
-        if (algorithm !== 'aes-128-cbc') throw new Error('Unsupported Hongguo cipher');
-        let padding = true;
-        const parts = [];
-        return {
-            setAutoPadding(value) { padding = value; },
-            update(data) { parts.push(Buffer.from(data)); return Buffer.alloc(0); },
-            final() { return Buffer.from(nativeCrypto({ op: 'aes', mode: 'CBC', padding,
-                key: key.toString('base64'), iv: iv.toString('base64'), data: Buffer.concat(parts).toString('base64') }).data, 'base64'); },
-        };
-    },
+    createCipheriv(algorithm, key, iv) { return aesCBC(true, algorithm, key, iv); },
+    createDecipheriv(algorithm, key, iv) { return aesCBC(false, algorithm, key, iv); },
 };

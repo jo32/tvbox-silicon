@@ -8,14 +8,18 @@
 // Yingxia adaptation, 2026-10-12: ES modules, native crypto bridge, bounded QuickJS HTTP.
 // 2026-10-25, following jackotom/hongguo-drama 3.3: per-request synthetic IDs, backup media
 // links, and the second answer's status code.
+// 2026-10-27, following jackotom/hongguo-drama 4.1: playback asks with a registered anonymous device
+// (playback-device.js), and the first answer carries the video list itself.
 // See NOTICE.txt for the complete provenance chain.
 import { Buffer, crypto } from './crypto.js';
 import sm3 from './sm3.js';
+import { playbackDevice } from './playback-device.js';
 const localId = () => String(1000000000000000n + BigInt('0x' + crypto.randomBytes(6).toString('hex')));
 const PROCESS_NONCE = crypto.randomBytes(18).toString('base64url');
 const PROCESS_STARTED = Date.now();
 const VIDEO_API = 'https://api5-normal-sinfonlineb.fqnovel.com/novel/player/multi_video_model/v1/';
 const VIDEO_UA = 'com.phoenix.read/71332 (Linux; U; Android 16; zh_CN; 25053RT47C; Build/BP2A.250605.031.A3; Cronet/TTNetVersion:04657795 2026-01-23 QuicVersion:c67e9834 2025-09-08)';
+const PLAYBACK_UA = 'com.phoenix.read/71532 (Linux; U; Android 9; SM-N9860; Build/PQ3A.190705.10241111;tt-ok/3.12.13.20)';
 // iid and device_id are made per request in signedVideoRequest.
 const DEVICE = {
     ac: 'wifi', channel: 'update_64', aid: '8662', app_name: 'novelread',
@@ -143,6 +147,14 @@ function signedVideoRequest(payload) {
     };
     return { url, headers, body };
 }
+// Since 2026-10-26 the endpoint answers signed requests from unregistered IDs with an empty body;
+// a registered device needs no signature.
+function playbackRequest(payload, identity) {
+    const query = pythonUrlEncode({ ...DEVICE, ...identity, _rticket: String(Date.now()) });
+    return { url: `${VIDEO_API}?${query}`, body: Buffer.from(payload), headers: {
+        'User-Agent': PLAYBACK_UA, Accept: 'application/json; charset=utf-8,application/x-protobuf', 'Content-Type': 'application/json; charset=UTF-8',
+    } };
+}
 function parseFallback(value) {
     if (typeof value === 'string') { const parsed = jsonBody(value); return parsed?.fallback_api || value; }
     if (Array.isArray(value)) return str(value[0]);
@@ -205,7 +217,7 @@ async function requestJson(url, options, deadline, signal) {
         try {
             const reply = globalThis.req(url, {
                 method: options.method || 'GET', headers: options.headers,
-                body: options.data ? options.data.toString('utf8') : undefined,
+                bodyBase64: options.data ? Buffer.from(options.data).toString('base64') : undefined,
                 timeout, redirect: false,
             });
             if (String(reply.content || '').length > 2 * 1024 * 1024) throw new Error('Response too large');
@@ -234,18 +246,23 @@ async function fetchAppPlayUrl(vid) {
         biz_param: { detail_page_version: 0, device_level: 3, disable_digg_stat: false, need_all_video_definition: true, need_mp4_align: false, use_os_player: false, use_server_dns: false, video_platform: 1024 },
         mixed_video_id_map: { '1004': [vid] },
     });
-    const signed = signedVideoRequest(payload);
+    const signed = playbackRequest(payload, await playbackDevice(requestJson));
     const response = await requestJson(signed.url, { method: 'POST', headers: signed.headers, data: signed.body }, deadline, signal);
     if (Number(response.Code || response.code || 0) !== 0) throw new Error('App 接口暂未提供本集播放信息');
     const entry = response.data?.[vid];
     const model = typeof entry?.video_model === 'string' ? jsonBody(entry.video_model) : entry?.video_model;
     if (!model) throw new Error('App 接口未返回所选分集，已停止取址');
-    const fallback = parseFallback(model.fallback_api);
-    if (!fallback) throw new Error('App 接口未返回本集片源地址');
-    const outer = await requestJson(fallback, { headers: { 'User-Agent': VIDEO_UA } }, deadline, signal);
-    // The second answer carries its own status; a refusal there is not a parsing failure.
-    if ([outer, outer?.video_info].some(value => Number(value?.Code || value?.code || 0) !== 0)) throw new Error('App 接口暂未提供本集播放信息');
-    const info = outer?.video_info?.data;
+    // A registered device gets the video list in this answer; otherwise it is behind fallback_api.
+    const inline = Array.isArray(model.video_list) && model.video_list.length > 0;
+    let info = model;
+    if (!inline) {
+        const fallback = parseFallback(model.fallback_api);
+        if (!fallback) throw new Error('App 接口未返回本集片源地址');
+        const outer = await requestJson(fallback, { headers: { 'User-Agent': VIDEO_UA } }, deadline, signal);
+        // The second answer carries its own status; a refusal there is not a parsing failure.
+        if ([outer, outer?.video_info].some(value => Number(value?.Code || value?.code || 0) !== 0)) throw new Error('App 接口暂未提供本集播放信息');
+        info = outer?.video_info?.data;
+    }
     // main_url and the backups are the same file on other CDN nodes.
     const links = item => [item.main_url, item.backup_url, item.backup_url_1, ...(Array.isArray(item.backup_url_list) ? item.backup_url_list : [])]
         .filter(value => typeof value === 'string' && value);
@@ -262,6 +279,7 @@ async function fetchAppPlayUrl(vid) {
     for (const selected of rows) {
         try {
             const spade = selected.item.spade_a || selected.item.encrypt_info?.spade_a;
+            if (inline && !spade && ![false, 0, '0', 'false'].includes(selected.item.encrypt_info?.encrypt)) throw new Error('本集片源缺少有效解密信息');
             const key = spade ? deriveContentKey(spade) : null;
             const urls = [...new Set(links(selected.item).flatMap(value => {
                 try {
@@ -272,7 +290,7 @@ async function fetchAppPlayUrl(vid) {
             if (!urls.length) continue;
             return { url: urls[0], backups: urls.slice(1), contentKey: key ? key.toString('hex') : null,
                 codec: selected.codec === 'bytevc1' ? 'hevc' : selected.codec, source: 'app', quality: selected.quality,
-                headers: { 'User-Agent': VIDEO_UA } };
+                headers: { 'User-Agent': inline ? PLAYBACK_UA : VIDEO_UA } };
         } catch (error) { lastError = error; }
     }
     throw lastError || new Error('本集片源地址或密钥无法解析');
