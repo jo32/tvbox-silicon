@@ -25,6 +25,7 @@ struct PlaybackHistoryView: View {
             }
         }
         .screenBackdrop()
+        .historyDetailsDestination()
         .tabTitle(L10n.text("Playback History"))
         .onChange(of: history.entries.isEmpty) { _, empty in if empty { managing = false; selected.removeAll() } }
         // Leaving the page gives up a title still being prepared.
@@ -126,6 +127,7 @@ enum HistoryFormat {
 struct HistoryCard: View {
     @Environment(Store.self) private var store
     @Environment(\.stripDrag) private var drag
+    @Environment(\.openHistoryDetails) private var openDetails
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -137,10 +139,13 @@ struct HistoryCard: View {
     /// Replaces resuming, for managing.
     var action: (() -> Void)? = nil
     @State private var hovering = false
-    /// Touch and the remote have no hover, so the empty heart stays available there.
+    /// Touch has no hover, so the empty heart stays available there. The remote cannot press a heart on a card (the
+    /// card's menu has Like), so Apple TV shows only a saved one.
     private var heartRevealed: Bool {
         #if os(macOS)
         hovering
+        #elseif os(tvOS)
+        false
         #else
         true
         #endif
@@ -161,7 +166,10 @@ struct HistoryCard: View {
         #endif
         .overlay(alignment: .topTrailing) {
             if selection == nil, hovering {
-                historyRemove
+                HStack(spacing: 6) {
+                    if let details = detailsRoute { detailsButton(details) }
+                    historyRemove
+                }
                     .padding(8)
                     .transition(.opacity)
             }
@@ -186,6 +194,32 @@ struct HistoryCard: View {
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.text("Remove from history"))
         .allowsHitTesting(drag?.active != true)
+    }
+
+    /// Opens the title's page, with its episodes, instead of resuming it. A pointer shows it; the context menu has it too.
+    private func detailsButton(_ route: Route) -> some View {
+        Button {
+            guard drag?.active != true else { return }
+            openDetails?(route)
+        } label: {
+            Image(systemName: "info").font(.system(size: 10, weight: .bold)).foregroundStyle(.black.opacity(0.8))
+                .frame(width: 22, height: 22)
+                .background(.white.opacity(0.9), in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.text("Show Details")).help(L10n.text("Show Details"))
+        .allowsHitTesting(drag?.active != true)
+    }
+
+    /// The title's page, where a tap on the card only resumes it. None on an iPhone, where the tap opens that page.
+    private var detailsRoute: Route? {
+        guard action == nil, openDetails != nil, let client = store.historyClient(entry) else { return nil }
+        #if os(iOS)
+        if WatchPage.applies(horizontalSizeClass, verticalSizeClass) { return nil }
+        #endif
+        let video = entry.listVideo
+        return Route { AnyView(VideoDetailView(video: video, client: client)) }
     }
 
     private var posterButton: some View {
@@ -267,7 +301,33 @@ struct HistoryCard: View {
     }
 
     @ViewBuilder private var menu: some View {
+        if let details = detailsRoute {
+            Button(L10n.text("Show Details"), systemImage: "info.circle") { openDetails?(details) }
+        }
         FavoriteMenuButton(item: entry.favoriteItem(), name: entry.context.videoName)
         Button(L10n.text("Remove from history"), systemImage: "trash", role: .destructive) { store.playbackHistory.remove(entry.id) }
+    }
+}
+
+extension EnvironmentValues { @Entry var openHistoryDetails: ((Route) -> Void)? = nil }
+
+extension View {
+    /// Lets the history cards under it open a title's page (`HistoryCard.detailsRoute`). Outside the cards' lazy grids:
+    /// a navigation destination inside a lazy container is not supported.
+    func historyDetailsDestination() -> some View { modifier(HistoryDetailsDestination()) }
+}
+
+private struct HistoryDetailsDestination: ViewModifier {
+    @State private var route: Route?
+    func body(content: Content) -> some View {
+        content
+            .environment(\.openHistoryDetails) { route = $0 }
+            .navigationDestination(item: $route) { route in
+                #if os(macOS)
+                route.build().musicBar()
+                #else
+                route.build()
+                #endif
+            }
     }
 }

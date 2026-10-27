@@ -39,6 +39,7 @@ struct HomeView: View {
             }
         }
         .screenBackdrop()
+        .historyDetailsDestination()
         .task {
             // Yield so this navigation paints the placeholders before the source row and posters are laid out.
             await Task.yield()
@@ -241,7 +242,7 @@ struct HomeView: View {
             SectionHeader(title: L10n.text("Pinned Sources")) { store.section = .sites }
             LazyVGrid(columns: Layout.cardColumns, spacing: Layout.cardSpacing) {
                 ForEach(store.orderedSites(config).filter { store.pinnedSources.contains($0, origin: config.origin) }) { site in
-                    RouteLink { SiteView(site: site, origin: config.origin, jarURL: config.spiderURL) } label: { SiteCard(site: site) }
+                    RouteLink { SiteView(site: site, origin: config.origin, jarURL: config.spiderURL) } label: { SiteCard(site: site, marksPinned: false) }
                         .tileButton().contextMenu { PinSourceButton(site: site, origin: config.origin) }
                         .accessibilityIdentifier("home.pinned." + site.key)
                 }
@@ -283,6 +284,23 @@ struct HomeView: View {
 
 }
 
+#if os(tvOS)
+/// A favorite on Watch Now as one tile: quiet at rest, a white plate with dark text under focus. No heart: everything in
+/// the row is a favorite.
+private struct FavoriteTile<Content: View>: View {
+    @Environment(\.isFocused) private var focused
+    @ViewBuilder let content: Content
+    var body: some View {
+        content
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background { TileSurface(focused: focused, radius: 16) }
+        // Primary and secondary text turn dark on the white plate.
+        .environment(\.colorScheme, focused ? .light : .dark)
+    }
+}
+#endif
+
 /// One of the 12 newest favorites on Watch Now, in the same panel as a channel card.
 private struct HomeFavoriteCard: View {
     @Environment(Store.self) private var store
@@ -296,6 +314,56 @@ private struct HomeFavoriteCard: View {
     private static let posterWidth = thumb * 2 / 3
 
     var body: some View {
+        #if os(tvOS)
+        tvBody
+        #else
+        cardBody
+        #endif
+    }
+
+    #if os(tvOS)
+    /// One focusable tile per favorite, lit up on focus like the source cards. A heart button beside the card's own focus
+    /// plate stuck out of it, and the remote could not press it: the tile's menu (press and hold) removes the favorite.
+    @ViewBuilder private var tvBody: some View {
+        switch item {
+        case .live(let channel):
+            tvButton(name: channel.name) { store.playing = channel } label: {
+                media(ChannelLogo(channel: channel), title: channel.name, subtitle: channel.displayGroup)
+            }
+        case .video(let video):
+            let label = media(poster(url: video.poster, headers: video.posterHeaders), title: video.videoName, subtitle: video.sourceName)
+            if let listing = video.listingVideo(), let client = store.catalogClient(for: video) {
+                RouteLink { VideoDetailView(video: listing, client: client) } label: { FavoriteTile { label } }
+                    .tileButton()
+                    .contextMenu { FavoriteMenuButton(item: item, name: video.videoName) }
+            } else {
+                tvButton(name: video.videoName) { store.reportMissingFavoriteSource() } label: { label }
+            }
+        case .episode(let episode):
+            tvButton(name: episode.video.videoName) { store.play(episode) } label: {
+                media(poster(url: episode.video.poster, headers: episode.video.posterHeaders), title: episode.video.videoName, subtitle: episode.episodeName)
+            }
+        case .music(let track):
+            tvButton(name: track.title) { store.music.play(track) } label: {
+                media(MusicArtwork(url: track.artwork, size: Self.thumb), title: track.title, subtitle: track.artistLine)
+            }
+        case .cloud(let file):
+            let cloud = CloudFile(id: file.fileID, name: file.fileName, isFolder: false, size: file.size)
+            tvButton(name: file.fileName) { store.play(file) } label: {
+                FileRowLabel(symbol: cloud.symbol, tint: cloud.tint, title: file.fileName,
+                             subtitle: CloudFiles.drive(key: file.driveKey)?.name ?? file.driveKey)
+            }
+        }
+    }
+
+    private func tvButton<Label: View>(name: String, action: @escaping () -> Void, @ViewBuilder label: () -> Label) -> some View {
+        Button(action: action) { FavoriteTile { label() } }
+            .tileButton()
+            .contextMenu { FavoriteMenuButton(item: item, name: name) }
+    }
+    #endif
+
+    @ViewBuilder private var cardBody: some View {
         switch item {
         case .live(let channel):
             ChannelCard(channel: channel)

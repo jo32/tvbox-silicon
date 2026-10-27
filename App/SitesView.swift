@@ -186,6 +186,8 @@ struct SiteCard: View {
     let site: Site
     /// A source the viewer hid, shown only while hidden sources are revealed.
     var dimmed = false
+    /// The pin badge on the icon; off in Watch Now's Pinned Sources, where every card is pinned.
+    var marksPinned = true
     #if os(tvOS)
     private var focused: Bool { isFocused }
     private let icon: CGFloat = 88, padding: CGFloat = 20, radius: CGFloat = 28
@@ -196,7 +198,7 @@ struct SiteCard: View {
     #endif
     var body: some View {
         let label = SourceLabel(site.name)
-        let pinned = store.subscription.map { store.pinnedSources.contains(site, origin: $0.origin) } ?? false
+        let pinned = marksPinned && (store.subscription.map { store.pinnedSources.contains(site, origin: $0.origin) } ?? false)
         let runs = site.isBuiltIn || site.canBrowse(jarURL: store.subscription?.spiderURL)
         let detail = runs ? (label.parts.dropFirst() + [engine].compactMap { $0 }).joined(separator: " · ") : site.compatibility
         HStack(spacing: padding) {
@@ -826,13 +828,6 @@ struct VideoDetailView: View {
         return (detail?.episodes ?? []).map(\.flag).filter { seen.insert($0).inserted }
     }
     private var activeFlag: String { flags.contains(selectedFlag ?? "\u{0}") ? selectedFlag! : (flags.first ?? "") }
-    private var railWidth: CGFloat {
-        #if os(tvOS)
-        560
-        #else
-        348
-        #endif
-    }
     private var wideMinWidth: CGFloat {
         #if os(tvOS)
         1200
@@ -858,10 +853,7 @@ struct VideoDetailView: View {
             pageBody
             #endif
         }
-        .safeAreaInset(edge: .bottom) { if !splitLayout && !isWatchPage { loadingCard } }
-        // The split has no outer scroll view to absorb a bottom inset: one appearing when Play
-        // starts pushed both columns up under the toolbar. Float the card over it instead.
-        .overlay(alignment: .bottom) { if splitLayout { loadingCard } }
+        .safeAreaInset(edge: .bottom) { if !isWatchPage { loadingCard } }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
         .screenBackdrop()
         .screenTitle(video.name).task {
@@ -924,41 +916,23 @@ struct VideoDetailView: View {
         }
     }
 
-    @ViewBuilder private var pageBody: some View {
-        if splitLayout {
-            // Watch-page split: artwork, Play and synopsis on the left; the episode rail
-            // scrolls on its own so the title and playback state stay in view.
-            HStack(alignment: .top, spacing: Layout.gutter + 8) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) { header; tmdbExtras }
-                    .padding(.vertical, Layout.gutter)
+    /// One page on Mac, iPad and Apple TV: the banner, the synopsis, the episodes, then TMDB's cast and facts. An episode
+    /// rail beside the banner (once used for long lists, and always on Apple TV) squeezed the banner into a card.
+    private var pageBody: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                header
+                if detail != nil {
+                    episodePanel
+                    tmdbExtras
+                } else if let error {
+                    errorCard(error).padding(.top, 12)
+                } else {
+                    // The Play placeholder in the header holds focus while details load.
+                    DetailSkeleton()
                 }
-                .scrollIndicators(.never)
-                // Each column is a full-height focus section: with a few episodes the rail ends
-                // above Play, and the remote found nothing to its right (no way to the source chips).
-                .tvFocusSection()
-                episodePanel(scrolls: true).padding(.top, Layout.gutter)
-                    .frame(width: railWidth).frame(maxHeight: .infinity, alignment: .top)
-                    .tvFocusSection()
             }
-            .padding(.horizontal, Layout.gutter)
-            .frame(maxWidth: Layout.maxWidth).frame(maxWidth: .infinity)
-        } else {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    header
-                    if detail != nil {
-                        episodePanel(scrolls: false)
-                        tmdbExtras
-                    } else if let error {
-                        errorCard(error).padding(.top, 12)
-                    } else {
-                        // The Play placeholder in the header holds focus while details load.
-                        DetailSkeleton()
-                    }
-                }
-                .pageContainer()
-            }
+            .pageContainer()
         }
     }
 
@@ -970,16 +944,6 @@ struct VideoDetailView: View {
         #endif
     }
 
-    /// The two-column watch page. On a Mac or iPad it only pays off with a long episode list and room for both
-    /// columns; otherwise the rail sat mostly empty beside a squeezed hero, so the page stacks instead.
-    private var splitLayout: Bool {
-        guard let detail, isWide else { return false }
-        #if os(tvOS)
-        return true
-        #else
-        return containerWidth >= 1100 && detail.episodes.filter { $0.flag == activeFlag }.count > 12
-        #endif
-    }
     @ViewBuilder private var loadingCard: some View {
         if busy {
             // Keyed by the step, so the timer restarts when details turn into resolving a link.
@@ -1121,16 +1085,19 @@ struct VideoDetailView: View {
             .transition(.opacity.combined(with: .move(edge: .bottom)))
         }
     }
-    private var bannerHeight: CGFloat { min(max(containerWidth * 0.42, 280), 540) }
+    private var bannerHeight: CGFloat {
+        #if os(tvOS)
+        // Leaves the synopsis in view under it.
+        min(max(containerWidth * 0.38, 480), 680)
+        #else
+        min(max(containerWidth * 0.42, 280), 540)
+        #endif
+    }
     /// TMDB's backdrop banner once the details are in, the source's cover and title until then.
     @ViewBuilder private var tmdbHero: some View {
         if let details = tmdb.details, let backdrop = details.backdrop {
             let banner = TMDBBanner(details: details, backdrop: backdrop, unmatched: tmdb.answer?.unmatched ?? "") { playControl }
-            #if os(tvOS)
-            banner.aspectRatio(16.0 / 9.0, contentMode: .fit).transition(.opacity)
-            #else
             banner.frame(height: bannerHeight).transition(.opacity)
-            #endif
         } else {
             hero.transition(.opacity)
         }
@@ -1283,7 +1250,7 @@ struct VideoDetailView: View {
     }
     #if os(tvOS)
     /// Stands in for a watch-page player: the cover over a blur of itself, the title and the primary action.
-    /// A 16:9 stage, like the player it stands in for.
+    /// As tall as TMDB's banner, which takes its place once the details are in.
     private var hero: some View {
         heroStage
             .overlay {
@@ -1319,7 +1286,7 @@ struct VideoDetailView: View {
             .foregroundStyle(.white).environment(\.colorScheme, .dark)
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
-    private var heroStage: some View { Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit) }
+    private var heroStage: some View { Color.clear.frame(maxWidth: .infinity).frame(height: bannerHeight) }
     private var heroInset: CGFloat { 28 }
     #else
     /// The cover and, beside it, the title and actions, on the page itself. The cover keeps its own shape,
@@ -1352,7 +1319,8 @@ struct VideoDetailView: View {
     #endif
     private var header: some View {
         VStack(alignment: .leading, spacing: 18) {
-            if isWide {
+            // TMDB's banner at any width, so a matched title's page looks the same everywhere.
+            if isWide || tmdb.details?.backdrop != nil {
                 tmdbHero
                 playbackBanner
                 tmdbStatus
@@ -1387,7 +1355,7 @@ struct VideoDetailView: View {
         .animation(.smooth(duration: 0.45), value: tmdb.details)
         .animation(.smooth(duration: 0.3), value: tmdb.phase)
     }
-    @ViewBuilder private func episodePanel(scrolls: Bool) -> some View {
+    @ViewBuilder private var episodePanel: some View {
         if let detail {
             if detail.episodes.isEmpty {
                 Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)
@@ -1403,12 +1371,7 @@ struct VideoDetailView: View {
                         }
                     }
                     flagPicker
-                    if scrolls {
-                        ScrollView { episodeList(items).padding(.bottom, Layout.gutter) }
-                            .scrollIndicators(.automatic)
-                    } else {
-                        episodeList(items)
-                    }
+                    episodeList(items)
                 }
             }
         }
@@ -1430,9 +1393,9 @@ struct VideoDetailView: View {
     }
     private func episodeList(_ items: [Episode]) -> some View {
         // A chip fits about six characters before it truncates (《一…); longer names get rows.
-        let longNames = splitLayout || (items.map { $0.name.count }.max() ?? 0) > 6
+        let longNames = (items.map { $0.name.count }.max() ?? 0) > 6
         // Under a full-width banner, long names fill columns rather than one stretched list.
-        let rowColumns = isWide && !splitLayout ? [GridItem(.adaptive(minimum: 320), spacing: 8)] : [GridItem(.flexible())]
+        let rowColumns = isWide ? [GridItem(.adaptive(minimum: 320), spacing: 8)] : [GridItem(.flexible())]
         // TMDB's stills, when its season lines up with most of the episodes.
         let stills = tmdb.episodes(items)
         let showsStills = items.count > 1 && stills.count * 2 >= items.count

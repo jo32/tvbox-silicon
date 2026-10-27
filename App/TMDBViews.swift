@@ -249,14 +249,23 @@ struct TMDBChoices: View {
 }
 
 struct TMDBCandidateTile: View {
-    let candidate: TMDBMatch.Candidate
+    let name: String
+    let year: Int?
+    let mediaType: TMDBMatch.MediaType
+    let poster: URL?
+    init(candidate: TMDBMatch.Candidate) {
+        self.init(name: candidate.name, year: candidate.year, mediaType: candidate.mediaType, poster: candidate.poster)
+    }
+    init(name: String, year: Int?, mediaType: TMDBMatch.MediaType, poster: URL?) {
+        self.name = name; self.year = year; self.mediaType = mediaType; self.poster = poster
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            PosterImage(url: candidate.poster)
+            PosterImage(url: poster)
                 .frame(width: TMDBMetrics.candidate, height: TMDBMetrics.candidate * 1.5)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            Text(candidate.name).font(.caption.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading)
-            Text([candidate.year.map(String.init), L10n.text(candidate.mediaType == .tv ? "TV Series" : "Movie")].compactMap { $0 }.joined(separator: " · "))
+            Text(name).font(.caption.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading)
+            Text([year.map(String.init), L10n.text(mediaType == .tv ? "TV Series" : "Movie")].compactMap { $0 }.joined(separator: " · "))
                 .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
         }
         .frame(width: TMDBMetrics.candidate, alignment: .leading)
@@ -277,7 +286,7 @@ struct TMDBBadge: View {
 
 enum TMDBMetrics {
     #if os(tvOS)
-    static let candidate: CGFloat = 150, castPhoto: CGFloat = 110, spacing: CGFloat = 28, badge: CGFloat = 20, focusRoom: CGFloat = 24
+    static let candidate: CGFloat = 200, castPhoto: CGFloat = 110, spacing: CGFloat = 28, badge: CGFloat = 20, focusRoom: CGFloat = 24
     static let episodeTile: CGFloat = 340
     #else
     static let candidate: CGFloat = 92, castPhoto: CGFloat = 64, spacing: CGFloat = 12, badge: CGFloat = 12, focusRoom: CGFloat = 0
@@ -288,7 +297,8 @@ enum TMDBMetrics {
 extension View {
     @ViewBuilder func tmdbCardButton() -> some View {
         #if os(tvOS)
-        buttonStyle(.borderless)
+        // The cards' focus plate: borderless only grew the focused tile a little, too little to see which one it was.
+        cardButton()
         #else
         buttonStyle(.plain)
         #endif
@@ -399,7 +409,16 @@ struct TMDBFooter: View {
             Text(L10n.text("This product uses the TMDB API but is not endorsed or certified by TMDB."))
                 .font(.caption2).foregroundStyle(.tertiary)
         }
+        #if DEBUG
+        // `-qaTMDBPicker 1` opens the picker, for screenshots.
+        .task { if UserDefaults.standard.bool(forKey: "qaTMDBPicker") { choosing = true } }
+        #endif
+        #if os(tvOS)
+        // A page of posters: a sheet with a list was a small box in the middle of the screen.
+        .fullScreenCover(isPresented: $choosing) { TMDBTVPicker(lookup: lookup, title: title) }
+        #else
         .sheet(isPresented: $choosing) { TMDBPicker(lookup: lookup, title: title) }
+        #endif
     }
 }
 
@@ -480,6 +499,81 @@ struct TMDBPicker: View {
     }
 }
 
+#if os(tvOS)
+/// Apple TV's "Not This Title?": TMDB's results for the title as posters (the lookup's suggestions first), searched again
+/// as the viewer types, and None of These.
+struct TMDBTVPicker: View {
+    let lookup: TMDBLookup
+    @Environment(\.dismiss) private var dismiss
+    @State private var query: String
+    @State private var results: [TMDBMatch.SearchResult] = []
+    @State private var searching = false
+
+    init(lookup: TMDBLookup, title: String) {
+        self.lookup = lookup
+        _query = State(initialValue: title)
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 40) {
+                    Text(L10n.text("Not This Title?")).font(.title2.weight(.bold))
+                    if !lookup.candidates.isEmpty {
+                        shelf(L10n.text("Suggestions"), lookup.candidates.map { ($0.key, TMDBCandidateTile(candidate: $0), $0.mediaType, $0.id) })
+                    }
+                    let suggested = Set(lookup.candidates.map(\.key))
+                    let others = results.filter { !suggested.contains($0.key) }
+                    if !others.isEmpty {
+                        shelf(L10n.text("TMDB"), others.map {
+                            ($0.key, TMDBCandidateTile(name: $0.name, year: $0.year, mediaType: $0.mediaType, poster: $0.poster), $0.mediaType, $0.id)
+                        })
+                    } else if searching {
+                        ProgressView().frame(maxWidth: .infinity)
+                    }
+                    HStack(spacing: 20) {
+                        Button(L10n.text("None of These")) { Task { await lookup.reject(); dismiss() } }.controlButton()
+                        Button(L10n.text("Cancel")) { dismiss() }.controlButton()
+                    }
+                    .tvFocusSection()
+                }
+                .pageContainer()
+            }
+            .catalogSearchable(text: $query, prompt: L10n.text("Search TMDB"))
+            .screenBackdrop()
+        }
+        // Searches as the viewer types: the inline keyboard has no reliable submit.
+        .task(id: query) {
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            await search()
+        }
+    }
+
+    private func shelf(_ title: String, _ tiles: [(String, TMDBCandidateTile, TMDBMatch.MediaType, Int)]) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title).font(.headline)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: TMDBMetrics.candidate), spacing: TMDBMetrics.spacing, alignment: .top)],
+                      alignment: .leading, spacing: TMDBMetrics.spacing) {
+                ForEach(tiles, id: \.0) { tile in
+                    Button { Task { await lookup.choose(tile.2, id: tile.3, season: nil); dismiss() } } label: { tile.1 }
+                        .tmdbCardButton()
+                }
+            }
+            .tvFocusSection()
+        }
+    }
+
+    private func search() async {
+        let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { results = []; return }
+        searching = true
+        defer { searching = false }
+        results = (try? await TMDBMatch.search(text)) ?? []
+    }
+}
+#endif
+
 /// Mac and iPad, and Apple TV: TMDB's backdrop across the page, with the title (its logo when TMDB has one), the facts and
 /// the page's actions over its lower edge, as in the TV app.
 struct TMDBBanner<Actions: View>: View {
@@ -509,7 +603,8 @@ struct TMDBBanner<Actions: View>: View {
                     actions.padding(.top, 6)
                 }
                 .padding(TMDBBannerMetrics.inset)
-                .frame(maxWidth: min(width * 0.62, 760), alignment: .leading)
+                // A narrow banner (an iPad's side-by-side window) gives the title its whole width.
+                .frame(maxWidth: width < 600 ? width : min(width * 0.62, TMDBBannerMetrics.textWidth), alignment: .leading)
             }
         }
         .foregroundStyle(.white).environment(\.colorScheme, .dark)
@@ -546,9 +641,12 @@ struct TMDBBanner<Actions: View>: View {
 enum TMDBBannerMetrics {
     #if os(tvOS)
     static let inset: CGFloat = 48, spacing: CGFloat = 14, title: CGFloat = 60, logoHeight: CGFloat = 150, corner: CGFloat = 24
+    /// The facts line fits on one line at the TV's type size.
+    static let textWidth: CGFloat = 1100
     static let factsFont = Font.title3
     #else
     static let inset: CGFloat = 24, spacing: CGFloat = 8, title: CGFloat = 34, logoHeight: CGFloat = 90, corner: CGFloat = 20
+    static let textWidth: CGFloat = 760
     static let factsFont = Font.subheadline
     #endif
 }
