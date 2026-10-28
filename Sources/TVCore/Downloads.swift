@@ -313,16 +313,28 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
         Channel(name: "\(item.title) · \(item.episode)", group: L10n.text("Downloads"), url: URL(string: "\(Self.scheme)://\(item.id)")!)
     }
 
-    /// The file (or, for HLS, the loopback address) that plays a `tvbox-download://` address.
-    public func playbackAddress(for url: URL) async throws -> URL {
-        guard url.scheme == Self.scheme, let id = url.host(), let item = item(id: id), item.status == .completed, let media = item.media else {
+    /// The file (or, for HLS, the loopback address) that plays a `tvbox-download://` address. An HDR MKV saved
+    /// before downloads became MP4s is rewrapped first, which `progress` follows (0...1).
+    public func playbackAddress(for url: URL, progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws -> URL {
+        guard url.scheme == Self.scheme, let id = url.host(), let item = item(id: id), item.status == .completed, var media = item.media else {
             throw TVError.unsupported(L10n.text("This download is no longer on this device."))
         }
-        let file = folder(id).appending(path: media)
+        var file = folder(id).appending(path: media)
         guard FileManager.default.fileExists(atPath: file.path) else {
             // Deleted or moved away in Finder: stop listing it as downloaded.
             remove([id])
             throw TVError.unsupported(L10n.text("This download is no longer on this device."))
+        }
+        if Remux.handles(name: media) {
+            let rewrapped = await Self.rewrap(media, in: folder(id), progress: progress)
+            try Task.checkCancellation()
+            if rewrapped != media {
+                media = rewrapped
+                file = folder(id).appending(path: media)
+                let size = Self.allocatedSize(folder(id))
+                update(id) { $0.media = rewrapped; $0.size = size }
+                save()
+            }
         }
         if let cid = item.cid { DanmakuSource.register(url, bilibiliCID: cid, duration: item.duration) }
         if media.hasSuffix(".m3u8") { return try await LocalMediaServer.shared.address(of: file, root: root) }
@@ -367,6 +379,33 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
         return values?.volumeAvailableCapacityForImportantUsage ?? values?.volumeAvailableCapacity.map(Int64.init)
         #endif
     }
+
+    /// Keeps a downloaded HDR MKV as an MP4 that AVPlayer opens itself (see `Rewrap`) and returns the playable
+    /// file's name. The MKV stays when no MP4 is needed, there is no room for one, or writing it fails.
+    nonisolated static func rewrap(_ name: String, in folder: URL, progress: @escaping @Sendable (Double) -> Void = { _ in }) async -> String {
+        guard Remux.handles(name: name) else { return name }
+        let source = folder.appending(path: name), target = folder.appending(path: rewrappedName)
+        let size = (try? source.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
+        let began = Date()
+        do {
+            if let free = availableCapacity(at: folder), size + (64 << 20) > free {
+                // Probed first: an SDR file needs no room.
+                guard try await Rewrap.needed(source) else { return name }
+                Diagnostics.shared.record(.warning, "download", "rewrap skipped size=\(size) free=\(free)")
+                return name
+            }
+            guard let selection = try await Rewrap.run(source, to: target, progress: progress) else { return name }
+            try FileManager.default.removeItem(at: source)
+            Diagnostics.shared.record(.info, "download", "rewrap mp4 streams=\(selection.streams.map(\.codec)) dropped=\(selection.dropped.map(\.codec)) size=\(size) s=\(Int(Date().timeIntervalSince(began)))")
+            return rewrappedName
+        } catch {
+            try? FileManager.default.removeItem(at: target)
+            if !(error is CancellationError) { Diagnostics.shared.failure("download", "rewrap", error) }
+            return name
+        }
+    }
+    /// The MP4 a downloaded MKV becomes.
+    nonisolated static let rewrappedName = "media.mp4"
 
     nonisolated static func allocatedSize(_ folder: URL) -> Int64 {
         let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey]

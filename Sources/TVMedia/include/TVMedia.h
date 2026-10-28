@@ -106,6 +106,21 @@ int tvm_cursor_init(TVMCursor *cursor, int track, void *context, TVMWriteFunctio
 int tvm_cursor_segment(TVMCursor *cursor, int64_t start, int64_t end, const uint8_t *active, void *context,
                        TVMWriteFunction write, TVMCueFunction cue, char *error, int errorSize);
 
+/// Opens a local file for reading, as `tvm_open` would with a reader over it.
+TVMInput *tvm_open_file(const char *path, char *error, int errorSize);
+
+/// Writes a text subtitle event's plain text (UTF-8, no markup) into `out`; returns its length, 0 to leave it out.
+typedef int (*TVMTextFunction)(void *context, int track, const uint8_t *text, int size, uint8_t *out, int capacity);
+/// How far the reader is (a byte position in the input); nonzero stops the work.
+typedef int (*TVMProgressFunction)(void *context, int64_t position);
+
+/// Copies `streams` (the input's stream indices; video and audio as they are, text subtitles as tx3g) from the
+/// start of the input into a plain MP4 file at `path`, which AVPlayer opens by itself. `dolbyVision` says how copied
+/// HEVC keeps a Dolby Vision configuration (TVMDolbyVision...). `track` in `text` is the stream's place in
+/// `streams`. Returns 0, or FFmpeg's negative error code; a failed file is removed.
+int tvm_rewrap(TVMInput *input, const int *streams, int count, int dolbyVision, const char *path, void *context,
+               TVMTextFunction text, TVMProgressFunction progress, char *error, int errorSize);
+
 #ifdef __cplusplus
 }
 #endif

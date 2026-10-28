@@ -1104,6 +1104,7 @@
 "Finding the live stream" = "ライブ配信を探しています";
 "Getting the file from the drive" = "ドライブからファイルを取得しています";
 "Repackaging the video for this device" = "このデバイス向けに動画を変換しています";
+"Preparing the saved download for this device · %lld%%" = "このデバイス用にダウンロードを準備しています · %lld%%";
 "Opening the saved download" = "保存したダウンロードを開いています";
 "Connecting to %@" = "%@ に接続しています";
 "Receiving video from %@" = "%@ から動画を受信しています";

@@ -11,8 +11,12 @@
 #include <libavutil/pixdesc.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <VideoToolbox/VideoToolbox.h>
 
 /// How far before a keyframe's time a packet still counts as that keyframe (index times are rounded).
@@ -62,6 +66,8 @@ struct TVMInput {
     TVMReadFunction read;
     TVMInterruptFunction interrupted;
     int64_t size, position;
+    /// The file `tvm_open_file` opened, closed with the input; -1 otherwise.
+    int descriptor;
 };
 
 static int input_read(void *opaque, uint8_t *buffer, int size) {
@@ -121,11 +127,14 @@ static void probe_colors(AVFormatContext *format) {
     }
 }
 
-TVMInput *tvm_open(void *context, TVMReadFunction read, TVMInterruptFunction interrupted, int64_t size,
-                   char *error, int errorSize) {
+/// `prepare`: probe the colours and go back to the first keyframe, as playing needs. Without it the reader stays
+/// at the start of the file, with what finding the streams read still to come.
+static TVMInput *open_input(void *context, TVMReadFunction read, TVMInterruptFunction interrupted, int64_t size, int prepare,
+                            char *error, int errorSize) {
     TVMInput *input = av_mallocz(sizeof(TVMInput));
     if (!input) { fail(error, errorSize, AVERROR(ENOMEM), "open"); return NULL; }
     input->context = context; input->read = read; input->interrupted = interrupted; input->size = size;
+    input->descriptor = -1;
     const int bufferSize = 256 << 10;
     uint8_t *buffer = av_malloc(bufferSize);
     input->io = buffer ? avio_alloc_context(buffer, bufferSize, 0, input, input_read, NULL, size >= 0 ? input_seek : NULL) : NULL;
@@ -146,16 +155,23 @@ TVMInput *tvm_open(void *context, TVMReadFunction read, TVMInterruptFunction int
     input->format = format;
     status = avformat_find_stream_info(format, NULL);
     if (status < 0) { tvm_close(input); fail(error, errorSize, status, "stream info"); return NULL; }
+    if (!prepare) return input;
     if (size >= 0) probe_colors(format);
     // Matroska reads its Cues (the keyframe index) at the first seek; back to the start does it now.
     if (size >= 0) av_seek_frame(format, -1, format->start_time == AV_NOPTS_VALUE ? 0 : format->start_time, AVSEEK_FLAG_BACKWARD);
     return input;
 }
 
+TVMInput *tvm_open(void *context, TVMReadFunction read, TVMInterruptFunction interrupted, int64_t size,
+                   char *error, int errorSize) {
+    return open_input(context, read, interrupted, size, 1, error, errorSize);
+}
+
 void tvm_close(TVMInput *input) {
     if (!input) return;
     if (input->format) avformat_close_input(&input->format);
     if (input->io) { av_freep(&input->io->buffer); avio_context_free(&input->io); }
+    if (input->descriptor >= 0) close(input->descriptor);
     av_free(input);
 }
 
@@ -1339,4 +1355,186 @@ done:
     cursor->nextStart = INT64_MIN;
     cursor->write = NULL; cursor->cue = NULL; cursor->context = NULL;
     return status < 0 ? status : AVERROR_UNKNOWN;
+}
+
+// MARK: - Rewrap
+
+/// tx3g's sample description, as FFmpeg's mov_text encoder writes it: centred at the bottom, white text.
+static const uint8_t text_sample_entry[] = {
+    0x00, 0x00, 0x00, 0x00,                         // displayFlags
+    0x01, 0xFF,                                     // horizontal and vertical justification
+    0x00, 0x00, 0x00, 0x00,                         // background colour
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // default text box
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x12, // style: characters, font 1, plain, 18
+    0xFF, 0xFF, 0xFF, 0xFF,                         // text colour
+    0x00, 0x00, 0x00, 0x12, 'f', 't', 'a', 'b',     // font table: one font, Serif
+    0x00, 0x01, 0x00, 0x01, 0x05, 'S', 'e', 'r', 'i', 'f',
+};
+
+static int file_read(void *context, int64_t offset, uint8_t *buffer, int size) {
+    ssize_t count = pread((int)(intptr_t)context, buffer, size, offset);
+    return count < 0 ? -1 : (int)count;
+}
+
+TVMInput *tvm_open_file(const char *path, char *error, int errorSize) {
+    int descriptor = open(path, O_RDONLY);
+    if (descriptor < 0) { fail(error, errorSize, AVERROR(errno), "open"); return NULL; }
+    struct stat info;
+    if (fstat(descriptor, &info) != 0) { fail(error, errorSize, AVERROR(errno), "open"); close(descriptor); return NULL; }
+    TVMInput *input = tvm_open((void *)(intptr_t)descriptor, file_read, NULL, info.st_size, error, errorSize);
+    if (!input) { close(descriptor); return NULL; }
+    input->descriptor = descriptor;
+    return input;
+}
+
+static int output_write(void *opaque, const uint8_t *bytes, int size) {
+    return fwrite(bytes, 1, size, opaque) == (size_t)size ? size : AVERROR(EIO);
+}
+
+static int64_t output_seek(void *opaque, int64_t offset, int whence) {
+    if (whence & AVSEEK_SIZE) return AVERROR(ENOSYS);
+    return fseeko(opaque, offset, whence & ~AVSEEK_FORCE) == 0 ? ftello(opaque) : AVERROR(EIO);
+}
+
+int tvm_rewrap(TVMInput *input, const int *streams, int count, int dolbyVision, const char *path, void *context,
+               TVMTextFunction text, TVMProgressFunction progress, char *error, int errorSize) {
+    // A reader of its own from the very start: going back to the first keyframe, as the input did, would leave out
+    // the sound and subtitles before it (a picture often starts seconds after them).
+    TVMInput *reader = open_input(input->context, input->read, input->interrupted, input->size, 0, error, errorSize);
+    if (!reader) return AVERROR(EIO);
+    if (reader->format->nb_streams != input->format->nb_streams) {
+        tvm_close(reader);
+        return fail(error, errorSize, AVERROR(EINVAL), "streams");
+    }
+    AVFormatContext *format = reader->format, *mux = NULL;
+    FILE *file = NULL;
+    AVPacket *packet = av_packet_alloc(), *sample = av_packet_alloc();
+    int *outOf = av_malloc_array(format->nb_streams, sizeof(int));
+    int64_t *lastDts = av_malloc_array(count > 0 ? count : 1, sizeof(int64_t));
+    uint8_t *line = av_malloc(4096);
+    // Copied video's decode times, rebuilt from presentation times as the cursor does (Matroska stores only those).
+    int64_t window[17];
+    int windowCount = 0, reorder = 1, decoded = 0, video = -1;
+    int64_t frameDuration = 1;
+    int status = packet && sample && outOf && lastDts && line ? 0 : AVERROR(ENOMEM);
+    if (status < 0) { fail(error, errorSize, status, "rewrap"); goto done; }
+    for (unsigned i = 0; i < format->nb_streams; i++) outOf[i] = -1;
+    if ((status = avformat_alloc_output_context2(&mux, NULL, "mp4", NULL)) < 0) { fail(error, errorSize, status, "writer"); goto done; }
+    for (int i = 0; i < count; i++) {
+        if (streams[i] < 0 || streams[i] >= (int)format->nb_streams) { status = fail(error, errorSize, AVERROR(EINVAL), "stream"); goto done; }
+        AVStream *in = format->streams[streams[i]], *st = avformat_new_stream(mux, NULL);
+        if (!st) { status = fail(error, errorSize, AVERROR(ENOMEM), "stream"); goto done; }
+        if (in->codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE) {
+            // Text subtitles become tx3g, which an MP4 carries and AVPlayer lists; `text` gives each cue's plain text.
+            st->codecpar->codec_type = AVMEDIA_TYPE_SUBTITLE;
+            st->codecpar->codec_id = AV_CODEC_ID_MOV_TEXT;
+            st->codecpar->extradata = av_mallocz(sizeof text_sample_entry + AV_INPUT_BUFFER_PADDING_SIZE);
+            if (!st->codecpar->extradata) { status = fail(error, errorSize, AVERROR(ENOMEM), "stream"); goto done; }
+            memcpy(st->codecpar->extradata, text_sample_entry, sizeof text_sample_entry);
+            st->codecpar->extradata_size = sizeof text_sample_entry;
+            st->time_base = (AVRational){1, 1000};
+        } else {
+            if ((status = avcodec_parameters_copy(st->codecpar, in->codecpar)) < 0) { fail(error, errorSize, status, "stream"); goto done; }
+            st->codecpar->codec_tag = 0;
+            st->time_base = in->time_base;
+            if (in->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+                if (st->codecpar->codec_id == AV_CODEC_ID_HEVC)
+                    st->codecpar->codec_tag = dolbyVision == TVMDolbyVisionDVH1 ? MKTAG('d', 'v', 'h', '1') : MKTAG('h', 'v', 'c', '1');
+                if (dolbyVision == TVMDolbyVisionDrop)
+                    av_packet_side_data_remove(st->codecpar->coded_side_data, &st->codecpar->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF);
+                st->avg_frame_rate = in->avg_frame_rate;
+                if (!st->codecpar->sample_aspect_ratio.num) st->codecpar->sample_aspect_ratio = in->sample_aspect_ratio;
+                // The colours the input found in the picture when its container named none.
+                const AVCodecParameters *probed = input->format->streams[streams[i]]->codecpar;
+                if (st->codecpar->color_trc == AVCOL_TRC_UNSPECIFIED) {
+                    st->codecpar->color_trc = probed->color_trc;
+                    st->codecpar->color_primaries = probed->color_primaries;
+                    st->codecpar->color_space = probed->color_space;
+                }
+                video = i;
+                reorder = FFMIN(16, FFMAX(in->codecpar->video_delay, 0) + 1);
+                AVRational rate = in->avg_frame_rate.num && in->avg_frame_rate.den ? in->avg_frame_rate : in->r_frame_rate;
+                frameDuration = FFMAX(1, rate.num && rate.den ? av_rescale_q(1, av_inv_q(rate), in->time_base) : av_rescale_q(1, (AVRational){1, 24}, in->time_base));
+            } else if (!st->codecpar->frame_size) {
+                switch (st->codecpar->codec_id) {
+                case AV_CODEC_ID_AAC: st->codecpar->frame_size = 1024; break;
+                case AV_CODEC_ID_AC3: case AV_CODEC_ID_EAC3: st->codecpar->frame_size = 1536; break;
+                default: break;
+                }
+            }
+        }
+        av_dict_copy(&st->metadata, in->metadata, 0);
+        st->disposition = in->disposition & (AV_DISPOSITION_DEFAULT | AV_DISPOSITION_FORCED);
+        outOf[streams[i]] = i;
+        lastDts[i] = AV_NOPTS_VALUE;
+    }
+    if (!(file = fopen(path, "wb"))) { status = fail(error, errorSize, AVERROR(errno), "create"); goto done; }
+    const int bufferSize = 1 << 20;
+    uint8_t *buffer = av_malloc(bufferSize);
+    mux->pb = buffer ? avio_alloc_context(buffer, bufferSize, 1, file, NULL, output_write, output_seek) : NULL;
+    if (!mux->pb) { av_free(buffer); status = fail(error, errorSize, AVERROR(ENOMEM), "writer"); goto done; }
+    mux->pb->seekable = AVIO_SEEKABLE_NORMAL;
+    // Dolby Vision's dvcC box is "unofficial" to FFmpeg; Apple players read it.
+    mux->strict_std_compliance = FF_COMPLIANCE_UNOFFICIAL;
+    if ((status = avformat_write_header(mux, NULL)) < 0) { fail(error, errorSize, status, "header"); goto done; }
+    for (int64_t packets = 0;; packets++) {
+        if (progress && packets % 256 == 0 && progress(context, reader->position)) { status = fail(error, errorSize, AVERROR_EXIT, "cancelled"); goto done; }
+        status = av_read_frame(format, packet);
+        if (status == AVERROR_EOF) { status = 0; break; }
+        if (status < 0) { fail(error, errorSize, status, "read"); goto done; }
+        int out = packet->stream_index < (int)format->nb_streams ? outOf[packet->stream_index] : -1;
+        if (out < 0) { av_packet_unref(packet); continue; }
+        AVStream *in = format->streams[packet->stream_index], *st = mux->streams[out];
+        AVPacket *write = packet;
+        if (st->codecpar->codec_id == AV_CODEC_ID_MOV_TEXT) {
+            int64_t start = packet->pts != AV_NOPTS_VALUE ? packet->pts : packet->dts;
+            int size = start == AV_NOPTS_VALUE || !text ? 0 : text(context, out, packet->data, packet->size, line + 2, 4096 - 2);
+            if (size <= 0) { av_packet_unref(packet); continue; }
+            if ((status = av_new_packet(sample, size + 2)) < 0) { fail(error, errorSize, status, "subtitle"); goto done; }
+            AV_WB16(sample->data, size);
+            memcpy(sample->data + 2, line + 2, size);
+            sample->pts = sample->dts = start;
+            // A cue with no end shows for four seconds, as in the repackager.
+            sample->duration = packet->duration > 0 ? packet->duration : av_rescale_q(4000000, AV_TIME_BASE_Q, in->time_base);
+            av_packet_unref(packet);
+            write = sample;
+        } else if (out == video && packet->pts != AV_NOPTS_VALUE) {
+            int at = windowCount;
+            while (at > 0 && window[at - 1] > packet->pts) { window[at] = window[at - 1]; at--; }
+            window[at] = packet->pts;
+            windowCount++;
+            if (windowCount > reorder) {
+                packet->dts = window[0];
+                memmove(window, window + 1, (windowCount - 1) * sizeof(int64_t));
+                windowCount--;
+            } else packet->dts = window[0] - (int64_t)(reorder - decoded) * frameDuration;
+            decoded++;
+        }
+        if (write->dts == AV_NOPTS_VALUE) write->dts = write->pts;
+        if (write->pts == AV_NOPTS_VALUE) write->pts = write->dts;
+        if (write->dts == AV_NOPTS_VALUE) { av_packet_unref(write); continue; }
+        if (lastDts[out] != AV_NOPTS_VALUE && write->dts <= lastDts[out]) write->dts = lastDts[out] + 1;
+        if (write->pts < write->dts) write->pts = write->dts;
+        lastDts[out] = write->dts;
+        av_packet_rescale_ts(write, in->time_base, st->time_base);
+        write->stream_index = out;
+        write->pos = -1;
+        status = av_write_frame(mux, write);
+        av_packet_unref(write);
+        if (status < 0) { fail(error, errorSize, status, "write"); goto done; }
+    }
+    if ((status = av_write_trailer(mux)) < 0) { fail(error, errorSize, status, "finish"); goto done; }
+    avio_flush(mux->pb);
+    if (fflush(file) != 0) status = fail(error, errorSize, AVERROR(EIO), "finish");
+done:
+    if (mux) {
+        if (mux->pb) { av_freep(&mux->pb->buffer); avio_context_free(&mux->pb); }
+        avformat_free_context(mux);
+    }
+    if (file && fclose(file) != 0 && status >= 0) status = fail(error, errorSize, AVERROR(EIO), "finish");
+    if (status < 0 && file) remove(path);
+    av_packet_free(&packet); av_packet_free(&sample);
+    av_free(outOf); av_free(lastDts); av_free(line);
+    tvm_close(reader);
+    return status < 0 ? status : 0;
 }

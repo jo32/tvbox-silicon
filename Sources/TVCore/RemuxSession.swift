@@ -362,7 +362,7 @@ final class RemuxSession: @unchecked Sendable {
         String(decoding: error.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
 
-    private static func stream(_ raw: TVMStream, index: Int) -> RemuxPlan.Stream {
+    static func stream(_ raw: TVMStream, index: Int) -> RemuxPlan.Stream {
         func text<T>(_ value: T) -> String {
             withUnsafeBytes(of: value) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
         }
