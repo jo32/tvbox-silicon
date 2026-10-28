@@ -1142,12 +1142,15 @@ struct VideoDetailView: View {
                 if text.count > 100 {
                     let toggle = Button(L10n.text(synopsisExpanded ? "Show Less" : "Show Full Synopsis")) { synopsisExpanded.toggle() }
                     #if os(tvOS)
-                    toggle.controlButton()
+                    toggle.glassControlButton()
                     #else
                     toggle.buttonStyle(.plain).font(.subheadline.weight(.semibold)).frame(minHeight: 44, alignment: .leading)
                     #endif
                 }
-            }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // Full width, so Down from the banner's buttons reaches Show Full Synopsis wherever they sit.
+            .tvFocusSection()
         }
     }
     private var synopsisLineLimit: Int {
@@ -1203,7 +1206,7 @@ struct VideoDetailView: View {
             // so the hero offers them too; they hold focus, and Back leaves the page again.
             HStack(spacing: 10) {
                 Button { startRequest { await loadDetail() } } label: { Label(L10n.text("Retry"), systemImage: "arrow.clockwise") }
-                    .controlButton(prominent: true).tint(Brand.accent).controlSize(.large)
+                    .glassControlButton(prominent: true).tint(Brand.accent).controlSize(.large)
                     .disabled(busy)
                     .focused($playFocused)
                     .accessibilityIdentifier("detail.retry")
@@ -1215,7 +1218,7 @@ struct VideoDetailView: View {
     #if os(tvOS)
     private func goBackButton(prominent: Bool) -> some View {
         Button { dismiss() } label: { Label(L10n.text("Go back"), systemImage: "chevron.backward") }
-            .controlButton(prominent: prominent).controlSize(.large)
+            .glassControlButton(prominent: prominent).controlSize(.large)
             .accessibilityIdentifier("detail.goBack")
     }
     #endif
@@ -1227,7 +1230,7 @@ struct VideoDetailView: View {
             }
             .font(.headline).lineLimit(1).fixedSize().padding(.horizontal, 8)
         }
-        .controlButton(prominent: true).tint(Brand.accent).controlSize(.large)
+        .glassControlButton(prominent: true).tint(Brand.accent).controlSize(.large)
         .focused($playFocused)
     }
     private func downloadButton(iconOnly: Bool) -> some View {
@@ -1236,7 +1239,7 @@ struct VideoDetailView: View {
                 .labelStyle(DownloadLabelStyle(iconOnly: iconOnly))
                 .font(.headline).lineLimit(1).fixedSize()
         }
-        .controlButton().controlSize(.large).accessibilityLabel(L10n.text("Download"))
+        .glassControlButton().controlSize(.large).accessibilityLabel(L10n.text("Download"))
     }
     /// Icon-only, beside Play and Download. An empty heart keeps the control color; a saved one is rose.
     /// Set as text in their font, so the button is as tall as theirs: a bare image made a smaller one on Apple TV.
@@ -1253,51 +1256,10 @@ struct VideoDetailView: View {
             }
             .font(.headline).lineLimit(1).fixedSize()
         }
-        .controlButton().controlSize(.large)
+        .glassControlButton().controlSize(.large)
         .accessibilityLabel(title).help(title)
         .accessibilityIdentifier("detail.favorite")
     }
-    #if os(tvOS)
-    /// Stands in for a watch-page player: the cover over a blur of itself, the title and the primary action.
-    /// As tall as TMDB's banner, which takes its place once the details are in.
-    private var hero: some View {
-        heroStage
-            .overlay {
-                GeometryReader { proxy in
-                    let inset: CGFloat = heroInset
-                    let aspect = min(max(artAspect ?? 2.0 / 3.0, 0.6), 1.8)
-                    // A landscape cover may take at most ~45% of the stage, so the title keeps its room.
-                    let artWidth = min(max(proxy.size.height - inset * 2, 60) * aspect, proxy.size.width * 0.45)
-                    ZStack {
-                        PosterImage(url: video.poster, headers: video.posterHeaders)
-                            .frame(width: proxy.size.width, height: proxy.size.height).clipped()
-                            .blur(radius: 40).scaleEffect(1.35)
-                            .overlay(Color.black.opacity(0.5))
-                        HStack(alignment: .center, spacing: inset) {
-                            PosterImage(url: video.poster, headers: video.posterHeaders, aspect: $artAspect)
-                                .frame(width: artWidth, height: artWidth / aspect)
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                .shadow(color: .black.opacity(0.45), radius: 20, y: 10)
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text(video.name).font(.system(size: 52, weight: .bold))
-                                    .lineLimit(3).minimumScaleFactor(0.7).fixedSize(horizontal: false, vertical: true)
-                                if !video.remarks.isEmpty {
-                                    Text(video.remarks).font(.title3).foregroundStyle(.white.opacity(0.75)).lineLimit(2)
-                                }
-                                playControl.padding(.top, 6)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .padding(inset).frame(width: proxy.size.width, height: proxy.size.height, alignment: .leading)
-                    }
-                }
-            }
-            .foregroundStyle(.white).environment(\.colorScheme, .dark)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-    }
-    private var heroStage: some View { Color.clear.frame(maxWidth: .infinity).frame(height: bannerHeight) }
-    private var heroInset: CGFloat { 28 }
-    #else
     /// The source's cover in TMDB's banner shape, so the page keeps its layout when TMDB's backdrop fades in, and for
     /// titles TMDB doesn't have.
     private var hero: some View {
@@ -1305,7 +1267,6 @@ struct VideoDetailView: View {
                      aspect: $artAspect) { playControl }
             .frame(height: bannerHeight)
     }
-    #endif
     private var header: some View {
         VStack(alignment: .leading, spacing: 18) {
             // TMDB's banner at any width, so a matched title's page looks the same everywhere.
@@ -1352,9 +1313,17 @@ struct VideoDetailView: View {
                 let items = detail.episodes.filter { $0.flag == activeFlag }
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        #if os(tvOS)
+                        if items.count > 1 {
+                            episodeOrderButton(count: items.count)
+                        } else {
+                            Text(L10n.text("Episodes")).font(.headline)
+                        }
+                        #else
                         Text(L10n.text("Episodes")).font(.headline)
                         Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
                         if items.count > 1 { episodeOrderButton }
+                        #endif
                         Spacer(minLength: 8)
                         if flags.count == 1, !activeFlag.isEmpty {
                             Text(SourceLabel(activeFlag).text).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -1381,11 +1350,25 @@ struct VideoDetailView: View {
             #endif
         }
     }
+    #if os(tvOS)
+    /// On Apple TV the heading itself turns the list around (倒序): one glass button whose arrow shows the order,
+    /// up for the first episode first, down for the last.
+    private func episodeOrderButton(count: Int) -> some View {
+        Button { reversesEpisodes.toggle() } label: {
+            HStack(spacing: 10) {
+                Image(systemName: reversesEpisodes ? "arrow.down" : "arrow.up").contentTransition(.symbolEffect(.replace))
+                Text(L10n.text("Episodes"))
+                Text("\(count)").monospacedDigit().foregroundStyle(.secondary)
+            }
+        }
+        .glassPill()
+        .accessibilityLabel(L10n.text("Reverse Order"))
+        .accessibilityAddTraits(reversesEpisodes ? .isSelected : [])
+        .accessibilityIdentifier("episodes.reverse")
+    }
+    #else
     /// The small button beside the episode count that turns the lists around (倒序).
-    @ViewBuilder private var episodeOrderButton: some View {
-        #if os(tvOS)
-        Chip(title: L10n.text("Reverse Order"), selected: reversesEpisodes) { reversesEpisodes.toggle() }
-        #else
+    private var episodeOrderButton: some View {
         Button { reversesEpisodes.toggle() } label: {
             Image(systemName: "arrow.up.arrow.down")
                 .font(.subheadline.weight(.semibold))
@@ -1397,8 +1380,8 @@ struct VideoDetailView: View {
         .accessibilityLabel(L10n.text("Reverse Order"))
         .accessibilityAddTraits(reversesEpisodes ? .isSelected : [])
         .accessibilityIdentifier("episodes.reverse")
-        #endif
     }
+    #endif
 
     /// The episodes in the order the lists show them. Only the lists: Play and the next episode still follow the source.
     private func shownOrder(_ items: [Episode]) -> [Episode] { reversesEpisodes ? items.reversed() : items }

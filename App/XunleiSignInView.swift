@@ -14,11 +14,83 @@ struct XunleiSignInView: View {
     @FocusState private var codeFocused: Bool
 
     var body: some View {
+        #if os(iOS)
+        phoneForm
+        #else
+        panel
+        #endif
+    }
+
+    private var title: String { L10n.text("Sign In to %@", L10n.text("Xunlei")) }
+    private var prompt: String {
+        challenge.map { L10n.text("Enter the code Xunlei texted to %@.", $0.account.mobile ?? "") }
+            ?? L10n.text("Enter the phone number of your Xunlei account. Xunlei texts it a code.")
+    }
+
+    #if os(iOS)
+    /// A grouped form like the system's sign-in sheets: the drive's icon and the prompt, the fields, one wide button.
+    private var phoneForm: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    VStack(spacing: 10) {
+                        // The drive's icon from the accounts list, at a header's size.
+                        Image(systemName: CloudProvider.xunlei.symbol)
+                            .font(.system(size: 28, weight: .semibold)).foregroundStyle(CloudProvider.xunlei.tint)
+                            .frame(width: 60, height: 60)
+                            .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .accessibilityHidden(true)
+                        Text(title).font(.title2.weight(.bold))
+                        Text(prompt).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
+                }
+                Section {
+                    TextField(L10n.text("Phone Number"), text: $mobile)
+                        .keyboardType(.phonePad).textContentType(.telephoneNumber)
+                        .disabled(challenge != nil || busy)
+                    if challenge != nil {
+                        TextField(L10n.text("Verification Code"), text: $code)
+                            .keyboardType(.numberPad).textContentType(.oneTimeCode)
+                            .focused($codeFocused)
+                            .disabled(busy)
+                    }
+                } footer: {
+                    if let error {
+                        Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Brand.rose)
+                    }
+                }
+                Section {
+                    Button { Task { if challenge == nil { await send() } else { await signIn() } } } label: {
+                        ZStack {
+                            Text(L10n.text(challenge == nil ? "Send Code" : "Sign In")).opacity(busy ? 0 : 1)
+                            if busy { ProgressView() }
+                        }
+                        .font(.headline).frame(maxWidth: .infinity)
+                    }
+                    .settingsButton(prominent: true).controlSize(.large)
+                    .disabled(busy || (challenge == nil ? XunleiSignIn.normalized(mobile) == nil : code.trimmingCharacters(in: .whitespaces).isEmpty))
+                    if challenge != nil {
+                        Button(L10n.text("Send Again")) { code = ""; challenge = nil; Task { await send() } }
+                            .font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity).disabled(busy)
+                    }
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("Cancel")) { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
+    }
+    #else
+    private var panel: some View {
         VStack(alignment: .leading, spacing: 22) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(L10n.text("Sign In to %@", L10n.text("Xunlei"))).font(.title2.weight(.bold))
-                Text(challenge.map { L10n.text("Enter the code Xunlei texted to %@.", $0.account.mobile ?? "") }
-                     ?? L10n.text("Enter the phone number of your Xunlei account. Xunlei texts it a code."))
+                Text(title).font(.title2.weight(.bold))
+                Text(prompt)
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             VStack(spacing: 12) {
@@ -59,11 +131,9 @@ struct XunleiSignInView: View {
         .frame(maxWidth: 900)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .screenBackdrop()
-        #else
-        .frame(maxWidth: 520, maxHeight: .infinity, alignment: .top)
-        .presentationDetents([.medium, .large])
         #endif
     }
+    #endif
 
     private func send() async {
         guard !busy, XunleiSignIn.normalized(mobile) != nil else { return }

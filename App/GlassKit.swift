@@ -1140,6 +1140,14 @@ extension View {
         buttonStyle(ContentControlStyle(prominent: prominent))
         #endif
     }
+    /// Liquid Glass on Apple TV (the chips' capsule, white on focus); `controlButton` elsewhere.
+    @ViewBuilder func glassControlButton(prominent: Bool = false) -> some View {
+        #if os(tvOS)
+        glassPill()
+        #else
+        controlButton(prominent: prominent)
+        #endif
+    }
     @ViewBuilder func controlBackdrop() -> some View {
         #if os(tvOS)
         background(Color.clear.glassSurface(.regular, in: .rect))

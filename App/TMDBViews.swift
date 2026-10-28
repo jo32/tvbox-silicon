@@ -404,7 +404,7 @@ struct TMDBFooter: View {
                 Spacer(minLength: 8)
                 Button(L10n.text("Not This Title?")) { choosing = true }
                     #if os(tvOS)
-                    .controlButton()
+                    .glassControlButton()
                     #else
                     .buttonStyle(.plain).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     #endif
@@ -535,8 +535,8 @@ struct TMDBTVPicker: View {
                         ProgressView().frame(maxWidth: .infinity)
                     }
                     HStack(spacing: 20) {
-                        Button(L10n.text("None of These")) { Task { await lookup.reject(); dismiss() } }.controlButton()
-                        Button(L10n.text("Cancel")) { dismiss() }.controlButton()
+                        Button(L10n.text("None of These")) { Task { await lookup.reject(); dismiss() } }.glassControlButton()
+                        Button(L10n.text("Cancel")) { dismiss() }.glassControlButton()
                     }
                     .tvFocusSection()
                 }
@@ -654,7 +654,7 @@ enum TMDBBannerMetrics {
     #endif
 }
 
-/// Mac and iPad: TMDB's banner made from the source's own cover, until TMDB's backdrop is in and for titles TMDB doesn't
+/// TMDB's banner made from the source's own cover, until TMDB's backdrop is in and for titles TMDB doesn't
 /// have. The same shape and type as TMDBBanner, so the page doesn't change its layout when that one fades in: a blur of
 /// the cover across it, the cover itself at the trailing edge, the title and actions over the lower leading corner.
 struct PosterBanner<Actions: View>: View {
@@ -694,7 +694,7 @@ struct PosterBanner<Actions: View>: View {
                     actions.padding(.top, 6)
                 }
                 .padding(inset)
-                .frame(maxWidth: min(max(size.width - artWidth - inset * 2, 240), 760), alignment: .leading)
+                .frame(maxWidth: min(max(size.width - artWidth - inset * 2, 240), TMDBBannerMetrics.textWidth), alignment: .leading)
             }
         }
         .foregroundStyle(.white).environment(\.colorScheme, .dark)
