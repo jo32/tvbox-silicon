@@ -191,3 +191,22 @@ import Testing
     #expect(throws: (any Error).self) { try Subscription.parse(Data("hello,world\n".utf8), origin: origin) }
     #expect(throws: (any Error).self) { try Subscription.parse(Data("分组,#genre#\n".utf8), origin: origin) }
 }
+
+@Test func catPawOpenAddressesNameTheirBundle() throws {
+    let checksum = try #require(URL(string: "https://example.com/cat/index.js.md5"))
+    let bundle = try #require(URL(string: "https://example.com/cat/index.js"))
+    #expect(CatPawOpen.bundle(Data("84b8d21a4d3fe28c524da6c198b47460\n".utf8), at: checksum) == bundle)
+    #expect(CatPawOpen.bundle(Data("<html>Not Found</html>".utf8), at: checksum) == nil)
+    #expect(CatPawOpen.bundle(Data("at=(0,jW.default)({serverFactory:catServerFactory,".utf8), at: bundle) == bundle)
+    #expect(CatPawOpen.bundle(Data("var rule = {title: 'drpy'}".utf8), at: bundle) == nil)
+    #expect(CatPawOpen.bundle(Data(#"{"sites":[]}"#.utf8), at: try #require(URL(string: "https://example.com/tv.json"))) == nil)
+
+    let site = Site(key: "nodejs_jinpai", name: "金牌影院", type: 3, api: bundle.absoluteString, raw: ["catPawOpen": .string("/spider/jinpai/3")])
+    #if os(macOS)
+    #expect(site.runtime == .javascript)
+    #elseif os(iOS)
+    #expect(site.runtime == (EmbeddedNodeHost.available ? .javascript : .unsupported))
+    #else
+    #expect(site.runtime == .unsupported)
+    #endif
+}

@@ -2,6 +2,8 @@ import vm from 'node:vm';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import http from 'node:http';
+import { createRequire } from 'node:module';
 import zlib from 'node:zlib';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
@@ -325,18 +327,91 @@ async function call(spider, params) {
     }
     return { result: typeof result === 'string' ? result : JSON.stringify(result) };
 }
+// CatPawOpen bundles (猫源) are Node servers in the CatVod Open format: `start(config)` builds a Fastify app
+// on the server `catServerFactory` makes, the app lists its sources at GET /config and serves each at
+// POST /spider/<key>/<type>/{init,home,category,detail,play,search}. The server only listens on loopback.
+let catServer, catProxyTouched = 0;
+const catStarted = new Set();
+async function startCatPaw() {
+    process.env.NODE_ENV = 'development'; // Fastify then skips its per-request logger
+    process.env.NODE_PATH = profile; // where the bundle keeps its settings database
+    // Bundles log with console.log; stdout carries the one-shot answer, so their logs join the host's on stderr.
+    Object.assign(console, { log, info: log, warn: log, error: log, debug: log });
+    // Some bundles' handlers answer a request twice; the CatVod apps keep serving, so this does too.
+    process.on('uncaughtException', error => log('CATPAW_UNCAUGHT', error?.stack || String(error)));
+    globalThis.catDartServerPort = () => 0;
+    globalThis.catServerFactory = handler => {
+        catServer = http.createServer((req, res) => {
+            // Anything but the host's own calls is the player reading the bundle's media proxy.
+            if (!req.headers['x-yingxia-host'] && Date.now() - catProxyTouched > 5000) {
+                catProxyTouched = Date.now();
+                fs.writeFileSync(path.join(cache, 'proxy-active'), '');
+            }
+            handler(req, res);
+        });
+        const listen = catServer.listen.bind(catServer);
+        catServer.listen = (...args) => listen(0, '127.0.0.1', args.find(arg => typeof arg === 'function'));
+        return catServer;
+    };
+    const require = createRequire(input.script);
+    // The bundle's settings sit beside it (index.js -> index.config.js); without them it starts with none.
+    let config = {};
+    const configResponse = request(new URL(input.api.replace(/\.js(?=$|[?#])/, '.config.js')).href);
+    if (configResponse.code >= 200 && configResponse.code < 300 && configResponse.content) {
+        const file = path.join(cache, 'index.config.js');
+        fs.writeFileSync(file, configResponse.content);
+        try { const module = require(file); config = module?.default ?? module ?? {}; } catch (error) { log('CATPAW_CONFIG', error.message); }
+    }
+    const bundle = require(input.script);
+    if (typeof bundle.start !== 'function') throw new Error('The script is not a CatPawOpen bundle');
+    await bundle.start(config);
+    const deadline = Date.now() + 20_000;
+    while (!catServer?.listening) {
+        if (Date.now() > deadline) throw new Error('The CatPawOpen server did not start');
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
+}
+async function callCatPaw(params) {
+    const port = catServer.address().port;
+    const send = async (route, body) => {
+        const headers = { 'x-yingxia-host': '1' };
+        const init = body === undefined ? { headers } : { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(body) };
+        const response = await fetch(`http://127.0.0.1:${port}${route}`, init);
+        const text = await response.text();
+        if (!response.ok) {
+            let message = text;
+            try { message = JSON.parse(text).message || text; } catch { }
+            throw new Error(`The source failed (HTTP ${response.status}): ${String(message).slice(0, 300)}`);
+        }
+        return text;
+    };
+    if (params.catConfig) return { result: await send('/config') };
+    const api = String(params.catPawOpen || '');
+    if (!/^\/spider\/[^?#]+$/.test(api)) throw new Error('Invalid CatPawOpen source');
+    if (!catStarted.has(api)) { await send(api + '/init', {}); catStarted.add(api); }
+    let route, body;
+    if ('play' in params) { route = '/play'; body = { flag: params.flag || '', id: params.play }; }
+    else if ('ids' in params) { route = '/detail'; body = { id: params.ids }; }
+    else if ('wd' in params) { route = '/search'; body = { wd: params.wd, page: Number(params.pg || 1), quick: params.quick === 'true' }; }
+    else if ('t' in params) { route = '/category'; body = { id: params.t, page: Number(params.pg || 1), filter: true, filters: {} }; }
+    else { route = '/home'; body = {}; }
+    const result = await send(api + route, body);
+    // Sources address the bundle's own proxy by the Mac's network address, but the server is on loopback.
+    return { result: result.replace(new RegExp(`http://\\d+\\.\\d+\\.\\d+\\.\\d+:${port}/`, 'g'), `http://127.0.0.1:${port}/`) };
+}
 try {
-    const spider = await initialize();
+    const spider = input.catPawOpen ? await startCatPaw() : await initialize();
+    const answer = params => input.catPawOpen ? callCatPaw(params) : call(spider, params);
     if (serving) {
         writeJSON(path.join(cache, 'ready.json'), { ready: true });
         for await (const line of readline.createInterface({ input: process.stdin })) {
             const command = JSON.parse(line);
             if (!/^[A-Za-z0-9-]{1,80}$/.test(command.id)) throw new Error('Invalid request identifier');
             let response;
-            try { response = await call(spider, command.params); } catch (error) { response = envelope(error); }
+            try { response = await answer(command.params); } catch (error) { response = envelope(error); }
             writeJSON(path.join(cache, 'responses', command.id + '.json'), response);
         }
-    } else process.stdout.write(JSON.stringify(await call(spider, input.params)) + '\n');
+    } else process.stdout.write(JSON.stringify(await answer(input.params)) + '\n');
     process.exit(0);
 } catch (error) {
     const response = envelope(error);

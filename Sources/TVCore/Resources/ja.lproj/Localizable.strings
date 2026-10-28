@@ -1077,3 +1077,6 @@
 "%@ of %@ episodes free" = "無料 %@/%@ 話";
 "%@ returned incomplete data. Please refresh and try again." = "%@ から届いたデータが不完全です。更新してお試しください。";
 "This episode isn't free on %@." = "このエピソードは %@ では有料です。";
+"This CatPawOpen bundle lists no video sources." = "この CatPawOpen バンドルには動画ソースがありません。";
+"This device can't run CatPawOpen sources." = "このデバイスでは CatPawOpen のソースを実行できません。";
+"The CatPawOpen runtime stopped. Quit and reopen the app to use these sources." = "CatPawOpen の実行環境が停止しました。アプリを終了して再度開いてから、これらのソースをお使いください。";

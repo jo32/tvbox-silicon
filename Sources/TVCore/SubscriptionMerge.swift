@@ -141,6 +141,7 @@ public enum SubscriptionImport: Sendable {
 extension HTTPClient {
     public func subscriptionImport(_ url: URL) async throws -> SubscriptionImport {
         let (data, finalURL) = try await get(url, headers: ["User-Agent": Self.subscriptionUserAgent])
+        if let bundle = CatPawOpen.bundle(data, at: finalURL) { return .subscription(try await CatPawOpen.subscription(bundle: bundle, origin: finalURL, http: self)) }
         if let servers = AListServer.list(from: data) { return .alist(servers) }
         if let entries = Subscription.directory(data, origin: finalURL) { return .directory(entries) }
         do { return .subscription(try await Subscription.parse(data, origin: finalURL).sniffingScripts(http: self)) }
