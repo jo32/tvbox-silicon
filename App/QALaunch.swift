@@ -243,6 +243,10 @@ enum QALaunch {
             case "telegram": TelegramGroupView()
             #endif
             case "cache": CacheSettingsView()
+            #if os(iOS)
+            case "playback": PlaybackSettingsView()
+            case "privacy": PrivacySettingsView()
+            #endif
             case "licenses": LicensesView()
             case "bilibili-account": BilibiliAccountView()
             case "douyin-account": DouyinAccountView()
@@ -291,7 +295,7 @@ enum QALaunch {
 
     static func overrides(_ section: AppSection) -> Bool {
         guard section == self.section, let page else { return false }
-        return ["site", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "licenses", "cloud-login", "cloud-accounts", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "web-sign-in", "plugin-sign-in", "folder", "alist-add"].contains(page.split(separator: ":").first.map(String.init) ?? "")
+        return ["site", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "cloud-login", "cloud-accounts", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "web-sign-in", "plugin-sign-in", "folder", "alist-add"].contains(page.split(separator: ":").first.map(String.init) ?? "")
     }
 }
 
