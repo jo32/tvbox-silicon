@@ -347,7 +347,9 @@ def handle(text):
             if slot.session is None:
                 slot.session = Session(request)
             response = slot.session.call(request.get('params') or {})
-    except Exception as error:
+    # SystemExit too: a spider's sys.exit() or exit() must not reach ApplePython.c, whose PyErr_Print
+    # exits the whole app on it, with no crash report (issue #187).
+    except (Exception, SystemExit) as error:
         response = envelope(error)
     return json.dumps(response, ensure_ascii=False)
 

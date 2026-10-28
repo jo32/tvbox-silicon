@@ -133,6 +133,12 @@ assert json.loads(ask('a', {})['result'])['class'][0]['type_id'] == '1', 'the sp
 assert json.loads(ask('b', {'wd': 'k'})['result'])['list'][0]['vod_name'] == 'k16'
 broken = json.loads(host.handle(json.dumps(dict(session='c', script=job + '/missing.py', cache=job + '/c', api='x', key='c', params={}))))
 assert broken.get('errorCode') == 'script_error', broken
+# A spider that calls sys.exit() answers with an error; the interpreter is the app's, and must keep running.
+exits = job + '/exits.py'
+with open(exits, 'w') as stream:
+    stream.write('import sys\nfrom base.spider import Spider\nclass Spider(Spider):\n    def searchContent(self, key, quick):\n        sys.exit(3)\n')
+exited = json.loads(host.handle(json.dumps(dict(session='d', script=exits, cache=job + '/d', api='x', key='d', params={'wd': 'k'}))))
+assert exited.get('errorCode') == 'script_error' and 'SystemExit' in exited['error'], exited
 assert host.handle('{"command":"cancel","request":"r"}') == '{}'
 print('embedded ok')
 '''
