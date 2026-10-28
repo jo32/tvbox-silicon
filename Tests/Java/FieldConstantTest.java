@@ -15,7 +15,8 @@ import org.jf.dexlib2.writer.pool.DexPool;
  * Dex gives any static field an initial value, a class file only primitives and Strings in String fields.
  * dex2jar copied a String kept in an Object field (or a class in a Class field) into the field's
  * ConstantValue, and the JVM refused the whole class: "Bad string initial value in class file
- * com/github/catvod/spider/Init", which took every source of that jar down.
+ * com/github/catvod/spider/Init", which took every source of that jar down. ART also keeps a String in a field of
+ * another type (a HashMap); setting that in <clinit> failed with "Bad type on operand stack" (ed372dc7299b).
  */
 public final class FieldConstantTest {
     static final String PROBE = "Ltvbox/FieldConstantProbe;";
@@ -32,7 +33,9 @@ public final class FieldConstantTest {
             field("sequence", "Ljava/lang/CharSequence;", new ImmutableStringEncodedValue("sequence")),
             field("type", "Ljava/lang/Class;", new ImmutableTypeEncodedValue("Ljava/lang/String;")),
             field("plain", "Ljava/lang/String;", new ImmutableStringEncodedValue("plain")),
-            field("number", "I", new ImmutableIntEncodedValue(7))));
+            field("number", "I", new ImmutableIntEncodedValue(7)),
+            field("map", "Ljava/util/HashMap;", new ImmutableStringEncodedValue("map")),
+            field("list", "Ljava/util/List;", new ImmutableTypeEncodedValue("Ljava/lang/String;"))));
         var methods = new ArrayList<ImmutableMethod>();
         if (withInitializer) {
             fields.add(new ImmutableField(PROBE, "copy", "Ljava/lang/Object;", AccessFlags.PUBLIC.getValue() | AccessFlags.STATIC.getValue(), null, Set.of(), null));
@@ -66,6 +69,7 @@ public final class FieldConstantTest {
                 check(probe.getField("type").get(null) == String.class, "Class constant lost");
                 check("plain".equals(probe.getField("plain").get(null)), "String constant lost");
                 check(Integer.valueOf(7).equals(probe.getField("number").get(null)), "int constant lost");
+                check(probe.getField("map").get(null) == null && probe.getField("list").get(null) == null, "value of another type kept");
                 if (withInitializer) check("spider".equals(probe.getField("copy").get(null)), "<clinit> ran before the static values");
             }
         } finally {
@@ -76,6 +80,6 @@ public final class FieldConstantTest {
     public static void main(String[] args) throws Exception {
         load(false);
         load(true);
-        System.out.println("FieldConstantTest passed: static values of Object and Class fields survive conversion");
+        System.out.println("FieldConstantTest passed: static values of Object and Class fields survive conversion, others are left out");
     }
 }

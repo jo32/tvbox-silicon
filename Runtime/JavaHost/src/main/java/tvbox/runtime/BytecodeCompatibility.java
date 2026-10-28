@@ -13,8 +13,13 @@ public final class BytecodeCompatibility {
     // v14: large constant arrays (fill-array-data) are copied into the array, not out of it (IR2JConverter).
     // v16: static values a class file can't keep as constants (a String in an Object field) are set in <clinit>.
     // v17: invoke-super naming the calling class itself goes to the superclass, as on ART.
-    public static final String VERSION = "host-v17";
+    // v18: a static value its field can't hold on the JVM (a String in a HashMap field) is left out of <clinit>.
+    public static final String VERSION = "host-v18";
     private static final java.util.Set<String> connections = java.util.Set.of("java/net/URLConnection", "java/net/HttpURLConnection", "javax/net/ssl/HttpsURLConnection");
+    // Field types that can hold a String, or a Class, on the JVM. ART stores a static value in any reference field.
+    private static final java.util.Set<String> stringFields = java.util.Set.of("Ljava/lang/Object;", "Ljava/lang/CharSequence;", "Ljava/io/Serializable;", "Ljava/lang/Comparable;");
+    private static final java.util.Set<String> classFields = java.util.Set.of("Ljava/lang/Object;", "Ljava/lang/Class;", "Ljava/io/Serializable;", "Ljava/lang/reflect/Type;",
+        "Ljava/lang/reflect/GenericDeclaration;", "Ljava/lang/reflect/AnnotatedElement;");
 
     private static final String BRIDGES = "tvbox/runtime/generated/InterfaceCalls";
     private record CallSite(String owner, String name, String descriptor) { }
@@ -46,7 +51,10 @@ public final class BytecodeCompatibility {
             @Override public FieldVisitor visitField(int access, String name, String descriptor, String signature, Object value) {
                 if (value != null && (access & Opcodes.ACC_STATIC) != 0 && (descriptor.startsWith("L") || descriptor.startsWith("["))
                         && !(value instanceof String && descriptor.equals("Ljava/lang/String;"))) {
-                    if (value instanceof String || value instanceof Type) initialValues.add(new InitialValue(name, descriptor, value));
+                    // A value of another type (a String in a HashMap field) would fail the verifier in <clinit> and take
+                    // the class down with it, so it is left out and the field starts as null.
+                    if ((value instanceof String && stringFields.contains(descriptor)) || (value instanceof Type && classFields.contains(descriptor)))
+                        initialValues.add(new InitialValue(name, descriptor, value));
                     value = null;
                 }
                 return super.visitField(access, name, descriptor, signature, value);
