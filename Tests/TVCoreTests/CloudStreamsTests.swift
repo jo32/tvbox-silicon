@@ -61,6 +61,17 @@ struct CloudStreamsTests {
         await stream.clear()
     }
 
+    /// A bundle's proxy downloads each request with its own threads, so its stream reads ahead on one connection.
+    @Test func aSingleConnectionStreamReadsAheadOneChunk() async throws {
+        let size = CloudByteStream.chunkSize * 10
+        let (url, _) = try await served("single.mp4", size: size)
+        let stream = CloudByteStream(source: .init(url: url, headers: [:], length: size, name: "single.mp4"), session: RangeServer.session, parallel: 1) { nil }
+        _ = try await stream.read(at: 0, count: 64)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(RangeServer.requests("single.mp4") == 2)
+        await stream.clear()
+    }
+
     /// A file whose audio sits far from its video is read in two places at once. Neither reader
     /// may cancel the other's chunks (the sound dropped out on Apple TV when they did).
     @Test func twoDistantReadersBothFinish() async throws {

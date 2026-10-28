@@ -23,9 +23,8 @@ public enum CatPawOpen {
             && url.path().range(of: #"^/spider/[^/]+/[^/]+/proxy/"#, options: .regularExpression) != nil
     }
 
-    /// A bundle's media proxy address as a cloud stream, when it answers the bytes asked for. AVPlayer then reads
-    /// it in parallel chunks, and HEVC that an MP4 tags `hev1` shows its picture instead of playing sound only
-    /// (`CloudStreams.playableSampleEntries`).
+    /// A bundle's media proxy address as a cloud stream, when it answers the bytes asked for. HEVC that an MP4 tags
+    /// `hev1` then shows its picture instead of playing sound only (`CloudStreams.playableSampleEntries`).
     public static func proxiedMedia(_ url: URL, headers: [String: String]) async -> CloudStreams.Source? {
         guard isMediaProxy(url), let probe = try? await RangeConnection.open(url, headers: headers, from: 0, through: 1,
                                                                             configuration: RangeConnection.configuration, counter: CloudCounter()) else { return nil }
