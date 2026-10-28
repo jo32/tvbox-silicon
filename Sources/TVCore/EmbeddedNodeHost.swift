@@ -156,7 +156,9 @@ public actor EmbeddedNodeHost {
         try? FileManager.default.removeItem(at: file)
         // Node watches this file; it has to exist first.
         FileManager.default.createFile(atPath: relistenFile.path, contents: nil)
-        let arguments = ["node", main.path, file.path, relistenFile.path]
+        // Node 18.20 refuses RSA PKCS#1 v1.5 decryption, which bundles use to read their APIs' replies (瓜子 signs
+        // in with it). Node 22+ allows it again with OpenSSL's implicit rejection; the Mac's Node already does.
+        let arguments = ["node", "--security-revert=CVE-2023-46809", main.path, file.path, relistenFile.path]
         let thread = Thread {
             // node_start expects its arguments in one contiguous block that lives as long as Node.
             let strings = arguments.map { Array($0.utf8CString) }
