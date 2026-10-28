@@ -20,12 +20,14 @@ public enum CloudStreams {
         }
     }
 
-    /// A playable address for `source`. `refresh` resolves the file again when its CDN link expires.
-    public static func register(_ source: Source, refresh: @escaping @Sendable () async -> Source?) -> URL {
-        register(source, session: CloudByteStream.session, refresh: refresh)
+    /// A playable address for `source`. `refresh` resolves the file again when its CDN link expires. `parallel` caps
+    /// the connections it reads ahead on; a proxy that downloads each request with its own threads wants one.
+    public static func register(_ source: Source, parallel: Int? = nil, refresh: @escaping @Sendable () async -> Source?) -> URL {
+        register(source, session: CloudByteStream.session, parallel: parallel ?? CloudByteStream.parallel, refresh: refresh)
     }
-    static func register(_ source: Source, session: URLSession, refresh: @escaping @Sendable () async -> Source?) -> URL {
-        CloudStreamStore.shared.add(CloudByteStream(source: source, session: session, refresh: refresh))
+    static func register(_ source: Source, session: URLSession, parallel: Int = CloudByteStream.parallel,
+                         refresh: @escaping @Sendable () async -> Source?) -> URL {
+        CloudStreamStore.shared.add(CloudByteStream(source: source, session: session, parallel: parallel, refresh: refresh))
     }
 
     public static func asset(for url: URL) -> AVURLAsset? {
@@ -174,12 +176,15 @@ actor CloudByteStream {
     }()
 
     private let session: URLSession
+    /// Connections reading ahead at once, `parallel` unless the source needs fewer.
+    private let connections: Int
     /// Whether `playableSampleEntries` retags the bytes: for AVPlayer's own MP4 reading, not for `Remux`.
     private var rewritesSampleEntries: Bool
 
-    init(source: CloudStreams.Source, session: URLSession = CloudByteStream.session, rewritesSampleEntries: Bool = true,
-         refresh: @escaping @Sendable () async -> CloudStreams.Source?) {
+    init(source: CloudStreams.Source, session: URLSession = CloudByteStream.session, parallel: Int = CloudByteStream.parallel,
+         rewritesSampleEntries: Bool = true, refresh: @escaping @Sendable () async -> CloudStreams.Source?) {
         self.source = source; self.session = session; self.refresh = refresh; host = source.url.host()
+        connections = max(1, parallel)
         self.rewritesSampleEntries = rewritesSampleEntries
         sourceLength = source.length
     }
@@ -244,7 +249,7 @@ actor CloudByteStream {
         let last = min(chunks - 1, index + Self.readAhead)
         guard index < last else { return }
         for next in index + 1...last where cache[next] == nil && inflight[next] == nil {
-            guard inflight.count < Self.parallel else { break }
+            guard inflight.count < connections else { break }
             _ = start(next)
         }
     }
