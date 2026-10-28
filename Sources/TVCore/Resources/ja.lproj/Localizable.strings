@@ -608,6 +608,8 @@
 "Pinned Group" = "固定";
 "Hide Source" = "ソースを隠す";
 "Unhide Source" = "再表示";
+"Search This Source" = "このソースで検索";
+"Manage Sources" = "配信ソースを管理";
 "Hidden Sources" = "隠したソース";
 "Hidden" = "非表示";
 "Pinned Sources" = "固定したソース";

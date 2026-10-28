@@ -28,6 +28,11 @@ import Testing
         }
     }
 }
+@Test func watchNowSourceActionsAreTranslated() {
+    #expect(L10n.text("Search This Source", language: "zh-Hans") == "在此源中搜索")
+    #expect(L10n.text("Manage Sources", language: "zh-Hant") == "管理隨選來源")
+    #expect(L10n.text("Manage Sources", language: "ja") == "配信ソースを管理")
+}
 @Test func formattedTranslationsPreserveArguments() {
     #expect(L10n.text("The source %@ returned HTTP %lld.", "example.com", 403, language: "en") == "The source example.com returned HTTP 403.")
     #expect(L10n.text("Page %lld of %lld", 2, 12, language: "ja") == "2 / 12 ページ")
