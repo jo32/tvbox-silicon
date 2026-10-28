@@ -797,6 +797,8 @@ struct VideoDetailView: View {
     @State private var playerStarted = false
     /// Back on the cover while it starts: shown for a moment by a tap, as the player's controls are.
     @State private var coverBack = false
+    /// The page's player, whose wait the cover tells about.
+    @State private var playerSession: PlaybackSession?
     #endif
     @State private var requestTask: Task<Void, Never>?
     @State private var detail: Video?
@@ -1578,6 +1580,7 @@ struct VideoDetailView: View {
         }
         .onChange(of: watchChannel == nil) { _, ended in
             playerStarted = false
+            if ended { playerSession = nil }
             if ended && fullScreen { setFullScreen(landscape: false) }
         }
         .sheet(isPresented: $showsAllEpisodes) { allEpisodes }
@@ -1590,11 +1593,20 @@ struct VideoDetailView: View {
         ZStack {
             if let channel = watchChannel {
                 PlaybackView(channel: channel, watch: WatchPlayback(fullScreen: fullScreen, toggleFullScreen: setFullScreen, leave: { dismiss() },
-                                                                    started: { playerStarted = $0 }))
+                                                                    started: { playerStarted = $0 }, opened: { playerSession = $0 }))
             }
             if covered { watchCover.transition(.opacity) }
         }
         .animation(.easeOut(duration: 0.35), value: covered)
+    }
+
+    /// The cover's words while it waits: the source finding the episode's link, then the page's player getting it ready.
+    private func coverStatus(_ elapsed: TimeInterval) -> PlaybackWait {
+        if let session = playerSession, let channel = watchChannel, loadingEpisode == nil {
+            return session.wait(elapsed: elapsed, resume: channel.resumePosition, linesHint: false)
+        }
+        let progress = LoadingProgress.source(client.site, origin: client.origin, title: busyTitle)
+        return PlaybackWait(message: progress.title, detail: progress.detail)
     }
 
     private func setFullScreen(landscape: Bool) {
@@ -1611,7 +1623,7 @@ struct VideoDetailView: View {
         let first = detail.flatMap { detail in detail.episodes.first { $0.flag == activeFlag } ?? detail.episodes.first }
         // The list's poster when there was one, so the picture doesn't change once the details arrive.
         let poster = video.poster != nil ? video : detail ?? video
-        return WatchCoverBackdrop(poster: poster.poster, headers: poster.posterHeaders, loading: starting)
+        return WatchCoverBackdrop(poster: poster.poster, headers: poster.posterHeaders, loading: starting) { coverStatus($0) }
             .contentShape(Rectangle())
             .onTapGesture { if starting { withAnimation(.smooth(duration: 0.25)) { coverBack.toggle() } } }
             .task(id: coverBack) {

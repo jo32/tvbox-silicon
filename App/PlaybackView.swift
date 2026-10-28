@@ -148,6 +148,14 @@ import TVCore
         var httpStatus: Int?
     }
     private(set) var transfer = Transfer()
+    /// What the player did for this episode so far, newest last: the wait's small print.
+    private(set) var steps: [String] = []
+    /// Adds a step to the wait's small print; once the picture shows there is no wait to tell about.
+    private func note(_ step: String) {
+        guard loading || !showsPicture, steps.last != step else { return }
+        steps.append(step)
+        if steps.count > 4 { steps.removeFirst() }
+    }
     private var sampler: Task<Void, Never>?
     private var endObserver: NSObjectProtocol?
     private var timeObservation: NSKeyValueObservation?
@@ -351,6 +359,7 @@ import TVCore
             var liveQualities: [StreamQuality] = [], liveQuality: Int?
             if let room = BilibiliLive.room(channel.url) { self.listen(room: room, generation: activeGeneration) }
             if LiveCatalog.isRoom(channel.url) {
+                self.note(L10n.text("Finding the live stream"))
                 do { (channel, liveQualities, liveQuality) = try await LiveCatalog.resolve(channel) }
                 catch {
                     guard self.generation == activeGeneration, !Task.isCancelled else { return }
@@ -398,6 +407,9 @@ import TVCore
             try AVAudioSession.sharedInstance().setActive(true)
         } catch { Diagnostics.shared.failure("player", "audio session", error); self.error = error.localizedDescription }
         #endif
+        if !url.isFileURL {
+            note(L10n.text("Connecting to %@", Self.server(CloudStreams.transfer(for: url)?.host ?? Remux.transfer(for: url)?.host ?? url.host())))
+        }
         let item = makeItem(channel, url: url)
         watch(item, channel: channel, url: url, generation: activeGeneration)
         // A repackaged file is served on this device's loopback, which an AirPlay receiver can't reach.
@@ -578,6 +590,8 @@ import TVCore
             if (400..<600).contains(error.errorStatusCode) { next.httpStatus = error.errorStatusCode }
             next.failure = error.errorComment ?? "\(error.errorDomain) \(error.errorStatusCode)"
         }
+        if transfer.received == 0, next.received > 0 { note(L10n.text("Receiving video from %@", Self.server(next.host))) }
+        if let failure = next.failure, failure != transfer.failure { note(L10n.text("Trouble with %@ (%@), trying again", Self.server(next.host), failure)) }
         transfer = next
         #if DEBUG
         if QALaunch.page?.hasPrefix("play-source:") == true || QALaunch.page == "resume-last" || UserDefaults.standard.string(forKey: "qaPlay") != nil
@@ -646,7 +660,7 @@ import TVCore
         chat?.stop(); chat = nil
         preparation?.cancel(); preparation = nil
         sampler?.cancel(); sampler = nil
-        transfer = Transfer()
+        transfer = Transfer(); steps = []
         #if os(macOS)
         if let proxy { Task { await proxy.stop() } }; proxy = nil
         #endif
@@ -691,6 +705,8 @@ import TVCore
         guard let requested = pendingResume, !restoringPosition, item.status == .readyToPlay,
               let target = PlaybackHistoryEntry.resumeTarget(requested, duration: item.duration.seconds) else { return }
         restoringPosition = true
+        let pattern: Duration.TimeFormatStyle.Pattern = target >= 3600 ? .hourMinuteSecond : .minuteSecond
+        note(L10n.text("Jumping to %@", Duration.seconds(Int(target)).formatted(.time(pattern: pattern))))
         let activeGeneration = generation
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
             Task { @MainActor [weak self] in
@@ -733,6 +749,7 @@ extension PlaybackSession {
         var prepared = Prepared(url: address)
         // A file from Cloud Files streams from its drive.
         if CloudFiles.isFile(address) {
+            note(L10n.text("Getting the file from the drive"))
             do { address = try await CloudFiles.prepare(address) }
             catch {
                 if !Task.isCancelled { Diagnostics.shared.failure("player", "cloud file \(channel.historyContext?.episodeFlag ?? "-")", error) }
@@ -762,6 +779,7 @@ extension PlaybackSession {
         // MKV, AVI, FLV, WMV and RMVB from a drive play repackaged as HLS; AVPlayer opens none of them.
         if address.scheme == CloudStreams.scheme, await CloudStreams.needsRemux(address) {
             try Task.checkCancellation()
+            note(L10n.text("Repackaging the video for this device"))
             if let source = await CloudStreams.remuxSource(for: address), let url = await Self.remux(source, channel: channel) {
                 prepared.url = url
                 return prepared
@@ -772,6 +790,7 @@ extension PlaybackSession {
         }
         // A downloaded episode plays from disk: its file, or its HLS through a loopback server.
         if address.scheme == DownloadLibrary.scheme {
+            note(L10n.text("Opening the saved download"))
             do { address = try await DownloadLibrary.shared.playbackAddress(for: address) }
             catch {
                 if !Task.isCancelled { Diagnostics.shared.failure("player", "saved download", error) }
@@ -782,6 +801,7 @@ extension PlaybackSession {
         // A link or saved file whose name says MKV and the like is repackaged too; when that fails AVPlayer
         // tries it as it is.
         if Remux.handles(name: address.lastPathComponent), ["http", "https", "file"].contains(address.scheme) {
+            note(L10n.text("Repackaging the video for this device"))
             let source: RemuxSource?
             if address.isFileURL { source = try? Remux.fileSource(address) }
             else {
@@ -928,7 +948,7 @@ extension PlaybackSession {
         player.actionAtItemEnd = .pause
         generation = UUID()
         let activeGeneration = generation
-        transfer = Transfer()
+        transfer = Transfer(); steps = []
         catalogDanmaku.clear(); sourceDanmaku = []
         error = nil; switchNotice = nil; quality = nil
         begin(channel)
@@ -955,6 +975,7 @@ extension PlaybackSession {
         // AVPlayer counts the first segment only once it finishes, so zero bytes means "not yet", not "stalled".
         let speed = transfer.received > 0 ? transfer.bytesPerSecond.map(Self.rate) : nil
         var progress = LoadingProgress(title: L10n.text(loading ? "Connecting…" : "Buffering…"))
+        if loading || !showsPicture { progress.steps = steps }
         if let switchNotice {
             progress.reason = switchNotice
             return progress
@@ -978,6 +999,11 @@ extension PlaybackSession {
             progress.reason = L10n.text("The player is filling its buffer before playback continues.")
         }
         return progress
+    }
+    /// A server's name for the wait's small print; this device's own proxies stand for the source's server.
+    static func server(_ host: String?) -> String {
+        guard let host, !host.isEmpty, !["127.0.0.1", "localhost"].contains(host) else { return L10n.text("the video server") }
+        return host
     }
     private static func rate(_ bytesPerSecond: Double) -> String {
         let formatter = ByteCountFormatter()
@@ -1038,9 +1064,29 @@ extension PlaybackSession {
 }
 
 extension PlaybackSession {
-    /// The waiting screen's words: the facts `loadingProgress` reports, said calmly. Speeds and server
-    /// names stay out; a second line suggests another line only once the wait has run long.
+    /// The waiting screen's words: the facts `loadingProgress` reports, said calmly. Past
+    /// `PlaybackWait.detailsAfter` the small print joins them: how the download goes, and what the player did to get here.
     func wait(elapsed: TimeInterval, resume: Double?, linesHint: Bool) -> PlaybackWait {
+        var wait = message(elapsed: elapsed, resume: resume, linesHint: linesHint)
+        if elapsed >= PlaybackWait.detailsAfter {
+            wait.detail = downloadLine
+            if loading || !showsPicture { wait.steps = steps }
+        }
+        return wait
+    }
+
+    /// How the download goes: its speed (against what the video needs, once known) and how much has arrived;
+    /// before the first bytes, the server it waits on.
+    private var downloadLine: String? {
+        guard transfer.received > 0 else { return transfer.host.map { L10n.text("Waiting for %@", Self.server($0)) } }
+        let received = L10n.text("%@ received", ByteCountFormatter.string(fromByteCount: transfer.received, countStyle: .file))
+        guard let bytes = transfer.bytesPerSecond else { return received }
+        let speed = transfer.required.map { L10n.text("%@ · needs %@", Self.rate(bytes), Self.rate($0)) } ?? Self.rate(bytes)
+        return speed + " · " + received
+    }
+
+    /// The one calm line, and a second one suggesting another line only once the wait has run long.
+    private func message(elapsed: TimeInterval, resume: Double?, linesHint: Bool) -> PlaybackWait {
         if let switchNotice { return PlaybackWait(message: Self.preparing(resume), caption: switchNotice) }
         // AVFoundation retries a failed request by itself; give it a moment before saying so.
         if elapsed >= 4, transfer.httpStatus != nil || transfer.failure != nil {
