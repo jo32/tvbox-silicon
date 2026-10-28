@@ -126,6 +126,8 @@ import TVCore
     private(set) var muted = false
     private(set) var quality: Int?
     private var playing: Channel?
+    /// The episode plays from a download on this device, which no server or connection holds up.
+    private var savedDownload = false
     private var automatic: URL?
     /// The live room playing (at the quality chosen), and whether it was already given a fresh address.
     private var liveRoom: Channel?
@@ -352,6 +354,7 @@ import TVCore
         Self.current = self
         // The queue has already moved on to this episode by itself.
         if let advanced, advanced == channel { self.advanced = nil; return }
+        savedDownload = channel.url.scheme == DownloadLibrary.scheme
         stop(); error = nil; errorSymbol = "play.slash.fill"; loading = true; showsPicture = false; sourceDanmaku = []; qualities = []; quality = nil; switchNotice = nil
         begin(channel)
         isLive = LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live")
@@ -1103,6 +1106,8 @@ extension PlaybackSession {
     /// The one calm line, and a second one suggesting another line only once the wait has run long.
     private func message(elapsed: TimeInterval, resume: Double?, linesHint: Bool) -> PlaybackWait {
         if let switchNotice { return PlaybackWait(message: Self.preparing(resume), caption: switchNotice) }
+        // A saved download waits only on this device (making its MP4, say): no server, line or connection to blame.
+        if savedDownload { return PlaybackWait(message: loading ? Self.preparing(resume) : L10n.text("Buffering…")) }
         // AVFoundation retries a failed request by itself; give it a moment before saying so.
         if elapsed >= 4, transfer.httpStatus != nil || transfer.failure != nil {
             return PlaybackWait(message: L10n.text("This line isn't answering right now."), suggestsLines: linesHint)
