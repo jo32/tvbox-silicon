@@ -596,13 +596,14 @@ private func uniqueVideos(_ videos: [Video]) -> [Video] {
 
 struct RecommendationsView: View {
     @Environment(Store.self) private var store
+    @Environment(\.openRoute) private var openRoute
     let config: Subscription
     var fixedSite: Site? = nil
     @AppStorage("recommendationSource") private var sourceKey = ""
     @State private var revision = 0
     @State private var forceRefresh = false
     @State private var choosingSource = false
-    /// A source's page opened from its long-press menu.
+    /// A source's page opened from its long-press menu, outside a stack that takes `openRoute`.
     @State private var openedSource: Route?
     #if os(tvOS)
     @FocusState private var focusedSource: String?
@@ -812,7 +813,10 @@ struct RecommendationsView: View {
     @ViewBuilder private func sourceActions(_ candidate: Site, leave: @escaping (@escaping () -> Void) -> Void = { $0() }) -> some View {
         HideSourceButton(site: candidate, origin: config.origin)
         Button {
-            leave { openedSource = Route { AnyView(SiteView(site: candidate, origin: config.origin, jarURL: config.spiderURL)) } }
+            leave {
+                let route = Route { AnyView(SiteView(site: candidate, origin: config.origin, jarURL: config.spiderURL)) }
+                if let openRoute { openRoute(route) } else { openedSource = route }
+            }
         } label: { Label(L10n.text("Search This Source"), systemImage: "magnifyingglass") }
             .accessibilityIdentifier("source.search." + candidate.key)
         Button { leave { store.section = .sites } } label: { Label(L10n.text("Manage Sources"), systemImage: AppSection.sites.icon) }

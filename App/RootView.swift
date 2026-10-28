@@ -98,6 +98,7 @@ struct RootView: View {
                 // The stack stays put across sections. Rebuilding it resets the sidebar column, so a
                 // section change collapsed the sidebar while the new page was still a placeholder.
                 NavigationStack(path: $detailPath) { content(store.section).musicBar().routeDestinations() }
+                    .environment(\.openRoute) { detailPath.append($0) }
             }
             .onChange(of: store.section) { detailPath = NavigationPath() }
             .overlay {
@@ -236,7 +237,8 @@ struct RootView: View {
                     // Any section can be moved into More, so any can be pushed here.
                     .navigationDestination(for: AppSection.self) { content($0).tvDefaultControls() }
             }
-        } else { NavigationStack { content(item).tvDefaultControls().routeDestinations() } }
+            .environment(\.openRoute) { morePath.append($0) }
+        } else { RouteStack { content(item).tvDefaultControls() } }
     }
 
     #if os(tvOS)
@@ -477,6 +479,23 @@ struct RouteLink<Label: View>: View {
         self.label = label()
     }
     var body: some View { NavigationLink(value: route) { label } }
+}
+
+extension EnvironmentValues {
+    /// Pushes a page onto the enclosing stack's path. A page opened with `navigationDestination(item:)` is not on the
+    /// path, so a `RouteLink` on it pushed underneath it: the new page only showed after Back.
+    @Entry var openRoute: ((Route) -> Void)? = nil
+}
+
+/// A tab's stack, with its own path so pages can be pushed from code (`openRoute`).
+private struct RouteStack<Root: View>: View {
+    @State private var path = NavigationPath()
+    private let root: Root
+    init(@ViewBuilder root: () -> Root) { self.root = root() }
+    var body: some View {
+        NavigationStack(path: $path) { root.routeDestinations() }
+            .environment(\.openRoute) { path.append($0) }
+    }
 }
 
 extension View {
