@@ -608,6 +608,8 @@
 "Pinned Group" = "置頂";
 "Hide Source" = "隱藏來源";
 "Unhide Source" = "取消隱藏";
+"Search This Source" = "在此來源中搜尋";
+"Manage Sources" = "管理隨選來源";
 "Hidden Sources" = "已隱藏的來源";
 "Hidden" = "已隱藏";
 "Pinned Sources" = "置頂點播來源";

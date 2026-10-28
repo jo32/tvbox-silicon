@@ -602,8 +602,12 @@ struct RecommendationsView: View {
     @State private var revision = 0
     @State private var forceRefresh = false
     @State private var choosingSource = false
+    /// A source's page opened from its long-press menu.
+    @State private var openedSource: Route?
     #if os(tvOS)
     @FocusState private var focusedSource: String?
+    /// The long-press action chosen in the source picker, run once its sheet has closed.
+    @State private var afterPicker: (() -> Void)?
     #endif
     /// The source category shown instead of its recommendations; nil shows the recommendations.
     @State private var category: String?
@@ -633,7 +637,8 @@ struct RecommendationsView: View {
                 }
                 .controlButton()
                 .accessibilityLabel(L10n.text("Recommendation Source"))
-                .sheet(isPresented: $choosingSource) {
+                .contextMenu { sourceActions(site) }
+                .sheet(isPresented: $choosingSource, onDismiss: { afterPicker?(); afterPicker = nil }) {
                     NavigationStack {
                         ScrollViewReader { proxy in
                             ScrollView {
@@ -656,6 +661,7 @@ struct RecommendationsView: View {
                                             .frame(maxWidth: .infinity)
                                         }
                                         .glassRow()
+                                        .contextMenu { sourceActions(candidate) { afterPicker = $0; choosingSource = false } }
                                         .focused($focusedSource, equals: candidate.key)
                                         .id(candidate.key)
                                     }
@@ -716,6 +722,8 @@ struct RecommendationsView: View {
                         // an onChange that also clears would run after a cached load and wipe that category.
                         if key != sourceKey { category = nil; categoryPage = 1 }
                         sourceKey = key; revision = 0; forceRefresh = false
+                    } actions: { key in
+                        AnyView(sites.first(where: { $0.key == key }).map { sourceActions($0) })
                     }
                     recommendationControls.fixedSize()
                 }
@@ -788,6 +796,25 @@ struct RecommendationsView: View {
                                client: CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL))
         }
         .onDisappear { browser.cancel() }
+        .navigationDestination(item: $openedSource) { route in
+            #if os(macOS)
+            route.build().musicBar()
+            #else
+            route.build()
+            #endif
+        }
+    }
+
+    /// A long press on a source (a right click on Mac): hide it, open its page to search only that source, as the
+    /// Sources page does, or go to the Sources page to manage them all. `leave` runs the two that leave Watch Now;
+    /// the tvOS picker passes one that closes its sheet first.
+    @ViewBuilder private func sourceActions(_ candidate: Site, leave: @escaping (@escaping () -> Void) -> Void = { $0() }) -> some View {
+        HideSourceButton(site: candidate, origin: config.origin)
+        Button {
+            leave { openedSource = Route { AnyView(SiteView(site: candidate, origin: config.origin, jarURL: config.spiderURL)) } }
+        } label: { Label(L10n.text("Search This Source"), systemImage: "magnifyingglass") }
+            .accessibilityIdentifier("source.search." + candidate.key)
+        Button { leave { store.section = .sites } } label: { Label(L10n.text("Manage Sources"), systemImage: AppSection.sites.icon) }
     }
 
     private func categoryChips(_ loadedSite: Site) -> some View {
@@ -859,13 +886,18 @@ struct SourceStrip: View {
     let items: [Item]
     let selection: String
     let select: (String) -> Void
+    /// A chip's long-press (right-click) menu, by item id.
+    var actions: ((String) -> AnyView)? = nil
 
     var body: some View {
         ScrollStrip(scrollTo: selection, leftLabel: "Scroll sources left", rightLabel: "Scroll sources right") {
             HStack(spacing: 6) {
                 ForEach(items) { item in
-                    SourceChip(name: item.name, count: item.count, dot: item.dot, selected: item.id == selection) { select(item.id) }
-                        .id(item.id)
+                    let chip = SourceChip(name: item.name, count: item.count, dot: item.dot, selected: item.id == selection) { select(item.id) }
+                    Group {
+                        if let actions { chip.contextMenu { actions(item.id) } } else { chip }
+                    }
+                    .id(item.id)
                 }
             }
             .padding(.vertical, 4)
