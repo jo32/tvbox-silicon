@@ -372,9 +372,17 @@ async function startCatPaw() {
     }
 }
 // The app's cloud-drive sign-ins, for bundles that keep their own and sign in through a config center the app can't
-// show. Bundles of the wexfnw family take them at PUT /website/api/credential/<drive>/cookie. Each sign-in passes on
-// once per change in the app, so the bundle's own refreshes of it stay. Keep in step with NodeHost/main.mjs.
+// show. Bundles of the wexfnw family take a drive's cookie at PUT /website/api/credential/<drive>/cookie, and the
+// Xunlei sign-in (its device and tokens) as their whole Xunlei config. Each sign-in passes on once per change in the
+// app, so the bundle's own refreshes of it stay. Keep in step with NodeHost/main.mjs.
 const sharedDrives = { quark: 'quarkCookie', uc: 'ucCookie', baidu: 'baiduCookie' };
+function sharedSignIns(accounts) {
+    const shares = Object.entries(sharedDrives)
+        .map(([drive, key]) => ({ drive, route: `/website/api/credential/${drive}/cookie`, value: String(accounts[key] || '').trim() }));
+    // A bundle from before Xunlei sign-ins lacks this address; the other drives still pass.
+    shares.push({ drive: 'thunder', route: '/website/api/thunder/config', value: accounts.xunlei ? JSON.stringify(accounts.xunlei) : '', optional: true });
+    return shares;
+}
 let catTakesAccounts = true, catAccountsStamp;
 async function shareCatPawAccounts(port) {
     if (!input.cloudAccounts || !catTakesAccounts) return;
@@ -388,17 +396,16 @@ async function shareCatPawAccounts(port) {
     try { given = JSON.parse(fs.readFileSync(givenFile, 'utf8')); } catch { }
     const digest = text => crypto.createHash('sha256').update(text).digest('hex');
     let changed = false;
-    for (const [drive, key] of Object.entries(sharedDrives)) {
-        const cookie = String(accounts[key] || '').trim();
-        if (!cookie || given[drive] === digest(cookie)) continue;
-        const response = await fetch(`http://127.0.0.1:${port}/website/api/credential/${drive}/cookie`, {
-            method: 'PUT', headers: { 'x-yingxia-host': '1', 'content-type': 'application/json' }, body: JSON.stringify({ value: cookie }),
+    for (const { drive, route, value, optional } of sharedSignIns(accounts)) {
+        if (!value || given[drive] === digest(value)) continue;
+        const response = await fetch(`http://127.0.0.1:${port}${route}`, {
+            method: 'PUT', headers: { 'x-yingxia-host': '1', 'content-type': 'application/json' }, body: JSON.stringify({ value }),
         });
         // The config center answers {code: 0}; anything else is a bundle without one.
         let saved = false;
         try { saved = response.ok && JSON.parse(await response.text()).code === 0; } catch { }
-        if (!saved) { catTakesAccounts = false; break; }
-        given[drive] = digest(cookie); changed = true; log('CATPAW_ACCOUNT', drive);
+        if (!saved) { if (optional) continue; catTakesAccounts = false; break; }
+        given[drive] = digest(value); changed = true; log('CATPAW_ACCOUNT', drive);
     }
     if (changed) writeJSON(givenFile, given);
 }

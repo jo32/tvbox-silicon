@@ -9,6 +9,8 @@ struct CloudDriveView: View {
     @State private var login: CloudProvider?
     /// Baidu and Aliyun sign in with a code to scan, as on Apple TV.
     @State private var scan: CloudProvider?
+    /// Xunlei signs in with a code texted to the phone.
+    @State private var texting = false
     @State private var notice: String?
     @State private var error: String?
     @State private var saving = false
@@ -29,7 +31,7 @@ struct CloudDriveView: View {
                             }.settingsButton()
                         } else {
                             Button(L10n.text("Sign In")) {
-                                if provider.signsInOnWeb { login = provider } else { scan = provider }
+                                if provider == .xunlei { texting = true } else if provider.signsInOnWeb { login = provider } else { scan = provider }
                             }.settingsButton(prominent: true)
                         }
                     }
@@ -67,6 +69,13 @@ struct CloudDriveView: View {
             CloudQRLoginView(drive: provider.qrDrive) {
                 accounts = (try? CloudDriveAccounts.load()) ?? accounts
                 save()
+            }
+        }
+        .sheet(isPresented: $texting) {
+            XunleiSignInView {
+                accounts = (try? CloudDriveAccounts.load()) ?? accounts
+                notice = L10n.text("Accounts saved. Retry the video source.")
+                error = nil
             }
         }
     }
@@ -271,13 +280,17 @@ struct CloudDriveView: View {
         .task { reload() }
         #if os(iOS)
         .sheet(item: $login) { provider in
-            WebSignInView(service: provider.webSignIn, signedIn: reload) {
-                CloudQRLoginView(drive: provider.qrDrive) { reload() }
+            if provider == .xunlei { XunleiSignInView(signedIn: reload) }
+            else {
+                WebSignInView(service: provider.webSignIn, signedIn: reload) {
+                    CloudQRLoginView(drive: provider.qrDrive) { reload() }
+                }
             }
         }
         #else
         .fullScreenCover(item: $login) { provider in
-            CloudQRLoginView(drive: provider.qrDrive) { reload() }
+            if provider == .xunlei { XunleiSignInView(signedIn: reload) }
+            else { CloudQRLoginView(drive: provider.qrDrive) { reload() } }
         }
         #endif
     }
@@ -304,7 +317,7 @@ struct CloudDriveView: View {
 #endif
 
 enum CloudProvider: String, Identifiable, CaseIterable {
-    case quark, uc, baidu, aliyun
+    case quark, uc, baidu, aliyun, xunlei
     var id: String { rawValue }
     var name: String {
         switch self {
@@ -312,6 +325,7 @@ enum CloudProvider: String, Identifiable, CaseIterable {
         case .uc: "UC"
         case .baidu: L10n.text("Baidu Netdisk")
         case .aliyun: L10n.text("Aliyun Drive")
+        case .xunlei: L10n.text("Xunlei")
         }
     }
     var symbol: String {
@@ -320,6 +334,7 @@ enum CloudProvider: String, Identifiable, CaseIterable {
         case .uc: "externaldrive.fill"
         case .baidu: "cloud.fill"
         case .aliyun: "shippingbox.fill"
+        case .xunlei: "bolt.fill"
         }
     }
     var tint: Color {
@@ -328,13 +343,14 @@ enum CloudProvider: String, Identifiable, CaseIterable {
         case .uc: .orange
         case .baidu: .indigo
         case .aliyun: .purple
+        case .xunlei: .cyan
         }
     }
-    /// Baidu and Aliyun only serve plugins, so an App Store build lists them once a subscription is added;
+    /// Baidu, Aliyun and Xunlei only serve plugins, so an App Store build lists them once a subscription is added;
     /// Quark and UC are browsed in Cloud Files too.
     @MainActor static func shown(_ store: Store) -> [CloudProvider] { store.extrasUnlocked ? allCases : [.quark, .uc] }
 
-    /// Quark and UC sign in on their web page on a Mac; every other sign-in is a code to scan.
+    /// Quark and UC sign in on their web page on a Mac; Xunlei with a texted code; every other sign-in is a code to scan.
     var signsInOnWeb: Bool { self == .quark || self == .uc }
     var domain: String { self == .quark ? "quark.cn" : "uc.cn" }
     var qrDrive: CloudDriveQRLogin.Drive { CloudDriveQRLogin.Drive(rawValue: rawValue)! }
@@ -345,7 +361,7 @@ enum CloudProvider: String, Identifiable, CaseIterable {
         switch self {
         case .baidu: ["mybd_cookie"]
         case .aliyun: ["ali_user", "ali_oauth", "ali_info"]
-        case .quark, .uc: []
+        case .quark, .uc, .xunlei: []
         }
     }
     func isSignedIn(_ accounts: CloudDriveAccounts) -> Bool {
@@ -355,6 +371,7 @@ enum CloudProvider: String, Identifiable, CaseIterable {
         case .uc: value = accounts.ucCookie
         case .baidu: value = accounts.baiduCookie ?? ""
         case .aliyun: value = accounts.token
+        case .xunlei: value = accounts.xunlei?.refreshToken ?? ""
         }
         return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -366,6 +383,8 @@ enum CloudProvider: String, Identifiable, CaseIterable {
         case .uc: accounts.ucCookie = cookie
         case .baidu: accounts.baiduCookie = cookie.isEmpty ? nil : cookie
         case .aliyun: accounts.token = cookie
+        // Xunlei's sign-in is made only by XunleiSignInView; this only clears it.
+        case .xunlei: if cookie.isEmpty { accounts.xunlei = nil }
         }
     }
     func clear(_ accounts: inout CloudDriveAccounts) {

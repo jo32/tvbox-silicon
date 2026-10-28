@@ -11,6 +11,8 @@ public struct CloudDriveAccounts: Codable, Sendable {
     public var token = ""
     /// Baidu Netdisk sign-in cookies, "BDUSS=…; PTOKEN=…; STOKEN=…"; older saves omit it.
     public var baiduCookie: String?
+    /// Xunlei's sign-in (`XunleiSignIn`), which CatPawOpen bundles take; older saves omit it.
+    public var xunlei: XunleiAccount?
     public init() {}
 
     /// Keeps a sign-in a plugin made through its own QR code (`baiduCookie`, `token`) as the app's
