@@ -1,6 +1,128 @@
 {
   "releases": [
     {
+      "version": "1.8.2",
+      "build": 40,
+      "date": "2026-10-28",
+      "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.2/Yingxia-1.8.2-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.2/Yingxia-1.8.2-macos-x86_64.dmg",
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "shippingbox",
+          "title": {
+            "en": "CatPawOpen (猫源) sources on Mac, iPhone and iPad",
+            "zh-Hans": "猫源现已支持 Mac、iPhone 和 iPad",
+            "zh-Hant": "貓源現已支援 Mac、iPhone 和 iPad",
+            "ja": "CatPawOpen（猫源）が Mac・iPhone・iPad に対応"
+          },
+          "detail": {
+            "en": "Add a CatPawOpen (猫源) bundle's address like any subscription, and its sources show up on the Mac, iPhone and iPad. They use the Quark, UC, Baidu and Xunlei accounts you signed in to in the app, and you can now sign in to Xunlei with a text-message code in Settings › Cloud Drive Accounts. Apple TV can't run these bundles yet.",
+            "zh-Hans": "像添加订阅一样添加猫源（CatPawOpen）包的地址，其中的点播源就会出现在 Mac、iPhone 和 iPad 上。它们会使用你在 App 中登录的夸克、UC、百度和迅雷账号；迅雷现在也可以在“设置 › 网盘账号”中用短信验证码登录。Apple TV 暂时还不能运行猫源。",
+            "zh-Hant": "像新增訂閱一樣新增貓源（CatPawOpen）套件的網址，其中的隨選來源就會出現在 Mac、iPhone 和 iPad 上。它們會使用你在 App 中登入的夸克、UC、百度和迅雷帳號；迅雷現在也可以在「設定 › 網盤帳號」中用簡訊驗證碼登入。Apple TV 暫時還無法執行貓源。",
+            "ja": "CatPawOpen（猫源）バンドルのアドレスをサブスクリプションと同じように追加すると、そのソースが Mac、iPhone、iPad に表示されます。アプリでサインインした Quark、UC、Baidu、迅雷（Xunlei）のアカウントを使います。迅雷は「設定 › クラウドドライブのアカウント」から SMS の認証コードでサインインできるようになりました。Apple TV ではまだ CatPawOpen を実行できません。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "magnifyingglass",
+          "title": {
+            "en": "Search just one source",
+            "zh-Hans": "只搜索一个源",
+            "zh-Hant": "只搜尋一個來源",
+            "ja": "1 つのソースだけを検索"
+          },
+          "detail": {
+            "en": "On Watch Now, press and hold a source (right-click on Mac) to hide it, search only that source, or manage your sources. On Apple TV the same menu is on the Recommendation Source button. Searching one source is much faster than searching them all.",
+            "zh-Hans": "在“现在观看”中按住某个源（Mac 上为右键点按），即可隐藏它、在此源中搜索或管理点播源。在 Apple TV 上，同样的菜单在“推荐来源”按钮上。只搜索一个源比搜索全部源快得多。",
+            "zh-Hant": "在「立即觀看」中按住某個來源（Mac 上為按右鍵），即可隱藏它、在此來源中搜尋或管理隨選來源。在 Apple TV 上，同樣的選單在「推薦來源」按鈕上。只搜尋一個來源比搜尋全部來源快得多。",
+            "ja": "「今すぐ観る」でソースを長押し（Mac では右クリック）すると、「ソースを隠す」「このソースで検索」「配信ソースを管理」を選べます。Apple TV では「おすすめのソース」ボタンに同じメニューがあります。1 つのソースだけなら、すべてのソースを検索するよりずっと速く結果が出ます。"
+          }
+        },
+        {
+          "symbol": "bubble.left.and.text.bubble.right",
+          "title": {
+            "en": "Replies to your feedback",
+            "zh-Hans": "查看反馈的回复",
+            "zh-Hant": "查看意見的回覆",
+            "ja": "フィードバックへの返信"
+          },
+          "detail": {
+            "en": "Settings › Send Feedback › Your Feedback lists the feedback you sent from this device, whether it was received, answered or resolved, and the developer's replies. A dot marks replies you haven't read yet.",
+            "zh-Hans": "“设置 › 反馈问题 › 我的反馈”会列出你在这台设备上提交的反馈，显示已收到、已回复或已解决，并显示开发者的回复。有未读回复时会显示一个圆点。",
+            "zh-Hant": "「設定 › 意見回饋 › 我的意見」會列出你在這台裝置上送出的意見，顯示已收到、已回覆或已解決，並顯示開發者的回覆。有未讀回覆時會顯示一個圓點。",
+            "ja": "「設定 › フィードバックを送信 › 送信したフィードバック」に、このデバイスから送ったフィードバックが一覧表示され、受付済み・返信あり・解決済みの状態と開発者からの返信を確認できます。未読の返信には丸印が付きます。"
+          }
+        },
+        {
+          "symbol": "gauge.with.dots.needle.67percent",
+          "title": {
+            "en": "See how loading is going",
+            "zh-Hans": "加载进度看得见",
+            "zh-Hant": "載入進度看得見",
+            "ja": "読み込みの進み具合を表示"
+          },
+          "detail": {
+            "en": "While a video loads, a spinner shows at once. After a few seconds, the download speed, the speed the video needs and the player's latest steps appear under it, so a long wait is easier to follow.",
+            "zh-Hans": "视频加载时会立即显示转圈图标；几秒后，下方会显示下载速度、视频所需的速度以及播放器的最新步骤，等待时心里更有数。",
+            "zh-Hant": "影片載入時會立即顯示轉圈圖示；幾秒後，下方會顯示下載速度、影片所需的速度以及播放器的最新步驟，等待時心裡更有數。",
+            "ja": "動画の読み込み中はすぐにスピナーが表示され、数秒後にはその下にダウンロード速度、再生に必要な速度、プレーヤーの直近の処理が表示されるので、待ち時間の様子がわかります。"
+          }
+        },
+        {
+          "symbol": "arrow.up.arrow.down",
+          "title": {
+            "en": "Reverse the episode list",
+            "zh-Hans": "选集可倒序",
+            "zh-Hant": "選集可倒序",
+            "ja": "エピソードを逆順に"
+          },
+          "detail": {
+            "en": "A button by the episode count puts the last episode first, and your choice is kept for every video. On Apple TV it's an arrow button next to the episodes.",
+            "zh-Hans": "选集旁新增倒序按钮，可让最后一集排在最前，选择会应用到所有影片。在 Apple TV 上，它是选集旁的箭头按钮。",
+            "zh-Hant": "選集旁新增倒序按鈕，可讓最後一集排在最前，選擇會套用到所有影片。在 Apple TV 上，它是選集旁的箭頭按鈕。",
+            "ja": "エピソード数の横のボタンで、最後のエピソードを先頭に並べ替えられます。設定はすべての作品で保持されます。Apple TV ではエピソード一覧の横にある矢印ボタンです。"
+          }
+        },
+        {
+          "symbol": "sparkles",
+          "title": {
+            "en": "A fresher look",
+            "zh-Hans": "焕然一新",
+            "zh-Hant": "煥然一新",
+            "ja": "デザインを一新"
+          },
+          "detail": {
+            "en": "Settings on iPhone and iPad are redesigned, with Playback and Privacy on pages of their own. On Apple TV every button is now Liquid Glass, and a video's page has a banner as on iPad. On the Mac, a video's page glows with its poster's colors.",
+            "zh-Hans": "iPhone 和 iPad 的设置页面全新设计，播放和隐私设置各有独立页面。在 Apple TV 上，所有按钮都采用 Liquid Glass，影片页面也和 iPad 一样有了横幅。在 Mac 上，影片页面的背景会随海报的颜色流动。",
+            "zh-Hant": "iPhone 和 iPad 的設定頁面全新設計，播放和隱私權設定各有獨立頁面。在 Apple TV 上，所有按鈕都採用 Liquid Glass，影片頁面也和 iPad 一樣有了橫幅。在 Mac 上，影片頁面的背景會隨海報的顏色流動。",
+            "ja": "iPhone と iPad の設定画面を新しくデザインし、再生とプライバシーの設定をそれぞれ専用のページにまとめました。Apple TV ではすべてのボタンが Liquid Glass になり、作品ページには iPad と同じバナーが付きました。Mac では作品ページの背景がポスターの色でゆっくり揺らめきます。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "A Python source that quits no longer closes the app on iPhone, iPad and Apple TV, and some Java sources that failed to open work again. Plugin sources that set up cloud drives from a config center now use your cloud drive sign-ins. On iPhone, a watch page opened from search takes one Back to leave, and on Mac and iPad loading cards line up with the posters under them.",
+            "zh-Hans": "Python 源退出时不再导致 iPhone、iPad 和 Apple TV 上的 App 关闭；部分无法打开的 Java 源也恢复正常。通过配置中心设置网盘的插件源现在会使用你已登录的网盘账号。在 iPhone 上，从搜索打开的观看页只需返回一次即可离开；在 Mac 和 iPad 上，加载卡片与下方的海报对齐。",
+            "zh-Hant": "Python 來源結束時不再導致 iPhone、iPad 和 Apple TV 上的 App 關閉；部分無法開啟的 Java 來源也恢復正常。透過設定中心設定網盤的外掛來源現在會使用你已登入的網盤帳號。在 iPhone 上，從搜尋開啟的觀看頁只需返回一次即可離開；在 Mac 和 iPad 上，載入卡片與下方的海報對齊。",
+            "ja": "Python のソースが終了しても、iPhone・iPad・Apple TV でアプリが閉じなくなりました。開けなかった一部の Java ソースも再び使えます。設定センターからクラウドドライブを設定するプラグインソースが、サインイン済みのクラウドドライブのアカウントを使うようになりました。iPhone では検索から開いた視聴ページを 1 回の「戻る」で閉じられ、Mac と iPad では読み込みカードが下のポスターと揃うようになりました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.1",
       "build": 39,
       "date": "2026-10-28",
@@ -2635,11 +2757,11 @@
   ],
   "testflight": {
     "ios": {
-      "build": 38,
+      "build": 39,
       "link": "https://testflight.apple.com/join/dU6UNbzp"
     },
     "tvos": {
-      "build": 38,
+      "build": 39,
       "link": "https://testflight.apple.com/join/SSgWEwSr"
     }
   }
