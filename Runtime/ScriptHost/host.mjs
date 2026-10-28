@@ -371,8 +371,40 @@ async function startCatPaw() {
         await new Promise(resolve => setTimeout(resolve, 50));
     }
 }
+// The app's cloud-drive sign-ins, for bundles that keep their own and sign in through a config center the app can't
+// show. Bundles of the wexfnw family take them at PUT /website/api/credential/<drive>/cookie. Each sign-in passes on
+// once per change in the app, so the bundle's own refreshes of it stay. Keep in step with NodeHost/main.mjs.
+const sharedDrives = { quark: 'quarkCookie', uc: 'ucCookie', baidu: 'baiduCookie' };
+let catTakesAccounts = true, catAccountsStamp;
+async function shareCatPawAccounts(port) {
+    if (!input.cloudAccounts || !catTakesAccounts) return;
+    let stamp;
+    try { stamp = fs.statSync(input.cloudAccounts).mtimeMs; } catch { return; }
+    if (stamp === catAccountsStamp) return;
+    catAccountsStamp = stamp;
+    const accounts = JSON.parse(fs.readFileSync(input.cloudAccounts, 'utf8'));
+    const givenFile = path.join(profile, 'yingxia-accounts.json');
+    let given = {};
+    try { given = JSON.parse(fs.readFileSync(givenFile, 'utf8')); } catch { }
+    const digest = text => crypto.createHash('sha256').update(text).digest('hex');
+    let changed = false;
+    for (const [drive, key] of Object.entries(sharedDrives)) {
+        const cookie = String(accounts[key] || '').trim();
+        if (!cookie || given[drive] === digest(cookie)) continue;
+        const response = await fetch(`http://127.0.0.1:${port}/website/api/credential/${drive}/cookie`, {
+            method: 'PUT', headers: { 'x-yingxia-host': '1', 'content-type': 'application/json' }, body: JSON.stringify({ value: cookie }),
+        });
+        // The config center answers {code: 0}; anything else is a bundle without one.
+        let saved = false;
+        try { saved = response.ok && JSON.parse(await response.text()).code === 0; } catch { }
+        if (!saved) { catTakesAccounts = false; break; }
+        given[drive] = digest(cookie); changed = true; log('CATPAW_ACCOUNT', drive);
+    }
+    if (changed) writeJSON(givenFile, given);
+}
 async function callCatPaw(params) {
     const port = catServer.address().port;
+    await shareCatPawAccounts(port).catch(error => log('CATPAW_ACCOUNT', error?.stack || String(error)));
     const send = async (route, body) => {
         const headers = { 'x-yingxia-host': '1' };
         const init = body === undefined ? { headers } : { method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(body) };

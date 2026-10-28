@@ -1,5 +1,5 @@
 // CatPawOpen (猫源) bundles on iPhone and iPad. EmbeddedNodeHost starts this once in the app's nodejs-mobile
-// and calls it over loopback: POST /call {bundle, api, profile, proxy, params} with the token it writes beside
+// and calls it over loopback: POST /call {bundle, api, profile, cloudAccounts, proxy, params} with the token it writes beside
 // its port. It mirrors the CatPawOpen mode of Runtime/ScriptHost/host.mjs (the Mac's sandboxed host); keep them in step.
 import http from 'node:http';
 import https from 'node:https';
@@ -127,6 +127,35 @@ async function start({ bundle, api, profile }) {
     const port = server.address().port;
     return { server, port, ports: [port], started: new Set() };
 }
+// The app's cloud-drive sign-ins, for bundles that keep their own and sign in through a config center the app can't
+// show. Bundles of the wexfnw family take them at PUT /website/api/credential/<drive>/cookie. Each sign-in passes on
+// once per change in the app, so the bundle's own refreshes of it stay. Keep in step with host.mjs.
+const sharedDrives = { quark: 'quarkCookie', uc: 'ucCookie', baidu: 'baiduCookie' };
+async function shareAccounts(instance, accountsFile, profile) {
+    if (!accountsFile || instance.takesAccounts === false) return;
+    let stamp;
+    try { stamp = fs.statSync(accountsFile).mtimeMs; } catch { return; }
+    if (stamp === instance.accountsStamp) return;
+    instance.accountsStamp = stamp;
+    const accounts = JSON.parse(fs.readFileSync(accountsFile, 'utf8'));
+    const givenFile = `${profile}/yingxia-accounts.json`;
+    let given = {};
+    try { given = JSON.parse(fs.readFileSync(givenFile, 'utf8')); } catch { }
+    const digest = text => crypto.createHash('sha256').update(text).digest('hex');
+    let changed = false;
+    for (const [drive, key] of Object.entries(sharedDrives)) {
+        const cookie = String(accounts[key] || '').trim();
+        if (!cookie || given[drive] === digest(cookie)) continue;
+        const { status, text } = await request(`http://127.0.0.1:${instance.port}/website/api/credential/${drive}/cookie`,
+            { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ value: cookie }) });
+        // The config center answers {code: 0}; anything else is a bundle without one.
+        let saved = false;
+        try { saved = status >= 200 && status < 300 && JSON.parse(text).code === 0; } catch { }
+        if (!saved) { instance.takesAccounts = false; break; }
+        given[drive] = digest(cookie); changed = true; log('CATPAW_ACCOUNT', drive);
+    }
+    if (changed) fs.writeFileSync(givenFile, JSON.stringify(given));
+}
 async function call(instance, params) {
     const send = async (route, body) => {
         const init = body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) };
@@ -176,7 +205,9 @@ const control = http.createServer(async (req, res) => {
             bundles.set(input.bundle, instance);
             instance.catch(() => bundles.delete(input.bundle));
         }
-        reply(await call(await instance, input.params || {}));
+        instance = await instance;
+        await shareAccounts(instance, input.cloudAccounts, input.profile).catch(error => log('CATPAW_ACCOUNT', error?.stack || String(error)));
+        reply(await call(instance, input.params || {}));
     } catch (error) {
         log(error?.stack || String(error));
         reply({ error: String(error), errorCode: 'script_error' });
