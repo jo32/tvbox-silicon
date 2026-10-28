@@ -41,6 +41,8 @@ public actor EmbeddedNodeHost {
         let input: [String: JSONValue] = [
             "bundle": .string(bundle.path), "api": .string(bundleURL.absoluteString),
             "profile": .string(root.appendingPathComponent("Profiles/" + key).path),
+            // Saved Quark/UC/Baidu sign-ins, which bundles with a config center take as their own.
+            "cloudAccounts": .string(CloudDriveAccounts.fileURL.path),
             "proxy": Self.systemProxy(), "params": .object(params.mapValues(JSONValue.string)),
         ]
         let body = try JSONEncoder().encode(input)
