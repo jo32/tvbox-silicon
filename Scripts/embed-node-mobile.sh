@@ -26,7 +26,7 @@ KEY=$({
   find "$FRAMEWORK" -exec stat -f '%m %z %N' {} +
 } | md5 -q)
 COPY="$APP/Frameworks/NodeMobile.framework"
-if [ "$(cat "$STAMP" 2>/dev/null)" = "$KEY" ] && [ -f "$COPY/NodeMobile" ] && { [ -z "$SIGN" ] || [ -d "$COPY/_CodeSignature" ]; }; then
+if [ "$(cat "$STAMP" 2>/dev/null)" = "$KEY" ] && [ -f "$COPY/NodeMobile" ] && [ -f "$COPY/PrivacyInfo.xcprivacy" ] && { [ -z "$SIGN" ] || [ -d "$COPY/_CodeSignature" ]; }; then
   echo "Node.js runtime already embedded"
   exit 0
 fi
@@ -34,6 +34,9 @@ rm -f "$STAMP"
 mkdir -p "$APP/Frameworks"
 # The app opens the framework with dlopen and never compiles against it, so its headers stay out.
 rsync -a --delete --exclude Headers --exclude Modules "$FRAMEWORK/" "$COPY/"
+# Node links OpenSSL, a commonly used SDK: without a privacy manifest TestFlight review marks the build invalid
+# (ITMS-91061), as it did the Python frameworks.
+cp "$SRCROOT/Config/Python/PrivacyInfo.xcprivacy" "$COPY/"
 if [ -n "$SIGN" ]; then
   /usr/bin/codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" ${OTHER_CODE_SIGN_FLAGS:-} --timestamp=none \
     --preserve-metadata=identifier,entitlements,flags --generate-entitlement-der "$COPY"
