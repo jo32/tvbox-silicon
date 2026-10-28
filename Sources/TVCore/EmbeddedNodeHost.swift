@@ -1,4 +1,5 @@
 #if os(iOS)
+import CFNetwork
 import Foundation
 
 /// CatPawOpen (猫源) sources on iPhone and iPad. The app embeds nodejs-mobile (`Scripts/fetch-node-mobile.sh`)
@@ -15,6 +16,7 @@ public actor EmbeddedNodeHost {
     }()
     private struct Control: Decodable { var port: Int?; var token: String?; var error: String? }
     private var control: Task<Control, Error>?
+    private var relistening: Task<Control, Error>?
     private let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 150
@@ -39,24 +41,22 @@ public actor EmbeddedNodeHost {
         let input: [String: JSONValue] = [
             "bundle": .string(bundle.path), "api": .string(bundleURL.absoluteString),
             "profile": .string(root.appendingPathComponent("Profiles/" + key).path),
-            "params": .object(params.mapValues(JSONValue.string)),
+            "proxy": Self.systemProxy(), "params": .object(params.mapValues(JSONValue.string)),
         ]
+        let body = try JSONEncoder().encode(input)
         let kind = EmbeddedJarHost.kind(params)
         let started = ContinuousClock.now
         Diagnostics.shared.record(.info, "jar.request", "source=\(site.key) node \(kind) begin")
         let control = try await self.start()
-        guard let port = control.port, let token = control.token else {
-            throw TVError.unsupported(control.error ?? L10n.text("The CatPawOpen runtime stopped. Quit and reopen the app to use these sources."))
-        }
-        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/call")!)
-        request.httpMethod = "POST"
-        request.setValue(token, forHTTPHeaderField: "x-yingxia-token")
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = try JSONEncoder().encode(input)
         let envelope: [String: JSONValue]
         do {
-            let (body, _) = try await session.data(for: request)
-            envelope = try JSONDecoder().decode([String: JSONValue].self, from: body)
+            let answer: Data
+            do { answer = try await send(body, to: control) }
+            catch let error as URLError where error.code == .cannotConnectToHost || error.code == .networkConnectionLost {
+                // iOS takes back a suspended app's listening sockets; Node then listens again on new ports.
+                answer = try await send(body, to: try await relisten(after: control))
+            }
+            envelope = try JSONDecoder().decode([String: JSONValue].self, from: answer)
         } catch {
             if error is CancellationError || (error as? URLError)?.code == .cancelled { throw CancellationError() }
             Diagnostics.shared.record(.error, "jar.request", "source=\(site.key) node \(kind) failed duration=\(started.duration(to: .now)) error=\(error.localizedDescription)")
@@ -73,12 +73,71 @@ public actor EmbeddedNodeHost {
         return try JSONDecoder().decode([String: JSONValue].self, from: Data(text.utf8))
     }
 
+    private func send(_ body: Data, to control: Control) async throws -> Data {
+        guard let port = control.port, let token = control.token else {
+            throw TVError.unsupported(control.error ?? L10n.text("The CatPawOpen runtime stopped. Quit and reopen the app to use these sources."))
+        }
+        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/call")!)
+        request.httpMethod = "POST"
+        request.setValue(token, forHTTPHeaderField: "x-yingxia-token")
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.httpBody = body
+        return try await session.data(for: request).0
+    }
+
     /// Starts Node at most once; a failed start stays failed until the app relaunches.
     private func start() async throws -> Control {
         if let control { return try await control.value }
         let task = Task.detached { try await Self.launch() }
         control = task
         return try await task.value
+    }
+
+    /// The control port found refusing: requests that fail together share one relisten.
+    private func relisten(after stale: Control) async throws -> Control {
+        if let current = try await control?.value, current.port != stale.port { return current }
+        let task = relistening ?? Task.detached { try await Self.relisten(from: stale) }
+        relistening = task
+        defer { relistening = nil }
+        let fresh = try await task.value
+        control = Task { fresh }
+        return fresh
+    }
+
+    private static func relisten(from stale: Control) async throws -> Control {
+        let file = storageRoot.appendingPathComponent("control.json")
+        func current() -> Control? {
+            (try? Data(contentsOf: file)).flatMap { try? JSONDecoder().decode(Control.self, from: $0) }
+        }
+        if let control = current(), control.port != stale.port { return control }
+        Diagnostics.shared.record(.warning, "node.start", "port \(stale.port ?? 0) refused; asking Node to listen again")
+        let handle = try FileHandle(forWritingTo: relistenFile)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data("\n".utf8))
+        try handle.close()
+        let deadline = ContinuousClock.now + .seconds(5)
+        while ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(50))
+            if let control = current(), control.port != stale.port {
+                Diagnostics.shared.record(.info, "node.start", "listening again on port \(control.port ?? 0)")
+                return control
+            }
+        }
+        Diagnostics.shared.record(.error, "node.start", "Node did not listen again within 5 s")
+        return Control(error: L10n.text("The CatPawOpen runtime stopped. Quit and reopen the app to use these sources."))
+    }
+
+    /// The HTTP proxy set in Settings > Wi-Fi, which Node's own sockets would bypass. A proxy set by a PAC file
+    /// isn't followed; a VPN-style proxy app needs nothing, since iOS routes Node's sockets through it.
+    private static func systemProxy() -> JSONValue {
+        guard let settings = CFNetworkCopySystemProxySettings()?.takeRetainedValue() as? [String: Any] else { return .null }
+        for scheme in ["HTTPS", "HTTP"] {
+            guard settings[scheme + "Enable"] as? Int == 1, let host = settings[scheme + "Proxy"] as? String, !host.isEmpty,
+                  let port = settings[scheme + "Port"] as? Int else { continue }
+            let exceptions = (settings["ExceptionsList"] as? [String] ?? []).map(JSONValue.string)
+            return .object(["host": .string(host), "port": .number(Double(port)), "exceptions": .array(exceptions)])
+        }
+        return .null
     }
 
     private static func launch() async throws -> Control {
@@ -93,7 +152,9 @@ public actor EmbeddedNodeHost {
         let nodeStart = unsafeBitCast(symbol, to: NodeStart.self)
         let file = storageRoot.appendingPathComponent("control.json")
         try? FileManager.default.removeItem(at: file)
-        let arguments = ["node", main.path, file.path]
+        // Node watches this file; it has to exist first.
+        FileManager.default.createFile(atPath: relistenFile.path, contents: nil)
+        let arguments = ["node", main.path, file.path, relistenFile.path]
         let thread = Thread {
             // node_start expects its arguments in one contiguous block that lives as long as Node.
             let strings = arguments.map { Array($0.utf8CString) }
@@ -125,6 +186,8 @@ public actor EmbeddedNodeHost {
         Diagnostics.shared.record(.error, "node.start", "Node did not start within 30 s")
         return Control(error: L10n.text("The CatPawOpen runtime stopped. Quit and reopen the app to use these sources."))
     }
+
+    private static let relistenFile = storageRoot.appendingPathComponent("relisten")
 
     /// Bundles download again on demand, but profiles hold their settings (sign-ins among them), so they stay
     /// out of purgeable Caches.
