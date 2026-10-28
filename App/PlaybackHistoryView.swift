@@ -304,10 +304,11 @@ extension View {
 }
 
 private struct HistoryDetailsDestination: ViewModifier {
+    @Environment(\.openRoute) private var openRoute
     @State private var route: Route?
     func body(content: Content) -> some View {
         content
-            .environment(\.openHistoryDetails) { route = $0 }
+            .environment(\.openHistoryDetails) { if let openRoute { openRoute($0) } else { route = $0 } }
             .navigationDestination(item: $route) { route in
                 #if os(macOS)
                 route.build().musicBar()
