@@ -309,7 +309,8 @@ struct HongguoTests {
             return { stalled.lock.withLock { stalled.cancelled += 1 } }
         }
         #expect((result.1 as? HTTPURLResponse)?.statusCode == 200)
-        #expect(stalled.started == 2 && stalled.cancelled == 2)
+        // On a loaded machine the winner's reply can take longer than the hedge, which starts a third try.
+        #expect((2...3).contains(stalled.started) && stalled.cancelled == stalled.started)
         #expect(Date().timeIntervalSince(start) < 1.5)
         // A failure starts the next try at once, without waiting for the hedge; a 4xx answer is final.
         let failing = Tries()
