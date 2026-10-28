@@ -631,7 +631,7 @@ struct RecommendationsView: View {
                     Label(site.name, systemImage: "chevron.down")
                         .lineLimit(1)
                 }
-                .controlButton()
+                .glassPill()
                 .accessibilityLabel(L10n.text("Recommendation Source"))
                 .sheet(isPresented: $choosingSource) {
                     NavigationStack {
@@ -678,8 +678,9 @@ struct RecommendationsView: View {
                 #if os(tvOS)
                 Button { forceRefresh = true; revision += 1 } label: {
                     Image(systemName: "arrow.clockwise")
-                }.disabled(model.busy).accessibilityLabel(L10n.text("Refresh"))
-                    .frame(minWidth: 44, minHeight: 44)
+                }
+                .glassPill()
+                .disabled(model.busy).accessibilityLabel(L10n.text("Refresh"))
                 #else
                 Button { forceRefresh = true; revision += 1 } label: {
                     ZStack {
@@ -830,10 +831,10 @@ struct RecommendationsView: View {
             if browser.pageCount > 1 {
                 HStack(spacing: 12) {
                     Button { categoryPage -= 1 } label: { Image(systemName: "chevron.left").frame(width: 22) }
-                        .controlButton().disabled(categoryPage <= 1 || browser.busy).accessibilityLabel(L10n.text("Previous"))
+                        .glassControlButton().disabled(categoryPage <= 1 || browser.busy).accessibilityLabel(L10n.text("Previous"))
                     Text(L10n.text("Page %lld of %lld", browser.page, browser.pageCount)).font(.subheadline.weight(.medium).monospacedDigit())
                     Button { categoryPage += 1 } label: { Image(systemName: "chevron.right").frame(width: 22) }
-                        .controlButton().disabled(categoryPage >= browser.pageCount || browser.busy).accessibilityLabel(L10n.text("Next"))
+                        .glassControlButton().disabled(categoryPage >= browser.pageCount || browser.busy).accessibilityLabel(L10n.text("Next"))
                 }
                 .frame(maxWidth: .infinity).tvFocusSection()
             }
