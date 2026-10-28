@@ -4,7 +4,7 @@ import Foundation
 /// serves its sources over HTTP the way the CatVod Open apps run it. Its `/config` lists the sources and
 /// each answers at `/spider/<key>/<type>`. The Mac runs the bundle in the bundled Node host, iPhone and iPad
 /// in the embedded nodejs-mobile (`EmbeddedNodeHost`); tvOS has no Node, so it cannot import one.
-enum CatPawOpen {
+public enum CatPawOpen {
     /// The bundle an added address names: its checksum file (`…/index.js.md5`) or the bundle itself.
     static func bundle(_ data: Data, at url: URL) -> URL? {
         let path = url.path.lowercased()
@@ -15,6 +15,23 @@ enum CatPawOpen {
         }
         if path.hasSuffix(".js"), data.range(of: Data("catServerFactory".utf8)) != nil { return url }
         return nil
+    }
+
+    /// A bundle's own media proxy (`http://127.0.0.1:<port>/spider/<key>/<type>/proxy/…`), which streams drive files.
+    static func isMediaProxy(_ url: URL) -> Bool {
+        url.scheme == "http" && ["127.0.0.1", "localhost"].contains(url.host() ?? "")
+            && url.path().range(of: #"^/spider/[^/]+/[^/]+/proxy/"#, options: .regularExpression) != nil
+    }
+
+    /// A bundle's media proxy address as a cloud stream, when it answers the bytes asked for. AVPlayer then reads
+    /// it in parallel chunks, and HEVC that an MP4 tags `hev1` shows its picture instead of playing sound only
+    /// (`CloudStreams.playableSampleEntries`).
+    public static func proxiedMedia(_ url: URL, headers: [String: String]) async -> CloudStreams.Source? {
+        guard isMediaProxy(url), let probe = try? await RangeConnection.open(url, headers: headers, from: 0, through: 1,
+                                                                            configuration: RangeConnection.configuration, counter: CloudCounter()) else { return nil }
+        probe.close()
+        guard probe.last == 1, probe.length > 0 else { return nil }
+        return CloudStreams.Source(url: url, headers: headers, length: Int(probe.length), name: url.lastPathComponent)
     }
 
     /// The bundle's video sources, each a type 3 source on the bundle with its `/spider/…` path in `catPawOpen`.

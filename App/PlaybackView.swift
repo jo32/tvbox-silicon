@@ -748,6 +748,11 @@ extension PlaybackSession {
             address = CloudStreams.register(media) { await EmbeddedJarHost.shared.directMedia(proxied) }
             prepared.url = address
             Diagnostics.shared.record(.info, "player", "cloud direct host=\(media.url.host() ?? "-") length=\(media.length)")
+        } else if let media = await CatPawOpen.proxiedMedia(address, headers: channel.headers) {
+            try Task.checkCancellation()
+            address = CloudStreams.register(media) { nil }
+            prepared.url = address
+            Diagnostics.shared.record(.info, "player", "catpaw stream length=\(media.length)")
         } else if EmbeddedJarHost.isPluginProxy(address) {
             Diagnostics.shared.record(.warning, "player", "plugin proxy stream \(EmbeddedJarHost.proxyRoute(address))")
             prepared.pluginProxy = true
