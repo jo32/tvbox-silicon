@@ -69,6 +69,8 @@ public class NativeProbe extends AbstractJni {
             result.put("errorCode", "class_conversion");
             String name = rejectedClass(rejected.getMessage());
             if (name != null) result.put("brokenClass", name);
+        } else if (chain.stream().anyMatch(NativeProbe::androidScreen)) {
+            result.put("errorCode", "android_screen");
         } else if (chain.stream().anyMatch(link -> link instanceof LinkageError || link instanceof UnsupportedOperationException
             || (link instanceof RuntimeException && "Stub!".equals(link.getMessage())))) {
             result.put("errorCode", "unsupported_android");
@@ -97,6 +99,17 @@ public class NativeProbe extends AbstractJni {
             catch (Throwable cause) { failed.initCause(cause); }
         }
         return failed;
+    }
+
+    /**
+     * A "Stub!" from Android's drawing, view or dialog classes: the plugin tried to show its own screen,
+     * such as a config center's QR code or a drive's sign-in dialog. The app has its own sign-in instead.
+     */
+    private static boolean androidScreen(Throwable error) {
+        if (!(error instanceof RuntimeException) || !"Stub!".equals(error.getMessage()) || error.getStackTrace().length == 0) return false;
+        String owner = error.getStackTrace()[0].getClassName();
+        return owner.startsWith("android.graphics.") || owner.startsWith("android.widget.") || owner.startsWith("android.view.")
+            || owner.startsWith("android.app.AlertDialog") || owner.equals("android.app.Dialog");
     }
 
     /** The first application frame decides: plugin code crashed on its own, not inside our runtime. */
@@ -255,6 +268,7 @@ public class NativeProbe extends AbstractJni {
         var context = runtime.context();
         String api = input.getString("api");
         if (!api.startsWith("csp_")) throw new IllegalArgumentException("Expected a csp_ plugin class");
+        CloudDriveBridge.seedDriveCookies(accounts, context.getFilesDir().toPath());
         var spider = (com.github.catvod.crawler.Spider)loader.loadClass("com.github.catvod.spider." + api.substring(4)).getDeclaredConstructor().newInstance();
         spider.siteKey = input.optString("key");
         spider.init(context, bridge.cloudExtension(input.optString("ext"), accounts, spider.getClass()));

@@ -378,6 +378,7 @@
 "%lld of %lld sources responded" = "%lld of %lld sources responded";
 "First-time setup can take a few minutes. Keep the app open." = "First-time setup can take a few minutes. Keep the app open.";
 "This source requires Android features that the plugin runtime does not support yet." = "This source requires Android features that the plugin runtime does not support yet.";
+"This entry opens the source's own settings or sign-in screen (such as a QR code), which Yingxia can't show. Sign in under Settings → Cloud Drive Accounts instead." = "This entry opens the source's own settings or sign-in screen (such as a QR code), which Yingxia can't show. Sign in under Settings → Cloud Drive Accounts instead.";
 "This source needs an Android feature that isn't supported yet: %@." = "This source needs an Android feature that isn't supported yet: %@.";
 "This plugin couldn't be prepared on this device (missing %@)." = "This plugin couldn't be prepared on this device (missing %@).";
 "This plugin couldn't be prepared on this device (%@ could not be converted)." = "This plugin couldn't be prepared on this device (%@ could not be converted).";

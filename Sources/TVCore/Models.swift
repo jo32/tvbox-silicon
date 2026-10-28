@@ -34,6 +34,8 @@ public enum PluginFailure {
         case "unsupported_android":
             if let missing { return L10n.text("This source needs an Android feature that isn't supported yet: %@.", missing, language: language) }
             return L10n.text("This source requires Android features that the plugin runtime does not support yet.", language: language)
+        case "android_screen":
+            return L10n.text("This entry opens the source's own settings or sign-in screen (such as a QR code), which Yingxia can't show. Sign in under Settings → Cloud Drive Accounts instead.", language: language)
         case "class_conversion":
             if let broken = envelope["brokenClass"]?.string {
                 return L10n.text("This plugin couldn't be prepared on this device (%@ could not be converted).", broken, language: language)
@@ -53,7 +55,7 @@ public enum PluginFailure {
     /// The plugin itself failed (crash, conversion, Android gap), as opposed to the site or network.
     static func inPlugin(_ envelope: [String: JSONValue]) -> Bool {
         switch envelope["errorCode"]?.string {
-        case "plugin_crash", "unsupported_android", "class_conversion", nil: return envelope["error"] != nil
+        case "plugin_crash", "unsupported_android", "android_screen", "class_conversion", nil: return envelope["error"] != nil
         default: return false
         }
     }
