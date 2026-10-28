@@ -110,7 +110,7 @@ struct Transfer: Sendable {
         if let data = try? Data(contentsOf: planFile), let saved = try? JSONDecoder().decode(TransferPlan.self, from: data) { plan = saved }
         else { plan = try await prepare(try await resolve()); try save(plan) }
         var renewals = 0
-        while true {
+        while finishedFile(plan) == nil {
             try Task.checkCancellation()
             try begin(plan)
             await note(.prepared(plan))
@@ -213,6 +213,12 @@ struct Transfer: Sendable {
         try? FileManager.default.removeItem(at: folder.appending(path: "parts"))
         try FileManager.default.createDirectory(at: folder.appending(path: "parts"), withIntermediateDirectories: true)
         return plan
+    }
+
+    /// A file download already moved into place (or rewrapped): the app quit while it was finishing.
+    private func finishedFile(_ plan: TransferPlan) -> String? {
+        guard plan.kind == .file, !FileManager.default.fileExists(atPath: folder.appending(path: "parts").appending(path: plan.files[0].name).path) else { return nil }
+        return ["media." + (plan.fileExtension ?? "mp4"), DownloadLibrary.rewrappedName].first { FileManager.default.fileExists(atPath: folder.appending(path: $0).path) }
     }
 
     private func save(_ plan: TransferPlan) throws {
@@ -379,11 +385,15 @@ struct Transfer: Sendable {
         let parts = folder.appending(path: "parts")
         switch plan.kind {
         case .file:
+            if let name = finishedFile(plan) {
+                try? FileManager.default.removeItem(at: parts)
+                return await DownloadLibrary.rewrap(name, in: folder)
+            }
             let name = "media." + (plan.fileExtension ?? "mp4")
             try? FileManager.default.removeItem(at: folder.appending(path: name))
             try FileManager.default.moveItem(at: parts.appending(path: plan.files[0].name), to: folder.appending(path: name))
             try? FileManager.default.removeItem(at: parts)
-            return name
+            return await DownloadLibrary.rewrap(name, in: folder)
         case .hls:
             try Self.writing { try Data((plan.playlist ?? "").utf8).write(to: folder.appending(path: "index.m3u8"), options: .atomic) }
             return "index.m3u8"

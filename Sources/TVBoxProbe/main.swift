@@ -120,6 +120,14 @@ import TVCore
             try await download(args[2], folder: URL(filePath: args[3]), pauseAfter: args.count > 4 ? Double(args[4]) : nil)
             return
         }
+        if args[1] == "--rewrap", args.count >= 4 {
+            // --rewrap <mkv> <mp4>: what a finished download of that file would be saved as.
+            setvbuf(stdout, nil, _IONBF, 0)
+            let began = Date()
+            let result = try await Rewrap.probe(URL(filePath: args[2]), to: URL(filePath: args[3])) { print(String(format: "%.0f%%", $0 * 100)) }
+            print(result ?? "not rewrapped: plays as it is", String(format: "%.1fs", Date().timeIntervalSince(began)))
+            return
+        }
         if args[1] == "--cast-upgrade", args.count >= 4, let cid = Int(args[2]) {
             // --cast-upgrade <cid> <title>: finds the video a DLNA cast belongs to.
             print("aid", await Bilibili.castVideo(cid: cid, title: args[3]).map(String.init) ?? "not found")

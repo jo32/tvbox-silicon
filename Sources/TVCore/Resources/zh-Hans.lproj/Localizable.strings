@@ -1104,6 +1104,7 @@
 "Finding the live stream" = "正在查找直播流";
 "Getting the file from the drive" = "正在从网盘获取文件";
 "Repackaging the video for this device" = "正在为此设备转封装视频";
+"Preparing the saved download for this device · %lld%%" = "正在为这台设备整理已下载的视频 · %lld%%";
 "Opening the saved download" = "正在打开已下载的视频";
 "Connecting to %@" = "正在连接 %@";
 "Receiving video from %@" = "正在从 %@ 接收视频";

@@ -1104,6 +1104,7 @@
 "Finding the live stream" = "Finding the live stream";
 "Getting the file from the drive" = "Getting the file from the drive";
 "Repackaging the video for this device" = "Repackaging the video for this device";
+"Preparing the saved download for this device · %lld%%" = "Preparing the saved download for this device · %lld%%";
 "Opening the saved download" = "Opening the saved download";
 "Connecting to %@" = "Connecting to %@";
 "Receiving video from %@" = "Receiving video from %@";

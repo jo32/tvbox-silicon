@@ -155,7 +155,16 @@ import TVCore
         guard loading || !showsPicture, steps.last != step else { return }
         steps.append(step)
         if steps.count > 4 { steps.removeFirst() }
+        noteKind = nil
     }
+    /// A step that counts up: each count replaces the last one of the same `kind`.
+    private func note(_ step: String, replacing kind: String) {
+        guard loading || !showsPicture else { return }
+        if noteKind == kind, !steps.isEmpty { steps[steps.count - 1] = step; return }
+        note(step)
+        noteKind = kind
+    }
+    private var noteKind: String?
     private var sampler: Task<Void, Never>?
     private var endObserver: NSObjectProtocol?
     private var timeObservation: NSKeyValueObservation?
@@ -791,7 +800,13 @@ extension PlaybackSession {
         // A downloaded episode plays from disk: its file, or its HLS through a loopback server.
         if address.scheme == DownloadLibrary.scheme {
             note(L10n.text("Opening the saved download"))
-            do { address = try await DownloadLibrary.shared.playbackAddress(for: address) }
+            do {
+                address = try await DownloadLibrary.shared.playbackAddress(for: address) { fraction in
+                    Task { @MainActor [weak self] in
+                        self?.note(L10n.text("Preparing the saved download for this device · %lld%%", Int(fraction * 100)), replacing: "rewrap")
+                    }
+                }
+            }
             catch {
                 if !Task.isCancelled { Diagnostics.shared.failure("player", "saved download", error) }
                 throw error
