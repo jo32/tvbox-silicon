@@ -96,7 +96,8 @@ with the JIT / `disable-library-validation` entitlements and the Developer ID mo
     *only for cloud sessions* (see Phase 7).
   - **write:** only under `~/Library/Caches/com.tvbox.yingxia/…`, the session job dir, and
     the profile dir.
-  - **network:** outbound tcp 80/443 plus loopback bind (for `CloudDriveBridge` / the py proxy).
+  - **network:** outbound tcp to any port (80/443 only until 2026-10-28, which broke sources on
+    ports like :16968) plus loopback bind (for `CloudDriveBridge` / the py proxy).
   - **exec/fork:** allow exec of the interpreter only; **deny process-fork**, which
     neutralizes Java `Runtime.exec`, Node `child_process`, and Python `subprocess`.
 - New `Sources/TVCore/SpiderSandbox.swift` builds the `sandbox-exec -f … -D … <interp> <args>`

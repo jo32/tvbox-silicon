@@ -42,11 +42,12 @@
 (allow system-socket)
 
 ;; --- Networking --------------------------------------------------------------------
-;; Outbound HTTP(S) to any host, plus the mDNSResponder socket that getaddrinfo uses to
-;; resolve host names, and loopback bind/connect for the media proxy and cloud bridge.
+;; Outbound TCP to any host and any port (many sources serve their API on ports like
+;; :8080 or :16968; a port limit adds nothing while :443 to any host is open), plus the
+;; mDNSResponder socket that getaddrinfo uses to resolve host names, and loopback
+;; bind/connect for the media proxy and cloud bridge.
 (allow network-outbound
-    (remote tcp "*:80")
-    (remote tcp "*:443")
+    (remote tcp "*:*")
     (remote ip "localhost:*")
     (literal "/private/var/run/mDNSResponder"))
 (allow network-bind (local ip "localhost:*"))
