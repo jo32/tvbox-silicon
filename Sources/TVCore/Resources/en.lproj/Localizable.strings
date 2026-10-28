@@ -1089,3 +1089,13 @@
 "Enter the code Xunlei texted to %@." = "Enter the code Xunlei texted to %@.";
 "Enter a mainland China mobile number." = "Enter a mainland China mobile number.";
 "Xunlei refused the sign-in (%@)." = "Xunlei refused the sign-in (%@).";
+"Finding the live stream" = "Finding the live stream";
+"Getting the file from the drive" = "Getting the file from the drive";
+"Repackaging the video for this device" = "Repackaging the video for this device";
+"Opening the saved download" = "Opening the saved download";
+"Connecting to %@" = "Connecting to %@";
+"Receiving video from %@" = "Receiving video from %@";
+"Trouble with %@ (%@), trying again" = "Trouble with %@ (%@), trying again";
+"Jumping to %@" = "Jumping to %@";
+"%@ received" = "%@ received";
+"the video server" = "the video server";

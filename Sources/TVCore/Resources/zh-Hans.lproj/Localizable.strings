@@ -1089,3 +1089,13 @@
 "Enter the code Xunlei texted to %@." = "输入迅雷发送到 %@ 的验证码。";
 "Enter a mainland China mobile number." = "请输入中国大陆手机号。";
 "Xunlei refused the sign-in (%@)." = "迅雷拒绝了登录（%@）。";
+"Finding the live stream" = "正在查找直播流";
+"Getting the file from the drive" = "正在从网盘获取文件";
+"Repackaging the video for this device" = "正在为此设备转封装视频";
+"Opening the saved download" = "正在打开已下载的视频";
+"Connecting to %@" = "正在连接 %@";
+"Receiving video from %@" = "正在从 %@ 接收视频";
+"Trouble with %@ (%@), trying again" = "%@ 出现问题（%@），正在重试";
+"Jumping to %@" = "正在跳转到 %@";
+"%@ received" = "已接收 %@";
+"the video server" = "视频服务器";

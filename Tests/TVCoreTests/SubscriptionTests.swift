@@ -192,6 +192,13 @@ import Testing
     #expect(throws: (any Error).self) { try Subscription.parse(Data("分组,#genre#\n".utf8), origin: origin) }
 }
 
+@Test func catPawOpenMediaProxiesAreRecognized() throws {
+    #expect(CatPawOpen.isMediaProxy(try #require(URL(string: "http://127.0.0.1:59322/spider/duoduo/3/proxy/quark/9d6b9453?token=1"))))
+    #expect(!CatPawOpen.isMediaProxy(try #require(URL(string: "http://127.0.0.1:59322/spider/duoduo/3/play"))))
+    #expect(!CatPawOpen.isMediaProxy(try #require(URL(string: "http://127.0.0.1:9978/proxy?do=quark&id=1"))))
+    #expect(!CatPawOpen.isMediaProxy(try #require(URL(string: "https://example.com/spider/duoduo/3/proxy/quark/1"))))
+}
+
 @Test func catPawOpenAddressesNameTheirBundle() throws {
     let checksum = try #require(URL(string: "https://example.com/cat/index.js.md5"))
     let bundle = try #require(URL(string: "https://example.com/cat/index.js"))
