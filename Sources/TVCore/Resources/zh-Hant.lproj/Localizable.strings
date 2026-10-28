@@ -325,6 +325,7 @@
 "Browse" = "瀏覽";
 "Library" = "資料庫";
 "Episodes" = "選集";
+"Reverse Order" = "倒序";
 "Couldn't play %@" = "無法播放 %@";
 "This source plays from %@ and needs you to sign in first." = "此來源透過%@網盤播放，需要先登入。";
 "Quark" = "夸克";

@@ -326,6 +326,7 @@
 "Browse" = "Browse";
 "Library" = "Library";
 "Episodes" = "Episodes";
+"Reverse Order" = "Reverse Order";
 "Couldn't play %@" = "Couldn't play %@";
 "This source plays from %@ and needs you to sign in first." = "This source plays from %@ and needs you to sign in first.";
 "Quark" = "Quark";

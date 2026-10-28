@@ -325,6 +325,7 @@
 "Browse" = "ブラウズ";
 "Library" = "ライブラリ";
 "Episodes" = "エピソード";
+"Reverse Order" = "逆順";
 "Couldn't play %@" = "%@ を再生できません";
 "This source plays from %@ and needs you to sign in first." = "このソースは%@ドライブから再生されるため、先にサインインが必要です。";
 "Quark" = "Quark";
