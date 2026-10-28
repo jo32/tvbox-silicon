@@ -10,7 +10,8 @@
   "workers_dev": false,
   "preview_urls": false,
   "d1_databases": [{ "binding": "DB", "database_name": "yingxia-reports", "database_id": "1f9e0251-3a96-43ad-ad9a-bd818932aec0" }],
-  // Per IP address (kept in memory only). An app sends at most once every six hours.
+  // Per IP address (kept in memory only). An app sends reports at most once every six hours, and asks
+  // for its feedback's replies (/v1/feedback/replies) when Send Feedback opens.
   "ratelimits": [
     { "name": "LIMITER", "namespace_id": "4101", "simple": { "limit": 10, "period": 60 } },
     // Feedback is typed by hand: two a minute is plenty (FEEDBACK_PER_MINUTE in src/index.ts, which also caps each day).

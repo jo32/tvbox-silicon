@@ -9,7 +9,9 @@ enum Support {
 /// Settings › Send Feedback: a problem or an idea in the user's own words, posted as a public GitHub
 /// issue (Feedback). Under the message go the subscriptions and what was played lately
 /// (Feedback.context), filled in when the page opens, for the viewer to edit or remove. Once the issue
-/// is up, the page shows its number and, off Apple TV, a link to it.
+/// is up, the page shows its number and, off Apple TV, a link to it. Under it, Your Feedback lists what
+/// was sent from this device with how each issue is doing and the developer's replies, asked from the
+/// server each time the page opens or sends.
 struct FeedbackView: View {
     @Environment(Store.self) private var store
     @State private var kind = Feedback.Kind.bug
@@ -19,6 +21,14 @@ struct FeedbackView: View {
     @State private var sending = false
     @State private var sent: Feedback.Issue?
     @State private var error: String?
+    @State private var history: [Feedback.Sent] = []
+    @State private var statuses: [Int: Feedback.Status] = [:]
+    @State private var checking = false
+    @State private var checkFailed = false
+    #if os(tvOS)
+    /// The issue whose latest reply the section's footer shows.
+    @State private var reading: Int?
+    #endif
 
     static var note: String {
         L10n.text("Your feedback becomes a public issue on Yingxia's GitHub page, with the app and system versions, the device model, the language and the included details. Please don't include accounts or passwords.")
@@ -43,6 +53,7 @@ struct FeedbackView: View {
                 contextLoaded = true
                 context = freshContext
             }
+            .task(id: sent?.number) { await check() }
             #if DEBUG
             // `-qaFeedbackDraft <text>` fills in the message (typing on the TV's keyboard is slow), and
             // `-qaFeedbackSend 1` sends it, to the server named by `-qaFeedback <url>`. Once per launch: the
@@ -76,11 +87,58 @@ struct FeedbackView: View {
                     !context.isEmpty
                 } set: { context = $0 ? freshContext : "" })
             }
+            if !history.isEmpty {
+                TVSettingsSection(title: L10n.text("Your Feedback"), footer: latestReply) {
+                    ForEach(history.prefix(Feedback.checked)) { item in
+                        let status = statuses[item.number]
+                        let unread = (status?.replies.count ?? 0) > item.seen
+                        TVSettingsAction(title: "#\(item.number) \(item.title)", value: unread ? L10n.text("New Reply") : status?.progress.title,
+                                         busy: checking && status == nil) {
+                            reading = item.number
+                            read(item)
+                        }
+                    }
+                }
+            }
         }
         #else
         FeedbackPage(kind: $kind, message: $message, context: $context, freshContext: freshContext, sending: sending,
-                     sent: $sent, error: error, send: send)
+                     sent: $sent, error: error, send: send,
+                     history: history, statuses: statuses, checking: checking, checkFailed: checkFailed, read: read)
         #endif
+    }
+
+    #if os(tvOS)
+    /// The chosen issue's latest reply as plain text, cut short: a footer can't scroll.
+    private var latestReply: String? {
+        if checkFailed { return L10n.text("Couldn't check for replies. Please try again later.") }
+        guard let reading, let status = statuses[reading] else { return nil }
+        guard let reply = status.replies.last else { return L10n.text("No replies yet. They'll appear here.") }
+        let text = String(Feedback.reply(reply.text).characters)
+        return "\(L10n.text("Developer")) · \(reply.date.formatted(date: .abbreviated, time: .shortened))\n"
+            + (text.count > 600 ? String(text.prefix(599)) + "…" : text)
+    }
+    #endif
+
+    /// What was sent from here and how each issue is doing. A failure leaves what was shown before.
+    private func check() async {
+        history = Feedback.sent()
+        guard !history.isEmpty else { return }
+        checking = true
+        defer { checking = false }
+        do {
+            statuses = try await Feedback.statuses(of: history.map(\.number))
+            checkFailed = false
+        } catch {
+            if !Task.isCancelled { checkFailed = true }
+        }
+    }
+
+    /// The viewer opened an issue: its replies so far are read.
+    private func read(_ item: Feedback.Sent) {
+        guard let count = statuses[item.number]?.replies.count, count != item.seen else { return }
+        Feedback.markSeen(item.number, replies: count)
+        history = Feedback.sent()
     }
 
     private func send() {
@@ -95,6 +153,17 @@ struct FeedbackView: View {
             } catch {
                 self.error = error.localizedDescription
             }
+        }
+    }
+}
+
+private extension Feedback.Status {
+    /// How the issue is doing, as a word and its color.
+    var progress: (title: String, tint: Color) {
+        switch state {
+        case .closed: (L10n.text("Resolved"), .green)
+        case .declined: (L10n.text("Closed"), .secondary)
+        case .open: replies.isEmpty ? (L10n.text("Received"), Brand.indigo) : (L10n.text("Replied"), Brand.cyan)
         }
     }
 }
@@ -116,6 +185,11 @@ private struct FeedbackPage: View {
     @Binding var sent: Feedback.Issue?
     let error: String?
     let send: () -> Void
+    let history: [Feedback.Sent]
+    let statuses: [Int: Feedback.Status]
+    let checking: Bool
+    let checkFailed: Bool
+    let read: (Feedback.Sent) -> Void
     @FocusState private var editing: Bool
     @Environment(\.openURL) private var openURL
     #if os(iOS)
@@ -149,6 +223,9 @@ private struct FeedbackPage: View {
                     thanks(sent).transition(.scale(scale: 0.97).combined(with: .opacity))
                 } else {
                     form.transition(.opacity)
+                }
+                if !history.isEmpty {
+                    FeedbackHistory(history: history, statuses: statuses, checking: checking, failed: checkFailed, compact: compact, read: read)
                 }
             }
             .padding(.horizontal, compact ? Layout.gutter : 32).padding(.top, compact ? 20 : 32).padding(.bottom, 40)
@@ -348,6 +425,105 @@ private struct FeedbackPage: View {
                 .overlay { Self.card.fill(RadialGradient(colors: [Color.green.opacity(0.16), .clear], center: .top, startRadius: 0, endRadius: 260)) }
         }
         .overlay { Self.card.strokeBorder(Color.primary.opacity(0.08)) }
+    }
+}
+
+/// Your Feedback: the issues sent from here, newest first, each with how it is doing. Opening one shows
+/// the developer's replies and marks them read; a dot marks an issue with replies not read yet.
+private struct FeedbackHistory: View {
+    let history: [Feedback.Sent]
+    let statuses: [Int: Feedback.Status]
+    let checking: Bool
+    let failed: Bool
+    let compact: Bool
+    let read: (Feedback.Sent) -> Void
+    @State private var open: Int?
+    @Environment(\.openURL) private var openURL
+    private static let card = RoundedRectangle(cornerRadius: 14, style: .continuous)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Label(L10n.text("Your Feedback"), systemImage: "tray.full")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                Spacer()
+                if checking { ProgressView().controlSize(.small) }
+            }
+            .padding(.horizontal, 4)
+            VStack(spacing: 0) {
+                ForEach(history.prefix(Feedback.checked)) { item in
+                    if item.id != history.first?.id { Divider().padding(.leading, compact ? 12 : 14) }
+                    row(item)
+                }
+            }
+            .background { Self.card.fill(FeedbackPage.fill) }
+            .overlay { Self.card.strokeBorder(Color.primary.opacity(0.08)) }
+            if failed {
+                Text(L10n.text("Couldn't check for replies. Please try again later."))
+                    .font(compact ? .footnote : .callout).foregroundStyle(.secondary).padding(.horizontal, 4)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: open)
+    }
+
+    private func row(_ item: Feedback.Sent) -> some View {
+        let status = statuses[item.number]
+        let unread = (status?.replies.count ?? 0) > item.seen
+        let expanded = open == item.number
+        return VStack(alignment: .leading, spacing: 12) {
+            Button {
+                open = expanded ? nil : item.number
+                if !expanded { read(item) }
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Image(systemName: item.kind.symbol).foregroundStyle(item.kind.tint)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(item.title).font(compact ? .subheadline.weight(.medium) : .body.weight(.medium))
+                            .lineLimit(expanded ? nil : 1)
+                        Text(verbatim: "#\(item.number) · \(item.date.formatted(date: .abbreviated, time: .omitted))")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
+                    if unread {
+                        Circle().fill(systemAccent).frame(width: 8, height: 8).accessibilityLabel(L10n.text("New Reply"))
+                    }
+                    if let progress = status?.progress {
+                        Text(progress.title).font(.caption.weight(.semibold)).foregroundStyle(progress.tint).lineLimit(1).fixedSize()
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(progress.tint.opacity(0.14), in: Capsule())
+                    }
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if expanded { replies(item, status) }
+        }
+        .padding(compact ? 12 : 14)
+    }
+
+    private func replies(_ item: Feedback.Sent, _ status: Feedback.Status?) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let replies = status?.replies, !replies.isEmpty {
+                ForEach(replies, id: \.self) { reply in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(verbatim: "\(L10n.text("Developer")) · \(reply.date.formatted(date: .abbreviated, time: .shortened))")
+                            .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        Text(Feedback.reply(reply.text)).font(compact ? .callout : .body)
+                            .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(compact ? 10 : 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+            } else {
+                Text(L10n.text("No replies yet. They'll appear here.")).font(.callout).foregroundStyle(.secondary)
+            }
+            Button { openURL(item.url) } label: { Label(L10n.text("View on GitHub"), systemImage: "arrow.up.right") }
+                .buttonStyle(.borderless).font(.callout)
+        }
+        .padding(.leading, compact ? 0 : 26)
     }
 }
 

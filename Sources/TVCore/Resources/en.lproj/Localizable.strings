@@ -911,6 +911,15 @@
 "Thank You!" = "Thank You!";
 "Your feedback is now issue #%lld on GitHub." = "Your feedback is now issue #%lld on GitHub.";
 "Send Another" = "Send Another";
+"Your Feedback" = "Your Feedback";
+"Received" = "Received";
+"Replied" = "Replied";
+"Resolved" = "Resolved";
+"Closed" = "Closed";
+"New Reply" = "New Reply";
+"Developer" = "Developer";
+"No replies yet. They'll appear here." = "No replies yet. They'll appear here.";
+"Couldn't check for replies. Please try again later." = "Couldn't check for replies. Please try again later.";
 "Remove Download" = "Remove Download";
 "Downloaded Songs" = "Downloaded Songs";
 "No Downloaded Songs" = "No Downloaded Songs";

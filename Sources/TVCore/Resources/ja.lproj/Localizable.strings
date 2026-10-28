@@ -910,6 +910,15 @@
 "Thank You!" = "ありがとうございます！";
 "Your feedback is now issue #%lld on GitHub." = "フィードバックは GitHub の Issue #%lld になりました。";
 "Send Another" = "もう一件送信";
+"Your Feedback" = "送信したフィードバック";
+"Received" = "受付済み";
+"Replied" = "返信あり";
+"Resolved" = "解決済み";
+"Closed" = "クローズ";
+"New Reply" = "新しい返信";
+"Developer" = "開発者";
+"No replies yet. They'll appear here." = "まだ返信はありません。返信があるとここに表示されます。";
+"Couldn't check for replies. Please try again later." = "返信を確認できませんでした。しばらくしてからもう一度お試しください。";
 "Remove Download" = "ダウンロードを削除";
 "Downloaded Songs" = "ダウンロードした曲";
 "No Downloaded Songs" = "ダウンロードした曲はありません";
