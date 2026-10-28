@@ -316,6 +316,20 @@ extension View {
     }
 }
 
+/// The notes under settings switches, shared by Settings and the pages under it.
+private enum SettingsNote {
+    static var danmaku: String { L10n.text("Bilibili's bullet comments, drawn over the video. You can also switch them in the player.") }
+    static var tmdb: String {
+        L10n.text("Shows cast, artwork and episode details from TMDB on video pages. Sends the video's title, its details from the source and the source's name to Yingxia's lookup service, never your accounts or subscription addresses.")
+    }
+    static var errorReports: String {
+        L10n.text("Sends errors to the developer a few times a day so they can be fixed: the error text with web addresses cut to the server name, the app and system versions, and a random ID. Never your accounts, passwords or viewing history.")
+    }
+    static var support: String {
+        L10n.text("Supports TVBox JSON subscriptions, M3U / TXT live playlists, and standard type 1 / type 4 JSON APIs. Media formats depend on the device. Local JavaScript and Python plugins are experimental on Mac, and JAR plugins are experimental on every platform; compatibility varies by source.")
+    }
+}
+
 struct FormSettingsView: View {
     @Environment(Store.self) private var store
     @Environment(Updates.self) private var updates
@@ -329,8 +343,8 @@ struct FormSettingsView: View {
     @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
     #if os(iOS)
     @State private var addingSubscription = false
-    @AppStorage(SpeedBoost.key) private var holdSpeed = SpeedBoost.standard
-    @AppStorage(PictureLevel.key) private var slidesLevels = true
+    @State private var showsFeedback = false
+    @Environment(\.openURL) private var openURL
     @AppStorage(PhoneTabs.labelsKey) private var showsTabLabels = true
     #endif
     #if os(macOS)
@@ -348,20 +362,32 @@ struct FormSettingsView: View {
             heroSection
 
             // Right under the app, so a problem or an idea is never more than one click away.
+            #if os(iOS)
+            // Two tiles side by side, so the way to the developer reads as a place, not two more rows.
             Section {
-                #if os(macOS)
+                HStack(spacing: 12) {
+                    Button { showsFeedback = true } label: {
+                        SettingsTile(symbol: "bubble.left.and.text.bubble.right.fill", tint: Brand.indigo, title: L10n.text("Send Feedback"),
+                                     subtitle: L10n.text("Report a problem or share an idea"))
+                    }
+                    Button { openURL(Support.telegram) } label: {
+                        SettingsTile(symbol: "paperplane.fill", tint: Brand.cyan, title: L10n.text("Telegram Group"),
+                                     subtitle: L10n.text("Chat with the developer and other users"), external: true)
+                    }
+                }
+                // Its own style per button, so each tile takes its own taps rather than the row's.
+                .buttonStyle(PressableStyle())
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
+            #else
+            Section {
                 SettingsLinkRow(symbol: "bubble.left.and.text.bubble.right.fill", tint: Brand.indigo, title: L10n.text("Send Feedback"),
                                 subtitle: L10n.text("Report a problem or share an idea")) { FeedbackView() }
-                #else
-                FormLink(symbol: "bubble.left.and.text.bubble.right.fill", tint: Brand.indigo, title: L10n.text("Send Feedback")) { FeedbackView() }
-                #endif
-                #if os(macOS)
                 SettingsWebRow(symbol: "paperplane.fill", tint: Brand.cyan, title: L10n.text("Telegram Group"),
                                subtitle: L10n.text("Chat with the developer and other users"), url: Support.telegram)
-                #else
-                SettingsWebRow(symbol: "paperplane.fill", tint: Brand.cyan, title: L10n.text("Telegram Group"), url: Support.telegram)
-                #endif
             }
+            #endif
 
             Section {
                 ForEach(store.subscriptions) { entry in
@@ -398,10 +424,11 @@ struct FormSettingsView: View {
                     if store.importing {
                         ProgressView().controlSize(.small)
                     } else if !store.subscriptions.isEmpty {
+                        // Quiet, in the header's own grey: a page of settings has no one blue action.
                         Button { Task { await store.refreshSubscriptions() } } label: {
                             Label(L10n.text("Refresh All"), systemImage: "arrow.clockwise")
                         }
-                        .font(.footnote.weight(.semibold)).textCase(nil)
+                        .font(.footnote.weight(.semibold)).textCase(nil).tint(.secondary)
                     }
                 }
                 #else
@@ -419,18 +446,21 @@ struct FormSettingsView: View {
                 FormLink(symbol: "externaldrive.fill.badge.person.crop", tint: .brown, title: L10n.text("Cloud Drive Accounts"), value: cloudSummary) { CloudDriveView() }
             }
 
+            #if os(iOS)
+            // The app's own pages in one group, as in the Settings app. Playback's switches and notes live a level
+            // deeper, so this page stays a short list of places.
             Section {
                 FormLink(symbol: AppSection.home.icon, tint: Brand.cyan, title: L10n.text("Watch Now")) { WatchNowSettingsView() }
-            }
-
-            #if os(iOS)
-            Section {
+                FormLink(symbol: "slider.horizontal.below.rectangle", tint: .orange, title: L10n.text("Playback")) { PlaybackSettingsView() }
+                FormLink(symbol: "play.fill", tint: Brand.indigo, title: L10n.text("Play a URL")) { PlayURLView() }
                 Toggle(isOn: $showsTabLabels) {
                     FormLabel(symbol: "dock.rectangle", tint: .gray, title: L10n.text("Tab Bar Labels"))
                 }
                 .settingsSwitch()
-            } footer: {
-                Text(L10n.text("Off shows only the icons in the tab bar along the bottom."))
+            }
+            #else
+            Section {
+                FormLink(symbol: AppSection.home.icon, tint: Brand.cyan, title: L10n.text("Watch Now")) { WatchNowSettingsView() }
             }
             #endif
 
@@ -461,74 +491,23 @@ struct FormSettingsView: View {
             } header: {
                 Text(L10n.text("Playback"))
             }
-            #else
-            if store.extrasUnlocked {
-                Section {
-                    Toggle(isOn: $showsDanmaku) {
-                        FormLabel(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Show Danmaku"))
-                    }
-                    .settingsSwitch()
-                } header: {
-                    Text(L10n.text("Playback"))
-                } footer: {
-                    // The Settings app explains a switch under its group, not inside the row; the switch
-                    // gets a group of its own so the note plainly belongs to it.
-                    Text(danmakuNote)
-                }
-            }
-            Section {
-                Picker(selection: $holdSpeed) {
-                    ForEach(SpeedBoost.startRates, id: \.self) { Text($0.formatted(.number.precision(.fractionLength(0...2))) + "×").tag($0) }
-                } label: {
-                    FormLabel(symbol: "forward.fill", tint: .orange, title: L10n.text("Touch and Hold Speed"))
-                }
-            } header: {
-                if !store.extrasUnlocked { Text(L10n.text("Playback")) }
-            } footer: {
-                Text(L10n.text("Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go."))
-            }
-            Section {
-                Toggle(isOn: $slidesLevels) {
-                    FormLabel(symbol: "sun.max.fill", tint: .yellow, title: L10n.text("Slide for Brightness and Volume"))
-                }
-                .settingsSwitch()
-            } footer: {
-                Text(L10n.text("Slide up or down on the left of the video to change the brightness, or on the right to change the volume."))
-            }
-            #endif
             if VideoEnhancement.canUpscale || VideoEnhancement.canSmooth {
                 Section {
                     if VideoEnhancement.canUpscale {
                         Toggle(isOn: $upscalesVideo) {
-                            #if os(iOS)
-                            FormLabel(symbol: "wand.and.sparkles", tint: .purple, title: L10n.text("Sharper Picture"))
-                            #else
                             FormLabel(symbol: "wand.and.sparkles", tint: .purple, title: L10n.text("Sharper Picture"), subtitle: upscaleNote)
-                            #endif
                         }
                         .settingsSwitch()
                     }
                     if VideoEnhancement.canSmooth {
                         Toggle(isOn: $smoothsVideo) {
-                            #if os(iOS)
-                            FormLabel(symbol: "film.stack", tint: .indigo, title: L10n.text("Smooth Motion (60 fps)"))
-                            #else
                             FormLabel(symbol: "film.stack", tint: .indigo, title: L10n.text("Smooth Motion (60 fps)"), subtitle: smoothNote)
-                            #endif
                         }
                         .settingsSwitch()
                     }
                 } header: {
                     Text(L10n.text("Picture"))
-                } footer: {
-                    #if os(iOS)
-                    Text(pictureNote)
-                    #endif
                 }
-            }
-            #if os(iOS)
-            Section {
-                FormLink(symbol: "play.fill", tint: Brand.indigo, title: L10n.text("Play a URL")) { PlayURLView() }
             }
             #endif
 
@@ -538,36 +517,33 @@ struct FormSettingsView: View {
                     FormLink(symbol: "cpu.fill", tint: .orange, title: L10n.text("JAR Runtime and Compatibility")) { RuntimeView() }
                 }
                 FormLink(symbol: "doc.text.magnifyingglass", tint: .gray, title: L10n.text("Diagnostic Logs")) { DiagnosticsView() }
+                #if os(iOS)
+                // The two switches that send something off the device, with their notes, on a page of their own.
+                FormLink(symbol: "hand.raised.fill", tint: .blue, title: L10n.text("Privacy")) { PrivacySettingsView() }
+                #else
                 Toggle(isOn: $sendsErrorReports) {
-                    #if os(iOS)
-                    FormLabel(symbol: "ladybug.fill", tint: .red, title: L10n.text("Send Error Reports"))
-                    #else
                     FormLabel(symbol: "ladybug.fill", tint: .red, title: L10n.text("Send Error Reports"), subtitle: errorReportsNote)
-                    #endif
                 }
                 .settingsSwitch()
                 .onChange(of: sendsErrorReports) { _, on in if !on { ErrorReports.shared.discard() } }
                 Toggle(isOn: $looksUpTMDB) {
-                    #if os(iOS)
-                    FormLabel(symbol: "film.stack.fill", tint: .teal, title: L10n.text("Look Up Titles on TMDB"))
-                    #else
                     FormLabel(symbol: "film.stack.fill", tint: .teal, title: L10n.text("Look Up Titles on TMDB"), subtitle: tmdbNote)
-                    #endif
                 }
                 .settingsSwitch()
+                #endif
             } header: {
                 Text(L10n.text("Advanced"))
             } footer: {
                 #if os(iOS)
-                Text(errorReportsNote + "\n\n" + tmdbNote)
+                if store.extrasUnlocked { Text(supportNote) }
                 #endif
             }
 
             #if os(iOS)
             // As in the Settings app: one-line rows with their state on the right, and the notes under
             // each group instead of a second line and a small link inside the row.
-            if Updates.channel != .none {
             Section {
+                if Updates.channel != .none {
                 Button {
                     if updates.available.isEmpty { Task { await updates.check(manual: true) } } else { updates.show() }
                 } label: {
@@ -583,15 +559,7 @@ struct FormSettingsView: View {
                 // Rows that act in place still read like the rows around them, not like links.
                 .tint(.primary)
                 .disabled(updates.checking)
-            } header: {
-                Text(L10n.text("About"))
-            } footer: {
-                if let title = updates.availableTitle { Text(title) }
-                else if let checked = updates.lastChecked { Text(L10n.text("Last checked %@", checked.formatted(date: .abbreviated, time: .shortened))) }
-            }
-            }
-
-            Section {
+                }
                 if !updates.currentNotes.isEmpty {
                     Button(action: updates.showCurrentNotes) {
                         HStack(spacing: 8) {
@@ -605,8 +573,18 @@ struct FormSettingsView: View {
                 }
                 FormLink(symbol: "doc.plaintext.fill", tint: .gray, title: L10n.text("Open Source Licenses")) { LicensesView() }
                     .id("settings.end")
+            } header: {
+                Text(L10n.text("About"))
             } footer: {
-                if store.extrasUnlocked { Text(L10n.text("Supports TVBox JSON subscriptions, M3U / TXT live playlists, and standard type 1 / type 4 JSON APIs. Media formats depend on the device. Local JavaScript and Python plugins are experimental on Mac, and JAR plugins are experimental on every platform; compatibility varies by source.")) }
+                VStack(alignment: .leading, spacing: 0) {
+                    if Updates.channel != .none {
+                        if let title = updates.availableTitle { Text(title) }
+                        else if let checked = updates.lastChecked { Text(L10n.text("Last checked %@", checked.formatted(date: .abbreviated, time: .shortened))) }
+                    }
+                    // The page ends on the copyright, centred, as the hero no longer carries it.
+                    Text(Brand.copyright).font(.caption2).foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity).padding(.top, 28)
+                }
             }
             #else
             Section {
@@ -640,7 +618,7 @@ struct FormSettingsView: View {
             } header: {
                 Text(L10n.text("About"))
             } footer: {
-                if store.extrasUnlocked { Text(L10n.text("Supports TVBox JSON subscriptions, M3U / TXT live playlists, and standard type 1 / type 4 JSON APIs. Media formats depend on the device. Local JavaScript and Python plugins are experimental on Mac, and JAR plugins are experimental on every platform; compatibility varies by source.")) }
+                if store.extrasUnlocked { Text(supportNote) }
             }
             #endif
         }.settingsRows() }
@@ -656,6 +634,7 @@ struct FormSettingsView: View {
         .settingsForm(L10n.text("Settings"))
         #if os(iOS)
         .sheet(isPresented: $addingSubscription) { AddSubscriptionSheet() }
+        .navigationDestination(isPresented: $showsFeedback) { FeedbackView() }
         #if DEBUG
         // `-qaAddSubscription 1` opens the sheet for screenshots.
         .onAppear { if UserDefaults.standard.bool(forKey: "qaAddSubscription") { addingSubscription = true } }
@@ -667,28 +646,41 @@ struct FormSettingsView: View {
 
     @ViewBuilder private var heroSection: some View {
         #if os(iOS)
-        // The app as a centred card on a glow of its icon's blues; a waiting release is its one button.
+        // The app on the page's own canvas, not in a card: its icon lit by a glow of itself, the name large, and the
+        // version with the update state in one glass chip. A waiting release is the one prominent button.
         Section {
-            VStack(spacing: 4) {
-                AppMark(size: 76).padding(.bottom, 10)
-                Text(L10n.text("Yingxia")).font(.title2.weight(.bold))
-                if let version { Text(version).font(.subheadline).foregroundStyle(.secondary) }
-                Text(Brand.copyright).font(.caption).foregroundStyle(.tertiary)
+            VStack(spacing: 0) {
+                // The row clips what it draws, so the glow stays small enough to fade out inside it.
+                AppMark(size: 96)
+                    .background { AppMark(size: 96).blur(radius: 22).opacity(0.7).accessibilityHidden(true) }
+                    .padding(.top, 36).padding(.bottom, 18)
+                Text(L10n.text("Yingxia")).font(.system(size: 32, weight: .bold, design: .rounded))
+                HStack(spacing: 6) {
+                    if let version { Text(version) }
+                    if updates.availableTitle == nil, Updates.channel != .none, updates.lastChecked != nil {
+                        Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
+                        Text(L10n.text("Up to Date"))
+                    }
+                }
+                .font(.footnote.weight(.medium)).foregroundStyle(.secondary)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .glassSurface(.regular, in: Capsule())
+                .padding(.top, 10)
                 if let title = updates.availableTitle {
                     Button(action: updates.show) {
                         Label(title, systemImage: "gift.fill")
                             .font(.subheadline.weight(.semibold)).foregroundStyle(Brand.onAccent)
-                            .padding(.horizontal, 16).padding(.vertical, 9)
+                            .padding(.horizontal, 18).padding(.vertical, 10)
                             .background(Brand.accent, in: Capsule())
                     }
-                    .buttonStyle(.plain)
-                    .padding(.top, 12)
+                    .buttonStyle(PressableStyle())
+                    .padding(.top, 14)
                 }
             }
             .lineLimit(1)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 18)
-            .listRowBackground(SettingsHeroGlow())
+            .padding(.bottom, 10)
+            .listRowBackground(Color.clear)
         }
         #else
         // The app leads, like the account card in Settings; a waiting release sits right under it.
@@ -719,14 +711,12 @@ struct FormSettingsView: View {
     }
 
     private var canAdd: Bool { !store.importing && !store.subscriptionAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    private var danmakuNote: String { L10n.text("Bilibili's bullet comments, drawn over the video. You can also switch them in the player.") }
+    private var danmakuNote: String { SettingsNote.danmaku }
     private var upscaleNote: String { VideoEnhancement.upscaleNote }
     private var smoothNote: String { VideoEnhancement.smoothNote }
-    private var pictureNote: String { VideoEnhancement.note }
-    private var tmdbNote: String {
-        L10n.text("Shows cast, artwork and episode details from TMDB on video pages. Sends the video's title, its details from the source and the source's name to Yingxia's lookup service, never your accounts or subscription addresses.")
-    }
-    private var errorReportsNote: String { L10n.text("Sends errors to the developer a few times a day so they can be fixed: the error text with web addresses cut to the server name, the app and system versions, and a random ID. Never your accounts, passwords or viewing history.") }
+    private var tmdbNote: String { SettingsNote.tmdb }
+    private var supportNote: String { SettingsNote.support }
+    private var errorReportsNote: String { SettingsNote.errorReports }
     private func add() { if canAdd { Task { await store.importSubscription() } } }
 
     #if os(macOS)
@@ -754,6 +744,121 @@ private struct SettingsHeroGlow: View {
             SettingsStyle.rowFill
             RadialGradient(colors: [Brand.cyan.opacity(0.32), .clear], center: .top, startRadius: 0, endRadius: 230)
             RadialGradient(colors: [Brand.indigo.opacity(0.22), .clear], center: .bottomTrailing, startRadius: 0, endRadius: 260)
+        }
+    }
+}
+
+/// A tile at the top of Settings: a symbol on a grey disc and the way out in the corner, then the title and one line
+/// about it. Drawn in the rows' fill and corner, so it reads as part of the same form.
+private struct SettingsTile: View {
+    let symbol: String
+    let tint: Color
+    let title: String
+    let subtitle: String
+    var external = false
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                Image(systemName: symbol)
+                    .font(.system(size: 17, weight: .semibold)).foregroundStyle(tint)
+                    .frame(width: 40, height: 40)
+                    .background(Color(uiColor: .tertiarySystemFill), in: Circle())
+                Spacer(minLength: 0)
+                Image(systemName: external ? "arrow.up.right" : "chevron.forward")
+                    .font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
+                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(2, reservesSpace: true)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SettingsStyle.rowFill, in: shape)
+        .contentShape(shape)
+    }
+}
+
+/// Answers the press itself, not the release: a slight sink on a critically damped spring, so a quick tap still shows.
+private struct PressableStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 1), value: configuration.isPressed)
+    }
+}
+
+/// Playback on iPhone and iPad: the player's gestures, danmaku and picture, each note under the group it explains.
+struct PlaybackSettingsView: View {
+    @Environment(Store.self) private var store
+    @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
+    @AppStorage(SpeedBoost.key) private var holdSpeed = SpeedBoost.standard
+    @AppStorage(PictureLevel.key) private var slidesLevels = true
+    @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
+    @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
+    var body: some View {
+        SettingsPage(title: L10n.text("Playback"), symbol: "slider.horizontal.below.rectangle") {
+            SettingsGroup(footer: L10n.text("Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go.")) {
+                Picker(selection: $holdSpeed) {
+                    ForEach(SpeedBoost.startRates, id: \.self) { Text($0.formatted(.number.precision(.fractionLength(0...2))) + "×").tag($0) }
+                } label: {
+                    FormLabel(symbol: "forward.fill", tint: .orange, title: L10n.text("Touch and Hold Speed"))
+                }
+            }
+            SettingsGroup(footer: L10n.text("Slide up or down on the left of the video to change the brightness, or on the right to change the volume.")) {
+                Toggle(isOn: $slidesLevels) {
+                    FormLabel(symbol: "sun.max.fill", tint: .yellow, title: L10n.text("Slide for Brightness and Volume"))
+                }
+                .settingsSwitch()
+            }
+            if store.extrasUnlocked {
+                SettingsGroup(footer: SettingsNote.danmaku) {
+                    Toggle(isOn: $showsDanmaku) {
+                        FormLabel(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Show Danmaku"))
+                    }
+                    .settingsSwitch()
+                }
+            }
+            if VideoEnhancement.canUpscale || VideoEnhancement.canSmooth {
+                SettingsGroup(title: L10n.text("Picture"), footer: VideoEnhancement.note) {
+                    if VideoEnhancement.canUpscale {
+                        Toggle(isOn: $upscalesVideo) {
+                            FormLabel(symbol: "wand.and.sparkles", tint: .purple, title: L10n.text("Sharper Picture"))
+                        }
+                        .settingsSwitch()
+                    }
+                    if VideoEnhancement.canSmooth {
+                        Toggle(isOn: $smoothsVideo) {
+                            FormLabel(symbol: "film.stack", tint: .indigo, title: L10n.text("Smooth Motion (60 fps)"))
+                        }
+                        .settingsSwitch()
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The two switches that send something off the device, each with what it sends.
+struct PrivacySettingsView: View {
+    @AppStorage(ErrorReports.key) private var sendsErrorReports = true
+    @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
+    var body: some View {
+        SettingsPage(title: L10n.text("Privacy"), symbol: "hand.raised.fill") {
+            SettingsGroup(footer: SettingsNote.errorReports) {
+                Toggle(isOn: $sendsErrorReports) {
+                    FormLabel(symbol: "ladybug.fill", tint: .red, title: L10n.text("Send Error Reports"))
+                }
+                .settingsSwitch()
+                .onChange(of: sendsErrorReports) { _, on in if !on { ErrorReports.shared.discard() } }
+            }
+            SettingsGroup(footer: SettingsNote.tmdb) {
+                Toggle(isOn: $looksUpTMDB) {
+                    FormLabel(symbol: "film.stack.fill", tint: .teal, title: L10n.text("Look Up Titles on TMDB"))
+                }
+                .settingsSwitch()
+            }
         }
     }
 }
