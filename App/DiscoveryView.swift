@@ -858,10 +858,10 @@ struct RecommendationsView: View {
             if browser.pageCount > 1 {
                 HStack(spacing: 12) {
                     Button { categoryPage -= 1 } label: { Image(systemName: "chevron.left").frame(width: 22) }
-                        .glassControlButton().disabled(categoryPage <= 1 || browser.busy).accessibilityLabel(L10n.text("Previous"))
+                        .controlButton().disabled(categoryPage <= 1 || browser.busy).accessibilityLabel(L10n.text("Previous"))
                     Text(L10n.text("Page %lld of %lld", browser.page, browser.pageCount)).font(.subheadline.weight(.medium).monospacedDigit())
                     Button { categoryPage += 1 } label: { Image(systemName: "chevron.right").frame(width: 22) }
-                        .glassControlButton().disabled(categoryPage >= browser.pageCount || browser.busy).accessibilityLabel(L10n.text("Next"))
+                        .controlButton().disabled(categoryPage >= browser.pageCount || browser.busy).accessibilityLabel(L10n.text("Next"))
                 }
                 .frame(maxWidth: .infinity).tvFocusSection()
             }

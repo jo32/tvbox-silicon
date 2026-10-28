@@ -1142,7 +1142,7 @@ struct VideoDetailView: View {
                 if text.count > 100 {
                     let toggle = Button(L10n.text(synopsisExpanded ? "Show Less" : "Show Full Synopsis")) { synopsisExpanded.toggle() }
                     #if os(tvOS)
-                    toggle.glassControlButton()
+                    toggle.controlButton()
                     #else
                     toggle.buttonStyle(.plain).font(.subheadline.weight(.semibold)).frame(minHeight: 44, alignment: .leading)
                     #endif
@@ -1206,7 +1206,7 @@ struct VideoDetailView: View {
             // so the hero offers them too; they hold focus, and Back leaves the page again.
             HStack(spacing: 10) {
                 Button { startRequest { await loadDetail() } } label: { Label(L10n.text("Retry"), systemImage: "arrow.clockwise") }
-                    .glassControlButton(prominent: true).tint(Brand.accent).controlSize(.large)
+                    .controlButton(prominent: true).tint(Brand.accent).controlSize(.large)
                     .disabled(busy)
                     .focused($playFocused)
                     .accessibilityIdentifier("detail.retry")
@@ -1218,7 +1218,7 @@ struct VideoDetailView: View {
     #if os(tvOS)
     private func goBackButton(prominent: Bool) -> some View {
         Button { dismiss() } label: { Label(L10n.text("Go back"), systemImage: "chevron.backward") }
-            .glassControlButton(prominent: prominent).controlSize(.large)
+            .controlButton(prominent: prominent).controlSize(.large)
             .accessibilityIdentifier("detail.goBack")
     }
     #endif
@@ -1230,7 +1230,7 @@ struct VideoDetailView: View {
             }
             .font(.headline).lineLimit(1).fixedSize().padding(.horizontal, 8)
         }
-        .glassControlButton(prominent: true).tint(Brand.accent).controlSize(.large)
+        .controlButton(prominent: true).tint(Brand.accent).controlSize(.large)
         .focused($playFocused)
     }
     private func downloadButton(iconOnly: Bool) -> some View {
@@ -1239,7 +1239,7 @@ struct VideoDetailView: View {
                 .labelStyle(DownloadLabelStyle(iconOnly: iconOnly))
                 .font(.headline).lineLimit(1).fixedSize()
         }
-        .glassControlButton().controlSize(.large).accessibilityLabel(L10n.text("Download"))
+        .controlButton().controlSize(.large).accessibilityLabel(L10n.text("Download"))
     }
     /// Icon-only, beside Play and Download. An empty heart keeps the control color; a saved one is rose.
     /// Set as text in their font, so the button is as tall as theirs: a bare image made a smaller one on Apple TV.
@@ -1256,7 +1256,7 @@ struct VideoDetailView: View {
             }
             .font(.headline).lineLimit(1).fixedSize()
         }
-        .glassControlButton().controlSize(.large)
+        .controlButton().controlSize(.large)
         .accessibilityLabel(title).help(title)
         .accessibilityIdentifier("detail.favorite")
     }
