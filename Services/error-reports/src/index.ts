@@ -177,7 +177,9 @@ async function feedback(request: Request, env: Env): Promise<Response> {
 // The issues are public, so their numbers are all it sends; only issues labeled feedback answer.
 const REPLIES_ISSUES = 10;
 const REPLY_MAX = 4000;
-const REPLIES_CACHE = 300; // seconds
+// Seconds. Each data center keeps its own copies, and a check right after sending caches "no replies":
+// short, so a reply shows within a minute.
+const REPLIES_CACHE = 60;
 const DEVELOPER = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
 // What the person who sent it sees of an issue's comments: the developer's, without HTML comments
@@ -194,7 +196,7 @@ export function state(issue: any) {
   return issue?.state !== "closed" ? "open" : issue.state_reason === "not_planned" ? "declined" : "closed";
 }
 
-// One issue, from the cache for five minutes. null when it isn't a feedback issue; undefined when GitHub failed.
+// One issue, from the cache for a minute. null when it isn't a feedback issue; undefined when GitHub failed.
 async function status(number: number, env: Env, origin: string) {
   const key = new Request(`${origin}/v1/feedback/replies/${number}`);
   const hit = await caches.default.match(key);
