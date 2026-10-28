@@ -1080,3 +1080,13 @@
 "This CatPawOpen bundle lists no video sources." = "此猫源没有提供视频源。";
 "This device can't run CatPawOpen sources." = "此设备无法运行猫源。";
 "The CatPawOpen runtime stopped. Quit and reopen the app to use these sources." = "猫源运行环境已停止。请退出并重新打开 App 后再使用这些源。";
+"Finding the live stream" = "正在查找直播流";
+"Getting the file from the drive" = "正在从网盘获取文件";
+"Repackaging the video for this device" = "正在为此设备转封装视频";
+"Opening the saved download" = "正在打开已下载的视频";
+"Connecting to %@" = "正在连接 %@";
+"Receiving video from %@" = "正在从 %@ 接收视频";
+"Trouble with %@ (%@), trying again" = "%@ 出现问题（%@），正在重试";
+"Jumping to %@" = "正在跳转到 %@";
+"%@ received" = "已接收 %@";
+"the video server" = "视频服务器";

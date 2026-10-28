@@ -1080,3 +1080,13 @@
 "This CatPawOpen bundle lists no video sources." = "この CatPawOpen バンドルには動画ソースがありません。";
 "This device can't run CatPawOpen sources." = "このデバイスでは CatPawOpen のソースを実行できません。";
 "The CatPawOpen runtime stopped. Quit and reopen the app to use these sources." = "CatPawOpen の実行環境が停止しました。アプリを終了して再度開いてから、これらのソースをお使いください。";
+"Finding the live stream" = "ライブ配信を探しています";
+"Getting the file from the drive" = "ドライブからファイルを取得しています";
+"Repackaging the video for this device" = "このデバイス向けに動画を変換しています";
+"Opening the saved download" = "保存したダウンロードを開いています";
+"Connecting to %@" = "%@ に接続しています";
+"Receiving video from %@" = "%@ から動画を受信しています";
+"Trouble with %@ (%@), trying again" = "%@ で問題が発生しました（%@）。再試行しています";
+"Jumping to %@" = "%@ へ移動しています";
+"%@ received" = "%@ 受信済み";
+"the video server" = "動画サーバー";

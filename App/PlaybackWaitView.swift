@@ -13,6 +13,11 @@ struct PlaybackWait: Equatable {
     var caption: String?
     /// Points to the other lines, under the ⋯ button, drawn with that button's own symbol.
     var suggestsLines = false
+    /// The small print, once the wait has run `detailsAfter`: the download's speed and size, and the player's last steps.
+    var detail: String?
+    var steps: [String] = []
+    /// Short waits show only the spinner and the line; longer ones say how they are going.
+    static let detailsAfter: TimeInterval = 3
 }
 
 /// The player's wait, ready to drop into a player's content overlay.
@@ -144,12 +149,13 @@ struct PlaybackWaitView: View {
         let axis = controlsAxis(width: size.width), centre = picture.midY
         if size.height > size.width * 1.2 {
             // Upright: clear of the title bar above, with the words hanging under the card, clear of the scrubber.
-            let half = max(40, min(size.height * 0.19, centre - 176, size.height - 190 - centre))
+            let half = max(40, min(size.height * 0.19, centre - 176, size.height - 230 - centre))
             let card = CGRect(x: axis - (picture.width - 48) / 2, y: centre - half, width: picture.width - 48, height: half * 2)
             return WaitLayout(card: card, axis: axis, wordsTop: card.maxY + 24)
         }
-        // Sideways: between the title bar and one line of words just above the scrubber (its top is about 62 pt up).
-        let wordsBottom: CGFloat = 68, wordsTop = size.height - wordsBottom - 44
+        // Sideways: between the title bar and one line of words, with its small print, just above the scrubber (its top
+        // is about 62 pt up).
+        let wordsBottom: CGFloat = 68, wordsTop = size.height - wordsBottom - 74
         let half = max(40, min(size.height * 0.3, centre - 111, wordsTop - 10 - centre))
         let card = CGRect(x: axis - picture.width * 0.3, y: centre - half, width: picture.width * 0.6, height: half * 2)
         return WaitLayout(card: card, axis: axis, wordsBottom: wordsBottom, inlineCaption: true)
@@ -195,7 +201,7 @@ struct PlaybackWaitView: View {
             let stack = VStack(spacing: 10) {
                 if let wait {
                     HStack(spacing: 10) {
-                        if !starting { ProgressView().controlSize(.small).tint(.white) }
+                        ProgressView().controlSize(.small).tint(.white)
                         // A new message replaces the old with a soft blur rather than two lines crossing.
                         line(wait, inline: layout.inlineCaption).lineLimit(1)
                             .id("\(wait.message)|\(wait.caption ?? "")|\(wait.suggestsLines)").transition(.blurReplace)
@@ -207,6 +213,11 @@ struct PlaybackWaitView: View {
                     if !layout.inlineCaption, let caption = caption(wait) {
                         caption.font(Self.captionFont).foregroundStyle(.white.opacity(0.66))
                             .multilineTextAlignment(.center).lineLimit(2)
+                            .frame(maxWidth: Self.captionWidth)
+                            .transition(.opacity)
+                    }
+                    if wait.detail != nil || !wait.steps.isEmpty {
+                        WaitDetails(detail: wait.detail, steps: Array(wait.steps.suffix(layout.inlineCaption ? 1 : 2)))
                             .frame(maxWidth: Self.captionWidth)
                             .transition(.opacity)
                     }
@@ -244,20 +255,37 @@ struct PlaybackWaitView: View {
     private static let captionWidth: CGFloat = 900
     /// Clears the transport bar, which tvOS shows by itself while a video loads (its scrubber sits about 175 pt up).
     private static let bottomGap: CGFloat = 250
-    private static let wordsHeight: CGFloat = 120
+    private static let wordsHeight: CGFloat = 175
     #elseif os(macOS)
     private static let pillFont = Font.callout.weight(.medium)
     private static let captionFont = Font.footnote
     private static let pillPadding: CGFloat = 10
     private static let captionWidth: CGFloat = 520
     private static let bottomGap: CGFloat = 96
-    private static let wordsHeight: CGFloat = 70
+    private static let wordsHeight: CGFloat = 115
     #else
     private static let pillFont = Font.subheadline.weight(.medium)
     private static let captionFont = Font.footnote
     private static let pillPadding: CGFloat = 11
     private static let captionWidth: CGFloat = 520
     #endif
+}
+
+/// A wait's small print, under its words or spinner: how the download goes, then the last steps, the newest brightest.
+struct WaitDetails: View {
+    var detail: String?
+    var steps: [String] = []
+    var body: some View {
+        VStack(spacing: 3) {
+            if let detail { Text(detail).font(.caption.monospacedDigit()).foregroundStyle(.white.opacity(0.75)) }
+            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                Text(step).font(.caption2).foregroundStyle(.white.opacity(index == steps.count - 1 ? 0.55 : 0.35))
+            }
+        }
+        .lineLimit(1)
+        .multilineTextAlignment(.center)
+        .shadow(color: .black.opacity(0.45), radius: 6)
+    }
 }
 
 /// A soft band of warm light that crosses the artwork every few seconds, as if the picture were developing.

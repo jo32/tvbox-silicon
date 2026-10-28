@@ -883,6 +883,8 @@ struct LoadingProgress {
     var detail: String? = nil
     var fraction: Double? = nil
     var reason: String? = nil
+    /// The last steps taken, newest last; the card shows the latest two under the detail.
+    var steps: [String] = []
 }
 
 extension LoadingProgress {
@@ -915,9 +917,11 @@ struct ElapsedTime: View {
     }
 }
 
-/// Every wait shows how long it has run; past `patience` seconds it also says why it is still
-/// loading. A card across the page column, like the rows around it, re-polled twice a second.
+/// Every wait starts as a spinner; after `quiet` seconds the card takes its place with what it waits on and how
+/// long it has run, and past `patience` seconds why it is still loading. A card across the page column, like the
+/// rows around it, re-polled twice a second.
 struct LoadingCard: View {
+    static let quiet: TimeInterval = 1.5
     static let patience: TimeInterval = 10
     /// The width of a compact card, for one over a video or alone in an empty page.
     static let compact: CGFloat = 620
@@ -930,9 +934,15 @@ struct LoadingCard: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.5)) { timeline in
             let elapsed = max(0, timeline.date.timeIntervalSince(started))
-            if elapsed >= appearAfter {
-                card(progress(), elapsed: Int(elapsed))
+            let speaks = elapsed >= appearAfter + Self.quiet
+            Group {
+                if speaks {
+                    card(progress(), elapsed: Int(elapsed)).transition(.opacity)
+                } else if elapsed >= appearAfter {
+                    ProgressView().frame(maxWidth: maxWidth).padding(.vertical, 14).transition(.opacity)
+                }
             }
+            .animation(.smooth(duration: 0.3), value: speaks)
         }
     }
 
@@ -945,6 +955,9 @@ struct LoadingCard: View {
                     Text(state.title).font(.callout.weight(.semibold)).lineLimit(1)
                     if let detail = state.detail {
                         Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    }
+                    ForEach(Array(state.steps.suffix(2).enumerated()), id: \.offset) { _, step in
+                        Text(step).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 16)

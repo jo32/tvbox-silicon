@@ -1080,3 +1080,13 @@
 "This CatPawOpen bundle lists no video sources." = "This CatPawOpen bundle lists no video sources.";
 "This device can't run CatPawOpen sources." = "This device can't run CatPawOpen sources.";
 "The CatPawOpen runtime stopped. Quit and reopen the app to use these sources." = "The CatPawOpen runtime stopped. Quit and reopen the app to use these sources.";
+"Finding the live stream" = "Finding the live stream";
+"Getting the file from the drive" = "Getting the file from the drive";
+"Repackaging the video for this device" = "Repackaging the video for this device";
+"Opening the saved download" = "Opening the saved download";
+"Connecting to %@" = "Connecting to %@";
+"Receiving video from %@" = "Receiving video from %@";
+"Trouble with %@ (%@), trying again" = "Trouble with %@ (%@), trying again";
+"Jumping to %@" = "Jumping to %@";
+"%@ received" = "%@ received";
+"the video server" = "the video server";

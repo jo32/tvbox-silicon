@@ -83,7 +83,7 @@ struct MobilePlayerView: View {
                     // player keeps its own wait.
                     Group {
                         if waiting.starting { WatchCoverBackdrop(poster: waiting.artwork.poster, headers: waiting.artwork.headers, loading: session.error == nil) }
-                        else { ProgressView().controlSize(.large).tint(.white) }
+                        else { WaitSpinner(status: waiting.state) }
                     }
                     .transition(.opacity)
                 } else {
@@ -676,6 +676,8 @@ struct WatchCoverBackdrop: View {
     let poster: URL?
     var headers: [String: String] = [:]
     var loading = true
+    /// What the wait has to say, by how long it has run (see `WaitSpinner`).
+    var status: (@MainActor (TimeInterval) -> PlaybackWait)? = nil
     var body: some View {
         ZStack {
             Color.black
@@ -684,9 +686,39 @@ struct WatchCoverBackdrop: View {
                 .blur(radius: 24).scaleEffect(1.2)
                 .overlay(Color.black.opacity(0.35))
                 .accessibilityHidden(true)
-            if loading { ProgressView().controlSize(.large).tint(.white) }
+            if loading { WaitSpinner(status: status) }
         }
         .clipped()
+    }
+}
+
+/// A spinner first; once the wait has run `PlaybackWait.detailsAfter`, its line and small print along the bottom,
+/// so the spinner stays where it was.
+struct WaitSpinner: View {
+    var status: (@MainActor (TimeInterval) -> PlaybackWait)?
+    @State private var started = Date()
+    var body: some View {
+        ZStack {
+            ProgressView().controlSize(.large).tint(.white)
+            if let status {
+                TimelineView(.periodic(from: .now, by: 0.5)) { timeline in
+                    let elapsed = max(0, timeline.date.timeIntervalSince(started))
+                    let speaks = elapsed >= PlaybackWait.detailsAfter
+                    VStack(spacing: 5) {
+                        if speaks {
+                            let wait = status(elapsed)
+                            Text(wait.message).font(.footnote.weight(.medium)).foregroundStyle(.white).lineLimit(1)
+                            WaitDetails(detail: wait.detail, steps: Array(wait.steps.suffix(2)))
+                        }
+                    }
+                    .padding(.horizontal, 24).padding(.bottom, 12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .animation(.smooth(duration: 0.45), value: speaks)
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -710,6 +742,8 @@ struct WatchPlayback {
     var leave: () -> Void
     /// The picture, or an error, has taken the place of the wait: the page's cover can go.
     var started: (Bool) -> Void = { _ in }
+    /// The page's player, so the cover over it can say how its wait goes.
+    var opened: (PlaybackSession) -> Void = { _ in }
 }
 
 /// The full-screen player sets the app's appearance; one at the top of a page sets only its own.
