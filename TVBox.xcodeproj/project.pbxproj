@@ -67,6 +67,7 @@
 		3917D120CB9602531FA0D44E /* Updates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D706229ED242AE96AE52F8 /* Updates.swift */; };
 		3A6251EF1A83DCA0F38A1235 /* MusicMacBrowse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D442D4FB2D2EB656FBBCB2C /* MusicMacBrowse.swift */; };
 		3AAEF47B755581ED6BE517CF /* OpenJDK-additional.txt in Resources */ = {isa = PBXBuildFile; fileRef = 49F3577BBD5630331F34E84E /* OpenJDK-additional.txt */; };
+		3ABC036DB97EAE1D5C4A76F5 /* XunleiSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00C471D2D671003876D2A4F9 /* XunleiSignInView.swift */; };
 		3AD83F67CC5F45C57E1021D3 /* MusicMacMiniPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF5CB8DD12A92056BFD50444 /* MusicMacMiniPlayer.swift */; };
 		3BD1DFEF3A75B43935EB2185 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C911ACB6C027C8F9A096409 /* RootView.swift */; };
 		3BE24A3F4D4DED139056CC1B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 3C95AF876ECA5A35824263D7 /* PrivacyInfo.xcprivacy */; };
@@ -190,8 +191,10 @@
 		C093CB1C1E82F6648ADBC51C /* VideoEnhancement.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAA3BD557773609F9C5109CA /* VideoEnhancement.swift */; };
 		C10EEC4D7AED0BE564BF2246 /* DanmakuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A5737402EC96F0FBF79243E /* DanmakuView.swift */; };
 		C1C46AE3262D5E734B72F980 /* OpenJDK-additional.txt in Resources */ = {isa = PBXBuildFile; fileRef = 49F3577BBD5630331F34E84E /* OpenJDK-additional.txt */; };
+		C4A3779AB55BFE31030743DF /* XunleiSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00C471D2D671003876D2A4F9 /* XunleiSignInView.swift */; };
 		C505C16C48F9D001FF7BF6AE /* MusicDownloadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F678BCB59DDEA3AD1329B11 /* MusicDownloadsView.swift */; };
 		C5E9C8C7F693011882FC1F22 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CB1FA4BB4990588B428781E /* PlayerView.swift */; };
+		C627C9461759A04D2BDC82FE /* XunleiSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00C471D2D671003876D2A4F9 /* XunleiSignInView.swift */; };
 		C6356D3F2510CD921FA3E890 /* Capstone.txt in Resources */ = {isa = PBXBuildFile; fileRef = E84A48E8E87E4B3CC3DCDA8C /* Capstone.txt */; };
 		C6A0D43B82613E91DDF9857A /* PlayOn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 226C6E62CA6E50C8609C1EF3 /* PlayOn.swift */; };
 		C6D7579CAFFAB9B441C0703C /* CloudDriveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE19E104EAA6C4F620B8E53 /* CloudDriveView.swift */; };
@@ -249,6 +252,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		00C471D2D671003876D2A4F9 /* XunleiSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XunleiSignInView.swift; sourceTree = "<group>"; };
 		04E8471F5AF8D64B17693833 /* TVBox-tvOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "TVBox-tvOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		0558AED26E6028C2881DD044 /* PythonHost */ = {isa = PBXFileReference; lastKnownFileType = folder; name = PythonHost; path = build/PythonHost; sourceTree = SOURCE_ROOT; };
 		06D9469858E5C5A118DED875 /* libffi.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = libffi.txt; sourceTree = "<group>"; };
@@ -473,6 +477,7 @@
 				FAA3BD557773609F9C5109CA /* VideoEnhancement.swift */,
 				367AD12D73554C3C3667315D /* WebSignInView.swift */,
 				4D5F41819EAA3AFE7BD6E5AD /* WebSniffer.swift */,
+				00C471D2D671003876D2A4F9 /* XunleiSignInView.swift */,
 				1F25D2D2DB103D5EFE355065 /* Resources */,
 			);
 			path = App;
@@ -941,6 +946,7 @@
 				34679295741063A247FA3E48 /* VideoEnhancement.swift in Sources */,
 				B19F7759D04CE58A64304EF8 /* WebSignInView.swift in Sources */,
 				75327F454262A1854A16C462 /* WebSniffer.swift in Sources */,
+				3ABC036DB97EAE1D5C4A76F5 /* XunleiSignInView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1005,6 +1011,7 @@
 				D0C9F46261DDBE305F183413 /* VideoEnhancement.swift in Sources */,
 				5F2A9E2F9145EE979E5AA1F0 /* WebSignInView.swift in Sources */,
 				D0DBC45A6CF92DB54117E0AC /* WebSniffer.swift in Sources */,
+				C627C9461759A04D2BDC82FE /* XunleiSignInView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1071,6 +1078,7 @@
 				C093CB1C1E82F6648ADBC51C /* VideoEnhancement.swift in Sources */,
 				ED3A1F1DAE4D25F3AA743AC7 /* WebSignInView.swift in Sources */,
 				57ACF4B5018DE98046D60BA3 /* WebSniffer.swift in Sources */,
+				C4A3779AB55BFE31030743DF /* XunleiSignInView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

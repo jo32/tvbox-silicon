@@ -888,21 +888,29 @@ struct VideoDetailView: View {
         // Sign in where playback failed, then resume the episode that needed the account.
         #if os(macOS)
         .sheet(item: $signingIn) { drive in
-            CloudLoginView(provider: drive.provider) { cookie, ticket in
-                try await drive.provider.saveLogin(cookie, ticket: ticket)
-                if let episode = playbackIssue?.episode { startRequest { await play(episode) } }
+            if drive == .xunlei {
+                XunleiSignInView { if let episode = playbackIssue?.episode { startRequest { await play(episode) } } }
+            } else {
+                CloudLoginView(provider: drive.provider) { cookie, ticket in
+                    try await drive.provider.saveLogin(cookie, ticket: ticket)
+                    if let episode = playbackIssue?.episode { startRequest { await play(episode) } }
+                }
             }
         }
         #elseif os(iOS)
         // The drive's own sign-in page; the code is for signing in with another phone.
         .sheet(item: $signingIn) { drive in
-            WebSignInView(service: drive.webSignIn, signedIn: retryAfterSignIn) {
-                CloudQRLoginView(drive: drive.qrDrive) { retryAfterSignIn() }
+            if drive == .xunlei { XunleiSignInView(signedIn: retryAfterSignIn) }
+            else {
+                WebSignInView(service: drive.webSignIn, signedIn: retryAfterSignIn) {
+                    CloudQRLoginView(drive: drive.qrDrive) { retryAfterSignIn() }
+                }
             }
         }
         #else
         .fullScreenCover(item: $signingIn) { drive in
-            CloudQRLoginView(drive: drive.qrDrive) { retryAfterSignIn() }
+            if drive == .xunlei { XunleiSignInView(signedIn: retryAfterSignIn) }
+            else { CloudQRLoginView(drive: drive.qrDrive) { retryAfterSignIn() } }
         }
         #endif
         .downloadPicker(isPresented: $choosingDownloads) {
@@ -1907,13 +1915,16 @@ private struct PlaybackIssue {
 
 /// Cloud drives whose plugins need a saved login before they can return a stream.
 private enum CloudDrive: String, Identifiable {
-    case quark, uc
+    /// Xunlei's sign-in is only for CatPawOpen bundles, which say when it is missing; other sources play their Xunlei
+    /// lines without it, so those lines are never held back for it.
+    case quark, uc, xunlei
     var id: String { rawValue }
     /// FTY names its lines after drive nicknames: 夸父 is Quark, 优汐 is UC.
     init?(flag: String) {
         let text = flag.lowercased()
         if text.contains("夸克") || text.contains("夸父") || text.contains("quark") { self = .quark }
         else if text.hasPrefix("uc") || text.contains("uc网盘") || text.contains("优汐") { self = .uc }
+        else if text.contains("迅雷") || text.contains("xunlei") { self = .xunlei }
         else { return nil }
     }
     /// Lines from drives that sign in through the plugin's own QR code (FTY's 嘟嘟 is Baidu, 阿狸 is
@@ -1927,13 +1938,25 @@ private enum CloudDrive: String, Identifiable {
         let accounts = (try? CloudDriveAccounts.load()) ?? CloudDriveAccounts()
         return flags.first { flag in
             if withoutSignIn(flag) { return false }
-            guard let drive = CloudDrive(flag: flag) else { return true }
+            guard let drive = CloudDrive(flag: flag), drive != .xunlei else { return true }
             let cookie = drive == .quark ? accounts.quarkCookie : accounts.ucCookie
             return !cookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
-    var name: String { self == .quark ? L10n.text("Quark") : "UC" }
-    var signInTitle: String { L10n.text(self == .quark ? "Sign In to Quark" : "Sign In to UC") }
+    var name: String {
+        switch self {
+        case .quark: L10n.text("Quark")
+        case .uc: "UC"
+        case .xunlei: L10n.text("Xunlei")
+        }
+    }
+    var signInTitle: String {
+        switch self {
+        case .quark: L10n.text("Sign In to Quark")
+        case .uc: L10n.text("Sign In to UC")
+        case .xunlei: L10n.text("Sign In to %@", name)
+        }
+    }
     #if os(macOS)
     var provider: CloudProvider { self == .quark ? .quark : .uc }
     #else
@@ -1943,7 +1966,7 @@ private enum CloudDrive: String, Identifiable {
     var loginHint: String { L10n.text("This source plays from %@ and needs you to sign in first.", name) }
     var expiredHint: String { L10n.text("Your %@ sign-in is missing or has expired. Sign in again to play this episode.", name) }
     static func missingLogin(forFlag flag: String) -> CloudDrive? {
-        guard let drive = CloudDrive(flag: flag) else { return nil }
+        guard let drive = CloudDrive(flag: flag), drive != .xunlei else { return nil }
         let accounts = (try? CloudDriveAccounts.load()) ?? CloudDriveAccounts()
         let cookie = drive == .quark ? accounts.quarkCookie : accounts.ucCookie
         return cookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? drive : nil

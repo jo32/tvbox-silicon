@@ -1080,6 +1080,15 @@
 "This CatPawOpen bundle lists no video sources." = "この CatPawOpen バンドルには動画ソースがありません。";
 "This device can't run CatPawOpen sources." = "このデバイスでは CatPawOpen のソースを実行できません。";
 "The CatPawOpen runtime stopped. Quit and reopen the app to use these sources." = "CatPawOpen の実行環境が停止しました。アプリを終了して再度開いてから、これらのソースをお使いください。";
+"Xunlei" = "迅雷";
+"Phone Number" = "電話番号";
+"Verification Code" = "確認コード";
+"Send Code" = "コードを送信";
+"Send Again" = "再送信";
+"Enter the phone number of your Xunlei account. Xunlei texts it a code." = "迅雷アカウントの電話番号を入力してください。迅雷からその番号に確認コードが届きます。";
+"Enter the code Xunlei texted to %@." = "迅雷から %@ に届いたコードを入力してください。";
+"Enter a mainland China mobile number." = "中国本土の携帯電話番号を入力してください。";
+"Xunlei refused the sign-in (%@)." = "迅雷がサインインを拒否しました（%@）。";
 "Finding the live stream" = "ライブ配信を探しています";
 "Getting the file from the drive" = "ドライブからファイルを取得しています";
 "Repackaging the video for this device" = "このデバイス向けに動画を変換しています";
