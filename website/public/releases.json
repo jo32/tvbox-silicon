@@ -114,10 +114,10 @@
             "ja": "その他の修正"
           },
           "detail": {
-            "en": "A Python source that quits no longer closes the app on iPhone, iPad and Apple TV, and some Java sources that failed to open work again. Plugin sources that set up cloud drives from a config center now use your cloud drive sign-ins. On iPhone, a watch page opened from search takes one Back to leave, and on Mac and iPad loading cards line up with the posters under them.",
-            "zh-Hans": "Python 源退出时不再导致 iPhone、iPad 和 Apple TV 上的 App 关闭；部分无法打开的 Java 源也恢复正常。通过配置中心设置网盘的插件源现在会使用你已登录的网盘账号。在 iPhone 上，从搜索打开的观看页只需返回一次即可离开；在 Mac 和 iPad 上，加载卡片与下方的海报对齐。",
-            "zh-Hant": "Python 來源結束時不再導致 iPhone、iPad 和 Apple TV 上的 App 關閉；部分無法開啟的 Java 來源也恢復正常。透過設定中心設定網盤的外掛來源現在會使用你已登入的網盤帳號。在 iPhone 上，從搜尋開啟的觀看頁只需返回一次即可離開；在 Mac 和 iPad 上，載入卡片與下方的海報對齊。",
-            "ja": "Python のソースが終了しても、iPhone・iPad・Apple TV でアプリが閉じなくなりました。開けなかった一部の Java ソースも再び使えます。設定センターからクラウドドライブを設定するプラグインソースが、サインイン済みのクラウドドライブのアカウントを使うようになりました。iPhone では検索から開いた視聴ページを 1 回の「戻る」で閉じられ、Mac と iPad では読み込みカードが下のポスターと揃うようになりました。"
+            "en": "Downloaded MKV videos, such as 4K HDR episodes, no longer load forever on Apple TV: the app keeps them as MP4, which plays directly. A Python source that quits no longer closes the app on iPhone, iPad and Apple TV, and some Java sources that failed to open work again. Plugin sources that set up cloud drives from a config center now use your cloud drive sign-ins. On iPhone, a watch page opened from search takes one Back to leave, and on Mac and iPad loading cards line up with the posters under them.",
+            "zh-Hans": "下载的 MKV 视频（如 4K HDR 剧集）在 Apple TV 上不再一直加载：App 会把它们存为 MP4，可直接播放。Python 源退出时不再导致 iPhone、iPad 和 Apple TV 上的 App 关闭；部分无法打开的 Java 源也恢复正常。通过配置中心设置网盘的插件源现在会使用你已登录的网盘账号。在 iPhone 上，从搜索打开的观看页只需返回一次即可离开；在 Mac 和 iPad 上，加载卡片与下方的海报对齐。",
+            "zh-Hant": "下載的 MKV 影片（如 4K HDR 劇集）在 Apple TV 上不再一直載入：App 會把它們存為 MP4，可直接播放。Python 來源結束時不再導致 iPhone、iPad 和 Apple TV 上的 App 關閉；部分無法開啟的 Java 來源也恢復正常。透過設定中心設定網盤的外掛來源現在會使用你已登入的網盤帳號。在 iPhone 上，從搜尋開啟的觀看頁只需返回一次即可離開；在 Mac 和 iPad 上，載入卡片與下方的海報對齊。",
+            "ja": "ダウンロードした MKV 動画（4K HDR のエピソードなど）が Apple TV で読み込み中のまま止まらなくなりました。アプリが MP4 として保存し、そのまま再生できます。Python のソースが終了しても、iPhone・iPad・Apple TV でアプリが閉じなくなりました。開けなかった一部の Java ソースも再び使えます。設定センターからクラウドドライブを設定するプラグインソースが、サインイン済みのクラウドドライブのアカウントを使うようになりました。iPhone では検索から開いた視聴ページを 1 回の「戻る」で閉じられ、Mac と iPad では読み込みカードが下のポスターと揃うようになりました。"
           }
         }
       ]
