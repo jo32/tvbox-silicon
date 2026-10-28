@@ -910,6 +910,15 @@
 "Thank You!" = "謝謝你！";
 "Your feedback is now issue #%lld on GitHub." = "你的意見已成為 GitHub 上的問題 #%lld。";
 "Send Another" = "再傳一則";
+"Your Feedback" = "我的意見";
+"Received" = "已收到";
+"Replied" = "已回覆";
+"Resolved" = "已解決";
+"Closed" = "已關閉";
+"New Reply" = "新回覆";
+"Developer" = "開發者";
+"No replies yet. They'll appear here." = "還沒有回覆，有回覆時會顯示在這裡。";
+"Couldn't check for replies. Please try again later." = "無法查看回覆，請稍後再試。";
 "Remove Download" = "移除下載";
 "Downloaded Songs" = "已下載的歌曲";
 "No Downloaded Songs" = "沒有已下載的歌曲";

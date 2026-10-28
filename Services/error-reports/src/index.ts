@@ -1,6 +1,7 @@
 // Takes the app's error reports and stores them in D1. The app groups repeats and sends at most
 // every six hours, so each install costs a request or so a day. No IP address is stored.
-// Also turns feedback written in the app's Settings into a GitHub issue (/v1/feedback).
+// Also turns feedback written in the app's Settings into a GitHub issue (/v1/feedback), and tells the app
+// how its issues are doing and what the developer replied (/v1/feedback/replies).
 
 interface Env {
   DB: D1Database;
@@ -126,6 +127,19 @@ export function issue(body: any) {
   };
 }
 
+// The repository's REST API, as the token. `path` follows /repos/<owner>/<name>.
+const github = (env: Env, path: string, init: RequestInit = {}) =>
+  fetch(`${env.GITHUB_API ?? "https://api.github.com"}/repos/${env.FEEDBACK_REPO}${path}`, {
+    ...init,
+    headers: {
+      accept: "application/vnd.github+json",
+      authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      "content-type": "application/json",
+      "user-agent": "yingxia-feedback",
+      "x-github-api-version": "2022-11-28",
+    },
+  });
+
 async function feedback(request: Request, env: Env): Promise<Response> {
   if (!env.GITHUB_TOKEN) return new Response(null, { status: 503 });
   if (!(await env.FEEDBACK_LIMITER.limit({ key: address(request) })).success) return tooMany("minute", FEEDBACK_PER_MINUTE, 60);
@@ -150,17 +164,7 @@ async function feedback(request: Request, env: Env): Promise<Response> {
     return tooMany(mine ? "install" : "everyone", max, oldest ? Math.max(60, oldest.received + 86400 - now) : 3600);
   }
 
-  const response = await fetch(`${env.GITHUB_API ?? "https://api.github.com"}/repos/${env.FEEDBACK_REPO}/issues`, {
-    method: "POST",
-    headers: {
-      accept: "application/vnd.github+json",
-      authorization: `Bearer ${env.GITHUB_TOKEN}`,
-      "content-type": "application/json",
-      "user-agent": "yingxia-feedback",
-      "x-github-api-version": "2022-11-28",
-    },
-    body: JSON.stringify(created),
-  });
+  const response = await github(env, "/issues", { method: "POST", body: JSON.stringify(created) });
   if (!response.ok) return new Response(null, { status: 502 });
   const posted: any = await response.json();
   // The install ID stays here, so the developer can look up the same install's error reports.
@@ -169,14 +173,70 @@ async function feedback(request: Request, env: Env): Promise<Response> {
   return Response.json({ number: posted.number, url: posted.html_url }, { status: 201 });
 }
 
-const ROUTES: Record<string, (request: Request, env: Env) => Promise<Response>> = { "/v1/reports": receive, "/v1/feedback": feedback };
+// Settings › Your Feedback asks how its issues are doing: each one's state and the developer's replies.
+// The issues are public, so their numbers are all it sends; only issues labeled feedback answer.
+const REPLIES_ISSUES = 10;
+const REPLY_MAX = 4000;
+const REPLIES_CACHE = 300; // seconds
+const DEVELOPER = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+
+// What the person who sent it sees of an issue's comments: the developer's, without HTML comments
+// (the coding agent's marker) and without requests to the agent ("@claude fix it").
+export function replies(comments: any[]) {
+  return comments
+    .filter((comment) => DEVELOPER.has(comment?.author_association) && typeof comment?.body === "string")
+    .map((comment) => ({ date: text(comment.created_at, 32), text: comment.body.replace(/<!--[\s\S]*?-->/g, "").trim().slice(0, REPLY_MAX) }))
+    .filter((reply) => reply.text && !/^@claude\b/i.test(reply.text));
+}
+
+// open, closed (done) or declined (closed as not planned), as `Feedback.Status` in Sources/TVCore/Feedback.swift reads it.
+export function state(issue: any) {
+  return issue?.state !== "closed" ? "open" : issue.state_reason === "not_planned" ? "declined" : "closed";
+}
+
+// One issue, from the cache for five minutes. null when it isn't a feedback issue; undefined when GitHub failed.
+async function status(number: number, env: Env, origin: string) {
+  const key = new Request(`${origin}/v1/feedback/replies/${number}`);
+  const hit = await caches.default.match(key);
+  if (hit) return hit.json();
+  const [issue, comments] = await Promise.all([github(env, `/issues/${number}`), github(env, `/issues/${number}/comments?per_page=100`)]);
+  if (!issue.ok && issue.status !== 404 && issue.status !== 410) return undefined;
+  const found: any = issue.ok ? await issue.json() : null;
+  let result = null;
+  if (found && !found.pull_request && found.labels?.some((label: any) => label?.name === "feedback")) {
+    if (!comments.ok) return undefined;
+    result = { number, state: state(found), replies: replies(await comments.json()) };
+  }
+  await caches.default.put(key, Response.json(result, { headers: { "cache-control": `max-age=${REPLIES_CACHE}` } }));
+  return result;
+}
+
+async function feedbackReplies(request: Request, env: Env): Promise<Response> {
+  if (!env.GITHUB_TOKEN) return new Response(null, { status: 503 });
+  if (!(await env.LIMITER.limit({ key: address(request) })).success) return new Response(null, { status: 429 });
+  const url = new URL(request.url);
+  const numbers = [...new Set((url.searchParams.get("issues") ?? "").split(",").map(Number))]
+    .filter((number) => Number.isSafeInteger(number) && number > 0)
+    .slice(0, REPLIES_ISSUES);
+  if (!numbers.length) return new Response(null, { status: 400 });
+  const found = await Promise.all(numbers.map((number) => status(number, env, url.origin)));
+  if (found.some((issue) => issue === undefined)) return new Response(null, { status: 502 });
+  return Response.json({ issues: found.filter(Boolean) });
+}
+
+const ROUTES: Record<string, [string, (request: Request, env: Env) => Promise<Response>]> = {
+  "/v1/reports": ["POST", receive],
+  "/v1/feedback": ["POST", feedback],
+  "/v1/feedback/replies": ["GET", feedbackReplies],
+};
 
 export default {
   async fetch(request, env) {
     const route = ROUTES[new URL(request.url).pathname];
     if (!route) return new Response(null, { status: 404 });
-    if (request.method !== "POST") return new Response(null, { status: 405, headers: { allow: "POST" } });
-    return route(request, env);
+    const [method, handle] = route;
+    if (request.method !== method) return new Response(null, { status: 405, headers: { allow: method } });
+    return handle(request, env);
   },
   async scheduled(_controller, env) {
     const old = Math.floor(Date.now() / 1000) - KEEP_DAYS * 86400;

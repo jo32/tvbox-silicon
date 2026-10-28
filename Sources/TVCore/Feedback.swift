@@ -6,7 +6,7 @@ import Foundation
 /// device model and the app's language. The install's random ID goes to the server only, which keeps
 /// it with the issue number, so the developer can find the same install's error reports.
 public enum Feedback {
-    public enum Kind: String, CaseIterable, Sendable {
+    public enum Kind: String, CaseIterable, Codable, Sendable {
         case bug, idea, other
         public var title: String {
             switch self {
@@ -150,6 +150,7 @@ public enum Feedback {
         switch (response as? HTTPURLResponse)?.statusCode ?? 0 {
         case 200..<300:
             guard let issue = try? JSONDecoder().decode(Issue.self, from: data) else { throw Failure.failed }
+            remember(issue, message: message, kind: kind, defaults: defaults)
             return issue
         case 429: throw refusal(data)
         default: throw Failure.failed
@@ -165,5 +166,93 @@ public enum Feedback {
                 lang: L10n.resolvedLanguage(), app: ErrorReports.bundleValue("CFBundleShortVersionString"),
                 build: ErrorReports.bundleValue("CFBundleVersion"), kind: kind.rawValue,
                 message: String(message.trimmingCharacters(in: .whitespacesAndNewlines).prefix(limit)))
+    }
+
+    // MARK: Your Feedback
+    // The issues sent from this device, kept here (the server forgets the install's after 30 days), and
+    // how each is doing on GitHub: asked from the server only while Send Feedback is open.
+
+    public struct Sent: Codable, Equatable, Identifiable, Sendable {
+        public let number: Int
+        public let url: URL
+        public let title: String
+        public let kind: Kind
+        public let date: Date
+        /// How many replies the viewer has read, so newer ones can be marked.
+        public var seen = 0
+        public var id: Int { number }
+    }
+
+    static let sentKey = "feedbackSent"
+    static let sentLimit = 20
+    /// How many of the newest are asked about; the server answers no more.
+    public static let checked = 10
+
+    /// Newest first.
+    public static func sent(defaults: UserDefaults = .standard) -> [Sent] {
+        defaults.data(forKey: sentKey).flatMap { try? JSONDecoder().decode([Sent].self, from: $0) } ?? []
+    }
+
+    static func save(_ list: [Sent], defaults: UserDefaults) {
+        if let data = try? JSONEncoder().encode(Array(list.prefix(sentLimit))) { defaults.set(data, forKey: sentKey) }
+    }
+
+    static func remember(_ issue: Issue, message: String, kind: Kind, date: Date = Date(), defaults: UserDefaults) {
+        let sent = Sent(number: issue.number, url: issue.url, title: title(message), kind: kind, date: date)
+        save([sent] + self.sent(defaults: defaults).filter { $0.number != issue.number }, defaults: defaults)
+    }
+
+    /// The viewer has read an issue's first `replies` replies.
+    public static func markSeen(_ number: Int, replies: Int, defaults: UserDefaults = .standard) {
+        var list = sent(defaults: defaults)
+        guard let index = list.firstIndex(where: { $0.number == number }), list[index].seen != replies else { return }
+        list[index].seen = replies
+        save(list, defaults: defaults)
+    }
+
+    /// The message's first line, as the server titles the issue.
+    static func title(_ message: String) -> String {
+        let line = message.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? ""
+        return line.count > 80 ? String(line.prefix(79)).trimmingCharacters(in: .whitespaces) + "…" : line
+    }
+
+    /// An issue's state and the developer's replies, oldest first (Services/error-reports, /v1/feedback/replies).
+    public struct Status: Decodable, Equatable, Sendable {
+        /// Closed is done; declined is closed as not planned.
+        public enum State: String, Decodable, Sendable { case open, closed, declined }
+        public struct Reply: Decodable, Equatable, Hashable, Sendable {
+            public let date: Date
+            public let text: String
+        }
+        public let number: Int
+        public let state: State
+        public let replies: [Reply]
+    }
+
+    /// The newest issues' statuses by number. Ones that are gone, or no longer feedback, are left out.
+    public static func statuses(of numbers: [Int], defaults: UserDefaults = .standard) async throws -> [Int: Status] {
+        guard !numbers.isEmpty else { return [:] }
+        #if DEBUG
+        guard let base = defaults.string(forKey: "qaFeedback").flatMap(URL.init(string:)) else { throw Failure.failed }
+        #else
+        let base = endpoint
+        #endif
+        let issues = numbers.prefix(checked).map(String.init).joined(separator: ",")
+        let address = base.appending(path: "replies").appending(queryItems: [URLQueryItem(name: "issues", value: issues)])
+        let (data, response) = try await URLSession.shared.data(for: URLRequest(url: address, timeoutInterval: 20))
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw Failure.failed }
+        return try statuses(data)
+    }
+
+    static func statuses(_ data: Data) throws -> [Int: Status] {
+        struct Body: Decodable { let issues: [Status] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return Dictionary(try decoder.decode(Body.self, from: data).issues.map { ($0.number, $0) }) { first, _ in first }
+    }
+
+    /// A reply's markdown (links, bold, code) as text; lists and headings stay as written.
+    public static func reply(_ text: String) -> AttributedString {
+        (try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
     }
 }

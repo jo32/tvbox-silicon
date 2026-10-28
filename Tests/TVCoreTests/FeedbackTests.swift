@@ -63,3 +63,40 @@ import Testing
     #expect(Feedback.Failure.installLimit(max: 5, until: nil).errorDescription?.contains("5") == true)
     #expect(Feedback.Failure.installLimit(max: 5, until: now).errorDescription?.contains(Feedback.moment(now)) == true)
 }
+
+@Test func feedbackRemembersWhatWasSentNewestFirst() throws {
+    let defaults = try #require(UserDefaults(suiteName: "feedback-sent-\(UUID())"))
+    let date = Date(timeIntervalSince1970: 1_792_870_000)
+    func issue(_ number: Int) throws -> Feedback.Issue {
+        Feedback.Issue(number: number, url: try #require(URL(string: "https://github.com/o/r/issues/\(number)")))
+    }
+    Feedback.remember(try issue(191), message: "\n  Page scrolls by itself  \nSubscriptions:\n- none", kind: .bug, date: date, defaults: defaults)
+    Feedback.remember(try issue(192), message: "Reverse the episodes", kind: .idea, date: date, defaults: defaults)
+    #expect(Feedback.sent(defaults: defaults).map(\.number) == [192, 191])
+    #expect(Feedback.sent(defaults: defaults).last?.title == "Page scrolls by itself")
+    #expect(Feedback.sent(defaults: defaults).last?.kind == .bug)
+
+    Feedback.markSeen(191, replies: 2, defaults: defaults)
+    #expect(Feedback.sent(defaults: defaults).map(\.seen) == [0, 2])
+    // Kept to the newest few.
+    for number in 1...30 { Feedback.remember(try issue(number), message: "x", kind: .other, defaults: defaults) }
+    #expect(Feedback.sent(defaults: defaults).count == Feedback.sentLimit)
+    #expect(Feedback.sent(defaults: defaults).first?.number == 30)
+}
+
+@Test func feedbackTitlesLikeTheServer() {
+    #expect(Feedback.title(" \n 自动页面滑动 \n\nmore") == "自动页面滑动")
+    #expect(Feedback.title(String(repeating: "a", count: 100)) == String(repeating: "a", count: 79) + "…")
+    #expect(Feedback.title("") == "")
+}
+
+@Test func feedbackReadsTheServersStatuses() throws {
+    // Services/error-reports, /v1/feedback/replies: oldest reply first, ISO dates.
+    let body = #"{"issues":[{"number":192,"state":"open","replies":[{"date":"2026-10-28T12:21:47Z","text":"Could you send a **screen recording**?"}]},{"number":191,"state":"declined","replies":[]}]}"#
+    let statuses = try Feedback.statuses(Data(body.utf8))
+    #expect(statuses[192]?.state == .open)
+    #expect(statuses[192]?.replies.first?.date == Date(timeIntervalSince1970: 1_793_190_107))
+    #expect(statuses[191]?.state == .declined)
+    #expect(statuses[191]?.replies.isEmpty == true)
+    #expect(String(Feedback.reply("Could you send a **screen recording**?\n- iOS 18.5").characters) == "Could you send a screen recording?\n- iOS 18.5")
+}
