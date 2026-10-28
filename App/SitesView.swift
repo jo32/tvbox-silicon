@@ -809,6 +809,8 @@ struct VideoDetailView: View {
     @State private var choosingQuality = false
     @State private var synopsisExpanded = false
     @State private var selectedFlag: String?
+    /// 倒序: the episode lists show the last episode first. Remembered for every video.
+    @AppStorage("episodesReversed") private var reversesEpisodes = false
     /// Play takes over focus from the loading placeholder; otherwise nothing is focused once details load.
     @FocusState private var playFocused: Bool
     @State private var containerWidth: CGFloat = 0
@@ -1352,6 +1354,7 @@ struct VideoDetailView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(L10n.text("Episodes")).font(.headline)
                         Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
+                        if items.count > 1 { episodeOrderButton }
                         Spacer(minLength: 8)
                         if flags.count == 1, !activeFlag.isEmpty {
                             Text(SourceLabel(activeFlag).text).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -1378,6 +1381,28 @@ struct VideoDetailView: View {
             #endif
         }
     }
+    /// The small button beside the episode count that turns the lists around (倒序).
+    @ViewBuilder private var episodeOrderButton: some View {
+        #if os(tvOS)
+        Chip(title: L10n.text("Reverse Order"), selected: reversesEpisodes) { reversesEpisodes.toggle() }
+        #else
+        Button { reversesEpisodes.toggle() } label: {
+            Image(systemName: "arrow.up.arrow.down")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(reversesEpisodes ? Brand.accent : Color.secondary)
+                .frame(minWidth: 32, minHeight: 32).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(L10n.text("Reverse Order"))
+        .accessibilityLabel(L10n.text("Reverse Order"))
+        .accessibilityAddTraits(reversesEpisodes ? .isSelected : [])
+        .accessibilityIdentifier("episodes.reverse")
+        #endif
+    }
+
+    /// The episodes in the order the lists show them. Only the lists: Play and the next episode still follow the source.
+    private func shownOrder(_ items: [Episode]) -> [Episode] { reversesEpisodes ? items.reversed() : items }
+
     private func episodeList(_ items: [Episode]) -> some View {
         // A chip fits about six characters before it truncates (《一…); longer names get rows.
         let longNames = (items.map { $0.name.count }.max() ?? 0) > 6
@@ -1392,7 +1417,7 @@ struct VideoDetailView: View {
         let columns = showsStills ? [GridItem(.adaptive(minimum: TMDBMetrics.episodeTile), spacing: TMDBMetrics.spacing, alignment: .top)]
             : longNames ? rowColumns : [GridItem(.adaptive(minimum: episodeMin), spacing: 8)]
         return LazyVGrid(columns: columns, spacing: showsStills ? TMDBMetrics.spacing : longNames ? 4 : 8) {
-            ForEach(items) { episode in
+            ForEach(shownOrder(items)) { episode in
                 let saved = download(episode)
                 Group {
                     if showsStills {
@@ -1712,6 +1737,7 @@ struct VideoDetailView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(L10n.text("Episodes")).font(.headline)
                             Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
+                            episodeOrderButton
                             Spacer(minLength: 8)
                             if items.count > (compact ? 5 : 2) {
                                 Button { showsAllEpisodes = true } label: {
@@ -1731,7 +1757,7 @@ struct VideoDetailView: View {
                         // scrollPosition rather than ScrollViewReader: scrollTo also scrolls the page's vertical
                         // scroll view, which pushed the title under the player.
                         ScrollView(.horizontal) {
-                            LazyHStack(alignment: .top, spacing: stills.isEmpty ? 8 : 12) { ForEach(items) { watchEpisodeCard($0, compact: compact, info: stills[$0.id]) } }
+                            LazyHStack(alignment: .top, spacing: stills.isEmpty ? 8 : 12) { ForEach(shownOrder(items)) { watchEpisodeCard($0, compact: compact, info: stills[$0.id]) } }
                                 .scrollTargetLayout()
                                 .padding(.horizontal, 16)
                         }
@@ -1826,7 +1852,7 @@ struct VideoDetailView: View {
                     watchLines
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: stills.isEmpty ? (compact ? 64 : 150) : 160), spacing: stills.isEmpty ? 8 : 12, alignment: .top)],
                               spacing: stills.isEmpty ? 8 : 14) {
-                        ForEach(items) { watchEpisodeCard($0, compact: compact, fill: true, info: stills[$0.id]) { showsAllEpisodes = false } }
+                        ForEach(shownOrder(items)) { watchEpisodeCard($0, compact: compact, fill: true, info: stills[$0.id]) { showsAllEpisodes = false } }
                     }
                 }
                 .padding(16)
@@ -1834,6 +1860,7 @@ struct VideoDetailView: View {
             .navigationTitle(L10n.text("Episodes"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) { episodeOrderButton }
                 ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { showsAllEpisodes = false } }
             }
         }
