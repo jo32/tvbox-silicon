@@ -404,7 +404,7 @@ struct TMDBFooter: View {
                 Spacer(minLength: 8)
                 Button(L10n.text("Not This Title?")) { choosing = true }
                     #if os(tvOS)
-                    .glassControlButton()
+                    .controlButton()
                     #else
                     .buttonStyle(.plain).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     #endif
@@ -535,8 +535,8 @@ struct TMDBTVPicker: View {
                         ProgressView().frame(maxWidth: .infinity)
                     }
                     HStack(spacing: 20) {
-                        Button(L10n.text("None of These")) { Task { await lookup.reject(); dismiss() } }.glassControlButton()
-                        Button(L10n.text("Cancel")) { dismiss() }.glassControlButton()
+                        Button(L10n.text("None of These")) { Task { await lookup.reject(); dismiss() } }.controlButton()
+                        Button(L10n.text("Cancel")) { dismiss() }.controlButton()
                     }
                     .tvFocusSection()
                 }

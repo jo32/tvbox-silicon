@@ -1201,8 +1201,13 @@ struct DiagnosticsView: View {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 TextField(L10n.text("Search Logs"), text: $search).textFieldStyle(.plain).autocorrectionDisabled()
                 if !search.isEmpty {
-                    Button { search = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
-                        .buttonStyle(.plain).accessibilityLabel(L10n.text("Clear Search"))
+                    let clear = Button { search = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                        .accessibilityLabel(L10n.text("Clear Search"))
+                    #if os(tvOS)
+                    clear.glassPill()
+                    #else
+                    clear.buttonStyle(.plain)
+                    #endif
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
@@ -1217,7 +1222,11 @@ struct DiagnosticsView: View {
             }
         }
     }
-    private func levelButton(_ value: String, title: String, count: Int, color: Color) -> some View {
+    @ViewBuilder private func levelButton(_ value: String, title: String, count: Int, color: Color) -> some View {
+        #if os(tvOS)
+        // The glass chips of every other filter on the TV, with the level's dot and its count.
+        Chip(title: "\(title) \(count)", selected: level == value, dot: value == "all" ? nil : color) { level = value }
+        #else
         Button { level = value } label: {
             HStack(spacing: 7) {
                 if value != "all" { Circle().fill(color).frame(width: 5, height: 5) }
@@ -1229,6 +1238,7 @@ struct DiagnosticsView: View {
             .overlay { Capsule().strokeBorder(level == value ? color.opacity(0.35) : .clear, lineWidth: 1) }
             .contentShape(Capsule())
         }.buttonStyle(.plain).accessibilityAddTraits(level == value ? .isSelected : [])
+        #endif
     }
     private var logList: some View {
         let visible = filtered
@@ -1256,7 +1266,7 @@ struct DiagnosticsView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(visible) { entry in
                             Button { selected = entry } label: { DiagnosticRow(entry: entry, compact: compact).foregroundStyle(.primary) }
-                                .buttonStyle(.plain)
+                                .glassRow()
                             Divider().padding(.horizontal, DiagnosticGrid.inset)
                         }
                     }

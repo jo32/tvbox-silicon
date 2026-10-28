@@ -1134,18 +1134,10 @@ extension View {
     @ViewBuilder func controlButton(prominent: Bool = false) -> some View {
         #if os(tvOS)
         // On tvOS the only highlight is focus: a coloured primary button beside a white focused one
-        // left people unsure which was focused, so every control looks the same until focused.
+        // left people unsure which was focused, so every control is the same glass until focused.
         buttonStyle(TVControlStyle())
         #else
         buttonStyle(ContentControlStyle(prominent: prominent))
-        #endif
-    }
-    /// Liquid Glass on Apple TV (the chips' capsule, white on focus); `controlButton` elsewhere.
-    @ViewBuilder func glassControlButton(prominent: Bool = false) -> some View {
-        #if os(tvOS)
-        glassPill()
-        #else
-        controlButton(prominent: prominent)
         #endif
     }
     @ViewBuilder func controlBackdrop() -> some View {
@@ -1157,25 +1149,10 @@ extension View {
     }
 }
 #if os(tvOS)
+/// Every control on Apple TV is Liquid Glass, as the chips are: clear at rest, white on focus. Solid plates beside
+/// glass chips read as two kinds of button, and the white of focus is the only highlight.
 private struct TVControlStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View { Control(configuration: configuration) }
-    private struct Control: View {
-        let configuration: ButtonStyleConfiguration
-        @Environment(\.isFocused) private var focused
-        @Environment(\.isEnabled) private var enabled
-        var body: some View {
-            configuration.label
-                .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(focused ? Color.black : Color.white)
-                .padding(.horizontal, 24).padding(.vertical, 15)
-                .frame(minHeight: 62)
-                // Focus is white, as everywhere on tvOS.
-                .background(focused ? Color.white : TVStyle.surface, in: RoundedRectangle(cornerRadius: 14))
-                .opacity(enabled ? 1 : 0.35)
-                .scaleEffect(configuration.isPressed ? 0.97 : focused ? 1.02 : 1)
-                .animation(.easeOut(duration: 0.18), value: focused)
-        }
-    }
+    func makeBody(configuration: Configuration) -> some View { TVChipStyle(selected: false).makeBody(configuration: configuration) }
 }
 #endif
 
