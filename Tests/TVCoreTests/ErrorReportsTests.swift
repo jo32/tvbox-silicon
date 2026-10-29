@@ -160,3 +160,12 @@ import Testing
     #expect(ErrorReports.bootTime > 0 && ErrorReports.bootTime < now)
     #expect((ErrorReports.memory().footprint ?? 0) > 0)
 }
+
+@Test func liquidGlassSkipsTheOldAppleTVs() {
+    #expect(!LiquidGlassSupport.drawsGlass(model: "AppleTV5,3"))
+    #expect(!LiquidGlassSupport.drawsGlass(model: "AppleTV6,2"))
+    #expect(LiquidGlassSupport.drawsGlass(model: "AppleTV11,1"))
+    #expect(LiquidGlassSupport.drawsGlass(model: "AppleTV14,1"))
+    #expect(LiquidGlassSupport.drawsGlass(model: "iPhone12,1"))
+    #expect(LiquidGlassSupport.drawsGlass(model: "Mac15,6"))
+}
