@@ -1118,3 +1118,7 @@
 "Privacy" = "プライバシー";
 "Dolby Vision video can't play while the screen is mirrored or recorded. Stop mirroring or recording, then try again." = "画面のミラーリングまたは収録中は Dolby Vision のビデオを再生できません。停止してからもう一度お試しください。";
 "This device can't play this Dolby Vision video. Try another line." = "このデバイスではこの Dolby Vision のビデオを再生できません。別の回線をお試しください。";
+"Contributors" = "コントリビューター";
+"Ranked by commits in the last 30 days." = "過去 30 日間のコミット数順です。";
+"1 commit" = "1 件のコミット";
+"%lld commits" = "%lld 件のコミット";

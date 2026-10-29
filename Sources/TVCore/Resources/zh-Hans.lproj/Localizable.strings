@@ -1118,3 +1118,7 @@
 "Privacy" = "隐私";
 "Dolby Vision video can't play while the screen is mirrored or recorded. Stop mirroring or recording, then try again." = "屏幕正在镜像或录制，杜比视界视频无法播放。请停止镜像或录屏后重试。";
 "This device can't play this Dolby Vision video. Try another line." = "此设备无法播放这个杜比视界视频，请尝试其他线路。";
+"Contributors" = "贡献者";
+"Ranked by commits in the last 30 days." = "按最近 30 天的提交次数排序。";
+"1 commit" = "1 次提交";
+"%lld commits" = "%lld 次提交";
