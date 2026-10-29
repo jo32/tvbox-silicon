@@ -32,4 +32,4 @@ mkdir -p build/host-tests
 
 "$JDK/bin/java" -Dtvbox.stuckGraceMillis=500 -cp 'build/host-tests:build/JavaHost/host.jar:build/JavaHost/lib/*' RequestCancellationTest
 
-"$JDK/bin/java" -cp 'build/host-tests:build/JavaHost/host.jar:build/JavaHost/lib/*' RequestStopTest
+"$JDK/bin/java" -Dtvbox.ownSignInPollMillis=50 -cp 'build/host-tests:build/JavaHost/host.jar:build/JavaHost/lib/*' RequestStopTest

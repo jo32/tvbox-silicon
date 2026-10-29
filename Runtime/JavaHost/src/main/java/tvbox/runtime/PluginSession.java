@@ -55,7 +55,11 @@ public final class PluginSession {
                 if (detail == null || detail.isBlank()) throw new IllegalStateException("The source returned no video details before playback");
                 detailID = required;
             }
-            String result = content(() -> spider.playerContent(params.optString("flag"), params.getString("play"), List.of()), false);
+            Operation play = () -> spider.playerContent(params.optString("flag"), params.getString("play"), List.of());
+            String result = content(play, false);
+            // The plugin has no sign-in for this line's drive: it signs in itself (the app shows its code), then the line is asked again.
+            String drive = bridge == null ? null : OwnDriveSignIn.missingDrive(result);
+            if (drive != null && OwnDriveSignIn.signIn(bridge, drive, HttpDiagnostics.promptFolder())) result = content(play, false);
             return bridge == null ? result : bridge.playback(result);
         }
         if (params.has("ids")) {

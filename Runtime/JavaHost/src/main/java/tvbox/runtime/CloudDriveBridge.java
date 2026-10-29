@@ -329,6 +329,24 @@ public final class CloudDriveBridge implements AutoCloseable {
     public void setDriveProxy(DriveProxy value) { driveProxy = value; }
     public void setProxy(Proxy value) { proxy = value; }
 
+    /** The drive cookies (quarkCookie, ucCookie, baiduCookie) the app holds a sign-in in. */
+    private volatile Set<String> appAccounts = Set.of();
+    public void appAccounts(JSONObject accounts) {
+        var held = new HashSet<String>();
+        for (String key : List.of("quarkCookie", "ucCookie", "baiduCookie")) if (accounts != null && !accounts.optString(key).isBlank()) held.add(key);
+        appAccounts = Set.copyOf(held);
+    }
+    boolean hasAppAccount(String field) { return appAccounts.contains(field); }
+
+    /** The plugin's own /proxy answer to these parameters as text, or null when it has no proxy or no body. */
+    String proxyText(Map<String,String> params) throws Exception {
+        Proxy handler = proxy;
+        if (handler == null) return null;
+        Object[] answer = handler.invoke(new HashMap<>(params));
+        if (answer == null || answer.length < 3 || !(answer[2] instanceof InputStream body)) return null;
+        try (body) { return new String(body.readAllBytes(), StandardCharsets.UTF_8); }
+    }
+
     public String extension(String original, JSONObject accounts) throws Exception {
         if (accounts == null || original == null || !original.trim().startsWith("{")) return original;
         JSONObject ext = new JSONObject(original);

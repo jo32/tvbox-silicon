@@ -1,7 +1,8 @@
 import Foundation
 import Observation
 
-/// A Baidu Netdisk or Aliyun Drive sign-in a plugin is waiting for. The plugin signs in itself
+/// A drive sign-in a plugin is waiting for: Baidu Netdisk or Aliyun Drive, or a drive a Wex-family
+/// plugin signs in to through its own config center (OwnDriveSignIn.java). The plugin signs in itself
 /// and saves the account; it only needs someone to scan its QR code, which this host can't show
 /// in an Android dialog. The plugin runtime leaves the code in the source's session folder
 /// (`login-prompt.json`, see LoginPrompt.java) and the app shows it while the request runs.
@@ -13,7 +14,7 @@ import Observation
 
     public struct Prompt: Identifiable, Equatable, Sendable {
         public let id: String
-        /// `baidu` or `aliyun`.
+        /// `baidu`, `aliyun`, or the Wex provider: `quark`, `pan115`, `pan189`, `guangya`.
         public let drive: String
         /// Baidu serves its code as an image.
         public let image: URL?

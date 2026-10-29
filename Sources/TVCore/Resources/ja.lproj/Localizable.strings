@@ -734,6 +734,9 @@
 "This line plays from %@, but its sign-in code couldn't be shown. Choose another line." = "この回線は%@から再生されますが、サインイン用のコードを表示できませんでした。別の回線を選んでください。";
 "Baidu Netdisk" = "Baidu Netdisk";
 "Aliyun Drive" = "Aliyun Drive";
+"115 Cloud" = "115 Cloud";
+"Tianyi Cloud" = "Tianyi Cloud";
+"Guangya Cloud" = "Guangya Cloud";
 "The original file is MKV, which Apple devices can't play, so the %@ line is playing instead." = "元のファイルは Apple デバイスで再生できない MKV 形式のため、%@回線で再生しています。";
 "Sign In to %@" = "%@にサインイン";
 "%@ needs this account for the line you chose. The video plays once you confirm." = "「%@」のこの回線にはこのアカウントが必要です。確認すると再生が始まります。";

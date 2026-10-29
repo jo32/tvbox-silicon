@@ -24,6 +24,8 @@ public final class HttpDiagnostics {
     private static final ThreadLocal<State> state = ThreadLocal.withInitial(State::new);
 
     private static final InheritableThreadLocal<State> requestContext = new InheritableThreadLocal<>();
+    /** True while OwnDriveSignIn asks the plugin for its own sign-in: the app shows that code itself. */
+    private static final ThreadLocal<Boolean> ownSignIn = ThreadLocal.withInitial(() -> false);
     // FTY/standalone runtimes own exactly one serialized source. Their pre-existing executor
     // threads cannot inherit a new request's context, so they can notify its active playback.
     // Shared multi-source runtimes never use this fallback.
@@ -131,7 +133,8 @@ public final class HttpDiagnostics {
         // poll forever. Quark and UC go back to the app's own QR login. Baidu and Aliyun keep
         // the plugin's sign-in: the app shows its code (LoginPrompt) while the plugin polls.
         // Swift's own login uses URLSession and never passes through here.
-        String drive = qrLoginDrive(remote, path);
+        boolean own = ownSignIn.get();
+        String drive = own ? null : qrLoginDrive(remote, path);
         java.nio.file.Path folder = promptFolder();
         boolean prompts = drive != null && (drive.equals("baidu") || drive.equals("aliyun")) && folder != null;
         if (drive != null && !prompts) throw handBack(drive, call);
@@ -143,7 +146,7 @@ public final class HttpDiagnostics {
         if (!local) PreparationProgress.waiting(remote);
         try {
             Response response = call.execute();
-            String confirming = LoginPrompt.confirmingDrive(remote, path);
+            String confirming = own ? null : LoginPrompt.confirmingDrive(remote, path);
             if (confirming != null && folder != null && LoginPrompt.confirms(confirming, path, response)) signedIn(confirming, folder, response);
             if (creates) {
                 Response kept = LoginPrompt.capture(drive, response, folder);
@@ -211,6 +214,15 @@ public final class HttpDiagnostics {
         long at = stop.get();
         if (at > now && at < later) stop.compareAndSet(at, later);
     }
+
+    /** Runs the plugin's own sign-in (OwnDriveSignIn) on this thread with its QR requests left alone. */
+    static <T> T ownSignIn(java.util.concurrent.Callable<T> work) throws Exception {
+        ownSignIn.set(true);
+        try { return work.call(); } finally { ownSignIn.set(false); }
+    }
+
+    /** The running request showed the app a sign-in code, so the viewer may sign in on the drive's page instead. */
+    static void prompted() { loginState().prompted = true; }
 
     public static void throwIfLoginRequired() {
         CloudLoginRequired login = loginState().loginRequired;

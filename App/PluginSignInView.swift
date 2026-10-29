@@ -1,10 +1,12 @@
 import SwiftUI
 import TVCore
 
-/// The QR code a source's plugin made for a Baidu Netdisk or Aliyun Drive sign-in. The plugin signs
-/// in by itself once the code is scanned and confirmed, then the video it was opening plays. iPhone
-/// and iPad can't scan their own screen: they sign in on the drive's page first, and the waiting
-/// plugin starts over with that account; the code stays for signing in with another phone.
+/// The QR code a source's plugin made for a drive sign-in: Baidu Netdisk or Aliyun Drive, or any drive
+/// a Wex-family plugin signs in to itself (115, Tianyi, Guangya, and Quark when the app's own sign-in
+/// didn't work there). The plugin signs in by itself once the code is scanned and confirmed, then the
+/// video it was opening plays. iPhone and iPad can't scan their own screen: for drives the app has a
+/// sign-in page for, they sign in there first, and the waiting plugin starts over with that account;
+/// the code stays for signing in with another phone.
 struct PluginSignInView: View {
     let prompt: PluginSignIn.Prompt
     @State private var now = Date()
@@ -12,7 +14,17 @@ struct PluginSignInView: View {
     @State private var signingIn = false
     #endif
 
-    private var name: String { L10n.text(prompt.drive == "baidu" ? "Baidu Netdisk" : "Aliyun Drive") }
+    private var name: String {
+        switch prompt.drive {
+        case "baidu": L10n.text("Baidu Netdisk")
+        case "aliyun": L10n.text("Aliyun Drive")
+        case "quark": L10n.text("Quark")
+        case "pan115": L10n.text("115 Cloud")
+        case "pan189": L10n.text("Tianyi Cloud")
+        case "guangya": L10n.text("Guangya Cloud")
+        default: prompt.drive
+        }
+    }
     private var expired: Bool { now >= prompt.expires }
 
     var body: some View {
@@ -50,11 +62,16 @@ struct PluginSignInView: View {
                 if expired {
                     Label(L10n.text("This code has expired."), systemImage: "clock.badge.exclamationmark").foregroundStyle(.secondary)
                 } else {
-                    Button(L10n.text(UIDevice.current.userInterfaceIdiom == .pad ? "Sign In on This iPad" : "Sign In on This iPhone")) { signingIn = true }
-                        .settingsButton(prominent: true)
-                        .accessibilityIdentifier("pluginSignIn.web")
+                    // 115, Tianyi and Guangya have no sign-in page in the app: their code is the only way.
+                    let page = WebSignIn(rawValue: prompt.drive) != nil
+                    if page {
+                        Button(L10n.text(UIDevice.current.userInterfaceIdiom == .pad ? "Sign In on This iPad" : "Sign In on This iPhone")) { signingIn = true }
+                            .settingsButton(prominent: true)
+                            .accessibilityIdentifier("pluginSignIn.web")
+                    }
                     VStack(alignment: .leading, spacing: 16) {
-                        Text(L10n.text("Or scan this code with the %@ app on another phone.", name))
+                        Text(page ? L10n.text("Or scan this code with the %@ app on another phone.", name)
+                             : L10n.text("Open the %@ app on your phone, scan this code, and confirm the sign-in.", name))
                             .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         code
                         SaveCodeButton(text: prompt.content, image: prompt.content == nil ? prompt.image : nil, app: name)

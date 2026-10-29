@@ -57,7 +57,8 @@ public final class RequestStopTest {
         check(drive.invoke(null, "pan.baidu.com", "/share/list") == null, "A Baidu share listing is not a sign-in");
         check(drive.invoke(null, "api.aliyundrive.com", "/adrive/v3/file/list") == null, "An Aliyun file listing is not a sign-in");
         signInCodes();
-        System.out.println("RequestStopTest passed: abandoned sleeps stop, deadlines stop polling spiders, QR sign-ins hand back, Baidu/Aliyun codes reach the app");
+        ownDriveSignIn();
+        System.out.println("RequestStopTest passed: abandoned sleeps stop, deadlines stop polling spiders, QR sign-ins hand back, Baidu/Aliyun codes reach the app, Wex lines sign in through the plugin");
     }
 
     /** Baidu and Aliyun sign-ins stay in the plugin: their codes go to the app, and scanning gets time. */
@@ -144,6 +145,71 @@ public final class RequestStopTest {
         check(thrown instanceof HttpDiagnostics.SignedIn, "The app's sign-in did not end the waiting spider: " + thrown);
         check(waited >= 250 && waited < 1500, "Ended " + waited + " ms after the app's sign-in");
         check(!java.nio.file.Files.exists(marker), "The app's sign-in was not used up");
+    }
+
+    /**
+     * A Wex line whose drive has no sign-in (115 here) gets the plugin's own: its config center's code
+     * goes to the app, the host polls until the plugin reports the sign-in, and the line plays.
+     */
+    private static void ownDriveSignIn() throws Exception {
+        Method missing = Class.forName("tvbox.runtime.OwnDriveSignIn").getDeclaredMethod("missingDrive", String.class);
+        missing.setAccessible(true);
+        check("pan115".equals(missing.invoke(null, "{\"url\":\"\",\"msg\":\"[pan115](resolvePlay) 115 Cookie 未配置或已失效\"}")), "115 sign-in missing");
+        check("quark".equals(missing.invoke(null, "{\"msg\":\"[quark](auth) 还没有配置夸克 Cookie，请先去配置中心登录夸克\"}")), "Quark sign-in missing");
+        check(missing.invoke(null, "{\"msg\":\"[quark](save) 转存文件失败\"}") == null, "A failed save is not a missing sign-in");
+        check(missing.invoke(null, "{\"url\":\"https://cdn.example/v.mp4\",\"msg\":\"[pan115](x) 未配置\"}") == null, "A line that plays needs no sign-in");
+        check(missing.invoke(null, "未登录") == null, "Not JSON");
+
+        var folder = java.nio.file.Files.createTempDirectory("own-sign-in");
+        try (var bridge = new tvbox.runtime.CloudDriveBridge(folder)) {
+            var spider = new WexSpider();
+            var asked = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
+            var shown = new java.util.concurrent.atomic.AtomicReference<String>();
+            bridge.setProxy(params -> {
+                check("pan".equals(params.get("do")), "Not the config center: " + params);
+                String action = params.get("action");
+                asked.add(action + ":" + params.get("provider"));
+                JSONObject answer = new JSONObject().put("code", 0);
+                if (action.equals("loginStart")) answer.put("qrUrl", "https://115.com/scan/dg-fixture").put("taskId", "task-1").put("status", "waiting");
+                if (action.equals("loginPoll")) {
+                    check("task-1".equals(params.get("taskId")), "Poll lost its task");
+                    shown.compareAndSet(null, java.nio.file.Files.readString(folder.resolve("login-prompt.json")));
+                    boolean done = asked.stream().filter(entry -> entry.startsWith("loginPoll")).count() >= 2;
+                    spider.signedIn = done;
+                    answer.put("status", done ? "success" : "waiting").put("terminal", done);
+                }
+                return new Object[]{200, "application/json", new java.io.ByteArrayInputStream(answer.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8))};
+            });
+            spider.drive = "[pan115](resolvePlay) 115 Cookie 未配置或已失效";
+            var session = new PluginSession(spider, null, bridge);
+            String played = session.request(new JSONObject().put("play", "x").put("flag", "115").put("_deadline", 30).put("_folder", folder.toString()));
+            check(new JSONObject(played).optString("url").equals("https://cdn.example/v.mp4"), "The line did not play after the sign-in: " + played);
+            check(asked.equals(List.of("loginStart:pan115", "loginPoll:pan115", "loginPoll:pan115")), "Config center calls: " + asked);
+            var code = new JSONObject(shown.get());
+            check("pan115".equals(code.getString("drive")) && "https://115.com/scan/dg-fixture".equals(code.getString("content")), "Code shown: " + code);
+            var notice = new JSONObject(java.nio.file.Files.readString(folder.resolve("login-prompt.json")));
+            check(notice.optBoolean("signedIn") && "pan115".equals(notice.optString("drive")), "The app was not told: " + notice);
+
+            // Quark without an app sign-in: the app offers its own, which every source then gets.
+            asked.clear(); spider.signedIn = false;
+            spider.drive = "[quark](auth) 还没有配置夸克 Cookie，请先去配置中心登录夸克";
+            String unsigned = session.request(new JSONObject().put("play", "x").put("flag", "quark").put("_deadline", 30).put("_folder", folder.toString()));
+            check(new JSONObject(unsigned).optString("msg").startsWith("[quark](auth)") && asked.isEmpty(), "Quark went to the plugin with no app sign-in: " + asked);
+            // With one the plugin didn't take, the plugin's own sign-in is the fallback.
+            bridge.appAccounts(new JSONObject().put("quarkCookie", "__pus=stale"));
+            String fallback = session.request(new JSONObject().put("play", "x").put("flag", "quark").put("_deadline", 30).put("_folder", folder.toString()));
+            check(new JSONObject(fallback).optString("url").equals("https://cdn.example/v.mp4") && asked.get(0).equals("loginStart:quark"), "Quark fallback: " + asked);
+        }
+    }
+
+    /** Answers like a Wex drive line: no sign-in for its drive until the plugin has one. */
+    public static final class WexSpider extends com.github.catvod.crawler.Spider {
+        volatile boolean signedIn;
+        volatile String drive;
+        @Override public String playerContent(String flag, String id, List<String> flags) throws Exception {
+            return signedIn ? new JSONObject().put("parse", 0).put("url", "https://cdn.example/v.mp4").toString()
+                : new JSONObject().put("url", "").put("msg", drive).toString();
+        }
     }
 
     /** Shows the app a code (as the host does for Baidu and Aliyun), then waits for the sign-in. */

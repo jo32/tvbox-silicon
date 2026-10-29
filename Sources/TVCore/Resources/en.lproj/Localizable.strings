@@ -735,6 +735,9 @@
 "This line plays from %@, but its sign-in code couldn't be shown. Choose another line." = "This line plays from %@, but its sign-in code couldn't be shown. Choose another line.";
 "Baidu Netdisk" = "Baidu Netdisk";
 "Aliyun Drive" = "Aliyun Drive";
+"115 Cloud" = "115 Cloud";
+"Tianyi Cloud" = "Tianyi Cloud";
+"Guangya Cloud" = "Guangya Cloud";
 "The original file is MKV, which Apple devices can't play, so the %@ line is playing instead." = "The original file is MKV, which Apple devices can't play, so the %@ line is playing instead.";
 "Sign In to %@" = "Sign In to %@";
 "%@ needs this account for the line you chose. The video plays once you confirm." = "%@ needs this account for the line you chose. The video plays once you confirm.";
