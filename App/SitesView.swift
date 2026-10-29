@@ -831,6 +831,12 @@ struct VideoDetailView: View {
         return (detail?.episodes ?? []).map(\.flag).filter { seen.insert($0).inserted }
     }
     private var activeFlag: String { flags.contains(selectedFlag ?? "\u{0}") ? selectedFlag! : (flags.first ?? "") }
+    /// The active line's episodes. `activeFlag` goes through every episode, so it is read once, not once per episode:
+    /// in the filter it made each page update quadratic (4 lines of 1,000 episodes took seconds, and iOS killed the app).
+    private var activeEpisodes: [Episode] {
+        let flag = activeFlag
+        return (detail?.episodes ?? []).filter { $0.flag == flag }
+    }
     private var wideMinWidth: CGFloat {
         #if os(tvOS)
         1200
@@ -875,7 +881,7 @@ struct VideoDetailView: View {
             #endif
             if detail == nil { await loadDetail() }
             #if os(iOS)
-            if continues, entry == nil, watchChannel == nil, let first = detail.flatMap({ detail in detail.episodes.first { $0.flag == activeFlag } }) {
+            if continues, entry == nil, watchChannel == nil, let first = activeEpisodes.first {
                 startRequest { await play(first) }
             }
             #endif
@@ -917,7 +923,7 @@ struct VideoDetailView: View {
         #endif
         .downloadPicker(isPresented: $choosingDownloads) {
             DownloadPicker(video: video, site: client.site, flag: activeFlag,
-                           episodes: (detail?.episodes ?? []).filter { $0.flag == activeFlag }) { count in
+                           episodes: activeEpisodes) { count in
                 guard count > 0 else { return }
                 withAnimation(.smooth(duration: 0.2)) { queuedNotice = count }
                 Task { try? await Task.sleep(for: .seconds(6)); withAnimation(.smooth(duration: 0.2)) { queuedNotice = nil } }
@@ -1183,7 +1189,7 @@ struct VideoDetailView: View {
 
     @ViewBuilder private var playControl: some View {
         if let detail {
-            if let first = detail.episodes.first(where: { $0.flag == activeFlag }) ?? detail.episodes.first {
+            if let first = activeEpisodes.first ?? detail.episodes.first {
                 // Beside the poster on a phone there is no room for both labels: Download drops to its icon.
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 10) { playButton(first); downloadButton(iconOnly: false); videoFavoriteButton }
@@ -1310,7 +1316,7 @@ struct VideoDetailView: View {
             if detail.episodes.isEmpty {
                 Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)
             } else {
-                let items = detail.episodes.filter { $0.flag == activeFlag }
+                let items = activeEpisodes
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         #if os(tvOS)
@@ -1636,7 +1642,7 @@ struct VideoDetailView: View {
     /// when that didn't happen (the episode failed, which the banner below explains).
     private var watchCover: some View {
         let starting = (detail == nil && error == nil) || busy || loadingEpisode != nil || store.resumingHistoryID != nil || watchChannel != nil
-        let first = detail.flatMap { detail in detail.episodes.first { $0.flag == activeFlag } ?? detail.episodes.first }
+        let first = activeEpisodes.first ?? detail?.episodes.first
         // The list's poster when there was one, so the picture doesn't change once the details arrive.
         let poster = video.poster != nil ? video : detail ?? video
         return WatchCoverBackdrop(poster: poster.poster, headers: poster.posterHeaders, loading: starting) { coverStatus($0) }
@@ -1712,7 +1718,7 @@ struct VideoDetailView: View {
             if detail.episodes.isEmpty {
                 Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)
             } else {
-                let items = detail.episodes.filter { $0.flag == activeFlag }
+                let items = activeEpisodes
                 let compact = items.allSatisfy { EpisodeRow.title($0.name).count <= 5 }
                 let stills = watchStills(items)
                 VStack(alignment: .leading, spacing: 12) {
@@ -1826,7 +1832,7 @@ struct VideoDetailView: View {
     }
 
     private var allEpisodes: some View {
-        let items = (detail?.episodes ?? []).filter { $0.flag == activeFlag }
+        let items = activeEpisodes
         let compact = items.allSatisfy { EpisodeRow.title($0.name).count <= 5 }
         let stills = watchStills(items)
         return NavigationStack {
