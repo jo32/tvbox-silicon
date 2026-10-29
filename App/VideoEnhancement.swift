@@ -280,11 +280,15 @@ private protocol EnhancementEngine: AnyObject, Sendable {
 struct EnhancedVideoSurface: View {
     let enhancer: VideoEnhancer
     var fills = false
+    /// Whether AVKit's picture runs under the safe areas, as it does on a screen of its own. At the top of an iPhone
+    /// watch page it keeps to its frame, so the enhanced picture must too.
+    var bleeds = true
     var body: some View {
         if VideoEnhancement.canUpscale || VideoEnhancement.canSmooth {
-            // The whole player area, like AVKit's own picture: inside the safe area (under the Mac's title bar)
-            // the fitted picture came out smaller than AVKit's, which then showed around its edges.
-            Host(enhancer: enhancer, fills: fills).ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true)
+            // The same area as AVKit's own picture: inside the safe area (under the Mac's title bar) the fitted
+            // picture came out smaller than AVKit's, and under the status bar above a watch page's player it came out
+            // taller and higher; either way AVKit's picture showed around its edges.
+            Host(enhancer: enhancer, fills: fills).ignoresSafeArea(edges: bleeds ? .all : []).allowsHitTesting(false).accessibilityHidden(true)
         }
     }
 
