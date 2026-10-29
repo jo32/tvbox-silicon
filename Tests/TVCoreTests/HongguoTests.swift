@@ -223,6 +223,29 @@ struct HongguoTests {
         #expect(await stream.statistics.cached == 0)
     }
 
+    @Test func sequentialReadsDoNotFetchTheSameBytesTwice() async throws {
+        // Samples of about 60 KB: a 128 KB read widens to whole samples, past where the next read starts.
+        let fixture = makeMovie(subsamples: true, sampleCount: 40, prefixSize: 60_000)
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appending(path: "fixture.mp4")
+        try fixture.encrypted.write(to: file)
+        let server = LocalMediaServer()
+        let url = try await server.address(of: file, root: root)
+        let stream = HongguoByteStream(urls: [url], key: hex("2b7e151628aed2a6abf7158809cf4f3c"), headers: [:], http: HTTPClient())
+        let index = try await stream.metadata()
+        let before = await stream.statistics
+        let start = index.samples[0].bytes.lowerBound, end = index.samples[30].bytes.upperBound
+        var at = start, played = Data()
+        while at < end {
+            let bytes = try await stream.read(at: at, count: end - at)
+            played.append(bytes); at += bytes.count
+        }
+        #expect(played == Data(repeating: fixture.plain, count: 31))
+        #expect(await stream.statistics.received - before.received == end - start)
+    }
+
     @Test func forwardWindowStopsReadingAndCancellationDoesNotFetchTheRest() async throws {
         let fixture = makeMovie(subsamples: true, sampleCount: 180, prefixSize: 32000)
         let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)

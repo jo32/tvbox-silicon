@@ -332,6 +332,52 @@ import TVCore
             HongguoStreams.stop(channel.url)
             return
         }
+        if args[1] == "--hongguo-bench" {
+            // --hongguo-bench <stream|file> <seconds> [series id] [episode number]: this process's CPU time,
+            // wakeups and network activity while an episode plays, streamed or from a prepared local file.
+            setvbuf(stdout, nil, _IONBF, 0)
+            let mode = args[2], seconds = Double(args[3]) ?? 60
+            func usage() -> (cpu: Double, wakeups: UInt64) {
+                var r = rusage(); getrusage(RUSAGE_SELF, &r)
+                let cpu = Double(r.ru_utime.tv_sec + r.ru_stime.tv_sec) + Double(r.ru_utime.tv_usec + r.ru_stime.tv_usec) / 1e6
+                var info = task_power_info(), count = mach_msg_type_number_t(MemoryLayout<task_power_info>.size / MemoryLayout<natural_t>.size)
+                _ = withUnsafeMutablePointer(to: &info) { $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_POWER_INFO), $0, &count) } }
+                return (cpu, info.task_interrupt_wakeups + info.task_platform_idle_wakeups)
+            }
+            let client = CatalogClient(site: .hongguo, origin: URL(string: "https://example.invalid/")!)
+            let id: String
+            if args.count > 4 { id = args[4] } else { guard let first = try await client.home().videos.first?.id else { throw TVError.emptyPlaylist }; id = first }
+            let video = try await client.detail(id)
+            let index = args.count > 5 ? (Int(args[5]) ?? 1) - 1 : 0
+            let before = usage(), started = Date()
+            let plan = try await client.preparePlayback(video.episodes[index], forDownload: mode == "file")
+            guard let url = URL(string: plan.choices[0].address) else { throw TVError.emptyPlaylist }
+            let prepared = usage()
+            print("prepare seconds=\(String(format: "%.1f", Date().timeIntervalSince(started))) cpu=\(String(format: "%.3f", prepared.cpu - before.cpu)) series=\(id) episode=\(index + 1)")
+            let asset = HongguoStreams.asset(for: url) ?? AVURLAsset(url: url)
+            let item = AVPlayerItem(asset: asset), player = AVPlayer()
+            item.preferredForwardBufferDuration = HongguoStreams.forwardBufferDuration
+            player.replaceCurrentItem(with: item); player.isMuted = true; player.play()
+            for _ in 0..<150 where player.currentTime().seconds < 0.5 && item.status != .failed { try await Task.sleep(for: .milliseconds(100)) }
+            guard player.currentTime().seconds >= 0.5 else { throw item.error ?? TVError.emptyPlaylist }
+            let duration = try await asset.load(.duration).seconds
+            print("playing size=\(item.presentationSize) duration=\(Int(duration))s")
+            let start = usage(), startStats = await HongguoStreams.statistics(for: url)
+            var last = startStats?.received ?? 0, active = 0
+            for _ in 0..<Int(seconds) {
+                try await Task.sleep(for: .seconds(1))
+                HongguoStreams.updatePosition(for: url, seconds: player.currentTime().seconds)
+                if let stats = await HongguoStreams.statistics(for: url) { if stats.received > last { active += 1 }; last = stats.received }
+                if item.status == .failed { throw item.error ?? TVError.emptyPlaylist }
+            }
+            let end = usage(), endStats = await HongguoStreams.statistics(for: url)
+            let played = player.currentTime().seconds
+            print("bench mode=\(mode) played=\(String(format: "%.1f", played))s cpu=\(String(format: "%.3f", end.cpu - start.cpu))s cpu%=\(String(format: "%.2f", (end.cpu - start.cpu) / seconds * 100)) wakeups/s=\((end.wakeups - start.wakeups) / UInt64(max(1, seconds))) requests=\((endStats?.requests ?? 0) - (startStats?.requests ?? 0)) bytes=\((endStats?.received ?? 0) - (startStats?.received ?? 0)) networkActiveSeconds=\(active) total=\(endStats?.total ?? 0)")
+            print("whole run cpu=\(String(format: "%.3f", end.cpu - before.cpu))s fetched=\(endStats?.received ?? 0) requests=\(endStats?.requests ?? 0)")
+            player.pause()
+            HongguoStreams.stop(url)
+            return
+        }
         if args[1] == "--bili-categories" {
             // --bili-categories [filter]: every category of the built-in Bilibili source with its first page's size.
             setvbuf(stdout, nil, _IONBF, 0)
