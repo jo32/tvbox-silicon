@@ -90,6 +90,15 @@ private func fixture(_ name: String, _ ext: String) throws -> Data {
     #expect(video.episodes[2].address == "opaque-id")
     #expect(video.synopsis == "Hello")
 }
+@Test func driveFoldersOpenAsListings() throws {
+    // csp_AList (小雅 drives) lists folders and files with vod_tag "folder" / "file".
+    let folder = try #require(Video(json: ["vod_id": .string("小雅/电影/2024"), "vod_name": .string("2024"), "vod_tag": .string("folder")], origin: base))
+    let file = try #require(Video(json: ["vod_id": .string("小雅/电影/a.mkv"), "vod_name": .string("a.mkv"), "vod_tag": .string("file")], origin: base))
+    let film = try #require(Video(json: ["vod_id": .string("1"), "type_name": .string("剧情"), "vod_class": .string("动作")], origin: base))
+    #expect(folder.isFolder)
+    #expect(!file.isFolder)
+    #expect(!film.isFolder)
+}
 @Test func synopsisDecodesDoubleEscapedEntities() {
     #expect(HTMLText.plain("该剧改编。 &amp;nbsp; &amp;nbsp;&amp;nbsp") == "该剧改编。")
     #expect(HTMLText.plain("<p>Tom &amp;amp; Jerry&#39;s &ldquo;day&rdquo;</p><br/>Part&#x20;2") == "Tom & Jerry's “day”\nPart 2")

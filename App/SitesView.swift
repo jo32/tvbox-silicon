@@ -615,6 +615,8 @@ struct SiteView: View {
     let origin: URL
     let jarURL: URL?
     var initialQuery: String = ""
+    /// A drive source's folder: the page lists it in place of the source's home.
+    var folder: Video? = nil
     private var canLoad: Bool { site.canBrowse(jarURL: jarURL) }
     private var isIndex: Bool { (site.raw["indexs"]?.int ?? 0) == 1 }
     @State private var browser = CatalogBrowser()
@@ -665,7 +667,7 @@ struct SiteView: View {
                         }
                         #endif
                         if site.isBilibili && !BilibiliAccount.load().signedIn { BilibiliSignInBanner() }
-                        if !browser.categories.isEmpty { categoryBar } else if initialLoading { ChipSkeletonRow() }
+                        if !browser.categories.isEmpty { categoryBar } else if initialLoading && folder == nil { ChipSkeletonRow() }
                         if isIndex && !browser.videos.isEmpty {
                             Text(L10n.text("Choose a title to find it across your sources.")).font(.subheadline).foregroundStyle(.secondary)
                         }
@@ -691,7 +693,7 @@ struct SiteView: View {
                                 if isIndex {
                                     Button { store.searchVideos(video.name) } label: { PosterCard(video: video) }.cardButton()
                                 } else {
-                                    RouteLink { VideoDetailView(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
+                                    RouteLink { CatalogDestination(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
                                 }
                             }
                         }
@@ -717,7 +719,7 @@ struct SiteView: View {
             let login = BilibiliAccount.load().cookie
             if login != bilibiliLogin { bilibiliLogin = login; query = ""; startRequest { await home(); await browser.loadCategories(client: client) } }
         }
-        .screenTitle(site.name).task {
+        .screenTitle(folder?.name ?? site.name).task {
             store.searchModel.suspend()
             if canLoad && !browser.loaded {
                 if browser.request != .home {
@@ -769,7 +771,7 @@ struct SiteView: View {
         .padding(.vertical, 8).frame(maxWidth: .infinity).controlBackdrop()
         #endif
     }
-    private func home() async { await browser.load(.home, client: client) }
+    private func home() async { await browser.load(folder.map { .list(category: $0.id, query: "", page: 1) } ?? .home, client: client) }
     private func search() async {
         let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.isEmpty { await home() }
@@ -777,6 +779,16 @@ struct SiteView: View {
     }
     private func load(page next: Int) async {
         await browser.load(.list(category: browser.category.isEmpty ? nil : browser.category, query: browser.query, page: next), client: client)
+    }
+}
+
+/// Where a listed title opens: its details, or for a drive source's folder the folder's listing.
+struct CatalogDestination: View {
+    let video: Video
+    let client: CatalogClient
+    var body: some View {
+        if video.isFolder { SiteView(site: client.site, origin: client.origin, jarURL: client.jarURL, folder: video) }
+        else { VideoDetailView(video: video, client: client) }
     }
 }
 
