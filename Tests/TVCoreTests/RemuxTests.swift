@@ -3,7 +3,8 @@ import Foundation
 import Testing
 @testable import TVCore
 
-struct RemuxTests {
+// The repackager keeps three files open; tests opening more at once would close each other's.
+@Suite(.serialized) struct RemuxTests {
     private typealias Stream = RemuxPlan.Stream
 
     @Test func containersAreKnownByTheirFirstBytes() {
@@ -264,6 +265,24 @@ struct RemuxTests {
         // AVFoundation lists it with the file's own, where the player's Subtitles menu finds it.
         let group = try await AVURLAsset(url: url).loadMediaSelectionGroup(for: .legible)
         #expect(group?.options.map(\.displayName).contains("Chinese") == true && group?.options.count == 2)
+    }
+
+    @Test func picturesAVPlayerCantDecodeAreRepackagedWhenThatShowsThem() {
+        #expect(Remux.showsPicture(["hev1"]) && Remux.showsPicture(["dvhe"]) && Remux.showsPicture(["vp09"]))
+        #expect(!Remux.showsPicture([]) && !Remux.showsPicture(["av01"]) && !Remux.showsPicture(["hev1", "av01"]))
+    }
+
+    @Test func hevcTaggedHev1PlaysRepackaged() async throws {
+        // AVPlayer plays this MP4's sound alone: it can't decode the picture's sample entry.
+        let file = try fixture("remux-hev1.mp4")
+        let track = try #require(try await AVURLAsset(url: file).loadTracks(withMediaType: .video).first)
+        #expect(try await track.load(.isPlayable) == false)
+        let url = try await Remux.open(try Remux.fileSource(file))
+        defer { Remux.stop(url) }
+        let master = String(decoding: try await fetch(url), as: UTF8.self)
+        #expect(master.contains("CODECS=\"hvc1.") && master.contains("RESOLUTION=320x180"))
+        let played = await ready(url)
+        #expect(played.status == .readyToPlay && abs(played.duration - 4) < 0.2)
     }
 
     @Test func aviIsConvertedForAVPlayer() async throws {
