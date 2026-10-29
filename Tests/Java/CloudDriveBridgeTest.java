@@ -68,6 +68,7 @@ public class CloudDriveBridgeTest {
         }
         cloudFamilyCredentials();
         pluginCookieFiles();
+        wexPreferences();
         ftyFamilyCredentials();
         proxyAddressMethodsUseHost();
         suspendedListenerRecovers();
@@ -325,6 +326,25 @@ public class CloudDriveBridgeTest {
         check(Files.readString(files.resolve(".baidu")).equals("BDUSS=new; STOKEN=s"), "The app's Baidu sign-in did not replace the old one");
         CloudDriveBridge.seedDriveCookies(new JSONObject(), files);
         check(Files.readString(files.resolve(".quark")).equals("__pus=quark-fixture"), "A missing account erased the plugin's cookie");
+    }
+
+    static void wexPreferences() throws Exception {
+        var context = new android.content.Context(Files.createTempDirectory("wex-cookie-test").toFile(), CloudDriveBridgeTest.class.getClassLoader());
+        var preferences = context.getSharedPreferences(CloudDriveBridge.WEX_PREFERENCES, 0);
+        CloudDriveBridge.seedWexCookies(null, context);
+        var accounts = new JSONObject().put("quarkCookie", " __pus=quark-fixture ").put("baiduCookie", "BDUSS=b; STOKEN=s");
+        CloudDriveBridge.seedWexCookies(accounts, context);
+        check(preferences.getString("Wex_quark_cookie", "").equals("__pus=quark-fixture"), "Quark cookie not given to the Wex preferences");
+        check(preferences.getString("Wex_baidu_cookie", "").equals("BDUSS=b; STOKEN=s"), "Baidu cookie not given to the Wex preferences");
+        check(!preferences.contains("Wex_ucpan_cookie"), "A missing UC account was written");
+        // The plugin refreshes its cookie; the same app sign-in must not undo that.
+        preferences.edit().putString("Wex_quark_cookie", "__pus=refreshed").commit();
+        CloudDriveBridge.seedWexCookies(accounts, context);
+        check(preferences.getString("Wex_quark_cookie", "").equals("__pus=refreshed"), "An unchanged sign-in replaced the plugin's refreshed cookie");
+        CloudDriveBridge.seedWexCookies(accounts.put("quarkCookie", "__pus=signed-in-again"), context);
+        check(preferences.getString("Wex_quark_cookie", "").equals("__pus=signed-in-again"), "A new app sign-in did not replace the plugin's cookie");
+        var reopened = new android.content.Context(context.getFilesDir().getParentFile(), CloudDriveBridgeTest.class.getClassLoader());
+        check(reopened.getSharedPreferences(CloudDriveBridge.WEX_PREFERENCES, 0).getString("Wex_baidu_cookie", "").equals("BDUSS=b; STOKEN=s"), "Wex preferences not saved to disk");
     }
 
     static void cloudFamilyCredentials() throws Exception {

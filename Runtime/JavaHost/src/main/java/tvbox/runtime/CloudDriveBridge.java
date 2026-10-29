@@ -371,6 +371,34 @@ public final class CloudDriveBridge implements AutoCloseable {
         }
     }
 
+    /** The SharedPreferences where the Wex family (王二小's MyPan, 玩偶 and the other AiNew drive lines) keeps sign-ins. */
+    public static final String WEX_PREFERENCES = "NewWexFnw_preferences";
+
+    /**
+     * Wex spiders read raw drive cookies from {@code Wex_quark_cookie}, {@code Wex_ucpan_cookie} and
+     * {@code Wex_baidu_cookie} in {@link #WEX_PREFERENCES}, which only their config center fills. Each app
+     * sign-in goes there once (a digest marks what was given), so the plugin's own cookie refreshes stay
+     * until the user signs in again.
+     */
+    public static void seedWexCookies(JSONObject accounts, android.content.Context context) {
+        if (accounts == null) return;
+        var preferences = context.getSharedPreferences(WEX_PREFERENCES, 0);
+        var editor = preferences.edit();
+        boolean changed = false;
+        for (var entry : Map.of("Wex_quark_cookie", "quarkCookie", "Wex_ucpan_cookie", "ucCookie", "Wex_baidu_cookie", "baiduCookie").entrySet()) {
+            String cookie = accounts.optString(entry.getValue()).trim();
+            if (cookie.isEmpty()) continue;
+            String given = "yingxia." + entry.getKey(), digest;
+            try {
+                digest = HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(cookie.getBytes(StandardCharsets.UTF_8)));
+            } catch (java.security.NoSuchAlgorithmException unavailable) { return; }
+            if (digest.equals(preferences.getString(given, ""))) continue;
+            editor.putString(entry.getKey(), cookie).putString(given, digest);
+            changed = true;
+        }
+        if (changed && !editor.commit()) System.err.println("CLOUD_ACCOUNT_SEED_FAILED " + WEX_PREFERENCES);
+    }
+
     /** Where the plugin offers the app a sign-in only it has (see syncFtyAccounts). */
     public static final String PLUGIN_ACCOUNTS = "plugin-accounts.json";
 
