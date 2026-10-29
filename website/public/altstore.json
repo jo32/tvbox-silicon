@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.3",
+          "buildVersion": "41",
+          "date": "2026-10-29",
+          "localizedDescription": "• 更多源可以播放了\n• 修复有声音没画面\n• 贡献者名单\n• 其他修复\n\n• More sources play\n• Sound but no picture, fixed\n• Meet the contributors\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.3/Yingxia-1.8.3-ios.ipa",
+          "size": 115154751,
+          "sha256": "d60b94496055ae978f0b1e00cbf3e06ddc72a710e8bae3f7f0dd78628e62843c",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.2",
           "buildVersion": "40",
           "date": "2026-10-28",
@@ -57,16 +67,6 @@
           "size": 72586889,
           "sha256": "ecc26bb93204af75dfebe83032af28bddde05eba5bec272b9770dc67b769e920",
           "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.7.12",
-          "buildVersion": "31",
-          "date": "2026-10-25",
-          "localizedDescription": "• 什么都能收藏\n• 点播源按订阅分组\n• 自选“现在观看”的内容\n• 单条删除\n• 反馈附带详细信息\n• 更多点播源恢复正常\n• 夸克和 UC 的大视频可以播放\n• 搜索不再闪退\n\n• Favorite anything\n• Sources grouped by subscription\n• Choose what Watch Now shows\n• Remove one at a time\n• Feedback with the details\n• More sources work\n• Large Quark and UC videos play\n• No more crash in search",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.7.12/Yingxia-1.7.12-ios.ipa",
-          "size": 72414549,
-          "sha256": "131c78a8e2b43f2d11278c1662fceda50a0e473ad50e2ea61c215b76b15fe273",
-          "minOSVersion": "18.0"
         }
       ],
       "appPermissions": {
