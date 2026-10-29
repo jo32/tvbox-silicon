@@ -80,6 +80,21 @@ public final class HttpDiagnostics {
     }
 
     /*
+     * sx.jar's Quark proxy answers a range with the request's own headers instead of a Content-Range,
+     * so the relay learns the file's size from the first ranged answer its own thread fetched upstream.
+     */
+    private static final ThreadLocal<long[]> rangeTotal = new ThreadLocal<>();
+    public static void watchRangeTotal(boolean on) { if (on) rangeTotal.set(new long[] { -1 }); else rangeTotal.remove(); }
+    public static long rangeTotal() { long[] total = rangeTotal.get(); return total == null ? -1 : total[0]; }
+    private static void recordRangeTotal(Response response) {
+        long[] total = rangeTotal.get();
+        if (total == null || total[0] >= 0 || response.code() != 206) return;
+        var range = response.header("Content-Range");
+        var match = range == null ? null : java.util.regex.Pattern.compile("bytes \\d+-\\d+/(\\d+)").matcher(range);
+        if (match != null && match.matches()) total[0] = Long.parseLong(match.group(1));
+    }
+
+    /*
      * Some drive proxies download ranges over HttpURLConnection on their own threads (Fish's
      * multi-threaded downloader), not OkHttp. Its request headers can only be read before it
      * connects, so these wrap the first call that connects it.
@@ -154,6 +169,7 @@ public final class HttpDiagnostics {
                 response = kept;
                 loginState().prompted = true;
             }
+            recordRangeTotal(response);
             if (local) return response;
             System.err.println("SOURCE_HTTP " + response.request().url().host() + response.request().url().encodedPath() + " " + response.code());
             recordMedia(response);
