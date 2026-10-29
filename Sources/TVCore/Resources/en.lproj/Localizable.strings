@@ -1118,3 +1118,7 @@
 "Privacy" = "Privacy";
 "Dolby Vision video can't play while the screen is mirrored or recorded. Stop mirroring or recording, then try again." = "Dolby Vision video can't play while the screen is mirrored or recorded. Stop mirroring or recording, then try again.";
 "This device can't play this Dolby Vision video. Try another line." = "This device can't play this Dolby Vision video. Try another line.";
+"Contributors" = "Contributors";
+"Ranked by commits in the last 30 days." = "Ranked by commits in the last 30 days.";
+"1 commit" = "1 commit";
+"%lld commits" = "%lld commits";

@@ -1,13 +1,15 @@
 // Takes the app's error reports and stores them in D1. The app groups repeats and sends at most
 // every six hours, so each install costs a request or so a day. No IP address is stored.
 // Also turns feedback written in the app's Settings into a GitHub issue (/v1/feedback), and tells the app
-// how its issues are doing and what the developer replied (/v1/feedback/replies).
+// how its issues are doing and what the developer replied (/v1/feedback/replies). Settings also lists the
+// month's contributors (/v1/contributors), read here once an hour so the app never meets GitHub's limit
+// for requests without a token (60 an hour per IP address, shared by everyone behind it).
 
 interface Env {
   DB: D1Database;
   LIMITER: RateLimit;
   FEEDBACK_LIMITER: RateLimit;
-  // owner/name of the public repository that gets the issues.
+  // owner/name of the public repository that gets the issues, and whose commits name the contributors.
   FEEDBACK_REPO: string;
   // Secret: a fine-grained token with Issues read and write on FEEDBACK_REPO only.
   GITHUB_TOKEN?: string;
@@ -226,10 +228,55 @@ async function feedbackReplies(request: Request, env: Env): Promise<Response> {
   return Response.json({ issues: found.filter(Boolean) });
 }
 
+// Settings › Contributors (Sources/TVCore/Contributors.swift): everyone whose commits reached the default
+// branch in the last 30 days, most first.
+const CONTRIBUTORS_DAYS = 30;
+// 100 commits a page.
+const CONTRIBUTORS_PAGES = 10;
+// Seconds. Each data center asks GitHub at most this often.
+const CONTRIBUTORS_CACHE = 3600;
+
+// Counted as GitHub's contributor graph counts them: merge commits, bots and commits whose email isn't tied
+// to a GitHub account are left out. Ties go alphabetically.
+export function contributors(commits: any[]) {
+  const people = new Map<string, { login: string; avatar?: string; profile?: string; commits: number }>();
+  for (const commit of commits) {
+    const author = commit?.author;
+    if ((commit?.parents?.length ?? 0) > 1 || typeof author?.login !== "string" || author.type === "Bot" || author.login.endsWith("[bot]")) continue;
+    const person = people.get(author.login) ?? { login: text(author.login, 64), avatar: text(author.avatar_url, 200) || undefined, profile: text(author.html_url, 200) || undefined, commits: 0 };
+    person.commits += 1;
+    people.set(author.login, person);
+  }
+  return [...people.values()].sort((a, b) => b.commits - a.commits || a.login.toLowerCase().localeCompare(b.login.toLowerCase()));
+}
+
+async function contributorList(request: Request, env: Env): Promise<Response> {
+  if (!env.GITHUB_TOKEN) return new Response(null, { status: 503 });
+  if (!(await env.LIMITER.limit({ key: address(request) })).success) return new Response(null, { status: 429 });
+  const key = new Request(`${new URL(request.url).origin}/v1/contributors`);
+  const hit = await caches.default.match(key);
+  if (hit) return hit;
+  const since = new Date(Date.now() - CONTRIBUTORS_DAYS * 86400 * 1000).toISOString();
+  const commits: any[] = [];
+  for (let page = 1; page <= CONTRIBUTORS_PAGES; page++) {
+    const response = await github(env, `/commits?since=${encodeURIComponent(since)}&per_page=100&page=${page}`);
+    if (!response.ok) return new Response(null, { status: 502 });
+    const batch: any = await response.json();
+    if (!Array.isArray(batch)) return new Response(null, { status: 502 });
+    commits.push(...batch);
+    if (batch.length < 100) break;
+  }
+  const result = Response.json({ since, days: CONTRIBUTORS_DAYS, contributors: contributors(commits) },
+    { headers: { "cache-control": `max-age=${CONTRIBUTORS_CACHE}` } });
+  await caches.default.put(key, result.clone());
+  return result;
+}
+
 const ROUTES: Record<string, [string, (request: Request, env: Env) => Promise<Response>]> = {
   "/v1/reports": ["POST", receive],
   "/v1/feedback": ["POST", feedback],
   "/v1/feedback/replies": ["GET", feedbackReplies],
+  "/v1/contributors": ["GET", contributorList],
 };
 
 export default {
