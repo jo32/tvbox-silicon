@@ -283,12 +283,15 @@ import TVCore
 
     /// An Apple TV can report HDR playback and still refuse a repackaged HDR10 file (-11868 with Core Media
     /// -17223, "cannot be played on this device"). The file opens again with its picture converted to SDR,
-    /// and so do the files opened after it.
+    /// and so do the files opened after it. A mirrored or recorded screen refuses HDR the same way, but only
+    /// while it lasts: then this file alone converts. Dolby Vision 5 can't convert, so it isn't tried again.
     private func retryHDR(after failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
-        guard !Remux.refusesHDR, Remux.isHDR(url), Self.refusedContent(failure) else { return false }
-        Remux.refusesHDR = true
+        guard Remux.isHDR(url), !Remux.isDolbyVision(url), Self.refusedContent(failure) else { return false }
+        let captured = Self.screenCaptured
+        guard captured ? !Remux.screenCaptured : !Remux.refusesHDR else { return false }
+        if captured { Remux.screenCaptured = true } else { Remux.refusesHDR = true }
         detachItem(); observation = nil
-        Diagnostics.shared.record(.warning, "player", "hdr refused; converting to sdr \(failure.map(Self.describe) ?? "-")")
+        Diagnostics.shared.record(.warning, "player", "hdr refused captured=\(captured); converting to sdr \(failure.map(Self.describe) ?? "-")")
         Remux.stop(url)
         preparation = Task { [weak self] in
             guard let self else { return }
@@ -495,6 +498,7 @@ import TVCore
                     self.loading = false
                     self.errorSymbol = expired ? "clock.badge.exclamationmark" : network ? "wifi.exclamationmark" : "play.slash.fill"
                     self.error = expired ? L10n.text("This episode's link may have expired. Open it again, or try another line.")
+                        : Remux.isDolbyVision(url) && Self.refusedContent(failure) ? Self.dolbyVisionRefused
                         : message ?? L10n.text("This media cannot be played. Try another channel or source.")
                 }
             }
@@ -849,8 +853,24 @@ extension PlaybackSession {
         return prepared
     }
 
+    /// Why a Dolby Vision 5 file was refused: while the screen is mirrored or recorded iOS plays no HDR stream.
+    private static var dolbyVisionRefused: String {
+        screenCaptured ? L10n.text("Dolby Vision video can't play while the screen is mirrored or recorded. Stop mirroring or recording, then try again.")
+            : L10n.text("This device can't play this Dolby Vision video. Try another line.")
+    }
+
+    /// Whether the screen is mirrored or recorded right now (`Remux.screenCaptured`).
+    static var screenCaptured: Bool {
+        #if canImport(UIKit)
+        UIApplication.shared.connectedScenes.contains { ($0 as? UIWindowScene)?.traitCollection.sceneCaptureState == .active }
+        #else
+        false
+        #endif
+    }
+
     /// The repackaged file's address, nil when FFmpeg can't read it.
     fileprivate static func remux(_ source: RemuxSource, channel: Channel) async -> URL? {
+        Remux.screenCaptured = screenCaptured
         do { return try await Remux.open(source, subtitles: channel.subtitles, headers: channel.headers) }
         catch {
             if !Task.isCancelled { Diagnostics.shared.failure("player", "remux source=\(channel.historyContext?.sourceKey ?? "-")", error) }
