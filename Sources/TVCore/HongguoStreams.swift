@@ -115,7 +115,8 @@ actor HongguoRangeReader {
         request.setValue("bytes=\(range.lowerBound)-\(range.upperBound - 1)", forHTTPHeaderField: "Range")
         request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
         let (bytes, response) = try await http.session.bytes(for: request)
-        defer { bytes.task.cancel() }
+        let task = bytes.task
+        defer { task.cancel() }
         let httpResponse = response as? HTTPURLResponse
         if range.lowerBound == 0 || httpResponse?.statusCode != 206 {
             Diagnostics.shared.record(.debug, "hongguo.stream", "range host=\(response.url?.host() ?? "-") requested=\(range.lowerBound)-\(range.upperBound - 1) status=\(httpResponse?.statusCode ?? 0) referer=\(retry) contentRange=\(httpResponse?.value(forHTTPHeaderField: "Content-Range") ?? "-") contentLength=\(response.expectedContentLength)")
@@ -123,7 +124,7 @@ actor HongguoRangeReader {
         // App CDN nodes have different Referer policies. Match the upstream client: omit it
         // first, add the app's Referer only after 403, and reuse that choice for later ranges.
         if httpResponse?.statusCode == 403, !retry {
-            bytes.task.cancel()
+            task.cancel()
             try Task.checkCancellation()
             usesReferer = true
             return try await read(range, from: url)
@@ -143,8 +144,13 @@ actor HongguoRangeReader {
               response.expectedContentLength == -1 || response.expectedContentLength == Int64(last - first + 1) else {
             throw HongguoMP4.Failure.invalid
         }
-        let expected = last - first + 1
-        var data = Data(); data.reserveCapacity(expected)
+        return (try await Self.body(bytes, expected: last - first + 1), length)
+    }
+
+    /// Off the actor on purpose: each step of an AsyncBytes loop in actor-isolated code hops to the
+    /// generic executor and back, two task switches per byte, which kept a core busy while streaming.
+    private nonisolated static func body(_ bytes: sending URLSession.AsyncBytes, expected: Int) async throws -> Data {
+        var data = [UInt8](); data.reserveCapacity(expected)
         for try await byte in bytes {
             guard data.count < expected else { throw HongguoMP4.Failure.invalid }
             data.append(byte)
@@ -152,7 +158,7 @@ actor HongguoRangeReader {
         }
         try Task.checkCancellation()
         guard data.count == expected else { throw HongguoMP4.Failure.invalid }
-        return (data, length)
+        return Data(data)
     }
 }
 
@@ -268,10 +274,13 @@ actor HongguoByteStream {
             }
         }
         try Task.checkCancellation()
-        if let i = cache.firstIndex(where: { $0.range.lowerBound <= requested.lowerBound && $0.range.upperBound >= requested.upperBound }) {
+        // A chunk is widened to whole samples, so the player's next read usually starts inside it. Serve
+        // what the chunk holds and let the next read start at its end, rather than fetching the overlap again.
+        if let i = cache.firstIndex(where: { $0.range.contains(requested.lowerBound) }) {
             let chunk = cache.remove(at: i); cache.append(chunk)
-            lastDeliveredOffset = requested.upperBound
-            return Data(chunk.data[requested.lowerBound - chunk.range.lowerBound..<requested.upperBound - chunk.range.lowerBound])
+            let end = min(requested.upperBound, chunk.range.upperBound)
+            lastDeliveredOffset = end
+            return Data(chunk.data[requested.lowerBound - chunk.range.lowerBound..<end - chunk.range.lowerBound])
         }
         let expanded = index.expanded(requested)
         let encrypted: Data
