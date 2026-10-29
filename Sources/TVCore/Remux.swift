@@ -25,6 +25,13 @@ public enum Remux {
             .contains((name as NSString).pathExtension.lowercased())
     }
 
+    /// Whether repackaging shows a picture AVPlayer can't decode in the file itself, from its sample entries:
+    /// HEVC that an MP4 tags `hev1` (`dvhe`) plays inside HLS as it is, and VP9 is converted. AV1 isn't, as
+    /// FFmpeg here has no decoder for it.
+    public static func showsPicture(_ codecs: [String]) -> Bool {
+        !codecs.isEmpty && codecs.allSatisfy { ["hev1", "dvhe", "vp09"].contains($0) }
+    }
+
     /// Opens the file and returns the address of its HLS master playlist on a loopback server. `subtitles`, the
     /// files beside it, are fetched (with `headers`) while the file opens and join its own subtitles.
     public static func open(_ source: RemuxSource, subtitles: [ExternalSubtitle] = [], headers: [String: String] = [:]) async throws -> URL {

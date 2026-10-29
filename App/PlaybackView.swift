@@ -135,6 +135,8 @@ import TVCore
     private var liveRetrying = false
     /// The episode was already asked for again after its server ignored AVPlayer's byte range.
     private var rangeRetried = false
+    /// Whether AVPlayer shows the picture of the file it just opened is being checked; the saved position waits.
+    private var checkingPicture = false
     /// A live room's chat, whose comments join `danmaku` as they are sent.
     private var chat: BilibiliLiveChat?
     /// Download state while connecting or buffering, sampled once a second from AVFoundation's logs.
@@ -451,10 +453,12 @@ import TVCore
     }
 
     /// The video's codec and size, for reports of sound without a picture (a codec the decoder
-    /// refuses, such as HEVC tagged `hev1` in MP4, plays its audio only).
-    private static func recordVideoFormat(_ item: AVPlayerItem) async {
-        guard let tracks = try? await item.asset.loadTracks(withMediaType: .video) else { return }
-        if tracks.isEmpty { Diagnostics.shared.record(.info, "player", "video none"); return }
+    /// refuses, such as HEVC tagged `hev1` in MP4, plays its audio only). Returns the codecs of a picture
+    /// AVPlayer can't decode; none when it decodes one, or there is none.
+    private static func recordVideoFormat(_ item: AVPlayerItem) async -> [String] {
+        guard let tracks = try? await item.asset.loadTracks(withMediaType: .video) else { return [] }
+        if tracks.isEmpty { Diagnostics.shared.record(.info, "player", "video none"); return [] }
+        var refused: [String] = [], decodes = false
         for track in tracks {
             let formats = (try? await track.load(.formatDescriptions)) ?? []
             let size = (try? await track.load(.naturalSize)) ?? .zero
@@ -464,6 +468,50 @@ import TVCore
                 return String(decoding: [24, 16, 8, 0].map { UInt8((code >> $0) & 0xff) }, as: UTF8.self)
             }
             Diagnostics.shared.record(.info, "player", "video codec=\(codecs.joined(separator: ",")) size=\(Int(size.width))x\(Int(size.height)) playable=\(playable)")
+            if playable { decodes = true } else { refused += codecs }
+        }
+        return decodes ? [] : refused
+    }
+
+    /// A file AVPlayer reads by itself and `Remux` can read too: not HLS, and not already repackaged.
+    private static func repackagable(_ url: URL) -> Bool {
+        !Remux.isRemuxed(url) && url.pathExtension.lowercased() != "m3u8"
+            && ["http", "https", "file", CloudStreams.scheme].contains(url.scheme)
+    }
+
+    /// A file whose picture AVPlayer can't decode plays its sound alone: HEVC that an MP4 tags `hev1`, or VP9
+    /// (#215). It opens again repackaged as HLS (`Remux.showsPicture`) and resumes where it was asked to. When it
+    /// can't be repackaged, the sound plays on as before.
+    private func repackage(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
+        player.pause(); loading = true
+        note(L10n.text("Repackaging the video for this device"))
+        Diagnostics.shared.record(.warning, "player", "no picture; repackaging host=\(url.host() ?? "-")")
+        preparation = Task { [weak self] in
+            let source: RemuxSource?
+            if url.scheme == CloudStreams.scheme { source = await CloudStreams.remuxSource(for: url) }
+            else if url.isFileURL { source = try? Remux.fileSource(url) }
+            else {
+                do { source = try await Remux.httpSource(url, headers: channel.headers) }
+                catch {
+                    if !Task.isCancelled { Diagnostics.shared.failure("player", "remux link host=\(url.host() ?? "-")", error) }
+                    source = nil
+                }
+            }
+            var remuxed: URL?
+            if let source { remuxed = await Self.remux(source, channel: channel) }
+            guard let self, self.generation == active, !Task.isCancelled, self.item === item else {
+                if let remuxed { Remux.stop(remuxed) }
+                return
+            }
+            guard let remuxed else {
+                self.restorePositionIfNeeded(item)
+                self.loading = self.pendingResume != nil || self.restoringPosition
+                if self.pendingResume == nil { self.player.play() }
+                return
+            }
+            self.detachItem(); self.observation = nil
+            self.configure(channel, url: remuxed, generation: active)
+            self.automatic = remuxed
         }
     }
 
@@ -483,10 +531,17 @@ import TVCore
                 guard let self, self.generation == activeGeneration else { return }
                 self.hasTimeline = timeline
                 if status == .readyToPlay {
+                    self.checkingPicture = Self.repackagable(url)
                     self.restorePositionIfNeeded(item)
                     self.loading = self.pendingResume != nil || self.restoringPosition
                     Diagnostics.shared.record(.info, "player", "ready host=\(self.transfer.host ?? channel.url.host() ?? "-")")
-                    Task { await Self.recordVideoFormat(item) }
+                    Task { [weak self] in
+                        let refused = await Self.recordVideoFormat(item)
+                        guard let self, self.generation == activeGeneration, self.item === item, self.checkingPicture else { return }
+                        self.checkingPicture = false
+                        if Remux.showsPicture(refused) { self.repackage(item, channel: channel, url: url, generation: activeGeneration) }
+                        else { self.restorePositionIfNeeded(item) }
+                    }
                 }
                 if status == .failed {
                     if self.retryRange(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
@@ -704,7 +759,7 @@ import TVCore
         historyContext = channel.historyContext
         requestedResumePosition = channel.resumePosition
         pendingResume = channel.resumePosition.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
-        restoringPosition = false; restoredPosition = nil
+        restoringPosition = false; restoredPosition = nil; checkingPicture = false
         skipScope = channel.skipScope
         skipSettings = skipScope.map { EpisodeSkipSettings.load(scope: $0, defaults: skipDefaults) } ?? EpisodeSkipSettings()
         skipPass = EpisodeSkipPass(); seekingSegment = false
@@ -718,7 +773,7 @@ import TVCore
     }
 
     private func restorePositionIfNeeded(_ item: AVPlayerItem) {
-        guard let requested = pendingResume, !restoringPosition, item.status == .readyToPlay,
+        guard let requested = pendingResume, !restoringPosition, !checkingPicture, item.status == .readyToPlay,
               let target = PlaybackHistoryEntry.resumeTarget(requested, duration: item.duration.seconds) else { return }
         restoringPosition = true
         let pattern: Duration.TimeFormatStyle.Pattern = target >= 3600 ? .hourMinuteSecond : .minuteSecond
