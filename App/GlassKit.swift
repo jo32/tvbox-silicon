@@ -50,8 +50,10 @@ struct GlassGroup<Content: View>: View {
 }
 
 extension View {
+    /// Apple TVs without Liquid Glass on tvOS 26 take the material path too: there the glass dropped its tint, so a
+    /// focused chip's white plate never showed and its black label sat on a dark capsule (#214).
     @ViewBuilder func glassSurface(_ style: GlassStyle = .regular, in shape: some Shape) -> some View {
-        if #available(macOS 26, iOS 26, tvOS 26, *) {
+        if #available(macOS 26, iOS 26, tvOS 26, *), LiquidGlassSupport.current {
             glassEffect(style.glass, in: shape)
         } else if style.isVisible {
             background {
