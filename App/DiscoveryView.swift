@@ -317,7 +317,7 @@ struct GlobalSearchView: View {
     @ViewBuilder private func resultLinks(_ config: Subscription) -> some View {
         ForEach(posters) { item in
             RouteLink {
-                VideoDetailView(video: item.video, client: CatalogClient(site: item.site, origin: config.origin, jarURL: config.spiderURL))
+                CatalogDestination(video: item.video, client: CatalogClient(site: item.site, origin: config.origin, jarURL: config.spiderURL))
                     .onAppear { rememberQuery() }
             } label: { searchPoster(item) }
             .cardButton().id(item.id)
@@ -765,7 +765,7 @@ struct RecommendationsView: View {
                             Button { store.searchVideos(keyword) } label: { PosterCard(recommendation: item) }.cardButton()
                         case .detail(let video):
                             RouteLink {
-                                VideoDetailView(video: video, client: CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL))
+                                CatalogDestination(video: video, client: CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL))
                             } label: { PosterCard(recommendation: item) }.cardButton()
                         }
                     }
@@ -852,7 +852,7 @@ struct RecommendationsView: View {
                     if isIndex {
                         Button { store.searchVideos(video.name) } label: { PosterCard(video: video) }.cardButton()
                     } else {
-                        RouteLink { VideoDetailView(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
+                        RouteLink { CatalogDestination(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
                     }
                 }
             }

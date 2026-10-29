@@ -30,6 +30,9 @@ public struct Video: Identifiable, Hashable, Sendable, Codable {
         self.id = id; self.name = name; self.poster = poster; self.posterHeaders = posterHeaders
         self.year = year; self.remarks = remarks; self.synopsis = synopsis; self.episodes = episodes; self.category = category
     }
+    /// A folder of a drive source (AList, 小雅 and other cloud-drive spiders tag it `vod_tag: "folder"`). As in
+    /// TVBox it opens as a listing of its own (the category request with the folder's id), not as details.
+    public var isFolder: Bool { category?.split(separator: ",").contains("folder") ?? false }
     /// This video with `poster` when it has none of its own. Many sources leave `vod_pic` out of the detail
     /// answer although their list or search answer had it, and history, favorites and Now Playing keep what plays.
     public func keepingPoster(_ poster: URL?, headers: [String: String]? = nil) -> Video {
