@@ -172,8 +172,12 @@ public final class CloudDriveBridge implements AutoCloseable {
         String asked = headers.get("range");
         var wanted = asked == null ? null : java.util.regex.Pattern.compile("bytes=(\\d+)-(\\d*)").matcher(asked);
         if (wanted != null && !wanted.matches()) wanted = null;
-        Object[] response = invoke(resource, params, headers);
-        if (wanted != null && !wanted.group(2).isEmpty() && misanswered(response, wanted.group(1))) {
+        Object[] response;
+        long upstreamTotal;
+        HttpDiagnostics.watchRangeTotal(true);
+        try { response = invoke(resource, params, headers); upstreamTotal = HttpDiagnostics.rangeTotal(); }
+        finally { HttpDiagnostics.watchRangeTotal(false); }
+        if (wanted != null && !wanted.group(2).isEmpty() && misanswered(response, wanted.group(1), upstreamTotal >= 0)) {
             // FTY's Quark proxy skips an 8-byte prefix at the start of a range but not at its end, so a short range
             // such as AVPlayer's 0-1 probe never starts. Android players ask for open ranges; so do we, and stop at
             // the end we wanted.
@@ -195,7 +199,9 @@ public final class CloudDriveBridge implements AutoCloseable {
                         try { length = Math.max(-1, Long.parseLong(value)); } catch (NumberFormatException ignored) { }
                         continue;
                     }
-                    if (Set.of("connection", "transfer-encoding").contains(key.toLowerCase(Locale.ROOT))) continue;
+                    // sx.jar's Quark proxy returns the request's own headers (Cookie, Range, User-Agent) as its answer's.
+                    if (Set.of("connection", "transfer-encoding", "range", "cookie").contains(key.toLowerCase(Locale.ROOT))
+                            || value.equals(headers.get(key.toLowerCase(Locale.ROOT))) || value.equals(params.get(key))) continue;
                     if (key.equalsIgnoreCase("location")) value = rewriteAddress(value);
                     exchange.getResponseHeaders().set(key, value);
                 }
@@ -212,6 +218,7 @@ public final class CloudDriveBridge implements AutoCloseable {
                     if (!answered.group(3).equals("*")) total = Long.parseLong(answered.group(3));
                     end = total > 0 ? total - 1 : Long.parseLong(answered.group(2));
                 } else if (first == 0 && length > 0) end = (total = length) - 1;
+                else if (range == null && upstreamTotal > 0) end = (total = upstreamTotal) - 1;
                 long last = wanted.group(2).isEmpty() ? end : Math.min(Long.parseLong(wanted.group(2)), end);
                 if (end >= 0 && first <= last) {
                     status = 206;
@@ -246,14 +253,17 @@ public final class CloudDriveBridge implements AutoCloseable {
         return proxy.invoke(request);
     }
 
-    /** A 206 answer whose Content-Range is missing, malformed or starts somewhere other than the range asked for. */
-    private static boolean misanswered(Object[] response, String first) {
+    /**
+     * A 206 answer whose Content-Range is malformed or starts somewhere other than the range asked for, or is
+     * missing while the file's size is unknown.
+     */
+    private static boolean misanswered(Object[] response, String first, boolean sizeKnown) {
         if (response == null || response.length < 4 || !(response[0] instanceof Number status) || status.intValue() != 206
                 || !(response[2] instanceof InputStream) || !(response[3] instanceof Map<?,?> answer)) return false;
         for (var entry : answer.entrySet())
             if (String.valueOf(entry.getKey()).equalsIgnoreCase("content-range"))
                 return !String.valueOf(entry.getValue()).matches("bytes " + first + "-\\d+/(\\d+|\\*)");
-        return true;
+        return !sizeKnown;
     }
 
     private static HttpServer standard;
@@ -383,24 +393,41 @@ public final class CloudDriveBridge implements AutoCloseable {
      * before the spider starts. A file holding JSON belongs to another plugin's format and stays.
      * Pan spiders of the 神仙 (sx.jar) family read them from shared storage instead, as
      * {@code TVBox/quark_cookie.txt} and {@code uc_cookie.txt}, and without one they hide every drive line of
-     * that kind. Their Baidu file is left alone: with a Baidu sign-in that family copies files from its own
-     * shares into the user's drive and deletes them again.
+     * that kind. These hold what their own sign-in writes, {@code {"nickname","member_type","cookie"}}, and
+     * they count as signed in only when all three are set; nothing else reads the first two. Their Baidu file is
+     * left alone: with a Baidu sign-in that family copies files from its own shares into the user's drive and
+     * deletes them again.
      */
     public static void seedDriveCookies(JSONObject accounts, Path files) {
         if (accounts == null) return;
-        Path shared = files.resolveSibling("external").resolve("TVBox");
-        for (var entry : Map.of(files.resolve(".quark"), "quarkCookie", files.resolve(".uc"), "ucCookie", files.resolve(".baidu"), "baiduCookie",
-                shared.resolve("quark_cookie.txt"), "quarkCookie", shared.resolve("uc_cookie.txt"), "ucCookie").entrySet()) {
+        for (var entry : Map.of(".quark", "quarkCookie", ".uc", "ucCookie", ".baidu", "baiduCookie").entrySet()) {
             String cookie = accounts.optString(entry.getValue()).trim();
             if (cookie.isEmpty()) continue;
-            Path file = entry.getKey();
+            Path file = files.resolve(entry.getKey());
             try {
                 String saved = Files.isRegularFile(file) ? Files.readString(file, StandardCharsets.UTF_8).trim() : "";
                 if (saved.equals(cookie) || saved.startsWith("{")) continue;
-                Files.createDirectories(file.getParent());
+                Files.createDirectories(files);
                 Files.writeString(file, cookie, StandardCharsets.UTF_8);
             } catch (IOException unwritable) {
-                System.err.println("CLOUD_ACCOUNT_SEED_FAILED " + file.getFileName());
+                System.err.println("CLOUD_ACCOUNT_SEED_FAILED " + entry.getKey());
+            }
+        }
+        Path shared = files.resolveSibling("external").resolve("TVBox");
+        for (var entry : Map.of("quark_cookie.txt", "quarkCookie", "uc_cookie.txt", "ucCookie").entrySet()) {
+            String cookie = accounts.optString(entry.getValue()).trim();
+            if (cookie.isEmpty()) continue;
+            Path file = shared.resolve(entry.getKey());
+            try {
+                JSONObject saved = null;
+                try { saved = new JSONObject(Files.readString(file, StandardCharsets.UTF_8)); }
+                catch (IOException | JSONException absent) { }
+                // The plugin's own sign-in of the same account (with its real nickname) stays.
+                if (saved != null && cookie.equals(saved.optString("cookie"))) continue;
+                Files.createDirectories(shared);
+                Files.writeString(file, new JSONObject().put("nickname", "映匣").put("member_type", "NORMAL").put("cookie", cookie).toString(), StandardCharsets.UTF_8);
+            } catch (IOException | JSONException unwritable) {
+                System.err.println("CLOUD_ACCOUNT_SEED_FAILED " + entry.getKey());
             }
         }
     }

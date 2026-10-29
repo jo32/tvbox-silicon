@@ -63,6 +63,32 @@ public class CloudDriveBridgeTest {
             check(fty.getResponseCode() == 206 && "bytes 0-1/10".equals(fty.getHeaderField("Content-Range")), "FTY range not repaired");
             check(new String(fty.getInputStream().readAllBytes()).equals("01"), "FTY range payload changed");
             check(asked.equals(List.of("bytes=0-1", "bytes=0-")), "FTY range was not asked again open: " + asked);
+            // sx.jar's Quark proxy fetches the range upstream, then answers with the request's own headers.
+            var cdn = com.sun.net.httpserver.HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            cdn.createContext("/", exchange -> {
+                exchange.getResponseHeaders().set("Content-Range", "bytes 0-1/10");
+                exchange.sendResponseHeaders(206, 2); exchange.getResponseBody().write("01".getBytes()); exchange.close();
+            });
+            cdn.start();
+            asked.clear();
+            bridge.setProxy(params -> {
+                asked.add(params.get("range"));
+                var client = new okhttp3.OkHttpClient();
+                var request = new okhttp3.Request.Builder().url("http://127.0.0.1:" + cdn.getAddress().getPort() + "/file").header("Range", params.get("range")).build();
+                tvbox.runtime.HttpDiagnostics.execute(client.newCall(request)).close();
+                int first = Integer.parseInt(params.get("range").replaceAll("bytes=(\\d+)-.*", "$1"));
+                var echoed = new TreeMap<String,String>(String.CASE_INSENSITIVE_ORDER); echoed.putAll(params);
+                return new Object[]{206, "application/oct-stream", new ByteArrayInputStream("0123456789".substring(first).getBytes()), echoed};
+            });
+            var sx = connection(media); sx.setRequestProperty("Range", "bytes=0-1"); sx.setRequestProperty("Cookie", "__puus=test-only");
+            check(sx.getResponseCode() == 206 && "bytes 0-1/10".equals(sx.getHeaderField("Content-Range")) && sx.getContentLengthLong() == 2, "sx range not repaired");
+            check(sx.getHeaderField("Cookie") == null && sx.getHeaderField("Range") == null, "Request headers echoed back");
+            check(new String(sx.getInputStream().readAllBytes()).equals("01"), "sx range payload changed");
+            var tail = connection(media); tail.setRequestProperty("Range", "bytes=4-");
+            check(tail.getResponseCode() == 206 && "bytes 4-9/10".equals(tail.getHeaderField("Content-Range")), "sx open range not repaired");
+            check(new String(tail.getInputStream().readAllBytes()).equals("456789"), "sx open range payload changed");
+            check(asked.equals(List.of("bytes=0-1", "bytes=4-")), "sx range was asked again: " + asked);
+            cdn.stop(0);
             check(Files.exists(cache.resolve("proxy-active")), "Playback lease not updated");
             check(bridge.rewriteAddress("https://example.com/proxy?do=quark").startsWith("https://example.com"), "Remote proxy rewritten");
             String array = bridge.playback("{\"url\":[\"HD\",\"http://127.0.0.1:9978/proxy?do=quark\"],\"header\":{\"Referer\":\"https://example.com\"}}");
@@ -330,10 +356,20 @@ public class CloudDriveBridgeTest {
         CloudDriveBridge.seedDriveCookies(new JSONObject(), files);
         check(Files.readString(files.resolve(".quark")).equals("__pus=quark-fixture"), "A missing account erased the plugin's cookie");
         // The sx.jar family reads Quark and UC from shared storage next to files/, and never gets the Baidu sign-in.
+        // Its files are JSON, signed in only with all three fields set.
         Path shared = files.resolveSibling("external").resolve("TVBox");
-        check(Files.readString(shared.resolve("quark_cookie.txt")).equals("__pus=quark-fixture"), "Quark cookie not seeded into TVBox/quark_cookie.txt");
-        check(Files.readString(shared.resolve("uc_cookie.txt")).equals("__pus=uc-fixture"), "UC cookie not seeded into TVBox/uc_cookie.txt");
+        var quark = new JSONObject(Files.readString(shared.resolve("quark_cookie.txt")));
+        check(quark.getString("cookie").equals("__pus=quark-fixture") && !quark.optString("nickname").isEmpty() && !quark.optString("member_type").isEmpty(),
+            "Quark sign-in not seeded into TVBox/quark_cookie.txt");
+        check(new JSONObject(Files.readString(shared.resolve("uc_cookie.txt"))).getString("cookie").equals("__pus=uc-fixture"), "UC sign-in not seeded into TVBox/uc_cookie.txt");
         check(!Files.exists(shared.resolve("baidu.txt")), "The Baidu sign-in reached TVBox/baidu.txt");
+        // The plugin's own sign-in of the same account stays; a new app sign-in replaces it.
+        String own = new JSONObject().put("nickname", "plugin").put("member_type", "SUPER_VIP").put("cookie", "__pus=quark-fixture").toString();
+        Files.writeString(shared.resolve("quark_cookie.txt"), own);
+        CloudDriveBridge.seedDriveCookies(accounts, files);
+        check(Files.readString(shared.resolve("quark_cookie.txt")).equals(own), "The plugin's own sign-in of the same account was replaced");
+        CloudDriveBridge.seedDriveCookies(accounts.put("quarkCookie", "__pus=signed-in-again"), files);
+        check(new JSONObject(Files.readString(shared.resolve("quark_cookie.txt"))).getString("cookie").equals("__pus=signed-in-again"), "A new app sign-in did not reach TVBox/quark_cookie.txt");
     }
 
     static void wexPreferences() throws Exception {
