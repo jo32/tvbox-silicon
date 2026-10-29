@@ -70,7 +70,7 @@ struct MobilePlayerView: View {
         ZStack {
             PlayerLayerView(player: session.player, fills: fillsScreen, pip: pip).playerBleed(!inline)
             // The enhanced picture covers the layer's own, under everything else.
-            EnhancedVideoSurface(enhancer: session.enhancer, fills: fillsScreen)
+            EnhancedVideoSurface(enhancer: session.enhancer, fills: fillsScreen, bleeds: !inline)
             if showsDanmaku && !session.danmaku.isEmpty {
                 DanmakuOverlay(player: session.player, comments: session.danmaku, opacity: session.danmakuOpacity, revision: session.danmakuRevision)
                     // Across the whole width, but below the Dynamic Island and above the home indicator when upright.
