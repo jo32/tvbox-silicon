@@ -381,20 +381,26 @@ public final class CloudDriveBridge implements AutoCloseable {
      * and {@code .baidu}. Their config center fills these from a phone through a LAN QR code this host
      * can't serve, and with no cookie they open an Android QR dialog, so the app's accounts go there
      * before the spider starts. A file holding JSON belongs to another plugin's format and stays.
+     * Pan spiders of the 神仙 (sx.jar) family read them from shared storage instead, as
+     * {@code TVBox/quark_cookie.txt} and {@code uc_cookie.txt}, and without one they hide every drive line of
+     * that kind. Their Baidu file is left alone: with a Baidu sign-in that family copies files from its own
+     * shares into the user's drive and deletes them again.
      */
     public static void seedDriveCookies(JSONObject accounts, Path files) {
         if (accounts == null) return;
-        for (var entry : Map.of(".quark", "quarkCookie", ".uc", "ucCookie", ".baidu", "baiduCookie").entrySet()) {
+        Path shared = files.resolveSibling("external").resolve("TVBox");
+        for (var entry : Map.of(files.resolve(".quark"), "quarkCookie", files.resolve(".uc"), "ucCookie", files.resolve(".baidu"), "baiduCookie",
+                shared.resolve("quark_cookie.txt"), "quarkCookie", shared.resolve("uc_cookie.txt"), "ucCookie").entrySet()) {
             String cookie = accounts.optString(entry.getValue()).trim();
             if (cookie.isEmpty()) continue;
-            Path file = files.resolve(entry.getKey());
+            Path file = entry.getKey();
             try {
                 String saved = Files.isRegularFile(file) ? Files.readString(file, StandardCharsets.UTF_8).trim() : "";
                 if (saved.equals(cookie) || saved.startsWith("{")) continue;
-                Files.createDirectories(files);
+                Files.createDirectories(file.getParent());
                 Files.writeString(file, cookie, StandardCharsets.UTF_8);
             } catch (IOException unwritable) {
-                System.err.println("CLOUD_ACCOUNT_SEED_FAILED " + entry.getKey());
+                System.err.println("CLOUD_ACCOUNT_SEED_FAILED " + file.getFileName());
             }
         }
     }

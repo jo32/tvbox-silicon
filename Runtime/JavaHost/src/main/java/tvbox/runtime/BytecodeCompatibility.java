@@ -14,7 +14,8 @@ public final class BytecodeCompatibility {
     // v16: static values a class file can't keep as constants (a String in an Object field) are set in <clinit>.
     // v17: invoke-super naming the calling class itself goes to the superclass, as on ART.
     // v18: a static value its field can't hold on the JVM (a String in a HashMap field) is left out of <clinit>.
-    public static final String VERSION = "host-v18";
+    // v19: interfaces with default or static methods are Java 8 class files (sx.jar's protobuf).
+    public static final String VERSION = "host-v19";
     private static final java.util.Set<String> connections = java.util.Set.of("java/net/URLConnection", "java/net/HttpURLConnection", "javax/net/ssl/HttpsURLConnection");
     // Field types that can hold a String, or a Class, on the JVM. ART stores a static value in any reference field.
     private static final java.util.Set<String> stringFields = java.util.Set.of("Ljava/lang/Object;", "Ljava/lang/CharSequence;", "Ljava/io/Serializable;", "Ljava/lang/Comparable;");
@@ -41,10 +42,25 @@ public final class BytecodeCompatibility {
                 }
             }, ClassReader.SKIP_CODE);
         }
+        // dex2jar writes Java 6 class files for dex older than 037, but such dex can still hold interface methods
+        // with code: the default bridge javac adds for a covariant return (protobuf's MessageOrBuilder), or a static
+        // method. The JVM refuses those ("illegal modifiers: 0x1041") below Java 8; dex2jar's frames suit Java 8.
+        boolean[] concreteInterface = { false };
+        if ((reader.getAccess() & Opcodes.ACC_INTERFACE) != 0 && (reader.readUnsignedShort(6)) < Opcodes.V1_8) {
+            reader.accept(new ClassVisitor(Opcodes.ASM9) {
+                @Override public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+                    if ((access & Opcodes.ACC_ABSTRACT) == 0 && !name.equals("<clinit>")) concreteInterface[0] = true;
+                    return null;
+                }
+            }, ClassReader.SKIP_CODE);
+        }
         boolean newCz = reader.getClassName().equals("com/github/catvod/spider/NewCz");
         var initialValues = new java.util.ArrayList<InitialValue>();
         boolean[] initializer = { false };
         reader.accept(new ClassVisitor(Opcodes.ASM9, writer) {
+            @Override public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
+                super.visit(concreteInterface[0] ? Opcodes.V1_8 : version, access, name, signature, superName, interfaces);
+            }
             // Dex gives any static field an initial value; a class file only primitives, and Strings in String
             // fields. The JVM refuses a class with any other ("Bad string initial value"), so dex2jar's String in
             // an Object field, or class in a Class field, is set first thing in <clinit> instead, as dex does.

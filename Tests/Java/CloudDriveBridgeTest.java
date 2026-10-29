@@ -329,6 +329,11 @@ public class CloudDriveBridgeTest {
         check(Files.readString(files.resolve(".baidu")).equals("BDUSS=new; STOKEN=s"), "The app's Baidu sign-in did not replace the old one");
         CloudDriveBridge.seedDriveCookies(new JSONObject(), files);
         check(Files.readString(files.resolve(".quark")).equals("__pus=quark-fixture"), "A missing account erased the plugin's cookie");
+        // The sx.jar family reads Quark and UC from shared storage next to files/, and never gets the Baidu sign-in.
+        Path shared = files.resolveSibling("external").resolve("TVBox");
+        check(Files.readString(shared.resolve("quark_cookie.txt")).equals("__pus=quark-fixture"), "Quark cookie not seeded into TVBox/quark_cookie.txt");
+        check(Files.readString(shared.resolve("uc_cookie.txt")).equals("__pus=uc-fixture"), "UC cookie not seeded into TVBox/uc_cookie.txt");
+        check(!Files.exists(shared.resolve("baidu.txt")), "The Baidu sign-in reached TVBox/baidu.txt");
     }
 
     static void wexPreferences() throws Exception {
