@@ -1,6 +1,79 @@
 {
   "releases": [
     {
+      "version": "1.8.3",
+      "build": 41,
+      "date": "2026-10-29",
+      "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.3/Yingxia-1.8.3-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.3/Yingxia-1.8.3-macos-x86_64.dmg",
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "play.rectangle.on.rectangle",
+          "title": {
+            "en": "More sources play",
+            "zh-Hans": "更多源可以播放了",
+            "zh-Hant": "更多來源可以播放了",
+            "ja": "再生できるソースが増えました"
+          },
+          "detail": {
+            "en": "Sources from the 神仙 (sx.jar) config now open, and their Quark and UC lines play once you've signed in under Settings › Cloud Drive Accounts. 王二小's 玩偶, 花卷 and MyPan lines use those sign-ins too. For their 115, 天翼 and 光鸭 lines, the app shows the source's own QR code to scan, and one scan works for all of these sources. Folders in drive sources such as 小雅 now open as lists you can browse.",
+            "zh-Hans": "神仙（sx.jar）配置中的源现在可以打开了；在“设置 › 网盘账号”中登录后，其中的夸克和 UC 线路也能播放。王二小的玩偶、花卷和 MyPan 线路同样会使用这些登录。它们的 115、天翼和光鸭线路会显示源自带的二维码供你扫码，扫一次即可用于所有这些源。小雅等网盘源中的文件夹现在会以列表打开，可以逐层浏览。",
+            "zh-Hant": "神仙（sx.jar）設定中的來源現在可以開啟了；在「設定 › 網盤帳號」中登入後，其中的夸克和 UC 線路也能播放。王二小的玩偶、花捲和 MyPan 線路同樣會使用這些登入。它們的 115、天翼和光鴨線路會顯示來源自帶的 QR 碼供你掃描，掃一次即可用於所有這些來源。小雅等網盤來源中的資料夾現在會以列表開啟，可以逐層瀏覽。",
+            "ja": "神仙（sx.jar）設定のソースが開けるようになり、「設定 › クラウドドライブのアカウント」でサインインすると Quark と UC の回線も再生できます。王二小の玩偶・花卷・MyPan の回線もこのサインインを使います。115・天翼・光鸭の回線ではソース独自の QR コードが表示され、1 回スキャンすればこれらすべてのソースで使えます。小雅などのドライブ系ソースのフォルダは、たどっていける一覧として開くようになりました。"
+          }
+        },
+        {
+          "symbol": "film",
+          "title": {
+            "en": "Sound but no picture, fixed",
+            "zh-Hans": "修复有声音没画面",
+            "zh-Hant": "修正有聲音沒畫面",
+            "ja": "音声だけで映像が出ない問題を修正"
+          },
+          "detail": {
+            "en": "Some MP4 links and saved files (HEVC tagged hev1, or VP9) played their sound over a black screen. Yingxia now notices and repackages them on the fly, picking up where you were. While your screen is mirrored or recorded, HDR10 videos play in SDR and later videos are back in HDR once that stops. On iPhone, Sharper Picture and Smooth Motion no longer leave black bands on the watch page.",
+            "zh-Hans": "部分 MP4 链接和已下载的文件（标记为 hev1 的 HEVC 或 VP9）会只有声音、画面全黑。影侠现在会自动识别并即时重新封装，从刚才的位置继续播放。屏幕镜像或录屏时，HDR10 视频会以 SDR 播放，停止后之后的视频会恢复 HDR。在 iPhone 上，“画质增强”和“智能补帧”不再在观看页留下黑边。",
+            "zh-Hant": "部分 MP4 連結和已下載的檔案（標記為 hev1 的 HEVC 或 VP9）會只有聲音、畫面全黑。影俠現在會自動辨識並即時重新封裝，從剛才的位置繼續播放。螢幕鏡像或錄影時，HDR10 影片會以 SDR 播放，停止後之後的影片會恢復 HDR。在 iPhone 上，「畫質增強」和「智慧補幀」不再在觀看頁留下黑邊。",
+            "ja": "一部の MP4 リンクや保存済みファイル（hev1 タグの HEVC や VP9）で、音声だけが流れて画面が真っ暗になることがありました。Yingxia がこれを検出してその場で再パッケージし、続きから再生します。画面のミラーリングや収録中は HDR10 のビデオを SDR で再生し、終了後のビデオは HDR に戻ります。iPhone の視聴ページでは、「高画質化」と「なめらか補間」で黒い帯が出なくなりました。"
+          }
+        },
+        {
+          "symbol": "person.3",
+          "title": {
+            "en": "Meet the contributors",
+            "zh-Hans": "贡献者名单",
+            "zh-Hant": "貢獻者名單",
+            "ja": "コントリビューター"
+          },
+          "detail": {
+            "en": "Settings has a new Contributors section listing everyone whose work reached Yingxia in the last 30 days, with their GitHub avatars. On iPhone, iPad and Mac, tap a name to open their GitHub page.",
+            "zh-Hans": "“设置”中新增“贡献者”栏目，列出过去 30 天内为影侠贡献代码的每个人及其 GitHub 头像。在 iPhone、iPad 和 Mac 上，轻点名字即可打开对方的 GitHub 页面。",
+            "zh-Hant": "「設定」中新增「貢獻者」欄目，列出過去 30 天內為影俠貢獻程式碼的每個人及其 GitHub 頭像。在 iPhone、iPad 和 Mac 上，點一下名字即可開啟對方的 GitHub 頁面。",
+            "ja": "「設定」に「コントリビューター」セクションが加わり、過去 30 日間に Yingxia に貢献したすべての人を GitHub のアバター付きで一覧表示します。iPhone・iPad・Mac では名前をタップするとその人の GitHub ページが開きます。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "Buttons are readable again on the Apple TV HD and the first Apple TV 4K. Videos with very long episode lists open without freezing, which could close the app on iPad. Hongguo short dramas use much less power and data while playing. On the Mac, sources whose server uses an unusual port work again. Saved downloads that are still getting ready no longer warn about the server or connection.",
+            "zh-Hans": "Apple TV HD 和第一代 Apple TV 4K 上的按钮文字重新清晰可读。选集很多的影片打开时不再卡住（在 iPad 上可能导致 App 退出）。红果短剧播放时的耗电和流量大幅降低。在 Mac 上，服务器使用非常用端口的源恢复正常。仍在准备中的已下载视频不再提示服务器或网络问题。",
+            "zh-Hant": "Apple TV HD 和第一代 Apple TV 4K 上的按鈕文字重新清晰可讀。選集很多的影片開啟時不再卡住（在 iPad 上可能導致 App 結束）。紅果短劇播放時的耗電和流量大幅降低。在 Mac 上，伺服器使用非常用連接埠的來源恢復正常。仍在準備中的已下載影片不再提示伺服器或網路問題。",
+            "ja": "Apple TV HD と第 1 世代の Apple TV 4K でボタンの文字が再び読みやすくなりました。エピソードがとても多い作品を開いても固まらなくなりました（iPad ではアプリが閉じることがありました）。Hongguo のショートドラマは再生中の電力とデータの消費が大きく減りました。Mac では、サーバーが一般的でないポートを使うソースが再び使えます。準備中の保存済みダウンロードで、サーバーや接続の警告が出なくなりました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.2",
       "build": 40,
       "date": "2026-10-28",
