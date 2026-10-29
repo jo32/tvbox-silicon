@@ -734,6 +734,9 @@
 "This line plays from %@, but its sign-in code couldn't be shown. Choose another line." = "這條線路來自%@，但無法顯示它的登入 QR 碼。請換一條線路。";
 "Baidu Netdisk" = "百度網盤";
 "Aliyun Drive" = "阿里雲盤";
+"115 Cloud" = "115 網盤";
+"Tianyi Cloud" = "天翼雲盤";
+"Guangya Cloud" = "光鴨雲盤";
 "The original file is MKV, which Apple devices can't play, so the %@ line is playing instead." = "原畫檔案是 MKV 格式，Apple 裝置無法播放，已改為播放%@線路。";
 "Sign In to %@" = "登入%@";
 "%@ needs this account for the line you chose. The video plays once you confirm." = "「%@」的這條線路需要該帳號。確認登入後即可播放。";
