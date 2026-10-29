@@ -1113,3 +1113,5 @@
 "%@ received" = "%@ 受信済み";
 "the video server" = "動画サーバー";
 "Privacy" = "プライバシー";
+"Dolby Vision video can't play while the screen is mirrored or recorded. Stop mirroring or recording, then try again." = "画面のミラーリングまたは収録中は Dolby Vision のビデオを再生できません。停止してからもう一度お試しください。";
+"This device can't play this Dolby Vision video. Try another line." = "このデバイスではこの Dolby Vision のビデオを再生できません。別の回線をお試しください。";

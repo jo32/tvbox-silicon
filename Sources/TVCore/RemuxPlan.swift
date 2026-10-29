@@ -234,6 +234,9 @@ struct RemuxPlan: Sendable, Equatable {
         return lines.joined(separator: "\n") + "\n"
     }
 
+    /// A Dolby Vision 5 picture, served as it is: it has no HDR10 picture to convert to SDR.
+    var isDolbyVision: Bool { tracks[0].kind == .video && tracks[0].mode == .copy && tracks[0].dolbyVision == .dvh1 }
+
     var videoRange: String {
         let stream = tracks[0].stream
         if tracks[0].toneMap { return "SDR" }

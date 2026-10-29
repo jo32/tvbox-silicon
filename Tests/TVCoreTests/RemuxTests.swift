@@ -71,6 +71,10 @@ struct RemuxTests {
         #expect(RemuxPlan(tracks: [RemuxPlan.videoTrack(hdr10, device: device)], bounds: [0, 1_000_000]).videoRange == "PQ")
         #expect(!RemuxPlan.videoTrack(Stream(index: 0, kind: .video, codec: "hevc", width: 3840, height: 2160, bitDepth: 10), device: sdr).toneMap)
         #expect(!RemuxPlan.videoTrack(Stream(index: 0, kind: .video, codec: "hevc", width: 3840, height: 2160, bitDepth: 10, colorTransfer: 16, doviProfile: 5), device: sdr).toneMap)
+        // Nor is Dolby Vision 5 converted later: a device that refused it would refuse it again.
+        let vision5 = RemuxPlan(tracks: [RemuxPlan.videoTrack(Stream(index: 0, kind: .video, codec: "hevc", width: 3840, height: 2160, bitDepth: 10, doviProfile: 5), device: sdr)],
+                                bounds: [0, 1_000_000])
+        #expect(vision5.isDolbyVision && vision5.videoRange == "PQ" && !RemuxPlan(tracks: [mapped], bounds: [0, 1_000_000]).isDolbyVision)
         let converted = RemuxPlan.videoTrack(Stream(index: 0, kind: .video, codec: "mpeg4", width: 720, height: 404, frameRate: 25, bitRate: 1_200_000), device: device)
         #expect(converted.bitRate == 1_500_000)
     }

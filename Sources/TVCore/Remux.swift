@@ -54,14 +54,27 @@ public enum Remux {
         return plan.videoRange != "SDR"
     }
 
+    /// Whether the picture behind `url` is Dolby Vision profile 5, served as it is: it has no HDR10 picture to
+    /// convert to SDR, so a device that refuses it refuses it again.
+    public static func isDolbyVision(_ url: URL) -> Bool { session(url)?.plan.isDolbyVision ?? false }
+
     /// Set once AVPlayer refused an HDR stream although the device reported HDR playback (an Apple TV can):
     /// files opened after that convert HDR pictures to SDR, as for a display that shows no HDR.
     public static var refusesHDR: Bool {
         get { hdrLock.withLock { hdrRefused } }
         set { hdrLock.withLock { hdrRefused = newValue } }
     }
+
+    /// Whether the screen is mirrored or recorded (AirPlay mirroring, a screen recording, a Mac showing the
+    /// iPhone). iOS then refuses every HDR variant of an HLS stream (-17223), though it plays them again once
+    /// that stops, so files opened meanwhile convert HDR pictures to SDR. The app sets it before each file opens.
+    public static var screenCaptured: Bool {
+        get { hdrLock.withLock { captured } }
+        set { hdrLock.withLock { captured = newValue } }
+    }
     private static let hdrLock = NSLock()
     nonisolated(unsafe) private static var hdrRefused = false
+    nonisolated(unsafe) private static var captured = false
 
     /// Stops reading and writing the file behind `url`.
     public static func stop(_ url: URL) {

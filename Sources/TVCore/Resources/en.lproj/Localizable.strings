@@ -1113,3 +1113,5 @@
 "%@ received" = "%@ received";
 "the video server" = "the video server";
 "Privacy" = "Privacy";
+"Dolby Vision video can't play while the screen is mirrored or recorded. Stop mirroring or recording, then try again." = "Dolby Vision video can't play while the screen is mirrored or recorded. Stop mirroring or recording, then try again.";
+"This device can't play this Dolby Vision video. Try another line." = "This device can't play this Dolby Vision video. Try another line.";

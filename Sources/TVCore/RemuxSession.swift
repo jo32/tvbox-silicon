@@ -187,7 +187,7 @@ final class RemuxSession: @unchecked Sendable {
         var device = RemuxPlan.Device(hevc: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
                                       av1: VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1),
                                       hevcEncoder: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
-                                      hdr: AVPlayer.eligibleForHDRPlayback && !Remux.refusesHDR)
+                                      hdr: AVPlayer.eligibleForHDRPlayback && !Remux.refusesHDR && !Remux.screenCaptured)
         #if !os(macOS)
         // An Apple TV or iPhone tone maps a 4K picture too slowly to keep up; one that shows no HDR gets 1080p.
         device.toneMapWidth = 1920

@@ -1113,3 +1113,5 @@
 "%@ received" = "已接收 %@";
 "the video server" = "视频服务器";
 "Privacy" = "隐私";
+"Dolby Vision video can't play while the screen is mirrored or recorded. Stop mirroring or recording, then try again." = "屏幕正在镜像或录制，杜比视界视频无法播放。请停止镜像或录屏后重试。";
+"This device can't play this Dolby Vision video. Try another line." = "此设备无法播放这个杜比视界视频，请尝试其他线路。";
