@@ -329,14 +329,24 @@ public final class CloudDriveBridge implements AutoCloseable {
     public void setDriveProxy(DriveProxy value) { driveProxy = value; }
     public void setProxy(Proxy value) { proxy = value; }
 
-    /** The drive cookies (quarkCookie, ucCookie, baiduCookie) the app holds a sign-in in. */
-    private volatile Set<String> appAccounts = Set.of();
-    public void appAccounts(JSONObject accounts) {
-        var held = new HashSet<String>();
-        for (String key : List.of("quarkCookie", "ucCookie", "baiduCookie")) if (accounts != null && !accounts.optString(key).isBlank()) held.add(key);
-        appAccounts = Set.copyOf(held);
+    /** The drive cookies (quarkCookie, ucCookie, baiduCookie) the app holds a sign-in in, with their digests. */
+    private volatile Map<String, String> appAccounts = Map.of();
+    /** The source's context, whose Wex preferences OwnDriveSignIn reads after the plugin signs in. */
+    private volatile android.content.Context context;
+    public void appAccounts(JSONObject accounts) { appAccounts(accounts, null); }
+    public void appAccounts(JSONObject accounts, android.content.Context value) {
+        var held = new HashMap<String, String>();
+        for (String key : List.of("quarkCookie", "ucCookie", "baiduCookie")) {
+            String cookie = accounts == null ? "" : accounts.optString(key).trim();
+            if (!cookie.isEmpty()) held.put(key, digest(cookie));
+        }
+        appAccounts = Map.copyOf(held);
+        context = value;
     }
-    boolean hasAppAccount(String field) { return appAccounts.contains(field); }
+    boolean hasAppAccount(String field) { return appAccounts.containsKey(field); }
+    /** The digest of the app's sign-in in this field, or "" without one. */
+    String appAccountDigest(String field) { return appAccounts.getOrDefault(field, ""); }
+    android.content.Context context() { return context; }
 
     /** The plugin's own /proxy answer to these parameters as text, or null when it has no proxy or no body. */
     String proxyText(Map<String,String> params) throws Exception {
@@ -392,29 +402,50 @@ public final class CloudDriveBridge implements AutoCloseable {
     /** The SharedPreferences where the Wex family (王二小's MyPan, 玩偶 and the other AiNew drive lines) keeps sign-ins. */
     public static final String WEX_PREFERENCES = "NewWexFnw_preferences";
 
+    /** The Wex preferences that hold the drives the app signs in to, and the app's account field for each. */
+    static final Map<String, String> WEX_APP_KEYS = Map.of("Wex_quark_cookie", "quarkCookie", "Wex_ucpan_cookie", "ucCookie", "Wex_baidu_cookie", "baiduCookie");
+    /** In the shared {@code wexPreferences}: the digest of the app sign-in that a plugin sign-in replaced. */
+    static final String WEX_REPLACED = "yingxia.replaced.";
+
     /**
      * Wex spiders read raw drive cookies from {@code Wex_quark_cookie}, {@code Wex_ucpan_cookie} and
      * {@code Wex_baidu_cookie} in {@link #WEX_PREFERENCES}, which only their config center fills. Each app
      * sign-in goes there once (a digest marks what was given), so the plugin's own cookie refreshes stay
-     * until the user signs in again.
+     * until the user signs in again. A sign-in one Wex source made through its own code
+     * ({@code wexPreferences}, see OwnDriveSignIn) reaches every source the same way, also after a new jar
+     * version; one that replaced an app sign-in the plugin refused holds until the app signs in again.
      */
     public static void seedWexCookies(JSONObject accounts, android.content.Context context) {
         if (accounts == null) return;
+        var values = new java.util.TreeMap<String, String>();
+        for (var entry : WEX_APP_KEYS.entrySet()) {
+            String cookie = accounts.optString(entry.getValue()).trim();
+            if (!cookie.isEmpty()) values.put(entry.getKey(), cookie);
+        }
+        JSONObject shared = accounts.optJSONObject("wexPreferences");
+        if (shared != null) for (var keys = shared.keys(); keys.hasNext(); ) {
+            String key = String.valueOf(keys.next()), value = shared.optString(key);
+            if (!key.startsWith("Wex_") || value.isEmpty()) continue;
+            String field = WEX_APP_KEYS.get(key);
+            if (field != null && !digest(accounts.optString(field).trim()).equals(shared.optString(WEX_REPLACED + key))) continue;
+            values.put(key, value);
+        }
+        if (values.isEmpty()) return;
         var preferences = context.getSharedPreferences(WEX_PREFERENCES, 0);
         var editor = preferences.edit();
         boolean changed = false;
-        for (var entry : Map.of("Wex_quark_cookie", "quarkCookie", "Wex_ucpan_cookie", "ucCookie", "Wex_baidu_cookie", "baiduCookie").entrySet()) {
-            String cookie = accounts.optString(entry.getValue()).trim();
-            if (cookie.isEmpty()) continue;
-            String given = "yingxia." + entry.getKey(), digest;
-            try {
-                digest = HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(cookie.getBytes(StandardCharsets.UTF_8)));
-            } catch (java.security.NoSuchAlgorithmException unavailable) { return; }
+        for (var entry : values.entrySet()) {
+            String given = "yingxia." + entry.getKey(), digest = digest(entry.getValue());
             if (digest.equals(preferences.getString(given, ""))) continue;
-            editor.putString(entry.getKey(), cookie).putString(given, digest);
+            editor.putString(entry.getKey(), entry.getValue()).putString(given, digest);
             changed = true;
         }
         if (changed && !editor.commit()) System.err.println("CLOUD_ACCOUNT_SEED_FAILED " + WEX_PREFERENCES);
+    }
+
+    static String digest(String text) {
+        try { return HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8))); }
+        catch (java.security.NoSuchAlgorithmException unavailable) { throw new IllegalStateException(unavailable); }
     }
 
     /** Where the plugin offers the app a sign-in only it has (see syncFtyAccounts). */

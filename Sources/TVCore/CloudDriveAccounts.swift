@@ -13,23 +13,35 @@ public struct CloudDriveAccounts: Codable, Sendable {
     public var baiduCookie: String?
     /// Xunlei's sign-in (`XunleiSignIn`), which CatPawOpen bundles take; older saves omit it.
     public var xunlei: XunleiAccount?
+    /// Wex-family preferences a sign-in through the plugin's own code wrote (OwnDriveSignIn.java), which
+    /// every Wex source then gets (CloudDriveBridge.seedWexCookies); older saves omit it.
+    public var wexPreferences: [String: String]?
     public init() {}
 
     /// Keeps a sign-in a plugin made through its own QR code (`baiduCookie`, `token`) as the app's
-    /// account for that drive, so every source can use it. True when something changed.
+    /// account for that drive, and a Wex sign-in's preferences (`wexPreferences`), so every source can
+    /// use it. True when something changed.
     @discardableResult
     public static func adopt(_ offered: [String: Any]) -> Bool {
         var accounts = (try? load()) ?? Self()
-        var changed = false
-        if let cookie = offered["baiduCookie"] as? String, cookie.contains("BDUSS="), accounts.baiduCookie != cookie {
-            accounts.baiduCookie = cookie; changed = true
-        }
-        if let token = offered["token"] as? String, token.count == 32, accounts.token != token {
-            accounts.token = token; changed = true
-        }
-        guard changed, (try? accounts.save()) != nil else { return false }
+        guard accounts.take(offered), (try? accounts.save()) != nil else { return false }
         Diagnostics.shared.record(.info, "cloud.signin", "saved a plugin sign-in for \(offered.keys.sorted().joined(separator: ","))")
         return true
+    }
+    /// Takes what `adopt` keeps from a plugin's offer. True when something changed.
+    mutating func take(_ offered: [String: Any]) -> Bool {
+        var changed = false
+        if let cookie = offered["baiduCookie"] as? String, cookie.contains("BDUSS="), baiduCookie != cookie {
+            baiduCookie = cookie; changed = true
+        }
+        if let token = offered["token"] as? String, token.count == 32, self.token != token {
+            self.token = token; changed = true
+        }
+        if let preferences = offered["wexPreferences"] as? [String: String], !preferences.isEmpty {
+            let merged = (wexPreferences ?? [:]).merging(preferences) { $1 }
+            if merged != wexPreferences { wexPreferences = merged; changed = true }
+        }
+        return changed
     }
     /// The plugin runtime reads accounts from this file.
     public static var fileURL: URL {

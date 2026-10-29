@@ -16,7 +16,8 @@ import org.json.JSONObject;
  * 未配置或已失效"), the host starts that sign-in, the app shows the code (LoginPrompt), and once it is
  * confirmed the line is asked again. Drives the app signs in to itself (Quark, UC, Baidu) reach the
  * plugin from the app's accounts (CloudDriveBridge.seedWexCookies); for them this is only the
- * fallback when the plugin still finds no usable sign-in.
+ * fallback when the plugin still finds no usable sign-in. What the sign-in wrote to the plugin's
+ * preferences goes to the app with the notice, so every Wex source gets it without another scan.
  */
 final class OwnDriveSignIn {
     /** "[drive](stage) message" from the plugin's drive errors, when the message says the sign-in is missing or stale. */
@@ -50,6 +51,7 @@ final class OwnDriveSignIn {
         String field = APP_ACCOUNTS.get(drive);
         // With no app sign-in, the app asks for its own, which every source then uses.
         if (field != null && !bridge.hasAppAccount(field)) return false;
+        var before = wexValues(bridge);
         var start = call(bridge, "loginStart", drive, null);
         String code = start == null ? "" : start.optString("qrUrl"), task = start == null ? "" : start.optString("taskId");
         if (start == null || start.optInt("code", -1) != 0 || code.isBlank() || task.isBlank()) {
@@ -69,18 +71,46 @@ final class OwnDriveSignIn {
             if (!TERMINAL.contains(status)) continue;
             System.err.println("PLUGIN_OWN_SIGN_IN " + drive + " " + status);
             if (!status.equals("success")) return false;
-            LoginPrompt.signedIn(folder, drive, account(bridge, drive));
+            LoginPrompt.signedIn(folder, drive, account(bridge, drive, before));
             return true;
         }
         return false;
     }
 
-    /** A Baidu sign-in the plugin made becomes the app's account too; other drives stay the plugin's. */
-    private static Map<String, String> account(CloudDriveBridge bridge, String drive) {
-        if (!drive.equals("baidu")) return Map.of();
-        var credentials = call(bridge, "credentials", null, null);
-        String cookie = credentials == null ? "" : credentials.optString("baiduCookie");
-        return cookie.contains("BDUSS=") ? Map.of("baiduCookie", cookie) : Map.of();
+    /**
+     * What the app keeps from a sign-in the plugin made: the Wex preferences it wrote
+     * ({@code wexPreferences}), which every Wex source then gets, and a Baidu sign-in as the app's own
+     * account too. A preference for a drive the app signs in to notes the app sign-in it replaced.
+     */
+    private static Map<String, Object> account(CloudDriveBridge bridge, String drive, Map<String, String> before) {
+        var kept = new java.util.HashMap<String, Object>();
+        var written = new JSONObject();
+        try {
+            for (var entry : wexValues(bridge).entrySet()) {
+                if (entry.getValue().equals(before.get(entry.getKey()))) continue;
+                written.put(entry.getKey(), entry.getValue());
+                String field = CloudDriveBridge.WEX_APP_KEYS.get(entry.getKey());
+                if (field != null) written.put(CloudDriveBridge.WEX_REPLACED + entry.getKey(), bridge.appAccountDigest(field));
+            }
+        } catch (org.json.JSONException impossible) { }
+        if (written.length() > 0) kept.put("wexPreferences", written);
+        if (drive.equals("baidu")) {
+            var credentials = call(bridge, "credentials", null, null);
+            String cookie = credentials == null ? "" : credentials.optString("baiduCookie");
+            if (cookie.contains("BDUSS=")) kept.put("baiduCookie", cookie);
+        }
+        return kept;
+    }
+
+    /** The plugin's text Wex preferences; none when the source has no context. */
+    private static Map<String, String> wexValues(CloudDriveBridge bridge) {
+        var values = new java.util.TreeMap<String, String>();
+        var context = bridge.context();
+        if (context == null) return values;
+        for (var entry : context.getSharedPreferences(CloudDriveBridge.WEX_PREFERENCES, 0).getAll().entrySet()) {
+            if (entry.getKey().startsWith("Wex_") && entry.getValue() instanceof String text && !text.isBlank()) values.put(entry.getKey(), text);
+        }
+        return values;
     }
 
     /** The plugin's config-center answer to {@code action}, or null when it gave none. */

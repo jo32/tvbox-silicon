@@ -8,6 +8,9 @@ import java.util.*;
 
 public class CloudDriveBridgeTest {
     static void check(boolean value, String message) { if (!value) throw new AssertionError(message); }
+    static String sha256(String text) throws Exception {
+        return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    }
     static HttpURLConnection connection(String address) throws Exception {
         var connection = (HttpURLConnection)new URL(address).openConnection();
         connection.setConnectTimeout(2000); connection.setReadTimeout(2000); return connection;
@@ -345,6 +348,25 @@ public class CloudDriveBridgeTest {
         check(preferences.getString("Wex_quark_cookie", "").equals("__pus=signed-in-again"), "A new app sign-in did not replace the plugin's cookie");
         var reopened = new android.content.Context(context.getFilesDir().getParentFile(), CloudDriveBridgeTest.class.getClassLoader());
         check(reopened.getSharedPreferences(CloudDriveBridge.WEX_PREFERENCES, 0).getString("Wex_baidu_cookie", "").equals("BDUSS=b; STOKEN=s"), "Wex preferences not saved to disk");
+
+        // Sign-ins one Wex source made through its own code reach a source (or jar version) that never saw them.
+        var other = new android.content.Context(Files.createTempDirectory("wex-shared-test").toFile(), CloudDriveBridgeTest.class.getClassLoader());
+        var shared = new JSONObject().put("Wex_pan115_cookie", "UID=115").put("Wex_quark_cookie", "__pus=plugin")
+            .put("yingxia.replaced.Wex_quark_cookie", sha256("__pus=signed-in-again")).put("yingxia.other", "x");
+        var withShared = new JSONObject(accounts.toString()).put("wexPreferences", shared);
+        CloudDriveBridge.seedWexCookies(withShared, other);
+        var otherPreferences = other.getSharedPreferences(CloudDriveBridge.WEX_PREFERENCES, 0);
+        check(otherPreferences.getString("Wex_pan115_cookie", "").equals("UID=115"), "A plugin's own 115 sign-in did not reach another source");
+        check(otherPreferences.getString("Wex_quark_cookie", "").equals("__pus=plugin"), "The plugin's Quark sign-in did not replace the app sign-in it refused");
+        check(!otherPreferences.contains("yingxia.other"), "Something other than a Wex preference was shared");
+        // A plugin sign-in noted against an older app sign-in is not used.
+        var older = new android.content.Context(Files.createTempDirectory("wex-older-test").toFile(), CloudDriveBridgeTest.class.getClassLoader());
+        CloudDriveBridge.seedWexCookies(new JSONObject(withShared.toString()).put("quarkCookie", "__pus=newest"), older);
+        check(older.getSharedPreferences(CloudDriveBridge.WEX_PREFERENCES, 0).getString("Wex_quark_cookie", "").equals("__pus=newest"), "A plugin sign-in beat a newer app sign-in");
+        // The user signs in to Quark again in the app: that sign-in wins again; 115 stays.
+        CloudDriveBridge.seedWexCookies(withShared.put("quarkCookie", "__pus=newest"), other);
+        check(otherPreferences.getString("Wex_quark_cookie", "").equals("__pus=newest"), "A new app sign-in did not replace the plugin's Quark sign-in");
+        check(otherPreferences.getString("Wex_pan115_cookie", "").equals("UID=115"), "The shared 115 sign-in was lost");
     }
 
     static void cloudFamilyCredentials() throws Exception {

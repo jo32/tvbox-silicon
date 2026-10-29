@@ -12,6 +12,9 @@ import tvbox.runtime.PluginSession;
  */
 public final class RequestStopTest {
     private static void check(boolean condition, String message) { if (!condition) throw new AssertionError(message); }
+    private static String sha256(String text) throws Exception {
+        return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    }
 
     public static void main(String[] args) throws Exception {
         // A long sleep ends soon after the app gives up on the request.
@@ -161,7 +164,11 @@ public final class RequestStopTest {
         check(missing.invoke(null, "未登录") == null, "Not JSON");
 
         var folder = java.nio.file.Files.createTempDirectory("own-sign-in");
+        var context = new android.content.Context(java.nio.file.Files.createTempDirectory("own-sign-in-profile").toFile(), RequestStopTest.class.getClassLoader());
+        var wex = context.getSharedPreferences("NewWexFnw_preferences", 0);
+        wex.edit().putString("Wex_auto_danmu", "1").commit();
         try (var bridge = new tvbox.runtime.CloudDriveBridge(folder)) {
+            bridge.appAccounts(new JSONObject(), context);
             var spider = new WexSpider();
             var asked = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
             var shown = new java.util.concurrent.atomic.AtomicReference<String>();
@@ -176,6 +183,9 @@ public final class RequestStopTest {
                     shown.compareAndSet(null, java.nio.file.Files.readString(folder.resolve("login-prompt.json")));
                     boolean done = asked.stream().filter(entry -> entry.startsWith("loginPoll")).count() >= 2;
                     spider.signedIn = done;
+                    // The plugin saves the account in its own preferences.
+                    boolean quark = "quark".equals(params.get("provider"));
+                    if (done) wex.edit().putString(quark ? "Wex_quark_cookie" : "Wex_pan115_cookie", quark ? "__pus=plugin" : "UID=115").commit();
                     answer.put("status", done ? "success" : "waiting").put("terminal", done);
                 }
                 return new Object[]{200, "application/json", new java.io.ByteArrayInputStream(answer.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8))};
@@ -189,6 +199,8 @@ public final class RequestStopTest {
             check("pan115".equals(code.getString("drive")) && "https://115.com/scan/dg-fixture".equals(code.getString("content")), "Code shown: " + code);
             var notice = new JSONObject(java.nio.file.Files.readString(folder.resolve("login-prompt.json")));
             check(notice.optBoolean("signedIn") && "pan115".equals(notice.optString("drive")), "The app was not told: " + notice);
+            var written = notice.getJSONObject("wexPreferences");
+            check(written.length() == 1 && "UID=115".equals(written.optString("Wex_pan115_cookie")), "The plugin's 115 sign-in was not offered to the app: " + written);
 
             // Quark without an app sign-in: the app offers its own, which every source then gets.
             asked.clear(); spider.signedIn = false;
@@ -196,9 +208,13 @@ public final class RequestStopTest {
             String unsigned = session.request(new JSONObject().put("play", "x").put("flag", "quark").put("_deadline", 30).put("_folder", folder.toString()));
             check(new JSONObject(unsigned).optString("msg").startsWith("[quark](auth)") && asked.isEmpty(), "Quark went to the plugin with no app sign-in: " + asked);
             // With one the plugin didn't take, the plugin's own sign-in is the fallback.
-            bridge.appAccounts(new JSONObject().put("quarkCookie", "__pus=stale"));
+            bridge.appAccounts(new JSONObject().put("quarkCookie", "__pus=stale"), context);
             String fallback = session.request(new JSONObject().put("play", "x").put("flag", "quark").put("_deadline", 30).put("_folder", folder.toString()));
             check(new JSONObject(fallback).optString("url").equals("https://cdn.example/v.mp4") && asked.get(0).equals("loginStart:quark"), "Quark fallback: " + asked);
+            // The plugin's Quark sign-in goes to the app noted against the app sign-in it replaced.
+            var replaced = new JSONObject(java.nio.file.Files.readString(folder.resolve("login-prompt.json"))).getJSONObject("wexPreferences");
+            check("__pus=plugin".equals(replaced.optString("Wex_quark_cookie")) && sha256("__pus=stale").equals(replaced.optString("yingxia.replaced.Wex_quark_cookie"))
+                && !replaced.has("Wex_pan115_cookie"), "Quark sign-in offered: " + replaced);
         }
     }
 
