@@ -83,7 +83,7 @@ final class LoginPrompt {
     }
 
     /** Tells the app the code was scanned (and the account it signed in to), so it can close the code while the video loads. */
-    static void signedIn(Path folder, String drive, java.util.Map<String, String> account) throws java.io.IOException {
+    static void signedIn(Path folder, String drive, java.util.Map<String, ?> account) throws java.io.IOException {
         if (folder == null) return;
         var notice = new JSONObject();
         try {
