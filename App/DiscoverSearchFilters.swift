@@ -172,7 +172,10 @@ struct DiscoverSearchFilters: View {
                 TextField(L10n.text("From"), text: from).accessibilityIdentifier("discover.filter.\(id).from")
                 Text("—").foregroundStyle(.secondary)
                 TextField(L10n.text("To"), text: to).accessibilityIdentifier("discover.filter.\(id).to")
-            }.textFieldStyle(.roundedBorder)
+            }
+            #if !os(tvOS)
+            .textFieldStyle(.roundedBorder)
+            #endif
         }
     }
     private var platforms: [(String, String)] {

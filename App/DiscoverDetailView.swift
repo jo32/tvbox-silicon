@@ -72,9 +72,11 @@ struct DiscoverDetailView: View {
                 Button { searchShown = true } label: { Image(systemName: "magnifyingglass") }
                     .accessibilityLabel(L10n.text("Search Catalog"))
                     .accessibilityIdentifier("discover.detail.search")
+                #if !os(tvOS)
                 ShareLink(item: details?.link ?? URL(string: "https://www.themoviedb.org/\(item.mediaType.rawValue)/\(item.id)")!) {
                     Image(systemName: "square.and.arrow.up")
                 }.accessibilityLabel(L10n.text("Share"))
+                #endif
             }
         }
         .modifier(DiscoverSearchPresentation(isPresented: $searchShown))
