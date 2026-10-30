@@ -264,7 +264,13 @@ struct DiscoverTVNativeShelf: UIViewControllerRepresentable {
         }
         func indexPathForPreferredFocusedView(in collectionView: UICollectionView) -> IndexPath? { preferred }
         func collectionView(_ collectionView: UICollectionView, didUpdateFocusIn context: UICollectionViewFocusUpdateContext, with coordinator: UIFocusAnimationCoordinator) {
-            if let next = context.nextFocusedIndexPath, next.item > 0 || revealed { preferred = next }
+            if let next = context.nextFocusedIndexPath, next.item > 0 { preferred = next }
+            guard revealed, context.previouslyFocusedIndexPath?.item == 0, context.nextFocusedIndexPath?.item != 0 else { return }
+            revealed = false
+            preferred = context.nextFocusedIndexPath ?? IndexPath(item: 1, section: 0)
+            let more = collection.cellForItem(at: IndexPath(item: 0, section: 0)) as? MoreCell
+            more?.conceal()
+            coordinator.addCoordinatedAnimations { self.collection.collectionViewLayout.invalidateLayout(); self.collection.layoutIfNeeded() }
         }
     }
 
@@ -282,9 +288,9 @@ struct DiscoverTVNativeShelf: UIViewControllerRepresentable {
             super.init(frame: frame)
             isAccessibilityElement = true
             accessibilityTraits = [.button]
+            // The system's focus effect rounds the corners and draws the glass rim, as on Rex's covers; masking it to
+            // the image's contents would cut the rim off.
             poster.adjustsImageWhenAncestorFocused = true
-            // The focus effect follows the image's rounded corners.
-            poster.masksFocusEffectToContents = true
             title.font = .systemFont(ofSize: DiscoverLayout.caption, weight: .medium)
             title.textColor = .white
             detail.font = .systemFont(ofSize: DiscoverLayout.secondary)
@@ -324,19 +330,18 @@ struct DiscoverTVNativeShelf: UIViewControllerRepresentable {
             guard url != self.url || size != self.size || poster.image == nil else { return }
             self.url = url; self.size = size
             task?.cancel()
-            poster.image = Self.rounded(nil, size)
+            poster.image = Self.cover(nil, size)
             guard let url else { return }
             task = Task { [weak self] in
                 guard let image = await PosterPalette.image(url), !Task.isCancelled, let self, self.url == url else { return }
-                self.poster.image = Self.rounded(image, size)
+                self.poster.image = Self.cover(image, size)
             }
         }
 
-        /// The cover filled into a rounded rectangle, or a placeholder plate.
-        static func rounded(_ image: CGImage?, _ size: CGSize) -> UIImage {
+        /// The cover cropped to fill the poster, or a placeholder plate.
+        static func cover(_ image: CGImage?, _ size: CGSize) -> UIImage {
             UIGraphicsImageRenderer(size: size).image { context in
                 let bounds = CGRect(origin: .zero, size: size)
-                UIBezierPath(roundedRect: bounds, cornerRadius: 12).addClip()
                 guard let image else { UIColor(white: 0.2, alpha: 1).setFill(); context.fill(bounds); return }
                 let scale = max(size.width / CGFloat(image.width), size.height / CGFloat(image.height))
                 let drawn = CGSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
@@ -394,6 +399,10 @@ struct DiscoverTVNativeShelf: UIViewControllerRepresentable {
             isAccessibilityElement = true
             UIView.animate(withDuration: 0.25) { self.contentView.alpha = 1 }
         }
+        func conceal() {
+            isAccessibilityElement = false
+            UIView.animate(withDuration: 0.2) { self.contentView.alpha = 0 }
+        }
         private func restyle() {
             plate.backgroundColor = isFocused ? UIColor(white: 0.88, alpha: 1) : UIColor(white: 1, alpha: 0.12)
             label.textColor = isFocused ? .black : .white
@@ -429,7 +438,7 @@ struct DiscoverTVLiftStyle: ButtonStyle {
     }
 }
 
-/// A filter chip: a dim capsule that turns white under focus; one with a value set stays lighter.
+/// A filter chip: a Liquid Glass capsule that turns white under focus; one with a value set stays lighter.
 struct DiscoverTVChipStyle: ButtonStyle {
     let active: Bool
     func makeBody(configuration: Configuration) -> some View { Chip(configuration: configuration, active: active) }
@@ -442,10 +451,14 @@ struct DiscoverTVChipStyle: ButtonStyle {
                 .font(.system(size: 26, weight: .medium)).lineLimit(1)
                 .foregroundStyle(focused ? Color.black : Color.white)
                 .padding(.horizontal, 30).frame(height: 62)
-                .background(focused ? AnyShapeStyle(.white) : AnyShapeStyle(.white.opacity(active ? 0.3 : 0.14)), in: Capsule())
+                .glassSurface(glass, in: Capsule())
                 .scaleEffect(configuration.isPressed ? 0.97 : focused ? 1.05 : 1)
                 .shadow(color: .black.opacity(focused ? 0.35 : 0), radius: 16, y: 10)
                 .animation(.easeOut(duration: 0.18), value: focused)
+        }
+        private var glass: GlassStyle {
+            if focused { return .regular.tint(.white.opacity(0.9)).interactive() }
+            return active ? .regular.tint(.white.opacity(0.28)).interactive() : .regular.interactive()
         }
     }
 }
@@ -699,3 +712,4 @@ private struct DiscoverTVSearchCard: View {
     }
 }
 #endif
+

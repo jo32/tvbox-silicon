@@ -21,6 +21,7 @@ struct DiscoverDetailView: View {
     @State private var episode: DiscoverEpisode?
     #if os(tvOS)
     @State private var tvScrolled = false
+    @State private var tvOverviewShown = false
     #endif
     private var details: TMDBMatch.Details? { model.details }
     private var dark: Bool { model.paint?.isDark ?? true }
@@ -81,6 +82,7 @@ struct DiscoverDetailView: View {
         .fullScreenCover(isPresented: $trailerShown) {
             if let trailer = details?.trailer { DiscoverTVTrailerScreen(trailer: trailer) }
         }
+        .fullScreenCover(isPresented: $tvOverviewShown) { tvOverviewScreen }
         #else
         .sheet(isPresented: $trailerShown) {
             if let trailer = details?.trailer { DiscoverTrailerScreen(trailer: trailer, title: item.name).discoverSheetSize(width: 960, height: 600) }
@@ -539,10 +541,16 @@ extension DiscoverDetailView {
         .toolbar(.hidden, for: .navigationBar)
     }
 
+    private var tvPlaysTrailer: Bool {
+        onScreen && scenePhase == .active && !tvScrolled && !trailerShown && !searchShown && !tvOverviewShown && episode == nil && still == nil
+    }
+
     private var tvBackdrop: some View {
         ZStack {
             Color.black
             if let url = details?.backdrop ?? item.backdrop { TMDBArtwork(url: url, maxPixels: 2400) }
+            // The trailer plays behind the title, as in Rex, until the page scrolls or something covers it.
+            if let trailer = details?.trailer, tvPlaysTrailer { DiscoverTrailer(trailer: trailer) }
             LinearGradient(colors: [.black.opacity(0.85), .black.opacity(0.35), .clear], startPoint: .leading, endPoint: .trailing)
             LinearGradient(stops: [.init(color: .clear, location: 0.35), .init(color: .black.opacity(0.85), location: 1)], startPoint: .top, endPoint: .bottom)
             Rectangle().fill(.regularMaterial).opacity(tvScrolled ? 1 : 0)
@@ -564,26 +572,21 @@ extension DiscoverDetailView {
                 }
             }.shadow(color: .black.opacity(0.4), radius: 12)
             HStack(alignment: .top, spacing: 56) {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 14) {
                     Button { tvFindSources() } label: {
                         Label(L10n.text(store.subscription == nil ? "Add Subscription" : "Search Sources"), systemImage: "magnifyingglass")
-                            .frame(width: 380)
+                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(DiscoverTVActionStyle(height: 86, font: 30))
+                    .buttonStyle(DiscoverTVActionStyle(height: 82, font: 30))
                     .accessibilityIdentifier("discover.findSources")
-                    HStack(spacing: 20) {
+                    HStack(spacing: 7) {
                         if details?.trailer != nil {
-                            Button { trailerShown = true } label: { Image(systemName: "play.rectangle").frame(width: 70) }
-                                .buttonStyle(DiscoverTVActionStyle(height: 70, font: 30, corner: 22))
-                                .accessibilityLabel(L10n.text("Trailer"))
-                                .accessibilityIdentifier("discover.detail.playTrailer")
+                            tvIconButton("play.rectangle", "Trailer", "discover.detail.playTrailer") { trailerShown = true }
                         }
-                        Button { searchShown = true } label: { Image(systemName: "text.magnifyingglass").frame(width: 70) }
-                            .buttonStyle(DiscoverTVActionStyle(height: 70, font: 30, corner: 22))
-                            .accessibilityLabel(L10n.text("Search Catalog"))
-                            .accessibilityIdentifier("discover.detail.search")
+                        tvIconButton("text.alignleft", "Overview", "discover.detail.overview") { tvOverviewShown = true }
+                        tvIconButton("text.magnifyingglass", "Search Catalog", "discover.detail.search") { searchShown = true }
                     }
-                }.focusSection()
+                }.frame(width: 368).focusSection()
                 VStack(alignment: .leading, spacing: 14) {
                     Text(details?.overview ?? item.overview).font(.system(size: 28)).lineLimit(2).lineSpacing(4)
                     Text(metadata).font(.system(size: 26)).opacity(0.65).lineLimit(1)
@@ -600,6 +603,33 @@ extension DiscoverDetailView {
         }
         .padding(.horizontal, Self.tvGutter)
         .frame(maxWidth: .infinity, minHeight: 950, alignment: .bottomLeading)
+    }
+
+    private func tvIconButton(_ symbol: String, _ label: String, _ identifier: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { Image(systemName: symbol).frame(maxWidth: .infinity) }
+            .buttonStyle(DiscoverTVActionStyle(height: 75, font: 30, corner: 24))
+            .accessibilityLabel(L10n.text(label))
+            .accessibilityIdentifier(identifier)
+    }
+
+    /// The whole overview, over the dimmed backdrop: the hero shows only two lines of it.
+    private var tvOverviewScreen: some View {
+        ZStack(alignment: .bottomLeading) {
+            Color.black
+            if let url = details?.backdrop ?? item.backdrop { TMDBArtwork(url: url, maxPixels: 2400).opacity(0.35) }
+            LinearGradient(colors: [.black.opacity(0.85), .black.opacity(0.3)], startPoint: .leading, endPoint: .trailing)
+            VStack(alignment: .leading, spacing: 24) {
+                Text(details?.name ?? item.name).font(.system(size: 56, weight: .bold)).lineLimit(2)
+                if let tagline = details?.tagline, !tagline.isEmpty { Text(tagline).font(.system(size: 30, weight: .medium)).opacity(0.7) }
+                Text(details?.overview ?? item.overview).font(.system(size: 30)).lineSpacing(6).lineLimit(14)
+                Text(metadata).font(.system(size: 26)).opacity(0.6)
+            }
+            .frame(maxWidth: 1300, alignment: .leading)
+            .padding(Self.tvGutter)
+            // Something must hold focus for Menu to close the page.
+            .focusable()
+        }
+        .ignoresSafeArea().foregroundStyle(.white).preferredColorScheme(.dark)
     }
 
     private func tvFindSources() {
@@ -819,7 +849,7 @@ private struct DiscoverTVStarLabel: LabelStyle {
     }
 }
 
-/// The detail page's actions: dim plates that turn white under focus.
+/// The detail page's actions: Liquid Glass plates that turn white under focus.
 private struct DiscoverTVActionStyle: ButtonStyle {
     let height: CGFloat
     let font: CGFloat
@@ -835,7 +865,7 @@ private struct DiscoverTVActionStyle: ButtonStyle {
                 .font(.system(size: style.font, weight: .medium)).lineLimit(1)
                 .foregroundStyle(focused ? Color.black : Color.white)
                 .padding(.horizontal, 18).frame(height: style.height)
-                .background(focused ? AnyShapeStyle(.white) : AnyShapeStyle(.white.opacity(0.18)), in: shape)
+                .glassSurface(focused ? .regular.tint(.white.opacity(0.9)).interactive() : .regular.interactive(), in: shape)
                 .scaleEffect(configuration.isPressed ? 0.97 : focused ? 1.06 : 1)
                 .shadow(color: .black.opacity(focused ? 0.35 : 0), radius: 16, y: 10)
                 .animation(.easeOut(duration: 0.18), value: focused)
