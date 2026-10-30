@@ -205,7 +205,7 @@ struct DiscoverView: View {
                         } label: {
                             VStack(spacing: 16) {
                                 PosterImage(url: person.profile, symbol: "person.fill").frame(width: 200, height: 200)
-                                Text(person.name).font(.system(size: 26, weight: .medium)).lineLimit(1)
+                                Text(person.name).font(.system(size: 26, weight: .medium)).lineLimit(1).cardCaption()
                             }.frame(width: 200)
                         }
                         .cardButton(.circle)
@@ -377,7 +377,7 @@ struct DiscoverView: View {
         if feeds.contains(where: { !model.items($0).isEmpty }) {
             #if os(tvOS)
             ScrollView(.horizontal) {
-                LazyHStack(spacing: DiscoverLayout.spacing) {
+                LazyHStack(spacing: 50) {
                     ForEach(feeds.filter { !model.items($0).isEmpty }, id: \.self) { feed in
                         DiscoverTVCollection(feed: feed, items: Array(model.items(feed).prefix(10)))
                     }
@@ -852,101 +852,152 @@ private struct DiscoverCollection: View {
 }
 
 #if os(tvOS)
-/// A collection on the TV, sized like Rex's: a wide banner that opens the list, over a strip of landscape titles,
-/// all on the cover's colour.
+/// A collection on the TV, measured from Rex's running app (BoardListFeatureCell): an 855×676 card on the banner's
+/// colour; the banner is not a button, a More pill on it opens the list, and the titles on the rail below lift one
+/// at a time with their captions.
 private struct DiscoverTVCollection: View {
     let feed: TMDBCatalog.Feed
     let items: [TMDBCatalog.Item]
     @State private var paint: DiscoverPaint?
     private var tint: Color { paint?.color ?? Color(white: 0.14) }
+    private var cover: URL? { items.first?.backdrop ?? items.first?.poster }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            RouteLink { DiscoverListView(feed: feed, initial: nil) } label: { banner }
-                .buttonStyle(DiscoverTVBannerStyle())
-                .accessibilityIdentifier("discover.collection.\(feed.rawValue)")
+            banner
             ScrollView(.horizontal) {
-                LazyHStack(alignment: .top, spacing: 8) {
+                LazyHStack(alignment: .top, spacing: 35) {
                     ForEach(items, id: \.key) { item in
                         RouteLink { DiscoverDetailView(item: item) } label: { tile(item) }
-                            .cardButton(.roundedRectangle(radius: 14))
+                            .cardButton()
                             .accessibilityIdentifier("discover.collection.\(feed.rawValue).\(item.key)")
                     }
-                }.padding(.horizontal, 14).padding(.vertical, 14)
-            }.scrollClipDisabled()
-            Spacer(minLength: 0)
+                }.padding(28)
+            }
+            .scrollClipDisabled()
+            .frame(width: 855, height: 276)
+            .background(Color(red: 0.11, green: 0.11, blue: 0.12).opacity(0.38))
         }
-        .frame(width: 860, height: 680, alignment: .top)
+        .frame(width: 855, height: 676, alignment: .top)
         .background(tint)
         .foregroundStyle(.white)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(.white.opacity(0.12), lineWidth: 1) }
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white.opacity(0.1), lineWidth: 1) }
         .focusSection()
-        .task(id: items.first?.poster) {
-            if let url = items.first?.poster { paint = await DiscoverPainter.shared.paint(url) }
+        .task(id: cover) {
+            if let cover { paint = await DiscoverPainter.shared.paint(cover) }
         }
     }
 
     private var banner: some View {
         ZStack(alignment: .bottom) {
-            PosterImage(url: items.first?.backdrop ?? items.first?.poster).frame(width: 860, height: 400).clipped()
+            PosterImage(url: cover).frame(width: 855, height: 400)
             LinearGradient(colors: [.clear, tint], startPoint: .center, endPoint: .bottom)
-            HStack(spacing: 20) {
-                Image(systemName: "laurel.leading").font(.system(size: 64))
-                VStack(spacing: 6) {
-                    Text(feed.collectionTitle).font(.system(size: 52, weight: .semibold))
-                    Text(items.first?.name ?? "").font(.system(size: 26)).opacity(0.75)
-                }.lineLimit(1)
-                Image(systemName: "laurel.trailing").font(.system(size: 64))
-            }.padding(.bottom, 34)
-            HStack { Spacer(); Text(L10n.text("See All")).font(.system(size: 24, weight: .medium)).opacity(0.85) }
-                .padding(.trailing, 28).padding(.bottom, 40)
-        }.frame(width: 860, height: 400).shadow(color: .black.opacity(0.3), radius: 10)
+            HStack(spacing: 15) {
+                Image(systemName: "laurel.leading").font(.system(size: 52)).frame(width: 64, height: 64)
+                VStack(spacing: 2) {
+                    Text(feed.collectionTitle).font(.system(size: 64, weight: .semibold))
+                    Text(items.first?.name ?? "").font(.system(size: 29, weight: .medium)).opacity(0.75)
+                }.lineLimit(1).minimumScaleFactor(0.7)
+                Image(systemName: "laurel.trailing").font(.system(size: 52)).frame(width: 64, height: 64)
+                Spacer(minLength: 20)
+                RouteLink { DiscoverListView(feed: feed, initial: nil) } label: {
+                    HStack(spacing: 10) {
+                        Text(L10n.text("More"))
+                        Image(systemName: "chevron.right.circle.fill")
+                    }
+                }
+                .buttonStyle(DiscoverTVMoreStyle())
+                .accessibilityIdentifier("discover.collection.\(feed.rawValue)")
+            }
+            .padding(.horizontal, 28).padding(.bottom, 28)
+        }.frame(width: 855, height: 400)
     }
 
     private func tile(_ item: TMDBCatalog.Item) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            PosterImage(url: item.backdrop ?? item.poster).frame(width: 264, height: 149)
-                .posterClip(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.name).font(.system(size: 26, weight: .medium))
-                Text([item.year.map(String.init), item.genreNames.split(separator: "/").first.map { $0.trimmingCharacters(in: .whitespaces) }]
-                    .compactMap { $0 }.joined(separator: " · "))
-                    .font(.system(size: 22)).opacity(0.6)
-            }.lineLimit(1).padding(.horizontal, 4)
-        }.frame(width: 264, alignment: .leading).padding(10)
+            PosterImage(url: item.backdrop ?? item.poster).frame(width: 263, height: 148)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.name).font(.system(size: 29))
+                HStack(spacing: 6) {
+                    if let year = item.year { Text(String(year)) }
+                    if item.year != nil, item.genre != nil { Circle().fill(.white.opacity(0.5)).frame(width: 3, height: 3) }
+                    if let genre = item.genre { Text(genre) }
+                }.font(.system(size: 23, weight: .medium)).foregroundStyle(.white.opacity(0.5))
+            }.lineLimit(1).cardCaption()
+        }.frame(width: 263, alignment: .leading)
     }
 }
 
-/// The collection's banner brightens under focus; the card's own edge frames it.
-private struct DiscoverTVBannerStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View { Banner(configuration: configuration) }
-    private struct Banner: View {
+private extension TMDBCatalog.Item {
+    /// The first of the genres, for a short caption.
+    var genre: String? {
+        genreNames.split(separator: "/").first.map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 }
+    }
+}
+
+/// The More pill on a collection's banner: words and a chevron that gain a light glass capsule under focus, as in Rex.
+private struct DiscoverTVMoreStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { More(configuration: configuration) }
+    private struct More: View {
         let configuration: ButtonStyleConfiguration
         @Environment(\.isFocused) private var focused
         var body: some View {
             configuration.label
-                .brightness(focused ? 0.08 : 0)
-                .overlay(alignment: .bottom) { if focused { Rectangle().fill(.white).frame(height: 4) } }
-                .opacity(configuration.isPressed ? 0.85 : 1)
+                .font(.system(size: 29, weight: .medium))
+                .padding(.horizontal, 24).frame(height: 64)
+                .glassSurface(focused ? .regular.tint(.white.opacity(0.3)).interactive() : .identity, in: Capsule())
+                .scaleEffect(configuration.isPressed ? 0.96 : focused ? 1.06 : 1)
                 .animation(.easeOut(duration: 0.18), value: focused)
         }
     }
 }
 
-/// A title inside a collection: a light plate appears behind it under focus, as in Rex.
-private struct DiscoverTVPlateStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View { Plate(configuration: configuration) }
-    private struct Plate: View {
-        let configuration: ButtonStyleConfiguration
-        @Environment(\.isFocused) private var focused
-        var body: some View {
-            configuration.label
-                .background(.white.opacity(focused ? 0.22 : 0), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .scaleEffect(configuration.isPressed ? 0.97 : focused ? 1.04 : 1)
-                .animation(.easeOut(duration: 0.18), value: focused)
+/// A list of titles on the TV, as Rex's View All: the name centred at the top, optional filter chips, then six
+/// 224×336 covers a row, centred, each over centred captions that move down as the cover lifts.
+struct DiscoverTVGrid<Chips: View, Footer: View>: View {
+    let title: String
+    let items: [TMDBCatalog.Item]
+    let identifier: String
+    let reachedEnd: () async -> Void
+    @ViewBuilder let chips: () -> Chips
+    @ViewBuilder let footer: () -> Footer
+    private static var width: CGFloat { 6 * 224 + 5 * 51 }
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                Text(title).font(.system(size: 52, weight: .semibold)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+                    .frame(maxWidth: .infinity).padding(.top, 60)
+                HStack(spacing: 20) { chips() }
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.top, 56).focusSection()
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(224), spacing: 51, alignment: .top), count: 6), spacing: 66) {
+                    ForEach(items, id: \.key) { item in
+                        RouteLink { DiscoverDetailView(item: item) } label: { tile(item) }
+                            .cardButton()
+                            .accessibilityIdentifier("\(identifier).\(item.key)")
+                            .task { if item.key == items.last?.key { await reachedEnd() } }
+                    }
+                }.padding(.top, 54)
+                footer().padding(40)
+            }
+            .frame(width: Self.width).frame(maxWidth: .infinity)
+            .padding(.bottom, 80)
         }
+        .scrollClipDisabled()
+        .ignoresSafeArea(edges: .top)
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private func tile(_ item: TMDBCatalog.Item) -> some View {
+        VStack(spacing: 5) {
+            PosterImage(url: item.poster).frame(width: 224, height: 336)
+            VStack(spacing: 0) {
+                Text(item.name).font(.system(size: 29))
+                Text(item.date ?? item.year.map(String.init) ?? " ").font(.system(size: 23, weight: .medium)).foregroundStyle(.white.opacity(0.5))
+            }.lineLimit(1).cardCaption()
+        }.frame(width: 224)
     }
 }
+
 /// A row of cards with room for the focus lift, as the collections row has.
 private struct DiscoverTVRow<Content: View>: View {
     @ViewBuilder let content: () -> Content
@@ -1142,6 +1193,19 @@ private struct DiscoverListView: View {
         _totalPages = State(initialValue: initial?.totalPages ?? 1)
     }
     var body: some View {
+        #if os(tvOS)
+        DiscoverTVGrid(title: feed.title, items: items, identifier: "discover.list.title", reachedEnd: loadMore) {
+            EmptyView()
+        } footer: {
+            if failed { Button(L10n.text("Try Again")) { Task { await loadMore() } } }
+            else if loading { ProgressView() }
+        }
+        .background { DiscoverCanvas(poster: items.first?.poster) }
+        .foregroundStyle(.white).preferredColorScheme(.dark)
+        .task {
+            if items.isEmpty { await loadMore() }
+        }
+        #else
         ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: DiscoverLayout.posterWidth), spacing: DiscoverLayout.spacing)], alignment: .leading, spacing: 22) {
                 ForEach(items, id: \.key) { item in
@@ -1167,6 +1231,7 @@ private struct DiscoverListView: View {
         .task {
             if items.isEmpty { await loadMore() }
         }
+        #endif
     }
     private func loadMore() async {
         guard !loading, page < totalPages else { return }

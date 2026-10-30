@@ -316,7 +316,7 @@ struct DiscoverTVNativeShelf: UIViewControllerRepresentable {
         // The captions move down with the poster's focus growth (about 12%, half of it below), as on the Home screen.
         override func didUpdateFocus(in context: UIFocusUpdateContext, with coordinator: UIFocusAnimationCoordinator) {
             super.didUpdateFocus(in: context, with: coordinator)
-            let shift = isFocused ? CGAffineTransform(translationX: 0, y: posterHeight.constant * 0.06 + 6) : .identity
+            let shift = isFocused ? CGAffineTransform(translationX: 0, y: posterHeight.constant * 0.06) : .identity
             coordinator.addCoordinatedAnimations { [title, detail] in title.transform = shift; detail.transform = shift }
         }
 
@@ -673,7 +673,7 @@ struct DiscoverTVSearchView: View {
                 Text(person.name).font(.system(size: 28)).lineLimit(1)
                 Text(L10n.text(person.department == "Acting" ? "Actor" : person.department ?? "People"))
                     .font(.system(size: 22)).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
-            }
+            }.cardCaption()
         }.frame(width: 220)
     }
 }

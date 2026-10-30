@@ -293,7 +293,7 @@ extension View {
     /// stay; there is no plate around the card. Covers inside use `posterClip`, as a clip would cut the rim off.
     @ViewBuilder func cardButton(_ shape: ButtonBorderShape = .roundedRectangle(radius: 12)) -> some View {
         #if os(tvOS)
-        buttonStyle(.borderless).buttonBorderShape(shape).environment(\.inCardButton, true)
+        modifier(TVCardButton(shape: shape))
         #else
         buttonStyle(LiftButtonStyle())
         #endif
@@ -321,6 +321,9 @@ extension View {
     /// Rounds a cover, except inside a card button on Apple TV, whose border shape rounds it instead.
     func posterClip<S: Shape>(_ shape: S) -> some View { modifier(PosterClip(shape: shape)) }
 
+    /// Captions under the cover of a `cardButton`: on Apple TV they move down as the cover lifts, as on Discover.
+    func cardCaption() -> some View { modifier(CardCaption()) }
+
     /// For cards that paint their own focus state (source cards).
     @ViewBuilder func tileButton() -> some View {
         #if os(tvOS)
@@ -338,6 +341,47 @@ extension EnvironmentValues {
         get { self[InCardButtonKey.self] }
         set { self[InCardButtonKey.self] = newValue }
     }
+}
+
+#if os(tvOS)
+/// The height of the cover in a card button, which sets how far its captions move.
+struct CardCoverHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+private struct CardCoverHeightEnvironmentKey: EnvironmentKey { static let defaultValue: CGFloat = 0 }
+extension EnvironmentValues {
+    var cardCoverHeight: CGFloat {
+        get { self[CardCoverHeightEnvironmentKey.self] }
+        set { self[CardCoverHeightEnvironmentKey.self] = newValue }
+    }
+}
+
+private struct TVCardButton: ViewModifier {
+    let shape: ButtonBorderShape
+    @State private var cover: CGFloat = 0
+    func body(content: Content) -> some View {
+        content.buttonStyle(.borderless).buttonBorderShape(shape)
+            .environment(\.inCardButton, true).environment(\.cardCoverHeight, cover)
+            .onPreferenceChange(CardCoverHeightKey.self) { cover = $0 }
+    }
+}
+#endif
+
+private struct CardCaption: ViewModifier {
+    #if os(tvOS)
+    @Environment(\.isFocused) private var focused
+    @Environment(\.cardCoverHeight) private var cover
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func body(content: Content) -> some View {
+        // 6% of the cover's height, as Rex's captions and DiscoverTVNativeShelf.Cell's move.
+        content.offset(y: focused ? cover * 0.06 : 0)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: focused)
+    }
+    #else
+    func body(content: Content) -> some View { content }
+    #endif
 }
 
 private struct PosterClip<S: Shape>: ViewModifier {
@@ -750,6 +794,7 @@ struct PosterImage: View {
         GeometryReader { proxy in
             Image(decorative: Self.cover(bitmap?.image, proxy.size), scale: 1).resizable()
                 .overlay { if bitmap == nil { Image(systemName: symbol).font(.title2).foregroundStyle(.white.opacity(0.55)) } }
+                .preference(key: CardCoverHeightKey.self, value: proxy.size.height)
         }
     }
 
@@ -807,7 +852,7 @@ struct PosterCard: View {
                 }
             // One line, cut with an ellipsis: a title that wrapped made its card taller than the rest of the row.
             Text(name).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-                .lineLimit(1).truncationMode(.tail)
+                .lineLimit(1).truncationMode(.tail).cardCaption()
         }
     }
 }

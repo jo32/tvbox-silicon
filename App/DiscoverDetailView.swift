@@ -714,7 +714,7 @@ extension DiscoverDetailView {
                             .background(.black.opacity(0.6), in: Capsule()).padding(12)
                     }
                 }
-            VStack(alignment: .leading, spacing: 4) { captions() }.padding(.horizontal, 4)
+            VStack(alignment: .leading, spacing: 4) { captions() }.padding(.horizontal, 4).cardCaption()
         }.frame(width: width, alignment: .leading)
     }
 
@@ -736,7 +736,7 @@ extension DiscoverDetailView {
             VStack(spacing: 4) {
                 Text(person.name).font(.system(size: 26)).lineLimit(1)
                 if let role = person.role { Text(role).font(.system(size: 22)).lineLimit(1).opacity(0.55) }
-            }
+            }.cardCaption()
         }.frame(width: 210)
     }
 

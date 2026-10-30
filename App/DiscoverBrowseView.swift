@@ -20,6 +20,27 @@ struct DiscoverBrowseView: View {
     }
     private var request: TMDBCatalog.Filter { var value = filter; value.sort = sort; return value }
     var body: some View {
+        #if os(tvOS)
+        DiscoverTVGrid(title: title, items: items, identifier: "discover.browse.item", reachedEnd: { await load(reset: false) }) {
+            if filter.company.isEmpty {
+                chip(L10n.text("Content Type"), value: filter.kind == .tv ? "tv" : "movie", active: false,
+                     options: [("movie", L10n.text("Movies")), ("tv", L10n.text("Series"))]) { filter.kind = $0 == "tv" ? .tv : .movie }
+            }
+            chip(L10n.text("Genres"), value: filter.genres.first.map(String.init) ?? "all", active: !filter.genres.isEmpty,
+                 options: [("all", L10n.text("All"))] + DiscoverGenres.ids(for: filter.kind).map { (String($0), L10n.text(DiscoverGenres.names[$0] ?? "")) }) {
+                filter.genres = Int($0).map { [$0] } ?? []
+            }
+            chip(L10n.text("Sort By"), value: sort, active: sort != "popularity.desc", options: Self.sorts.map { ($0.0, L10n.text($0.1)) }) { sort = $0 }
+        } footer: {
+            if failed { Button(L10n.text("Try Again")) { Task { await load(reset: page == 0) } }.accessibilityIdentifier("discover.browse.retry") }
+            else if loading { ProgressView() }
+            else if items.isEmpty { ContentUnavailableView(L10n.text("No Results"), systemImage: "film") }
+        }
+        .background { DiscoverSearchAtmosphere() }
+        .foregroundStyle(.white).preferredColorScheme(.dark)
+        .onChange(of: filter.kind) { _, kind in filter.genres.formIntersection(DiscoverGenres.ids(for: kind)) }
+        .task(id: request) { await load(reset: true) }
+        #else
         GeometryReader { geometry in
             ScrollView {
                 if let logo {
@@ -93,7 +114,23 @@ struct DiscoverBrowseView: View {
         }
         .onChange(of: filter.kind) { _, kind in filter.genres.formIntersection(DiscoverGenres.ids(for: kind)) }
         .task(id: request) { await load(reset: true) }
+        #endif
     }
+    private static let sorts = [("popularity.desc", "Popularity ↓"), ("vote_average.desc", "Rating ↓"), ("vote_count.desc", "Most Votes"),
+                                ("date.desc", "Newest First"), ("date.asc", "Oldest First")]
+    #if os(tvOS)
+    /// A filter as a chip that opens a menu, as on the person page and in Rex.
+    private func chip(_ title: String, value: String, active: Bool, options: [(String, String)], set: @escaping (String) -> Void) -> some View {
+        Menu {
+            Picker(title, selection: Binding(get: { value }, set: set)) { ForEach(options, id: \.0) { Text($0.1).tag($0.0) } }
+        } label: {
+            let shown = options.first { $0.0 == value }?.1 ?? ""
+            Text(TMDBMatch.language.hasPrefix("zh") ? "\(title)：\(shown)" : "\(title): \(shown)")
+        }
+        .menuStyle(.button)
+        .buttonStyle(DiscoverTVChipStyle(active: active))
+    }
+    #endif
     private func tile(_ item: TMDBCatalog.Item) -> some View {
         VStack(spacing: 5) {
             PosterImage(url: item.poster).aspectRatio(2.0 / 3.0, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 9))

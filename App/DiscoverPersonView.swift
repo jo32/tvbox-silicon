@@ -15,6 +15,9 @@ struct DiscoverPersonView: View {
     @State private var loading = true
     @State private var failed = false
     @State private var revision = 0
+    #if os(tvOS)
+    @FocusState private var tvChip: String?
+    #endif
     @State private var kind = "all"
     @State private var contribution = "all"
     @State private var biographyShown = false
@@ -193,9 +196,19 @@ extension DiscoverPersonView {
     private static let tvMargin: CGFloat = 80
 
     var tvPage: some View {
+        // The header has nothing to focus; reaching the chips scrolls it back into view, as Up does in Rex.
+        ScrollViewReader { proxy in
+            tvScroll.onChange(of: tvChip) { _, chip in
+                guard chip != nil else { return }
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) { proxy.scrollTo("tvTop", anchor: .top) }
+            }
+        }
+    }
+
+    private var tvScroll: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                tvHeader
+                tvHeader.id("tvTop")
                 HStack(spacing: 20) {
                     tvMenu(L10n.text("Content Type"), $kind, [("all", L10n.text("All")), ("movie", L10n.text("Movies")), ("tv", L10n.text("Series"))],
                            identifier: "discover.person.kind")
@@ -258,6 +271,7 @@ extension DiscoverPersonView {
         }
         .menuStyle(.button)
         .buttonStyle(DiscoverTVChipStyle(active: selection.wrappedValue != "all"))
+        .focused($tvChip, equals: identifier)
         .accessibilityIdentifier(identifier)
     }
 
@@ -266,15 +280,17 @@ extension DiscoverPersonView {
             // Unclipped: the button's border shape rounds it, and a clip would cut off the focus rim.
             PosterImage(url: work.item.poster).frame(width: 250, height: 375)
                 .padding(.bottom, 16)
-            Text(work.item.name).font(.system(size: 26, weight: .medium)).lineLimit(1)
-            Text([L10n.text(work.item.mediaType == .tv ? "Series" : "Movies"), work.item.genreNames].filter { !$0.isEmpty }.joined(separator: " · "))
-                .font(.system(size: 21)).lineLimit(1).opacity(0.6)
-            if !work.roles.isEmpty {
-                Text(work.roles.joined(separator: " · ")).font(.system(size: 21)).lineLimit(1).opacity(0.6)
-            }
-            if let rating = work.item.rating {
-                HStack(spacing: 6) { TMDBBadge(); Text(rating, format: .number.precision(.fractionLength(1))).font(.system(size: 21)) }
-            }
+            VStack(alignment: .leading, spacing: 5) {
+                Text(work.item.name).font(.system(size: 26, weight: .medium)).lineLimit(1)
+                Text([L10n.text(work.item.mediaType == .tv ? "Series" : "Movies"), work.item.genreNames].filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.system(size: 21)).lineLimit(1).opacity(0.6)
+                if !work.roles.isEmpty {
+                    Text(work.roles.joined(separator: " · ")).font(.system(size: 21)).lineLimit(1).opacity(0.6)
+                }
+                if let rating = work.item.rating {
+                    HStack(spacing: 6) { TMDBBadge(); Text(rating, format: .number.precision(.fractionLength(1))).font(.system(size: 21)) }
+                }
+            }.cardCaption()
         }.frame(width: 250, alignment: .leading)
     }
 }
@@ -352,7 +368,9 @@ private final class DiscoverPosterWallView: UIView {
     let root = CALayer()
     private let rotation = CALayer()
     private let canvas = CALayer()
-    private let tiles = (0..<24).map { _ in CALayer() }
+    private static let rows = 8
+    private var tiles: [CALayer] = []
+    private var images: [URL: CGImage] = [:]
     private var urls: [URL] = []
     private var task: Task<Void, Never>?
     private var active = false
@@ -360,25 +378,25 @@ private final class DiscoverPosterWallView: UIView {
     init() {
         root.masksToBounds = true
         root.addSublayer(rotation); rotation.addSublayer(canvas)
-        for tile in tiles {
-            tile.contentsGravity = .resizeAspectFill; tile.masksToBounds = true; tile.cornerRadius = 10
-            tile.backgroundColor = CGColor(gray: 1, alpha: 0.06); canvas.addSublayer(tile)
-        }
+    }
+    /// Neighbours across differ by one poster, and down by three.
+    private func url(at index: Int) -> URL? {
+        guard !urls.isEmpty else { return nil }
+        let column = index / Self.rows, row = index % Self.rows
+        return urls[(column + (row % 4) * 3) % urls.count]
     }
     func update(urls: [URL], active: Bool) {
         self.active = active
         if self.urls != urls {
-            self.urls = urls; task?.cancel()
+            self.urls = urls; task?.cancel(); images = [:]
             for tile in tiles { tile.contents = nil }
             task = Task { [weak self] in
                 await withTaskGroup(of: (URL, CGImage?).self) { group in
                     for url in Set(urls) { group.addTask { (url, await PosterPalette.image(url)) } }
                     for await (url, image) in group {
                         guard !Task.isCancelled, let self, self.urls == urls, let image else { continue }
-                        for (index, tile) in self.tiles.enumerated() where !urls.isEmpty {
-                            let column = index / 8, row = index % 8
-                            if urls[(column + (row % 4) * 3) % urls.count] == url { tile.contents = image }
-                        }
+                        self.images[url] = image
+                        for (index, tile) in self.tiles.enumerated() where self.url(at: index) == url { tile.contents = image }
                     }
                 }
             }
@@ -390,14 +408,23 @@ private final class DiscoverPosterWallView: UIView {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         let width = min(size.width * 0.4263, 220), height = width * 1.5, step = height + 8
+        // Tilted, the wall needs a little more than the width; a phone keeps its three columns.
+        let columns = max(3, Int((size.width + size.height * 0.18) / (width + 8)) + 1)
+        while tiles.count < columns * Self.rows {
+            let tile = CALayer()
+            tile.contentsGravity = .resizeAspectFill; tile.masksToBounds = true; tile.cornerRadius = 10
+            tile.backgroundColor = CGColor(gray: 1, alpha: 0.06); canvas.addSublayer(tile); tiles.append(tile)
+        }
         rotation.setAffineTransform(.identity)
-        rotation.bounds = CGRect(x: 0, y: 0, width: width * 3 + 16, height: size.height + step * 2)
+        rotation.bounds = CGRect(x: 0, y: 0, width: CGFloat(columns) * (width + 8) - 8, height: size.height + step * 2)
         rotation.position = CGPoint(x: size.width / 2, y: size.height / 2 - step * 0.3)
         rotation.setAffineTransform(CGAffineTransform(rotationAngle: -.pi / 18))
         canvas.frame = rotation.bounds
         for (index, tile) in tiles.enumerated() {
-            let column = index / 8, row = index % 8
-            tile.frame = CGRect(x: CGFloat(column) * (width + 8), y: CGFloat(row) * step + (column == 1 ? height * 0.3 : 0), width: width, height: height)
+            let column = index / Self.rows, row = index % Self.rows
+            tile.isHidden = column >= columns
+            tile.frame = CGRect(x: CGFloat(column) * (width + 8), y: CGFloat(row) * step + (column % 2 == 1 ? height * 0.3 : 0), width: width, height: height)
+            if tile.contents == nil, let url = url(at: index) { tile.contents = images[url] }
         }
         if cycle != step * 4 { cycle = step * 4; canvas.removeAnimation(forKey: "drift") }
         animate()

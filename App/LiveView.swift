@@ -602,7 +602,7 @@ private struct FavoriteEpisodeCard: View {
                     } else {
                         Text(episode.video.videoName).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
                     }
-                    Text(episode.episodeName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text(episode.episodeName).font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

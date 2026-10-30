@@ -291,8 +291,9 @@ struct LiveRoomCard: View {
                         }
                     }
                 Text(room.title.isEmpty ? room.host : room.title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-                    .lineLimit(1).truncationMode(.tail)
+                    .lineLimit(1).truncationMode(.tail).cardCaption()
                 Text([room.host, room.area].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .cardCaption()
             }
             // Cards in a row share its height; a one-line title leaves the space below, not between.
             .frame(maxHeight: .infinity, alignment: .top)

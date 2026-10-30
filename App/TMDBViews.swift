@@ -267,9 +267,9 @@ struct TMDBCandidateTile: View {
             PosterImage(url: poster)
                 .frame(width: TMDBMetrics.candidate, height: TMDBMetrics.candidate * 1.5)
                 .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            Text(name).font(.caption.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading)
+            Text(name).font(.caption.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading).cardCaption()
             Text([year.map(String.init), L10n.text(mediaType == .tv ? "TV Series" : "Movie")].compactMap { $0 }.joined(separator: " · "))
-                .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                .font(.caption2).foregroundStyle(.secondary).lineLimit(1).cardCaption()
         }
         .frame(width: TMDBMetrics.candidate, alignment: .leading)
         .foregroundStyle(.primary)
@@ -749,10 +749,10 @@ struct TMDBEpisodeTile: View {
                 .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay { if current { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Brand.accent, lineWidth: 2) } }
             Text(name).font(.subheadline.weight(current ? .bold : .semibold)).lineLimit(1)
-                .foregroundStyle(current ? Brand.accent : .primary)
+                .foregroundStyle(current ? Brand.accent : .primary).cardCaption()
             // Always a second line, so tiles in a row stay one height.
             Text(info.map(\.name).flatMap { $0.isEmpty || $0 == name ? nil : $0 } ?? " ")
-                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                .font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
         }
         .frame(width: width, alignment: .leading)
         .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)

@@ -327,7 +327,7 @@ struct GlobalSearchView: View {
     private func searchPoster(_ item: SearchPoster) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             PosterCard(video: item.video)
-            Text(SourceLabel(item.site.name).text).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Text(SourceLabel(item.site.name).text).font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
         }
     }
 
