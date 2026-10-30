@@ -88,6 +88,8 @@ extension PlaybackHistoryEntry {
     private let file: URL
     private let cache: MediaCache
     private let defaults: UserDefaults
+    /// Called after the history changes here (not after `adopt`), for iCloud sync.
+    @ObservationIgnored public var onChange: (@MainActor () -> Void)?
 
     public init(file: URL? = nil, cache: MediaCache = .shared, defaults: UserDefaults = .standard) {
         self.cache = cache; self.defaults = defaults
@@ -120,14 +122,26 @@ extension PlaybackHistoryEntry {
         entries = Array(entries.prefix(Self.limit))
         prioritizeCaches()
         persist()
+        onChange?()
+    }
+
+    /// Another device's merged history. An entry that is no longer in it loses its caches as if removed here.
+    public func adopt(_ synced: [PlaybackHistoryEntry]) {
+        var seen = Set<String>()
+        let next = Array(synced.filter { Self.valid($0) }.sorted { $0.updatedAt > $1.updatedAt }
+            .filter { seen.insert($0.id).inserted }.prefix(Self.limit))
+        let kept = Set(next.map(\.id))
+        for entry in entries where !kept.contains(entry.id) { clean(entry) }
+        entries = next
+        prioritizeCaches(); persist()
     }
 
     public func remove(_ id: String) { remove(Set([id])) }
     public func remove(_ ids: Set<String>) {
         for entry in entries where ids.contains(entry.id) { clean(entry) }
-        entries.removeAll { ids.contains($0.id) }; prioritizeCaches(); persist()
+        entries.removeAll { ids.contains($0.id) }; prioritizeCaches(); persist(); onChange?()
     }
-    public func clear() { for entry in entries { clean(entry) }; entries.removeAll(); prioritizeCaches(); persist() }
+    public func clear() { for entry in entries { clean(entry) }; entries.removeAll(); prioritizeCaches(); persist(); onChange?() }
     private func prioritizeCaches() {
         cache.prioritize(Set(entries.flatMap { entry in
             [entry.id] + (entry.context.poster.map { [PosterResource.artworkScope($0)] } ?? [])

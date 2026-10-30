@@ -7,6 +7,8 @@ import Observation
     /// Bumps when the pin list changes, so a cached source row can be reused until then.
     public private(set) var revision = 0
     private let defaults: UserDefaults
+    /// Called after the list changes here (not after `adopt`), for iCloud sync.
+    @ObservationIgnored public var onChange: (@MainActor () -> Void)?
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         keys = defaults.stringArray(forKey: "pinnedSources.v1") ?? []
@@ -17,6 +19,17 @@ import Observation
     public func toggle(_ site: Site, origin: URL) {
         let key = key(site, origin: origin)
         if keys.contains(key) { keys.removeAll { $0 == key } } else { keys.append(key) }
+        defaults.set(keys, forKey: "pinnedSources.v1")
+        revision += 1
+        onChange?()
+    }
+
+    /// The saved keys, in order, as iCloud sync compares them.
+    public var savedKeys: [String] { keys }
+    /// The list merged with other devices'.
+    public func adopt(_ keys: [String]) {
+        guard keys != self.keys else { return }
+        self.keys = keys
         defaults.set(keys, forKey: "pinnedSources.v1")
         revision += 1
     }

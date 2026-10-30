@@ -7,6 +7,8 @@ import Observation
     /// Bumps when a source is hidden or shown, so a cached source row can be reused until then.
     public private(set) var revision = 0
     private let defaults: UserDefaults
+    /// Called after the list changes here (not after `adopt`), for iCloud sync.
+    @ObservationIgnored public var onChange: (@MainActor () -> Void)?
     private static let storageKey = "hiddenSources.v1"
     private static let builtInRestoreKey = "hiddenSources.builtInRestore.v1"
     private static let autoRestoreKey = "hiddenSources.autoRestore.v1"
@@ -27,12 +29,24 @@ import Observation
         if keys.contains(key) { keys.removeAll { $0 == key } } else { keys.append(key) }
         defaults.set(keys, forKey: Self.storageKey)
         revision += 1
+        onChange?()
     }
 
     public func insert(_ site: Site, origin: URL) {
         let key = key(site, origin: origin)
         guard !keys.contains(key) else { return }
         keys.append(key)
+        defaults.set(keys, forKey: Self.storageKey)
+        revision += 1
+        onChange?()
+    }
+
+    /// The saved keys, in order, as iCloud sync compares them.
+    public var savedKeys: [String] { keys }
+    /// The list merged with other devices'.
+    public func adopt(_ keys: [String]) {
+        guard keys != self.keys else { return }
+        self.keys = keys
         defaults.set(keys, forKey: Self.storageKey)
         revision += 1
     }
@@ -46,6 +60,7 @@ import Observation
             keys.removeAll { restored.contains($0) }
             defaults.set(keys, forKey: Self.storageKey)
             revision += 1
+            onChange?()
         }
         defaults.set(true, forKey: Self.builtInRestoreKey)
     }
@@ -61,6 +76,7 @@ import Observation
             keys.removeAll { restored.contains($0) }
             defaults.set(keys, forKey: Self.storageKey)
             revision += 1
+            onChange?()
         }
         defaults.set(true, forKey: Self.autoRestoreKey)
     }
