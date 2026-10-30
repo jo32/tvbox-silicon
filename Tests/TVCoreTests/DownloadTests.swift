@@ -160,6 +160,21 @@ import Testing
     #expect(FileManager.default.fileExists(atPath: root.appending(path: "downloads.json").path))
 }
 
+@MainActor @Test func downloadsAtATimeCanBeChanged() throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: "downloads-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let defaults = try #require(UserDefaults(suiteName: UUID().uuidString))
+    let library = DownloadLibrary(root: root, defaults: defaults)
+    #expect(library.simultaneous == 2)
+    library.simultaneous = 3
+    #expect(library.simultaneous == 3)
+    #expect(defaults.integer(forKey: "downloadsSimultaneous") == 3)
+    library.simultaneous = 9
+    #expect(library.simultaneous == 4)
+    #expect(defaults.integer(forKey: "downloadsSimultaneous") == 4)
+    #expect(DownloadLibrary(root: root, defaults: defaults).simultaneous == 4)
+}
+
 @MainActor @Test func savedSongsWhoseFilesAreGoneAreForgotten() throws {
     let root = FileManager.default.temporaryDirectory.appending(path: "music-downloads-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: root) }
