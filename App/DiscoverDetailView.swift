@@ -24,6 +24,56 @@ struct DiscoverDetailView: View {
     private var seasons: [TMDBMatch.SeasonSummary] { details?.seasons.filter { $0.number > 0 } ?? [] }
 
     var body: some View {
+        page
+        .modifier(DiscoverSearchPresentation(isPresented: $searchShown))
+        .onAppear { onScreen = true }
+        .onDisappear { onScreen = false }
+        .task(id: item.key) { await model.load(item) }
+        .onChange(of: details?.id) { _, _ in
+            if seasonNumber == nil { seasonNumber = seasons.first?.number }
+        }
+        .task(id: seasonNumber) { await loadSeason() }
+        .sheet(isPresented: $overviewShown) {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text(details?.name ?? item.name).font(.title2.bold())
+                        if let tagline = details?.tagline, !tagline.isEmpty { Text(tagline).font(.headline).foregroundStyle(.secondary) }
+                        Text(details?.overview ?? item.overview).font(.body).lineSpacing(5).selectable()
+                    }.padding(24)
+                }.navigationTitle(L10n.text("Overview"))
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { overviewShown = false } } }
+            }.presentationDetents([.medium, .large]).discoverSheetSize(width: 560, height: 480)
+        }
+        .sheet(item: $episode) { selection in
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        PosterImage(url: selection.value.still ?? details?.backdrop).aspectRatio(16.0 / 9, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 16))
+                        Text(selection.value.name).font(.title2.bold())
+                        Text(selection.value.overview).lineSpacing(4)
+                        sourceButton
+                    }.padding(20)
+                }.navigationTitle(selection.value.name)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { episode = nil } } }
+            }.presentationDetents([.medium, .large]).discoverSheetSize(width: 600, height: 640)
+        }
+        .sheet(item: $still) { selection in
+            NavigationStack {
+                TMDBArtwork(url: selection.url, maxPixels: 2400, fill: false)
+                    .background(.black).ignoresSafeArea(edges: .bottom)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { still = nil } } }
+            }.preferredColorScheme(.dark).discoverSheetSize(width: 1000, height: 640)
+        }
+        .sheet(isPresented: $trailerShown) {
+            if let trailer = details?.trailer { DiscoverTrailerScreen(trailer: trailer, title: item.name).discoverSheetSize(width: 960, height: 600) }
+        }
+    }
+
+    @ViewBuilder private var page: some View {
+        #if os(tvOS)
+        tvPage
+        #else
         GeometryReader { geometry in
             let width = geometry.size.width
             let coverHeight = width < 600 ? width * 1.5 : min(760, width * 0.7)
@@ -76,49 +126,7 @@ struct DiscoverDetailView: View {
                 #endif
             }
         }
-        .modifier(DiscoverSearchPresentation(isPresented: $searchShown))
-        .onAppear { onScreen = true }
-        .onDisappear { onScreen = false }
-        .task(id: item.key) { await model.load(item) }
-        .onChange(of: details?.id) { _, _ in
-            if seasonNumber == nil { seasonNumber = seasons.first?.number }
-        }
-        .task(id: seasonNumber) { await loadSeason() }
-        .sheet(isPresented: $overviewShown) {
-            NavigationStack {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        Text(details?.name ?? item.name).font(.title2.bold())
-                        if let tagline = details?.tagline, !tagline.isEmpty { Text(tagline).font(.headline).foregroundStyle(.secondary) }
-                        Text(details?.overview ?? item.overview).font(.body).lineSpacing(5).selectable()
-                    }.padding(24)
-                }.navigationTitle(L10n.text("Overview"))
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { overviewShown = false } } }
-            }.presentationDetents([.medium, .large]).discoverSheetSize(width: 560, height: 480)
-        }
-        .sheet(item: $episode) { selection in
-            NavigationStack {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        PosterImage(url: selection.value.still ?? details?.backdrop).aspectRatio(16.0 / 9, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 16))
-                        Text(selection.value.name).font(.title2.bold())
-                        Text(selection.value.overview).lineSpacing(4)
-                        sourceButton
-                    }.padding(20)
-                }.navigationTitle(selection.value.name)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { episode = nil } } }
-            }.presentationDetents([.medium, .large]).discoverSheetSize(width: 600, height: 640)
-        }
-        .sheet(item: $still) { selection in
-            NavigationStack {
-                TMDBArtwork(url: selection.url, maxPixels: 2400, fill: false)
-                    .background(.black).ignoresSafeArea(edges: .bottom)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { still = nil } } }
-            }.preferredColorScheme(.dark).discoverSheetSize(width: 1000, height: 640)
-        }
-        .sheet(isPresented: $trailerShown) {
-            if let trailer = details?.trailer { DiscoverTrailerScreen(trailer: trailer, title: item.name).discoverSheetSize(width: 960, height: 600) }
-        }
+        #endif
     }
 
     private func identity(width: CGFloat) -> some View {
@@ -443,15 +451,18 @@ struct DiscoverSearchPresentation: ViewModifier {
     func body(content: Content) -> some View {
         #if os(iOS)
         content.fullScreenCover(isPresented: $isPresented) { DiscoverSearchView() }
-        #elseif os(macOS)
-        // A page in the window, with Back and the toolbar's search field, rather than the iPhone's full-screen sheet.
+        #else
+        // A page of its own (Back returns), rather than the iPhone's full-screen sheet: on the Mac with the toolbar's
+        // search field, on the TV laid out for the remote.
         content.onChange(of: isPresented) { _, shown in
             guard shown else { return }
             isPresented = false
+            #if os(macOS)
             openRoute?(Route { AnyView(DiscoverMacSearchView()) })
+            #else
+            openRoute?(Route { AnyView(DiscoverTVSearchView()) })
+            #endif
         }
-        #else
-        content.sheet(isPresented: $isPresented) { DiscoverSearchView() }
         #endif
     }
 }
@@ -476,3 +487,267 @@ extension View {
         #endif
     }
 }
+
+#if os(tvOS)
+/// The detail page on the TV, laid out like Rex: the backdrop fills the screen with the logo, actions and summary at
+/// its foot; below it, rows sized for the remote. Scrolling frosts the backdrop.
+extension DiscoverDetailView {
+    private static let tvGutter: CGFloat = 96
+    private var tvScrolled: Bool { model.scrollY > 120 }
+
+    var tvPage: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 60) {
+                tvHero
+                if model.failed {
+                    Button(L10n.text("Try Again")) { Task { await model.load(item) } }.padding(.horizontal, Self.tvGutter)
+                }
+                if !seasons.isEmpty { tvEpisodes }
+                if let details {
+                    if !details.cast.isEmpty { tvPeople(details.cast, title: L10n.text("Cast")) }
+                    if details.crew.contains(where: { $0.profile != nil }) { tvPeople(details.crew, title: L10n.text("Crew")) }
+                    if !details.genres.isEmpty { tvGenres(details) }
+                    if let images = details.stills, !images.isEmpty { tvStills(images) }
+                    if let recommendations = details.recommendations, !recommendations.isEmpty { tvRelated(recommendations) }
+                }
+            }.padding(.bottom, 90)
+        }
+        .scrollClipDisabled()
+        .modifier(DiscoverDetailScroll(model: model))
+        .background { tvBackdrop }
+        .ignoresSafeArea()
+        .foregroundStyle(.white).preferredColorScheme(.dark)
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var tvBackdrop: some View {
+        ZStack {
+            Color.black
+            if let url = details?.backdrop ?? item.backdrop { TMDBArtwork(url: url, maxPixels: 2400) }
+            LinearGradient(colors: [.black.opacity(0.85), .black.opacity(0.35), .clear], startPoint: .leading, endPoint: .trailing)
+            LinearGradient(stops: [.init(color: .clear, location: 0.35), .init(color: .black.opacity(0.85), location: 1)], startPoint: .top, endPoint: .bottom)
+            Rectangle().fill(.regularMaterial).opacity(tvScrolled ? 1 : 0)
+        }
+        .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.35), value: tvScrolled)
+    }
+
+    private var tvHero: some View {
+        VStack(alignment: .leading, spacing: 34) {
+            Group {
+                if let logo = details?.logo {
+                    TMDBArtwork(url: logo, maxPixels: 1400, fill: false)
+                        .frame(width: 600, height: 240, alignment: .bottomLeading)
+                        .accessibilityLabel(details?.name ?? item.name)
+                } else {
+                    Text(details?.name ?? item.name).font(.system(size: 76, weight: .bold)).lineLimit(2).minimumScaleFactor(0.6)
+                        .frame(maxWidth: 1000, alignment: .bottomLeading)
+                }
+            }.shadow(color: .black.opacity(0.4), radius: 12)
+            HStack(alignment: .top, spacing: 56) {
+                VStack(alignment: .leading, spacing: 22) {
+                    Button {
+                        episode = nil
+                        if store.subscription == nil { store.section = .settings } else { store.searchVideos(item.name) }
+                    } label: {
+                        Label(L10n.text(store.subscription == nil ? "Add Subscription" : "Search Sources"), systemImage: "magnifyingglass")
+                            .frame(width: 380)
+                    }
+                    .buttonStyle(DiscoverTVActionStyle(height: 86, font: 30))
+                    .accessibilityIdentifier("discover.findSources")
+                    HStack(spacing: 20) {
+                        if details?.trailer != nil {
+                            Button { trailerShown = true } label: { Image(systemName: "play.rectangle").frame(width: 70) }
+                                .buttonStyle(DiscoverTVActionStyle(height: 70, font: 30, corner: 22))
+                                .accessibilityLabel(L10n.text("Trailer"))
+                                .accessibilityIdentifier("discover.detail.playTrailer")
+                        }
+                        Button { searchShown = true } label: { Image(systemName: "text.magnifyingglass").frame(width: 70) }
+                            .buttonStyle(DiscoverTVActionStyle(height: 70, font: 30, corner: 22))
+                            .accessibilityLabel(L10n.text("Search Catalog"))
+                            .accessibilityIdentifier("discover.detail.search")
+                    }
+                }.focusSection()
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(details?.overview ?? item.overview).font(.system(size: 28)).lineLimit(2).lineSpacing(4)
+                    Text(metadata).font(.system(size: 26)).opacity(0.65).lineLimit(1)
+                    if let rating = details?.rating ?? item.rating {
+                        HStack(spacing: 10) {
+                            TMDBBadge()
+                            Text(rating, format: .number.precision(.fractionLength(1))).font(.system(size: 26, design: .rounded))
+                            if let votes = details?.voteCount { Text("(\(votes))").font(.system(size: 22, design: .rounded)).opacity(0.6) }
+                        }
+                    }
+                    if model.loading, details == nil { ProgressView() }
+                }.frame(maxWidth: 1150, alignment: .leading)
+            }
+        }
+        .padding(.horizontal, Self.tvGutter)
+        .frame(maxWidth: .infinity, minHeight: 950, alignment: .bottomLeading)
+    }
+
+    private func tvRow(_ title: String?, spacing: CGFloat = 40, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let title { Text(title).font(.system(size: 34, weight: .medium)).opacity(0.6).padding(.horizontal, DiscoverLayout.gutter) }
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: spacing) { content() }
+                    .padding(.horizontal, DiscoverLayout.gutter).padding(.vertical, 24)
+            }.scrollClipDisabled()
+        }.focusSection()
+    }
+
+    private var tvEpisodes: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Menu {
+                ForEach(seasons, id: \.number) { value in
+                    Button { seasonNumber = value.number } label: {
+                        if seasonNumber == value.number { Label(value.name, systemImage: "checkmark") } else { Text(value.name) }
+                    }
+                }
+            } label: {
+                Label(seasons.first { $0.number == seasonNumber }?.name ?? L10n.text("Seasons"), systemImage: "chevron.down")
+            }
+            .menuStyle(.button).buttonStyle(DiscoverTVChipStyle(active: false))
+            .padding(.horizontal, DiscoverLayout.gutter)
+            .accessibilityIdentifier("discover.detail.season")
+            if loadingSeason { ProgressView().frame(maxWidth: .infinity).frame(height: 300) }
+            else if seasonFailed { Button(L10n.text("Try Again")) { Task { await loadSeason() } }.padding(.horizontal, DiscoverLayout.gutter) }
+            else if let season {
+                tvRow(nil) {
+                    ForEach(season.episodes, id: \.number) { value in
+                        Button { episode = DiscoverEpisode(value: value) } label: {
+                            tvLandscape(value.still ?? details?.backdrop, width: 420,
+                                        badge: value.runtime.map { "\(Int($0)) " + L10n.text("min") }) {
+                                Text("\(value.number). \(value.name)").font(.system(size: 26, weight: .semibold)).lineLimit(1)
+                                Text(value.overview).font(.system(size: 22)).lineLimit(2).opacity(0.6)
+                            }
+                        }
+                        .buttonStyle(DiscoverTVLiftStyle(scale: 1.05))
+                        .accessibilityIdentifier("discover.detail.episode.\(value.number)")
+                    }
+                }
+            }
+        }
+    }
+
+    /// A landscape image over left-aligned captions; only the image lifts with focus.
+    private func tvLandscape(_ url: URL?, width: CGFloat, badge: String? = nil, @ViewBuilder captions: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            PosterImage(url: url).frame(width: width, height: width * 9 / 16)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(alignment: .bottomTrailing) {
+                    if let badge {
+                        Text(badge).font(.system(size: 20, weight: .medium)).padding(.horizontal, 10).padding(.vertical, 4)
+                            .background(.black.opacity(0.6), in: Capsule()).padding(12)
+                    }
+                }
+            VStack(alignment: .leading, spacing: 4) { captions() }.padding(.horizontal, 4)
+        }.frame(width: width, alignment: .leading)
+    }
+
+    private func tvPeople(_ people: [TMDBMatch.Person], title: String) -> some View {
+        tvRow(title, spacing: 36) {
+            ForEach(Array(people.enumerated()), id: \.offset) { _, person in
+                if let id = person.id {
+                    RouteLink { DiscoverPersonView(id: id, name: person.name, profile: person.profile) } label: { tvPerson(person) }
+                        .buttonStyle(DiscoverTVLiftStyle(scale: 1.1))
+                        .accessibilityIdentifier("discover.detail.person.\(id)")
+                } else { tvPerson(person) }
+            }
+        }
+    }
+
+    private func tvPerson(_ person: TMDBMatch.Person) -> some View {
+        VStack(spacing: 12) {
+            PosterImage(url: person.profile, symbol: "person.fill").frame(width: 190, height: 190).clipShape(Circle())
+            VStack(spacing: 4) {
+                Text(person.name).font(.system(size: 26)).lineLimit(1)
+                if let role = person.role { Text(role).font(.system(size: 22)).lineLimit(1).opacity(0.55) }
+            }
+        }.frame(width: 210)
+    }
+
+    private func tvGenres(_ details: TMDBMatch.Details) -> some View {
+        tvRow(L10n.text("Genres"), spacing: 20) {
+            if let genres = details.genreItems, !genres.isEmpty {
+                ForEach(genres) { genre in
+                    RouteLink { DiscoverBrowseView(title: genre.name, filter: .genre(genre.id, type: item.mediaType)) } label: { Text(genre.name) }
+                        .buttonStyle(DiscoverTVChipStyle(active: false))
+                        .accessibilityIdentifier("discover.detail.genre.\(genre.id)")
+                }
+            } else {
+                ForEach(details.genres, id: \.self) { name in
+                    Text(name).font(.system(size: 26, weight: .medium)).padding(.horizontal, 30).frame(height: 62)
+                        .background(.white.opacity(0.14), in: Capsule())
+                }
+            }
+        }
+    }
+
+    private func tvStills(_ images: [URL]) -> some View {
+        tvRow(L10n.text("Stills")) {
+            ForEach(images, id: \.self) { url in
+                Button { still = DiscoverStill(url: url) } label: {
+                    PosterImage(url: url).frame(width: 560, height: 315).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(DiscoverTVLiftStyle(scale: 1.05))
+                .accessibilityIdentifier("discover.detail.still")
+            }
+        }
+    }
+
+    private func tvRelated(_ items: [TMDBMatch.Candidate]) -> some View {
+        tvRow(L10n.text("You May Like")) {
+            ForEach(items, id: \.key) { candidate in
+                let value = candidate.catalogItem
+                RouteLink { DiscoverDetailView(item: value) } label: {
+                    tvLandscape(value.backdrop ?? value.poster, width: 380) {
+                        Text(value.name).font(.system(size: 26, weight: .semibold)).lineLimit(1)
+                        HStack(spacing: 10) {
+                            if let rating = value.rating {
+                                Label(rating.formatted(.number.precision(.fractionLength(1))), systemImage: "star.fill")
+                                    .labelStyle(DiscoverTVStarLabel())
+                            }
+                            if let year = value.year { Text(String(year)).opacity(0.6) }
+                        }.font(.system(size: 22))
+                        Text(value.overview).font(.system(size: 22)).lineLimit(2).opacity(0.6)
+                    }
+                }
+                .buttonStyle(DiscoverTVLiftStyle(scale: 1.05))
+                .accessibilityIdentifier("discover.detail.related.\(value.key)")
+            }
+        }
+    }
+}
+
+/// A yellow star beside the rating, as on Rex's cards.
+private struct DiscoverTVStarLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) { configuration.icon.foregroundStyle(.yellow); configuration.title }
+    }
+}
+
+/// The detail page's actions: dim plates that turn white under focus.
+private struct DiscoverTVActionStyle: ButtonStyle {
+    let height: CGFloat
+    let font: CGFloat
+    var corner: CGFloat?
+    func makeBody(configuration: Configuration) -> some View { Action(configuration: configuration, style: self) }
+    private struct Action: View {
+        let configuration: ButtonStyleConfiguration
+        let style: DiscoverTVActionStyle
+        @Environment(\.isFocused) private var focused
+        var body: some View {
+            let shape = RoundedRectangle(cornerRadius: style.corner ?? style.height / 2, style: .continuous)
+            configuration.label
+                .font(.system(size: style.font, weight: .medium)).lineLimit(1)
+                .foregroundStyle(focused ? Color.black : Color.white)
+                .padding(.horizontal, 18).frame(height: style.height)
+                .background(focused ? AnyShapeStyle(.white) : AnyShapeStyle(.white.opacity(0.18)), in: shape)
+                .scaleEffect(configuration.isPressed ? 0.97 : focused ? 1.06 : 1)
+                .shadow(color: .black.opacity(focused ? 0.35 : 0), radius: 16, y: 10)
+                .animation(.easeOut(duration: 0.18), value: focused)
+        }
+    }
+}
+#endif

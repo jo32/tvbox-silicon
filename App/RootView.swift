@@ -518,7 +518,7 @@ private struct RouteStack<Root: View>: View {
 extension View {
     /// Registers `Route` pages; apply once at the root of every NavigationStack.
     func routeDestinations() -> some View {
-        #if os(macOS)
+        #if os(macOS) || os(tvOS)
         modifier(MacRouteDestinations())
         #else
         navigationDestination(for: Route.self) { $0.build() }
@@ -526,13 +526,17 @@ extension View {
     }
 }
 
-#if os(macOS)
+#if os(macOS) || os(tvOS)
 /// Pushed pages get `openRoute` too: the environment set on the detail stack reaches its root page, not the pages its
 /// destinations build, so a page opened from code (Discover's search, a person from it) pushed nothing.
 private struct MacRouteDestinations: ViewModifier {
     @Environment(\.openRoute) private var openRoute
     func body(content: Content) -> some View {
+        #if os(macOS)
         content.navigationDestination(for: Route.self) { $0.build().musicBar().environment(\.openRoute, openRoute) }
+        #else
+        content.navigationDestination(for: Route.self) { $0.build().environment(\.openRoute, openRoute) }
+        #endif
     }
 }
 #endif
