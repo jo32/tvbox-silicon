@@ -961,7 +961,7 @@
 "Added %lld AList servers. Browse them in Cloud Files." = "Added %lld AList servers. Browse them in Cloud Files.";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "This address is now an AList server. Add it again to browse it in Cloud Files.";
 "Sign in to Quark or UC under Cloud Drive Accounts to browse their files here." = "Sign in to Quark or UC under Cloud Drive Accounts to browse their files here.";
-"Add an AList or OpenList server, or a NAS's WebDAV share, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too." = "Add an AList or OpenList server, or a NAS's WebDAV share, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too.";
+"Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too." = "Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too.";
 "Edit Server" = "Edit Server";
 "Remove Server" = "Remove Server";
 "Add Server" = "Add Server";
@@ -972,12 +972,12 @@
 "Password" = "Password";
 "Open" = "Open";
 "Enter the password for %@." = "Enter the password for %@.";
-"The server's address, such as http://192.168.1.10:5244 for AList, or the WebDAV address your NAS shows. Add a folder after it to start there. The user name and password are only for servers that don't let guests browse." = "The server's address, such as http://192.168.1.10:5244 for AList, or the WebDAV address your NAS shows. Add a folder after it to start there. The user name and password are only for servers that don't let guests browse.";
+"The server's address, such as http://192.168.1.10:5244 for AList, http://192.168.1.10:8096 for Emby or Jellyfin, or the WebDAV address your NAS shows. Add a folder after an AList or WebDAV address to start there. Emby and Jellyfin always want the user name; the others only when they don't let guests browse." = "The server's address, such as http://192.168.1.10:5244 for AList, http://192.168.1.10:8096 for Emby or Jellyfin, or the WebDAV address your NAS shows. Add a folder after an AList or WebDAV address to start there. Emby and Jellyfin always want the user name; the others only when they don't let guests browse.";
 "Address" = "Address";
 "Name (Optional)" = "Name (Optional)";
 "User Name (Optional)" = "User Name (Optional)";
 "Password (Optional)" = "Password (Optional)";
-"No AList or WebDAV server answered at this address." = "No AList or WebDAV server answered at this address.";
+"No AList, WebDAV, Emby or Jellyfin server answered at this address." = "No AList, WebDAV, Emby or Jellyfin server answered at this address.";
 "This server doesn't let guests browse. Enter a user name and password." = "This server doesn't let guests browse. Enter a user name and password.";
 "Sign in to Quark and UC on their official page. Yingxia stores the login on this Mac." = "Sign in to Quark and UC on their official page. Yingxia stores the login on this Mac.";
 "Sign in on the drive's own page, or scan a code with the drive's app on another phone. Yingxia keeps the sign-in on this device." = "Sign in on the drive's own page, or scan a code with the drive's app on another phone. Yingxia keeps the sign-in on this device.";

@@ -2,7 +2,7 @@ import SwiftUI
 import TVCore
 
 /// Cloud Files: the Quark and UC drives signed in under Cloud Drive Accounts and the saved AList
-/// servers and WebDAV shares. Open folders and play their videos; the rest of the folder plays
+/// servers, WebDAV shares and Emby or Jellyfin servers. Open folders and play their videos; the rest of the folder plays
 /// after the one chosen.
 struct CloudFilesView: View {
     @State private var drives: [CloudFilesDrive] = []
@@ -30,7 +30,7 @@ struct CloudFilesView: View {
                     .glassRow()
                 }
             }
-            FilesSection(title: "AList · WebDAV", footer: L10n.text("Add an AList or OpenList server, or a NAS's WebDAV share, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too.")) {
+            FilesSection(title: "AList · WebDAV · Emby", footer: L10n.text("Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too.")) {
                 ForEach(servers) { server in
                     FolderLink(drive: .alist(server), folder: server.root, name: server.name) {
                         FileRowLabel(symbol: CloudFilesDrive.alist(server).symbol, tint: .teal, title: server.name,
@@ -137,7 +137,7 @@ struct CloudFolderView: View {
     }
 
     @ViewBuilder private func row(_ file: CloudFile, in files: [CloudFile]) -> some View {
-        let label = FileRowLabel(symbol: file.symbol, tint: file.tint, title: file.name, subtitle: subtitle(file), chevron: file.isFolder)
+        let label = FileRowLabel(symbol: file.symbol, tint: file.tint, title: file.name, subtitle: subtitle(file), chevron: file.isFolder, artwork: file.artwork)
         if file.isFolder {
             FolderLink(drive: drive, folder: file.id, name: file.name) { label }
         } else if drive.plays(file) {
@@ -190,8 +190,8 @@ struct CloudFolderView: View {
     }
 }
 
-/// Adding or editing an AList server or a WebDAV share: its address, and an account for servers
-/// that keep guests out. The server is checked before it is saved.
+/// Adding or editing an AList server, a WebDAV share or an Emby or Jellyfin server: its address, and
+/// an account for servers that keep guests out. The server is checked before it is saved.
 struct AListServerForm: View {
     @Environment(\.dismiss) private var dismiss
     @State private var server: AListServer
@@ -231,7 +231,7 @@ struct AListServerForm: View {
                 Section {
                     fields
                 } footer: {
-                    Text(L10n.text("The server's address, such as http://192.168.1.10:5244 for AList, or the WebDAV address your NAS shows. Add a folder after it to start there. The user name and password are only for servers that don't let guests browse."))
+                    Text(L10n.text("The server's address, such as http://192.168.1.10:5244 for AList, http://192.168.1.10:8096 for Emby or Jellyfin, or the WebDAV address your NAS shows. Add a folder after an AList or WebDAV address to start there. Emby and Jellyfin always want the user name; the others only when they don't let guests browse."))
                 }
                 if let error { Section { Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Brand.amber) } }
             }
@@ -279,11 +279,12 @@ struct AListServerForm: View {
             do {
                 let url = try WebAddress.resolve(address)
                 let username = server.username.trimmingCharacters(in: .whitespaces)
-                // An AList server, else a WebDAV share such as a NAS's.
+                // An AList server, else an Emby or Jellyfin server, else a WebDAV share such as a NAS's.
                 var probed = await AList.probe(url)
+                if probed == nil { probed = await Emby.probe(url) }
                 if probed == nil { probed = try await WebDAV.shared.probe(url, username: username, password: server.password) }
                 guard var found = probed else {
-                    error = L10n.text("No AList or WebDAV server answered at this address.")
+                    error = L10n.text("No AList, WebDAV, Emby or Jellyfin server answered at this address.")
                     return
                 }
                 found.id = server.id
@@ -291,7 +292,9 @@ struct AListServerForm: View {
                 found.username = username
                 found.password = server.password
                 found.folderPassword = server.folderPassword
-                if found.isWebDAV { try await WebDAV.shared.check(found) } else { try await AList.shared.check(found) }
+                if found.isWebDAV { try await WebDAV.shared.check(found) }
+                else if found.isEmby { try await Emby.shared.check(found) }
+                else { try await AList.shared.check(found) }
                 if isNew { try AListServers.add([found]) } else { try AListServers.update(found) }
                 saved()
                 dismiss()
@@ -369,6 +372,8 @@ struct FileRowLabel: View {
     let title: String
     var subtitle: String = ""
     var chevron = false
+    /// A media server's poster, in place of the symbol's tile.
+    var artwork: URL? = nil
     #if os(tvOS)
     private let tile: CGFloat = 56, glyph: CGFloat = 26, titleFont = Font.system(size: 29, weight: .medium), detailFont = Font.system(size: 23)
     #elseif os(macOS)
@@ -378,11 +383,18 @@ struct FileRowLabel: View {
     #endif
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: glyph, weight: .semibold)).foregroundStyle(.white)
-                .frame(width: tile, height: tile)
-                .background(tint.gradient, in: RoundedRectangle(cornerRadius: tile * 0.26, style: .continuous))
-                .accessibilityHidden(true)
+            if let artwork {
+                PosterImage(url: artwork, symbol: symbol)
+                    .frame(width: tile, height: tile * 1.5)
+                    .clipShape(RoundedRectangle(cornerRadius: tile * 0.16, style: .continuous))
+                    .accessibilityHidden(true)
+            } else {
+                Image(systemName: symbol)
+                    .font(.system(size: glyph, weight: .semibold)).foregroundStyle(.white)
+                    .frame(width: tile, height: tile)
+                    .background(tint.gradient, in: RoundedRectangle(cornerRadius: tile * 0.26, style: .continuous))
+                    .accessibilityHidden(true)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(titleFont).foregroundStyle(.primary).lineLimit(2).multilineTextAlignment(.leading)
                 if !subtitle.isEmpty { Text(subtitle).font(detailFont).foregroundStyle(.secondary).lineLimit(1) }
@@ -428,7 +440,7 @@ extension CloudFilesDrive {
         switch self {
         case .quark: CloudProvider.quark.symbol
         case .uc: CloudProvider.uc.symbol
-        case .alist(let server): server.isWebDAV ? "externaldrive.connected.to.line.below" : "server.rack"
+        case .alist(let server): server.isEmby ? "play.tv" : server.isWebDAV ? "externaldrive.connected.to.line.below" : "server.rack"
         }
     }
     var tint: Color {

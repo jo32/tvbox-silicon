@@ -181,6 +181,78 @@ import Testing
         try await plays(WebDAV.shared.stream(server, path: video.id, name: video.name))
     }
 
+    @Test func anEmbyServerIsFoundByTheAddressItsWebAppOpensAt() async throws {
+        EmbyStub.reset()
+        let server = try #require(await Emby.probe(URL(string: "http://emby.test/emby/web/index.html#!/home")!, session: EmbyStub.session))
+        #expect(server.isEmby && server.address == "http://emby.test/emby" && server.root == "/" && server.name == "Home")
+        #expect(await Emby.probe(URL(string: "http://emby.test/site")!, session: EmbyStub.session) == nil)
+        // Saved and loaded again, it is still a media server.
+        #expect(try JSONDecoder().decode(AListServer.self, from: JSONEncoder().encode(server)).isEmby)
+    }
+
+    @Test func embyLibrariesListAsFoldersAndEpisodesInOrder() async throws {
+        EmbyStub.reset()
+        let server = AListServer(id: "e", name: "Home", address: "http://emby.test/emby", username: "me", password: "pw", kind: .emby)
+        let client = Emby(session: EmbyStub.session)
+        let libraries = try await client.list(server, id: server.root)
+        // Live TV isn't a folder of files.
+        #expect(libraries.map(\.name) == ["Shows"] && libraries[0].isFolder && libraries[0].id == "shows")
+        #expect(libraries[0].artwork?.absoluteString == "http://emby.test/emby/Items/shows/Images/Primary?tag=t1&maxHeight=240")
+        let episodes = CloudFile.arranged(try await client.list(server, id: "season"))
+        #expect(episodes.map(\.name) == ["2. Pilot.mp4", "10. Finale.mkv", "Film (2024).mkv"])
+        #expect(episodes.allSatisfy { CloudFilesDrive.alist(server).plays($0) })
+        #expect(EmbyStub.calls == ["POST /emby/Users/AuthenticateByName -", "GET /emby/Users/u1/Views tok-1",
+                                   "GET /emby/Users/u1/Items?Fields=Path&ParentId=season&SortBy=SortName tok-1"])
+        // The server restarted and forgot the token: sign in again, once.
+        EmbyStub.forgetTokens()
+        _ = try await client.list(server, id: server.root)
+        #expect(EmbyStub.calls.suffix(3) == ["GET /emby/Users/u1/Views tok-1", "POST /emby/Users/AuthenticateByName -", "GET /emby/Users/u1/Views tok-2"])
+        // Without an account, or with a wrong one, the viewer is told.
+        await #expect(throws: CloudFilesError.signInRequired("Home")) {
+            try await Emby(session: EmbyStub.session).check(AListServer(name: "Home", address: "http://emby.test/emby", kind: .emby))
+        }
+        await #expect(throws: TVError.self) {
+            try await Emby(session: EmbyStub.session).check(AListServer(name: "Home", address: "http://emby.test/emby", username: "me", password: "no", kind: .emby))
+        }
+    }
+
+    @Test func anEmbyFilePlaysAsTheServerStoresIt() async throws {
+        EmbyStub.reset()
+        let server = AListServer(id: "e", name: "Home", address: "http://emby.test/emby", username: "me", password: "pw", kind: .emby)
+        let source = try await Emby(session: EmbyStub.session).source(server, id: "e2", name: "2. Pilot.mp4")
+        #expect(source.url.absoluteString == "http://emby.test/emby/Videos/e2/stream?static=true&MediaSourceId=ms2" && source.length == 1_048_576)
+        #expect(source.headers["X-Emby-Token"] == "tok-1" && source.headers["Authorization"]?.contains(#"Token="tok-1""#) == true)
+        // Its history entry goes back to the server.
+        let channel = CloudFiles.channel(CloudFile(id: "e2", name: "2. Pilot.mp4", isFolder: false), in: .alist(server), folder: "season", folderName: "Season 1")
+        #expect(channel.historyContext?.episodeFlag == "alist.e" && channel.historyContext?.videoID == "season")
+        #expect(Emby.type(path: nil, container: "mov,mp4,m4a,3gp,3g2,mj2") == "mp4" && Emby.type(path: "/a/b.strm", container: "matroska,webm") == "mkv")
+    }
+
+    /// A real Emby or Jellyfin server: TVBOX_EMBY_URL and the account TVBOX_EMBY_USER/PASSWORD.
+    /// Plays the first video of each kind of file it finds in the libraries, or for one the player
+    /// repackages, reads its first bytes.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["TVBOX_EMBY_URL"] != nil))
+    func aRealEmbyServerListsAndPlays() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        var server = try #require(await Emby.probe(URL(string: environment["TVBOX_EMBY_URL"]!)!))
+        server.username = environment["TVBOX_EMBY_USER"] ?? ""; server.password = environment["TVBOX_EMBY_PASSWORD"] ?? ""
+        try await Emby.shared.check(server)
+        var folders = [server.root], videos: [String: CloudFile] = [:]
+        while let folder = folders.first, folders.count < 50 {
+            folders.removeFirst()
+            for file in try await Emby.shared.list(server, id: folder) {
+                if file.isFolder { folders.append(file.id) }
+                else if file.kind == .video { videos[(file.name as NSString).pathExtension.lowercased()] = videos[(file.name as NSString).pathExtension.lowercased()] ?? file }
+            }
+        }
+        #expect(!videos.isEmpty)
+        for video in videos.values {
+            let url = try await Emby.shared.stream(server, id: video.id, name: video.name)
+            // An MKV or AVI is the player's to repackage; its first bytes say it reads as one.
+            if CloudFile.playsNatively(video.name) { try await plays(url) } else { #expect(await CloudStreams.needsRemux(url)); CloudStreams.stop(url) }
+        }
+    }
+
     /// A real Quark account: TVBOX_QUARK_ACCOUNTS names a copy of the app's accounts.json. Plays the
     /// first MP4 in TVBOX_QUARK_FOLDER (the root by default) as it is, then as Quark's transcoded copy.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["TVBOX_QUARK_ACCOUNTS"] != nil))
@@ -321,6 +393,61 @@ final class WebDAVStub: URLProtocol, @unchecked Sendable {
         let body = status == 207 ? #"<?xml version="1.0" encoding="utf-8"?><D:multistatus xmlns:D="DAV:">"# + responses.joined() + "</D:multistatus>" : ""
         client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/xml"])!, cacheStoragePolicy: .notAllowed)
         client.urlProtocol(self, didLoad: Data(body.utf8))
+        client.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+
+/// An Emby server at emby.test/emby with the account me/pw. Each sign-in hands out a new token,
+/// and only tokens since the last `forgetTokens()` are taken.
+final class EmbyStub: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var log: [String] = []
+    nonisolated(unsafe) private static var issued = 0, valid = 0
+    static var calls: [String] { lock.withLock { log } }
+    static func reset() { lock.withLock { log = []; issued = 0; valid = 0 } }
+    static func forgetTokens() { lock.withLock { valid = issued } }
+    static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [EmbyStub.self]
+        return URLSession(configuration: configuration)
+    }()
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host() == "emby.test" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard let url = request.url, let client else { return }
+        let target = url.path + (url.query.map { "?" + $0 } ?? ""), token = request.value(forHTTPHeaderField: "X-Emby-Token")
+        var body: [String: Any] = [:]
+        if let stream = request.httpBodyStream {
+            stream.open(); defer { stream.close() }
+            var data = Data(), buffer = [UInt8](repeating: 0, count: 4096)
+            while stream.hasBytesAvailable { let count = stream.read(&buffer, maxLength: buffer.count); if count <= 0 { break }; data.append(buffer, count: count) }
+            body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        }
+        let (status, answer): (Int, Any) = Self.lock.withLock {
+            Self.log.append("\(request.httpMethod ?? "-") \(target) \(token ?? "-")")
+            let signedIn = token.flatMap { Int($0.dropFirst(4)) }.map { $0 > Self.valid && $0 <= Self.issued } ?? false
+            switch url.path {
+            case "/emby/System/Info/Public": return (200, ["Id": "abc", "Version": "4.10.2.0", "ServerName": "Home"])
+            case "/emby/Users/AuthenticateByName":
+                guard body["Username"] as? String == "me", body["Pw"] as? String == "pw" else { return (401, [:]) }
+                Self.issued += 1
+                return (200, ["AccessToken": "tok-\(Self.issued)", "User": ["Id": "u1"]])
+            case _ where !signedIn: return (401, [:])
+            case "/emby/Users/u1/Views":
+                return (200, ["Items": [["Id": "shows", "Name": "Shows", "IsFolder": true, "CollectionType": "tvshows", "ImageTags": ["Primary": "t1"]],
+                                        ["Id": "tv", "Name": "Live TV", "IsFolder": true, "CollectionType": "livetv"]]])
+            case "/emby/Users/u1/Items":
+                return (200, ["Items": [["Id": "e10", "Name": "Finale", "Type": "Episode", "IndexNumber": 10, "IsFolder": false, "Path": "/media/Show/S01E10.mkv"],
+                                        ["Id": "e2", "Name": "Pilot", "Type": "Episode", "IndexNumber": 2, "IsFolder": false, "Container": "mov,mp4,m4a,3gp,3g2,mj2"],
+                                        ["Id": "m", "Name": "Film", "Type": "Movie", "ProductionYear": 2024, "IsFolder": false, "Container": "mkv"]]])
+            case "/emby/Users/u1/Items/e2":
+                return (200, ["Id": "e2", "MediaType": "Video", "MediaSources": [["Id": "ms2", "Size": 1_048_576, "Container": "mp4"]]])
+            default: return (404, [:])
+            }
+        }
+        client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+        client.urlProtocol(self, didLoad: try! JSONSerialization.data(withJSONObject: answer))
         client.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() {}

@@ -960,7 +960,7 @@
 "Added %lld AList servers. Browse them in Cloud Files." = "已添加 %lld 个 AList 服务器，可在“网盘文件”中浏览。";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "此地址现在是 AList 服务器。重新添加即可在“网盘文件”中浏览。";
 "Sign in to Quark or UC under Cloud Drive Accounts to browse their files here." = "在“网盘账号”中登录夸克或 UC 后，即可在此浏览其中的文件。";
-"Add an AList or OpenList server, or a NAS's WebDAV share, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too." = "用打开 AList、OpenList 服务器或 NAS 的 WebDAV 共享的地址来添加它。在“添加订阅”中粘贴 AList 地址或 TVBox AList 配置，也能添加服务器。";
+"Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too." = "用打开 AList、OpenList 服务器、NAS 的 WebDAV 共享或 Emby、Jellyfin 服务器的地址来添加它。在“添加订阅”中粘贴 AList 地址或 TVBox AList 配置，也能添加服务器。";
 "Edit Server" = "编辑服务器";
 "Remove Server" = "移除服务器";
 "Add Server" = "添加服务器";
@@ -971,12 +971,12 @@
 "Password" = "密码";
 "Open" = "打开";
 "Enter the password for %@." = "输入“%@”的密码。";
-"The server's address, such as http://192.168.1.10:5244 for AList, or the WebDAV address your NAS shows. Add a folder after it to start there. The user name and password are only for servers that don't let guests browse." = "服务器的地址，例如 AList 的 http://192.168.1.10:5244，或 NAS 显示的 WebDAV 地址。在后面加上文件夹即可从那里开始浏览。用户名和密码仅用于不允许游客浏览的服务器。";
+"The server's address, such as http://192.168.1.10:5244 for AList, http://192.168.1.10:8096 for Emby or Jellyfin, or the WebDAV address your NAS shows. Add a folder after an AList or WebDAV address to start there. Emby and Jellyfin always want the user name; the others only when they don't let guests browse." = "服务器的地址，例如 AList 的 http://192.168.1.10:5244、Emby 或 Jellyfin 的 http://192.168.1.10:8096，或 NAS 显示的 WebDAV 地址。在 AList 或 WebDAV 地址后面加上文件夹即可从那里开始浏览。Emby 和 Jellyfin 总是需要用户名；其他服务器仅在不允许游客浏览时需要。";
 "Address" = "地址";
 "Name (Optional)" = "名称（可选）";
 "User Name (Optional)" = "用户名（可选）";
 "Password (Optional)" = "密码（可选）";
-"No AList or WebDAV server answered at this address." = "此地址上没有响应的 AList 或 WebDAV 服务器。";
+"No AList, WebDAV, Emby or Jellyfin server answered at this address." = "此地址上没有响应的 AList、WebDAV、Emby 或 Jellyfin 服务器。";
 "This server doesn't let guests browse. Enter a user name and password." = "此服务器不允许游客浏览，请输入用户名和密码。";
 "Sign in to Quark and UC on their official page. Yingxia stores the login on this Mac." = "夸克和 UC 在官方页面登录。映匣会将登录信息保存在这台 Mac 上。";
 "Sign in on the drive's own page, or scan a code with the drive's app on another phone. Yingxia keeps the sign-in on this device." = "在网盘官方页面登录，或用另一台手机上的网盘 App 扫码登录。映匣会将登录信息保存在这台设备上。";
