@@ -1309,3 +1309,13 @@
 "Open in UC Browser" = "UC Browser で開く";
 "UC Browser isn't on this device. Get UC Browser (UC浏览器) from the App Store and sign in to it, or scan the code with another phone." = "このデバイスには UC Browser がありません。App Store から UC Browser（UC浏览器）を入手してサインインするか、別のスマートフォンでコードをスキャンしてください。";
 "Waiting for UC Browser to approve…" = "UC Browser での承認を待っています…";
+
+"%lld works" = "%lld 作品";
+
+"Contribution" = "担当";
+
+"Editing" = "編集";
+
+"List View" = "リスト表示";
+
+"Grid View" = "グリッド表示";

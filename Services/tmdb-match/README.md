@@ -85,3 +85,9 @@ Check answers: `wrangler d1 execute yingxia-tmdb --remote --command "SELECT titl
 Fix a wrong one by deleting its row; the next viewer asks again.
 
 This product uses the TMDB API but is not endorsed or certified by TMDB.
+
+### People and related browsing
+
+`GET /v1/catalog/search?mode=profile&id=<person-id>&language=<language>` returns a localized person profile and combined movie/TV credits. Each work retains its full date, roles and contribution departments; duplicate cast/crew appearances merge by typed media identity. Undated works follow dated works.
+
+Title details retain optional person IDs, `genreItems` (ID and localized name), and studio IDs with `network`/`company` kind. Related pages query the existing discover mode with `genres`, `networks` or `companies`, preserving media type, sorting and pagination. Platform IDs accept bounded positive integers instead of only the home page's preset brands. Profile requests share the catalog search limiter.

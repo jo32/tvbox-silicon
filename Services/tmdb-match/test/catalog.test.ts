@@ -11,7 +11,7 @@ test("detail visual rails deduplicate landscape stills and keep native trailer i
   }), null);
   const value = await details(tmdb, "tv", 7, "zh-CN", null);
   assert.deepEqual(value!.stills, ["https://image.tmdb.org/t/p/w780/a.jpg"]);
-  assert.deepEqual(value!.studios, [{ name: "Studio", logo: "https://image.tmdb.org/t/p/w300/studio.png" }]);
+  assert.deepEqual(value!.studios, [{ id: null, kind: "network", name: "Studio", logo: "https://image.tmdb.org/t/p/w300/studio.png" }]);
   assert.deepEqual(value!.trailer, { site: "IMDb", key: "tt1234567" });
 });
 

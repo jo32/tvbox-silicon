@@ -1309,3 +1309,13 @@
 "Open in UC Browser" = "Open in UC Browser";
 "UC Browser isn't on this device. Get UC Browser (UC浏览器) from the App Store and sign in to it, or scan the code with another phone." = "UC Browser isn't on this device. Get UC Browser (UC浏览器) from the App Store and sign in to it, or scan the code with another phone.";
 "Waiting for UC Browser to approve…" = "Waiting for UC Browser to approve…";
+
+"%lld works" = "%lld works";
+
+"Contribution" = "Contribution";
+
+"Editing" = "Editing";
+
+"List View" = "List View";
+
+"Grid View" = "Grid View";

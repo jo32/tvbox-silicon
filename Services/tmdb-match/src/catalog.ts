@@ -48,6 +48,7 @@ export function catalogItems(body: any, fallbackType?: MediaType) {
       mediaType,
       name: name.trim().slice(0, 200),
       originalName: String((mediaType === "tv" ? item.original_name : item.original_title) ?? "").slice(0, 200),
+      date: typeof (mediaType === "tv" ? item.first_air_date : item.release_date) === "string" ? (mediaType === "tv" ? item.first_air_date : item.release_date) : null,
       year: yearOf(mediaType === "tv" ? item.first_air_date : item.release_date),
       overview: typeof item.overview === "string" ? item.overview.slice(0, 2000) : "",
       poster: image(item.poster_path, "w500"),

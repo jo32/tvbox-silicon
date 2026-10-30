@@ -41,7 +41,7 @@ struct DiscoverDetailView: View {
                             if !details.cast.isEmpty { people(details.cast, title: L10n.text("Cast")) }
                             if details.crew.contains(where: { $0.profile != nil }) { people(details.crew, title: L10n.text("Crew")) }
                             if let studios = details.studios, !studios.isEmpty { studioRail(studios) }
-                            if !details.genres.isEmpty { genreRail(details.genres) }
+                            if !details.genres.isEmpty { genreRail(details) }
                             if let images = details.stills, !images.isEmpty { stillRail(images) }
                             if details.trailer != nil { trailerCard }
                             facts(details)
@@ -230,17 +230,24 @@ struct DiscoverDetailView: View {
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: 13) {
                     ForEach(Array(people.enumerated()), id: \.offset) { _, person in
-                        VStack(spacing: 7) {
-                            PosterImage(url: person.profile, symbol: "person.fill").frame(width: 83, height: 83).clipShape(Circle())
-                            VStack(spacing: 2) {
-                                Text(person.name).font(.system(size: 13)).lineLimit(1)
-                                if let role = person.role { Text(role).font(.system(size: 11)).lineLimit(1).opacity(0.55) }
-                            }
-                        }.frame(width: 99)
+                        if let id = person.id {
+                            RouteLink { DiscoverPersonView(id: id, name: person.name, profile: person.profile) } label: { personCard(person) }
+                                .buttonStyle(.plain).accessibilityIdentifier("discover.detail.person.\(id)")
+                        } else { personCard(person) }
                     }
                 }.padding(.horizontal, 20)
             }.scrollIndicators(.hidden)
         }
+    }
+
+    private func personCard(_ person: TMDBMatch.Person) -> some View {
+        VStack(spacing: 7) {
+            PosterImage(url: person.profile, symbol: "person.fill").frame(width: 83, height: 83).clipShape(Circle())
+            VStack(spacing: 2) {
+                Text(person.name).font(.system(size: 13)).lineLimit(1)
+                if let role = person.role { Text(role).font(.system(size: 11)).lineLimit(1).opacity(0.55) }
+            }
+        }.frame(width: 99)
     }
 
     private func studioRail(_ studios: [TMDBMatch.Studio]) -> some View {
@@ -249,30 +256,45 @@ struct DiscoverDetailView: View {
             ScrollView(.horizontal) {
                 HStack(spacing: 13) {
                     ForEach(Array(studios.enumerated()), id: \.offset) { _, studio in
-                        VStack(spacing: 10) {
-                            AsyncImage(url: studio.logo) { phase in
-                                if let image = phase.image { image.resizable().scaledToFit() } else { Image(systemName: "film.stack") }
-                            }.frame(width: 100, height: 44)
-                            Text(studio.name).font(.system(size: 11)).lineLimit(1)
-                        }.padding(15).frame(width: 145).background(.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        if let id = studio.id {
+                            RouteLink { DiscoverBrowseView(title: studio.name, filter: .studio(id, type: studio.kind == "network" ? .tv : .movie), logo: studio.logo) } label: { studioCard(studio) }
+                                .buttonStyle(.plain).accessibilityIdentifier("discover.detail.studio.\(id)")
+                        } else { studioCard(studio) }
                     }
                 }.padding(.horizontal, 20)
             }.scrollIndicators(.hidden)
         }
     }
 
-    private func genreRail(_ genres: [String]) -> some View {
+    private func studioCard(_ studio: TMDBMatch.Studio) -> some View {
+        VStack(spacing: 10) {
+            AsyncImage(url: studio.logo) { phase in
+                if let image = phase.image { image.resizable().scaledToFit() } else { Image(systemName: "film.stack") }
+            }.frame(width: 100, height: 44)
+            Text(studio.name).font(.system(size: 11)).lineLimit(1)
+        }.padding(15).frame(width: 145).background(.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private func genreRail(_ details: TMDBMatch.Details) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             heading(L10n.text("Genres"))
             ScrollView(.horizontal) {
                 HStack(spacing: 10) {
-                    ForEach(genres, id: \.self) { genre in
-                        Text(genre).font(.system(size: 14, weight: .medium)).padding(.horizontal, 20).padding(.vertical, 12)
-                            .background(.primary.opacity(0.08), in: Capsule())
+                    if let genres = details.genreItems, !genres.isEmpty {
+                        ForEach(genres) { genre in
+                            RouteLink { DiscoverBrowseView(title: genre.name, filter: .genre(genre.id, type: item.mediaType)) } label: { genreChip(genre.name) }
+                                .buttonStyle(.plain).accessibilityIdentifier("discover.detail.genre.\(genre.id)")
+                        }
+                    } else {
+                        ForEach(details.genres, id: \.self) { genreChip($0) }
                     }
                 }.padding(.horizontal, 20)
             }.scrollIndicators(.hidden)
         }
+    }
+    private func genreChip(_ name: String) -> some View {
+        Text(name).font(.system(size: 14, weight: .medium)).padding(.horizontal, 20).padding(.vertical, 12)
+            .background(.primary.opacity(0.08), in: Capsule())
     }
 
     private func stillRail(_ images: [URL]) -> some View {

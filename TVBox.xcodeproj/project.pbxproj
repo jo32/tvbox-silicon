@@ -18,6 +18,8 @@
 		0BAEA44063C146779B061BB1 /* ApplePython.c in Sources */ = {isa = PBXBuildFile; fileRef = E740CFD276F4B76892EB0AF1 /* ApplePython.c */; };
 		0C95000B36C5B15AF33D6C8C /* Capstone.txt in Resources */ = {isa = PBXBuildFile; fileRef = E84A48E8E87E4B3CC3DCDA8C /* Capstone.txt */; };
 		1050D617A22F09CD0A01DE66 /* GlassKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 739A64FB51780D4314D2DDF8 /* GlassKit.swift */; };
+		1236A790753CA813B297575D /* DiscoverPersonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */; };
+		1331896EA47189E426A4DE6C /* DiscoverBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */; };
 		13A266A0565733CC2C7A66E6 /* Updates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D706229ED242AE96AE52F8 /* Updates.swift */; };
 		13AB1C878E7990BF8FB16849 /* HLSProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B44CBA0E5BBD1D129D5D64E3 /* HLSProxy.swift */; };
 		14E05DC952FB2705E645EAE6 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B7E929CDDC1F085C6B55693 /* HomeView.swift */; };
@@ -36,6 +38,7 @@
 		1B6DFFAF679C5BAD70F09875 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B7E929CDDC1F085C6B55693 /* HomeView.swift */; };
 		1D206EDCE9B6412346BCC150 /* DouyinAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB7347843C885A97DFE397DD /* DouyinAccountView.swift */; };
 		1D82C5470FDA73053EAD6398 /* CloudFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A0D2EAF4F07329DAB40B97D /* CloudFilesView.swift */; };
+		1D9F55E8F4446D174D346871 /* DiscoverPersonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */; };
 		1E4B0163BABCB43BA85836D6 /* TVCore in Frameworks */ = {isa = PBXBuildFile; productRef = 758A0D5359D0622060D86C20 /* TVCore */; };
 		1FAC6965CB4F8B33135C85C5 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D1010816125FBC3792AF838 /* Store.swift */; };
 		211EB9AFF7659786EDBA5D9C /* libffi.txt in Resources */ = {isa = PBXBuildFile; fileRef = 06D9469858E5C5A118DED875 /* libffi.txt */; };
@@ -182,8 +185,11 @@
 		99DDB54D60A36E748D5E8C73 /* CacheSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4EB0D74F8DB73E33CC129F8 /* CacheSettingsView.swift */; };
 		9A75F15C645F052034EA6926 /* PluginSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C5AB58ECA34E84E70A20906 /* PluginSignInView.swift */; };
 		9AD1AE51475719ED2DE59664 /* libffi.txt in Resources */ = {isa = PBXBuildFile; fileRef = 06D9469858E5C5A118DED875 /* libffi.txt */; };
+		A02125568B4CAB3B33994198 /* DiscoverBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */; };
 		A149AE9D183C5FB64D411761 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ADB3063A14E368A71892DCEE /* Assets.xcassets */; };
 		A6CF37D3E8E26FD498A15CD1 /* JavaHost in Resources */ = {isa = PBXBuildFile; fileRef = F1B927CC6ECB2F8BDFB22287 /* JavaHost */; };
+		A75BCD1DBB7A45ED27CEBA63 /* DiscoverBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */; };
+		AA2B9DEAC822A56D57A10055 /* DiscoverPersonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */; };
 		AC043E4B83A36550FA487318 /* MacUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ACBC18014BA7190EBA2EDD7 /* MacUpdater.swift */; };
 		B02B784DE4DDF64B05C8FA0F /* MusicRemoteControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E59EDBC7BE62078557E781 /* MusicRemoteControl.swift */; };
 		B03711CE7478DB53B6591F83 /* DiscoverTrailer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74376E0596FEAF3CE3FBE7C8 /* DiscoverTrailer.swift */; };
@@ -303,6 +309,7 @@
 		4A0D2EAF4F07329DAB40B97D /* CloudFilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudFilesView.swift; sourceTree = "<group>"; };
 		4D5F41819EAA3AFE7BD6E5AD /* WebSniffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSniffer.swift; sourceTree = "<group>"; };
 		4EF42E1957EFE569C0D2CF7D /* OpenJDK-assembly-exception.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OpenJDK-assembly-exception.txt"; sourceTree = "<group>"; };
+		51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverPersonView.swift; sourceTree = "<group>"; };
 		52B784080CDE6CF171AEA5E7 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		559683A9A4BDFA11A4A9FE67 /* FeedbackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackView.swift; sourceTree = "<group>"; };
 		57642E0B8E9377FD57BC9D7F /* PlaybackWaitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackWaitView.swift; sourceTree = "<group>"; };
@@ -322,6 +329,7 @@
 		781912838F2DF6F1DD3963CF /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		7A5737402EC96F0FBF79243E /* DanmakuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DanmakuView.swift; sourceTree = "<group>"; };
 		8320284C7FB9590C44BA7102 /* JNA-Apache2.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "JNA-Apache2.txt"; sourceTree = "<group>"; };
+		846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverBrowseView.swift; sourceTree = "<group>"; };
 		8A2BB58B1720E9D6D85F93F4 /* TVBoxApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TVBoxApp.swift; sourceTree = "<group>"; };
 		8B842401113B0BDFA7B532B4 /* QALaunch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QALaunch.swift; sourceTree = "<group>"; };
 		8C5AB58ECA34E84E70A20906 /* PluginSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginSignInView.swift; sourceTree = "<group>"; };
@@ -462,7 +470,9 @@
 				7A5737402EC96F0FBF79243E /* DanmakuView.swift */,
 				A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */,
 				1E644254088B8C9E61B8363D /* DiscoverArtwork.swift */,
+				846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */,
 				28110209CF4DBB819A2F3C74 /* DiscoverDetailView.swift */,
+				51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */,
 				356AA3CFC2271101141EF964 /* DiscoverSearchFilters.swift */,
 				76143E60685F2F76994F90D7 /* DiscoverSearchView.swift */,
 				74376E0596FEAF3CE3FBE7C8 /* DiscoverTrailer.swift */,
@@ -938,7 +948,9 @@
 				ED3BFF07859A99C455624644 /* DanmakuView.swift in Sources */,
 				6F182F91BDACFBFC8E6B3B0E /* DetailAurora.swift in Sources */,
 				61A44E1F889577D84A761385 /* DiscoverArtwork.swift in Sources */,
+				1331896EA47189E426A4DE6C /* DiscoverBrowseView.swift in Sources */,
 				598C9B1ACA758778E88E48D5 /* DiscoverDetailView.swift in Sources */,
+				1236A790753CA813B297575D /* DiscoverPersonView.swift in Sources */,
 				C0CF8F2481F4B90775C681F8 /* DiscoverSearchFilters.swift in Sources */,
 				E0E5700C59932DA281F7A5CE /* DiscoverSearchView.swift in Sources */,
 				B03711CE7478DB53B6591F83 /* DiscoverTrailer.swift in Sources */,
@@ -1010,7 +1022,9 @@
 				2EF5CCF1BA71B68F4DCF2F71 /* DanmakuView.swift in Sources */,
 				7DCDDEB6A7774CAF5C85D539 /* DetailAurora.swift in Sources */,
 				2D5C517BA45AA3ACE1C53D73 /* DiscoverArtwork.swift in Sources */,
+				A75BCD1DBB7A45ED27CEBA63 /* DiscoverBrowseView.swift in Sources */,
 				68952BF47707079971D26F5A /* DiscoverDetailView.swift in Sources */,
+				1D9F55E8F4446D174D346871 /* DiscoverPersonView.swift in Sources */,
 				963C1AD1D27CD834FFDF0273 /* DiscoverSearchFilters.swift in Sources */,
 				2813CE0358963C61D7865EF7 /* DiscoverSearchView.swift in Sources */,
 				2F58769982B29FDB6BE2304C /* DiscoverTrailer.swift in Sources */,
@@ -1084,7 +1098,9 @@
 				C10EEC4D7AED0BE564BF2246 /* DanmakuView.swift in Sources */,
 				EBDFAB717675C3CBCA05B75F /* DetailAurora.swift in Sources */,
 				90EE7DA8213C0720E113C6F1 /* DiscoverArtwork.swift in Sources */,
+				A02125568B4CAB3B33994198 /* DiscoverBrowseView.swift in Sources */,
 				38395AAE5193EB91CF33602A /* DiscoverDetailView.swift in Sources */,
+				AA2B9DEAC822A56D57A10055 /* DiscoverPersonView.swift in Sources */,
 				97EB7EDFE8BA6C35B6197AFF /* DiscoverSearchFilters.swift in Sources */,
 				FDB9BF271E35ADEFD6FD6568 /* DiscoverSearchView.swift in Sources */,
 				C8024841462ADC780DB0058C /* DiscoverTrailer.swift in Sources */,

@@ -12,8 +12,12 @@ private final class CatalogSearchProtocol: URLProtocol, @unchecked Sendable {
         // Echo the request through a real decoded title to verify serialization.
         let title: [String: Any] = ["id": 1, "mediaType": "movie", "name": fields["q"] ?? "", "originalName": fields["mode"] ?? "",
                                     "overview": String(data: try! JSONSerialization.data(withJSONObject: fields), encoding: .utf8)!, "genreIDs": []]
-        let body: [String: Any] = ["items": [title], "people": [["id": 31, "name": "Person", "works": []]],
+        var body: [String: Any] = ["items": [title], "people": [["id": 31, "name": "Person", "works": []]],
                                    "keywords": [["id": 12, "name": "space"]], "page": Int(fields["page"] ?? "1")!, "totalPages": 5]
+        if fields["mode"] == "profile" {
+            body = ["id": Int(fields["id"] ?? "0")!, "name": fields["language"] ?? "", "biography": "Biography", "birthplace": "", "department": "Acting",
+                    "works": [["item": title, "date": "2025-03-19", "roles": ["Lead", "Producer"], "departments": ["Acting", "Production"]]]]
+        }
         client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: fields["q"] == "fail" ? 429 : 200, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: try! JSONSerialization.data(withJSONObject: body))
         client?.urlProtocolDidFinishLoading(self)
@@ -50,4 +54,19 @@ struct TMDBCatalogSearchTests {
         catch let error as TMDBMatch.Failure { #expect(error.code == "http"); #expect(error.message == "HTTP 429") }
         catch { Issue.record("Unexpected error: \(error)") }
     }
+    @Test func personProfileKeepsDateAndContributionsAndRequestsTheCorrectID() async throws {
+        let person = try await TMDBCatalog.person(9280, language: "zh-CN", session: session())
+        #expect(person.id == 9280); #expect(person.name == "zh-CN")
+        #expect(person.works[0].date == "2025-03-19")
+        #expect(person.works[0].departments == ["Acting", "Production"])
+        #expect(person.works[0].roles == ["Lead", "Producer"])
+        #expect(person.works[0].id == "movie:1")
+    }
+    @Test func oldCachedDetailsWithoutNavigationIDsStillDecode() throws {
+        let decoder = JSONDecoder()
+        let person = try decoder.decode(TMDBMatch.Person.self, from: Data(#"{"name":"Actor"}"#.utf8))
+        let studio = try decoder.decode(TMDBMatch.Studio.self, from: Data(#"{"name":"Studio"}"#.utf8))
+        #expect(person.id == nil); #expect(studio.id == nil); #expect(studio.kind == nil)
+    }
+
 }

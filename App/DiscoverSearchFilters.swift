@@ -38,8 +38,8 @@ struct DiscoverSearchFilters: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
     private let languages = ["zh", "en", "ja", "ko", "fr", "de", "es", "it", "hi", "th"]
     private let regions = ["CN", "HK", "TW", "US", "GB", "JP", "KR", "FR", "DE", "IN", "TH"]
-    private let movieGenres = [28,12,16,35,80,99,18,10751,14,36,27,10402,9648,10749,878,10770,53,10752,37]
-    private let tvGenres = [10759,16,35,80,99,18,10751,10762,9648,10763,10764,10765,10766,10767,10768,37]
+    private let movieGenres = DiscoverGenres.ids(for: .movie)
+    private let tvGenres = DiscoverGenres.ids(for: .tv)
 
     var body: some View {
         ScrollView {

@@ -1309,3 +1309,13 @@
 "Open in UC Browser" = "在 UC 浏览器中打开";
 "UC Browser isn't on this device. Get UC Browser (UC浏览器) from the App Store and sign in to it, or scan the code with another phone." = "此设备未安装 UC 浏览器。请从 App Store 下载 UC 浏览器并登录，或用另一部手机扫码。";
 "Waiting for UC Browser to approve…" = "等待 UC 浏览器确认…";
+
+"%lld works" = "%lld 部作品";
+
+"Contribution" = "参与职务";
+
+"Editing" = "剪辑";
+
+"List View" = "列表视图";
+
+"Grid View" = "网格视图";
