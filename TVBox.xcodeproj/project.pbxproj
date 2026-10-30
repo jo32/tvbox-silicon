@@ -108,8 +108,10 @@
 		5E064141ADA8E6A4E7A97D0B /* EpisodeSkipSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B451E5612B33CF005EEAAE08 /* EpisodeSkipSettingsView.swift */; };
 		5F05B8FEB75498291DBE83CB /* TVCore in Frameworks */ = {isa = PBXBuildFile; productRef = 150E7485ED76FF29A84D7C1D /* TVCore */; };
 		5F2A9E2F9145EE979E5AA1F0 /* WebSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367AD12D73554C3C3667315D /* WebSignInView.swift */; };
+		5FD01522B8D935B4CF540C64 /* CatPawSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688641B892E4732AFEB875A3 /* CatPawSignInView.swift */; };
 		5FD81EA27FB5E3FEFB92C731 /* MusicMiniPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBED9BDC96E5249DBA0BFDB0 /* MusicMiniPlayer.swift */; };
 		6012B7CF185E20A26CC68CD0 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B7E929CDDC1F085C6B55693 /* HomeView.swift */; };
+		616DE5FBCAE2BD0044BD32AA /* CatPawSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688641B892E4732AFEB875A3 /* CatPawSignInView.swift */; };
 		61A44E1F889577D84A761385 /* DiscoverArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E644254088B8C9E61B8363D /* DiscoverArtwork.swift */; };
 		633726D6D289775DF1910809 /* MobilePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08D7BF6713A8519BEED17EE3 /* MobilePlayer.swift */; };
 		635ADE133C7284D6EF1677C8 /* OpenJDK.txt in Resources */ = {isa = PBXBuildFile; fileRef = BD71FD8B3E72803C426D91CC /* OpenJDK.txt */; };
@@ -236,6 +238,7 @@
 		DBC3CE787002095C1BA56C84 /* BilibiliCastController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B1CEF969E4F3D3301A8D61 /* BilibiliCastController.swift */; };
 		DF010807CD40F2180FDE6793 /* QALaunch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B842401113B0BDFA7B532B4 /* QALaunch.swift */; };
 		DF91C748F93013B4CF944A64 /* MusicMiniPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBED9BDC96E5249DBA0BFDB0 /* MusicMiniPlayer.swift */; };
+		E0832AB8995164BECCE1DEDA /* CatPawSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688641B892E4732AFEB875A3 /* CatPawSignInView.swift */; };
 		E0B7524BAA3500D6675442D7 /* FavoriteControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8F5818C392424F43FF0C9 /* FavoriteControls.swift */; };
 		E0E5700C59932DA281F7A5CE /* DiscoverSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76143E60685F2F76994F90D7 /* DiscoverSearchView.swift */; };
 		E64F015590BDBE0DFC8A216E /* LiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7459A3EBEF2E7C346B508738 /* LiveView.swift */; };
@@ -307,6 +310,7 @@
 		66DF697EACE4307031398E5A /* MusicTVScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicTVScreen.swift; sourceTree = "<group>"; };
 		675EA4CF000337C94DF5B1D3 /* LiveRoomsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveRoomsView.swift; sourceTree = "<group>"; };
 		6876ACF1E9D9F80BBC4F22C4 /* PlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackView.swift; sourceTree = "<group>"; };
+		688641B892E4732AFEB875A3 /* CatPawSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatPawSignInView.swift; sourceTree = "<group>"; };
 		73945256FDDE0952A22BF98C /* releases.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = releases.json; sourceTree = "<group>"; };
 		739A64FB51780D4314D2DDF8 /* GlassKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassKit.swift; sourceTree = "<group>"; };
 		73C9A2A4F2D8A180EBDF8C8E /* MusicMacPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicMacPlayer.swift; sourceTree = "<group>"; };
@@ -451,6 +455,7 @@
 				A4EB0D74F8DB73E33CC129F8 /* CacheSettingsView.swift */,
 				C093554D3863FDB5D2E832B5 /* CatalogDanmakuView.swift */,
 				46C4D3FABE1C6E7A7B63BA62 /* CatalogPlaybackActions.swift */,
+				688641B892E4732AFEB875A3 /* CatPawSignInView.swift */,
 				CEE19E104EAA6C4F620B8E53 /* CloudDriveView.swift */,
 				4A0D2EAF4F07329DAB40B97D /* CloudFilesView.swift */,
 				E78573DE76BCF27CABBB20F3 /* CloudQRLoginView.swift */,
@@ -924,6 +929,7 @@
 				4FF55220DBC7080B2E95C5A8 /* BilibiliCastController.swift in Sources */,
 				16517407D53F4E6410E93AC7 /* BilibiliMark.swift in Sources */,
 				19D2D88AB805DCF59BA312D6 /* CacheSettingsView.swift in Sources */,
+				E0832AB8995164BECCE1DEDA /* CatPawSignInView.swift in Sources */,
 				FFE8085D174DC6F8A20E5CD6 /* CatalogDanmakuView.swift in Sources */,
 				762AAE7DEDF6675A62474B19 /* CatalogPlaybackActions.swift in Sources */,
 				C6D7579CAFFAB9B441C0703C /* CloudDriveView.swift in Sources */,
@@ -995,6 +1001,7 @@
 				DBC3CE787002095C1BA56C84 /* BilibiliCastController.swift in Sources */,
 				2F95C18CB44C1D8FFD03583F /* BilibiliMark.swift in Sources */,
 				1903E9CDD9B2628A63C19FF3 /* CacheSettingsView.swift in Sources */,
+				5FD01522B8D935B4CF540C64 /* CatPawSignInView.swift in Sources */,
 				37B3CD8A4542A1B2304DBB75 /* CatalogDanmakuView.swift in Sources */,
 				FC0F00688179660407FD70E1 /* CatalogPlaybackActions.swift in Sources */,
 				D10B5A0245BDE1A5E05A6BD7 /* CloudDriveView.swift in Sources */,
@@ -1068,6 +1075,7 @@
 				BFCFF64AE36615F3BAE33874 /* BilibiliCastController.swift in Sources */,
 				BE6FB2873A21222464CED1D8 /* BilibiliMark.swift in Sources */,
 				99DDB54D60A36E748D5E8C73 /* CacheSettingsView.swift in Sources */,
+				616DE5FBCAE2BD0044BD32AA /* CatPawSignInView.swift in Sources */,
 				6BD7887B6DFF159358B27ACD /* CatalogDanmakuView.swift in Sources */,
 				78CE336AE6714726DFDFDB43 /* CatalogPlaybackActions.swift in Sources */,
 				59953BBDD74AED0A292F7079 /* CloudDriveView.swift in Sources */,

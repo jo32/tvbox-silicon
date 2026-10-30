@@ -204,7 +204,7 @@ public actor EmbeddedJarHost {
     }
 
     static func kind(_ params: [String: String]) -> String {
-        params["play"] != nil ? "play" : params["ids"] != nil ? "detail" : params["wd"] != nil ? "search" : params["t"] != nil ? "category" : "home"
+        params["catLogin"] != nil ? "sign-in" : params["play"] != nil ? "play" : params["ids"] != nil ? "detail" : params["wd"] != nil ? "search" : params["t"] != nil ? "category" : "home"
     }
 
     /// Seconds a spider may work on a request. Generous: drive sources list many shares for a
