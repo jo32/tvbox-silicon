@@ -137,6 +137,8 @@ targets:
     info:
       properties:
         ITSAppUsesNonExemptEncryption: false
+        # Let UIKit and Core Animation use ProMotion rates during gestures and transitions.
+        CADisableMinimumFrameDurationOnPhone: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         # Save Code to Photos, where a sign-in code can be scanned by the app on the same phone.

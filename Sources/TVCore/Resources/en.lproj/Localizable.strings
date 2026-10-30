@@ -1122,3 +1122,171 @@
 "Ranked by commits in the last 30 days." = "Ranked by commits in the last 30 days.";
 "1 commit" = "1 commit";
 "%lld commits" = "%lld commits";
+
+// Discover catalog
+"Discover" = "Discover";
+"Trending This Week" = "Trending This Week";
+"In Theaters" = "In Theaters";
+"On the Air" = "On the Air";
+"Popular Animation" = "Popular Animation";
+"Popular Movies" = "Popular Movies";
+"Popular TV Shows" = "Popular TV Shows";
+"Top Rated Movies" = "Top Rated Movies";
+"Top Rated TV Shows" = "Top Rated TV Shows";
+"Coming Soon" = "Coming Soon";
+"Chinese TV Shows" = "Chinese TV Shows";
+"Korean TV Shows" = "Korean TV Shows";
+"Variety Shows" = "Variety Shows";
+"Popular Variety Shows" = "Popular Variety Shows";
+"Popular Chinese Dramas" = "Popular Chinese Dramas";
+"Search movies and TV shows" = "Search movies and TV shows";
+"Some lists couldn't load. Try again." = "Some lists couldn't load. Try again.";
+"No Titles Available" = "No Titles Available";
+"Please try again later." = "Please try again later.";
+"Search Sources" = "Search Sources";
+"View on TMDB" = "View on TMDB";
+"Search couldn't load. Please try again." = "Search couldn't load. Please try again.";
+"Action" = "Action";
+"Adventure" = "Adventure";
+"Animation" = "Animation";
+"Comedy" = "Comedy";
+"Crime" = "Crime";
+"Documentary" = "Documentary";
+"Drama" = "Drama";
+"Family" = "Family";
+"Fantasy" = "Fantasy";
+"Historical" = "Historical";
+"Horror" = "Horror";
+"Mystery" = "Mystery";
+"Romance" = "Romance";
+"Science Fiction" = "Science Fiction";
+"Thriller" = "Thriller";
+"War" = "War";
+"Western" = "Western";
+"Action & Adventure" = "Action & Adventure";
+"Kids" = "Kids";
+"News" = "News";
+"Reality" = "Reality";
+"Sci-Fi & Fantasy" = "Sci-Fi & Fantasy";
+"Talk" = "Talk";
+
+"Edit Layout" = "Edit Layout";
+"Featured Titles" = "Featured Titles";
+"Featured Collections" = "Featured Collections";
+"People" = "People";
+"Networks" = "Networks";
+"Browse by Genre" = "Browse by Genre";
+"Top Rated Collections" = "Top Rated Collections";
+"Film Studios" = "Film Studios";
+
+"Studios & Networks" = "Studios & Networks";
+
+"Stills" = "Stills";
+
+"Trailer Unavailable" = "Trailer Unavailable";
+
+"Crew" = "Crew";
+
+"Share" = "Share";
+
+"Overview" = "Overview";
+
+"Trailer" = "Trailer";
+
+"min" = "min";
+
+"Seasons" = "Seasons";
+
+"Genres" = "Genres";
+
+"Release Date" = "Release Date";
+
+"Country / Region" = "Country / Region";
+
+"Status" = "Status";
+
+"Returning Series" = "Returning Series";
+
+"Ended" = "Ended";
+
+"In Production" = "In Production";
+
+"Post Production" = "Post Production";
+
+"Planned" = "Planned";
+
+"Canceled" = "Canceled";
+
+"Rumored" = "Rumored";
+
+/* Discover catalog search */
+"Search Catalog" = "Search Catalog";
+"Movies, Series, People" = "Movies, Series, People";
+"Clear Search History" = "Clear Search History";
+"Recently Viewed" = "Recently Viewed";
+"Clear Recently Viewed" = "Clear Recently Viewed";
+"Discover More" = "Discover More";
+"Trending Today" = "Trending Today";
+"Popular" = "Popular";
+"Collapse" = "Collapse";
+"See All" = "See All";
+"Load More" = "Load More";
+"No Results" = "No Results";
+"Try another title or change your filters." = "Try another title or change your filters.";
+"Couldn't Load Results" = "Couldn't Load Results";
+"Loading" = "Loading";
+"Filter" = "Filter";
+"Reset Filters" = "Reset Filters";
+"Keywords" = "Keywords";
+"Years" = "Years";
+"Sort By" = "Sort By";
+"Platform / Studio" = "Platform / Studio";
+"Region" = "Region";
+"Show Results" = "Show Results";
+"Release Year" = "Release Year";
+"From" = "From";
+"To" = "To";
+"Minimum Rating" = "Minimum Rating";
+"Minimum Votes" = "Minimum Votes";
+"Runtime (min)" = "Runtime (min)";
+"Find a keyword" = "Find a keyword";
+"Enter a valid range, from lowest to highest." = "Enter a valid range, from lowest to highest.";
+"Popularity ↓" = "Popularity ↓";
+"Popularity ↑" = "Popularity ↑";
+"Rating ↓" = "Rating ↓";
+"Rating ↑" = "Rating ↑";
+"Newest First" = "Newest First";
+"Oldest First" = "Oldest First";
+"Most Votes" = "Most Votes";
+"Highest Revenue" = "Highest Revenue";
+"Filmography" = "Filmography";
+"Soap" = "Soap";
+"War & Politics" = "War & Politics";
+"Acting" = "Acting";
+"Directing" = "Directing";
+"Writing" = "Writing";
+"Production" = "Production";
+
+/* Discover catalog search */
+"Movies" = "Movies";
+"Series" = "Series";
+"Content Type" = "Content Type";
+"Topics" = "Topics";
+
+"Any" = "Any";
+
+"Filter Type" = "Type";
+
+"Filter Genre" = "Genre";
+
+"Filtered Results" = "Filtered Results";
+
+"Actor" = "Actor";
+
+"%@s" = "%@s";
+
+"Language" = "Language";
+
+"Catalog Series" = "TV Shows";
+
+"TV Movie" = "TV Movie";

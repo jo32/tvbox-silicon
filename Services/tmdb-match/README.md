@@ -40,6 +40,19 @@ TMDB request). Worker `yingxia-tmdb` at https://yingxia-tmdb.getmegaportal.com, 
   (TMDB episodes before the source's first, when TMDB lists two broadcast seasons as one) let the app line its
   episodes up with TMDB's. `unmatched` holds the title's words outside the TMDB name, verbatim.
 - `GET /v1/details?type=tv&id=…&season=…&language=…` gives one work's details, for a candidate the viewer picked.
+- `GET /v1/catalog?feed=trending&page=1&language=zh-CN` supplies Discover's catalog rails. Feed names are
+  allowlisted in `src/catalog.ts`; pages are limited to 1–500. Results retain movie/series identity, artwork,
+  year, genre IDs and TMDB rating. Adult results and people are excluded from title lists.
+- `GET /v1/catalog/collections?language=zh-CN` supplies popular people with their known works and the
+  allowlisted network/studio logos. A failed individual logo lookup does not discard the other brands.
+  Both catalog endpoints reuse the details rate limiter and upstream cache; neither invokes an AI model nor
+  writes to the match database. TMDB credentials remain on the Worker.
+- `GET /v1/catalog/search` powers the separate Discover search. `mode=search&q=…&kind=movie|tv|person`
+  returns paged title cards or people; `mode=recommend&feed=day|week|popular` supplies the initial groups.
+  `mode=discover` supports bounded genre, year, rating, vote-count, runtime, language, region, network/studio,
+  and keyword filters. `mode=keywords&q=…` resolves keyword IDs; `mode=person&id=…` returns a deduplicated
+  filmography. The handler validates all parameters before accessing TMDB, has its own 120/minute limiter,
+  and never accesses source-video search, AI models or D1. Search history stays on the device.
 - Reverse lookup: matched answers and viewers' picks (`POST /v1/link`) are kept in `links`, one row per source video.
   `GET /v1/search?q=…` searches TMDB and says how many source videos each result has; `GET /v1/sources?type=&id=`
   lists them. An agent's answer never replaces a viewer's pick.

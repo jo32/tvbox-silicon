@@ -168,6 +168,16 @@ public enum TMDBMatch {
         public let episodes: [EpisodeInfo]
     }
 
+    public struct Trailer: Codable, Hashable, Sendable {
+        public let site: String
+        public let key: String
+    }
+
+    public struct Studio: Codable, Hashable, Sendable {
+        public let name: String
+        public let logo: URL?
+    }
+
     public struct Details: Codable, Hashable, Sendable {
         public let mediaType: MediaType
         public let id: Int
@@ -186,6 +196,11 @@ public enum TMDBMatch {
         public let poster: URL?
         public let backdrop: URL?
         public let logo: URL?
+        /// Optional for details cached before Discover; prefers a text-free portrait behind the wordmark.
+        public let heroPoster: URL?
+        public let trailer: Trailer?
+        public let stills: [URL]?
+        public let studios: [Studio]?
         public let cast: [Person]
         public let crew: [Person]
         public let networks: [String]
@@ -252,7 +267,7 @@ public enum TMDBMatch {
     public static func details(_ type: MediaType, id: Int, season: Int?, language: String = TMDBMatch.language, session: URLSession = .shared) async throws -> Details {
         var parts = URLComponents(url: base.appending(path: "details"), resolvingAgainstBaseURL: false)!
         parts.queryItems = [URLQueryItem(name: "type", value: type.rawValue), URLQueryItem(name: "id", value: String(id)),
-                            URLQueryItem(name: "language", value: language)] + (season.map { [URLQueryItem(name: "season", value: String($0))] } ?? [])
+                            URLQueryItem(name: "language", value: language), URLQueryItem(name: "v", value: "3")] + (season.map { [URLQueryItem(name: "season", value: String($0))] } ?? [])
         return try await get(Details.self, parts.url!, session: session)
     }
 

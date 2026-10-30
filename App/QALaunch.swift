@@ -11,6 +11,7 @@ enum QALaunch {
     private static var sectionByKey: AppSection? {
         switch UserDefaults.standard.string(forKey: "qaSection") {
         case "home": .home
+        case "discover": .discover
         case "live": .live
         case "music": .music
         case "search": .search
@@ -30,6 +31,11 @@ enum QALaunch {
     static var scrollTarget: String? { UserDefaults.standard.string(forKey: "qaScroll") }
 
     @MainActor static func start(_ store: Store) async {
+        #if os(iOS)
+        // Temporary screenshot sessions only; a regular launch restores normal auto-lock.
+        UIApplication.shared.isIdleTimerDisabled = UserDefaults.standard.bool(forKey: "qaKeepAwake")
+        UserDefaults.standard.removeObject(forKey: "qaDiscoverTrailer")
+        #endif
         // `-qaAListServer <address>` adds that AList server to Cloud Files, as the Add form would.
         if let address = UserDefaults.standard.string(forKey: "qaAListServer"), let url = try? WebAddress.resolve(address) {
             if let server = await AList.probe(url) { _ = try? AListServers.add([server]) }
@@ -77,7 +83,7 @@ enum QALaunch {
             }
             await store.importSubscription(address: subscription)
         }
-        else if store.subscription == nil, !Distribution.isAppStore { await store.importSubscription(address: Store.defaultURL) }
+        else if section != .discover, store.subscription == nil, !Distribution.isAppStore { await store.importSubscription(address: Store.defaultURL) }
         if QASweep.enabled, let config = store.subscription { Task.detached(priority: .utility) { await QASweep.run(config) } }
         if let section { store.section = section }
         if let page, page.hasPrefix("search:") {

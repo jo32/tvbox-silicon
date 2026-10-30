@@ -1,0 +1,592 @@
+{
+  "reference": "Rex 1.0.2 (b2), user-provided iPhone IPA",
+  "scope": "Independent TMDB catalog search opened next to Share in Discover detail. The existing global/source search is unchanged.",
+  "evidence": {
+    "classes": [
+      {
+        "name": "<RexHome.MediaSearchChromeView>",
+        "fields": [
+          {
+            "name": "onFilter",
+            "type": "yycSg",
+            "flags": 2
+          },
+          {
+            "name": "onDismiss",
+            "type": "yycSg",
+            "flags": 2
+          },
+          {
+            "name": "onClearKeyword",
+            "type": "yycSg",
+            "flags": 2
+          },
+          {
+            "name": "onKeywordChange",
+            "type": "ySScSg",
+            "flags": 2
+          },
+          {
+            "name": "onFocusChange",
+            "type": "ySbcSg",
+            "flags": 2
+          },
+          {
+            "name": "textField",
+            "type": "<RexHome.CommittedTextField>",
+            "flags": 0
+          },
+          {
+            "name": "keywordBar",
+            "type": "<RexHome.MediaSearchKeywordBar>",
+            "flags": 0
+          },
+          {
+            "name": "chromeRow",
+            "type": "So6UIViewC",
+            "flags": 0
+          },
+          {
+            "name": "inputCapsule",
+            "type": "So6UIViewC",
+            "flags": 0
+          },
+          {
+            "name": "filterButton",
+            "type": "So8UIButtonC",
+            "flags": 0
+          },
+          {
+            "name": "magnifierView",
+            "type": "So11UIImageViewC",
+            "flags": 0
+          },
+          {
+            "name": "clearButton",
+            "type": "So8UIButtonC",
+            "flags": 0
+          },
+          {
+            "name": "dismissButton",
+            "type": "So8UIButtonC",
+            "flags": 0
+          },
+          {
+            "name": "collapsedButton",
+            "type": "So8UIButtonC",
+            "flags": 0
+          },
+          {
+            "name": "usesGlobalSources",
+            "type": "Sb",
+            "flags": 2
+          },
+          {
+            "name": "isAppear",
+            "type": "Sb",
+            "flags": 2
+          },
+          {
+            "name": "isSearchFocused",
+            "type": "Sb",
+            "flags": 2
+          },
+          {
+            "name": "showSourceFilterFilled",
+            "type": "Sb",
+            "flags": 2
+          },
+          {
+            "name": "keyword",
+            "type": "SS",
+            "flags": 2
+          },
+          {
+            "name": "appearTransitionGeneration",
+            "type": "Si",
+            "flags": 2
+          },
+          {
+            "name": "isAppearTransitioning",
+            "type": "Sb",
+            "flags": 2
+          }
+        ],
+        "address": "0x104498d7c"
+      },
+      {
+        "name": "<RexHome.MediaSearchItemCell>",
+        "fields": [
+          {
+            "name": "onActivate",
+            "type": "yycSg",
+            "flags": 2
+          },
+          {
+            "name": "onRemoveHistory",
+            "type": "yycSg",
+            "flags": 2
+          },
+          {
+            "name": "pressContent",
+            "type": "So6UIViewC",
+            "flags": 0
+          },
+          {
+            "name": "card",
+            "type": "So6UIViewC",
+            "flags": 0
+          },
+          {
+            "name": "posterView",
+            "type": "<RexHome.BoardImageView>",
+            "flags": 0
+          },
+          {
+            "name": "posterPlaceholder",
+            "type": "So11UIImageViewC",
+            "flags": 0
+          },
+          {
+            "name": "titleLabel",
+            "type": "So7UILabelC",
+            "flags": 0
+          },
+          {
+            "name": "metaLabel",
+            "type": "So7UILabelC",
+            "flags": 0
+          },
+          {
+            "name": "ratingStack",
+            "type": "So11UIStackViewC",
+            "flags": 0
+          },
+          {
+            "name": "ratingValueLabel",
+            "type": "So7UILabelC",
+            "flags": 0
+          },
+          {
+            "name": "overviewLabel",
+            "type": "So7UILabelC",
+            "flags": 0
+          },
+          {
+            "name": "isRedacted",
+            "type": "Sb",
+            "flags": 2
+          },
+          {
+            "name": "isHistory",
+            "type": "Sb",
+            "flags": 2
+          },
+          {
+            "name": "item",
+            "type": "<RexHomeCore.MediaSearchItem>Sg",
+            "flags": 2
+          },
+          {
+            "name": "isPressed",
+            "type": "Sb",
+            "flags": 2
+          },
+          {
+            "name": "cachedOverviewHeight",
+            "type": "<context:0x1000016da>",
+            "flags": 2
+          },
+          {
+            "name": "metaCandidates",
+            "type": "SaySS4text_<context:0x1000016da>5widthtG",
+            "flags": 2
+          },
+          {
+            "name": "fullMetaText",
+            "type": "SS",
+            "flags": 2
+          },
+          {
+            "name": "renderedMetaWidth",
+            "type": "<context:0x1000016da>",
+            "flags": 2
+          },
+          {
+            "name": "titleRedaction",
+            "type": "<context:0x10432d9bc.MediaSearchRedactionBar>",
+            "flags": 0
+          },
+          {
+            "name": "metaRedaction",
+            "type": "<context:0x10432d9bc.MediaSearchRedactionBar>",
+            "flags": 0
+          },
+          {
+            "name": "ratingRedaction",
+            "type": "<context:0x10432d9bc.MediaSearchRedactionBar>",
+            "flags": 0
+          },
+          {
+            "name": "overviewRedaction",
+            "type": "<context:0x10432d9bc.MediaSearchRedactionBar>",
+            "flags": 0
+          },
+          {
+            "name": "posterRedaction",
+            "type": "<context:0x10432d9bc.MediaSearchRedactionBar>",
+            "flags": 0
+          }
+        ],
+        "address": "0x104498f20"
+      },
+      {
+        "name": "<RexHomeCore.MediaDiscoverFilterSection>",
+        "fields": [
+          {
+            "name": "keywords",
+            "type": "",
+            "flags": 0
+          },
+          {
+            "name": "type",
+            "type": "",
+            "flags": 0
+          },
+          {
+            "name": "genres",
+            "type": "",
+            "flags": 0
+          },
+          {
+            "name": "years",
+            "type": "",
+            "flags": 0
+          },
+          {
+            "name": "sort",
+            "type": "",
+            "flags": 0
+          },
+          {
+            "name": "platformOrCompany",
+            "type": "",
+            "flags": 0
+          },
+          {
+            "name": "language",
+            "type": "",
+            "flags": 0
+          },
+          {
+            "name": "region",
+            "type": "",
+            "flags": 0
+          }
+        ],
+        "address": "0x1044a1a24"
+      },
+      {
+        "name": "<RexHomeCore.MediaSearchResultSection>",
+        "fields": [
+          {
+            "name": "kind",
+            "type": "<RexHomeCore.MediaSearchKind>Sg",
+            "flags": 0
+          },
+          {
+            "name": "rows",
+            "type": "Say<RexHomeCore.MediaSearchResultRow>G",
+            "flags": 0
+          },
+          {
+            "name": "title",
+            "type": "SSSg",
+            "flags": 0
+          }
+        ],
+        "address": "0x1044a1d30"
+      },
+      {
+        "name": "<RexHomeCore.MediaSearchSession>",
+        "fields": [
+          {
+            "name": "searchKeyword",
+            "type": "SS",
+            "flags": 2
+          },
+          {
+            "name": "searchItems",
+            "type": "Say<RexHomeCore.MediaSearchItem>G",
+            "flags": 2
+          },
+          {
+            "name": "recommendationItems",
+            "type": "Say<RexHomeCore.MediaSearchItem>G",
+            "flags": 2
+          },
+          {
+            "name": "isQuerying",
+            "type": "Sb",
+            "flags": 2
+          },
+          {
+            "name": "selectedRecommendationFeed",
+            "type": "<RexHomeCore.MediaSearchRecommendationFeed>",
+            "flags": 0
+          },
+          {
+            "name": "lastResultKeyword",
+            "type": "SS",
+            "flags": 2
+          },
+          {
+            "name": "isFirstAppear",
+            "type": "Sb",
+            "flags": 2
+          },
+          {
+            "name": "recentKeywords",
+            "type": "SaySSG",
+            "flags": 2
+          },
+          {
+            "name": "recentOpenedItems",
+            "type": "Say<RexHomeCore.MediaSearchItem>G",
+            "flags": 2
+          },
+          {
+            "name": "selection",
+            "type": "ShySSG",
+            "flags": 2
+          },
+          {
+            "name": "sources",
+            "type": "<RexHomeCore.MediaSearchSourceSnapshot>",
+            "flags": 2
+          },
+          {
+            "name": "filter",
+            "type": "<RexHomeCore.MediaDiscoverFilter>Sg",
+            "flags": 2
+          },
+          {
+            "name": "filterKeyword",
+            "type": "SS",
+            "flags": 2
+          },
+          {
+            "name": "discoverItems",
+            "type": "Say<RexHomeCore.MediaSearchItem>G",
+            "flags": 2
+          },
+          {
+            "name": "discoverPage",
+            "type": "Si",
+            "flags": 2
+          },
+          {
+            "name": "hasMoreDiscoverPages",
+            "type": "Sb",
+            "flags": 2
+          },
+          {
+            "name": "onChange",
+            "type": "yycSg",
+            "flags": 2
+          },
+          {
+            "name": "vault",
+            "type": "<RexData.Vault>",
+            "flags": 0
+          },
+          {
+            "name": "sourceProvider",
+            "type": "<context:0x104332b28>_p",
+            "flags": 0
+          },
+          {
+            "name": "defaults",
+            "type": "So14NSUserDefaultsC",
+            "flags": 0
+          },
+          {
+            "name": "isRestoringSelection",
+            "type": "Sb",
+            "flags": 2
+          },
+          {
+            "name": "selectionSaveTask",
+            "type": "ScTyyt<context:0x100001dd4>GSg",
+            "flags": 2
+          },
+          {
+            "name": "selectionSaveRevision",
+            "type": "<>",
+            "flags": 2
+          },
+          {
+            "name": "saveUserID",
+            "type": "SS",
+            "flags": 2
+          },
+          {
+            "name": "readUserIDs",
+            "type": "SaySSG",
+            "flags": 2
+          },
+          {
+            "name": "usesGlobalSources",
+            "type": "Sb",
+            "flags": 2
+          },
+          {
+            "name": "catalogLibraryID",
+            "type": "SSSg",
+            "flags": 2
+          },
+          {
+            "name": "environmentID",
+            "type": "SSSg",
+            "flags": 2
+          },
+          {
+            "name": "historyScopeKey",
+            "type": "SS",
+            "flags": 2
+          },
+          {
+            "name": "failedRecommendationKinds",
+            "type": "Shy<RexHomeCore.MediaSearchKind>G",
+            "flags": 2
+          },
+          {
+            "name": "failedSearchKinds",
+            "type": "Shy<RexHomeCore.MediaSearchKind>G",
+            "flags": 2
+          },
+          {
+            "name": "searchGeneration",
+            "type": "Si",
+            "flags": 2
+          },
+          {
+            "name": "recommendationGeneration",
+            "type": "Si",
+            "flags": 2
+          },
+          {
+            "name": "pendingRecommendationKinds",
+            "type": "Shy<RexHomeCore.MediaSearchKind>G",
+            "flags": 2
+          },
+          {
+            "name": "discoverGeneration",
+            "type": "Si",
+            "flags": 2
+          },
+          {
+            "name": "discoverFailed",
+            "type": "Sb",
+            "flags": 2
+          },
+          {
+            "name": "recommendationCache",
+            "type": "SDy<context:0x104332a68.RecommendationKey>Say<RexHomeCore.MediaSearchItem>GG",
+            "flags": 2
+          }
+        ],
+        "address": "0x1044a1e30"
+      }
+    ],
+    "verified_geometry": {
+      "poster": [
+        80,
+        120
+      ],
+      "poster_corner": 12,
+      "poster_inset": 8,
+      "poster_to_text_gap": 10,
+      "text_right_inset": 12,
+      "overview_lines": 2,
+      "input_height": 44,
+      "card_height": 136,
+      "card_corner": 20,
+      "collapsed_card_width": 265.333,
+      "card_gap": 10,
+      "outer_inset": 16,
+      "section_header_height": 30,
+      "section_header_font": 16,
+      "section_expand_symbol": "rectangle.expand.vertical",
+      "poster_title_font": 17,
+      "poster_title_weight": "bold",
+      "metadata_rating_overview_font": 13,
+      "person_avatar": 82.667,
+      "person_name_font": 13,
+      "person_department_font": 12,
+      "person_gap": 14,
+      "filter_chip_height": 38,
+      "filter_chip_font": 15,
+      "filter_chip_gap": 8,
+      "bottom_chrome_height": 48
+    },
+    "disassembly": "build/RexReverse/search-disassembly-annotated.txt; search-cell-init.txt; search-extra.txt",
+    "limitations": "The reference now runs in iOS 27.1 Simulator after platform metadata and signing adaptation. Its search UI code is unchanged. The animated atmosphere is an independent approximation, and exact frame-by-frame shader/pixel parity is not claimed. iOS 26 and 27 render system glass differently. The iOS 27.1 Duo runtime occasionally retains an unfocused keyboard across automation sessions; keyboard dismissal is explicitly asserted in the iOS 26.5 full-flow verification.",
+    "runtime": {
+      "simulator": "Rex Reference / iPhone Duo / iOS 27.1",
+      "uuid": "E733A108-3645-4D92-AE27-EEE9A40BD4AC",
+      "bundle": "tv.rexnow.app",
+      "prepared_copy": "build/RexSimulatorReference/Rex.app",
+      "adaptations": [
+        "25 unencrypted arm64 Mach-O build-version commands changed to iossim",
+        "Bundle platform metadata changed to iPhoneSimulator; launch storyboard retained",
+        "Ad hoc signed simulator copy; original IPA is unchanged"
+      ],
+      "why_not_26_5": "The reference calls swift_task_isCancelledWithFlags on iOS 26.5 and crashes; iOS 27.1 runs it successfully.",
+      "ui_tree": "build/RexReverse/runtime-search-tree.txt",
+      "fonts": "build/RexReverse/runtime-search-fonts.txt",
+      "paint": "build/RexReverse/runtime-search-paint.txt",
+      "screens": "build/RexReference/search-comparison/rex-{recommendations,query,genres}.{png,txt} (copied from interactive commands 4, 6, 9)"
+    }
+  },
+  "implementation": {
+    "entry": "Detail navigation bar, magnifier immediately before Share",
+    "chrome": "Centered Search title; persistent horizontal filter chips above content; floating native committed-text input at bottom, follows keyboard; dismissal returns to original detail",
+    "content": "People avatar rail, then horizontal movie and TV cards; section-title expand symbol toggles flat lazy vertical rows; local keyword history",
+    "cards": "Measured 80x120 poster, 136-point card, 20-point card corner; 17-point bold title, 13-point metadata/overview, system yellow stars",
+    "filter_sections": [
+      "keywords",
+      "media type",
+      "genres",
+      "years",
+      "sort/rating/votes/runtime",
+      "platform/studio",
+      "language",
+      "region"
+    ],
+    "filter_behavior": "Type menu and anchored three-column glass panels; selections apply immediately and retain the typed title; selected chips can be deselected and all filters reset",
+    "navigation": "Detail magnifier before Share opens catalog search; movie/TV detail and person filmography use the local search stack",
+    "input": "Native UITextField commits marked text before queries; 350ms debounce; generation and cancellation guards; text/history independent of global search",
+    "data": "Validated /v1/catalog/search endpoint, no Gemini or D1 operations; 120/minute independent limiter; TMDB token remains in Worker",
+    "history": "Twelve keyword entries and twelve opened titles in local UserDefaults, clearable independently",
+    "background": "Independent animated lavender/pink atmosphere with light/dark palettes, Reduce Motion support",
+    "query_filtering": "Typed title uses TMDB search, then year/genre/rating/language and optional detail-based platform/country/runtime/keyword constraints; ordering is per upstream search page",
+    "filter_material": "Anchored 28-point rounded glass panel with a lavender tint to suppress strong poster colors; three 36-point capsule columns."
+  },
+  "verification": {
+    "worker_tests": 33,
+    "swift_catalog_tests": 6,
+    "simulator": "iPhone 17 Pro Max, iOS 26.5; original reference on iPhone Duo, iOS 27.1",
+    "original_runtime_search_comparison": true,
+    "full_search_flow": "SearchReferenceVerifiedQA.xcresult passed: bottom input position, 136-point horizontal cards, keyboard dismissal, section expansion, inline genres, retained query, detail/back, person filmography/back, page-two identity, empty, close",
+    "production_pagination": "SearchLazyRowsQA.xcresult passed: invalid year range prevents apply, expanded movie list scrolls, page 2 appends results, subsequent query returns correct result",
+    "long_list_fix": "Flat lazy Section rows replace a tall VStack per group; the reproduced layout loop no longer occurs; simulator process idle CPU 0.3% after the passing run",
+    "worker_version": "5a761169-26bd-4b70-b7e3-e9275778d8bb",
+    "preview_dependency": false,
+    "installed_on_phone_this_iteration": false,
+    "reference_screens": "build/RexReference/search-comparison/",
+    "same_runtime_capture": "SearchFinalCaptureQA.xcresult passed on iPhone Duo / iOS 27.1; original search screenshots are from the successfully operated interactive reference session, not the later unsuccessful duplicate-label locator attempts.",
+    "material_capture": "SearchMaterialCaptureQA.xcresult passed; final panel tint inspected. The dedicated phone screenshot run is saved in build/RexReference/search-phone-final.",
+    "phone_final_capture": "SearchPhoneFinalQA.xcresult passed on iOS 26.5 with final glass tint and explicit keyboard-dismissal assertion."
+  }
+}

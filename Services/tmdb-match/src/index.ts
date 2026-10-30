@@ -9,6 +9,8 @@ import { cacheKey, readSource, readSourceVideo, type SourceVideo, text } from ".
 import { brief, details } from "./details.ts";
 import { type Fetcher, image, type MediaType, TMDB, UpstreamError } from "./tmdb.ts";
 import { DurableObject } from "cloudflare:workers";
+import { catalogSearch, readCatalogSearch } from "./catalog-search.ts";
+import { catalog, catalogCollections, isCatalogFeed } from "./catalog.ts";
 import { modelConfig } from "./provider.ts";
 
 interface Env {
@@ -16,6 +18,7 @@ interface Env {
   GEMINI_RELAY: DurableObjectNamespace<GeminiRelay>;
   MATCH_LIMITER: RateLimit;
   DETAILS_LIMITER: RateLimit;
+  CATALOG_SEARCH_LIMITER: RateLimit;
   // Secrets: wrangler secret put OPENAI_API_KEY / GEMINI_API_KEY / TMDB_TOKEN (TMDB's v4 read access token).
   AI_PROVIDER?: string;
   OPENAI_API_KEY?: string;
@@ -413,6 +416,9 @@ export default {
     const { pathname } = new URL(request.url);
     if (pathname === "/v1/match" && request.method === "POST") return match(request, env, ctx);
     if (pathname === "/v1/details" && request.method === "GET") return lookup(request, env);
+    if (pathname === "/v1/catalog/search" && request.method === "GET") return searchCatalog(request, env);
+    if (pathname === "/v1/catalog" && request.method === "GET") return browse(request, env);
+    if (pathname === "/v1/catalog/collections" && request.method === "GET") return browseCollections(request, env);
     if (pathname === "/v1/search" && request.method === "GET") return search(request, env);
     if (pathname === "/v1/sources" && request.method === "GET") return sources(request, env);
     if (pathname === "/v1/link" && request.method === "POST") return chosen(request, env);
@@ -429,3 +435,42 @@ export default {
     ]);
   },
 } satisfies ExportedHandler<Env>;
+
+async function browse(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const feed = url.searchParams.get("feed") ?? "trending";
+  const language = url.searchParams.get("language") ?? "zh-CN";
+  const page = Number(url.searchParams.get("page") ?? "1");
+  if (!isCatalogFeed(feed) || !LANGUAGES.has(language) || !Number.isInteger(page) || page < 1 || page > 500) return new Response(null, { status: 400 });
+  if (!(await env.DETAILS_LIMITER.limit({ key: request.headers.get("cf-connecting-ip") ?? "" })).success) return new Response(null, { status: 429 });
+  try {
+    return Response.json(await catalog(new TMDB(env.TMDB_TOKEN), feed, language, page), { headers: { "cache-control": "public, max-age=3600" } });
+  } catch (error) {
+    return Response.json({ error: (error as Error).message.slice(0, 200) }, { status: 502 });
+  }
+}
+
+async function browseCollections(request: Request, env: Env): Promise<Response> {
+  const language = new URL(request.url).searchParams.get("language") ?? "zh-CN";
+  if (!LANGUAGES.has(language)) return new Response(null, { status: 400 });
+  if (!(await env.DETAILS_LIMITER.limit({ key: request.headers.get("cf-connecting-ip") ?? "" })).success) return new Response(null, { status: 429 });
+  try {
+    return Response.json(await catalogCollections(new TMDB(env.TMDB_TOKEN), language), { headers: { "cache-control": "public, max-age=3600" } });
+  } catch (error) {
+    return Response.json({ error: (error as Error).message.slice(0, 200) }, { status: 502 });
+  }
+}
+
+async function searchCatalog(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const language = url.searchParams.get("language") ?? "zh-CN";
+  if (!LANGUAGES.has(language)) return new Response(null, { status: 400 });
+  let input: ReturnType<typeof readCatalogSearch>;
+  try { input = readCatalogSearch(url.searchParams); } catch { return new Response(null, { status: 400 }); }
+  if (!(await env.CATALOG_SEARCH_LIMITER.limit({ key: request.headers.get("cf-connecting-ip") ?? "" })).success) return new Response(null, { status: 429 });
+  try {
+    return Response.json(await catalogSearch(new TMDB(env.TMDB_TOKEN), input, language), { headers: { "cache-control": "private, max-age=300" } });
+  } catch (error) {
+    return Response.json({ error: (error as Error).message.slice(0, 200) }, { status: 502 });
+  }
+}

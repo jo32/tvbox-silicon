@@ -15,7 +15,7 @@ struct PhoneTabs: Equatable {
     static func slots(horizontal: UserInterfaceSizeClass?, vertical: UserInterfaceSizeClass?) -> Int {
         horizontal == .regular && vertical == .regular ? wideBarSlots : barSlots
     }
-    static let standard = PhoneTabs(bar: [.home, .live, .music, .search], more: [.sites, .files, .history, .favorites, .downloads, .messages, .settings])
+    static let standard = PhoneTabs(bar: [.home, .discover, .live, .search], more: [.music, .sites, .files, .history, .favorites, .downloads, .messages, .settings])
     var bar: [AppSection]
     var more: [AppSection]
 
@@ -28,6 +28,9 @@ struct PhoneTabs: Equatable {
         guard halves.count == 2, !halves[0].isEmpty else { self = .standard; return }
         var bar: [AppSection] = [], more: [AppSection] = []
         for section in halves[0] where !bar.contains(section) && bar.count < Self.wideBarSlots { bar.append(section) }
+        // Add Discover once to an existing installation's visible tabs. Preserve their relative
+        // order; arranged(slots:) carries the last tab into More when the bar is full.
+        if !(halves[0] + halves[1]).contains(.discover) { bar.insert(.discover, at: min(1, bar.count)) }
         // Overflow, then sections a newer version added, land in More.
         for section in halves[0] + halves[1] + Self.standard.more + Self.standard.bar where !bar.contains(section) && !more.contains(section) {
             more.append(section)
@@ -51,6 +54,7 @@ extension AppSection {
     var glyphTint: Color {
         switch self {
         case .home: Brand.cyan
+        case .discover: Color(red: 0.43, green: 0.48, blue: 1.0)
         case .live: Color(red: 1.0, green: 0.45, blue: 0.32)
         case .music, .nowPlaying: Color(red: 1.0, green: 0.34, blue: 0.56)
         case .search: Color(red: 0.36, green: 0.60, blue: 1.0)

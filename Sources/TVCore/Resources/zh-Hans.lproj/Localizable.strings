@@ -1122,3 +1122,171 @@
 "Ranked by commits in the last 30 days." = "按最近 30 天的提交次数排序。";
 "1 commit" = "1 次提交";
 "%lld commits" = "%lld 次提交";
+
+// Discover catalog
+"Discover" = "发现";
+"Trending This Week" = "本周趋势";
+"In Theaters" = "正在热映";
+"On the Air" = "正在播出";
+"Popular Animation" = "热门动漫";
+"Popular Movies" = "热门电影";
+"Popular TV Shows" = "热门剧集";
+"Top Rated Movies" = "高分电影";
+"Top Rated TV Shows" = "高分剧集";
+"Coming Soon" = "即将上映";
+"Chinese TV Shows" = "华语剧集";
+"Korean TV Shows" = "韩语剧集";
+"Variety Shows" = "综艺";
+"Popular Variety Shows" = "热门综艺";
+"Popular Chinese Dramas" = "热门华语剧集";
+"Search movies and TV shows" = "搜索电影和剧集";
+"Some lists couldn't load. Try again." = "部分栏目加载失败，点此重试。";
+"No Titles Available" = "暂无影片";
+"Please try again later." = "请稍后重试。";
+"Search Sources" = "搜索片源";
+"View on TMDB" = "在 TMDB 查看";
+"Search couldn't load. Please try again." = "搜索失败，请重试。";
+"Action" = "动作";
+"Adventure" = "冒险";
+"Animation" = "动画";
+"Comedy" = "喜剧";
+"Crime" = "犯罪";
+"Documentary" = "纪录";
+"Drama" = "剧情";
+"Family" = "家庭";
+"Fantasy" = "奇幻";
+"Historical" = "历史";
+"Horror" = "恐怖";
+"Mystery" = "悬疑";
+"Romance" = "爱情";
+"Science Fiction" = "科幻";
+"Thriller" = "惊悚";
+"War" = "战争";
+"Western" = "西部";
+"Action & Adventure" = "动作与冒险";
+"Kids" = "儿童";
+"News" = "新闻";
+"Reality" = "真人秀";
+"Sci-Fi & Fantasy" = "科幻与奇幻";
+"Talk" = "脱口秀";
+
+"Edit Layout" = "编辑布局";
+"Featured Titles" = "精选影片";
+"Featured Collections" = "精选专题";
+"People" = "人物";
+"Networks" = "播出平台";
+"Browse by Genre" = "分类浏览";
+"Top Rated Collections" = "高分片单";
+"Film Studios" = "电影公司";
+
+"Studios & Networks" = "制片与播出平台";
+
+"Stills" = "剧照";
+
+"Trailer Unavailable" = "预告片暂时无法播放";
+
+"Crew" = "工作人员";
+
+"Share" = "分享";
+
+"Overview" = "剧情简介";
+
+"Trailer" = "预告片";
+
+"min" = "分钟";
+
+"Seasons" = "季";
+
+"Genres" = "类型";
+
+"Release Date" = "上映日期";
+
+"Country / Region" = "国家 / 地区";
+
+"Status" = "状态";
+
+"Returning Series" = "连载中";
+
+"Ended" = "已完结";
+
+"In Production" = "制作中";
+
+"Post Production" = "后期制作";
+
+"Planned" = "筹备中";
+
+"Canceled" = "已取消";
+
+"Rumored" = "传闻";
+
+/* Discover catalog search */
+"Search Catalog" = "搜索影视";
+"Movies, Series, People" = "电影、剧集、人物";
+"Clear Search History" = "清空搜索记录";
+"Recently Viewed" = "最近浏览";
+"Clear Recently Viewed" = "清空浏览记录";
+"Discover More" = "发现更多";
+"Trending Today" = "今日趋势";
+"Popular" = "热门";
+"Collapse" = "收起";
+"See All" = "查看全部";
+"Load More" = "加载更多";
+"No Results" = "没有找到结果";
+"Try another title or change your filters." = "换个关键词，或调整筛选条件。";
+"Couldn't Load Results" = "暂时无法加载结果";
+"Loading" = "正在加载";
+"Filter" = "筛选";
+"Reset Filters" = "清除筛选";
+"Keywords" = "关键词";
+"Years" = "年份";
+"Sort By" = "排序";
+"Platform / Studio" = "平台／片商";
+"Region" = "地区";
+"Show Results" = "查看结果";
+"Release Year" = "上映年份";
+"From" = "起始";
+"To" = "截止";
+"Minimum Rating" = "最低评分";
+"Minimum Votes" = "最低评价人数";
+"Runtime (min)" = "时长（分钟）";
+"Find a keyword" = "搜索关键词";
+"Enter a valid range, from lowest to highest." = "请输入有效范围，起始值不能大于截止值。";
+"Popularity ↓" = "热度从高到低";
+"Popularity ↑" = "热度从低到高";
+"Rating ↓" = "评分从高到低";
+"Rating ↑" = "评分从低到高";
+"Newest First" = "最新优先";
+"Oldest First" = "最早优先";
+"Most Votes" = "评价人数最多";
+"Highest Revenue" = "票房最高";
+"Filmography" = "参与作品";
+"Soap" = "肥皂剧";
+"War & Politics" = "战争与政治";
+"Acting" = "演员";
+"Directing" = "导演";
+"Writing" = "编剧";
+"Production" = "制片";
+
+/* Discover catalog search */
+"Movies" = "电影";
+"Series" = "剧集";
+"Content Type" = "影视类别";
+"Topics" = "题材";
+
+"Any" = "不限";
+
+"Filter Type" = "类型";
+
+"Filter Genre" = "分类";
+
+"Filtered Results" = "筛选结果";
+
+"Actor" = "演员";
+
+"%@s" = "%@ 年代";
+
+"Language" = "语言";
+
+"Catalog Series" = "电视剧";
+
+"TV Movie" = "电视电影";
