@@ -476,6 +476,23 @@ public final class CloudDriveBridge implements AutoCloseable {
         if (changed && !editor.commit()) System.err.println("CLOUD_ACCOUNT_SEED_FAILED " + WEX_PREFERENCES);
     }
 
+    /** In {@link #WEX_PREFERENCES}: how Wex drive lines fetch in parallel, {@code go} (the plugin's default) or {@code java}. */
+    static final String WEX_THREAD_PROXY_MODE = "pan.thread_proxy_mode";
+
+    /**
+     * Wex drive lines (Quark, UC, Baidu, Thunder, Guangya) play through a multi-thread proxy. Its default
+     * is a Go binary the plugin downloads and starts with Runtime.exec, which only runs on Android, so
+     * every such line failed with "Go 多线程未在启动阶段初始化完成" (#226). The plugin's Java mode serves
+     * the same ranges from its own in-process server. A switch back to Go in its config center lasts
+     * until the source starts again.
+     */
+    public static void useWexJavaThreads(android.content.Context context) {
+        var preferences = context.getSharedPreferences(WEX_PREFERENCES, 0);
+        if (!"java".equals(preferences.getString(WEX_THREAD_PROXY_MODE, "")) && !preferences.edit().putString(WEX_THREAD_PROXY_MODE, "java").commit()) {
+            System.err.println("CLOUD_ACCOUNT_SEED_FAILED " + WEX_THREAD_PROXY_MODE);
+        }
+    }
+
     static String digest(String text) {
         try { return HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8))); }
         catch (java.security.NoSuchAlgorithmException unavailable) { throw new IllegalStateException(unavailable); }

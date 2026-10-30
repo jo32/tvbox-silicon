@@ -98,6 +98,7 @@ public class CloudDriveBridgeTest {
         cloudFamilyCredentials();
         pluginCookieFiles();
         wexPreferences();
+        wexJavaThreads();
         ftyFamilyCredentials();
         proxyAddressMethodsUseHost();
         suspendedListenerRecovers();
@@ -408,6 +409,19 @@ public class CloudDriveBridgeTest {
         CloudDriveBridge.seedWexCookies(withShared.put("quarkCookie", "__pus=newest"), other);
         check(otherPreferences.getString("Wex_quark_cookie", "").equals("__pus=newest"), "A new app sign-in did not replace the plugin's Quark sign-in");
         check(otherPreferences.getString("Wex_pan115_cookie", "").equals("UID=115"), "The shared 115 sign-in was lost");
+    }
+
+    static void wexJavaThreads() throws Exception {
+        var context = new android.content.Context(Files.createTempDirectory("wex-threads-test").toFile(), CloudDriveBridgeTest.class.getClassLoader());
+        var preferences = context.getSharedPreferences(CloudDriveBridge.WEX_PREFERENCES, 0);
+        CloudDriveBridge.useWexJavaThreads(context);
+        check(preferences.getString("pan.thread_proxy_mode", "").equals("java"), "A new Wex source was left on the Go multi-thread proxy");
+        // The config center's switch back to Go can't work here; the next start undoes it.
+        preferences.edit().putString("pan.thread_proxy_mode", "go").commit();
+        CloudDriveBridge.useWexJavaThreads(context);
+        check(preferences.getString("pan.thread_proxy_mode", "").equals("java"), "A Wex source switched to Go stayed on Go");
+        var reopened = new android.content.Context(context.getFilesDir().getParentFile(), CloudDriveBridgeTest.class.getClassLoader());
+        check(reopened.getSharedPreferences(CloudDriveBridge.WEX_PREFERENCES, 0).getString("pan.thread_proxy_mode", "").equals("java"), "The Java multi-thread mode was not saved to disk");
     }
 
     static void cloudFamilyCredentials() throws Exception {
