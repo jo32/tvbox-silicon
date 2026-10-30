@@ -12,6 +12,8 @@ public final class AppleBootstrap {
             case "exception" -> throw new IllegalStateException("Test plugin failure");
             case "out-of-memory" -> throw new OutOfMemoryError("Test plugin allocation failure");
             case "no-response" -> null;
+            case "class-space" -> "{\"result\":\"" + java.lang.management.ManagementFactory
+                    .getPlatformMXBean(com.sun.management.HotSpotDiagnosticMXBean.class).getVMOption("CompressedClassSpaceSize").getValue() + "\"}";
             default -> input;
         };
     }

@@ -147,7 +147,10 @@ char *TVAppleRuntimeRequest(const char *resourcePath, const char *requestJSON) {
             NSString *heap = heapLimit();
             fprintf(stderr, "Java heap limit %s\n", heap.UTF8String);
             // Shrink the committed heap after collections, so memory freed in Java goes back to iOS.
-            NSArray<NSString *> *arguments = @[heap, @"-Xms32m", @"-Xss2m", @"-XX:+UseSerialGC", @"-XX:MinHeapFreeRatio=10", @"-XX:MaxHeapFreeRatio=30", @"-XX:+DisableAttachMechanism", @"-Xrs",
+            // Class metadata gets 128 MB of address space instead of the default 1 GB: a 3 GB device may not have
+            // 1 GB free in one piece, and then the JVM can't start ("Could not allocate compressed class space")
+            // and ends the app. 30 sources of one FTY jar use about 10 MB.
+            NSArray<NSString *> *arguments = @[heap, @"-Xms32m", @"-Xss2m", @"-XX:CompressedClassSpaceSize=128m", @"-XX:+UseSerialGC", @"-XX:MinHeapFreeRatio=10", @"-XX:MaxHeapFreeRatio=30", @"-XX:+DisableAttachMechanism", @"-Xrs",
                 @"--add-opens=java.base/java.lang=ALL-UNNAMED", @"--add-opens=java.base/sun.net.www.protocol.jar=ALL-UNNAMED",
                 @"--enable-native-access=ALL-UNNAMED",
                 @"-Dorg.slf4j.simpleLogger.defaultLogLevel=error",
