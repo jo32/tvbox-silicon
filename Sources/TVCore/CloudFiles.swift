@@ -1,15 +1,18 @@
 import Foundation
 
-/// A file or folder in Cloud Files: on a signed-in Quark or UC drive, an AList server or a WebDAV share.
+/// A file or folder in Cloud Files: on a signed-in Quark or UC drive, an AList server, a WebDAV share
+/// or an Emby or Jellyfin server.
 public struct CloudFile: Identifiable, Hashable, Codable, Sendable {
-    /// Quark and UC: the drive's file id. AList and WebDAV: the file's full path.
+    /// Quark, UC, Emby and Jellyfin: the drive's file id. AList and WebDAV: the file's full path.
     public let id: String
     public let name: String
     public let isFolder: Bool
     public let size: Int64
     public let modified: Date?
-    public init(id: String, name: String, isFolder: Bool, size: Int64 = 0, modified: Date? = nil) {
-        self.id = id; self.name = name; self.isFolder = isFolder; self.size = size; self.modified = modified
+    /// The poster or still a media server keeps for the item.
+    public let artwork: URL?
+    public init(id: String, name: String, isFolder: Bool, size: Int64 = 0, modified: Date? = nil, artwork: URL? = nil) {
+        self.id = id; self.name = name; self.isFolder = isFolder; self.size = size; self.modified = modified; self.artwork = artwork
     }
 
     public enum Kind: Sendable { case folder, video, audio, image, subtitle, other }
@@ -41,7 +44,8 @@ public struct CloudFile: Identifiable, Hashable, Codable, Sendable {
     }
 }
 
-/// Where Cloud Files browses: a drive signed in under Cloud Drive Accounts, or a saved AList server or WebDAV share.
+/// Where Cloud Files browses: a drive signed in under Cloud Drive Accounts, or a saved AList server, WebDAV
+/// share or Emby or Jellyfin server.
 public enum CloudFilesDrive: Hashable, Identifiable, Sendable {
     case quark, uc, alist(AListServer)
     public var id: String { key }
@@ -61,7 +65,7 @@ public enum CloudFilesDrive: Hashable, Identifiable, Sendable {
         }
     }
     /// Whether `file` plays from this drive: Quark and UC also transcode videos in containers that don't play
-    /// as they are; an AList server or WebDAV share hands over the file as it is.
+    /// as they are; an AList server, WebDAV share or media server hands over the file as it is.
     public func plays(_ file: CloudFile) -> Bool {
         switch self {
         case .quark, .uc: file.kind == .video || (file.kind == .audio && CloudFile.playsNatively(file.name))
@@ -126,6 +130,7 @@ public enum CloudFiles {
         case .quark: files = try await QuarkFiles.quark.list(folder)
         case .uc: files = try await QuarkFiles.uc.list(folder)
         case .alist(let server) where server.isWebDAV: files = try await WebDAV.shared.list(server, path: folder)
+        case .alist(let server) where server.isEmby: files = try await Emby.shared.list(server, id: folder)
         case .alist(let server): files = try await AList.shared.list(server, path: folder, password: password)
         }
         return CloudFile.arranged(files)
@@ -165,6 +170,7 @@ public enum CloudFiles {
         case .quark: return try await QuarkFiles.quark.stream(id, name: name)
         case .uc: return try await QuarkFiles.uc.stream(id, name: name)
         case .alist(let server) where server.isWebDAV: return try await WebDAV.shared.stream(server, path: id, name: name)
+        case .alist(let server) where server.isEmby: return try await Emby.shared.stream(server, id: id, name: name)
         case .alist(let server): return try await AList.shared.stream(server, path: id, name: name)
         }
     }
