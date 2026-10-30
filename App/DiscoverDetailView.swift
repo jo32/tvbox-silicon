@@ -19,6 +19,9 @@ struct DiscoverDetailView: View {
     @State private var searchShown = false
     @State private var still: DiscoverStill?
     @State private var episode: DiscoverEpisode?
+    #if os(tvOS)
+    @State private var tvScrolled = false
+    #endif
     private var details: TMDBMatch.Details? { model.details }
     private var dark: Bool { model.paint?.isDark ?? true }
     private var seasons: [TMDBMatch.SeasonSummary] { details?.seasons.filter { $0.number > 0 } ?? [] }
@@ -45,6 +48,13 @@ struct DiscoverDetailView: View {
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { overviewShown = false } } }
             }.presentationDetents([.medium, .large]).discoverSheetSize(width: 560, height: 480)
         }
+        #if os(tvOS)
+        // Full-screen pages, as the TV presents things: the iPhone's sheets froze the TV app when they opened.
+        .fullScreenCover(item: $episode) { selection in tvEpisodeScreen(selection.value) }
+        .fullScreenCover(item: $still) { selection in
+            ZStack { Color.black; TMDBArtwork(url: selection.url, maxPixels: 2400, fill: false) }.ignoresSafeArea()
+        }
+        #else
         .sheet(item: $episode) { selection in
             NavigationStack {
                 ScrollView {
@@ -65,9 +75,17 @@ struct DiscoverDetailView: View {
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { still = nil } } }
             }.preferredColorScheme(.dark).discoverSheetSize(width: 1000, height: 640)
         }
+        #endif
+        #if os(tvOS)
+        // The system player, full screen: the iPhone's sheet with SwiftUI's VideoPlayer froze the TV app.
+        .fullScreenCover(isPresented: $trailerShown) {
+            if let trailer = details?.trailer { DiscoverTVTrailerScreen(trailer: trailer) }
+        }
+        #else
         .sheet(isPresented: $trailerShown) {
             if let trailer = details?.trailer { DiscoverTrailerScreen(trailer: trailer, title: item.name).discoverSheetSize(width: 960, height: 600) }
         }
+        #endif
     }
 
     @ViewBuilder private var page: some View {
@@ -493,7 +511,6 @@ extension View {
 /// its foot; below it, rows sized for the remote. Scrolling frosts the backdrop.
 extension DiscoverDetailView {
     private static let tvGutter: CGFloat = 96
-    private var tvScrolled: Bool { model.scrollY > 120 }
 
     var tvPage: some View {
         ScrollView {
@@ -513,7 +530,9 @@ extension DiscoverDetailView {
             }.padding(.bottom, 90)
         }
         .scrollClipDisabled()
-        .modifier(DiscoverDetailScroll(model: model))
+        // Only crossing the hero's edge matters. A per-frame offset re-rendered the page on every scroll step, and a
+        // sheet's presentation fed back into it until the watchdog killed the app.
+        .modifier(DiscoverTVScrolled(scrolled: $tvScrolled))
         .background { tvBackdrop }
         .ignoresSafeArea()
         .foregroundStyle(.white).preferredColorScheme(.dark)
@@ -546,10 +565,7 @@ extension DiscoverDetailView {
             }.shadow(color: .black.opacity(0.4), radius: 12)
             HStack(alignment: .top, spacing: 56) {
                 VStack(alignment: .leading, spacing: 22) {
-                    Button {
-                        episode = nil
-                        if store.subscription == nil { store.section = .settings } else { store.searchVideos(item.name) }
-                    } label: {
+                    Button { tvFindSources() } label: {
                         Label(L10n.text(store.subscription == nil ? "Add Subscription" : "Search Sources"), systemImage: "magnifyingglass")
                             .frame(width: 380)
                     }
@@ -584,6 +600,33 @@ extension DiscoverDetailView {
         }
         .padding(.horizontal, Self.tvGutter)
         .frame(maxWidth: .infinity, minHeight: 950, alignment: .bottomLeading)
+    }
+
+    private func tvFindSources() {
+        episode = nil
+        if store.subscription == nil { store.section = .settings } else { store.searchVideos(item.name) }
+    }
+
+    func tvEpisodeScreen(_ value: TMDBMatch.EpisodeInfo) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            Color.black
+            PosterImage(url: value.still ?? details?.backdrop).frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
+            LinearGradient(stops: [.init(color: .clear, location: 0.3), .init(color: .black.opacity(0.92), location: 1)], startPoint: .top, endPoint: .bottom)
+            VStack(alignment: .leading, spacing: 24) {
+                Text("\(value.number). \(value.name)").font(.system(size: 56, weight: .bold)).lineLimit(2)
+                if !value.overview.isEmpty {
+                    Text(value.overview).font(.system(size: 28)).lineSpacing(4).lineLimit(4).opacity(0.8)
+                        .frame(maxWidth: 1300, alignment: .leading)
+                }
+                Button { tvFindSources() } label: {
+                    Label(L10n.text(store.subscription == nil ? "Add Subscription" : "Search Sources"), systemImage: "magnifyingglass")
+                        .frame(width: 380)
+                }
+                .buttonStyle(DiscoverTVActionStyle(height: 86, font: 30))
+                .accessibilityIdentifier("discover.episode.findSources")
+            }.padding(Self.tvGutter)
+        }
+        .ignoresSafeArea().foregroundStyle(.white).preferredColorScheme(.dark)
     }
 
     private func tvRow(_ title: String?, spacing: CGFloat = 40, @ViewBuilder content: () -> some View) -> some View {
@@ -717,6 +760,55 @@ extension DiscoverDetailView {
                 .accessibilityIdentifier("discover.detail.related.\(value.key)")
             }
         }
+    }
+}
+
+private struct DiscoverTVScrolled: ViewModifier {
+    @Binding var scrolled: Bool
+    @ViewBuilder func body(content: Content) -> some View {
+        if #available(tvOS 18, *) {
+            content.onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > 120 } action: { _, value in scrolled = value }
+        } else { content }
+    }
+}
+
+/// A trailer on the TV in the system player; Menu returns to the page.
+private struct DiscoverTVTrailerScreen: View {
+    let trailer: TMDBMatch.Trailer
+    @State private var failed = false
+    var body: some View {
+        ZStack {
+            Color.black
+            DiscoverTVTrailerPlayer(trailer: trailer, failed: $failed)
+            if failed { Text(L10n.text("Trailer Unavailable")).font(.system(size: 32)).foregroundStyle(.white) }
+        }.ignoresSafeArea()
+    }
+}
+
+private struct DiscoverTVTrailerPlayer: UIViewControllerRepresentable {
+    let trailer: TMDBMatch.Trailer
+    @Binding var failed: Bool
+    final class Coordinator { var task: Task<Void, Never>? }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeUIViewController(context: Context) -> AVPlayerViewController {
+        let controller = AVPlayerViewController()
+        let player = AVPlayer()
+        controller.player = player
+        let failed = $failed
+        context.coordinator.task = Task { @MainActor in
+            guard let stream = await DiscoverTrailerResolver.shared.resolve(trailer) else { failed.wrappedValue = true; return }
+            guard !Task.isCancelled else { return }
+            let asset = AVURLAsset(url: stream.url, options: ["AVURLAssetHTTPHeaderFieldsKey": stream.headers])
+            player.replaceCurrentItem(with: AVPlayerItem(asset: asset))
+            player.play()
+        }
+        return controller
+    }
+    func updateUIViewController(_ controller: AVPlayerViewController, context: Context) {}
+    static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) {
+        coordinator.task?.cancel()
+        controller.player?.pause()
+        controller.player?.replaceCurrentItem(with: nil)
     }
 }
 
