@@ -6,12 +6,14 @@ import Observation
 /// Keys are subscription-qualified like `PinnedSources`, so the order survives re-imports.
 @MainActor @Observable public final class SourceOrder {
     public var enabled: Bool {
-        didSet { defaults.set(enabled, forKey: "sourceOrder.enabled"); revision += 1 }
+        didSet { defaults.set(enabled, forKey: "sourceOrder.enabled"); revision += 1; onChange?() }
     }
     private var keys: [String]
     /// Bumps when the saved order or its switch changes, so a cached source row can be reused until then.
     public private(set) var revision = 0
     private let defaults: UserDefaults
+    /// Called after the list changes here (not after `adopt`), for iCloud sync.
+    @ObservationIgnored public var onChange: (@MainActor () -> Void)?
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         enabled = defaults.bool(forKey: "sourceOrder.enabled")
@@ -45,6 +47,17 @@ import Observation
     public func save(_ sites: [Site], origin: URL) {
         let ordered = sites.map { key($0, origin: origin) }, listed = Set(ordered)
         keys = ordered + keys.filter { !listed.contains($0) }
+        defaults.set(keys, forKey: "sourceOrder.v1")
+        revision += 1
+        onChange?()
+    }
+
+    /// The saved keys, in order, as iCloud sync compares them.
+    public var savedKeys: [String] { keys }
+    /// The list merged with other devices'.
+    public func adopt(_ keys: [String]) {
+        guard keys != self.keys else { return }
+        self.keys = keys
         defaults.set(keys, forKey: "sourceOrder.v1")
         revision += 1
     }
