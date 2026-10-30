@@ -270,6 +270,7 @@ public class NativeProbe extends AbstractJni {
         if (!api.startsWith("csp_")) throw new IllegalArgumentException("Expected a csp_ plugin class");
         CloudDriveBridge.seedDriveCookies(accounts, context.getFilesDir().toPath());
         CloudDriveBridge.seedWexCookies(accounts, context);
+        CloudDriveBridge.useWexJavaThreads(context);
         bridge.appAccounts(accounts, context);
         var spider = (com.github.catvod.crawler.Spider)loader.loadClass("com.github.catvod.spider." + api.substring(4)).getDeclaredConstructor().newInstance();
         spider.siteKey = input.optString("key");
