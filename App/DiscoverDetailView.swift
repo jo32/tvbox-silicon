@@ -69,7 +69,7 @@ struct DiscoverDetailView: View {
         #endif
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                Button { searchShown = true } label: { Image(systemName: "magnifyingglass") }
+                Button { searchShown = true } label: { Image(systemName: "text.magnifyingglass") }
                     .accessibilityLabel(L10n.text("Search Catalog"))
                     .accessibilityIdentifier("discover.detail.search")
                 #if !os(tvOS)
@@ -415,7 +415,7 @@ private struct DiscoverTrailerScreen: View {
     }
 }
 
-private struct DiscoverSearchPresentation: ViewModifier {
+struct DiscoverSearchPresentation: ViewModifier {
     @Binding var isPresented: Bool
     func body(content: Content) -> some View {
         #if os(iOS)
