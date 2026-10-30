@@ -35,7 +35,7 @@ import TVCore
     }
 }
 
-/// Measurements from Rex's on-device accessibility tree: a 1.5:1 portrait hero, 17 pt gutters,
+/// Catalog layout: a 1.5:1 portrait hero, 17 pt gutters,
 /// 116 × 174 pt covers, and a wider landscape rail for the weekly trend list.
 struct DiscoverView: View {
     @State private var model = DiscoverModel()
@@ -600,8 +600,7 @@ struct DiscoverTile: View {
     }
 }
 
-/// Rex's editorial card is a 450-point composition scaled as a unit, rather than a collection
-/// of independently flexible text/image frames. This keeps its proportions on different phones.
+/// Scale the 450-point editorial composition as a unit to preserve its proportions across phones.
 private struct DiscoverCollection: View {
     let feed: TMDBCatalog.Feed
     let items: [TMDBCatalog.Item]

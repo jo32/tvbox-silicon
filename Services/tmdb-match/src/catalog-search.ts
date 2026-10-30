@@ -88,7 +88,7 @@ export async function catalogSearch(tmdb: TMDB, input: ReturnType<typeof readCat
   let body = await tmdb.get(path, { ...(mode === "discover" && !searching ? input.params : {}), language, page, include_adult: "false",
     query: searching ? query : undefined });
   // TMDB discover has no title-query parameter. Preserve the typed title when
-  // changing Rex-style chips: search the selected kind, then apply constraints.
+  // changing filter chips: search the selected kind, then apply constraints.
   if (mode === "discover" && searching) {
     const p = input.params;
     const selectedIDs = (key: string) => String(p[key] || "").split(",").filter(Boolean).map(Number);

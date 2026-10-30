@@ -1,7 +1,7 @@
 import SwiftUI
 import TVCore
 
-/// Measured against the running Rex reference: bottom chrome, persistent filters,
+/// Catalog search with a bottom input bar, persistent filters,
 /// 30-point section headers, horizontal 136-point cards and circular people rails.
 struct DiscoverSearchView: View {
     @Environment(\.dismiss) private var dismiss
