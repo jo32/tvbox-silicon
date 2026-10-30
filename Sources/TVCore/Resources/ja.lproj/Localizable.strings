@@ -1122,6 +1122,175 @@
 "Ranked by commits in the last 30 days." = "過去 30 日間のコミット数順です。";
 "1 commit" = "1 件のコミット";
 "%lld commits" = "%lld 件のコミット";
+
+// Discover catalog
+"Discover" = "見つける";
+"Trending This Week" = "今週のトレンド";
+"In Theaters" = "上映中";
+"On the Air" = "放送中";
+"Popular Animation" = "人気アニメ";
+"Popular Movies" = "人気の映画";
+"Popular TV Shows" = "人気のテレビ番組";
+"Top Rated Movies" = "高評価の映画";
+"Top Rated TV Shows" = "高評価のテレビ番組";
+"Coming Soon" = "近日公開";
+"Chinese TV Shows" = "中国語のドラマ";
+"Korean TV Shows" = "韓国語のドラマ";
+"Variety Shows" = "バラエティ";
+"Popular Variety Shows" = "人気のバラエティ";
+"Popular Chinese Dramas" = "人気の中国語ドラマ";
+"Search movies and TV shows" = "映画やテレビ番組を検索";
+"Some lists couldn't load. Try again." = "一部のリストを読み込めませんでした。再試行してください。";
+"No Titles Available" = "作品がありません";
+"Please try again later." = "しばらくしてから再試行してください。";
+"Search Sources" = "配信元を検索";
+"View on TMDB" = "TMDB で見る";
+"Search couldn't load. Please try again." = "検索できませんでした。再試行してください。";
+"Action" = "アクション";
+"Adventure" = "アドベンチャー";
+"Animation" = "アニメ";
+"Comedy" = "コメディ";
+"Crime" = "犯罪";
+"Documentary" = "ドキュメンタリー";
+"Drama" = "ドラマ";
+"Family" = "ファミリー";
+"Fantasy" = "ファンタジー";
+"Historical" = "歴史";
+"Horror" = "ホラー";
+"Mystery" = "ミステリー";
+"Romance" = "ロマンス";
+"Science Fiction" = "SF";
+"Thriller" = "スリラー";
+"War" = "戦争";
+"Western" = "西部劇";
+"Action & Adventure" = "アクション＆アドベンチャー";
+"Kids" = "キッズ";
+"News" = "ニュース";
+"Reality" = "リアリティ";
+"Sci-Fi & Fantasy" = "SF＆ファンタジー";
+"Talk" = "トーク";
+
+"Edit Layout" = "レイアウトを編集";
+"Featured Titles" = "注目の作品";
+"Featured Collections" = "特集";
+"People" = "人物";
+"Networks" = "放送・配信サービス";
+"Browse by Genre" = "ジャンルから探す";
+"Top Rated Collections" = "高評価のコレクション";
+"Film Studios" = "映画スタジオ";
+
+"Studios & Networks" = "制作・配信";
+
+"Stills" = "場面写真";
+
+"Trailer Unavailable" = "予告編を再生できません";
+
+"Crew" = "スタッフ";
+
+"Share" = "共有";
+
+"Overview" = "あらすじ";
+
+"Trailer" = "予告編";
+
+"min" = "分";
+
+"Seasons" = "シーズン";
+
+"Genres" = "ジャンル";
+
+"Release Date" = "公開日";
+
+"Country / Region" = "国・地域";
+
+"Status" = "状態";
+
+"Returning Series" = "放送中";
+
+"Ended" = "放送終了";
+
+"In Production" = "制作中";
+
+"Post Production" = "ポストプロダクション";
+
+"Planned" = "企画中";
+
+"Canceled" = "中止";
+
+"Rumored" = "未確定";
+
+/* Discover catalog search */
+"Search Catalog" = "作品を検索";
+"Movies, Series, People" = "映画・ドラマ・人物";
+"Clear Search History" = "検索履歴を消去";
+"Recently Viewed" = "最近見た作品";
+"Clear Recently Viewed" = "閲覧履歴を消去";
+"Discover More" = "もっと探す";
+"Trending Today" = "今日のトレンド";
+"Popular" = "人気";
+"Collapse" = "折りたたむ";
+"See All" = "すべて表示";
+"Load More" = "さらに読み込む";
+"No Results" = "結果が見つかりません";
+"Try another title or change your filters." = "別のキーワードや絞り込み条件をお試しください。";
+"Couldn't Load Results" = "結果を読み込めませんでした";
+"Loading" = "読み込み中";
+"Filter" = "絞り込み";
+"Reset Filters" = "絞り込みを解除";
+"Keywords" = "キーワード";
+"Years" = "年代";
+"Sort By" = "並び順";
+"Platform / Studio" = "配信・製作会社";
+"Region" = "地域";
+"Show Results" = "結果を表示";
+"Release Year" = "公開年";
+"From" = "開始";
+"To" = "終了";
+"Minimum Rating" = "最低評価";
+"Minimum Votes" = "最低評価数";
+"Runtime (min)" = "上映時間（分）";
+"Find a keyword" = "キーワードを探す";
+"Enter a valid range, from lowest to highest." = "開始値が終了値以下の有効な範囲を入力してください。";
+"Popularity ↓" = "人気の高い順";
+"Popularity ↑" = "人気の低い順";
+"Rating ↓" = "評価の高い順";
+"Rating ↑" = "評価の低い順";
+"Newest First" = "新しい順";
+"Oldest First" = "古い順";
+"Most Votes" = "評価数の多い順";
+"Highest Revenue" = "興行収入の高い順";
+"Filmography" = "出演・制作作品";
+"Soap" = "ソープオペラ";
+"War & Politics" = "戦争・政治";
+"Acting" = "俳優";
+"Directing" = "監督";
+"Writing" = "脚本";
+"Production" = "制作";
+
+/* Discover catalog search */
+"Movies" = "映画";
+"Series" = "ドラマ";
+"Content Type" = "作品の種類";
+"Topics" = "ジャンル";
+
+"Any" = "指定なし";
+
+"Filter Type" = "種類";
+
+"Filter Genre" = "ジャンル";
+
+"Filtered Results" = "絞り込み結果";
+
+"Actor" = "俳優";
+
+"%@s" = "%@年代";
+
+"Language" = "言語";
+
+"Catalog Series" = "テレビ番組";
+
+"TV Movie" = "テレビ映画";
+
 "iCloud Sync" = "iCloud 同期";
 "Keeps favorites, Continue Watching, subscriptions, and the sources you pinned, hid or ordered the same on your devices signed in to the same iCloud account. Accounts, passwords and downloads stay on each device." = "同じ iCloud アカウントでサインインしているデバイス間で、お気に入り、視聴を続ける、配信設定、固定・非表示・並べ替えたソースを同期します。アカウント、パスワード、ダウンロードは各デバイスにのみ保存されます。";
 "Danmaku Area" = "弾幕の表示範囲";

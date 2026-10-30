@@ -15,7 +15,8 @@
   // Per IP address, in memory only. Each viewer opens a title once; a run is a few model turns.
   "ratelimits": [
     { "name": "MATCH_LIMITER", "namespace_id": "4201", "simple": { "limit": 20, "period": 60 } },
-    { "name": "DETAILS_LIMITER", "namespace_id": "4202", "simple": { "limit": 60, "period": 60 } }
+    { "name": "DETAILS_LIMITER", "namespace_id": "4202", "simple": { "limit": 60, "period": 60 } },
+    { "name": "CATALOG_SEARCH_LIMITER", "namespace_id": "4203", "simple": { "limit": 120, "period": 60 } }
   ],
   // Secrets: OPENAI_API_KEY, GEMINI_API_KEY (retained for switching back), TMDB_TOKEN (wrangler secret put).
   "vars": { "AI_PROVIDER": "openai", "OPENAI_MODEL": "gpt-6-luna", "GEMINI_MODEL": "gemini-3.5-flash-lite", "DAILY_RUNS": "2000" },

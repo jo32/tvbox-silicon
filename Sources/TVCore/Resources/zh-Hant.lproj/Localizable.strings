@@ -1122,6 +1122,175 @@
 "Ranked by commits in the last 30 days." = "依最近 30 天的提交次數排序。";
 "1 commit" = "1 次提交";
 "%lld commits" = "%lld 次提交";
+
+// Discover catalog
+"Discover" = "探索";
+"Trending This Week" = "本週趨勢";
+"In Theaters" = "現正熱映";
+"On the Air" = "正在播出";
+"Popular Animation" = "熱門動漫";
+"Popular Movies" = "熱門電影";
+"Popular TV Shows" = "熱門影集";
+"Top Rated Movies" = "高分電影";
+"Top Rated TV Shows" = "高分影集";
+"Coming Soon" = "即將上映";
+"Chinese TV Shows" = "華語影集";
+"Korean TV Shows" = "韓語影集";
+"Variety Shows" = "綜藝";
+"Popular Variety Shows" = "熱門綜藝";
+"Popular Chinese Dramas" = "熱門華語影集";
+"Search movies and TV shows" = "搜尋電影和影集";
+"Some lists couldn't load. Try again." = "部分欄目載入失敗，點此重試。";
+"No Titles Available" = "暫無影片";
+"Please try again later." = "請稍後重試。";
+"Search Sources" = "搜尋片源";
+"View on TMDB" = "在 TMDB 檢視";
+"Search couldn't load. Please try again." = "搜尋失敗，請重試。";
+"Action" = "動作";
+"Adventure" = "冒險";
+"Animation" = "動畫";
+"Comedy" = "喜劇";
+"Crime" = "犯罪";
+"Documentary" = "紀錄";
+"Drama" = "劇情";
+"Family" = "家庭";
+"Fantasy" = "奇幻";
+"Historical" = "歷史";
+"Horror" = "恐怖";
+"Mystery" = "懸疑";
+"Romance" = "愛情";
+"Science Fiction" = "科幻";
+"Thriller" = "驚悚";
+"War" = "戰爭";
+"Western" = "西部";
+"Action & Adventure" = "動作與冒險";
+"Kids" = "兒童";
+"News" = "新聞";
+"Reality" = "實境秀";
+"Sci-Fi & Fantasy" = "科幻與奇幻";
+"Talk" = "脫口秀";
+
+"Edit Layout" = "編輯版面";
+"Featured Titles" = "精選影片";
+"Featured Collections" = "精選專題";
+"People" = "人物";
+"Networks" = "播出平台";
+"Browse by Genre" = "分類瀏覽";
+"Top Rated Collections" = "高分片單";
+"Film Studios" = "電影公司";
+
+"Studios & Networks" = "製片與播出平台";
+
+"Stills" = "劇照";
+
+"Trailer Unavailable" = "預告片暫時無法播放";
+
+"Crew" = "製作團隊";
+
+"Share" = "分享";
+
+"Overview" = "劇情簡介";
+
+"Trailer" = "預告片";
+
+"min" = "分鐘";
+
+"Seasons" = "季";
+
+"Genres" = "類型";
+
+"Release Date" = "上映日期";
+
+"Country / Region" = "國家 / 地區";
+
+"Status" = "狀態";
+
+"Returning Series" = "連載中";
+
+"Ended" = "已完結";
+
+"In Production" = "製作中";
+
+"Post Production" = "後期製作";
+
+"Planned" = "籌備中";
+
+"Canceled" = "已取消";
+
+"Rumored" = "傳聞";
+
+/* Discover catalog search */
+"Search Catalog" = "搜尋影視";
+"Movies, Series, People" = "電影、影集、人物";
+"Clear Search History" = "清除搜尋記錄";
+"Recently Viewed" = "最近瀏覽";
+"Clear Recently Viewed" = "清除瀏覽記錄";
+"Discover More" = "探索更多";
+"Trending Today" = "今日趨勢";
+"Popular" = "熱門";
+"Collapse" = "收起";
+"See All" = "查看全部";
+"Load More" = "載入更多";
+"No Results" = "沒有找到結果";
+"Try another title or change your filters." = "換個關鍵字，或調整篩選條件。";
+"Couldn't Load Results" = "暫時無法載入結果";
+"Loading" = "正在載入";
+"Filter" = "篩選";
+"Reset Filters" = "清除篩選";
+"Keywords" = "關鍵字";
+"Years" = "年份";
+"Sort By" = "排序";
+"Platform / Studio" = "平台／片商";
+"Region" = "地區";
+"Show Results" = "查看結果";
+"Release Year" = "上映年份";
+"From" = "起始";
+"To" = "截止";
+"Minimum Rating" = "最低評分";
+"Minimum Votes" = "最低評價人數";
+"Runtime (min)" = "片長（分鐘）";
+"Find a keyword" = "搜尋關鍵字";
+"Enter a valid range, from lowest to highest." = "請輸入有效範圍，起始值不能大於截止值。";
+"Popularity ↓" = "熱度由高到低";
+"Popularity ↑" = "熱度由低到高";
+"Rating ↓" = "評分由高到低";
+"Rating ↑" = "評分由低到高";
+"Newest First" = "最新優先";
+"Oldest First" = "最早優先";
+"Most Votes" = "評價人數最多";
+"Highest Revenue" = "票房最高";
+"Filmography" = "參與作品";
+"Soap" = "肥皂劇";
+"War & Politics" = "戰爭與政治";
+"Acting" = "演員";
+"Directing" = "導演";
+"Writing" = "編劇";
+"Production" = "製片";
+
+/* Discover catalog search */
+"Movies" = "電影";
+"Series" = "影集";
+"Content Type" = "影視類別";
+"Topics" = "題材";
+
+"Any" = "不限";
+
+"Filter Type" = "類型";
+
+"Filter Genre" = "分類";
+
+"Filtered Results" = "篩選結果";
+
+"Actor" = "演員";
+
+"%@s" = "%@ 年代";
+
+"Language" = "語言";
+
+"Catalog Series" = "電視劇";
+
+"TV Movie" = "電視電影";
+
 "iCloud Sync" = "iCloud 同步";
 "Keeps favorites, Continue Watching, subscriptions, and the sources you pinned, hid or ordered the same on your devices signed in to the same iCloud account. Accounts, passwords and downloads stay on each device." = "在登入同一 iCloud 帳號的裝置之間同步收藏、繼續觀看、訂閱，以及你置頂、隱藏或排序的來源。帳號、密碼和下載內容只保存在各自的裝置上。";
 "Danmaku Area" = "彈幕區域";
