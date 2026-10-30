@@ -43,6 +43,7 @@ struct DiscoverView: View {
     @State private var onScreen = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var editing = false
+    @State private var searchShown = false
     @AppStorage("discover.hiddenSections") private var hiddenSections = ""
     private var featured: [TMDBCatalog.Item] { Array(model.items(.trending).filter { $0.poster != nil }.prefix(8)) }
     var body: some View {
@@ -93,9 +94,20 @@ struct DiscoverView: View {
             }
         }
         .modifier(DiscoverHeroTheme(state: heroState))
+        .navigationTitle("")
         #if !os(macOS)
-        .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.visible, for: .navigationBar)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbarColorScheme(heroState.paint?.isDark == false ? .light : .dark, for: .navigationBar)
         #endif
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { searchShown = true } label: { Image(systemName: "text.magnifyingglass") }
+                    .accessibilityLabel(L10n.text("Search Catalog"))
+                    .accessibilityIdentifier("discover.home.search")
+            }
+        }
+        .modifier(DiscoverSearchPresentation(isPresented: $searchShown))
         .ignoresSafeArea(edges: .top)
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }

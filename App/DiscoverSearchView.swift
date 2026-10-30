@@ -186,14 +186,21 @@ struct DiscoverSearchView: View {
         } header: {
             Button {
                 guard kind != .person, filter == nil else { return }
-                focused = false
-                withAnimation(.easeInOut(duration: 0.22)) {
+                // Replace the two lazy layouts together; animating their insertion/removal
+                // cross-fades duplicate cards and repeatedly adjusts the scroll geometry.
+                var transaction = Transaction(animation: nil)
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    focused = false
                     if expanded.contains(kind) { expanded.remove(kind) } else { expanded.insert(kind) }
                 }
             } label: {
                 HStack(spacing: 5) {
                     Text(filter == nil ? kind.title : L10n.text("Filtered Results")).font(.system(size: 16, weight: .semibold))
-                    if kind != .person && filter == nil { Image(systemName: expanded.contains(kind) ? "rectangle.compress.vertical" : "rectangle.expand.vertical").font(.system(size: 18)) }
+                    if kind != .person && filter == nil {
+                        Image(systemName: expanded.contains(kind) ? "rectangle.split.2x1" : "list.bullet")
+                            .font(.system(size: 15, weight: .medium))
+                    }
                     Spacer()
                 }.frame(height: 30).contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityIdentifier("discover.search.expand.\(kind.rawValue)")
