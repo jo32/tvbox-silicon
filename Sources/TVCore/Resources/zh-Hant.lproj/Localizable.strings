@@ -1124,3 +1124,8 @@
 "%lld commits" = "%lld 次提交";
 "iCloud Sync" = "iCloud 同步";
 "Keeps favorites, Continue Watching, subscriptions, and the sources you pinned, hid or ordered the same on your devices signed in to the same iCloud account. Accounts, passwords and downloads stay on each device." = "在登入同一 iCloud 帳號的裝置之間同步收藏、繼續觀看、訂閱，以及你置頂、隱藏或排序的來源。帳號、密碼和下載內容只保存在各自的裝置上。";
+"Danmaku Area" = "彈幕區域";
+"Top Quarter" = "1/4 畫面";
+"Top Half" = "半畫面";
+"Top Three Quarters" = "3/4 畫面";
+"Whole Screen" = "全畫面";

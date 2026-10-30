@@ -143,6 +143,25 @@ struct ProtobufReader {
     }
 }
 
+/// How much of the picture comments may use, from the top (弹幕区域): a quarter or a half keeps them off faces
+/// and subtitles. Stored in percent under `key`; three quarters is where comments always scrolled.
+public enum DanmakuArea: Int, CaseIterable, Sendable {
+    case quarter = 25, half = 50, threeQuarters = 75, full = 100
+    public static let key = "danmakuArea"
+    public static let standard = DanmakuArea.threeQuarters
+    public var share: Double { Double(rawValue) / 100 }
+    public var title: String {
+        switch self {
+        case .quarter: L10n.text("Top Quarter")
+        case .half: L10n.text("Top Half")
+        case .threeQuarters: L10n.text("Top Three Quarters")
+        case .full: L10n.text("Whole Screen")
+        }
+    }
+    /// The choice after this one, for a row that steps through them with each press.
+    public var next: DanmakuArea { Self.allCases[((Self.allCases.firstIndex(of: self) ?? 0) + 1) % Self.allCases.count] }
+}
+
 /// Places comments in lanes as their time comes, so none overlap: a scrolling comment takes a lane once
 /// the lane's previous comment has fully entered and cannot be caught before it leaves; a fixed one
 /// takes a lane whose previous fixed comment has gone. Comments that find no lane are dropped, which is
@@ -169,7 +188,8 @@ public struct DanmakuLayout {
     public init(width: Double, height: Double, laneHeight: Double, scrollArea: Double = 0.75, scrollDuration: Double = 9, fixedDuration: Double = 4) {
         self.width = width; self.laneHeight = laneHeight; self.scrollDuration = scrollDuration; self.fixedDuration = fixedDuration
         scrollLanes = max(1, Int(height * scrollArea / laneHeight))
-        fixedLanes = max(1, Int(height * 0.3 / laneHeight))
+        // Top comments stay inside the scrolling area when that is smaller than their usual 30%.
+        fixedLanes = max(1, Int(height * min(0.3, scrollArea) / laneHeight))
         scrolling = Array(repeating: nil, count: scrollLanes)
         top = Array(repeating: nil, count: fixedLanes)
         bottom = Array(repeating: nil, count: fixedLanes)

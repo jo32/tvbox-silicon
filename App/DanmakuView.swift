@@ -10,6 +10,7 @@ struct DanmakuOverlay: View {
     let comments: [Danmaku]
     var opacity = 0.9
     var revision = ""
+    @AppStorage(DanmakuArea.key) private var area = DanmakuArea.standard
     @State private var engine = DanmakuEngine()
     @Environment(\.displayScale) private var scale
 
@@ -20,7 +21,7 @@ struct DanmakuOverlay: View {
                 _ = timeline.date
                 let time = player.currentTime().seconds
                 guard time.isFinite else { return }
-                for sprite in engine.frame(time: time, size: size, scale: scale) {
+                for sprite in engine.frame(time: time, size: size, scale: scale, area: area) {
                     context.draw(Image(decorative: sprite.image, scale: scale), in: sprite.frame)
                 }
             }
@@ -45,6 +46,7 @@ final class DanmakuEngine: @unchecked Sendable {
     private var comments: [Danmaku] = []
     private var layout: DanmakuLayout?
     private var size = CGSize.zero
+    private var area = DanmakuArea.standard
     private var fontSize: CGFloat = 24
     private var next = 0
     private var active: [Active] = []
@@ -65,11 +67,13 @@ final class DanmakuEngine: @unchecked Sendable {
         }
     }
 
-    func frame(time: Double, size: CGSize, scale: CGFloat) -> [Sprite] {
+    func frame(time: Double, size: CGSize, scale: CGFloat, area: DanmakuArea = .standard) -> [Sprite] {
         lock.withLock {
             guard !comments.isEmpty, size.width > 0, size.height > 0 else { return [] }
-            // A new size, or a seek (any jump the clock would not make by itself), starts over at `time`.
-            if layout == nil || size != self.size || time < lastTime - 0.3 || time > lastTime + 2 { restart(at: time, size: size) }
+            // A new size or area, or a seek (any jump the clock would not make by itself), starts over at `time`.
+            if layout == nil || size != self.size || area != self.area || time < lastTime - 0.3 || time > lastTime + 2 {
+                restart(at: time, size: size, area: area)
+            }
             lastTime = time
             var budget = Self.perFrame
             while next < comments.count, comments[next].time <= time {
@@ -90,13 +94,15 @@ final class DanmakuEngine: @unchecked Sendable {
             active.removeAll { time - $0.placement.start > layout.duration($0.placement) }
             let lane = layout.laneHeight
             let top = size.height * 0.04
+            // Bottom comments rest at the foot of the picture, or of the area when it stops above the lower quarter.
+            let bottom = area.share < DanmakuArea.threeQuarters.share ? top + size.height * 0.96 * area.share : size.height * 0.92
             return active.map { item in
                 let placement = item.placement
                 let x: Double, y: Double
                 switch placement.comment.position {
                 case .scroll: x = layout.width - (time - placement.start) * placement.speed; y = top + Double(placement.lane) * lane
                 case .top: x = (layout.width - item.size.width) / 2; y = top + Double(placement.lane) * lane
-                case .bottom: x = (layout.width - item.size.width) / 2; y = size.height * 0.92 - Double(placement.lane + 1) * lane
+                case .bottom: x = (layout.width - item.size.width) / 2; y = bottom - Double(placement.lane + 1) * lane
                 }
                 return Sprite(image: item.image, frame: CGRect(x: x, y: y + (lane - item.size.height) / 2, width: item.size.width, height: item.size.height))
             }
@@ -112,12 +118,12 @@ final class DanmakuEngine: @unchecked Sendable {
         return image
     }
 
-    private func restart(at time: Double, size: CGSize) {
-        self.size = size
+    private func restart(at time: Double, size: CGSize, area: DanmakuArea) {
+        self.size = size; self.area = area
         // About 43pt on a 1080p TV, 22pt in a small Mac window. From the shorter side: an upright iPhone's full-screen
         // player is tall and narrow, and its height made the text twice the size it is when the phone is turned.
         fontSize = min(44, max(15, min(size.width, size.height) * 0.04))
-        layout = DanmakuLayout(width: size.width, height: size.height * 0.96, laneHeight: fontSize * 1.35)
+        layout = DanmakuLayout(width: size.width, height: size.height * 0.96, laneHeight: fontSize * 1.35, scrollArea: area.share)
         active = []
         var low = 0, high = comments.count
         while low < high { let mid = (low + high) / 2; if comments[mid].time < time { low = mid + 1 } else { high = mid } }

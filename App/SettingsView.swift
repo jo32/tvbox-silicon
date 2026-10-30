@@ -340,6 +340,7 @@ struct FormSettingsView: View {
     @State private var bilibiliSummary = ""
     @State private var douyinSummary = ""
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
+    @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     @AppStorage(ErrorReports.key) private var sendsErrorReports = true
@@ -485,6 +486,11 @@ struct FormSettingsView: View {
                         FormLabel(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Show Danmaku"), subtitle: danmakuNote)
                     }
                     .settingsSwitch()
+                    Picker(selection: $danmakuArea) {
+                        ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
+                    } label: {
+                        FormLabel(symbol: "rectangle.tophalf.inset.filled", tint: .teal, title: L10n.text("Danmaku Area"))
+                    }
                     Toggle(isOn: $receivesCasts) {
                         FormLabel(symbol: "tv.and.mediabox.fill", tint: BilibiliMark.blue, title: L10n.text("Cast from the Bilibili App"),
                                   subtitle: L10n.text("With your phone on the same network, tap the TV button in a Bilibili video and choose %@.", L10n.text("Yingxia")))
@@ -811,6 +817,7 @@ private struct PressableStyle: ButtonStyle {
 struct PlaybackSettingsView: View {
     @Environment(Store.self) private var store
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
+    @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @AppStorage(SpeedBoost.key) private var holdSpeed = SpeedBoost.standard
     @AppStorage(PictureLevel.key) private var slidesLevels = true
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
@@ -836,6 +843,11 @@ struct PlaybackSettingsView: View {
                         FormLabel(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Show Danmaku"))
                     }
                     .settingsSwitch()
+                    Picker(selection: $danmakuArea) {
+                        ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
+                    } label: {
+                        FormLabel(symbol: "rectangle.tophalf.inset.filled", tint: .teal, title: L10n.text("Danmaku Area"))
+                    }
                 }
             }
             if VideoEnhancement.canUpscale || VideoEnhancement.canSmooth {
@@ -1463,6 +1475,7 @@ struct TVSettingsView: View {
     @State private var bilibiliSummary = ""
     @State private var douyinSummary = ""
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
+    @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     @AppStorage(BilibiliCastController.key) private var receivesCasts = true
@@ -1499,6 +1512,7 @@ struct TVSettingsView: View {
             TVSettingsSection(title: L10n.text("Playback"), footer: playbackFooter) {
                 if store.extrasUnlocked {
                     TVSettingsToggle(title: L10n.text("Show Danmaku"), isOn: $showsDanmaku)
+                    TVSettingsAction(title: L10n.text("Danmaku Area"), value: danmakuArea.title) { danmakuArea = danmakuArea.next }
                     TVSettingsToggle(title: L10n.text("Cast from the Bilibili App"), isOn: $receivesCasts)
                         .onChange(of: receivesCasts) { _, on in
                             if on { BilibiliCastController.shared.start(store) } else { BilibiliCastController.shared.stop() }

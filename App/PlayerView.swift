@@ -18,6 +18,7 @@ struct PlaybackView: View {
     @State private var quietStart = !UserDefaults.standard.bool(forKey: "qaPlayerControls")
     #endif
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
+    @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @State private var showsDanmakuList = false
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
@@ -213,6 +214,10 @@ struct PlaybackView: View {
             if !session.danmaku.isEmpty {
                 Menu {
                     Toggle(isOn: $showsDanmaku) { Label(L10n.text("Show Danmaku"), systemImage: "text.bubble") }
+                    Picker(selection: $danmakuArea) {
+                        ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
+                    } label: { Label(L10n.text("Danmaku Area"), systemImage: "rectangle.tophalf.inset.filled") }
+                    .pickerStyle(.menu)
                     Button { showsDanmakuList = true } label: { Label(L10n.text("Danmaku List"), systemImage: "list.bullet.rectangle") }
                 } label: {
                     Image(systemName: showsDanmaku ? "text.bubble.fill" : "text.bubble").font(.headline).frame(width: 22, height: 22)
@@ -886,6 +891,7 @@ private struct DesktopPlaybackView: View {
     @State private var floats = false
     @State private var idle = ChromeIdle()
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
+    @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @State private var showsDanmakuList = false
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
@@ -1007,6 +1013,9 @@ private struct DesktopPlaybackView: View {
             }
             if !session.danmaku.isEmpty {
                 Toggle(L10n.text("Show Danmaku"), isOn: $showsDanmaku)
+                Picker(L10n.text("Danmaku Area"), selection: $danmakuArea) {
+                    ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
                 Button(L10n.text("Danmaku List…")) { showsDanmakuList = true }
             }
             Divider()
