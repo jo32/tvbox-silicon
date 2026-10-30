@@ -137,6 +137,8 @@ import TVCore
     private var rangeRetried = false
     /// Whether AVPlayer shows the picture of the file it just opened is being checked; the saved position waits.
     private var checkingPicture = false
+    /// A live stream is being moved to its live edge (`catchUpLive`).
+    private var catchingUpLive = false
     /// A live room's chat, whose comments join `danmaku` as they are sent.
     private var chat: BilibiliLiveChat?
     /// Download state while connecting or buffering, sampled once a second from AVFoundation's logs.
@@ -625,6 +627,7 @@ import TVCore
         guard let item, player.currentItem === item else { return true }
         restorePositionIfNeeded(item)
         updateSkipping(item)
+        catchUpLive(item)
         queueUpcomingIfDue(item)
         if let url = playing?.url { HongguoStreams.updatePosition(for: url, seconds: pendingResume ?? player.currentTime().seconds) }
         if tick % 5 == 0 { saveHistory() }
@@ -687,6 +690,17 @@ import TVCore
             Diagnostics.shared.record(.debug, "player", "waiting host=\(next.host ?? "-") received=\(next.received) speed=\(Int(next.bytesPerSecond ?? -1)) required=\(Int(next.required ?? -1)) failure=\(next.failure ?? "-")")
         }
         return true
+    }
+    /// A live stream playing before everything its playlist still lists shows a frozen picture (`LiveEdge`); it
+    /// jumps to the live edge, as a web player does, instead of waiting for someone to open it again.
+    private func catchUpLive(_ item: AVPlayerItem) {
+        guard !catchingUpLive, item.status == .readyToPlay, item.duration.isIndefinite, player.timeControlStatus == .playing,
+              let edge = LiveEdge.target(position: player.currentTime(), seekable: item.seekableTimeRanges.map(\.timeRangeValue)) else { return }
+        catchingUpLive = true
+        Diagnostics.shared.record(.info, "player", "live catch-up from=\(Int(player.currentTime().seconds))s to=\(Int(edge.seconds))s")
+        player.seek(to: edge) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.catchingUpLive = false }
+        }
     }
     /// Domain and code of the error and its underlying cause: AVFoundation's messages alone
     /// ("The operation could not be completed") don't tell an HTTP 403 from a decoder failure.
