@@ -181,7 +181,7 @@ struct DiscoverView: View {
         case .networks: brands(model.collections?.networks ?? [], title: section.title, width: 302)
         case .genres: genreCards
         case .rankings: rankings(width: width)
-        case .companies: brands(model.collections?.companies ?? [], title: section.title, width: 197)
+        case .companies: brands(model.collections?.companies ?? [], title: section.title, width: 197, studio: true)
         }
     }
 
@@ -213,10 +213,23 @@ struct DiscoverView: View {
         }
     }
 
-    @ViewBuilder private func brands(_ brands: [TMDBCatalog.Brand], title: String, width: CGFloat) -> some View {
+    @ViewBuilder private func brands(_ brands: [TMDBCatalog.Brand], title: String, width: CGFloat, studio: Bool = false) -> some View {
         if !brands.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 sectionHeading(title)
+                #if os(tvOS)
+                DiscoverTVRow {
+                    ForEach(brands) { brand in
+                        RouteLink { DiscoverBrowseView(title: brand.name, filter: brand.feed.brandFilter, logo: brand.logo) } label: {
+                            if studio {
+                                DiscoverTVStudioCard(brand: brand, backdrop: model.items(brand.feed).lazy.compactMap(\.backdrop).first)
+                            } else {
+                                DiscoverTVNetworkCard(brand: brand, items: Array(model.items(brand.feed).filter { $0.poster != nil }.prefix(9)))
+                            }
+                        }.tmdbCardButton().accessibilityLabel(brand.name)
+                    }
+                }
+                #else
                 DiscoverRail {
                     LazyHStack(spacing: 13) {
                         ForEach(brands) { brand in
@@ -226,6 +239,7 @@ struct DiscoverView: View {
                         }
                     }.padding(.horizontal, DiscoverLayout.gutter)
                 }
+                #endif
             }
         }
     }
@@ -233,6 +247,15 @@ struct DiscoverView: View {
     private var genreCards: some View {
         VStack(alignment: .leading, spacing: 0) {
             sectionHeading(L10n.text("Browse by Genre"))
+            #if os(tvOS)
+            DiscoverTVRow {
+                ForEach(tvGenres) { genre in
+                    RouteLink { DiscoverBrowseView(title: genre.title, filter: genre.filter) } label: {
+                        DiscoverTVGenreCard(title: genre.title, posters: genre.posters)
+                    }.tmdbCardButton().accessibilityIdentifier("discover.genre.\(genre.id)")
+                }
+            }
+            #else
             DiscoverRail {
                 HStack(spacing: 13) {
                     ForEach([TMDBCatalog.Feed.family, .animation, .kids], id: \.self) { feed in
@@ -251,10 +274,36 @@ struct DiscoverView: View {
                     }
                 }.padding(.horizontal, DiscoverLayout.gutter)
             }
+            #endif
         }
     }
 
+    #if os(tvOS)
+    /// Family, animation and kids from their own feeds, then the common genres with covers from every loaded row.
+    private var tvGenres: [DiscoverTVGenre] {
+        let feeds: [(TMDBCatalog.Feed, Int, TMDBMatch.MediaType)] = [(.family, 10751, .movie), (.animation, 16, .tv), (.kids, 10762, .tv)]
+        var genres = feeds.map { feed, id, type in DiscoverTVGenre(id: id, title: feed.title, filter: .genre(id, type: type), posters: model.items(feed).compactMap(\.poster)) }
+        let loaded = model.pages.values.flatMap(\.items)
+        for id in [878, 28, 35, 80, 18, 9648, 53, 27, 10749, 14, 12, 99] where !genres.contains(where: { $0.id == id }) {
+            var seen = Set<URL>()
+            let posters = loaded.filter { $0.genreIDs.contains(id) }.compactMap(\.poster).filter { seen.insert($0).inserted }
+            guard posters.count >= 3, let name = DiscoverGenres.names[id] else { continue }
+            genres.append(DiscoverTVGenre(id: id, title: L10n.text(name), filter: .genre(id, type: .movie), posters: posters))
+        }
+        return genres
+    }
+    #endif
+
     private func rankings(width: CGFloat) -> some View {
+        #if os(tvOS)
+        DiscoverTVRow {
+            ForEach([TMDBCatalog.Feed.topTelevision, .topMovies], id: \.self) { feed in
+                RouteLink { DiscoverListView(feed: feed, initial: model.pages[feed]) } label: {
+                    DiscoverTVRankingCard(title: feed.title, items: Array(model.items(feed).filter { $0.poster != nil }.prefix(18)))
+                }.tmdbCardButton().accessibilityIdentifier("discover.ranking.\(feed.rawValue)")
+            }
+        }
+        #else
         DiscoverRail {
             HStack(spacing: 13) {
                 ForEach([TMDBCatalog.Feed.topTelevision, .topMovies], id: \.self) { feed in
@@ -264,6 +313,7 @@ struct DiscoverView: View {
                 }
             }.padding(.horizontal, DiscoverLayout.gutter)
         }
+        #endif
     }
 
     @ViewBuilder private func shelf(_ feed: TMDBCatalog.Feed, landscape: Bool = false) -> some View {
@@ -876,6 +926,125 @@ private struct DiscoverTVPlateStyle: ButtonStyle {
                 .scaleEffect(configuration.isPressed ? 0.97 : focused ? 1.04 : 1)
                 .animation(.easeOut(duration: 0.18), value: focused)
         }
+    }
+}
+/// A row of cards with room for the focus lift, as the collections row has.
+private struct DiscoverTVRow<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    var body: some View {
+        ScrollView(.horizontal) {
+            LazyHStack(spacing: DiscoverLayout.spacing) { content() }
+                .padding(.horizontal, DiscoverLayout.gutter).padding(.vertical, 24)
+        }.scrollClipDisabled().focusSection()
+    }
+}
+
+/// A network's or studio's logo in white, or its name until the logo loads.
+private struct DiscoverTVLogo: View {
+    let brand: TMDBCatalog.Brand
+    var body: some View {
+        AsyncImage(url: brand.logo) { phase in
+            if let image = phase.image { image.renderingMode(.template).resizable().scaledToFit() }
+            else { Text(brand.name).font(.system(size: 32, weight: .bold)).lineLimit(1).minimumScaleFactor(0.6) }
+        }
+    }
+}
+
+/// A network: its logo on the left, a tilted wall of its shows on the right.
+private struct DiscoverTVNetworkCard: View {
+    let brand: TMDBCatalog.Brand
+    let items: [TMDBCatalog.Item]
+    var body: some View {
+        ZStack(alignment: .leading) {
+            Color(white: 0.09)
+            HStack(alignment: .top, spacing: 12) {
+                ForEach(0..<3) { column in
+                    VStack(spacing: 12) {
+                        ForEach(Array(items.enumerated()).filter { $0.offset % 3 == column }, id: \.element.key) { _, item in
+                            PosterImage(url: item.poster).frame(width: 96, height: 144)
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                    }.offset(y: column == 1 ? -70 : -10)
+                }
+            }
+            .rotationEffect(.degrees(12))
+            .frame(maxWidth: .infinity, alignment: .trailing).offset(x: 24)
+            LinearGradient(stops: [.init(color: Color(white: 0.09), location: 0.38), .init(color: Color(white: 0.09).opacity(0), location: 0.62)],
+                           startPoint: .leading, endPoint: .trailing)
+            DiscoverTVLogo(brand: brand).frame(width: 200, height: 84).padding(.leading, 34)
+        }
+        .frame(width: 520, height: 236).clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous)).foregroundStyle(.white)
+    }
+}
+
+/// A studio: a still from one of its films behind its logo.
+private struct DiscoverTVStudioCard: View {
+    let brand: TMDBCatalog.Brand
+    let backdrop: URL?
+    var body: some View {
+        ZStack {
+            Color(white: 0.12)
+            if let backdrop { TMDBArtwork(url: backdrop, maxPixels: 800) }
+            Color.black.opacity(0.42)
+            DiscoverTVLogo(brand: brand).frame(width: 220, height: 76).shadow(color: .black.opacity(0.5), radius: 8)
+        }
+        .frame(width: 316, height: 136).clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous)).foregroundStyle(.white)
+    }
+}
+
+struct DiscoverTVGenre: Identifiable {
+    let id: Int
+    let title: String
+    let filter: TMDBCatalog.Filter
+    let posters: [URL]
+}
+
+/// A genre: a small fan of its covers beside its name.
+private struct DiscoverTVGenreCard: View {
+    let title: String
+    let posters: [URL]
+    var body: some View {
+        HStack(spacing: 0) {
+            ZStack(alignment: .leading) {
+                ForEach(Array(posters.prefix(3).enumerated()).reversed(), id: \.offset) { index, url in
+                    PosterImage(url: url).frame(width: 62, height: 93)
+                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .shadow(color: .black.opacity(0.45), radius: 5, x: 3)
+                        .rotationEffect(.degrees(Double(index) * 7), anchor: .bottom)
+                        .offset(x: CGFloat(index) * 15)
+                }
+            }.frame(width: 110, alignment: .leading)
+            Text(title).font(.system(size: 30, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
+                .frame(maxWidth: .infinity)
+        }
+        .padding(.leading, 24).padding(.trailing, 12)
+        .frame(width: 316, height: 136)
+        .background(Color(white: 0.13), in: RoundedRectangle(cornerRadius: 20, style: .continuous)).foregroundStyle(.white)
+    }
+}
+
+/// Top rated: three staggered rows of covers over the title.
+private struct DiscoverTVRankingCard: View {
+    let title: String
+    let items: [TMDBCatalog.Item]
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 24) {
+                ForEach(0..<3) { row in
+                    HStack(spacing: 22) {
+                        ForEach(Array(items.enumerated()).filter { $0.offset % 3 == row }, id: \.element.key) { _, item in
+                            PosterImage(url: item.poster).frame(width: 120, height: 178)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+                    }.offset(x: [-30, -96, -8][row])
+                }
+            }
+            .padding(.top, 22)
+            .frame(width: 720, height: 610, alignment: .topLeading).clipped()
+            Text(title).font(.system(size: 40, weight: .bold)).frame(maxHeight: .infinity)
+        }
+        .frame(width: 720, height: 700)
+        .background(Color(white: 0.1)).clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous)).foregroundStyle(.white)
     }
 }
 #endif
