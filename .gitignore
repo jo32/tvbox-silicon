@@ -18,3 +18,8 @@ Review/
 exports/
 .upload-staging/
 .wrangler/
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+!.env.example

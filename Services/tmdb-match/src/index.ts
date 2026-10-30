@@ -1,5 +1,5 @@
 // Finds the TMDB movie or series behind a source's video for the app's detail page (Sources/TVCore/TMDBMatch.swift).
-// A Gemini agent searches TMDB (src/agent.ts); its answer is kept in D1 by title, so the next viewer of the same
+// An AI agent searches TMDB (src/agent.ts); its answer is kept in D1 by title, so the next viewer of the same
 // title, on any source, gets it at once. The app sees progress while the agent works: the answer is a stream of
 // JSON lines, the last one the result. TMDB's own answers are cached per data center for a day (src/tmdb.ts).
 // It also works the other way: each matched source video is linked to its TMDB work, so a TMDB title found with
@@ -9,13 +9,17 @@ import { cacheKey, readSource, readSourceVideo, type SourceVideo, text } from ".
 import { brief, details } from "./details.ts";
 import { type Fetcher, image, type MediaType, TMDB, UpstreamError } from "./tmdb.ts";
 import { DurableObject } from "cloudflare:workers";
+import { modelConfig } from "./provider.ts";
 
 interface Env {
   DB: D1Database;
   GEMINI_RELAY: DurableObjectNamespace<GeminiRelay>;
   MATCH_LIMITER: RateLimit;
   DETAILS_LIMITER: RateLimit;
-  // Secrets: wrangler secret put GEMINI_API_KEY / TMDB_TOKEN (TMDB's v4 read access token).
+  // Secrets: wrangler secret put OPENAI_API_KEY / GEMINI_API_KEY / TMDB_TOKEN (TMDB's v4 read access token).
+  AI_PROVIDER?: string;
+  OPENAI_API_KEY?: string;
+  OPENAI_MODEL?: string;
   GEMINI_API_KEY: string;
   TMDB_TOKEN: string;
   GEMINI_MODEL: string;
@@ -80,22 +84,66 @@ function fromRow(row: Row): Verdict {
 }
 
 const GEMINI = "https://generativelanguage.googleapis.com/";
+const OPENAI = "https://api.openai.com/v1/";
+
+interface RelayReply {
+  status: number;
+  headers: [string, string][];
+  body: ArrayBuffer;
+}
 
 // Gemini turns away calls from some places Cloudflare runs Workers (Hong Kong, where viewers in China land:
 // "User location is not supported"), and a placement hint did not change what Google sees. A Durable Object made
 // with a location hint does run there, so the model's calls go out through one in eastern North America.
+// OpenAI uses the US jurisdiction (a hint alone isn't a guarantee). Keep the existing class and binding names.
 export class GeminiRelay extends DurableObject<Env> {
+  private pending: { target: string; body: string; resolve: (reply: RelayReply) => void; reject: (error: unknown) => void }[] = [];
+
   async fetch(request: Request) {
-    if (!request.url.startsWith(GEMINI)) return new Response(null, { status: 400 });
-    return fetch(request.url, { method: "POST", headers: request.headers, body: request.body });
+    const target = request.headers.get("x-model-target") ?? request.url;
+    if (!target.startsWith(GEMINI) && !target.startsWith(OPENAI)) return new Response(null, { status: 400 });
+    const headers = new Headers(request.headers);
+    headers.delete("x-model-target");
+    if (target.startsWith(OPENAI)) {
+      const body = await request.text();
+      // An alarm has its own server-side request context, independent of the viewer's edge metadata.
+      const reply = await new Promise<RelayReply>((resolve, reject) => {
+        this.pending.push({ target, body, resolve, reject });
+        void this.ctx.storage.setAlarm(Date.now()).catch(reject);
+      });
+      return new Response(reply.body, { status: reply.status, headers: reply.headers });
+    }
+    return fetch(target, { method: "POST", headers, body: request.body });
+  }
+
+  async alarm() {
+    const requests = this.pending.splice(0);
+    await Promise.all(requests.map(async ({ target, body, resolve, reject }) => {
+      try {
+        const response = await fetch(target, {
+          method: "POST",
+          headers: { authorization: `Bearer ${this.env.OPENAI_API_KEY}`, "content-type": "application/json", "accept-encoding": "identity" },
+          body,
+          signal: AbortSignal.timeout(60_000),
+        });
+        // Streams belong to their event: only buffered bytes cross back into the waiting fetch handler.
+        resolve({ status: response.status, headers: [...response.headers], body: await response.arrayBuffer() });
+      } catch (error) { reject(error); }
+    }));
   }
 }
 
 // A few relays, so one busy object doesn't hold up every lookup.
 function relay(env: Env): Fetcher {
   return (url, init) => {
-    const name = `gemini-${Math.floor(Math.random() * 4)}`;
-    return env.GEMINI_RELAY.get(env.GEMINI_RELAY.idFromName(name), { locationHint: "enam" }).fetch(url, init);
+    const openai = url.startsWith(OPENAI);
+    const namespace = openai ? env.GEMINI_RELAY.jurisdiction("us") : env.GEMINI_RELAY;
+    const name = `${openai ? "openai" : "gemini"}-${Math.floor(Math.random() * 4)}`;
+    const stub = namespace.get(namespace.idFromName(name), { locationHint: "enam" });
+    if (!openai) return stub.fetch(url, init);
+    const headers = new Headers(init?.headers);
+    headers.set("x-model-target", url);
+    return stub.fetch("https://model-relay.internal/", { ...init, headers });
   };
 }
 
@@ -217,9 +265,13 @@ async function match(request: Request, env: Env, ctx: ExecutionContext): Promise
 
 async function agent(source: Source, key: string, tmdb: TMDB, env: Env, progress: (event: Record<string, unknown>) => void) {
   const started = Date.now();
-  const cache = await cachedPrefix(env);
-  const gemini = { key: env.GEMINI_API_KEY, model: env.GEMINI_MODEL, fetcher: relay(env), cache, cacheLost: () => void forgetPrefix(env, cache!).catch(() => {}) };
-  const outcome = await identify(source, tmdb, gemini, progress);
+  const model = modelConfig(env);
+  model.fetcher = relay(env);
+  if (model.provider === "gemini") {
+    const cache = await cachedPrefix(env);
+    Object.assign(model, { cache, cacheLost: () => void forgetPrefix(env, cache!).catch(() => {}) });
+  }
+  const outcome = await identify(source, tmdb, model, progress);
   const { verdict, seen } = outcome;
   // The candidates as cards (name, year, poster), so a cached answer needs no search to show them.
   const candidates = verdict.candidates.map((item) => seen.get(`${item.mediaType}:${item.id}`)).filter(Boolean);
@@ -244,7 +296,7 @@ async function agent(source: Source, key: string, tmdb: TMDB, env: Env, progress
       verdict.unmatched,
       verdict.reason,
       JSON.stringify(candidates),
-      env.GEMINI_MODEL,
+      model.model,
       outcome.turns,
       tmdb.requests,
       outcome.tokens,
