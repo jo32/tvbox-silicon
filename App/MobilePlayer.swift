@@ -38,6 +38,7 @@ struct MobilePlayerView: View {
     @State private var nowPlaying = VideoNowPlaying()
     @State private var fillsScreen = false
     @State private var speed: Float = 1
+    @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @State private var showsDanmakuList = false
     /// Devices with Yingxia open, for the Play On button; and the one the video was sent to.
     @State private var tvBrowser = PlayOnBrowser()
@@ -500,6 +501,10 @@ struct MobilePlayerView: View {
             if !session.danmaku.isEmpty {
                 Menu {
                     Toggle(isOn: $showsDanmaku) { Label(L10n.text("Show Danmaku"), systemImage: "text.bubble") }
+                    Picker(selection: $danmakuArea) {
+                        ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
+                    } label: { Label(L10n.text("Danmaku Area"), systemImage: "rectangle.tophalf.inset.filled") }
+                    .pickerStyle(.menu)
                     Button { showsDanmakuList = true } label: { Label(L10n.text("Danmaku List"), systemImage: "list.bullet.rectangle") }
                 } label: {
                     Image(systemName: showsDanmaku ? "text.bubble.fill" : "text.bubble").font(.headline).frame(width: 22, height: 22)

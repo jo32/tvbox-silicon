@@ -42,6 +42,16 @@ struct DanmakuTests {
         #expect(layout.place(fixed, width: 100, at: 4.5)?.lane == 0)
     }
 
+    @Test func areaLimitsHowMuchOfThePictureCommentsUse() {
+        // A quarter of a 1000-point picture holds five 50-point rows, and top comments stay inside it too.
+        let quarter = DanmakuLayout(width: 1000, height: 1000, laneHeight: 50, scrollArea: DanmakuArea.quarter.share)
+        #expect(quarter.scrollLanes == 5 && quarter.fixedLanes == 5)
+        let whole = DanmakuLayout(width: 1000, height: 1000, laneHeight: 50, scrollArea: DanmakuArea.full.share)
+        #expect(whole.scrollLanes == 20 && whole.fixedLanes == 6)
+        #expect(DanmakuArea.standard.share == 0.75 && DanmakuArea(rawValue: 50) == .half)
+        #expect(DanmakuArea.allCases.map(\.next) == [.half, .threeQuarters, .full, .quarter])
+    }
+
     @Test func topCommentsAndScrollingCommentsDoNotOverlap() {
         var layout = DanmakuLayout(width: 1000, height: 400, laneHeight: 50, scrollArea: 0.5, scrollDuration: 10)
         let moving = Danmaku(time: 0, position: .scroll, text: "x")
