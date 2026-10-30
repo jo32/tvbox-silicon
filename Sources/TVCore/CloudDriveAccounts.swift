@@ -74,6 +74,7 @@ public struct CloudDriveAccounts: Codable, Sendable {
         #if os(tvOS)
         UserDefaults.standard.set(data, forKey: Self.defaultsKey)
         #endif
+        NotificationCenter.default.post(name: CloudFiles.drivesChanged, object: nil)
     }
     /// Changes whenever the saved accounts do; empty when nothing is saved.
     public static var revision: String {

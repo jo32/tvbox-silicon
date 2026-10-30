@@ -113,6 +113,59 @@ import Testing
         #expect(try await client.list(server, path: "/Private/Deeper", password: nil).count == 2)
     }
 
+    @Test func drivesSearchAsSources() async throws {
+        QuarkStub.reset()
+        let quark = try await QuarkFiles(.quark, session: QuarkStub.session, account: { "__pus=abc" }).search("庆余年 1", page: 2, size: 50)
+        #expect(quark.files.map(\.name) == ["庆余年", "庆余年 第1集.mp4", "庆余年 海报.pdf"] && quark.total == 120)
+        AListStub.reset()
+        let server = AListServer(id: "q", name: "Stub", address: "https://alist.test", username: "me", password: "pw")
+        let client = AList(session: AListStub.session)
+        let found = try await client.search(server, "剧", page: 1, size: 50)
+        #expect(found.files.map(\.id) == ["/Local/剧集/第一季", "/a.mp4"] && found.files[0].isFolder && found.total == 2)
+        // A server without a search index says how to get one.
+        await #expect(throws: TVError.self) { try await client.search(server, "nothing", page: 1, size: 50) }
+        EmbyStub.reset()
+        let emby = AListServer(id: "e", name: "Home", address: "http://emby.test/emby", username: "me", password: "pw", kind: .emby)
+        let films = try await Emby(session: EmbyStub.session).search(emby, "Pilot", page: 2, size: 50)
+        #expect(films.files.count == 3 && films.total == 3)
+        #expect(EmbyStub.calls.last == "GET /emby/Users/u1/Items?Fields=Path,MediaSources&IncludeItemTypes=Movie,Series,Video,MusicVideo&Limit=50&Recursive=true&SearchTerm=Pilot&StartIndex=50 tok-1")
+    }
+
+    @Test func aDriveSourceNamesFilesAndFoldersByTheirIDs() throws {
+        let file = CloudFile(id: "/Local/剧集/S01E01 #1|a%b.mp4", name: "S01E01 #1|a%b.mp4", isFolder: false, size: 2048)
+        let entry = CloudFilesSource.Entry(file)
+        #expect(CloudFilesSource.Entry(entry.token) == entry && !entry.token.contains("#") && entry.token.split(separator: "|").count == 3)
+        #expect(CloudFilesSource.Entry("x|a|b") == nil && CloudFilesSource.Entry("f||b") == nil)
+        // Found by a search, a folder opens as details; browsing, as a listing.
+        let folder = CloudFile(id: "d1", name: "庆余年", isFolder: true)
+        #expect(CloudFilesSource.video(folder, opensAsListing: false)["vod_tag"] == nil)
+        #expect(CloudFilesSource.video(folder, opensAsListing: true)["vod_tag"] == .string("folder"))
+        let video = try #require(Video(json: CloudFilesSource.video(file, opensAsListing: false), origin: URL(string: "https://example.invalid")!))
+        #expect(video.name == "S01E01 #1|a%b" && !video.isFolder && video.remarks == ByteCountFormatter.string(fromByteCount: 2048, countStyle: .file))
+        // An episode keeps its file through TVBox's play list, whatever its name holds.
+        let fields: [String: JSONValue] = ["vod_id": .string("v"), "vod_play_from": .string(CloudFilesSource.lineName("A$B")),
+                                           "vod_play_url": .string(CloudFilesSource.episode(file))]
+        let episode = try #require(Video(json: fields, origin: URL(string: "https://example.invalid")!)?.episodes.first)
+        #expect(CloudFilesSource.Entry(episode.address) == entry && episode.name == "S01E01 ＃1|a%b" && episode.flag == "A＄B")
+    }
+
+    @Test func aFolderPlaysItsFilesThenEachSubfoldersAsLines() {
+        let drive = CloudFilesDrive.quark
+        let lines = CloudFilesSource.playlist("Show", [CloudFile(id: "s1", name: "Season 1", isFolder: true), CloudFile(id: "n", name: "notes.txt", isFolder: false),
+                                                       CloudFile(id: "t", name: "Trailer.mp4", isFolder: false)],
+                                              subfolders: [(name: "Season 1", files: [CloudFile(id: "e1", name: "E01.mkv", isFolder: false)]),
+                                                           (name: "Extras", files: [CloudFile(id: "x", name: "cover.jpg", isFolder: false)])], drive: drive)
+        #expect(lines.map(\.name) == ["Show", "Season 1"] && lines.map { $0.files.map(\.id) } == [["t"], ["e1"]])
+    }
+
+    @Test func driveSourcesAreBuiltInAndRunHere() {
+        let site = CloudFilesSource.site(.quark)
+        #expect(site.isCloudFiles && site.isBuiltIn && site.searchable && site.canBrowse(jarURL: nil))
+        #expect(site.key == "builtin.files.quark" && !Site.bilibili.isCloudFiles)
+        let webdav = AListServer(name: "NAS", address: "http://nas:5005", kind: .webdav)
+        #expect(!CloudFilesDrive.alist(webdav).searches && CloudFilesDrive.uc.searches)
+    }
+
     /// A real AList or OpenList server, for example Scripts' local one: TVBOX_ALIST_URL plus
     /// TVBOX_ALIST_FOLDER (a folder holding an MP4) and optionally TVBOX_ALIST_USER/PASSWORD.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["TVBOX_ALIST_URL"] != nil))
@@ -261,6 +314,10 @@ import Testing
         let accounts = try JSONDecoder().decode(CloudDriveAccounts.self, from: Data(contentsOf: URL(fileURLWithPath: environment["TVBOX_QUARK_ACCOUNTS"]!)))
         let drive = QuarkFiles(.quark, account: { accounts.quarkCookie })
         let files = try await drive.list(environment["TVBOX_QUARK_FOLDER"] ?? "0")
+        // Its search finds a file by a word of its name.
+        let named = try #require(files.first { !$0.isFolder })
+        let found = try await drive.search(String(named.name.prefix(2)), page: 1, size: 50)
+        #expect(found.files.contains { $0.id == named.id } && found.total >= found.files.count)
         let video = try #require(files.first { !$0.isFolder && $0.name.lowercased().hasSuffix(".mp4") })
         try await plays(drive.stream(video.id, name: video.name))
         // Named as a container Apple devices can't open, it takes the transcoded way.
@@ -303,6 +360,12 @@ final class QuarkStub: URLProtocol, @unchecked Sendable {
         switch url.path {
         case "/1/clouddrive/file/download":
             answer = ["status": 400, "code": 23018, "message": "download file size limit[0f72b19798924b5191194e364cf4265e]"]
+        case "/1/clouddrive/file/search":
+            answer = ["status": 200, "code": 0, "metadata": ["_total": 120], "data": ["list": [
+                ["fid": "d1", "file_name": "庆余年", "dir": true],
+                ["fid": "f1", "file_name": "庆余年 第1集.mp4", "dir": false, "size": 1000],
+                ["fid": "f2", "file_name": "庆余年 海报.pdf", "dir": false, "size": 10],
+            ]]]
         case "/1/clouddrive/file/v2/play":
             answer = ["status": 200, "code": 0, "data": ["video_list": [
                 ["resolution": "super", "accessable": false],
@@ -346,6 +409,11 @@ final class AListStub: URLProtocol, @unchecked Sendable {
         switch url.path {
         case "/api/auth/login":
             answer = body["password"] as? String == "pw" ? ["code": 200, "data": ["token": "token-1"]] : ["code": 400, "message": "password is incorrect"]
+        case "/api/fs/search" where body["keywords"] as? String == "nothing":
+            answer = ["code": 500, "message": "search not available"]
+        case "/api/fs/search":
+            answer = ["code": 200, "data": ["total": 2, "content": [["parent": "/Local/剧集/", "name": "第一季", "is_dir": true, "size": 0],
+                                                                   ["parent": "/", "name": "a.mp4", "is_dir": false, "size": 10]]]]
         case "/api/fs/list" where token == nil:
             answer = ["code": 401, "message": "Guest user is disabled, login please"]
         case "/api/fs/list" where (body["path"] as? String ?? "").hasPrefix("/Private") && body["password"] as? String != "1234":

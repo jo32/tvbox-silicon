@@ -47,6 +47,14 @@ actor QuarkFiles {
         return files
     }
 
+    /// Files and folders anywhere in the drive whose names hold `keywords`, newest first.
+    func search(_ keywords: String, page: Int, size: Int) async throws -> (files: [CloudFile], total: Int) {
+        let words = keywords.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed.subtracting(CharacterSet(charactersIn: "&=+?#"))) ?? keywords
+        let answer = try await call("/file/search?\(query)&q=\(words)&_page=\(page)&_size=\(size)&_fetch_total=1&_sort=file_type:desc,updated_at:desc")
+        let files = (((answer["data"] as? [String: Any])?["list"] as? [[String: Any]]) ?? []).compactMap(Self.file)
+        return (files, ((answer["metadata"] as? [String: Any])?["_total"] as? NSNumber)?.intValue ?? files.count)
+    }
+
     static func file(_ item: [String: Any]) -> CloudFile? {
         guard let id = item["fid"] as? String, let name = item["file_name"] as? String else { return nil }
         let updated = (item["updated_at"] as? NSNumber)?.doubleValue

@@ -57,6 +57,12 @@ public enum CloudStreams {
         return CloudRemuxSource(stream: stream)
     }
 
+    /// The file a stream reads and the headers its CDN wants, for a download, which reads it itself.
+    public static func source(for url: URL) async -> Source? {
+        guard let stream = CloudStreamStore.shared.stream(url) else { return nil }
+        return await stream.currentSource
+    }
+
     public static func stop(_ url: URL) {
         CloudResourceLoader.shared.cancel(url)
         if let stream = CloudStreamStore.shared.stream(url) { Task { await stream.clear() } }
@@ -190,6 +196,7 @@ actor CloudByteStream {
     }
 
     var length: Int { source.length }
+    var currentSource: CloudStreams.Source { source }
     nonisolated let sourceLength: Int
     private var chunks: Int { (source.length + Self.chunkSize - 1) / Self.chunkSize }
 

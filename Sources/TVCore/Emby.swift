@@ -59,6 +59,16 @@ public actor Emby {
         return items.compactMap { Self.file($0, server: server) }
     }
 
+    /// Films, series and videos in the user's libraries whose names hold `term`.
+    func search(_ server: AListServer, _ term: String, page: Int, size: Int) async throws -> (files: [CloudFile], total: Int) {
+        let answer = try await call(server, query: ["SearchTerm": term, "Recursive": "true", "IncludeItemTypes": "Movie,Series,Video,MusicVideo",
+                                                    "Fields": "Path,MediaSources", "StartIndex": String((page - 1) * size), "Limit": String(size)]) {
+            "/Users/\($0)/Items"
+        } as? [String: Any]
+        let files = (answer?["Items"] as? [[String: Any]] ?? []).compactMap { Self.file($0, server: server) }
+        return (files, (answer?["TotalRecordCount"] as? NSNumber)?.intValue ?? files.count)
+    }
+
     /// An item as a file: folders by their name, and media by a name ending in the extension of
     /// the file the server keeps, which says how it plays. Episodes lead with their number so the
     /// season lists in order.

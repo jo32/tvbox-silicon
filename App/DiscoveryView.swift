@@ -43,7 +43,7 @@ struct GlobalSearchView: View {
     /// Built-in sources can be selected while their first search is still in flight. One the viewer
     /// hid, or one paused for failing, isn't asked and gets no chip.
     private var sourceItems: [SearchSourceItem] {
-        let builtins = Site.builtInSites.filter { site in
+        let builtins = (store.subscription?.sites ?? Site.builtInSites).filter(\.isBuiltIn).filter { site in
             model.total > 0 && (model.results.contains { $0.site.key == site.key } ||
                 (model.busy && model.asking.contains(site.key)))
         }.map { site in
