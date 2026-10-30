@@ -84,10 +84,12 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
         public var available: Int64?
         public var capacity: Int64?
     }
-    /// How many downloads run at once.
+    /// How many downloads run at once, 1 to 4.
     public var simultaneous: Int {
         didSet {
-            simultaneous = min(max(simultaneous, 1), 4)
+            // @Observable runs didSet again for an assignment made inside it, so only assign when clamping.
+            let clamped = min(max(simultaneous, 1), 4)
+            guard clamped == simultaneous else { simultaneous = clamped; return }
             defaults.set(simultaneous, forKey: "downloadsSimultaneous")
             schedule()
         }
