@@ -64,9 +64,6 @@ struct DiscoverDetailView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(dark ? .dark : .light, for: .navigationBar)
         #endif
-        #if os(iOS)
-        .toolbar(.hidden, for: .tabBar)
-        #endif
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { searchShown = true } label: { Image(systemName: "text.magnifyingglass") }
