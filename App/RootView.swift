@@ -476,11 +476,26 @@ struct Route: Hashable, @unchecked Sendable {
 struct RouteLink<Label: View>: View {
     private let route: Route
     private let label: Label
+    #if os(macOS)
+    @Environment(\.stripDrag) private var drag
+    @Environment(\.openRoute) private var openRoute
+    #endif
     init<Destination: View>(@ViewBuilder destination: @escaping @MainActor () -> Destination, @ViewBuilder label: () -> Label) {
         route = Route { AnyView(destination()) }
         self.label = label()
     }
-    var body: some View { NavigationLink(value: route) { label } }
+    var body: some View {
+        #if os(macOS)
+        // In a strip the link under the pointer gets the mouse-up that ends a drag, which must not open it.
+        if let drag, let openRoute {
+            Button { if !drag.active { openRoute(route) } } label: { label }
+        } else {
+            NavigationLink(value: route) { label }
+        }
+        #else
+        NavigationLink(value: route) { label }
+        #endif
+    }
 }
 
 extension EnvironmentValues {
@@ -504,9 +519,20 @@ extension View {
     /// Registers `Route` pages; apply once at the root of every NavigationStack.
     func routeDestinations() -> some View {
         #if os(macOS)
-        navigationDestination(for: Route.self) { $0.build().musicBar() }
+        modifier(MacRouteDestinations())
         #else
         navigationDestination(for: Route.self) { $0.build() }
         #endif
     }
 }
+
+#if os(macOS)
+/// Pushed pages get `openRoute` too: the environment set on the detail stack reaches its root page, not the pages its
+/// destinations build, so a page opened from code (Discover's search, a person from it) pushed nothing.
+private struct MacRouteDestinations: ViewModifier {
+    @Environment(\.openRoute) private var openRoute
+    func body(content: Content) -> some View {
+        content.navigationDestination(for: Route.self) { $0.build().musicBar().environment(\.openRoute, openRoute) }
+    }
+}
+#endif

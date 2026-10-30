@@ -272,7 +272,7 @@ struct DiscoverSearchAtmosphere: View {
                     .frame(width: geometry.size.width * 1.3, height: geometry.size.height * 0.8)
                     .blur(radius: 100).offset(x: shifted ? -100 : 90, y: shifted ? 110 : 270)
             }
-        }.ignoresSafeArea().allowsHitTesting(false)
+        }.discoverFullBleed().allowsHitTesting(false)
             .onAppear { guard !reduceMotion else { return }; withAnimation(.easeInOut(duration: 16).repeatForever(autoreverses: true)) { shifted = true } }
     }
 }
@@ -355,6 +355,184 @@ struct DiscoverSearchGroup {
     func removeOpened(_ item: TMDBCatalog.Item) { opened.removeAll { $0.key == item.key }; saveOpened() }
     private func saveOpened() { UserDefaults.standard.set(try? JSONEncoder().encode(opened), forKey: "discover.search.opened") }
 }
+#if os(macOS)
+/// The Mac's catalog search, a page in the window rather than the iPhone's full-screen sheet: the search field sits in
+/// the toolbar, each filter opens in a popover, and results fill grids.
+struct DiscoverMacSearchView: View {
+    @Environment(\.openRoute) private var openRoute
+    @State private var model = DiscoverSearchModel()
+    @State private var query = ""
+    @State private var searching = true
+    @State private var feed: TMDBCatalog.SearchFeed = .popular
+    @State private var filter: TMDBCatalog.Filter?
+    @State private var filterSection: DiscoverFilterSection?
+    @State private var expanded: Set<TMDBCatalog.SearchKind> = []
+    @State private var revision = 0
+    private var keyword: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var request: DiscoverSearchRequest { .init(keyword: keyword, feed: feed, filter: filter, revision: revision) }
+    private let sections: [DiscoverFilterSection] = [.type, .genres, .years, .sort, .platform, .language, .region, .keywords]
+    private let columns = [GridItem(.adaptive(minimum: 300, maximum: 460), spacing: 14)]
+    /// Cards a section shows until See All.
+    private let preview = 6
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 26) {
+                filters
+                if keyword.isEmpty && filter == nil && !model.history.isEmpty { history }
+                if model.loading && model.groups.isEmpty { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
+                ForEach([TMDBCatalog.SearchKind.person, .movie, .tv], id: \.self) { kind in
+                    if let group = model.groups[kind], group.count > 0 || (filter != nil && group.hasMore) { results(group, kind: kind) }
+                }
+                if model.isEmpty && !model.loading && !model.failed {
+                    ContentUnavailableView(L10n.text("No Results"), systemImage: "magnifyingglass", description: Text(L10n.text("Try another title or change your filters.")))
+                        .accessibilityIdentifier("discover.search.empty")
+                }
+                if model.failed { Button(L10n.text("Try Again")) { revision += 1 }.frame(maxWidth: .infinity) }
+            }
+            .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 28)
+        }
+        .background { DiscoverSearchAtmosphere() }
+        .navigationTitle(L10n.text("Search Catalog"))
+        .searchable(text: $query, isPresented: $searching, placement: .toolbar, prompt: Text(L10n.text("Search")))
+        .onSubmit(of: .search) { model.remember(keyword) }
+        .onChange(of: query) { _, value in if value.count > 100 { query = String(value.prefix(100)) } }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    ForEach(TMDBCatalog.SearchFeed.allCases, id: \.self) { value in
+                        Button { feed = value } label: { if feed == value { Label(value.title, systemImage: "checkmark") } else { Text(value.title) } }
+                    }
+                } label: { Label(L10n.text("Discover More"), systemImage: "line.3.horizontal.decrease.circle") }
+                    .disabled(filter != nil)
+                    .accessibilityIdentifier("discover.search.feed")
+            }
+        }
+        .task(id: request) { expanded.removeAll(); await model.load(request) }
+    }
+
+    private var filters: some View {
+        DiscoverChipFlow(spacing: 8) {
+            ForEach(sections, id: \.self) { section in
+                Button { filterSection = filterSection == section ? nil : section } label: { chip(section.chipTitle(filter), open: filterSection == section) }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: Binding(get: { filterSection == section }, set: { if !$0, filterSection == section { filterSection = nil } }),
+                             arrowEdge: .bottom) {
+                        DiscoverSearchFilters(filter: Binding(get: { filter ?? .init() }, set: { filter = $0 }), section: section).frame(width: 360)
+                    }
+                    .accessibilityIdentifier("discover.filter.section.\(section.rawValue)")
+            }
+            if filter != nil {
+                Button { filter = nil; filterSection = nil } label: {
+                    Label(L10n.text("Reset Filters"), systemImage: "xmark").font(.system(size: 13)).padding(.horizontal, 12).frame(height: 30)
+                        .contentShape(Capsule())
+                }.buttonStyle(.plain).foregroundStyle(.secondary).accessibilityIdentifier("discover.search.resetFilters")
+            }
+        }
+    }
+
+    private func chip(_ title: String, open: Bool) -> some View {
+        HStack(spacing: 6) {
+            Text(title).lineLimit(1)
+            Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+        }
+        .font(.system(size: 13)).padding(.horizontal, 12).frame(height: 30)
+        .background(.primary.opacity(open ? 0.16 : 0.07), in: Capsule())
+        .overlay { Capsule().strokeBorder(.primary.opacity(0.1), lineWidth: 0.5) }
+        .contentShape(Capsule())
+    }
+
+    private var history: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(L10n.text("Recent Searches")).font(.title3.weight(.semibold))
+                Spacer()
+                Button { model.clearHistory() } label: { Image(systemName: "trash") }
+                    .buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel(L10n.text("Clear Search History"))
+            }
+            DiscoverChipFlow(spacing: 8) {
+                ForEach(model.history, id: \.self) { text in
+                    Button { query = text } label: {
+                        Text(text).font(.system(size: 13)).padding(.horizontal, 12).frame(height: 28)
+                            .background(.primary.opacity(0.07), in: Capsule()).contentShape(Capsule())
+                    }.buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func results(_ group: DiscoverSearchGroup, kind: TMDBCatalog.SearchKind) -> some View {
+        let all = expanded.contains(kind) || filter != nil
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(filter == nil ? kind.title : L10n.text("Filtered Results")).font(.title3.weight(.semibold))
+                Spacer()
+                if kind != .person, filter == nil, group.items.count > preview || group.hasMore {
+                    Button(L10n.text(all ? "Show Less" : "See All")) {
+                        if all { expanded.remove(kind) } else { expanded.insert(kind) }
+                    }.buttonStyle(.plain).foregroundStyle(.secondary).accessibilityIdentifier("discover.search.expand.\(kind.rawValue)")
+                }
+            }
+            if kind == .person {
+                DiscoverRail(arrowCenter: 41.5) {
+                    LazyHStack(alignment: .top, spacing: 18) {
+                        ForEach(group.people) { person in
+                            DiscoverButton { open(person) } label: { DiscoverSearchPersonRow(person: person) }
+                                .buttonStyle(.plain).accessibilityIdentifier("discover.search.person.\(person.id)")
+                        }
+                    }
+                }
+            } else {
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+                    ForEach(all ? group.items : Array(group.items.prefix(preview)), id: \.key) { item in
+                        Button { open(item) } label: { DiscoverSearchRow(item: item) }
+                            .buttonStyle(.plain).accessibilityIdentifier("discover.search.result.\(item.key)")
+                    }
+                }
+                if all, group.hasMore {
+                    Button { Task { await model.more(kind, request: request) } } label: {
+                        Group { if group.loadingMore { ProgressView().controlSize(.small) } else { Text(L10n.text(group.failedMore ? "Try Again" : "Load More")) } }
+                            .frame(maxWidth: .infinity).frame(height: 36)
+                    }.disabled(group.loadingMore).accessibilityIdentifier("discover.search.more.\(kind.rawValue)")
+                }
+            }
+        }
+    }
+
+    private func open(_ item: TMDBCatalog.Item) {
+        model.remember(keyword); model.rememberOpened(item)
+        openRoute?(Route { AnyView(DiscoverDetailView(item: item)) })
+    }
+    private func open(_ person: TMDBCatalog.SearchPerson) {
+        model.remember(keyword)
+        openRoute?(Route { AnyView(DiscoverPersonView(id: person.id, name: person.name, profile: person.profile)) })
+    }
+}
+
+/// Chips in rows, wrapping when a row is full.
+struct DiscoverChipFlow: SwiftUI.Layout {
+    var spacing: CGFloat = 8
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        rows(proposal.width ?? .infinity, subviews).size
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for (index, point) in rows(bounds.width, subviews).points.enumerated() {
+            subviews[index].place(at: CGPoint(x: bounds.minX + point.x, y: bounds.minY + point.y), proposal: .unspecified)
+        }
+    }
+    private func rows(_ width: CGFloat, _ subviews: Subviews) -> (points: [CGPoint], size: CGSize) {
+        var points: [CGPoint] = [], x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, widest: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width { x = 0; y += rowHeight + spacing; rowHeight = 0 }
+            points.append(CGPoint(x: x, y: y))
+            x += size.width + spacing; rowHeight = max(rowHeight, size.height); widest = max(widest, x - spacing)
+        }
+        return (points, CGSize(width: widest, height: y + rowHeight))
+    }
+}
+#endif
+
 extension TMDBCatalog.SearchKind {
     var title: String { L10n.text(self == .movie ? "Movies" : self == .tv ? "Catalog Series" : "People") }
 }

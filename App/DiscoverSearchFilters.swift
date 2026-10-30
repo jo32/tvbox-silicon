@@ -42,6 +42,17 @@ struct DiscoverSearchFilters: View {
     private let tvGenres = DiscoverGenres.ids(for: .tv)
 
     var body: some View {
+        #if os(macOS)
+        // A popover sized to its choices; only the keyword suggestions can grow long enough to scroll.
+        Group {
+            if section == .keywords {
+                ScrollView { VStack(alignment: .leading, spacing: 10) { editor }.padding(14) }.frame(height: 300)
+            } else {
+                VStack(alignment: .leading, spacing: 10) { editor }.padding(14)
+            }
+        }
+        .accessibilityIdentifier("discover.filter.panel")
+        #else
         ScrollView {
             VStack(alignment: .leading, spacing: 12) { editor }
                 .padding(.horizontal, 16).padding(.vertical, 12)
@@ -49,6 +60,7 @@ struct DiscoverSearchFilters: View {
             .frame(idealHeight: panelHeight, maxHeight: panelHeight)
             .glassSurface(.regular.tint((scheme == .dark ? Color(red: 0.27, green: 0.23, blue: 0.31) : Color(red: 0.94, green: 0.91, blue: 0.97)).opacity(0.65)), in: RoundedRectangle(cornerRadius: 28))
             .accessibilityIdentifier("discover.filter.panel")
+        #endif
     }
     private var panelHeight: CGFloat {
         switch section {
@@ -126,7 +138,12 @@ struct DiscoverSearchFilters: View {
                 }
             }
         case .keywords:
-            TextField(L10n.text("Find a keyword"), text: $keyword).textFieldStyle(.plain).padding(15).glassSurface(.regular, in: Capsule())
+            TextField(L10n.text("Find a keyword"), text: $keyword)
+                #if os(macOS)
+                .textFieldStyle(.roundedBorder)
+                #else
+                .textFieldStyle(.plain).padding(15).glassSurface(.regular, in: Capsule())
+                #endif
                 .autocorrectionDisabled().accessibilityIdentifier("discover.filter.keyword")
             if !filter.keywords.isEmpty {
                 LazyVGrid(columns: columns, spacing: 8) {
@@ -157,6 +174,15 @@ struct DiscoverSearchFilters: View {
         }
     }
     private func choice(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        #if os(macOS)
+        Button(action: action) {
+            Text(title).font(.system(size: 13, weight: selected ? .semibold : .regular)).lineLimit(1).minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity).frame(height: 28)
+                .foregroundStyle(selected ? Brand.onAccent : Color.primary)
+                .background(selected ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(.primary.opacity(0.08)), in: Capsule())
+                .contentShape(Capsule())
+        }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
+        #else
         Button(action: action) {
             Text(title).font(.system(size: 15)).lineLimit(1).minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity).frame(height: 36)
@@ -164,6 +190,7 @@ struct DiscoverSearchFilters: View {
                 .background { if selected { Capsule().fill(Color.primary) } }
                 .glassSurface(selected ? .identity : .regular, in: Capsule())
         }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
+        #endif
     }
     private func range(_ title: String, from: Binding<String>, to: Binding<String>, hint: String, id: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {

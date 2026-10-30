@@ -35,6 +35,10 @@ struct DiscoverPersonView: View {
         }.compactMap(\.item.poster)
         return Array((narrative.count >= 3 ? narrative : credits.compactMap(\.item.poster)).prefix(12))
     }
+    #if os(macOS)
+    /// The biography and timeline in a centred column on the Mac; full-width rows were mostly empty.
+    private static let column: CGFloat = 680
+    #endif
     var body: some View {
         GeometryReader { geometry in
             ScrollView {
@@ -49,13 +53,16 @@ struct DiscoverPersonView: View {
                         RouteLink { DiscoverDetailView(item: work.item) } label: {
                             timeline(work, marker: index == 0 || works[index - 1].date?.prefix(7) != work.date?.prefix(7), last: index == works.count - 1)
                         }.buttonStyle(.plain).accessibilityIdentifier("discover.person.work.\(work.id)")
+                        #if os(macOS)
+                        .frame(maxWidth: Self.column)
+                        #endif
                     }
                 }.padding(.bottom, 100)
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: kind)
                     .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: contribution)
             }
             .scrollIndicators(.hidden)
-            .background(color.ignoresSafeArea())
+            .background(color.discoverFullBleed())
             .ignoresSafeArea(edges: .top)
             .overlay(alignment: .bottomTrailing) { filters.padding(20) }
         }
@@ -84,7 +91,7 @@ struct DiscoverPersonView: View {
                 ScrollView { Text(person?.biography ?? "").lineSpacing(5).frame(maxWidth: .infinity, alignment: .leading).padding(24).selectable() }
                     .navigationTitle(person?.name ?? name)
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { biographyShown = false } } }
-            }.presentationDetents([.medium, .large])
+            }.presentationDetents([.medium, .large]).discoverSheetSize(width: 560, height: 480)
         }
     }
     private func header(width: CGFloat) -> some View {
@@ -103,7 +110,11 @@ struct DiscoverPersonView: View {
                 Link(destination: url) { Label(handle, systemImage: "camera").font(.system(size: 13)).frame(maxWidth: .infinity, alignment: .leading) }.padding(.top, 12)
             }
         }
-        .padding(.horizontal, 18).padding(.bottom, 16).frame(maxWidth: .infinity)
+        .padding(.horizontal, 18).padding(.bottom, 16)
+        #if os(macOS)
+        .frame(maxWidth: Self.column)
+        #endif
+        .frame(maxWidth: .infinity)
         .background(alignment: .top) {
             DiscoverPosterWall(urls: wallPosters, color: color)
                 .frame(height: min(width * 0.88, 430) + 270)
@@ -157,7 +168,11 @@ struct DiscoverPersonView: View {
             }
         } label: {
             Image(systemName: "line.3.horizontal.decrease").font(.system(size: 20)).frame(width: 48, height: 48).glassSurface(.regular, in: Circle())
-        }.accessibilityLabel(L10n.text("Filter")).accessibilityIdentifier("discover.person.filter")
+        }
+        #if os(macOS)
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        #endif
+        .accessibilityLabel(L10n.text("Filter")).accessibilityIdentifier("discover.person.filter")
     }
 }
 
@@ -170,19 +185,7 @@ private struct DiscoverPosterWall: View {
     @State private var visible = false
     private var animates: Bool { visible && scenePhase == .active && !reduceMotion && !urls.isEmpty }
     var body: some View {
-        Group {
-            #if canImport(UIKit)
-            DiscoverNativePosterWall(urls: urls, active: animates)
-            #else
-            GeometryReader { proxy in
-                HStack(spacing: 8) {
-                    ForEach(Array(urls.prefix(3).enumerated()), id: \.offset) { _, url in
-                        PosterImage(url: url).frame(width: proxy.size.width * 0.43, height: proxy.size.height)
-                    }
-                }.rotationEffect(.degrees(-10))
-            }
-            #endif
-        }.clipped()
+        DiscoverNativePosterWall(urls: urls, active: animates).clipped()
             .overlay { LinearGradient(stops: [.init(color: .clear, location: 0.45), .init(color: color.opacity(0.35), location: 0.65), .init(color: color, location: 1)], startPoint: .top, endPoint: .bottom) }
             .accessibilityHidden(true).allowsHitTesting(false)
             .onAppear { visible = true }
@@ -190,38 +193,79 @@ private struct DiscoverPosterWall: View {
     }
 }
 
-#if canImport(UIKit)
-private struct DiscoverNativePosterWall: UIViewRepresentable {
+private struct DiscoverNativePosterWall {
     let urls: [URL]
     let active: Bool
+}
+
+#if os(macOS)
+extension DiscoverNativePosterWall: NSViewRepresentable {
+    func makeNSView(context: Context) -> DiscoverPosterWallView { DiscoverPosterWallView() }
+    func updateNSView(_ view: DiscoverPosterWallView, context: Context) { view.wall.update(urls: urls, active: active) }
+    static func dismantleNSView(_ view: DiscoverPosterWallView, coordinator: ()) { view.wall.stop() }
+}
+
+private final class DiscoverPosterWallView: NSView {
+    let wall = DiscoverPosterWallLayers()
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        // Layer-hosting, so AppKit leaves the layers alone; flipped to lay out top-down as on iPhone.
+        wall.root.isGeometryFlipped = true
+        layer = wall.root
+        wantsLayer = true
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func layout() { super.layout(); wall.layout(bounds.size) }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+#else
+extension DiscoverNativePosterWall: UIViewRepresentable {
     func makeUIView(context: Context) -> DiscoverPosterWallView { DiscoverPosterWallView() }
-    func updateUIView(_ view: DiscoverPosterWallView, context: Context) { view.update(urls: urls, active: active) }
-    static func dismantleUIView(_ view: DiscoverPosterWallView, coordinator: ()) { view.stop() }
+    func updateUIView(_ view: DiscoverPosterWallView, context: Context) { view.wall.update(urls: urls, active: active) }
+    static func dismantleUIView(_ view: DiscoverPosterWallView, coordinator: ()) { view.wall.stop() }
 }
 
 private final class DiscoverPosterWallView: UIView {
-    private let rotation = UIView()
-    private let canvas = UIView()
-    private let tiles = (0..<24).map { _ in UIImageView() }
+    let wall = DiscoverPosterWallLayers()
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+        layer.addSublayer(wall.root)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        wall.root.frame = bounds
+        CATransaction.commit()
+        wall.layout(bounds.size)
+    }
+}
+#endif
+
+/// Three tilted columns of posters drifting upwards, in layers so every platform shares them.
+@MainActor private final class DiscoverPosterWallLayers {
+    let root = CALayer()
+    private let rotation = CALayer()
+    private let canvas = CALayer()
+    private let tiles = (0..<24).map { _ in CALayer() }
     private var urls: [URL] = []
     private var task: Task<Void, Never>?
     private var active = false
     private var cycle: CGFloat = 0
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        clipsToBounds = true; isUserInteractionEnabled = false
-        addSubview(rotation); rotation.addSubview(canvas)
+    init() {
+        root.masksToBounds = true
+        root.addSublayer(rotation); rotation.addSublayer(canvas)
         for tile in tiles {
-            tile.contentMode = .scaleAspectFill; tile.clipsToBounds = true; tile.layer.cornerRadius = 10
-            tile.backgroundColor = UIColor.white.withAlphaComponent(0.06); canvas.addSubview(tile)
+            tile.contentsGravity = .resizeAspectFill; tile.masksToBounds = true; tile.cornerRadius = 10
+            tile.backgroundColor = CGColor(gray: 1, alpha: 0.06); canvas.addSublayer(tile)
         }
     }
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     func update(urls: [URL], active: Bool) {
         self.active = active
         if self.urls != urls {
             self.urls = urls; task?.cancel()
-            for tile in tiles { tile.image = nil }
+            for tile in tiles { tile.contents = nil }
             task = Task { [weak self] in
                 await withTaskGroup(of: (URL, CGImage?).self) { group in
                     for url in Set(urls) { group.addTask { (url, await PosterPalette.image(url)) } }
@@ -229,37 +273,39 @@ private final class DiscoverPosterWallView: UIView {
                         guard !Task.isCancelled, let self, self.urls == urls, let image else { continue }
                         for (index, tile) in self.tiles.enumerated() where !urls.isEmpty {
                             let column = index / 8, row = index % 8
-                            if urls[(column + (row % 4) * 3) % urls.count] == url { tile.image = UIImage(cgImage: image) }
+                            if urls[(column + (row % 4) * 3) % urls.count] == url { tile.contents = image }
                         }
                     }
                 }
             }
         }
-        setNeedsLayout(); animate()
+        animate()
     }
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        let width = min(bounds.width * 0.4263, 220), height = width * 1.5, step = height + 8
-        rotation.bounds = CGRect(x: 0, y: 0, width: width * 3 + 16, height: bounds.height + step * 2)
-        rotation.center = CGPoint(x: bounds.midX, y: bounds.midY - step * 0.3)
-        rotation.transform = CGAffineTransform(rotationAngle: -.pi / 18)
+    func layout(_ size: CGSize) {
+        guard size.width > 0 else { return }
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        let width = min(size.width * 0.4263, 220), height = width * 1.5, step = height + 8
+        rotation.setAffineTransform(.identity)
+        rotation.bounds = CGRect(x: 0, y: 0, width: width * 3 + 16, height: size.height + step * 2)
+        rotation.position = CGPoint(x: size.width / 2, y: size.height / 2 - step * 0.3)
+        rotation.setAffineTransform(CGAffineTransform(rotationAngle: -.pi / 18))
         canvas.frame = rotation.bounds
         for (index, tile) in tiles.enumerated() {
             let column = index / 8, row = index % 8
             tile.frame = CGRect(x: CGFloat(column) * (width + 8), y: CGFloat(row) * step + (column == 1 ? height * 0.3 : 0), width: width, height: height)
         }
-        if cycle != step * 4 { cycle = step * 4; canvas.layer.removeAnimation(forKey: "drift") }
+        if cycle != step * 4 { cycle = step * 4; canvas.removeAnimation(forKey: "drift") }
         animate()
     }
     private func animate() {
-        guard active, !urls.isEmpty, cycle > 0 else { canvas.layer.removeAnimation(forKey: "drift"); return }
-        guard canvas.layer.animation(forKey: "drift") == nil else { return }
+        guard active, !urls.isEmpty, cycle > 0 else { canvas.removeAnimation(forKey: "drift"); return }
+        guard canvas.animation(forKey: "drift") == nil else { return }
         let animation = CABasicAnimation(keyPath: "transform.translation.y")
         animation.fromValue = 0; animation.toValue = -cycle
         animation.duration = 90; animation.repeatCount = .infinity
         animation.timingFunction = CAMediaTimingFunction(name: .linear)
-        canvas.layer.add(animation, forKey: "drift")
+        canvas.add(animation, forKey: "drift")
     }
-    func stop() { task?.cancel(); canvas.layer.removeAnimation(forKey: "drift") }
+    func stop() { task?.cancel(); canvas.removeAnimation(forKey: "drift") }
 }
-#endif
