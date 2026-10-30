@@ -33,6 +33,8 @@ static void *run(void *unused) {
         check("exception", NULL);
         check("out-of-memory", NULL);
         check("no-response", NULL);
+        // The JVM got the bridge's options: 128 MB of class space, which 3 GB devices can reserve.
+        check("class-space", "{\"result\":\"134217728\"}");
         check(NULL, NULL);
         check("\xff", NULL);
         const char *valid[] = {"{\"result\":\"中文、日本語、😀 and \\u0000\"}", "{\"result\":\"\"}", "{\"result\":\"recovered\"}"};
