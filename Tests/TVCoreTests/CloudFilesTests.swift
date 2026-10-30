@@ -132,6 +132,55 @@ import Testing
         #expect(added.first?.address == server.address && added.first?.root == folder)
     }
 
+    @Test func aNASWebDAVShareListsWithItsAccount() async throws {
+        WebDAVStub.reset()
+        let client = WebDAV(session: WebDAVStub.session)
+        let server = try #require(try await client.probe(URL(string: "http://dav.test/NAS")!, username: "me", password: "pw"))
+        #expect(server.isWebDAV && server.address == "http://dav.test" && server.root == "/NAS" && server.name == "dav.test")
+        let files = CloudFile.arranged(try await client.list(server, path: server.root))
+        #expect(files.map(\.name) == ["剧集", "S01E01 #1.mp4"] && files.map(\.id) == ["/NAS/剧集", "/NAS/S01E01 #1.mp4"])
+        #expect(files[0].isFolder && !files[1].isFolder && files[1].size == 1_048_576)
+        #expect(files[1].modified == Date(timeIntervalSince1970: 1_793_346_000))
+        #expect(WebDAVStub.calls == ["PROPFIND /NAS/ 0 Basic bWU6cHc=", "PROPFIND /NAS/ 1 Basic bWU6cHc="])
+        // Without an account the share's refusal is the viewer's to answer; a wrong one says so.
+        await #expect(throws: CloudFilesError.signInRequired("dav.test")) { try await client.probe(URL(string: "http://dav.test/NAS")!) }
+        await #expect(throws: TVError.self) { try await client.probe(URL(string: "http://dav.test/NAS")!, username: "me", password: "no") }
+        // A web server that doesn't speak WebDAV isn't a share.
+        #expect(try await client.probe(URL(string: "http://dav.test/site")!) == nil)
+    }
+
+    @Test func aWebDAVFilePlaysByRangedReadsWithTheAccount() async throws {
+        WebDAVStub.reset()
+        let server = AListServer(name: "NAS", address: "http://dav.test", root: "/NAS", username: "me", password: "pw", kind: .webdav)
+        let source = try await WebDAV(session: WebDAVStub.session).source(server, path: "/NAS/S01E01 #1.mp4", name: "S01E01 #1.mp4")
+        #expect(source.url.absoluteString == "http://dav.test/NAS/S01E01%20%231.mp4" && source.length == 1_048_576)
+        #expect(source.headers == ["Authorization": "Basic bWU6cHc="])
+        #expect(WebDAVStub.calls == ["PROPFIND /NAS/S01E01%20%231.mp4 0 Basic bWU6cHc="])
+        // Its history entry goes back to the share.
+        let channel = CloudFiles.channel(CloudFile(id: "/NAS/S01E01 #1.mp4", name: "S01E01 #1.mp4", isFolder: false), in: .alist(server), folder: "/NAS", folderName: "NAS")
+        #expect(channel.historyContext?.episodeFlag == "alist." + server.id)
+    }
+
+    @Test func serversSavedBeforeWebDAVAreAList() throws {
+        let saved = Data(#"[{"id":"a","name":"NAS","address":"http://nas:5244","root":"/","username":"","password":"","folderPassword":""}]"#.utf8)
+        #expect(try JSONDecoder().decode([AListServer].self, from: saved).first?.isWebDAV == false)
+        let share = AListServer(name: "NAS", address: "http://nas:5005", kind: .webdav)
+        #expect(try JSONDecoder().decode(AListServer.self, from: JSONEncoder().encode(share)).isWebDAV)
+    }
+
+    /// A real WebDAV share: TVBOX_WEBDAV_URL (with the folder to start in) holding an MP4, and
+    /// TVBOX_WEBDAV_USER/PASSWORD when it wants an account.
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["TVBOX_WEBDAV_URL"] != nil))
+    func aRealWebDAVShareListsAndPlays() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        let server = try #require(try await WebDAV.shared.probe(URL(string: environment["TVBOX_WEBDAV_URL"]!)!,
+                                                                 username: environment["TVBOX_WEBDAV_USER"] ?? "", password: environment["TVBOX_WEBDAV_PASSWORD"] ?? ""))
+        try await WebDAV.shared.check(server)
+        let files = CloudFile.arranged(try await WebDAV.shared.list(server, path: server.root))
+        let video = try #require(files.first { $0.name.hasSuffix(".mp4") })
+        try await plays(WebDAV.shared.stream(server, path: video.id, name: video.name))
+    }
+
     /// A real Quark account: TVBOX_QUARK_ACCOUNTS names a copy of the app's accounts.json. Plays the
     /// first MP4 in TVBOX_QUARK_FOLDER (the root by default) as it is, then as Quark's transcoded copy.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["TVBOX_QUARK_ACCOUNTS"] != nil))
@@ -237,6 +286,41 @@ final class AListStub: URLProtocol, @unchecked Sendable {
         }
         client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
         client.urlProtocol(self, didLoad: try! JSONSerialization.data(withJSONObject: answer))
+        client.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+
+/// A NAS's WebDAV share at dav.test: /NAS wants the account me/pw, and /site is a web page that isn't WebDAV.
+final class WebDAVStub: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var log: [String] = []
+    static var calls: [String] { lock.withLock { log } }
+    static func reset() { lock.withLock { log = [] } }
+    static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [WebDAVStub.self]
+        return URLSession(configuration: configuration)
+    }()
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host() == "dav.test" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard let url = request.url, let client else { return }
+        let path = url.path(percentEncoded: true), account = request.value(forHTTPHeaderField: "Authorization")
+        let depth = request.value(forHTTPHeaderField: "Depth") ?? "-"
+        Self.lock.withLock { Self.log.append("\(request.httpMethod ?? "-") \(path) \(depth) \(account ?? "-")") }
+        let folder = #"<D:response><D:href>/NAS/</D:href><D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype><D:getlastmodified>Fri, 30 Oct 2026 07:40:00 GMT</D:getlastmodified></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>"#
+        let file = #"<D:response><D:href>http://dav.test/NAS/S01E01%20%231.mp4</D:href><D:propstat><D:prop><D:resourcetype/><D:getcontentlength>1048576</D:getcontentlength><D:getlastmodified>Fri, 30 Oct 2026 07:40:00 GMT</D:getlastmodified></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat><D:propstat><D:prop><D:quota/></D:prop><D:status>HTTP/1.1 404 Not Found</D:status></D:propstat></D:response>"#
+        let subfolder = #"<D:response><D:href>/NAS/%E5%89%A7%E9%9B%86/</D:href><D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>"#
+        let status: Int, responses: [String]
+        if path.hasPrefix("/site") { (status, responses) = (405, []) }
+        else if account != "Basic bWU6cHc=" { (status, responses) = (401, []) }
+        else if path == "/NAS/" { (status, responses) = (207, depth == "0" ? [folder] : [folder, subfolder, file]) }
+        else if path == "/NAS/S01E01%20%231.mp4" { (status, responses) = (207, [file]) }
+        else { (status, responses) = (404, []) }
+        let body = status == 207 ? #"<?xml version="1.0" encoding="utf-8"?><D:multistatus xmlns:D="DAV:">"# + responses.joined() + "</D:multistatus>" : ""
+        client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/xml"])!, cacheStoragePolicy: .notAllowed)
+        client.urlProtocol(self, didLoad: Data(body.utf8))
         client.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() {}

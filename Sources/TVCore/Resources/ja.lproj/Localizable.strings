@@ -960,10 +960,10 @@
 "Added %lld AList servers. Browse them in Cloud Files." = "AList サーバを %lld 台追加しました。クラウドファイルで閲覧できます。";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "このアドレスは現在 AList サーバです。追加し直すとクラウドファイルで閲覧できます。";
 "Sign in to Quark or UC under Cloud Drive Accounts to browse their files here." = "クラウドドライブのアカウントで Quark または UC にサインインすると、ここでファイルを閲覧できます。";
-"Add an AList or OpenList server by the address you open it at. Pasting that address, or a TVBox AList configuration, in Add Subscription adds servers too." = "AList または OpenList サーバは、開くときのアドレスで追加します。そのアドレスや TVBox の AList 設定を「配信設定を追加」に貼り付けても追加できます。";
+"Add an AList or OpenList server, or a NAS's WebDAV share, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too." = "AList・OpenList サーバや NAS の WebDAV 共有は、開くときのアドレスで追加します。AList のアドレスや TVBox の AList 設定を「配信設定を追加」に貼り付けても追加できます。";
 "Edit Server" = "サーバを編集";
 "Remove Server" = "サーバを削除";
-"Add AList Server" = "AList サーバを追加";
+"Add Server" = "サーバを追加";
 "Remove %@ from Cloud Files?" = "%@ をクラウドファイルから削除しますか？";
 "This Folder Is Empty" = "このフォルダは空です";
 "Couldn't Open This Folder" = "このフォルダを開けませんでした";
@@ -971,12 +971,12 @@
 "Password" = "パスワード";
 "Open" = "開く";
 "Enter the password for %@." = "「%@」のパスワードを入力してください。";
-"The address you open the server at in a browser, such as http://192.168.1.10:5244. Add a folder after it to start there. The user name and password are only for servers that don't let guests browse." = "ブラウザでサーバを開くときのアドレスです（例：http://192.168.1.10:5244）。後ろにフォルダを付けると、そこから閲覧を始めます。ユーザ名とパスワードは、ゲストに閲覧を許可していないサーバの場合のみ必要です。";
+"The server's address, such as http://192.168.1.10:5244 for AList, or the WebDAV address your NAS shows. Add a folder after it to start there. The user name and password are only for servers that don't let guests browse." = "サーバのアドレスです（例：AList なら http://192.168.1.10:5244、NAS なら表示される WebDAV のアドレス）。後ろにフォルダを付けると、そこから閲覧を始めます。ユーザ名とパスワードは、ゲストに閲覧を許可していないサーバの場合のみ必要です。";
 "Address" = "アドレス";
 "Name (Optional)" = "名前（省略可）";
 "User Name (Optional)" = "ユーザ名（省略可）";
 "Password (Optional)" = "パスワード（省略可）";
-"No AList server answered at this address." = "このアドレスで応答する AList サーバがありません。";
+"No AList or WebDAV server answered at this address." = "このアドレスで応答する AList または WebDAV サーバがありません。";
 "This server doesn't let guests browse. Enter a user name and password." = "このサーバはゲストの閲覧を許可していません。ユーザ名とパスワードを入力してください。";
 "Sign in to Quark and UC on their official page. Yingxia stores the login on this Mac." = "Quark と UC は公式ページでサインインします。映匣はログイン情報をこの Mac に保存します。";
 "Sign in on the drive's own page, or scan a code with the drive's app on another phone. Yingxia keeps the sign-in on this device." = "ドライブの公式ページでサインインするか、別のスマートフォンのドライブアプリでコードをスキャンします。映匣はログイン情報をこのデバイスに保存します。";

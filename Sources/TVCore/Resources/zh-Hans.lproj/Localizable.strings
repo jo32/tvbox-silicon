@@ -960,10 +960,10 @@
 "Added %lld AList servers. Browse them in Cloud Files." = "已添加 %lld 个 AList 服务器，可在“网盘文件”中浏览。";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "此地址现在是 AList 服务器。重新添加即可在“网盘文件”中浏览。";
 "Sign in to Quark or UC under Cloud Drive Accounts to browse their files here." = "在“网盘账号”中登录夸克或 UC 后，即可在此浏览其中的文件。";
-"Add an AList or OpenList server by the address you open it at. Pasting that address, or a TVBox AList configuration, in Add Subscription adds servers too." = "用打开 AList 或 OpenList 服务器的地址来添加它。在“添加订阅”中粘贴该地址或 TVBox AList 配置，也能添加服务器。";
+"Add an AList or OpenList server, or a NAS's WebDAV share, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too." = "用打开 AList、OpenList 服务器或 NAS 的 WebDAV 共享的地址来添加它。在“添加订阅”中粘贴 AList 地址或 TVBox AList 配置，也能添加服务器。";
 "Edit Server" = "编辑服务器";
 "Remove Server" = "移除服务器";
-"Add AList Server" = "添加 AList 服务器";
+"Add Server" = "添加服务器";
 "Remove %@ from Cloud Files?" = "要从网盘文件中移除%@吗？";
 "This Folder Is Empty" = "此文件夹为空";
 "Couldn't Open This Folder" = "无法打开此文件夹";
@@ -971,12 +971,12 @@
 "Password" = "密码";
 "Open" = "打开";
 "Enter the password for %@." = "输入“%@”的密码。";
-"The address you open the server at in a browser, such as http://192.168.1.10:5244. Add a folder after it to start there. The user name and password are only for servers that don't let guests browse." = "在浏览器中打开服务器所用的地址，例如 http://192.168.1.10:5244。在后面加上文件夹即可从那里开始浏览。用户名和密码仅用于不允许游客浏览的服务器。";
+"The server's address, such as http://192.168.1.10:5244 for AList, or the WebDAV address your NAS shows. Add a folder after it to start there. The user name and password are only for servers that don't let guests browse." = "服务器的地址，例如 AList 的 http://192.168.1.10:5244，或 NAS 显示的 WebDAV 地址。在后面加上文件夹即可从那里开始浏览。用户名和密码仅用于不允许游客浏览的服务器。";
 "Address" = "地址";
 "Name (Optional)" = "名称（可选）";
 "User Name (Optional)" = "用户名（可选）";
 "Password (Optional)" = "密码（可选）";
-"No AList server answered at this address." = "此地址上没有响应的 AList 服务器。";
+"No AList or WebDAV server answered at this address." = "此地址上没有响应的 AList 或 WebDAV 服务器。";
 "This server doesn't let guests browse. Enter a user name and password." = "此服务器不允许游客浏览，请输入用户名和密码。";
 "Sign in to Quark and UC on their official page. Yingxia stores the login on this Mac." = "夸克和 UC 在官方页面登录。映匣会将登录信息保存在这台 Mac 上。";
 "Sign in on the drive's own page, or scan a code with the drive's app on another phone. Yingxia keeps the sign-in on this device." = "在网盘官方页面登录，或用另一台手机上的网盘 App 扫码登录。映匣会将登录信息保存在这台设备上。";
