@@ -64,6 +64,8 @@ struct DiscoverPersonView: View {
         #if !os(macOS)
         .toolbar(.visible, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
+        #endif
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task(id: revision) {
