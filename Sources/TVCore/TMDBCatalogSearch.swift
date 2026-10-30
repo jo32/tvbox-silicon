@@ -70,3 +70,31 @@ extension TMDBCatalog {
         return try JSONDecoder().decode(SearchPage.self, from: data)
     }
 }
+
+extension TMDBCatalog {
+    public struct PersonWork: Codable, Hashable, Sendable, Identifiable {
+        public let item: Item
+        public let date: String?
+        public let roles: [String]
+        public let departments: [String]
+        public var id: String { item.key }
+    }
+    public struct PersonProfile: Codable, Sendable {
+        public let id: Int
+        public let name: String
+        public let profile: URL?
+        public let biography: String
+        public let birthday: String?
+        public let birthplace: String
+        public let department: String
+        public let instagram: String?
+        public let works: [PersonWork]
+    }
+    public static func person(_ id: Int, language: String = TMDBMatch.language, session: URLSession = .shared) async throws -> PersonProfile {
+        var parts = URLComponents(url: TMDBMatch.base.appending(path: "catalog/search"), resolvingAgainstBaseURL: false)!
+        parts.queryItems = [URLQueryItem(name: "mode", value: "profile"), URLQueryItem(name: "id", value: String(id)), URLQueryItem(name: "language", value: language)]
+        let (data, response) = try await session.data(for: URLRequest(url: parts.url!, timeoutInterval: 30))
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+        return try JSONDecoder().decode(PersonProfile.self, from: data)
+    }
+}

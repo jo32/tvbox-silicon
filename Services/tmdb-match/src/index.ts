@@ -9,6 +9,7 @@ import { cacheKey, readSource, readSourceVideo, type SourceVideo, text } from ".
 import { brief, details } from "./details.ts";
 import { type Fetcher, image, type MediaType, TMDB, UpstreamError } from "./tmdb.ts";
 import { DurableObject } from "cloudflare:workers";
+import { catalogPerson } from "./catalog-person.ts";
 import { catalogSearch, readCatalogSearch } from "./catalog-search.ts";
 import { catalog, catalogCollections, isCatalogFeed } from "./catalog.ts";
 import { modelConfig } from "./provider.ts";
@@ -469,7 +470,7 @@ async function searchCatalog(request: Request, env: Env): Promise<Response> {
   try { input = readCatalogSearch(url.searchParams); } catch { return new Response(null, { status: 400 }); }
   if (!(await env.CATALOG_SEARCH_LIMITER.limit({ key: request.headers.get("cf-connecting-ip") ?? "" })).success) return new Response(null, { status: 429 });
   try {
-    return Response.json(await catalogSearch(new TMDB(env.TMDB_TOKEN), input, language), { headers: { "cache-control": "private, max-age=300" } });
+    return Response.json(await (input.mode === "profile" ? catalogPerson(new TMDB(env.TMDB_TOKEN), input.personID!, language) : catalogSearch(new TMDB(env.TMDB_TOKEN), input, language)), { headers: { "cache-control": "private, max-age=300" } });
   } catch (error) {
     return Response.json({ error: (error as Error).message.slice(0, 200) }, { status: 502 });
   }

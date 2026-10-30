@@ -161,13 +161,7 @@ struct DiscoverView: View {
                     LazyHStack(alignment: .top, spacing: 14) {
                         ForEach(people) { person in
                             RouteLink {
-                                ScrollView {
-                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 116), spacing: 13)], spacing: 20) {
-                                        ForEach(person.works, id: \.key) { work in
-                                            RouteLink { DiscoverDetailView(item: work) } label: { DiscoverTile(item: work) }.tmdbCardButton()
-                                        }
-                                    }.padding(17)
-                                }.screenBackdrop().navigationTitle(person.name)
+                                DiscoverPersonView(id: person.id, name: person.name, profile: person.profile)
                             } label: {
                                 VStack(spacing: 7) {
                                     PosterImage(url: person.profile, symbol: "person.fill").frame(width: 83, height: 83).clipShape(Circle())
@@ -188,7 +182,7 @@ struct DiscoverView: View {
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: 13) {
                         ForEach(brands) { brand in
-                            RouteLink { DiscoverListView(feed: brand.feed, initial: model.pages[brand.feed]) } label: {
+                            RouteLink { DiscoverBrowseView(title: brand.name, filter: brand.feed.brandFilter, logo: brand.logo) } label: {
                                 DiscoverBrandCard(brand: brand, items: Array(model.items(brand.feed).prefix(4)), width: width)
                             }.tmdbCardButton().accessibilityLabel(brand.name)
                         }
@@ -204,7 +198,7 @@ struct DiscoverView: View {
             ScrollView(.horizontal) {
                 HStack(spacing: 13) {
                     ForEach([TMDBCatalog.Feed.family, .animation, .kids], id: \.self) { feed in
-                        RouteLink { DiscoverListView(feed: feed, initial: model.pages[feed]) } label: {
+                        RouteLink { DiscoverBrowseView(title: feed.title, filter: .genre(feed == .family ? 10751 : feed == .kids ? 10762 : 16, type: feed == .family ? .movie : .tv)) } label: {
                             HStack(spacing: 15) {
                                 ZStack {
                                     ForEach(Array(model.items(feed).prefix(3).enumerated()).reversed(), id: \.element.key) { index, item in
@@ -830,6 +824,11 @@ extension TMDBCatalog.Item {
 }
 
 enum DiscoverGenres {
+    static func ids(for kind: TMDBCatalog.SearchKind) -> [Int] {
+        kind == .tv ? [10759,16,35,80,99,18,10751,10762,9648,10763,10764,10765,10766,10767,10768,37]
+            : [28,12,16,35,80,99,18,10751,14,36,27,10402,9648,10749,878,10770,53,10752,37]
+    }
+
     static let names = [28: "Action", 12: "Adventure", 16: "Animation", 35: "Comedy", 80: "Crime", 99: "Documentary",
                         18: "Drama", 10751: "Family", 14: "Fantasy", 36: "Historical", 27: "Horror", 10402: "Music",
                         9648: "Mystery", 10749: "Romance", 878: "Science Fiction", 53: "Thriller", 10752: "War", 37: "Western",
@@ -848,5 +847,13 @@ extension TMDBMatch.Candidate {
     var catalogItem: TMDBCatalog.Item {
         TMDBCatalog.Item(id: id, mediaType: mediaType, name: name, originalName: originalName ?? "", year: year,
                          overview: overview ?? "", poster: poster, backdrop: nil, rating: nil, genreIDs: [])
+    }
+}
+
+private extension TMDBCatalog.Feed {
+    var brandFilter: TMDBCatalog.Filter {
+        let mapping: [Self: (Int, TMDBMatch.MediaType)] = [.netflix: (213, .tv), .disney: (2739, .tv), .appleTV: (2552, .tv), .hbo: (49, .tv), .warner: (174, .movie), .universal: (33, .movie), .paramount: (4, .movie), .sony: (34, .movie)]
+        let value = mapping[self]!
+        return .studio(value.0, type: value.1)
     }
 }

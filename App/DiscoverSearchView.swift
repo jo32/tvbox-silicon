@@ -61,7 +61,7 @@ struct DiscoverSearchView: View {
             #endif
             .routeDestinations()
             .navigationDestination(for: TMDBCatalog.Item.self) { DiscoverDetailView(item: $0) }
-            .navigationDestination(for: TMDBCatalog.SearchPerson.self) { DiscoverSearchPersonView(person: $0) }
+            .navigationDestination(for: TMDBCatalog.SearchPerson.self) { DiscoverPersonView(id: $0.id, name: $0.name, profile: $0.profile) }
         }
         .environment(\.openRoute) { path.append($0) }
         .tint(.primary)
@@ -251,33 +251,6 @@ private struct DiscoverSearchPersonRow: View {
             Text(L10n.text(person.department == "Acting" ? "Actor" : person.department ?? "People"))
                 .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1).padding(.top, 2)
         }.frame(width: 83)
-    }
-}
-private struct DiscoverSearchPersonView: View {
-    let person: TMDBCatalog.SearchPerson
-    @State private var items: [TMDBCatalog.Item] = []
-    @State private var failed = false
-    @State private var loading = true
-    @State private var revision = 0
-    var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 10) {
-                PosterImage(url: person.profile, symbol: "person.fill").frame(width: 116, height: 116).clipShape(Circle()).padding(.top, 20)
-                Text(person.name).font(.title.bold())
-                if let department = person.department { Text(L10n.text(department == "Acting" ? "Actor" : department)).foregroundStyle(.secondary) }
-                if loading { ProgressView().padding(30) }
-                if failed { Button(L10n.text("Try Again")) { revision += 1 } }
-                ForEach(items, id: \.key) { item in NavigationLink(value: item) { DiscoverSearchRow(item: item) }.buttonStyle(.plain) }
-            }.padding(.horizontal, 16).padding(.bottom, 30)
-        }.background { DiscoverSearchAtmosphere() }.navigationTitle(L10n.text("Filmography"))
-            #if !os(macOS)
-            .toolbar(.visible, for: .navigationBar)
-            #endif
-            .task(id: revision) {
-                loading = true; failed = false
-                do { let page = try await TMDBCatalog.search(personID: person.id); try Task.checkCancellation(); items = page.items; loading = false }
-                catch { if !Task.isCancelled { failed = true; loading = false } }
-            }
     }
 }
 /// Keep Duo's side display clear while allowing glass shadows through the vertical safe areas.

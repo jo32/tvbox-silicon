@@ -32,7 +32,7 @@ function ids(p: URLSearchParams, key: string, allowed?: Set<number>): string | u
 }
 export function readCatalogSearch(p: URLSearchParams) {
   const kind = choice(p, "kind", kinds, "movie");
-  const mode = choice(p, "mode", new Set(["search", "discover", "recommend", "person", "keywords"]), "search");
+  const mode = choice(p, "mode", new Set(["search", "discover", "recommend", "person", "profile", "keywords"]), "search");
   const query = (p.get("q") ?? "").trim();
   if (query.length > 100 || ((mode === "search" || mode === "keywords") && !query)) throw new Error("q");
   if (mode === "discover" && kind === "person") throw new Error("kind");
@@ -44,7 +44,7 @@ export function readCatalogSearch(p: URLSearchParams) {
   const minRuntime = integer(p, "minRuntime", 0, 600), maxRuntime = integer(p, "maxRuntime", 0, 600);
   if (minRuntime != null && maxRuntime != null && minRuntime > maxRuntime) throw new Error("runtime");
   const personID = integer(p, "id", 1, 2147483647);
-  if (mode === "person" && !personID) throw new Error("id");
+  if ((mode === "person" || mode === "profile") && !personID) throw new Error("id");
   const params: Record<string, string | number | undefined> = {
     with_genres: ids(p, "genres", kind === "tv" ? tvGenres : movieGenres),
     with_original_language: choice(p, "originalLanguage", languages),
@@ -53,8 +53,8 @@ export function readCatalogSearch(p: URLSearchParams) {
     "vote_count.gte": integer(p, "votes", 0, 1000000),
     "with_runtime.gte": minRuntime, "with_runtime.lte": maxRuntime,
     with_keywords: ids(p, "keywords"),
-    with_networks: kind === "tv" ? ids(p, "networks", new Set([213,2739,2552,49])) : undefined,
-    with_companies: kind === "movie" ? ids(p, "companies", new Set([174,33,4,34,2])) : undefined,
+    with_networks: kind === "tv" ? ids(p, "networks") : undefined,
+    with_companies: kind === "movie" ? ids(p, "companies") : undefined,
     sort_by: sort.replace("date.", kind === "tv" ? "first_air_date." : "primary_release_date."),
     [kind === "tv" ? "first_air_date.gte" : "primary_release_date.gte"]: from ? `${from}-01-01` : undefined,
     [kind === "tv" ? "first_air_date.lte" : "primary_release_date.lte"]: to ? `${to}-12-31` : undefined,

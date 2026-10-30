@@ -13,6 +13,7 @@ public enum TMDBCatalog {
         public let name: String
         public let originalName: String
         public let year: Int?
+        public let date: String?
         public let overview: String
         public let poster: URL?
         public let backdrop: URL?
@@ -21,10 +22,10 @@ public enum TMDBCatalog {
         public var key: String { "\(mediaType.rawValue):\(id)" }
 
         public init(id: Int, mediaType: TMDBMatch.MediaType, name: String, originalName: String, year: Int?, overview: String,
-                    poster: URL?, backdrop: URL?, rating: Double?, genreIDs: [Int]) {
+                    poster: URL?, backdrop: URL?, rating: Double?, genreIDs: [Int], date: String? = nil) {
             self.id = id; self.mediaType = mediaType; self.name = name; self.originalName = originalName
             self.year = year; self.overview = overview; self.poster = poster; self.backdrop = backdrop
-            self.rating = rating; self.genreIDs = genreIDs
+            self.rating = rating; self.genreIDs = genreIDs; self.date = date
         }
     }
 

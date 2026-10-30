@@ -2,6 +2,7 @@
 import { image, type MediaType, type TMDB, yearOf } from "./tmdb.ts";
 
 export interface Person {
+  id: number | null;
   name: string;
   role: string | null;
   profile: string | null;
@@ -46,6 +47,7 @@ export interface Details {
   year: number | null;
   date: string | null;
   genres: string[];
+  genreItems: { id: number; name: string }[];
   runtime: number | null;
   rating: number | null;
   voteCount: number;
@@ -57,7 +59,7 @@ export interface Details {
   heroPoster: string | null;
   trailer: { site: "YouTube" | "IMDb"; key: string } | null;
   stills: string[];
-  studios: { name: string; logo: string | null }[];
+  studios: { id: number | null; kind: "network" | "company"; name: string; logo: string | null }[];
   cast: Person[];
   crew: Person[];
   networks: string[];
@@ -162,16 +164,17 @@ export async function details(tmdb: TMDB, type: MediaType, id: number, language:
   const cast: Person[] = list(credits?.cast)
     .slice(0, 16)
     .map((person) => ({
+      id: Number.isSafeInteger(person.id) && person.id > 0 ? person.id : null,
       name: clip(person.name, 80),
       role: clip(tv ? person.roles?.[0]?.character : person.character, 80) || null,
       profile: image(person.profile_path, "w185"),
     }));
   const crew: Person[] = tv
-    ? list(item.created_by).slice(0, 4).map((person) => ({ name: clip(person.name, 80), role: "Creator", profile: image(person.profile_path, "w185") }))
+    ? list(item.created_by).slice(0, 4).map((person) => ({ id: Number.isSafeInteger(person.id) && person.id > 0 ? person.id : null, name: clip(person.name, 80), role: "Creator", profile: image(person.profile_path, "w185") }))
     : list(credits?.crew)
         .filter((person) => person.job === "Director")
         .slice(0, 3)
-        .map((person) => ({ name: clip(person.name, 80), role: "Director", profile: image(person.profile_path, "w185") }));
+        .map((person) => ({ id: Number.isSafeInteger(person.id) && person.id > 0 ? person.id : null, name: clip(person.name, 80), role: "Director", profile: image(person.profile_path, "w185") }));
   const seasons: SeasonSummary[] = list(item.seasons).map((season) => ({
     number: season.season_number,
     name: clip(season.name, 80),
@@ -212,6 +215,7 @@ export async function details(tmdb: TMDB, type: MediaType, id: number, language:
     year: yearOf(date),
     date,
     genres: list(item.genres).map((genre) => clip(genre.name, 40)).filter(Boolean),
+    genreItems: list(item.genres).filter((genre) => Number.isSafeInteger(genre.id) && genre.id > 0 && clip(genre.name, 40)).map((genre) => ({ id: genre.id, name: clip(genre.name, 40) })),
     runtime: tv ? number(item.episode_run_time?.[0]) : number(item.runtime),
     rating: item.vote_count > 0 ? number(item.vote_average) : null,
     voteCount: item.vote_count ?? 0,
@@ -223,7 +227,7 @@ export async function details(tmdb: TMDB, type: MediaType, id: number, language:
     heroPoster: heroPoster(item.images, item.poster_path),
     trailer: trailer(item.videos, language, item.imdb_id ?? item.external_ids?.imdb_id),
     stills: [...new Set(list(item.images?.backdrops).filter((entry) => typeof entry.file_path === "string" && entry.aspect_ratio > 1).map((entry) => image(entry.file_path, "w780")!))].slice(0, 8),
-    studios: list(tv ? item.networks : item.production_companies).slice(0, 8).map((entry) => ({ name: clip(entry.name, 60), logo: image(entry.logo_path, "w300") })),
+    studios: list(tv ? item.networks : item.production_companies).slice(0, 8).map((entry) => ({ id: Number.isSafeInteger(entry.id) && entry.id > 0 ? entry.id : null, kind: tv ? "network" : "company", name: clip(entry.name, 60), logo: image(entry.logo_path, "w300") })),
     cast,
     crew,
     networks: list(tv ? item.networks : item.production_companies).slice(0, 3).map((entry) => clip(entry.name, 60)),
