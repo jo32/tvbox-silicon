@@ -14,6 +14,8 @@
 # signs with Apple Distribution and the "Yingxia iOS/tvOS App Store" profiles, uploads with altool, then runs
 # Scripts/testflight-publish.py: wait for processing, copy What to Test, add to the group, submit for review.
 # --no-upload stops after the export (to check the archives). Output: build/testflight/<version>-<build>/.
+# ICLOUD=1 signs in iCloud key-value storage (Config/iCloud.entitlements, for iCloud sync); the App IDs and the
+# App Store profiles must have the iCloud capability first, or the export fails.
 set -euo pipefail
 
 TESTFLIGHT_VERSION=${TESTFLIGHT_VERSION:-1.7.7}
@@ -63,6 +65,7 @@ for platform in iOS tvOS; do
       -derivedDataPath "build/testflight/DerivedData-$platform" -archivePath "$archive" \
       -allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER" \
       DEVELOPMENT_TEAM=$TEAM MARKETING_VERSION="$TESTFLIGHT_VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
+      ${ICLOUD:+ICLOUD_ENTITLEMENTS=Config/iCloud.entitlements} \
       'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) APPSTORE' >"$OUT/$platform-archive.log" 2>&1; then
     grep -E 'error:|BUILD FAILED|ARCHIVE FAILED' "$OUT/$platform-archive.log" | tail -20
     echo "archive failed, log: $OUT/$platform-archive.log" >&2

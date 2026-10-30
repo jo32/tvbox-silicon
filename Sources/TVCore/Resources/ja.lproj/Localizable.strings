@@ -1290,3 +1290,6 @@
 "Catalog Series" = "テレビ番組";
 
 "TV Movie" = "テレビ映画";
+
+"iCloud Sync" = "iCloud 同期";
+"Keeps favorites, Continue Watching, subscriptions, and the sources you pinned, hid or ordered the same on your devices signed in to the same iCloud account. Accounts, passwords and downloads stay on each device." = "同じ iCloud アカウントでサインインしているデバイス間で、お気に入り、視聴を続ける、配信設定、固定・非表示・並べ替えたソースを同期します。アカウント、パスワード、ダウンロードは各デバイスにのみ保存されます。";

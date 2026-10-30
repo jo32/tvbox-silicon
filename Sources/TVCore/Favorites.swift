@@ -155,6 +155,8 @@ struct FavoriteDocument: Codable {
     public private(set) var persistenceError: String?
     private let defaults: UserDefaults
     private static let storageKey = "favorites"
+    /// Called after the viewer changes the list (not after `adopt`), for iCloud sync.
+    @ObservationIgnored public var onChange: (@MainActor () -> Void)?
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -194,6 +196,20 @@ struct FavoriteDocument: Codable {
     public func toggle(_ item: FavoriteItem) {
         if let index = items.firstIndex(where: { $0.matches(item) }) { items.remove(at: index) }
         else { items.insert(item, at: 0) }
+        persist()
+        onChange?()
+    }
+
+    /// Every item by its key, as iCloud sync compares them.
+    public var syncValues: [String: FavoriteItem] { Dictionary(items.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first }) }
+
+    /// The list merged with other devices': the newest change first; items changed at the same moment keep this device's order.
+    public func adopt(_ synced: [CloudSyncItem<FavoriteItem>]) {
+        let rank = Dictionary(items.enumerated().map { ($0.element.key, $0.offset) }, uniquingKeysWith: min)
+        items = synced.sorted { lhs, rhs in
+            if lhs.stamp != rhs.stamp { return lhs.stamp > rhs.stamp }
+            return (rank[lhs.id] ?? Int.max, lhs.id) < (rank[rhs.id] ?? Int.max, rhs.id)
+        }.map(\.value)
         persist()
     }
 

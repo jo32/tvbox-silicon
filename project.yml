@@ -17,6 +17,8 @@ settings:
     INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.entertainment
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: ''
+    # Config/iCloud.entitlements once the App IDs and profiles have iCloud (Sources/TVCore/CloudSync.swift).
+    ICLOUD_ENTITLEMENTS: ''
 packages:
   # Symlinks to the root Package.swift, Sources, Vendor and Tests. Xcode walks every file under a
   # local package before building, so pointing it at the repo root made it scan build/ (minutes).
@@ -94,6 +96,7 @@ targets:
         SURequireSignedFeed: true
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.jo32.yingxia.mac
+      CODE_SIGN_ENTITLEMENTS: $(ICLOUD_ENTITLEMENTS)
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   TVBox-iOS:
     templates: [SharedApp]
@@ -132,6 +135,7 @@ targets:
       STRIP_STYLE: non-global
       ARCHS: arm64
       PRODUCT_BUNDLE_IDENTIFIER: com.jo32.yingxia.ios
+      CODE_SIGN_ENTITLEMENTS: $(ICLOUD_ENTITLEMENTS)
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       TARGETED_DEVICE_FAMILY: '1,2'
     info:
@@ -181,6 +185,7 @@ targets:
       STRIP_STYLE: non-global
       ARCHS: arm64
       PRODUCT_BUNDLE_IDENTIFIER: com.jo32.yingxia.tv
+      CODE_SIGN_ENTITLEMENTS: $(ICLOUD_ENTITLEMENTS)
       ASSETCATALOG_COMPILER_APPICON_NAME: App Icon & Top Shelf Image
     info:
       properties:

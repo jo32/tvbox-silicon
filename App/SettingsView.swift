@@ -325,6 +325,9 @@ private enum SettingsNote {
     static var errorReports: String {
         L10n.text("Sends errors to the developer a few times a day so they can be fixed: the error text with web addresses cut to the server name, the app and system versions, and a random ID. Never your accounts, passwords or viewing history.")
     }
+    static var iCloud: String {
+        L10n.text("Keeps favorites, Continue Watching, subscriptions, and the sources you pinned, hid or ordered the same on your devices signed in to the same iCloud account. Accounts, passwords and downloads stay on each device.")
+    }
     static var support: String {
         L10n.text("Supports TVBox JSON subscriptions, M3U / TXT live playlists, and standard type 1 / type 4 JSON APIs. Media formats depend on the device. Local JavaScript and Python plugins are experimental on Mac, and JAR plugins are experimental on every platform; compatibility varies by source.")
     }
@@ -341,6 +344,7 @@ struct FormSettingsView: View {
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     @AppStorage(ErrorReports.key) private var sendsErrorReports = true
     @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
+    @AppStorage(CloudSync.enabledKey) private var syncsWithICloud = true
     #if os(iOS)
     @State private var addingSubscription = false
     @State private var showsFeedback = false
@@ -444,6 +448,16 @@ struct FormSettingsView: View {
                     FormLink(symbol: "music.note", tint: .black, title: L10n.text("Douyin"), value: douyinSummary) { DouyinAccountView() }
                 }
                 FormLink(symbol: "externaldrive.fill.badge.person.crop", tint: .brown, title: L10n.text("Cloud Drive Accounts"), value: cloudSummary) { CloudDriveView() }
+            }
+
+            Section {
+                Toggle(isOn: $syncsWithICloud) {
+                    FormLabel(symbol: "icloud.fill", tint: .blue, title: L10n.text("iCloud Sync"))
+                }
+                .settingsSwitch()
+                .onChange(of: syncsWithICloud) { _, on in store.cloudSync?.setEnabled(on) }
+            } footer: {
+                Text(SettingsNote.iCloud)
             }
 
             #if os(iOS)
@@ -1455,6 +1469,7 @@ struct TVSettingsView: View {
     @AppStorage(PlayOnController.key) private var receivesPlayOn = true
     @AppStorage(ErrorReports.key) private var sendsErrorReports = true
     @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
+    @AppStorage(CloudSync.enabledKey) private var syncsWithICloud = true
 
     var body: some View {
         TVSettingsLayout {
@@ -1473,6 +1488,10 @@ struct TVSettingsView: View {
                     TVSettingsLink(title: L10n.text("Douyin"), value: douyinSummary) { DouyinAccountView() }
                 }
                 TVSettingsLink(title: L10n.text("Cloud Drive Accounts"), value: cloudSummary) { CloudDriveView() }
+            }
+            TVSettingsSection(footer: L10n.text("Keeps favorites, Continue Watching, subscriptions, and the sources you pinned, hid or ordered the same on your devices signed in to the same iCloud account. Accounts, passwords and downloads stay on each device.")) {
+                TVSettingsToggle(title: L10n.text("iCloud Sync"), isOn: $syncsWithICloud)
+                    .onChange(of: syncsWithICloud) { _, on in store.cloudSync?.setEnabled(on) }
             }
             TVSettingsSection {
                 TVSettingsLink(title: L10n.text("Watch Now")) { WatchNowSettingsView() }

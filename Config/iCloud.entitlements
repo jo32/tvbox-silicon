@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- iCloud key-value storage for Sources/TVCore/CloudSync.swift. One store for all three apps, so the iPhone's
+     favorites reach the Apple TV and the Mac. Builds use it only with ICLOUD_ENTITLEMENTS=Config/iCloud.entitlements:
+     the provisioning profiles must have iCloud first, or signing fails. Without it, sync does nothing. -->
+<plist version="1.0">
+<dict>
+	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+	<string>$(TeamIdentifierPrefix)com.jo32.yingxia.ios</string>
+</dict>
+</plist>

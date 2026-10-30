@@ -40,6 +40,8 @@ import TVCore
                     if QALaunch.section != nil || QALaunch.page != nil { await QALaunch.start(store); return }
                     #endif
                     await store.restoreSubscription()
+                    // After the saved subscriptions load, so the ones another device added load beside them.
+                    store.cloudSync?.start()
                 }
                 .task {
                     #if DEBUG
@@ -70,6 +72,7 @@ import TVCore
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background {
                         Task { _ = await Diagnostics.shared.snapshot(); ErrorReports.shared.save() }
+                        store.cloudSync?.flushPending()
                     }
                     if phase == .active { Task { await ErrorReports.shared.sendIfDue() } }
                     #if os(tvOS) || os(macOS)

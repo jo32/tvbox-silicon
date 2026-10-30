@@ -18,6 +18,8 @@ import TVCore
     let pinnedSources: PinnedSources
     let hiddenSources: HiddenSources
     let sourceOrder: SourceOrder
+    /// Keeps the viewer's library the same on their other devices; nil for tests and QA's isolated data.
+    let cloudSync: CloudSync?
     /// The history entry being resumed; another entry, or leaving the page, replaces or cancels it.
     private(set) var resumingHistoryID: String?
     private var resumeTask: Task<Void, Never>?
@@ -104,6 +106,7 @@ import TVCore
         WebSniff.install(WKWebSniffer())
         #endif
         sourceOrder = SourceOrder(defaults: playbackDefaults)
+        cloudSync = defaults === UserDefaults.standard && !defaults.bool(forKey: "qaIsolatedData") ? CloudSync() : nil
         favorites = Favorites(defaults: defaults)
         autoPlayNext = defaults.object(forKey: "autoPlayNextEpisode") == nil || defaults.bool(forKey: "autoPlayNextEpisode")
         let saved = defaults.data(forKey: "subscriptions").flatMap { try? JSONDecoder().decode([SubscriptionEntry].self, from: $0) }
@@ -136,6 +139,7 @@ import TVCore
         }
         // Songs that were downloading when the app quit carry on.
         MusicDownloadLibrary.shared.wake()
+        setUpCloudSync()
     }
     /// The current media address of a downloading episode, from its source; the queue asks again when a link expires.
     private func resolveDownload(_ item: DownloadItem) async throws -> Channel {
@@ -318,7 +322,48 @@ import TVCore
         if persistsChanges, let data = try? JSONEncoder().encode(value) { try? Self.save(data, to: Self.file(for: entry)) }
     }
     private func saveSubscriptionList() {
-        if persistsChanges { defaults.set(try? JSONEncoder().encode(subscriptions), forKey: "subscriptions") }
+        guard persistsChanges else { return }
+        defaults.set(try? JSONEncoder().encode(subscriptions), forKey: "subscriptions")
+        cloudSync?.changed("subscriptions")
+    }
+    /// Favorites, Continue Watching, subscriptions and the viewer's pins, hides and order follow them to their other
+    /// devices. Continue Watching changes every few seconds while a video plays, so it waits longer between writes.
+    private func setUpCloudSync() {
+        guard let sync = cloudSync else { return }
+        let favorites = favorites, history = playbackHistory, pinned = pinnedSources, hidden = hiddenSources, order = sourceOrder
+        sync.register("favorites", current: { favorites.syncValues }, apply: { favorites.adopt($0) })
+        sync.register("history", delay: .seconds(30), current: { Dictionary(history.entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }) },
+                      apply: { history.adopt($0.map(\.value)) })
+        sync.register("subscriptions", current: { [weak self] in self?.syncedSubscriptions ?? [:] }, apply: { [weak self] in self?.adoptSubscriptions($0) })
+        sync.register("pinnedSources", current: { CloudSync.ranks(pinned.savedKeys) }, apply: { pinned.adopt(CloudSync.ordered($0)) })
+        sync.register("hiddenSources", current: { Dictionary(hidden.savedKeys.map { ($0, true) }, uniquingKeysWith: { first, _ in first }) },
+                      apply: { hidden.adopt($0.sorted { ($0.stamp, $0.id) < ($1.stamp, $1.id) }.map(\.id)) })
+        sync.register("sourceOrder", current: { CloudSync.ranks(order.savedKeys) }, apply: { order.adopt(CloudSync.ordered($0)) })
+        // Only "on" is an item: a new device's default (off) is no change, so it can't switch the order off everywhere.
+        sync.register("sourceOrderOn", current: { order.enabled ? ["on": true] : [:] }, apply: { if order.enabled == $0.isEmpty { order.enabled = !$0.isEmpty } })
+        favorites.onChange = { sync.changed("favorites") }
+        history.onChange = { sync.changed("history") }
+        pinned.onChange = { sync.changed("pinnedSources") }
+        hidden.onChange = { sync.changed("hiddenSources") }
+        order.onChange = { sync.changed("sourceOrder"); sync.changed("sourceOrderOn") }
+    }
+    private var syncedSubscriptions: [String: SyncedSubscription] {
+        Dictionary(subscriptions.enumerated().map { ($0.element.address, SyncedSubscription(entry: $0.element, rank: $0.offset)) },
+                   uniquingKeysWith: { first, _ in first })
+    }
+    /// Subscriptions another device added, renamed, switched, moved or removed. A new one that is on loads.
+    private func adoptSubscriptions(_ synced: [CloudSyncItem<SyncedSubscription>]) {
+        let next = synced.sorted { ($0.value.rank, $0.id) < ($1.value.rank, $1.id) }.map(\.value.entry)
+        guard next != subscriptions else { return }
+        let kept = Set(next.map(\.address))
+        for entry in subscriptions where !kept.contains(entry.address) {
+            documents[entry.address] = nil; subscriptionErrors[entry.address] = nil
+            try? FileManager.default.removeItem(at: Self.file(for: entry))
+        }
+        subscriptions = next
+        saveSubscriptionList()
+        if subscriptions.contains(where: { $0.enabled && documents[$0.address] == nil }) { Task { await restoreSubscription() } }
+        else { rebuildSubscription() }
     }
     /// Shows every enabled subscription that has a copy, merged in list order.
     private func rebuildSubscription(resetting: Bool = true) {
@@ -710,4 +755,10 @@ struct PlaybackCatalog {
     let client: CatalogClient
     let scope: String
     var playlist: EpisodePlaylist { EpisodePlaylist(video.episodes) }
+}
+
+/// A subscription as iCloud sync keeps it: the entry and its place in the list.
+struct SyncedSubscription: Codable, Equatable, Sendable {
+    var entry: SubscriptionEntry
+    var rank: Int
 }
