@@ -1,3 +1,6 @@
+#if canImport(CoreImage.CIFilterBuiltins)
+import CoreImage.CIFilterBuiltins
+#endif
 import Foundation
 import Testing
 @testable import TVCore
@@ -191,6 +194,23 @@ import Testing
     #expect(throws: (any Error).self) { try Subscription.parse(Data("hello,world\n".utf8), origin: origin) }
     #expect(throws: (any Error).self) { try Subscription.parse(Data("分组,#genre#\n".utf8), origin: origin) }
 }
+
+@Test func catPawBundlesAskForTheUCTVToken() {
+    #expect(CatPawSignIn.provider(for: "插件错误：Error: The source failed (HTTP 500): 非高会需要配置 UC TV Token，请到配置中心扫码获取") == "ucToken")
+    #expect(CatPawSignIn.provider(for: "刷新 UC TV Token 失败") == "ucToken")
+    #expect(CatPawSignIn.provider(for: "夸克授权失败，请扫码登录") == nil)
+}
+
+#if canImport(CoreImage.CIFilterBuiltins)
+@Test func catPawSignInReadsTheLinkInItsCode() throws {
+    let link = "https://su.uc.cn/9_iCI3h?uc_param_str=&token=sta326333a3maasaq80nd5xub2ws0ib1"
+    let filter = CIFilter.qrCodeGenerator()
+    filter.message = Data(link.utf8)
+    let code = try #require(filter.outputImage).transformed(by: CGAffineTransform(scaleX: 8, y: 8))
+    let png = try #require(CIContext().pngRepresentation(of: code, format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB()))
+    #expect(CatPawSignIn.decode(png)?.absoluteString == link)
+}
+#endif
 
 @Test func catPawOpenMediaProxiesAreRecognized() throws {
     #expect(CatPawOpen.isMediaProxy(try #require(URL(string: "http://127.0.0.1:59322/spider/duoduo/3/proxy/quark/9d6b9453?token=1"))))

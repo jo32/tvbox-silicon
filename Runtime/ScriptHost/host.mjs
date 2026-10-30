@@ -425,6 +425,12 @@ async function callCatPaw(params) {
         return text;
     };
     if (params.catConfig) return { result: await send('/config') };
+    // A sign-in the bundle's config center runs with its own QR code (UC's TV token), for accounts the app has no
+    // sign-in page for. Keep in step with NodeHost/main.mjs.
+    if (params.catLogin) {
+        if (!['start', 'poll', 'cancel'].includes(params.catLogin)) throw new Error('Invalid CatPawOpen sign-in');
+        return { result: await send(`/website/api/login/${params.catLogin}`, { provider: params.provider || '', taskId: params.taskId || '' }) };
+    }
     const api = String(params.catPawOpen || '');
     if (!/^\/spider\/[^?#]+$/.test(api)) throw new Error('Invalid CatPawOpen source');
     if (!catStarted.has(api)) { await send(api + '/init', {}); catStarted.add(api); }

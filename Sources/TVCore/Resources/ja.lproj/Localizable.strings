@@ -1298,3 +1298,11 @@
 "Top Half" = "上半分";
 "Top Three Quarters" = "上 3/4";
 "Whole Screen" = "全画面";
+"UC TV Token" = "UC TV トークン";
+"Get UC TV Token" = "UC TV トークンを取得";
+"You're signed in to UC, but this source plays UC accounts without premium through UC's TV app, which needs a token of its own. Get it once with the UC Browser app, or choose another line." = "UC にはサインイン済みですが、このソースはプレミアムでない UC アカウントを UC の TV アプリ経由で再生するため、専用のトークンが必要です。UC Browser で一度取得するか、別の回線を選んでください。";
+"Scan this code with the UC Browser app on your phone, signed in to the same UC account, and approve it." = "同じ UC アカウントでサインインしたスマートフォンの UC Browser アプリでこのコードをスキャンし、承認してください。";
+"Approve the token in the UC Browser app, signed in to the same UC account: open it here, or scan the code with UC Browser on another phone." = "同じ UC アカウントでサインインした UC Browser アプリで承認してください。ここで開くか、別のスマートフォンの UC Browser でコードをスキャンします。";
+"Open in UC Browser" = "UC Browser で開く";
+"UC Browser isn't on this device. Get UC Browser (UC浏览器) from the App Store and sign in to it, or scan the code with another phone." = "このデバイスには UC Browser がありません。App Store から UC Browser（UC浏览器）を入手してサインインするか、別のスマートフォンでコードをスキャンしてください。";
+"Waiting for UC Browser to approve…" = "UC Browser での承認を待っています…";

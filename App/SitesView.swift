@@ -833,6 +833,8 @@ struct VideoDetailView: View {
     /// A failed or blocked playback attempt, shown as an inline banner beside the artwork.
     @State private var playbackIssue: PlaybackIssue?
     @State private var signingIn: CloudDrive?
+    /// A sign-in the source's CatPawOpen bundle runs itself (UC's TV token).
+    @State private var bundleSignIn: BundleSignIn?
     @State private var choosingDownloads = false
     /// How many episodes were just queued, shown briefly under the header.
     @State private var queuedNotice: Int?
@@ -906,6 +908,13 @@ struct VideoDetailView: View {
         .task(id: detail?.id) { await startTMDB() }
         .onChange(of: choosingQuality) { _, open in if !open && !busy { loadingEpisode = nil } }
         // Sign in where playback failed, then resume the episode that needed the account.
+        #if !os(tvOS)
+        .sheet(item: $bundleSignIn) { pending in
+            CatPawSignInView(client: client, provider: pending.provider) {
+                if let episode = playbackIssue?.episode { startRequest { await play(episode) } }
+            }
+        }
+        #endif
         #if os(macOS)
         .sheet(item: $signingIn) { drive in
             if drive == .xunlei {
@@ -1000,7 +1009,7 @@ struct VideoDetailView: View {
         }
         if let issue = playbackIssue {
             HStack(alignment: .top, spacing: 14) {
-                Image(systemName: issue.drive != nil ? "person.crop.circle.badge.exclamationmark.fill" : "exclamationmark.triangle.fill")
+                Image(systemName: issue.drive != nil || issue.signIn != nil ? "person.crop.circle.badge.exclamationmark.fill" : "exclamationmark.triangle.fill")
                     .font(.system(size: 16, weight: .semibold)).foregroundStyle(Brand.amber)
                     .frame(width: 36, height: 36)
                     .background(Brand.amber.opacity(0.15), in: Circle())
@@ -1016,10 +1025,17 @@ struct VideoDetailView: View {
                         if let drive = issue.drive {
                             Button(drive.signInTitle) { signingIn = drive }.settingsButton(prominent: true)
                         }
+                        #if !os(tvOS)
+                        if let provider = issue.signIn {
+                            Button(L10n.text("Get UC TV Token")) { bundleSignIn = BundleSignIn(provider: provider) }
+                                .settingsButton(prominent: true)
+                                .accessibilityIdentifier("playbackIssue.bundleSignIn")
+                        }
+                        #endif
                         Button(L10n.text(issue.blockedBeforeRequest ? "Try Anyway" : "Retry")) {
                             startRequest { await play(issue.episode, skipAccountCheck: true) }
                         }
-                        .settingsButton(prominent: issue.drive == nil)
+                        .settingsButton(prominent: issue.drive == nil && issue.signIn == nil)
                         #if os(tvOS)
                         // A focusable action instead of the small corner close button.
                         Button(L10n.text("Dismiss")) { withAnimation(.smooth(duration: 0.2)) { playbackIssue = nil } }.settingsButton()
@@ -1543,6 +1559,10 @@ struct VideoDetailView: View {
             // say what happened and offer the sign-in instead of echoing them.
             if let login = error as? CloudDriveLoginRequired, let drive = CloudDrive(rawValue: login.rawValue) {
                 playbackIssue = PlaybackIssue(episode: episode, message: drive.expiredHint, drive: drive, blockedBeforeRequest: false)
+            } else if let provider = CatPawSignIn.provider(for: error.localizedDescription) {
+                // Signed in, but the bundle wants a token its own code gives; signing in again would change nothing.
+                playbackIssue = PlaybackIssue(episode: episode, message: L10n.text("You're signed in to UC, but this source plays UC accounts without premium through UC's TV app, which needs a token of its own. Get it once with the UC Browser app, or choose another line."),
+                                              drive: nil, blockedBeforeRequest: false, signIn: provider)
             } else if let drive = CloudDrive(flag: episode.flag), CloudDrive.isLoginFailure(error.localizedDescription) {
                 playbackIssue = PlaybackIssue(episode: episode, message: drive.expiredHint, drive: drive, blockedBeforeRequest: false)
             } else {
@@ -1939,6 +1959,13 @@ private struct PlaybackIssue {
     let drive: CloudDrive?
     /// True when playback was not attempted because a required account is missing.
     let blockedBeforeRequest: Bool
+    /// A sign-in the source's CatPawOpen bundle runs itself (`CatPawSignIn.provider(for:)`).
+    var signIn: String? = nil
+}
+
+private struct BundleSignIn: Identifiable {
+    let provider: String
+    var id: String { provider }
 }
 
 /// Cloud drives whose plugins need a saved login before they can return a stream.

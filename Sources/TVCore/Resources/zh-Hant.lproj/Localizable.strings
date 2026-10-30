@@ -1298,3 +1298,11 @@
 "Top Half" = "半畫面";
 "Top Three Quarters" = "3/4 畫面";
 "Whole Screen" = "全畫面";
+"UC TV Token" = "UC TV Token";
+"Get UC TV Token" = "取得 UC TV Token";
+"You're signed in to UC, but this source plays UC accounts without premium through UC's TV app, which needs a token of its own. Get it once with the UC Browser app, or choose another line." = "你已登入 UC，但此片源透過 UC 網盤 TV 版播放非會員帳號，需要另外的 TV Token。用 UC 瀏覽器取得一次即可，或改選其他線路。";
+"Scan this code with the UC Browser app on your phone, signed in to the same UC account, and approve it." = "用手機上的 UC 瀏覽器（登入同一 UC 帳號）掃描此 QR 碼並確認。";
+"Approve the token in the UC Browser app, signed in to the same UC account: open it here, or scan the code with UC Browser on another phone." = "請在 UC 瀏覽器（登入同一 UC 帳號）中確認：在本機開啟，或用另一支手機的 UC 瀏覽器掃描 QR 碼。";
+"Open in UC Browser" = "在 UC 瀏覽器中開啟";
+"UC Browser isn't on this device. Get UC Browser (UC浏览器) from the App Store and sign in to it, or scan the code with another phone." = "此裝置未安裝 UC 瀏覽器。請從 App Store 下載 UC 瀏覽器（UC浏览器）並登入，或用另一支手機掃碼。";
+"Waiting for UC Browser to approve…" = "等待 UC 瀏覽器確認…";
