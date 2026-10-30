@@ -270,7 +270,7 @@ struct HistoryCard: View {
                         }
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .opacity(selection == false ? 0.6 : 1)
             Text(entry.context.videoName).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
             if details {

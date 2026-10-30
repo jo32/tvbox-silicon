@@ -636,7 +636,7 @@ struct DiscoverTVSearchView: View {
                     LazyHStack(alignment: .top, spacing: 40) {
                         ForEach(group.people) { person in
                             RouteLink { DiscoverPersonView(id: person.id, name: person.name, profile: person.profile) } label: { portrait(person) }
-                                .buttonStyle(DiscoverTVLiftStyle(scale: 1.1))
+                                .cardButton(.circle)
                                 .accessibilityIdentifier("discover.search.person.\(person.id)")
                         }
                     }.padding(.horizontal, gutter).padding(.vertical, 24)
@@ -662,13 +662,13 @@ struct DiscoverTVSearchView: View {
 
     private func card(_ item: TMDBCatalog.Item) -> some View {
         RouteLink { DiscoverDetailView(item: item) } label: { DiscoverTVSearchCard(item: item) }
-            .buttonStyle(DiscoverTVLiftStyle())
+            .panelCardButton(cornerRadius: 24)
             .accessibilityIdentifier("discover.search.result.\(item.key)")
     }
 
     private func portrait(_ person: TMDBCatalog.SearchPerson) -> some View {
         VStack(spacing: 14) {
-            PosterImage(url: person.profile, symbol: "person.fill").frame(width: 200, height: 200).clipShape(Circle())
+            PosterImage(url: person.profile, symbol: "person.fill").frame(width: 200, height: 200).posterClip(Circle())
             VStack(spacing: 4) {
                 Text(person.name).font(.system(size: 28)).lineLimit(1)
                 Text(L10n.text(person.department == "Acting" ? "Actor" : person.department ?? "People"))

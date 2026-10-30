@@ -279,7 +279,7 @@ private struct MusicContinueCard: View {
             .contentPanel(cornerRadius: 20)
             .contentShape(Rectangle())
         }
-        .cardButton()
+        .panelCardButton(cornerRadius: 20)
     }
 }
 

@@ -695,7 +695,7 @@ extension DiscoverDetailView {
                                 Text(value.overview).font(.system(size: 22)).lineLimit(2).opacity(0.6)
                             }
                         }
-                        .buttonStyle(DiscoverTVLiftStyle(scale: 1.05))
+                        .cardButton(.roundedRectangle(radius: 16))
                         .accessibilityIdentifier("discover.detail.episode.\(value.number)")
                     }
                 }
@@ -707,7 +707,7 @@ extension DiscoverDetailView {
     private func tvLandscape(_ url: URL?, width: CGFloat, badge: String? = nil, @ViewBuilder captions: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             PosterImage(url: url).frame(width: width, height: width * 9 / 16)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .posterClip(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(alignment: .bottomTrailing) {
                     if let badge {
                         Text(badge).font(.system(size: 20, weight: .medium)).padding(.horizontal, 10).padding(.vertical, 4)
@@ -723,7 +723,7 @@ extension DiscoverDetailView {
             ForEach(Array(people.enumerated()), id: \.offset) { _, person in
                 if let id = person.id {
                     RouteLink { DiscoverPersonView(id: id, name: person.name, profile: person.profile) } label: { tvPerson(person) }
-                        .buttonStyle(DiscoverTVLiftStyle(scale: 1.1))
+                        .cardButton(.circle)
                         .accessibilityIdentifier("discover.detail.person.\(id)")
                 } else { tvPerson(person) }
             }
@@ -732,7 +732,7 @@ extension DiscoverDetailView {
 
     private func tvPerson(_ person: TMDBMatch.Person) -> some View {
         VStack(spacing: 12) {
-            PosterImage(url: person.profile, symbol: "person.fill").frame(width: 190, height: 190).clipShape(Circle())
+            PosterImage(url: person.profile, symbol: "person.fill").frame(width: 190, height: 190).posterClip(Circle())
             VStack(spacing: 4) {
                 Text(person.name).font(.system(size: 26)).lineLimit(1)
                 if let role = person.role { Text(role).font(.system(size: 22)).lineLimit(1).opacity(0.55) }
@@ -761,9 +761,9 @@ extension DiscoverDetailView {
         tvRow(L10n.text("Stills")) {
             ForEach(images, id: \.self) { url in
                 Button { still = DiscoverStill(url: url) } label: {
-                    PosterImage(url: url).frame(width: 560, height: 315).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    PosterImage(url: url).frame(width: 560, height: 315).posterClip(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
-                .buttonStyle(DiscoverTVLiftStyle(scale: 1.05))
+                .cardButton(.roundedRectangle(radius: 16))
                 .accessibilityIdentifier("discover.detail.still")
             }
         }
@@ -786,7 +786,7 @@ extension DiscoverDetailView {
                         Text(value.overview).font(.system(size: 22)).lineLimit(2).opacity(0.6)
                     }
                 }
-                .buttonStyle(DiscoverTVLiftStyle(scale: 1.05))
+                .cardButton(.roundedRectangle(radius: 16))
                 .accessibilityIdentifier("discover.detail.related.\(value.key)")
             }
         }

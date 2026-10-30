@@ -432,7 +432,7 @@ private struct HomeFavoriteCard: View {
             } label: {
                 FileRowLabel(symbol: cloud.symbol, tint: cloud.tint, title: file.fileName, subtitle: driveName)
             }
-            .cardButton()
+            .rowCardButton()
             FavoriteHeartButton(item: .cloud(file), name: file.fileName)
                 .fixedSize()
                 .allowsHitTesting(drag?.active != true)
@@ -444,7 +444,7 @@ private struct HomeFavoriteCard: View {
     private func poster(url: URL?, headers: [String: String]) -> some View {
         PosterImage(url: url, headers: headers)
             .frame(width: Self.posterWidth, height: Self.thumb)
-            .clipShape(RoundedRectangle(cornerRadius: Self.thumb * 0.28, style: .continuous))
+            .posterClip(RoundedRectangle(cornerRadius: Self.thumb * 0.28, style: .continuous))
     }
 
     private func media<Art: View>(_ art: Art, title: String, subtitle: String) -> some View {

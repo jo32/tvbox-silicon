@@ -707,7 +707,7 @@ struct ChannelCard: View {
                     }
                     Spacer(minLength: 0)
                 }.contentShape(Rectangle())
-            }.cardButton()
+            }.rowCardButton()
             Button { if drag?.active != true { store.toggleFavorite(channel) } } label: {
                 Image(systemName: favorite ? "heart.fill" : "heart")
                     .font(.title3).foregroundStyle(favorite ? Brand.rose : .secondary)

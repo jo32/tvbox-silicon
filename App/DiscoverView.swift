@@ -195,6 +195,24 @@ struct DiscoverView: View {
         if let people = model.collections?.people, !people.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 sectionHeading(L10n.text("People"))
+                #if os(tvOS)
+                // Round photos that take the system's focus lift and glass rim themselves, as in Rex: a card plate
+                // drew a rectangle around the circle.
+                DiscoverTVRow {
+                    ForEach(people) { person in
+                        RouteLink {
+                            DiscoverPersonView(id: person.id, name: person.name, profile: person.profile)
+                        } label: {
+                            VStack(spacing: 16) {
+                                PosterImage(url: person.profile, symbol: "person.fill").frame(width: 200, height: 200)
+                                Text(person.name).font(.system(size: 26, weight: .medium)).lineLimit(1)
+                            }.frame(width: 200)
+                        }
+                        .cardButton(.circle)
+                        .accessibilityIdentifier("discover.person.\(person.id)")
+                    }
+                }
+                #else
                 DiscoverRail(arrowCenter: 41.5) {
                     LazyHStack(alignment: .top, spacing: 14) {
                         ForEach(people) { person in
@@ -209,6 +227,7 @@ struct DiscoverView: View {
                         }
                     }.padding(.horizontal, DiscoverLayout.gutter)
                 }
+                #endif
             }
         }
     }
@@ -226,7 +245,7 @@ struct DiscoverView: View {
                             } else {
                                 DiscoverTVNetworkCard(brand: brand, items: Array(model.items(brand.feed).filter { $0.poster != nil }.prefix(9)))
                             }
-                        }.tmdbCardButton().accessibilityLabel(brand.name)
+                        }.panelCardButton(cornerRadius: studio ? 20 : 24).accessibilityLabel(brand.name)
                     }
                 }
                 #else
@@ -252,7 +271,7 @@ struct DiscoverView: View {
                 ForEach(tvGenres) { genre in
                     RouteLink { DiscoverBrowseView(title: genre.title, filter: genre.filter) } label: {
                         DiscoverTVGenreCard(title: genre.title, posters: genre.posters)
-                    }.tmdbCardButton().accessibilityIdentifier("discover.genre.\(genre.id)")
+                    }.panelCardButton(cornerRadius: 20).accessibilityIdentifier("discover.genre.\(genre.id)")
                 }
             }
             #else
@@ -300,7 +319,7 @@ struct DiscoverView: View {
             ForEach([TMDBCatalog.Feed.topTelevision, .topMovies], id: \.self) { feed in
                 RouteLink { DiscoverListView(feed: feed, initial: model.pages[feed]) } label: {
                     DiscoverTVRankingCard(title: feed.title, items: Array(model.items(feed).filter { $0.poster != nil }.prefix(18)))
-                }.tmdbCardButton().accessibilityIdentifier("discover.ranking.\(feed.rawValue)")
+                }.panelCardButton(cornerRadius: 28).accessibilityIdentifier("discover.ranking.\(feed.rawValue)")
             }
         }
         #else
@@ -771,7 +790,7 @@ struct DiscoverTile: View {
         VStack(alignment: .leading, spacing: 0) {
             Color.clear.aspectRatio(landscape ? 16.0 / 9 : 2.0 / 3, contentMode: .fit)
                 .overlay { PosterImage(url: landscape ? item.backdrop ?? item.poster : item.poster) }
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .posterClip(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.primary.opacity(0.1), lineWidth: 0.5) }
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.name).font(.system(size: DiscoverLayout.caption)).lineLimit(1)
@@ -849,7 +868,7 @@ private struct DiscoverTVCollection: View {
                 LazyHStack(alignment: .top, spacing: 8) {
                     ForEach(items, id: \.key) { item in
                         RouteLink { DiscoverDetailView(item: item) } label: { tile(item) }
-                            .buttonStyle(DiscoverTVPlateStyle())
+                            .cardButton(.roundedRectangle(radius: 14))
                             .accessibilityIdentifier("discover.collection.\(feed.rawValue).\(item.key)")
                     }
                 }.padding(.horizontal, 14).padding(.vertical, 14)
@@ -887,7 +906,7 @@ private struct DiscoverTVCollection: View {
     private func tile(_ item: TMDBCatalog.Item) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             PosterImage(url: item.backdrop ?? item.poster).frame(width: 264, height: 149)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .posterClip(RoundedRectangle(cornerRadius: 14, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.name).font(.system(size: 26, weight: .medium))
                 Text([item.year.map(String.init), item.genreNames.split(separator: "/").first.map { $0.trimmingCharacters(in: .whitespaces) }]

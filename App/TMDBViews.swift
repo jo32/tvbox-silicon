@@ -239,7 +239,7 @@ struct TMDBChoices: View {
                         .frame(width: TMDBMetrics.candidate, height: TMDBMetrics.candidate * 1.5)
                         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
-                    .tmdbCardButton()
+                    .panelCardButton(cornerRadius: 10)
                 }
                 .padding(.vertical, TMDBMetrics.focusRoom)
             }
@@ -266,7 +266,7 @@ struct TMDBCandidateTile: View {
         VStack(alignment: .leading, spacing: 6) {
             PosterImage(url: poster)
                 .frame(width: TMDBMetrics.candidate, height: TMDBMetrics.candidate * 1.5)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
             Text(name).font(.caption.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading)
             Text([year.map(String.init), L10n.text(mediaType == .tv ? "TV Series" : "Movie")].compactMap { $0 }.joined(separator: " · "))
                 .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
@@ -746,7 +746,7 @@ struct TMDBEpisodeTile: View {
                             .background(.black.opacity(0.55), in: Capsule()).foregroundStyle(.white).padding(6)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay { if current { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Brand.accent, lineWidth: 2) } }
             Text(name).font(.subheadline.weight(current ? .bold : .semibold)).lineLimit(1)
                 .foregroundStyle(current ? Brand.accent : .primary)

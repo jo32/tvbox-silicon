@@ -267,7 +267,7 @@ struct LiveRoomCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
                     .overlay { PosterImage(url: room.cover, headers: [:]) }
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .posterClip(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(alignment: .topLeading) {
                         HStack(spacing: 5) {
                             Image(systemName: "dot.radiowaves.left.and.right").font(.caption2.weight(.bold))
