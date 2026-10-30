@@ -193,6 +193,7 @@ public struct CatalogClient: Sendable {
         }
     }
     private func perform(_ params: [String: String]) async throws -> [String: JSONValue] {
+        if site.isCloudFiles { return try await CloudFilesSource.request(site, params: params) }
         // A bundled lite port runs first, in-process on QuickJS everywhere; when it fails or answers
         // with nothing usable, the source's JAR spider answers instead.
         if let script = site.liteScript, ScriptRuntime.available, await LiteFallback.shared.prefersPort(site.key) {
@@ -384,6 +385,10 @@ public struct CatalogClient: Sendable {
     /// This does not call a spider `isVideoFormat`.
     public func resolvePlayback(_ plan: PlaybackPlan, choice: PlaybackChoice) async throws -> Channel {
         if site.key == Hongguo.siteKey, let url = URL(string: choice.address), url.scheme == HongguoStreams.scheme {
+            return Channel(name: choice.name, group: plan.group, url: url, headers: [:])
+        }
+        // A drive in Cloud Files hands over its stream, which carries the CDN's headers itself.
+        if site.isCloudFiles, let url = URL(string: choice.address), url.scheme == CloudStreams.scheme {
             return Channel(name: choice.name, group: plan.group, url: url, headers: [:])
         }
         if !plan.requiresWebDetection || Self.isDirectMedia(choice.address) {

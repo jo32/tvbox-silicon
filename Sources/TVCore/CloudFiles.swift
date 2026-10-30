@@ -102,6 +102,8 @@ public enum CloudFiles {
     public static let scheme = "tvbox-files"
     /// The source key playback history keeps for files played from Cloud Files.
     public static let sourceKey = "builtin.files"
+    /// Posted when a drive's account or a server is saved, so the app can add or remove its source.
+    public static let drivesChanged = Notification.Name("CloudFilesDrivesChanged")
 
     /// Signed-in Quark and UC, then the saved AList servers.
     public static func drives() -> [CloudFilesDrive] {
@@ -166,6 +168,11 @@ public enum CloudFiles {
         guard let drive = drive(key: key) else {
             throw TVError.unsupported(L10n.text("This file's drive is no longer in Cloud Files."))
         }
+        return try await stream(drive, id: id, name: name)
+    }
+
+    /// The address AVPlayer opens for a file of `drive`.
+    static func stream(_ drive: CloudFilesDrive, id: String, name: String) async throws -> URL {
         switch drive {
         case .quark: return try await QuarkFiles.quark.stream(id, name: name)
         case .uc: return try await QuarkFiles.uc.stream(id, name: name)

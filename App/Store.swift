@@ -69,6 +69,7 @@ import TVCore
     /// them many times while drawing one frame. The stamp is the inputs, so a later frame reuses the row.
     /// Not observed: views fill these while drawing, and a write would draw every reader again.
     @ObservationIgnored private var siteListStamp = ""
+    @ObservationIgnored private var cloudDrivesObserver: NSObjectProtocol?
     @ObservationIgnored private var automaticCache: [Site]?
     @ObservationIgnored private var orderedCache: [Site]?
     @ObservationIgnored private var recommendationCache: [Site]?
@@ -132,6 +133,10 @@ import TVCore
             defaults.removeObject(forKey: "subscription")
         }
         rebuildSubscription(resetting: false)
+        // Signing in to a drive or adding a server adds its source; signing out or removing one takes it away.
+        cloudDrivesObserver = NotificationCenter.default.addObserver(forName: CloudFiles.drivesChanged, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshCloudFilesSources() }
+        }
         searchModel.order = sourceOrder
         DownloadLibrary.shared.resolver = { [weak self] item in
             guard let self else { throw CancellationError() }
@@ -154,6 +159,11 @@ import TVCore
         let channel = try await client.resolvePlayback(plan, choice: plan.choices[0])
         // A cloud-drive file downloads straight from its CDN, as it plays: through the plugin's
         // proxy every part costs the embedded runtime download threads and interpreted TLS.
+        // A file of a drive in Cloud Files downloads from the address its stream reads.
+        if channel.url.scheme == CloudStreams.scheme, let media = await CloudStreams.source(for: channel.url) {
+            CloudStreams.stop(channel.url)
+            return Channel(name: channel.name, group: channel.group, url: media.url, headers: media.headers)
+        }
         let address = try await EmbeddedJarHost.shared.recoverProxy(channel.url)
         if let media = await EmbeddedJarHost.shared.directMedia(address) {
             Diagnostics.shared.record(.info, "download", "cloud direct host=\(media.url.host() ?? "-") length=\(media.length)")
@@ -374,6 +384,10 @@ import TVCore
             hiddenSources.restoreBuiltIns(subscription.sites, origin: subscription.origin)
             hiddenSources.restoreAutoHidden(subscription.sites, origin: subscription.origin, health: .shared)
         }
+    }
+    private func refreshCloudFilesSources() {
+        guard let subscription, subscription.sites.filter(\.isCloudFiles) != CloudFilesSource.sites() else { return }
+        rebuildSubscription()
     }
     func searchVideos(_ title: String) {
         guard let config = subscription else { return }

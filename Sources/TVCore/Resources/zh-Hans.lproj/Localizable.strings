@@ -1,4 +1,7 @@
 // Shared UI and user-facing errors. English is the source language.
+"%@ hasn't turned on search. Its administrator can build the search index in AList's settings." = "%@ 未开启搜索。管理员可在 AList 设置中建立搜索索引。";
+"My %@" = "我的%@";
+"This folder has no videos Apple devices can play." = "此文件夹中没有 Apple 设备可以播放的视频。";
 "Yingxia" = "映匣";
 "Yingxia / TVBOX" = "映匣 / TVBOX";
 "Watch Now" = "现在观看";
