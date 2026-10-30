@@ -608,8 +608,18 @@ private final class EnhancementPipeline: EnhancementEngine, @unchecked Sendable 
 
     /// Whether the source is slow enough to gain from in-between frames (24–30 fps, up to 47).
     private var smoothable: Bool {
-        guard let interval else { return false }
-        return interval > 1 / 47.0 && interval < 1 / 18.0
+        guard let interval, let shown = shownInterval else { return false }
+        return shown > 1 / 47.0 && interval < 1 / 18.0
+    }
+
+    /// Seconds between source frames on screen: played faster, they come closer together, and 30 fps at 2x already
+    /// fills a 60 Hz screen. Above 2x the frame times read from the output also jump between one and three frames
+    /// apart, so the media interval alone switched smoothing on and off many times a second and the picture
+    /// flashed between AVKit's and this layer's (#223).
+    private var shownInterval: Double? {
+        guard let interval else { return nil }
+        let rate = CMTimebaseGetRate(renderer.timebase)
+        return rate > 1 ? interval / rate : interval
     }
 
     private func enqueue(_ frames: [Frame], now: Double) {
@@ -849,7 +859,7 @@ private final class EnhancementPipeline: EnhancementEngine, @unchecked Sendable 
     private func prepare(width: Int, height: Int, work: (width: Int, height: Int), format: OSType) {
         let factor = options.upscale ? Self.scaleFactor(width: width, height: height, target: options.target) : nil
         let scaleKey = factor.map { "scale \(width)x\(height) x\($0)" }
-        let tooFast = interval.map { $0 <= 1 / 47.0 } ?? false
+        let tooFast = shownInterval.map { $0 <= 1 / 47.0 } ?? false
         let smoothKey = options.smooth && !tooFast && Self.interpolationFits(width: work.width, height: work.height)
             ? "smooth \(work.width)x\(work.height)\(work != (width, height) ? " from \(width)x\(height)" : "")" : nil
         wanted = (scaleKey, smoothKey)

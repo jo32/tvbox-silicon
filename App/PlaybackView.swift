@@ -433,6 +433,11 @@ import TVCore
         player.allowsExternalPlayback = !Remux.isRemuxed(url)
         player.preventsDisplaySleepDuringVideoPlayback = true
         player.replaceCurrentItem(with: item)
+        #if DEBUG
+        // `-qaSpeed <rate>` plays at that speed, as picking it in the speed menu does.
+        let qaSpeed = UserDefaults.standard.float(forKey: "qaSpeed")
+        if qaSpeed > 0 { player.defaultRate = qaSpeed }
+        #endif
         if pendingResume == nil { player.play() }
         #if DEBUG
         // `-qaSeek <seconds>` starts playback there, for screenshots.
