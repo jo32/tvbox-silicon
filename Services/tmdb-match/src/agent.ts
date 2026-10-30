@@ -1,7 +1,10 @@
-// The matcher: Gemini searches TMDB with tools until it can say which movie or series a source's video is.
+// The matcher: OpenAI or Gemini searches TMDB with tools until it can identify a source's video.
 // It sees the source's own title and details; TMDB answers are the only facts it may cite.
 import { brief, facts } from "./details.ts";
 import { type Fetcher, type MediaType, type TMDB, UpstreamError } from "./tmdb.ts";
+import { ModelError, type ToolCall, type ToolResult } from "./model.ts";
+import { type OpenAI, OpenAISession } from "./openai.ts";
+export { ModelError } from "./model.ts";
 
 export interface Source {
   title: string;
@@ -39,8 +42,6 @@ export interface Limits {
 }
 
 export const LIMITS: Limits = { searches: 8, details: 6, seasons: 3, turns: 10 };
-
-export class ModelError extends Error {}
 
 const PROMPT = `You identify which TMDB movie or TV series a video from a Chinese video source is, using the tools.
 
@@ -126,6 +127,7 @@ const declarations = [
 ];
 
 export interface Gemini {
+  provider?: "gemini";
   key: string;
   model: string;
   fetcher?: Fetcher;
@@ -173,7 +175,8 @@ async function generate(gemini: Gemini, body: unknown, signal?: AbortSignal) {
     const value: any = await response.json();
     const content = value?.candidates?.[0]?.content;
     if (!content?.parts?.length) throw new ModelError(`Gemini gave no answer (${value?.candidates?.[0]?.finishReason ?? "?"})`);
-    return { content, tokens: value?.usageMetadata?.totalTokenCount ?? 0, cached: value?.usageMetadata?.cachedContentTokenCount ?? 0 };
+    const calls: ToolCall[] = content.parts.filter((part: any) => part.functionCall).map((part: any) => part.functionCall);
+    return { content, calls, tokens: value?.usageMetadata?.totalTokenCount ?? 0, cached: value?.usageMetadata?.cachedContentTokenCount ?? 0 };
   }
 }
 
@@ -202,7 +205,10 @@ const key = (type: string, id: number) => `${type}:${id}`;
 // Search results that come with their details.
 const DETAILED = 3;
 
-export async function identify(source: Source, tmdb: TMDB, gemini: Gemini, progress: Progress, limits = LIMITS, signal?: AbortSignal) {
+export async function identify(source: Source, tmdb: TMDB, model: Gemini | OpenAI, progress: Progress, limits = LIMITS, signal?: AbortSignal) {
+  const message = `Which TMDB work is this source video?\n${describe(source)}`;
+  const openai = model.provider === "openai" ? new OpenAISession(model, PROMPT, declarations, message, signal) : undefined;
+  const gemini = model.provider === "openai" ? undefined : model;
   // Every work the tools showed, by "type:id": answers may only name these.
   const seen = new Map<string, ReturnType<typeof brief>>();
   const used = { searches: 0, details: 0, seasons: 0 };
@@ -280,6 +286,8 @@ export async function identify(source: Source, tmdb: TMDB, gemini: Gemini, progr
   // One model turn. The shared prefix comes from the cache when there is one; a request that names a cache can't also
   // set tools or their config, so the last turn, which allows only submit, sends it whole.
   async function ask(last: boolean) {
+    if (openai) return openai.ask(last);
+    if (!gemini) throw new ModelError("No model provider configured.");
     const generationConfig = { thinkingConfig: { thinkingLevel: "low" } };
     if (gemini.cache && !last) {
       try {
@@ -297,24 +305,25 @@ export async function identify(source: Source, tmdb: TMDB, gemini: Gemini, progr
   }
 
   // No search before the model's first turn: an AI-generated video or a short drama shouldn't reach TMDB at all.
-  contents.push({ role: "user", parts: [{ text: `Which TMDB work is this source video?\n${describe(source)}` }] });
+  contents.push({ role: "user", parts: [{ text: message }] });
 
   for (let turn = 0; turn < limits.turns; turn++) {
     const last = turn === limits.turns - 1;
     progress({ step: "thinking", turn });
-    const { content, tokens: spent, cached } = await ask(last);
-    tokens += spent;
-    cachedTokens += cached;
+    const answer = await ask(last);
+    tokens += answer.tokens;
+    cachedTokens += answer.cached;
     // The model's turn goes back as it came, thought signatures included: Gemini needs them to carry on.
-    contents.push(content);
-    const calls = (content.parts as any[]).filter((part) => part.functionCall).map((part) => part.functionCall);
+    if ("content" in answer) contents.push(answer.content);
+    const calls = answer.calls;
     const submit = calls.find((call) => call.name === "submit");
     if (submit) return { verdict: verdict(submit.args ?? {}, seen), seen, used, tokens, cachedTokens, turns: turn + 1 };
     if (calls.length === 0) {
-      contents.push({ role: "user", parts: [{ text: "Use a tool, or submit." }] });
+      if (openai) openai.remind();
+      else contents.push({ role: "user", parts: [{ text: "Use a tool, or submit." }] });
       continue;
     }
-    const responses = await Promise.all(
+    const responses: ToolResult[] = await Promise.all(
       calls.map(async (call) => {
         let response: unknown;
         try {
@@ -324,10 +333,11 @@ export async function identify(source: Source, tmdb: TMDB, gemini: Gemini, progr
           if (error instanceof UpstreamError) throw error;
           response = { error: (error as Error).message };
         }
-        return { functionResponse: { name: call.name, ...(call.id ? { id: call.id } : {}), response: { result: response } } };
+        return { call, result: response };
       }),
     );
-    contents.push({ role: "user", parts: responses });
+    if (openai) openai.respond(responses);
+    else contents.push({ role: "user", parts: responses.map(({ call, result }) => ({ functionResponse: { name: call.name, ...(call.id ? { id: call.id } : {}), response: { result } } })) });
   }
   throw new ModelError("The model did not submit an answer.");
 }

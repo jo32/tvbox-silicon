@@ -13,17 +13,26 @@ TMDB request). Worker `yingxia-tmdb` at https://yingxia-tmdb.getmegaportal.com, 
   `{"type":"result",…}` or `{"type":"error","code":"upstream|model|busy|internal",…}`.
 - A result is `matched` (with `match` and `details`), `ambiguous` (with `candidates` to choose from) or `notFound`.
   Failures are errors, never `notFound`, and are not kept.
-- A Gemini agent (`src/agent.ts`, model in `GEMINI_MODEL`) searches TMDB with tools (`search`, `details`, `season`)
-  and submits an answer. It may only name works the tools showed; `matched` needs confidence ≥ 0.8, else it becomes
+- An AI agent (`src/agent.ts`) defaults to OpenAI Responses with `gpt-6-luna` (`AI_PROVIDER=openai`,
+  `OPENAI_MODEL=gpt-6-luna`). Set `AI_PROVIDER=gemini` to use the retained Gemini implementation and
+  `GEMINI_MODEL` again. Both providers search TMDB with tools (`search`, `details`, `season`)
+  and submit an answer. The agent may only name works the tools showed; `matched` needs confidence ≥ 0.8, else it becomes
   `ambiguous`. Budgets per run: 8 searches (pages count), 6 details, 3 seasons, 10 model turns. Before searching it
   decides whether the video can be on TMDB at all: AI-generated videos and short dramas are `notFound` (reason
   `AI-generated: …` / `Short drama: …`), kept 120 days. The app already skips videos whose source labels them so.
 - A search's first 3 results come with their details, so most matches take 2–3 model calls (search, maybe one more
-  check, submit). The instructions and tools every call starts with (about 1,600 tokens) sit in a Gemini context cache
+  check, submit). OpenAI replays tool calls and encrypted reasoning with `store: false`; prompt caching is automatic.
+  `matches.model`, `tokens` and `cached_tokens` record the selected model and its usage.
+  When Gemini is selected, the instructions and tools every call starts with sit in a Gemini context cache
   shared by all runs: cached tokens cost a tenth. A run that finds no live cache (table `gemini_cache`) makes one for an
   hour; a changed prompt, tool or model makes a new one. `matches.cached_tokens` shows how much of each run it covered.
-- Gemini refuses requests from some Cloudflare locations ("User location is not supported"), so the calls go through
-  the `GeminiRelay` Durable Object, created with a North American location hint.
+- Model calls use the retained `GeminiRelay` Durable Object. OpenAI uses a US-jurisdiction subnamespace so compute
+  runs in the US; a location hint alone is not a guarantee. Gemini keeps its existing objects and North American
+  hint to avoid "User location is not supported" errors. The relay accepts only the two providers' API hosts.
+  OpenAI requests run in an alarm event with fresh server headers, so the viewer's edge metadata is not forwarded.
+  Pending requests stay in memory while their fetch handlers wait; only the alarm time is persisted. Buffered
+  response bytes return to the corresponding caller, since streams cannot cross event contexts. Each upstream
+  request has a 60-second timeout; a relay failure uses the transport's normal retry/error handling.
 - Answers are kept in D1 by `version|title|year|type` for every viewer: matched 120 days, ambiguous 30, not found 7.
   The title is compared after NFKC, lower case and collapsed spaces only; `第四季` or a `2` still makes another title.
   Bump `VERSION` in `src/source.ts` when the prompt changes enough that old answers should go.
@@ -34,18 +43,23 @@ TMDB request). Worker `yingxia-tmdb` at https://yingxia-tmdb.getmegaportal.com, 
 - Reverse lookup: matched answers and viewers' picks (`POST /v1/link`) are kept in `links`, one row per source video.
   `GET /v1/search?q=…` searches TMDB and says how many source videos each result has; `GET /v1/sources?type=&id=`
   lists them. An agent's answer never replaces a viewer's pick.
-- TMDB answers are cached per data center for a day (Cache API). 429s wait for Retry-After and try again. Gemini 429s
-  wait when the wait is short (per-minute limits); a daily limit fails at once.
+- TMDB answers are cached per data center for a day (Cache API). 429s wait for Retry-After and try again. Model 429s
+  wait when the wait is short (per-minute limits); exhausted quota and long waits fail at once.
 - Limits: 20 runs a minute per IP (only cache misses), `DAILY_RUNS` agent runs a day in all.
 
 ## Deploy
 
 ```sh
 ../../website/node_modules/.bin/wrangler d1 execute yingxia-tmdb --remote --file schema.sql
-../../website/node_modules/.bin/wrangler deploy
-../../website/node_modules/.bin/wrangler secret put GEMINI_API_KEY
+../../website/node_modules/.bin/wrangler secret put OPENAI_API_KEY
+../../website/node_modules/.bin/wrangler secret put GEMINI_API_KEY # retained; only needed for Gemini
 ../../website/node_modules/.bin/wrangler secret put TMDB_TOKEN   # TMDB's v4 read access token
+../../website/node_modules/.bin/wrangler deploy
 ```
+
+Credentials belong in Worker secrets. For local development use an ignored `.dev.vars` file; never put keys in
+`wrangler.jsonc`, app sources or the website. Missing selected-provider credentials fail explicitly; there is no
+automatic fallback to another provider. Existing cached matches remain valid and are reused until expiry.
 
 An existing database gets new columns and tables from `migrations/` (`wrangler d1 execute … --file migrations/…`).
 

@@ -1,7 +1,7 @@
 import Foundation
 
 /// The TMDB movie or series behind a source's video, for its detail page: artwork, cast, facts and episode stills.
-/// Our Worker (Services/tmdb-match) has a Gemini agent search TMDB and keeps each answer for every viewer, so a title
+/// Our Worker (Services/tmdb-match) has an AI agent search TMDB and keeps each answer for every viewer, so a title
 /// someone opened before comes back at once; a new one takes some seconds, and its steps stream in as it works.
 /// Sent: the video's title, year, remarks, synopsis and episode names, and which source and video it is (the source's
 /// key and name from the subscription, the video's ID there), so a TMDB title can list the sources others found it on
