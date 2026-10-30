@@ -1,7 +1,7 @@
 import Foundation
 
-/// An AList (or OpenList) server in Cloud Files: where its API lives, the folder browsing starts
-/// in, and the account and folder password it may need. Kept beside the cloud-drive accounts.
+/// An AList (or OpenList) server or a WebDAV share in Cloud Files: where its API lives, the folder
+/// browsing starts in, and the account and folder password it may need. Kept beside the cloud-drive accounts.
 public struct AListServer: Codable, Hashable, Identifiable, Sendable {
     public var id: String
     public var name: String
@@ -14,11 +14,15 @@ public struct AListServer: Codable, Hashable, Identifiable, Sendable {
     /// Sent with every request, as TVBox AList configurations do, for servers whose files sit
     /// behind one folder password.
     public var folderPassword: String
+    /// What answers at `address`. Nil in servers saved before WebDAV shares could be added, which are all AList.
+    public var kind: Kind?
+    public enum Kind: String, Codable, Sendable { case alist, webdav }
+    public var isWebDAV: Bool { kind == .webdav }
 
     public init(id: String = UUID().uuidString, name: String, address: String, root: String = "/",
-                username: String = "", password: String = "", folderPassword: String = "") {
+                username: String = "", password: String = "", folderPassword: String = "", kind: Kind? = nil) {
         self.id = id; self.name = name; self.address = address; self.root = root
-        self.username = username; self.password = password; self.folderPassword = folderPassword
+        self.username = username; self.password = password; self.folderPassword = folderPassword; self.kind = kind
     }
 
     /// The servers a TVBox AList configuration lists (`[{name, server, password, path, login}]`,
