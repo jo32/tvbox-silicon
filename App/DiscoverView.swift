@@ -127,7 +127,7 @@ struct DiscoverView: View {
                 }
                 .navigationTitle(L10n.text("Edit Layout"))
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { editing = false } } }
-            }.preferredColorScheme(.dark)
+            }.preferredColorScheme(.dark).discoverSheetSize(width: 420, height: 560)
         }
     }
 
@@ -157,7 +157,7 @@ struct DiscoverView: View {
         if let people = model.collections?.people, !people.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 sectionHeading(L10n.text("People"))
-                ScrollView(.horizontal) {
+                DiscoverRail(arrowCenter: 41.5) {
                     LazyHStack(alignment: .top, spacing: 14) {
                         ForEach(people) { person in
                             RouteLink {
@@ -170,7 +170,7 @@ struct DiscoverView: View {
                             }.tmdbCardButton()
                         }
                     }.padding(.horizontal, 17)
-                }.scrollIndicators(.hidden)
+                }
             }
         }
     }
@@ -179,7 +179,7 @@ struct DiscoverView: View {
         if !brands.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 sectionHeading(title)
-                ScrollView(.horizontal) {
+                DiscoverRail {
                     LazyHStack(spacing: 13) {
                         ForEach(brands) { brand in
                             RouteLink { DiscoverBrowseView(title: brand.name, filter: brand.feed.brandFilter, logo: brand.logo) } label: {
@@ -187,7 +187,7 @@ struct DiscoverView: View {
                             }.tmdbCardButton().accessibilityLabel(brand.name)
                         }
                     }.padding(.horizontal, 17)
-                }.scrollIndicators(.hidden)
+                }
             }
         }
     }
@@ -195,7 +195,7 @@ struct DiscoverView: View {
     private var genreCards: some View {
         VStack(alignment: .leading, spacing: 0) {
             sectionHeading(L10n.text("Browse by Genre"))
-            ScrollView(.horizontal) {
+            DiscoverRail {
                 HStack(spacing: 13) {
                     ForEach([TMDBCatalog.Feed.family, .animation, .kids], id: \.self) { feed in
                         RouteLink { DiscoverBrowseView(title: feed.title, filter: .genre(feed == .family ? 10751 : feed == .kids ? 10762 : 16, type: feed == .family ? .movie : .tv)) } label: {
@@ -212,12 +212,12 @@ struct DiscoverView: View {
                         }.tmdbCardButton()
                     }
                 }.padding(.horizontal, 17)
-            }.scrollIndicators(.hidden)
+            }
         }
     }
 
     private func rankings(width: CGFloat) -> some View {
-        ScrollView(.horizontal) {
+        DiscoverRail {
             HStack(spacing: 13) {
                 ForEach([TMDBCatalog.Feed.topTelevision, .topMovies], id: \.self) { feed in
                     RouteLink { DiscoverListView(feed: feed, initial: model.pages[feed]) } label: {
@@ -225,7 +225,7 @@ struct DiscoverView: View {
                     }.tmdbCardButton()
                 }
             }.padding(.horizontal, 17)
-        }.scrollIndicators(.hidden)
+        }
     }
 
     @ViewBuilder private func shelf(_ feed: TMDBCatalog.Feed, landscape: Bool = false) -> some View {
@@ -241,7 +241,7 @@ struct DiscoverView: View {
                 }
                 .buttonStyle(.plain).padding(.horizontal, 17)
                 .accessibilityIdentifier("discover.more.\(feed.rawValue)")
-                ScrollView(.horizontal) {
+                DiscoverRail(arrowCenter: landscape ? 50 : 87) {
                     LazyHStack(alignment: .top, spacing: 13) {
                         ForEach(items, id: \.key) { item in
                             RouteLink { DiscoverDetailView(item: item) } label: {
@@ -255,7 +255,7 @@ struct DiscoverView: View {
                     #if os(tvOS)
                     .padding(.vertical, 20)
                     #endif
-                }.scrollIndicators(.hidden)
+                }
             }
         }
     }
@@ -263,7 +263,7 @@ struct DiscoverView: View {
     @ViewBuilder private func collections(width: CGFloat) -> some View {
         let feeds: [TMDBCatalog.Feed] = [.variety, .chinese]
         if feeds.contains(where: { !model.items($0).isEmpty }) {
-            ScrollView(.horizontal) {
+            DiscoverRail {
                 HStack(spacing: 13) {
                     ForEach(feeds, id: \.self) { feed in
                         if !model.items(feed).isEmpty {
@@ -272,7 +272,7 @@ struct DiscoverView: View {
                         }
                     }
                 }.padding(.horizontal, 17)
-            }.scrollIndicators(.hidden)
+            }
         }
     }
 }
@@ -353,6 +353,9 @@ private struct DiscoverHeroCarousel: View {
     let items: [TMDBCatalog.Item]
     let state: DiscoverHeroState
     let width: CGFloat
+    #if os(macOS)
+    @State private var hovering = false
+    #endif
     var body: some View {
         let height = width < 600 ? width * 1.5 : min(720, width * 0.65)
         let selectedID = state.id ?? items.first?.key
@@ -360,6 +363,24 @@ private struct DiscoverHeroCarousel: View {
             #if os(iOS)
             DiscoverNativeHeroPager(items: items, details: state.details, dark: state.paint?.isDark ?? true, selection: Binding(get: { selectedID }, set: { state.id = $0 }),
                                     progress: { state.pageProgress = $0 }, dragging: { state.dragging = $0 })
+            #elseif os(macOS)
+            // One title at a time: in the split view's detail a horizontal scroll view takes the sidebar's width as
+            // a content inset, which shifted every page. The arrows and the dots move between titles.
+            let index = items.firstIndex { $0.key == selectedID } ?? 0
+            RouteLink { DiscoverDetailView(item: items[index]) } label: {
+                DiscoverHero(item: items[index], details: state.details[items[index].key])
+                    .frame(width: width, height: height)
+            }
+            .buttonStyle(.plain).id(items[index].key).transition(.opacity)
+            .accessibilityIdentifier("discover.hero.\(items[index].key)")
+            .overlay {
+                HStack {
+                    heroArrow("chevron.left", label: L10n.text("Previous"), to: index - 1)
+                    Spacer()
+                    heroArrow("chevron.right", label: L10n.text("Next"), to: index + 1)
+                }.padding(.horizontal, 20).opacity(hovering ? 1 : 0).animation(.easeOut(duration: 0.2), value: hovering)
+            }
+            .onHover { hovering = $0 }
             #else
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 0) {
@@ -405,6 +426,15 @@ private struct DiscoverHeroCarousel: View {
         .frame(height: height)
     }
 
+    #if os(macOS)
+    private func heroArrow(_ symbol: String, label: String, to index: Int) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.35)) { state.id = items[(index + items.count) % items.count].key }
+        } label: {
+            Image(systemName: symbol).font(.system(size: 17, weight: .semibold)).frame(width: 44, height: 44).glassSurface(.regular, in: Circle())
+        }.buttonStyle(.plain).accessibilityLabel(label)
+    }
+    #endif
 }
 
 #if os(iOS)
@@ -518,7 +548,7 @@ private struct DiscoverCanvas: View {
     @State private var paint: DiscoverPaint?
     var body: some View {
         (paint?.color ?? Color(white: 0.06))
-            .overlay(.black.opacity(0.4)).ignoresSafeArea()
+            .overlay(.black.opacity(0.4)).discoverFullBleed()
             .task(id: poster) {
                 guard let poster else { return }
                 let value = await DiscoverPainter.shared.paint(poster)
@@ -526,6 +556,30 @@ private struct DiscoverCanvas: View {
                 withAnimation(.easeInOut(duration: 0.4)) { paint = value }
             }
     }
+}
+
+/// A horizontal rail. On the Mac, where a mouse wheel scrolls only up and down, it is a `ScrollStrip`: it can be
+/// dragged like a swipe, and arrows float over its ends, centred `arrowCenter` from the top (the middle of the
+/// artwork rather than of artwork and caption).
+struct DiscoverRail<Content: View>: View {
+    var arrowCenter: CGFloat? = nil
+    @ViewBuilder let content: Content
+    var body: some View {
+        #if os(macOS)
+        ScrollStrip(leftLabel: "Previous", rightLabel: "Next", overlayArrows: true, arrowCenter: arrowCenter) { content }
+        #else
+        ScrollView(.horizontal) { content }.scrollIndicators(.hidden)
+        #endif
+    }
+}
+
+/// A button in a rail. On the Mac the card under the pointer gets the mouse-up that ends a drag, which must not
+/// press it.
+struct DiscoverButton<Label: View>: View {
+    let action: () -> Void
+    @ViewBuilder let label: Label
+    @Environment(\.stripDrag) private var drag
+    var body: some View { Button { if drag?.active != true { action() } } label: { label } }
 }
 
 private struct DiscoverScrollKey: PreferenceKey {

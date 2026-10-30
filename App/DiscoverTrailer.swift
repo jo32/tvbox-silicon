@@ -144,15 +144,22 @@ private struct DiscoverTrailerLayer: NSViewRepresentable {
     final class Host: NSView {
         let video = AVPlayerLayer()
         let fade = CAGradientLayer()
+        /// AppKit owns a layer-backed view's own layer and drops a mask set on it, so the video and its fade sit in
+        /// a sublayer. The view is flipped to match UIKit, so the fade runs to the bottom as on iOS.
+        private let clip = CALayer()
+        override var isFlipped: Bool { true }
         override init(frame: NSRect) {
-            super.init(frame: frame); wantsLayer = true; layer?.addSublayer(video); video.videoGravity = .resizeAspectFill
+            super.init(frame: frame); wantsLayer = true; layer?.addSublayer(clip); clip.addSublayer(video); video.videoGravity = .resizeAspectFill
+            clip.masksToBounds = true
             fade.startPoint = CGPoint(x: 0.5, y: 0); fade.endPoint = CGPoint(x: 0.5, y: 1)
             fade.colors = [1.0, 1.0, 0.85, 0.35, 0.0].map { NSColor.black.withAlphaComponent($0).cgColor }
-            fade.locations = [0, 0.5, 0.7, 0.87, 1]; layer?.mask = fade
+            fade.locations = [0, 0.5, 0.7, 0.87, 1]; clip.mask = fade
         }
         required init?(coder: NSCoder) { nil }
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
         override func layout() {
             super.layout(); CATransaction.begin(); CATransaction.setDisableActions(true)
+            clip.frame = bounds
             video.frame = bounds.insetBy(dx: -bounds.width * 0.1, dy: -bounds.height * 0.1); fade.frame = bounds
             CATransaction.commit()
         }

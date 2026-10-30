@@ -139,7 +139,7 @@ struct DiscoverBackdrop: View {
                     .allowsHitTesting(false)
             }
         }
-        .ignoresSafeArea()
+        .discoverFullBleed()
         .accessibilityHidden(true)
         .onChange(of: trailer?.key) { _, _ in videoReady = false }
         .onChange(of: playsTrailer) { _, plays in if !plays { videoReady = false } }

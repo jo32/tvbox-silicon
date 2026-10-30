@@ -94,7 +94,7 @@ struct DiscoverDetailView: View {
                     }.padding(24)
                 }.navigationTitle(L10n.text("Overview"))
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { overviewShown = false } } }
-            }.presentationDetents([.medium, .large])
+            }.presentationDetents([.medium, .large]).discoverSheetSize(width: 560, height: 480)
         }
         .sheet(item: $episode) { selection in
             NavigationStack {
@@ -107,17 +107,17 @@ struct DiscoverDetailView: View {
                     }.padding(20)
                 }.navigationTitle(selection.value.name)
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { episode = nil } } }
-            }.presentationDetents([.medium, .large])
+            }.presentationDetents([.medium, .large]).discoverSheetSize(width: 600, height: 640)
         }
         .sheet(item: $still) { selection in
             NavigationStack {
                 TMDBArtwork(url: selection.url, maxPixels: 2400, fill: false)
                     .background(.black).ignoresSafeArea(edges: .bottom)
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { still = nil } } }
-            }.preferredColorScheme(.dark)
+            }.preferredColorScheme(.dark).discoverSheetSize(width: 1000, height: 640)
         }
         .sheet(isPresented: $trailerShown) {
-            if let trailer = details?.trailer { DiscoverTrailerScreen(trailer: trailer, title: item.name) }
+            if let trailer = details?.trailer { DiscoverTrailerScreen(trailer: trailer, title: item.name).discoverSheetSize(width: 960, height: 600) }
         }
     }
 
@@ -161,6 +161,9 @@ struct DiscoverDetailView: View {
             if model.loading, details == nil { ProgressView().padding(10) }
         }
         .padding(.horizontal, 20).padding(.bottom, 0)
+        #if os(macOS)
+        .frame(maxWidth: 640)
+        #endif
         .frame(maxWidth: .infinity)
     }
 
@@ -203,10 +206,10 @@ struct DiscoverDetailView: View {
             if loadingSeason { ProgressView().frame(maxWidth: .infinity).frame(height: 120) }
             else if seasonFailed { Button(L10n.text("Try Again")) { Task { await loadSeason() } }.padding(.horizontal, 20) }
             else if let season {
-                ScrollView(.horizontal) {
+                DiscoverRail(arrowCenter: 73) {
                     LazyHStack(alignment: .top, spacing: 13) {
                         ForEach(season.episodes, id: \.number) { value in
-                            Button { episode = DiscoverEpisode(value: value) } label: {
+                            DiscoverButton { episode = DiscoverEpisode(value: value) } label: {
                                 VStack(alignment: .leading, spacing: 7) {
                                     PosterImage(url: value.still ?? details?.backdrop).frame(width: 260, height: 146.25)
                                         .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
@@ -219,7 +222,7 @@ struct DiscoverDetailView: View {
                             }.buttonStyle(.plain).accessibilityIdentifier("discover.detail.episode.\(value.number)")
                         }
                     }.padding(.horizontal, 20)
-                }.scrollIndicators(.hidden)
+                }
             }
         }
     }
@@ -227,7 +230,7 @@ struct DiscoverDetailView: View {
     private func people(_ people: [TMDBMatch.Person], title: String) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             heading(title)
-            ScrollView(.horizontal) {
+            DiscoverRail(arrowCenter: 41.5) {
                 LazyHStack(alignment: .top, spacing: 13) {
                     ForEach(Array(people.enumerated()), id: \.offset) { _, person in
                         if let id = person.id {
@@ -236,7 +239,7 @@ struct DiscoverDetailView: View {
                         } else { personCard(person) }
                     }
                 }.padding(.horizontal, 20)
-            }.scrollIndicators(.hidden)
+            }
         }
     }
 
@@ -253,7 +256,7 @@ struct DiscoverDetailView: View {
     private func studioRail(_ studios: [TMDBMatch.Studio]) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             heading(L10n.text("Studios & Networks"))
-            ScrollView(.horizontal) {
+            DiscoverRail {
                 HStack(spacing: 13) {
                     ForEach(Array(studios.enumerated()), id: \.offset) { _, studio in
                         if let id = studio.id {
@@ -262,7 +265,7 @@ struct DiscoverDetailView: View {
                         } else { studioCard(studio) }
                     }
                 }.padding(.horizontal, 20)
-            }.scrollIndicators(.hidden)
+            }
         }
     }
 
@@ -278,7 +281,7 @@ struct DiscoverDetailView: View {
     private func genreRail(_ details: TMDBMatch.Details) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             heading(L10n.text("Genres"))
-            ScrollView(.horizontal) {
+            DiscoverRail {
                 HStack(spacing: 10) {
                     if let genres = details.genreItems, !genres.isEmpty {
                         ForEach(genres) { genre in
@@ -289,7 +292,7 @@ struct DiscoverDetailView: View {
                         ForEach(details.genres, id: \.self) { genreChip($0) }
                     }
                 }.padding(.horizontal, 20)
-            }.scrollIndicators(.hidden)
+            }
         }
     }
     private func genreChip(_ name: String) -> some View {
@@ -300,15 +303,15 @@ struct DiscoverDetailView: View {
     private func stillRail(_ images: [URL]) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             heading(L10n.text("Stills"))
-            ScrollView(.horizontal) {
+            DiscoverRail(arrowCenter: 73) {
                 LazyHStack(spacing: 13) {
                     ForEach(images, id: \.self) { url in
-                        Button { still = DiscoverStill(url: url) } label: {
+                        DiscoverButton { still = DiscoverStill(url: url) } label: {
                             PosterImage(url: url).frame(width: 260, height: 146.25).clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
                         }.buttonStyle(.plain).accessibilityIdentifier("discover.detail.still")
                     }
                 }.padding(.horizontal, 20)
-            }.scrollIndicators(.hidden)
+            }
         }
     }
 
@@ -344,13 +347,13 @@ struct DiscoverDetailView: View {
     private func related(_ items: [TMDBMatch.Candidate]) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             heading(L10n.text("You May Like"))
-            ScrollView(.horizontal) {
+            DiscoverRail(arrowCenter: 87) {
                 LazyHStack(alignment: .top, spacing: 13) {
                     ForEach(items, id: \.key) { candidate in
                         RouteLink { DiscoverDetailView(item: candidate.catalogItem) } label: { DiscoverTile(item: candidate.catalogItem).frame(width: 116) }.tmdbCardButton()
                     }
                 }.padding(.horizontal, 20)
-            }.scrollIndicators(.hidden)
+            }
         }
     }
     private func heading(_ title: String) -> some View {
@@ -436,11 +439,40 @@ private struct DiscoverTrailerScreen: View {
 
 struct DiscoverSearchPresentation: ViewModifier {
     @Binding var isPresented: Bool
+    @Environment(\.openRoute) private var openRoute
     func body(content: Content) -> some View {
         #if os(iOS)
         content.fullScreenCover(isPresented: $isPresented) { DiscoverSearchView() }
+        #elseif os(macOS)
+        // A page in the window, with Back and the toolbar's search field, rather than the iPhone's full-screen sheet.
+        content.onChange(of: isPresented) { _, shown in
+            guard shown else { return }
+            isPresented = false
+            openRoute?(Route { AnyView(DiscoverMacSearchView()) })
+        }
         #else
         content.sheet(isPresented: $isPresented) { DiscoverSearchView() }
+        #endif
+    }
+}
+
+extension View {
+    /// Artwork that runs under the bars. On the Mac it stops at the sidebar: the split view's detail reports the
+    /// sidebar's width as a leading inset, so ignoring every edge stretched the art under the sidebar.
+    func discoverFullBleed() -> some View {
+        #if os(macOS)
+        ignoresSafeArea(edges: .top)
+        #else
+        ignoresSafeArea()
+        #endif
+    }
+
+    /// A sheet's size on the Mac, where a sheet otherwise shrinks to its content's smallest size.
+    func discoverSheetSize(width: CGFloat, height: CGFloat) -> some View {
+        #if os(macOS)
+        frame(minWidth: width * 0.8, idealWidth: width, minHeight: height * 0.8, idealHeight: height)
+        #else
+        self
         #endif
     }
 }
