@@ -99,7 +99,7 @@ struct RootView: View {
                 // The stack stays put across sections. Rebuilding it resets the sidebar column, so a
                 // section change collapsed the sidebar while the new page was still a placeholder.
                 NavigationStack(path: $detailPath) { content(store.section).musicBar().routeDestinations() }
-                    .environment(\.openRoute) { detailPath.append($0) }
+                    .environment(\.openRoute, RouteOpener { detailPath.append($0) })
             }
             .onChange(of: store.section) { detailPath = NavigationPath() }
             .overlay {
@@ -238,7 +238,7 @@ struct RootView: View {
                     // Any section can be moved into More, so any can be pushed here.
                     .navigationDestination(for: AppSection.self) { content($0).tvDefaultControls() }
             }
-            .environment(\.openRoute) { morePath.append($0) }
+            .environment(\.openRoute, RouteOpener { morePath.append($0) })
         } else { RouteStack { content(item).tvDefaultControls() } }
     }
 
@@ -501,18 +501,34 @@ struct RouteLink<Label: View>: View {
 extension EnvironmentValues {
     /// Pushes a page onto the enclosing stack's path. A page opened with `navigationDestination(item:)` is not on the
     /// path, so a `RouteLink` on it pushed underneath it: the new page only showed after Back.
-    @Entry var openRoute: ((Route) -> Void)? = nil
+    @Entry var openRoute: RouteOpener? = nil
 }
 
 /// A tab's stack, with its own path so pages can be pushed from code (`openRoute`).
 private struct RouteStack<Root: View>: View {
-    @State private var path = NavigationPath()
+    @State private var stack = RoutePath()
     private let root: Root
     init(@ViewBuilder root: () -> Root) { self.root = root() }
     var body: some View {
-        NavigationStack(path: $path) { root.routeDestinations() }
-            .environment(\.openRoute) { path.append($0) }
+        @Bindable var stack = stack
+        NavigationStack(path: $stack.path) { root.routeDestinations() }
+            .environment(\.openRoute, stack.opener)
     }
+}
+
+/// A stack's path, and the one `openRoute` that pushes onto it for the stack's whole life.
+@MainActor @Observable private final class RoutePath {
+    var path = NavigationPath()
+    @ObservationIgnored private(set) lazy var opener = RouteOpener { [weak self] in self?.path.append($0) }
+}
+
+/// Pushes a page onto a stack's path (`openRoute`). An object rather than a closure: SwiftUI can't compare closures,
+/// so one in the environment was a new value on every update and every pushed page updated with it. On tvOS 27 an
+/// alert or sheet over a pushed page then kept the stack updating forever and froze the app (#272).
+@MainActor final class RouteOpener {
+    private let push: @MainActor (Route) -> Void
+    init(_ push: @escaping @MainActor (Route) -> Void) { self.push = push }
+    func callAsFunction(_ route: Route) { push(route) }
 }
 
 extension View {

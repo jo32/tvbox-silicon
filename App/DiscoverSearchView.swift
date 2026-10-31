@@ -62,7 +62,7 @@ struct DiscoverSearchView: View {
             .navigationDestination(for: TMDBCatalog.Item.self) { DiscoverDetailView(item: $0) }
             .navigationDestination(for: TMDBCatalog.SearchPerson.self) { DiscoverPersonView(id: $0.id, name: $0.name, profile: $0.profile) }
         }
-        .environment(\.openRoute) { path.append($0) }
+        .environment(\.openRoute, RouteOpener { path.append($0) })
         .tint(.primary)
         .task(id: request) { expanded.removeAll(); await model.load(request) }
         .onChange(of: path.count) { _, value in if value > 0 { focused = false; filterSection = nil } }
