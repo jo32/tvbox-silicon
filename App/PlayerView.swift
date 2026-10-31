@@ -516,12 +516,15 @@ private struct TVPlaybackFailureView: View {
                 Text(L10n.text("Try again, or go back and choose another video."))
                     .font(.system(size: 27)).foregroundStyle(Color(white: 0.65))
                     .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 20) {
-                    Button(action: retry) { Label(L10n.text("Try Again"), systemImage: "arrow.clockwise") }.focused($retryFocused)
-                    Button(action: goBack) { Label(L10n.text("Go back"), systemImage: "chevron.backward") }
-                    Button { showsDetails.toggle() } label: { Label(L10n.text(showsDetails ? "Hide details" : "Show details"), systemImage: "info.circle") }
+                // Liquid Glass, as every other control on Apple TV: clear at rest, white on focus.
+                GlassGroup(spacing: 20) {
+                    HStack(spacing: 20) {
+                        Button(action: retry) { Label(L10n.text("Try Again"), systemImage: "arrow.clockwise") }.focused($retryFocused)
+                        Button(action: goBack) { Label(L10n.text("Go back"), systemImage: "chevron.backward") }
+                        Button { showsDetails.toggle() } label: { Label(L10n.text(showsDetails ? "Hide details" : "Show details"), systemImage: "info.circle") }
+                    }
+                    .controlButton()
                 }
-                .buttonStyle(TVPlaybackRecoveryStyle())
                 .padding(.top, 48)
                 if showsDetails {
                     ScrollView {
@@ -541,24 +544,6 @@ private struct TVPlaybackFailureView: View {
         }
         .onAppear { retryFocused = true }
         .onExitCommand(perform: goBack)
-    }
-}
-
-private struct TVPlaybackRecoveryStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View { RecoveryButton(configuration: configuration) }
-    private struct RecoveryButton: View {
-        let configuration: ButtonStyleConfiguration
-        @Environment(\.isFocused) private var focused
-        var body: some View {
-            configuration.label
-                .font(.system(size: 26, weight: .semibold))
-                .padding(.horizontal, 32).padding(.vertical, 20)
-                .frame(minWidth: 220)
-                .foregroundStyle(focused ? Color.black : Color.white)
-                .background(focused ? Color.white : TVStyle.raised, in: Capsule())
-                .scaleEffect(configuration.isPressed ? 0.97 : 1)
-                .animation(.easeOut(duration: 0.12), value: focused)
-        }
     }
 }
 #endif
