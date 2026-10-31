@@ -4,11 +4,17 @@
 // how its issues are doing and what the developer replied (/v1/feedback/replies). Settings also lists the
 // month's contributors (/v1/contributors), read here once an hour so the app never meets GitHub's limit
 // for requests without a token (60 an hour per IP address, shared by everyone behind it).
+// Pictures and videos added to feedback, and the app's diagnostic log, are uploaded first
+// (/v1/feedback/uploads) to the R2 bucket behind download.getmegaportal.com.
 
 interface Env {
   DB: D1Database;
   LIMITER: RateLimit;
   FEEDBACK_LIMITER: RateLimit;
+  UPLOAD_LIMITER: RateLimit;
+  // The bucket that keeps feedback's pictures, videos and logs, and the public address it is served at.
+  FILES?: R2Bucket;
+  FILES_URL: string;
   // owner/name of the public repository that gets the issues, and whose commits name the contributors.
   FEEDBACK_REPO: string;
   // Secret: a fine-grained token with Issues read and write on FEEDBACK_REPO only.
@@ -108,9 +114,19 @@ const tooMany = (limit: "minute" | "install" | "everyone", max: number, retryAft
 const LABELS: Record<string, string[]> = { bug: ["feedback", "bug"], idea: ["feedback", "enhancement"], other: ["feedback"] };
 const SYSTEMS: Record<string, string> = { macos: "macOS", ios: "iOS", tvos: "tvOS" };
 
+// What went up with a message (/v1/feedback/uploads), as the issue shows it.
+export interface Attached {
+  kind: string;
+  size: number;
+  url: string;
+}
+
+const megabytes = (size: number) => `${(size / MB).toFixed(1)} MB`;
+
 // The issue is public. Its first line is the title, @names stay text instead of notifying strangers
 // (a zero-width space after the @), and the details come from the app, never from the install ID.
-export function issue(body: any) {
+// Pictures show in it and videos are linked; a log is only mentioned: its address stays private.
+export function issue(body: any, attached: Attached[] = []) {
   const message = text(body?.message, FEEDBACK_MAX).replace(/\r\n?/g, "\n").trim().replace(/@(?=[A-Za-z0-9_-])/g, "@​");
   const line = (message.split("\n").find((row) => row.trim()) ?? "").trim();
   const title = line.length > 80 ? line.slice(0, 79).trimEnd() + "…" : line;
@@ -122,9 +138,16 @@ export function issue(body: any) {
     `| System | ${SYSTEMS[body?.platform] ?? "-"} ${cell(body?.os, 24)} · ${cell(body?.model, 32)} |`,
     `| Language | ${cell(body?.lang, 16)} |`,
   ];
+  if (attached.some((file) => file.kind === "log")) details.push("| Log | Diagnostic log sent to the developer (not public) |");
+  let pictures = 0, videos = 0;
+  const media = attached.flatMap((file) =>
+    file.kind === "image" ? [`![Picture ${++pictures}](${file.url})`]
+    : file.kind === "video" ? [`🎬 [Video ${++videos}](${file.url}) (${megabytes(file.size)})`]
+    : []);
+  const shown = media.length ? `\n\n${media.join("\n\n")}` : "";
   return {
     title,
-    body: `${message}\n\n---\n\n${details.join("\n")}\n\n<sub>Sent from Settings → Send Feedback in the app.</sub>`,
+    body: `${message}${shown}\n\n---\n\n${details.join("\n")}\n\n<sub>Sent from Settings → Send Feedback in the app.</sub>`,
     labels: LABELS[body?.kind] ?? [],
   };
 }
@@ -149,8 +172,9 @@ async function feedback(request: Request, env: Env): Promise<Response> {
   if (body instanceof Response) return body;
   const install = text(body?.install, 36);
   const platform = text(body?.platform, 8);
-  const created = issue(body);
-  if (!/^[0-9A-Fa-f-]{36}$/.test(install) || !PLATFORMS.has(platform) || !(body?.kind in LABELS) || !created.title) {
+  const ids: unknown[] = Array.isArray(body?.attachments) ? [...new Set(body.attachments)] : [];
+  if (!/^[0-9A-Fa-f-]{36}$/.test(install) || !PLATFORMS.has(platform) || !(body?.kind in LABELS) || !issue(body).title
+    || ids.length > ATTACHMENTS_MAX || !ids.every((id) => typeof id === "string" && UPLOAD_ID.test(id))) {
     return new Response(null, { status: 400 });
   }
   const now = Math.floor(Date.now() / 1000);
@@ -166,13 +190,103 @@ async function feedback(request: Request, env: Env): Promise<Response> {
     return tooMany(mine ? "install" : "everyone", max, oldest ? Math.max(60, oldest.received + 86400 - now) : 3600);
   }
 
-  const response = await github(env, "/issues", { method: "POST", body: JSON.stringify(created) });
+  // This install's uploads that no message has taken yet, in the app's order. One that is missing
+  // (another install's, already sent, or deleted after a day) turns the message away.
+  let attached: (Attached & { id: string })[] = [];
+  if (ids.length) {
+    if (!env.FILES) return new Response(null, { status: 503 });
+    const found = await env.DB.prepare(
+      `SELECT id, kind, size, key FROM uploads WHERE install = ? AND issue IS NULL AND id IN (${ids.map(() => "?").join(", ")})`,
+    ).bind(install, ...ids).all<{ id: string; kind: string; size: number; key: string }>();
+    if (found.results.length !== ids.length) return new Response(null, { status: 400 });
+    attached = ids.map((id) => found.results.find((row) => row.id === id)!)
+      .map((row) => ({ id: row.id, kind: row.kind, size: row.size, url: `${env.FILES_URL}/${row.key}` }));
+  }
+
+  const response = await github(env, "/issues", { method: "POST", body: JSON.stringify(issue(body, attached)) });
   if (!response.ok) return new Response(null, { status: 502 });
   const posted: any = await response.json();
-  // The install ID stays here, so the developer can look up the same install's error reports.
-  await env.DB.prepare("INSERT INTO feedback (received, install, platform, app, issue) VALUES (?, ?, ?, ?, ?)")
-    .bind(now, install, platform, text(body.app, 16), whole(posted.number, Number.MAX_SAFE_INTEGER)).run();
+  const number = whole(posted.number, Number.MAX_SAFE_INTEGER);
+  // The install ID stays here, so the developer can look up the same install's error reports, and the
+  // uploads remember their issue (a log can only be found that way).
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO feedback (received, install, platform, app, issue) VALUES (?, ?, ?, ?, ?)")
+      .bind(now, install, platform, text(body.app, 16), number),
+    ...(attached.length
+      ? [env.DB.prepare(`UPDATE uploads SET issue = ? WHERE id IN (${attached.map(() => "?").join(", ")})`).bind(number, ...attached.map((file) => file.id))]
+      : []),
+  ]);
   return Response.json({ number: posted.number, url: posted.html_url }, { status: 201 });
+}
+
+const MB = 1024 * 1024;
+// What can be added to feedback (`Feedback.sizeLimit` in Sources/TVCore/FeedbackAttachments.swift: keep the
+// sizes in step), the content types each takes with the file extension it gets, and its folder in the bucket.
+// Pictures and videos are as public as the issue that shows them. The log is for the developer: its name is
+// random and never published, and it is deleted after KEEP_DAYS.
+const UPLOADS: Record<string, { max: number; types: Record<string, string>; folder: string }> = {
+  image: { max: 10 * MB, types: { "image/jpeg": "jpg", "image/png": "png", "image/gif": "gif" }, folder: "yingxia/feedback" },
+  video: { max: 50 * MB, types: { "video/mp4": "mp4", "video/quicktime": "mov" }, folder: "yingxia/feedback" },
+  log: { max: 5 * MB, types: { "application/gzip": "jsonl.gz" }, folder: "yingxia/feedback-logs" },
+};
+// With one message: the app's four pictures or videos, and its log.
+const ATTACHMENTS_MAX = 5;
+const UPLOAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+// In any 24 hours: per install, and everyone's bytes together.
+const UPLOADS_PER_INSTALL = 30;
+const UPLOAD_BYTES_PER_INSTALL = 300 * MB;
+const UPLOAD_BYTES_PER_DAY = 5 * 1024 * MB;
+// UPLOAD_LIMITER's, in wrangler.jsonc.
+const UPLOADS_PER_MINUTE = 10;
+// Seconds: an upload that no message took by then is deleted.
+const UNSENT_KEEP = 86400;
+
+// One file, as its body: POST /v1/feedback/uploads?install=<id>&kind=image|video|log with its Content-Type
+// and Content-Length. Answers {id}, which /v1/feedback then takes in `attachments`.
+async function upload(request: Request, env: Env): Promise<Response> {
+  if (!env.FILES) return new Response(null, { status: 503 });
+  if (!(await env.UPLOAD_LIMITER.limit({ key: address(request) })).success) return tooMany("minute", UPLOADS_PER_MINUTE, 60);
+  const url = new URL(request.url);
+  const install = text(url.searchParams.get("install"), 36);
+  const kind = url.searchParams.get("kind") ?? "";
+  const rule = Object.hasOwn(UPLOADS, kind) ? UPLOADS[kind] : undefined;
+  const type = (request.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+  const extension = rule && Object.hasOwn(rule.types, type) ? rule.types[type] : undefined;
+  if (!/^[0-9A-Fa-f-]{36}$/.test(install) || !rule || !extension) return new Response(null, { status: 400 });
+  const length = Number(request.headers.get("content-length") ?? NaN);
+  if (!request.body || !Number.isSafeInteger(length) || length <= 0) return new Response(null, { status: 411 });
+  if (length > rule.max) return Response.json({ max: rule.max }, { status: 413 });
+
+  const now = Math.floor(Date.now() / 1000);
+  const sent = await env.DB.prepare(
+    `SELECT COALESCE(SUM(size), 0) AS everyone, COALESCE(SUM(install = ?), 0) AS files,
+       COALESCE(SUM(CASE WHEN install = ? THEN size ELSE 0 END), 0) AS bytes, MIN(CASE WHEN install = ? THEN received END) AS oldest
+     FROM uploads WHERE received >= ?`,
+  ).bind(install, install, install, now - 86400).first<{ everyone: number; files: number; bytes: number; oldest: number | null }>();
+  if (sent && (sent.files >= UPLOADS_PER_INSTALL || sent.bytes + length > UPLOAD_BYTES_PER_INSTALL)) {
+    return tooMany("uploads", UPLOADS_PER_INSTALL, sent.oldest ? Math.max(60, sent.oldest + 86400 - now) : 3600);
+  }
+  if (sent && sent.everyone + length > UPLOAD_BYTES_PER_DAY) return tooMany("everyone", FEEDBACK_PER_DAY, 3600);
+
+  const id = crypto.randomUUID();
+  const key = `${rule.folder}/${id}.${extension}`;
+  const log = kind === "log";
+  try {
+    await env.FILES.put(key, request.body, {
+      httpMetadata: {
+        contentType: type,
+        cacheControl: log ? "private, no-store" : "public, max-age=31536000, immutable",
+        contentDisposition: log ? `attachment; filename="yingxia-log-${id}.jsonl.gz"` : undefined,
+      },
+      customMetadata: { install },
+    });
+  } catch {
+    // The body ended before its Content-Length.
+    return new Response(null, { status: 400 });
+  }
+  await env.DB.prepare("INSERT INTO uploads (id, received, install, kind, type, size, key) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, now, install, kind, type, length, key).run();
+  return Response.json({ id }, { status: 201 });
 }
 
 // Settings › Your Feedback asks how its issues are doing: each one's state and the developer's replies.
@@ -276,6 +390,7 @@ const ROUTES: Record<string, [string, (request: Request, env: Env) => Promise<Re
   "/v1/reports": ["POST", receive],
   "/v1/feedback": ["POST", feedback],
   "/v1/feedback/replies": ["GET", feedbackReplies],
+  "/v1/feedback/uploads": ["POST", upload],
   "/v1/contributors": ["GET", contributorList],
 };
 
@@ -288,10 +403,19 @@ export default {
     return handle(request, env);
   },
   async scheduled(_controller, env) {
-    const old = Math.floor(Date.now() / 1000) - KEEP_DAYS * 86400;
+    const now = Math.floor(Date.now() / 1000);
+    const old = now - KEEP_DAYS * 86400;
     await env.DB.batch([
       env.DB.prepare("DELETE FROM reports WHERE received < ?").bind(old),
       env.DB.prepare("DELETE FROM feedback WHERE received < ?").bind(old),
     ]);
+    // Uploads no message took, and logs once they are as old as the reports. Pictures and videos that
+    // went with an issue stay in the bucket: the issue shows them.
+    if (!env.FILES) return;
+    const stale = await env.DB.prepare("SELECT key FROM uploads WHERE (issue IS NULL AND received < ?) OR (kind = 'log' AND received < ?)")
+      .bind(now - UNSENT_KEEP, old).all<{ key: string }>();
+    const keys = stale.results.map((row) => row.key);
+    for (let start = 0; start < keys.length; start += 1000) await env.FILES.delete(keys.slice(start, start + 1000));
+    await env.DB.prepare("DELETE FROM uploads WHERE (issue IS NULL AND received < ?) OR received < ?").bind(now - UNSENT_KEEP, old).run();
   },
 } satisfies ExportedHandler<Env>;
