@@ -1,5 +1,9 @@
 import SwiftUI
 import TVCore
+import UniformTypeIdentifiers
+#if os(iOS)
+import PhotosUI
+#endif
 
 /// Where people talk with the developer and each other, besides Send Feedback's public issues.
 enum Support {
@@ -11,7 +15,9 @@ enum Support {
 /// (Feedback.context), filled in when the page opens, for the viewer to edit or remove. Once the issue
 /// is up, the page shows its number and, off Apple TV, a link to it. Under it, Your Feedback lists what
 /// was sent from this device with how each issue is doing and the developer's replies, asked from the
-/// server each time the page opens or sends.
+/// server each time the page opens or sends. Pictures and videos can go with the message (not on Apple
+/// TV, which has none to pick), and the diagnostic log goes with it unless the viewer turns it off; they
+/// are uploaded when it is sent (Feedback.Attachment), with the progress in the composer.
 struct FeedbackView: View {
     @Environment(Store.self) private var store
     @State private var kind = Feedback.Kind.bug
@@ -25,6 +31,10 @@ struct FeedbackView: View {
     @State private var statuses: [Int: Feedback.Status] = [:]
     @State private var checking = false
     @State private var checkFailed = false
+    @State private var attachments: [Feedback.Attachment] = []
+    @State private var attachLog = true
+    /// How far the uploads have got while sending, 0...1.
+    @State private var progress: Double?
     #if os(tvOS)
     /// The issue whose latest reply the section's footer shows.
     @State private var reading: Int?
@@ -32,6 +42,12 @@ struct FeedbackView: View {
 
     static var note: String {
         L10n.text("Your feedback becomes a public issue on Yingxia's GitHub page, with the app and system versions, the device model, the language and the included details. Please don't include accounts or passwords.")
+    }
+    static var logNote: String {
+        L10n.text("The diagnostic log goes to the developer only, not into the public issue. It helps find what went wrong.")
+    }
+    static var mediaNote: String {
+        L10n.text("Pictures and videos you add appear in the public issue, without where they were taken.")
     }
     static var contextNote: String {
         L10n.text("Your subscriptions and what you played lately help find the problem. Edit or remove anything you'd rather keep private.")
@@ -41,6 +57,9 @@ struct FeedbackView: View {
     }
     private var empty: Bool { message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var thanks: String? { sent.map { L10n.text("Thanks! Your feedback is issue #%lld.", $0.number) } }
+    private var sendingTitle: String {
+        progress.map { L10n.text("Uploading… %@", $0.formatted(.percent.precision(.fractionLength(0)))) } ?? L10n.text("Sending…")
+    }
 
     #if DEBUG
     private static var qaDrafted = false
@@ -52,17 +71,25 @@ struct FeedbackView: View {
                 guard !contextLoaded else { return }
                 contextLoaded = true
                 context = freshContext
+                // Copies left by a page that closed without sending.
+                Feedback.discardAll()
             }
             .task(id: sent?.number) { await check() }
             #if DEBUG
             // `-qaFeedbackDraft <text>` fills in the message (typing on the TV's keyboard is slow), and
-            // `-qaFeedbackSend 1` sends it, to the server named by `-qaFeedback <url>`. Once per launch: the
-            // page can appear more than once.
+            // `-qaFeedbackSend 1` sends it, to the server named by `-qaFeedback <url>`; `-qaFeedbackAttach
+            // <path>,<path>` adds those pictures or videos first. Once per launch: the page can appear more than once.
             .onAppear {
                 guard !Self.qaDrafted, let draft = UserDefaults.standard.string(forKey: "qaFeedbackDraft") else { return }
                 Self.qaDrafted = true
                 message = draft
-                if UserDefaults.standard.bool(forKey: "qaFeedbackSend") { send() }
+                let paths = UserDefaults.standard.string(forKey: "qaFeedbackAttach")?.split(separator: ",").map(String.init) ?? []
+                Task {
+                    for path in paths {
+                        if let attachment = try? await Feedback.attachment(from: URL(fileURLWithPath: path)) { attachments.append(attachment) }
+                    }
+                    if UserDefaults.standard.bool(forKey: "qaFeedbackSend") { send() }
+                }
             }
             #endif
     }
@@ -77,15 +104,17 @@ struct FeedbackView: View {
                     kind = kinds[((kinds.firstIndex(of: kind) ?? 0) + 1) % kinds.count]
                 }
                 TVSettingsField(title: L10n.text("Message"), text: $message, prose: true)
-                TVSettingsAction(title: sending ? L10n.text("Sending…") : L10n.text("Send"), busy: sending, action: send)
+                TVSettingsAction(title: sending ? sendingTitle : L10n.text("Send"), busy: sending, action: send)
                     .disabled(sending || empty)
             }
             // Typing a dozen lines with the remote is no way to edit them: the TV shows the details
             // and sends them or not.
-            TVSettingsSection(title: L10n.text("Included Details"), footer: context.isEmpty ? Self.contextNote : context + "\n\n" + Self.contextNote) {
+            TVSettingsSection(title: L10n.text("Included Details"),
+                              footer: [context, Self.contextNote, Self.logNote].filter { !$0.isEmpty }.joined(separator: "\n\n")) {
                 TVSettingsToggle(title: L10n.text("Include Details"), isOn: Binding {
                     !context.isEmpty
                 } set: { context = $0 ? freshContext : "" })
+                TVSettingsToggle(title: L10n.text("Attach Diagnostic Log"), isOn: $attachLog)
             }
             if !history.isEmpty {
                 TVSettingsSection(title: L10n.text("Your Feedback"), footer: latestReply) {
@@ -103,7 +132,7 @@ struct FeedbackView: View {
         }
         #else
         FeedbackPage(kind: $kind, message: $message, context: $context, freshContext: freshContext, sending: sending,
-                     sent: $sent, error: error, send: send,
+                     sent: $sent, error: error, send: send, attachments: $attachments, attachLog: $attachLog, progress: progress,
                      history: history, statuses: statuses, checking: checking, checkFailed: checkFailed, read: read)
         #endif
     }
@@ -143,14 +172,24 @@ struct FeedbackView: View {
 
     private func send() {
         guard !sending, !empty else { return }
-        sending = true; error = nil; sent = nil
+        sending = true; error = nil; sent = nil; progress = nil
+        let show: @MainActor (Double) -> Void = { progress = $0 }
         Task {
-            defer { sending = false }
+            defer { sending = false; progress = nil }
+            // The log as it is now: read only when sending.
+            let log = attachLog ? await Feedback.diagnosticLog() : nil
+            let files = attachments + (log.map { [$0] } ?? [])
             do {
-                sent = try await Feedback.send(Feedback.combined(message, context: context), kind: kind)
+                sent = try await Feedback.send(Feedback.combined(message, context: context), kind: kind, attachments: files) { value in
+                    Task { @MainActor in show(value) }
+                }
+                Feedback.discard(files)
+                attachments = []
                 message = ""
                 context = freshContext
             } catch {
+                // The pictures and videos stay for another try; the log is read again then.
+                if let log { Feedback.discard([log]) }
                 self.error = error.localizedDescription
             }
         }
@@ -185,11 +224,22 @@ private struct FeedbackPage: View {
     @Binding var sent: Feedback.Issue?
     let error: String?
     let send: () -> Void
+    @Binding var attachments: [Feedback.Attachment]
+    @Binding var attachLog: Bool
+    let progress: Double?
     let history: [Feedback.Sent]
     let statuses: [Int: Feedback.Status]
     let checking: Bool
     let checkFailed: Bool
     let read: (Feedback.Sent) -> Void
+    /// Chosen files still being prepared.
+    @State private var adding = 0
+    @State private var attachError: String?
+    #if os(iOS)
+    @State private var picked: [PhotosPickerItem] = []
+    #else
+    @State private var importing = false
+    #endif
     @FocusState private var editing: Bool
     @Environment(\.openURL) private var openURL
     #if os(iOS)
@@ -268,7 +318,7 @@ private struct FeedbackPage: View {
             }
             composer
             included
-            if let error {
+            if let error = error ?? attachError {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Brand.amber)
                     Text(error)
@@ -302,24 +352,35 @@ private struct FeedbackPage: View {
             #endif
             .frame(minHeight: compact ? 150 : 200)
             .padding(compact ? 10 : 14)
+            if !attachments.isEmpty || adding > 0 {
+                attachmentStrip.padding(.horizontal, compact ? 10 : 14).padding(.bottom, compact ? 6 : 8)
+            }
             Divider()
             HStack(spacing: 10) {
+                attachButton
                 // What is sent: the message and the included details.
                 let count = Feedback.combined(message, context: context).count
                 Text(verbatim: "\(count.formatted()) / \(Feedback.limit.formatted())")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(count > Feedback.limit ? AnyShapeStyle(Brand.amber) : AnyShapeStyle(.tertiary))
                 Spacer()
-                if sending { ProgressView().controlSize(.small) }
+                if sending, let progress {
+                    ProgressView(value: progress).frame(width: compact ? 56 : 110)
+                    Text(progress.formatted(.percent.precision(.fractionLength(0))))
+                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                } else if sending {
+                    ProgressView().controlSize(.small)
+                }
                 #if os(macOS)
                 Text(verbatim: "⌘↩").font(.callout).foregroundStyle(.tertiary)
                 #endif
                 Button(action: send) {
-                    Label(sending ? L10n.text("Sending…") : L10n.text("Send"), systemImage: "paperplane.fill").padding(.horizontal, 6)
+                    Label(sending ? (progress == nil ? L10n.text("Sending…") : L10n.text("Uploading…")) : L10n.text("Send"),
+                          systemImage: "paperplane.fill").padding(.horizontal, 6)
                 }
                 .buttonStyle(.borderedProminent).tint(systemAccent).feedbackButton(compact ? .regular : .large)
                 .keyboardShortcut(.return, modifiers: .command)
-                .disabled(sending || empty)
+                .disabled(sending || empty || adding > 0)
             }
             .padding(.horizontal, compact ? 10 : 14).padding(.vertical, 10)
         }
@@ -330,6 +391,83 @@ private struct FeedbackPage: View {
         // Not on iPhone: the keyboard would cover the page before it has been read.
         .onAppear { editing = true }
         #endif
+    }
+
+    private var tileSide: CGFloat { compact ? 64 : 76 }
+
+    /// The pictures and videos going with the message, each with a button to take it out again.
+    private var attachmentStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(attachments) { attachment in
+                    FeedbackAttachmentTile(attachment: attachment, side: tileSide, removable: !sending) {
+                        attachments.removeAll { $0.id == attachment.id }
+                        Feedback.discard([attachment])
+                    }
+                }
+                ForEach(0..<adding, id: \.self) { _ in
+                    ProgressView().controlSize(.small).frame(width: tileSide, height: tileSide)
+                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+            }
+            // Room for the remove buttons, which stick out of the tiles' corners.
+            .padding(.top, 7).padding(.trailing, 7)
+        }
+    }
+
+    private var attachLabel: some View {
+        Label(L10n.text("Add Photos or Videos"), systemImage: "paperclip").labelStyle(.iconOnly).font(.body.weight(.medium))
+    }
+
+    /// Adds pictures and videos: from Photos on iPhone and iPad, from files on the Mac.
+    @ViewBuilder private var attachButton: some View {
+        let room = Feedback.attachmentLimit - attachments.count - adding
+        #if os(iOS)
+        PhotosPicker(selection: $picked, maxSelectionCount: max(room, 1), selectionBehavior: .ordered,
+                     matching: .any(of: [.images, .videos]), preferredItemEncoding: .current) { attachLabel }
+            .buttonStyle(.borderless)
+            .disabled(room <= 0 || sending)
+            .onChange(of: picked) { _, items in
+                guard !items.isEmpty else { return }
+                picked = []
+                add(items.map { item -> @Sendable () async throws -> URL? in { try await item.loadTransferable(type: PickedFile.self)?.url } })
+            }
+        #else
+        Button { importing = true } label: { attachLabel }
+            .buttonStyle(.borderless)
+            .help(L10n.text("Add Photos or Videos"))
+            .disabled(room <= 0 || sending)
+            .fileImporter(isPresented: $importing, allowedContentTypes: [.image, .movie], allowsMultipleSelection: true) { result in
+                guard case .success(let urls) = result else { return }
+                add(urls.map { url -> @Sendable () async throws -> URL? in { url } })
+            }
+        #endif
+    }
+
+    /// Prepares the chosen files one after another (Feedback.attachment), as many as there is room for.
+    private func add(_ sources: [@Sendable () async throws -> URL?]) {
+        let room = Feedback.attachmentLimit - attachments.count - adding
+        attachError = sources.count > room ? L10n.text("You can add up to %lld pictures or videos.", Feedback.attachmentLimit) : nil
+        let chosen = Array(sources.prefix(max(room, 0)))
+        adding += chosen.count
+        Task {
+            for source in chosen {
+                do {
+                    guard let url = try await source() else { throw Feedback.Failure.unsupportedAttachment }
+                    let scoped = url.startAccessingSecurityScopedResource()
+                    defer {
+                        if scoped { url.stopAccessingSecurityScopedResource() }
+                        #if os(iOS)
+                        PickedFile.remove(url)
+                        #endif
+                    }
+                    attachments.append(try await Feedback.attachment(from: url))
+                } catch {
+                    attachError = error.localizedDescription
+                }
+                adding -= 1
+            }
+        }
     }
 
     /// The subscriptions and recent plays, sent after the message as they read here.
@@ -354,6 +492,16 @@ private struct FeedbackPage: View {
             }
             Text(FeedbackView.contextNote).font(compact ? .footnote : .callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            Toggle(isOn: $attachLog) {
+                Label(L10n.text("Attach Diagnostic Log"), systemImage: "doc.text.magnifyingglass")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+            }
+            #if os(macOS)
+            .toggleStyle(.switch).controlSize(.small)
+            #endif
+            .padding(.top, 6)
+            Text(FeedbackView.logNote).font(compact ? .footnote : .callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 4)
         .animation(.easeOut(duration: 0.2), value: context.isEmpty)
@@ -375,6 +523,8 @@ private struct FeedbackPage: View {
                 VStack(alignment: .leading, spacing: 8) { app; system; model; lang }
             }
             Label(FeedbackView.note, systemImage: "globe").font(compact ? .footnote : .callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Label(FeedbackView.mediaNote, systemImage: "photo.on.rectangle").font(compact ? .footnote : .callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Link(destination: Support.telegram) {
                 Label(L10n.text("Prefer to chat? Join the Telegram group."), systemImage: "paperplane")
@@ -427,6 +577,77 @@ private struct FeedbackPage: View {
         .overlay { Self.card.strokeBorder(Color.primary.opacity(0.08)) }
     }
 }
+
+/// A picture or video going with the message: its thumbnail, a video's size, and a button to remove it.
+private struct FeedbackAttachmentTile: View {
+    let attachment: Feedback.Attachment
+    let side: CGFloat
+    let removable: Bool
+    let remove: () -> Void
+    @State private var image: Image?
+    private let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            Group {
+                if let image {
+                    image.resizable().scaledToFill()
+                } else {
+                    Image(systemName: attachment.kind == .video ? "film" : "photo").font(.title2).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.primary.opacity(0.06))
+                }
+            }
+            .frame(width: side, height: side).clipShape(shape)
+            if attachment.kind == .video {
+                Label(ByteCountFormatter.string(fromByteCount: attachment.size, countStyle: .file), systemImage: "play.fill")
+                    .font(.caption2.weight(.semibold).monospacedDigit()).foregroundStyle(.white).lineLimit(1)
+                    .padding(.horizontal, 5).padding(.vertical, 2)
+                    .background(.black.opacity(0.55), in: Capsule()).padding(4)
+            }
+        }
+        .overlay { shape.strokeBorder(Color.primary.opacity(0.1)) }
+        .overlay(alignment: .topTrailing) {
+            if removable {
+                Button(action: remove) {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 18)).symbolRenderingMode(.palette).foregroundStyle(.white, .black.opacity(0.65))
+                }
+                .buttonStyle(.plain).offset(x: 6, y: -6).accessibilityLabel(L10n.text("Remove"))
+            }
+        }
+        .task(id: attachment.id) {
+            guard let data = attachment.thumbnail else { return }
+            #if os(macOS)
+            image = NSImage(data: data).map { Image(nsImage: $0) }
+            #else
+            image = UIImage(data: data).map { Image(uiImage: $0) }
+            #endif
+        }
+    }
+}
+
+#if os(iOS)
+/// A picture or video from Photos, copied out before the picker deletes its own copy.
+private struct PickedFile: Transferable {
+    let url: URL
+    static var folder: URL { FileManager.default.temporaryDirectory.appending(path: "FeedbackPicked", directoryHint: .isDirectory) }
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .movie) { try PickedFile(copying: $0.file) }
+        FileRepresentation(importedContentType: .image) { try PickedFile(copying: $0.file) }
+    }
+
+    init(copying file: URL) throws {
+        try FileManager.default.createDirectory(at: Self.folder, withIntermediateDirectories: true)
+        url = Self.folder.appending(path: UUID().uuidString + "." + file.pathExtension)
+        try FileManager.default.copyItem(at: file, to: url)
+    }
+
+    /// The copy, once Feedback.attachment has made its own.
+    static func remove(_ url: URL) {
+        if url.path.hasPrefix(folder.path) { try? FileManager.default.removeItem(at: url) }
+    }
+}
+#endif
 
 /// Your Feedback: the issues sent from here, newest first, each with how it is doing. Opening one shows
 /// the developer's replies and marks them read; a dot marks an issue with replies not read yet.

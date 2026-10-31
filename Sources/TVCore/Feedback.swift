@@ -30,6 +30,12 @@ public enum Feedback {
         case everyoneLimit(until: Date?)
         /// A 429 that doesn't say which cap (a server from before it did).
         case tooMany
+        /// The last 24 hours' pictures and videos from this install.
+        case uploadLimit(until: Date?)
+        /// Not a picture or a video, or one the system can't read.
+        case unsupportedAttachment
+        /// Larger than `Feedback.sizeLimit` takes.
+        case attachmentTooLarge(Attachment.Kind)
         case failed
         public var errorDescription: String? {
             switch self {
@@ -41,6 +47,13 @@ public enum Feedback {
                 until.map { L10n.text("Today's feedback from everyone has reached its limit. You can send yours after %@.", Feedback.moment($0)) }
                     ?? L10n.text("Today's feedback from everyone has reached its limit. Please try again later.")
             case .tooMany: L10n.text("You've sent a lot of feedback. Please try again later.")
+            case .uploadLimit(let until):
+                until.map { L10n.text("You've uploaded a lot of pictures and videos today. You can send more after %@.", Feedback.moment($0)) }
+                    ?? L10n.text("You've uploaded a lot of pictures and videos today. Please try again tomorrow.")
+            case .unsupportedAttachment: L10n.text("This file can't be added. Choose a picture or a video.")
+            case .attachmentTooLarge(let kind):
+                L10n.text(kind == .video ? "Videos can be up to %@. Choose a shorter one." : "Pictures can be up to %@.",
+                          ByteCountFormatter.string(fromByteCount: Feedback.sizeLimit(kind), countStyle: .binary))
             case .failed: L10n.text("Couldn't send feedback. Please try again later.")
             }
         }
@@ -55,6 +68,7 @@ public enum Feedback {
         case "minute": return .tooFast
         case "install": return body.max.map { .installLimit(max: $0, until: until) } ?? .tooMany
         case "everyone": return .everyoneLimit(until: until)
+        case "uploads": return .uploadLimit(until: until)
         default: return .tooMany
         }
     }
@@ -135,7 +149,10 @@ public enum Feedback {
         return context.isEmpty ? message : message + "\n\n" + context
     }
 
-    public static func send(_ message: String, kind: Kind, defaults: UserDefaults = .standard) async throws -> Issue {
+    /// Uploads the attachments one after another, telling `progress` how far they have got together
+    /// (0...1), then posts the message with them.
+    public static func send(_ message: String, kind: Kind, attachments: [Attachment] = [], defaults: UserDefaults = .standard,
+                            progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws -> Issue {
         #if DEBUG
         // Debug builds and simulators only send with `-qaFeedback <url>` (e.g. a local `wrangler dev`).
         guard let address = defaults.string(forKey: "qaFeedback").flatMap(URL.init(string:)) else { throw Failure.failed }
@@ -145,7 +162,18 @@ public enum Feedback {
         var request = URLRequest(url: address, timeoutInterval: 30)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(payload(message, kind: kind, install: ErrorReports.shared.install))
+        let install = ErrorReports.shared.install
+        let meter = UploadMeter(total: attachments.reduce(0) { $0 + $1.size }, report: progress)
+        var uploaded: [String] = []
+        for attachment in attachments {
+            do {
+                uploaded.append(try await upload(attachment, to: address, install: install) { meter.sending($0) })
+            } catch where attachment.kind == .log && !(error is CancellationError) {
+                // The log only helps: the message goes without it (a server from before uploads, too).
+            }
+            meter.finished(attachment.size)
+        }
+        request.httpBody = try JSONEncoder().encode(payload(message, kind: kind, install: install, attachments: uploaded))
         let (data, response) = try await URLSession.shared.data(for: request)
         switch (response as? HTTPURLResponse)?.statusCode ?? 0 {
         case 200..<300:
@@ -159,13 +187,16 @@ public enum Feedback {
 
     struct Payload: Encodable {
         let install, platform, os, model, lang, app, build, kind, message: String
+        /// The uploads' ids, in order; left out when there are none.
+        var attachments: [String]?
     }
 
-    static func payload(_ message: String, kind: Kind, install: String) -> Payload {
+    static func payload(_ message: String, kind: Kind, install: String, attachments: [String] = []) -> Payload {
         Payload(install: install, platform: ErrorReports.platform, os: ErrorReports.osVersion, model: ErrorReports.model,
                 lang: L10n.resolvedLanguage(), app: ErrorReports.bundleValue("CFBundleShortVersionString"),
                 build: ErrorReports.bundleValue("CFBundleVersion"), kind: kind.rawValue,
-                message: String(message.trimmingCharacters(in: .whitespacesAndNewlines).prefix(limit)))
+                message: String(message.trimmingCharacters(in: .whitespacesAndNewlines).prefix(limit)),
+                attachments: attachments.isEmpty ? nil : attachments)
     }
 
     // MARK: Your Feedback

@@ -15,11 +15,16 @@
   "ratelimits": [
     { "name": "LIMITER", "namespace_id": "4101", "simple": { "limit": 10, "period": 60 } },
     // Feedback is typed by hand: two a minute is plenty (FEEDBACK_PER_MINUTE in src/index.ts, which also caps each day).
-    { "name": "FEEDBACK_LIMITER", "namespace_id": "4102", "simple": { "limit": 2, "period": 60 } }
+    { "name": "FEEDBACK_LIMITER", "namespace_id": "4102", "simple": { "limit": 2, "period": 60 } },
+    // Pictures, videos and the log added to feedback, one request each (UPLOADS_PER_MINUTE in src/index.ts).
+    { "name": "UPLOAD_LIMITER", "namespace_id": "4103", "simple": { "limit": 10, "period": 60 } }
   ],
+  // Feedback's pictures, videos and logs (/v1/feedback/uploads), next to the releases on download.getmegaportal.com:
+  // yingxia/feedback/ (public, linked from the issues) and yingxia/feedback-logs/ (random names, deleted after 30 days).
+  "r2_buckets": [{ "binding": "FILES", "bucket_name": "megaportal-downloads" }],
   // Feedback becomes an issue here. The token is a secret: wrangler secret put GITHUB_TOKEN.
-  "vars": { "FEEDBACK_REPO": "jo32/tvbox-silicon" },
-  // Daily: drop reports older than 30 days.
+  "vars": { "FILES_URL": "https://download.getmegaportal.com", "FEEDBACK_REPO": "jo32/tvbox-silicon" },
+  // Daily: drop reports older than 30 days, and uploads no feedback took within a day.
   "triggers": { "crons": ["17 3 * * *"] },
   "observability": { "enabled": false }
 }
