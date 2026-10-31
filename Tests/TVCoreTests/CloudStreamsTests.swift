@@ -121,6 +121,51 @@ struct CloudStreamsTests {
         }
     }
 
+    /// Reports from 2026-10: a drive answered a range 2.5 GB into an episode with 206 and no bytes, which stopped it.
+    @Test func aRangeAnsweredWithNoBytesIsAskedAgain() async throws {
+        let size = CloudByteStream.chunkSize * 2 + 77
+        var bytes = Data(count: size)
+        bytes.withUnsafeMutableBytes { raw in for i in 0..<size { raw[i] = UInt8(truncatingIfNeeded: i &* 7 &+ i >> 11) } }
+        let name = "empty-\(UUID().uuidString).mkv"
+        let url = RangeServer.add(name, bytes, empty: 2)
+        let stream = CloudByteStream(source: .init(url: url, headers: [:], length: size, name: name), session: RangeServer.session, parallel: 1) { nil }
+        // The last chunk, so nothing is read ahead.
+        #expect(try await stream.read(at: size - 16, count: 16) == bytes.suffix(16))
+        #expect(RangeServer.requests(name) == 3)
+        await stream.clear()
+    }
+
+    @Test func aDriveThatSendsPartOfARangeIsAskedForTheRest() async throws {
+        let size = CloudByteStream.chunkSize + 999
+        var bytes = Data(count: size)
+        bytes.withUnsafeMutableBytes { raw in for i in 0..<size { raw[i] = UInt8(truncatingIfNeeded: i &* 13 &+ i >> 7) } }
+        let name = "capped-\(UUID().uuidString).mkv"
+        let url = RangeServer.add(name, bytes, cap: 700_000)
+        let stream = CloudByteStream(source: .init(url: url, headers: [:], length: size, name: name), session: RangeServer.session, parallel: 1) { nil }
+        let chunk = try await stream.read(at: 0, count: CloudByteStream.chunkSize)
+        #expect(chunk == bytes.prefix(CloudByteStream.chunkSize))
+        #expect(try await stream.read(at: size - 10, count: 10) == bytes.suffix(10))
+        await stream.clear()
+    }
+
+    /// A refresh that failed isn't reported as a new address to the other chunks refused with it.
+    @Test func aFailedRefreshIsNotRetriedAtOnce() async throws {
+        let size = CloudByteStream.chunkSize * 3
+        let (url, _) = try await served("gone.mp4", size: size)
+        let expired = url.deletingLastPathComponent().appending(path: "gone-expired.mp4")
+        let calls = CloudCounter()
+        let stream = CloudByteStream(source: .init(url: expired, headers: [:], length: size, name: "gone.mp4"), session: RangeServer.session, parallel: 1) {
+            calls.add(1)
+            return nil
+        }
+        await #expect(throws: (any Error).self) { try await stream.read(at: 0, count: 4) }
+        await #expect(throws: (any Error).self) { try await stream.read(at: CloudByteStream.chunkSize * 2, count: 4) }
+        #expect(calls.value == 1)
+        // One request for each chunk: no retry after the refresh failed.
+        #expect(RangeServer.requests("gone-expired.mp4") == 2)
+        await stream.clear()
+    }
+
     @Test func anExpiredAddressIsResolvedAgain() async throws {
         let size = CloudByteStream.chunkSize + 10
         let (url, bytes) = try await served("a.mp4", size: size)
@@ -143,6 +188,8 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) private static var files: [String: Data] = [:]
     nonisolated(unsafe) private static var restOfFile: Set<String> = []
     nonisolated(unsafe) private static var counts: [String: Int] = [:]
+    /// Answers a drive gives now and then: `empty` ranges with no bytes, then at most `cap` bytes per range.
+    nonisolated(unsafe) private static var faults: [String: (empty: Int, cap: Int?)] = [:]
     static let configuration: URLSessionConfiguration = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [RangeServer.self]
@@ -150,10 +197,11 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
     }()
     static let session = URLSession(configuration: configuration)
     /// `restOfFile` answers every range with everything from its start, as a plugin's drive proxy does.
-    static func add(_ name: String, _ data: Data, restOfFile: Bool = false) -> URL {
+    static func add(_ name: String, _ data: Data, restOfFile: Bool = false, empty: Int = 0, cap: Int? = nil) -> URL {
         lock.withLock {
             files[name] = data
             if restOfFile { Self.restOfFile.insert(name) }
+            if empty > 0 || cap != nil { faults[name] = (empty, cap) }
         }
         return URL(string: "https://cloud.test/\(name)")!
     }
@@ -164,9 +212,11 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
     override func startLoading() {
         guard let url = request.url, let client else { return }
         let name = url.lastPathComponent
-        let (file, toEnd) = Self.lock.withLock {
+        let (file, toEnd, fault) = Self.lock.withLock {
             Self.counts[name, default: 0] += 1
-            return (Self.files[name], Self.restOfFile.contains(name))
+            let fault = Self.faults[name]
+            if let fault, fault.empty > 0 { Self.faults[name]?.empty -= 1 }
+            return (Self.files[name], Self.restOfFile.contains(name), fault)
         }
         guard let data = file else {
             client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 404, httpVersion: "HTTP/1.1", headerFields: [:])!, cacheStoragePolicy: .notAllowed)
@@ -176,7 +226,12 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
         if let header = request.value(forHTTPHeaderField: "Range"), let match = header.firstMatch(of: /^bytes=(\d+)-(\d*)$/),
            let first = Int(match.1), first < data.count {
             let last = toEnd ? data.count - 1 : Int(match.2) ?? data.count - 1
-            range = first..<min(data.count, last + 1); status = 206
+            range = first..<min(data.count, last + 1, fault?.cap.map { first + $0 } ?? Int.max); status = 206
+        }
+        if status == 206, let fault, fault.empty > 0 {
+            let headers = ["Content-Length": "0", "Content-Range": "bytes \(range.lowerBound)-\(range.upperBound - 1)/\(data.count)"]
+            client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: 206, httpVersion: "HTTP/1.1", headerFields: headers)!, cacheStoragePolicy: .notAllowed)
+            client.urlProtocolDidFinishLoading(self); return
         }
         var headers = ["Content-Length": "\(range.count)", "Content-Type": "application/octet-stream"]
         if status == 206 { headers["Content-Range"] = "bytes \(range.lowerBound)-\(range.upperBound - 1)/\(data.count)" }
