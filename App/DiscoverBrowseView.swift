@@ -6,6 +6,8 @@ struct DiscoverBrowseView: View {
     let title: String
     @State private var filter: TMDBCatalog.Filter
     let logo: URL?
+    /// The genres the page opened with: a genre page's own genre is its subject, not a filter to reset.
+    private let openingGenres: Set<Int>
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var items: [TMDBCatalog.Item] = []
     @State private var page = 0
@@ -16,12 +18,12 @@ struct DiscoverBrowseView: View {
     @State private var layout = "grid"
     @State private var generation = UUID()
     init(title: String, filter: TMDBCatalog.Filter, logo: URL? = nil) {
-        self.title = title; self.logo = logo; _filter = State(initialValue: filter)
+        self.title = title; self.logo = logo; openingGenres = filter.genres; _filter = State(initialValue: filter)
     }
     private var request: TMDBCatalog.Filter { var value = filter; value.sort = sort; return value }
     private var noResults: some View {
         EmptyResults(symbol: "film", title: L10n.text("No Results"),
-                     action: filter.genres.isEmpty ? nil : L10n.text("Reset Filters"), actionSymbol: "xmark") { filter.genres = [] }
+                     action: filter.genres == openingGenres ? nil : L10n.text("Reset Filters"), actionSymbol: "xmark") { filter.genres = openingGenres }
     }
     private var loadFailed: some View {
         EmptyResults(symbol: "wifi.exclamationmark", title: L10n.text("Couldn't Load Results"), action: L10n.text("Try Again")) {
