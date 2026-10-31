@@ -12,7 +12,7 @@ struct MusicArtwork: View {
             .aspectRatio(1, contentMode: .fit)
             .overlay { PosterImage(url: url, symbol: symbol) }
             .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: size.map { max(4, $0 * 0.12) } ?? 12, style: .continuous))
+            .posterClip(RoundedRectangle(cornerRadius: size.map { max(4, $0 * 0.12) } ?? 12, style: .continuous))
     }
 }
 

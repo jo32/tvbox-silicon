@@ -113,6 +113,25 @@ struct DiscoverBackdrop: View {
     let playsTrailer: Bool
     @State private var videoReady = false
     var body: some View {
+        #if os(tvOS)
+        ZStack(alignment: .top) {
+            Color(red: 0.018, green: 0.028, blue: 0.035)
+            ZStack {
+                if let paint {
+                    Image(decorative: paint.image, scale: 1).resizable().scaledToFill()
+                        .frame(width: width, height: heroHeight).clipped()
+                }
+                if let trailer, playsTrailer {
+                    DiscoverTrailer(trailer: trailer).frame(width: width, height: heroHeight).clipped()
+                }
+                LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .leading, endPoint: .trailing)
+                LinearGradient(stops: [.init(color: .clear, location: 0.35), .init(color: Color(red: 0.018, green: 0.028, blue: 0.035), location: 1)], startPoint: .top, endPoint: .bottom)
+            }
+            .frame(width: width, height: heroHeight)
+            .offset(y: -max(0, scrollY) * 0.6)
+            .opacity(max(0, 1 - max(0, scrollY) / heroHeight))
+        }.ignoresSafeArea().accessibilityHidden(true).allowsHitTesting(false)
+        #else
         ZStack(alignment: .top) {
             (paint?.color ?? Color(white: 0.06))
             if let paint {
@@ -143,5 +162,6 @@ struct DiscoverBackdrop: View {
         .accessibilityHidden(true)
         .onChange(of: trailer?.key) { _, _ in videoReady = false }
         .onChange(of: playsTrailer) { _, plays in if !plays { videoReady = false } }
+        #endif
     }
 }

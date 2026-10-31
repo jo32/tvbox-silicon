@@ -15,6 +15,9 @@ struct DiscoverPersonView: View {
     @State private var loading = true
     @State private var failed = false
     @State private var revision = 0
+    #if os(tvOS)
+    @FocusState private var tvChip: String?
+    #endif
     @State private var kind = "all"
     @State private var contribution = "all"
     @State private var biographyShown = false
@@ -35,20 +38,33 @@ struct DiscoverPersonView: View {
         }.compactMap(\.item.poster)
         return Array((narrative.count >= 3 ? narrative : credits.compactMap(\.item.poster)).prefix(12))
     }
+    /// The list with nothing in it: a way back from filters that match nothing, or a retry.
+    @ViewBuilder private var emptyState: some View {
+        if failed {
+            EmptyResults(symbol: "wifi.exclamationmark", title: L10n.text("Couldn't Load Results"), action: L10n.text("Try Again")) { revision += 1 }
+        } else if !loading && works.isEmpty {
+            if kind != "all" || contribution != "all" {
+                EmptyResults(symbol: "line.3.horizontal.decrease", title: L10n.text("No Results"), message: L10n.text("No works match these filters."),
+                             action: L10n.text("Reset Filters"), actionSymbol: "xmark") { kind = "all"; contribution = "all" }
+            } else {
+                EmptyResults(symbol: "film", title: L10n.text("No Results"))
+            }
+        }
+    }
     #if os(macOS)
     /// The biography and timeline in a centred column on the Mac; full-width rows were mostly empty.
     private static let column: CGFloat = 680
     #endif
-    var body: some View {
+    @ViewBuilder private var page: some View {
+        #if os(tvOS)
+        tvPage
+        #else
         GeometryReader { geometry in
             ScrollView {
                 LazyVStack(spacing: 0) {
                     header(width: geometry.size.width)
                     if loading { ProgressView().padding(30).frame(maxWidth: .infinity) }
-                    if failed { Button(L10n.text("Try Again")) { revision += 1 }.padding(30) }
-                    if !loading && !failed && works.isEmpty {
-                        ContentUnavailableView(L10n.text("No Results"), systemImage: "film")
-                    }
+                    emptyState
                     ForEach(Array(works.enumerated()), id: \.element.id) { index, work in
                         RouteLink { DiscoverDetailView(item: work.item) } label: {
                             timeline(work, marker: index == 0 || works[index - 1].date?.prefix(7) != work.date?.prefix(7), last: index == works.count - 1)
@@ -66,6 +82,11 @@ struct DiscoverPersonView: View {
             .ignoresSafeArea(edges: .top)
             .overlay(alignment: .bottomTrailing) { filters.padding(20) }
         }
+        #endif
+    }
+
+    var body: some View {
+        page
         .foregroundStyle(.white).preferredColorScheme(.dark)
         .navigationTitle("")
         #if !os(macOS)
@@ -86,6 +107,7 @@ struct DiscoverPersonView: View {
                 if !posters.isEmpty { paint = await DiscoverPainter.shared.paint(posters[min(4, posters.count - 1)]) }
             } catch { if !Task.isCancelled { loading = false; failed = true } }
         }
+        #if !os(tvOS)
         .sheet(isPresented: $biographyShown) {
             NavigationStack {
                 ScrollView { Text(person?.biography ?? "").lineSpacing(5).frame(maxWidth: .infinity, alignment: .leading).padding(24).selectable() }
@@ -93,6 +115,7 @@ struct DiscoverPersonView: View {
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { biographyShown = false } } }
             }.presentationDetents([.medium, .large]).discoverSheetSize(width: 560, height: 480)
         }
+        #endif
     }
     private func header(width: CGFloat) -> some View {
         VStack(spacing: 0) {
@@ -176,6 +199,110 @@ struct DiscoverPersonView: View {
     }
 }
 
+#if os(tvOS)
+/// The TV page, as Rex lays it out: the wall of covers over the person's colour, their photo, name and biography,
+/// two filter chips and a grid of their works.
+extension DiscoverPersonView {
+    private static let tvMargin: CGFloat = 80
+
+    var tvPage: some View {
+        // The header has nothing to focus; reaching the chips scrolls it back into view, as Up does in Rex.
+        ScrollViewReader { proxy in
+            tvScroll.onChange(of: tvChip) { _, chip in
+                guard chip != nil else { return }
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) { proxy.scrollTo("tvTop", anchor: .top) }
+            }
+        }
+    }
+
+    private var tvScroll: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                tvHeader.id("tvTop")
+                HStack(spacing: 20) {
+                    tvMenu(L10n.text("Content Type"), $kind, [("all", L10n.text("All")), ("movie", L10n.text("Movies")), ("tv", L10n.text("Series"))],
+                           identifier: "discover.person.kind")
+                    tvMenu(L10n.text("Contribution"), $contribution,
+                           [("all", L10n.text("All"))] + ["Acting", "Directing", "Writing", "Production", "Editing"].map { ($0, L10n.text($0)) },
+                           identifier: "discover.person.contribution")
+                }
+                .padding(.horizontal, Self.tvMargin).padding(.top, 40).focusSection()
+                if loading { ProgressView().frame(maxWidth: .infinity).padding(60) }
+                emptyState
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(250), spacing: 50, alignment: .top), count: 6), alignment: .leading, spacing: 60) {
+                    ForEach(works, id: \.id) { work in
+                        RouteLink { DiscoverDetailView(item: work.item) } label: { tvWork(work) }
+                            .cardButton()
+                            .accessibilityIdentifier("discover.person.work.\(work.id)")
+                    }
+                }
+                .padding(.horizontal, Self.tvMargin).padding(.top, 70).padding(.bottom, 120).focusSection()
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: kind)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: contribution)
+            }
+        }
+        .scrollClipDisabled()
+        .background(color.ignoresSafeArea())
+        .ignoresSafeArea(edges: .top)
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var tvHeader: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Color.clear.frame(height: 430)
+            HStack(alignment: .top, spacing: 40) {
+                PosterImage(url: person?.profile ?? profile, symbol: "person.fill")
+                    .frame(width: 240, height: 240).clipShape(Circle())
+                    .shadow(color: .black.opacity(0.35), radius: 18, y: 8)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(person?.name ?? name).font(.system(size: 52, weight: .bold)).lineLimit(1)
+                    if let person { Text(L10n.text("%lld works", person.works.count)).font(.system(size: 26)).opacity(0.85) }
+                    if let biography = person?.biography, !biography.isEmpty {
+                        Text(biography).font(.system(size: 26)).lineSpacing(4).lineLimit(2).opacity(0.72)
+                            .frame(maxWidth: 1250, alignment: .leading).padding(.top, 26)
+                    }
+                }.padding(.top, 34)
+            }
+        }
+        .padding(.horizontal, Self.tvMargin)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(alignment: .top) { DiscoverPosterWall(urls: wallPosters, color: color).frame(height: 640) }
+    }
+
+    private func tvMenu(_ title: String, _ selection: Binding<String>, _ options: [(String, String)], identifier: String) -> some View {
+        let value = options.first { $0.0 == selection.wrappedValue }?.1 ?? ""
+        return Menu {
+            Picker(title, selection: selection) { ForEach(options, id: \.0) { Text($0.1).tag($0.0) } }
+        } label: {
+            Text(TMDBMatch.language.hasPrefix("zh") ? "\(title)：\(value)" : "\(title): \(value)")
+        }
+        .menuStyle(.button)
+        .buttonStyle(DiscoverTVChipStyle(active: selection.wrappedValue != "all"))
+        .focused($tvChip, equals: identifier)
+        .accessibilityIdentifier(identifier)
+    }
+
+    private func tvWork(_ work: TMDBCatalog.PersonWork) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            // Unclipped: the button's border shape rounds it, and a clip would cut off the focus rim.
+            PosterImage(url: work.item.poster).frame(width: 250, height: 375)
+                .padding(.bottom, 16)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(work.item.name).font(.system(size: 26, weight: .medium)).lineLimit(1)
+                Text([L10n.text(work.item.mediaType == .tv ? "Series" : "Movies"), work.item.genreNames].filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.system(size: 21)).lineLimit(1).opacity(0.6)
+                if !work.roles.isEmpty {
+                    Text(work.roles.joined(separator: " · ")).font(.system(size: 21)).lineLimit(1).opacity(0.6)
+                }
+                if let rating = work.item.rating {
+                    HStack(spacing: 6) { TMDBBadge(); Text(rating, format: .number.precision(.fractionLength(1))).font(.system(size: 21)) }
+                }
+            }.cardCaption()
+        }.frame(width: 250, alignment: .leading)
+    }
+}
+#endif
+
 /// Animate only the poster layer. The list does not recompute on animation frames.
 private struct DiscoverPosterWall: View {
     let urls: [URL]
@@ -248,7 +375,9 @@ private final class DiscoverPosterWallView: UIView {
     let root = CALayer()
     private let rotation = CALayer()
     private let canvas = CALayer()
-    private let tiles = (0..<24).map { _ in CALayer() }
+    private static let rows = 8
+    private var tiles: [CALayer] = []
+    private var images: [URL: CGImage] = [:]
     private var urls: [URL] = []
     private var task: Task<Void, Never>?
     private var active = false
@@ -256,25 +385,25 @@ private final class DiscoverPosterWallView: UIView {
     init() {
         root.masksToBounds = true
         root.addSublayer(rotation); rotation.addSublayer(canvas)
-        for tile in tiles {
-            tile.contentsGravity = .resizeAspectFill; tile.masksToBounds = true; tile.cornerRadius = 10
-            tile.backgroundColor = CGColor(gray: 1, alpha: 0.06); canvas.addSublayer(tile)
-        }
+    }
+    /// Neighbours across differ by one poster, and down by three.
+    private func url(at index: Int) -> URL? {
+        guard !urls.isEmpty else { return nil }
+        let column = index / Self.rows, row = index % Self.rows
+        return urls[(column + (row % 4) * 3) % urls.count]
     }
     func update(urls: [URL], active: Bool) {
         self.active = active
         if self.urls != urls {
-            self.urls = urls; task?.cancel()
+            self.urls = urls; task?.cancel(); images = [:]
             for tile in tiles { tile.contents = nil }
             task = Task { [weak self] in
                 await withTaskGroup(of: (URL, CGImage?).self) { group in
                     for url in Set(urls) { group.addTask { (url, await PosterPalette.image(url)) } }
                     for await (url, image) in group {
                         guard !Task.isCancelled, let self, self.urls == urls, let image else { continue }
-                        for (index, tile) in self.tiles.enumerated() where !urls.isEmpty {
-                            let column = index / 8, row = index % 8
-                            if urls[(column + (row % 4) * 3) % urls.count] == url { tile.contents = image }
-                        }
+                        self.images[url] = image
+                        for (index, tile) in self.tiles.enumerated() where self.url(at: index) == url { tile.contents = image }
                     }
                 }
             }
@@ -286,14 +415,23 @@ private final class DiscoverPosterWallView: UIView {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         let width = min(size.width * 0.4263, 220), height = width * 1.5, step = height + 8
+        // Tilted, the wall needs a little more than the width; a phone keeps its three columns.
+        let columns = max(3, Int((size.width + size.height * 0.18) / (width + 8)) + 1)
+        while tiles.count < columns * Self.rows {
+            let tile = CALayer()
+            tile.contentsGravity = .resizeAspectFill; tile.masksToBounds = true; tile.cornerRadius = 10
+            tile.backgroundColor = CGColor(gray: 1, alpha: 0.06); canvas.addSublayer(tile); tiles.append(tile)
+        }
         rotation.setAffineTransform(.identity)
-        rotation.bounds = CGRect(x: 0, y: 0, width: width * 3 + 16, height: size.height + step * 2)
+        rotation.bounds = CGRect(x: 0, y: 0, width: CGFloat(columns) * (width + 8) - 8, height: size.height + step * 2)
         rotation.position = CGPoint(x: size.width / 2, y: size.height / 2 - step * 0.3)
         rotation.setAffineTransform(CGAffineTransform(rotationAngle: -.pi / 18))
         canvas.frame = rotation.bounds
         for (index, tile) in tiles.enumerated() {
-            let column = index / 8, row = index % 8
-            tile.frame = CGRect(x: CGFloat(column) * (width + 8), y: CGFloat(row) * step + (column == 1 ? height * 0.3 : 0), width: width, height: height)
+            let column = index / Self.rows, row = index % Self.rows
+            tile.isHidden = column >= columns
+            tile.frame = CGRect(x: CGFloat(column) * (width + 8), y: CGFloat(row) * step + (column % 2 == 1 ? height * 0.3 : 0), width: width, height: height)
+            if tile.contents == nil, let url = url(at: index) { tile.contents = images[url] }
         }
         if cycle != step * 4 { cycle = step * 4; canvas.removeAnimation(forKey: "drift") }
         animate()

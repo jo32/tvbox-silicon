@@ -1319,3 +1319,5 @@
 "List View" = "リスト表示";
 
 "Grid View" = "グリッド表示";
+
+"No works match these filters." = "この条件に合う作品はありません。";

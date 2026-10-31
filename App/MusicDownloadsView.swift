@@ -277,6 +277,7 @@ private struct MusicDownloadedTile: View {
                     Text(collection.title).font(Self.titleFont).foregroundStyle(.primary).lineLimit(1)
                     Text(L10n.text("%lld songs", saved)).font(Self.subtitleFont).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
                 }
+                .cardCaption()
             }
             .frame(width: size, alignment: .leading)
             .contentShape(.rect)

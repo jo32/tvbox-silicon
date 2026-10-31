@@ -267,8 +267,8 @@ struct LiveRoomCard: View {
             VStack(alignment: .leading, spacing: 8) {
                 Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
                     .overlay { PosterImage(url: room.cover, headers: [:]) }
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(alignment: .topLeading) {
+                    .posterClip(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .coverOverlay(alignment: .topLeading) {
                         HStack(spacing: 5) {
                             Image(systemName: "dot.radiowaves.left.and.right").font(.caption2.weight(.bold))
                             Text(L10n.text("LIVE")).font(.caption2.weight(.bold))
@@ -276,7 +276,7 @@ struct LiveRoomCard: View {
                         .foregroundStyle(.white).padding(.horizontal, 8).padding(.vertical, 4)
                         .background(Brand.rose, in: Capsule()).padding(8)
                     }
-                    .overlay(alignment: .bottomTrailing) {
+                    .coverOverlay(alignment: .bottomTrailing) {
                         if room.online > 0 {
                             Label(room.online.formatted(.number.notation(.compactName)), systemImage: "person.2.fill")
                                 .font(.caption2.weight(.semibold)).foregroundStyle(.white).labelStyle(.titleAndIcon)
@@ -284,15 +284,16 @@ struct LiveRoomCard: View {
                                 .glassSurface(.regular.tint(.black.opacity(0.45)), in: Capsule()).padding(8)
                         }
                     }
-                    .overlay(alignment: .bottomLeading) {
+                    .coverOverlay(alignment: .bottomLeading) {
                         if favorite {
                             Image(systemName: "heart.fill").font(.caption).foregroundStyle(Brand.rose)
                                 .padding(6).glassSurface(.regular.tint(.black.opacity(0.45)), in: Circle()).padding(8)
                         }
                     }
                 Text(room.title.isEmpty ? room.host : room.title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-                    .lineLimit(1).truncationMode(.tail)
+                    .lineLimit(1).truncationMode(.tail).cardCaption()
                 Text([room.host, room.area].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .cardCaption()
             }
             // Cards in a row share its height; a one-line title leaves the space below, not between.
             .frame(maxHeight: .infinity, alignment: .top)

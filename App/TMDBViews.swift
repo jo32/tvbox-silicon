@@ -239,7 +239,7 @@ struct TMDBChoices: View {
                         .frame(width: TMDBMetrics.candidate, height: TMDBMetrics.candidate * 1.5)
                         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
-                    .tmdbCardButton()
+                    .panelCardButton(cornerRadius: 10)
                 }
                 .padding(.vertical, TMDBMetrics.focusRoom)
             }
@@ -266,10 +266,10 @@ struct TMDBCandidateTile: View {
         VStack(alignment: .leading, spacing: 6) {
             PosterImage(url: poster)
                 .frame(width: TMDBMetrics.candidate, height: TMDBMetrics.candidate * 1.5)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            Text(name).font(.caption.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading)
+                .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            Text(name).font(.caption.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading).cardCaption()
             Text([year.map(String.init), L10n.text(mediaType == .tv ? "TV Series" : "Movie")].compactMap { $0 }.joined(separator: " · "))
-                .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                .font(.caption2).foregroundStyle(.secondary).lineLimit(1).cardCaption()
         }
         .frame(width: TMDBMetrics.candidate, alignment: .leading)
         .foregroundStyle(.primary)
@@ -736,23 +736,27 @@ struct TMDBEpisodeTile: View {
         VStack(alignment: .leading, spacing: 6) {
             Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
                 .overlay {
-                    if let still = info?.still { PosterImage(url: still, symbol: "play.rectangle") } else { EpisodeNumberArt(name: name) }
+                    if let still = info?.still {
+                        PosterImage(url: still, symbol: "play.rectangle")
+                    } else {
+                        EpisodeNumberArt(name: name).overlay { CoverOverlayStack() }
+                    }
                 }
-                .overlay { if loading { ProgressView().padding(8).background(.black.opacity(0.45), in: Circle()) } }
-                .overlay(alignment: .bottomTrailing) {
+                .coverOverlay(animated: true) { if loading { ProgressView().padding(8).background(.black.opacity(0.45), in: Circle()) } }
+                .coverOverlay(alignment: .bottomTrailing) {
                     if let runtime = info?.runtime, runtime > 0 {
                         Text(L10n.text("%lld min", Int(runtime))).font(.caption2.weight(.semibold)).monospacedDigit()
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(.black.opacity(0.55), in: Capsule()).foregroundStyle(.white).padding(6)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay { if current { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Brand.accent, lineWidth: 2) } }
+                .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .coverOverlay { if current { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Brand.accent, lineWidth: 2) } }
             Text(name).font(.subheadline.weight(current ? .bold : .semibold)).lineLimit(1)
-                .foregroundStyle(current ? Brand.accent : .primary)
+                .foregroundStyle(current ? Brand.accent : .primary).cardCaption()
             // Always a second line, so tiles in a row stay one height.
             Text(info.map(\.name).flatMap { $0.isEmpty || $0 == name ? nil : $0 } ?? " ")
-                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                .font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
         }
         .frame(width: width, alignment: .leading)
         .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)

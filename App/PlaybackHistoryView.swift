@@ -242,7 +242,7 @@ struct HistoryCard: View {
         VStack(alignment: .leading, spacing: 8) {
             Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit)
                 .overlay { PosterImage(url: entry.context.poster, headers: entry.context.posterHeaders ?? [:]) }
-                .overlay(alignment: .bottom) {
+                .coverOverlay(alignment: .bottom) {
                     if entry.duration > 0 {
                         // White on the artwork, as in the TV app: the accent is near-black in light mode.
                         GeometryReader { proxy in
@@ -252,7 +252,7 @@ struct HistoryCard: View {
                         .frame(height: 5).padding(10)
                     }
                 }
-                .overlay(alignment: .topTrailing) {
+                .coverOverlay(alignment: .topTrailing) {
                     if let selection {
                         Image(systemName: selection ? "checkmark.circle.fill" : "circle")
                             .font(.title2).symbolRenderingMode(.palette)
@@ -261,7 +261,7 @@ struct HistoryCard: View {
                             .padding(8)
                     }
                 }
-                .overlay {
+                .coverOverlay(animated: true) {
                     // Preparing this title; choosing another card switches to that one.
                     if store.resumingHistoryID == entry.id {
                         ZStack {
@@ -270,16 +270,18 @@ struct HistoryCard: View {
                         }
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .opacity(selection == false ? 0.6 : 1)
             Text(entry.context.videoName).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
+                .cardCaption()
             if details {
                 Text("\(entry.context.episodeName) · \(SourceLabel(entry.context.sourceName).text)")
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
                 Text(HistoryFormat.status(entry)).font(.caption).monospacedDigit().foregroundStyle(.tertiary).lineLimit(1)
+                    .cardCaption()
             } else {
                 // The bar on the poster already says how far; the line names the episode.
-                Text(entry.context.episodeName).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(entry.context.episodeName).font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
             }
         }
         .frame(width: details ? nil : HistoryMetrics.card)

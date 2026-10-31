@@ -36,8 +36,8 @@ struct DiscoverSearchFilters: View {
     @State private var lookingUp = false
     @State private var lookupFailed = false
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
-    private let languages = ["zh", "en", "ja", "ko", "fr", "de", "es", "it", "hi", "th"]
-    private let regions = ["CN", "HK", "TW", "US", "GB", "JP", "KR", "FR", "DE", "IN", "TH"]
+    static let languages = ["zh", "en", "ja", "ko", "fr", "de", "es", "it", "hi", "th"]
+    static let regions = ["CN", "HK", "TW", "US", "GB", "JP", "KR", "FR", "DE", "IN", "TH"]
     private let movieGenres = DiscoverGenres.ids(for: .movie)
     private let tvGenres = DiscoverGenres.ids(for: .tv)
 
@@ -77,7 +77,7 @@ struct DiscoverSearchFilters: View {
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach([TMDBCatalog.SearchKind.movie, .tv], id: \.self) { kind in
                     choice(kind.title, selected: filter.kind == kind) {
-                        if filter.kind != kind { filter.kind = kind; filter.genres = []; filter.company = ""; if kind == .tv && filter.sort == "revenue.desc" { filter.sort = "popularity.desc" } }
+                        filter.switchKind(kind)
                     }.accessibilityIdentifier("discover.filter.type.\(kind.rawValue)")
                 }
             }
@@ -101,7 +101,7 @@ struct DiscoverSearchFilters: View {
             }
         case .sort:
             LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(sortOptions, id: \.0) { value, label in
+                ForEach(Self.sortOptions(filter.kind), id: \.0) { value, label in
                     choice(L10n.text(label), selected: filter.sort == value) { filter.sort = value }
                 }
             }
@@ -121,19 +121,19 @@ struct DiscoverSearchFilters: View {
         case .platform:
             LazyVGrid(columns: columns, spacing: 8) {
                 choice(L10n.text("Any"), selected: filter.company.isEmpty) { filter.company = "" }
-                ForEach(platforms, id: \.0) { id, name in choice(name, selected: filter.company == id) { filter.company = id } }
+                ForEach(Self.platforms(filter.kind), id: \.0) { id, name in choice(name, selected: filter.company == id) { filter.company = id } }
             }
         case .language:
             LazyVGrid(columns: columns, spacing: 8) {
                 choice(L10n.text("Any"), selected: filter.originalLanguage.isEmpty) { filter.originalLanguage = "" }
-                ForEach(languages, id: \.self) { code in
+                ForEach(Self.languages, id: \.self) { code in
                     choice(Locale(identifier: TMDBMatch.language).localizedString(forLanguageCode: code) ?? code, selected: filter.originalLanguage == code) { filter.originalLanguage = code }
                 }
             }
         case .region:
             LazyVGrid(columns: columns, spacing: 8) {
                 choice(L10n.text("Any"), selected: filter.region.isEmpty) { filter.region = "" }
-                ForEach(regions, id: \.self) { code in
+                ForEach(Self.regions, id: \.self) { code in
                     choice(Locale(identifier: TMDBMatch.language).localizedString(forRegionCode: code) ?? code, selected: filter.region == code) { filter.region = code }
                 }
             }
@@ -205,13 +205,22 @@ struct DiscoverSearchFilters: View {
             #endif
         }
     }
-    private var platforms: [(String, String)] {
-        filter.kind == .tv ? [("213", "Netflix"), ("2739", "Disney+"), ("2552", "Apple TV+"), ("49", "HBO")]
+    static func platforms(_ kind: TMDBCatalog.SearchKind) -> [(String, String)] {
+        kind == .tv ? [("213", "Netflix"), ("2739", "Disney+"), ("2552", "Apple TV+"), ("49", "HBO")]
             : [("174", "Warner Bros."), ("33", "Universal"), ("4", "Paramount"), ("34", "Sony Pictures"), ("2", "Disney")]
     }
-    private var sortOptions: [(String, String)] {
+    static func sortOptions(_ kind: TMDBCatalog.SearchKind) -> [(String, String)] {
         [("popularity.desc", "Popularity ↓"), ("popularity.asc", "Popularity ↑"), ("vote_average.desc", "Rating ↓"), ("vote_average.asc", "Rating ↑"),
          ("date.desc", "Newest First"), ("date.asc", "Oldest First"), ("vote_count.desc", "Most Votes")]
-        + (filter.kind == .movie ? [("revenue.desc", "Highest Revenue")] : [])
+        + (kind == .movie ? [("revenue.desc", "Highest Revenue")] : [])
+    }
+}
+
+extension TMDBCatalog.Filter {
+    /// Genres and studios belong to one kind, and a series cannot sort by revenue.
+    mutating func switchKind(_ kind: TMDBCatalog.SearchKind) {
+        guard self.kind != kind else { return }
+        self.kind = kind; genres = []; company = ""
+        if kind == .tv && sort == "revenue.desc" { sort = "popularity.desc" }
     }
 }

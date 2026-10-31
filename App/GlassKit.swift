@@ -53,6 +53,14 @@ extension View {
     /// Apple TVs without Liquid Glass on tvOS 26 take the material path too: there the glass dropped its tint, so a
     /// focused chip's white plate never showed and its black label sat on a dark capsule (#214).
     @ViewBuilder func glassSurface(_ style: GlassStyle = .regular, in shape: some Shape) -> some View {
+        #if os(tvOS)
+        modifier(CoverGlass(style: style, shape: shape))
+        #else
+        liveGlassSurface(style, in: shape)
+        #endif
+    }
+
+    @ViewBuilder fileprivate func liveGlassSurface(_ style: GlassStyle, in shape: some Shape) -> some View {
         if #available(macOS 26, iOS 26, tvOS 26, *), LiquidGlassSupport.current {
             glassEffect(style.glass, in: shape)
         } else if style.isVisible {
@@ -288,11 +296,59 @@ extension View {
         glassSurface(.regular, in: RoundedRectangle(cornerRadius: max(cornerRadius, 14), style: .continuous))
     }
 
-    @ViewBuilder func cardButton() -> some View {
+    /// A cover with captions under it. On Apple TV it takes Discover's focus: the cover itself lifts with the
+    /// system's Liquid Glass rim and parallax (the first image in the label, rounded by `shape`) while the captions
+    /// stay; there is no plate around the card. Covers inside use `posterClip`, as a clip would cut the rim off.
+    @ViewBuilder func cardButton(_ shape: ButtonBorderShape = .roundedRectangle(radius: 12)) -> some View {
         #if os(tvOS)
-        buttonStyle(TVCardStyle())
+        modifier(TVCardButton(shape: shape))
         #else
         buttonStyle(LiftButtonStyle())
+        #endif
+    }
+
+    /// A row of a small picture beside text: on Apple TV the whole row lifts on Liquid Glass with a light rim.
+    @ViewBuilder func rowCardButton() -> some View {
+        #if os(tvOS)
+        buttonStyle(TVPanelStyle(cornerRadius: 16, plate: true))
+        #else
+        buttonStyle(LiftButtonStyle())
+        #endif
+    }
+
+    /// A card made of several pictures, or with its own surface: on Apple TV the whole card lifts with a light
+    /// glass rim, as Rex's large cards do, since there is no single cover for the system's lift.
+    @ViewBuilder func panelCardButton(cornerRadius: CGFloat) -> some View {
+        #if os(tvOS)
+        buttonStyle(TVPanelStyle(cornerRadius: cornerRadius))
+        #else
+        buttonStyle(.plain)
+        #endif
+    }
+
+    /// Rounds a cover, except inside a card button on Apple TV, whose border shape rounds it instead.
+    func posterClip<S: Shape>(_ shape: S) -> some View { modifier(PosterClip(shape: shape)) }
+
+    /// Captions under the cover of a `cardButton`: on Apple TV they move down as the cover lifts, as on Discover.
+    func cardCaption() -> some View { modifier(CardCaption()) }
+
+    /// An overlay on a cover, such as a progress bar or a badge, on the view that holds its `PosterImage`. On Apple TV
+    /// the image paints it into its own bitmap, so the focus lift grows, moves and tilts it with the artwork, as Rex's
+    /// overlayContentView does: SwiftUI lifts only the image, never views over it, not even overlays attached to it.
+    /// `animated` content (a spinner) can't be painted; it is scaled with the lift instead, which matches until the
+    /// remote's touch tilts the cover.
+    @ViewBuilder func coverOverlay<V: View>(alignment: Alignment = .center, animated: Bool = false,
+                                            @ViewBuilder _ content: () -> V) -> some View {
+        #if os(tvOS)
+        if animated {
+            overlay { content().frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment).modifier(CoverLift()) }
+        } else {
+            let layer = CoverOverlay(alignment: alignment, view: AnyView(content()))
+            // The outer modifier runs first; inserting at the front keeps the order the overlays were written in.
+            transformEnvironment(\.coverOverlays) { $0.insert(layer, at: 0) }
+        }
+        #else
+        overlay(alignment: alignment, content: content)
         #endif
     }
 
@@ -303,6 +359,133 @@ extension View {
         #else
         buttonStyle(LiftButtonStyle())
         #endif
+    }
+}
+
+private struct InCardButtonKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    /// Inside a `cardButton` on Apple TV.
+    var inCardButton: Bool {
+        get { self[InCardButtonKey.self] }
+        set { self[InCardButtonKey.self] = newValue }
+    }
+}
+
+#if os(tvOS)
+/// The height of the cover in a card button, which sets how far its captions move.
+struct CardCoverHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+private struct CardCoverHeightEnvironmentKey: EnvironmentKey { static let defaultValue: CGFloat = 0 }
+extension EnvironmentValues {
+    var cardCoverHeight: CGFloat {
+        get { self[CardCoverHeightEnvironmentKey.self] }
+        set { self[CardCoverHeightEnvironmentKey.self] = newValue }
+    }
+}
+
+private struct TVCardButton: ViewModifier {
+    let shape: ButtonBorderShape
+    @State private var cover: CGFloat = 0
+    func body(content: Content) -> some View {
+        content.buttonStyle(.borderless).buttonBorderShape(shape)
+            .environment(\.inCardButton, true).environment(\.cardCoverHeight, cover)
+            .onPreferenceChange(CardCoverHeightKey.self) { cover = $0 }
+    }
+}
+#endif
+
+/// An overlay that `coverOverlay` hands down to the cover's `PosterImage`.
+struct CoverOverlay {
+    let alignment: Alignment
+    let view: AnyView
+}
+
+private struct CoverOverlaysKey: EnvironmentKey { static var defaultValue: [CoverOverlay] { [] } }
+private struct BakingCoverKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var coverOverlays: [CoverOverlay] {
+        get { self[CoverOverlaysKey.self] }
+        set { self[CoverOverlaysKey.self] = newValue }
+    }
+    /// Painting a cover's overlays into its bitmap, where glass doesn't render.
+    var bakingCover: Bool {
+        get { self[BakingCoverKey.self] }
+        set { self[BakingCoverKey.self] = newValue }
+    }
+}
+
+/// The `coverOverlay`s of a cover that isn't a `PosterImage`, which has no bitmap to paint them into: they grow with
+/// the lift instead.
+struct CoverOverlayStack: View {
+    @Environment(\.coverOverlays) private var overlays
+    var body: some View { CoverOverlayLayers(overlays: overlays).modifier(CoverLift()) }
+}
+
+fileprivate struct CoverOverlayLayers: View {
+    let overlays: [CoverOverlay]
+    var body: some View {
+        ZStack {
+            ForEach(overlays.indices, id: \.self) { index in
+                overlays[index].view.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: overlays[index].alignment)
+            }
+        }
+    }
+}
+
+#if os(tvOS)
+/// Glass can't be painted into a bitmap, so a badge baked into a cover gets its tint as a plain fill.
+private struct CoverGlass<S: Shape>: ViewModifier {
+    let style: GlassStyle
+    let shape: S
+    @Environment(\.bakingCover) private var baking
+    @ViewBuilder func body(content: Content) -> some View {
+        if baking {
+            content.background { if style.isVisible { shape.fill(style.tint ?? .black.opacity(0.3)) } }
+        } else {
+            content.liveGlassSurface(style, in: shape)
+        }
+    }
+}
+#endif
+
+private struct CoverLift: ViewModifier {
+    #if os(tvOS)
+    @Environment(\.isFocused) private var focused
+    @Environment(\.inCardButton) private var inCardButton
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func body(content: Content) -> some View {
+        // The system grows a focused cover by 12% about its centre (measured on the TV, as in Rex).
+        content.scaleEffect(inCardButton && focused ? 1.12 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: focused)
+    }
+    #else
+    func body(content: Content) -> some View { content }
+    #endif
+}
+
+private struct CardCaption: ViewModifier {
+    #if os(tvOS)
+    @Environment(\.isFocused) private var focused
+    @Environment(\.cardCoverHeight) private var cover
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func body(content: Content) -> some View {
+        // 6% of the cover's height, as Rex's captions and DiscoverTVNativeShelf.Cell's move.
+        content.offset(y: focused ? cover * 0.06 : 0)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: focused)
+    }
+    #else
+    func body(content: Content) -> some View { content }
+    #endif
+}
+
+private struct PosterClip<S: Shape>: ViewModifier {
+    let shape: S
+    @Environment(\.inCardButton) private var inCardButton
+    @ViewBuilder func body(content: Content) -> some View {
+        if inCardButton { content } else { content.clipShape(shape) }
     }
 }
 
@@ -535,6 +718,45 @@ extension EmptyPage where Footer == EmptyView {
     }
 }
 
+/// Nothing to list under a page's header or filters, centred in the width below them and sized for the screen,
+/// with an optional way out. A bare ContentUnavailableView hugged the leading edge of leading stacks, and on
+/// tvOS left the remote nothing to focus under the filters.
+struct EmptyResults: View {
+    let symbol: String
+    let title: String
+    var message: String?
+    var action: String?
+    var actionSymbol = "arrow.clockwise"
+    var perform: (() -> Void)?
+    #if os(tvOS)
+    private let icon: CGFloat = 60, titleSize: CGFloat = 38, text: CGFloat = 26, spacing: CGFloat = 22, width: CGFloat = 900, inset: CGFloat = 60
+    #else
+    private let icon: CGFloat = 36, titleSize: CGFloat = 20, text: CGFloat = 15, spacing: CGFloat = 12, width: CGFloat = 420, inset: CGFloat = 48
+    #endif
+    var body: some View {
+        VStack(spacing: spacing) {
+            Image(systemName: symbol).font(.system(size: icon, weight: .light)).foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            VStack(spacing: spacing * 0.4) {
+                Text(title).font(.system(size: titleSize, weight: .semibold))
+                if let message {
+                    Text(message).font(.system(size: text)).foregroundStyle(.secondary)
+                }
+            }
+            .multilineTextAlignment(.center).frame(maxWidth: width)
+            if let action, let perform {
+                Button(action: perform) { Label(action, systemImage: actionSymbol).padding(.horizontal, 8) }
+                    .controlButton().padding(.top, spacing * 0.4)
+            }
+        }
+        .padding(.vertical, inset).padding(.horizontal, Layout.gutter)
+        .frame(maxWidth: .infinity)
+        // Down from filters at the leading edge reaches the centred button.
+        .tvFocusSection()
+        .accessibilityElement(children: .contain)
+    }
+}
+
 /// Two-line card title that always takes two lines of height (so cards in a grid row match)
 /// but centres a one-line title instead of leaving a gap under it.
 struct CardTitle: View {
@@ -687,16 +909,17 @@ struct PosterImage: View {
     /// Receives the loaded image's width over height, for a frame that shows the whole cover.
     var aspect: Binding<CGFloat?>? = nil
     @State private var bitmap: PosterBitmap?
+    #if os(tvOS)
+    @Environment(\.coverOverlays) private var overlays
+    @Environment(\.displayScale) private var displayScale
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.locale) private var locale
+    @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    #endif
     private var resource: PosterResource? { url.map { PosterResource(url: $0, headers: headers) } }
     var body: some View {
-        ZStack {
-            Color(white: 0.20)
-            Image(systemName: symbol).font(.title2).foregroundStyle(.white.opacity(0.55))
-            if let bitmap { Color.clear.overlay { Image(decorative: bitmap.image, scale: 1).resizable().scaledToFill() } }
-        }
-        // A filled cover is wider than its frame; clip its drawing and its hit area, or the overflow
-        // lies over the neighbouring cards and takes their clicks.
-        .clipped()
+        artwork
         .contentShape(.rect)
         .task(id: resource) {
             bitmap = nil
@@ -707,6 +930,59 @@ struct PosterImage: View {
             }
         }
     }
+
+    #if os(tvOS)
+    /// One image, cropped to the frame and never clipped: a borderless button lifts the first image in its label and
+    /// draws the glass rim around it, which a clip would cut off, as on Discover's covers.
+    private var artwork: some View {
+        GeometryReader { proxy in
+            Image(decorative: baked(Self.cover(bitmap?.image, proxy.size), proxy.size), scale: 1).resizable()
+                .overlay { if bitmap == nil { Image(systemName: symbol).font(.title2).foregroundStyle(.white.opacity(0.55)) } }
+                .preference(key: CardCoverHeightKey.self, value: proxy.size.height)
+        }
+    }
+
+    private static let placeholder: CGImage = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { context in
+        UIColor(white: 0.2, alpha: 1).setFill(); context.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+    }.cgImage!
+
+    /// The cover with its `coverOverlay`s painted in, so the lift moves, grows and tilts them with the artwork.
+    private func baked(_ cover: CGImage, _ size: CGSize) -> CGImage {
+        guard !overlays.isEmpty, size.width > 0, size.height > 0 else { return cover }
+        let renderer = ImageRenderer(content: ZStack {
+            Image(decorative: cover, scale: 1).resizable()
+            CoverOverlayLayers(overlays: overlays)
+        }
+        .frame(width: size.width, height: size.height)
+        .environment(\.colorScheme, colorScheme).environment(\.locale, locale)
+        .environment(\.layoutDirection, layoutDirection).environment(\.dynamicTypeSize, dynamicTypeSize)
+        .environment(\.bakingCover, true))
+        renderer.scale = displayScale
+        return renderer.cgImage ?? cover
+    }
+
+    /// The middle of the image at the frame's shape, as a fill would show it.
+    private static func cover(_ image: CGImage?, _ size: CGSize) -> CGImage {
+        guard let image else { return placeholder }
+        guard size.width > 0, size.height > 0 else { return image }
+        let width = CGFloat(image.width), height = CGFloat(image.height), shape = size.width / size.height
+        let rect = width / height > shape
+            ? CGRect(x: (width - height * shape) / 2, y: 0, width: height * shape, height: height)
+            : CGRect(x: 0, y: (height - width / shape) / 2, width: width, height: width / shape)
+        return image.cropping(to: rect.integral) ?? image
+    }
+    #else
+    private var artwork: some View {
+        ZStack {
+            Color(white: 0.20)
+            Image(systemName: symbol).font(.title2).foregroundStyle(.white.opacity(0.55))
+            if let bitmap { Color.clear.overlay { Image(decorative: bitmap.image, scale: 1).resizable().scaledToFill() } }
+        }
+        // A filled cover is wider than its frame; clip its drawing and its hit area, or the overflow
+        // lies over the neighbouring cards and takes their clicks.
+        .clipped()
+    }
+    #endif
 }
 
 struct PosterCard: View {
@@ -725,8 +1001,8 @@ struct PosterCard: View {
         VStack(alignment: .leading, spacing: 10) {
             Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit)
                 .overlay { PosterImage(url: poster, headers: headers) }
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(alignment: .bottomLeading) {
+                .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .coverOverlay(alignment: .bottomLeading) {
                     if !remarks.isEmpty {
                         Text(remarks).font(.caption2.weight(.semibold)).lineLimit(1)
                             .foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 3)
@@ -735,7 +1011,7 @@ struct PosterCard: View {
                 }
             // One line, cut with an ellipsis: a title that wrapped made its card taller than the rest of the row.
             Text(name).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-                .lineLimit(1).truncationMode(.tail)
+                .lineLimit(1).truncationMode(.tail).cardCaption()
         }
     }
 }
@@ -1098,23 +1374,32 @@ private struct TVTileStyle: ButtonStyle {
         }
     }
 }
-private struct TVCardStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View { Card(configuration: configuration) }
-    private struct Card: View {
+/// The whole label lifts under focus with a light glass rim. `plate` lays Liquid Glass under rows that have no surface
+/// of their own; it bleeds into the gutter so the layout size stays the same.
+private struct TVPanelStyle: ButtonStyle {
+    let cornerRadius: CGFloat
+    var plate = false
+    func makeBody(configuration: Configuration) -> some View { Panel(configuration: configuration, style: self) }
+    private struct Panel: View {
         let configuration: ButtonStyleConfiguration
+        let style: TVPanelStyle
         @Environment(\.isFocused) private var focused
-        /// The focus plate bleeds into the grid gutter so the title gets inner padding
-        /// without the card's layout size changing.
-        private let inset: CGFloat = 14
         var body: some View {
-            let plate = RoundedRectangle(cornerRadius: 10 + inset, style: .continuous)
+            let inset: CGFloat = style.plate ? 12 : 0
+            let shape = RoundedRectangle(cornerRadius: style.cornerRadius + inset, style: .continuous)
             configuration.label
                 .padding(inset)
-                .background { plate.fill(TVStyle.raised.opacity(focused ? 1 : 0)) }
-                .overlay { plate.strokeBorder(.white.opacity(focused ? 1 : 0), lineWidth: 3) }
+                .background {
+                    if style.plate { Color.clear.glassSurface(focused ? .regular.tint(.white.opacity(0.18)).interactive() : .identity, in: shape) }
+                }
+                .overlay {
+                    shape.strokeBorder(LinearGradient(colors: [.white.opacity(0.85), .white.opacity(0.18), .white.opacity(0.45)],
+                                                      startPoint: .top, endPoint: .bottom), lineWidth: 2)
+                        .opacity(focused ? 1 : 0)
+                }
                 .padding(-inset)
-                .scaleEffect(configuration.isPressed ? 0.98 : focused ? 1.02 : 1)
-                .shadow(color: .black.opacity(focused ? 0.4 : 0), radius: 20, y: 12)
+                .scaleEffect(configuration.isPressed ? 0.98 : focused ? (style.plate ? 1.03 : 1.06) : 1)
+                .shadow(color: .black.opacity(focused ? 0.45 : 0), radius: 24, y: 14)
                 .animation(.easeOut(duration: 0.18), value: focused)
         }
     }
