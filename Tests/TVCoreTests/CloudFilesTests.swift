@@ -87,6 +87,21 @@ import Testing
         await #expect(throws: TVError.self) { try await drive.stream("big", name: "歌.mp3") }
     }
 
+    /// Quark sends most transcoded copies as HLS (`format: m3u8`, `.../media.m3u8`): AVPlayer reads the playlist
+    /// itself, with the account's cookies on every request. Read as the bytes of one file, the first range came
+    /// back as the playlist (HTTP 200) and the video failed ("request failed offset=0 HTTP 416", -17761).
+    @Test func aTranscodedCopyInHLSPlaysAsHLS() async throws {
+        QuarkStub.reset()
+        let drive = QuarkFiles(.quark, session: QuarkStub.session, account: { "__pus=abc" })
+        let url = try await drive.stream("hls", name: "夫妇.mp4")
+        #expect(url.host() == "video-play.quark.test" && url.pathExtension == "m3u8")
+        #expect(CloudStreams.playlistHeaders(for: url)?["Cookie"]?.contains("__pus=abc") == true)
+        #expect(CloudStreams.playlistHeaders(for: url)?["Referer"] == "https://pan.quark.cn/")
+        #expect(try #require(CloudStreams.asset(for: url)).url == url)
+        CloudStreams.stop(url)
+        #expect(CloudStreams.playlistHeaders(for: url) == nil && CloudStreams.asset(for: url) == nil)
+    }
+
     @Test func aGuestThatMayNotBrowseSignsInOnce() async throws {
         AListStub.reset()
         let server = AListServer(id: "s", name: "Stub", address: "https://alist.test", username: "me", password: "pw")
@@ -320,8 +335,10 @@ import Testing
         #expect(found.files.contains { $0.id == named.id } && found.total >= found.files.count)
         let video = try #require(files.first { !$0.isFolder && $0.name.lowercased().hasSuffix(".mp4") })
         try await plays(drive.stream(video.id, name: video.name))
-        // Named as a container Apple devices can't open, it takes the transcoded way.
+        // Named as a container `Remux` repackages, the original plays through it.
         try await plays(drive.stream(video.id, name: (video.name as NSString).deletingPathExtension + ".mkv"))
+        // Named as one neither opens, it plays Quark's transcoded copy, usually HLS.
+        try await plays(drive.stream(video.id, name: (video.name as NSString).deletingPathExtension + ".3gp"))
     }
 
     private func plays(_ url: URL) async throws {
@@ -366,6 +383,13 @@ final class QuarkStub: URLProtocol, @unchecked Sendable {
                 ["fid": "f1", "file_name": "庆余年 第1集.mp4", "dir": false, "size": 1000],
                 ["fid": "f2", "file_name": "庆余年 海报.pdf", "dir": false, "size": 10],
             ]]]
+        case "/1/clouddrive/file/v2/play" where Self.body(request)["fid"] as? String == "hls":
+            answer = ["status": 200, "code": 0, "data": ["video_list": [
+                ["resolution": "high", "accessable": false, "supports_format": "p_qv"],
+                ["resolution": "low", "accessable": true, "supports_format": "p_qv", "video_info": [
+                    "url": "https://video-play.quark.test/sz3/media.m3u8?auth_key=1", "size": 5308125, "format": "m3u8",
+                    "file_format": "m3u8", "duration": 95, "width": 480, "height": 270]],
+            ]]]
         case "/1/clouddrive/file/v2/play":
             answer = ["status": 200, "code": 0, "data": ["video_list": [
                 ["resolution": "super", "accessable": false],
@@ -379,6 +403,16 @@ final class QuarkStub: URLProtocol, @unchecked Sendable {
         client.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() {}
+    /// A POST's JSON body, which URLSession hands a protocol as a stream.
+    private static func body(_ request: URLRequest) -> [String: Any] {
+        var data = request.httpBody ?? Data()
+        if data.isEmpty, let stream = request.httpBodyStream {
+            stream.open(); defer { stream.close() }
+            var buffer = [UInt8](repeating: 0, count: 4096)
+            while stream.hasBytesAvailable { let count = stream.read(&buffer, maxLength: buffer.count); if count <= 0 { break }; data.append(buffer, count: count) }
+        }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+    }
 }
 
 /// An AList server that wants a sign-in from guests and protects /Private with "1234".

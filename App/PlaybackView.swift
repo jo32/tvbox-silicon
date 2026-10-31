@@ -915,7 +915,7 @@ extension PlaybackSession {
         }
         #if os(macOS)
         if address.pathExtension.lowercased() == "m3u8", ["http", "https"].contains(address.scheme), channel.url.scheme != DownloadLibrary.scheme {
-            let adapter = HLSProxy(headers: channel.headers)
+            let adapter = HLSProxy(headers: channel.headers.merging(CloudStreams.playlistHeaders(for: address) ?? [:]) { $1 })
             do { prepared.url = try await adapter.start(url: address) }
             catch {
                 if !Task.isCancelled { Diagnostics.shared.record(.error, "player", "proxy failed host=\(channel.url.host() ?? "-") \(Self.describe(error))") }
