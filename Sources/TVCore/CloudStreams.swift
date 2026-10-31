@@ -30,7 +30,18 @@ public enum CloudStreams {
         CloudStreamStore.shared.add(CloudByteStream(source: source, session: session, parallel: parallel, refresh: refresh))
     }
 
+    /// A drive's own HLS copy (Quark's and UC's transcoded videos), which AVPlayer reads itself. Its playlist and
+    /// segments want the account's headers: without the cookies the CDN refuses every request (HTTP 412).
+    public static func registerPlaylist(_ url: URL, headers: [String: String]) -> URL {
+        CloudPlaylists.shared.add(url, headers: headers)
+        return url
+    }
+
+    /// The headers a drive's HLS copy wants, for the Mac's HLS adapter and for downloads.
+    public static func playlistHeaders(for url: URL) -> [String: String]? { CloudPlaylists.shared.headers(url) }
+
     public static func asset(for url: URL) -> AVURLAsset? {
+        if let headers = CloudPlaylists.shared.headers(url) { return AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": headers]) }
         guard CloudStreamStore.shared.stream(url) != nil else { return nil }
         let asset = AVURLAsset(url: url)
         asset.resourceLoader.setDelegate(CloudResourceLoader.shared, queue: CloudResourceLoader.shared.queue)
@@ -64,6 +75,7 @@ public enum CloudStreams {
     }
 
     public static func stop(_ url: URL) {
+        CloudPlaylists.shared.remove(url)
         CloudResourceLoader.shared.cancel(url)
         if let stream = CloudStreamStore.shared.stream(url) { Task { await stream.clear() } }
     }
@@ -426,4 +438,22 @@ private final class CloudResourceLoader: NSObject, AVAssetResourceLoaderDelegate
             if !value.request.isCancelled { value.request.finishLoading(with: CancellationError()) }
         }
     }
+}
+
+/// The drives' HLS copies being played, with their headers. The last few are kept: an address that is never
+/// stopped (the Mac plays it through its HLS adapter) doesn't pile up.
+final class CloudPlaylists: @unchecked Sendable {
+    static let shared = CloudPlaylists()
+    private let lock = NSLock()
+    private var entries: [(url: URL, headers: [String: String])] = []
+
+    func add(_ url: URL, headers: [String: String]) {
+        lock.withLock {
+            entries.removeAll { $0.url == url }
+            entries.append((url, headers))
+            if entries.count > 8 { entries.removeFirst(entries.count - 8) }
+        }
+    }
+    func headers(_ url: URL) -> [String: String]? { lock.withLock { entries.last { $0.url == url }?.headers } }
+    func remove(_ url: URL) { lock.withLock { entries.removeAll { $0.url == url } } }
 }

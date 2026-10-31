@@ -75,9 +75,11 @@ actor QuarkFiles {
             }
         }
         guard CloudFile.kind(of: name) == .video else { throw CloudFilesError.unsupportedFormat((name as NSString).pathExtension) }
-        let source = try await transcoded(id, name: name)
-        Diagnostics.shared.record(.info, "files", "\(service) transcoded copy \(source.length) bytes")
-        return CloudStreams.register(source) { [self] in try? await transcoded(id, name: name) }
+        let copy = try await transcoded(id, name: name)
+        Diagnostics.shared.record(.info, "files", "\(service) transcoded copy \(copy.source.length) bytes playlist=\(copy.playlist)")
+        // Most transcoded copies are HLS (`format: m3u8`): a playlist of segments, not the bytes of one file.
+        if copy.playlist { return CloudStreams.registerPlaylist(copy.source.url, headers: copy.source.headers) }
+        return CloudStreams.register(copy.source) { [self] in try? await transcoded(id, name: name).source }
     }
 
     private func original(_ id: String, name: String) async throws -> CloudStreams.Source {
@@ -90,20 +92,23 @@ actor QuarkFiles {
     }
 
     /// The best transcoded copy this account may play: free accounts get the lower resolutions.
-    private func transcoded(_ id: String, name: String) async throws -> CloudStreams.Source {
+    private func transcoded(_ id: String, name: String) async throws -> (source: CloudStreams.Source, playlist: Bool) {
         let answer = try await call("/file/v2/play?\(query)", body: ["fid": id, "resolutions": "normal,low,high,super,2k,4k", "supports": "fmp4,m3u8"])
         let videos = ((answer["data"] as? [String: Any])?["video_list"] as? [[String: Any]]) ?? []
         let ranks = ["4k", "2k", "super", "high", "normal", "low"]
-        let playable = videos.compactMap { video -> (rank: Int, url: URL, size: Int)? in
+        let playable = videos.compactMap { video -> (rank: Int, url: URL, size: Int, playlist: Bool)? in
             guard video["accessable"] as? Bool != false, let info = video["video_info"] as? [String: Any],
                   let address = info["url"] as? String, let url = URL(string: address),
                   let size = (info["size"] as? NSNumber)?.intValue, size > 0 else { return nil }
-            return (ranks.firstIndex(of: video["resolution"] as? String ?? "") ?? ranks.count, url, size)
+            let format = ((info["format"] ?? info["file_format"]) as? String)?.lowercased()
+            return (ranks.firstIndex(of: video["resolution"] as? String ?? "") ?? ranks.count, url, size,
+                    format == "m3u8" || url.pathExtension.lowercased() == "m3u8")
         }
         guard let best = playable.min(by: { $0.rank < $1.rank }) else {
             throw TVError.unsupported(L10n.text("%@ hasn't prepared a version of this video that Apple devices can play.", self.name))
         }
-        return CloudStreams.Source(url: best.url, headers: cdnHeaders, length: best.size, name: (name as NSString).deletingPathExtension + ".mp4")
+        return (CloudStreams.Source(url: best.url, headers: cdnHeaders, length: best.size,
+                                    name: (name as NSString).deletingPathExtension + (best.playlist ? ".m3u8" : ".mp4")), best.playlist)
     }
 
     private var cdnHeaders: [String: String] { ["Cookie": jar.header, "User-Agent": Self.userAgent, "Referer": referer] }

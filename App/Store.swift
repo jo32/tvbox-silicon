@@ -164,6 +164,11 @@ import TVCore
             CloudStreams.stop(channel.url)
             return Channel(name: channel.name, group: channel.group, url: media.url, headers: media.headers)
         }
+        // A drive's HLS copy downloads with the headers its CDN wants.
+        if let headers = CloudStreams.playlistHeaders(for: channel.url) {
+            CloudStreams.stop(channel.url)
+            return Channel(name: channel.name, group: channel.group, url: channel.url, headers: channel.headers.merging(headers) { $1 })
+        }
         let address = try await EmbeddedJarHost.shared.recoverProxy(channel.url)
         if let media = await EmbeddedJarHost.shared.directMedia(address) {
             Diagnostics.shared.record(.info, "download", "cloud direct host=\(media.url.host() ?? "-") length=\(media.length)")
