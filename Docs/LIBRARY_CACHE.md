@@ -28,11 +28,13 @@ channel, it would be dismissed and presented again for every episode.
 
 ## Automatic catalog danmaku
 
-For subscription-source catalog videos, the app searches Dandanplay and, when
+For subscription-source catalog videos, the app searches the official Dandanplay API
+(using the private build configuration in [DANDANPLAY.md](DANDANPLAY.md)) and, when
 official-page lookup is enabled, IQiyi and Tencent Video. A validated official
 episode page can also be used directly. Matching checks normalized title,
 episode number and available year/season information, then asks the configured
-dmku endpoint for that episode's comments. The first nonempty result wins;
+dmku endpoint for that episode's comments. Dandanplay is tried first (up to five
+seconds); if it has no usable track, the first nonempty fallback result wins;
 unmatched episodes and unavailable services leave the video playing without an
 overlay or an alert.
 

@@ -72,7 +72,7 @@ private actor DanmakuTestTransport {
     #expect(cache.summary().lookups == 1)
 }
 
-@Test func firstUsableSourceCancelsSlowRequestsAndDandanStillWorksAsFallback() async throws {
+@Test func dandanplayIsPrimaryAndSlowPrimaryFallsBackWithinBoundedTime() async throws {
     let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     for mode in ["slow", "dandan"] {
@@ -82,8 +82,13 @@ private actor DanmakuTestTransport {
         let start = Date()
         let result = try await resolver.resolve(automaticContext())
         #expect(!result.comments.isEmpty)
-        #expect(Date().timeIntervalSince(start) < 3)
+        #expect(Date().timeIntervalSince(start) < 7)
         #expect(mode == "dandan" ? result.source == "Dandanplay" : result.source == "dmku · iqiyi")
+        if mode == "dandan" {
+            #expect(await transport.count("dmku.test/") == 0)
+            #expect(await transport.count("mesh.if.iqiyi.com/portal/lw/search/homePageV3") == 0)
+            #expect(await transport.count("pbaccess.video.qq.com/trpc.videosearch.search_cgi.http/load_playsource_list_info") == 0)
+        }
     }
 }
 

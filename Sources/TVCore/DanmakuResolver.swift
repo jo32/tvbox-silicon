@@ -45,8 +45,32 @@ public struct DanmakuResolver: Sendable {
         let lookupKey = lookupKey(context)
         var mappings = cache.data(for: lookupKey, kind: .lookup).flatMap { try? JSONDecoder().decode([DanmakuMapping].self, from: $0) } ?? []
         let saved = mappings
-        return try await withThrowingTaskGroup(of: Outcome.self) { group in
+        // Give Dandanplay the first opportunity, even when another provider is faster.
+        // Bound the wait so an unavailable primary cannot hold up the fallbacks.
+        let primary = await withTaskGroup(of: Outcome.self) { group in
             group.addTask { await self.dandan(context, cached: saved.first { $0.provider == "dandan" }) }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(5))
+                return Outcome()
+            }
+            let result = await group.next() ?? Outcome()
+            group.cancelAll()
+            return result
+        }
+        try Task.checkCancellation()
+        if let mapping = primary.mapping, !mapping.tracks.isEmpty {
+            mappings.removeAll { $0.provider == mapping.provider }; mappings.append(mapping)
+            if let data = try? JSONEncoder().encode(mappings) {
+                cache.store(data, for: lookupKey, kind: .lookup, ttl: 30 * 86400, ticket: ticket)
+            }
+        }
+        if let result = primary.result, !result.comments.isEmpty {
+            if let data = try? JSONEncoder().encode(result) {
+                cache.store(data, for: key, kind: .danmaku, scope: context.id, ttl: 7 * 86400, ticket: ticket)
+            }
+            return result
+        }
+        return try await withThrowingTaskGroup(of: Outcome.self) { group in
             if let page = context.officialPage.flatMap({ OfficialVideoPage.validated($0.absoluteString) }) {
                 group.addTask {
                     let mapping = DanmakuMapping(provider: "direct", title: context.videoName, year: context.year,
@@ -58,7 +82,7 @@ public struct DanmakuResolver: Sendable {
                     group.addTask { await self.official(context, provider: provider, cached: saved.first { $0.provider == provider }) }
                 }
             }
-            var responded = false
+            var responded = primary.responded
             for try await outcome in group {
                 try Task.checkCancellation()
                 responded = responded || outcome.responded

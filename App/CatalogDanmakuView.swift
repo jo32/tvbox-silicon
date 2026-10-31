@@ -205,7 +205,7 @@ struct CatalogDanmakuSettingsView: View {
                 }
                 Section {
                     Toggle(L10n.text("Find official episodes for dmku"), isOn: $officialLookup).settingsSwitch()
-                    Text(L10n.text("Automatically checks Dandanplay, iQIYI and Tencent Video. The first matching track with comments is used. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent."))
+                    Text(L10n.text("Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent."))
                         .font(.caption).foregroundStyle(.secondary)
                     HStack {
                         TextField(L10n.text("Video title"), text: $keyword).onSubmit { search() }.accessibilityIdentifier("danmaku.keyword")
@@ -247,7 +247,7 @@ struct CatalogDanmakuSettingsView: View {
                         }
                     Button(L10n.text("Use Default URL")) { server = CatalogDanmakuClient.defaultServer }
                 } header: { Text(L10n.text("Danmaku Service")) }
-                  footer: { Text(L10n.text("Uses a public Dandanplay-compatible service. You can enter your own danmu_api server. Availability depends on the service.")) }
+                  footer: { Text(L10n.text("Uses the official Dandanplay service. You can also enter your own compatible server.")) }
             }
             .navigationTitle(L10n.text("Danmaku"))
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { dismiss() } } }
@@ -255,7 +255,10 @@ struct CatalogDanmakuSettingsView: View {
         #if os(macOS)
         .frame(minWidth: 520, idealWidth: 560, minHeight: 500)
         #endif
-        .onAppear { keyword = channelName.components(separatedBy: " · ").first ?? channelName }
+        .onAppear {
+            if server.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/")) == CatalogDanmakuClient.legacyDefaultServer { server = CatalogDanmakuClient.defaultServer }
+            keyword = channelName.components(separatedBy: " · ").first ?? channelName
+        }
         .onDisappear { work?.cancel() }
         .fileImporter(isPresented: $showsImporter, allowedContentTypes: [.xml, .json]) { result in
             do { try model.importFile(result.get()); dismiss() }

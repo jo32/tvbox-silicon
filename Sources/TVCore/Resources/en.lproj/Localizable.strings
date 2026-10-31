@@ -1341,3 +1341,7 @@
 "Bitrate %@" = "Bitrate %@";
 
 "Download %@" = "Download %@";
+
+"Uses the official Dandanplay service. You can also enter your own compatible server." = "Uses the official Dandanplay service. You can also enter your own compatible server.";
+"This build is missing its Dandanplay API configuration." = "This build is missing its Dandanplay API configuration.";
+"Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent." = "Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent.";
