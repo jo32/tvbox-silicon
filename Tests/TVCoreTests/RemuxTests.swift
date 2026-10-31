@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import Testing
+import VideoToolbox
 @testable import TVCore
 
 // The repackager keeps three files open; tests opening more at once would close each other's.
@@ -301,6 +302,22 @@ import Testing
         #expect(segment.subdata(in: 4..<8) == Data("moof".utf8))
         let played = await ready(url)
         #expect(played.status == .readyToPlay && abs(played.duration - 4) < 0.2)
+    }
+
+    /// Without AV1 hardware (Macs before the M3, iPhones before the 15 Pro, Apple TV), dav1d decodes AV1 for the
+    /// conversion; FFmpeg alone has no AV1 decoder. With the hardware the picture is copied.
+    @Test func av1PlaysWithOrWithoutAV1Hardware() async throws {
+        let url = try await Remux.open(try Remux.fileSource(fixture("remux-av1.mkv")))
+        defer { Remux.stop(url) }
+        let master = String(decoding: try await fetch(url), as: UTF8.self)
+        #expect(master.contains(VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1) ? "CODECS=\"av01." : "CODECS=\"avc1."))
+        let video = String(decoding: try await fetch(url.deletingLastPathComponent().appending(path: "0.m3u8")), as: UTF8.self)
+        for name in video.split(separator: "\n").filter({ !$0.hasPrefix("#") }) {
+            let segment = try await fetch(url.deletingLastPathComponent().appending(path: String(name)))
+            #expect(segment.count > 500 && segment.subdata(in: 4..<8) == Data("moof".utf8), "\(name)")
+        }
+        let played = await ready(url)
+        #expect(played.status == .readyToPlay && abs(played.duration - 8) < 0.2)
     }
 
     // MARK: - Links

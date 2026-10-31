@@ -17,11 +17,11 @@ loopback server. Performance decided this over a second player such as KSPlayer'
   output, picture in picture and Now Playing, and every player control, subtitle menu and history feature that
   already exists keeps working.
 - **Only what Apple can't decode is converted**: VP9, VP8, MPEG-1/2/4 Part 2, WMV, RealVideo, VC-1, H.263,
-  Theora, H.264 Hi10/4:2:2, AV1 without a hardware decoder → libavcodec decode, VideoToolbox H.264 (or HEVC 10-bit
+  Theora, H.264 Hi10/4:2:2, AV1 without a hardware decoder (dav1d) → libavcodec decode, VideoToolbox H.264 (or HEVC 10-bit
   for deep or HDR pictures) hardware encode. DTS, TrueHD, Opus, Vorbis, MP3, MP2, WMA, PCM, Cook → AudioToolbox
   AAC (5.1 kept). MP3 and Opus are converted because AVPlayer refuses them inside fragmented MP4 HLS.
 - **Small.** FFmpeg is built with only the demuxers, the MP4 muxer and those decoders (LGPL, no network, no
-  filters): a static library per platform, built once into a shared cache by `Scripts/build-apple-ffmpeg.sh`.
+  filters; dav1d, BSD, for AV1): a static library per platform, built once into a shared cache by `Scripts/build-apple-ffmpeg.sh`.
 
 KSPlayer (GPL) informed the design (its own order is AVPlayer first, FFmpeg player second). Its prebuilt GPL
 binaries cover macOS, the iOS simulator and tvOS but not iPhones, and its FFmpeg player renders through Metal
