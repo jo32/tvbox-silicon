@@ -708,7 +708,7 @@ extension DiscoverDetailView {
         VStack(alignment: .leading, spacing: 10) {
             PosterImage(url: url).frame(width: width, height: width * 9 / 16)
                 .posterClip(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(alignment: .bottomTrailing) {
+                .coverOverlay(alignment: .bottomTrailing) {
                     if let badge {
                         Text(badge).font(.system(size: 20, weight: .medium)).padding(.horizontal, 10).padding(.vertical, 4)
                             .background(.black.opacity(0.6), in: Capsule()).padding(12)

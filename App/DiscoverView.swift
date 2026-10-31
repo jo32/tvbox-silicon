@@ -791,7 +791,7 @@ struct DiscoverTile: View {
             Color.clear.aspectRatio(landscape ? 16.0 / 9 : 2.0 / 3, contentMode: .fit)
                 .overlay { PosterImage(url: landscape ? item.backdrop ?? item.poster : item.poster) }
                 .posterClip(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.primary.opacity(0.1), lineWidth: 0.5) }
+                .coverOverlay { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.primary.opacity(0.1), lineWidth: 0.5) }
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.name).font(.system(size: DiscoverLayout.caption)).lineLimit(1)
                 HStack(spacing: 5) {

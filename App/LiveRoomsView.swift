@@ -268,7 +268,7 @@ struct LiveRoomCard: View {
                 Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
                     .overlay { PosterImage(url: room.cover, headers: [:]) }
                     .posterClip(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(alignment: .topLeading) {
+                    .coverOverlay(alignment: .topLeading) {
                         HStack(spacing: 5) {
                             Image(systemName: "dot.radiowaves.left.and.right").font(.caption2.weight(.bold))
                             Text(L10n.text("LIVE")).font(.caption2.weight(.bold))
@@ -276,7 +276,7 @@ struct LiveRoomCard: View {
                         .foregroundStyle(.white).padding(.horizontal, 8).padding(.vertical, 4)
                         .background(Brand.rose, in: Capsule()).padding(8)
                     }
-                    .overlay(alignment: .bottomTrailing) {
+                    .coverOverlay(alignment: .bottomTrailing) {
                         if room.online > 0 {
                             Label(room.online.formatted(.number.notation(.compactName)), systemImage: "person.2.fill")
                                 .font(.caption2.weight(.semibold)).foregroundStyle(.white).labelStyle(.titleAndIcon)
@@ -284,7 +284,7 @@ struct LiveRoomCard: View {
                                 .glassSurface(.regular.tint(.black.opacity(0.45)), in: Capsule()).padding(8)
                         }
                     }
-                    .overlay(alignment: .bottomLeading) {
+                    .coverOverlay(alignment: .bottomLeading) {
                         if favorite {
                             Image(systemName: "heart.fill").font(.caption).foregroundStyle(Brand.rose)
                                 .padding(6).glassSurface(.regular.tint(.black.opacity(0.45)), in: Circle()).padding(8)

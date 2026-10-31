@@ -242,7 +242,7 @@ struct HistoryCard: View {
         VStack(alignment: .leading, spacing: 8) {
             Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit)
                 .overlay { PosterImage(url: entry.context.poster, headers: entry.context.posterHeaders ?? [:]) }
-                .overlay(alignment: .bottom) {
+                .coverOverlay(alignment: .bottom) {
                     if entry.duration > 0 {
                         // White on the artwork, as in the TV app: the accent is near-black in light mode.
                         GeometryReader { proxy in
@@ -252,7 +252,7 @@ struct HistoryCard: View {
                         .frame(height: 5).padding(10)
                     }
                 }
-                .overlay(alignment: .topTrailing) {
+                .coverOverlay(alignment: .topTrailing) {
                     if let selection {
                         Image(systemName: selection ? "checkmark.circle.fill" : "circle")
                             .font(.title2).symbolRenderingMode(.palette)
@@ -261,7 +261,7 @@ struct HistoryCard: View {
                             .padding(8)
                     }
                 }
-                .overlay {
+                .coverOverlay {
                     // Preparing this title; choosing another card switches to that one.
                     if store.resumingHistoryID == entry.id {
                         ZStack {

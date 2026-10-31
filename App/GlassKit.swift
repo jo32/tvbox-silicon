@@ -324,6 +324,13 @@ extension View {
     /// Captions under the cover of a `cardButton`: on Apple TV they move down as the cover lifts, as on Discover.
     func cardCaption() -> some View { modifier(CardCaption()) }
 
+    /// An overlay on a cover, such as a progress bar or a badge, on the view that has the cover's frame. In a card
+    /// button on Apple TV it grows with the cover under focus, as Rex's sit in the image view's overlayContentView;
+    /// SwiftUI's lift takes only the image, not even overlays attached to it.
+    func coverOverlay<V: View>(alignment: Alignment = .center, @ViewBuilder _ content: () -> V) -> some View {
+        overlay { content().frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment).modifier(CoverLift()) }
+    }
+
     /// For cards that paint their own focus state (source cards).
     @ViewBuilder func tileButton() -> some View {
         #if os(tvOS)
@@ -368,6 +375,21 @@ private struct TVCardButton: ViewModifier {
     }
 }
 #endif
+
+private struct CoverLift: ViewModifier {
+    #if os(tvOS)
+    @Environment(\.isFocused) private var focused
+    @Environment(\.inCardButton) private var inCardButton
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func body(content: Content) -> some View {
+        // The system grows a focused cover by 12% about its centre (measured on the TV, as in Rex).
+        content.scaleEffect(inCardButton && focused ? 1.12 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: focused)
+    }
+    #else
+    func body(content: Content) -> some View { content }
+    #endif
+}
 
 private struct CardCaption: ViewModifier {
     #if os(tvOS)
@@ -843,7 +865,7 @@ struct PosterCard: View {
             Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit)
                 .overlay { PosterImage(url: poster, headers: headers) }
                 .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(alignment: .bottomLeading) {
+                .coverOverlay(alignment: .bottomLeading) {
                     if !remarks.isEmpty {
                         Text(remarks).font(.caption2.weight(.semibold)).lineLimit(1)
                             .foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 3)

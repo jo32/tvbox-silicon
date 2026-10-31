@@ -738,8 +738,8 @@ struct TMDBEpisodeTile: View {
                 .overlay {
                     if let still = info?.still { PosterImage(url: still, symbol: "play.rectangle") } else { EpisodeNumberArt(name: name) }
                 }
-                .overlay { if loading { ProgressView().padding(8).background(.black.opacity(0.45), in: Circle()) } }
-                .overlay(alignment: .bottomTrailing) {
+                .coverOverlay { if loading { ProgressView().padding(8).background(.black.opacity(0.45), in: Circle()) } }
+                .coverOverlay(alignment: .bottomTrailing) {
                     if let runtime = info?.runtime, runtime > 0 {
                         Text(L10n.text("%lld min", Int(runtime))).font(.caption2.weight(.semibold)).monospacedDigit()
                             .padding(.horizontal, 6).padding(.vertical, 2)
@@ -747,7 +747,7 @@ struct TMDBEpisodeTile: View {
                     }
                 }
                 .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay { if current { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Brand.accent, lineWidth: 2) } }
+                .coverOverlay { if current { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Brand.accent, lineWidth: 2) } }
             Text(name).font(.subheadline.weight(current ? .bold : .semibold)).lineLimit(1)
                 .foregroundStyle(current ? Brand.accent : .primary).cardCaption()
             // Always a second line, so tiles in a row stay one height.
