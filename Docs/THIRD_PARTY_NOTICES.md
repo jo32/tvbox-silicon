@@ -46,6 +46,8 @@ How Unicorn's and Keystone's GPL-2.0 terms apply to apps that embed this runtime
 
 [FFmpeg](https://ffmpeg.org) n8.1.3 (LGPL-2.1-or-later) reads MKV, AVI, FLV, WMV, RMVB and MPEG files so AVPlayer can play them. `Scripts/build-apple-ffmpeg.sh` builds it from unmodified upstream sources with only LGPL parts enabled and links it statically; `Vendor/FFmpeg/` keeps the license and an upstream record (`UPSTREAM.md`). The complete source of the app, including that script, is available under the GPL, so the library can be rebuilt and relinked.
 
+[dav1d](https://code.videolan.org/videolan/dav1d) 1.5.4 (BSD-2-Clause, `Vendor/FFmpeg/LICENSE.dav1d`) decodes AV1 for that library on devices without an AV1 hardware decoder. The same script builds it from unmodified upstream sources into the static library.
+
 ## Reference implementation
 
 The built-in Hongguo source uses the catalog and player response formats from

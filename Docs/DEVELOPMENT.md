@@ -14,7 +14,7 @@ Yingxia bundles a JVM, an Android ELF/JNI compatibility layer, and a DEX convert
 - A standalone macOS Node.js binary and its distributed LICENSE for the JavaScript host (`NODE_BIN` and `NODE_LICENSE` can select them).
 - [uv](https://docs.astral.sh/uv/) for the Python host. It installs a relocatable python-build-standalone CPython; `PYTHON_HOME` can select another relocatable prefix.
 - Python 3 for localization checks and plugin inspection scripts.
-- Git and network access once, to fetch FFmpeg's source for `Scripts/build-apple-ffmpeg.sh`.
+- Git and network access once, to fetch FFmpeg's and dav1d's sources and dav1d's build tools (Meson and Ninja, from PyPI into the FFmpeg cache) for `Scripts/build-apple-ffmpeg.sh`.
 
 The Mac app uses its bundled Java runtime; users do not need a separate Java installation. Physical iOS and tvOS devices require your own development team and signing configuration in Xcode. No account, certificate, or development team is preset.
 
@@ -31,7 +31,7 @@ Scripts/build-apple-ffmpeg.sh
 xcodegen generate
 ```
 
-`Scripts/build-apple-ffmpeg.sh` builds the small FFmpeg (LGPL, demuxers, the MP4 muxer, and the decoders the conversion path needs) that plays MKV, AVI, FLV, WMV and RMVB files; see [MKV playback](mkv-playback-plan.md). The first run takes about four minutes. Builds are kept in `~/Library/Caches/tvbox-ffmpeg`, so other checkouts and worktrees of the same recipe only link `build/FFmpeg/FFmpeg.xcframework` to it; `Vendor/FFmpeg` points there. `Scripts/verify.sh` and the release scripts run it first.
+`Scripts/build-apple-ffmpeg.sh` builds the small FFmpeg (LGPL, demuxers, the MP4 muxer, and the decoders the conversion path needs, with dav1d for AV1) that plays MKV, AVI, FLV, WMV and RMVB files; see [MKV playback](mkv-playback-plan.md). The first run takes about five minutes (more on a busy Mac). Builds are kept in `~/Library/Caches/tvbox-ffmpeg`, so other checkouts and worktrees of the same recipe only link `build/FFmpeg/FFmpeg.xcframework` to it; `Vendor/FFmpeg` points there. `Scripts/verify.sh` and the release scripts run it first.
 
 The runtime script uses `MAVEN_BIN` if set, otherwise the local Maven binary under `build/tools/` when available, then `mvn` from `PATH`. It writes the Mac runtime to `build/JavaHost/`, which the Mac target includes as a folder resource. This generated directory is not committed, so prepare it before building a fresh checkout.
 
