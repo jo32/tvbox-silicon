@@ -138,7 +138,7 @@ struct GlobalSearchView: View {
                     if model.keyword.isEmpty { idle.frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity) }
                     else {
                         if model.total == 0 {
-                            ContentUnavailableView(L10n.text("No searchable sources are available on this device."), systemImage: "magnifyingglass")
+                            EmptyResults(symbol: "magnifyingglass", title: L10n.text("No searchable sources are available on this device."))
                         } else if posters.isEmpty {
                             if model.busy {
                                 VStack(spacing: 18) {
@@ -167,7 +167,8 @@ struct GlobalSearchView: View {
                         }
                     }
                 } else {
-                    ContentUnavailableView(L10n.text("No Sources Yet"), systemImage: "magnifyingglass", description: Text(L10n.text("Add a TVBox subscription in Settings.")))
+                    EmptyResults(symbol: "magnifyingglass", title: L10n.text("No Sources Yet"), message: L10n.text("Add a TVBox subscription in Settings."),
+                                 action: L10n.text("Settings"), actionSymbol: "gearshape") { store.section = .settings }
                 }
             }.pageContainer()
         }

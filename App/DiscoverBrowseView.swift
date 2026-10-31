@@ -19,6 +19,15 @@ struct DiscoverBrowseView: View {
         self.title = title; self.logo = logo; _filter = State(initialValue: filter)
     }
     private var request: TMDBCatalog.Filter { var value = filter; value.sort = sort; return value }
+    private var noResults: some View {
+        EmptyResults(symbol: "film", title: L10n.text("No Results"),
+                     action: filter.genres.isEmpty ? nil : L10n.text("Reset Filters"), actionSymbol: "xmark") { filter.genres = [] }
+    }
+    private var loadFailed: some View {
+        EmptyResults(symbol: "wifi.exclamationmark", title: L10n.text("Couldn't Load Results"), action: L10n.text("Try Again")) {
+            Task { await load(reset: true) }
+        }.accessibilityIdentifier("discover.browse.retry")
+    }
     var body: some View {
         #if os(tvOS)
         DiscoverTVGrid(title: title, items: items, identifier: "discover.browse.item", reachedEnd: { await load(reset: false) }) {
@@ -32,9 +41,10 @@ struct DiscoverBrowseView: View {
             }
             chip(L10n.text("Sort By"), value: sort, active: sort != "popularity.desc", options: Self.sorts.map { ($0.0, L10n.text($0.1)) }) { sort = $0 }
         } footer: {
-            if failed { Button(L10n.text("Try Again")) { Task { await load(reset: page == 0) } }.accessibilityIdentifier("discover.browse.retry") }
+            if failed && items.isEmpty { loadFailed }
+            else if failed { Button(L10n.text("Try Again")) { Task { await load(reset: page == 0) } }.accessibilityIdentifier("discover.browse.retry") }
             else if loading { ProgressView() }
-            else if items.isEmpty { ContentUnavailableView(L10n.text("No Results"), systemImage: "film") }
+            else if items.isEmpty { noResults }
         }
         .background { DiscoverSearchAtmosphere() }
         .foregroundStyle(.white).preferredColorScheme(.dark)
@@ -61,11 +71,12 @@ struct DiscoverBrowseView: View {
                         }
                     }.padding(14)
                 }
-                if failed {
+                if failed && items.isEmpty { loadFailed }
+                else if failed {
                     Button(L10n.text("Try Again")) { Task { await load(reset: page == 0) } }.padding(24)
                         .accessibilityIdentifier("discover.browse.retry")
                 } else if loading { ProgressView().padding(24) }
-                else if items.isEmpty { ContentUnavailableView(L10n.text("No Results"), systemImage: "film") }
+                else if items.isEmpty { noResults }
                 else if page < totalPages {
                     Button(L10n.text("Load More")) { Task { await load(reset: false) } }.padding(24)
                         .accessibilityIdentifier("discover.browse.more")

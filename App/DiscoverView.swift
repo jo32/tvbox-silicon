@@ -66,17 +66,35 @@ struct DiscoverView: View {
                         if !model.failures.isEmpty || model.collectionsFailed {
                             Button { Task { await model.load() } } label: {
                                 Label(L10n.text("Some lists couldn't load. Try again."), systemImage: "arrow.clockwise")
+                                    #if !os(tvOS)
                                     .font(.subheadline).frame(maxWidth: .infinity).padding()
-                            }.buttonStyle(.plain).accessibilityIdentifier("discover.retry")
+                                    #endif
+                            }
+                            #if os(tvOS)
+                            .controlButton().frame(maxWidth: .infinity)
+                            #else
+                            .buttonStyle(.plain)
+                            #endif
+                            .accessibilityIdentifier("discover.retry")
                         }
                         if !model.loading, model.pages.values.allSatisfy({ $0.items.isEmpty }) {
-                            ContentUnavailableView(L10n.text("No Titles Available"), systemImage: "film",
-                                                   description: Text(L10n.text("Please try again later.")))
+                            EmptyResults(symbol: "film", title: L10n.text("No Titles Available"), message: L10n.text("Please try again later."),
+                                         // The failure row above already offers a retry.
+                                         action: model.failures.isEmpty && !model.collectionsFailed ? L10n.text("Try Again") : nil) { Task { await model.load() } }
                         }
                         Button { editing = true } label: {
                             Label(L10n.text("Edit Layout"), systemImage: "slider.horizontal.3")
+                                #if !os(tvOS)
                                 .font(.subheadline).padding(18).glassSurface(.regular, in: Capsule())
-                        }.buttonStyle(.plain).frame(maxWidth: .infinity).padding(.top, 10)
+                                #endif
+                        }
+                        // On tvOS .plain lays its focus platter under the glass capsule; one glass control instead.
+                        #if os(tvOS)
+                        .controlButton()
+                        #else
+                        .buttonStyle(.plain)
+                        #endif
+                        .frame(maxWidth: .infinity).padding(.top, 10)
                         HStack(spacing: 8) {
                             TMDBBadge()
                             Text(L10n.text("This product uses the TMDB API but is not endorsed or certified by TMDB."))

@@ -686,7 +686,7 @@ struct SiteView: View {
                             )
                             .padding(.vertical, browser.videos.isEmpty ? 24 : 8)
                         }
-                        if browser.videos.isEmpty && browser.loaded && !browser.busy && browser.error == nil { ContentUnavailableView(L10n.text("No Videos"), systemImage: "film", description: Text(L10n.text("Try selecting a category or searching."))).frame(maxWidth: .infinity) }
+                        if browser.videos.isEmpty && browser.loaded && !browser.busy && browser.error == nil { EmptyResults(symbol: "film", title: L10n.text("No Videos"), message: L10n.text("Try selecting a category or searching.")) }
                         LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
                             ForEach(browser.videos) { video in
                                 // An index source (a ranking or list site) names titles; other sources play them.

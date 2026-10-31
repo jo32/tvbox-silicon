@@ -718,6 +718,45 @@ extension EmptyPage where Footer == EmptyView {
     }
 }
 
+/// Nothing to list under a page's header or filters, centred in the width below them and sized for the screen,
+/// with an optional way out. A bare ContentUnavailableView hugged the leading edge of leading stacks, and on
+/// tvOS left the remote nothing to focus under the filters.
+struct EmptyResults: View {
+    let symbol: String
+    let title: String
+    var message: String?
+    var action: String?
+    var actionSymbol = "arrow.clockwise"
+    var perform: (() -> Void)?
+    #if os(tvOS)
+    private let icon: CGFloat = 60, titleSize: CGFloat = 38, text: CGFloat = 26, spacing: CGFloat = 22, width: CGFloat = 900, inset: CGFloat = 60
+    #else
+    private let icon: CGFloat = 36, titleSize: CGFloat = 20, text: CGFloat = 15, spacing: CGFloat = 12, width: CGFloat = 420, inset: CGFloat = 48
+    #endif
+    var body: some View {
+        VStack(spacing: spacing) {
+            Image(systemName: symbol).font(.system(size: icon, weight: .light)).foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            VStack(spacing: spacing * 0.4) {
+                Text(title).font(.system(size: titleSize, weight: .semibold))
+                if let message {
+                    Text(message).font(.system(size: text)).foregroundStyle(.secondary)
+                }
+            }
+            .multilineTextAlignment(.center).frame(maxWidth: width)
+            if let action, let perform {
+                Button(action: perform) { Label(action, systemImage: actionSymbol).padding(.horizontal, 8) }
+                    .controlButton().padding(.top, spacing * 0.4)
+            }
+        }
+        .padding(.vertical, inset).padding(.horizontal, Layout.gutter)
+        .frame(maxWidth: .infinity)
+        // Down from filters at the leading edge reaches the centred button.
+        .tvFocusSection()
+        .accessibilityElement(children: .contain)
+    }
+}
+
 /// Two-line card title that always takes two lines of height (so cards in a grid row match)
 /// but centres a one-line title instead of leaving a gap under it.
 struct CardTitle: View {

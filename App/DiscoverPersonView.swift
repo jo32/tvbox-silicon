@@ -38,6 +38,19 @@ struct DiscoverPersonView: View {
         }.compactMap(\.item.poster)
         return Array((narrative.count >= 3 ? narrative : credits.compactMap(\.item.poster)).prefix(12))
     }
+    /// The list with nothing in it: a way back from filters that match nothing, or a retry.
+    @ViewBuilder private var emptyState: some View {
+        if failed {
+            EmptyResults(symbol: "wifi.exclamationmark", title: L10n.text("Couldn't Load Results"), action: L10n.text("Try Again")) { revision += 1 }
+        } else if !loading && works.isEmpty {
+            if kind != "all" || contribution != "all" {
+                EmptyResults(symbol: "line.3.horizontal.decrease", title: L10n.text("No Results"), message: L10n.text("No works match these filters."),
+                             action: L10n.text("Reset Filters"), actionSymbol: "xmark") { kind = "all"; contribution = "all" }
+            } else {
+                EmptyResults(symbol: "film", title: L10n.text("No Results"))
+            }
+        }
+    }
     #if os(macOS)
     /// The biography and timeline in a centred column on the Mac; full-width rows were mostly empty.
     private static let column: CGFloat = 680
@@ -51,10 +64,7 @@ struct DiscoverPersonView: View {
                 LazyVStack(spacing: 0) {
                     header(width: geometry.size.width)
                     if loading { ProgressView().padding(30).frame(maxWidth: .infinity) }
-                    if failed { Button(L10n.text("Try Again")) { revision += 1 }.padding(30) }
-                    if !loading && !failed && works.isEmpty {
-                        ContentUnavailableView(L10n.text("No Results"), systemImage: "film")
-                    }
+                    emptyState
                     ForEach(Array(works.enumerated()), id: \.element.id) { index, work in
                         RouteLink { DiscoverDetailView(item: work.item) } label: {
                             timeline(work, marker: index == 0 || works[index - 1].date?.prefix(7) != work.date?.prefix(7), last: index == works.count - 1)
@@ -218,10 +228,7 @@ extension DiscoverPersonView {
                 }
                 .padding(.horizontal, Self.tvMargin).padding(.top, 40).focusSection()
                 if loading { ProgressView().frame(maxWidth: .infinity).padding(60) }
-                if failed { Button(L10n.text("Try Again")) { revision += 1 }.padding(60) }
-                if !loading && !failed && works.isEmpty {
-                    ContentUnavailableView(L10n.text("No Results"), systemImage: "film")
-                }
+                emptyState
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(250), spacing: 50, alignment: .top), count: 6), alignment: .leading, spacing: 60) {
                     ForEach(works, id: \.id) { work in
                         RouteLink { DiscoverDetailView(item: work.item) } label: { tvWork(work) }

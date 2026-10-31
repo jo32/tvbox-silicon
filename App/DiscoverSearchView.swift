@@ -30,12 +30,11 @@ struct DiscoverSearchView: View {
                                 if let group = model.groups[kind], group.count > 0 || (filter != nil && group.hasMore) { results(group, kind: kind, width: geometry.size.width) }
                             }
                             if model.isEmpty && !model.loading && !model.failed {
-                                ContentUnavailableView(L10n.text("No Results"), systemImage: "magnifyingglass", description: Text(L10n.text("Try another title or change your filters.")))
+                                EmptyResults(symbol: "magnifyingglass", title: L10n.text("No Results"), message: L10n.text("Try another title or change your filters."),
+                                                 action: filter == nil ? nil : L10n.text("Reset Filters"), actionSymbol: "xmark") { filter = nil }
                                     .accessibilityIdentifier("discover.search.empty")
                             }
-                            if model.failed {
-                                Button(L10n.text("Try Again")) { revision += 1 }.frame(maxWidth: .infinity).padding(24)
-                            }
+                            if model.failed { EmptyResults(symbol: "wifi.exclamationmark", title: L10n.text("Couldn't Load Results"), action: L10n.text("Try Again")) { revision += 1 } }
                         }.padding(.top, 4).padding(.bottom, 16)
                     }
                     .scrollIndicators(.hidden)
@@ -385,10 +384,11 @@ struct DiscoverMacSearchView: View {
                     if let group = model.groups[kind], group.count > 0 || (filter != nil && group.hasMore) { results(group, kind: kind) }
                 }
                 if model.isEmpty && !model.loading && !model.failed {
-                    ContentUnavailableView(L10n.text("No Results"), systemImage: "magnifyingglass", description: Text(L10n.text("Try another title or change your filters.")))
+                    EmptyResults(symbol: "magnifyingglass", title: L10n.text("No Results"), message: L10n.text("Try another title or change your filters."),
+                                     action: filter == nil ? nil : L10n.text("Reset Filters"), actionSymbol: "xmark") { filter = nil }
                         .accessibilityIdentifier("discover.search.empty")
                 }
-                if model.failed { Button(L10n.text("Try Again")) { revision += 1 }.frame(maxWidth: .infinity) }
+                if model.failed { EmptyResults(symbol: "wifi.exclamationmark", title: L10n.text("Couldn't Load Results"), action: L10n.text("Try Again")) { revision += 1 } }
             }
             .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 28)
         }
