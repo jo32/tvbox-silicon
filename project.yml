@@ -15,6 +15,7 @@ settings:
     GENERATE_INFOPLIST_FILE: YES
     INFOPLIST_KEY_CFBundleDisplayName: Yingxia
     INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.entertainment
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: ''
     # Config/iCloud.entitlements once the App IDs and profiles have iCloud (Sources/TVCore/CloudSync.swift).
@@ -72,6 +73,9 @@ targets:
         type: folder
         buildPhase: resources
     preBuildScripts:
+      - name: Embed Dandanplay API configuration
+        script: '"$SRCROOT/Scripts/embed-dandanplay-config.py"'
+        basedOnDependencyAnalysis: false
       - name: Check the bundled Java host
         script: '"$SRCROOT/Scripts/check-java-host.sh" "$SRCROOT/build/JavaHost/host.jar" && touch "$DERIVED_FILE_DIR/java-host-checked"'
         # Declared, so the script sandbox lets it read them and it runs again only when one changes.
@@ -100,6 +104,10 @@ targets:
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   TVBox-iOS:
     templates: [SharedApp]
+    preBuildScripts:
+      - name: Embed Dandanplay API configuration
+        script: '"$SRCROOT/Scripts/embed-dandanplay-config.py"'
+        basedOnDependencyAnalysis: false
     platform: iOS
     sources:
       - path: Runtime/AppleRuntime/Native/AppleRuntime.m
@@ -153,6 +161,10 @@ targets:
             CFBundleURLSchemes: [yingxia]
   TVBox-tvOS:
     templates: [SharedApp]
+    preBuildScripts:
+      - name: Embed Dandanplay API configuration
+        script: '"$SRCROOT/Scripts/embed-dandanplay-config.py"'
+        basedOnDependencyAnalysis: false
     platform: tvOS
     sources:
       - path: Runtime/AppleRuntime/Native/AppleRuntime.m

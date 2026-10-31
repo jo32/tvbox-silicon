@@ -613,6 +613,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 69187C92E06B41B0817552F3 /* Build configuration list for PBXNativeTarget "TVBox-iOS" */;
 			buildPhases = (
+				7E0F3B0D6BC3E391D1F6A374 /* Embed Dandanplay API configuration */,
 				FF62FD0D84F10E3C607D716E /* Sources */,
 				AEDE346CFFADBAE2169B12A1 /* Resources */,
 				E94BC2A1C955B6F2E58D19BE /* Frameworks */,
@@ -636,6 +637,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 429EE12CD839980B47636EAD /* Build configuration list for PBXNativeTarget "TVBox-macOS" */;
 			buildPhases = (
+				DD18DA320E499D9BCF308EE1 /* Embed Dandanplay API configuration */,
 				38AA9476BEF00D4E183306B5 /* Check the bundled Java host */,
 				DE668986064D1052747B0516 /* Sources */,
 				330684913FA5953506D1EE47 /* Resources */,
@@ -659,6 +661,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = DAA4895E5FBCBEE93E8522D9 /* Build configuration list for PBXNativeTarget "TVBox-tvOS" */;
 			buildPhases = (
+				9C7766533080E9B0AC54B9CD /* Embed Dandanplay API configuration */,
 				3045AC51AD346EA9FB246FE5 /* Sources */,
 				28C5970E177A56CF0613AE10 /* Resources */,
 				42CF7C28FA76A27C0C01C499 /* Frameworks */,
@@ -854,6 +857,44 @@
 			shellPath = /bin/sh;
 			shellScript = "set -eu\nRUNTIME=\"$SRCROOT/build/AppleRuntime/$PLATFORM_NAME\"\ntest -f \"$RUNTIME/lib/libTVAppleRuntime.a\"\n\"$SRCROOT/Scripts/check-java-host.sh\" \"$RUNTIME/Resources/JavaHost/host.jar\"\nrsync -a --delete \"$RUNTIME/Resources/lib/\" \"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/lib/\"\nrsync -a --delete \"$RUNTIME/Resources/JavaHost/\" \"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/JavaHost/\"\n";
 		};
+		7E0F3B0D6BC3E391D1F6A374 /* Embed Dandanplay API configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Embed Dandanplay API configuration";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/Scripts/embed-dandanplay-config.py\"";
+		};
+		9C7766533080E9B0AC54B9CD /* Embed Dandanplay API configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Embed Dandanplay API configuration";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/Scripts/embed-dandanplay-config.py\"";
+		};
 		A4DF47F9E069B67C04C29D12 /* Embed on-device Java runtime */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -872,6 +913,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "set -eu\nRUNTIME=\"$SRCROOT/build/AppleRuntime/$PLATFORM_NAME\"\ntest -f \"$RUNTIME/lib/libTVAppleRuntime.a\"\n\"$SRCROOT/Scripts/check-java-host.sh\" \"$RUNTIME/Resources/JavaHost/host.jar\"\nrsync -a --delete \"$RUNTIME/Resources/lib/\" \"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/lib/\"\nrsync -a --delete \"$RUNTIME/Resources/JavaHost/\" \"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/JavaHost/\"\n";
+		};
+		DD18DA320E499D9BCF308EE1 /* Embed Dandanplay API configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Embed Dandanplay API configuration";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/Scripts/embed-dandanplay-config.py\"";
 		};
 		E70A0A00C0021120BA15D9D3 /* Embed on-device Python runtime */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -1219,6 +1279,7 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -1399,6 +1460,7 @@
 				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
