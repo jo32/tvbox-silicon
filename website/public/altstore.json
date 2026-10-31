@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.4",
+          "buildVersion": "42",
+          "date": "2026-10-31",
+          "localizedDescription": "• 发现\n• 你的 NAS 和媒体服务器\n• 弹幕区域可调\n• 其他修复\n\n• Discover\n• Your NAS and media server\n• Choose where danmaku go\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.4/Yingxia-1.8.4-ios.ipa",
+          "size": 116425308,
+          "sha256": "133309eeb1827acbc2b5ac1b5567838185d9c460921794927b1e7022ecbfcea3",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.3",
           "buildVersion": "41",
           "date": "2026-10-29",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.0/Yingxia-1.8.0-ios.ipa",
           "size": 98643054,
           "sha256": "cedfa1b766e90560292125d5b384879f180caa9a6ccb890f73fa86b8b2a00f9c",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.7.13",
-          "buildVersion": "32",
-          "date": "2026-10-25",
-          "localizedDescription": "• 支持 iOS 17\n• 更多网页播放地址可以播放\n• 全局搜索更简洁\n• 为订阅命名\n• 只显示图标的标签栏\n• 海报不再丢失\n• 弹幕更稳定\n• 播放和暂停反应更快\n• 返回时不再卡死\n• 其他修复\n\n• Runs on iOS 17\n• More player pages play\n• A tidier Global Search\n• Name your subscriptions\n• Icons-only tab bar\n• Posters stay put\n• Danmaku keep coming\n• Snappier play and pause\n• No more freeze on return\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.7.13/Yingxia-1.7.13-ios.ipa",
-          "size": 72586889,
-          "sha256": "ecc26bb93204af75dfebe83032af28bddde05eba5bec272b9770dc67b769e920",
           "minOSVersion": "17.0"
         }
       ],
