@@ -21,8 +21,8 @@ export const MAC_INTEL_DOWNLOAD = "https://download.getmegaportal.com/yingxia/1.
 /** iPhone/iPad and Apple TV IPAs for sideloading, next to the Mac release. */
 export const DOWNLOADS = {
   mac: MAC_DOWNLOAD,
-  ios: "https://download.getmegaportal.com/yingxia/1.8.4/Yingxia-1.8.4-ios.ipa",
-  tv: "https://download.getmegaportal.com/yingxia/1.8.4/Yingxia-1.8.4-tvos.ipa",
+  ios: "https://download.getmegaportal.com/yingxia/1.8.5/Yingxia-1.8.5-ios.ipa",
+  tv: "https://download.getmegaportal.com/yingxia/1.8.5/Yingxia-1.8.5-tvos.ipa",
 } as const;
 
 /** Public TestFlight invites (external testing), the recommended install for iPhone, iPad and Apple TV.
