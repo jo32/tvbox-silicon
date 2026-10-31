@@ -43,6 +43,13 @@ import Testing
         #expect(RemuxPlan.make(streams: [streams[1]], keyframes: [], start: 0, duration: 1, size: 0, device: .init()) == nil)
     }
 
+    @Test func intraRefreshPicturesAreConverted() {
+        var stream = Stream(index: 0, kind: .video, codec: "h264", width: 1920, height: 1080)
+        #expect(RemuxPlan.videoTrack(stream, device: RemuxPlan.Device()).mode == .copy)
+        stream.intraRefresh = true
+        #expect(RemuxPlan.videoTrack(stream, device: RemuxPlan.Device()).mode == .h264)
+    }
+
     @Test func onlyPicturesTheDeviceCantDecodeAreConverted() {
         let device = RemuxPlan.Device(hevc: true, av1: false, hevcEncoder: true)
         func mode(_ stream: Stream, _ device: RemuxPlan.Device = device) -> RemuxPlan.Mode { RemuxPlan.videoTrack(stream, device: device).mode }
@@ -339,6 +346,60 @@ import Testing
         defer { Remux.stop(master) }
         let played = await ready(master)
         #expect(played.status == .readyToPlay && abs(played.duration - 8) < 0.2)
+    }
+
+    /// The segments a track's playlist lists, and how long they run together.
+    private func playlist(_ master: URL, track: Int) async throws -> (segments: [String], seconds: Double) {
+        let text = String(decoding: try await fetch(master.deletingLastPathComponent().appending(path: "\(track).m3u8")), as: UTF8.self)
+        let lines = text.split(separator: "\n")
+        let seconds = lines.compactMap { $0.wholeMatch(of: /#EXTINF:([0-9.]+),/).flatMap { Double($0.1) } }.reduce(0, +)
+        return (lines.filter { !$0.hasPrefix("#") }.map(String.init), seconds)
+    }
+
+    /// A Matroska file written as a stream (FFmpeg's `-live`, a recording, a pipe) has no Duration and no Cues. The
+    /// end of the file says how long it is, from a drive and from a plugin's proxy alike.
+    @Test func matroskaWithoutADurationPlays() async throws {
+        for proxy in [false, true] {
+            let url = RangeServer.add("live-\(UUID().uuidString).mkv", try Data(contentsOf: fixture("remux-live.mkv")), restOfFile: proxy)
+            let source = try await Remux.httpSource(url, headers: [:], chunks: RangeServer.session, configuration: RangeServer.configuration)
+            let master = try await Remux.open(source)
+            defer { Remux.stop(master) }
+            let video = try await playlist(master, track: 0)
+            #expect(abs(video.seconds - 8) < 0.3, "proxy=\(proxy) \(video.seconds)")
+            let last = try await fetch(master.deletingLastPathComponent().appending(path: try #require(video.segments.last)))
+            #expect(last.count > 500 && last.subdata(in: 4..<8) == Data("moof".utf8))
+            let played = await ready(master)
+            #expect(played.status == .readyToPlay && abs(played.duration - 8) < 0.3, "proxy=\(proxy)")
+        }
+    }
+
+    /// FFmpeg writes the time a file ends as its Duration. One whose clock starts at 10 s is 8 s long, not 18 s
+    /// with 10 s of nothing at the end, where a seek never finished.
+    @Test func matroskaWhoseClockStartsLaterKeepsItsLength() async throws {
+        let master = try await Remux.open(try Remux.fileSource(fixture("remux-offset.mkv")))
+        defer { Remux.stop(master) }
+        let video = try await playlist(master, track: 0)
+        #expect(abs(video.seconds - 8) < 0.3, "\(video.seconds)")
+        for name in video.segments {
+            let segment = try await fetch(master.deletingLastPathComponent().appending(path: name))
+            #expect(segment.count > 500 && segment.subdata(in: 4..<8) == Data("moof".utf8), "\(name)")
+        }
+    }
+
+    /// x264's intra refresh marks recovery points as keyframes; AVPlayer starts no picture there, so after a seek
+    /// it showed none. The picture is converted, which gives every segment a real keyframe.
+    @Test func intraRefreshIsConverted() async throws {
+        let master = try await Remux.open(try Remux.fileSource(fixture("remux-intra-refresh.mkv")))
+        defer { Remux.stop(master) }
+        let id = try #require(master.pathComponents.dropLast().last)
+        #expect(RemuxStore.shared.session(id)?.plan.tracks.first?.mode == .h264)
+        let video = try await playlist(master, track: 0)
+        let later = try await fetch(master.deletingLastPathComponent().appending(path: try #require(video.segments.last)))
+        #expect(later.subdata(in: 4..<8) == Data("moof".utf8))
+        // A file without intra refresh is copied as before.
+        let plain = try await Remux.open(try Remux.fileSource(fixture("remux-live.mkv")))
+        defer { Remux.stop(plain) }
+        #expect(RemuxStore.shared.session(try #require(plain.pathComponents.dropLast().last))?.plan.tracks.first?.mode == .copy)
     }
 
     @Test func aFileFFmpegCantReadFailsToOpen() async throws {

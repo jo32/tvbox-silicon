@@ -375,7 +375,8 @@ final class RemuxSession: @unchecked Sendable {
         return RemuxPlan.Stream(index: index, kind: kind, codec: text(raw.codec), profile: Int(raw.profile), level: Int(raw.level),
                                 width: Int(raw.width), height: Int(raw.height), bitDepth: Int(raw.bitDepth), chroma: Int(raw.chroma),
                                 frameRate: raw.frameRate, colorTransfer: Int(raw.colorTransfer), doviProfile: Int(raw.doviProfile),
-                                doviCompatibility: Int(raw.doviCompatibility), sampleRate: Int(raw.sampleRate), channels: Int(raw.channels),
+                                doviCompatibility: Int(raw.doviCompatibility), intraRefresh: raw.intraRefresh != 0,
+                                sampleRate: Int(raw.sampleRate), channels: Int(raw.channels),
                                 bitRate: raw.bitRate, language: text(raw.language), title: text(raw.title),
                                 isDefault: raw.isDefault != 0, isForced: raw.isForced != 0, isText: raw.isText != 0)
     }

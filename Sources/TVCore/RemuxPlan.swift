@@ -19,6 +19,8 @@ struct RemuxPlan: Sendable, Equatable {
         /// FFmpeg's AVColorTransferCharacteristic: 16 is PQ, 18 is HLG.
         var colorTransfer = 2
         var doviProfile = -1, doviCompatibility = -1
+        /// x264's intra refresh: its keyframes are recovery points, where AVPlayer can't start a segment.
+        var intraRefresh = false
         var sampleRate = 0, channels = 0
         var bitRate: Int64 = 0
         var language = "", title = ""
@@ -110,7 +112,7 @@ struct RemuxPlan: Sendable, Equatable {
             return track
         }
         switch stream.codec {
-        case "h264" where stream.bitDepth <= 8 && plain: return track
+        case "h264" where stream.bitDepth <= 8 && plain && !stream.intraRefresh: return track
         case "hevc" where device.hevc && stream.bitDepth <= 10 && plain:
             // Profile 5 is Dolby Vision alone; 8 has an HDR10 (or SDR, HLG) base. Others keep their base only.
             track.dolbyVision = stream.doviProfile == 5 ? .dvh1 : stream.doviProfile == 8 ? .hvc1 : .drop
