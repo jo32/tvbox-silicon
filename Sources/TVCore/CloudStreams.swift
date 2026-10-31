@@ -161,7 +161,8 @@ actor CloudByteStream {
     nonisolated let host: String?
     private var source: CloudStreams.Source
     private let refresh: @Sendable () async -> CloudStreams.Source?
-    private var lastRefresh: Date?
+    /// When the address was last resolved again, and whether that gave a new one.
+    private var lastRefresh: (date: Date, renewed: Bool)?
     private var cache: [Int: Data] = [:]
     private var recent: [Int] = []
     private var inflight: [Int: Task<Data, Error>] = [:]
@@ -270,35 +271,45 @@ actor CloudByteStream {
     private func download(_ index: Int) async throws -> Data {
         defer { inflight[index] = nil }
         let first = index * Self.chunkSize, last = min(source.length, first + Self.chunkSize) - 1
-        var attempt = 0
+        var attempt = 0, cut = 0
+        var received = Data()
         while true {
             try Task.checkCancellation()
             attempt += 1
-            let current = source
+            let current = source, from = first + received.count
             var request = URLRequest(url: current.url)
             current.headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
-            request.setValue("bytes=\(first)-\(last)", forHTTPHeaderField: "Range")
+            request.setValue("bytes=\(from)-\(last)", forHTTPHeaderField: "Range")
             request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
             do {
                 let (data, response) = try await session.data(for: request)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 // The signed address expired, or the drive wants a fresh session: resolve once more.
                 if [401, 403, 404, 410].contains(status), attempt <= 2, await renew() { continue }
-                guard status == 206,
-                      let range = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Range"),
-                      let match = range.firstMatch(of: /^bytes (\d+)-(\d+)\/(\d+)$/),
-                      Int(match.1) == first, Int(match.2) == last, data.count == last - first + 1 else {
+                let range = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Range")?.firstMatch(of: /^bytes (\d+)-(\d+)\/(\d+)$/)
+                let end = range.flatMap { Int($0.2) }
+                guard status == 206, let range, Int(range.1) == from, let end, end <= last, !data.isEmpty, data.count == end - from + 1 else {
+                    // A drive sometimes answers a range with no bytes, or fewer than it says: the next try gets them.
+                    if status == 206, cut < 2 {
+                        cut += 1
+                        Diagnostics.shared.record(.debug, "cloud.stream", "chunk=\(index) short answer bytes=\(data.count) range=\(range.map { "\($0.1)-\($0.2)" } ?? "-"); again")
+                        try await Task.sleep(for: .milliseconds(300 * cut))
+                        continue
+                    }
                     Diagnostics.shared.record(.error, "cloud.stream", "chunk=\(index) status=\(status) bytes=\(data.count)")
                     throw TVError.http(status == 200 ? 416 : status)
                 }
                 counter.add(data.count)
                 rate.bytes += data.count
+                received.append(data)
+                // A drive that sends part of the range at a time: ask for the rest.
+                if end < last { attempt = 0; continue }
                 if Date().timeIntervalSince(rate.since) >= 10 {
                     let seconds = Date().timeIntervalSince(rate.since)
                     Diagnostics.shared.record(.debug, "cloud.stream", "rate bytesPerSecond=\(Int(Double(rate.bytes) / seconds)) readers=\(readers) inflight=\(inflight.count)")
                     rate = (Date(), 0)
                 }
-                let playable = rewritesSampleEntries ? CloudStreams.playableSampleEntries(data) : data
+                let playable = rewritesSampleEntries ? CloudStreams.playableSampleEntries(received) : received
                 cache[index] = playable
                 recent.removeAll { $0 == index }; recent.append(index)
                 while recent.count > Self.cacheChunks { cache[recent.removeFirst()] = nil }
@@ -311,12 +322,14 @@ actor CloudByteStream {
     }
 
     private func renew() async -> Bool {
-        if let lastRefresh, Date().timeIntervalSince(lastRefresh) < 10 { return true }
-        lastRefresh = Date()
+        // Chunks refused together share one refresh, and its outcome: one that failed isn't retried at once.
+        if let lastRefresh, Date().timeIntervalSince(lastRefresh.date) < 10 { return lastRefresh.renewed }
+        lastRefresh = (Date(), false)
         guard let next = await refresh(), next.length == source.length else {
             Diagnostics.shared.record(.error, "cloud.stream", "refresh failed")
             return false
         }
+        lastRefresh = (Date(), true)
         source = next
         Diagnostics.shared.record(.info, "cloud.stream", "refreshed host=\(next.url.host() ?? "-")")
         return true
