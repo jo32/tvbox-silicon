@@ -2903,7 +2903,7 @@
   ],
   "testflight": {
     "ios": {
-      "build": 41,
+      "build": 42,
       "link": "https://testflight.apple.com/join/dU6UNbzp"
     },
     "tvos": {
