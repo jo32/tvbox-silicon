@@ -600,6 +600,8 @@ struct RecommendationsView: View {
     @Environment(\.openRoute) private var openRoute
     let config: Subscription
     var fixedSite: Site? = nil
+    /// Apple TV's Watch Now: the picks as a row of covers, then a row for each of the source's first categories.
+    var rails = false
     @AppStorage("recommendationSource") private var sourceKey = ""
     @State private var revision = 0
     @State private var forceRefresh = false
@@ -713,7 +715,8 @@ struct RecommendationsView: View {
         }
     }
 
-    var body: some View {
+    /// The source's picks in a grid, under its categories as chips.
+    private var grid: some View {
         VStack(alignment: .leading, spacing: 16) {
             #if os(tvOS)
             recommendationControls.tvFocusSection()
@@ -775,6 +778,16 @@ struct RecommendationsView: View {
                 .tvFocusSection()
             }
         }
+    }
+
+    var body: some View {
+        Group {
+            #if os(tvOS)
+            if rails { tvRails } else { grid }
+            #else
+            grid
+            #endif
+        }
         .task(id: requestID) {
             #if DEBUG && os(tvOS)
             // `-qaSourcePicker 1` opens the recommendation source picker, for screenshots.
@@ -794,7 +807,8 @@ struct RecommendationsView: View {
             }
         }
         .task(id: "\(requestID)|\(category ?? "")|\(categoryPage)") {
-            guard let category, let loadedSite = model.site, loadedSite.key == site?.key else { return }
+            // The rows load their own categories.
+            guard !rails, let category, let loadedSite = model.site, loadedSite.key == site?.key else { return }
             await browser.load(.list(category: category, query: "", page: categoryPage),
                                client: CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL))
         }
@@ -807,6 +821,64 @@ struct RecommendationsView: View {
             #endif
         }
     }
+
+    #if os(tvOS)
+    /// The picks as a row of covers, then a row for each of the source's first four categories, each loaded when it
+    /// comes on screen. See All opens the source's page.
+    private var tvRails: some View {
+        LazyVStack(alignment: .leading, spacing: 30) {
+            HStack(spacing: 24) {
+                Text(L10n.text("Recommendations")).font(.system(size: DiscoverLayout.heading, weight: .semibold)).lineLimit(1)
+                recommendationControls
+            }
+            .padding(.horizontal, DiscoverLayout.gutter)
+            .tvFocusSection()
+            if let error = model.error {
+                HStack(spacing: 24) {
+                    Text(error).foregroundStyle(.secondary)
+                    Button(L10n.text("Retry")) { forceRefresh = true; revision += 1 }.controlButton()
+                }
+                .padding(.horizontal, DiscoverLayout.gutter)
+            }
+            if let loadedSite = model.site, !model.busy || !model.items.isEmpty {
+                let client = CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL)
+                let page = Route { AnyView(SiteView(site: loadedSite, origin: config.origin, jarURL: config.spiderURL)) }
+                if !model.items.isEmpty {
+                    ScrollView(.horizontal) {
+                        LazyHStack(alignment: .top, spacing: DiscoverLayout.spacing) {
+                            ForEach(model.items) { item in
+                                let cover = WatchNowTVCover(title: item.name, detail: item.remarks, poster: item.poster?.url, headers: item.poster?.headers ?? [:])
+                                switch item.destination {
+                                case .search(let keyword):
+                                    Button { store.searchVideos(keyword) } label: { cover }.cardButton()
+                                case .detail(let video):
+                                    RouteLink { CatalogDestination(video: video, client: client) } label: { cover }.cardButton()
+                                }
+                            }
+                            WatchNowTVSeeAll(height: WatchNowTVCover.height, route: page)
+                        }
+                        .padding(.horizontal, DiscoverLayout.gutter).padding(.vertical, 24)
+                    }
+                    .scrollClipDisabled().scrollIndicators(.hidden).focusSection()
+                } else if !model.busy, model.error == nil, model.categories.isEmpty {
+                    Text(L10n.text("This source has no recommendations. Choose another source or use Global Search."))
+                        .foregroundStyle(.secondary).padding(.horizontal, DiscoverLayout.gutter)
+                }
+                ForEach(model.categories.prefix(4)) { item in
+                    WatchNowTVCategoryRail(title: item.name, category: item.id, client: client, seeAll: page)
+                }
+            } else if model.busy {
+                HStack(spacing: DiscoverLayout.spacing) {
+                    ForEach(0..<7, id: \.self) { _ in
+                        SkeletonBlock(cornerRadius: 12).frame(width: WatchNowTVCover.width, height: WatchNowTVCover.height)
+                    }
+                }
+                .padding(.horizontal, DiscoverLayout.gutter).padding(.vertical, 24)
+                .accessibilityLabel(L10n.text("Loading…"))
+            }
+        }
+    }
+    #endif
 
     /// A long press on a source (a right click on Mac): hide it, open its page to search only that source, as the
     /// Sources page does, or go to the Sources page to manage them all. `leave` runs the two that leave Watch Now;
