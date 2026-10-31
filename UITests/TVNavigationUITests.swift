@@ -162,6 +162,37 @@ final class TVNavigationUITests: XCTestCase {
         for _ in 0..<3 where chips.contains(where: { $0.hasFocus }) { remote.press(.left); sleep(1) }
         XCTAssertFalse(chips.contains { $0.hasFocus } || file.hasFocus, "Left did not leave the episode rail")
     }
+    /// The address row on Add Subscription opens its alert and the app keeps answering the remote. On tvOS 27 any
+    /// alert or sheet over a page pushed in a tab froze the app: `openRoute` was a new closure on every update, so
+    /// the stack never settled (#272).
+    func testAddSubscriptionAddressOpensWithoutFreezing() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-qaSection", "settings", "-qaIsolatedData", "1",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        let add = app.buttons["Add Subscription"].firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 60), "Settings did not appear")
+        sleep(3)
+        // A notice about a newer version can cover the page at launch, with its OK in focus.
+        if app.buttons["OK"].exists { remote.press(.select); sleep(2) }
+        remote.press(.right); sleep(1)
+        for _ in 0..<20 where !add.hasFocus { remote.press(.down); usleep(600_000) }
+        XCTAssertTrue(add.hasFocus, "Add Subscription did not take focus")
+        remote.press(.select)
+        let address = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Subscription URL'")).firstMatch
+        XCTAssertTrue(address.waitForExistence(timeout: 10), "Add Subscription did not open")
+        sleep(2)
+        for _ in 0..<4 where !address.hasFocus { remote.press(.up); usleep(600_000) }
+        remote.press(.select)
+        XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 10), "The address alert did not appear")
+        remote.press(.menu); sleep(2)
+        XCTAssertFalse(app.alerts.firstMatch.exists, "Back did not close the address alert")
+        XCTAssertTrue(address.exists, "Back from the alert left Add Subscription")
+        remote.press(.menu); sleep(2)
+        XCTAssertTrue(add.waitForExistence(timeout: 10), "Back did not return to Settings")
+        XCTAssertEqual(app.state, .runningForeground)
+    }
     /// Poster titles are part of their card's label, so look for the text anywhere in a label.
     private func shown(_ text: String, in app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
