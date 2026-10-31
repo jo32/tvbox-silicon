@@ -828,6 +828,9 @@ struct VideoDetailView: View {
     @State private var containerWidth: CGFloat = 0
     /// The cover's width over height once it loads; landscape covers are common (Bilibili, short dramas).
     @State private var artAspect: CGFloat?
+    /// TMDB's backdrop once its picture has loaded. The source's cover stays until then, and when it never does
+    /// (image.tmdb.org is blocked on some networks, #237).
+    @State private var loadedBackdrop: URL?
     /// The episode whose playback is being prepared; its row and the Play button show progress.
     @State private var loadingEpisode: Episode.ID?
     /// A failed or blocked playback attempt, shown as an inline banner beside the artwork.
@@ -1143,9 +1146,9 @@ struct VideoDetailView: View {
         min(max(containerWidth * 0.42, 280), 540)
         #endif
     }
-    /// TMDB's backdrop banner once the details are in, the source's cover and title until then.
+    /// TMDB's backdrop banner once its picture is in, the source's cover and title until then.
     @ViewBuilder private var tmdbHero: some View {
-        if let details = tmdb.details, let backdrop = details.backdrop {
+        if let details = tmdb.details, let backdrop = details.backdrop, backdrop == loadedBackdrop {
             let banner = TMDBBanner(details: details, backdrop: backdrop, unmatched: tmdb.answer?.unmatched ?? "") { playControl }
             banner.frame(height: bannerHeight).transition(.opacity)
         } else {
@@ -1304,7 +1307,7 @@ struct VideoDetailView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 18) {
             // TMDB's banner at any width, so a matched title's page looks the same everywhere.
-            if isWide || tmdb.details?.backdrop != nil {
+            if isWide || hasBackdrop {
                 tmdbHero
                 playbackBanner
                 tmdbStatus
@@ -1337,7 +1340,18 @@ struct VideoDetailView: View {
             }
         }
         .animation(.smooth(duration: 0.45), value: tmdb.details)
+        .animation(.smooth(duration: 0.45), value: loadedBackdrop)
         .animation(.smooth(duration: 0.3), value: tmdb.phase)
+        .task(id: tmdb.details?.backdrop) {
+            // Into TMDBArtwork's cache, so the banner shows it at once.
+            guard let backdrop = tmdb.details?.backdrop,
+                  await TMDBArtwork.load(backdrop, maxPixels: TMDBBannerMetrics.backdropPixels) != nil,
+                  !Task.isCancelled else { return }
+            loadedBackdrop = backdrop
+        }
+    }
+    private var hasBackdrop: Bool {
+        tmdb.details?.backdrop != nil && tmdb.details?.backdrop == loadedBackdrop
     }
     @ViewBuilder private var episodePanel: some View {
         if let detail {

@@ -49,7 +49,7 @@ test("recommendations come first, then similar titles, each once and only with a
   assert.deepEqual(titles.map((title) => `${title.mediaType}:${title.id}`), ["movie:2", "tv:5", "tv:7"]);
   assert.equal(titles[0].year, 2020);
   assert.equal(titles[1].originalName, "D");
-  assert.match(titles[1].poster, /^https:\/\/image\.tmdb\.org\/t\/p\/w342\/d\.jpg$/);
+  assert.match(titles[1].poster, /^https:\/\/images\.tmdb\.org\/t\/p\/w342\/d\.jpg$/);
   assert.equal(related(item, "tv", 1).length, 1);
   assert.deepEqual(related({ id: 1 }, "movie"), []);
 });
