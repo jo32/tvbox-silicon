@@ -254,6 +254,25 @@ import VideoToolbox
         #expect(played.status == .readyToPlay && abs(played.duration - 8) < 0.2)
     }
 
+    /// iOS and tvOS take back a suspended app's listening sockets, and the address AVPlayer holds then refuses.
+    @Test func aServerThatStoppedListeningListensAgain() async throws {
+        let url = try await Remux.open(try Remux.fileSource(fixture("remux-copy.mkv")))
+        let id = url.deletingLastPathComponent().lastPathComponent
+        // Its own server, so files other tests play on the shared one keep their address.
+        let server = RemuxServer()
+        let stale = try await server.base()
+        let fresh = try await server.base(replacing: stale)
+        #expect(fresh.port != stale.port)
+        // Another address that failed with it shares the new listener.
+        #expect(try await server.base(replacing: stale) == fresh)
+        await #expect(throws: URLError.self) { try await URLSession.shared.data(from: stale.appending(path: "\(id)/master.m3u8")) }
+        let master = String(decoding: try await fetch(fresh.appending(path: "\(id)/master.m3u8")), as: UTF8.self)
+        #expect(master.contains("#EXTM3U"))
+        // A file closed meanwhile has no address to come back to.
+        Remux.stop(url)
+        #expect(try await Remux.relisten(url) == nil)
+    }
+
     @Test func subtitleFilesPlayAsSubtitlesOfTheStream() async throws {
         let srt = RangeServer.add("film-\(UUID().uuidString).srt", Data("1\n00:00:07,000 --> 00:00:07,500\n从文件来的字幕\n".utf8))
         let missing = URL(string: "https://cloud.test/missing.srt")!

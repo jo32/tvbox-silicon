@@ -135,6 +135,8 @@ import TVCore
     private var liveRetrying = false
     /// The episode was already asked for again after its server ignored AVPlayer's byte range.
     private var rangeRetried = false
+    /// When the loopback server behind the episode last listened again (`recoverLoopback`).
+    private var loopbackRecovered: ContinuousClock.Instant?
     /// Whether AVPlayer shows the picture of the file it just opened is being checked; the saved position waits.
     private var checkingPicture = false
     /// A live stream is being moved to its live edge (`catchUpLive`).
@@ -285,6 +287,44 @@ import TVCore
         return true
     }
 
+    /// iOS and tvOS take back a suspended app's listening sockets: after a pause in the background, AVPlayer finds
+    /// the loopback server behind a repackaged file or a plugin's proxy refusing (-1004) and gives up 30 s later.
+    /// The server listens again, on a new port, and the episode opens there where it was. At most once a minute, so
+    /// a server that stays down shows its error.
+    private func recoverLoopback(_ code: Int?, channel: Channel, url: URL, generation active: UUID) -> Bool {
+        guard let code, [NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost].contains(code),
+              Remux.isRemuxed(url) || EmbeddedJarHost.isPluginProxy(url),
+              loopbackRecovered.map({ $0.duration(to: .now) > .seconds(60) }) ?? true else { return false }
+        loopbackRecovered = .now
+        let position = player.currentTime().seconds
+        detachItem(); observation = nil; loading = true
+        Diagnostics.shared.record(.warning, "player", "loopback refused code=\(code) at=\(position.isFinite ? Int(position) : -1)s; listening again")
+        preparation = Task { [weak self] in
+            var fresh: URL?, failure: Error?
+            do { fresh = Remux.isRemuxed(url) ? try await Remux.relisten(url) : try await EmbeddedJarHost.shared.recoverProxy(url) }
+            catch { failure = error }
+            guard let self, self.generation == active, !Task.isCancelled else { return }
+            guard let fresh else {
+                if let failure { Diagnostics.shared.failure("player", "loopback relisten", failure) }
+                self.error = failure?.localizedDescription ?? L10n.text("Playback was interrupted."); self.loading = false; return
+            }
+            if position.isFinite, position > 0 { self.pendingResume = position }
+            if self.automatic == url { self.automatic = fresh }
+            self.configure(channel, url: fresh, generation: active)
+        }
+        return true
+    }
+
+    /// The URL error code behind a failure, through its underlying errors.
+    nonisolated static func urlErrorCode(_ error: Error?) -> Int? {
+        var current = error as NSError?
+        while let error = current {
+            if error.domain == NSURLErrorDomain { return error.code }
+            current = error.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return nil
+    }
+
     /// An Apple TV can report HDR playback and still refuse a repackaged HDR10 file (-11868 with Core Media
     /// -17223, "cannot be played on this device"). The file opens again with its picture converted to SDR,
     /// and so do the files opened after it. A mirrored or recorded screen refuses HDR the same way, but only
@@ -342,6 +382,20 @@ import TVCore
         #if DEBUG
         // `-qaMute 1`: QA runs on a shared Mac play silently.
         if UserDefaults.standard.bool(forKey: "qaMute") { player.isMuted = true }
+        #if os(iOS) || os(tvOS)
+        // `-qaPauseInBackground 1`: pause when the app leaves the screen and play when it is back, as a viewer
+        // who pauses and locks the phone does; a paused app is suspended and loses its listening sockets.
+        if UserDefaults.standard.bool(forKey: "qaPauseInBackground") {
+            NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
+                Diagnostics.shared.record(.info, "player", "qa background pause at=\(Int(player.currentTime().seconds))s")
+                player.pause()
+            }
+            NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+                Diagnostics.shared.record(.info, "player", "qa active play at=\(Int(player.currentTime().seconds))s")
+                player.play()
+            }
+        }
+        #endif
         #endif
         self.player = player
         enhancer = VideoEnhancer(player: player)
@@ -366,6 +420,7 @@ import TVCore
         begin(channel)
         isLive = LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live")
         liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveRetried = false; liveRetrying = false; rangeRetried = false
+        loopbackRecovered = nil
         ErrorReports.shared.playing(live: isLive, format: channel.url.pathExtension, source: channel.historyContext?.sourceKey,
                                     danmaku: UserDefaults.standard.object(forKey: DanmakuPreference.key) == nil || UserDefaults.standard.bool(forKey: DanmakuPreference.key),
                                     sharper: UserDefaults.standard.bool(forKey: VideoEnhancement.upscaleKey))
@@ -553,6 +608,7 @@ import TVCore
                 if status == .failed {
                     if self.retryRange(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.retryHDR(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
+                    if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
                     Diagnostics.shared.record(.error, "player", "failed host=\(self.transfer.host ?? channel.url.host() ?? "-") \(self.transfer.failure.map { "upstream=\($0) " } ?? "")\(detail) \(self.failureContext(channel, url: url, item: item))")
                     if self.retryLive(after: failure) { return }
                     // A refused link is usually an expired one: say so in plain words rather than the system's.
@@ -570,6 +626,7 @@ import TVCore
             let message = failure?.localizedDescription
             Task { @MainActor [weak self] in
                 guard let self, self.generation == activeGeneration else { return }
+                if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
                 Diagnostics.shared.record(.error, "player", "interrupted host=\(self.transfer.host ?? channel.url.host() ?? "-") at=\(Int(self.player.currentTime().seconds.isFinite ? self.player.currentTime().seconds : -1))s \(failure.map(Self.describe) ?? "-") \(self.failureContext(channel, url: url, item: item))")
                 if self.retryLive(after: failure) { return }
                 self.error = message ?? L10n.text("Playback was interrupted."); self.loading = false
@@ -610,19 +667,19 @@ import TVCore
             let muted = player.isMuted
             Task { @MainActor [weak self] in self?.muted = muted }
         }
-        let origin = channel.url.host()
         sampler = Task { [weak self] in
             var history: [(date: Date, bytes: Int64)] = []
             var tick = 0
             while !Task.isCancelled {
-                guard self?.sample(&history, tick: tick, origin: origin, generation: activeGeneration) == true else { return }
+                guard self?.sample(&history, tick: tick, channel: channel, url: url, generation: activeGeneration) == true else { return }
                 tick += 1
                 try? await Task.sleep(for: .seconds(1))
             }
         }
     }
-    private func sample(_ history: inout [(date: Date, bytes: Int64)], tick: Int, origin: String?, generation activeGeneration: UUID) -> Bool {
+    private func sample(_ history: inout [(date: Date, bytes: Int64)], tick: Int, channel: Channel, url: URL, generation activeGeneration: UUID) -> Bool {
         guard generation == activeGeneration else { return false }
+        let origin = channel.url.host()
         // Once the queue has moved on, `queueMoved` is about to take over the next episode.
         guard let item, player.currentItem === item else { return true }
         restorePositionIfNeeded(item)
@@ -666,6 +723,9 @@ import TVCore
         }
         #endif
         if next.failure == nil, let error = item.errorLog()?.events.last, let date = error.date, now.timeIntervalSince(date) < 30 {
+            // The loopback server behind the episode stopped listening: AVPlayer would keep trying it for 30 s.
+            if error.errorDomain == NSURLErrorDomain,
+               recoverLoopback(error.errorStatusCode, channel: channel, url: url, generation: activeGeneration) { return false }
             if (400..<600).contains(error.errorStatusCode) { next.httpStatus = error.errorStatusCode }
             next.failure = error.errorComment ?? "\(error.errorDomain) \(error.errorStatusCode)"
         }

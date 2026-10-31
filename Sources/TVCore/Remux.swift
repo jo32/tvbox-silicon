@@ -83,6 +83,14 @@ public enum Remux {
     nonisolated(unsafe) private static var hdrRefused = false
     nonisolated(unsafe) private static var captured = false
 
+    /// The address of the file behind `url` once the loopback server listens again, on a new port: iOS and tvOS
+    /// take back a suspended app's listening sockets, and AVPlayer then finds `url` refusing (-1004). Nil when
+    /// the file was closed meanwhile.
+    public static func relisten(_ url: URL) async throws -> URL? {
+        guard let id = identifier(url), RemuxStore.shared.session(id) != nil else { return nil }
+        return try await RemuxServer.shared.base(replacing: url).appending(path: "\(id)/master.m3u8")
+    }
+
     /// Stops reading and writing the file behind `url`.
     public static func stop(_ url: URL) {
         guard let id = identifier(url) else { return }
@@ -432,6 +440,15 @@ actor RemuxServer {
         let value = try await task.value
         address = value
         return value
+    }
+
+    /// A new listener in place of the one `stale` was served on, which refused AVPlayer though it may still say
+    /// it is ready; addresses that fail together share one new listener.
+    func base(replacing stale: URL) async throws -> URL {
+        if starting == nil, address == nil || address?.port == stale.port {
+            listener?.cancel(); listener = nil; address = nil
+        }
+        return try await base()
     }
 
     private func listen() async throws -> URL {
