@@ -47,6 +47,7 @@ struct MobilePlayerView: View {
     @State private var boost: SpeedBoost?
     @State private var holding = false
     @AppStorage(SpeedBoost.key) private var holdSpeed = SpeedBoost.standard
+    @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     /// Double taps on a side skip (YouTube); the run's total shows on that side for a moment.
     @State private var taps = PictureTaps()
     @State private var skipped: (forward: Bool, total: Double)?
@@ -112,6 +113,14 @@ struct MobilePlayerView: View {
                     self.playingOn = nil
                     if session.paused { session.togglePlayback() }
                 }
+            }
+            // The controls take its corner while they show; it comes back with the bare picture.
+            if showsPlaybackInfo && session.error == nil && session.showsPicture && !pip.active && playingOn == nil {
+                PlaybackInfoPanel(session: session)
+                    .padding(inline ? 8 : 16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .opacity(chromeVisible ? 0 : 1)
+                    .animation(.smooth(duration: 0.25), value: chromeVisible)
             }
             controls.opacity(chromeVisible ? 1 : 0).allowsHitTesting(chromeVisible && !settling)
         }
@@ -565,6 +574,7 @@ struct MobilePlayerView: View {
                 }
             }
             Toggle(L10n.text("Fill Screen"), isOn: $fillsScreen)
+            Toggle(L10n.text("Show Video Info"), isOn: $showsPlaybackInfo)
         } label: {
             Image(systemName: "slider.horizontal.3").font(.headline).frame(width: 22, height: 22)
                 .symbolVariant(pictureSwitches && (upscalesVideo || smoothsVideo) ? .fill : .none)

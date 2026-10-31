@@ -1321,3 +1321,11 @@
 "Grid View" = "网格视图";
 
 "No works match these filters." = "没有符合筛选条件的作品。";
+
+"Show Video Info" = "显示视频信息";
+
+"Shows the video's format, resolution, frame rate and bitrate in a corner of the player." = "在播放器一角显示视频的格式、分辨率、帧率和码率。";
+
+"Bitrate %@" = "码率 %@";
+
+"Download %@" = "下载 %@";

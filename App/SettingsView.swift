@@ -318,6 +318,7 @@ extension View {
 
 /// The notes under settings switches, shared by Settings and the pages under it.
 private enum SettingsNote {
+    static var playbackInfo: String { L10n.text("Shows the video's format, resolution, frame rate and bitrate in a corner of the player.") }
     static var danmaku: String { L10n.text("Bilibili's bullet comments, drawn over the video. You can also switch them in the player.") }
     static var tmdb: String {
         L10n.text("Shows cast, artwork and episode details from TMDB on video pages. Sends the video's title, its details from the source and the source's name to Yingxia's lookup service, never your accounts or subscription addresses.")
@@ -355,6 +356,7 @@ struct FormSettingsView: View {
     #if os(macOS)
     @AppStorage(BilibiliCastController.key) private var receivesCasts = true
     @AppStorage(PlayOnController.key) private var receivesPlayOn = true
+    @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     #endif
     private var version: String? {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String).flatMap { $0.isEmpty ? nil : L10n.text("Version %@", $0) }
@@ -507,6 +509,10 @@ struct FormSettingsView: View {
                 .onChange(of: receivesPlayOn) { _, on in
                     if on { PlayOnController.shared.start(store) } else { PlayOnController.shared.stop() }
                 }
+                Toggle(isOn: $showsPlaybackInfo) {
+                    FormLabel(symbol: "info.circle.fill", tint: .blue, title: L10n.text("Show Video Info"), subtitle: SettingsNote.playbackInfo)
+                }
+                .settingsSwitch()
                 FormLink(symbol: "play.fill", tint: Brand.indigo, title: L10n.text("Play a URL")) { PlayURLView() }
             } header: {
                 Text(L10n.text("Playback"))
@@ -822,6 +828,7 @@ struct PlaybackSettingsView: View {
     @AppStorage(PictureLevel.key) private var slidesLevels = true
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
+    @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     var body: some View {
         SettingsPage(title: L10n.text("Playback"), symbol: "slider.horizontal.below.rectangle") {
             SettingsGroup(footer: L10n.text("Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go.")) {
@@ -834,6 +841,12 @@ struct PlaybackSettingsView: View {
             SettingsGroup(footer: L10n.text("Slide up or down on the left of the video to change the brightness, or on the right to change the volume.")) {
                 Toggle(isOn: $slidesLevels) {
                     FormLabel(symbol: "sun.max.fill", tint: .yellow, title: L10n.text("Slide for Brightness and Volume"))
+                }
+                .settingsSwitch()
+            }
+            SettingsGroup(footer: SettingsNote.playbackInfo) {
+                Toggle(isOn: $showsPlaybackInfo) {
+                    FormLabel(symbol: "info.circle.fill", tint: .blue, title: L10n.text("Show Video Info"))
                 }
                 .settingsSwitch()
             }
@@ -1480,6 +1493,7 @@ struct TVSettingsView: View {
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     @AppStorage(BilibiliCastController.key) private var receivesCasts = true
     @AppStorage(PlayOnController.key) private var receivesPlayOn = true
+    @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     @AppStorage(ErrorReports.key) private var sendsErrorReports = true
     @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
     @AppStorage(CloudSync.enabledKey) private var syncsWithICloud = true
@@ -1523,6 +1537,9 @@ struct TVSettingsView: View {
                         if on { PlayOnController.shared.start(store) } else { PlayOnController.shared.stop() }
                     }
                 TVSettingsLink(title: L10n.text("Play a URL")) { TVPlayURLPage() }
+            }
+            TVSettingsSection(footer: L10n.text("Shows the video's format, resolution, frame rate and bitrate in a corner of the player.")) {
+                TVSettingsToggle(title: L10n.text("Show Video Info"), isOn: $showsPlaybackInfo)
             }
             if VideoEnhancement.canUpscale || VideoEnhancement.canSmooth {
                 TVSettingsSection(title: L10n.text("Picture"), footer: VideoEnhancement.note) {
