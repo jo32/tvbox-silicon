@@ -39,6 +39,8 @@ typedef struct {
     int sampleAspectNum, sampleAspectDen;
     /// FFmpeg's AVColorTransferCharacteristic and AVColorPrimaries.
     int colorTransfer, colorPrimaries;
+    /// H.264 that x264 encoded with intra refresh: no keyframe a player can start at after the first.
+    int intraRefresh;
     /// Dolby Vision profile and level from the stream's configuration record, -1 when it has none.
     int doviProfile, doviLevel, doviCompatibility;
     int sampleRate, channels;
