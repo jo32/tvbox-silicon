@@ -1,0 +1,217 @@
+# 2026-10-31 15:31:20 +0000 files=70 modes=["file", "exact", "rest"] sdr=false
+a01_aac_51.mkv file open=ok(68ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+a01_aac_51.mkv exact open=ok(11ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a01_aac_51.mkv rest open=ok(27ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+a02_aac_71.mkv file open=ok(8ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+a02_aac_71.mkv exact open=ok(11ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a02_aac_71.mkv rest open=ok(28ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+a03_ac3_51.mkv file open=ok(8ms) plan=h264,ac3 segs=3 fetch=ok(2pl,8files) total=0s
+a03_ac3_51.mkv exact open=ok(10ms) plan=h264,ac3 segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a03_ac3_51.mkv rest open=ok(10ms) plan=h264,ac3 segs=3 fetch=ok(2pl,8files) total=0s
+a04_eac3_51.mkv file open=ok(9ms) plan=h264,eac3 segs=3 fetch=ok(2pl,8files) total=0s
+a04_eac3_51.mkv exact open=ok(10ms) plan=h264,eac3 segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a04_eac3_51.mkv rest open=ok(20ms) plan=h264,eac3 segs=3 fetch=ok(2pl,8files) total=0s
+a05_dts_51.mkv file open=ok(14ms) plan=h264,dts>aac segs=3 fetch=ok(2pl,8files) total=0s
+a05_dts_51.mkv exact open=ok(11ms) plan=h264,dts>aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a05_dts_51.mkv rest open=ok(22ms) plan=h264,dts>aac segs=3 fetch=ok(2pl,8files) total=0s
+a06_truehd_51.mkv file open=ok(10ms) plan=h264,truehd>aac segs=3 fetch=ok(2pl,8files) total=0s
+a06_truehd_51.mkv exact open=ok(11ms) plan=h264,truehd>aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a06_truehd_51.mkv rest open=ok(30ms) plan=h264,truehd>aac segs=3 fetch=ok(2pl,8files) total=0s
+a07_flac_24bit_71.mkv file open=ok(7ms) plan=h264,flac segs=3 fetch=ok(2pl,8files) total=0s
+a07_flac_24bit_71.mkv exact open=ok(9ms) plan=h264,flac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a07_flac_24bit_71.mkv rest open=ok(20ms) plan=h264,flac segs=3 fetch=ok(2pl,8files) total=0s
+a08_flac_96k.mkv file open=ok(9ms) plan=h264,flac segs=3 fetch=ok(2pl,8files) total=0s
+a08_flac_96k.mkv exact open=ok(11ms) plan=h264,flac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a08_flac_96k.mkv rest open=ok(25ms) plan=h264,flac segs=3 fetch=ok(2pl,8files) total=0s
+a09_opus_51.mkv file open=ok(11ms) plan=h264,opus>aac segs=3 fetch=ok(2pl,8files) total=0s
+a09_opus_51.mkv exact open=ok(11ms) plan=h264,opus>aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a09_opus_51.mkv rest open=ok(27ms) plan=h264,opus>aac segs=3 fetch=ok(2pl,8files) total=0s
+a10_vorbis.mkv file open=ok(9ms) plan=h264,vorbis>aac segs=3 fetch=ok(2pl,8files) total=0s
+a10_vorbis.mkv exact open=ok(11ms) plan=h264,vorbis>aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a10_vorbis.mkv rest open=ok(22ms) plan=h264,vorbis>aac segs=3 fetch=ok(2pl,8files) total=0s
+a11_mp3.mkv file open=ok(10ms) plan=h264,mp3>aac segs=3 fetch=ok(2pl,8files) total=0s
+a11_mp3.mkv exact open=ok(12ms) plan=h264,mp3>aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a11_mp3.mkv rest open=ok(18ms) plan=h264,mp3>aac segs=3 fetch=ok(2pl,8files) total=0s
+a12_mp2.mkv file open=ok(10ms) plan=h264,mp2>aac segs=3 fetch=ok(2pl,8files) total=0s
+a12_mp2.mkv exact open=ok(11ms) plan=h264,mp2>aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a12_mp2.mkv rest open=ok(24ms) plan=h264,mp2>aac segs=3 fetch=ok(2pl,8files) total=0s
+a13_pcm_s16.mkv file open=ok(10ms) plan=h264,pcm_s16le>aac segs=3 fetch=ok(2pl,8files) total=0s
+a13_pcm_s16.mkv exact open=ok(13ms) plan=h264,pcm_s16le>aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a13_pcm_s16.mkv rest open=ok(24ms) plan=h264,pcm_s16le>aac segs=3 fetch=ok(2pl,8files) total=0s
+a14_pcm_s24_51.mkv file open=ok(10ms) plan=h264,pcm_s24le>aac segs=3 fetch=ok(2pl,8files) total=0s
+a14_pcm_s24_51.mkv exact open=ok(11ms) plan=h264,pcm_s24le>aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a14_pcm_s24_51.mkv rest open=ok(14ms) plan=h264,pcm_s24le>aac segs=3 fetch=ok(2pl,8files) total=0s
+a15_alac.mkv file open=ok(8ms) plan=h264,alac segs=3 fetch=ok(2pl,8files) total=0s
+a15_alac.mkv exact open=ok(9ms) plan=h264,alac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a15_alac.mkv rest open=ok(32ms) plan=h264,alac segs=3 fetch=ok(2pl,8files) total=0s
+a16_aac_44k_mono.mkv file open=ok(8ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+a16_aac_44k_mono.mkv exact open=ok(9ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a16_aac_44k_mono.mkv rest open=ok(28ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+a17_no_audio.mkv file open=ok(10ms) plan=h264 segs=3 fetch=ok(1pl,4files) total=0s
+a17_no_audio.mkv exact open=ok(11ms) plan=h264 segs=3 fetch=ok(1pl,4files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide] audioOpts=0 subOpts=0 total=7s
+a17_no_audio.mkv rest open=ok(9ms) plan=h264 segs=3 fetch=ok(1pl,4files) total=0s
+a18_multi_audio.mkv file open=ok(10ms) plan=h264,aac,ac3,dts>aac segs=3 fetch=ok(4pl,16files) total=0s
+a18_multi_audio.mkv exact open=ok(11ms) plan=h264,aac,ac3,dts>aac segs=3 fetch=ok(4pl,16files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=3 subOpts=0 total=7s
+a18_multi_audio.mkv rest open=ok(46ms) plan=h264,aac,ac3,dts>aac segs=3 fetch=ok(4pl,16files) total=0s
+a19_audio_first.mkv file open=ok(7ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+a19_audio_first.mkv exact open=ok(9ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+a19_audio_first.mkv rest open=ok(15ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+a20_dts_default_aac_second.mkv file open=ok(10ms) plan=h264,dts>aac,aac segs=3 fetch=ok(3pl,12files) total=0s
+a20_dts_default_aac_second.mkv exact open=ok(11ms) plan=h264,dts>aac,aac segs=3 fetch=ok(3pl,12files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=2 subOpts=0 total=7s
+a20_dts_default_aac_second.mkv rest open=ok(25ms) plan=h264,dts>aac,aac segs=3 fetch=ok(3pl,12files) total=0s
+c01_cues_at_front.mkv file open=ok(8ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+c01_cues_at_front.mkv exact open=ok(10ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+c01_cues_at_front.mkv rest open=ok(27ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+c02_no_cues_streamed.mkv file ERROR unsupported("This media cannot be played. Try another channel or source.") total=0s
+c02_no_cues_streamed.mkv exact ERROR unsupported("This media cannot be played. Try another channel or source.") total=0s
+c02_no_cues_streamed.mkv rest ERROR unsupported("This media cannot be played. Try another channel or source.") total=0s
+c03_start_at_10s.mkv file open=ok(10ms) plan=h264,aac segs=4 fetch=BAD[0-2.m4s=notmoof 0-3.m4s=notmoof 1-2.m4s=notmoof 1-3.m4s=notmoof] total=0s
+# 2026-10-31 15:37:39 +0000 files=49 modes=["file", "exact", "rest"] sdr=false
+c03_start_at_10s.mkv file open=ok(66ms) plan=h264,aac segs=4 fetch=BAD[0-2.m4s=notmoof 0-3.m4s=notmoof 1-2.m4s=notmoof 1-3.m4s=notmoof] total=0s
+c03_start_at_10s.mkv exact open=ok(11ms) plan=h264,aac segs=4 fetch=BAD[0-2.m4s=notmoof 0-3.m4s=notmoof 1-2.m4s=notmoof 1-3.m4s=notmoof] play=ready dur=22.0 size=640x360 frames=35 t=3.7 seek(13)=HUNG frames2=0 t2=13.2 tracks=[vide,soun] audioOpts=1 subOpts=0 errors=["-12318:Segment exceeds specified bandwidth for variant"] total=23s
+c03_start_at_10s.mkv rest open=ok(18ms) plan=h264,aac segs=4 fetch=BAD[0-2.m4s=notmoof 0-3.m4s=notmoof 1-2.m4s=notmoof 1-3.m4s=notmoof] total=0s
+c04_audio_starts_late.mkv file open=ok(9ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+c04_audio_starts_late.mkv exact open=ok(10ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=13.5 size=640x360 frames=35 t=5.1 seek(8)=true frames2=30 t2=11.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+c04_audio_starts_late.mkv rest open=ok(24ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+c05_video_starts_late.mkv file open=ok(10ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+c05_video_starts_late.mkv exact open=ok(10ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+c05_video_starts_late.mkv rest open=ok(38ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+c06_live_mode.mkv file ERROR unsupported("This media cannot be played. Try another channel or source.") total=0s
+c06_live_mode.mkv exact ERROR unsupported("This media cannot be played. Try another channel or source.") total=0s
+c06_live_mode.mkv rest ERROR unsupported("This media cannot be played. Try another channel or source.") total=0s
+c07_webm_vp9_opus.mkv file open=ok(129ms) plan=vp9>h264,opus>aac segs=3 fetch=ok(2pl,8files) total=0s
+c07_webm_vp9_opus.mkv exact open=ok(48ms) plan=vp9>h264,opus>aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+c07_webm_vp9_opus.mkv rest open=ok(59ms) plan=vp9>h264,opus>aac segs=3 fetch=ok(2pl,8files) total=0s
+c08_mkvmerge_start_10s.mkv file open=ok(9ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+c08_mkvmerge_start_10s.mkv exact open=ok(9ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+c08_mkvmerge_start_10s.mkv rest open=ok(20ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+l01_24min_h264.mkv file open=ok(15ms) plan=h264,aac segs=360 fetch=ok(2pl,8files) total=0s
+l01_24min_h264.mkv exact open=ok(13ms) plan=h264,aac segs=360 fetch=ok(2pl,8files) play=ready dur=1440.0 size=320x180 frames=35 t=3.7 seek(1339)=true frames2=30 t2=1342.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+l01_24min_h264.mkv rest open=ok(50ms) plan=h264,aac segs=360 fetch=ok(2pl,8files) total=0s
+l02_24min_hevc10_ac3.mkv file open=ok(13ms) plan=hevc,ac3 segs=360 fetch=ok(2pl,8files) total=0s
+l02_24min_hevc10_ac3.mkv exact open=ok(14ms) plan=hevc,ac3 segs=360 fetch=ok(2pl,8files) play=ready dur=1440.0 size=320x180 frames=35 t=3.7 seek(1339)=true frames2=30 t2=1342.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+l02_24min_hevc10_ac3.mkv rest open=ok(217ms) plan=hevc,ac3 segs=360 fetch=ok(2pl,8files) total=0s
+m01_mkvmerge_h264.mkv file open=ok(8ms) plan=h264,aac,subrip segs=3 fetch=ok(3pl,11files) total=0s
+m01_mkvmerge_h264.mkv exact open=ok(17ms) plan=h264,aac,subrip segs=3 fetch=ok(3pl,11files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=1 total=7s
+m01_mkvmerge_h264.mkv rest open=ok(20ms) plan=h264,aac,subrip segs=3 fetch=ok(3pl,11files) total=0s
+m02_mkvmerge_hevc10.mkv file open=ok(10ms) plan=hevc,aac segs=3 fetch=ok(2pl,8files) total=0s
+m02_mkvmerge_hevc10.mkv exact open=ok(10ms) plan=hevc,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.9 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+m02_mkvmerge_hevc10.mkv rest open=ok(60ms) plan=hevc,aac segs=3 fetch=ok(2pl,8files) total=0s
+m03_mkvmerge_no_cues.mkv file open=ok(8ms) plan=h264,aac segs=2 fetch=ok(2pl,6files) total=0s
+m03_mkvmerge_no_cues.mkv exact open=ok(12ms) plan=h264,aac segs=2 fetch=ok(2pl,6files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+m03_mkvmerge_no_cues.mkv rest open=ok(25ms) plan=h264,aac segs=2 fetch=ok(2pl,6files) total=0s
+m05_zlib_subs.mkv file open=ok(8ms) plan=h264,aac,subrip segs=3 fetch=ok(3pl,11files) total=0s
+m05_zlib_subs.mkv exact open=ok(12ms) plan=h264,aac,subrip segs=3 fetch=ok(3pl,11files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=1 total=7s
+m05_zlib_subs.mkv rest open=ok(18ms) plan=h264,aac,subrip segs=3 fetch=ok(3pl,11files) total=0s
+m06_zlib_video.mkv file open=ok(8ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+m06_zlib_video.mkv exact open=ok(10ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+m06_zlib_video.mkv rest open=ok(16ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+m07_cover_attachment.mkv file open=ok(8ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+m07_cover_attachment.mkv exact open=ok(10ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.9 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+m07_cover_attachment.mkv rest open=ok(27ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+m08_40mb_font_attachments.mkv file open=ok(68ms) plan=h264,aac,ass segs=3 fetch=ok(3pl,11files) total=0s
+m08_40mb_font_attachments.mkv exact open=ok(32ms) plan=h264,aac,ass segs=3 fetch=ok(3pl,11files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=1 total=7s
+m08_40mb_font_attachments.mkv rest open=ok(55ms) plan=h264,aac,ass segs=3 fetch=ok(3pl,11files) total=0s
+m09_lacing_none.mkv file open=ok(9ms) plan=h264,ac3 segs=3 fetch=ok(2pl,8files) total=0s
+m09_lacing_none.mkv exact open=ok(9ms) plan=h264,ac3 segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+m09_lacing_none.mkv rest open=ok(23ms) plan=h264,ac3 segs=3 fetch=ok(2pl,8files) total=0s
+m10_cluster_long.mkv file open=ok(9ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+m10_cluster_long.mkv exact open=ok(9ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+m10_cluster_long.mkv rest open=ok(29ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+m11_default_duration_23976.mkv file open=ok(9ms) plan=hevc,aac segs=3 fetch=ok(2pl,8files) total=0s
+m11_default_duration_23976.mkv exact open=ok(11ms) plan=hevc,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.9 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+m11_default_duration_23976.mkv rest open=ok(32ms) plan=hevc,aac segs=3 fetch=ok(2pl,8files) total=0s
+m12_track_order_sub_audio_video.mkv file open=ok(8ms) plan=h264,aac,subrip segs=3 fetch=ok(3pl,11files) total=0s
+m12_track_order_sub_audio_video.mkv exact open=ok(10ms) plan=h264,aac,subrip segs=3 fetch=ok(3pl,11files) play=ready dur=12.0 size=640x360 frames=35 t=3.9 seek(7)=true frames2=30 t2=10.5 tracks=[vide,soun] audioOpts=1 subOpts=1 total=7s
+m12_track_order_sub_audio_video.mkv rest open=ok(35ms) plan=h264,aac,subrip segs=3 fetch=ok(3pl,11files) total=0s
+s01_srt.mkv file open=ok(8ms) plan=h264,aac,subrip segs=3 fetch=ok(3pl,11files) total=0s
+s01_srt.mkv exact open=ok(10ms) plan=h264,aac,subrip segs=3 fetch=ok(3pl,11files) play=ready dur=12.0 size=640x360 frames=35 t=3.9 seek(7)=true frames2=30 t2=10.6 tracks=[vide,soun] audioOpts=1 subOpts=1 total=7s
+s01_srt.mkv rest open=ok(37ms) plan=h264,aac,subrip segs=3 fetch=ok(3pl,11files) total=0s
+s02_ass.mkv file open=ok(10ms) plan=h264,aac,ass segs=3 fetch=ok(3pl,11files) total=0s
+s02_ass.mkv exact open=ok(11ms) plan=h264,aac,ass segs=3 fetch=ok(3pl,11files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.5 tracks=[vide,soun] audioOpts=1 subOpts=1 total=7s
+s02_ass.mkv rest open=ok(26ms) plan=h264,aac,ass segs=3 fetch=ok(3pl,11files) total=0s
+s03_webvtt.mkv file open=ok(10ms) plan=h264,aac,webvtt segs=3 fetch=ok(3pl,11files) total=0s
+s03_webvtt.mkv exact open=ok(9ms) plan=h264,aac,webvtt segs=3 fetch=ok(3pl,11files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.6 tracks=[vide,soun] audioOpts=1 subOpts=1 total=7s
+s03_webvtt.mkv rest open=ok(22ms) plan=h264,aac,webvtt segs=3 fetch=ok(3pl,11files) total=0s
+s04_twenty_subs.mkv file open=ok(9ms) plan=h264,aac,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip segs=3 fetch=ok(18pl,56files) total=0s
+s04_twenty_subs.mkv exact open=ok(10ms) plan=h264,aac,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip segs=3 fetch=ok(18pl,56files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=16 total=7s
+s04_twenty_subs.mkv rest open=ok(26ms) plan=h264,aac,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip,subrip segs=3 fetch=ok(18pl,56files) total=0s
+s05_forced_sub.mkv file open=ok(8ms) plan=h264,aac,subrip,subrip segs=3 fetch=ok(4pl,14files) total=0s
+s05_forced_sub.mkv exact open=ok(9ms) plan=h264,aac,subrip,subrip segs=3 fetch=ok(4pl,14files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.5 tracks=[vide,soun] audioOpts=1 subOpts=2 total=7s
+s05_forced_sub.mkv rest open=ok(13ms) plan=h264,aac,subrip,subrip segs=3 fetch=ok(4pl,14files) total=0s
+v01_h264_8bit.mkv file open=ok(8ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v01_h264_8bit.mkv exact open=ok(11ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v01_h264_8bit.mkv rest open=ok(31ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v02_h264_hi10.mkv file open=ok(71ms) plan=h264>hevc,aac segs=3 fetch=ok(2pl,8files) total=0s
+v02_h264_hi10.mkv exact open=ok(53ms) plan=h264>hevc,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v02_h264_hi10.mkv rest open=ok(63ms) plan=h264>hevc,aac segs=3 fetch=ok(2pl,8files) total=0s
+v03_h264_422.mkv file open=ok(45ms) plan=h264>h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v03_h264_422.mkv exact open=ok(47ms) plan=h264>h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v03_h264_422.mkv rest open=ok(58ms) plan=h264>h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v04_h264_444.mkv file open=ok(46ms) plan=h264>h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v04_h264_444.mkv exact open=ok(46ms) plan=h264>h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v04_h264_444.mkv rest open=ok(65ms) plan=h264>h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v05_h264_interlaced.mkv file open=ok(10ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v05_h264_interlaced.mkv exact open=ok(11ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=720x576 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.5 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v05_h264_interlaced.mkv rest open=ok(14ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v06_h264_intra_refresh.mkv file open=ok(8ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v06_h264_intra_refresh.mkv exact open=ok(10ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=0 t2=10.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v06_h264_intra_refresh.mkv rest open=ok(34ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v07_h264_1080p_l51.mkv file open=ok(19ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v07_h264_1080p_l51.mkv exact open=ok(17ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=1920x1080 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v07_h264_1080p_l51.mkv rest open=ok(43ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v08_hevc_8bit.mkv file open=ok(9ms) plan=hevc,aac segs=3 fetch=ok(2pl,8files) total=0s
+v08_hevc_8bit.mkv exact open=ok(10ms) plan=hevc,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.9 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v08_hevc_8bit.mkv rest open=ok(16ms) plan=hevc,aac segs=3 fetch=ok(2pl,8files) total=0s
+v09_hevc_main10.mkv file open=ok(9ms) plan=hevc,aac segs=3 fetch=ok(2pl,8files) total=0s
+v09_hevc_main10.mkv exact open=ok(11ms) plan=hevc,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v09_hevc_main10.mkv rest open=ok(34ms) plan=hevc,aac segs=3 fetch=ok(2pl,8files) total=0s
+v10_hevc_hdr10.mkv file open=ok(60ms) plan=hevc>hevc(sdr),aac segs=3 fetch=ok(2pl,8files) total=0s
+v10_hevc_hdr10.mkv exact open=ok(57ms) plan=hevc>hevc(sdr),aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.5 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v10_hevc_hdr10.mkv rest open=ok(61ms) plan=hevc>hevc(sdr),aac segs=3 fetch=ok(2pl,8files) total=0s
+v11_hevc_hlg.mkv file open=ok(58ms) plan=hevc>hevc(sdr),aac segs=3 fetch=ok(2pl,8files) total=0s
+v11_hevc_hlg.mkv exact open=ok(58ms) plan=hevc>hevc(sdr),aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v11_hevc_hlg.mkv rest open=ok(68ms) plan=hevc>hevc(sdr),aac segs=3 fetch=ok(2pl,8files) total=0s
+v12_hevc_422_10.mkv file open=ok(54ms) plan=hevc>hevc,aac segs=3 fetch=ok(2pl,8files) total=0s
+v12_hevc_422_10.mkv exact open=ok(54ms) plan=hevc>hevc,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v12_hevc_422_10.mkv rest open=ok(82ms) plan=hevc>hevc,aac segs=3 fetch=ok(2pl,8files) total=0s
+v13_hevc_12bit.mkv file open=ok(54ms) plan=hevc>hevc,aac segs=3 fetch=ok(2pl,8files) total=0s
+v13_hevc_12bit.mkv exact open=ok(52ms) plan=hevc>hevc,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v13_hevc_12bit.mkv rest open=ok(73ms) plan=hevc>hevc,aac segs=3 fetch=ok(2pl,8files) total=0s
+v14_hevc_long_gop.mkv file open=ok(8ms) plan=hevc,aac segs=2 fetch=ok(2pl,6files) total=0s
+v14_hevc_long_gop.mkv exact open=ok(10ms) plan=hevc,aac segs=2 fetch=ok(2pl,6files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.5 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v14_hevc_long_gop.mkv rest open=ok(11ms) plan=hevc,aac segs=2 fetch=ok(2pl,6files) total=0s
+v15_hevc_1080p_main10.mkv file open=ok(23ms) plan=hevc,aac segs=3 fetch=ok(2pl,8files) total=0s
+v15_hevc_1080p_main10.mkv exact open=ok(22ms) plan=hevc,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=1920x1080 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v15_hevc_1080p_main10.mkv rest open=ok(34ms) plan=hevc,aac segs=3 fetch=ok(2pl,8files) total=0s
+v16_av1_8bit.mkv file open=ok(42ms) plan=av1>h264,aac segs=3 fetch=BAD[0-0.m4s=500 0-1.m4s=500 0-2.m4s=500 1-0.m4s=500 1-1.m4s=500 1-2.m4s=500] total=0s
+v16_av1_8bit.mkv exact open=ok(44ms) plan=av1>h264,aac segs=3 fetch=BAD[0-0.m4s=500 0-1.m4s=500 0-2.m4s=500 1-0.m4s=500 1-1.m4s=500 1-2.m4s=500] play=unknown dur=12.0 size=0x0 frames=0 t=0.0 tracks=[vide,soun] audioOpts=1 subOpts=0 errors=["-16847:The operation couldn’t be completed. (CoreMediaErrorDomain error -16847 - HTTP 500: Internal Server Error)", "-16847:The operation couldn’t be completed. (CoreMediaErrorDomain error -16847 - HTTP 500: Internal Server Error)", "-16847:The operation couldn’t be completed. (CoreMediaErrorDomain error -16847 - HTTP 500: Internal Server Error)"] total=20s
+v16_av1_8bit.mkv rest open=ok(55ms) plan=av1>h264,aac segs=3 fetch=BAD[0-0.m4s=500 0-1.m4s=500 0-2.m4s=500 1-0.m4s=500 1-1.m4s=500 1-2.m4s=500] total=0s
+v17_av1_10bit.mkv file open=ok(44ms) plan=av1>h264,aac segs=3 fetch=BAD[0-0.m4s=500 0-1.m4s=500 0-2.m4s=500 1-0.m4s=500 1-1.m4s=500 1-2.m4s=500] total=0s
+v17_av1_10bit.mkv exact open=ok(45ms) plan=av1>h264,aac segs=3 fetch=BAD[0-0.m4s=500 0-1.m4s=500 0-2.m4s=500 1-0.m4s=500 1-1.m4s=500 1-2.m4s=500] play=unknown dur=12.0 size=0x0 frames=0 t=0.0 tracks=[vide,soun] audioOpts=1 subOpts=0 errors=["-16847:The operation couldn’t be completed. (CoreMediaErrorDomain error -16847 - HTTP 500: Internal Server Error)", "-16847:The operation couldn’t be completed. (CoreMediaErrorDomain error -16847 - HTTP 500: Internal Server Error)", "-16847:The operation couldn’t be completed. (CoreMediaErrorDomain error -16847 - HTTP 500: Internal Server Error)"] total=20s
+v17_av1_10bit.mkv rest open=ok(59ms) plan=av1>h264,aac segs=3 fetch=BAD[0-0.m4s=500 0-1.m4s=500 0-2.m4s=500 1-0.m4s=500 1-1.m4s=500 1-2.m4s=500] total=0s
+v18_vp9.mkv file open=ok(44ms) plan=vp9>h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v18_vp9.mkv exact open=ok(47ms) plan=vp9>h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v18_vp9.mkv rest open=ok(51ms) plan=vp9>h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v19_vp8.mkv file open=ok(44ms) plan=vp8>h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v19_vp8.mkv exact open=ok(46ms) plan=vp8>h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v19_vp8.mkv rest open=ok(72ms) plan=vp8>h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v20_mpeg2.mkv file open=ok(44ms) plan=mpeg2video>h264,ac3 segs=3 fetch=ok(2pl,8files) total=0s
+v20_mpeg2.mkv exact open=ok(46ms) plan=mpeg2video>h264,ac3 segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v20_mpeg2.mkv rest open=ok(56ms) plan=mpeg2video>h264,ac3 segs=3 fetch=ok(2pl,8files) total=0s
+v21_mpeg4_xvid.mkv file open=ok(47ms) plan=mpeg4>h264,mp3>aac segs=3 fetch=ok(2pl,8files) total=0s
+v21_mpeg4_xvid.mkv exact open=ok(48ms) plan=mpeg4>h264,mp3>aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.8 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v21_mpeg4_xvid.mkv rest open=ok(52ms) plan=mpeg4>h264,mp3>aac segs=3 fetch=ok(2pl,8files) total=0s
+v22_h264_anamorphic.mkv file open=ok(8ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v22_h264_anamorphic.mkv exact open=ok(10ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=853x480 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v22_h264_anamorphic.mkv rest open=ok(28ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v23_h264_scope_1920x800.mkv file open=ok(18ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v23_h264_scope_1920x800.mkv exact open=ok(18ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=1920x800 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v23_h264_scope_1920x800.mkv rest open=ok(38ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v24_h264_vfr.mkv file open=ok(8ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v24_h264_vfr.mkv exact open=ok(11ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=640x360 frames=35 t=3.7 seek(7)=true frames2=25 t2=10.4 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v24_h264_vfr.mkv rest open=ok(29ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v25_h264_60fps.mkv file open=ok(13ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+v25_h264_60fps.mkv exact open=ok(14ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) play=ready dur=12.0 size=1280x720 frames=35 t=3.7 seek(7)=true frames2=30 t2=10.3 tracks=[vide,soun] audioOpts=1 subOpts=0 total=7s
+v25_h264_60fps.mkv rest open=ok(33ms) plan=h264,aac segs=3 fetch=ok(2pl,8files) total=0s
+# end
