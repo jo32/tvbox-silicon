@@ -468,9 +468,13 @@ private struct DiscoverTrailerScreen: View {
 struct DiscoverSearchPresentation: ViewModifier {
     @Binding var isPresented: Bool
     @Environment(\.openRoute) private var openRoute
+    @Environment(Store.self) private var store
     func body(content: Content) -> some View {
         #if os(iOS)
         content.fullScreenCover(isPresented: $isPresented) { DiscoverSearchView() }
+            // Search Sources on a detail page opened from here switches to the Search tab, which is behind this
+            // full-screen sheet: close it so the source results show instead of the catalog search.
+            .onChange(of: store.section) { if isPresented { isPresented = false } }
         #else
         // A page of its own (Back returns), rather than the iPhone's full-screen sheet: on the Mac with the toolbar's
         // search field, on the TV laid out for the remote.
