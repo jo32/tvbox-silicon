@@ -80,13 +80,18 @@ public final class InProcessHost {
      */
     public static String request(String inputText) {
         String requestId = "";
+        boolean counted = false;
         try {
             JSONObject input = new JSONObject(inputText);
             if ("recoverProxy".equals(input.optString("command"))) return recoverProxy(input.getString("url"));
             if ("directMedia".equals(input.optString("command"))) return directMedia(input.getString("url"));
-            if ("trim".equals(input.optString("command"))) return new JSONObject().put("result", trim("memory pressure", true)).toString();
+            if ("trim".equals(input.optString("command"))) { ConvertAhead.release(); return new JSONObject().put("result", trim("memory pressure", true)).toString(); }
             if ("cancel".equals(input.optString("command"))) return cancel(input.optString("request"));
+            // Background work: it yields to every plugin request (see ConvertAhead).
+            if ("convertAhead".equals(input.optString("command"))) return convertAhead(input);
             requestId = input.optString("request");
+            inFlight.incrementAndGet();
+            counted = true;
             var stopAt = requestId.isEmpty() ? new java.util.concurrent.atomic.AtomicLong()
                 : cancellations.computeIfAbsent(requestId, id -> new java.util.concurrent.atomic.AtomicLong());
             input.put("stopAt", (Object) stopAt);
@@ -118,8 +123,27 @@ public final class InProcessHost {
             try { return NativeProbe.failure(error).toString(); }
             catch (Exception impossible) { return "{\"error\":\"Plugin request failed\"}"; }
         } finally {
+            if (counted) inFlight.decrementAndGet();
             if (!requestId.isEmpty()) cancellations.remove(requestId);
         }
+    }
+
+    /** Plugin requests in this JVM right now, including ones waiting to open their plugin. */
+    private static final java.util.concurrent.atomic.AtomicInteger inFlight = new java.util.concurrent.atomic.AtomicInteger();
+
+    /**
+     * {@code {"command":"convertAhead",…}}: see ConvertAhead. It stops while a plugin request runs or a
+     * plugin's proxy is serving media (the viewer is watching), so it never competes with either.
+     */
+    private static String convertAhead(JSONObject input) throws Exception {
+        if ("release".equals(input.optString("action"))) { ConvertAhead.release(); return "{\"result\":true}"; }
+        try { return new JSONObject().put("result", ConvertAhead.run(input, () -> inFlight.get() > 0 || streamingAny())).toString(); }
+        catch (OutOfMemoryError exhausted) { ConvertAhead.release(); trim("out of memory", true); throw exhausted; }
+    }
+
+    private static synchronized boolean streamingAny() {
+        for (Runtime runtime : runtimes.values()) if (streamingQuietly(runtime)) return true;
+        return false;
     }
 
     private static String cancel(String requestId) {

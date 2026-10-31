@@ -124,6 +124,18 @@ final class SerializedPluginWorker: @unchecked Sendable {
         }
     }
 
+    /// Background host work (ahead-of-time conversion): its own thread at utility priority, outside both
+    /// lanes, so it never takes a slot a viewer's request needs.
+    func background(resources: String, json: String) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            let thread = Thread { [execute] in continuation.resume(with: execute(resources, json)) }
+            thread.name = "On-device plugins (background)"
+            thread.qualityOfService = .utility
+            thread.stackSize = 8 * 1024 * 1024
+            thread.start()
+        }
+    }
+
     /// Starts queued work in arrival order within each lane. Call with `lock` held.
     private func scheduleLocked() {
         var searches = running.count(where: \.search)
