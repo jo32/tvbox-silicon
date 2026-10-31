@@ -10,8 +10,8 @@ test("detail visual rails deduplicate landscape stills and keep native trailer i
     images: { backdrops: [{ file_path: "/a.jpg", aspect_ratio: 1.78 }, { file_path: "/a.jpg", aspect_ratio: 1.78 }, { file_path: "/portrait.jpg", aspect_ratio: 0.67 }] },
   }), null);
   const value = await details(tmdb, "tv", 7, "zh-CN", null);
-  assert.deepEqual(value!.stills, ["https://image.tmdb.org/t/p/w780/a.jpg"]);
-  assert.deepEqual(value!.studios, [{ id: null, kind: "network", name: "Studio", logo: "https://image.tmdb.org/t/p/w300/studio.png" }]);
+  assert.deepEqual(value!.stills, ["https://images.tmdb.org/t/p/w780/a.jpg"]);
+  assert.deepEqual(value!.studios, [{ id: null, kind: "network", name: "Studio", logo: "https://images.tmdb.org/t/p/w300/studio.png" }]);
   assert.deepEqual(value!.trailer, { site: "IMDb", key: "tt1234567" });
 });
 
@@ -32,8 +32,8 @@ test("hero cover prefers an unlettered portrait and falls back without changing 
     { file_path: "/localized.jpg", iso_639_1: "zh", aspect_ratio: 0.67, vote_count: 100 },
     { file_path: "/wide.jpg", iso_639_1: null, aspect_ratio: 1.78, vote_count: 100 },
     { file_path: "/clean.jpg", iso_639_1: null, aspect_ratio: 0.67, vote_count: 2 },
-  ] }, "/fallback.jpg"), "https://image.tmdb.org/t/p/w780/clean.jpg");
-  assert.equal(heroPoster(null, "/fallback.jpg"), "https://image.tmdb.org/t/p/w780/fallback.jpg");
+  ] }, "/fallback.jpg"), "https://images.tmdb.org/t/p/w780/clean.jpg");
+  assert.equal(heroPoster(null, "/fallback.jpg"), "https://images.tmdb.org/t/p/w780/fallback.jpg");
   assert.equal(heroPoster(null, null), null);
 });
 
@@ -51,7 +51,7 @@ test("catalog keeps movie and series identities distinct and rejects unsupported
   assert.equal(items[0].rating, 8.2);
   assert.equal(items[1].rating, null);
   assert.equal(items[1].year, 2025);
-  assert.equal(items[0].poster, "https://image.tmdb.org/t/p/w500/a.jpg");
+  assert.equal(items[0].poster, "https://images.tmdb.org/t/p/w500/a.jpg");
   assert.equal(catalogItems({ results: [{ id: 1, title: "Movie" }] }, "movie")[0].mediaType, "movie");
   assert.deepEqual(catalogItems(null), []);
 });

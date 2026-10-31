@@ -25,7 +25,7 @@ actor DiscoverPainter {
         if let cached = cache[source] { return cached }
         if let task = pending[source] { return await task.value }
         // The rails use w500; the full-width cover needs enough pixels for the phone's display.
-        let url = source.host == "image.tmdb.org"
+        let url = ["images.tmdb.org", "image.tmdb.org"].contains(source.host ?? "")
             ? URL(string: source.absoluteString.replacingOccurrences(of: "/w500/", with: "/w1280/").replacingOccurrences(of: "/w780/", with: "/w1280/")) ?? source : source
         let task = Task { await self.render(url) }
         pending[source] = task

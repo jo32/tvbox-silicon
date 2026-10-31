@@ -9,7 +9,7 @@ export class UpstreamError extends Error {
   }
 }
 
-export const IMAGE = "https://image.tmdb.org/t/p/";
+export const IMAGE = "https://images.tmdb.org/t/p/";
 const API = "https://api.themoviedb.org/3";
 const CACHE_SECONDS = 24 * 3600;
 
