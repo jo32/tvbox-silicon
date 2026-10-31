@@ -15,8 +15,8 @@ export function SoonPill({ small = false }: { small?: boolean }) {
 }
 
 /** The current Mac release on download.getmegaportal.com (R2 bucket megaportal-downloads): Apple silicon, and Intel. */
-export const MAC_DOWNLOAD = "https://download.getmegaportal.com/yingxia/1.8.3/Yingxia-1.8.3-macos-arm64.dmg";
-export const MAC_INTEL_DOWNLOAD = "https://download.getmegaportal.com/yingxia/1.8.3/Yingxia-1.8.3-macos-x86_64.dmg";
+export const MAC_DOWNLOAD = "https://download.getmegaportal.com/yingxia/1.8.4/Yingxia-1.8.4-macos-arm64.dmg";
+export const MAC_INTEL_DOWNLOAD = "https://download.getmegaportal.com/yingxia/1.8.4/Yingxia-1.8.4-macos-x86_64.dmg";
 
 /** iPhone/iPad and Apple TV IPAs for sideloading, next to the Mac release. */
 export const DOWNLOADS = {
