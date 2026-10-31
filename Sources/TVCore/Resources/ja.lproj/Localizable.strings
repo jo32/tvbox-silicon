@@ -1321,3 +1321,11 @@
 "Grid View" = "グリッド表示";
 
 "No works match these filters." = "この条件に合う作品はありません。";
+
+"Show Video Info" = "ビデオ情報を表示";
+
+"Shows the video's format, resolution, frame rate and bitrate in a corner of the player." = "プレーヤーの隅にビデオの形式、解像度、フレームレート、ビットレートを表示します。";
+
+"Bitrate %@" = "ビットレート %@";
+
+"Download %@" = "ダウンロード %@";

@@ -1321,3 +1321,11 @@
 "Grid View" = "Grid View";
 
 "No works match these filters." = "No works match these filters.";
+
+"Show Video Info" = "Show Video Info";
+
+"Shows the video's format, resolution, frame rate and bitrate in a corner of the player." = "Shows the video's format, resolution, frame rate and bitrate in a corner of the player.";
+
+"Bitrate %@" = "Bitrate %@";
+
+"Download %@" = "Download %@";

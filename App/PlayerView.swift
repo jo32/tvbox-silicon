@@ -22,6 +22,9 @@ struct PlaybackView: View {
     @State private var showsDanmakuList = false
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
+    #if os(tvOS)
+    @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
+    #endif
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -48,7 +51,7 @@ struct PlaybackView: View {
                                  qualities: session.qualities, quality: session.quality, choose: { session.choose(quality: $0) },
                                  live: session.isLive, previous: episodeAction(store.step(back: true, from: channel, session: session)),
                                  next: episodeAction(store.step(back: false, from: channel, session: session)), waiting: waitContent,
-                                 enhancer: session.enhancer, upscale: $upscalesVideo, smooth: $smoothsVideo,
+                                 enhancer: session.enhancer, upscale: $upscalesVideo, smooth: $smoothsVideo, info: $showsPlaybackInfo,
                                  exitWhileWaiting: session.showsPicture ? nil : { dismiss() }).ignoresSafeArea()
             }
             // Until the picture starts, AVKit's player keeps the Back press to itself, so a stream that never
@@ -56,6 +59,12 @@ struct PlaybackView: View {
             if session.error == nil && !session.showsPicture {
                 Color.clear.loadingFocus(takeFocus: true) { dismiss() }
                     .accessibilityIdentifier("player.waiting")
+            }
+            // In the title-safe corner, over the picture and clear of the transport bar.
+            if showsPlaybackInfo && session.error == nil && session.showsPicture {
+                PlaybackInfoPanel(session: session)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .transition(.opacity)
             }
             #elseif os(iOS)
             MobilePlayerView(channel: channel, session: session, showsDanmaku: $showsDanmaku, upscalesVideo: $upscalesVideo, smoothsVideo: $smoothsVideo,
@@ -653,6 +662,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     var enhancer: VideoEnhancer? = nil
     var upscale: Binding<Bool> = .constant(false)
     var smooth: Binding<Bool> = .constant(false)
+    var info: Binding<Bool> = .constant(false)
     /// Closes the player on Back until the picture starts. The overlay that takes focus for that loses it
     /// once the transport bar shows (an episode button takes it), and AVKit then keeps the press to itself.
     var exitWhileWaiting: (() -> Void)? = nil
@@ -744,6 +754,9 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             }
             items.append(UIMenu(title: L10n.text("Picture"), image: UIImage(systemName: "wand.and.sparkles"), children: options))
         }
+        let info = info
+        items.append(UIAction(title: L10n.text("Show Video Info"), image: UIImage(systemName: "info.circle"),
+                              state: info.wrappedValue ? .on : .off) { _ in info.wrappedValue.toggle() })
         controller.transportBarCustomMenuItems = items
     }
     static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) { coordinator.criteria?.reset() }
@@ -897,6 +910,7 @@ private struct DesktopPlaybackView: View {
     @State private var showsDanmakuList = false
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
+    @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     /// Devices with Yingxia open, for the Play On button; and the one the video was sent to.
     @State private var tvBrowser = PlayOnBrowser()
     @State private var playingOn: String?
@@ -913,6 +927,13 @@ private struct DesktopPlaybackView: View {
                 DesktopNativePlayer(player: session.player, fillsFrame: fillsFrame, live: bare, waiting: waitContent, enhancer: session.enhancer)
                     .id(bare)
                 if showsDanmaku && !session.danmaku.isEmpty { DanmakuOverlay(player: session.player, comments: session.danmaku, opacity: session.danmakuOpacity, revision: session.danmakuRevision).ignoresSafeArea() }
+                // Under the title bar's buttons, so it stays put while they come and go.
+                if showsPlaybackInfo && session.error == nil && session.showsPicture && playingOn == nil {
+                    PlaybackInfoPanel(session: session)
+                        .padding(.leading, 16).padding(.top, 56)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .transition(.opacity)
+                }
                 if let error = session.error {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle").font(.largeTitle)
@@ -1008,6 +1029,7 @@ private struct DesktopPlaybackView: View {
             Toggle(L10n.text("Loop Playback"), isOn: $session.looping)
             Toggle(L10n.text("Fill Window"), isOn: $fillsFrame)
             Toggle(L10n.text("Float on Top"), isOn: $floats)
+            Toggle(L10n.text("Show Video Info"), isOn: $showsPlaybackInfo)
             if VideoEnhancement.canUpscale { Toggle(L10n.text("Sharper Picture"), isOn: $upscalesVideo) }
             if VideoEnhancement.canSmooth { Toggle(L10n.text("Smooth Motion (60 fps)"), isOn: $smoothsVideo) }
             if session.qualities.count > 1 {
@@ -1167,5 +1189,121 @@ extension Store {
        let catalog = store.catalog(for: channel), context.sourceKey != Bilibili.siteKey {
         session.catalogDanmaku.prefetch(PlaybackHistoryContext(origin: context.origin, site: catalog.client.site,
             video: catalog.video, episode: next))
+    }
+}
+
+/// The info panel in a corner of the picture (Settings → Show Video Info, off by default): the video and audio
+/// format, the picture's size and frame rate, and the stream's bitrate beside what arrives. It exists only while
+/// the switch is on, and reads the playing item once a second, as the session's own sampling does.
+struct PlaybackInfoPanel: View {
+    let session: PlaybackSession
+    @State private var info = PlaybackInfo()
+    @State private var formats = PlaybackFormats()
+
+    private struct Row: Identifiable { let id: String; let text: String }
+
+    var body: some View {
+        let rows = [Row(id: "film", text: info.video ?? ""), Row(id: "waveform", text: info.audio ?? ""),
+                    Row(id: "speedometer", text: info.network() ?? "")].filter { !$0.text.isEmpty }
+        VStack(alignment: .leading, spacing: Metrics.spacing) {
+            ForEach(rows) { row in
+                HStack(spacing: Metrics.spacing * 2.5) {
+                    Image(systemName: row.id).foregroundStyle(.white.opacity(0.55)).frame(width: Metrics.icon)
+                    Text(row.text).lineLimit(1)
+                }
+            }
+        }
+        .font(.system(size: Metrics.font, weight: .medium)).monospacedDigit()
+        .foregroundStyle(.white.opacity(0.92))
+        .padding(.horizontal, Metrics.padding * 1.3).padding(.vertical, Metrics.padding)
+        // A plain tint, not a material: it sits over moving video, where a blur would redraw every frame.
+        .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: Metrics.corner, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: Metrics.corner, style: .continuous).strokeBorder(.white.opacity(0.12), lineWidth: 1) }
+        .opacity(rows.isEmpty ? 0 : 1)
+        .animation(.smooth(duration: 0.25), value: rows.map(\.id))
+        .environment(\.colorScheme, .dark)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("player.info")
+        .task {
+            while !Task.isCancelled {
+                await refresh()
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    private func refresh() async {
+        guard let item = session.player.currentItem else { info = PlaybackInfo(); return }
+        let tracks = item.tracks.filter(\.isEnabled)
+        let video = tracks.first { $0.assetTrack?.mediaType == .video }
+        let audio = tracks.first { $0.assetTrack?.mediaType == .audio }
+        let picture = await formats.describe(video?.assetTrack)
+        let sound = await formats.describe(audio?.assetTrack)
+        guard !Task.isCancelled, session.player.currentItem === item else { return }
+        var next = PlaybackInfo()
+        let size = item.presentationSize
+        next.width = Int(size.width.rounded()); next.height = Int(size.height.rounded())
+        if next.width == 0 || next.height == 0 { next.width = picture?.width ?? 0; next.height = picture?.height ?? 0 }
+        next.videoCodec = picture?.codec
+        next.transferFunction = picture?.transferFunction
+        // The track's own rate; the measured one (a stream that declares none) wanders around it.
+        let measured = Double(video?.currentVideoFrameRate ?? 0)
+        next.frameRate = picture?.frameRate ?? (measured > 0 ? measured : nil)
+        next.audioCodec = sound?.codec
+        next.sampleRate = sound?.sampleRate
+        next.channels = sound?.channels
+        // The session's measured rate (the variant's, or the decoded media's), else what the file's tracks declare.
+        let declared = (picture?.dataRate ?? 0) + (sound?.dataRate ?? 0)
+        next.bitrate = session.transfer.required.map { $0 * 8 } ?? (declared > 0 ? declared : nil)
+        next.download = session.transfer.bytesPerSecond
+        if next != info { info = next }
+    }
+
+    private enum Metrics {
+        #if os(tvOS)
+        static let font: CGFloat = 21, spacing: CGFloat = 6, padding: CGFloat = 14, corner: CGFloat = 18, icon: CGFloat = 28
+        #else
+        static let font: CGFloat = 11.5, spacing: CGFloat = 3, padding: CGFloat = 8, corner: CGFloat = 10, icon: CGFloat = 15
+        #endif
+    }
+}
+
+/// The formats of the tracks playing, loaded once per track: a stream's tracks change only when its variant does.
+@MainActor private final class PlaybackFormats {
+    struct Format {
+        var codec: UInt32?
+        var transferFunction: String?
+        var width = 0, height = 0
+        var frameRate: Double?
+        var sampleRate: Double?
+        var channels: Int?
+        /// Bits per second the track declares.
+        var dataRate: Double?
+    }
+    private var known: [(track: AVAssetTrack, format: Format)] = []
+
+    func describe(_ track: AVAssetTrack?) async -> Format? {
+        guard let track else { return nil }
+        if let hit = known.first(where: { $0.track === track }) { return hit.format }
+        guard let (descriptions, frameRate, dataRate) = try? await track.load(.formatDescriptions, .nominalFrameRate, .estimatedDataRate) else { return nil }
+        var format = Format()
+        if let description = descriptions.first {
+            format.codec = CMFormatDescriptionGetMediaSubType(description)
+            format.transferFunction = CMFormatDescriptionGetExtension(description, extensionKey: kCMFormatDescriptionExtension_TransferFunction) as? String
+            if CMFormatDescriptionGetMediaType(description) == kCMMediaType_Video {
+                let dimensions = CMVideoFormatDescriptionGetDimensions(description)
+                format.width = Int(dimensions.width); format.height = Int(dimensions.height)
+            }
+            if let stream = CMAudioFormatDescriptionGetStreamBasicDescription(description)?.pointee {
+                format.sampleRate = stream.mSampleRate > 0 ? stream.mSampleRate : nil
+                format.channels = stream.mChannelsPerFrame > 0 ? Int(stream.mChannelsPerFrame) : nil
+            }
+        }
+        format.frameRate = frameRate > 0 ? Double(frameRate) : nil
+        format.dataRate = dataRate > 0 ? Double(dataRate) : nil
+        // The video and audio tracks playing now, and the ones before a variant switch.
+        known = Array(([(track, format)] + known).prefix(4))
+        return format
     }
 }
