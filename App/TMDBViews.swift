@@ -591,7 +591,7 @@ struct TMDBBanner<Actions: View>: View {
             let width = proxy.size.width
             ZStack(alignment: .bottomLeading) {
                 Color(white: 0.12)
-                TMDBArtwork(url: backdrop, maxPixels: 2400).frame(width: width, height: proxy.size.height).clipped()
+                TMDBArtwork(url: backdrop, maxPixels: TMDBBannerMetrics.backdropPixels).frame(width: width, height: proxy.size.height).clipped()
                 LinearGradient(stops: [.init(color: .black.opacity(0.0), location: 0.35), .init(color: .black.opacity(0.82), location: 1)],
                                startPoint: .top, endPoint: .bottom)
                 LinearGradient(stops: [.init(color: .black.opacity(0.55), location: 0), .init(color: .clear, location: 0.6)],
@@ -652,6 +652,7 @@ enum TMDBBannerMetrics {
     static let textWidth: CGFloat = 760
     static let factsFont = Font.subheadline
     #endif
+    static let backdropPixels = 2400
 }
 
 /// TMDB's banner made from the source's own cover, until TMDB's backdrop is in and for titles TMDB doesn't
@@ -785,15 +786,22 @@ struct TMDBArtwork: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: url) {
             if let cached = Self.cache.object(forKey: url as NSURL) { show(cached.image); return }
-            guard let (data, _) = try? await URLSession.shared.data(from: url),
-                  let source = CGImageSourceCreateWithData(data as CFData, nil),
-                  let decoded = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                    kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceThumbnailMaxPixelSize: maxPixels, kCGImageSourceShouldCacheImmediately: true,
-                  ] as CFDictionary), !Task.isCancelled else { return }
-            Self.cache.setObject(Box(decoded), forKey: url as NSURL)
+            guard let decoded = await Self.load(url, maxPixels: maxPixels), !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: 0.3)) { show(decoded) }
         }
+    }
+
+    /// Downloads and decodes `url` into the shared cache; nil when it doesn't load.
+    static func load(_ url: URL, maxPixels: Int) async -> CGImage? {
+        if let cached = cache.object(forKey: url as NSURL) { return cached.image }
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let decoded = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: maxPixels, kCGImageSourceShouldCacheImmediately: true,
+              ] as CFDictionary) else { return nil }
+        cache.setObject(Box(decoded), forKey: url as NSURL)
+        return decoded
     }
 
     private func show(_ decoded: CGImage) {
