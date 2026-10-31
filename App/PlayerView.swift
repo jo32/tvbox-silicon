@@ -594,7 +594,9 @@ private struct PlayerSurface: NSViewRepresentable {
         var controller = scene.keyWindow?.rootViewController
         while let next = controller?.presentedViewController { controller = next }
         controller?.setNeedsUpdateOfSupportedInterfaceOrientations()
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: landscape ? .landscape : .portrait)) { error in
+        // UIKit calls the error handler on a background queue. @Sendable keeps it off the main actor;
+        // without it Swift 6 checks the closure's main-actor isolation at entry and traps (issue #247).
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: landscape ? .landscape : .portrait)) { @Sendable error in
             Diagnostics.shared.record(.warning, "player", "Rotation refused: \(error.localizedDescription)")
         }
     }
