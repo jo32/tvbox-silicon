@@ -82,6 +82,8 @@ extension Feedback {
         if type.conforms(to: .gif) {
             let file = folder.appending(path: UUID().uuidString + ".gif")
             try FileManager.default.copyItem(at: source, to: file)
+            // The copy keeps the original's date; `discardStale` goes by when it was added.
+            try FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: file.path)
             return try Attachment(kind: .image, file: file, type: "image/gif", thumbnail: thumbnail)
         }
         // Screenshots stay sharp as PNG; photos (HEIC and the rest) become JPEG, which every browser shows.
@@ -182,9 +184,18 @@ extension Feedback {
         for attachment in attachments { try? FileManager.default.removeItem(at: attachment.file) }
     }
 
-    /// Deletes every copy left from before (a page closed without sending).
-    public static func discardAll() {
-        try? FileManager.default.removeItem(at: folder)
+    /// How old a copy is before `discardStale` takes it.
+    static let staleAge: TimeInterval = 86400
+
+    /// Deletes the copies left from before (a page closed without sending) once they are a day old. Not
+    /// the newer ones: on the Mac, a page in another window may be about to send them.
+    public static func discardStale(now: Date = .now) {
+        let manager = FileManager.default
+        guard let files = try? manager.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        for file in files {
+            let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            if now.timeIntervalSince(modified) > staleAge { try? manager.removeItem(at: file) }
+        }
     }
 
     /// Uploads one file and answers the id the message names it by.

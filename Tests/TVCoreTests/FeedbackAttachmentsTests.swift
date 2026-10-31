@@ -201,3 +201,22 @@ private final class FeedbackServer: URLProtocol, @unchecked Sendable {
     #expect(issue.number == 7)
     #expect(FeedbackServer.posted["attachments"] as? [String] == ["picture-1"])
 }
+
+/// Another window's page (on the Mac) can be about to send its copies: opening the page only clears day-old ones.
+@Test func feedbackKeepsCopiesAnotherPageMaySend() async throws {
+    let manager = FileManager.default
+    try manager.createDirectory(at: Feedback.folder, withIntermediateDirectories: true)
+    let old = Feedback.folder.appending(path: "stale-\(UUID().uuidString).jpg")
+    try Data([1]).write(to: old)
+    try manager.setAttributes([.modificationDate: Date.now.addingTimeInterval(-2 * Feedback.staleAge)], ofItemAtPath: old.path)
+    // A GIF is copied as it is, so the copy starts with the original's date.
+    let gif = try picture("old.gif", type: .gif, width: 40, height: 30, metadata: false)
+    try manager.setAttributes([.modificationDate: Date.now.addingTimeInterval(-400 * 86400)], ofItemAtPath: gif.path)
+    let fresh = try await Feedback.attachment(from: gif)
+    defer { Feedback.discard([fresh]) }
+    #expect(fresh.type == "image/gif")
+
+    Feedback.discardStale()
+    #expect(!manager.fileExists(atPath: old.path))
+    #expect(manager.fileExists(atPath: fresh.file.path))
+}

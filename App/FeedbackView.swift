@@ -72,7 +72,7 @@ struct FeedbackView: View {
                 contextLoaded = true
                 context = freshContext
                 // Copies left by a page that closed without sending.
-                Feedback.discardAll()
+                Feedback.discardStale()
             }
             .task(id: sent?.number) { await check() }
             #if DEBUG
