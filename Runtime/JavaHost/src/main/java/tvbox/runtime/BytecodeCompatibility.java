@@ -16,6 +16,10 @@ public final class BytecodeCompatibility {
     // v18: a static value its field can't hold on the JVM (a String in a HashMap field) is left out of <clinit>.
     // v19: interfaces with default or static methods are Java 8 class files (sx.jar's protobuf).
     public static final String VERSION = "host-v19";
+    // dex2jar's own output (the vendored com.googlecode classes, the dex2jar dependency, LazyDexArchive's
+    // conversion), which LazyDexArchive keeps per class. Bump it, and VERSION, only when that output changes;
+    // a change to the rewrite below needs VERSION alone. Tests/TVCoreTests/JavaHostVersionTests checks both.
+    public static final String DEX2JAR_VERSION = "dex2jar-v1";
     private static final java.util.Set<String> connections = java.util.Set.of("java/net/URLConnection", "java/net/HttpURLConnection", "javax/net/ssl/HttpsURLConnection");
     // Field types that can hold a String, or a Class, on the JVM. ART stores a static value in any reference field.
     private static final java.util.Set<String> stringFields = java.util.Set.of("Ljava/lang/Object;", "Ljava/lang/CharSequence;", "Ljava/io/Serializable;", "Ljava/lang/Comparable;");
