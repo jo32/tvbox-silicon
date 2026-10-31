@@ -1,6 +1,77 @@
 {
   "releases": [
     {
+      "version": "1.8.4",
+      "build": 42,
+      "date": "2026-10-31",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "safari",
+          "title": {
+            "en": "Discover",
+            "zh-Hans": "发现",
+            "zh-Hant": "探索",
+            "ja": "見つける"
+          },
+          "detail": {
+            "en": "A new Discover tab for browsing movies and series from TMDB: trending and top-rated rows, networks, studios, genres and collections, with trailers that play right on the page. A title's page shows its seasons, cast, stills and studios, and Search Sources finds it in your sources. Search the catalog with filters for type, genre, year, platform, language and region, and open an actor or director to see everything they've made. On Apple TV, Discover has a new layout, made for the remote.",
+            "zh-Hans": "新增“发现”标签页，可浏览来自 TMDB 的电影和剧集：热门与高分榜单、电视网、出品公司、类型和合集，预告片直接在页面上播放。影片详情页会显示分季、演员、剧照和出品公司，点“搜索片源”即可在你的源中找到它。目录搜索可按类型、分类、年份、平台、语言和地区筛选，点开演员或导演就能看到其全部作品。在 Apple TV 上，“发现”采用了为遥控器设计的全新布局。",
+            "zh-Hant": "新增「探索」分頁，可瀏覽來自 TMDB 的電影和影集：熱門與高分榜單、電視網、出品公司、類型和合集，預告片直接在頁面上播放。影片詳情頁會顯示分季、演員、劇照和出品公司，點「搜尋片源」即可在你的來源中找到它。目錄搜尋可依類型、分類、年份、平台、語言和地區篩選，點開演員或導演就能看到其全部作品。在 Apple TV 上，「探索」採用了為遙控器設計的全新版面。",
+            "ja": "TMDB の映画やシリーズを見て回れる「見つける」タブを追加しました。人気・高評価のランキング、放送局、制作会社、ジャンル、コレクションがあり、予告編はページ上でそのまま再生されます。作品ページにはシーズン、キャスト、スチル、制作会社が表示され、「配信元を検索」で手持ちのソースから探せます。カタログ検索は種類・ジャンル・年・配信サービス・言語・地域で絞り込め、俳優や監督を開くとその人の全作品を見られます。Apple TV では、リモコン向けの新しいレイアウトになりました。"
+          }
+        },
+        {
+          "symbol": "externaldrive.connected.to.line.below",
+          "title": {
+            "en": "Your NAS and media server",
+            "zh-Hans": "你的 NAS 和媒体服务器",
+            "zh-Hant": "你的 NAS 和媒體伺服器",
+            "ja": "NAS とメディアサーバー"
+          },
+          "detail": {
+            "en": "Cloud Files now adds WebDAV shares, such as a NAS from Synology, QNAP, 绿联 or 极空间, and your own Emby or Jellyfin server, next to AList. Add Server works out which kind it is from the address. Global Search can also search the drives you've signed in to, as \"My Quark\", \"My UC\" and so on, next to your sources.",
+            "zh-Hans": "“网盘文件”现在可以添加 WebDAV 共享（例如群晖、威联通、绿联、极空间等 NAS）以及你自己的 Emby 或 Jellyfin 服务器，和 AList 并列。“添加服务器”会根据地址自动识别类型。“全局搜索”也能搜索你已登录的网盘，它们会以“我的夸克”“我的 UC”等名称和你的源一起出现。",
+            "zh-Hant": "「網盤檔案」現在可以加入 WebDAV 共享（例如群暉、威聯通、綠聯、極空間等 NAS）以及你自己的 Emby 或 Jellyfin 伺服器，和 AList 並列。「新增伺服器」會依位址自動辨識類型。「全域搜尋」也能搜尋你已登入的網盤，它們會以「我的夸克」「我的 UC」等名稱和你的來源一起出現。",
+            "ja": "「クラウドファイル」に、AList に加えて WebDAV 共有（Synology、QNAP、绿联、极空间などの NAS）と、自分の Emby / Jellyfin サーバーを追加できるようになりました。「サーバを追加」はアドレスから種類を自動で判別します。「横断検索」では、サインイン済みのドライブも「マイQuark」「マイUC」などとしてソースと一緒に検索できます。"
+          }
+        },
+        {
+          "symbol": "text.bubble",
+          "title": {
+            "en": "Choose where danmaku go",
+            "zh-Hans": "弹幕区域可调",
+            "zh-Hant": "彈幕區域可調",
+            "ja": "弾幕の表示範囲を選べます"
+          },
+          "detail": {
+            "en": "A new Danmaku Area setting keeps comments to the top quarter, half or three quarters of the screen, or lets them use all of it. It starts at three quarters, as before.",
+            "zh-Hans": "新增“弹幕区域”设置，可让弹幕只占屏幕上方 1/4、半屏或 3/4，也可以铺满全屏。默认仍为 3/4 屏，与之前一致。",
+            "zh-Hant": "新增「彈幕區域」設定，可讓彈幕只佔螢幕上方 1/4、半畫面或 3/4，也可以鋪滿全畫面。預設仍為 3/4 畫面，與之前一致。",
+            "ja": "新しい「弾幕の表示範囲」設定で、コメントを画面の上 1/4・半分・3/4 に収めるか、全体に流すかを選べます。初期値はこれまでどおり 3/4 です。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "CatPawOpen sources that need a UC TV token can get one from Settings. 王二小's Quark lines no longer fail with a Go multi-thread error. With Smooth Motion on, the picture no longer flashes at 3x and 4x speed. Live channels jump back to the live edge after a long stall instead of freezing. Changing Downloads › At a Time no longer crashes. Plugins start again on iPhones and iPads with 3 GB of memory. On iPhone, the tab bar no longer pops in late after going back from a Discover page.",
+            "zh-Hans": "需要 UC TV Token 的 CatPawOpen 源可以在“设置”中获取。王二小的夸克线路不再报 Go 多线程错误。开启“智能补帧”时，3 倍速和 4 倍速播放不再闪屏。直播长时间卡顿后会跳回最新画面，而不是一直停住。修改“下载 › 同时下载”不再闪退。3 GB 内存的 iPhone 和 iPad 上插件重新可以启动。在 iPhone 上，从“发现”页面返回后标签栏不再延迟弹出。",
+            "zh-Hant": "需要 UC TV Token 的 CatPawOpen 來源可以在「設定」中取得。王二小的夸克線路不再出現 Go 多執行緒錯誤。開啟「智慧補幀」時，3 倍速和 4 倍速播放不再閃爍。直播長時間卡頓後會跳回最新畫面，而不是一直停住。修改「下載 › 同時下載」不再閃退。3 GB 記憶體的 iPhone 和 iPad 上外掛重新可以啟動。在 iPhone 上，從「探索」頁面返回後標籤列不再延遲彈出。",
+            "ja": "UC TV トークンが必要な CatPawOpen ソースは「設定」で取得できます。王二小の Quark 回線で Go マルチスレッドのエラーが出なくなりました。「なめらか補間」がオンでも、3 倍速・4 倍速で画面がちらつかなくなりました。ライブは長く止まったあと、固まったままにならず最新の位置へ戻ります。「ダウンロード › 同時ダウンロード数」を変えても落ちなくなりました。メモリ 3 GB の iPhone・iPad でプラグインが再び起動します。iPhone で「見つける」のページから戻ったとき、タブバーが遅れて現れなくなりました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.3",
       "build": 41,
       "date": "2026-10-29",

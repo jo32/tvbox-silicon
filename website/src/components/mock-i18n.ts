@@ -29,7 +29,7 @@ const T: Record<string, Row> = {
   "All Sources": ["すべてのソース", "모든 소스", "全部來源"],
   "Stop": ["停止", "정지", "停止"],
   "SPACE": ["スペース", "스페이스", "空格"],
-  "Version 1.8.3": ["バージョン 1.8.3", "버전 1.8.3", "版本 1.8.3"],
+  "Version 1.8.4": ["バージョン 1.8.4", "버전 1.8.4", "版本 1.8.4"],
 };
 
 const COL: Record<Exclude<Lang, "en">, number> = { ja: 0, ko: 1, "zh-Hant": 2 };
