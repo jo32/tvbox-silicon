@@ -24,9 +24,12 @@ public final class LazyDexArchive {
     private final Path checkpoints;
 
     public LazyDexArchive(String path, String cache) throws Exception {
+        this(path, Path.of(HostEnvironment.converted(Path.of(HostEnvironment.cache(cache),"converted").toString())));
+    }
+
+    /** An archive whose converted classes live in `converted` (the folder a runtime's loader would use). */
+    public LazyDexArchive(String path, Path converted) throws Exception {
         String hash = sha256(Path.of(path));
-        String fallback = Path.of(HostEnvironment.cache(cache),"converted").toString();
-        Path converted = Path.of(HostEnvironment.converted(fallback));
         folder = converted.resolve(hash+"."+BytecodeCompatibility.VERSION+"-lazy1");
         checkpoints = converted.resolve(hash+"."+BytecodeCompatibility.DEX2JAR_VERSION);
         Files.createDirectories(folder);
@@ -159,6 +162,59 @@ public final class LazyDexArchive {
         });
     }
     public boolean contains(String name) { return indexes.containsKey("L"+name.replace('.','/')+";"); }
+    public int size() { return indexes.size(); }
+
+    /** Whether a request would load `name` from this archive without converting it. */
+    public boolean converted(String name) {
+        try { return verified(folder.resolve(classKey(name)+".jar")); }
+        catch (Exception unavailable) { return false; }
+    }
+
+    /**
+     * The archive's other classes that `name` names in its declaration or code (supertypes, and the
+     * owners and types its instructions use): what running it is likely to load next. Reads only this
+     * class from the DEX and converts nothing.
+     */
+    public List<String> references(String name) {
+        Integer index = indexes.get("L"+name.replace('.','/')+";");
+        if (index == null) return List.of();
+        Set<String> found = new LinkedHashSet<>();
+        java.util.function.Consumer<String> add = type -> {
+            if (type == null) return;
+            int start = 0;
+            while (start < type.length() && type.charAt(start) == '[') start++;
+            String element = type.substring(start);
+            if (indexes.containsKey(element)) found.add(element.substring(1, element.length() - 1).replace('/', '.'));
+        };
+        reader.accept(new DexFileVisitor() {
+            @Override public DexClassVisitor visit(int access, String className, String parent, String[] interfaces) {
+                add.accept(parent);
+                if (interfaces != null) for (String type : interfaces) add.accept(type);
+                return new DexClassVisitor() {
+                    @Override public DexMethodVisitor visitMethod(int accessFlags, com.googlecode.d2j.Method method) {
+                        return new DexMethodVisitor() {
+                            @Override public DexCodeVisitor visitCode() {
+                                return new DexCodeVisitor() {
+                                    @Override public void visitMethodStmt(com.googlecode.d2j.reader.Op op, int[] args, com.googlecode.d2j.Method target) { add.accept(target.getOwner()); }
+                                    @Override public void visitFieldStmt(com.googlecode.d2j.reader.Op op, int a, int b, com.googlecode.d2j.Field field) { add.accept(field.getOwner()); }
+                                    @Override public void visitTypeStmt(com.googlecode.d2j.reader.Op op, int a, int b, String type) { add.accept(type); }
+                                    @Override public void visitFilledNewArrayStmt(com.googlecode.d2j.reader.Op op, int[] args, String type) { add.accept(type); }
+                                    @Override public void visitConstStmt(com.googlecode.d2j.reader.Op op, int a, Object value) { if (value instanceof com.googlecode.d2j.DexType type) add.accept(type.desc); }
+                                    @Override public void visitTryCatch(com.googlecode.d2j.DexLabel start, com.googlecode.d2j.DexLabel end, com.googlecode.d2j.DexLabel[] handlers, String[] types) { if (types != null) for (String type : types) add.accept(type); }
+                                };
+                            }
+                        };
+                    }
+                };
+            }
+        }, index, DexFileReader.SKIP_DEBUG | DexFileReader.SKIP_ANNOTATION);
+        found.remove(name);
+        return new ArrayList<>(found);
+    }
+
+    private static String classKey(String name) throws Exception {
+        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(name.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    }
     /**
      * FileChannel and NIO writes are interruptible. Plugins interrupt their own worker threads
      * (timeouts, cancelled futures); a conversion that fails that way is cached by the JVM as a
@@ -182,7 +238,7 @@ public final class LazyDexArchive {
         String descriptor = "L"+name.replace('.','/')+";";
         Integer index = indexes.get(descriptor);
         if(index==null) throw new ClassNotFoundException(name);
-        String key = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(name.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        String key = classKey(name);
         Path result = folder.resolve(key+".jar");
         // Committed artifacts are immutable. Reusing one must not wait behind another
         // class's conversion, which takes seconds per class on the interpreter.

@@ -383,6 +383,12 @@ import TVCore
             Self.registerPlugins(subscription)
             hiddenSources.restoreBuiltIns(subscription.sites, origin: subscription.origin)
             hiddenSources.restoreAutoHidden(subscription.sites, origin: subscription.origin, health: .shared)
+            #if os(iOS) || os(tvOS)
+            // Converts the visible JAR sources' likely classes while the app sits idle (issue #274).
+            let visible = subscription.sites.filter { !hiddenSources.contains($0, origin: subscription.origin) }
+            let origin = subscription.origin, spider = subscription.spiderURL
+            Task { await PluginConversionAhead.shared.schedule(sites: visible, origin: origin, spider: spider) }
+            #endif
         }
     }
     private func refreshCloudFilesSources() {

@@ -91,6 +91,9 @@ public actor EmbeddedJarHost {
 
     public func request(site: Site, jarURL: URL, params: [String: String], http: HTTPClient, configurationOrigin: URL, progress: PluginPreparation? = nil) async throws -> [String: JSONValue] {
         guard Self.available, let resources = Bundle.main.resourcePath else { throw TVError.unsupported("The on-device plugin runtime is missing from this build.") }
+        // Ahead-of-time conversion waits until requests have been quiet for a while.
+        PluginConversionAhead.requestStarted()
+        defer { PluginConversionAhead.requestEnded() }
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
         let identity = Data((jarURL.absoluteString + site.key + configurationOrigin.absoluteString).utf8) + (try encoder.encode(site.raw))
         let profileKey = PluginChecksum.sha256(identity)
@@ -101,22 +104,12 @@ public actor EmbeddedJarHost {
             progress?.report(stage, received: received, expected: expected)
         }
         try Task.checkCancellation()
-        // Dead or blocked plugin hosts answer with a web page; the archive reader would only say "zip END header not found".
-        let start = String(decoding: data.prefix(256), as: UTF8.self).lowercased()
-        if start.contains("<!doctype") || start.contains("<html") {
-            throw TVError.unsupported(L10n.text("The plugin download returned a web page instead of a plugin. Its host may be offline."))
-        }
+        try Self.refuseWebPage(data)
         progress?.report(.verifying)
-        let digest = PluginChecksum.sha256(data)
+        let (digest, jar) = try Self.store(data)
         let key = profileKey + "-" + digest
         let job = root.appendingPathComponent(key, isDirectory: true)
-        let archives = root.appendingPathComponent("Jars", isDirectory: true)
         try FileManager.default.createDirectory(at: job, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: archives, withIntermediateDirectories: true)
-        let jar = archives.appendingPathComponent(digest + ".jar")
-        if (try? Data(contentsOf: jar)).map(PluginChecksum.sha256) != digest {
-            try data.write(to: jar, options: .atomic)
-        }
         let value = try site.pluginExtension(origin: configurationOrigin)
         let ext = try value?.string ?? value.map { String(decoding: try encoder.encode($0), as: UTF8.self) } ?? ""
         // Preserve existing account/preferences location when adding content-based session identity.
@@ -185,6 +178,67 @@ public actor EmbeddedJarHost {
             Diagnostics.shared.record(.error, "jar.empty", "source=\(site.key) \(kind) answered empty after answering with content\nlastContent=\(Int(age / 3600))h ago archive=\(digest.prefix(12))")
         }
         return answer
+    }
+
+    /// Dead or blocked plugin hosts answer with a web page; the archive reader would only say "zip END header not found".
+    static func refuseWebPage(_ data: Data) throws {
+        let start = String(decoding: data.prefix(256), as: UTF8.self).lowercased()
+        if start.contains("<!doctype") || start.contains("<html") {
+            throw TVError.unsupported(L10n.text("The plugin download returned a web page instead of a plugin. Its host may be offline."))
+        }
+    }
+
+    /// Keeps a downloaded archive as Jars/<SHA-256>.jar, where the host reads it.
+    static func store(_ data: Data) throws -> (digest: String, file: URL) {
+        let digest = PluginChecksum.sha256(data)
+        let archives = storageRoot.appendingPathComponent("Jars", isDirectory: true)
+        try FileManager.default.createDirectory(at: archives, withIntermediateDirectories: true)
+        let jar = archives.appendingPathComponent(digest + ".jar")
+        if (try? Data(contentsOf: jar)).map(PluginChecksum.sha256) != digest {
+            try data.write(to: jar, options: .atomic)
+        }
+        return (digest, jar)
+    }
+
+    /// One batch of ahead-of-time conversion (see `PluginConversionAhead` and `ConvertAhead.java`).
+    struct ConversionBatch: Sendable {
+        var digest: String
+        /// The archive was already prepared for this build (`isDone`), so nothing ran.
+        var skipped = false
+        var converted = 0, reused = 0, planned = 0, next = 0
+        var done = false
+        /// Why the batch ended before `batch` classes: "busy" (a plugin request or stream), "memory", or empty.
+        var stopped = ""
+    }
+
+    /// Converts up to `batch` more of the archive's likely classes, from position `from`, on a
+    /// utility-priority thread outside the request lanes. Opens no plugin and runs none of its code.
+    func convertAhead(jarURL: URL, spiders: [String], from: Int, limit: Int, batch: Int, http: HTTPClient,
+                      isDone: @Sendable (String) -> Bool) async throws -> ConversionBatch {
+        guard Self.available, let resources = Bundle.main.resourcePath else { throw TVError.unsupported("The on-device plugin runtime is missing from this build.") }
+        let data = try await PluginDownloads.shared.data(at: jarURL, http: http)
+        try Self.refuseWebPage(data)
+        let (digest, jar) = try Self.store(data)
+        if isDone(digest) { return ConversionBatch(digest: digest, skipped: true) }
+        let input: [String: JSONValue] = [
+            "command": .string("convertAhead"), "jar": .string(jar.path),
+            "conversionCache": .string(Self.storageRoot.appendingPathComponent("Converted").path),
+            "spiders": .array(spiders.map(JSONValue.string)), "from": .number(Double(from)),
+            "limit": .number(Double(limit)), "batch": .number(Double(batch)),
+        ]
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        let response = try await worker.background(resources: resources, json: String(decoding: try encoder.encode(input), as: UTF8.self))
+        let envelope = try JSONDecoder().decode([String: JSONValue].self, from: Data(response.utf8))
+        guard case .object(let result)? = envelope["result"] else { throw TVError.unsupported(envelope["error"]?.string ?? "The plugin runtime returned no response.") }
+        return ConversionBatch(digest: digest, converted: result["converted"]?.int ?? 0, reused: result["reused"]?.int ?? 0,
+                               planned: result["planned"]?.int ?? 0, next: result["next"]?.int ?? from,
+                               done: result["done"] == .bool(true), stopped: result["stopped"]?.string ?? "")
+    }
+
+    /// Drops the index of the archive ahead-of-time conversion was working on.
+    func releaseConversionAhead() async {
+        guard Self.available, let resources = Bundle.main.resourcePath else { return }
+        _ = try? await worker.background(resources: resources, json: "{\"command\":\"convertAhead\",\"action\":\"release\"}")
     }
 
     static func adoptPluginAccounts(in folder: URL) {
