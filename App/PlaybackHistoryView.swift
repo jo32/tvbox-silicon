@@ -261,7 +261,7 @@ struct HistoryCard: View {
                             .padding(8)
                     }
                 }
-                .coverOverlay {
+                .coverOverlay(animated: true) {
                     // Preparing this title; choosing another card switches to that one.
                     if store.resumingHistoryID == entry.id {
                         ZStack {

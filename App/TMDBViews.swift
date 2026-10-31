@@ -736,9 +736,13 @@ struct TMDBEpisodeTile: View {
         VStack(alignment: .leading, spacing: 6) {
             Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
                 .overlay {
-                    if let still = info?.still { PosterImage(url: still, symbol: "play.rectangle") } else { EpisodeNumberArt(name: name) }
+                    if let still = info?.still {
+                        PosterImage(url: still, symbol: "play.rectangle")
+                    } else {
+                        EpisodeNumberArt(name: name).overlay { CoverOverlayStack() }
+                    }
                 }
-                .coverOverlay { if loading { ProgressView().padding(8).background(.black.opacity(0.45), in: Circle()) } }
+                .coverOverlay(animated: true) { if loading { ProgressView().padding(8).background(.black.opacity(0.45), in: Circle()) } }
                 .coverOverlay(alignment: .bottomTrailing) {
                     if let runtime = info?.runtime, runtime > 0 {
                         Text(L10n.text("%lld min", Int(runtime))).font(.caption2.weight(.semibold)).monospacedDigit()

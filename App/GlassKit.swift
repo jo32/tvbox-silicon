@@ -53,6 +53,14 @@ extension View {
     /// Apple TVs without Liquid Glass on tvOS 26 take the material path too: there the glass dropped its tint, so a
     /// focused chip's white plate never showed and its black label sat on a dark capsule (#214).
     @ViewBuilder func glassSurface(_ style: GlassStyle = .regular, in shape: some Shape) -> some View {
+        #if os(tvOS)
+        modifier(CoverGlass(style: style, shape: shape))
+        #else
+        liveGlassSurface(style, in: shape)
+        #endif
+    }
+
+    @ViewBuilder fileprivate func liveGlassSurface(_ style: GlassStyle, in shape: some Shape) -> some View {
         if #available(macOS 26, iOS 26, tvOS 26, *), LiquidGlassSupport.current {
             glassEffect(style.glass, in: shape)
         } else if style.isVisible {
@@ -324,11 +332,24 @@ extension View {
     /// Captions under the cover of a `cardButton`: on Apple TV they move down as the cover lifts, as on Discover.
     func cardCaption() -> some View { modifier(CardCaption()) }
 
-    /// An overlay on a cover, such as a progress bar or a badge, on the view that has the cover's frame. In a card
-    /// button on Apple TV it grows with the cover under focus, as Rex's sit in the image view's overlayContentView;
-    /// SwiftUI's lift takes only the image, not even overlays attached to it.
-    func coverOverlay<V: View>(alignment: Alignment = .center, @ViewBuilder _ content: () -> V) -> some View {
-        overlay { content().frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment).modifier(CoverLift()) }
+    /// An overlay on a cover, such as a progress bar or a badge, on the view that holds its `PosterImage`. On Apple TV
+    /// the image paints it into its own bitmap, so the focus lift grows, moves and tilts it with the artwork, as Rex's
+    /// overlayContentView does: SwiftUI lifts only the image, never views over it, not even overlays attached to it.
+    /// `animated` content (a spinner) can't be painted; it is scaled with the lift instead, which matches until the
+    /// remote's touch tilts the cover.
+    @ViewBuilder func coverOverlay<V: View>(alignment: Alignment = .center, animated: Bool = false,
+                                            @ViewBuilder _ content: () -> V) -> some View {
+        #if os(tvOS)
+        if animated {
+            overlay { content().frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment).modifier(CoverLift()) }
+        } else {
+            let layer = CoverOverlay(alignment: alignment, view: AnyView(content()))
+            // The outer modifier runs first; inserting at the front keeps the order the overlays were written in.
+            transformEnvironment(\.coverOverlays) { $0.insert(layer, at: 0) }
+        }
+        #else
+        overlay(alignment: alignment, content: content)
+        #endif
     }
 
     /// For cards that paint their own focus state (source cards).
@@ -372,6 +393,60 @@ private struct TVCardButton: ViewModifier {
         content.buttonStyle(.borderless).buttonBorderShape(shape)
             .environment(\.inCardButton, true).environment(\.cardCoverHeight, cover)
             .onPreferenceChange(CardCoverHeightKey.self) { cover = $0 }
+    }
+}
+#endif
+
+/// An overlay that `coverOverlay` hands down to the cover's `PosterImage`.
+struct CoverOverlay {
+    let alignment: Alignment
+    let view: AnyView
+}
+
+private struct CoverOverlaysKey: EnvironmentKey { static var defaultValue: [CoverOverlay] { [] } }
+private struct BakingCoverKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    var coverOverlays: [CoverOverlay] {
+        get { self[CoverOverlaysKey.self] }
+        set { self[CoverOverlaysKey.self] = newValue }
+    }
+    /// Painting a cover's overlays into its bitmap, where glass doesn't render.
+    var bakingCover: Bool {
+        get { self[BakingCoverKey.self] }
+        set { self[BakingCoverKey.self] = newValue }
+    }
+}
+
+/// The `coverOverlay`s of a cover that isn't a `PosterImage`, which has no bitmap to paint them into: they grow with
+/// the lift instead.
+struct CoverOverlayStack: View {
+    @Environment(\.coverOverlays) private var overlays
+    var body: some View { CoverOverlayLayers(overlays: overlays).modifier(CoverLift()) }
+}
+
+fileprivate struct CoverOverlayLayers: View {
+    let overlays: [CoverOverlay]
+    var body: some View {
+        ZStack {
+            ForEach(overlays.indices, id: \.self) { index in
+                overlays[index].view.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: overlays[index].alignment)
+            }
+        }
+    }
+}
+
+#if os(tvOS)
+/// Glass can't be painted into a bitmap, so a badge baked into a cover gets its tint as a plain fill.
+private struct CoverGlass<S: Shape>: ViewModifier {
+    let style: GlassStyle
+    let shape: S
+    @Environment(\.bakingCover) private var baking
+    @ViewBuilder func body(content: Content) -> some View {
+        if baking {
+            content.background { if style.isVisible { shape.fill(style.tint ?? .black.opacity(0.3)) } }
+        } else {
+            content.liveGlassSurface(style, in: shape)
+        }
     }
 }
 #endif
@@ -795,6 +870,14 @@ struct PosterImage: View {
     /// Receives the loaded image's width over height, for a frame that shows the whole cover.
     var aspect: Binding<CGFloat?>? = nil
     @State private var bitmap: PosterBitmap?
+    #if os(tvOS)
+    @Environment(\.coverOverlays) private var overlays
+    @Environment(\.displayScale) private var displayScale
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.locale) private var locale
+    @Environment(\.layoutDirection) private var layoutDirection
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    #endif
     private var resource: PosterResource? { url.map { PosterResource(url: $0, headers: headers) } }
     var body: some View {
         artwork
@@ -814,7 +897,7 @@ struct PosterImage: View {
     /// draws the glass rim around it, which a clip would cut off, as on Discover's covers.
     private var artwork: some View {
         GeometryReader { proxy in
-            Image(decorative: Self.cover(bitmap?.image, proxy.size), scale: 1).resizable()
+            Image(decorative: baked(Self.cover(bitmap?.image, proxy.size), proxy.size), scale: 1).resizable()
                 .overlay { if bitmap == nil { Image(systemName: symbol).font(.title2).foregroundStyle(.white.opacity(0.55)) } }
                 .preference(key: CardCoverHeightKey.self, value: proxy.size.height)
         }
@@ -823,6 +906,21 @@ struct PosterImage: View {
     private static let placeholder: CGImage = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { context in
         UIColor(white: 0.2, alpha: 1).setFill(); context.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
     }.cgImage!
+
+    /// The cover with its `coverOverlay`s painted in, so the lift moves, grows and tilts them with the artwork.
+    private func baked(_ cover: CGImage, _ size: CGSize) -> CGImage {
+        guard !overlays.isEmpty, size.width > 0, size.height > 0 else { return cover }
+        let renderer = ImageRenderer(content: ZStack {
+            Image(decorative: cover, scale: 1).resizable()
+            CoverOverlayLayers(overlays: overlays)
+        }
+        .frame(width: size.width, height: size.height)
+        .environment(\.colorScheme, colorScheme).environment(\.locale, locale)
+        .environment(\.layoutDirection, layoutDirection).environment(\.dynamicTypeSize, dynamicTypeSize)
+        .environment(\.bakingCover, true))
+        renderer.scale = displayScale
+        return renderer.cgImage ?? cover
+    }
 
     /// The middle of the image at the frame's shape, as a fill would show it.
     private static func cover(_ image: CGImage?, _ size: CGSize) -> CGImage {
