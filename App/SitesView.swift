@@ -887,16 +887,16 @@ struct VideoDetailView: View {
         .screenTitle(video.name).task {
             store.searchModel.suspend()
             #if os(iOS)
-            // The watch page plays at once: where the viewer stopped (from Continue Watching, or watched before),
-            // which resolves its own details, or else the first episode once the details are in.
+            // From Continue Watching the watch page resumes at once, resolving its own details.
             let continues = watchLayout && watchChannel == nil && store.resumingHistoryID == nil
-            let entry = continues ? resume ?? watchHistory : nil
-            if let entry { store.resume(entry) }
+            if continues, let resume { store.resume(resume) }
             #endif
             if detail == nil { await loadDetail() }
             #if os(iOS)
-            if continues, entry == nil, watchChannel == nil, let first = activeEpisodes.first {
-                startRequest { await play(first) }
+            // A video of one episode then plays by itself, from where the viewer stopped if watched before. One of
+            // several waits on its cover for the viewer to choose the line and episode (#260).
+            if continues, resume == nil, watchChannel == nil, store.resumingHistoryID == nil, activeEpisodes.count <= 1 {
+                playWatchCover()
             }
             #endif
             #if DEBUG
@@ -1670,14 +1670,22 @@ struct VideoDetailView: View {
         if !entering { PlayerOrientation.set(landscape: false) } else if landscape { PlayerOrientation.set(landscape: true) }
     }
 
-    /// Before the picture: the cover across the top, blurred, while the page starts playing by itself. Play shows only
-    /// when that didn't happen (the episode failed, which the banner below explains).
+    /// The cover's Play: where the viewer stopped, else the line's first episode.
+    private func playWatchCover() {
+        if let watchHistory { store.resume(watchHistory); return }
+        guard let first = activeEpisodes.first ?? detail?.episodes.first else { return }
+        startRequest { await play(first) }
+    }
+
+    /// Before the picture: the cover across the top, blurred, while an episode starts. Otherwise (a video of several
+    /// episodes waiting for one to be chosen, or an episode that failed, which the banner below explains) the cover
+    /// shows clear, as Discover's page does, with Play.
     private var watchCover: some View {
         let starting = (detail == nil && error == nil) || busy || loadingEpisode != nil || store.resumingHistoryID != nil || watchChannel != nil
-        let first = activeEpisodes.first ?? detail?.episodes.first
+        let playable = watchHistory != nil || (activeEpisodes.first ?? detail?.episodes.first) != nil
         // The list's poster when there was one, so the picture doesn't change once the details arrive.
         let poster = video.poster != nil ? video : detail ?? video
-        return WatchCoverBackdrop(poster: poster.poster, headers: poster.posterHeaders, loading: starting) { coverStatus($0) }
+        return WatchCoverBackdrop(poster: poster.poster, headers: poster.posterHeaders, loading: starting, clear: !starting) { coverStatus($0) }
             .contentShape(Rectangle())
             .onTapGesture { if starting { withAnimation(.smooth(duration: 0.25)) { coverBack.toggle() } } }
             .task(id: coverBack) {
@@ -1686,8 +1694,8 @@ struct VideoDetailView: View {
                 if !Task.isCancelled { withAnimation(.smooth(duration: 0.3)) { coverBack = false } }
             }
             .overlay {
-                if !starting, let first {
-                    Button { startRequest { await play(first) } } label: {
+                if !starting, playable {
+                    Button { playWatchCover() } label: {
                         Image(systemName: "play.fill").font(.system(size: 22, weight: .semibold))
                             .frame(width: 58, height: 58)
                             .glassSurface(.regular.interactive(), in: Circle())

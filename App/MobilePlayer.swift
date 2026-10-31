@@ -677,12 +677,15 @@ struct MobilePlayerView: View {
 }
 
 /// The top of an iPhone watch page before the picture: the cover filling the width, blurred, under a spinner.
+/// While nothing is starting, the whole cover shows clear over that blur.
 struct WatchCoverBackdrop: View {
     let poster: URL?
     var headers: [String: String] = [:]
     var loading = true
+    var clear = false
     /// What the wait has to say, by how long it has run (see `WaitSpinner`).
     var status: (@MainActor (TimeInterval) -> PlaybackWait)? = nil
+    @State private var aspect: CGFloat?
     var body: some View {
         ZStack {
             Color.black
@@ -691,8 +694,18 @@ struct WatchCoverBackdrop: View {
                 .blur(radius: 24).scaleEffect(1.2)
                 .overlay(Color.black.opacity(0.35))
                 .accessibilityHidden(true)
+            if clear, poster != nil {
+                PosterImage(url: poster, headers: headers, aspect: $aspect)
+                    .aspectRatio(aspect ?? 2.0 / 3, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
+                    .padding(.vertical, 14)
+                    .accessibilityHidden(true)
+                    .transition(.opacity)
+            }
             if loading { WaitSpinner(status: status) }
         }
+        .animation(.easeOut(duration: 0.3), value: clear)
         .clipped()
     }
 }
