@@ -628,6 +628,8 @@ struct SearchQueryButton: View {
 /// Set by `ScrollStrip` while the user drags it, so the chip under the pointer ignores the mouse-up.
 @MainActor final class StripDrag { var active = false }
 extension EnvironmentValues { @Entry var stripDrag: StripDrag? = nil }
+/// Draws `controlButton()` and the source chips as Liquid Glass, on the iPhone watch page (#293).
+extension EnvironmentValues { @Entry var glassControls = false }
 
 /// A horizontal chip row: a `ScrollStrip` (drag and arrows on Mac), or a plain focus-driven
 /// scroll view on tvOS.
@@ -1511,10 +1513,23 @@ private struct ChromeButtonStyle: ButtonStyle {
 }
 #endif
 
+extension View {
+    /// `glass` where the system draws Liquid Glass; otherwise, or when `glass` is nil, the flat `fill`. iPhones before
+    /// iOS 26 keep the fill they had, with no material blur added.
+    @ViewBuilder func glassOrFill(_ glass: GlassStyle?, _ fill: some ShapeStyle, in shape: some Shape) -> some View {
+        if #available(macOS 26, iOS 26, *), LiquidGlassSupport.current, let glass {
+            glassEffect(glass.glass, in: shape)
+        } else {
+            background(fill, in: shape)
+        }
+    }
+}
+
 private struct ContentControlStyle: ButtonStyle {
     var prominent: Bool
     @Environment(\.isEnabled) private var enabled
     @Environment(\.controlSize) private var size
+    @Environment(\.glassControls) private var glass
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(size == .large ? .body.weight(.semibold) : .subheadline.weight(.semibold))
@@ -1523,7 +1538,8 @@ private struct ContentControlStyle: ButtonStyle {
             .padding(.vertical, 10)
             .frame(minHeight: 44)
             // Secondary fill is relative to the page so it stays visible on light and dark canvases.
-            .background(prominent ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(Color.primary.opacity(0.08)), in: Capsule())
+            .glassOrFill(glass ? (prominent ? GlassStyle.regular.tint(Brand.accent).interactive() : .regular.interactive()) : nil,
+                         prominent ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(Color.primary.opacity(0.08)), in: Capsule())
             .contentShape(Capsule())
             .opacity(enabled ? (configuration.isPressed ? 0.72 : 1) : 0.38)
     }

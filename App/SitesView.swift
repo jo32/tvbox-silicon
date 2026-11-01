@@ -1761,6 +1761,8 @@ struct VideoDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Its buttons are Liquid Glass, like the player's above them (#293).
+        .environment(\.glassControls, true)
         .animation(.smooth(duration: 0.45), value: tmdb.details)
         .animation(.smooth(duration: 0.3), value: tmdb.phase)
     }
@@ -1781,12 +1783,14 @@ struct VideoDetailView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(L10n.text("Episodes")).font(.headline)
                             Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
-                            episodeOrderButton
+                            episodeOrderButton.glassOrFill(.regular.interactive(), Color.clear, in: Circle())
                             Spacer(minLength: 8)
                             if items.count > (compact ? 5 : 2) {
                                 Button { showsAllEpisodes = true } label: {
                                     HStack(spacing: 3) { Text(L10n.text("All")); Image(systemName: "chevron.right").font(.caption.weight(.semibold)) }
                                         .font(.subheadline).foregroundStyle(.secondary)
+                                        .padding(.horizontal, 12).frame(minHeight: 32)
+                                        .glassOrFill(.regular.interactive(), Color.clear, in: Capsule())
                                         .frame(minHeight: 44).contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
@@ -1807,6 +1811,8 @@ struct VideoDetailView: View {
                         }
                         .scrollIndicators(.never)
                         .scrollPosition(id: $episodeScroll, anchor: .center)
+                        // Edge to edge, unclipped: the tiles' glass shadow ran past the row and was cut off in a band (#293).
+                        .scrollClipDisabled()
                         .padding(.horizontal, -16)
                         .onAppear { episodeScroll = currentEpisodeID }
                         .onChange(of: currentEpisodeID) { _, id in if let id { withAnimation { episodeScroll = id } } }
@@ -1826,6 +1832,9 @@ struct VideoDetailView: View {
                 let same = episodes.first { $0.flag == flag && $0.name == playing?.name } ?? episodes.first { $0.flag == flag }
                 if let same, same.id != currentEpisodeID { startRequest { await play(same) } }
             }
+            // Edge to edge and unclipped, like the episodes, so the strip doesn't cut the chips' glass shadow (#293).
+            .contentMargins(.horizontal, 16, for: .scrollContent).scrollClipDisabled()
+            .padding(.horizontal, -16)
         }
     }
 
@@ -1885,7 +1894,8 @@ struct VideoDetailView: View {
             .padding(.horizontal, compact ? 8 : 12)
             .frame(width: fill ? nil : tile ?? 150, height: compact ? 44 : 54, alignment: compact ? .center : .leading)
             .frame(maxWidth: fill ? .infinity : nil, alignment: compact ? .center : .leading)
-            .background(current ? Brand.accent : Color.primary.opacity(0.06), in: shape)
+            .glassOrFill(current ? GlassStyle.regular.tint(Brand.accent).interactive() : .regular.interactive(),
+                         current ? Brand.accent : Color.primary.opacity(0.06), in: shape)
             .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge() } }
             .contentShape(shape)
             }
@@ -1929,6 +1939,7 @@ struct VideoDetailView: View {
                 ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { showsAllEpisodes = false } }
             }
         }
+        .environment(\.glassControls, true)
         .presentationDetents([.medium, .large])
     }
     #endif
