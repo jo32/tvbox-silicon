@@ -83,6 +83,11 @@ struct DiscoverDetailView: View {
             if let trailer = details?.trailer { DiscoverTVTrailerScreen(trailer: trailer) }
         }
         .fullScreenCover(isPresented: $tvOverviewShown) { tvOverviewScreen }
+        #elseif os(iOS)
+        // The movie player, full screen: SwiftUI's VideoPlayer in a sheet had no full screen, Fill or speed (#300).
+        .fullScreenCover(isPresented: $trailerShown) {
+            if let trailer = details?.trailer { DiscoverMobileTrailerScreen(trailer: trailer, title: details?.name ?? item.name) }
+        }
         #else
         .sheet(isPresented: $trailerShown) {
             if let trailer = details?.trailer { DiscoverTrailerScreen(trailer: trailer, title: item.name).discoverSheetSize(width: 960, height: 600) }
@@ -464,6 +469,37 @@ private struct DiscoverTrailerScreen: View {
             .onDisappear { player.pause(); player.replaceCurrentItem(with: nil) }
     }
 }
+
+#if os(iOS)
+/// A trailer in the movie player, so it fills the screen and has Fill, speed and Picture in Picture like any video.
+/// The channel has no history context, so the trailer stays out of Continue Watching.
+private struct DiscoverMobileTrailerScreen: View {
+    @Environment(\.dismiss) private var dismiss
+    let trailer: TMDBMatch.Trailer
+    let title: String
+    @State private var channel: Channel?
+    @State private var failed = false
+    var body: some View {
+        if let channel {
+            PlaybackView(channel: channel)
+        } else {
+            ZStack(alignment: .topLeading) {
+                Color.black.ignoresSafeArea()
+                Group {
+                    if failed { Text(L10n.text("Trailer Unavailable")) } else { ProgressView() }
+                }.foregroundStyle(.white).tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity)
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.headline).foregroundStyle(.white).frame(width: 44, height: 44)
+                }.accessibilityLabel(L10n.text("Close")).padding(.horizontal, 12)
+            }.preferredColorScheme(.dark)
+                .task {
+                    guard let stream = await DiscoverTrailerResolver.shared.resolve(trailer), !Task.isCancelled else { failed = true; return }
+                    channel = Channel(name: title, url: stream.url, headers: stream.headers)
+                }
+        }
+    }
+}
+#endif
 
 struct DiscoverSearchPresentation: ViewModifier {
     @Binding var isPresented: Bool
