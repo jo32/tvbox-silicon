@@ -1761,8 +1761,9 @@ struct TVSettingsField: View {
     var prose = false
     @State private var editing = false
     @State private var draft = ""
+    @State private var cancelled = false
     var body: some View {
-        Button { draft = text; editing = true } label: {
+        Button { draft = text; cancelled = false; editing = true } label: {
             TVSettingsRowLabel(title: title, value: text.isEmpty ? L10n.text("Not set") : text)
         }
         .glassRow()
@@ -1770,8 +1771,13 @@ struct TVSettingsField: View {
             TextField(title, text: $draft)
                 .autocorrectionDisabled(!prose)
                 .textInputAutocapitalization(prose ? .sentences : .never).keyboardType(prose ? .default : .URL)
-            Button(L10n.text("Done")) { text = draft.trimmingCharacters(in: .whitespacesAndNewlines) }
-            Button(L10n.text("Cancel"), role: .cancel) {}
+            Button(L10n.text("Done")) {}
+            Button(L10n.text("Cancel"), role: .cancel) { cancelled = true }
+        }
+        // Closing the alert any way but Cancel keeps the text. tvOS 18 also shows the text field as a second
+        // button under it, which closes the alert without running any action, so a typed address was lost (#291).
+        .onChange(of: editing) { _, open in
+            if !open, !cancelled { text = draft.trimmingCharacters(in: .whitespacesAndNewlines) }
         }
     }
 }
