@@ -65,6 +65,8 @@ class Handler(BaseHTTPRequestHandler):
             if 'ids' in q or 'play' in q: time.sleep(120); return self.send({'list': []})
             return self.send({'class':[{'type_id':'movies','type_name':'电影'}],'pagecount':1,
                 'list':[{'vod_id':str(i),'vod_name':f'测试影片 {i:02d}','vod_pic':base+'/poster.png','vod_remarks':'更新至 36 集'} for i in range(1,13)]})
+        # Downloads: episodes 1 and 2 arrive at once, the rest trickle in, so finished and running downloads show together.
+        if path == '/downloads-config.json': return self.send({'sites': [{'key':'qa-downloads','name':'下载 / Downloads','type':4,'api':base+'/api?stream=download'}], 'lives': []})
         # A live stream that never answers, for Back while the player is still loading.
         if path == '/stall.m3u8': time.sleep(120); return self.send('Not found',404,'text/plain')
         if path == '/invalid.json': return self.send('{invalid JSON')
@@ -79,7 +81,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send('\n'.join(lines),mime='audio/x-mpegurl')
         if path == '/poster.png':
             return self.send((root/'Design/yingxia-icon.png').read_bytes(),mime='image/png')
-        if path == '/clip.mp4':
+        if path in ['/clip.mp4','/slow.mp4']:
             media=args.media
             if not media.exists(): return self.send('Generate clip with Scripts/test-player.sh first',404,'text/plain')
             size=media.stat().st_size
@@ -95,7 +97,12 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             with media.open('rb') as stream:
                 stream.seek(start)
-                try:self.wfile.write(stream.read(end-start+1))
+                body=stream.read(end-start+1)
+                try:
+                    if path=='/clip.mp4':self.wfile.write(body)
+                    # About 16 KB/s: minutes for the clip.
+                    else:
+                        for offset in range(0,len(body),4096):self.wfile.write(body[offset:offset+4096]);self.wfile.flush();time.sleep(0.25)
                 except (BrokenPipeError,ConnectionResetError):pass
             return
         if path == '/missing.mp4': return self.send('Not found',404,'text/plain')
@@ -114,7 +121,9 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/slow':time.sleep(2)
             categories=[{'type_id':'movies','type_name':'电影'},{'type_id':'series','type_name':'电视剧'},{'type_id':'empty','type_name':'空分类'}]
             # qa-stream-stall: episodes whose stream never answers, so the player opens with episode buttons and no picture.
-            if 'play' in q:return self.send({'parse':0,'url':base+('/stall.m3u8' if q.get('stream')=='stall' else '/clip.mp4')})
+            if 'play' in q:
+                if q.get('stream')=='download':return self.send({'parse':0,'url':base+('/clip.mp4' if q['play'] in ['episode-1','episode-2'] else '/slow.mp4')})
+                return self.send({'parse':0,'url':base+('/stall.m3u8' if q.get('stream')=='stall' else '/clip.mp4')})
             if q.get('ids')=='drive':
                 return self.send({'list':[{'vod_id':'drive','vod_name':'玩具总动员 5','vod_pic':base+'/poster.png','vod_remarks':'4K HDR',
                     'vod_content':'这是一段用于检查详情页布局的简介。 '*24,

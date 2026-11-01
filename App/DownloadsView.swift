@@ -66,7 +66,9 @@ struct DownloadsView: View {
                 if !shows.isEmpty {
                     VStack(alignment: .leading, spacing: Layout.headerSpacing) {
                         SectionHeader(title: L10n.text("Downloaded"))
-                        LazyVStack(spacing: Layout.cardSpacing) {
+                        // Not lazy: the remote only moves focus to views that exist, and below a download queue
+                        // as tall as the screen a lazy stack had built none, so Down stopped at the queue.
+                        VStack(spacing: Layout.cardSpacing) {
                             ForEach(shows) { show in
                                 ShowPanel(show: show) { store.playing = library.channel(for: $0) } delete: { deleting = show }
                             }
@@ -387,7 +389,7 @@ private struct ShowPanel: View {
                     Text([SourceLabel(show.sourceName).text, show.items.count == 1 ? L10n.text("1 episode") : L10n.text("%lld episodes", show.items.count), DownloadFormat.size(show.size)].joined(separator: " · "))
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: DownloadMetrics.episodeMin), spacing: 8)], spacing: DownloadMetrics.thumb > 60 ? 12 : 4) {
+                EpisodeGrid(minimum: DownloadMetrics.episodeMin, spacing: 8, rowSpacing: DownloadMetrics.thumb > 60 ? 12 : 4).callAsFunction {
                     ForEach(show.items) { item in episode(item) }
                 }
                 .tvFocusSection()
@@ -430,6 +432,45 @@ private struct ShowPanel: View {
             }
             #endif
             Button(L10n.text("Delete Download"), systemImage: "trash", role: .destructive) { library.remove([item.id]) }
+        }
+    }
+}
+
+/// LazyVGrid's adaptive columns, built all at once, for the same reason as the list of shows: a lazy grid below
+/// the screen has no episodes yet for the remote to move to.
+private struct EpisodeGrid: SwiftUI.Layout {
+    let minimum: CGFloat
+    let spacing: CGFloat
+    let rowSpacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? minimum
+        let rows = rows(subviews, width: width)
+        return CGSize(width: width, height: rows.reduce(0) { $0 + $1.height } + rowSpacing * CGFloat(max(0, rows.count - 1)))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let cell = cellWidth(bounds.width)
+        var y = bounds.minY
+        for row in rows(subviews, width: bounds.width) {
+            for (column, index) in row.indices.enumerated() {
+                subviews[index].place(at: CGPoint(x: bounds.minX + CGFloat(column) * (cell + spacing), y: y),
+                                      proposal: ProposedViewSize(width: cell, height: row.height))
+            }
+            y += row.height + rowSpacing
+        }
+    }
+
+    private func columns(_ width: CGFloat) -> Int { max(1, Int((width + spacing) / (minimum + spacing))) }
+    private func cellWidth(_ width: CGFloat) -> CGFloat {
+        let count = CGFloat(columns(width))
+        return max(0, (width - spacing * (count - 1)) / count)
+    }
+    private func rows(_ subviews: Subviews, width: CGFloat) -> [(indices: Range<Int>, height: CGFloat)] {
+        let count = columns(width), cell = ProposedViewSize(width: cellWidth(width), height: nil)
+        return stride(from: 0, to: subviews.count, by: count).map { start in
+            let indices = start..<min(start + count, subviews.count)
+            return (indices, indices.map { subviews[$0].sizeThatFits(cell).height }.max() ?? 0)
         }
     }
 }
