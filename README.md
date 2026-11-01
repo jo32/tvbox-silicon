@@ -12,8 +12,8 @@
 <p align="center">
   <a href="https://yingxia.getmegaportal.com"><b>yingxia.getmegaportal.com</b></a>
   &nbsp;·&nbsp;
-  <a href="https://download.getmegaportal.com/yingxia/1.8.5/Yingxia-1.8.5-macos-arm64.dmg">Download for Mac</a>
-  (<a href="https://download.getmegaportal.com/yingxia/1.8.5/Yingxia-1.8.5-macos-x86_64.dmg">Intel</a>)
+  <a href="https://download.getmegaportal.com/yingxia/1.8.6/Yingxia-1.8.6-macos-arm64.dmg">Download for Mac</a>
+  (<a href="https://download.getmegaportal.com/yingxia/1.8.6/Yingxia-1.8.6-macos-x86_64.dmg">Intel</a>)
   &nbsp;·&nbsp;
   <a href="#-get-it">iPhone, iPad &amp; Apple TV beta</a>
   &nbsp;·&nbsp;
@@ -74,7 +74,7 @@ Yingxia (映匣) plays your TVBox subscriptions the way an Apple app should: liv
 
 | Platform | How |
 | --- | --- |
-| **Mac** (macOS 15+, Apple silicon or Intel) | ✅ Free download for [Apple silicon](https://download.getmegaportal.com/yingxia/1.8.5/Yingxia-1.8.5-macos-arm64.dmg) or [Intel](https://download.getmegaportal.com/yingxia/1.8.5/Yingxia-1.8.5-macos-x86_64.dmg), signed and notarized. It updates itself. |
+| **Mac** (macOS 15+, Apple silicon or Intel) | ✅ Free download for [Apple silicon](https://download.getmegaportal.com/yingxia/1.8.6/Yingxia-1.8.6-macos-arm64.dmg) or [Intel](https://download.getmegaportal.com/yingxia/1.8.6/Yingxia-1.8.6-macos-x86_64.dmg), signed and notarized. It updates itself. |
 | **iPhone & iPad** (iOS 17+) | 🧪 Public beta: [join on TestFlight](https://testflight.apple.com/join/dU6UNbzp). Or [download the IPA](https://download.getmegaportal.com/yingxia/1.8.6/Yingxia-1.8.6-ios.ipa) and [sideload it](Docs/INSTALL.md#install-on-iphone-or-ipad), or add the [AltStore source](Docs/INSTALL.md#altstore-and-sidestore). |
 | **Apple TV** (tvOS 17+) | 🧪 Public beta: [join on TestFlight](https://testflight.apple.com/join/SSgWEwSr) (open the invite on an iPhone or iPad signed in to the same Apple Account, then install from TestFlight on the TV). Or [download the IPA](https://download.getmegaportal.com/yingxia/1.8.6/Yingxia-1.8.6-tvos.ipa) and [sideload it](Docs/INSTALL.md#install-on-apple-tv). |
 
