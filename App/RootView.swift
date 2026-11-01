@@ -155,8 +155,15 @@ struct RootView: View {
     /// The phone's tab bar: the tabs the viewer arranged, then More with the rest and the tab bar editor. Every
     /// iPhone screen uses it, not only compact ones: iPhone Duo's inner display is regular both ways, and there
     /// the full set of sections overflowed the side tab bar into the system's own More list, without the editor.
+    /// iPads on iOS 17 use it too. Their classic tab bar shows seven tabs and moves the rest into UIKit's More list,
+    /// which wraps each tab's NavigationStack in its own navigation controller: opening a section there and then
+    /// another tab crashed with "Layout requested for visible navigation bar ... nest wrapped navigation
+    /// controllers" (#301). Seven sections and the app's own More fit that bar without the system list.
     @AppStorage(PhoneTabs.labelsKey) private var showsTabLabels = true
-    private var phoneTabs: Bool { sizeClass == .compact || UIDevice.current.userInterfaceIdiom == .phone }
+    private var phoneTabs: Bool {
+        if #unavailable(iOS 18) { return true }
+        return sizeClass == .compact || UIDevice.current.userInterfaceIdiom == .phone
+    }
     /// Sections a phone reaches through More, as arranged in the tab bar editor.
     private var inMore: [AppSection] { PhoneTabs(stored: storedTabs).arranged(slots: barSlots, hiding: store.hiddenSections).more }
     private var barSlots: Int { PhoneTabs.slots(horizontal: sizeClass, vertical: verticalSizeClass) }
