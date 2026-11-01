@@ -1761,6 +1761,8 @@ struct VideoDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Its buttons are Liquid Glass, like the player's above them (#293).
+        .environment(\.glassControls, true)
         .animation(.smooth(duration: 0.45), value: tmdb.details)
         .animation(.smooth(duration: 0.3), value: tmdb.phase)
     }
@@ -1773,19 +1775,22 @@ struct VideoDetailView: View {
                 Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)
             } else {
                 let items = activeEpisodes
-                let compact = items.allSatisfy { EpisodeRow.title($0.name).count <= 5 }
+                let tile = compactTileWidth(items)
+                let compact = tile != nil
                 let stills = watchStills(items)
                 VStack(alignment: .leading, spacing: 12) {
                     if items.count > 1 {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(L10n.text("Episodes")).font(.headline)
                             Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
-                            episodeOrderButton
+                            episodeOrderButton.glassOrFill(.regular.interactive(), Color.clear, in: Circle())
                             Spacer(minLength: 8)
                             if items.count > (compact ? 5 : 2) {
                                 Button { showsAllEpisodes = true } label: {
                                     HStack(spacing: 3) { Text(L10n.text("All")); Image(systemName: "chevron.right").font(.caption.weight(.semibold)) }
                                         .font(.subheadline).foregroundStyle(.secondary)
+                                        .padding(.horizontal, 12).frame(minHeight: 32)
+                                        .glassOrFill(.regular.interactive(), Color.clear, in: Capsule())
                                         .frame(minHeight: 44).contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
@@ -1800,12 +1805,14 @@ struct VideoDetailView: View {
                         // scrollPosition rather than ScrollViewReader: scrollTo also scrolls the page's vertical
                         // scroll view, which pushed the title under the player.
                         ScrollView(.horizontal) {
-                            LazyHStack(alignment: .top, spacing: stills.isEmpty ? 8 : 12) { ForEach(shownOrder(items)) { watchEpisodeCard($0, compact: compact, info: stills[$0.id]) } }
+                            LazyHStack(alignment: .top, spacing: stills.isEmpty ? 8 : 12) { ForEach(shownOrder(items)) { watchEpisodeCard($0, tile: tile, info: stills[$0.id]) } }
                                 .scrollTargetLayout()
                                 .padding(.horizontal, 16)
                         }
                         .scrollIndicators(.never)
                         .scrollPosition(id: $episodeScroll, anchor: .center)
+                        // Edge to edge, unclipped: the tiles' glass shadow ran past the row and was cut off in a band (#293).
+                        .scrollClipDisabled()
                         .padding(.horizontal, -16)
                         .onAppear { episodeScroll = currentEpisodeID }
                         .onChange(of: currentEpisodeID) { _, id in if let id { withAnimation { episodeScroll = id } } }
@@ -1825,6 +1832,9 @@ struct VideoDetailView: View {
                 let same = episodes.first { $0.flag == flag && $0.name == playing?.name } ?? episodes.first { $0.flag == flag }
                 if let same, same.id != currentEpisodeID { startRequest { await play(same) } }
             }
+            // Edge to edge and unclipped, like the episodes, so the strip doesn't cut the chips' glass shadow (#293).
+            .contentMargins(.horizontal, 16, for: .scrollContent).scrollClipDisabled()
+            .padding(.horizontal, -16)
         }
     }
 
@@ -1835,10 +1845,30 @@ struct VideoDetailView: View {
         return items.count > 1 && stills.values.filter { $0.still != nil }.count * 2 >= items.count ? stills : [:]
     }
 
+    /// The width of the small tiles when every name is short (第1集, 01, 4K国语), or nil for two-line cards. The tiles
+    /// are as wide as the widest name, at least 64 points: a fixed 64 cut off names of four or five characters such as
+    /// 4K国语 or 第100集 (#290). Measures one name, in the same pass that checks their lengths.
+    private func compactTileWidth(_ items: [Episode]) -> CGFloat? {
+        var widest = "", widestUnits = 0
+        for item in items {
+            let title = EpisodeRow.title(item.name)
+            guard title.count <= 5 else { return nil }
+            // Chinese and other wide characters take about twice the room of digits and Latin letters.
+            let units = title.unicodeScalars.reduce(0) { $0 + ($1.isASCII ? 1 : 2) }
+            if units > widestUnits { widest = title; widestUnits = units }
+        }
+        let font = UIFont.systemFont(ofSize: UIFont.preferredFont(forTextStyle: .subheadline).pointSize, weight: .semibold)
+        let text = (widest as NSString).size(withAttributes: [.font: font]).width
+        // 8 points of padding on each side, and a little room for the bold of the episode playing.
+        return max(64, (text + 20).rounded(.up))
+    }
+
     /// An episode: a small tile for short names (第1集, 01), a two-line card for long ones, TMDB's still above the name
-    /// when there is one. The one playing is tinted in the accent. There is no per-episode favorite on this page.
-    private func watchEpisodeCard(_ episode: Episode, compact: Bool, fill: Bool = false, info: TMDBMatch.EpisodeInfo? = nil,
+    /// when there is one. The one playing is filled with the accent, like the chosen line above it (#290). There is no
+    /// per-episode favorite on this page.
+    private func watchEpisodeCard(_ episode: Episode, tile: CGFloat?, fill: Bool = false, info: TMDBMatch.EpisodeInfo? = nil,
                                   chosen: (() -> Void)? = nil) -> some View {
+        let compact = tile != nil
         let current = episode.id == currentEpisodeID
         let saved = download(episode)
         let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -1859,11 +1889,13 @@ struct VideoDetailView: View {
                     .multilineTextAlignment(compact ? .center : .leading)
             }
             .font(.subheadline.weight(current ? .semibold : .regular))
-            .foregroundStyle(current ? Brand.accent : Color.primary)
+            .foregroundStyle(current ? Brand.onAccent : Color.primary)
+            .tint(current ? Brand.onAccent : nil)
             .padding(.horizontal, compact ? 8 : 12)
-            .frame(width: fill ? nil : compact ? 64 : 150, height: compact ? 44 : 54, alignment: compact ? .center : .leading)
+            .frame(width: fill ? nil : tile ?? 150, height: compact ? 44 : 54, alignment: compact ? .center : .leading)
             .frame(maxWidth: fill ? .infinity : nil, alignment: compact ? .center : .leading)
-            .background(current ? Brand.accent.opacity(0.14) : Color.primary.opacity(0.06), in: shape)
+            .glassOrFill(current ? GlassStyle.regular.tint(Brand.accent).interactive() : .regular.interactive(),
+                         current ? Brand.accent : Color.primary.opacity(0.06), in: shape)
             .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge() } }
             .contentShape(shape)
             }
@@ -1887,15 +1919,15 @@ struct VideoDetailView: View {
 
     private var allEpisodes: some View {
         let items = activeEpisodes
-        let compact = items.allSatisfy { EpisodeRow.title($0.name).count <= 5 }
+        let tile = compactTileWidth(items)
         let stills = watchStills(items)
         return NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     watchLines
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: stills.isEmpty ? (compact ? 64 : 150) : 160), spacing: stills.isEmpty ? 8 : 12, alignment: .top)],
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: stills.isEmpty ? tile ?? 150 : 160), spacing: stills.isEmpty ? 8 : 12, alignment: .top)],
                               spacing: stills.isEmpty ? 8 : 14) {
-                        ForEach(shownOrder(items)) { watchEpisodeCard($0, compact: compact, fill: true, info: stills[$0.id]) { showsAllEpisodes = false } }
+                        ForEach(shownOrder(items)) { watchEpisodeCard($0, tile: tile, fill: true, info: stills[$0.id]) { showsAllEpisodes = false } }
                     }
                 }
                 .padding(16)
@@ -1907,6 +1939,7 @@ struct VideoDetailView: View {
                 ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { showsAllEpisodes = false } }
             }
         }
+        .environment(\.glassControls, true)
         .presentationDetents([.medium, .large])
     }
     #endif

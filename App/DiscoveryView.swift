@@ -1095,6 +1095,7 @@ private struct SourceChip: View {
     let action: () -> Void
     @State private var hovering = false
     @Environment(\.stripDrag) private var drag
+    @Environment(\.glassControls) private var glass
 
     var body: some View {
         let label = SourceLabel(name)
@@ -1110,7 +1111,7 @@ private struct SourceChip: View {
             .foregroundStyle(selected ? Brand.onAccent : Color.primary.opacity(0.82))
             .padding(.horizontal, 12)
             .frame(height: SourceStrip.controlSize)
-            .background(fill, in: Capsule())
+            .glassOrFill(glass ? (selected ? GlassStyle.regular.tint(Brand.accent).interactive() : .regular.interactive()) : nil, fill, in: Capsule())
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
