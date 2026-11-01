@@ -233,6 +233,60 @@ final class TVNavigationUITests: XCTestCase {
         XCTAssertFalse(alert.exists, "\(close.label) did not close the alert")
         XCTAssertTrue(address.label.hasSuffix(typed), "The typed address was not kept: \(address.label)")
     }
+    /// Back on a title's page opened with Up Next's Show Details returns to Watch Now.
+    func testBackFromUpNextDetailsReturnsToWatchNow() throws {
+        let app = launchWatchNowWithHistory()
+        let remote = XCUIRemote.shared
+        let details = app.buttons["home.upNext.details"]
+        XCTAssertTrue(details.waitForExistence(timeout: 60), "Up Next did not appear")
+        sleep(3)
+        for _ in 0..<4 where !details.hasFocus { remote.press(.right); sleep(1) }
+        XCTAssertTrue(details.hasFocus, "Show Details did not take focus")
+        remote.press(.select)
+        try backFromDetails(app, to: details)
+    }
+
+    /// Back on a title's page opened from a Continue Watching card's menu returns to Watch Now.
+    func testBackFromContinueWatchingDetailsReturnsToWatchNow() throws {
+        let app = launchWatchNowWithHistory()
+        let remote = XCUIRemote.shared
+        let card = app.buttons["history.resume.1"]
+        XCTAssertTrue(card.waitForExistence(timeout: 60), "Continue Watching did not appear")
+        sleep(3)
+        // Focus starts in the tab sidebar: Right into Up Next, then Down to the row.
+        let resume = app.buttons["home.upNext.resume"]
+        for _ in 0..<4 where !resume.hasFocus { remote.press(.right); sleep(1) }
+        for _ in 0..<4 where !card.hasFocus { remote.press(.down); sleep(1) }
+        XCTAssertTrue(card.hasFocus, "The card did not take focus")
+        remote.press(.select, forDuration: 1.5)
+        let show = app.buttons["Show Details"]
+        XCTAssertTrue(show.waitForExistence(timeout: 5), "The card's menu did not open")
+        for _ in 0..<3 where !show.hasFocus { remote.press(.up); usleep(700_000) }
+        remote.press(.select)
+        try backFromDetails(app, to: card)
+    }
+
+    private func launchWatchNowWithHistory() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["-qaSection", "home", "-qaIsolatedData", "1", "-qaResetHistory", "1", "-qaSeedHistory", "qa-standard:1",
+                               "-qaSubscription", "http://127.0.0.1:8776/config.json",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        return app
+    }
+
+    private func backFromDetails(_ app: XCUIApplication, to origin: XCUIElement) throws {
+        let favorite = app.buttons["detail.favorite"]
+        XCTAssertTrue(favorite.waitForExistence(timeout: 30), "The title's page did not open")
+        sleep(3)
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot)
+        XCUIRemote.shared.press(.menu)
+        sleep(3)
+        XCTAssertEqual(app.state, .runningForeground, "Back left the app")
+        XCTAssertFalse(favorite.exists, "Back did not leave the title's page")
+        XCTAssertTrue(origin.waitForExistence(timeout: 10) && origin.isHittable, "Back did not return to Watch Now")
+    }
+
     /// Poster titles are part of their card's label, so look for the text anywhere in a label.
     private func shown(_ text: String, in app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch

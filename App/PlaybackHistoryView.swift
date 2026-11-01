@@ -108,7 +108,7 @@ struct PlaybackHistoryView: View {
 enum HistoryMetrics {
     /// Continue Watching card width on Watch Now; the History page lets the grid size its cards.
     #if os(tvOS)
-    static let card: CGFloat = 240
+    static let card: CGFloat = DiscoverLayout.posterWidth
     #elseif os(macOS)
     static let card: CGFloat = 150
     #else
@@ -239,7 +239,7 @@ struct HistoryCard: View {
     }
 
     private var cardLabel: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: centredCaptions ? .center : .leading, spacing: 8) {
             Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit)
                 .overlay { PosterImage(url: entry.context.poster, headers: entry.context.posterHeaders ?? [:]) }
                 .coverOverlay(alignment: .bottom) {
@@ -286,6 +286,15 @@ struct HistoryCard: View {
         }
         .frame(width: details ? nil : HistoryMetrics.card)
         .frame(maxWidth: details ? .infinity : nil, alignment: .leading)
+    }
+
+    /// On Apple TV's Watch Now the captions are centred under the cover, as Discover's.
+    private var centredCaptions: Bool {
+        #if os(tvOS)
+        !details
+        #else
+        false
+        #endif
     }
 
     @ViewBuilder private var menu: some View {

@@ -14,10 +14,55 @@ struct HomeView: View {
     @AppStorage(HomeSection.recommendations.key) private var showsRecommendations = true
     @AppStorage(HomeSection.favorites.key) private var showsFavorites = true
     @AppStorage(HomeSection.liveTV.key) private var showsLiveTV = true
+    @AppStorage(HomeSection.upNext.key) private var showsUpNext = true
     /// The first frame is only the section placeholders. The source row is built on the next turn, so the page can appear before that layout.
     @State private var settled = false
 
     var body: some View {
+        #if os(tvOS)
+        if let config = store.subscription, settled {
+            WatchNowTVPage(config: config, sections: shownSections)
+                .historyDetailsDestination()
+                // The tab sidebar already names this page; a second heading just repeats it.
+                .toolbar(.hidden, for: .navigationBar)
+                .overlay { if shownSections.isEmpty { allHidden } }
+        } else {
+            classic
+        }
+        #elseif os(iOS)
+        // iPhone (and an iPad's narrow window) lays Watch Now out as Discover; a full iPad keeps its grid for now.
+        if let config = store.subscription, settled, sizeClass == .compact {
+            WatchNowPhonePage(config: config, sections: shownSections)
+                .historyDetailsDestination()
+                .overlay { if shownSections.isEmpty { allHidden } }
+        } else {
+            classic
+        }
+        #else
+        if let config = store.subscription, settled {
+            WatchNowPhonePage(config: config, sections: shownSections)
+                .historyDetailsDestination()
+                .overlay { if shownSections.isEmpty { allHidden } }
+        } else {
+            classic
+        }
+        #endif
+    }
+
+    private var shownSections: Set<HomeSection> {
+        Set(HomeSection.allCases.filter { section in
+            switch section {
+            case .upNext: showsUpNext
+            case .continueWatching: showsContinueWatching
+            case .pinnedSources: showsPinnedSources
+            case .recommendations: showsRecommendations
+            case .favorites: showsFavorites
+            case .liveTV: showsLiveTV
+            }
+        })
+    }
+
+    private var classic: some View {
         // The column width, not the placeholders' own width. A row of fixed cards is wider than the
         // detail column and NavigationSplitView then gives it that width, crushing the sidebar.
         GeometryReader { proxy in
@@ -526,12 +571,15 @@ private enum PosterSurface {
 
 /// A section of Watch Now that Settings can hide. Each one shows until it is switched off.
 enum HomeSection: String, CaseIterable, Identifiable {
-    case continueWatching, pinnedSources, recommendations, favorites, liveTV
+    case upNext, continueWatching, pinnedSources, recommendations, favorites, liveTV
     var id: String { rawValue }
+    /// The sections Watch Now has.
+    static var available: [HomeSection] { allCases }
     /// The switch's key in the user defaults.
     var key: String { "homeShows." + rawValue }
     var title: String {
         switch self {
+        case .upNext: L10n.text("Up Next")
         case .continueWatching: L10n.text("Continue Watching")
         case .pinnedSources: L10n.text("Pinned Sources")
         case .recommendations: L10n.text("Recommendations")
@@ -541,6 +589,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
     }
     var symbol: String {
         switch self {
+        case .upNext: "play.circle.fill"
         case .continueWatching: AppSection.history.icon
         case .pinnedSources: "pin.fill"
         case .recommendations: "sparkles"
@@ -550,6 +599,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
     }
     var tint: Color {
         switch self {
+        case .upNext: Brand.cyan
         case .continueWatching: Brand.amber
         case .pinnedSources: .purple
         case .recommendations: .orange
@@ -565,7 +615,7 @@ struct WatchNowSettingsView: View {
         SettingsPage(title: L10n.text("Watch Now"), symbol: AppSection.home.icon) {
             SettingsGroup(title: L10n.text("Show on Watch Now"),
                           footer: L10n.text("A section you switch off only leaves Watch Now: Playback History, Favorites, Sources and Live TV still have everything.")) {
-                ForEach(HomeSection.allCases) { HomeSectionToggle(section: $0) }
+                ForEach(HomeSection.available) { HomeSectionToggle(section: $0) }
             }
         }
     }

@@ -17,30 +17,35 @@ struct DiscoverPaint: @unchecked Sendable {
 actor DiscoverPainter {
     static let shared = DiscoverPainter()
     private let context = CIContext(options: [.cacheIntermediates: false])
-    private var cache: [URL: DiscoverPaint] = [:]
-    private var order: [URL] = []
-    private var pending: [URL: Task<DiscoverPaint?, Never>] = [:]
+    private var cache: [String: DiscoverPaint] = [:]
+    private var order: [String] = []
+    private var pending: [String: Task<DiscoverPaint?, Never>] = [:]
 
-    func paint(_ source: URL) async -> DiscoverPaint? {
-        if let cached = cache[source] { return cached }
-        if let task = pending[source] { return await task.value }
+    /// `headers` for a source's poster; `soft` blurs the whole cover, for a poster standing in for a backdrop (Watch Now's
+    /// Up Next), whose sharp half would show its low resolution at the size of the screen.
+    func paint(_ source: URL, headers: [String: String] = [:], soft: Bool = false) async -> DiscoverPaint? {
+        let key = (soft ? "soft|" : "") + source.absoluteString
+        if let cached = cache[key] { return cached }
+        if let task = pending[key] { return await task.value }
         // The rails use w500; the full-width cover needs enough pixels for the phone's display.
         let url = ["images.tmdb.org", "image.tmdb.org"].contains(source.host ?? "")
             ? URL(string: source.absoluteString.replacingOccurrences(of: "/w500/", with: "/w1280/").replacingOccurrences(of: "/w780/", with: "/w1280/")) ?? source : source
-        let task = Task { await self.render(url) }
-        pending[source] = task
+        let task = Task { await self.render(url, headers: headers, soft: soft) }
+        pending[key] = task
         let result = await task.value
-        pending[source] = nil
+        pending[key] = nil
         if let result {
-            cache[source] = result
-            order.append(source)
+            cache[key] = result
+            order.append(key)
             if order.count > 12 { cache.removeValue(forKey: order.removeFirst()) }
         }
         return result
     }
 
-    private func render(_ url: URL) async -> DiscoverPaint? {
-        guard let (data, response) = try? await URLSession.shared.data(from: url),
+    private func render(_ url: URL, headers: [String: String], soft: Bool) async -> DiscoverPaint? {
+        var request = URLRequest(url: url)
+        for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200,
               let source = CGImageSourceCreateWithData(data as CFData, nil),
               let decoded = CGImageSourceCreateThumbnailAtIndex(source, 0, [
@@ -52,13 +57,13 @@ actor DiscoverPainter {
         let rgb = palette(decoded)
         let image = CIImage(cgImage: decoded)
         let rect = image.extent
-        let blurred = image.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: rect.width * 0.055]).cropped(to: rect)
+        let blurred = image.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: rect.width * (soft ? 0.09 : 0.055)]).cropped(to: rect)
         let mask = CIFilter(name: "CILinearGradient", parameters: [
             "inputPoint0": CIVector(x: 0, y: rect.height * 0.62),
             "inputPoint1": CIVector(x: 0, y: rect.height * 0.38),
             "inputColor0": CIColor.black, "inputColor1": CIColor.white,
         ])!.outputImage!.cropped(to: rect)
-        let progressive = blurred.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: image, kCIInputMaskImageKey: mask])
+        let progressive = soft ? blurred : blurred.applyingFilter("CIBlendWithMask", parameters: [kCIInputBackgroundImageKey: image, kCIInputMaskImageKey: mask])
         let tint = CIColor(red: rgb.0, green: rgb.1, blue: rgb.2)
         let fade = CIFilter(name: "CILinearGradient", parameters: [
             "inputPoint0": CIVector(x: 0, y: rect.height * 0.52),

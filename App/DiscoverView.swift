@@ -744,12 +744,12 @@ struct DiscoverButton<Label: View>: View {
     var body: some View { Button { if drag?.active != true { action() } } label: { label } }
 }
 
-private struct DiscoverScrollKey: PreferenceKey {
+struct DiscoverScrollKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
-private struct DiscoverScrollObserver: ViewModifier {
+struct DiscoverScrollObserver: ViewModifier {
     @Binding var offset: CGFloat
     @ViewBuilder func body(content: Content) -> some View {
         if #available(iOS 18, macOS 15, tvOS 18, *) {

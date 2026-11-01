@@ -10,6 +10,8 @@
 		0120B7D5C3369E0579B5D973 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31D1816B8ED53D49478FD843 /* MoreView.swift */; };
 		01D530B7370C1CB5CFA657BE /* TVBoxApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A2BB58B1720E9D6D85F93F4 /* TVBoxApp.swift */; };
 		024BC7DE6E06F79B6511FC89 /* PlaybackHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 334B106CCFB47B5E27376A16 /* PlaybackHistoryView.swift */; };
+		03843072ECAC2CFBF3568416 /* WatchNowTV.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB076E674CF0D07EFFAE17DA /* WatchNowTV.swift */; };
+		382B776ED16F65AA1CE97A61 /* WatchNowPhone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3786C41F7FCE1F0681977129 /* WatchNowPhone.swift */; };
 		03EDA66F1A059D8515CE0C80 /* LiveRoomsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675EA4CF000337C94DF5B1D3 /* LiveRoomsView.swift */; };
 		05392A45E74A244DECCD26BB /* MusicPlayerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2CD4FD12F4DD3AAE1F8592A /* MusicPlayerViews.swift */; };
 		089C2D01F3B95CB1738D9AD9 /* PlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6876ACF1E9D9F80BBC4F22C4 /* PlaybackView.swift */; };
@@ -41,6 +43,8 @@
 		1D9F55E8F4446D174D346871 /* DiscoverPersonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */; };
 		1E4B0163BABCB43BA85836D6 /* TVCore in Frameworks */ = {isa = PBXBuildFile; productRef = 758A0D5359D0622060D86C20 /* TVCore */; };
 		1FAC6965CB4F8B33135C85C5 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D1010816125FBC3792AF838 /* Store.swift */; };
+		20E6BB22E6777E0F2310897D /* WatchNowTV.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB076E674CF0D07EFFAE17DA /* WatchNowTV.swift */; };
+		3CA63D34B24DE8FDCB239A89 /* WatchNowPhone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3786C41F7FCE1F0681977129 /* WatchNowPhone.swift */; };
 		211EB9AFF7659786EDBA5D9C /* libffi.txt in Resources */ = {isa = PBXBuildFile; fileRef = 06D9469858E5C5A118DED875 /* libffi.txt */; };
 		2158BE026F2A22702C9A2890 /* PluginSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C5AB58ECA34E84E70A20906 /* PluginSignInView.swift */; };
 		224B543BAFC40C8B7BACF9A5 /* MusicNowPlayingPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D10D9BAFE11E31196C70422 /* MusicNowPlayingPanels.swift */; };
@@ -80,6 +84,8 @@
 		3BD1DFEF3A75B43935EB2185 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C911ACB6C027C8F9A096409 /* RootView.swift */; };
 		3BE24A3F4D4DED139056CC1B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 3C95AF876ECA5A35824263D7 /* PrivacyInfo.xcprivacy */; };
 		3DB703B04E4659AB8623A1A7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B442C75C212445F3786397ED /* SettingsView.swift */; };
+		3E10E4E62E4E47143AEA71B9 /* WatchNowTV.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB076E674CF0D07EFFAE17DA /* WatchNowTV.swift */; };
+		C211471B3050740729A220C9 /* WatchNowPhone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3786C41F7FCE1F0681977129 /* WatchNowPhone.swift */; };
 		3E39031243C9BC9870C143E4 /* OpenJDK.txt in Resources */ = {isa = PBXBuildFile; fileRef = BD71FD8B3E72803C426D91CC /* OpenJDK.txt */; };
 		3E3FA848D0BF2855FEAE2577 /* OpenJDK.txt in Resources */ = {isa = PBXBuildFile; fileRef = BD71FD8B3E72803C426D91CC /* OpenJDK.txt */; };
 		3E782ECA07220E19F2EBDB7C /* ThirdPartyNotices.txt in Resources */ = {isa = PBXBuildFile; fileRef = A3012FC04D8DAD058B1A5168 /* ThirdPartyNotices.txt */; };
@@ -348,6 +354,8 @@
 		A4EB0D74F8DB73E33CC129F8 /* CacheSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheSettingsView.swift; sourceTree = "<group>"; };
 		A90392B70C28DA6CC7497B9F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailAurora.swift; sourceTree = "<group>"; };
+		AB076E674CF0D07EFFAE17DA /* WatchNowTV.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchNowTV.swift; sourceTree = "<group>"; };
+		3786C41F7FCE1F0681977129 /* WatchNowPhone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchNowPhone.swift; sourceTree = "<group>"; };
 		AB7347843C885A97DFE397DD /* DouyinAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DouyinAccountView.swift; sourceTree = "<group>"; };
 		ADB3063A14E368A71892DCEE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B2CD4FD12F4DD3AAE1F8592A /* MusicPlayerViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlayerViews.swift; sourceTree = "<group>"; };
@@ -525,6 +533,8 @@
 				8A2BB58B1720E9D6D85F93F4 /* TVBoxApp.swift */,
 				90D706229ED242AE96AE52F8 /* Updates.swift */,
 				FAA3BD557773609F9C5109CA /* VideoEnhancement.swift */,
+				AB076E674CF0D07EFFAE17DA /* WatchNowTV.swift */,
+				3786C41F7FCE1F0681977129 /* WatchNowPhone.swift */,
 				367AD12D73554C3C3667315D /* WebSignInView.swift */,
 				4D5F41819EAA3AFE7BD6E5AD /* WebSniffer.swift */,
 				00C471D2D671003876D2A4F9 /* XunleiSignInView.swift */,
@@ -1064,6 +1074,8 @@
 				01D530B7370C1CB5CFA657BE /* TVBoxApp.swift in Sources */,
 				3917D120CB9602531FA0D44E /* Updates.swift in Sources */,
 				34679295741063A247FA3E48 /* VideoEnhancement.swift in Sources */,
+				03843072ECAC2CFBF3568416 /* WatchNowTV.swift in Sources */,
+				382B776ED16F65AA1CE97A61 /* WatchNowPhone.swift in Sources */,
 				B19F7759D04CE58A64304EF8 /* WebSignInView.swift in Sources */,
 				75327F454262A1854A16C462 /* WebSniffer.swift in Sources */,
 				3ABC036DB97EAE1D5C4A76F5 /* XunleiSignInView.swift in Sources */,
@@ -1139,6 +1151,8 @@
 				BB4A23786D789829360C242B /* TVBoxApp.swift in Sources */,
 				13A266A0565733CC2C7A66E6 /* Updates.swift in Sources */,
 				D0C9F46261DDBE305F183413 /* VideoEnhancement.swift in Sources */,
+				3E10E4E62E4E47143AEA71B9 /* WatchNowTV.swift in Sources */,
+				C211471B3050740729A220C9 /* WatchNowPhone.swift in Sources */,
 				5F2A9E2F9145EE979E5AA1F0 /* WebSignInView.swift in Sources */,
 				D0DBC45A6CF92DB54117E0AC /* WebSniffer.swift in Sources */,
 				C627C9461759A04D2BDC82FE /* XunleiSignInView.swift in Sources */,
@@ -1216,6 +1230,8 @@
 				17CDC06DD8AD8CE47973B982 /* TVBoxApp.swift in Sources */,
 				090916F463B64788E8F69468 /* Updates.swift in Sources */,
 				C093CB1C1E82F6648ADBC51C /* VideoEnhancement.swift in Sources */,
+				20E6BB22E6777E0F2310897D /* WatchNowTV.swift in Sources */,
+				3CA63D34B24DE8FDCB239A89 /* WatchNowPhone.swift in Sources */,
 				ED3A1F1DAE4D25F3AA743AC7 /* WebSignInView.swift in Sources */,
 				57ACF4B5018DE98046D60BA3 /* WebSniffer.swift in Sources */,
 				C4A3779AB55BFE31030743DF /* XunleiSignInView.swift in Sources */,
