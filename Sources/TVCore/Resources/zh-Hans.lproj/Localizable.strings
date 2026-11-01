@@ -1345,3 +1345,4 @@
 "Uses the official Dandanplay service. You can also enter your own compatible server." = "使用弹弹play官方服务，也可填入自建兼容服务地址。";
 "This build is missing its Dandanplay API configuration." = "此版本缺少弹弹play API 配置。";
 "Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent." = "优先使用弹弹play；没有找到弹幕或服务不可用时，再查询爱奇艺和腾讯视频。仅将官方公开单集页面交给 dmku（dmku 没有时交给 danmu.zxz.ee），不发送播放流地址或请求头。";
+"Dandanplay has reached its request limit for now. Try again later, or choose another danmaku server." = "弹弹play 的请求次数暂时用完了，请稍后再试，或换一个弹幕服务器。";

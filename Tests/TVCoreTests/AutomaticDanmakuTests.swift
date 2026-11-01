@@ -29,11 +29,13 @@ private actor DanmakuTestTransport {
             return Data(##"{"code":200,"count":2,"danmuku":[[1,5,"#4994c4","有2条弹幕正在赶来，请遵守弹幕礼仪，祝您观影愉快~","1"],[3,1,"#ffffff","备用解析","1721178153"],[8,5,"#f00","顶部","1721178153"]]}"##.utf8)
         }
         if host == "dmku.test" {
-            if mode == "dandan" { throw TVError.http(503) }
+            if ["dandan", "none", "limit", "limit-http"].contains(mode) { throw TVError.http(503) }
             if mode == "backup" { return Data(#"{"code":23,"danmuku":[]}"#.utf8) }
             return Data(##"{"code":23,"danmuku":[[1.5,"right","#fff","32px","真实协议测试"],[4,"top","#f00","32px","顶部"]]}"##.utf8)
         }
-        if host == "dandan.test" {
+        if host == "dandan.test" || host.hasPrefix("limit") {
+            if mode == "limit" { return Data(#"{"success":false,"errorCode":429,"errorMessage":"已达到接口调用配额上限"}"#.utf8) }
+            if mode == "limit-http" { throw TVError.http(429) }
             if mode == "slow" { try await Task.sleep(for: .seconds(10)) }
             if mode != "dandan" { return Data(#"{"success":true,"animes":[]}"#.utf8) }
             if path.contains("search/anime") { return Data(#"{"animes":[{"animeId":123,"animeTitle":"测试剧"}]}"#.utf8) }
@@ -43,6 +45,7 @@ private actor DanmakuTestTransport {
         throw TVError.http(404)
     }
     func count(_ key: String) -> Int { counts[key] ?? 0 }
+    func count(host: String) -> Int { counts.filter { $0.key.hasPrefix(host + "/") || $0.key == host }.values.reduce(0, +) }
     func total() -> Int { counts.values.reduce(0, +) }
 }
 
@@ -72,22 +75,68 @@ private actor DanmakuTestTransport {
     #expect(cache.summary().lookups == 1)
 }
 
-@Test func dandanplayIsPrimaryAndSlowPrimaryFallsBackWithinBoundedTime() async throws {
+@Test func dandanplayIsAskedOnlyWhenTheOtherProvidersFindNothing() async throws {
     let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
-    for mode in ["slow", "dandan"] {
+    // The others have comments: Dandanplay, whose requests are few, is never asked, even when it would be slow.
+    for mode in ["dmku", "slow"] {
         let transport = DanmakuTestTransport(mode)
         let resolver = DanmakuResolver(cache: MediaCache(root: root.appending(path: mode)), http: DanmakuHTTP { try await transport.send($0) },
             dandanServer: "https://dandan.test", dmkuServer: URL(string: "https://dmku.test")!)
         let start = Date()
         let result = try await resolver.resolve(automaticContext())
-        #expect(!result.comments.isEmpty)
+        #expect(result.source == "dmku · iqiyi")
         #expect(Date().timeIntervalSince(start) < 7)
-        #expect(mode == "dandan" ? result.source == "Dandanplay" : result.source == "dmku · iqiyi")
-        if mode == "dandan" {
-            #expect(await transport.count("dmku.test/") == 0)
-            #expect(await transport.count("mesh.if.iqiyi.com/portal/lw/search/homePageV3") == 0)
-            #expect(await transport.count("pbaccess.video.qq.com/trpc.videosearch.search_cgi.http/load_playsource_list_info") == 0)
+        #expect(await transport.count(host: "dandan.test") == 0)
+    }
+    // They have none: Dandanplay is asked. The next episode of a title it matched asks it first, with one request.
+    let transport = DanmakuTestTransport("dandan")
+    let resolver = DanmakuResolver(cache: MediaCache(root: root.appending(path: "dandan")), http: DanmakuHTTP { try await transport.send($0) },
+        dandanServer: "https://dandan.test", dmkuServer: URL(string: "https://dmku.test")!)
+    let first = try await resolver.resolve(automaticContext())
+    #expect(first.source == "Dandanplay")
+    #expect(await transport.count("mesh.if.iqiyi.com/portal/lw/search/homePageV3") == 1)
+    #expect(await transport.count("dandan.test/api/v2/search/anime") == 1)
+    let dmku = await transport.count(host: "dmku.test")
+    let next = try await resolver.resolve(automaticContext(episode: "第2集"))
+    #expect(next.source == "Dandanplay")
+    #expect(await transport.count("dandan.test/api/v2/search/anime") == 1)
+    #expect(await transport.count("dandan.test/api/v2/comment/123002") == 1)
+    #expect(await transport.count(host: "dmku.test") == dmku)
+}
+
+@Test func aTitleDandanplayDoesNotListIsSearchedThereOnceNotForEveryEpisode() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let transport = DanmakuTestTransport("none")
+    let resolver = DanmakuResolver(cache: MediaCache(root: root), http: DanmakuHTTP { try await transport.send($0) },
+        dandanServer: "https://dandan.test", dmkuServer: URL(string: "https://dmku.test")!)
+    for episode in ["第1集", "第2集", "第3集"] {
+        let result = try await resolver.resolve(automaticContext(episode: episode))
+        #expect(result.comments.isEmpty)
+        #expect(result.state == "unmatched")
+    }
+    #expect(await transport.count(host: "dandan.test") == 1)
+}
+
+@Test func dandanplaysLimitIsNamedAndAutomaticMatchingStopsAskingForAWhile() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    // Its limit comes as HTTP 200 with errorCode 429, or as HTTP 429.
+    for mode in ["limit", "limit-http"] {
+        let transport = DanmakuTestTransport(mode)
+        let http = DanmakuHTTP { try await transport.send($0) }
+        let server = "https://\(mode).test"
+        let resolver = DanmakuResolver(cache: MediaCache(root: root.appending(path: mode)), http: http,
+            dandanServer: server, dmkuServer: URL(string: "https://dmku.test")!)
+        for episode in ["第1集", "第2集"] {
+            let result = try await resolver.resolve(automaticContext(episode: episode))
+            #expect(result.comments.isEmpty)
+        }
+        #expect(await transport.count(host: "\(mode).test") == 1)
+        // Searching by hand still asks, and says why it got nothing.
+        await #expect(throws: DandanplayLimitReached.self) {
+            _ = try await CatalogDanmakuClient(address: server, transport: http, credentials: nil).search("测试剧")
         }
     }
 }

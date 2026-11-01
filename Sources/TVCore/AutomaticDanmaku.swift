@@ -62,9 +62,7 @@ public struct DanmakuHTTP: Sendable {
     public static func live(_ request: URLRequest) async throws -> Data {
         let (bytes, response) = try await URLSession.shared.bytes(for: request, delegate: request.value(forHTTPHeaderField: "X-AppId") == nil ? nil : DandanplayRedirectPolicy.shared)
         guard let response = response as? HTTPURLResponse else { throw TVError.invalidConfiguration }
-        guard (200..<300).contains(response.statusCode) else {
-            throw TVError.unsupported(L10n.text("The server returned HTTP %lld.", response.statusCode))
-        }
+        guard (200..<300).contains(response.statusCode) else { throw TVError.http(response.statusCode) }
         guard response.expectedContentLength <= CatalogDanmakuParser.maximumBytes else { throw TVError.invalidConfiguration }
         var data = Data()
         for try await byte in bytes {

@@ -1,8 +1,13 @@
 # Official Dandanplay API
 
 The default danmaku service is `https://api.dandanplay.net`. Automatic matching and
-manual search use the same signed API client. Automatic matching waits up to five
-seconds for Dandanplay before trying the remaining providers. The old built-in public proxy URL
+manual search use the same signed API client. The AppId's requests are few and shared
+by every install, so automatic matching asks Dandanplay last: only when iQIYI and
+Tencent Video (through dmku) find no comments, or first when the title already matched
+on Dandanplay (one request, waiting up to five seconds). A title Dandanplay doesn't list
+is not searched there again for a week, and after Dandanplay reports its limit
+(HTTP 429, or `errorCode` 429) automatic matching leaves it alone for an hour. Manual
+search still asks it and says when the limit is reached. The old built-in public proxy URL
 is migrated to the official service; other custom server URLs remain supported
 and never receive the app's authentication headers.
 
