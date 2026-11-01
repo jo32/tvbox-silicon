@@ -193,6 +193,46 @@ final class TVNavigationUITests: XCTestCase {
         XCTAssertTrue(add.waitForExistence(timeout: 10), "Back did not return to Settings")
         XCTAssertEqual(app.state, .runningForeground)
     }
+    /// A typed address stays when the alert closes by anything but Cancel. tvOS 18 also shows the alert's text field
+    /// as a button under it, the first one Down reaches; selecting it closed the alert and dropped the address (#291).
+    func testAddSubscriptionKeepsTheTypedAddress() throws {
+        let typed = "http://127.0.0.1:8776/config.json"
+        let app = XCUIApplication()
+        // On tvOS 18, XCTest's runtime-issue hook crashed the app on a UIKit log fault when the text field took focus.
+        app.launchEnvironment = ["OS_ACTIVITY_MODE": "disable"]
+        app.launchArguments = ["-qaSection", "settings", "-qaIsolatedData", "1",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        let add = app.buttons["Add Subscription"].firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 60), "Settings did not appear")
+        sleep(3)
+        if app.buttons["OK"].exists { remote.press(.select); sleep(2) }
+        remote.press(.right); sleep(1)
+        for _ in 0..<20 where !add.hasFocus { remote.press(.down); usleep(600_000) }
+        remote.press(.select)
+        let address = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Subscription URL'")).firstMatch
+        XCTAssertTrue(address.waitForExistence(timeout: 10), "Add Subscription did not open")
+        sleep(2)
+        for _ in 0..<4 where !address.hasFocus { remote.press(.up); usleep(600_000) }
+        remote.press(.select)
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 10), "The address alert did not appear")
+        sleep(1)
+        // Select opens the keyboard on the focused text field; Menu returns to the alert with the text kept.
+        remote.press(.select); sleep(3)
+        app.typeText(typed); sleep(1)
+        remote.press(.menu); sleep(2)
+        XCTAssertTrue(alert.exists, "Leaving the keyboard closed the alert")
+        let fieldButton = alert.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Subscription URL'")).firstMatch
+        let close = fieldButton.exists ? fieldButton : alert.buttons["Done"].firstMatch
+        for _ in 0..<3 where !close.hasFocus { remote.press(.down); usleep(700_000) }
+        for _ in 0..<2 where !close.hasFocus { remote.press(.right); usleep(700_000) }
+        XCTAssertTrue(close.hasFocus, "\(close.label) did not take focus")
+        remote.press(.select); sleep(2)
+        XCTAssertFalse(alert.exists, "\(close.label) did not close the alert")
+        XCTAssertTrue(address.label.hasSuffix(typed), "The typed address was not kept: \(address.label)")
+    }
     /// Poster titles are part of their card's label, so look for the text anywhere in a label.
     private func shown(_ text: String, in app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
