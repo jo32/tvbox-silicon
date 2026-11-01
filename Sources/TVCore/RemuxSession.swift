@@ -387,7 +387,7 @@ final class RemuxSession: @unchecked Sendable {
             Diagnostics.shared.record(level <= 16 ? .warning : .debug, "remux", "ffmpeg \(String(cString: message))")
         }
     }()
-    private static func installLog() { _ = logOnce }
+    static func installLog() { _ = logOnce }
 }
 
 private final class ReadResult: @unchecked Sendable {

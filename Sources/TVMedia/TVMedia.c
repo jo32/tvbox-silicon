@@ -704,6 +704,35 @@ static void reset_track(Track *track) {
     track->lastFramePts = AV_NOPTS_VALUE;
 }
 
+/// MPEG-TS carries AAC in ADTS frames and no configuration record, which an MP4 needs. FFmpeg's muxer would strip
+/// the frame headers with a filter that fragmented output turns off, so the record is made from the stream's
+/// parameters (what an ADTS header holds) and `copy_audio` drops each frame's header.
+static void aac_configuration(AVCodecParameters *par) {
+    static const int rates[] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350};
+    int sbr = par->profile == AV_PROFILE_AAC_HE || par->profile == AV_PROFILE_AAC_HE_V2;
+    int rate = sbr ? par->sample_rate / 2 : par->sample_rate, index = -1;
+    for (int i = 0; i < 13; i++) if (rates[i] == rate) index = i;
+    int channels = par->ch_layout.nb_channels;
+    if (par->profile == AV_PROFILE_AAC_HE_V2 && channels == 2) channels = 1;
+    if (channels == 8) channels = 7;
+    int object = par->profile >= AV_PROFILE_AAC_MAIN && par->profile <= AV_PROFILE_AAC_LTP ? par->profile + 1 : 2;
+    if (index < 0 || channels < 1 || channels > 7) return;
+    uint8_t *record = av_mallocz(2 + AV_INPUT_BUFFER_PADDING_SIZE);
+    if (!record) return;
+    record[0] = (uint8_t)(object << 3 | index >> 1);
+    record[1] = (uint8_t)((index & 1) << 7 | channels << 3);
+    par->extradata = record;
+    par->extradata_size = 2;
+}
+
+static void strip_adts(AVPacket *packet) {
+    if (packet->size < 7 || packet->data[0] != 0xFF || (packet->data[1] & 0xF6) != 0xF0) return;
+    int header = packet->data[1] & 1 ? 7 : 9;
+    if (packet->size <= header) return;
+    packet->data += header;
+    packet->size -= header;
+}
+
 TVMCursor *tvm_cursor_create(TVMInput *input, const TVMTrack *tracks, int count, int64_t offset) {
     if (count <= 0 || count > 64) return NULL;
     TVMCursor *cursor = av_mallocz(sizeof(TVMCursor));
@@ -740,8 +769,9 @@ TVMCursor *tvm_cursor_create(TVMInput *input, const TVMTrack *tracks, int count,
         track->outOffset = av_rescale_q(offset, AV_TIME_BASE_Q, track->outBase);
         track->nextSample = track->lastFramePts = AV_NOPTS_VALUE;
         track->fresh = 1;
-        const AVCodecParameters *par = track->in->codecpar;
+        AVCodecParameters *par = track->in->codecpar;
         enum AVCodecID codec = par->codec_id;
+        if (track->spec.mode == TVMModeCopy && codec == AV_CODEC_ID_AAC && !par->extradata_size) aac_configuration(par);
         track->delayed = track->spec.mode == TVMModeCopy &&
             (codec == AV_CODEC_ID_AC3 || codec == AV_CODEC_ID_EAC3 || codec == AV_CODEC_ID_TRUEHD ||
              (!par->extradata_size && (codec == AV_CODEC_ID_AAC || codec == AV_CODEC_ID_H264 || codec == AV_CODEC_ID_HEVC)));
@@ -924,6 +954,7 @@ static int convert_audio(TVMCursor *cursor, Track *track, AVPacket *packet) {
 /// Copied audio is retimed by its sample count: Matroska's millisecond clock would otherwise make every
 /// frame's duration jitter.
 static int copy_audio(Track *track, AVPacket *packet) {
+    if (track->in->codecpar->codec_id == AV_CODEC_ID_AAC) strip_adts(packet);
     av_packet_rescale_ts(packet, track->in->time_base, track->outBase);
     int64_t samples = packet->duration > 0 ? packet->duration : av_get_audio_frame_duration2(track->in->codecpar, packet->size);
     if (packet->pts == AV_NOPTS_VALUE) packet->pts = packet->dts;
