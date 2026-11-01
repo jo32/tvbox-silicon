@@ -359,11 +359,14 @@ struct WatchNowTVSeeAll: View {
             .clipped()
         }
         .buttonStyle(WatchNowTVPlateStyle())
-        .opacity(isRevealed ? 1 : 0)
+        // Not 0: the focus engine passes over a fully transparent view, and Left from the first cover then opened the
+        // sidebar instead of See All. A one-point sliver this faint is still invisible.
+        .opacity(isRevealed ? 1 : 0.02)
         // As tall as a cover with its captions: it opens the row, and a lazy row takes its height from its first item.
         .frame(height: height + DiscoverLayout.captionHeight, alignment: .top)
         .accessibilityHidden(!isRevealed)
         .accessibilityLabel(L10n.text("See All"))
+        .accessibilityIdentifier("watchnow.more")
     }
 }
 
