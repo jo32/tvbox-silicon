@@ -3,6 +3,13 @@ import TVCore
 
 struct SitesView: View {
     @Environment(Store.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    /// Choosing a source for something else (Watch Now's recommendations): only `pickable` sources are listed, the
+    /// `picked` one is checked, and Select hands the source back and returns instead of opening it.
+    var pick: ((Site) -> Void)? = nil
+    var pickable: [Site] = []
+    var picked: String? = nil
+    @FocusState private var focusedSite: String?
     @State private var query = ""
     /// Groups the viewer folded. Every group starts open, subscriptions and hidden sources included,
     /// so nothing on the page needs finding. Reset with the page, not with a pushed source: the state
@@ -15,11 +22,12 @@ struct SitesView: View {
     var body: some View {
         Group {
             if let config = store.subscription {
-                let groups = store.sourceGroups(includeHidden: false).filtered(by: query)
+                let groups = store.sourceGroups(includeHidden: false).filtered(by: query).limited(to: pick == nil ? nil : Set(pickable.map(\.key)))
                 let sites = store.orderedSites(config)
+                ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: Layout.cardSpacing) {
-                        if query.isEmpty && sites.count > 1 {
+                        if pick == nil, query.isEmpty && sites.count > 1 {
                             SourceOrderCard(sites: sites) { arranging = true }.tvFocusSection()
                         }
                         ForEach(groups) { group in
@@ -27,12 +35,19 @@ struct SitesView: View {
                             if !collapsed.contains(group.id) {
                                 LazyVGrid(columns: Layout.cardColumns, spacing: Layout.cardSpacing) {
                                     ForEach(group.sites) { site in
+                                        if let pick {
+                                            Button { pick(site); dismiss() } label: { SiteCard(site: site, chosen: site.key == picked) }.tileButton()
+                                                .accessibilityAddTraits(site.key == picked ? .isSelected : [])
+                                                .focused($focusedSite, equals: site.key)
+                                                .id(site.key)
+                                        } else {
                                         RouteLink { SiteView(site: site, origin: config.origin, jarURL: config.spiderURL) } label: { SiteCard(site: site, dimmed: group.kind == .hidden) }.tileButton()
                                             .contextMenu {
                                                 PinSourceButton(site: site, origin: config.origin)
                                                 HideSourceButton(site: site, origin: config.origin)
                                                 if store.sourceOrder.enabled { MoveSourceButtons(site: site, sites: sites) }
                                             }
+                                        }
                                     }
                                 }
                                 // Unfolds from under its header; folding only fades, as the groups below slide up.
@@ -40,6 +55,10 @@ struct SitesView: View {
                             }
                         }
                     }.pageContainer()
+                }
+                // Picking opens on the current choice rather than the top of a long page.
+                .defaultFocus($focusedSite, picked)
+                .onAppear { if pick != nil, let picked { proxy.scrollTo(picked, anchor: .center) } }
                 }
                 .sheet(isPresented: $arranging) { SourceOrderEditor(sites: sites, automatic: store.automaticSites(config)) }
                 #if DEBUG
@@ -55,7 +74,8 @@ struct SitesView: View {
             } else { ContentUnavailableView(L10n.text("No Sources Yet"), systemImage: "square.grid.2x2", description: Text(L10n.text("Add a TVBox subscription in Settings."))) }
         }
         .screenBackdrop()
-        .catalogSearchable(text: $query, prompt: L10n.text("Find a source")).tabTitle(L10n.text("Sources"))
+        .catalogSearchable(text: $query, prompt: L10n.text("Find a source"))
+        .modifier(SitesTitle(picking: pick != nil))
         .task(id: store.section) {
             if store.section == .sites && !prepared {
                 applyDefaultFold()
@@ -121,7 +141,25 @@ struct SitesView: View {
     }
 }
 
+/// The Sources tab names itself in the sidebar; a page pushed to pick a source says what is being chosen.
+private struct SitesTitle: ViewModifier {
+    let picking: Bool
+    func body(content: Content) -> some View {
+        if picking { content.screenTitle(L10n.text("Recommendation Source")) } else { content.tabTitle(L10n.text("Sources")) }
+    }
+}
+
 private extension Array where Element == SourceGroup {
+    /// Only these sources, when given; groups left empty drop out.
+    func limited(to keys: Set<String>?) -> [SourceGroup] {
+        guard let keys else { return self }
+        return compactMap { group in
+            var kept = group
+            kept.sites = group.sites.filter { keys.contains($0.key) }
+            return kept.sites.isEmpty ? nil : kept
+        }
+    }
+
     /// Sites whose name contains the query, ignoring case; groups left empty drop out.
     func filtered(by query: String) -> [SourceGroup] {
         guard !query.isEmpty else { return self }
@@ -188,6 +226,8 @@ struct SiteCard: View {
     var dimmed = false
     /// The pin badge on the icon; off in Watch Now's Pinned Sources, where every card is pinned.
     var marksPinned = true
+    /// Whether this is the source currently chosen, when picking one (`SitesView.pick`); nil when not picking.
+    var chosen: Bool? = nil
     #if os(tvOS)
     private var focused: Bool { isFocused }
     private let icon: CGFloat = 88, padding: CGFloat = 20, radius: CGFloat = 28
@@ -227,8 +267,12 @@ struct SiteCard: View {
                 }
             }
             Spacer(minLength: 0)
+            if chosen == true {
+                Image(systemName: "checkmark.circle.fill").font(.title2).foregroundStyle(focused ? Color.black : Brand.accent)
+                    .accessibilityHidden(true)
+            }
             #if !os(tvOS)
-            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+            if chosen == nil { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary) }
             #endif
         }
         .padding(padding).frame(maxWidth: .infinity, alignment: .leading)
@@ -617,6 +661,8 @@ struct SiteView: View {
     var initialQuery: String = ""
     /// A drive source's folder: the page lists it in place of the source's home.
     var folder: Video? = nil
+    /// The source's home as another page already has it (Watch Now's recommendations): shown at once, then refreshed.
+    var preview: (videos: [Video], categories: [TVCore.Category])? = nil
     private var canLoad: Bool { site.canBrowse(jarURL: jarURL) }
     private var isIndex: Bool { (site.raw["indexs"]?.int ?? 0) == 1 }
     @State private var browser = CatalogBrowser()
@@ -721,6 +767,7 @@ struct SiteView: View {
         }
         .screenTitle(folder?.name ?? site.name).task {
             store.searchModel.suspend()
+            if let preview, folder == nil, initialQuery.isEmpty { browser.seed(videos: preview.videos, categories: preview.categories) }
             if canLoad && !browser.loaded {
                 if browser.request != .home {
                     await browser.load(browser.request, client: client)

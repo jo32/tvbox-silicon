@@ -29,12 +29,26 @@ struct HomeView: View {
         } else {
             classic
         }
+        #elseif os(iOS)
+        // iPhone (and an iPad's narrow window) lays Watch Now out as Discover; a full iPad keeps its grid for now.
+        if let config = store.subscription, settled, sizeClass == .compact {
+            WatchNowPhonePage(config: config, sections: shownSections)
+                .historyDetailsDestination()
+                .overlay { if shownSections.isEmpty { allHidden } }
+        } else {
+            classic
+        }
         #else
-        classic
+        if let config = store.subscription, settled {
+            WatchNowPhonePage(config: config, sections: shownSections)
+                .historyDetailsDestination()
+                .overlay { if shownSections.isEmpty { allHidden } }
+        } else {
+            classic
+        }
         #endif
     }
 
-    #if os(tvOS)
     private var shownSections: Set<HomeSection> {
         Set(HomeSection.allCases.filter { section in
             switch section {
@@ -47,7 +61,6 @@ struct HomeView: View {
             }
         })
     }
-    #endif
 
     private var classic: some View {
         // The column width, not the placeholders' own width. A row of fixed cards is wider than the
@@ -560,14 +573,8 @@ private enum PosterSurface {
 enum HomeSection: String, CaseIterable, Identifiable {
     case upNext, continueWatching, pinnedSources, recommendations, favorites, liveTV
     var id: String { rawValue }
-    /// The sections this platform's Watch Now has: Up Next is on Apple TV only, for now.
-    static var available: [HomeSection] {
-        #if os(tvOS)
-        allCases
-        #else
-        allCases.filter { $0 != .upNext }
-        #endif
-    }
+    /// The sections Watch Now has.
+    static var available: [HomeSection] { allCases }
     /// The switch's key in the user defaults.
     var key: String { "homeShows." + rawValue }
     var title: String {

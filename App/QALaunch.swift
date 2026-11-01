@@ -85,6 +85,18 @@ enum QALaunch {
         }
         else if section != .discover, store.subscription == nil, !Distribution.isAppStore { await store.importSubscription(address: Store.defaultURL) }
         if QASweep.enabled, let config = store.subscription { Task.detached(priority: .utility) { await QASweep.run(config) } }
+        // `-qaSeedHistory <source key>:<video id>` records that video's first episode as part watched, for Watch Now's
+        // Up Next and Continue Watching.
+        if let seed = UserDefaults.standard.string(forKey: "qaSeedHistory"), let config = store.subscription {
+            let parts = seed.split(separator: ":", maxSplits: 1).map(String.init)
+            if parts.count == 2, let site = config.sites.first(where: { $0.key == parts[0] }) {
+                let client = CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL).applying(config)
+                if let video = try? await client.detail(parts[1]), let episode = video.episodes.first {
+                    store.playbackHistory.record(PlaybackHistoryContext(origin: config.origin, site: site, video: video, episode: episode),
+                                                 position: 30, duration: 120)
+                }
+            }
+        }
         if let section { store.section = section }
         if let page, page.hasPrefix("search:") {
             // Let the tab settle first: switching sections suspends a search that is already running.

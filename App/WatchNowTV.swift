@@ -59,9 +59,8 @@ struct WatchNowTVPage: View {
 
     @ViewBuilder private var rows: some View {
         if sections.contains(.continueWatching), !store.playbackHistory.entries.isEmpty {
-            WatchNowTVRail(title: L10n.text("Continue Watching")) {
+            WatchNowTVRail(title: L10n.text("Continue Watching"), seeAll: WatchNowTVSeeAll(height: WatchNowTVCover.height) { store.section = .history }) {
                 ForEach(store.playbackHistory.entries.prefix(12)) { HistoryCard(entry: $0) }
-                WatchNowTVSeeAll(height: WatchNowTVCover.height) { store.section = .history }
             }
             .id("continue")
         }
@@ -85,9 +84,8 @@ struct WatchNowTVPage: View {
         }
         if sections.contains(.recommendations) { RecommendationsView(config: config, rails: true).id("recommendations") }
         if sections.contains(.favorites), !store.favorites.items.isEmpty {
-            WatchNowTVRail(title: L10n.text("Favorites")) {
+            WatchNowTVRail(title: L10n.text("Favorites"), seeAll: WatchNowTVSeeAll(height: WatchNowTVCover.height) { store.section = .favorites }) {
                 ForEach(Array(store.favorites.items.prefix(20))) { WatchNowTVFavorite(item: $0) }
-                WatchNowTVSeeAll(height: WatchNowTVCover.height) { store.section = .favorites }
             }
             .id("favorites")
         }
@@ -100,55 +98,6 @@ struct WatchNowTVPage: View {
                     .focusSection()
             }
             .id("live")
-        }
-    }
-}
-
-/// The hero's selection and artwork, read only by the hero and the backdrop: scrolling and paging must not evaluate the
-/// rows again.
-@MainActor @Observable final class WatchNowHeroState {
-    var selected: String?
-    var scrollY: CGFloat = 0
-    var paints: [String: DiscoverPaint] = [:]
-    var details: [String: TMDBMatch.Details] = [:]
-    var paint: DiscoverPaint? { selected.flatMap { paints[$0] } }
-
-    /// Artwork for each title, two at a time, the shown one first: the TMDB backdrop this device already has for it
-    /// (from its page), else its own poster, blurred. Never a new TMDB lookup.
-    func load(_ entries: [PlaybackHistoryEntry]) async {
-        if selected == nil || !entries.contains(where: { $0.id == selected }) { selected = entries.first?.id }
-        let missing = entries.filter { paints[$0.id] == nil }
-        await withTaskGroup(of: (String, TMDBMatch.Details?, DiscoverPaint?).self) { group in
-            var remaining = missing.makeIterator()
-            func enqueue(_ entry: PlaybackHistoryEntry) {
-                group.addTask {
-                    let details = await Self.knownDetails(entry.context)
-                    let paint: DiscoverPaint? = if let backdrop = details?.backdrop {
-                        await DiscoverPainter.shared.paint(backdrop)
-                    } else if let poster = entry.context.poster {
-                        await DiscoverPainter.shared.paint(poster, headers: entry.context.posterHeaders ?? [:], soft: true)
-                    } else { nil }
-                    return (entry.id, details, paint)
-                }
-            }
-            for _ in 0..<2 { if let entry = remaining.next() { enqueue(entry) } }
-            for await (id, details, paint) in group {
-                guard !Task.isCancelled else { group.cancelAll(); break }
-                if let details { self.details[id] = details }
-                if let paint { paints[id] = paint }
-                if let entry = remaining.next() { enqueue(entry) }
-            }
-        }
-    }
-
-    /// The details the title's page found: the work the viewer chose for it, else a match kept on this device.
-    nonisolated static func knownDetails(_ context: PlaybackHistoryContext) async -> TMDBMatch.Details? {
-        guard TMDBMatch.enabled else { return nil }
-        let key = TMDBMatchStore.key(source: context.sourceKey, video: context.videoID)
-        switch await TMDBMatchStore.shared.choice(for: key) {
-        case .some(.none): return nil
-        case .some(.work(let type, let id, let season)): return try? await TMDBMatch.details(type, id: id, season: season)
-        case nil: return await TMDBMatchStore.shared.answer(for: key)?.details
         }
     }
 }
@@ -219,6 +168,7 @@ private struct WatchNowTVHero: View {
                         if let route = detailsRoute(entry) {
                             Button { openDetails?(route) } label: { Label(L10n.text("Show Details"), systemImage: "info.circle") }
                                 .focused($focus, equals: .details)
+                                .accessibilityIdentifier("home.upNext.details")
                         }
                     }
                     .controlButton()
@@ -230,6 +180,14 @@ private struct WatchNowTVHero: View {
         .multilineTextAlignment(.leading)
         .padding(.horizontal, DiscoverLayout.gutter).padding(.bottom, 40)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        .background(alignment: .trailing) {
+            // No TMDB backdrop: the page is tinted by the title's own cover, blurred, so show that cover itself too.
+            if state.paints[entry.id] != nil, details?.backdrop == nil, let poster = entry.context.poster {
+                WatchNowTVHeroCover(url: poster, headers: entry.context.posterHeaders ?? [:])
+                    .id(entry.id).transition(.opacity)
+                    .padding(.trailing, DiscoverLayout.gutter)
+            }
+        }
         .focusSection()
         .defaultFocus($focus, .resume)
         .onChange(of: focus) { _, value in
@@ -270,6 +228,32 @@ private struct WatchNowTVHero: View {
     }
 }
 
+/// A title's own cover, whole and sharp, on the right of the hero: portrait or landscape, it keeps its shape.
+private struct WatchNowTVHeroCover: View {
+    let url: URL
+    let headers: [String: String]
+    @State private var aspect: CGFloat?
+    var body: some View {
+        GeometryReader { proxy in
+            let box = CGSize(width: proxy.size.width * 0.4, height: proxy.size.height * 0.62)
+            let shape = aspect ?? 2.0 / 3.0
+            let size = shape > box.width / max(box.height, 1)
+                ? CGSize(width: box.width, height: box.width / shape) : CGSize(width: box.height * shape, height: box.height)
+            PosterImage(url: url, headers: headers, aspect: $aspect)
+                .frame(width: size.width, height: size.height)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.14), lineWidth: 1) }
+                .shadow(color: .black.opacity(0.5), radius: 34, y: 18)
+                .opacity(aspect == nil ? 0 : 1)
+                .animation(.easeOut(duration: 0.25), value: aspect == nil)
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .trailing)
+                .offset(y: 36)
+        }
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+}
+
 private struct WatchNowTVDotStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View { configuration.label.scaleEffect(configuration.isPressed ? 0.85 : 1) }
 }
@@ -294,19 +278,40 @@ struct WatchNowTVHeading: View {
     }
 }
 
-/// A section as a row of covers with room for the focus lift.
+/// A section as a row of covers under its name.
 struct WatchNowTVRail<Content: View>: View {
     let title: String
+    var seeAll: WatchNowTVSeeAll? = nil
     @ViewBuilder let content: () -> Content
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             WatchNowTVHeading(title: title)
-            ScrollView(.horizontal) {
-                LazyHStack(alignment: .top, spacing: DiscoverLayout.spacing) { content() }
-                    .padding(.horizontal, DiscoverLayout.gutter).padding(.vertical, 24)
+            WatchNowTVRow(seeAll: seeAll, content: content)
+        }
+    }
+}
+
+/// A row of covers with room for the focus lift. See All waits at the start of the row, as on Discover: a sliver in the
+/// margin, invisible, that Left from the first cover lands on and opens; it closes again when focus leaves it.
+struct WatchNowTVRow<Content: View>: View {
+    var seeAll: WatchNowTVSeeAll? = nil
+    @ViewBuilder let content: () -> Content
+    @FocusState private var seeAllFocused: Bool
+    @State private var revealed = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var body: some View {
+        ScrollView(.horizontal) {
+            LazyHStack(alignment: .top, spacing: DiscoverLayout.spacing) {
+                if let seeAll { seeAll.revealing(revealed).focused($seeAllFocused) }
+                content()
             }
-            .scrollClipDisabled().scrollIndicators(.hidden)
-            .focusSection()
+            .padding(.leading, seeAll != nil && !revealed ? DiscoverLayout.gutter - DiscoverLayout.spacing - 1 : DiscoverLayout.gutter)
+            .padding(.trailing, DiscoverLayout.gutter).padding(.vertical, 24)
+        }
+        .scrollClipDisabled().scrollIndicators(.hidden)
+        .focusSection()
+        .onChange(of: seeAllFocused) { _, focused in
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { revealed = focused }
         }
     }
 }
@@ -337,8 +342,11 @@ struct WatchNowTVSeeAll: View {
     let height: CGFloat
     var destination: Route? = nil
     var action: () -> Void = {}
+    /// Hidden to a one-point sliver until the row opens it (`WatchNowTVRow`).
+    private var isRevealed = true
     init(height: CGFloat, action: @escaping () -> Void) { self.height = height; self.action = action }
     init(height: CGFloat, route: Route) { self.height = height; self.destination = route }
+    func revealing(_ revealed: Bool) -> Self { var copy = self; copy.isRevealed = revealed; return copy }
     @Environment(\.openRoute) private var openRoute
     var body: some View {
         Button { if let destination { openRoute?(destination) } else { action() } } label: {
@@ -346,9 +354,15 @@ struct WatchNowTVSeeAll: View {
                 Text(L10n.text("See All")).font(.system(size: 26, weight: .medium)).multilineTextAlignment(.center)
                 Image(systemName: "chevron.right.circle.fill").font(.system(size: 26, weight: .medium))
             }
-            .padding(8).frame(width: 120, height: height)
+            .fixedSize()
+            .frame(width: isRevealed ? 120 : 1, height: height)
+            .clipped()
         }
         .buttonStyle(WatchNowTVPlateStyle())
+        .opacity(isRevealed ? 1 : 0)
+        // As tall as a cover with its captions: it opens the row, and a lazy row takes its height from its first item.
+        .frame(height: height + DiscoverLayout.captionHeight, alignment: .top)
+        .accessibilityHidden(!isRevealed)
         .accessibilityLabel(L10n.text("See All"))
     }
 }
@@ -437,29 +451,27 @@ private struct WatchNowTVFavorite: View {
     }
 }
 
-/// A row of a source's category on Watch Now: its first page, loaded when the row comes on screen.
+/// A row of a source's category on Watch Now: its first page. Rows come and go as the page scrolls (it is lazy), so
+/// what they loaded is kept in `WatchNowRows`: scrolling back shows it at once instead of loading it again.
 struct WatchNowTVCategoryRail: View {
     @Environment(Store.self) private var store
     let title: String
     let category: String
     let client: CatalogClient
     let seeAll: Route
-    @State private var browser = CatalogBrowser()
     private var isIndex: Bool { (client.site.raw["indexs"]?.int ?? 0) == 1 }
+    private var key: String { WatchNowRows.key(category: category, client: client) }
 
     var body: some View {
+        let row = WatchNowRows.shared.rows[key]
         Group {
-            if browser.loaded, browser.videos.isEmpty {
+            if let row, row.videos.isEmpty {
                 // An empty or failing category leaves no row behind.
                 Color.clear.frame(height: 0)
             } else {
-                WatchNowTVRail(title: title) {
-                    if browser.videos.isEmpty {
-                        ForEach(0..<6, id: \.self) { _ in
-                            SkeletonBlock(cornerRadius: 12).frame(width: WatchNowTVCover.width, height: WatchNowTVCover.height)
-                        }
-                    } else {
-                        ForEach(browser.videos.prefix(20)) { video in
+                WatchNowTVRail(title: title, seeAll: row == nil ? nil : WatchNowTVSeeAll(height: WatchNowTVCover.height, route: seeAll)) {
+                    if let row {
+                        ForEach(row.videos.prefix(20)) { video in
                             let cover = WatchNowTVCover(title: video.name, detail: video.remarks, poster: video.poster, headers: video.posterHeaders)
                             if isIndex {
                                 Button { store.searchVideos(video.name) } label: { cover }.cardButton()
@@ -467,13 +479,107 @@ struct WatchNowTVCategoryRail: View {
                                 RouteLink { CatalogDestination(video: video, client: client) } label: { cover }.cardButton()
                             }
                         }
-                        WatchNowTVSeeAll(height: WatchNowTVCover.height, route: seeAll)
+                    } else {
+                        // As tall as the covers and captions that replace them, so nothing below moves when they come.
+                        ForEach(0..<6, id: \.self) { _ in
+                            SkeletonBlock(cornerRadius: 12).frame(width: WatchNowTVCover.width, height: WatchNowTVCover.height)
+                                .frame(height: WatchNowTVCover.height + DiscoverLayout.captionHeight, alignment: .top)
+                        }
                     }
                 }
             }
         }
-        .task(id: "\(client.site.key)|\(category)") { await browser.load(.list(category: category, query: "", page: 1), client: client) }
-        .onDisappear { browser.cancel() }
+        .task(id: key) { WatchNowRows.shared.load(category: category, client: client) }
     }
 }
+
 #endif
+
+/// The hero's selection and artwork, read only by the hero and the backdrop: scrolling and paging must not evaluate the
+/// rows again.
+@MainActor @Observable final class WatchNowHeroState {
+    var selected: String?
+    var scrollY: CGFloat = 0
+    var paints: [String: DiscoverPaint] = [:]
+    var details: [String: TMDBMatch.Details] = [:]
+    var paint: DiscoverPaint? { selected.flatMap { paints[$0] } }
+
+    /// Artwork for each title, two at a time, the shown one first: on Apple TV the TMDB backdrop this device already has
+    /// for it (from its page), else its own poster, blurred; on iPhone the TMDB cover, else its own. Never a new TMDB lookup.
+    func load(_ entries: [PlaybackHistoryEntry]) async {
+        if selected == nil || !entries.contains(where: { $0.id == selected }) { selected = entries.first?.id }
+        let missing = entries.filter { paints[$0.id] == nil }
+        await withTaskGroup(of: (String, TMDBMatch.Details?, DiscoverPaint?).self) { group in
+            var remaining = missing.makeIterator()
+            func enqueue(_ entry: PlaybackHistoryEntry) {
+                group.addTask {
+                    let details = await Self.knownDetails(entry.context)
+                    #if os(tvOS)
+                    let paint: DiscoverPaint? = if let backdrop = details?.backdrop {
+                        await DiscoverPainter.shared.paint(backdrop)
+                    } else if let poster = entry.context.poster {
+                        await DiscoverPainter.shared.paint(poster, headers: entry.context.posterHeaders ?? [:], soft: true)
+                    } else { nil }
+                    #else
+                    // The phone's hero is portrait: a cover fills it, sharp at the top, as Discover's.
+                    let paint: DiscoverPaint? = if let poster = details?.heroPoster ?? details?.poster {
+                        await DiscoverPainter.shared.paint(poster)
+                    } else if let poster = entry.context.poster {
+                        await DiscoverPainter.shared.paint(poster, headers: entry.context.posterHeaders ?? [:])
+                    } else { nil }
+                    #endif
+                    return (entry.id, details, paint)
+                }
+            }
+            for _ in 0..<2 { if let entry = remaining.next() { enqueue(entry) } }
+            for await (id, details, paint) in group {
+                guard !Task.isCancelled else { group.cancelAll(); break }
+                if let details { self.details[id] = details }
+                if let paint { paints[id] = paint }
+                if let entry = remaining.next() { enqueue(entry) }
+            }
+        }
+    }
+
+    /// The details the title's page found: the work the viewer chose for it, else a match kept on this device.
+    nonisolated static func knownDetails(_ context: PlaybackHistoryContext) async -> TMDBMatch.Details? {
+        guard TMDBMatch.enabled else { return nil }
+        let key = TMDBMatchStore.key(source: context.sourceKey, video: context.videoID)
+        switch await TMDBMatchStore.shared.choice(for: key) {
+        case .some(.none): return nil
+        case .some(.work(let type, let id, let season)): return try? await TMDBMatch.details(type, id: id, season: season)
+        case nil: return await TMDBMatchStore.shared.answer(for: key)?.details
+        }
+    }
+}
+
+/// Watch Now's category rows, kept for the app's life. A row older than ten minutes loads again when it comes on
+/// screen, showing the old covers until the new ones arrive; a load runs to the end even if the row scrolls away. Apple TV and iPhone share it.
+@MainActor @Observable final class WatchNowRows {
+    static let shared = WatchNowRows()
+    struct Row { var videos: [Video]; var date: Date }
+    private(set) var rows: [String: Row] = [:]
+    @ObservationIgnored private var loading: Set<String> = []
+
+    static func key(category: String, client: CatalogClient) -> String { "\(client.origin)|\(client.site.key)|\(category)" }
+
+    func load(category: String, client: CatalogClient) {
+        let key = Self.key(category: category, client: client)
+        if let row = rows[key], Date().timeIntervalSince(row.date) < 600 { return }
+        guard loading.insert(key).inserted else { return }
+        Task {
+            defer { loading.remove(key) }
+            do {
+                let page = try await client.list(category: category, query: "", page: 1)
+                var seen = Set<String>()
+                let videos = page.videos.filter { seen.insert($0.id).inserted }
+                if rows[key]?.videos != videos { rows[key] = Row(videos: videos, date: Date()) } else { rows[key]?.date = Date() }
+            } catch {
+                Diagnostics.shared.failure("catalog", "watch now row \(client.reportContext)", error)
+                // Keep covers already shown; a row that never loaded goes away.
+                if rows[key] == nil { rows[key] = Row(videos: [], date: Date()) }
+            }
+            if rows.count > 40, let oldest = rows.min(by: { $0.value.date < $1.value.date })?.key { rows[oldest] = nil }
+        }
+    }
+}

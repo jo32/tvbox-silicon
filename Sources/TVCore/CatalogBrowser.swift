@@ -18,6 +18,8 @@ import Observation
     public private(set) var error: String?
     public private(set) var request: Request = .home
     private var generation = 0
+    /// Shown from another page (`seed`) until the first home load answers; that load then refreshes it in place.
+    private var seeded = false
     private var pending: Task<CatalogPage, Error>?
     private var pendingCategories: Task<CatalogPage, Error>?
     public init() {}
@@ -40,6 +42,17 @@ import Observation
         }
     }
 
+    /// Shows the home another page already has (Watch Now's picks for this source) at once. The next home load runs
+    /// without clearing or dimming it and replaces it only if the source answers differently; a failure keeps it.
+    public func seed(videos: [Video], categories: [Category]) {
+        guard !loaded, !busy, self.videos.isEmpty, !videos.isEmpty else { return }
+        var seen = Set<String>()
+        self.videos = videos.filter { seen.insert($0.id).inserted }
+        self.categories = categories
+        request = .home; category = ""; query = ""; page = 1; pageCount = 1
+        seeded = true
+    }
+
     /// The category bar for a page that opened on a search: categories only come with the home
     /// answer, so fetch it without touching the videos on screen.
     public func loadCategories(client: CatalogClient) async {
@@ -59,13 +72,15 @@ import Observation
         pendingCategories?.cancel(); pendingCategories = nil
         generation += 1
         let current = generation
+        let refreshing = seeded && request == .home && !videos.isEmpty
+        seeded = false
         self.request = request
-        busy = true; loaded = false; error = nil
+        busy = !refreshing; loaded = false; error = nil
         switch request {
         case .home: category = ""; query = ""; page = 1
         case let .list(category, query, page): self.category = category ?? ""; self.query = query; self.page = page
         }
-        videos = []; pageCount = 1
+        if !refreshing { videos = []; pageCount = 1 }
         defer { if generation == current { pending = nil; busy = false; if !Task.isCancelled { loaded = true } } }
         func perform(_ request: Request) async throws -> CatalogPage {
             let task = Task { try await fetch(request) }
@@ -76,7 +91,7 @@ import Observation
             var result = try await perform(request)
             guard generation == current, !Task.isCancelled else { return }
             if request == .home {
-                categories = result.categories
+                if !refreshing || !result.categories.isEmpty { categories = result.categories }
                 if result.videos.isEmpty, let first = categories.first {
                     category = first.id
                     self.request = .list(category: first.id, query: "", page: 1)
@@ -85,12 +100,14 @@ import Observation
             }
             guard generation == current, !Task.isCancelled else { return }
             var seen = Set<String>()
-            videos = result.videos.filter { seen.insert($0.id).inserted }
+            let fresh = result.videos.filter { seen.insert($0.id).inserted }
+            // A refresh that answers the same leaves the shown covers untouched.
+            if !refreshing || fresh != videos { videos = fresh }
             pageCount = result.pageCount
         } catch {
             guard generation == current, !Task.isCancelled else { return }
             Diagnostics.shared.failure("catalog", "\(request == .home ? "home" : "list") \(context)", error)
-            self.error = error.localizedDescription
+            if !refreshing { self.error = error.localizedDescription }
         }
     }
 }
