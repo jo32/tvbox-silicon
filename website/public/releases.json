@@ -1,6 +1,104 @@
 {
   "releases": [
     {
+      "version": "1.8.6",
+      "build": 44,
+      "date": "2026-11-02",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "play.rectangle.on.rectangle",
+          "title": {
+            "en": "A new Watch Now",
+            "zh-Hans": "全新的“现在观看”",
+            "zh-Hant": "全新的「立即觀看」",
+            "ja": "新しい「今すぐ観る」"
+          },
+          "detail": {
+            "en": "Watch Now now looks like Discover. What you're in the middle of fills the top of the page over its artwork, and Continue Watching, Favorites and Recommendations are rows of covers. Each row's title opens all of it with See All.",
+            "zh-Hans": "“现在观看”现在和“发现”一样：你正在看的内容以大图铺满页面顶部，“继续观看”、“收藏”和“推荐”都是一排排海报。点每一排的标题可以“查看全部”。",
+            "zh-Hant": "「立即觀看」現在和「探索」一樣：你正在看的內容以大圖鋪滿頁面頂部，「繼續觀看」、「收藏」和「推薦」都是一排排海報。點每一排的標題可以「查看全部」。",
+            "ja": "「今すぐ観る」が「見つける」と同じデザインになりました。見ている途中の作品がアートワークとともにページ上部に大きく表示され、「視聴を続ける」「お気に入り」「おすすめ」はポスターの列になります。各列のタイトルから「すべて表示」できます。"
+          },
+          "platforms": [
+            "macos",
+            "ios",
+            "tvos"
+          ]
+        },
+        {
+          "symbol": "photo.tv",
+          "title": {
+            "en": "Picture for more 4K videos",
+            "zh-Hans": "更多 4K 视频有画面了",
+            "zh-Hant": "更多 4K 影片有畫面了",
+            "ja": "4K 動画の映像が出るように"
+          },
+          "detail": {
+            "en": "Some sources send 4K HEVC video in a format Apple's player plays with sound only. The app now repackages these streams as they play, so the picture shows too.",
+            "zh-Hans": "有些片源用苹果播放器只能播出声音的格式发送 4K HEVC 视频。现在应用会在播放时重新封装这些视频流，画面也能正常显示。",
+            "zh-Hant": "有些片源用蘋果播放器只能播出聲音的格式傳送 4K HEVC 影片。現在 App 會在播放時重新封裝這些影片串流，畫面也能正常顯示。",
+            "ja": "一部のソースは、Apple のプレーヤーでは音声しか再生されない形式で 4K HEVC 動画を送ってきます。再生中にアプリがこれを変換し直すので、映像も表示されるようになりました。"
+          }
+        },
+        {
+          "symbol": "film",
+          "title": {
+            "en": "Trailers play full screen",
+            "zh-Hans": "预告片全屏播放",
+            "zh-Hant": "預告片全螢幕播放",
+            "ja": "予告編を全画面で再生"
+          },
+          "detail": {
+            "en": "On iPhone and iPad, Discover's trailers open in the movie player, with full screen, zoom and playback speed, instead of a small window.",
+            "zh-Hans": "在 iPhone 和 iPad 上，“发现”里的预告片现在用影片播放器打开，可以全屏、缩放和调整播放速度，不再是一个小窗口。",
+            "zh-Hant": "在 iPhone 和 iPad 上，「探索」裡的預告片現在用影片播放器開啟，可以全螢幕、縮放和調整播放速度，不再是一個小視窗。",
+            "ja": "iPhone と iPad では、「見つける」の予告編が小さなウインドウではなく動画プレーヤーで開き、全画面・ズーム・再生速度が使えます。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "person.badge.key",
+          "title": {
+            "en": "Baidu Netdisk sign-in for CatPawOpen",
+            "zh-Hans": "CatPawOpen 源可用百度网盘登录",
+            "zh-Hant": "CatPawOpen 來源可用百度網盤登入",
+            "ja": "CatPawOpen で Baidu Netdisk にサインイン"
+          },
+          "detail": {
+            "en": "When a CatPawOpen source says it needs a Baidu Netdisk sign-in, the app now offers its own Baidu sign-in right there, instead of the source's config page that couldn't be opened from another phone.",
+            "zh-Hans": "CatPawOpen 源提示需要登录百度网盘时，应用现在会直接提供自己的百度登录，不用再去那个无法用另一台手机打开的源配置页面。",
+            "zh-Hant": "CatPawOpen 來源提示需要登入百度網盤時，App 現在會直接提供自己的百度登入，不用再去那個無法用另一支手機開啟的來源設定頁面。",
+            "ja": "CatPawOpen のソースが Baidu Netdisk へのサインインを求めたとき、アプリ自身の Baidu サインインをその場で表示するようになりました。別のスマートフォンから開けないソースの設定ページは不要です。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "On Apple TV, the Downloads page reaches your downloaded episodes while others are still downloading. On Apple TV with tvOS 18, Add Subscription keeps the address you typed. Danmaku keep coming when Dandanplay's daily limit is reached. On iPhone, the watch page shows whole episode names and marks the episode playing clearly. Fixed a crash on iPhone while a video loads, and one on iPads with iOS 17 when opening a section from More.",
+            "zh-Hans": "在 Apple TV 上，有内容正在下载时也能进入“下载”页面的已下载剧集。在 tvOS 18 的 Apple TV 上，“添加订阅”会保留你输入的地址。弹弹play达到每日上限时，弹幕也能继续显示。在 iPhone 上，播放页会显示完整的剧集名称，并清楚标出正在播放的一集。修复了 iPhone 在视频加载时的一个闪退，以及 iOS 17 的 iPad 从“更多”打开页面时的闪退。",
+            "zh-Hant": "在 Apple TV 上，有內容正在下載時也能進入「下載」頁面的已下載集數。在 tvOS 18 的 Apple TV 上，「新增訂閱」會保留你輸入的網址。彈彈play達到每日上限時，彈幕也能繼續顯示。在 iPhone 上，播放頁會顯示完整的集數名稱，並清楚標出正在播放的一集。修正了 iPhone 在影片載入時的一個閃退，以及 iOS 17 的 iPad 從「更多」開啟頁面時的閃退。",
+            "ja": "Apple TV で、ほかのダウンロード中でも「ダウンロード」ページのダウンロード済みエピソードに移動できるようになりました。tvOS 18 の Apple TV で「配信設定を追加」に入力したアドレスが消えなくなりました。dandanplay の 1 日の上限に達しても弾幕が表示されます。iPhone の再生ページでエピソード名が省略されずに表示され、再生中のエピソードがはっきりわかります。動画の読み込み中に iPhone で落ちる問題と、iOS 17 の iPad で「その他」からページを開くと落ちる問題を修正しました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.5",
       "build": 43,
       "date": "2026-11-01",
