@@ -752,8 +752,10 @@ import TVCore
         // average counts a half-fetched segment's bytes against finished durations, so it runs high
         // mid-segment and settles at each boundary: keep the lowest value seen.
         if let last = events.last {
+            // The access log can report an infinite bitrate (crash d7b70a868820); skip it rather than show it.
             let media = max(0, last.averageVideoBitrate) + max(0, last.averageAudioBitrate)
-            let current = media > 0 ? media / 8 : (last.indicatedBitrate > 0 ? last.indicatedBitrate / 8 : nil)
+            let indicated = last.indicatedBitrate
+            let current = media > 0 && media.isFinite ? media / 8 : (indicated > 0 && indicated.isFinite ? indicated / 8 : nil)
             next.required = [current, transfer.required].compactMap { $0 }.min()
         }
         // The Mac plays HLS through a local proxy; name the real server instead.
@@ -1225,7 +1227,9 @@ extension PlaybackSession {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         formatter.allowsNonnumericFormatting = false // "0 KB", not "Zero KB"
-        return L10n.text("%@/s", formatter.string(fromByteCount: Int64(max(0, bytesPerSecond))))
+        // Int64(_:) traps on infinity, NaN and anything past Int64.max.
+        let bytes = bytesPerSecond.isFinite ? Int64(min(max(0, bytesPerSecond), 1e15)) : 0
+        return L10n.text("%@/s", formatter.string(fromByteCount: bytes))
     }
 }
 
