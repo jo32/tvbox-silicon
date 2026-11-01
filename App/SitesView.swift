@@ -922,6 +922,9 @@ struct VideoDetailView: View {
         .sheet(item: $signingIn) { drive in
             if drive == .xunlei {
                 XunleiSignInView { if let episode = playbackIssue?.episode { startRequest { await play(episode) } } }
+            } else if drive == .baidu {
+                // Baidu signs in with a code to scan on a Mac, as in Settings.
+                CloudQRLoginView(drive: .baidu) { retryAfterSignIn() }
             } else {
                 CloudLoginView(provider: drive.provider) { cookie, ticket in
                     try await drive.provider.saveLogin(cookie, ticket: ticket)
@@ -1557,21 +1560,20 @@ struct VideoDetailView: View {
             store.playing = store.catalogChannel(resolved, video: currentVideo(), episode: episode, client: playback)
         } catch { fail(episode, error) }
     }
-    #if !os(macOS)
     private func retryAfterSignIn() {
         if let episode = playbackIssue?.episode { startRequest { await play(episode) } }
     }
-    #endif
     private func fail(_ episode: Episode, _ error: Error) {
         guard !Task.isCancelled, !(error is CancellationError) else { return }
+        let login = error as? CloudDriveLoginRequired ?? CloudDriveLoginRequired(bundleMessage: error.localizedDescription)
         // A drive that needs signing in is expected, not a failure to report.
-        if !(error is CloudDriveLoginRequired) {
+        if login == nil {
             Diagnostics.shared.failure("catalog", "play \(client.reportContext) flag=\(episode.flag)", error)
         }
         withAnimation(.smooth(duration: 0.25)) {
             // Plugins report a missing or expired drive login in their own words ("夸克授权失败，请扫码登录");
             // say what happened and offer the sign-in instead of echoing them.
-            if let login = error as? CloudDriveLoginRequired, let drive = CloudDrive(rawValue: login.rawValue) {
+            if let login, let drive = CloudDrive(rawValue: login.rawValue) {
                 playbackIssue = PlaybackIssue(episode: episode, message: drive.expiredHint, drive: drive, blockedBeforeRequest: false)
             } else if let provider = CatPawSignIn.provider(for: error.localizedDescription) {
                 // Signed in, but the bundle wants a token its own code gives; signing in again would change nothing.
@@ -2026,8 +2028,9 @@ private struct BundleSignIn: Identifiable {
 /// Cloud drives whose plugins need a saved login before they can return a stream.
 private enum CloudDrive: String, Identifiable {
     /// Xunlei's sign-in is only for CatPawOpen bundles, which say when it is missing; other sources play their Xunlei
-    /// lines without it, so those lines are never held back for it.
-    case quark, uc, xunlei
+    /// lines without it, so those lines are never held back for it. Baidu comes only from a plugin's error
+    /// (`CloudDriveLoginRequired`), never from a line's name: other plugins sign in to it with their own code.
+    case quark, uc, xunlei, baidu
     var id: String { rawValue }
     /// FTY names its lines after drive nicknames: 夸父 is Quark, 优汐 is UC.
     init?(flag: String) {
@@ -2058,20 +2061,21 @@ private enum CloudDrive: String, Identifiable {
         case .quark: L10n.text("Quark")
         case .uc: "UC"
         case .xunlei: L10n.text("Xunlei")
+        case .baidu: L10n.text("Baidu Netdisk")
         }
     }
     var signInTitle: String {
         switch self {
         case .quark: L10n.text("Sign In to Quark")
         case .uc: L10n.text("Sign In to UC")
-        case .xunlei: L10n.text("Sign In to %@", name)
+        case .xunlei, .baidu: L10n.text("Sign In to %@", name)
         }
     }
     #if os(macOS)
     var provider: CloudProvider { self == .quark ? .quark : .uc }
     #else
-    var qrDrive: CloudDriveQRLogin.Drive { self == .quark ? .quark : .uc }
-    var webSignIn: WebSignIn { self == .quark ? .quark : .uc }
+    var qrDrive: CloudDriveQRLogin.Drive { self == .quark ? .quark : self == .baidu ? .baidu : .uc }
+    var webSignIn: WebSignIn { self == .quark ? .quark : self == .baidu ? .baidu : .uc }
     #endif
     var loginHint: String { L10n.text("This source plays from %@ and needs you to sign in first.", name) }
     var expiredHint: String { L10n.text("Your %@ sign-in is missing or has expired. Sign in again to play this episode.", name) }
