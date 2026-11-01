@@ -99,6 +99,14 @@ public enum CloudDriveLoginRequired: String, LocalizedError, Sendable {
         self.init(rawValue: drive)
     }
 
+    /// A CatPawOpen bundle without a Baidu sign-in sends the viewer to its config center, which runs on the device's
+    /// own address and can't be opened from another phone ("还没有配置百度网盘 Cookie，请先去配置中心登录百度网盘", #297).
+    /// The app's Baidu sign-in reaches the bundle on its next request (Runtime/NodeHost `shareAccounts`).
+    public init?(bundleMessage message: String) {
+        guard message.contains("百度网盘"), message.contains("配置中心") || message.localizedCaseInsensitiveContains("cookie") else { return nil }
+        self = .baidu
+    }
+
     public func message(language: String? = nil) -> String {
         switch self {
         case .quark, .uc:

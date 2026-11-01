@@ -201,6 +201,13 @@ import Testing
     #expect(CatPawSignIn.provider(for: "夸克授权失败，请扫码登录") == nil)
 }
 
+@Test func catPawBundlesAskForTheAppsBaiduSignIn() {
+    // #297: the bundle's config center can't be reached from another phone, so the app offers its own Baidu sign-in.
+    #expect(CloudDriveLoginRequired(bundleMessage: "插件错误：Error: The source failed (HTTP 500): 还没有配置百度网盘 Cookie，请先去配置中心登录百度网盘") == .baidu)
+    #expect(CloudDriveLoginRequired(bundleMessage: "非高会需要配置 UC TV Token，请到配置中心扫码获取") == nil)
+    #expect(CloudDriveLoginRequired(bundleMessage: "百度网盘分享已失效") == nil)
+}
+
 #if canImport(CoreImage.CIFilterBuiltins)
 @Test func catPawSignInReadsTheLinkInItsCode() throws {
     let link = "https://su.uc.cn/9_iCI3h?uc_param_str=&token=sta326333a3maasaq80nd5xub2ws0ib1"
