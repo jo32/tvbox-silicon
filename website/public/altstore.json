@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.6",
+          "buildVersion": "44",
+          "date": "2026-11-02",
+          "localizedDescription": "• 全新的“现在观看”\n• 更多 4K 视频有画面了\n• 预告片全屏播放\n• CatPawOpen 源可用百度网盘登录\n• 其他修复\n\n• A new Watch Now\n• Picture for more 4K videos\n• Trailers play full screen\n• Baidu Netdisk sign-in for CatPawOpen\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.6/Yingxia-1.8.6-ios.ipa",
+          "size": 117329114,
+          "sha256": "199d9dd2b049d84fe59f5a359322410c687d3818cf18a941920be8dafd5ffede",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.5",
           "buildVersion": "43",
           "date": "2026-11-01",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.2/Yingxia-1.8.2-ios.ipa",
           "size": 115095547,
           "sha256": "83eee78a59458b9361c6b1fdef9284e0615ccc8a9b2fc9a3ad843d9911ce8a09",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.1",
-          "buildVersion": "39",
-          "date": "2026-10-28",
-          "localizedDescription": "• 来自 TMDB 的海报、演员和剧照\n• 在影片页直接观看\n• 网盘字幕\n• 新增两个短剧源\n• 其他修复\n\n• Artwork, cast and episode pictures from TMDB\n• Watch on the video's page\n• Subtitles from cloud drives\n• Two more short-drama sources\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.1/Yingxia-1.8.1-ios.ipa",
-          "size": 99244426,
-          "sha256": "4830fa6ed2af943efbe36ed5931c95316e999e0f27e9c224a1e08ec1271e2bfc",
           "minOSVersion": "17.0"
         }
       ],
