@@ -1,6 +1,117 @@
 {
   "releases": [
     {
+      "version": "1.8.5",
+      "build": 43,
+      "date": "2026-11-01",
+      "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.5/Yingxia-1.8.5-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.5/Yingxia-1.8.5-macos-x86_64.dmg",
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "text.bubble",
+          "title": {
+            "en": "Official Dandanplay danmaku",
+            "zh-Hans": "官方弹弹play弹幕",
+            "zh-Hant": "官方彈彈play彈幕",
+            "ja": "公式 dandanplay の弾幕"
+          },
+          "detail": {
+            "en": "Danmaku now come straight from the official Dandanplay API instead of a public proxy, so matching an episode and searching for comments are faster and more reliable. If Dandanplay has nothing within five seconds, the other services are tried. Your own danmaku servers keep working as before.",
+            "zh-Hans": "弹幕现在直接来自弹弹play官方 API，不再经过公共代理，匹配剧集和搜索弹幕都更快、更稳定。如果弹弹play五秒内没有结果，会自动尝试其他服务。你自己添加的弹幕服务器照常可用。",
+            "zh-Hant": "彈幕現在直接來自彈彈play官方 API，不再經過公共代理，比對劇集和搜尋彈幕都更快、更穩定。如果彈彈play五秒內沒有結果，會自動嘗試其他服務。你自己加入的彈幕伺服器照常可用。",
+            "ja": "弾幕コメントは公開プロキシを経由せず、dandanplay の公式 API から直接取得するようになり、エピソードの照合もコメント検索も速く安定しました。dandanplay が 5 秒以内に見つからなければ、ほかのサービスを試します。自分で追加した弾幕サーバーはこれまでどおり使えます。"
+          }
+        },
+        {
+          "symbol": "film.stack",
+          "title": {
+            "en": "More videos from cloud drives play",
+            "zh-Hans": "更多网盘视频可以播放",
+            "zh-Hant": "更多網盤影片可以播放",
+            "ja": "クラウドドライブの動画がさらに再生可能に"
+          },
+          "detail": {
+            "en": "AV1 videos now play on Apple TV and on Macs, iPhones and iPads without an AV1 chip. MKV files with no length, or with a clock that starts late, play and seek properly. Quark's transcoded copies play again, a drive that sends back an empty chunk is simply asked again, and a video no longer fails with \"Could not connect to the server\" after the app comes back from the background.",
+            "zh-Hans": "AV1 视频现在可以在 Apple TV，以及没有 AV1 硬件解码的 Mac、iPhone 和 iPad 上播放。没有时长信息或时间轴起点靠后的 MKV 文件也能正常播放和拖动进度。夸克的转码版本重新可以播放；网盘返回空数据块时会自动重新请求；应用从后台回来后，视频不再报“无法连接服务器”。",
+            "zh-Hant": "AV1 影片現在可以在 Apple TV，以及沒有 AV1 硬體解碼的 Mac、iPhone 和 iPad 上播放。沒有時長資訊或時間軸起點較晚的 MKV 檔案也能正常播放和拖曳進度。夸克的轉碼版本重新可以播放；網盤回傳空資料區塊時會自動重新請求；App 從背景回來後，影片不再出現「無法連線伺服器」。",
+            "ja": "AV1 の動画が、Apple TV と、AV1 ハードウェアのない Mac・iPhone・iPad でも再生できるようになりました。長さの情報がない MKV や、時刻が途中から始まる MKV も正しく再生・シークできます。Quark のトランスコード版が再び再生でき、ドライブが空のデータを返したときは自動で取り直します。アプリがバックグラウンドから戻ったあとに「サーバーに接続できません」で止まることもなくなりました。"
+          }
+        },
+        {
+          "symbol": "info.circle",
+          "title": {
+            "en": "Show Video Info",
+            "zh-Hans": "显示视频信息",
+            "zh-Hant": "顯示影片資訊",
+            "ja": "ビデオ情報を表示"
+          },
+          "detail": {
+            "en": "Turn on Show Video Info in Settings or in the player to see a small panel in a corner of the picture: the video's codec, resolution, frame rate and HDR, the audio's codec and channels, the bitrate and the current download speed. It's off by default.",
+            "zh-Hans": "在“设置”或播放器中打开“显示视频信息”，画面角落会显示一个小面板：视频编码、分辨率、帧率和 HDR，音频编码和声道，码率以及当前下载速度。默认关闭。",
+            "zh-Hant": "在「設定」或播放器中開啟「顯示影片資訊」，畫面角落會顯示一個小面板：影片編碼、解析度、影格率和 HDR，音訊編碼和聲道，位元率以及目前下載速度。預設關閉。",
+            "ja": "「設定」またはプレーヤーで「ビデオ情報を表示」をオンにすると、画面の隅に小さなパネルが出て、映像のコーデック・解像度・フレームレート・HDR、音声のコーデックとチャンネル、ビットレート、現在のダウンロード速度がわかります。初期設定はオフです。"
+          }
+        },
+        {
+          "symbol": "paperclip",
+          "title": {
+            "en": "Pictures and videos in feedback",
+            "zh-Hans": "反馈可附图片和视频",
+            "zh-Hant": "回饋可附圖片和影片",
+            "ja": "フィードバックに写真・動画を添付"
+          },
+          "detail": {
+            "en": "Send Feedback can now attach up to four pictures or videos (pictures up to 10 MB, videos up to 50 MB), and it adds the diagnostic log by itself, so problems are easier to track down.",
+            "zh-Hans": "“反馈问题”现在可以附上最多 4 张图片或视频（图片最大 10 MB，视频最大 50 MB），并会自动附上诊断日志，问题更容易查清。",
+            "zh-Hant": "「意見回饋」現在可以附上最多 4 張圖片或影片（圖片最大 10 MB，影片最大 50 MB），並會自動附上診斷記錄，問題更容易查清。",
+            "ja": "「フィードバックを送信」で、写真や動画を 4 つまで添付できるようになりました（写真は 10 MB、動画は 50 MB まで）。診断ログも自動で添付されるので、問題を調べやすくなります。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "bolt",
+          "title": {
+            "en": "JAR sources open faster",
+            "zh-Hans": "JAR 源打开更快",
+            "zh-Hant": "JAR 來源開啟更快",
+            "ja": "JAR ソースがすばやく開きます"
+          },
+          "detail": {
+            "en": "After an app update, JAR sources no longer convert all of their code again the first time you use them. The code a source needs first is also prepared ahead of time while the app is idle, so the first tap on a source is much quicker.",
+            "zh-Hans": "应用更新后，JAR 源第一次使用时不再重新转换全部代码。源最先需要的代码也会在应用空闲时提前准备好，第一次点开源会快很多。",
+            "zh-Hant": "App 更新後，JAR 來源第一次使用時不再重新轉換全部程式碼。來源最先需要的程式碼也會在 App 閒置時提前準備好，第一次點開來源會快很多。",
+            "ja": "アプリを更新しても、JAR ソースを初めて使うときにコードをすべて変換し直すことはなくなりました。ソースが最初に必要とするコードはアプリが空いている間に前もって用意されるので、ソースを初めて開くのがずっと速くなります。"
+          },
+          "platforms": [
+            "ios",
+            "tvos"
+          ]
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "The iPhone no longer crashes when iOS refuses to rotate the player. On iPhone, a video with several episodes waits for you to choose one instead of starting at once. Discover's pictures load on networks that block TMDB's image server. On Apple TV with tvOS 27, Add Subscription and other pop-ups no longer freeze the app. Apple TV's \"can't play\" page has Liquid Glass buttons. On iPhone, Search Sources from the catalog search now shows the results.",
+            "zh-Hans": "iOS 拒绝旋转播放器时，iPhone 不再闪退。在 iPhone 上，多集视频会等你选择剧集，而不是立刻开始播放。在屏蔽 TMDB 图片服务器的网络上，“发现”的图片也能加载。在 tvOS 27 的 Apple TV 上，“添加订阅”等弹窗不再让应用卡死。Apple TV 的“无法播放”页面改用 Liquid Glass 按钮。在 iPhone 上，从目录搜索里点“搜索片源”现在会显示搜索结果。",
+            "zh-Hant": "iOS 拒絕旋轉播放器時，iPhone 不再閃退。在 iPhone 上，多集影片會等你選擇集數，而不是立刻開始播放。在封鎖 TMDB 圖片伺服器的網路上，「探索」的圖片也能載入。在 tvOS 27 的 Apple TV 上，「新增訂閱」等彈出視窗不再讓 App 卡住。Apple TV 的「無法播放」頁面改用 Liquid Glass 按鈕。在 iPhone 上，從目錄搜尋裡點「搜尋片源」現在會顯示搜尋結果。",
+            "ja": "iOS がプレーヤーの回転を拒んだときに iPhone で落ちなくなりました。iPhone では、複数エピソードの動画はすぐに再生を始めず、エピソードを選ぶまで待ちます。TMDB の画像サーバーがブロックされているネットワークでも「見つける」の画像が表示されます。tvOS 27 の Apple TV で「配信設定を追加」などのポップアップでアプリが固まらなくなりました。Apple TV の「再生できません」画面のボタンが Liquid Glass になりました。iPhone のカタログ検索から「配信元を検索」を押すと、結果が表示されるようになりました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.4",
       "build": 42,
       "date": "2026-10-31",
@@ -2903,7 +3014,7 @@
   ],
   "testflight": {
     "ios": {
-      "build": 41,
+      "build": 42,
       "link": "https://testflight.apple.com/join/dU6UNbzp"
     },
     "tvos": {

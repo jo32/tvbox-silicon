@@ -53,7 +53,8 @@ public enum Remux {
         }
     }
 
-    public static func isRemuxed(_ url: URL) -> Bool { session(url) != nil }
+    /// Whether `url` is served by the repackager: a file (`open`) or an HLS stream (`HLSRemux`).
+    public static func isRemuxed(_ url: URL) -> Bool { identifier(url).map(RemuxStore.shared.contains) ?? false }
 
     /// Whether the picture behind `url` is served as HDR (PQ or HLG), not converted to SDR.
     public static func isHDR(_ url: URL) -> Bool {
@@ -87,7 +88,7 @@ public enum Remux {
     /// take back a suspended app's listening sockets, and AVPlayer then finds `url` refusing (-1004). Nil when
     /// the file was closed meanwhile.
     public static func relisten(_ url: URL) async throws -> URL? {
-        guard let id = identifier(url), RemuxStore.shared.session(id) != nil else { return nil }
+        guard let id = identifier(url), RemuxStore.shared.contains(id) else { return nil }
         return try await RemuxServer.shared.base(replacing: url).appending(path: "\(id)/master.m3u8")
     }
 
@@ -394,24 +395,34 @@ final class FileRemuxSource: RemuxSource, @unchecked Sendable {
     func close() async { lock.withLock { try? handle.close() } }
 }
 
-/// The open files; the oldest is closed when a fourth opens (an episode queued behind another holds two).
+/// A file or HLS stream the loopback server serves.
+protocol RemuxStored: AnyObject, Sendable {
+    var id: String { get }
+    func close()
+}
+
+extension RemuxSession: RemuxStored {}
+
+/// The open files and streams; the oldest is closed when a fourth opens (an episode queued behind another holds two).
 final class RemuxStore: @unchecked Sendable {
     static let shared = RemuxStore()
     private let lock = NSLock()
-    private var sessions: [String: RemuxSession] = [:]
+    private var sessions: [String: any RemuxStored] = [:]
     private var order: [String] = []
 
-    func add(_ session: RemuxSession) {
-        let retired: [RemuxSession] = lock.withLock {
+    func add(_ session: any RemuxStored) {
+        let retired: [any RemuxStored] = lock.withLock {
             sessions[session.id] = session; order.append(session.id)
-            var old: [RemuxSession] = []
+            var old: [any RemuxStored] = []
             while order.count > 3 { if let value = sessions.removeValue(forKey: order.removeFirst()) { old.append(value) } }
             return old
         }
         retired.forEach { $0.close() }
     }
-    func session(_ id: String) -> RemuxSession? { lock.withLock { sessions[id] } }
-    func remove(_ id: String) -> RemuxSession? {
+    func session(_ id: String) -> RemuxSession? { lock.withLock { sessions[id] as? RemuxSession } }
+    func segmented(_ id: String) -> HLSRemuxSession? { lock.withLock { sessions[id] as? HLSRemuxSession } }
+    func contains(_ id: String) -> Bool { lock.withLock { sessions[id] != nil } }
+    func remove(_ id: String) -> (any RemuxStored)? {
         lock.withLock {
             order.removeAll { $0 == id }
             return sessions.removeValue(forKey: id)
@@ -494,7 +505,9 @@ actor RemuxServer {
         guard fields.count >= 2, fields[0] == "GET" || fields[0] == "HEAD" else { return send(connection, status: 405) }
         let head = fields[0] == "HEAD"
         let parts = String(fields[1]).components(separatedBy: "?")[0].split(separator: "/").map(String.init)
-        guard parts.count == 3, parts[0] == token, let session = RemuxStore.shared.session(parts[1]) else { return send(connection, status: 404) }
+        guard parts.count == 3, parts[0] == token else { return send(connection, status: 404) }
+        if let stream = RemuxStore.shared.segmented(parts[1]) { return serve(connection, file: parts[2], head: head, of: stream) }
+        guard let session = RemuxStore.shared.session(parts[1]) else { return send(connection, status: 404) }
         let file = parts[2], name = (file as NSString).deletingPathExtension
         switch (file as NSString).pathExtension {
         case "m3u8":
@@ -510,6 +523,34 @@ actor RemuxServer {
             if head { return send(connection, status: 200, mime: file.hasSuffix("vtt") ? "text/vtt" : "video/mp4") }
             guard let segment = session.segment(track: numbers[0], index: numbers[1]) else { return send(connection, status: 404) }
             stream(segment, of: session, to: connection, mime: file.hasSuffix("vtt") ? "text/vtt" : "video/mp4")
+        default:
+            send(connection, status: 404)
+        }
+    }
+
+    /// An HLS stream's playlists, and its segments once repackaged (`HLSRemuxSession`): `<track>-<segment>.mp4` is the
+    /// initialization segment of the discontinuity beginning there, `<track>-<segment>.m4s` the segment.
+    private nonisolated static func serve(_ connection: NWConnection, file: String, head: Bool, of stream: HLSRemuxSession) {
+        let name = (file as NSString).deletingPathExtension
+        switch (file as NSString).pathExtension {
+        case "m3u8":
+            let text = name == "master" ? stream.master : Int(name).flatMap { stream.playlists[$0] }
+            guard let text else { return send(connection, status: 404) }
+            send(connection, status: 200, body: head ? Data() : Data(text.utf8), length: text.utf8.count, mime: "application/vnd.apple.mpegurl")
+        case "mp4", "m4s":
+            let numbers = name.split(separator: "-").compactMap { Int($0) }
+            guard numbers.count == 2 else { return send(connection, status: 404) }
+            if head { return send(connection, status: 200, mime: "video/mp4") }
+            let initialization = file.hasSuffix(".mp4")
+            Task {
+                do {
+                    let data = initialization ? try await stream.initialization(track: numbers[0], index: numbers[1])
+                        : try await stream.segment(track: numbers[0], index: numbers[1])
+                    send(connection, status: 200, body: data, mime: "video/mp4")
+                } catch {
+                    send(connection, status: 500)
+                }
+            }
         default:
             send(connection, status: 404)
         }

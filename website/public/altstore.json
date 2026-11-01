@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.5",
+          "buildVersion": "43",
+          "date": "2026-11-01",
+          "localizedDescription": "• 官方弹弹play弹幕\n• 更多网盘视频可以播放\n• 显示视频信息\n• 反馈可附图片和视频\n• JAR 源打开更快\n• 其他修复\n\n• Official Dandanplay danmaku\n• More videos from cloud drives play\n• Show Video Info\n• Pictures and videos in feedback\n• JAR sources open faster\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.5/Yingxia-1.8.5-ios.ipa",
+          "size": 117006225,
+          "sha256": "2757f3c59c7a3aeab5b120580fee956e88fcd2c59bc21e4a7c0fda3dc6c3bd45",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.4",
           "buildVersion": "42",
           "date": "2026-10-31",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.1/Yingxia-1.8.1-ios.ipa",
           "size": 99244426,
           "sha256": "4830fa6ed2af943efbe36ed5931c95316e999e0f27e9c224a1e08ec1271e2bfc",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.0",
-          "buildVersion": "36",
-          "date": "2026-10-26",
-          "localizedDescription": "• 支持 MKV 等更多格式\n• HDR 视频可以播放\n• Python 点播源全平台可用\n• 点播源不再消失\n• 红果短剧更稳定\n• 选集按钮不再误触\n• 更舒展的影片页面\n• 加入 Telegram 群组\n• 批量移除订阅\n• 其他修复\n\n• Plays MKV and more\n• HDR videos play\n• Python sources everywhere\n• Sources no longer disappear\n• Hongguo loads more reliably\n• Episode buttons out of the way\n• A roomier video page\n• Join the Telegram group\n• Remove subscriptions in bulk\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.0/Yingxia-1.8.0-ios.ipa",
-          "size": 98643054,
-          "sha256": "cedfa1b766e90560292125d5b384879f180caa9a6ccb890f73fa86b8b2a00f9c",
           "minOSVersion": "17.0"
         }
       ],

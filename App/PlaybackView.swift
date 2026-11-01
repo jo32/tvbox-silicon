@@ -139,6 +139,8 @@ import TVCore
     private var loopbackRecovered: ContinuousClock.Instant?
     /// Whether AVPlayer shows the picture of the file it just opened is being checked; the saved position waits.
     private var checkingPicture = false
+    /// The item whose HLS stream is being watched for sound without a picture (`checkSegmentedPicture`).
+    private var checkingSegments: ObjectIdentifier?
     /// A live stream is being moved to its live edge (`catchUpLive`).
     private var catchingUpLive = false
     /// A live room's chat, whose comments join `danmaku` as they are sent.
@@ -577,6 +579,47 @@ import TVCore
         }
     }
 
+    /// HLS whose MPEG-TS segments carry HEVC plays its sound alone: AVPlayer drops that picture without an error (#292).
+    /// For the first seconds after an HLS stream is ready, an item that plays sound with no picture track opens again
+    /// repackaged (`HLSRemux`) where it was. A stream it can't repackage plays on as it is.
+    private func checkSegmentedPicture(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
+        guard checkingSegments != ObjectIdentifier(item), !Remux.isRemuxed(url), ["http", "https"].contains(url.scheme) else { return }
+        checkingSegments = ObjectIdentifier(item)
+        Task { [weak self] in
+            for _ in 0..<16 {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard let self, self.generation == active, self.item === item, item.status == .readyToPlay else { return }
+                let kinds = item.tracks.compactMap { $0.assetTrack?.mediaType }
+                if kinds.contains(.video) || item.presentationSize != .zero { return }
+                guard kinds.contains(.audio), self.player.timeControlStatus == .playing else { continue }
+                let playback = item.accessLog()?.events.last?.playbackType ?? ""
+                guard ["VOD", "LIVE"].contains(playback) || url.absoluteString.lowercased().contains("m3u8") else { return }
+                self.repackageSegments(item, channel: channel, url: url, generation: active)
+                return
+            }
+        }
+    }
+
+    private func repackageSegments(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
+        Diagnostics.shared.record(.warning, "player", "hls plays no picture; repackaging host=\(url.host() ?? "-")")
+        note(L10n.text("Repackaging the video for this device"))
+        preparation = Task { [weak self] in
+            var remuxed: URL?
+            do { remuxed = try await HLSRemux.open(url, headers: channel.headers) }
+            catch { if !Task.isCancelled { Diagnostics.shared.record(.info, "player", "hls not repackaged \(Self.describe(error))") } }
+            guard let self, self.generation == active, !Task.isCancelled, self.item === item, let remuxed else {
+                if let remuxed { Remux.stop(remuxed) }
+                return
+            }
+            let position = self.player.currentTime().seconds
+            if self.pendingResume == nil, position.isFinite, position > 1 { self.pendingResume = position }
+            self.loading = true
+            self.detachItem(); self.observation = nil
+            self.configure(channel, url: remuxed, generation: active)
+            self.automatic = remuxed
+        }
+    }
+
     /// Follows the episode's item (ready, failed, ended), the player's state, and the transfer, for this playback.
     private func watch(_ item: AVPlayerItem, channel: Channel, url: URL, generation activeGeneration: UUID) {
         self.item = item
@@ -604,6 +647,7 @@ import TVCore
                         if Remux.showsPicture(refused) { self.repackage(item, channel: channel, url: url, generation: activeGeneration) }
                         else { self.restorePositionIfNeeded(item) }
                     }
+                    self.checkSegmentedPicture(item, channel: channel, url: url, generation: activeGeneration)
                 }
                 if status == .failed {
                     if self.retryRange(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
