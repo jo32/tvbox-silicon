@@ -287,6 +287,34 @@ final class TVNavigationUITests: XCTestCase {
         XCTAssertTrue(origin.waitForExistence(timeout: 10) && origin.isHittable, "Back did not return to Watch Now")
     }
 
+    /// Down from the download queue reaches the finished episodes under it while other episodes are still downloading.
+    func testRemoteReachesDownloadedEpisodesWhileOthersDownload() throws {
+        let app = XCUIApplication()
+        // Episodes 1 and 2 arrive at once, 3 and 4 take minutes (Scripts/qa-server.py).
+        app.launchArguments = ["-qaSection", "downloads", "-qaIsolatedData", "1", "-qaDownload", "qa-downloads:1:4", "-downloadsSimultaneous", "4",
+                               "-qaSubscription", "http://127.0.0.1:8776/downloads-config.json",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        // What's New covers the page on a fresh install.
+        if app.buttons["OK"].waitForExistence(timeout: 20) { remote.press(.select); sleep(2) }
+        let episodes = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Play 第'"))
+        XCTAssertTrue(app.buttons["Pause"].firstMatch.waitForExistence(timeout: 60), "Nothing was downloading")
+        // Episodes 1 and 2 finish in a moment. Below a queue as tall as the screen, a lazy list never built them.
+        sleep(10)
+        XCTAssertTrue(app.buttons["Pause"].firstMatch.exists, "Nothing was still downloading")
+        let focused = app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+        remote.press(.right); sleep(1)
+        var trail: [String] = []
+        for _ in 0..<14 where !episodes.allElementsBoundByIndex.contains(where: { $0.hasFocus }) {
+            trail.append(focused.exists ? focused.label : "-")
+            remote.press(.down); usleep(800_000)
+        }
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot)
+        XCTAssertTrue(episodes.allElementsBoundByIndex.contains(where: { $0.hasFocus }),
+                      "Down never reached the downloaded episodes; focus went \(trail.joined(separator: " > "))")
+    }
+
     /// Poster titles are part of their card's label, so look for the text anywhere in a label.
     private func shown(_ text: String, in app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch

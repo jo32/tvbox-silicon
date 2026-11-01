@@ -8,6 +8,8 @@ shift
 OUT=build/TVUI
 mkdir -p "$OUT"
 xcrun simctl terminate "$SIMULATOR_ID" com.tvbox.yingxia.qa.tv-tests.xctrunner 2>/dev/null || true
+# Downloads live outside -qaIsolatedData; start each run without the last run's.
+xcrun simctl uninstall "$SIMULATOR_ID" com.tvbox.yingxia.qa.tv 2>/dev/null || true
 if lsof -tiTCP:8776 -sTCP:LISTEN >/dev/null; then
   echo 'Port 8776 is occupied; stop the previous QA server first.' >&2
   exit 1
