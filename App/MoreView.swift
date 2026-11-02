@@ -11,6 +11,17 @@ struct PhoneTabs: Equatable {
     static let barSlots = 4
     /// iPhone Duo's inner display (regular both ways): its side tab bar has room for seven before More.
     static let wideBarSlots = 7
+    /// Whether this screen uses the phone's tab bar (and so More and the tab bar editor). Every iPhone screen
+    /// does, not only compact ones: iPhone Duo's inner display is regular both ways, and there the full set of
+    /// sections overflowed the side tab bar into the system's own More list, without the editor. iPads on iOS 17
+    /// use it too. Their classic tab bar shows seven tabs and moves the rest into UIKit's More list, which wraps
+    /// each tab's NavigationStack in its own navigation controller: opening a section there and then another tab
+    /// crashed with "Layout requested for visible navigation bar ... nest wrapped navigation controllers" (#301).
+    /// Seven sections and the app's own More fit that bar without the system list.
+    @MainActor static func inUse(horizontal: UserInterfaceSizeClass?) -> Bool {
+        if #unavailable(iOS 18) { return true }
+        return horizontal == .compact || UIDevice.current.userInterfaceIdiom == .phone
+    }
     /// The bar's places on a screen with these size classes.
     static func slots(horizontal: UserInterfaceSizeClass?, vertical: UserInterfaceSizeClass?) -> Int {
         horizontal == .regular && vertical == .regular ? wideBarSlots : barSlots
@@ -107,13 +118,13 @@ struct TabBarPreview: View {
     }
 }
 
-/// The phone's More tab: the sections that are not in the tab bar as tiles, and the tab bar editor.
+/// The phone's More tab: the sections that are not in the tab bar, as tiles. The tab bar editor is in Settings
+/// (`EditTabBarRow`): a miniature tab bar here sat right above the real one and was easy to tap by mistake (#326).
 struct MoreView: View {
     @Environment(Store.self) private var store
     @Environment(Updates.self) private var updates
     @Environment(Announcements.self) private var announcements
     @AppStorage(PhoneTabs.storageKey) private var storedTabs = ""
-    @State private var editing = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     private var slots: Int { PhoneTabs.slots(horizontal: horizontalSizeClass, vertical: verticalSizeClass) }
@@ -121,34 +132,24 @@ struct MoreView: View {
     var body: some View {
         let tabs = PhoneTabs(stored: storedTabs).arranged(slots: slots, hiding: store.hiddenSections)
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                VStack(spacing: 12) {
-                    // Pairs; an odd last tile spans the row instead of leaving a hole.
-                    ForEach(Array(stride(from: 0, to: tabs.more.count, by: 2)), id: \.self) { start in
-                        HStack(spacing: 12) {
-                            let row = tabs.more[start..<min(start + 2, tabs.more.count)]
-                            ForEach(row) { section in
-                                MoreTile(section: section, count: count(section),
-                                         badge: badge(section), wide: row.count == 1)
-                            }
+            VStack(spacing: 12) {
+                // Pairs; an odd last tile spans the row instead of leaving a hole.
+                ForEach(Array(stride(from: 0, to: tabs.more.count, by: 2)), id: \.self) { start in
+                    HStack(spacing: 12) {
+                        let row = tabs.more[start..<min(start + 2, tabs.more.count)]
+                        ForEach(row) { section in
+                            MoreTile(section: section, count: count(section),
+                                     badge: badge(section), wide: row.count == 1)
                         }
-                        .fixedSize(horizontal: false, vertical: true)
                     }
+                    .fixedSize(horizontal: false, vertical: true)
                 }
-                tabBarCard(tabs)
             }
             .pageContainer()
         }
         .scrollIndicators(.hidden)
         .screenBackdrop()
         .screenTitle(L10n.text("More"))
-        .sheet(isPresented: $editing) {
-            TabBarEditor(tabs: tabs, slots: slots) { storedTabs = $0.stored }
-        }
-        #if DEBUG
-        // `-qaEditTabs 1` opens the editor for screenshots.
-        .onAppear { if UserDefaults.standard.bool(forKey: "qaEditTabs") { editing = true } }
-        #endif
     }
 
     private func badge(_ section: AppSection) -> Bool {
@@ -167,35 +168,6 @@ struct MoreView: View {
         case .favorites: store.favorites.items.count
         case .downloads: DownloadLibrary.shared.items.count
         default: nil
-        }
-    }
-
-    private func tabBarCard(_ tabs: PhoneTabs) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L10n.text("Tab Bar"))
-                .font(.title3.weight(.bold))
-                .accessibilityAddTraits(.isHeader)
-            Button { editing = true } label: {
-                VStack(spacing: 14) {
-                    TabBarPreview(bar: tabs.bar)
-                    HStack(spacing: 12) {
-                        Text(L10n.text("Choose your tabs and their order."))
-                            .font(.subheadline).foregroundStyle(.secondary)
-                            .multilineTextAlignment(.leading)
-                        Spacer(minLength: 0)
-                        Text(L10n.text("Edit"))
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(Brand.onAccent)
-                            .padding(.horizontal, 16).padding(.vertical, 7)
-                            .background(Brand.accent, in: Capsule())
-                    }
-                }
-                .padding(14)
-                .frame(maxWidth: .infinity)
-                .contentPanel(cornerRadius: 22)
-                .contentShape(.rect(cornerRadius: 22))
-            }
-            .buttonStyle(LiftButtonStyle())
-            .accessibilityLabel(L10n.text("Edit Tab Bar"))
         }
     }
 }
@@ -245,6 +217,40 @@ private struct MoreTile: View {
             .contentShape(.rect(cornerRadius: 22))
         }
         .buttonStyle(LiftButtonStyle())
+    }
+}
+
+/// Settings' row for the tab bar editor, on screens that use the phone's tab bar.
+struct EditTabBarRow: View {
+    @Environment(Store.self) private var store
+    @AppStorage(PhoneTabs.storageKey) private var storedTabs = ""
+    @State private var editing = false
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    private var slots: Int { PhoneTabs.slots(horizontal: horizontalSizeClass, vertical: verticalSizeClass) }
+
+    var body: some View {
+        if PhoneTabs.inUse(horizontal: horizontalSizeClass) {
+            Button { editing = true } label: {
+                HStack(spacing: 8) {
+                    FormLabel(symbol: "arrow.up.arrow.down", title: L10n.text("Edit Tab Bar"),
+                              subtitle: L10n.text("Choose your tabs and their order."))
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            // A button in a list draws its title in the tint; this one reads like the rows around it.
+            .tint(.primary)
+            .sheet(isPresented: $editing) {
+                TabBarEditor(tabs: PhoneTabs(stored: storedTabs).arranged(slots: slots, hiding: store.hiddenSections),
+                             slots: slots) { storedTabs = $0.stored }
+            }
+            #if DEBUG
+            // `-qaEditTabs 1` opens the editor for screenshots once Settings is shown.
+            .onAppear { if UserDefaults.standard.bool(forKey: "qaEditTabs") { editing = true } }
+            #endif
+        }
     }
 }
 
