@@ -1346,3 +1346,5 @@
 "This build is missing its Dandanplay API configuration." = "このビルドにはDandanplay API設定がありません。";
 "Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent." = "Dandanplayを優先し、コメントが見つからないかサービスを利用できない場合はiQIYIとTencent Videoを検索します。dmku（見つからない場合は danmu.zxz.ee）には公式の公開エピソードページのみ送信し、ストリームURLや再生ヘッダーは送信しません。";
 "Dandanplay has reached its request limit for now. Try again later, or choose another danmaku server." = "Dandanplayのリクエスト上限に達しました。しばらくしてからもう一度試すか、別の弾幕サーバーを選んでください。";
+"Open Config Center" = "設定センターを開く";
+"Config Center" = "設定センター";

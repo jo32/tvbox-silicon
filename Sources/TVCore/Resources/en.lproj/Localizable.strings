@@ -1346,3 +1346,5 @@
 "This build is missing its Dandanplay API configuration." = "This build is missing its Dandanplay API configuration.";
 "Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent." = "Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent.";
 "Dandanplay has reached its request limit for now. Try again later, or choose another danmaku server." = "Dandanplay has reached its request limit for now. Try again later, or choose another danmaku server.";
+"Open Config Center" = "Open Config Center";
+"Config Center" = "Config Center";
