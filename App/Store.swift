@@ -536,7 +536,18 @@ import TVCore
         if let data = try? JSONEncoder().encode(video) {
             MediaCache.shared.store(data, for: "detail", kind: .catalog, scope: context.id, ttl: 6 * 3600, ticket: MediaCache.shared.ticket())
         }
-        playbackCatalog = PlaybackCatalog(video: video, client: client, scope: context.id)
+        // The Episodes menu's short labels (#318): kept from the episode before on the same video, else worked out off the
+        // main thread.
+        let kept = playbackCatalog.flatMap { $0.video == video ? $0.labels : nil }
+        playbackCatalog = PlaybackCatalog(video: video, client: client, scope: context.id, labels: kept ?? [:])
+        guard kept == nil else { return }
+        let episodes = video.episodes
+        Task { [weak self] in
+            let labels = await Task.detached(priority: .utility) { EpisodeLabels.labels(episodes) }.value
+            // Still this video, though maybe the next episode by now.
+            guard let self, !labels.isEmpty, self.playbackCatalog?.video == video else { return }
+            self.playbackCatalog?.labels = labels
+        }
     }
 
     /// The next episode's stream, resolved ahead so the player can queue it behind this one; nil when
@@ -779,6 +790,8 @@ struct PlaybackCatalog {
     let video: Video
     let client: CatalogClient
     let scope: String
+    /// Short labels (第1集) for lines whose episode names are file names, by episode id.
+    var labels: [Episode.ID: String] = [:]
     var playlist: EpisodePlaylist { EpisodePlaylist(video.episodes) }
 }
 

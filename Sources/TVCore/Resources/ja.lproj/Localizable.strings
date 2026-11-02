@@ -651,6 +651,8 @@
 
 "Hongguo" = "Hongguo";
 "Episode %@" = "エピソード %@";
+"Episode %1$@" = "第%1$@話";
+"Episodes %1$@–%2$@" = "第%1$@-%2$@話";
 "Live-action Drama" = "実写ドラマ";
 "Animated Drama" = "アニメドラマ";
 "AI Drama" = "AI ドラマ";
