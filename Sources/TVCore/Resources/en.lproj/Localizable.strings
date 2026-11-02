@@ -97,6 +97,7 @@
 "Video Details" = "Video Details";
 "This media cannot be played. Try another channel or source." = "This media cannot be played. Try another channel or source.";
 "Playback was interrupted." = "Playback was interrupted.";
+"The connection dropped. Reconnecting" = "The connection dropped. Reconnecting";
 "Close" = "Close";
 "Connecting…" = "Connecting…";
 "Enter a valid HTTP or HTTPS URL." = "Enter a valid HTTP or HTTPS URL.";

@@ -97,6 +97,7 @@
 "Video Details" = "動画の詳細";
 "This media cannot be played. Try another channel or source." = "このメディアは再生できません。別のチャンネルやソースをお試しください。";
 "Playback was interrupted." = "再生が中断されました。";
+"The connection dropped. Reconnecting" = "接続が切れました。再接続しています";
 "Close" = "閉じる";
 "Connecting…" = "接続中…";
 "Enter a valid HTTP or HTTPS URL." = "有効な HTTP または HTTPS URL を入力してください。";

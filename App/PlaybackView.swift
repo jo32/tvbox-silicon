@@ -137,6 +137,9 @@ import TVCore
     private var rangeRetried = false
     /// When the loopback server behind the episode last listened again (`recoverLoopback`).
     private var loopbackRecovered: ContinuousClock.Instant?
+    /// How often the episode opened again after its connection dropped (`resumeAfterDrop`), and whether it did yet.
+    private var dropRecovery = PlaybackDropRecovery()
+    private var reopenedAfterDrop = false
     /// Whether AVPlayer shows the picture of the file it just opened is being checked; the saved position waits.
     private var checkingPicture = false
     /// The item whose HLS stream is being watched for sound without a picture (`checkSegmentedPicture`).
@@ -317,6 +320,28 @@ import TVCore
         return true
     }
 
+    /// An on-demand episode whose connection dropped or stalled (NSURL -1005, or Core Media -15628 after "No response
+    /// for media file") stops there: AVPlayer doesn't ask again by itself. It opens again where it was, a few times and
+    /// a little later each time (`PlaybackDropRecovery`), and so does a reopening that can't connect yet. Live streams
+    /// and saved downloads don't, and the error shows once the attempts are used up.
+    private func resumeAfterDrop(_ failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
+        guard !isLive, !savedDownload, !url.isFileURL, hasTimeline || reopenedAfterDrop else { return false }
+        let current = player.currentTime().seconds
+        let position = pendingResume ?? (current.isFinite ? current : 0)
+        guard let delay = dropRecovery.delay(after: failure, position: position) else { return false }
+        reopenedAfterDrop = true
+        detachItem(); observation = nil; loading = true
+        Diagnostics.shared.record(.warning, "player", "dropped host=\(transfer.host ?? url.host() ?? "-") at=\(Int(position))s attempt=\(dropRecovery.attempts) \(failure.map(Self.describe) ?? "-"); reopening")
+        note(L10n.text("The connection dropped. Reconnecting"))
+        preparation = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard let self, self.generation == active, !Task.isCancelled else { return }
+            if position > 1 { self.pendingResume = position }
+            self.configure(channel, url: url, generation: active)
+        }
+        return true
+    }
+
     /// The URL error code behind a failure, through its underlying errors.
     nonisolated static func urlErrorCode(_ error: Error?) -> Int? {
         var current = error as NSError?
@@ -422,7 +447,7 @@ import TVCore
         begin(channel)
         isLive = LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live")
         liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveRetried = false; liveRetrying = false; rangeRetried = false
-        loopbackRecovered = nil
+        loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false
         ErrorReports.shared.playing(live: isLive, format: channel.url.pathExtension, source: channel.historyContext?.sourceKey,
                                     danmaku: UserDefaults.standard.object(forKey: DanmakuPreference.key) == nil || UserDefaults.standard.bool(forKey: DanmakuPreference.key),
                                     sharper: UserDefaults.standard.bool(forKey: VideoEnhancement.upscaleKey))
@@ -653,6 +678,7 @@ import TVCore
                     if self.retryRange(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.retryHDR(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
+                    if self.reopenedAfterDrop, self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
                     Diagnostics.shared.record(.error, "player", "failed host=\(self.transfer.host ?? channel.url.host() ?? "-") \(self.transfer.failure.map { "upstream=\($0) " } ?? "")\(detail) \(self.failureContext(channel, url: url, item: item))")
                     if self.retryLive(after: failure) { return }
                     // A refused link is usually an expired one: say so in plain words rather than the system's.
@@ -671,6 +697,7 @@ import TVCore
             Task { @MainActor [weak self] in
                 guard let self, self.generation == activeGeneration else { return }
                 if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
+                if self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
                 Diagnostics.shared.record(.error, "player", "interrupted host=\(self.transfer.host ?? channel.url.host() ?? "-") at=\(Int(self.player.currentTime().seconds.isFinite ? self.player.currentTime().seconds : -1))s \(failure.map(Self.describe) ?? "-") \(self.failureContext(channel, url: url, item: item))")
                 if self.retryLive(after: failure) { return }
                 self.error = message ?? L10n.text("Playback was interrupted."); self.loading = false
