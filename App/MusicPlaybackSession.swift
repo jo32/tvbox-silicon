@@ -80,6 +80,21 @@ typealias MusicTrack = TVCore.MusicTrack
     /// AVPlayer gets this long from a stream being set to sound playing before the stream counts as failed.
     static let startWindow: Duration = .seconds(10)
 
+    // MARK: TVBox episodes (#289)
+
+    /// Turns a TVBox episode into its stream through its source; set by the store, which has the subscriptions.
+    @ObservationIgnored var resolveSource: ((MusicSourceEpisode) async throws -> Channel)?
+    /// Opens a TVBox episode in the video player at a second: its stream has a picture (`true`), or this player
+    /// can't play it and the video player, with more ways to play, might. The last is whether Now Playing was open.
+    @ObservationIgnored var handOffSource: ((Channel, Double, Bool, Bool) -> Void)?
+    /// Saves where a TVBox episode is under its book, as the video player saves a series.
+    @ObservationIgnored var recordSource: ((MusicSourceEpisode, Double, Double) -> Void)?
+    /// The stream of the TVBox episode playing.
+    private(set) var sourceStream: Channel?
+    /// The first episode's stream, which the page that started the queue already resolved.
+    private var givenStream: (track: String, channel: Channel)?
+    private var pictureObservation: NSKeyValueObservation?
+
     init(library: MusicLibrary = .shared) {
         self.library = library
         player.volume = Float(volume)
@@ -93,6 +108,8 @@ typealias MusicTrack = TVCore.MusicTrack
     }
 
     var busy: Bool { phase == .resolving || phase == .loading }
+    /// A stream is set: a music channel's, or a TVBox episode's.
+    var hasStream: Bool { selection != nil || sourceStream != nil }
     var isPlaying: Bool { phase == .playing || phase == .loading && player.rate > 0 }
     var failure: String? { if case .failed(let message) = phase { message } else { nil } }
     /// Seconds the lyrics run ahead of the audio for this song, set by the viewer: positive shows
@@ -141,8 +158,9 @@ typealias MusicTrack = TVCore.MusicTrack
     func play(_ track: MusicTrack) { play(MusicQueue(tracks: [track])) }
 
     /// Plays a queue from its current song, at `position` when continuing.
-    func play(_ queue: MusicQueue, at position: Double? = nil) {
-        guard queue.current != nil else { return }
+    func play(_ queue: MusicQueue, at position: Double? = nil, stream: Channel? = nil) {
+        guard let current = queue.current else { return }
+        givenStream = stream.map { (current.id, $0) }
         self.queue = queue
         shuffled = false; unshuffled = nil
         consecutiveFailures = 0
@@ -296,6 +314,7 @@ typealias MusicTrack = TVCore.MusicTrack
         task?.cancel(); startWatch?.cancel(); lyricsTask?.cancel()
         tearDownItem()
         queue = nil; selection = nil; attempts = []; phase = .idle; failureDetail = nil; notice = nil; presentsPlayer = false
+        sourceStream = nil; givenStream = nil
         position = 0; duration = nil; seekingTo = nil; lyrics = nil; lyricsFor = nil
         library.flush()
     }
@@ -313,13 +332,14 @@ typealias MusicTrack = TVCore.MusicTrack
         let run = UUID(); generation = run
         task?.cancel(); startWatch?.cancel(); lyricsTask?.cancel()
         tearDownItem()
-        selection = nil; attempts = []; failureDetail = nil
+        selection = nil; attempts = []; failureDetail = nil; sourceStream = nil
         position = resumeAt ?? 0; duration = track.duration; seekingTo = nil
         lyrics = nil; lyricsLoading = false; lyricsFor = nil; recordedPlay = false
         lyricsOffset = savedLyricsOffset(for: track.id)
         cache = MusicStreamCache(); recovery = MusicRecovery()
         requestedAt = Date()
         phase = .resolving
+        if let source = track.source { loadSource(source, track: track, at: resumeAt, run: run); return }
         let resolver = MusicResolver(preferences: preferences), preference = preferences.quality, cache = cache
         // A downloaded song plays from its file, with no channel to find.
         if let saved = MusicDownloadLibrary.shared.localSelection(for: track) {
@@ -349,13 +369,20 @@ typealias MusicTrack = TVCore.MusicTrack
         tearDownItem()
         self.selection = selection
         duration = selection.probe.duration ?? track?.duration
-        activateAudioSession()
         let stream = selection.stream
-        let asset = AVURLAsset(url: stream.url, options: stream.headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": stream.headers])
+        setItem(url: stream.url, headers: stream.headers, metadata: track ?? selection.track, at: seconds, run: run)
+        loadLyrics(for: selection)
+        Diagnostics.shared.record(.info, "music", "start \(selection.candidate.provider.rawValue) host=\(stream.url.host() ?? "-") \(selection.probe.format.label)\(selection.degraded ? " degraded" : "")")
+    }
+
+    /// Plays a stream, watching for its failure and its end, and for no sound within the start window.
+    @discardableResult private func setItem(url: URL, headers: [String: String], metadata track: MusicTrack, at seconds: Double?, run: UUID) -> AVPlayerItem {
+        activateAudioSession()
+        let asset = AVURLAsset(url: url, options: headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": headers])
         let item = AVPlayerItem(asset: asset)
         #if os(tvOS)
         // AVKit's transport bar and info panel show the song from these.
-        item.externalMetadata = Self.metadata(for: track ?? selection.track)
+        item.externalMetadata = Self.metadata(for: track)
         #endif
         itemObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             let failed = item.status == .failed, detail = item.error.map { String(describing: type(of: $0)) + " " + (($0 as NSError).code.description) }
@@ -377,14 +404,70 @@ typealias MusicTrack = TVCore.MusicTrack
         player.play()
         phase = .loading
         streamSetAt = Date()
-        loadLyrics(for: selection)
-        Diagnostics.shared.record(.info, "music", "start \(selection.candidate.provider.rawValue) host=\(stream.url.host() ?? "-") \(selection.probe.format.label)\(selection.degraded ? " degraded" : "")")
         // Buffering, pausing and interruptions are not failures; no sound at all within the window is.
         startWatch = Task { [weak self] in
             try? await Task.sleep(for: Self.startWindow)
             guard let self, !Task.isCancelled, self.generation == run, self.phase == .loading, self.player.rate > 0 else { return }
             self.playbackFailed("no sound within 10 s", run: run)
         }
+        return item
+    }
+
+    /// A TVBox episode: its source gives the stream, unless the page that started the queue already has it.
+    private func loadSource(_ source: MusicSourceEpisode, track: MusicTrack, at resumeAt: Double?, run: UUID) {
+        let given = givenStream?.track == track.id ? givenStream?.channel : nil
+        givenStream = nil
+        let resolve = resolveSource
+        task = Task {
+            do {
+                let stream: Channel
+                if let given { stream = given }
+                else if let resolve { stream = try await resolve(source) }
+                else { throw CancellationError() }
+                guard self.generation == run else { return }
+                self.startSource(stream, track: track, at: resumeAt, run: run)
+            } catch {
+                guard self.generation == run else { return }
+                self.songFailed(MusicProviderError(error), run: run, message: error.localizedDescription)
+            }
+        }
+    }
+
+    private func startSource(_ stream: Channel, track: MusicTrack, at seconds: Double?, run: UUID) {
+        tearDownItem()
+        sourceStream = stream
+        // Addresses only the video player can open (its own schemes for drives and remuxed streams) go there.
+        guard ["http", "https", "file"].contains(stream.url.scheme?.lowercased() ?? "") else {
+            handOff(stream, reason: "scheme \(stream.url.scheme ?? "-")", picture: false)
+            return
+        }
+        let item = setItem(url: stream.url, headers: stream.headers, metadata: track, at: seconds, run: run)
+        Diagnostics.shared.record(.info, "music", "start source host=\(stream.url.host() ?? "-")")
+        // A stream with a picture belongs in the video player. AVPlayer gives the picture's size once it has one:
+        // at once for a file, and for HLS when a variant with video loads; a song's cover art has none.
+        pictureObservation = item.observe(\.presentationSize, options: [.initial, .new]) { [weak self] item, _ in
+            let size = item.presentationSize
+            guard size.width > 0, size.height > 0 else { return }
+            Task { @MainActor [weak self] in
+                guard let self, self.generation == run, self.sourceStream == stream else { return }
+                self.handOff(stream, reason: "picture \(Int(size.width))x\(Int(size.height))", picture: true)
+            }
+        }
+    }
+
+    /// The source's episode playing, in the video player instead.
+    func openInVideoPlayer() {
+        guard let stream = sourceStream else { return }
+        handOff(stream, reason: "viewer", picture: false)
+    }
+
+    /// Stops here and opens the episode in the video player where it was. Nothing of it stays in Continue Playing.
+    private func handOff(_ stream: Channel, reason: String, picture: Bool) {
+        let at = currentSeconds > 1 ? currentSeconds : position, covered = presentsPlayer
+        Diagnostics.shared.record(.info, "music", "source to the video player: \(reason)")
+        sourceStream = nil
+        stop()
+        handOffSource?(stream, at, picture, covered)
     }
 
     private func loadLyrics(for selection: MusicPlaybackSelection) {
@@ -437,6 +520,8 @@ typealias MusicTrack = TVCore.MusicTrack
 
     /// A stream that stopped working: refresh it, then try another channel, then give up.
     private func playbackFailed(_ reason: String, run: UUID) {
+        // The video player has more ways to play a source's stream (its own demuxer, proxies).
+        if generation == run, let stream = sourceStream { handOff(stream, reason: reason, picture: false); return }
         guard generation == run, let selection, let track else { return }
         Diagnostics.shared.record(.warning, "music", "playback failed \(selection.candidate.provider.rawValue): \(reason)")
         let at = currentSeconds, previous = selection.probe
@@ -506,10 +591,11 @@ typealias MusicTrack = TVCore.MusicTrack
 
     /// Saves where listening is every few seconds of playback, and at once on pause and stop.
     private func saveResumePoint(force: Bool) {
-        guard let queue, selection != nil else { return }
+        guard let queue, selection != nil || sourceStream != nil else { return }
         guard force || abs(position - lastSavedPosition) >= 5 else { return }
         lastSavedPosition = position
         library.saveResumePoint(MusicResumePoint(queue: queue, position: position))
+        if let source = queue.current?.source { recordSource?(source, position, duration ?? 0) }
     }
 
     private func statusChanged(_ status: AVPlayer.TimeControlStatus) {
@@ -523,7 +609,8 @@ typealias MusicTrack = TVCore.MusicTrack
             }
             if !recordedPlay, let track {
                 recordedPlay = true; consecutiveFailures = 0; notice = nil
-                if let collection = queue?.collection { library.recordPlay(collection) } else { library.recordPlay(track) }
+                // A source's episodes are kept under their book in the playback history instead.
+                if let collection = queue?.collection { library.recordPlay(collection) } else if track.source == nil { library.recordPlay(track) }
             }
         case .waitingToPlayAtSpecifiedRate:
             if phase == .playing { phase = .loading }
@@ -534,7 +621,7 @@ typealias MusicTrack = TVCore.MusicTrack
     }
 
     private func tearDownItem() {
-        itemObservation = nil
+        itemObservation = nil; pictureObservation = nil
         for observer in observers { NotificationCenter.default.removeObserver(observer) }
         observers = []
         player.pause()

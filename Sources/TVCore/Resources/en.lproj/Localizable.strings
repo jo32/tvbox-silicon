@@ -768,6 +768,7 @@
 "Back 15 Seconds" = "Back 15 Seconds";
 "Forward 15 Seconds" = "Forward 15 Seconds";
 "Channels" = "Channels";
+"Open in Video Player" = "Open in Video Player";
 "The quality shown is read from the audio itself, not taken from what a channel claims." = "The quality shown is read from the audio itself, not taken from what a channel claims.";
 "Not tried yet" = "Not tried yet";
 "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead.";

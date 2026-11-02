@@ -767,6 +767,7 @@
 "Back 15 Seconds" = "后退 15 秒";
 "Forward 15 Seconds" = "前进 15 秒";
 "Channels" = "播放渠道";
+"Open in Video Player" = "在视频播放器中打开";
 "The quality shown is read from the audio itself, not taken from what a channel claims." = "显示的音质读取自音频本身，而不是渠道的声称。";
 "Not tried yet" = "尚未尝试";
 "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "“无损优先”在没有渠道提供无损音频时，会播放最好的有损版本并加以标注；“仅无损”则停止播放。";

@@ -228,8 +228,13 @@ struct MusicNowPlaying: View {
             if !compact {
                 Button { showsLyrics = true } label: { Image(systemName: "quote.bubble") }
                     .controlButton().accessibilityLabel(L10n.text("Lyrics"))
-                Button { showsChannels = true } label: { Image(systemName: "antenna.radiowaves.left.and.right") }
-                    .controlButton().accessibilityLabel(L10n.text("Channels"))
+                if music.sourceStream != nil {
+                    Button { music.openInVideoPlayer() } label: { Image(systemName: "play.rectangle") }
+                        .controlButton().accessibilityLabel(L10n.text("Open in Video Player"))
+                } else {
+                    Button { showsChannels = true } label: { Image(systemName: "antenna.radiowaves.left.and.right") }
+                        .controlButton().accessibilityLabel(L10n.text("Channels"))
+                }
                 Button { music.stop() } label: { Image(systemName: "xmark") }
                     .controlButton().accessibilityLabel(L10n.text("Stop"))
             }
@@ -241,7 +246,11 @@ struct MusicNowPlaying: View {
     private func extras(_ music: MusicPlaybackSession) -> some View {
         Menu {
             Button { showsLyrics = true } label: { Label(L10n.text("Lyrics"), systemImage: "quote.bubble") }
-            Button { showsChannels = true } label: { Label(L10n.text("Channels"), systemImage: "antenna.radiowaves.left.and.right") }
+            if music.sourceStream != nil {
+                Button { music.openInVideoPlayer() } label: { Label(L10n.text("Open in Video Player"), systemImage: "play.rectangle") }
+            } else {
+                Button { showsChannels = true } label: { Label(L10n.text("Channels"), systemImage: "antenna.radiowaves.left.and.right") }
+            }
             if let track = music.track { MusicDownloadMenuItems(tracks: [track]) }
             Button(role: .destructive) { music.stop() } label: { Label(L10n.text("Stop"), systemImage: "xmark") }
         } label: { Image(systemName: "ellipsis") }
@@ -262,7 +271,7 @@ struct MusicNowPlaying: View {
             }
             .tint(Brand.accent)
             .transaction { $0.animation = nil }
-            .disabled(music.selection == nil || music.duration == nil)
+            .disabled(!music.hasStream || music.duration == nil)
             #endif
             Text(music.duration.map(MusicTime.text) ?? "--:--").font(.caption).monospacedDigit().foregroundStyle(.secondary)
         }
@@ -613,7 +622,7 @@ struct MusicScrubber: View {
             }
             .font(.caption2.weight(.semibold)).monospacedDigit().foregroundStyle(.secondary)
         }
-        .disabled(music.selection == nil || total == 0)
+        .disabled(!music.hasStream || total == 0)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L10n.text("Playback Position"))
         .accessibilityValue(MusicTime.text(position) + " / " + MusicTime.text(total))
