@@ -1,6 +1,7 @@
-#if os(macOS) || os(tvOS)
 import SwiftUI
 import TVCore
+
+#if os(macOS) || os(tvOS)
 
 /// Search results in rows, as Music on the Mac and Spotify on Apple TV lay them out: albums and
 /// playlists as rows of covers, songs as columns of a few rows, each scrolling sideways. On the
@@ -53,17 +54,21 @@ struct MusicTopResults: View {
     }
 }
 
+#endif
+
 enum MusicBrowseMetrics {
     #if os(tvOS)
     static let cover: CGFloat = 230, tileSpacing: CGFloat = 40, sectionSpacing: CGFloat = 50, headerSpacing: CGFloat = 18
     static let songArt: CGFloat = 72, songColumn: CGFloat = 560, songRows = 3
+    #elseif os(iOS)
+    static let cover: CGFloat = 148, tileSpacing: CGFloat = 14, sectionSpacing: CGFloat = 28, headerSpacing: CGFloat = 8
     #else
     static let cover: CGFloat = 164, tileSpacing: CGFloat = 18, sectionSpacing: CGFloat = 34, headerSpacing: CGFloat = 10
     static let songArt: CGFloat = 40, songRows = 3
     #endif
 }
 
-#if os(macOS)
+#if !os(tvOS)
 /// A section's title with a chevron; it opens the whole section.
 private struct MusicSectionLink<Destination: View>: View {
     let title: String
@@ -113,11 +118,73 @@ struct MusicCollectionTile: View {
 
     #if os(tvOS)
     private static let titleFont = Font.system(size: 24, weight: .semibold), subtitleFont = Font.system(size: 20)
+    #elseif os(iOS)
+    private static let titleFont = Font.subheadline.weight(.medium), subtitleFont = Font.caption
     #else
     private static let titleFont = Font.system(size: 12, weight: .medium), subtitleFont = Font.system(size: 11)
     #endif
 }
 
+/// The Music page with nothing searched, laid out as Discover is for video: a row of covers for each
+/// shelf (charts, playlists, new albums), scrolling sideways. On the Mac and iPhone a shelf's title
+/// opens all of it as a grid. The shelves come from `MusicBrowseModel`, whatever catalog filled them.
+struct MusicBrowseShelves: View {
+    let sections: [MusicBrowseSection]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MusicBrowseMetrics.sectionSpacing) {
+            ForEach(sections) { section in
+                VStack(alignment: .leading, spacing: MusicBrowseMetrics.headerSpacing) {
+                    #if os(tvOS)
+                    SectionHeader(title: section.title)
+                    ChipRow { tiles(section.collections) }.tvFocusSection()
+                    #else
+                    MusicSectionLink(title: section.title) { MusicCollectionsPage(title: section.title, collections: section.collections) }
+                    ScrollStrip(overlayArrows: true, arrowCenter: MusicBrowseMetrics.cover / 2) { tiles(section.collections) }
+                    #endif
+                }
+            }
+        }
+    }
+
+    private func tiles(_ items: [MusicCollection]) -> some View {
+        LazyHStack(alignment: .top, spacing: MusicBrowseMetrics.tileSpacing) {
+            ForEach(items) { MusicCollectionTile(collection: $0, size: MusicBrowseMetrics.cover) }
+        }
+    }
+}
+
+#if !os(tvOS)
+/// Every album or playlist a search found, or a whole shelf of the Music page, as a grid of covers.
+struct MusicCollectionsPage: View {
+    let title: String
+    let collections: [MusicCollection]
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                #if os(macOS)
+                Text(title).font(.largeTitle.weight(.bold))
+                #endif
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: MusicBrowseMetrics.cover, maximum: MusicBrowseMetrics.cover * 1.35), spacing: 20, alignment: .top)],
+                          alignment: .leading, spacing: 24) {
+                    ForEach(collections) { MusicCollectionTile(collection: $0) }
+                }
+            }
+            .pageContainer()
+        }
+        .screenBackdrop()
+        #if os(macOS)
+        .navigationTitle(title)
+        .toolbar(removing: .title)
+        #else
+        .screenTitle(title)
+        .musicPlayerInset()
+        #endif
+    }
+}
+#endif
+
+#if os(macOS) || os(tvOS)
 /// Songs a few to a column, scrolling sideways: three columns to the width on the Mac.
 private struct MusicSongGrid: View {
     let tracks: [MusicTrack]
@@ -337,27 +404,6 @@ struct MusicSongsPage: View {
             VStack(alignment: .leading, spacing: 18) {
                 Text(title).font(.largeTitle.weight(.bold))
                 MusicSongTable(tracks: tracks) { store.music.play(MusicQueue(tracks: tracks, start: $0)) }
-            }
-            .pageContainer()
-        }
-        .screenBackdrop()
-        .navigationTitle(title)
-        .toolbar(removing: .title)
-    }
-}
-
-/// Every album or playlist a search found, as a grid of covers.
-struct MusicCollectionsPage: View {
-    let title: String
-    let collections: [MusicCollection]
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Text(title).font(.largeTitle.weight(.bold))
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: MusicBrowseMetrics.cover, maximum: MusicBrowseMetrics.cover * 1.35), spacing: 20, alignment: .top)],
-                          alignment: .leading, spacing: 24) {
-                    ForEach(collections) { MusicCollectionTile(collection: $0) }
-                }
             }
             .pageContainer()
         }

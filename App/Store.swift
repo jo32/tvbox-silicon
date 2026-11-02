@@ -12,6 +12,8 @@ import TVCore
     let musicSearch = MusicSearchModel()
     #endif
     let music = MusicPlaybackSession()
+    /// The Music page's charts, playlists and new albums; fetched when that page first shows.
+    let musicBrowse = MusicBrowseModel()
     let recommendationModel = RecommendationModel()
     let playbackHistory: PlaybackHistory
     let playbackDefaults: UserDefaults

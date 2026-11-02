@@ -40,24 +40,28 @@ extension NeteaseMusicCatalog: MusicCollectionSource {
 
     static func parseCollections(_ json: JSONValue, kind: MusicCollection.Kind) -> [MusicCollection] {
         switch kind {
-        case .album:
-            return (json[path: "result", "albums"]?.array ?? []).compactMap { album in
-                guard let id = album["id"]?.string, let name = album["name"]?.string else { return nil }
-                let year = album["publishTime"]?.double.map { Date(timeIntervalSince1970: $0 / 1000).formatted(.dateTime.year()) }
-                return MusicCollection(kind: .album, platform: .netease, collectionID: id, title: name,
-                                       subtitle: album[path: "artist", "name"]?.string,
-                                       artwork: album["picUrl"]?.string.flatMap { URL(string: $0 + "?param=300y300") },
-                                       trackCount: album["size"]?.int, year: year)
-            }
-        case .playlist:
-            return (json[path: "result", "playlists"]?.array ?? []).compactMap { list in
-                guard let id = list["id"]?.string, let name = list["name"]?.string else { return nil }
-                // Cover URLs carry watermark parameters; the plain image is enough.
-                let cover = list["coverImgUrl"]?.string.map { $0.components(separatedBy: "?")[0] + "?param=300y300" }
-                return MusicCollection(kind: .playlist, platform: .netease, collectionID: id, title: name,
-                                       subtitle: list[path: "creator", "nickname"]?.string, artwork: cover.flatMap(URL.init(string:)),
-                                       trackCount: list["trackCount"]?.int)
-            }
+        case .album: (json[path: "result", "albums"]?.array ?? []).compactMap(album)
+        case .playlist: (json[path: "result", "playlists"]?.array ?? []).compactMap(playlist)
         }
+    }
+
+    /// An album as search results and new releases list it.
+    static func album(_ album: JSONValue) -> MusicCollection? {
+        guard let id = album["id"]?.string, let name = album["name"]?.string else { return nil }
+        let year = album["publishTime"]?.double.map { Date(timeIntervalSince1970: $0 / 1000).formatted(.dateTime.year()) }
+        return MusicCollection(kind: .album, platform: .netease, collectionID: id, title: name,
+                               subtitle: album[path: "artist", "name"]?.string,
+                               artwork: album["picUrl"]?.string.flatMap { URL(string: $0 + "?param=300y300") },
+                               trackCount: album["size"]?.int, year: year)
+    }
+
+    /// A playlist as search results, charts and recommendations list it (recommendations name the cover `picUrl`).
+    static func playlist(_ list: JSONValue) -> MusicCollection? {
+        guard let id = list["id"]?.string, let name = list["name"]?.string else { return nil }
+        // Cover URLs carry watermark parameters; the plain image is enough.
+        let cover = (list["coverImgUrl"]?.string ?? list["picUrl"]?.string).map { $0.components(separatedBy: "?")[0] + "?param=300y300" }
+        return MusicCollection(kind: .playlist, platform: .netease, collectionID: id, title: name,
+                               subtitle: list[path: "creator", "nickname"]?.string, artwork: cover.flatMap(URL.init(string:)),
+                               trackCount: list["trackCount"]?.int)
     }
 }
