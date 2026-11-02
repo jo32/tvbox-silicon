@@ -18,6 +18,12 @@ public protocol MusicBrowseSource: Sendable {
     var platform: MusicPlatform { get }
     /// The catalog's shelves, best first. Throws only when it has none to show.
     func browseSections() async throws -> [MusicBrowseSection]
+    /// No shelves is an answer, not a failure: music extensions when none is imported.
+    var mayBeEmpty: Bool { get }
+}
+
+extension MusicBrowseSource {
+    public var mayBeEmpty: Bool { false }
 }
 
 public enum MusicBrowse {
@@ -97,7 +103,7 @@ public enum MusicBrowse {
                 group.addTask { (index, try? await source.browseSections()) }
             }
             for await (index, answer) in group {
-                guard let answer, !answer.isEmpty else { failed = true; continue }
+                guard let answer, !answer.isEmpty || sources[index].mayBeEmpty else { failed = true; continue }
                 answers[index] = answer
                 sections = MusicBrowse.merge(sources.indices.compactMap { answers[$0] })
             }
@@ -107,6 +113,13 @@ public enum MusicBrowse {
         incomplete = failed
         // The clock runs from the last time every catalog was asked, not from a retry of one.
         if wanted.count == sources.count { loadedAt = now }
+    }
+
+    /// Fetches `platform`'s shelves again, the others staying: after music extensions were added or turned off.
+    public func reload(_ platform: MusicPlatform) async {
+        for index in sources.indices where sources[index].platform == platform { answers[index] = nil }
+        sections = MusicBrowse.merge(sources.indices.compactMap { answers[$0] })
+        await load()
     }
 }
 

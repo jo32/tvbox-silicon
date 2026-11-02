@@ -482,6 +482,7 @@ struct MusicSettingsView: View {
                 TVSettingsField(title: L10n.text("HYW key"), text: $music.preferences.hywKey)
             }
             MusicLXSourcesSection()
+            MusicExtensionsSection()
         }
         #else
         MusicSheet(title: L10n.text("Music Settings"), symbol: "slider.horizontal.3") {
@@ -516,6 +517,7 @@ struct MusicSettingsView: View {
                     }
                 }
                 MusicLXSourcesSection()
+                MusicExtensionsSection()
             }
             #if os(macOS)
             .formStyle(.grouped)
@@ -767,6 +769,157 @@ struct MusicLXSourcesSection: View {
         .fileImporter(isPresented: $importing, allowedContentTypes: [.javaScript, .plainText, .data]) { result in
             if case .success(let file) = result { model.add(file: file) }
         }
+    }
+
+    private func add() {
+        model.add(address: address)
+        address = ""
+    }
+}
+#endif
+
+/// The music extensions in Music Settings (Listenify-format scripts such as allfm.js): add one by address (or
+/// from a file on iPhone, iPad and Mac), turn each on or off, remove it. Their lists show on the Music page,
+/// which reloads their shelves after a change; their songs show in Music search.
+@MainActor @Observable final class MusicExtensionsModel {
+    private(set) var items: [MusicExtension] = MusicExtensionLibrary.shared.extensions
+    private(set) var busy = false
+    var message: String?
+    var failed = false
+    /// Called after a change, to refresh the Music page's shelves.
+    var changed: () -> Void = {}
+
+    static var note: String {
+        L10n.text("Scripts in the Listenify music extension format. Their charts and playlists show on the Music page and their songs in Music search; songs play from what the extension gives, or through your LX Music sources when it asks for one. Yingxia includes none: add only extensions you trust.")
+    }
+
+    func add(address text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard let url = URL(string: trimmed), url.host() != nil, ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
+            report(TVError.invalidURL); return
+        }
+        run { try await MusicExtensionLibrary.shared.add(script: MusicExtensionLibrary.download(url), origin: url) }
+    }
+
+    func add(file: URL) {
+        run {
+            let scoped = file.startAccessingSecurityScopedResource()
+            defer { if scoped { file.stopAccessingSecurityScopedResource() } }
+            let data = try Data(contentsOf: file)
+            guard let script = String(data: data, encoding: .utf8) else { throw TVError.unsupported(L10n.text("This file is not a music extension.")) }
+            return try await MusicExtensionLibrary.shared.add(script: script, origin: nil)
+        }
+    }
+
+    func enabled(_ item: MusicExtension) -> Binding<Bool> {
+        Binding(get: { self.items.first { $0.id == item.id }?.enabled ?? false }, set: { on in
+            MusicExtensionLibrary.shared.setEnabled(item.id, on)
+            self.items = MusicExtensionLibrary.shared.extensions
+            self.changed()
+        })
+    }
+
+    func remove(_ item: MusicExtension) {
+        MusicExtensionLibrary.shared.remove(item.id)
+        items = MusicExtensionLibrary.shared.extensions
+        message = nil
+        changed()
+    }
+
+    static func detail(_ item: MusicExtension) -> String {
+        [item.version, item.summary].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    private func run(_ work: @escaping @MainActor () async throws -> MusicExtension) {
+        guard !busy else { return }
+        busy = true; message = nil; failed = false
+        Task {
+            do {
+                let item = try await work()
+                items = MusicExtensionLibrary.shared.extensions
+                message = L10n.text("Added “%@”.", item.name)
+                changed()
+            } catch { report(error) }
+            busy = false
+        }
+    }
+
+    private func report(_ error: Error) {
+        failed = true
+        message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+    }
+}
+
+#if os(tvOS)
+struct MusicExtensionsSection: View {
+    @Environment(Store.self) private var store
+    @State private var model = MusicExtensionsModel()
+    @State private var address = ""
+    var body: some View {
+        TVSettingsSection(title: L10n.text("Music Extensions"), footer: [model.message, MusicExtensionsModel.note].compactMap { $0 }.joined(separator: "\n\n")) {
+            ForEach(model.items) { item in
+                TVSettingsToggle(title: item.name, detail: MusicExtensionsModel.detail(item), isOn: model.enabled(item))
+                TVSettingsAction(title: L10n.text("Remove “%@”", item.name), destructive: true) { model.remove(item) }
+            }
+            // Apple TV has no files to pick: extensions come from an address.
+            TVSettingsField(title: L10n.text("Add from Address"), text: $address)
+                .disabled(model.busy)
+                .onChange(of: address) { _, text in
+                    guard !text.isEmpty else { return }
+                    model.add(address: text)
+                    address = ""
+                }
+        }
+        .onAppear { model.changed = { [store] in Task { await store.musicBrowse.reload(.ext) } } }
+    }
+}
+#else
+struct MusicExtensionsSection: View {
+    @Environment(Store.self) private var store
+    @State private var model = MusicExtensionsModel()
+    @State private var address = ""
+    @State private var importing = false
+    var body: some View {
+        Section {
+            ForEach(model.items) { item in
+                HStack {
+                    Toggle(isOn: model.enabled(item)) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.name)
+                            let detail = MusicExtensionsModel.detail(item)
+                            if !detail.isEmpty { Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+                        }
+                    }
+                    .settingsSwitch()
+                    Button(role: .destructive) { model.remove(item) } label: { Image(systemName: "trash") }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel(L10n.text("Remove “%@”", item.name))
+                }
+            }
+            HStack {
+                TextField(L10n.text("Extension address"), text: $address)
+                    .autocorrectionDisabled()
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never).keyboardType(.URL)
+                    #endif
+                    .onSubmit(add)
+                if model.busy { ProgressView().controlSize(.small) }
+                else { Button(L10n.text("Add"), action: add).disabled(address.trimmingCharacters(in: .whitespaces).isEmpty) }
+            }
+            Button(L10n.text("Add from File…")) { importing = true }.disabled(model.busy)
+            if let message = model.message {
+                Text(message).font(.caption).foregroundStyle(model.failed ? Brand.amber : Color.secondary)
+            }
+        } header: {
+            Text(L10n.text("Music Extensions"))
+        } footer: {
+            Text(MusicExtensionsModel.note)
+        }
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.javaScript, .plainText, .data]) { result in
+            if case .success(let file) = result { model.add(file: file) }
+        }
+        .onAppear { model.changed = { [store] in Task { await store.musicBrowse.reload(.ext) } } }
     }
 
     private func add() {
