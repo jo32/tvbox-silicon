@@ -28,7 +28,8 @@ public actor MusicHealth {
     static let riskCooldown: TimeInterval = 10 * 60
     /// Requests allowed per service in `window`; services not listed are unlimited here.
     /// Xinghai sets no number, only an overall limit and a request not to overuse it.
-    static let budgets: [String: Int] = ["gdstudio": 50, "xinghai": 30]
+    /// LX Music sources are third-party scripts with services of their own: at most one lookup every few seconds.
+    static let budgets: [String: Int] = ["gdstudio": 50, "xinghai": 30, "lx": 60]
     static let window: TimeInterval = 5 * 60
 
     private var records: [String: Record] = [:]

@@ -256,7 +256,10 @@ public struct MusicResolver: Sendable {
     /// Primary providers per catalog, then fallbacks. Migu's own servers and Kuwo through Nianxin
     /// lead: in the 2026-10-14 test they played songs VKeys and GD no longer reach (Jay Chou's).
     static let primaries: [(MusicPlatform, MusicProviderID)] = [(.migu, .migu), (.kuwo, .nianxin), (.qq, .vkeys), (.netease, .gdstudio)]
-    static let order: [(MusicPlatform, MusicProviderID)] = primaries + [(.kuwo, .xinghai), (.netease, .nianxin), (.qq, .hyw), (.netease, .xinghai)]
+    /// LX Music sources the listener imported come last: third-party scripts, asked when the built-in channels
+    /// found nothing better.
+    static let order: [(MusicPlatform, MusicProviderID)] = primaries + [(.kuwo, .xinghai), (.netease, .nianxin), (.qq, .hyw), (.netease, .xinghai),
+                                                                         (.qq, .lx), (.netease, .lx), (.kuwo, .lx), (.migu, .lx)]
     static func isPrimary(_ candidate: MusicCandidate) -> Bool {
         primaries.contains { $0.0 == candidate.platform && $0.1 == candidate.provider }
     }
@@ -276,6 +279,7 @@ public struct MusicResolver: Sendable {
         if preferences.enabled(.migu) { list.append(MiguProvider(transport: transport)) }
         if preferences.enabled(.nianxin) { list.append(NianxinProvider(transport: transport)) }
         if preferences.enabled(.xinghai) { list.append(XinghaiProvider(transport: transport, health: health)) }
+        if preferences.enabled(.lx), let lx = LXMusicProvider(sources: LXSourceLibrary.shared.enabled, health: health) { list.append(lx) }
         self.init(providers: list, prober: MusicProber(transport: transport), health: health,
                   companions: MusicCompanionFinder(catalogs: MusicSearchModel.defaultCatalogs(transport: transport, health: health)))
     }
@@ -411,7 +415,7 @@ public struct MusicResolver: Sendable {
         let key = MusicHealth.key(candidate.provider.rawValue, candidate.platform, .resolve)
         do {
             guard let provider = providers[candidate.provider] else { throw MusicProviderError.authRequired }
-            let stream = try await MusicHTTP.withTimeout(min(8, timeout)) { try await provider.resolve(candidate.songID, platform: candidate.platform) }
+            let stream = try await MusicHTTP.withTimeout(min(8, timeout)) { try await provider.resolve(candidate.songID, platform: candidate.platform, track: track) }
             await health.record(key, error: nil)
             let probe = try await prober.probe(stream, expected: track.duration)
             if probe.completeness == .preview { throw MusicProviderError.preview(probe.duration ?? 0) }

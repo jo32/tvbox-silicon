@@ -144,6 +144,8 @@ public struct MusicProbeResult: Hashable, Codable, Sendable {
 /// A service that turns a catalog song ID into a temporary audio address.
 public enum MusicProviderID: String, Codable, Sendable, Hashable, CaseIterable {
     case vkeys, gdstudio, hyw, migu, nianxin, xinghai
+    /// The LX Music sources the listener imported (MusicLXSources.swift).
+    case lx
     public var name: String {
         switch self {
         case .vkeys: "VKeys"
@@ -152,6 +154,7 @@ public enum MusicProviderID: String, Codable, Sendable, Hashable, CaseIterable {
         case .migu: L10n.text("Migu")
         case .nianxin: L10n.text("Nianxin")
         case .xinghai: L10n.text("Xinghai")
+        case .lx: L10n.text("LX Music Sources")
         }
     }
     /// Services this provider is known to call itself, so a fallback never repeats a failed one.
@@ -163,6 +166,7 @@ public enum MusicProviderID: String, Codable, Sendable, Hashable, CaseIterable {
         case .migu: ["migu"]
         case .nianxin: ["nianxin"]
         case .xinghai: ["xinghai"]
+        case .lx: ["lx"]
         }
     }
 }

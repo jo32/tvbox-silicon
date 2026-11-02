@@ -1358,3 +1358,13 @@
 "Add from File…" = "從檔案加入…";
 "A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider." = "TVBox JSON 訂閱，或單一 Python（.py）或 JavaScript（.js）爬蟲。";
 "This file is no longer on this device. Add it again." = "此檔案已不在這部裝置上，請重新加入。";
+"LX Music Sources" = "洛雪音樂自訂源";
+"LX Music Source" = "洛雪音源";
+"This file is not an LX Music source." = "這不是洛雪音樂的自訂源腳本。";
+"This source plays none of the catalogs Yingxia searches (QQ Music, NetEase Cloud Music, Kuwo, Migu)." = "這個音源不支援映匣搜尋的任何曲庫（QQ 音樂、網易雲音樂、酷我、咪咕）。";
+"The LX Music source did not start: %@" = "洛雪音源無法啟動：%@";
+"Scripts made for LX Music's custom sources. They are asked for a song's audio after the channels above, for QQ Music, NetEase Cloud Music, Kuwo and Migu songs. Yingxia includes none: add only sources you trust." = "為洛雪音樂「自訂源」編寫的腳本。上方的通道之後才會向它們取得歌曲音訊，適用於 QQ 音樂、網易雲音樂、酷我和咪咕的歌曲。映匣不內建任何音源，請只加入你信任的音源。";
+"Added “%@”." = "已加入「%@」。";
+"Remove “%@”" = "移除「%@」";
+"Add from Address" = "從網址加入";
+"Source address" = "音源網址";
