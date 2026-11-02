@@ -5,6 +5,8 @@
       "build": 45,
       "date": "2026-11-03",
       "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.7/Yingxia-1.8.7-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.7/Yingxia-1.8.7-macos-x86_64.dmg",
         "ios": "https://yingxia.getmegaportal.com/#install-ios",
         "tvos": "https://yingxia.getmegaportal.com/#install-tv"
       },
