@@ -747,6 +747,7 @@
 "%@ needs this account for the line you chose. The video plays once you confirm." = "「%@」的這條線路需要該帳號。確認登入後即可播放。";
 "Sign in to Quark and UC on their official page, and to Baidu and Aliyun by scanning a code with their phone app. Yingxia stores the login on this Mac and supplies it to the plugins you run." = "夸克和 UC 在官方頁面登入，百度網盤和阿里雲盤用手機 App 掃碼登入。映匣會將登入資訊儲存在這台 Mac 上，並提供給你執行的外掛。";
 "Baidu Cookie (BDUSS, STOKEN)" = "百度網盤 Cookie（BDUSS、STOKEN）";
+"115 Cookie (UID, CID, SEID)" = "115 Cookie（UID、CID、SEID）";
 
 /* Music */
 "Music" = "音樂";
@@ -767,6 +768,7 @@
 "Back 15 Seconds" = "倒退 15 秒";
 "Forward 15 Seconds" = "快轉 15 秒";
 "Channels" = "播放渠道";
+"Open in Video Player" = "在影片播放器中打開";
 "The quality shown is read from the audio itself, not taken from what a channel claims." = "顯示的音質讀取自音訊本身，而非渠道的聲稱。";
 "Not tried yet" = "尚未嘗試";
 "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "「無損優先」在沒有渠道提供無損音訊時，會播放最好的有損版本並加以標示；「僅無損」則停止播放。";
@@ -976,7 +978,7 @@
 "Added the AList server %@. Browse it in Cloud Files." = "已新增 AList 伺服器 %@，可在「網盤檔案」中瀏覽。";
 "Added %lld AList servers. Browse them in Cloud Files." = "已新增 %lld 個 AList 伺服器，可在「網盤檔案」中瀏覽。";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "此網址現在是 AList 伺服器。重新新增即可在「網盤檔案」中瀏覽。";
-"Sign in to Quark or UC under Cloud Drive Accounts to browse their files here." = "在「網盤帳號」中登入夸克或 UC 後，即可在此瀏覽其中的檔案。";
+"Sign in to Quark, UC or 115 under Cloud Drive Accounts to browse their files here." = "在「網盤帳號」中登入夸克、UC 或 115 後，即可在此瀏覽其中的檔案。";
 "Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too." = "用開啟 AList、OpenList 伺服器、NAS 的 WebDAV 共享或 Emby、Jellyfin 伺服器的網址來新增它。在「新增訂閱」中貼上 AList 網址或 TVBox AList 設定，也能新增伺服器。";
 "Edit Server" = "編輯伺服器";
 "Remove Server" = "移除伺服器";
@@ -1354,6 +1356,9 @@
 "Recommended Playlists" = "推薦歌單";
 "New Albums" = "新碟上架";
 "More Charts" = "更多榜單";
+"Add from File…" = "從檔案加入…";
+"A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider." = "TVBox JSON 訂閱，或單一 Python（.py）或 JavaScript（.js）爬蟲。";
+"This file is no longer on this device. Add it again." = "此檔案已不在這部裝置上，請重新加入。";
 "LX Music Sources" = "洛雪音樂自訂源";
 "LX Music Source" = "洛雪音源";
 "This file is not an LX Music source." = "這不是洛雪音樂的自訂源腳本。";
@@ -1364,7 +1369,6 @@
 "Remove “%@”" = "移除「%@」";
 "Add from Address" = "從網址加入";
 "Source address" = "音源網址";
-"Add from File…" = "從檔案加入…";
 "Music Extensions" = "音樂擴充";
 "Music Extension" = "音樂擴充";
 "Extension" = "擴充";

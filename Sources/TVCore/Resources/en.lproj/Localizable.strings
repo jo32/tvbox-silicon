@@ -748,6 +748,7 @@
 "%@ needs this account for the line you chose. The video plays once you confirm." = "%@ needs this account for the line you chose. The video plays once you confirm.";
 "Sign in to Quark and UC on their official page, and to Baidu and Aliyun by scanning a code with their phone app. Yingxia stores the login on this Mac and supplies it to the plugins you run." = "Sign in to Quark and UC on their official page, and to Baidu and Aliyun by scanning a code with their phone app. Yingxia stores the login on this Mac and supplies it to the plugins you run.";
 "Baidu Cookie (BDUSS, STOKEN)" = "Baidu Cookie (BDUSS, STOKEN)";
+"115 Cookie (UID, CID, SEID)" = "115 Cookie (UID, CID, SEID)";
 
 /* Music */
 "Music" = "Music";
@@ -768,6 +769,7 @@
 "Back 15 Seconds" = "Back 15 Seconds";
 "Forward 15 Seconds" = "Forward 15 Seconds";
 "Channels" = "Channels";
+"Open in Video Player" = "Open in Video Player";
 "The quality shown is read from the audio itself, not taken from what a channel claims." = "The quality shown is read from the audio itself, not taken from what a channel claims.";
 "Not tried yet" = "Not tried yet";
 "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead.";
@@ -977,7 +979,7 @@
 "Added the AList server %@. Browse it in Cloud Files." = "Added the AList server %@. Browse it in Cloud Files.";
 "Added %lld AList servers. Browse them in Cloud Files." = "Added %lld AList servers. Browse them in Cloud Files.";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "This address is now an AList server. Add it again to browse it in Cloud Files.";
-"Sign in to Quark or UC under Cloud Drive Accounts to browse their files here." = "Sign in to Quark or UC under Cloud Drive Accounts to browse their files here.";
+"Sign in to Quark, UC or 115 under Cloud Drive Accounts to browse their files here." = "Sign in to Quark, UC or 115 under Cloud Drive Accounts to browse their files here.";
 "Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too." = "Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too.";
 "Edit Server" = "Edit Server";
 "Remove Server" = "Remove Server";
@@ -1354,6 +1356,9 @@
 "Recommended Playlists" = "Recommended Playlists";
 "New Albums" = "New Albums";
 "More Charts" = "More Charts";
+"Add from File…" = "Add from File…";
+"A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider." = "A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider.";
+"This file is no longer on this device. Add it again." = "This file is no longer on this device. Add it again.";
 "LX Music Sources" = "LX Music Sources";
 "LX Music Source" = "LX Music Source";
 "This file is not an LX Music source." = "This file is not an LX Music source.";
@@ -1364,7 +1369,6 @@
 "Remove “%@”" = "Remove “%@”";
 "Add from Address" = "Add from Address";
 "Source address" = "Source address";
-"Add from File…" = "Add from File…";
 "Music Extensions" = "Music Extensions";
 "Music Extension" = "Music Extension";
 "Extension" = "Extension";

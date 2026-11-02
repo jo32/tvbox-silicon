@@ -47,6 +47,7 @@ struct CloudDriveView: View {
                     SecureField(L10n.text("UC Token (optional)"), text: $accounts.ucToken)
                     SecureField(L10n.text("Aliyun Refresh Token"), text: $accounts.token)
                     SecureField(L10n.text("Baidu Cookie (BDUSS, STOKEN)"), text: Binding(get: { accounts.baiduCookie ?? "" }, set: { accounts.baiduCookie = $0.isEmpty ? nil : $0 }))
+                    SecureField(L10n.text("115 Cookie (UID, CID, SEID)"), text: Binding(get: { accounts.pan115Cookie ?? "" }, set: { accounts.pan115Cookie = $0.isEmpty ? nil : $0 }))
                     HStack { Spacer(); Button(L10n.text("Save Accounts")) { save() }.settingsButton(prominent: true).disabled(saving) }
                 } label: {
                     Text(L10n.text("Paste Credentials Manually"))
@@ -281,7 +282,15 @@ struct CloudDriveView: View {
         #if os(iOS)
         .sheet(item: $login) { provider in
             if provider == .xunlei { XunleiSignInView(signedIn: reload) }
-            else {
+            else if provider == .pan115 {
+                // 115 has no sign-in page here, only the code to scan with its app on another phone.
+                NavigationStack {
+                    CloudQRLoginView(drive: provider.qrDrive) { reload() }
+                        .navigationTitle(L10n.text("Sign In to %@", provider.name))
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("Cancel")) { login = nil } } }
+                }
+            } else {
                 WebSignInView(service: provider.webSignIn, signedIn: reload) {
                     CloudQRLoginView(drive: provider.qrDrive) { reload() }
                 }
@@ -317,12 +326,13 @@ struct CloudDriveView: View {
 #endif
 
 enum CloudProvider: String, Identifiable, CaseIterable {
-    case quark, uc, baidu, aliyun, xunlei
+    case quark, uc, pan115, baidu, aliyun, xunlei
     var id: String { rawValue }
     var name: String {
         switch self {
         case .quark: L10n.text("Quark")
         case .uc: "UC"
+        case .pan115: L10n.text("115 Cloud")
         case .baidu: L10n.text("Baidu Netdisk")
         case .aliyun: L10n.text("Aliyun Drive")
         case .xunlei: L10n.text("Xunlei")
@@ -332,6 +342,7 @@ enum CloudProvider: String, Identifiable, CaseIterable {
         switch self {
         case .quark: "icloud.fill"
         case .uc: "externaldrive.fill"
+        case .pan115: "archivebox.fill"
         case .baidu: "cloud.fill"
         case .aliyun: "shippingbox.fill"
         case .xunlei: "bolt.fill"
@@ -341,14 +352,15 @@ enum CloudProvider: String, Identifiable, CaseIterable {
         switch self {
         case .quark: .blue
         case .uc: .orange
+        case .pan115: .mint
         case .baidu: .indigo
         case .aliyun: .purple
         case .xunlei: .cyan
         }
     }
     /// Baidu, Aliyun and Xunlei only serve plugins, so an App Store build lists them once a subscription is added;
-    /// Quark and UC are browsed in Cloud Files too.
-    @MainActor static func shown(_ store: Store) -> [CloudProvider] { store.extrasUnlocked ? allCases : [.quark, .uc] }
+    /// Quark, UC and 115 are browsed in Cloud Files too.
+    @MainActor static func shown(_ store: Store) -> [CloudProvider] { store.extrasUnlocked ? allCases : [.quark, .uc, .pan115] }
 
     /// Quark and UC sign in on their web page on a Mac; Xunlei with a texted code; every other sign-in is a code to scan.
     var signsInOnWeb: Bool { self == .quark || self == .uc }
@@ -361,7 +373,7 @@ enum CloudProvider: String, Identifiable, CaseIterable {
         switch self {
         case .baidu: ["mybd_cookie"]
         case .aliyun: ["ali_user", "ali_oauth", "ali_info"]
-        case .quark, .uc, .xunlei: []
+        case .quark, .uc, .pan115, .xunlei: []
         }
     }
     func isSignedIn(_ accounts: CloudDriveAccounts) -> Bool {
@@ -370,6 +382,7 @@ enum CloudProvider: String, Identifiable, CaseIterable {
         case .quark: value = accounts.quarkCookie
         case .uc: value = accounts.ucCookie
         case .baidu: value = accounts.baiduCookie ?? ""
+        case .pan115: value = accounts.pan115Cookie ?? ""
         case .aliyun: value = accounts.token
         case .xunlei: value = accounts.xunlei?.refreshToken ?? ""
         }
@@ -382,6 +395,7 @@ enum CloudProvider: String, Identifiable, CaseIterable {
             accounts.quarkCookie = cookie
         case .uc: accounts.ucCookie = cookie
         case .baidu: accounts.baiduCookie = cookie.isEmpty ? nil : cookie
+        case .pan115: accounts.pan115Cookie = cookie.isEmpty ? nil : cookie
         case .aliyun: accounts.token = cookie
         // Xunlei's sign-in is made only by XunleiSignInView; this only clears it.
         case .xunlei: if cookie.isEmpty { accounts.xunlei = nil }

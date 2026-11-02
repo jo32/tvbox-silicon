@@ -136,8 +136,10 @@ struct RootView: View {
         #if os(tvOS)
         .fullScreenCover(isPresented: Binding(get: { store.music.presentsPlayer }, set: { store.music.presentsPlayer = $0 })) { MusicPlayerScreen() }
         #endif
-        // A video and a song never play over each other.
-        .onChange(of: store.playing) { _, channel in if channel != nil { store.music.pause() } }
+        // A video and a song never play over each other. The song stops rather than pausing, so its strip
+        // doesn't stay over the video and every page after it (#289); where it was stays saved, and
+        // Music's Continue Playing picks it up.
+        .onChange(of: store.playing) { _, channel in if channel != nil { store.music.stop() } }
         .modifier(PlayerPresentation(playing: $store.playing))
         #if os(tvOS) || os(macOS)
         // What another device sent, while it opens.
@@ -180,7 +182,7 @@ struct RootView: View {
             #endif
             #if os(iOS)
             .minimizesTabBarOnScroll()
-            .musicAccessory(enabled: store.music.track != nil && phoneTabs)
+            .musicAccessory(enabled: store.music.showsStrip(videoPlaying: store.playing != nil) && phoneTabs)
             // Opened from the mini player; swiping down closes it, as in Music.
             .sheet(isPresented: Binding(get: { store.music.presentsPlayer }, set: { store.music.presentsPlayer = $0 })) { MusicNowPlayingScreen() }
             .onChange(of: store.section) { _, section in

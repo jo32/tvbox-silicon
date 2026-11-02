@@ -747,6 +747,7 @@
 "%@ needs this account for the line you chose. The video plays once you confirm." = "「%@」のこの回線にはこのアカウントが必要です。確認すると再生が始まります。";
 "Sign in to Quark and UC on their official page, and to Baidu and Aliyun by scanning a code with their phone app. Yingxia stores the login on this Mac and supplies it to the plugins you run." = "Quark と UC は公式ページで、Baidu と Aliyun はスマートフォンのアプリでコードをスキャンしてサインインします。映匣はログイン情報をこの Mac に保存し、実行するプラグインに渡します。";
 "Baidu Cookie (BDUSS, STOKEN)" = "Baidu の Cookie（BDUSS、STOKEN）";
+"115 Cookie (UID, CID, SEID)" = "115 Cookie（UID、CID、SEID）";
 
 /* Music */
 "Music" = "ミュージック";
@@ -767,6 +768,7 @@
 "Back 15 Seconds" = "15 秒戻る";
 "Forward 15 Seconds" = "15 秒進む";
 "Channels" = "再生チャンネル";
+"Open in Video Player" = "ビデオプレーヤーで開く";
 "The quality shown is read from the audio itself, not taken from what a channel claims." = "表示される音質は、チャンネルの申告ではなく音声そのものから読み取ったものです。";
 "Not tried yet" = "未試行";
 "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "「ロスレス優先」は、ロスレス音声のあるチャンネルがないとき、最良の非可逆圧縮音声をその旨を表示して再生します。「ロスレスのみ」は再生しません。";
@@ -976,7 +978,7 @@
 "Added the AList server %@. Browse it in Cloud Files." = "AList サーバ %@ を追加しました。クラウドファイルで閲覧できます。";
 "Added %lld AList servers. Browse them in Cloud Files." = "AList サーバを %lld 台追加しました。クラウドファイルで閲覧できます。";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "このアドレスは現在 AList サーバです。追加し直すとクラウドファイルで閲覧できます。";
-"Sign in to Quark or UC under Cloud Drive Accounts to browse their files here." = "クラウドドライブのアカウントで Quark または UC にサインインすると、ここでファイルを閲覧できます。";
+"Sign in to Quark, UC or 115 under Cloud Drive Accounts to browse their files here." = "クラウドドライブのアカウントで Quark、UC または 115 にサインインすると、ここでファイルを閲覧できます。";
 "Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too." = "AList・OpenList サーバ、NAS の WebDAV 共有、Emby・Jellyfin サーバは、開くときのアドレスで追加します。AList のアドレスや TVBox の AList 設定を「配信設定を追加」に貼り付けても追加できます。";
 "Edit Server" = "サーバを編集";
 "Remove Server" = "サーバを削除";
@@ -1354,6 +1356,9 @@
 "Recommended Playlists" = "おすすめプレイリスト";
 "New Albums" = "ニューアルバム";
 "More Charts" = "その他のランキング";
+"Add from File…" = "ファイルから追加…";
+"A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider." = "TVBox JSON 配信設定、または単体の Python（.py）/ JavaScript（.js）スパイダー。";
+"This file is no longer on this device. Add it again." = "このファイルはこのデバイスにありません。もう一度追加してください。";
 "LX Music Sources" = "LX Music カスタムソース";
 "LX Music Source" = "LX Music ソース";
 "This file is not an LX Music source." = "このファイルは LX Music のカスタムソースではありません。";
@@ -1364,7 +1369,6 @@
 "Remove “%@”" = "「%@」を削除";
 "Add from Address" = "アドレスから追加";
 "Source address" = "ソースのアドレス";
-"Add from File…" = "ファイルから追加…";
 "Music Extensions" = "音楽拡張機能";
 "Music Extension" = "音楽拡張機能";
 "Extension" = "拡張機能";

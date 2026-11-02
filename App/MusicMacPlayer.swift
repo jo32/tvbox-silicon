@@ -104,7 +104,7 @@ extension View {
 private struct MusicBarInset: ViewModifier {
     @Environment(Store.self) private var store
     func body(content: Content) -> some View {
-        content.safeAreaInset(edge: .bottom, spacing: 0) { if store.music.track != nil { MusicMacBar() } }
+        content.safeAreaInset(edge: .bottom, spacing: 0) { if store.music.showsStrip(videoPlaying: store.playing != nil) { MusicMacBar() } }
     }
 }
 
@@ -268,7 +268,11 @@ private struct MusicMacMenu: View {
         Menu {
             if let quality = MusicMacNowPlaying.quality(music) { Text(quality) }
             if let credit = MusicMacNowPlaying.credit(music) { Text(credit) }
-            Button { showsChannels = true } label: { Label(L10n.text("Channels"), systemImage: "antenna.radiowaves.left.and.right") }
+            if music.sourceStream != nil {
+                Button { music.openInVideoPlayer() } label: { Label(L10n.text("Open in Video Player"), systemImage: "play.rectangle") }
+            } else {
+                Button { showsChannels = true } label: { Label(L10n.text("Channels"), systemImage: "antenna.radiowaves.left.and.right") }
+            }
             if let track = music.track { MusicDownloadMenuItems(tracks: [track]) }
             if music.lyrics?.synced == true {
                 Divider()

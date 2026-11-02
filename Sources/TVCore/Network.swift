@@ -9,7 +9,8 @@ public struct HTTPClient: Sendable {
     public init(session: URLSession = .shared) { self.init(session: session, mirrors: .shared) }
     init(session: URLSession, mirrors: GitHubMirrors) { self.session = session; self.mirrors = mirrors }
     public func get(_ url: URL, headers: [String: String] = [:]) async throws -> (Data, URL) {
-        try await mirrors.fetch(url, timeout: 25) { [session] address, timeout in
+        if let data = try ImportedFiles.data(at: url) { return (data, url) }
+        return try await mirrors.fetch(url, timeout: 25) { [session] address, timeout in
             var request = URLRequest(url: address, timeoutInterval: timeout)
             request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
             for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }

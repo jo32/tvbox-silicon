@@ -447,7 +447,10 @@ struct MusicDownloadMenuItems: View {
     var body: some View {
         let library = MusicDownloadLibrary.shared
         let saved = tracks.compactMap { library.item(for: $0) }
-        if !tracks.isEmpty, saved.count == tracks.count {
+        if tracks.contains(where: { $0.source != nil }) {
+            // A source's episode (#289) downloads from its video page.
+            EmptyView()
+        } else if !tracks.isEmpty, saved.count == tracks.count {
             Button(role: .destructive) { library.remove(saved.map(\.id)) } label: {
                 Label(L10n.text(saved.allSatisfy { $0.status == .completed } ? "Remove Download" : "Cancel Download"), systemImage: "trash")
             }

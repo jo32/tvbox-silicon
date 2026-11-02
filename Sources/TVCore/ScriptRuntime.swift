@@ -272,6 +272,7 @@ final class ScriptBridge: @unchecked Sendable {
     /// Module sources: bundled assets, or downloads kept for five minutes and reused when offline.
     private func module(_ address: String) throws -> String {
         if let source = supplied[address] { return source }
+        if let url = URL(string: address), let data = try ImportedFiles.data(at: url) { return String(decoding: data, as: UTF8.self) }
         if address.hasPrefix("assets://") {
             guard let source = ScriptAssets.bundled(address) else { throw ScriptHostError("no bundled module \(address)") }
             return source

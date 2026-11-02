@@ -48,6 +48,8 @@ struct MusicMiniPlayer: View {
                 }
                 if !inline {
                     button("forward.fill", label: "Next") { music.next() }.disabled(music.queue?.hasNext != true)
+                    // Closes the strip without opening Now Playing first; Continue Playing keeps the song.
+                    button("xmark", label: "Stop") { music.stop() }.font(.body).foregroundStyle(.secondary)
                 }
             }
             .font(.title3)
@@ -56,8 +58,16 @@ struct MusicMiniPlayer: View {
         .frame(maxHeight: .infinity)
         .contentShape(.rect)
         .onTapGesture { music.presentsPlayer = true }
+        // A swipe across the strip closes it too, as the × does.
+        .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { drag in
+            if abs(drag.translation.width) > 80, abs(drag.translation.width) > abs(drag.translation.height) * 2 { music.stop() }
+        })
+        .contextMenu {
+            Button(role: .destructive) { music.stop() } label: { Label(L10n.text("Stop"), systemImage: "xmark") }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityAction(named: L10n.text("Now Playing")) { music.presentsPlayer = true }
+        .accessibilityAction(named: L10n.text("Stop")) { music.stop() }
         #if DEBUG
         // `-qaNowPlaying artwork|lyrics|queue` opens Now Playing on that panel, for screenshots.
         .task { if UserDefaults.standard.string(forKey: "qaNowPlaying") != nil { music.presentsPlayer = true } }
