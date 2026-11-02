@@ -285,6 +285,10 @@ typealias MusicTrack = TVCore.MusicTrack
 
     func skip(by seconds: Double) { seek(to: currentSeconds + seconds) }
 
+    /// Whether the mini player or the Mac's bar shows: while a song is loaded, and never over a video, which
+    /// has its own controls. The bar comes back when the video closes.
+    func showsStrip(videoPlaying: Bool) -> Bool { track != nil && !videoPlaying }
+
     /// Stops and hides the player. Where listening was stays saved, to continue from the Music page.
     func stop() {
         saveResumePoint(force: true)
