@@ -10,6 +10,7 @@ extension QQMusicCatalog: MusicCollectionSource {
     }
 
     public func tracks(of collection: MusicCollection) async throws -> [MusicTrack] {
+        if let chart = Self.chartID(collection) { return try await chartTracks(chart) }
         switch collection.kind {
         case .album:
             var tracks: [MusicTrack] = []

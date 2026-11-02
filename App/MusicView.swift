@@ -2,8 +2,8 @@ import SwiftUI
 import TVCore
 
 /// Music: search songs, albums or playlists by name (and artist), and play from the best channel
-/// found. With no search, the page offers to continue where listening stopped and lists what
-/// played recently.
+/// found. With no search, the page offers to continue where listening stopped, then shelves of
+/// charts, playlists and new albums as Discover has for video, then what played recently.
 struct MusicView: View {
     @Environment(Store.self) private var store
     @State private var query = ""
@@ -97,6 +97,8 @@ struct MusicView: View {
         #if os(tvOS)
         .onPlayPauseCommand { store.music.toggle() }
         #endif
+        // The shelves load the first time the page shows with nothing searched, not at launch.
+        .task(id: search.query.isEmpty) { if search.query.isEmpty { await store.musicBrowse.load() } }
         .tabTitle(L10n.text("Music"))
         #if !os(tvOS)
         .toolbar {
@@ -219,19 +221,39 @@ enum MusicLayout {
     #endif
 }
 
-/// The Music page with nothing searched: continue listening, and what played recently.
+/// The Music page with nothing searched: continue listening, shelves to browse, and what played recently.
 private struct MusicHome: View {
     @Environment(Store.self) private var store
     let openSettings: () -> Void
 
     var body: some View {
         let library = store.music.library
+        let browse = store.musicBrowse
         let resumable = store.music.track == nil ? library.resumePoint : nil
         if let point = resumable, let track = point.queue.current {
             MusicContinueCard(point: point, track: track).padding(.bottom, 20)
         }
         let downloads = !MusicDownloadLibrary.shared.items.isEmpty
         if downloads { MusicDownloadsLink().padding(.bottom, 20) }
+        if !browse.sections.isEmpty {
+            MusicBrowseShelves(sections: browse.sections).padding(.bottom, 28)
+        } else if browse.loading {
+            ProgressView().frame(maxWidth: .infinity).padding(.vertical, 60)
+        }
+        if browse.incomplete && !browse.loading {
+            Button { Task { await browse.load() } } label: {
+                Label(L10n.text("Some lists couldn't load. Try again."), systemImage: "arrow.clockwise")
+                    #if !os(tvOS)
+                    .font(.subheadline).frame(maxWidth: .infinity).padding(.vertical, 8)
+                    #endif
+            }
+            #if os(tvOS)
+            .controlButton().frame(maxWidth: .infinity)
+            #else
+            .buttonStyle(.plain)
+            #endif
+            .padding(.bottom, 20)
+        }
         if !library.history.isEmpty {
             HStack {
                 SectionHeader(title: L10n.text("Recently Played"))
@@ -247,7 +269,7 @@ private struct MusicHome: View {
                     MusicTrackRow(track: track) { store.music.play(track) }
                 }
             }
-        } else if resumable == nil && !downloads {
+        } else if resumable == nil && !downloads && browse.sections.isEmpty && !browse.loading {
             EmptyPage(symbol: "music.note", title: L10n.text("Search for a Song"),
                       message: L10n.text("Type a song's name, or its name and the artist. Yingxia finds the recording and plays it from the best channel available, lossless first."),
                       action: L10n.text("Music Settings"), actionSymbol: "slider.horizontal.3", perform: openSettings)
