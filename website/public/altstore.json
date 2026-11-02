@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.7",
+          "buildVersion": "45",
+          "date": "2026-11-03",
+          "localizedDescription": "• 音乐里能听的更多了\n• 支持 115 网盘\n• 单个爬虫也能添加\n• 播放更不容易中断\n• 剧集名称更清楚\n• 其他修复\n\n• More to play in Music\n• 115 cloud drive\n• Add a single spider\n• Playback that keeps going\n• Clear episode names\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.7/Yingxia-1.8.7-ios.ipa",
+          "size": 117758042,
+          "sha256": "1a34c38b43b2464687f7d9e4832fc551b0931871cfa5cee853f34a2f10030f85",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.6",
           "buildVersion": "44",
           "date": "2026-11-02",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.3/Yingxia-1.8.3-ios.ipa",
           "size": 115154751,
           "sha256": "d60b94496055ae978f0b1e00cbf3e06ddc72a710e8bae3f7f0dd78628e62843c",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.2",
-          "buildVersion": "40",
-          "date": "2026-10-28",
-          "localizedDescription": "• 猫源现已支持 Mac、iPhone 和 iPad\n• 只搜索一个源\n• 查看反馈的回复\n• 加载进度看得见\n• 选集可倒序\n• 焕然一新\n• 其他修复\n\n• CatPawOpen (猫源) sources on Mac, iPhone and iPad\n• Search just one source\n• Replies to your feedback\n• See how loading is going\n• Reverse the episode list\n• A fresher look\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.2/Yingxia-1.8.2-ios.ipa",
-          "size": 115095547,
-          "sha256": "83eee78a59458b9361c6b1fdef9284e0615ccc8a9b2fc9a3ad843d9911ce8a09",
           "minOSVersion": "17.0"
         }
       ],
