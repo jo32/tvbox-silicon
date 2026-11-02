@@ -226,6 +226,18 @@ import Testing
     #expect(!CatPawOpen.isMediaProxy(try #require(URL(string: "https://example.com/spider/duoduo/3/proxy/quark/1"))))
 }
 
+@Test func catPawOpenConfigCentersAreFoundInTheirEntries() {
+    let site = Site(key: "wex", name: "王二小", type: 3, api: "https://example.com/index.js", raw: ["catPawOpen": .string("/spider/wex/3")])
+    let entry = Video(id: "config", name: "扫码打开配置中心", synopsis: "手机扫码打开：http://127.0.0.1:52380/website")
+    #expect(CatPawOpen.configCenter(of: entry, site: site)?.absoluteString == "http://127.0.0.1:52380/website")
+    let page = Video(id: "webdav", name: "WebDAV", synopsis: "请在 http://localhost:41234/website/#/webdav?tab=1。配置")
+    #expect(CatPawOpen.configCenter(of: page, site: site)?.absoluteString == "http://localhost:41234/website/#/webdav?tab=1")
+    // Only a bundle runs a config center in the app; a remote page or the bundle's media proxy isn't one.
+    #expect(CatPawOpen.configCenter(of: entry, site: Site(key: "other", name: "Other", type: 3, api: "https://example.com/a.js", raw: [:])) == nil)
+    #expect(CatPawOpen.configCenter(of: Video(id: "a", name: "a", synopsis: "https://example.com/website"), site: site) == nil)
+    #expect(CatPawOpen.configCenter(of: Video(id: "b", name: "b", synopsis: "http://127.0.0.1:52380/spider/wex/3/proxy/quark/1"), site: site) == nil)
+}
+
 @Test func catPawOpenAddressesNameTheirBundle() throws {
     let checksum = try #require(URL(string: "https://example.com/cat/index.js.md5"))
     let bundle = try #require(URL(string: "https://example.com/cat/index.js"))

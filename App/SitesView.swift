@@ -858,6 +858,8 @@ struct VideoDetailView: View {
     @State private var coverBack = false
     /// The page's player, whose wait the cover tells about.
     @State private var playerSession: PlaybackSession?
+    /// The source's config center, open in the app (`ConfigCenterView`).
+    @State private var showsConfigCenter = false
     #endif
     @State private var requestTask: Task<Void, Never>?
     @State private var detail: Video?
@@ -957,6 +959,9 @@ struct VideoDetailView: View {
         .onDisappear { requestTask?.cancel() }
         .task(id: detail?.id) { await startTMDB() }
         .onChange(of: choosingQuality) { _, open in if !open && !busy { loadingEpisode = nil } }
+        #if os(iOS)
+        .sheet(isPresented: $showsConfigCenter) { ConfigCenterView { await configCenterAddress() } }
+        #endif
         // Sign in where playback failed, then resume the episode that needed the account.
         #if !os(tvOS)
         .sheet(item: $bundleSignIn) { pending in
@@ -1166,6 +1171,28 @@ struct VideoDetailView: View {
         guard !TMDBMatch.labeledNotOnTMDB(request) else { tmdb.skip(); return }
         await tmdb.run(key: key, request: request)
     }
+    /// A video without episodes. A CatPawOpen bundle's config center entry opens its page in the app (#311).
+    @ViewBuilder private func noEpisodes(_ detail: Video) -> some View {
+        #if os(iOS)
+        if CatPawOpen.configCenter(of: detail, site: client.site) != nil {
+            Button { showsConfigCenter = true } label: { Label(L10n.text("Open Config Center"), systemImage: "gearshape") }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("detail.configCenter")
+        } else {
+            Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)
+        }
+        #else
+        Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)
+        #endif
+    }
+    #if os(iOS)
+    /// The config center's address now. Asking the bundle again gives its current port, which changes when iOS took
+    /// back its socket while the app was suspended; the page's details can be older than that, or cached.
+    private func configCenterAddress() async -> URL? {
+        let fresh = try? await client.detail(video.id)
+        return (fresh ?? detail).flatMap { CatPawOpen.configCenter(of: $0, site: client.site) }
+    }
+    #endif
     /// TMDB's story when it has one, else the source's synopsis.
     private func synopsisText(_ detail: Video) -> String {
         if let story = tmdb.details?.story, !story.isEmpty { return story }
@@ -1406,7 +1433,7 @@ struct VideoDetailView: View {
     @ViewBuilder private var episodePanel: some View {
         if let detail {
             if detail.episodes.isEmpty {
-                Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)
+                noEpisodes(detail)
             } else {
                 let items = activeEpisodes
                 VStack(alignment: .leading, spacing: 12) {
@@ -1821,7 +1848,7 @@ struct VideoDetailView: View {
     @ViewBuilder private var watchEpisodes: some View {
         if let detail {
             if detail.episodes.isEmpty {
-                Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)
+                noEpisodes(detail)
             } else {
                 let items = activeEpisodes
                 let tile = compactTileWidth(items)

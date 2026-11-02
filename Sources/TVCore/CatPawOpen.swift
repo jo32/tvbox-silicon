@@ -24,6 +24,17 @@ public enum CatPawOpen {
             && url.path().range(of: #"^/spider/[^/]+/[^/]+/proxy/"#, options: .regularExpression) != nil
     }
 
+    /// The config center a bundle's entry sends the viewer to ("手机扫码打开：http://127.0.0.1:52380/website"). The bundle
+    /// serves it from inside this app, so only this device can open it, and an iPhone only while the app is in front:
+    /// in Safari it stops as soon as iOS suspends the app (#311).
+    public static func configCenter(of video: Video, site: Site) -> URL? {
+        guard site.raw["catPawOpen"] != nil else { return nil }
+        let text = video.synopsis + "\n" + video.remarks
+        guard let range = text.range(of: #"http://(127\.0\.0\.1|localhost):[0-9]+(/[A-Za-z0-9._~%/?#&=+:@!$*,;-]*)?"#, options: .regularExpression),
+              let url = URL(string: String(text[range])), !isMediaProxy(url) else { return nil }
+        return url
+    }
+
     /// A bundle's media proxy address as a cloud stream, when it answers the bytes asked for. HEVC that an MP4 tags
     /// `hev1` then shows its picture instead of playing sound only (`CloudStreams.playableSampleEntries`).
     public static func proxiedMedia(_ url: URL, headers: [String: String]) async -> CloudStreams.Source? {

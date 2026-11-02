@@ -1346,3 +1346,5 @@
 "This build is missing its Dandanplay API configuration." = "此版本缺少彈彈play API 設定。";
 "Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent." = "優先使用彈彈play；找不到彈幕或服務無法使用時，再查詢愛奇藝和騰訊影片。僅將官方公開單集頁面交給 dmku（dmku 沒有時交給 danmu.zxz.ee），不傳送播放串流位址或請求標頭。";
 "Dandanplay has reached its request limit for now. Try again later, or choose another danmaku server." = "彈彈play 的請求次數暫時用完了，請稍後再試，或換一個彈幕伺服器。";
+"Open Config Center" = "打開配置中心";
+"Config Center" = "配置中心";
