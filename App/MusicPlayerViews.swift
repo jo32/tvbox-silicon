@@ -1,5 +1,6 @@
 import SwiftUI
 import TVCore
+import UniformTypeIdentifiers
 
 extension View {
     /// The music player panel under a page, while a song is loaded.
@@ -480,6 +481,7 @@ struct MusicSettingsView: View {
                 }
                 TVSettingsField(title: L10n.text("HYW key"), text: $music.preferences.hywKey)
             }
+            MusicLXSourcesSection()
         }
         #else
         MusicSheet(title: L10n.text("Music Settings"), symbol: "slider.horizontal.3") {
@@ -513,6 +515,7 @@ struct MusicSettingsView: View {
                         ForEach(Self.channelNotes, id: \.self) { Text($0) }
                     }
                 }
+                MusicLXSourcesSection()
             }
             #if os(macOS)
             .formStyle(.grouped)
@@ -629,6 +632,146 @@ struct MusicScrubber: View {
         .accessibilityAdjustableAction { direction in
             music.skip(by: direction == .increment ? 10 : -10)
         }
+    }
+}
+#endif
+
+/// The LX Music custom sources in Music Settings: add one by address (or from a file on iPhone, iPad and
+/// Mac), turn each on or off, remove it. Adding runs the script once to read which catalogs it covers.
+@MainActor @Observable final class MusicLXSourcesModel {
+    private(set) var sources: [LXSource] = LXSourceLibrary.shared.sources
+    private(set) var busy = false
+    var message: String?
+    var failed = false
+
+    static var note: String {
+        L10n.text("Scripts made for LX Music's custom sources. They are asked for a song's audio after the channels above, for QQ Music, NetEase Cloud Music, Kuwo and Migu songs. Yingxia includes none: add only sources you trust.")
+    }
+
+    func add(address text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard let url = URL(string: trimmed), url.host() != nil, ["http", "https"].contains(url.scheme?.lowercased() ?? "") else {
+            report(TVError.invalidURL); return
+        }
+        run { try await LXSourceLibrary.shared.add(script: LXSourceLibrary.download(url), origin: url) }
+    }
+
+    func add(file: URL) {
+        run {
+            let scoped = file.startAccessingSecurityScopedResource()
+            defer { if scoped { file.stopAccessingSecurityScopedResource() } }
+            let data = try Data(contentsOf: file)
+            guard let script = String(data: data, encoding: .utf8) else { throw TVError.unsupported(L10n.text("This file is not an LX Music source.")) }
+            return try await LXSourceLibrary.shared.add(script: script, origin: nil)
+        }
+    }
+
+    func enabled(_ source: LXSource) -> Binding<Bool> {
+        Binding(get: { self.sources.first { $0.id == source.id }?.enabled ?? false }, set: { on in
+            LXSourceLibrary.shared.setEnabled(source.id, on)
+            self.sources = LXSourceLibrary.shared.sources
+        })
+    }
+
+    func remove(_ source: LXSource) {
+        LXSourceLibrary.shared.remove(source.id)
+        sources = LXSourceLibrary.shared.sources
+        message = nil
+    }
+
+    static func detail(_ source: LXSource) -> String {
+        ([source.info.version] + [source.platforms.map(\.name).joined(separator: ", ")]).filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    private func run(_ work: @escaping @MainActor () async throws -> LXSource) {
+        guard !busy else { return }
+        busy = true; message = nil; failed = false
+        Task {
+            do {
+                let source = try await work()
+                sources = LXSourceLibrary.shared.sources
+                message = L10n.text("Added “%@”.", source.info.name)
+            } catch { report(error) }
+            busy = false
+        }
+    }
+
+    private func report(_ error: Error) {
+        failed = true
+        message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+    }
+}
+
+#if os(tvOS)
+struct MusicLXSourcesSection: View {
+    @State private var model = MusicLXSourcesModel()
+    @State private var address = ""
+    var body: some View {
+        TVSettingsSection(title: L10n.text("LX Music Sources"), footer: [model.message, MusicLXSourcesModel.note].compactMap { $0 }.joined(separator: "\n\n")) {
+            ForEach(model.sources) { source in
+                TVSettingsToggle(title: source.info.name, detail: MusicLXSourcesModel.detail(source), isOn: model.enabled(source))
+                TVSettingsAction(title: L10n.text("Remove “%@”", source.info.name), destructive: true) { model.remove(source) }
+            }
+            // Apple TV has no files to pick: sources come from an address.
+            TVSettingsField(title: L10n.text("Add from Address"), text: $address)
+                .disabled(model.busy)
+                .onChange(of: address) { _, text in
+                    guard !text.isEmpty else { return }
+                    model.add(address: text)
+                    address = ""
+                }
+        }
+    }
+}
+#else
+struct MusicLXSourcesSection: View {
+    @State private var model = MusicLXSourcesModel()
+    @State private var address = ""
+    @State private var importing = false
+    var body: some View {
+        Section {
+            ForEach(model.sources) { source in
+                HStack {
+                    Toggle(isOn: model.enabled(source)) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(source.info.name)
+                            Text(MusicLXSourcesModel.detail(source)).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .settingsSwitch()
+                    Button(role: .destructive) { model.remove(source) } label: { Image(systemName: "trash") }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel(L10n.text("Remove “%@”", source.info.name))
+                }
+            }
+            HStack {
+                TextField(L10n.text("Source address"), text: $address)
+                    .autocorrectionDisabled()
+                    #if os(iOS)
+                    .textInputAutocapitalization(.never).keyboardType(.URL)
+                    #endif
+                    .onSubmit(add)
+                if model.busy { ProgressView().controlSize(.small) }
+                else { Button(L10n.text("Add"), action: add).disabled(address.trimmingCharacters(in: .whitespaces).isEmpty) }
+            }
+            Button(L10n.text("Add from File…")) { importing = true }.disabled(model.busy)
+            if let message = model.message {
+                Text(message).font(.caption).foregroundStyle(model.failed ? Brand.amber : Color.secondary)
+            }
+        } header: {
+            Text(L10n.text("LX Music Sources"))
+        } footer: {
+            Text(MusicLXSourcesModel.note)
+        }
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.javaScript, .plainText, .data]) { result in
+            if case .success(let file) = result { model.add(file: file) }
+        }
+    }
+
+    private func add() {
+        model.add(address: address)
+        address = ""
     }
 }
 #endif

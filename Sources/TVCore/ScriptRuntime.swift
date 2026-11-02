@@ -98,11 +98,7 @@ final class ScriptSession: @unchecked Sendable {
         let session = ScriptSession(thread: ScriptThread(label: label), bridge: ScriptBridge(profile: profile, label: label, supplied: source.map { [api: $0] } ?? [:]))
         session.thread.start()
         let failure: String? = await session.thread.run {
-            let opaque = Unmanaged.passUnretained(session.bridge).toOpaque()
-            guard let script = tv_script_create(opaque, scriptHost, 256 << 20, 12 << 20) else { return "QuickJS could not start" }
-            session.script = script
-            guard let prelude = ScriptAssets.bundled("assets://tvbox/prelude.js") else { return "The script prelude is missing from this build" }
-            if let error = tv_script_module(script, "assets://tvbox/prelude.js", prelude, 60) { defer { free(error) }; return String(cString: error) }
+            if let failure = session.boot() { return failure }
             let input = (try? String(decoding: JSONSerialization.data(withJSONObject: ["api": api, "key": key, "ext": ext]), as: UTF8.self)) ?? "{}"
             guard let envelope = session.evaluate("__tvbox.init(\(input))", seconds: 60) else { return "The script runtime stopped" }
             if envelope["value"]?.object?["ready"] != nil { return nil }
@@ -113,6 +109,39 @@ final class ScriptSession: @unchecked Sendable {
             throw TVError.unsupported(L10n.text("Plugin error: %@", String(failure.prefix(300))))
         }
         return session
+    }
+
+    /// A runtime for a script that is not a TVBox spider: the prelude, then the bundled `module`, which
+    /// reads the script and anything else it needs from `supplied` (`__host('module', key)`).
+    static func start(module: String, supplied: [String: String], profile: URL, label: String) async throws -> ScriptSession {
+        let session = ScriptSession(thread: ScriptThread(label: label), bridge: ScriptBridge(profile: profile, label: label, supplied: supplied))
+        session.thread.start()
+        let failure: String? = await session.thread.run {
+            if let failure = session.boot() { return failure }
+            guard let source = ScriptAssets.bundled(module), let script = session.script else { return "The script module is missing from this build" }
+            if let error = tv_script_module(script, module, source, 30) { defer { free(error) }; return String(cString: error) }
+            return nil
+        }
+        if let failure {
+            session.close()
+            throw TVError.unsupported(L10n.text("Plugin error: %@", String(failure.prefix(300))))
+        }
+        return session
+    }
+
+    /// Evaluates a global expression, waiting up to `seconds` for a promise: {"value": ...} or {"error": ...}.
+    func evaluate(_ expression: String, within seconds: Double) async -> [String: JSONValue] {
+        await thread.run { self.evaluate(expression, seconds: seconds) } ?? ["error": .string("The script runtime stopped")]
+    }
+
+    /// Runs on the session thread: QuickJS with the TVBox prelude loaded.
+    private func boot() -> String? {
+        let opaque = Unmanaged.passUnretained(bridge).toOpaque()
+        guard let script = tv_script_create(opaque, scriptHost, 256 << 20, 12 << 20) else { return "QuickJS could not start" }
+        self.script = script
+        guard let prelude = ScriptAssets.bundled("assets://tvbox/prelude.js") else { return "The script prelude is missing from this build" }
+        if let error = tv_script_module(script, "assets://tvbox/prelude.js", prelude, 60) { defer { free(error) }; return String(cString: error) }
+        return nil
     }
 
     /// The spider's answer envelope: {"result": ...} or a PluginFailure envelope.
@@ -186,6 +215,9 @@ final class ScriptBridge: @unchecked Sendable {
     private let supplied: [String: String]
     private var preferences: [String: String]
     private var preferencesFile: URL { profile.appendingPathComponent("preferences.json") }
+    private let pending = PendingRequests()
+
+    deinit { pending.cancelAll() }
 
     init(profile: URL, label: String, supplied: [String: String] = [:]) {
         self.profile = profile
@@ -206,6 +238,14 @@ final class ScriptBridge: @unchecked Sendable {
             return resolved
         case "module": return try module(argument)
         case "http": return try ScriptHTTP.perform(argument)
+        // Requests that don't block the script: start one, then poll for its answer from a timer.
+        case "httpStart":
+            let id = pending.add()
+            let cancel = try ScriptHTTP.start(argument) { [pending] answer in pending.finish(id, answer) }
+            pending.setCancel(id, cancel)
+            return String(id)
+        case "httpPoll": return pending.take(Int(argument) ?? -1)
+        case "httpCancel": pending.cancel(Int(argument) ?? -1); return nil
         case "encode": return Data(argument.utf8).base64EncodedString()
         case "decode":
             let request = try JSONDecoder().decode([String: String].self, from: Data(argument.utf8))
@@ -249,6 +289,29 @@ final class ScriptBridge: @unchecked Sendable {
         }
         if let cached = try? String(contentsOf: file, encoding: .utf8) { return cached }
         throw ScriptHostError("cannot download module \(address) (HTTP \(answer["code"]?.int ?? 0))")
+    }
+}
+
+/// Requests started with `httpStart`, until their answers are taken.
+final class PendingRequests: @unchecked Sendable {
+    private let lock = NSLock()
+    private var next = 1
+    private var answers: [Int: String] = [:]
+    private var cancels: [Int: () -> Void] = [:]
+
+    func add() -> Int { lock.withLock { defer { next += 1 }; return next } }
+    func setCancel(_ id: Int, _ cancel: @escaping () -> Void) {
+        lock.withLock { if answers[id] == nil { cancels[id] = cancel } }
+    }
+    func finish(_ id: Int, _ answer: String) { lock.withLock { cancels[id] = nil; answers[id] = answer } }
+    func take(_ id: Int) -> String? { lock.withLock { answers.removeValue(forKey: id) } }
+    func cancel(_ id: Int) {
+        let cancel = lock.withLock { answers[id] = nil; return cancels.removeValue(forKey: id) }
+        cancel?()
+    }
+    func cancelAll() {
+        let all = lock.withLock { defer { cancels = [:]; answers = [:] }; return Array(cancels.values) }
+        all.forEach { $0() }
     }
 }
 
@@ -309,19 +372,7 @@ enum ScriptHTTP {
 
     static func perform(_ json: String) throws -> String {
         let options = try JSONDecoder().decode([String: JSONValue].self, from: Data(json.utf8))
-        guard let address = options["url"]?.string, let url = try? WebAddress.resolve(address) else { throw ScriptHostError("Only HTTP and HTTPS script requests are supported") }
-        var request = URLRequest(url: url, timeoutInterval: min(30, max(1, Double(options["timeout"]?.int ?? 20000) / 1000)))
-        let method = (options["method"]?.string ?? "GET").uppercased()
-        request.httpMethod = method == "HEADER" ? "HEAD" : method
-        var headers = options["headers"]?.object?.compactMapValues(\.string) ?? [:]
-        if !headers.keys.contains(where: { $0.lowercased() == "user-agent" }) { headers["User-Agent"] = "Mozilla/5.0" }
-        for (field, value) in headers where !(field + value).contains(where: \.isNewline) { request.setValue(value, forHTTPHeaderField: field) }
-        if method != "GET", method != "HEAD" {
-            // `bodyBase64` carries binary request bodies (for example protobuf) that a string would corrupt.
-            if let encoded = options["bodyBase64"]?.string { request.httpBody = Data(base64Encoded: encoded) ?? Data() }
-            else if let body = options["body"]?.string { request.httpBody = Data(body.utf8) }
-        }
-        let stopsRedirects = options["redirect"].map { if case .bool(false) = $0 { return true } else { return false } } == true
+        let (request, stopsRedirects) = try prepare(options)
         let racers = min(4, max(1, options["racers"]?.int ?? 1))
         let result: Reply
         if racers > 1 {
@@ -339,6 +390,40 @@ enum ScriptHTTP {
             semaphore.wait()
             result = reply
         }
+        return try answer(result, request: request, options: options)
+    }
+
+    /// Starts a request without waiting for it (`httpStart`): `finish` gets the same answer `perform` returns.
+    /// Returns how to cancel it.
+    static func start(_ json: String, finish: @escaping @Sendable (String) -> Void) throws -> () -> Void {
+        let options = try JSONDecoder().decode([String: JSONValue].self, from: Data(json.utf8))
+        let (request, stopsRedirects) = try prepare(options)
+        let task = (stopsRedirects ? stopping : following).dataTask(with: request) { data, response, error in
+            finish((try? answer((data, response, error), request: request, options: options)) ?? #"{"code":0,"content":"","failed":"Network request failed"}"#)
+        }
+        task.resume()
+        return { task.cancel() }
+    }
+
+    private static func prepare(_ options: [String: JSONValue]) throws -> (URLRequest, stopsRedirects: Bool) {
+        guard let address = options["url"]?.string, let url = try? WebAddress.resolve(address) else { throw ScriptHostError("Only HTTP and HTTPS script requests are supported") }
+        var request = URLRequest(url: url, timeoutInterval: min(30, max(1, Double(options["timeout"]?.int ?? 20000) / 1000)))
+        let method = (options["method"]?.string ?? "GET").uppercased()
+        request.httpMethod = method == "HEADER" ? "HEAD" : method
+        var headers = options["headers"]?.object?.compactMapValues(\.string) ?? [:]
+        if !headers.keys.contains(where: { $0.lowercased() == "user-agent" }) { headers["User-Agent"] = "Mozilla/5.0" }
+        for (field, value) in headers where !(field + value).contains(where: \.isNewline) { request.setValue(value, forHTTPHeaderField: field) }
+        if method != "GET", method != "HEAD" {
+            // `bodyBase64` carries binary request bodies (for example protobuf) that a string would corrupt.
+            if let encoded = options["bodyBase64"]?.string { request.httpBody = Data(base64Encoded: encoded) ?? Data() }
+            else if let body = options["body"]?.string { request.httpBody = Data(body.utf8) }
+        }
+        let stopsRedirects = options["redirect"].map { if case .bool(false) = $0 { return true } else { return false } } == true
+        return (request, stopsRedirects)
+    }
+
+    private static func answer(_ result: Reply, request: URLRequest, options: [String: JSONValue]) throws -> String {
+        let url = request.url!
         let host = url.host ?? ""
         var answer: [String: Any] = ["url": (result.1?.url ?? url).absoluteString, "host": host]
         if let error = result.2 {
