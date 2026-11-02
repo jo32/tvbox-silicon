@@ -444,7 +444,9 @@ private struct EpisodeGrid: SwiftUI.Layout {
     let rowSpacing: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? minimum
+        // SwiftUI can ask for the size at an unbounded width (.infinity), not only an unspecified one; Int(_:)
+        // in columns(_:) traps on that (TestFlight crash on iPad, build 44, opening Downloads).
+        let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? minimum
         let rows = rows(subviews, width: width)
         return CGSize(width: width, height: rows.reduce(0) { $0 + $1.height } + rowSpacing * CGFloat(max(0, rows.count - 1)))
     }
