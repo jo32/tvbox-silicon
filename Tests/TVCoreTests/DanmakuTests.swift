@@ -52,6 +52,15 @@ struct DanmakuTests {
         #expect(DanmakuArea.allCases.map(\.next) == [.half, .threeQuarters, .full, .quarter])
     }
 
+    @Test func styleMenuKeepsTheStoredChoice() {
+        #expect(DanmakuStyle.fontSizes(including: 22) == [16, 18, 20, 22, 26, 30, 36])
+        // A size or opacity the sheet's slider set between the menu's choices is still listed, so it shows as chosen.
+        #expect(DanmakuStyle.fontSizes(including: 24) == [16, 18, 20, 22, 24, 26, 30, 36])
+        #expect(DanmakuStyle.opacities(including: 0.85) == [1, 0.85, 0.7, 0.5, 0.3])
+        #expect(DanmakuStyle.opacities(including: 0.6) == [1, 0.85, 0.7, 0.6, 0.5, 0.3])
+        #expect(DanmakuStyle.textScale(33) == 1.5 && DanmakuStyle.textScale(80) == 36 / 22.0 && DanmakuStyle.textScale(.nan) == 1)
+    }
+
     @Test func topCommentsAndScrollingCommentsDoNotOverlap() {
         var layout = DanmakuLayout(width: 1000, height: 400, laneHeight: 50, scrollArea: 0.5, scrollDuration: 10)
         let moving = Danmaku(time: 0, position: .scroll, text: "x")

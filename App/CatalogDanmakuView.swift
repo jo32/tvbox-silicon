@@ -21,11 +21,13 @@ import UniformTypeIdentifiers
             if automatic { startAutomatic(automaticContext) } else { cancelAutomatic() }
         }
     }
-    var opacity = UserDefaults.standard.object(forKey: "danmakuOpacity") as? Double ?? 0.85 {
-        didSet { UserDefaults.standard.set(opacity, forKey: "danmakuOpacity") }
+    /// Applies to every track, Bilibili's own and live rooms included; the player's danmaku menu sets it too.
+    var opacity = UserDefaults.standard.object(forKey: DanmakuStyle.opacityKey) as? Double ?? DanmakuStyle.standardOpacity {
+        didSet { UserDefaults.standard.set(opacity, forKey: DanmakuStyle.opacityKey) }
     }
-    var fontSize = UserDefaults.standard.object(forKey: "danmakuFontSize") as? Double ?? 22 {
-        didSet { UserDefaults.standard.set(fontSize, forKey: "danmakuFontSize") }
+    /// Read by `DanmakuOverlay` from the same key, so it sizes every track, not only these comments.
+    var fontSize = UserDefaults.standard.object(forKey: DanmakuStyle.fontSizeKey) as? Double ?? DanmakuStyle.standardFontSize {
+        didSet { UserDefaults.standard.set(fontSize, forKey: DanmakuStyle.fontSizeKey) }
     }
     private var generation = UUID()
     private var automaticTask: Task<Void, Never>?
@@ -38,7 +40,7 @@ import UniformTypeIdentifiers
 
     @ObservationIgnored private var renderedKey: String?
     @ObservationIgnored private var rendered: [Danmaku] = []
-    var renderedRevision: String { "\(revision):\(offset):\(fontSize)" }
+    var renderedRevision: String { "\(revision):\(offset)" }
     var renderedComments: [Danmaku] {
         let key = renderedRevision
         if renderedKey != key {
@@ -46,7 +48,7 @@ import UniformTypeIdentifiers
             rendered = comments.map { comment in
                 Danmaku(time: max(0, comment.time + offset),
                     position: comment.mode == .top ? .top : comment.mode == .bottom ? .bottom : .scroll,
-                    color: comment.color, scale: fontSize / 22, text: comment.text)
+                    color: comment.color, text: comment.text)
             }
         }
         return rendered

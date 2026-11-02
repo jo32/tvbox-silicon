@@ -162,6 +162,28 @@ public enum DanmakuArea: Int, CaseIterable, Sendable {
     public var next: DanmakuArea { Self.allCases[((Self.allCases.firstIndex(of: self) ?? 0) + 1) % Self.allCases.count] }
 }
 
+/// Text size and opacity for every comment track (matched or imported comments, Bilibili videos and live rooms).
+/// The size is stored in points under `fontSizeKey`, where 22 is the standard size.
+public enum DanmakuStyle {
+    public static let fontSizeKey = "danmakuFontSize", opacityKey = "danmakuOpacity"
+    public static let standardFontSize = 22.0, standardOpacity = 0.85
+    /// The sizes the player's menu offers, smallest first. A size the older slider stored between them stays in the list.
+    public static func fontSizes(including current: Double) -> [Double] {
+        choices([16, 18, 20, 22, 26, 30, 36], current).sorted()
+    }
+    /// The opacities the player's menu offers, most opaque first.
+    public static func opacities(including current: Double) -> [Double] {
+        choices([1, 0.85, 0.7, 0.5, 0.3], current).sorted(by: >)
+    }
+    /// How many times the standard size comments are drawn, within the slider's 16–36 range.
+    public static func textScale(_ fontSize: Double) -> Double {
+        fontSize.isFinite ? min(36, max(16, fontSize)) / standardFontSize : 1
+    }
+    private static func choices(_ standard: [Double], _ current: Double) -> [Double] {
+        !current.isFinite || standard.contains(where: { abs($0 - current) < 0.001 }) ? standard : standard + [current]
+    }
+}
+
 /// Places comments in lanes as their time comes, so none overlap: a scrolling comment takes a lane once
 /// the lane's previous comment has fully entered and cannot be caught before it leaves; a fixed one
 /// takes a lane whose previous fixed comment has gone. Comments that find no lane are dropped, which is

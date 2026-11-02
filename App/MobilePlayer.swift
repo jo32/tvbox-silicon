@@ -514,6 +514,7 @@ struct MobilePlayerView: View {
                         ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
                     } label: { Label(L10n.text("Danmaku Area"), systemImage: "rectangle.tophalf.inset.filled") }
                     .pickerStyle(.menu)
+                    DanmakuStylePickers(model: session.catalogDanmaku)
                     Button { showsDanmakuList = true } label: { Label(L10n.text("Danmaku List"), systemImage: "list.bullet.rectangle") }
                 } label: {
                     Image(systemName: showsDanmaku ? "text.bubble.fill" : "text.bubble").font(.headline).frame(width: 22, height: 22)

@@ -11,6 +11,7 @@ struct DanmakuOverlay: View {
     var opacity = 0.9
     var revision = ""
     @AppStorage(DanmakuArea.key) private var area = DanmakuArea.standard
+    @AppStorage(DanmakuStyle.fontSizeKey) private var fontSize = DanmakuStyle.standardFontSize
     @State private var engine = DanmakuEngine()
     @Environment(\.displayScale) private var scale
 
@@ -21,7 +22,7 @@ struct DanmakuOverlay: View {
                 _ = timeline.date
                 let time = player.currentTime().seconds
                 guard time.isFinite else { return }
-                for sprite in engine.frame(time: time, size: size, scale: scale, area: area) {
+                for sprite in engine.frame(time: time, size: size, scale: scale, area: area, textScale: DanmakuStyle.textScale(fontSize)) {
                     context.draw(Image(decorative: sprite.image, scale: scale), in: sprite.frame)
                 }
             }
@@ -39,6 +40,24 @@ enum DanmakuPreference {
     static let key = "danmakuEnabled"
 }
 
+#if !os(tvOS)
+/// Text size and opacity for the player's danmaku menu, next to the area, for whatever comments are playing.
+struct DanmakuStylePickers: View {
+    @Bindable var model: CatalogDanmakuModel
+
+    var body: some View {
+        Picker(selection: $model.fontSize) {
+            ForEach(DanmakuStyle.fontSizes(including: model.fontSize), id: \.self) { Text(verbatim: "\(Int($0.rounded()))").tag($0) }
+        } label: { Label(L10n.text("Text Size"), systemImage: "textformat.size") }
+        .pickerStyle(.menu)
+        Picker(selection: $model.opacity) {
+            ForEach(DanmakuStyle.opacities(including: model.opacity), id: \.self) { Text(verbatim: "\(Int(($0 * 100).rounded()))%").tag($0) }
+        } label: { Label(L10n.text("Opacity"), systemImage: "circle.lefthalf.filled") }
+        .pickerStyle(.menu)
+    }
+}
+#endif
+
 final class DanmakuEngine: @unchecked Sendable {
     struct Sprite { let image: CGImage; let frame: CGRect }
     private struct Active { let placement: DanmakuLayout.Placement; let image: CGImage; let size: CGSize }
@@ -47,6 +66,7 @@ final class DanmakuEngine: @unchecked Sendable {
     private var layout: DanmakuLayout?
     private var size = CGSize.zero
     private var area = DanmakuArea.standard
+    private var textScale = 1.0
     private var fontSize: CGFloat = 24
     private var next = 0
     private var active: [Active] = []
@@ -67,12 +87,13 @@ final class DanmakuEngine: @unchecked Sendable {
         }
     }
 
-    func frame(time: Double, size: CGSize, scale: CGFloat, area: DanmakuArea = .standard) -> [Sprite] {
+    func frame(time: Double, size: CGSize, scale: CGFloat, area: DanmakuArea = .standard, textScale: Double = 1) -> [Sprite] {
         lock.withLock {
             guard !comments.isEmpty, size.width > 0, size.height > 0 else { return [] }
-            // A new size or area, or a seek (any jump the clock would not make by itself), starts over at `time`.
-            if layout == nil || size != self.size || area != self.area || time < lastTime - 0.3 || time > lastTime + 2 {
-                restart(at: time, size: size, area: area)
+            // A new size, area or text size, or a seek (any jump the clock would not make by itself), starts over at `time`.
+            if layout == nil || size != self.size || area != self.area || textScale != self.textScale
+                || time < lastTime - 0.3 || time > lastTime + 2 {
+                restart(at: time, size: size, area: area, textScale: textScale)
             }
             lastTime = time
             var budget = Self.perFrame
@@ -118,11 +139,12 @@ final class DanmakuEngine: @unchecked Sendable {
         return image
     }
 
-    private func restart(at time: Double, size: CGSize, area: DanmakuArea) {
-        self.size = size; self.area = area
+    private func restart(at time: Double, size: CGSize, area: DanmakuArea, textScale: Double) {
+        self.size = size; self.area = area; self.textScale = textScale
         // About 43pt on a 1080p TV, 22pt in a small Mac window. From the shorter side: an upright iPhone's full-screen
         // player is tall and narrow, and its height made the text twice the size it is when the phone is turned.
-        fontSize = min(44, max(15, min(size.width, size.height) * 0.04))
+        // The chosen text size scales that, and the lanes with it, so larger comments don't overlap.
+        fontSize = min(44, max(15, min(size.width, size.height) * 0.04)) * textScale
         layout = DanmakuLayout(width: size.width, height: size.height * 0.96, laneHeight: fontSize * 1.35, scrollArea: area.share)
         active = []
         var low = 0, high = comments.count

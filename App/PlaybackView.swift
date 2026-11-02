@@ -79,7 +79,7 @@ import TVCore
     /// Bullet comments for the media, when its source has them.
     private var sourceDanmaku: [Danmaku] = []
     var danmaku: [Danmaku] { sourceDanmaku.isEmpty ? catalogDanmaku.renderedComments : sourceDanmaku }
-    var danmakuOpacity: Double { sourceDanmaku.isEmpty ? catalogDanmaku.opacity : 0.9 }
+    var danmakuOpacity: Double { catalogDanmaku.opacity }
     var danmakuRevision: String { sourceDanmaku.isEmpty ? catalogDanmaku.renderedRevision : "" }
     var onPlaybackEnded: (() -> Void)?
     /// Plays another line of the same episode when this file can't play here (an MKV original);
