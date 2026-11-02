@@ -17,7 +17,9 @@ Object.assign(console, { log, info: log, warn: log, error: log, debug: log });
 // Some bundles' handlers answer a request twice; the CatVod apps keep serving, so this does too.
 process.on('uncaughtException', error => log('CATPAW_UNCAUGHT', error?.stack || String(error)));
 process.on('unhandledRejection', error => log('CATPAW_UNHANDLED', error?.stack || String(error)));
-globalThis.catDartServerPort = () => 0;
+// The bundle in the current call; its server also takes the bundle's messages to the app.
+let messagePort = 0;
+globalThis.catDartServerPort = () => messagePort;
 
 // The app reaches the internet through the system's HTTP proxy when one is set (Settings > Wi-Fi > Configure
 // Proxy), but Node's sockets don't, so every agent's connections tunnel through it with CONNECT. A VPN-style
@@ -88,6 +90,46 @@ function request(url, { method = 'GET', headers = {}, body, timeout = 60_000 } =
     });
 }
 
+// Bundles ask the app for things by POSTing {action, opt} to http://127.0.0.1:<catDartServerPort()>/msg, as the CatVod
+// Open apps take them. The bundle's own server answers that address here (`answerMessage`). The one request kept is a
+// page to open: a config center entry asks for its page that way ("openInternalWebview") and may say nothing else
+// about it (#315). Keep in step with host.mjs.
+const pageWatchers = new Set(); // the detail calls under way, each collecting the loopback pages asked for
+async function answerMessage(req, res) {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    let message = {};
+    try { message = JSON.parse(Buffer.concat(chunks).toString('utf8')) || {}; } catch { }
+    const page = String(message.opt?.url || '');
+    if (['openInternalWebview', 'openWeb'].includes(message.action) && /^http:\/\/(127\.0\.0\.1|localhost):\d+(\/|$)/.test(page)) {
+        for (const pages of pageWatchers) pages.push(page);
+    }
+    // Anything else gets nothing back, as when no one answered: the bundle carries on without it.
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end('null');
+}
+const isMessage = req => req.method === 'POST' && req.url === '/msg';
+// A detail answer for which the bundle asked to open a page: the page's address joins the video's synopsis, where the
+// app finds a config center (CatPawOpen.configCenter). Some bundles answer such an entry with an empty list.
+function withPage(text, page) {
+    let answer;
+    try { answer = JSON.parse(text); } catch { return text; }
+    if (!answer || typeof answer !== 'object' || Array.isArray(answer)) return text;
+    const list = Array.isArray(answer.list) ? answer.list : [];
+    const video = list[0] && typeof list[0] === 'object' ? list[0] : {};
+    if (!`${video.vod_content ?? ''}\n${video.vod_remarks ?? ''}`.includes(page)) {
+        video.vod_content = [video.vod_content, page].filter(Boolean).join('\n');
+    }
+    answer.list = [video, ...list.slice(1)];
+    return JSON.stringify(answer);
+}
+// The detail calls collect what pages the bundle asks to open while it answers.
+async function watchingPages(route, send) {
+    const pages = [];
+    if (route.endsWith('/detail')) pageWatchers.add(pages);
+    try { return { text: await send(), page: pages.at(-1) }; } finally { pageWatchers.delete(pages); }
+}
+
 // A bundle's `start(config)` builds a Fastify app on the server `catServerFactory` makes, then lists its
 // sources at GET /config and serves each at POST /spider/<key>/<type>/{init,home,category,detail,play,search}.
 const bundles = new Map(); // bundle file -> Promise<{server, port, ports, started}>
@@ -95,7 +137,7 @@ let starting = Promise.resolve();
 async function start({ bundle, api, profile }) {
     let server;
     globalThis.catServerFactory = handler => {
-        server = http.createServer(handler);
+        server = http.createServer((req, res) => isMessage(req) ? answerMessage(req, res) : handler(req, res));
         const listen = server.listen.bind(server);
         server.listen = (...args) => listen(0, '127.0.0.1', args.find(arg => typeof arg === 'function'));
         return server;
@@ -166,7 +208,7 @@ async function shareAccounts(instance, accountsFile, profile) {
 async function call(instance, params) {
     const send = async (route, body) => {
         const init = body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) };
-        const ask = () => request(`http://127.0.0.1:${instance.port}${route}`, init);
+        const ask = () => { messagePort = instance.port; return request(`http://127.0.0.1:${instance.port}${route}`, init); };
         // A refused connection means iOS took the bundle's socket back while the app was suspended.
         const { status, text } = await ask().catch(async error => {
             if (error.code !== 'ECONNREFUSED') throw error;
@@ -196,11 +238,12 @@ async function call(instance, params) {
     else if ('wd' in params) { route = '/search'; body = { wd: params.wd, page: Number(params.pg || 1), quick: params.quick === 'true' }; }
     else if ('t' in params) { route = '/category'; body = { id: params.t, page: Number(params.pg || 1), filter: true, filters: {} }; }
     else { route = '/home'; body = {}; }
-    const result = await send(api + route, body);
+    const { text, page } = await watchingPages(route, () => send(api + route, body));
     // Sources address the bundle's own proxy by the device's network address, or by a port from before a relisten,
     // but the server is on loopback.
     const ports = instance.ports.join('|');
-    return { result: result.replace(new RegExp(`http://\\d+\\.\\d+\\.\\d+\\.\\d+:(?:${ports})/`, 'g'), `http://127.0.0.1:${instance.port}/`) };
+    const result = text.replace(new RegExp(`http://\\d+\\.\\d+\\.\\d+\\.\\d+:(?:${ports})/`, 'g'), `http://127.0.0.1:${instance.port}/`);
+    return { result: page ? withPage(result, page) : result };
 }
 
 const control = http.createServer(async (req, res) => {
