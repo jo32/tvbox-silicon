@@ -3,9 +3,10 @@ import Foundation
 /// Sign in to a cloud drive by scanning a code with its phone app. Quark and UC: the approved
 /// code yields a service ticket, which the drive exchanges for the same cookie its web sign-in
 /// sets. Baidu Netdisk: the passport's QR login sets BDUSS, STOKEN and PTOKEN. Aliyun Drive:
-/// the approved code carries the account's refresh token.
+/// the approved code carries the account's refresh token. 115: the approved code signs in a client, which
+/// gets the UID, CID, SEID and KID cookies.
 public struct CloudDriveQRLogin: Sendable {
-    public enum Drive: String, Sendable { case quark, uc, baidu, aliyun }
+    public enum Drive: String, Sendable { case quark, uc, baidu, aliyun, pan115 }
     public struct Credentials: Sendable, Equatable {
         public let cookie: String
         public let serviceTicket: String?
@@ -32,6 +33,7 @@ public struct CloudDriveQRLogin: Sendable {
         switch drive {
         case .baidu: return try await startBaidu()
         case .aliyun: return try await startAliyun()
+        case .pan115: return try await start115()
         case .quark, .uc: break
         }
         let members = try await members(drive, "getTokenForQrcodeLogin", [:])
@@ -43,6 +45,7 @@ public struct CloudDriveQRLogin: Sendable {
         switch drive {
         case .baidu: return try await pollBaidu()
         case .aliyun: return try await pollAliyun()
+        case .pan115: return try await poll115()
         case .quark, .uc: break
         }
         let (status, members) = try await Self.call(drive, "getServiceTicketByQrcodeToken", ["token": token])
@@ -244,6 +247,77 @@ public struct CloudDriveQRLogin: Sendable {
         var request = URLRequest(url: url, timeoutInterval: 15)
         request.setValue(browser, forHTTPHeaderField: "User-Agent")
         request.setValue("https://passport.aliyundrive.com/", forHTTPHeaderField: "Referer")
+        return request
+    }
+
+    // MARK: 115
+
+    /// The client the sign-in is made as. 115 keeps one sign-in per kind of client, so this one signs out
+    /// another TV app of the same account, but not 115 on the phone, the computer or the web.
+    static let pan115App = "tv"
+
+    private static func start115() async throws -> CloudDriveQRLogin {
+        let (data, response) = try await URLSession.shared.data(for: pan115Request(URL(string: "https://qrcodeapi.115.com/api/1.0/web/1.0/token/")!))
+        try check(response)
+        let session = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["data"] as? [String: Any]
+        guard let uid = session?["uid"] as? String, let sign = session?["sign"] as? String, let time = session?["time"] as? NSNumber,
+              let code = session?["qrcode"] as? String, !uid.isEmpty, !code.isEmpty else {
+            throw TVError.unsupported(L10n.text("Couldn't get a sign-in code. Try again."))
+        }
+        return CloudDriveQRLogin(drive: .pan115, code: code, token: uid, state: ["time": time.stringValue, "sign": sign])
+    }
+
+    private func poll115() async throws -> Status {
+        var components = URLComponents(string: "https://qrcodeapi.115.com/get/status/")!
+        components.queryItems = [("uid", token), ("time", state["time"] ?? ""), ("sign", state["sign"] ?? ""), ("_", "\(Self.milliseconds())")]
+            .map { URLQueryItem(name: $0.0, value: $0.1) }
+        // The status request is held open until something happens, for up to about 30 seconds.
+        let (data, response) = try await URLSession.shared.data(for: Self.pan115Request(components.url!, timeout: 45))
+        try Self.check(response)
+        switch Self.pan115Status(data) {
+        case .some(2): return .signedIn(try await Self.complete115(token))
+        case .some(let status) where status < 0: return .expired
+        default: return .waiting
+        }
+    }
+
+    /// The code's status: nothing yet (nil), 0 waiting, 1 scanned, 2 approved, -1 expired, -2 cancelled.
+    /// An answer that isn't a success means the code is gone.
+    static func pan115Status(_ data: Data) -> Int? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        guard (object["state"] as? NSNumber)?.intValue == 1 else { return -1 }
+        return ((object["data"] as? [String: Any])?["status"] as? NSNumber)?.intValue
+    }
+
+    private static func complete115(_ uid: String) async throws -> Credentials {
+        var request = pan115Request(URL(string: "https://passportapi.115.com/app/1.0/\(pan115App)/1.0/login/qrcode/")!)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Data("account=\(uid)&app=\(pan115App)".utf8)
+        // Its cookies are the account's; they belong in the saved sign-in, not in the app's cookie store.
+        let session = URLSession(configuration: .ephemeral)
+        defer { session.finishTasksAndInvalidate() }
+        let (data, response) = try await session.data(for: request)
+        try check(response)
+        guard let cookie = pan115Cookie(data) else {
+            throw TVError.unsupported(L10n.text("Sign-in was approved, but the drive didn't return a login. Try again."))
+        }
+        return Credentials(cookie: cookie, serviceTicket: nil)
+    }
+
+    /// "UID=…; CID=…; SEID=…; KID=…" from the sign-in's answer, `{"data": {"cookie": {"UID": …}}}`.
+    static func pan115Cookie(_ data: Data) -> String? {
+        let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let cookie = (object?["data"] as? [String: Any])?["cookie"] as? [String: Any] ?? [:]
+        let fields = ["UID", "CID", "SEID", "KID"].compactMap { name in (cookie[name] as? String).flatMap { $0.isEmpty ? nil : (name, $0) } }
+        guard Set(fields.map { $0.0 }).isSuperset(of: ["UID", "CID", "SEID"]) else { return nil }
+        return fields.map { "\($0.0)=\($0.1)" }.joined(separator: "; ")
+    }
+
+    private static func pan115Request(_ url: URL, timeout: TimeInterval = 15) -> URLRequest {
+        var request = URLRequest(url: url, timeoutInterval: timeout)
+        request.setValue(Pan115Files.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("https://115.com/", forHTTPHeaderField: "Referer")
         return request
     }
 
