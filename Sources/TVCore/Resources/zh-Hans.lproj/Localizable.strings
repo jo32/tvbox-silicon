@@ -97,6 +97,7 @@
 "Video Details" = "影片详情";
 "This media cannot be played. Try another channel or source." = "媒体无法播放，请尝试其他频道或线路。";
 "Playback was interrupted." = "播放中断。";
+"The connection dropped. Reconnecting" = "连接已中断，正在重新连接";
 "Close" = "关闭";
 "Connecting…" = "正在连接…";
 "Enter a valid HTTP or HTTPS URL." = "请输入有效的 HTTP 或 HTTPS 地址。";
