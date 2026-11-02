@@ -11,7 +11,8 @@ private actor Hosts {
     let file = URL(string: "https://raw.githubusercontent.com/o/r/refs/heads/main/lib/%E8%99%8E.js")!
     #expect(GitHubMirrors.mirrors(of: file).map(\.absoluteString) == [
         "https://gcore.jsdelivr.net/gh/o/r@main/lib/%E8%99%8E.js", "https://fastly.jsdelivr.net/gh/o/r@main/lib/%E8%99%8E.js",
-        "https://gh-proxy.com/\(file.absoluteString)", "https://ghfast.top/\(file.absoluteString)"])
+        "https://gh-proxy.org/\(file.absoluteString)", "https://gh-proxy.com/\(file.absoluteString)",
+        "https://ghfast.top/\(file.absoluteString)"])
     // A configuration's own GitHub proxy (饭太硬 uses git.yylx.win) still names the GitHub file.
     #expect(GitHubMirrors.gitHubFile(URL(string: "https://git.yylx.win/https://raw.githubusercontent.com/o/r/main/a.js")!)?.absoluteString
             == "https://raw.githubusercontent.com/o/r/main/a.js")

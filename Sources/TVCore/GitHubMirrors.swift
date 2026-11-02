@@ -8,8 +8,9 @@ final class GitHubMirrors: @unchecked Sendable {
     static let shared = GitHubMirrors()
     /// Tried in order after GitHub. jsDelivr serves the repository's own files (a branch is cached for up
     /// to 12 hours); the prefix proxies are community services that come and go, so keep this list current.
+    /// gh-proxy.org is gh-proxy.com's newer domain; listing both helps when a network blocks one of them.
     static let cdns = ["gcore.jsdelivr.net", "fastly.jsdelivr.net"]
-    static let proxies = ["gh-proxy.com", "ghfast.top"]
+    static let proxies = ["gh-proxy.org", "gh-proxy.com", "ghfast.top"]
     /// How long each address may stay silent before the next one is tried.
     static let patience: TimeInterval = 10
     private let lock = NSLock()
