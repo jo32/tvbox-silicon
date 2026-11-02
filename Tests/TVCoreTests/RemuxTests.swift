@@ -450,12 +450,13 @@ import VideoToolbox
 
     /// The HEVC MPEG-TS fixture served as HLS by `RangeServer` under names of its own. `edit` changes the playlist,
     /// `segment` each segment's bytes.
-    private func hevcTransportStream(_ edit: (String) -> String = { $0 }, segment: (Int, Data) throws -> Data = { $1 }) throws -> URL {
+    private func hevcTransportStream(_ edit: (String) -> String = { $0 }, segment: (Int, Data) throws -> Data = { $1 },
+                                     named name: String = "remux-hevc-ts") throws -> URL {
         let prefix = "hls-\(UUID().uuidString)"
-        var text = String(decoding: try Data(contentsOf: fixture("remux-hevc-ts.m3u8")), as: UTF8.self)
+        var text = String(decoding: try Data(contentsOf: fixture("\(name).m3u8")), as: UTF8.self)
         for index in 0..<2 {
-            _ = RangeServer.add("\(prefix)-\(index).ts", try segment(index, try Data(contentsOf: fixture("remux-hevc-ts-\(index).ts"))))
-            text = text.replacingOccurrences(of: "remux-hevc-ts-\(index).ts", with: "\(prefix)-\(index).ts")
+            _ = RangeServer.add("\(prefix)-\(index).ts", try segment(index, try Data(contentsOf: fixture("\(name)-\(index).ts"))))
+            text = text.replacingOccurrences(of: "\(name)-\(index).ts", with: "\(prefix)-\(index).ts")
         }
         return RangeServer.add("\(prefix).m3u8", Data(edit(text).utf8))
     }
@@ -547,6 +548,26 @@ import VideoToolbox
         #expect(RemuxPlan.box("hvcC", in: later) != nil)
         let played = await picture(master)
         #expect(played.status == .readyToPlay && played.size == CGSize(width: 320, height: 180))
+    }
+
+    /// HDR10 HEVC in MPEG-TS. Where HDR plays it is copied and named PQ; where it doesn't (an SDR screen, a mirrored or
+    /// recorded one) AVPlayer refuses that variant at once (-1002, #345), so the picture is tone mapped to SDR.
+    @Test func hdrInTransportStreamHLSIsToneMappedWhereHDRDoesNotPlay() async throws {
+        let copied = try await HLSRemux.open(try hevcTransportStream(named: "remux-hevc-pq"), headers: [:], network: RangeServer.session)
+        defer { Remux.stop(copied) }
+        #expect(Remux.isHDR(copied) && Remux.isSegmented(copied))
+        #expect(String(decoding: try await fetch(copied), as: UTF8.self).contains("VIDEO-RANGE=PQ"))
+        let master = try await HLSRemux.open(try hevcTransportStream(named: "remux-hevc-pq"), headers: [:], network: RangeServer.session,
+                                             device: .init(hdr: false))
+        defer { Remux.stop(master) }
+        #expect(!Remux.isHDR(master))
+        let text = String(decoding: try await fetch(master), as: UTF8.self)
+        #expect(text.contains("CODECS=\"hvc1.1.") && text.contains("RESOLUTION=320x180") && !text.contains("VIDEO-RANGE"))
+        let session = try #require(RemuxStore.shared.segmented(master.deletingLastPathComponent().lastPathComponent))
+        let first = try await session.output(0), second = try await session.output(1)
+        #expect(first.toneMapped && first.initializations[0] == second.initializations[0])
+        let played = await picture(master)
+        #expect(played.status == .readyToPlay && played.size == CGSize(width: 320, height: 180) && played.video)
     }
 
     @Test func hlsWhosePictureAVPlayerShowsIsLeftAlone() async throws {

@@ -56,8 +56,12 @@ public enum Remux {
     /// Whether `url` is served by the repackager: a file (`open`) or an HLS stream (`HLSRemux`).
     public static func isRemuxed(_ url: URL) -> Bool { identifier(url).map(RemuxStore.shared.contains) ?? false }
 
+    /// Whether `url` is an HLS stream the repackager serves (`HLSRemux`).
+    public static func isSegmented(_ url: URL) -> Bool { identifier(url).flatMap(RemuxStore.shared.segmented) != nil }
+
     /// Whether the picture behind `url` is served as HDR (PQ or HLG), not converted to SDR.
     public static func isHDR(_ url: URL) -> Bool {
+        if let stream = identifier(url).flatMap(RemuxStore.shared.segmented) { return stream.copiesHDR }
         guard let plan = session(url)?.plan, plan.tracks.first?.kind == .video else { return false }
         return plan.videoRange != "SDR"
     }

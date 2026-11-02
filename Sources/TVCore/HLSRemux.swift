@@ -6,16 +6,17 @@ import TVMedia
 /// carries HEVC only in fragmented MP4), so such a stream opens again here (#292). Each segment is repackaged on its
 /// own into fragmented MP4 when AVPlayer asks for it, video and audio copied as they are, and served from the
 /// repackager's loopback server under the playlist's own durations and discontinuities. AES-128 keys are applied
-/// here. Only streams that end (VOD) are handled; a live one plays as before.
+/// here. Only streams that end (VOD) are handled; a live one plays as before. An HDR picture is tone mapped to SDR
+/// on a device that doesn't show HDR now, as a repackaged file's is: AVPlayer refuses its HDR variant there (#345).
 public enum HLSRemux {
     /// Opens the stream behind `url` (a master or media playlist) and returns the address of its repackaged master
     /// playlist. Throws when its first segment isn't MPEG-TS carrying HEVC, or the playlist is one this doesn't handle.
     public static func open(_ url: URL, headers: [String: String]) async throws -> URL {
-        try await open(url, headers: headers, network: HLSRemuxSession.network)
+        try await open(url, headers: headers, network: HLSRemuxSession.network, device: RemuxSession.device())
     }
 
-    static func open(_ url: URL, headers: [String: String], network: URLSession) async throws -> URL {
-        let session = try await HLSRemuxSession.make(url, headers: headers, network: network)
+    static func open(_ url: URL, headers: [String: String], network: URLSession, device: RemuxPlan.Device = .init()) async throws -> URL {
+        let session = try await HLSRemuxSession.make(url, headers: headers, network: network, device: device)
         RemuxStore.shared.add(session)
         do {
             let base = try await RemuxServer.shared.base()
@@ -121,7 +122,9 @@ public enum HLSRemux {
     /// One segment repackaged: each track's initialization segment and fragments (0 video, 1 audio).
     struct Output: Sendable {
         var format = ""
-        var video = "", audio: String?, audioProfile = 0
+        /// The source's picture codec, and the one the segments carry (`hevc` or `h264` once tone mapped).
+        var video = "", picture = "", toneMapped = false
+        var audio: String?, audioProfile = 0
         var width = 0, height = 0, transfer = 0
         var bytes = 0
         var initializations: [Int: Data] = [:]
@@ -129,8 +132,9 @@ public enum HLSRemux {
     }
 
     /// Repackages one segment's bytes: the picture (H.264 or HEVC) and the first audio, copied when Apple devices
-    /// decode it, else converted to AAC. Times stay the segment's own, so segments line up as they did.
-    static func repackage(_ data: Data) throws -> Output {
+    /// decode it, else converted to AAC. An HDR picture is tone mapped to SDR when `device` shows no HDR. Times
+    /// stay the segment's own, so segments line up as they did.
+    static func repackage(_ data: Data, device: RemuxPlan.Device = .init()) throws -> Output {
         RemuxSession.installLog()
         let memory = MemoryMedia(data)
         let context = Unmanaged.passUnretained(memory).toOpaque()
@@ -146,10 +150,19 @@ public enum HLSRemux {
             guard tvm_stream(input, index, &raw) == 0 else { continue }
             let codec = withUnsafeBytes(of: raw.codec) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
             if raw.kind == Int32(TVMKindVideo), video == nil, raw.width > 0, ["h264", "hevc"].contains(codec) {
-                video = TVMTrack(stream: index, mode: Int32(TVMModeCopy), bitRate: 0, channels: 0, dolbyVision: Int32(TVMDolbyVisionDrop),
-                                 toneMap: 0, width: 0, height: 0)
+                let stream = RemuxSession.stream(raw, index: Int(index))
+                let mapped = RemuxPlan.videoTrack(stream, device: device)
+                let track = mapped.toneMap ? mapped : RemuxPlan.Track(stream: stream)
+                video = TVMTrack(stream: index, mode: track.mode.rawValue, bitRate: Int32(track.bitRate), channels: 0,
+                                 dolbyVision: Int32(TVMDolbyVisionDrop), toneMap: track.toneMap ? 1 : 0,
+                                 width: Int32(track.width), height: Int32(track.height))
                 output.video = codec
-                output.width = Int(raw.width); output.height = Int(raw.height); output.transfer = Int(raw.colorTransfer)
+                output.picture = track.mode == .copy ? codec : track.mode == .hevc ? "hevc" : "h264"
+                output.toneMapped = track.toneMap
+                output.width = track.width > 0 ? track.width : Int(raw.width)
+                output.height = track.height > 0 ? track.height : Int(raw.height)
+                // BT.709 once tone mapped.
+                output.transfer = track.toneMap ? 1 : Int(raw.colorTransfer)
             } else if raw.kind == Int32(TVMKindAudio), audio == nil, raw.channels > 0 {
                 let copy = ["aac", "ac3", "eac3"].contains(codec)
                 audio = TVMTrack(stream: index, mode: Int32(copy ? TVMModeCopy : TVMModeAAC), bitRate: 192_000,
@@ -198,6 +211,10 @@ final class HLSRemuxSession: RemuxStored, @unchecked Sendable {
 
     let id = UUID().uuidString.lowercased()
     let segments: [HLSRemux.Segment]
+    /// Whether HDR plays here (`RemuxSession.device`), decided once so that every segment matches the first.
+    let device: RemuxPlan.Device
+    /// The picture is HDR, copied as it is.
+    private(set) var copiesHDR = false
     private(set) var master = ""
     private(set) var playlists: [Int: String] = [:]
     private let headers: [String: String]
@@ -208,13 +225,13 @@ final class HLSRemuxSession: RemuxStored, @unchecked Sendable {
     private var keys: [URL: Task<Data, Error>] = [:]
     private var closed = false
 
-    private init(segments: [HLSRemux.Segment], headers: [String: String], network: URLSession) {
-        self.segments = segments; self.headers = headers; self.network = network
+    private init(segments: [HLSRemux.Segment], headers: [String: String], network: URLSession, device: RemuxPlan.Device) {
+        self.segments = segments; self.headers = headers; self.network = network; self.device = device
     }
 
     /// Reads the playlist (the variant with the highest bandwidth of a master one) and repackages the first segment,
     /// which must be MPEG-TS carrying HEVC.
-    static func make(_ url: URL, headers: [String: String], network: URLSession) async throws -> HLSRemuxSession {
+    static func make(_ url: URL, headers: [String: String], network: URLSession, device: RemuxPlan.Device) async throws -> HLSRemuxSession {
         let began = Date()
         var address = url
         var text = try await playlist(url, headers: headers, network: network)
@@ -226,7 +243,7 @@ final class HLSRemuxSession: RemuxStored, @unchecked Sendable {
             text = try await playlist(address, headers: headers, network: network)
         }
         guard let segments = HLSRemux.segments(text, base: address) else { throw TVError.unsupported("playlist not repackaged") }
-        let session = HLSRemuxSession(segments: segments, headers: headers, network: network)
+        let session = HLSRemuxSession(segments: segments, headers: headers, network: network, device: device)
         let first: HLSRemux.Output
         do { first = try await session.output(0) } catch { session.close(); throw error }
         guard first.format == "mpegts", first.video == "hevc" else {
@@ -234,7 +251,7 @@ final class HLSRemuxSession: RemuxStored, @unchecked Sendable {
             throw TVError.unsupported("not HEVC in MPEG-TS: \(first.format) \(first.video)")
         }
         session.describe(first)
-        Diagnostics.shared.record(.info, "remux", "hls open host=\(address.host() ?? "-") segments=\(segments.count) audio=\(first.audio ?? "-") size=\(first.width)x\(first.height) discontinuities=\(segments.filter(\.discontinuity).count) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
+        Diagnostics.shared.record(.info, "remux", "hls open host=\(address.host() ?? "-") segments=\(segments.count) audio=\(first.audio ?? "-") size=\(first.width)x\(first.height) transfer=\(first.transfer) hdr=\(device.hdr) sdr=\(first.toneMapped) discontinuities=\(segments.filter(\.discontinuity).count) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
         return session
     }
 
@@ -253,6 +270,7 @@ final class HLSRemuxSession: RemuxStored, @unchecked Sendable {
     private func describe(_ first: HLSRemux.Output) {
         let audio = first.media[1] != nil
         let tracks = audio ? [0, 1] : [0]
+        copiesHDR = first.transfer == 16 || first.transfer == 18
         let target = max(1, Int((segments.map(\.duration).max() ?? 1).rounded(.up)))
         for track in tracks {
             var lines = ["#EXTM3U", "#EXT-X-VERSION:7", "#EXT-X-TARGETDURATION:\(target)", "#EXT-X-MEDIA-SEQUENCE:0", "#EXT-X-PLAYLIST-TYPE:VOD"]
@@ -283,7 +301,7 @@ final class HLSRemuxSession: RemuxStored, @unchecked Sendable {
 
     private func codecs(_ first: HLSRemux.Output) -> String? {
         guard let initialization = first.initializations[0] else { return nil }
-        let video = first.video == "hevc" ? RemuxPlan.box("hvcC", in: initialization).flatMap { RemuxPlan.hevcCodec($0) }
+        let video = first.picture == "hevc" ? RemuxPlan.box("hvcC", in: initialization).flatMap { RemuxPlan.hevcCodec($0) }
             : RemuxPlan.box("avcC", in: initialization).flatMap(RemuxPlan.avcCodec)
         guard let video else { return nil }
         guard let audio = first.audio else { return video }
@@ -353,7 +371,7 @@ final class HLSRemuxSession: RemuxStored, @unchecked Sendable {
             data = try HLSRemux.decrypt(data, key: try await keyData(key.url), iv: key.iv ?? HLSRemux.iv(segment.sequence))
         }
         try Task.checkCancellation()
-        return try HLSRemux.repackage(MediaPayload.transportStream(data))
+        return try HLSRemux.repackage(MediaPayload.transportStream(data), device: device)
     }
 
     private func keyData(_ url: URL) async throws -> Data {

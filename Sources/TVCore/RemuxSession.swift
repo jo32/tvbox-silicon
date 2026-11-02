@@ -184,15 +184,7 @@ final class RemuxSession: @unchecked Sendable {
                 _ = tvm_keyframes(input, video, &keyframes, count)
             }
         }
-        var device = RemuxPlan.Device(hevc: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
-                                      av1: VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1),
-                                      hevcEncoder: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
-                                      hdr: AVPlayer.eligibleForHDRPlayback && !Remux.refusesHDR && !Remux.screenCaptured)
-        #if !os(macOS)
-        // An Apple TV or iPhone tone maps a 4K picture too slowly to keep up; one that shows no HDR gets 1080p.
-        device.toneMapWidth = 1920
-        device.toneMapHeight = 1080
-        #endif
+        let device = Self.device()
         guard let plan = RemuxPlan.make(streams: streams, keyframes: keyframes, start: tvm_start_time(input), duration: tvm_duration(input),
                                         size: source.length, device: device) else {
             throw TVError.unsupported(L10n.text("This media cannot be played. Try another channel or source."))
@@ -360,6 +352,21 @@ final class RemuxSession: @unchecked Sendable {
 
     private static func message(_ error: [CChar]) -> String {
         String(decoding: error.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    }
+
+    /// What this device decodes, and whether AVPlayer shows HDR here right now: not after it refused HDR once,
+    /// nor while the screen is mirrored or recorded.
+    static func device() -> RemuxPlan.Device {
+        var device = RemuxPlan.Device(hevc: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
+                                      av1: VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1),
+                                      hevcEncoder: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
+                                      hdr: AVPlayer.eligibleForHDRPlayback && !Remux.refusesHDR && !Remux.screenCaptured)
+        #if !os(macOS)
+        // An Apple TV or iPhone tone maps a 4K picture too slowly to keep up; one that shows no HDR gets 1080p.
+        device.toneMapWidth = 1920
+        device.toneMapHeight = 1080
+        #endif
+        return device
     }
 
     static func stream(_ raw: TVMStream, index: Int) -> RemuxPlan.Stream {

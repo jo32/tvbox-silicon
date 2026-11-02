@@ -357,7 +357,9 @@ import TVCore
     /// and so do the files opened after it. A mirrored or recorded screen refuses HDR the same way, but only
     /// while it lasts: then this file alone converts. Dolby Vision 5 can't convert, so it isn't tried again.
     private func retryHDR(after failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
-        guard Remux.isHDR(url), !Remux.isDolbyVision(url), Self.refusedContent(failure) else { return false }
+        // A repackaged HLS stream's HDR variant is refused before any segment loads: -1002 or -12927 (#345).
+        let refused = Self.refusedContent(failure) || Remux.isSegmented(url) && Self.refusedVariant(failure)
+        guard Remux.isHDR(url), !Remux.isDolbyVision(url), refused else { return false }
         let captured = Self.screenCaptured
         guard captured ? !Remux.screenCaptured : !Remux.refusesHDR else { return false }
         if captured { Remux.screenCaptured = true } else { Remux.refusesHDR = true }
@@ -628,6 +630,7 @@ import TVCore
     private func repackageSegments(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
         Diagnostics.shared.record(.warning, "player", "hls plays no picture; repackaging host=\(url.host() ?? "-")")
         note(L10n.text("Repackaging the video for this device"))
+        Remux.screenCaptured = Self.screenCaptured
         preparation = Task { [weak self] in
             var remuxed: URL?
             do { remuxed = try await HLSRemux.open(url, headers: channel.headers) }
@@ -1288,6 +1291,16 @@ extension PlaybackSession {
     }
 
     /// AVPlayer won't play the stream's content on this device (AVFoundation -11868, Core Media -17223).
+    /// Core Media refusing every variant of a stream: -1002 when the variant names its HDR range, else -12927.
+    nonisolated static func refusedVariant(_ error: Error?) -> Bool {
+        var current = error as NSError?
+        while let error = current {
+            if error.domain == "CoreMediaErrorDomain", [-1002, -12927].contains(error.code) { return true }
+            current = error.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return false
+    }
+
     nonisolated static func refusedContent(_ error: Error?) -> Bool {
         var current = error as NSError?
         while let error = current {
