@@ -155,6 +155,8 @@ targets:
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         # Save Code to Photos, where a sign-in code can be scanned by the app on the same phone.
         NSPhotoLibraryAddUsageDescription: Saves a sign-in code to Photos, so the app on this phone can scan it.
+        # Downloads keep going in the background as continued-processing tasks (iOS 26, App/DownloadsView.swift).
+        BGTaskSchedulerPermittedIdentifiers: [$(PRODUCT_BUNDLE_IDENTIFIER).downloads.*]
         # yingxia://douyin-login, the code an Apple TV shows to receive the Douyin sign-in.
         CFBundleURLTypes:
           - CFBundleURLName: com.tvbox.yingxia.handoff

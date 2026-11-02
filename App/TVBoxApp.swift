@@ -24,6 +24,7 @@ import TVCore
         #endif
         #if os(iOS)
         _ = MusicRemoteControl.shared
+        DownloadsLifecycle.install()
         #endif
     }
     var body: some Scene {

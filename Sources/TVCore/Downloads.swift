@@ -96,6 +96,8 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
     }
     /// Resolves an episode to its current media address; set by the app, which knows the sources.
     @ObservationIgnored public var resolver: (@MainActor @Sendable (DownloadItem) async throws -> Channel)?
+    /// Called each time a download starts running. The iOS app uses it to keep downloads going in the background.
+    @ObservationIgnored public var onStart: (@MainActor () -> Void)?
 
     public let root: URL
     @ObservationIgnored private let defaults: UserDefaults
@@ -247,6 +249,7 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
             }
         }
         running[id] = (run, task, meter)
+        onStart?()
     }
 
     private func resolve(_ id: String) async throws -> Channel {
