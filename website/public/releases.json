@@ -1,6 +1,111 @@
 {
   "releases": [
     {
+      "version": "1.8.7",
+      "build": 45,
+      "date": "2026-11-03",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "music.note.list",
+          "title": {
+            "en": "More to play in Music",
+            "zh-Hans": "音乐里能听的更多了",
+            "zh-Hant": "音樂裡能聽的更多了",
+            "ja": "ミュージックがもっと楽しく"
+          },
+          "detail": {
+            "en": "With nothing searched, Music now shows Top Charts, playlists and new albums. You can add LX Music custom sources and music extensions in Music Settings. Audiobook, radio and music sources open in the music player, and the mini player can be closed and steps aside when a video starts.",
+            "zh-Hans": "不搜索时，“音乐”页会显示排行榜、推荐歌单和新专辑。可以在“音乐设置”里添加洛雪音乐自定义源和音乐扩展。听书、电台和音乐类片源会在音乐播放器里播放；迷你播放器可以关掉，开始看视频时也会自动让开。",
+            "zh-Hant": "不搜尋時，「音樂」頁會顯示排行榜、推薦歌單和新專輯。可以在「音樂設定」裡加入洛雪音樂自訂源和音樂擴充。聽書、電台和音樂類片源會在音樂播放器裡播放；迷你播放器可以關掉，開始看影片時也會自動讓開。",
+            "ja": "何も検索していないとき、ミュージックにランキング、おすすめプレイリスト、新着アルバムが表示されます。「ミュージック設定」で LX Music カスタムソースや音楽拡張機能を追加できます。オーディオブック・ラジオ・音楽のソースはミュージックプレーヤーで再生され、ミニプレーヤーは閉じられるうえ、動画を再生すると自動で消えます。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "externaldrive.badge.icloud",
+          "title": {
+            "en": "115 cloud drive",
+            "zh-Hans": "支持 115 网盘",
+            "zh-Hant": "支援 115 網盤",
+            "ja": "115 クラウドドライブに対応"
+          },
+          "detail": {
+            "en": "Sign in to 115 in Cloud Drive Accounts by scanning a code with the 115 app, then browse, search and play its files in Cloud Files.",
+            "zh-Hans": "在“网盘账号”里用 115 App 扫码登录，就能在“网盘文件”里浏览、搜索和播放 115 的文件。",
+            "zh-Hant": "在「網盤帳號」裡用 115 App 掃碼登入，就能在「網盤檔案」裡瀏覽、搜尋和播放 115 的檔案。",
+            "ja": "「クラウドドライブのアカウント」で 115 アプリからコードを読み取ってサインインすると、「クラウドファイル」で 115 のファイルを閲覧・検索・再生できます。"
+          }
+        },
+        {
+          "symbol": "doc.badge.plus",
+          "title": {
+            "en": "Add a single spider",
+            "zh-Hans": "单个爬虫也能添加",
+            "zh-Hant": "單個爬蟲也能加入",
+            "ja": "スパイダーを1つだけ追加"
+          },
+          "detail": {
+            "en": "An address that serves one Python or JavaScript spider now adds as a subscription with that source. On iPhone, iPad and Mac, Add from File… takes .py, .js and .json files. On iPhone, a CatPawOpen bundle's config center opens inside the app with Open Config Center.",
+            "zh-Hans": "只提供一个 Python 或 JavaScript 爬虫的地址，现在也能作为订阅添加，里面就是这一个片源。在 iPhone、iPad 和 Mac 上，“从文件添加…”支持 .py、.js 和 .json 文件。在 iPhone 上，CatPawOpen 包的配置中心可以用“打开配置中心”在 App 内打开。",
+            "zh-Hant": "只提供一個 Python 或 JavaScript 爬蟲的位址，現在也能作為訂閱加入，裡面就是這一個片源。在 iPhone、iPad 和 Mac 上，「從檔案加入…」支援 .py、.js 和 .json 檔案。在 iPhone 上，CatPawOpen 套件的配置中心可以用「打開配置中心」在 App 內打開。",
+            "ja": "Python または JavaScript のスパイダーを1つだけ配信するアドレスも、そのソースだけを含む購読として追加できるようになりました。iPhone・iPad・Mac では「ファイルから追加…」で .py・.js・.json ファイルを追加できます。iPhone では CatPawOpen バンドルの設定センターを「設定センターを開く」でアプリ内で開けます。"
+          }
+        },
+        {
+          "symbol": "arrow.clockwise.circle",
+          "title": {
+            "en": "Playback that keeps going",
+            "zh-Hans": "播放更不容易中断",
+            "zh-Hant": "播放更不容易中斷",
+            "ja": "再生が止まりにくく"
+          },
+          "detail": {
+            "en": "When the connection drops, episodes reopen where they stopped instead of ending with an error. 4K HDR streams that only played as a black screen now play in SDR where HDR can't be shown, and cloud drives that refuse extra connections keep streaming.",
+            "zh-Hans": "网络断开后，剧集会从中断的位置重新打开，而不是报错结束。原来只有黑屏的 4K HDR 片源，在无法显示 HDR 时会改用 SDR 播放；拒绝多连接的网盘也能继续播放。",
+            "zh-Hant": "網路中斷後，劇集會從中斷的位置重新打開，而不是報錯結束。原本只有黑畫面的 4K HDR 片源，在無法顯示 HDR 時會改用 SDR 播放；拒絕多連線的網盤也能繼續播放。",
+            "ja": "接続が切れても、エラーで終わらずに止まった位置から再開します。黒い画面のままだった 4K HDR のストリームは、HDR を表示できない場合は SDR で再生されます。追加の接続を拒むクラウドドライブでも再生が続きます。"
+          }
+        },
+        {
+          "symbol": "list.number",
+          "title": {
+            "en": "Clear episode names",
+            "zh-Hans": "剧集名称更清楚",
+            "zh-Hant": "劇集名稱更清楚",
+            "ja": "エピソード名がわかりやすく"
+          },
+          "detail": {
+            "en": "Lines that name episodes after their files, such as netdisk lines, now show short labels like Episode 1 · 4K, so episodes no longer all look the same. The full file name is still in the context menu.",
+            "zh-Hans": "用文件名当剧集名的线路（比如网盘线路），现在显示“第1集 · 4K”这样的简短名称，不再每一集看起来都一样。完整文件名仍可在长按菜单里看到。",
+            "zh-Hant": "用檔名當劇集名的線路（例如網盤線路），現在顯示「第1集 · 4K」這樣的簡短名稱，不再每一集看起來都一樣。完整檔名仍可在長按選單裡看到。",
+            "ja": "ファイル名をエピソード名にしている回線（ネットドライブの回線など）に「第1話 · 4K」のような短い名前が表示され、どのエピソードも同じに見えることがなくなりました。完全なファイル名はコンテキストメニューで確認できます。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "Downloads keep running in the background on iPhone and iPad. The danmaku menu has Text Size and Opacity for every video, including Bilibili and live rooms. Edit Tab Bar moved to Settings on iPhone. Global Search on Apple TV no longer freezes while results arrive. Hongguo plays again, and GitHub-hosted subscriptions try one more mirror when GitHub is blocked.",
+            "zh-Hans": "iPhone 和 iPad 上的下载会在后台继续。弹幕菜单里有“字号”和“不透明度”，对所有视频生效，包括哔哩哔哩和直播间。iPhone 上的“编辑标签栏”移到了设置里。Apple TV 的全局搜索在结果陆续出现时不再卡住。红果可以再次播放；GitHub 被屏蔽时，放在 GitHub 上的订阅会多试一个镜像。",
+            "zh-Hant": "iPhone 和 iPad 上的下載會在背景繼續。彈幕選單裡有「字號」和「不透明度」，對所有影片生效，包括嗶哩嗶哩和直播間。iPhone 上的「編輯標籤列」移到了設定裡。Apple TV 的全域搜尋在結果陸續出現時不再卡住。紅果可以再次播放；GitHub 被封鎖時，放在 GitHub 上的訂閱會多試一個鏡像。",
+            "ja": "iPhone と iPad でダウンロードがバックグラウンドでも続くようになりました。弾幕メニューに「文字サイズ」と「不透明度」が加わり、ビリビリやライブ配信を含むすべての動画に適用されます。iPhone の「タブバーを編集」は設定に移りました。Apple TV の横断検索で結果が届く間に固まらなくなりました。紅果が再び再生でき、GitHub がブロックされている場合、GitHub 上の購読はもう1つのミラーを試します。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.6",
       "build": 44,
       "date": "2026-11-02",
