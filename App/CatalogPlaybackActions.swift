@@ -20,7 +20,7 @@ struct CatalogPlaybackActions: View {
                         ForEach(catalog.playlist.flags, id: \.self) { flag in
                             Menu(flag) {
                                 ForEach(catalog.playlist.episodes(for: flag)) { episode in
-                                    Button(episode.name) { store.selectEpisode(episode, from: channel) }
+                                    Button(catalog.labels[episode.id] ?? episode.name) { store.selectEpisode(episode, from: channel) }
                                 }
                             }
                         }

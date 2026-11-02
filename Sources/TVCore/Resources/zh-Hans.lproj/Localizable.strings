@@ -651,6 +651,8 @@
 
 "Hongguo" = "红果短剧";
 "Episode %@" = "第 %@ 集";
+"Episode %1$@" = "第%1$@集";
+"Episodes %1$@–%2$@" = "第%1$@-%2$@集";
 "Live-action Drama" = "真人剧";
 "Animated Drama" = "漫剧";
 "AI Drama" = "AI 剧";
