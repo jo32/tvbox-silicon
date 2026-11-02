@@ -50,6 +50,8 @@ public struct MusicTrack: Identifiable, Hashable, Codable, Sendable {
     public var ids: [MusicPlatform: String]
     /// Why entries from different catalogs were taken as one recording, for diagnostics.
     public var evidence: [String]
+    /// Set for an episode of a TVBox source (an audiobook's chapter, #289): it plays from the source, not a catalog.
+    public var source: MusicSourceEpisode?
 
     public init(platform: MusicPlatform, songID: String, title: String, artists: [String], album: String? = nil,
                 duration: Double? = nil, artwork: URL? = nil) {

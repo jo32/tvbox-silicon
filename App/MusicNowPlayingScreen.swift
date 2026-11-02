@@ -88,7 +88,11 @@ struct MusicNowPlayingScreen: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Menu {
-                Button { showsChannels = true } label: { Label(L10n.text("Channels"), systemImage: "antenna.radiowaves.left.and.right") }
+                if music.sourceStream != nil {
+                    Button { music.openInVideoPlayer() } label: { Label(L10n.text("Open in Video Player"), systemImage: "play.rectangle") }
+                } else {
+                    Button { showsChannels = true } label: { Label(L10n.text("Channels"), systemImage: "antenna.radiowaves.left.and.right") }
+                }
                 if let track = music.track { MusicDownloadMenuItems(tracks: [track]) }
                 Button(role: .destructive) { music.stop() } label: { Label(L10n.text("Stop"), systemImage: "xmark") }
             } label: {

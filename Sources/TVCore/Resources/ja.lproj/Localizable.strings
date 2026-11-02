@@ -767,6 +767,7 @@
 "Back 15 Seconds" = "15 秒戻る";
 "Forward 15 Seconds" = "15 秒進む";
 "Channels" = "再生チャンネル";
+"Open in Video Player" = "ビデオプレーヤーで開く";
 "The quality shown is read from the audio itself, not taken from what a channel claims." = "表示される音質は、チャンネルの申告ではなく音声そのものから読み取ったものです。";
 "Not tried yet" = "未試行";
 "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "「ロスレス優先」は、ロスレス音声のあるチャンネルがないとき、最良の非可逆圧縮音声をその旨を表示して再生します。「ロスレスのみ」は再生しません。";

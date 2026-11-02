@@ -39,7 +39,12 @@ import TVCore
     var importing = false
     var error: String?
     var notice: String?
-    var playing: Channel?
+    var playing: Channel? {
+        // An episode of a listening source (audiobooks, radio, songs) plays in the music player instead (#289).
+        didSet { if let channel = playing, let queue = listeningQueue(for: channel) { playing = nil; listen(queue, from: channel) } }
+    }
+    /// Set while a listening source's episode goes to the video player on purpose.
+    @ObservationIgnored private var playsAsVideo = false
     /// The videos whose iPhone watch page is on screen (`PlaybackHistoryContext.id`): their episodes play at the top
     /// of the page instead of in the full-screen player.
     var watchPageScopes: Set<String> = []
@@ -144,8 +149,71 @@ import TVCore
         }
         // Songs that were downloading when the app quit carry on.
         MusicDownloadLibrary.shared.wake()
+        setUpListening()
         setUpCloudSync()
     }
+    // MARK: Listening sources (#289)
+
+    /// The music player's queue for an episode of a listening source: the episodes of its line, from it on. Nil for
+    /// other sources, for one whose streams turned out to be videos, and when the episode's details aren't at hand.
+    private func listeningQueue(for channel: Channel) -> MusicQueue? {
+        guard !playsAsVideo, let context = channel.historyContext, let catalog = catalog(for: channel),
+              AudioSources.isCandidate(catalog.client.site),
+              !AudioSourceVerdicts(defaults: playbackDefaults).showsVideo(context),
+              let episode = context.episode(in: catalog.video.episodes) else { return nil }
+        return AudioSources.queue(video: catalog.video, from: episode, site: catalog.client.site, origin: catalog.client.origin)
+    }
+
+    /// Plays the queue from the channel's stream, where this chapter stopped last time.
+    private func listen(_ queue: MusicQueue, from channel: Channel) {
+        var position = channel.resumePosition
+        if position == nil, let context = channel.historyContext,
+           let saved = playbackHistory.entries.first(where: { $0.id == context.id }),
+           saved.context.episodeID == context.episodeID, saved.context.episodeFlag == context.episodeFlag, saved.resumePosition > 1 {
+            position = saved.resumePosition
+        }
+        Diagnostics.shared.record(.info, "music", "listening source \(channel.historyContext?.sourceKey ?? "-") queue=\(queue.tracks.count)")
+        music.play(queue, at: position, stream: channel)
+    }
+
+    /// The music player gets a source's streams from here, saves where a book is in the playback history, and hands
+    /// an episode with a picture, or one it can't play, to the video player.
+    private func setUpListening() {
+        music.resolveSource = { [weak self] source in
+            guard let self else { throw CancellationError() }
+            return try await self.resolveListening(source)
+        }
+        music.recordSource = { [weak self] source, position, duration in
+            self?.playbackHistory.record(source.context, position: position, duration: duration)
+        }
+        music.handOffSource = { [weak self] stream, position, picture, covered in
+            guard let self, let context = stream.historyContext else { return }
+            if picture { AudioSourceVerdicts(defaults: self.playbackDefaults).recordVideo(context) }
+            let channel = Channel(name: stream.name, group: stream.group, url: stream.url, logo: stream.logo, headers: stream.headers,
+                                  skipScope: stream.skipScope, historyContext: context, resumePosition: position > 1 ? position : nil,
+                                  subtitles: stream.subtitles)
+            Task { @MainActor [weak self] in
+                // The video player can't open while Now Playing is still closing (as PlayOn waits for the player).
+                if covered { try? await Task.sleep(for: .milliseconds(700)) }
+                guard let self, self.playing == nil else { return }
+                self.playsAsVideo = true
+                self.playing = channel
+                self.playsAsVideo = false
+            }
+        }
+    }
+
+    /// A chapter's stream from its source, as Continue Watching gets an episode's.
+    private func resolveListening(_ source: MusicSourceEpisode) async throws -> Channel {
+        let context = source.context
+        guard let client = historyClient(PlaybackHistoryEntry(context: context, position: 0, duration: 0, updatedAt: Date())) else {
+            throw TVError.unsupported(L10n.text("This history source is no longer in the current subscription. Restore that subscription to continue."))
+        }
+        let resolved = try await client.playback(source.episode)
+        return Channel(name: "\(context.videoName) · \(context.episodeName)", group: resolved.group, url: resolved.url, logo: resolved.logo,
+                       headers: resolved.headers, skipScope: context.id, historyContext: context, subtitles: resolved.subtitles)
+    }
+
     /// The current media address of a downloading episode, from its source; the queue asks again when a link expires.
     private func resolveDownload(_ item: DownloadItem) async throws -> Channel {
         let config = subscription
