@@ -10,6 +10,8 @@
 // links, and the second answer's status code.
 // 2026-10-27, following jackotom/hongguo-drama 4.1: playback asks with a registered anonymous device
 // (playback-device.js), and the first answer carries the video list itself.
+// 2026-11-02, following jackotom/hongguo-drama 5.4: the playback request is signed again, and an empty
+// answer is asked once more at the other official host.
 // See NOTICE.txt for the complete provenance chain.
 import { Buffer, crypto } from './crypto.js';
 import sm3 from './sm3.js';
@@ -18,6 +20,8 @@ const localId = () => String(1000000000000000n + BigInt('0x' + crypto.randomByte
 const PROCESS_NONCE = crypto.randomBytes(18).toString('base64url');
 const PROCESS_STARTED = Date.now();
 const VIDEO_API = 'https://api5-normal-sinfonlineb.fqnovel.com/novel/player/multi_video_model/v1/';
+// The playback endpoint's own host first, then another official host for one retry.
+const PLAYBACK_HOSTS = [new URL(VIDEO_API).hostname, 'api5-normal-hl.fqnovel.com'];
 const VIDEO_UA = 'com.phoenix.read/71332 (Linux; U; Android 16; zh_CN; 25053RT47C; Build/BP2A.250605.031.A3; Cronet/TTNetVersion:04657795 2026-01-23 QuicVersion:c67e9834 2025-09-08)';
 const PLAYBACK_UA = 'com.phoenix.read/71532 (Linux; U; Android 9; SM-N9860; Build/PQ3A.190705.10241111;tt-ok/3.12.13.20)';
 // iid and device_id are made per request in signedVideoRequest.
@@ -147,12 +151,28 @@ function signedVideoRequest(payload) {
     };
     return { url, headers, body };
 }
-// Since 2026-10-26 the endpoint answers signed requests from unregistered IDs with an empty body;
-// a registered device needs no signature.
-function playbackRequest(payload, identity) {
-    const query = pythonUrlEncode({ ...DEVICE, ...identity, _rticket: String(Date.now()) });
-    return { url: `${VIDEO_API}?${query}`, body: Buffer.from(payload), headers: {
+// Since 2026-10-26 the endpoint answers signed requests from unregistered IDs with an empty body, and since
+// 2026-11-02 unsigned requests from registered ones too: a registered device signs, with its own IDs.
+function playbackRequest(payload, identity, host = PLAYBACK_HOSTS[0]) {
+    const body = Buffer.from(payload);
+    const khronos = Math.floor(Date.now() / 1000), ticketBase = Date.now();
+    const device = { ...DEVICE, ...identity };
+    let query = '', url = '', requestTicket = ticketBase;
+    // Only signature branch 0 is accepted here: vary _rticket until the request lands on it (about one in three does).
+    for (let n = 0; n < 128; n += 1) {
+        requestTicket = ticketBase + n;
+        query = pythonUrlEncode({ ...device, ts: String(khronos), _rticket: String(requestTicket) });
+        url = `https://${host}/novel/player/multi_video_model/v1/?${query}`;
+        if (branchOf(url, body, khronos) === 0) break;
+        if (n === 127) throw new Error('无法生成播放请求签名');
+    }
+    return { url, body, headers: {
         'User-Agent': PLAYBACK_UA, Accept: 'application/json; charset=utf-8,application/x-protobuf', 'Content-Type': 'application/json; charset=UTF-8',
+        'x-ss-req-ticket': String(requestTicket), 'sdk-version': '2', 'x-xs-from-web': '0', 'x-khronos': String(khronos),
+        'x-gorgon': xGorgon(query, body, khronos, Math.floor(Math.random() * 65536)),
+        'x-ladon': be32(khronos).toString('base64'), 'x-argus': le32(khronos).toString('base64'),
+        'x-helios': helios(khronos), 'x-medusa': buildMedusa(url, body, khronos, device), 'x-tt-dt': '',
+        'x-tt-store-region': 'cn', 'x-tt-store-region-src': 'did',
     } };
 }
 function parseFallback(value) {
@@ -230,6 +250,8 @@ async function requestJson(url, options, deadline, signal) {
             continue;
         }
         if (response.status !== 200) throw new Error(`App 片源请求失败（HTTP ${response.status}）`);
+        // How the playback endpoint refuses a request it does not accept.
+        if (typeof response.data === 'string' && !response.data.trim()) throw Object.assign(new Error('App 接口未返回有效数据'), { code: 'EMPTY_RESPONSE' });
         const parsed = typeof response.data === 'string' ? jsonBody(response.data) : response.data;
         if (!parsed || typeof parsed !== 'object') throw new Error('App 接口未返回有效数据');
         return parsed;
@@ -240,14 +262,26 @@ async function requestJson(url, options, deadline, signal) {
 async function fetchAppPlayUrl(vid) {
     vid = String(vid || '');
     if (!/^\d{1,30}$/.test(vid)) throw new Error('分集编号无效');
-    const deadline = Date.now() + 12000;
-    const signal = { aborted: false };
     const payload = JSON.stringify({
         biz_param: { detail_page_version: 0, device_level: 3, disable_digg_stat: false, need_all_video_definition: true, need_mp4_align: false, use_os_player: false, use_server_dns: false, video_platform: 1024 },
         mixed_video_id_map: { '1004': [vid] },
     });
-    const signed = playbackRequest(payload, await playbackDevice(requestJson));
-    const response = await requestJson(signed.url, { method: 'POST', headers: signed.headers, data: signed.body }, deadline, signal);
+    const identity = await playbackDevice(requestJson);
+    // Registration has its own 8 s budget; it does not use up the playback request's.
+    const deadline = Date.now() + 12000;
+    const signal = { aborted: false };
+    let response;
+    for (const host of PLAYBACK_HOSTS) {
+        // Signed afresh for each host.
+        const signed = playbackRequest(payload, identity, host);
+        try {
+            response = await requestJson(signed.url, { method: 'POST', headers: signed.headers, data: signed.body }, deadline, signal);
+            break;
+        } catch (error) {
+            // The endpoint still answers an empty body now and then; the other host gets one try.
+            if (host !== PLAYBACK_HOSTS[0] || error.code !== 'EMPTY_RESPONSE' || deadline - Date.now() < 1000) throw error;
+        }
+    }
     if (Number(response.Code || response.code || 0) !== 0) throw new Error('App 接口暂未提供本集播放信息');
     const entry = response.data?.[vid];
     const model = typeof entry?.video_model === 'string' ? jsonBody(entry.video_model) : entry?.video_model;
@@ -296,4 +330,4 @@ async function fetchAppPlayUrl(vid) {
     throw lastError || new Error('本集片源地址或密钥无法解析');
 }
 
-export { fetchAppPlayUrl, signedVideoRequest, deriveContentKey, decryptSpadeUrl };
+export { fetchAppPlayUrl, signedVideoRequest, deriveContentKey, decryptSpadeUrl, xGorgon, branchOf };
