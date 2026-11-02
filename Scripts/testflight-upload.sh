@@ -14,8 +14,8 @@
 # signs with Apple Distribution and the "Yingxia iOS/tvOS App Store" profiles, uploads with altool, then runs
 # Scripts/testflight-publish.py: wait for processing, copy What to Test, add to the group, submit for review.
 # --no-upload stops after the export (to check the archives). Output: build/testflight/<version>-<build>/.
-# ICLOUD=1 signs in iCloud key-value storage (Config/iCloud.entitlements, for iCloud sync); the App IDs and the
-# App Store profiles must have the iCloud capability first, or the export fails.
+# Signs in iCloud key-value storage (Config/iCloud.entitlements, for iCloud sync) by default; the App IDs and the
+# App Store profiles must have the iCloud capability, or the export fails. ICLOUD=0 builds without it.
 set -euo pipefail
 
 TESTFLIGHT_VERSION=${TESTFLIGHT_VERSION:-1.7.7}
@@ -23,6 +23,12 @@ BUILD=${1:?usage: Scripts/testflight-upload.sh <build> [--no-upload]}
 UPLOAD=1
 [ "${2:-}" = "--no-upload" ] && UPLOAD=0
 [[ $BUILD =~ ^[0-9]+$ ]] || { echo "build must be a number: $BUILD" >&2; exit 1; }
+ICLOUD=${ICLOUD:-1}
+case $ICLOUD in
+  1) ICLOUD_SETTING=ICLOUD_ENTITLEMENTS=Config/iCloud.entitlements ;;
+  0) ICLOUD_SETTING= ;;
+  *) echo "ICLOUD must be 1 or 0: $ICLOUD" >&2; exit 1 ;;
+esac
 
 TEAM=WWNM49L69R
 DISTRIBUTION=8871E484354649A0272A1FD042C4EBDAF5989C28 # Apple Distribution: Dailin Jiang
@@ -65,7 +71,7 @@ for platform in iOS tvOS; do
       -derivedDataPath "build/testflight/DerivedData-$platform" -archivePath "$archive" \
       -allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER" \
       DEVELOPMENT_TEAM=$TEAM MARKETING_VERSION="$TESTFLIGHT_VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
-      ${ICLOUD:+ICLOUD_ENTITLEMENTS=Config/iCloud.entitlements} \
+      ${ICLOUD_SETTING:+"$ICLOUD_SETTING"} \
       'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) APPSTORE' >"$OUT/$platform-archive.log" 2>&1; then
     grep -E 'error:|BUILD FAILED|ARCHIVE FAILED' "$OUT/$platform-archive.log" | tail -20
     echo "archive failed, log: $OUT/$platform-archive.log" >&2
