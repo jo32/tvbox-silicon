@@ -514,8 +514,12 @@ private struct SearchActivityList: View {
             let active = Array(PluginPreparation.active(origin: origin).prefix(limit))
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 14) {
+                    #if os(tvOS)
+                    SearchProgressBar(fraction: Double(completed) / Double(max(total, 1)))
+                    #else
                     ProgressView(value: Double(completed), total: Double(max(total, 1)))
                         .progressViewStyle(.linear).tint(Brand.accent)
+                    #endif
                     if let remaining = remaining(at: timeline.date) {
                         Text(remaining).foregroundStyle(.secondary).monospacedDigit().fixedSize()
                     }
@@ -566,6 +570,27 @@ private struct SearchActivityList: View {
         return minutes <= 1 ? L10n.text("Less than a minute left") : L10n.text("About %lld min left", minutes)
     }
 }
+
+#if os(tvOS)
+/// The search's progress, drawn rather than a linear `ProgressView`. On tvOS that is a UIProgressView, and setting
+/// its progress makes UIKit's accessibility ask SwiftUI for the focused element in the middle of a view update.
+/// With the remote moving through the results as sources answer, AttributeGraph then loops on the cycle with the
+/// main thread at 100%, and the app freezes until it is quit (#325).
+private struct SearchProgressBar: View {
+    let fraction: Double
+    var body: some View {
+        Capsule().fill(Color.primary.opacity(0.2))
+            .overlay(alignment: .leading) {
+                GeometryReader { proxy in
+                    Capsule().fill(Brand.accent).frame(width: proxy.size.width * min(1, max(0, fraction)))
+                }
+            }
+            .frame(height: 6)
+            .accessibilityElement()
+            .accessibilityValue(Text(fraction, format: .percent.precision(.fractionLength(0))))
+    }
+}
+#endif
 
 #if !os(tvOS)
 private struct QuietPillStyle: ButtonStyle {
