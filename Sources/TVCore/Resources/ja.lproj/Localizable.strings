@@ -1355,3 +1355,6 @@
 "Recommended Playlists" = "おすすめプレイリスト";
 "New Albums" = "ニューアルバム";
 "More Charts" = "その他のランキング";
+"Add from File…" = "ファイルから追加…";
+"A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider." = "TVBox JSON 配信設定、または単体の Python（.py）/ JavaScript（.js）スパイダー。";
+"This file is no longer on this device. Add it again." = "このファイルはこのデバイスにありません。もう一度追加してください。";

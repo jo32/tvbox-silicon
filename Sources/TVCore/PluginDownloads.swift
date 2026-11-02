@@ -28,6 +28,7 @@ actor PluginDownloads {
     init(lifetime: TimeInterval = 300, directory: URL? = nil) { self.lifetime = lifetime; self.directory = directory }
 
     func data(at url: URL, http: HTTPClient, progress: Update? = nil) async throws -> Data {
+        if let data = try ImportedFiles.data(at: url) { return data }
         progress?(.checking, 0, nil)
         if var hit = cached[url], hit.expires > Date() {
             hit.used = Date(); cached[url] = hit

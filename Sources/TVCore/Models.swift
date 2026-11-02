@@ -259,6 +259,8 @@ public struct Subscription: Codable, Sendable {
     public static func parse(_ data: Data, origin: URL) throws -> Subscription {
         let raw: [String: JSONValue]
         do { raw = try SubscriptionDocument.decode(data) } catch {
+            // A lone Python or JavaScript spider imports as a subscription that holds just that source.
+            if let single = singleSpider(data, origin: origin) { return single }
             // A bare M3U / TXT live playlist imports as a subscription that holds just that playlist.
             guard isLivePlaylist(data, origin: origin) else { throw error }
             return Subscription(origin: origin, importedAt: Date(), sites: [],
