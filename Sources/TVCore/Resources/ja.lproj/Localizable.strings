@@ -1365,3 +1365,14 @@
 "Add from Address" = "アドレスから追加";
 "Source address" = "ソースのアドレス";
 "Add from File…" = "ファイルから追加…";
+"Music Extensions" = "音楽拡張機能";
+"Music Extension" = "音楽拡張機能";
+"Extension" = "拡張機能";
+"Extension address" = "拡張機能のアドレス";
+"This file is not a music extension." = "このファイルは音楽拡張機能ではありません。";
+"The music extension failed: %@" = "音楽拡張機能のエラー：%@";
+"This extension plays songs through an LX Music source." = "この拡張機能は LX Music の音源で曲を再生します。";
+"This extension plays songs through an LX Music source. Add one in Music Settings." = "この拡張機能は LX Music の音源で曲を再生します。音楽設定で追加してください。";
+"None of your LX Music sources plays this song's catalog." = "追加した LX Music の音源はどれもこの曲のカタログに対応していません。";
+"This extension asks an LX Music source for something Yingxia doesn't support." = "この拡張機能が LX Music の音源に求める内容には、映匣はまだ対応していません。";
+"Scripts in the Listenify music extension format. Their charts and playlists show on the Music page and their songs in Music search; songs play from what the extension gives, or through your LX Music sources when it asks for one. Yingxia includes none: add only extensions you trust." = "Listenify 形式の音楽拡張機能スクリプトです。チャートとプレイリストはミュージックページに、曲はミュージック検索に表示されます。曲は拡張機能が示すアドレスから、または必要なとき LX Music の音源を通して再生されます。映匣には拡張機能は含まれていません。信頼できるものだけを追加してください。";

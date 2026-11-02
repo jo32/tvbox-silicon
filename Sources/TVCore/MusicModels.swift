@@ -4,12 +4,15 @@ import Foundation
 public enum MusicPlatform: String, Codable, Sendable, CaseIterable, Hashable {
     // Merging takes catalogs in this order: QQ's entries carry durations and covers the others join.
     case qq, netease, migu, kuwo
+    /// Songs, albums and playlists from the music extensions the listener imported (MusicExtensions.swift).
+    case ext
     public var name: String {
         switch self {
         case .qq: L10n.text("QQ Music")
         case .netease: L10n.text("NetEase Cloud Music")
         case .migu: L10n.text("Migu Music")
         case .kuwo: L10n.text("Kuwo Music")
+        case .ext: L10n.text("Music Extensions")
         }
     }
 }
@@ -142,6 +145,8 @@ public struct MusicProbeResult: Hashable, Codable, Sendable {
 /// A service that turns a catalog song ID into a temporary audio address.
 public enum MusicProviderID: String, Codable, Sendable, Hashable, CaseIterable {
     case vkeys, gdstudio, hyw, migu, nianxin, xinghai
+    /// What a music extension's `getSongInfo` gives for its own songs.
+    case `extension`
     /// The LX Music sources the listener imported (MusicLXSources.swift).
     case lx
     public var name: String {
@@ -152,6 +157,7 @@ public enum MusicProviderID: String, Codable, Sendable, Hashable, CaseIterable {
         case .migu: L10n.text("Migu")
         case .nianxin: L10n.text("Nianxin")
         case .xinghai: L10n.text("Xinghai")
+        case .extension: L10n.text("Extension")
         case .lx: L10n.text("LX Music Sources")
         }
     }
@@ -164,6 +170,7 @@ public enum MusicProviderID: String, Codable, Sendable, Hashable, CaseIterable {
         case .migu: ["migu"]
         case .nianxin: ["nianxin"]
         case .xinghai: ["xinghai"]
+        case .extension: ["extension"]
         case .lx: ["lx"]
         }
     }

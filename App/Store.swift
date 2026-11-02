@@ -6,14 +6,16 @@ import TVCore
     let searchModel = SearchModel()
     /// Song search and the music player; both outlive the Music page, so a song keeps playing elsewhere in the app.
     /// The Mac and Apple TV list every kind at once, in rows; a phone or iPad starts on songs.
+    /// Music extensions the listener imported search alongside the catalogs; with none, they answer nothing at once.
     #if os(macOS) || os(tvOS)
-    let musicSearch = MusicSearchModel(kind: .top)
+    let musicSearch = MusicSearchModel(catalogs: MusicSearchModel.defaultCatalogs() + [MusicExtensionCatalog()], kind: .top)
     #else
-    let musicSearch = MusicSearchModel()
+    let musicSearch = MusicSearchModel(catalogs: MusicSearchModel.defaultCatalogs() + [MusicExtensionCatalog()])
     #endif
     let music = MusicPlaybackSession()
     /// The Music page's charts, playlists and new albums; fetched when that page first shows.
-    let musicBrowse = MusicBrowseModel()
+    /// The music extensions' library groups come after the catalogs' shelves.
+    let musicBrowse = MusicBrowseModel(sources: MusicBrowseModel.defaultSources() + [MusicExtensionCatalog()])
     let recommendationModel = RecommendationModel()
     let playbackHistory: PlaybackHistory
     let playbackDefaults: UserDefaults

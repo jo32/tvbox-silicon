@@ -59,7 +59,7 @@ private func temporaryLibrary() throws -> (LXSourceLibrary, URL, UserDefaults) {
 @Test func lxKeysMapToCatalogsAndInfoMatchesLXFormat() throws {
     #expect(LXSourceKey.platform("tx") == .qq && LXSourceKey.platform("wy") == .netease)
     #expect(LXSourceKey.platform("kw") == .kuwo && LXSourceKey.platform("mg") == .migu && LXSourceKey.platform("kg") == nil)
-    for platform in MusicPlatform.allCases { #expect(LXSourceKey.platform(LXSourceKey.key(platform)) == platform) }
+    for platform in MusicPlatform.allCases where platform != .ext { #expect(LXSourceKey.platform(LXSourceKey.key(platform)) == platform) }
     #expect(LXSourceKey.quality(from: ["128k", "320k", "flac", "flac24bit"]) == "flac")
     #expect(LXSourceKey.quality(from: ["128k", "320k"]) == "320k")
     #expect(LXSourceKey.quality(from: []) == "320k")

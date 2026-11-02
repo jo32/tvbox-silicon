@@ -57,6 +57,7 @@ public enum LXSourceKey {
         case .netease: "wy"
         case .kuwo: "kw"
         case .migu: "mg"
+        case .ext: ""
         }
     }
 
@@ -76,7 +77,7 @@ public enum LXSourceKey {
             }
         case .qq: info["strMediaMid"] = .string(songID)
         case .kuwo: info["rid"] = .string(songID)
-        case .netease: break
+        case .netease, .ext: break
         }
         info["name"] = .string(track?.title ?? "")
         info["singer"] = .string(track?.artists.joined(separator: "、") ?? "")

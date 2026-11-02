@@ -1365,3 +1365,14 @@
 "Add from Address" = "Add from Address";
 "Source address" = "Source address";
 "Add from File…" = "Add from File…";
+"Music Extensions" = "Music Extensions";
+"Music Extension" = "Music Extension";
+"Extension" = "Extension";
+"Extension address" = "Extension address";
+"This file is not a music extension." = "This file is not a music extension.";
+"The music extension failed: %@" = "The music extension failed: %@";
+"This extension plays songs through an LX Music source." = "This extension plays songs through an LX Music source.";
+"This extension plays songs through an LX Music source. Add one in Music Settings." = "This extension plays songs through an LX Music source. Add one in Music Settings.";
+"None of your LX Music sources plays this song's catalog." = "None of your LX Music sources plays this song's catalog.";
+"This extension asks an LX Music source for something Yingxia doesn't support." = "This extension asks an LX Music source for something Yingxia doesn't support.";
+"Scripts in the Listenify music extension format. Their charts and playlists show on the Music page and their songs in Music search; songs play from what the extension gives, or through your LX Music sources when it asks for one. Yingxia includes none: add only extensions you trust." = "Scripts in the Listenify music extension format. Their charts and playlists show on the Music page and their songs in Music search; songs play from what the extension gives, or through your LX Music sources when it asks for one. Yingxia includes none: add only extensions you trust.";

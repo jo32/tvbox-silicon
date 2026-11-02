@@ -273,6 +273,7 @@ public struct MusicResolver: Sendable {
     /// The providers the viewer left on.
     public init(preferences: MusicPreferences, transport: MusicTransport = URLSessionMusicTransport(), health: MusicHealth = .shared) {
         var list: [any MusicStreamProvider] = []
+        if preferences.enabled(.extension), let extensions = MusicExtensionProvider() { list.append(extensions) }
         if preferences.enabled(.vkeys) { list.append(VKeysProvider(transport: transport)) }
         if preferences.enabled(.gdstudio) { list.append(GDStudioProvider(transport: transport, health: health)) }
         if preferences.enabled(.hyw) { list.append(HYWProvider(key: preferences.hywKey, transport: transport)) }
@@ -285,10 +286,14 @@ public struct MusicResolver: Sendable {
     }
 
     public func candidates(for track: MusicTrack) -> [MusicCandidate] {
-        Self.order.compactMap { platform, provider in
+        let listed = Self.order.compactMap { platform, provider -> MusicCandidate? in
             guard let songID = track.ids[platform], let resolver = providers[provider], resolver.platforms.contains(platform) else { return nil }
             return MusicCandidate(platform: platform, songID: songID, provider: provider)
         }
+        // A music extension's own song plays from what the extension gives; after the built-in channels when the
+        // song was also found in a catalog.
+        guard let songID = track.ids[.ext], providers[.extension]?.platforms.contains(.ext) == true else { return listed }
+        return listed + [MusicCandidate(platform: .ext, songID: songID, provider: .extension)]
     }
 
     private struct Found: Sendable {
