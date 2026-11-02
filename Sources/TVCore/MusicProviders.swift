@@ -7,6 +7,14 @@ public protocol MusicStreamProvider: Sendable {
     var platforms: Set<MusicPlatform> { get }
     /// Asks for the best quality the provider offers.
     func resolve(_ songID: String, platform: MusicPlatform) async throws -> ResolvedMusicStream
+    /// The same, for providers that also want the song's title and artist (LX Music sources).
+    func resolve(_ songID: String, platform: MusicPlatform, track: MusicTrack?) async throws -> ResolvedMusicStream
+}
+
+extension MusicStreamProvider {
+    public func resolve(_ songID: String, platform: MusicPlatform, track: MusicTrack?) async throws -> ResolvedMusicStream {
+        try await resolve(songID, platform: platform)
+    }
 }
 
 /// VKeys' current QQ endpoint. Its older `/v2/music/tencent/geturl` returned 60-second previews

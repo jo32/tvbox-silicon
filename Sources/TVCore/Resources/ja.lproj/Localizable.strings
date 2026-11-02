@@ -1354,3 +1354,14 @@
 "Recommended Playlists" = "おすすめプレイリスト";
 "New Albums" = "ニューアルバム";
 "More Charts" = "その他のランキング";
+"LX Music Sources" = "LX Music カスタムソース";
+"LX Music Source" = "LX Music ソース";
+"This file is not an LX Music source." = "このファイルは LX Music のカスタムソースではありません。";
+"This source plays none of the catalogs Yingxia searches (QQ Music, NetEase Cloud Music, Kuwo, Migu)." = "このソースは映匣が検索するカタログ（QQ Music、NetEase Cloud Music、Kuwo、Migu）のどれにも対応していません。";
+"The LX Music source did not start: %@" = "LX Music ソースを開始できませんでした: %@";
+"Scripts made for LX Music's custom sources. They are asked for a song's audio after the channels above, for QQ Music, NetEase Cloud Music, Kuwo and Migu songs. Yingxia includes none: add only sources you trust." = "LX Music のカスタムソース用のスクリプトです。QQ Music、NetEase Cloud Music、Kuwo、Migu の曲について、上のチャンネルのあとで音声を問い合わせます。映匣には付属しません。信頼できるソースだけを追加してください。";
+"Added “%@”." = "「%@」を追加しました。";
+"Remove “%@”" = "「%@」を削除";
+"Add from Address" = "アドレスから追加";
+"Source address" = "ソースのアドレス";
+"Add from File…" = "ファイルから追加…";

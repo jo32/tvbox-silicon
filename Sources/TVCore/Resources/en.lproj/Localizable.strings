@@ -1354,3 +1354,14 @@
 "Recommended Playlists" = "Recommended Playlists";
 "New Albums" = "New Albums";
 "More Charts" = "More Charts";
+"LX Music Sources" = "LX Music Sources";
+"LX Music Source" = "LX Music Source";
+"This file is not an LX Music source." = "This file is not an LX Music source.";
+"This source plays none of the catalogs Yingxia searches (QQ Music, NetEase Cloud Music, Kuwo, Migu)." = "This source plays none of the catalogs Yingxia searches (QQ Music, NetEase Cloud Music, Kuwo, Migu).";
+"The LX Music source did not start: %@" = "The LX Music source did not start: %@";
+"Scripts made for LX Music's custom sources. They are asked for a song's audio after the channels above, for QQ Music, NetEase Cloud Music, Kuwo and Migu songs. Yingxia includes none: add only sources you trust." = "Scripts made for LX Music's custom sources. They are asked for a song's audio after the channels above, for QQ Music, NetEase Cloud Music, Kuwo and Migu songs. Yingxia includes none: add only sources you trust.";
+"Added “%@”." = "Added “%@”.";
+"Remove “%@”" = "Remove “%@”";
+"Add from Address" = "Add from Address";
+"Source address" = "Source address";
+"Add from File…" = "Add from File…";
