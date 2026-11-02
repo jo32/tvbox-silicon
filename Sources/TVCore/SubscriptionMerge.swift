@@ -121,6 +121,7 @@ public struct SubscriptionEntry: Codable, Hashable, Identifiable, Sendable {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard name.isEmpty else { return name }
         guard let url = URL(string: address), let host = url.host() else { return address }
+        if ImportedFiles.isImported(address) { return url.lastPathComponent }
         let parts = url.pathComponents.filter { $0 != "/" }
         let place = host == "raw.githubusercontent.com" && parts.count > 2 ? parts[0] + "/" + parts[1]
             : host.hasPrefix("www.") ? String(host.dropFirst(4)) : host

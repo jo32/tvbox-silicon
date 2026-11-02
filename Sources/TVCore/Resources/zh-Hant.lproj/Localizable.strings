@@ -1355,3 +1355,6 @@
 "Recommended Playlists" = "推薦歌單";
 "New Albums" = "新碟上架";
 "More Charts" = "更多榜單";
+"Add from File…" = "從檔案加入…";
+"A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider." = "TVBox JSON 訂閱，或單一 Python（.py）或 JavaScript（.js）爬蟲。";
+"This file is no longer on this device. Add it again." = "此檔案已不在這部裝置上，請重新加入。";

@@ -1355,3 +1355,6 @@
 "Recommended Playlists" = "Recommended Playlists";
 "New Albums" = "New Albums";
 "More Charts" = "More Charts";
+"Add from File…" = "Add from File…";
+"A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider." = "A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider.";
+"This file is no longer on this device. Add it again." = "This file is no longer on this device. Add it again.";

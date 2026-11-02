@@ -315,6 +315,21 @@ import TVCore
             self.error = L10n.text("Import failed: %@", error.localizedDescription)
         }
     }
+    /// Adds a subscription, or one spider script, from a file the viewer picked. The file is copied
+    /// into the app (see `ImportedFiles`) and then added like an address.
+    func importSubscriptionFile(_ file: URL) async {
+        let scoped = file.startAccessingSecurityScopedResource()
+        let copied = Result { try ImportedFiles.add(file) }
+        if scoped { file.stopAccessingSecurityScopedResource() }
+        guard case .success(let url) = copied else {
+            if case .failure(let error) = copied { self.error = L10n.text("Import failed: %@", error.localizedDescription) }
+            return
+        }
+        let address = url.absoluteString, known = subscriptions.contains { $0.address == address }
+        await importSubscription(address: address)
+        // A file that added no subscription of its own leaves no copy behind.
+        if !known, !subscriptions.contains(where: { $0.address == address }) { ImportedFiles.remove(address) }
+    }
     /// Fetches every enabled subscription again; one that fails keeps its last good copy.
     func refreshSubscriptions() async {
         guard !importing else { return }
@@ -344,7 +359,7 @@ import TVCore
         subscriptions.removeAll { addresses.contains($0.address) }
         for entry in removed {
             documents[entry.address] = nil; subscriptionErrors[entry.address] = nil
-            if persistsChanges { try? FileManager.default.removeItem(at: Self.file(for: entry)) }
+            if persistsChanges { try? FileManager.default.removeItem(at: Self.file(for: entry)); ImportedFiles.remove(entry.address) }
         }
         saveSubscriptionList()
         rebuildSubscription()
