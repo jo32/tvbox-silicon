@@ -27,7 +27,7 @@ struct HongguoTests {
         defer { try? FileManager.default.removeItem(at: folder) }
         let source = #"""
         import spider, { routerData, catalog, detail, search, webMedia } from 'assets://sites/Hongguo.js';
-        import { fetchAppPlayUrl, deriveContentKey, decryptSpadeUrl } from 'assets://sites/hongguo/app-source.js';
+        import { fetchAppPlayUrl, deriveContentKey, decryptSpadeUrl, xGorgon, branchOf } from 'assets://sites/hongguo/app-source.js';
         import { Buffer, crypto } from 'assets://sites/hongguo/crypto.js';
         import { playbackDevice } from 'assets://sites/hongguo/playback-device.js';
         import sm3 from 'assets://sites/hongguo/sm3.js';
@@ -98,6 +98,7 @@ struct HongguoTests {
             const backup = 'https://v9-reading.fqnovelvod.com/video.mp4';
             const backupSpade = Buffer.concat([Buffer.from([0xa8, 0, 1, 0]), Buffer.from(nativeCrypto({ op: 'aes', encrypt: true, key: material.subarray(0, 16).toString('base64'), iv: material.subarray(16, 32).toString('base64'), dataText: backup }).data, 'base64')]).toString('base64');
             let calls = 0, registrations = 0, wrongEpisode = false, badDestination = false, refused = false, inlineModel = false;
+            let emptyAnswers = 0, playbackHosts = [];
             const device = '1234567890123456', install = '6543210987654321';
             const videoList = {
                 unsupported: { codec_type: 'bytevc2', quality_desc: '2160p', main_url: media },
@@ -119,6 +120,16 @@ struct HongguoTests {
                 if (options.method === 'POST') {
                     const body = JSON.parse(Buffer.from(options.bodyBase64, 'base64').toString('utf8'));
                     if (body.mixed_video_id_map['1004'][0] !== vids[3] || !url.includes('&device_id=' + device) || !url.includes('&iid=' + install) || options.redirect !== false) throw new Error('Invalid playback request');
+                    // Signed like the app since 2026-11-02 (unsigned requests get an empty body): the signature covers this
+                    // query and body, its time and ticket are the query's, and only branch 0 is used.
+                    const headers = options.headers, sent = Buffer.from(options.bodyBase64, 'base64'), query = url.split('?')[1];
+                    const time = Number(headers['x-khronos']), gorgon = Buffer.from(headers['x-gorgon'] || '', 'hex'), random = gorgon[2] | (gorgon[3] << 8);
+                    if (url.match(/[?&]ts=(\d+)/)?.[1] !== String(time) || url.match(/[?&]_rticket=(\d+)/)?.[1] !== headers['x-ss-req-ticket'] ||
+                        branchOf(url, sent, time) !== 0 || gorgon.length !== 26 || headers['x-gorgon'] !== xGorgon(query, sent, time, random) ||
+                        headers['x-gorgon'] === xGorgon(query, Buffer.from('altered body'), time, random) ||
+                        !['x-medusa', 'x-helios', 'x-ladon', 'x-argus'].every(name => headers[name]) || 'Cookie' in headers) throw new Error('Unsigned playback request');
+                    playbackHosts.push(url.split('/')[2]);
+                    if (emptyAnswers > 0) { emptyAnswers--; return { code: 200, content: '' }; }
                     const model = inlineModel ? { video_list: inlineList } : { fallback_api: badDestination ? 'https://127.0.0.1/info' : 'https://vod.snssdk.com/info' };
                     return { code: 200, content: JSON.stringify({ code: 0, data: { [wrongEpisode ? vids[0] : vids[3]]: { video_model: JSON.stringify(model) } } }) };
                 }
@@ -154,6 +165,13 @@ struct HongguoTests {
             badDestination = false; inlineModel = true; calls = 0;
             const inlinePlayback = await fetchAppPlayUrl(vids[3]);
             checks.inline = calls === 1 && inlinePlayback.url === media && inlinePlayback.contentKey === key && inlinePlayback.headers['User-Agent'].startsWith('com.phoenix.read/71532');
+            // An empty answer is asked once more at the other official host, signed again; a second one is the failure.
+            emptyAnswers = 1; playbackHosts = [];
+            checks.otherHost = (await fetchAppPlayUrl(vids[3])).url === media &&
+                JSON.stringify(playbackHosts) === JSON.stringify(['api5-normal-sinfonlineb.fqnovel.com', 'api5-normal-hl.fqnovel.com']);
+            emptyAnswers = 2; playbackHosts = []; rejected = false;
+            try { await fetchAppPlayUrl(vids[3]); } catch { rejected = true; }
+            checks.emptyTwice = rejected && playbackHosts.length === 2;
             return { checks };
         } };
         """#
@@ -162,7 +180,7 @@ struct HongguoTests {
         let envelope = try await session.call([:])
         let json = try #require(envelope["result"]?.string, "\(envelope)")
         let checks = try #require(JSONDecoder().decode([String: JSONValue].self, from: Data(json.utf8))["checks"]?.object)
-        #expect(checks.count == 30)
+        #expect(checks.count == 32)
         for (name, result) in checks { #expect(result == .bool(true), "\(name)") }
     }
 

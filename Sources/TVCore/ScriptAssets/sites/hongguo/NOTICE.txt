@@ -23,6 +23,12 @@ and registration fields come from tsukiyo-zero/hongguoTV commit
 kotlin-tv/core/src/main/kotlin/com/hongguotv/core/DeviceRegister.kt, adapted
 from charlie901208/HGTV (feat/phone-login). License: GPL-3.0-only.
 
+Updated 2026-11-02 from the same repository at commit
+93e694e3f4ab71b83b58846f70258191112a6ca3 (v5.4), src/native/app-source.js: the
+registered device's playback request is signed again (signature branch 0, ts in the
+query, store-region headers), and an empty answer is asked once more at
+api5-normal-hl.fqnovel.com, signed afresh. Device registration is unchanged.
+
 Xifan.js and Hema.js (in sites/, beside Hongguo.js) follow the endpoints, page data
 and response fields of src/native/xifan.js and src/native/hema.js in the same
 repository at commit f210689c4adbf0986e3412cdb12a1c710c5dd611 (v4.1), rewritten for
