@@ -327,6 +327,45 @@ async function call(spider, params) {
     }
     return { result: typeof result === 'string' ? result : JSON.stringify(result) };
 }
+// Bundles ask the app for things by POSTing {action, opt} to http://127.0.0.1:<catDartServerPort()>/msg, as the CatVod
+// Open apps take them. The bundle's own server answers that address here (`answerMessage`). The one request kept is a
+// page to open: a config center entry asks for its page that way ("openInternalWebview") and may say nothing else
+// about it (#315). Keep in step with NodeHost/main.mjs.
+const pageWatchers = new Set(); // the detail calls under way, each collecting the loopback pages asked for
+async function answerMessage(req, res) {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    let message = {};
+    try { message = JSON.parse(Buffer.concat(chunks).toString('utf8')) || {}; } catch { }
+    const page = String(message.opt?.url || '');
+    if (['openInternalWebview', 'openWeb'].includes(message.action) && /^http:\/\/(127\.0\.0\.1|localhost):\d+(\/|$)/.test(page)) {
+        for (const pages of pageWatchers) pages.push(page);
+    }
+    // Anything else gets nothing back, as when no one answered: the bundle carries on without it.
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end('null');
+}
+const isMessage = req => req.method === 'POST' && req.url === '/msg';
+// A detail answer for which the bundle asked to open a page: the page's address joins the video's synopsis, where the
+// app finds a config center (CatPawOpen.configCenter). Some bundles answer such an entry with an empty list.
+function withPage(text, page) {
+    let answer;
+    try { answer = JSON.parse(text); } catch { return text; }
+    if (!answer || typeof answer !== 'object' || Array.isArray(answer)) return text;
+    const list = Array.isArray(answer.list) ? answer.list : [];
+    const video = list[0] && typeof list[0] === 'object' ? list[0] : {};
+    if (!`${video.vod_content ?? ''}\n${video.vod_remarks ?? ''}`.includes(page)) {
+        video.vod_content = [video.vod_content, page].filter(Boolean).join('\n');
+    }
+    answer.list = [video, ...list.slice(1)];
+    return JSON.stringify(answer);
+}
+// The detail calls collect what pages the bundle asks to open while it answers.
+async function watchingPages(route, send) {
+    const pages = [];
+    if (route.endsWith('/detail')) pageWatchers.add(pages);
+    try { return { text: await send(), page: pages.at(-1) }; } finally { pageWatchers.delete(pages); }
+}
 // CatPawOpen bundles (猫源) are Node servers in the CatVod Open format: `start(config)` builds a Fastify app
 // on the server `catServerFactory` makes, the app lists its sources at GET /config and serves each at
 // POST /spider/<key>/<type>/{init,home,category,detail,play,search}. The server only listens on loopback.
@@ -339,9 +378,10 @@ async function startCatPaw() {
     Object.assign(console, { log, info: log, warn: log, error: log, debug: log });
     // Some bundles' handlers answer a request twice; the CatVod apps keep serving, so this does too.
     process.on('uncaughtException', error => log('CATPAW_UNCAUGHT', error?.stack || String(error)));
-    globalThis.catDartServerPort = () => 0;
+    globalThis.catDartServerPort = () => catServer?.address()?.port || 0;
     globalThis.catServerFactory = handler => {
         catServer = http.createServer((req, res) => {
+            if (isMessage(req)) return answerMessage(req, res);
             // Anything but the host's own calls is the player reading the bundle's media proxy.
             if (!req.headers['x-yingxia-host'] && Date.now() - catProxyTouched > 5000) {
                 catProxyTouched = Date.now();
@@ -440,9 +480,10 @@ async function callCatPaw(params) {
     else if ('wd' in params) { route = '/search'; body = { wd: params.wd, page: Number(params.pg || 1), quick: params.quick === 'true' }; }
     else if ('t' in params) { route = '/category'; body = { id: params.t, page: Number(params.pg || 1), filter: true, filters: {} }; }
     else { route = '/home'; body = {}; }
-    const result = await send(api + route, body);
+    const { text, page } = await watchingPages(route, () => send(api + route, body));
     // Sources address the bundle's own proxy by the Mac's network address, but the server is on loopback.
-    return { result: result.replace(new RegExp(`http://\\d+\\.\\d+\\.\\d+\\.\\d+:${port}/`, 'g'), `http://127.0.0.1:${port}/`) };
+    const result = text.replace(new RegExp(`http://\\d+\\.\\d+\\.\\d+\\.\\d+:${port}/`, 'g'), `http://127.0.0.1:${port}/`);
+    return { result: page ? withPage(result, page) : result };
 }
 try {
     const spider = input.catPawOpen ? await startCatPaw() : await initialize();

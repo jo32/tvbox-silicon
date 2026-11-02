@@ -226,12 +226,17 @@ import Testing
     #expect(!CatPawOpen.isMediaProxy(try #require(URL(string: "https://example.com/spider/duoduo/3/proxy/quark/1"))))
 }
 
-@Test func catPawOpenConfigCentersAreFoundInTheirEntries() {
+@Test func catPawOpenConfigCentersAreFoundInTheirEntries() throws {
     let site = Site(key: "wex", name: "王二小", type: 3, api: "https://example.com/index.js", raw: ["catPawOpen": .string("/spider/wex/3")])
     let entry = Video(id: "config", name: "扫码打开配置中心", synopsis: "手机扫码打开：http://127.0.0.1:52380/website")
     #expect(CatPawOpen.configCenter(of: entry, site: site)?.absoluteString == "http://127.0.0.1:52380/website")
     let page = Video(id: "webdav", name: "WebDAV", synopsis: "请在 http://localhost:41234/website/#/webdav?tab=1。配置")
     #expect(CatPawOpen.configCenter(of: page, site: site)?.absoluteString == "http://localhost:41234/website/#/webdav?tab=1")
+    // An entry that only asks the app to open its page ("openInternalWebview") and answers its details with an empty list:
+    // the Node host gives back an entry with that page as its synopsis (#315).
+    let answer: [String: JSONValue] = ["list": .array([.object(["vod_id": .string("pan"), "vod_content": .string("http://127.0.0.1:52380/website/#/pan")])]), "msg": .string("已打开")]
+    let asked = try #require(CatalogPage(json: answer, origin: URL(string: "https://example.com")!).videos.first)
+    #expect(CatPawOpen.configCenter(of: asked, site: site)?.absoluteString == "http://127.0.0.1:52380/website/#/pan")
     // Only a bundle runs a config center in the app; a remote page or the bundle's media proxy isn't one.
     #expect(CatPawOpen.configCenter(of: entry, site: Site(key: "other", name: "Other", type: 3, api: "https://example.com/a.js", raw: [:])) == nil)
     #expect(CatPawOpen.configCenter(of: Video(id: "a", name: "a", synopsis: "https://example.com/website"), site: site) == nil)
