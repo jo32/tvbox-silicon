@@ -57,6 +57,8 @@ public struct MusicDownloadedCollection: Codable, Identifiable, Hashable, Sendab
     @ObservationIgnored private var running: [String: (run: UUID, task: Task<Void, Never>, meter: DownloadMeter)] = [:]
     @ObservationIgnored private var ticker: Task<Void, Never>?
     @ObservationIgnored private var savedAt = Date.distantPast
+    /// Called each time a download starts running. The iOS app uses it to keep downloads going in the background.
+    @ObservationIgnored public var onStart: (@MainActor () -> Void)?
 
     public init(root: URL = MusicDownloadLibrary.defaultRoot) {
         self.root = root
@@ -228,6 +230,7 @@ public struct MusicDownloadedCollection: Codable, Identifiable, Hashable, Sendab
             }
         }
         running[id] = (run, task, meter)
+        onStart?()
     }
 
     /// Finds the song's channel now, as playing it would, and remembers which it was. The

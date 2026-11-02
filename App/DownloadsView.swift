@@ -3,6 +3,9 @@ import TVCore
 #if !os(macOS)
 import UIKit
 #endif
+#if os(iOS)
+import BackgroundTasks
+#endif
 
 /// Downloaded episodes, the download queue, and how much space they take.
 struct DownloadsView: View {
@@ -649,16 +652,22 @@ extension View {
     }
 }
 
-/// Downloads keep going briefly after the app leaves the screen, then stop and resume when it returns.
+/// Downloads keep going after the app leaves the screen. On iOS 26 and later a continued-processing task keeps
+/// them running until the queue is empty (see `ContinuedDownloads`). Otherwise, or when the system ends that task,
+/// they get the usual short grace period, then stop and resume when the app returns.
 @MainActor enum DownloadsLifecycle {
     #if !os(macOS)
     private static var task: UIBackgroundTaskIdentifier = .invalid
+    static func install() {
+        #if os(iOS)
+        DownloadLibrary.shared.onStart = { started() }
+        MusicDownloadLibrary.shared.onStart = { started() }
+        #endif
+    }
     static func enteredBackground() {
-        guard DownloadLibrary.shared.items.contains(where: \.isActive) || MusicDownloadLibrary.shared.items.contains(where: \.isActive),
-              task == .invalid else { return }
+        guard hasWork, task == .invalid else { return }
         task = UIApplication.shared.beginBackgroundTask(withName: "Downloads") {
-            DownloadLibrary.shared.suspend()
-            MusicDownloadLibrary.shared.suspend()
+            if !continuing { suspend() }
             end()
         }
     }
@@ -666,11 +675,140 @@ extension View {
         end()
         DownloadLibrary.shared.wake()
         MusicDownloadLibrary.shared.wake()
+        started()
+    }
+    static var hasWork: Bool {
+        DownloadLibrary.shared.items.contains(where: \.isActive) || MusicDownloadLibrary.shared.items.contains(where: \.isActive)
+    }
+    private static func suspend() {
+        DownloadLibrary.shared.suspend()
+        MusicDownloadLibrary.shared.suspend()
     }
     private static func end() {
         guard task != .invalid else { return }
         UIApplication.shared.endBackgroundTask(task)
         task = .invalid
     }
+    /// A download started or the app came back: ask for a continued-processing task while the app is open.
+    private static func started() {
+        #if os(iOS)
+        if #available(iOS 26.0, *) { ContinuedDownloads.begin() }
+        #endif
+    }
+    private static var continuing: Bool {
+        #if os(iOS)
+        if #available(iOS 26.0, *) { return ContinuedDownloads.isRunning }
+        #endif
+        return false
+    }
+    /// The continued-processing task ended: the queue emptied, or the system (or the person, from its progress)
+    /// stopped it. Off screen, stop as the grace period's end would.
+    static func continuedEnded(expired: Bool) {
+        guard UIApplication.shared.applicationState != .active else { return }
+        if expired { suspend() }
+        end()
+    }
     #endif
 }
+
+#if os(iOS)
+/// iOS 26 lets an app keep work a person started running in the background, as a continued-processing task whose
+/// progress the system shows on the Lock Screen and in the Dynamic Island. The task can only be asked for while the
+/// app is open, so it starts with the first download and follows every download (videos and songs) until the queue
+/// is empty. When the system ends it early, the downloads stop as before and carry on when the app comes back.
+@available(iOS 26.0, *)
+@MainActor enum ContinuedDownloads {
+    private static var task: BGContinuedProcessingTask?
+    /// When a request was submitted and its task hasn't started yet.
+    private static var submitted: Date?
+    /// Downloads this task has followed, for its progress: finished, paused or removed ones count as done.
+    private static var followed: Set<String> = []
+    private static var subtitle = ""
+    private static var follower: Task<Void, Never>?
+
+    static var isRunning: Bool { task != nil }
+
+    static func begin() {
+        guard task == nil, submitted.map({ Date().timeIntervalSince($0) > 10 }) ?? true,
+              UIApplication.shared.applicationState == .active, let name = current() else { return }
+        let identifier = "\(Bundle.main.bundleIdentifier ?? "com.tvbox.yingxia").downloads.\(UUID().uuidString)"
+        // Each request has its own identifier, registered just before it is submitted (allowed for this kind of task).
+        let registered = BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: .main) { task in
+            MainActor.assumeIsolated { run(task) }
+        }
+        guard registered else {
+            Diagnostics.shared.record(.warning, "download", "continued task not permitted")
+            return
+        }
+        let request = BGContinuedProcessingTaskRequest(identifier: identifier, title: L10n.text("Downloading"), subtitle: name)
+        request.strategy = .fail
+        do {
+            try BGTaskScheduler.shared.submit(request)
+            submitted = Date()
+        } catch {
+            Diagnostics.shared.record(.warning, "download", "continued task refused \(error)")
+        }
+    }
+
+    private static func run(_ started: BGTask) {
+        submitted = nil
+        guard let started = started as? BGContinuedProcessingTask else { started.setTaskCompleted(success: false); return }
+        guard task == nil, let name = current() else { started.setTaskCompleted(success: true); return }
+        task = started
+        followed = []
+        subtitle = name
+        started.expirationHandler = { Task { @MainActor in expire() } }
+        Diagnostics.shared.record(.info, "download", "continued task started")
+        follower = Task {
+            while !Task.isCancelled, follow() {
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    /// Reports progress; false, after ending the task, once nothing is left to download.
+    private static func follow() -> Bool {
+        guard let task else { return false }
+        var fractions: [String: Double] = [:]
+        for item in DownloadLibrary.shared.items where item.status == .queued || item.isActive { fractions["v" + item.id] = item.fraction }
+        for item in MusicDownloadLibrary.shared.items where item.status == .queued || item.isActive { fractions["m" + item.id] = item.fraction }
+        guard !fractions.isEmpty else {
+            task.progress.completedUnitCount = task.progress.totalUnitCount
+            finish(success: true)
+            DownloadsLifecycle.continuedEnded(expired: false)
+            return false
+        }
+        followed.formUnion(fractions.keys)
+        let done = followed.reduce(0.0) { $0 + (fractions[$1] ?? 1) }
+        task.progress.totalUnitCount = Int64(followed.count) * 1000
+        task.progress.completedUnitCount = Int64(done * 1000)
+        if let name = current(), name != subtitle {
+            subtitle = name
+            task.updateTitle(L10n.text("Downloading"), subtitle: name)
+        }
+        return true
+    }
+
+    private static func expire() {
+        guard task != nil else { return }
+        Diagnostics.shared.record(.info, "download", "continued task expired")
+        finish(success: false)
+        DownloadsLifecycle.continuedEnded(expired: true)
+    }
+
+    private static func finish(success: Bool) {
+        follower?.cancel(); follower = nil
+        task?.setTaskCompleted(success: success)
+        task = nil
+    }
+
+    /// The download running now (else the next one waiting), as the progress names it.
+    private static func current() -> String? {
+        let videos = DownloadLibrary.shared.items, songs = MusicDownloadLibrary.shared.items
+        if let item = videos.first(where: \.isActive) ?? videos.first(where: { $0.status == .queued }) {
+            return item.episode.isEmpty ? item.title : "\(item.title) · \(item.episode)"
+        }
+        return (songs.first(where: \.isActive) ?? songs.first(where: { $0.status == .queued }))?.track.title
+    }
+}
+#endif

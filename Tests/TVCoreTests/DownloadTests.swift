@@ -193,3 +193,22 @@ import Testing
     library.forgetMissing()
     #expect(library.items.map(\.id) == [songs[1].id])
 }
+
+@MainActor @Test func startingADownloadIsAnnounced() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: "downloads-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let defaults = try #require(UserDefaults(suiteName: UUID().uuidString))
+    let library = DownloadLibrary(root: root, defaults: defaults)
+    var starts = 0
+    library.onStart = { starts += 1 }
+    library.resolver = { _ in try await Task.sleep(for: .seconds(60)); throw CancellationError() }
+    let site = Site(key: "s", name: "S", type: 3, api: "csp_Test", raw: [:])
+    let episode = Episode(id: "1", name: "第 1 集", address: "https://example.com/1.mp4", flag: "line")
+    let item = library.download(DownloadSource(site: site, videoID: "v", episode: episode), title: "Show", poster: nil)
+    #expect(starts == 1)
+    #expect(library.item(id: item.id)?.status == .downloading)
+    library.pause(item.id)
+    library.resume(item.id)
+    #expect(starts == 2)
+    library.pause(item.id)
+}
