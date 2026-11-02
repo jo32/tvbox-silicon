@@ -11,6 +11,7 @@ import Security
 ///          {"op": "hmac", "alg": ..., "key", "data"}
 ///          {"op": "pow", "alg": "sha256"|"md5", "prefix", "target", "match": "prefix"|"equal", "start", "end", "limitMs"}
 ///          {"op": "inflate", "data", "raw": false, "output"}  zlib (or raw deflate) decompression
+///          {"op": "rsaRaw", "key": PEM public key, "data"}  RSA without padding (LX Music's rsaEncrypt)
 /// Each binary field X may be given as X (base64), XText (UTF-8) or XHex. `output` selects the
 /// AES result: "base64" (default), "hex" or "text" (UTF-8). Answer: {"data"|"hex"|"text": ...}.
 enum ScriptCrypto {
@@ -92,6 +93,8 @@ enum ScriptCrypto {
             case "base64": answer = ["data": result.base64EncodedString()]
             default: answer = ["text": String(decoding: result, as: UTF8.self)]
             }
+        case "rsaRaw":
+            answer = ["data": try rsaRaw(publicKey: request["key"]?.string ?? "", data: bytes("data")).base64EncodedString()]
         default: throw ScriptHostError("unsupported crypto operation")
         }
         return String(decoding: try JSONSerialization.data(withJSONObject: answer), as: UTF8.self)
@@ -124,6 +127,46 @@ enum ScriptCrypto {
             if nonce & 1023 == 0 && Date() > deadline { return "" }
         }
         return ""
+    }
+
+    /// Node's `publicEncrypt` with RSA_NO_PADDING, as LX Music sources use it for NetEase's weapi:
+    /// the data is left-padded with zeros to the key's size.
+    static func rsaRaw(publicKey pem: String, data: Data) throws -> Data {
+        let body = pem.components(separatedBy: .newlines).filter { !$0.hasPrefix("-----") }.joined()
+        guard var der = Data(base64Encoded: body, options: .ignoreUnknownCharacters), !der.isEmpty else { throw ScriptHostError("invalid RSA public key") }
+        if !pem.contains("BEGIN RSA PUBLIC KEY") { der = try subjectPublicKey(der) }
+        let attributes: [CFString: Any] = [kSecAttrKeyType: kSecAttrKeyTypeRSA, kSecAttrKeyClass: kSecAttrKeyClassPublic]
+        guard let key = SecKeyCreateWithData(der as CFData, attributes as CFDictionary, nil) else { throw ScriptHostError("invalid RSA public key") }
+        let size = SecKeyGetBlockSize(key)
+        guard data.count <= size else { throw ScriptHostError("RSA input is longer than the key") }
+        guard let output = SecKeyCreateEncryptedData(key, .rsaEncryptionRaw, (Data(count: size - data.count) + data) as CFData, nil) else {
+            throw ScriptHostError("RSA encryption failed")
+        }
+        return output as Data
+    }
+
+    /// The PKCS#1 key inside a SubjectPublicKeyInfo ("BEGIN PUBLIC KEY"):
+    /// SEQUENCE { SEQUENCE { algorithm }, BIT STRING { 0x00, RSAPublicKey } }.
+    static func subjectPublicKey(_ der: Data) throws -> Data {
+        let bytes = [UInt8](der), invalid = ScriptHostError("invalid RSA public key")
+        var index = 0
+        func header(_ tag: UInt8) throws -> Int {
+            guard index < bytes.count, bytes[index] == tag else { throw invalid }
+            index += 1
+            guard index < bytes.count else { throw invalid }
+            let first = bytes[index]; index += 1
+            if first < 0x80 { return Int(first) }
+            let count = Int(first & 0x7F)
+            guard (1...4).contains(count), index + count <= bytes.count else { throw invalid }
+            var length = 0
+            for _ in 0..<count { length = length << 8 | Int(bytes[index]); index += 1 }
+            return length
+        }
+        _ = try header(0x30)
+        index += try header(0x30)
+        let bits = try header(0x03)
+        guard bits > 1, index + bits <= bytes.count, bytes[index] == 0 else { throw invalid }
+        return Data(bytes[(index + 1)..<(index + bits)])
     }
 
     static func aes(encrypt: Bool, ecb: Bool, padding: Bool, key: Data, iv: Data, data: Data) throws -> Data {

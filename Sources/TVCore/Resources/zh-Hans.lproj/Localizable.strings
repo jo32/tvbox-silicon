@@ -1350,3 +1350,14 @@
 "Dandanplay has reached its request limit for now. Try again later, or choose another danmaku server." = "弹弹play 的请求次数暂时用完了，请稍后再试，或换一个弹幕服务器。";
 "Open Config Center" = "打开配置中心";
 "Config Center" = "配置中心";
+"LX Music Sources" = "洛雪音乐自定义源";
+"LX Music Source" = "洛雪音源";
+"This file is not an LX Music source." = "这不是洛雪音乐的自定义源脚本。";
+"This source plays none of the catalogs Yingxia searches (QQ Music, NetEase Cloud Music, Kuwo, Migu)." = "这个音源不支持映匣搜索的任何曲库（QQ 音乐、网易云音乐、酷我、咪咕）。";
+"The LX Music source did not start: %@" = "洛雪音源无法启动：%@";
+"Scripts made for LX Music's custom sources. They are asked for a song's audio after the channels above, for QQ Music, NetEase Cloud Music, Kuwo and Migu songs. Yingxia includes none: add only sources you trust." = "为洛雪音乐“自定义源”编写的脚本。上面的通道之后才会向它们获取歌曲音频，适用于 QQ 音乐、网易云音乐、酷我和咪咕的歌曲。映匣不自带任何音源，请只添加你信任的音源。";
+"Added “%@”." = "已添加“%@”。";
+"Remove “%@”" = "移除“%@”";
+"Add from Address" = "从地址添加";
+"Source address" = "音源地址";
+"Add from File…" = "从文件添加…";
