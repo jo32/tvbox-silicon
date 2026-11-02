@@ -104,7 +104,7 @@ extension View {
 private struct MusicBarInset: ViewModifier {
     @Environment(Store.self) private var store
     func body(content: Content) -> some View {
-        content.safeAreaInset(edge: .bottom, spacing: 0) { if store.music.track != nil { MusicMacBar() } }
+        content.safeAreaInset(edge: .bottom, spacing: 0) { if store.music.showsStrip(videoPlaying: store.playing != nil) { MusicMacBar() } }
     }
 }
 

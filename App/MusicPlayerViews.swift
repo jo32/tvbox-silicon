@@ -17,7 +17,7 @@ private struct MusicPlayerInset: ViewModifier {
         content
         #else
         content.safeAreaInset(edge: .bottom, spacing: 0) {
-            if store.music.track != nil {
+            if store.music.showsStrip(videoPlaying: store.playing != nil) {
                 #if os(iOS)
                 if sizeClass == .compact {
                     // A phone has Music's strip: in the tab bar's accessory slot where the system has
