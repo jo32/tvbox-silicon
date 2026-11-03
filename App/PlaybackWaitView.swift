@@ -180,8 +180,7 @@ struct PlaybackWaitView: View {
     /// The player's overlay gets no safe area of its own, so this reads the window's.
     @MainActor private static func controlsAxis(width: CGFloat) -> CGFloat {
         guard UIDevice.current.userInterfaceIdiom == .phone,
-              let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene })
-                .first(where: { $0.activationState == .foregroundActive }),
+              let scene = UIApplication.shared.appWindowScene, scene.activationState == .foregroundActive,
               let window = scene.keyWindow ?? scene.windows.first,
               // A phone held sideways. iPhone Duo's inner display is regular both ways and keeps the camera elsewhere.
               window.traitCollection.verticalSizeClass == .compact else { return width / 2 }

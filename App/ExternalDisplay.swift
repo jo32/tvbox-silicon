@@ -1,3 +1,17 @@
+#if os(iOS) || os(tvOS)
+import UIKit
+
+extension UIApplication {
+    /// The app's own window scene, on the device's screen. A connected display can add a second scene
+    /// (`ExternalDisplay`), so `connectedScenes.first` may be that one: code that rotates, reads the screen or
+    /// shows a window the user must tap uses this instead.
+    var appWindowScene: UIWindowScene? {
+        let scenes = connectedScenes.compactMap { $0 as? UIWindowScene }.filter { $0.session.role == .windowApplication }
+        return scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+    }
+}
+#endif
+
 #if os(iOS)
 import AVFoundation
 import SwiftUI
@@ -33,7 +47,9 @@ import UIKit
         refresh()
     }
 
-    /// The player screen closed: the display goes black until the next video.
+    /// The player screen closed: the external window goes away. From iOS 27 the accessory is unregistered too
+    /// (`ExternalDisplayAccessoryController`), so the system takes the display back; on earlier systems the
+    /// app keeps the display's scene and it shows black until the next video.
     func detach(_ player: AVPlayer) {
         guard self.player === player else { return }
         self.player = nil
@@ -95,8 +111,8 @@ private final class PlayerLayerDisplay: UIView {
     var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
 }
 
-/// A view in the player screen that registers the external-display accessory. The registration lives only
-/// while the player is on screen, so the display mirrors the app again once playback closes.
+/// A view in the player screen that registers the external-display accessory (iOS 27). The registration lives
+/// only while the player is on screen, so the system takes the display back once playback closes.
 struct ExternalDisplaySceneRegistrar: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> UIViewController {
         if #available(iOS 27.0, *) { return ExternalDisplayAccessoryController() }
@@ -114,9 +130,22 @@ private final class ExternalDisplayAccessoryController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .clear
         view.isUserInteractionEnabled = false
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        guard registration == nil else { return }
         let configuration = UISceneConfiguration()
         configuration.delegateClass = ExternalDisplaySceneDelegate.self
         registration = registerSceneAccessory(UISceneAccessory.externalNonInteractive(sceneConfiguration: configuration))
+    }
+
+    /// Gives the display back as soon as the player leaves the screen, not whenever this controller is freed.
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        guard let registration else { return }
+        unregisterSceneAccessory(registration)
+        self.registration = nil
     }
 }
 

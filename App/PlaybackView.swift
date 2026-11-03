@@ -847,7 +847,7 @@ import TVCore
         #if os(macOS)
         return NSScreen.main?.maximumFramesPerSecond ?? 0
         #else
-        return (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.maximumFramesPerSecond ?? 0
+        return UIApplication.shared.appWindowScene?.screen.maximumFramesPerSecond ?? 0
         #endif
     }
     #endif

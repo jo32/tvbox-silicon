@@ -227,7 +227,7 @@ struct MobilePlayerView: View {
         levelTask?.cancel(); level = nil; mountsVolume = false
     }
 
-    private var screen: UIScreen? { (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen }
+    private var screen: UIScreen? { UIApplication.shared.appWindowScene?.screen }
 
     private func swiped(_ phase: PictureGestures.Swipe) {
         switch phase {
