@@ -218,7 +218,7 @@ async function call(instance, params) {
         if (status < 200 || status >= 300) {
             let message = text;
             try { message = JSON.parse(text).message || text; } catch { }
-            throw new Error(`The source failed (HTTP ${status}): ${String(message).slice(0, 300)}`);
+            throw Object.assign(new Error(`The source failed (HTTP ${status}): ${String(message).slice(0, 300)}`), { status });
         }
         return text;
     };
@@ -238,7 +238,10 @@ async function call(instance, params) {
     else if ('wd' in params) { route = '/search'; body = { wd: params.wd, page: Number(params.pg || 1), quick: params.quick === 'true' }; }
     else if ('t' in params) { route = '/category'; body = { id: params.t, page: Number(params.pg || 1), filter: true, filters: params.filters ? JSON.parse(params.filters) : {} }; }
     else { route = '/home'; body = {}; }
-    const { text, page } = await watchingPages(route, () => send(api + route, body));
+    // A search that finds nothing answers HTTP 404 in some bundles: the 9280.kstore.vip sites (木偶, 虎斑, 蜡笔…) pass on
+    // their site's 404 for a search without matches, and a source without search has no route. Neither is a failure.
+    const { text, page } = await watchingPages(route, () => send(api + route, body)
+        .catch(error => { if (route === '/search' && error.status === 404) return '{"list":[]}'; throw error; }));
     // Sources address the bundle's own proxy by the device's network address, or by a port from before a relisten,
     // but the server is on loopback.
     const ports = instance.ports.join('|');
