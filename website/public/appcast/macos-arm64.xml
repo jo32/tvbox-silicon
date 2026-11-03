@@ -6,6 +6,20 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Yingxia</title>
         <item>
+            <title>1.8.8</title>
+            <pubDate>Wed, 04 Nov 2026 01:18:40 +0800</pubDate>
+            <sparkle:version>46</sparkle:version>
+            <sparkle:shortVersionString>1.8.8</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://download.getmegaportal.com/yingxia/1.8.8/Yingxia-1.8.8-macos-arm64.dmg" length="198231447" type="application/octet-stream" sparkle:edSignature="3sm35s4vGLM30S0gT7R3ZHuFULaYRy0m49ziXWEUTEeQkTc/P5seb26+HJngDP/P6vVrPqnY8/NmqZIxh/5pBQ=="/>
+            <sparkle:deltas>
+                <enclosure url="https://download.getmegaportal.com/yingxia/1.8.8/Yingxia46-45-arm64.delta" sparkle:deltaFrom="45" length="5040938" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="468528" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="DFuV4nVuU5w1Cbojpp2WvqakPzIV0M8rbVdCSm1FD6WwVxotmjMWFXtxyCCZCtzWFvkV4DS+M3hC7BBWCRpXCQ=="/>
+                <enclosure url="https://download.getmegaportal.com/yingxia/1.8.8/Yingxia46-44-arm64.delta" sparkle:deltaFrom="44" length="5561338" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="468528" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="DUGpHQS4+AmhB3IKpIPPjQF60csbVSoAzEI2+N6mwz+cmYAP3znWTYsF0b3hbb9Baa3CM4E051i+8Q/do5aLAA=="/>
+                <enclosure url="https://download.getmegaportal.com/yingxia/1.8.8/Yingxia46-43-arm64.delta" sparkle:deltaFrom="43" length="5934834" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="468528" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="XfRo92sZT9H1nnOY4fv9IaI1NV5U2mFuApdmFvNQC8DHhzyNdYZpdYVraYSGkczIRrIk9izXKgN8ta6bgV4oCw=="/>
+            </sparkle:deltas>
+        </item>
+        <item>
             <title>1.8.7</title>
             <pubDate>Tue, 03 Nov 2026 04:11:55 +0800</pubDate>
             <sparkle:version>45</sparkle:version>
@@ -33,23 +47,9 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
                 <enclosure url="https://download.getmegaportal.com/yingxia/1.8.6/Yingxia44-41-arm64.delta" sparkle:deltaFrom="41" length="5068706" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="468528" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="aMja+zjWvHN2fk0lwjTfP4RcKrOaROlyOoTSvleiwtVOfSpZvam0ht/GrkeiD7KSLynj44Eo8+TLVpojMlfZCg=="/>
             </sparkle:deltas>
         </item>
-        <item>
-            <title>1.8.5</title>
-            <pubDate>Sun, 01 Nov 2026 04:03:54 +0800</pubDate>
-            <sparkle:version>43</sparkle:version>
-            <sparkle:shortVersionString>1.8.5</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://download.getmegaportal.com/yingxia/1.8.5/Yingxia-1.8.5-macos-arm64.dmg" length="199298857" type="application/octet-stream" sparkle:edSignature="jnwRuhGNopiSOy1wmCeysC+ORjfXcWYQyE+clw6Jx/C4xFH14LV24JFpKMcavF5WBwOeywQ87V9NfJ9yu+j4CQ=="/>
-            <sparkle:deltas>
-                <enclosure url="https://download.getmegaportal.com/yingxia/1.8.5/Yingxia43-42-arm64.delta" sparkle:deltaFrom="42" length="3414642" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="468528" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="VpIo+PzfO+ulNRHbsKpYpBMQkce3o/C7u92DAshWXPlzyJWZYc1s53AzY4cfyhKi1NMDBZOEzs7AHTCklshkCQ=="/>
-                <enclosure url="https://download.getmegaportal.com/yingxia/1.8.5/Yingxia43-41-arm64.delta" sparkle:deltaFrom="41" length="4693538" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="468528" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="z30UMtVLCfe1keExu6gky8+9o1tZUCFF1lKs/a8GYPeFairUEUJ2YGSHHcaB2nDgWrnO1ZRlOouWWuOawlDgAw=="/>
-                <enclosure url="https://download.getmegaportal.com/yingxia/1.8.5/Yingxia43-40-arm64.delta" sparkle:deltaFrom="40" length="4858210" type="application/octet-stream" sparkle:deltaFromSparkleExecutableSize="468528" sparkle:deltaFromSparkleLocales="de,he,ar,el,ja,fa,uk" sparkle:edSignature="se4CxswRJLL0jZ20B14VI3rPGv4Rm91t+dreVppnk/2MqSPSYivQPtv8kCoGptrem2zVfdBDzO9IPSCfcockCA=="/>
-            </sparkle:deltas>
-        </item>
     </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: ptuT2d8e27YtLQcxxv0G7ZEiwwAnUt66xxkKOqJuPwgIznikZ6QIAH8cdAgkyECVGaAJ4Ut0vS+tATJJ5aieAQ==
+edSignature: kuJeaUKq5JWuzmp6GRlyS1ix0YvI0Q+dj3tXBssSWV7P5mJ73Yr6DljnTXXFlK1tiocGdeXDVOEKOh3aWK0XDg==
 length: 6223
 -->
