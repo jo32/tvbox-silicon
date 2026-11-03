@@ -38,11 +38,13 @@ public enum Remux {
         try await open(source, subtitles: subtitles, headers: headers, session: .shared)
     }
 
-    static func open(_ source: RemuxSource, subtitles: [ExternalSubtitle], headers: [String: String], session subtitleSession: URLSession) async throws -> URL {
+    static func open(_ source: RemuxSource, subtitles: [ExternalSubtitle], headers: [String: String], session subtitleSession: URLSession,
+                     translator: (any SubtitleTranslating)? = SubtitleTranslation.translator) async throws -> URL {
         async let files = SubtitleFile.load(subtitles, headers: headers, session: subtitleSession)
         let session = RemuxSession(source: source)
         try await session.open()
         session.add(await files)
+        if let translator { await session.addTranslations(translator) }
         RemuxStore.shared.add(session)
         do {
             let base = try await RemuxServer.shared.base()

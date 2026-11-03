@@ -78,6 +78,17 @@ struct RemuxPlan: Sendable, Equatable {
         return Array(first..<tracks.count)
     }
 
+    /// Translated twins of subtitle tracks (`SubtitleTranslation.sources`), after the others. Like a subtitle file's,
+    /// their tracks name no stream. Returns their indices.
+    mutating func addTranslations(_ sources: [(track: Int, language: Locale.Language)], target: Locale.Language) -> [Int] {
+        let first = tracks.count
+        for source in sources {
+            tracks.append(Track(stream: Stream(index: -1, kind: .subtitle, codec: SubtitleTranslation.codec, language: target.minimalIdentifier,
+                                               title: SubtitleTranslation.name(target: target, source: source.language), isText: true)))
+        }
+        return Array(first..<tracks.count)
+    }
+
     /// The cues of a subtitle file that segment `index` carries: those starting within it, as FFmpeg places
     /// the file's own. The first and last segments take those before and after the picture too.
     func cues(_ cues: [Cue], segment index: Int) -> [Cue] {
@@ -197,7 +208,9 @@ struct RemuxPlan: Sendable, Equatable {
             let stream = tracks[index].stream
             var attributes = ["TYPE=SUBTITLES", "GROUP-ID=\"subtitles\"", "NAME=\"\(quoted(unique(Self.displayName(tracks[index]))))\""]
             if let language = Self.languageTag(stream.language) { attributes.append("LANGUAGE=\"\(language)\"") }
-            attributes += ["DEFAULT=\(stream.isDefault && !stream.isForced ? "YES" : "NO")", "AUTOSELECT=YES",
+            // A translation is made only for someone who picks it, never by AVPlayer's own choice.
+            let automatic = stream.codec != SubtitleTranslation.codec
+            attributes += ["DEFAULT=\(stream.isDefault && !stream.isForced ? "YES" : "NO")", "AUTOSELECT=\(automatic ? "YES" : "NO")",
                            "FORCED=\(stream.isForced ? "YES" : "NO")", "URI=\"\(index).m3u8\""]
             lines.append("#EXT-X-MEDIA:" + attributes.joined(separator: ","))
         }

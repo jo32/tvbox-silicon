@@ -108,6 +108,8 @@ struct PlaybackView: View {
         #else
         .preferredColorScheme(.dark)
         #endif
+        // Translated subtitles are translated here, where Translation can ask to download a language.
+        .subtitleTranslation()
         #if os(macOS)
         .frame(minWidth: 880, minHeight: 540)
         #endif
