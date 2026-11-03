@@ -1397,7 +1397,6 @@
 
 "%@ (Translated from %@)" = "%@ (Translated from %@)";
 
-"Airing Today" = "Airing Today";
 "Airing Schedule" = "Airing Schedule";
 "Anime" = "Anime";
 "Nothing Airing" = "Nothing Airing";
@@ -1405,7 +1404,6 @@
 "Data:" = "Data:";
 "The schedule sources can't be reached right now, so this is an older copy." = "The schedule sources can't be reached right now, so this is an older copy.";
 "Full Schedule" = "Full Schedule";
-"Aired" = "Aired";
 "Chinese Series" = "Chinese Series";
 "Hong Kong & Taiwan Series" = "Hong Kong & Taiwan Series";
 "American Series" = "American Series";
@@ -1414,3 +1412,6 @@
 "British Series" = "British Series";
 "Today" = "Today";
 "Airs Next" = "Airs Next";
+"Anime Airing Today" = "Anime Airing Today";
+"Series Airing Today" = "Series Airing Today";
+"Day" = "Day";

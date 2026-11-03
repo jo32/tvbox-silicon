@@ -1397,7 +1397,6 @@
 
 "%@ (Translated from %@)" = "%@（%@から翻訳）";
 
-"Airing Today" = "今日の放送";
 "Airing Schedule" = "放送スケジュール";
 "Anime" = "アニメ";
 "Nothing Airing" = "この日の放送はありません";
@@ -1405,7 +1404,6 @@
 "Data:" = "データ提供：";
 "The schedule sources can't be reached right now, so this is an older copy." = "スケジュールの提供元に接続できないため、以前のデータを表示しています。";
 "Full Schedule" = "すべてのスケジュール";
-"Aired" = "放送済み";
 "Chinese Series" = "中国ドラマ";
 "Hong Kong & Taiwan Series" = "香港・台湾ドラマ";
 "American Series" = "アメリカのドラマ";
@@ -1414,3 +1412,6 @@
 "British Series" = "イギリスのドラマ";
 "Today" = "今日";
 "Airs Next" = "まもなく放送";
+"Anime Airing Today" = "今日のアニメ";
+"Series Airing Today" = "今日のドラマ";
+"Day" = "曜日";

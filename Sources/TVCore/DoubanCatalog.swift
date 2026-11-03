@@ -25,9 +25,10 @@ public enum DoubanCatalog {
         }
     }
 
-    public static func items(_ feed: Feed, count: Int = 30, session: URLSession = .shared) async throws -> [Item] {
+    /// `start` pages through the list: the first title to return, counting from 0.
+    public static func items(_ feed: Feed, start: Int = 0, count: Int = 30, session: URLSession = .shared) async throws -> [Item] {
         var parts = URLComponents(string: "https://m.douban.com/rexxar/api/v2/subject_collection/\(feed.rawValue)/items")!
-        parts.queryItems = [URLQueryItem(name: "start", value: "0"), URLQueryItem(name: "count", value: String(count))]
+        parts.queryItems = [URLQueryItem(name: "start", value: String(start)), URLQueryItem(name: "count", value: String(count))]
         var request = URLRequest(url: parts.url!, timeoutInterval: 20)
         request.setValue(referer, forHTTPHeaderField: "Referer")
         let (data, response) = try await session.data(for: request)

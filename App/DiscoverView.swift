@@ -11,7 +11,7 @@ import TVCore
     /// Douban's hot lists, only fetched while their section is shown. A list that fails is just left out.
     private(set) var douban: [DoubanCatalog.Feed: [DoubanCatalog.Item]] = [:]
     private var doubanLoading = false
-    /// This week's airing calendars (Airing Today); not on Apple TV. One that fails is just left out.
+    /// This week's airing calendars (the Airing Today shelves). One that fails is just left out.
     private(set) var calendar: [TMDBCalendar.Kind: TMDBCalendar.Week] = [:]
     static let feeds: [TMDBCatalog.Feed] = [.trending, .nowPlaying, .onTheAir, .variety, .chinese, .animation, .topMovies, .topTelevision, .family, .kids, .netflix, .disney, .appleTV, .hbo, .warner, .universal, .paramount, .sony]
     func items(_ feed: TMDBCatalog.Feed) -> [TMDBCatalog.Item] { pages[feed]?.items ?? [] }
@@ -22,10 +22,8 @@ import TVCore
         defer { loading = false }
         let pending = Self.feeds.filter { refresh || pages[$0] == nil }
         async let metadata = try? TMDBCatalog.collections()
-        #if !os(tvOS)
         async let anime = try? TMDBCalendar.week(.anime)
         async let series = try? TMDBCalendar.week(.tv)
-        #endif
         await withTaskGroup(of: (TMDBCatalog.Feed, TMDBCatalog.Page?).self) { group in
             for feed in pending {
                 group.addTask { (feed, try? await TMDBCatalog.page(feed)) }
@@ -37,13 +35,11 @@ import TVCore
             }
         }
         let fresh = await metadata
-        #if !os(tvOS)
         let weeks = (anime: await anime, series: await series)
         if !Task.isCancelled {
             if let week = weeks.anime { calendar[.anime] = week }
             if let week = weeks.series { calendar[.tv] = week }
         }
-        #endif
         if !Task.isCancelled {
             if let fresh { collections = fresh; collectionsFailed = false }
             else { collectionsFailed = true }
@@ -99,7 +95,7 @@ struct DiscoverView: View {
                         if featured.isEmpty, model.loading {
                             ProgressView().frame(maxWidth: .infinity).frame(height: min(proxy.size.width * 1.5, 660))
                         }
-                        ForEach(DiscoverSection.available.filter(visible)) { section in
+                        ForEach(DiscoverSection.allCases.filter(visible)) { section in
                             sectionView(section, width: proxy.size.width)
                         }
                         if !model.failures.isEmpty || model.collectionsFailed {
@@ -210,7 +206,7 @@ struct DiscoverView: View {
         .sheet(isPresented: $editing) {
             NavigationStack {
                 Form {
-                    ForEach(DiscoverSection.available) { section in
+                    ForEach(DiscoverSection.allCases) { section in
                         Toggle(section.title, isOn: shown(section))
                             #if !os(tvOS)
                             .settingsSwitch()
@@ -248,7 +244,8 @@ struct DiscoverView: View {
                 #endif
             }
         case .douban: doubanShelves
-        case .calendar: airingToday
+        case .airingAnime: airing(.anime)
+        case .airingSeries: airing(.tv)
         case .nowPlaying: shelf(.nowPlaying)
         case .onTheAir: shelf(.onTheAir)
         case .trending: shelf(.trending, landscape: true)
@@ -262,24 +259,66 @@ struct DiscoverView: View {
         }
     }
 
-    /// Today's anime and series, and the week's calendar behind the heading.
-    @ViewBuilder private var airingToday: some View {
-        #if !os(tvOS)
-        if !model.calendar.isEmpty {
-            DiscoverAiringToday(weeks: model.calendar)
-            #if DEBUG
-                .task {
-                    // QA: -qaCalendarOpen anime|tv opens the week page (with -qaCalendar for a local Worker).
-                    if let value = UserDefaults.standard.string(forKey: "qaCalendarOpen"), !DiscoverQA.calendarOpened {
-                        DiscoverQA.calendarOpened = true
-                        let kind = TMDBCalendar.Kind(rawValue: value) ?? .anime
-                        openRoute?(Route { AnyView(DiscoverCalendarView(initial: model.calendar, kind: kind)) })
+    /// Today's anime or series from the one before the next to air, as a shelf; its heading opens the week.
+    @ViewBuilder private func airing(_ kind: TMDBCalendar.Kind) -> some View {
+        if let today = model.calendar[kind]?.today(), !today.items.isEmpty {
+            let next = DiscoverAiring.next(today.items)
+            VStack(alignment: .leading, spacing: 0) {
+                #if os(tvOS)
+                sectionHeading(kind.shelfTitle)
+                DiscoverTVRow {
+                    ForEach(DiscoverAiring.fromNow(today.items)) { item in
+                        DiscoverAiringLink(item: item) { DiscoverAiringTile(item: item, next: item.id == next) }
+                            .accessibilityIdentifier("discover.calendar.\(item.id)")
                     }
+                    RouteLink { DiscoverCalendarView(initial: model.calendar, kind: kind) } label: {
+                        DiscoverTVSeeAllCard(symbol: "calendar", title: L10n.text("Full Schedule"))
+                    }.panelCardButton(cornerRadius: 12).accessibilityIdentifier("discover.more.calendar.\(kind.rawValue)")
                 }
+                #else
+                moreHeading(kind.shelfTitle, identifier: "discover.more.calendar.\(kind.rawValue)") {
+                    DiscoverCalendarView(initial: model.calendar, kind: kind)
+                }
+                DiscoverRail(arrowCenter: 87) {
+                    LazyHStack(alignment: .top, spacing: DiscoverLayout.spacing) {
+                        ForEach(DiscoverAiring.fromNow(today.items)) { item in
+                            DiscoverAiringLink(item: item) {
+                                DiscoverAiringTile(item: item, next: item.id == next).frame(width: DiscoverLayout.posterWidth)
+                            }
+                            .accessibilityIdentifier("discover.calendar.\(item.id)")
+                        }
+                    }.padding(.horizontal, DiscoverLayout.gutter)
+                }
+                #endif
+            }
+            #if DEBUG
+            .task {
+                // QA: -qaCalendarOpen anime|tv opens the week page (with -qaCalendar for a local Worker).
+                if kind == .anime, let value = UserDefaults.standard.string(forKey: "qaCalendarOpen"), !DiscoverQA.calendarOpened {
+                    DiscoverQA.calendarOpened = true
+                    let kind = TMDBCalendar.Kind(rawValue: value) ?? .anime
+                    openRoute?(Route { AnyView(DiscoverCalendarView(initial: model.calendar, kind: kind)) })
+                }
+            }
             #endif
         }
-        #endif
     }
+
+    #if !os(tvOS)
+    /// A shelf's heading that opens its full list, as the TMDB shelves' do.
+    private func moreHeading<Destination: View>(_ title: String, identifier: String,
+                                                @ViewBuilder destination: @escaping @MainActor () -> Destination) -> some View {
+        RouteLink(destination: destination) {
+            HStack {
+                Text(title).font(.system(size: DiscoverLayout.heading, weight: .semibold))
+                Spacer()
+                Image(systemName: "chevron.forward").font(.system(size: 14, weight: .semibold))
+            }.frame(height: DiscoverLayout.headingHeight, alignment: .top).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).padding(.horizontal, DiscoverLayout.gutter)
+        .accessibilityIdentifier(identifier)
+    }
+    #endif
 
     private func sectionHeading(_ title: String) -> some View {
         Text(title).font(.system(size: DiscoverLayout.heading, weight: .semibold))
@@ -438,16 +477,22 @@ struct DiscoverView: View {
                 let items = model.douban[feed] ?? []
                 if !items.isEmpty {
                     VStack(alignment: .leading, spacing: 0) {
-                        sectionHeading(feed.title)
                         #if os(tvOS)
+                        sectionHeading(feed.title)
                         DiscoverTVRow {
                             ForEach(items) { item in
                                 RouteLink { DoubanTitleView(item: item) } label: { DoubanTile(item: item) }
                                     .cardButton()
                                     .accessibilityIdentifier("discover.douban.\(feed.rawValue).\(item.id)")
                             }
+                            RouteLink { DoubanListView(feed: feed, initial: items) } label: {
+                                DiscoverTVSeeAllCard(symbol: "square.grid.2x2", title: L10n.text("See All"))
+                            }.panelCardButton(cornerRadius: 12).accessibilityIdentifier("discover.more.douban.\(feed.rawValue)")
                         }
                         #else
+                        moreHeading(feed.title, identifier: "discover.more.douban.\(feed.rawValue)") {
+                            DoubanListView(feed: feed, initial: items)
+                        }
                         DiscoverRail(arrowCenter: 87) {
                             LazyHStack(alignment: .top, spacing: DiscoverLayout.spacing) {
                                 ForEach(items) { item in
@@ -818,7 +863,7 @@ private struct DiscoverPageControl: UIViewRepresentable {
 }
 #endif
 
-private struct DiscoverCanvas: View {
+struct DiscoverCanvas: View {
     let poster: URL?
     @State private var paint: DiscoverPaint?
     var body: some View {
@@ -1415,20 +1460,13 @@ private extension TMDBCatalog.Feed {
 #endif
 
 private enum DiscoverSection: String, CaseIterable, Identifiable {
-    case hero, calendar, douban, nowPlaying, onTheAir, trending, collections, animation, people, networks, genres, rankings, companies
+    case hero, airingAnime, airingSeries, douban, nowPlaying, onTheAir, trending, collections, animation, people, networks, genres, rankings, companies
     var id: String { rawValue }
-    /// The ones this platform has: Apple TV has no airing calendar.
-    static var available: [DiscoverSection] {
-        #if os(tvOS)
-        allCases.filter { $0 != .calendar }
-        #else
-        allCases
-        #endif
-    }
     var title: String {
         switch self {
         case .hero: L10n.text("Featured Titles")
-        case .calendar: L10n.text("Airing Today")
+        case .airingAnime: TMDBCalendar.Kind.anime.shelfTitle
+        case .airingSeries: TMDBCalendar.Kind.tv.shelfTitle
         case .douban: L10n.text("Douban Hot Lists")
         case .nowPlaying: L10n.text("In Theaters")
         case .onTheAir: L10n.text("On the Air")
@@ -1549,6 +1587,97 @@ private struct DoubanTile: View {
         #endif
     }
 }
+
+/// A whole Douban list, as Discover's See All pages: Douban's lists run to a few hundred titles, 30 at a time.
+private struct DoubanListView: View {
+    let feed: DoubanCatalog.Feed
+    @State private var items: [DoubanCatalog.Item]
+    @State private var loading = false
+    @State private var failed = false
+    @State private var ended = false
+    init(feed: DoubanCatalog.Feed, initial: [DoubanCatalog.Item]) {
+        self.feed = feed
+        _items = State(initialValue: initial)
+    }
+    var body: some View {
+        ScrollView {
+            #if os(tvOS)
+            Text(feed.title).font(.system(size: 52, weight: .semibold)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+                .frame(maxWidth: .infinity).padding(.top, 60)
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(DiscoverLayout.posterWidth), spacing: 55, alignment: .top), count: 6), spacing: 66) {
+                cells
+            }.padding(.top, 54)
+            #else
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: DiscoverLayout.posterWidth), spacing: DiscoverLayout.spacing)], alignment: .leading, spacing: 22) {
+                cells
+            }.padding(DiscoverLayout.gutter)
+            #endif
+            if failed {
+                Button(L10n.text("Try Again")) { Task { await loadMore() } }.padding()
+            } else if loading {
+                ProgressView().padding()
+            }
+        }
+        #if os(tvOS)
+        .scrollClipDisabled()
+        .ignoresSafeArea(edges: .top)
+        .toolbar(.hidden, for: .navigationBar)
+        #else
+        .navigationTitle(feed.title)
+        #endif
+        .background { DiscoverCanvas(poster: items.first?.cover) }
+        .foregroundStyle(.white).preferredColorScheme(.dark)
+        .task { if items.isEmpty { await loadMore() } }
+    }
+    private var cells: some View {
+        ForEach(items) { item in
+            RouteLink { DoubanTitleView(item: item) } label: {
+                #if os(tvOS)
+                DoubanTile(item: item)
+                #else
+                DoubanTile(item: item).frame(maxWidth: .infinity)
+                #endif
+            }
+            #if os(tvOS)
+            .cardButton()
+            #else
+            .tmdbCardButton()
+            #endif
+            .accessibilityIdentifier("discover.douban.list.\(item.id)")
+            .task { if item.id == items.last?.id { await loadMore() } }
+        }
+    }
+    private func loadMore() async {
+        guard !loading, !ended else { return }
+        loading = true; failed = false
+        defer { loading = false }
+        do {
+            let page = try await DoubanCatalog.items(feed, start: items.count)
+            guard !Task.isCancelled else { return }
+            var seen = Set(items.map(\.id))
+            let fresh = page.filter { seen.insert($0.id).inserted }
+            items += fresh
+            ended = fresh.isEmpty
+        } catch { if !Task.isCancelled { failed = true } }
+    }
+}
+
+#if os(tvOS)
+/// The last card of a shelf on the TV, which opens the whole list: Apple TV has no heading to click.
+private struct DiscoverTVSeeAllCard: View {
+    let symbol: String
+    let title: String
+    var body: some View {
+        VStack(spacing: 18) {
+            Image(systemName: symbol).font(.system(size: 54, weight: .medium))
+            Text(title).font(.system(size: 28, weight: .semibold)).multilineTextAlignment(.center).lineLimit(2)
+        }
+        .padding(20)
+        .frame(width: DiscoverLayout.posterWidth, height: DiscoverLayout.posterWidth * 1.5)
+        .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+#endif
 
 /// A Douban title opens as the TMDB title of the same kind, name and year, with its seasons, cast and Search
 /// Sources. Without one it keeps Douban's card, and Search Sources looks for it by its Douban name.
