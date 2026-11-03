@@ -227,6 +227,19 @@ async function shareAccounts(instance, accountsFile, profile) {
     }
     if (changed) fs.writeFileSync(givenFile, JSON.stringify(given));
 }
+// Bundles keep their sites' connections open in their own keep-alive agents (the 9280.kstore.vip bundle's shared axios,
+// used by its 秒播 sites), and reuse one the far end has since dropped: a server's idle timeout, or a proxy or NAT
+// between. That request fails at once with "socket hang up" and the bundle answers HTTP 500. One more try opens a
+// fresh connection. A slow hang-up is a server that drops every request, so it isn't asked twice. Keep in step with
+// host.mjs.
+async function sendFresh(send, route, body) {
+    const started = Date.now();
+    try { return await send(route, body); } catch (error) {
+        if (error.status !== 500 || !/socket hang up|ECONNRESET|EPIPE/.test(error.message) || Date.now() - started > 2500) throw error;
+        log('CATPAW_RETRY', route, error.message);
+        return send(route, body);
+    }
+}
 async function call(instance, params) {
     const send = async (route, body) => {
         const init = body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) };
@@ -261,8 +274,10 @@ async function call(instance, params) {
     else if ('t' in params) { route = '/category'; body = { id: params.t, page: Number(params.pg || 1), filter: true, filters: params.filters ? JSON.parse(params.filters) : {} }; }
     else { route = '/home'; body = {}; }
     // A search that finds nothing answers HTTP 404 in some bundles: the 9280.kstore.vip sites (木偶, 虎斑, 蜡笔…) pass on
-    // their site's 404 for a search without matches, and a source without search has no route. Neither is a failure.
-    const { text, page } = await watchingPages(route, () => send(api + route, body)
+    // their site's 404 for a search without matches, and a source without search has no route. Sources whose search
+    // returns nothing at all (its 少儿 and 体育 sites) answer 200 with an empty body. None of these is a failure.
+    const { text, page } = await watchingPages(route, () => sendFresh(send, api + route, body)
+        .then(text => route === '/search' && !text.trim() ? '{"list":[]}' : text)
         .catch(error => { if (route === '/search' && error.status === 404) return '{"list":[]}'; throw error; }));
     // Sources address the bundle's own proxy by the device's network address, or by a port from before a relisten,
     // but the server is on loopback.
