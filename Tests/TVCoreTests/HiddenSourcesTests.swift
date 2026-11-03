@@ -25,6 +25,33 @@ private func source(_ key: String) -> Site {
     #expect(hidden.contains(site, origin: origin))
 }
 
+@Test @MainActor func manySourcesHideAndShowInOneChange() throws {
+    let suite = "hidden.many." + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let hidden = HiddenSources(defaults: defaults)
+    var changes = 0
+    hidden.onChange = { changes += 1 }
+    let a = source("a"), b = source("b"), c = source("c")
+    hidden.insert(a, origin: origin)
+    hidden.setHidden([a, b, c], origin: origin, hidden: true)
+    #expect([a, b, c].allSatisfy { hidden.contains($0, origin: origin) })
+    #expect(hidden.savedKeys.count == 3)
+    #expect(changes == 2)
+    #expect(HiddenSources(defaults: defaults).contains(c, origin: origin))
+    // Nothing to change: no save, no sync.
+    let revision = hidden.revision
+    hidden.setHidden([b, c], origin: origin, hidden: true)
+    #expect(hidden.revision == revision && changes == 2)
+    hidden.setHidden([a, c], origin: origin, hidden: false)
+    #expect(!hidden.contains(a, origin: origin) && hidden.contains(b, origin: origin) && !hidden.contains(c, origin: origin))
+    #expect(changes == 3)
+    // Another subscription's copy of a source keeps its own state.
+    let other = URL(string: "https://other.example/a.json")!
+    hidden.setHidden([b], origin: other, hidden: false)
+    #expect(hidden.contains(b, origin: origin))
+}
+
 private struct Failure: Error {}
 
 @Test @MainActor func failingSourcesGoRedWithoutBeingHidden() throws {

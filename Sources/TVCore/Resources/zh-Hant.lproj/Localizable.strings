@@ -616,6 +616,13 @@
 "Manage Sources" = "管理隨選來源";
 "Hidden Sources" = "已隱藏的來源";
 "Hidden" = "已隱藏";
+"Hide or Show Sources" = "隱藏或顯示來源";
+"%lld hidden" = "已隱藏 %lld 個";
+"Choose many sources at once, or a whole subscription." = "一次選擇多個來源，或整個訂閱。";
+"Ticked sources are shown. Hidden sources stay out of Watch Now and search." = "勾選的來源會顯示。已隱藏的來源不會出現在「立即觀看」和搜尋中。";
+"Show All Sources" = "顯示全部來源";
+"Show All" = "全部顯示";
+"Hide All" = "全部隱藏";
 "Pinned Sources" = "置頂點播來源";
 "Search history" = "搜尋播放歷史";
 "Manage history" = "管理歷史";
