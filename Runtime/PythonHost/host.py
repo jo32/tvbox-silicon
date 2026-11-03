@@ -289,7 +289,7 @@ class Session:
             else:
                 result = spider.searchContent(params['wd'], False)
         elif 't' in params:
-            result = spider.categoryContent(params['t'], params.get('pg') or '1', True, {})
+            result = spider.categoryContent(params['t'], params.get('pg') or '1', True, json.loads(params.get('filters') or '{}'))
         else:
             result = parsed(spider.homeContent(True))
             if not result.get('list'):

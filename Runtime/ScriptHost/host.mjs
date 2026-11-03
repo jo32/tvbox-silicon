@@ -310,7 +310,7 @@ async function call(spider, params) {
     if ('play' in params) { method = 'play'; args = [params.flag || '', params.play, []]; }
     else if ('ids' in params) { method = 'detail'; args = [params.ids]; }
     else if ('wd' in params) { method = 'search'; args = [params.wd, false, params.pg || '1']; }
-    else if ('t' in params) { method = 'category'; args = [params.t, params.pg || '1', true, {}]; }
+    else if ('t' in params) { method = 'category'; args = [params.t, params.pg || '1', true, params.filters ? JSON.parse(params.filters) : {}]; }
     else { method = 'home'; args = [true]; }
     if (typeof spider[method] !== 'function') throw new Error(`The script does not implement ${method}`);
     let result = await spider[method](...args);
@@ -478,7 +478,7 @@ async function callCatPaw(params) {
     if ('play' in params) { route = '/play'; body = { flag: params.flag || '', id: params.play }; }
     else if ('ids' in params) { route = '/detail'; body = { id: params.ids }; }
     else if ('wd' in params) { route = '/search'; body = { wd: params.wd, page: Number(params.pg || 1), quick: params.quick === 'true' }; }
-    else if ('t' in params) { route = '/category'; body = { id: params.t, page: Number(params.pg || 1), filter: true, filters: {} }; }
+    else if ('t' in params) { route = '/category'; body = { id: params.t, page: Number(params.pg || 1), filter: true, filters: params.filters ? JSON.parse(params.filters) : {} }; }
     else { route = '/home'; body = {}; }
     const { text, page } = await watchingPages(route, () => send(api + route, body));
     // Sources address the bundle's own proxy by the Mac's network address, but the server is on loopback.
