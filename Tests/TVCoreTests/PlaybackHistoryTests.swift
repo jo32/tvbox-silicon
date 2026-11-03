@@ -50,6 +50,9 @@ private func historyContext(video: String = "series", episode: String = "1", sou
     #expect(context.episode(in: [next]) == nil)
     #expect(context.episode(in: [Episode(id: "1", name: "Episode 1", address: "different-line", flag: "other")]) == nil)
     #expect(context.episode(in: [original, Episode(id: "10", name: "Episode 1", address: "ambiguous", flag: "line")]) == nil)
+    // The details page opens on the line watched last even when it isn't the first line (#362).
+    let otherLine = Episode(id: "20", name: "Episode 1", address: "first-line", flag: "other")
+    #expect(context.episode(in: [otherLine, next, original])?.flag == "line")
 }
 
 @Test @MainActor func playbackHistoryBoundsAndRecoversItsPersistentFile() throws {

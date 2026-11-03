@@ -1149,8 +1149,9 @@ struct VideoDetailView: View {
             let episodes = value.episodes
             episodeLabels = await Task.detached(priority: .userInitiated) { EpisodeLabels.labels(episodes) }.value
             detail = value
-            // Start on a line that can play: not one from a drive the viewer has no way to sign in to.
-            if selectedFlag == nil { selectedFlag = CloudDrive.preferredFlag(flags) }
+            // Start on the line watched last (#362), else on one that can play: not one from a drive the viewer has no
+            // way to sign in to.
+            if selectedFlag == nil { selectedFlag = watchedFlag ?? CloudDrive.preferredFlag(flags) }
             #if os(tvOS)
             Task { try? await Task.sleep(for: .milliseconds(100)); playFocused = true }
             #endif
@@ -1674,22 +1675,34 @@ struct VideoDetailView: View {
         }
     }
 
-    #if os(iOS)
-    // MARK: iPhone watch page
-
-    private var watchLayout: Bool { WatchPage.applies(sizeClass, verticalSizeClass) }
     /// This video's playback scopes (`PlaybackHistoryContext.id`); the details may carry another ID than the list's.
     private var watchScopes: Set<String> {
         let origin = client.site.origin(or: client.origin)
         return Set([video.id, detail?.id].compactMap { $0 }.map { EpisodeSkipSettings.scope(origin: origin, source: client.site.sourceKey, video: $0) })
     }
-    /// What plays at the top of the page: one of this video's episodes.
-    private var watchChannel: Channel? {
-        store.playing.flatMap { watchScopes.contains($0.historyContext?.id ?? "") ? $0 : nil }
-    }
     /// Where the viewer stopped last time, for Continue.
     private var watchHistory: PlaybackHistoryEntry? {
         store.playbackHistory.entries.first { watchScopes.contains($0.context.id) }
+    }
+    /// The line of the episode playing, else of the one watched last, while the details still have it: the page opens
+    /// on that line so the episode shows in its list, not on the first line (#362).
+    private var watchedFlag: String? {
+        guard let episodes = detail?.episodes else { return nil }
+        #if os(iOS)
+        let context = watchChannel?.historyContext ?? watchHistory?.context
+        #else
+        let context = watchHistory?.context
+        #endif
+        return context?.episode(in: episodes)?.flag
+    }
+
+    #if os(iOS)
+    // MARK: iPhone watch page
+
+    private var watchLayout: Bool { WatchPage.applies(sizeClass, verticalSizeClass) }
+    /// What plays at the top of the page: one of this video's episodes.
+    private var watchChannel: Channel? {
+        store.playing.flatMap { watchScopes.contains($0.historyContext?.id ?? "") ? $0 : nil }
     }
     /// The episode playing, else the one watched last: marked in the list, which scrolls to it.
     private var currentEpisodeID: Episode.ID? {
