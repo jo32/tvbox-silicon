@@ -243,6 +243,28 @@ import Testing
     #expect(CatPawOpen.configCenter(of: Video(id: "b", name: "b", synopsis: "http://127.0.0.1:52380/spider/wex/3/proxy/quark/1"), site: site) == nil)
 }
 
+@Test func wexConfigCentersOpenOnLoopback() throws {
+    // Every entry of Wex's 配置中心 (csp_PanConfigGuard) points at the plugin's own server at this device's address (#360).
+    let site = Site(key: "Wexconfig", name: "🐮配置┃中心🐮", type: 3, api: "csp_PanConfigGuard", raw: [:])
+    let entry = Video(id: "web", name: "设置成功后刷新配置中心", synopsis: "如果弹窗没有显示，请打开网页版配置中心：http://127.0.0.1:19988/config")
+    #expect(ConfigCenter.page(of: entry, site: site)?.absoluteString == "http://127.0.0.1:19988/config")
+    if let own = ConfigCenter.ownAddresses().first(where: { !$0.contains(":") && $0 != "127.0.0.1" }) {
+        let lan = Video(id: "web", name: "设置成功后刷新配置中心", synopsis: "如果弹窗没有显示，请打开网页版配置中心：http://\(own):19988/config")
+        #expect(ConfigCenter.page(of: lan, site: site)?.absoluteString == "http://127.0.0.1:19988/config")
+        // The page itself redirects to the plugin proxy at that address, which only listens on loopback.
+        let proxy = try #require(URL(string: "http://\(own):9978/proxy?do=pan&action=config"))
+        #expect(ConfigCenter.local(proxy)?.absoluteString == "http://127.0.0.1:9978/proxy?do=pan&action=config")
+    }
+    // Another machine's page isn't served here, and only a plugin's entry counts.
+    #expect(ConfigCenter.page(of: Video(id: "web", name: "web", synopsis: "请打开：http://203.0.113.9:19988/config"), site: site) == nil)
+    #expect(ConfigCenter.local(try #require(URL(string: "http://203.0.113.9:9978/proxy"))) == nil)
+    #expect(ConfigCenter.local(try #require(URL(string: "https://example.com/config"))) == nil)
+    #expect(ConfigCenter.page(of: entry, site: Site(key: "api", name: "API", type: 1, api: "https://example.com/api.php/provide/vod", raw: [:])) == nil)
+    // A CatPawOpen bundle's entry is still found the way #311 finds it.
+    let bundle = Site(key: "wex", name: "王二小", type: 3, api: "https://example.com/index.js", raw: ["catPawOpen": .string("/spider/wex/3")])
+    #expect(ConfigCenter.page(of: Video(id: "config", name: "配置", synopsis: "手机扫码打开：http://127.0.0.1:52380/website"), site: bundle)?.absoluteString == "http://127.0.0.1:52380/website")
+}
+
 @Test func catPawOpenAddressesNameTheirBundle() throws {
     let checksum = try #require(URL(string: "https://example.com/cat/index.js.md5"))
     let bundle = try #require(URL(string: "https://example.com/cat/index.js"))

@@ -327,9 +327,9 @@ struct SaveCodeButton: View {
     }
 }
 
-/// A CatPawOpen bundle's config center, opened in the app. The bundle serves it from inside the app, so in Safari it
-/// stopped answering as soon as iOS suspended the app (#311). `address` asks the bundle for it again: iOS takes back a
-/// suspended app's listening sockets, and the bundle then answers on a new port.
+/// A source's config center (`ConfigCenter`), opened in the app. The source serves it from inside the app, so in Safari
+/// it stopped answering as soon as iOS suspended the app (#311). `address` asks the source for it again: iOS takes back a
+/// suspended app's listening sockets, and a CatPawOpen bundle then answers on a new port.
 struct ConfigCenterView: View {
     let address: () async -> URL?
     @Environment(\.dismiss) private var dismiss
@@ -379,6 +379,12 @@ struct ConfigCenterView: View {
             webView.load(URLRequest(url: fresh))
             return
         }
+        // A page the address redirected to (Wex's, #360) is served elsewhere: Refresh starts from the address again.
+        guard current.port == page.port else {
+            self.page = fresh
+            if reload { webView.load(URLRequest(url: fresh)) }
+            return
+        }
         // Where the viewer is in the page, on the port the bundle answers on now.
         let moved = page.port != fresh.port
         current.port = fresh.port
@@ -414,6 +420,19 @@ private struct ConfigCenterBrowser: UIViewRepresentable {
             let code = (failure as NSError).code, domain = (failure as NSError).domain
             if (domain == NSURLErrorDomain && code == NSURLErrorCancelled) || (domain == "WebKitErrorDomain" && code == 102) { return }
             error = failure.localizedDescription
+        }
+
+        /// Wex's config center redirects to the plugin's proxy at this device's network address, where nothing listens:
+        /// the proxy only answers on loopback (#360).
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                     decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void) {
+            if navigationAction.targetFrame?.isMainFrame != false, let url = navigationAction.request.url,
+               let local = ConfigCenter.local(url), local != url {
+                decisionHandler(.cancel)
+                webView.load(URLRequest(url: local))
+                return
+            }
+            decisionHandler(.allow)
         }
 
         /// Links that open a new window open here.

@@ -16,8 +16,50 @@ public class HostCompatibilityTest {
             }
             return;
         }
-        reflectiveArrayCloneWorks(); conversionCacheReusesAndRepairs(); partialInitializationDoesNotHideWorkingSources(); recommendationsMerge(); stateSurvivesAndRestores(); interfaceCallsExecute(); sourceFailuresStaySpecific(); androidScreensAreNamed(); cloudLoginReturnsToTheApp(); asyncCloudLoginEndsPlayback(); packageContextExists(); androidLogHasEveryOverload(); pluginKeepsItsOwnSlf4j(); conversionFailuresNameTheClass();
+        reflectiveArrayCloneWorks(); conversionCacheReusesAndRepairs(); partialInitializationDoesNotHideWorkingSources(); recommendationsMerge(); stateSurvivesAndRestores(); interfaceCallsExecute(); sourceFailuresStaySpecific(); androidScreensAreNamed(); cloudLoginReturnsToTheApp(); asyncCloudLoginEndsPlayback(); packageContextExists(); androidLogHasEveryOverload(); androidDrawingWorks(); pluginKeepsItsOwnSlf4j(); conversionFailuresNameTheClass();
         System.out.println("Java host regression checks passed (state, interface bytecode, HTTP failures, Android context).");
+    }
+
+    private static void androidDrawingWorks() throws Exception {
+        // Wex's 配置中心 draws its tile icons with Canvas and its QR codes with setPixels, then sends them as PNG data: URLs (#360).
+        var bitmap = android.graphics.Bitmap.createBitmap(128, 128, android.graphics.Bitmap.Config.ARGB_8888);
+        var canvas = new android.graphics.Canvas(bitmap);
+        var fill = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        fill.setColor(0xff2080ff);
+        canvas.drawRoundRect(new android.graphics.RectF(5, 5, 123, 123), 27, 27, fill);
+        check(bitmap.getPixel(64, 64) == 0xff2080ff && bitmap.getPixel(6, 6) == 0 && bitmap.getPixel(6, 64) == 0xff2080ff, "Round rect not filled");
+        var line = new android.graphics.Paint(); line.setColor(0xffffffff); line.setStyle(android.graphics.Paint.Style.STROKE); line.setStrokeWidth(6);
+        var path = new android.graphics.Path(); path.moveTo(28, 78); path.cubicTo(16, 63, 29, 48, 43, 51); path.lineTo(94, 84);
+        canvas.drawPath(path, line);
+        canvas.drawCircle(64, 30, 8, fill);
+        canvas.drawText("A", 64, 64, line);
+        check(bitmap.getPixel(94, 84) == 0xffffffff && bitmap.getPixel(64, 30) == 0xff2080ff, "Path or circle not drawn");
+        var gradient = new android.graphics.Paint(1);
+        gradient.setShader(new android.graphics.LinearGradient(0, 0, 128, 0, 0xff000000, 0xffffffff, android.graphics.Shader.TileMode.CLAMP));
+        canvas.drawRect(0, 100, 128, 128, gradient);
+        check((bitmap.getPixel(0, 120) & 0xff) < 8 && (bitmap.getPixel(127, 120) & 0xff) > 248, "Gradient not drawn");
+        int[] qr = new int[21 * 21];
+        for (int i = 0; i < qr.length; i++) qr[i] = i % 2 == 0 ? 0xff000000 : 0xffffffff;
+        var code = android.graphics.Bitmap.createBitmap(21, 21, android.graphics.Bitmap.Config.RGB_565);
+        code.setPixels(qr, 0, 21, 0, 0, 21, 21);
+        var png = new java.io.ByteArrayOutputStream();
+        check(code.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, png), "PNG not written");
+        byte[] bytes = png.toByteArray();
+        check(bytes[1] == 'P' && bytes[2] == 'N' && bytes[3] == 'G', "Not a PNG");
+        var chunks = new java.io.DataInputStream(new java.io.ByteArrayInputStream(bytes, 8, bytes.length - 8));
+        var data = new java.io.ByteArrayOutputStream();
+        int width = 0;
+        while (true) {
+            byte[] type = new byte[4], body = new byte[chunks.readInt()];
+            chunks.readFully(type); chunks.readFully(body); chunks.readInt();
+            String name = new String(type, java.nio.charset.StandardCharsets.US_ASCII);
+            if (name.equals("IHDR")) width = java.nio.ByteBuffer.wrap(body).getInt();
+            else if (name.equals("IDAT")) data.write(body);
+            else if (name.equals("IEND")) break;
+        }
+        byte[] rows = new java.util.zip.InflaterInputStream(new java.io.ByteArrayInputStream(data.toByteArray())).readAllBytes();
+        // Each row: filter 0, then RGBA. The first pixel is black, the second white, both opaque.
+        check(width == 21 && rows.length == 21 * (1 + 21 * 4) && rows[1] == 0 && rows[4] == (byte) 255 && rows[5] == (byte) 255 && rows[8] == (byte) 255, "PNG pixels wrong");
     }
 
     private static void androidLogHasEveryOverload() throws Exception {
