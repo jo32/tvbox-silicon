@@ -8,6 +8,9 @@ import TVCore
     private(set) var collections: TMDBCatalog.Collections?
     private(set) var collectionsFailed = false
     private(set) var loading = false
+    /// Douban's hot lists, only fetched while their section is shown. A list that fails is just left out.
+    private(set) var douban: [DoubanCatalog.Feed: [DoubanCatalog.Item]] = [:]
+    private var doubanLoading = false
     static let feeds: [TMDBCatalog.Feed] = [.trending, .nowPlaying, .onTheAir, .variety, .chinese, .animation, .topMovies, .topTelevision, .family, .kids, .netflix, .disney, .appleTV, .hbo, .warner, .universal, .paramount, .sony]
     func items(_ feed: TMDBCatalog.Feed) -> [TMDBCatalog.Item] { pages[feed]?.items ?? [] }
 
@@ -33,6 +36,26 @@ import TVCore
             else { collectionsFailed = true }
         }
     }
+
+    func loadDouban(refresh: Bool = false) async {
+        guard !doubanLoading else { return }
+        doubanLoading = true
+        defer { doubanLoading = false }
+        let pending = DoubanCatalog.Feed.allCases.filter { refresh || douban[$0] == nil }
+        await withTaskGroup(of: (DoubanCatalog.Feed, [DoubanCatalog.Item]?).self) { group in
+            for feed in pending {
+                group.addTask {
+                    do { return (feed, try await DoubanCatalog.items(feed)) } catch {
+                        if !(error is CancellationError) { Diagnostics.shared.record(.warning, "douban", "list=\(feed.rawValue) failed=\(String(reflecting: error))") }
+                        return (feed, nil)
+                    }
+                }
+            }
+            for await (feed, items) in group where !Task.isCancelled {
+                if let items, !items.isEmpty { douban[feed] = items }
+            }
+        }
+    }
 }
 
 /// Catalog layout: a 1.5:1 portrait hero, 17 pt gutters,
@@ -48,6 +71,8 @@ struct DiscoverView: View {
     @FocusState private var tvFocus: DiscoverTVFocus?
     #endif
     @AppStorage("discover.hiddenSections") private var hiddenSections = ""
+    /// Douban's lists are in Chinese: shown by default only when the app is.
+    @AppStorage("discover.doubanShown") private var doubanShown = TMDBMatch.language.hasPrefix("zh")
     private var featured: [TMDBCatalog.Item] { Array(model.items(.trending).filter { $0.poster != nil }.prefix(8)) }
     var body: some View {
         GeometryReader { proxy in
@@ -60,7 +85,7 @@ struct DiscoverView: View {
                         if featured.isEmpty, model.loading {
                             ProgressView().frame(maxWidth: .infinity).frame(height: min(proxy.size.width * 1.5, 660))
                         }
-                        ForEach(DiscoverSection.allCases.filter { !hiddenSections.split(separator: ",").contains(Substring($0.rawValue)) }) { section in
+                        ForEach(DiscoverSection.allCases.filter(visible)) { section in
                             sectionView(section, width: proxy.size.width)
                         }
                         if !model.failures.isEmpty || model.collectionsFailed {
@@ -111,7 +136,13 @@ struct DiscoverView: View {
                 .coordinateSpace(name: "discoverScroll")
                 .modifier(DiscoverScrollObserver(offset: Binding(get: { heroState.scrollY }, set: { heroState.scrollY = $0 })))
                 .scrollIndicators(.hidden)
-                .refreshable { await model.load(refresh: true) }
+                .refreshable {
+                    if doubanShown {
+                        async let douban: Void = model.loadDouban(refresh: true)
+                        await model.load(refresh: true)
+                        await douban
+                    } else { await model.load(refresh: true) }
+                }
             }
         }
         .modifier(DiscoverHeroTheme(state: heroState))
@@ -161,6 +192,7 @@ struct DiscoverView: View {
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }
         .task { await model.load() }
+        .task(id: doubanShown) { if doubanShown { await model.loadDouban() } }
         .sheet(isPresented: $editing) {
             NavigationStack {
                 Form {
@@ -177,11 +209,14 @@ struct DiscoverView: View {
         }
     }
 
+    private func visible(_ section: DiscoverSection) -> Bool {
+        section == .douban ? doubanShown : !hiddenSections.split(separator: ",").contains(Substring(section.rawValue))
+    }
+
     /// Whether Edit Layout shows the section on the page.
     private func shown(_ section: DiscoverSection) -> Binding<Bool> {
-        Binding(get: {
-            !hiddenSections.split(separator: ",").contains(Substring(section.rawValue))
-        }, set: { shown in
+        Binding(get: { visible(section) }, set: { shown in
+            if section == .douban { doubanShown = shown; return }
             var hidden = Set(hiddenSections.split(separator: ",").map(String.init))
             if shown { hidden.remove(section.rawValue) } else { hidden.insert(section.rawValue) }
             hiddenSections = hidden.sorted().joined(separator: ",")
@@ -198,6 +233,7 @@ struct DiscoverView: View {
                 DiscoverHeroCarousel(items: featured, state: heroState, width: width).padding(.bottom, -15)
                 #endif
             }
+        case .douban: doubanShelves
         case .nowPlaying: shelf(.nowPlaying)
         case .onTheAir: shelf(.onTheAir)
         case .trending: shelf(.trending, landscape: true)
@@ -359,6 +395,41 @@ struct DiscoverView: View {
             }.padding(.horizontal, DiscoverLayout.gutter)
         }
         #endif
+    }
+
+    /// Douban's hot lists, captioned with Douban's score. A title opens as the TMDB one it matches.
+    private var doubanShelves: some View {
+        VStack(alignment: .leading, spacing: 30) {
+            ForEach(DoubanCatalog.Feed.allCases, id: \.self) { feed in
+                let items = model.douban[feed] ?? []
+                if !items.isEmpty {
+                    VStack(alignment: .leading, spacing: 0) {
+                        sectionHeading(feed.title)
+                        #if os(tvOS)
+                        DiscoverTVRow {
+                            ForEach(items) { item in
+                                RouteLink { DoubanTitleView(item: item) } label: { DoubanTile(item: item) }
+                                    .cardButton()
+                                    .accessibilityIdentifier("discover.douban.\(feed.rawValue).\(item.id)")
+                            }
+                        }
+                        #else
+                        DiscoverRail(arrowCenter: 87) {
+                            LazyHStack(alignment: .top, spacing: DiscoverLayout.spacing) {
+                                ForEach(items) { item in
+                                    RouteLink { DoubanTitleView(item: item) } label: {
+                                        DoubanTile(item: item).frame(width: DiscoverLayout.posterWidth)
+                                    }
+                                    .tmdbCardButton()
+                                    .accessibilityIdentifier("discover.douban.\(feed.rawValue).\(item.id)")
+                                }
+                            }.padding(.horizontal, DiscoverLayout.gutter)
+                        }
+                        #endif
+                    }
+                }
+            }
+        }
     }
 
     @ViewBuilder private func shelf(_ feed: TMDBCatalog.Feed, landscape: Bool = false) -> some View {
@@ -1306,11 +1377,12 @@ private extension TMDBCatalog.Feed {
 }
 
 private enum DiscoverSection: String, CaseIterable, Identifiable {
-    case hero, nowPlaying, onTheAir, trending, collections, animation, people, networks, genres, rankings, companies
+    case hero, douban, nowPlaying, onTheAir, trending, collections, animation, people, networks, genres, rankings, companies
     var id: String { rawValue }
     var title: String {
         switch self {
         case .hero: L10n.text("Featured Titles")
+        case .douban: L10n.text("Douban Hot Lists")
         case .nowPlaying: L10n.text("In Theaters")
         case .onTheAir: L10n.text("On the Air")
         case .trending: L10n.text("Trending This Week")
@@ -1341,7 +1413,7 @@ enum DiscoverGenres {
                         10759: "Action & Adventure", 10762: "Kids", 10763: "News", 10764: "Reality", 10765: "Sci-Fi & Fantasy", 10767: "Talk", 10770: "TV Movie", 10766: "Soap", 10768: "War & Politics"]
 }
 
-private extension TMDBMatch.SearchResult {
+extension TMDBMatch.SearchResult {
     var catalogItem: TMDBCatalog.Item {
         // Both server responses share the same title identity and artwork fields.
         TMDBCatalog.Item(id: id, mediaType: mediaType, name: name, originalName: originalName ?? "", year: year,
@@ -1382,3 +1454,98 @@ private struct DiscoverTVShelf: View {
     }
 }
 #endif
+
+// MARK: Douban
+
+extension DoubanCatalog.Feed {
+    var title: String {
+        switch self {
+        case .movies: L10n.text("Douban Hot Movies")
+        case .television: L10n.text("Douban Hot Series")
+        case .variety: L10n.text("Douban Hot Variety Shows")
+        }
+    }
+}
+
+private extension DoubanCatalog.Item {
+    var caption: String {
+        [year.map(String.init), rating.map { L10n.text("Douban") + " " + $0.formatted(.number.precision(.fractionLength(1))) }]
+            .compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
+/// A Douban title as Discover draws its covers, with the year and Douban's score under it.
+private struct DoubanTile: View {
+    let item: DoubanCatalog.Item
+    var body: some View {
+        #if os(tvOS)
+        VStack(spacing: 5) {
+            PosterImage(url: item.cover).frame(width: DiscoverLayout.posterWidth, height: DiscoverLayout.posterWidth * 1.5)
+            VStack(spacing: 0) {
+                Text(item.title).font(.system(size: DiscoverLayout.caption))
+                Text(item.caption.isEmpty ? " " : item.caption).font(.system(size: DiscoverLayout.secondary, weight: .medium)).foregroundStyle(.white.opacity(0.5))
+            }.lineLimit(1).cardCaption()
+        }.frame(width: DiscoverLayout.posterWidth)
+        #else
+        VStack(alignment: .leading, spacing: 0) {
+            Color.clear.aspectRatio(2.0 / 3, contentMode: .fit)
+                .overlay { PosterImage(url: item.cover) }
+                .posterClip(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.primary.opacity(0.1), lineWidth: 0.5) }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title).font(.system(size: DiscoverLayout.caption)).lineLimit(1)
+                Text(item.caption).lineLimit(1)
+                    .font(.system(size: DiscoverLayout.secondary, design: .rounded)).foregroundStyle(.primary.opacity(0.56))
+            }.frame(maxWidth: .infinity, alignment: .leading).frame(height: DiscoverLayout.captionHeight)
+        }
+        .accessibilityElement(children: .combine)
+        #endif
+    }
+}
+
+/// A Douban title opens as the TMDB title of the same kind, name and year, with its seasons, cast and Search
+/// Sources. Without one it keeps Douban's card, and Search Sources looks for it by its Douban name.
+private struct DoubanTitleView: View {
+    @Environment(Store.self) private var store
+    let item: DoubanCatalog.Item
+    @State private var match: TMDBCatalog.Item?
+    @State private var looked = false
+    var body: some View {
+        Group {
+            if let match { DiscoverDetailView(item: match) }
+            else if looked { card }
+            else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
+        }
+        .task(id: item.id) {
+            guard !looked else { return }
+            let results = (try? await TMDBMatch.search(DoubanCatalog.searchTitle(item))) ?? []
+            guard !Task.isCancelled else { return }
+            match = DoubanCatalog.match(item, in: results)?.catalogItem
+            looked = true
+        }
+    }
+
+    private var card: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                PosterImage(url: item.cover).frame(width: 220, height: 330).clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                Text(item.title).font(.title2.weight(.semibold)).multilineTextAlignment(.center)
+                if !item.caption.isEmpty { Text(item.caption).font(.headline).opacity(0.7) }
+                if !item.subtitle.isEmpty { Text(item.subtitle).font(.subheadline).opacity(0.6).multilineTextAlignment(.center) }
+                Button {
+                    if store.subscription == nil { store.section = .settings } else { store.searchVideos(item.title) }
+                } label: {
+                    Label(L10n.text(store.subscription == nil ? "Add Subscription" : "Search Sources"), systemImage: "magnifyingglass")
+                }
+                #if os(tvOS)
+                .controlButton()
+                #else
+                .buttonStyle(.borderedProminent)
+                #endif
+                .accessibilityIdentifier("discover.douban.findSources")
+            }.padding(40).frame(maxWidth: .infinity)
+        }
+        .background { DiscoverCanvas(poster: item.cover) }
+        .foregroundStyle(.white).preferredColorScheme(.dark)
+    }
+}

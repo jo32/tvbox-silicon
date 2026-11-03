@@ -1389,3 +1389,8 @@
 "None of your LX Music sources plays this song's catalog." = "None of your LX Music sources plays this song's catalog.";
 "This extension asks an LX Music source for something Yingxia doesn't support." = "This extension asks an LX Music source for something Yingxia doesn't support.";
 "Scripts in the Listenify music extension format. Their charts and playlists show on the Music page and their songs in Music search; songs play from what the extension gives, or through your LX Music sources when it asks for one. Yingxia includes none: add only extensions you trust." = "Scripts in the Listenify music extension format. Their charts and playlists show on the Music page and their songs in Music search; songs play from what the extension gives, or through your LX Music sources when it asks for one. Yingxia includes none: add only extensions you trust.";
+"Douban Hot Lists" = "Douban Hot Lists";
+"Douban Hot Movies" = "Douban Hot Movies";
+"Douban Hot Series" = "Douban Hot Series";
+"Douban Hot Variety Shows" = "Douban Hot Variety Shows";
+"Douban" = "Douban";

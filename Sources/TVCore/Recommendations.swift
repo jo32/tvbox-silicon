@@ -8,7 +8,16 @@ public struct PosterResource: Hashable, Sendable {
     public var cacheKey: String {
         url.absoluteString + headers.sorted { $0.key < $1.key }.map { "\n\($0.key.lowercased()):\($0.value)" }.joined()
     }
-    public init(url: URL, headers: [String: String] = [:]) { self.url = url; self.headers = headers }
+    public init(url: URL, headers: [String: String] = [:]) {
+        self.url = url
+        var headers = headers
+        // Douban's image hosts refuse covers without a Douban Referer (HTTP 418, or 403 with another site's);
+        // many sources and the Douban lists on Discover show them.
+        if url.host()?.hasSuffix(".doubanio.com") == true, !headers.keys.contains(where: { $0.caseInsensitiveCompare("Referer") == .orderedSame }) {
+            headers["Referer"] = "https://movie.douban.com/"
+        }
+        self.headers = headers
+    }
     public init?(address: String, origin: URL) {
         // TVBox appends transport headers to artwork URLs. Do not send that suffix as part of the URL.
         let pattern = #"@(Headers|Cookie|Referer|User-Agent)="#
