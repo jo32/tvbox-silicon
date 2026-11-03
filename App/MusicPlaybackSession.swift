@@ -98,6 +98,10 @@ typealias MusicTrack = TVCore.MusicTrack
     init(library: MusicLibrary = .shared) {
         self.library = library
         player.volume = Float(volume)
+        // AirPlay gets the sound this player makes, not the stream's address. Allowed to, AVPlayer hands the address
+        // to a receiver that can play video, and an Android TV box's AirPlay app then plays the FLAC itself: with
+        // static on some songs, or not at all (-11870, "external playback not supported for asset") (#376).
+        player.allowsExternalPlayback = false
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { [weak self] time in
             MainActor.assumeIsolated { self?.tick(time) }
         }
