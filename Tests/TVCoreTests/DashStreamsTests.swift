@@ -16,12 +16,14 @@ struct DashStreamsTests {
         """#.utf8), origin: CloudSources.address)
         #expect(CloudSources.accepts(cloud))
         let shown = subscription.withCloudSources(cloud)
+        // Drives signed in on this machine add their "My <drive>" sources too; they don't matter here.
+        let keys = { (subscription: Subscription) in subscription.sites.map(\.key).filter { !$0.hasPrefix(CloudFilesSource.keyPrefix) } }
         // The subscription's own source wins a clash; Yingxia's are added after it, once.
-        #expect(shown.sites.map(\.key) == ["a", "builtin.bilibili"])
-        #expect(shown.withCloudSources(cloud).sites.count == 2)
+        #expect(keys(shown) == ["a", "builtin.bilibili"])
+        #expect(keys(shown.withCloudSources(cloud)) == ["a", "builtin.bilibili"])
         #expect(shown.lives.map(\.url.absoluteString) == ["douyu-live://rooms", "https://example.com/tv.m3u"])
-        #expect(subscription.withCloudSources(nil).sites.map(\.key) == ["a"])
-        let site = try #require(shown.sites.last)
+        #expect(keys(subscription.withCloudSources(nil)) == ["a"])
+        let site = try #require(shown.sites.first { $0.key == "builtin.bilibili" })
         #expect(site.isBuiltIn && site.isBilibili && site.runsInProcess && site.account == "bilibili")
         let ext = try #require(try site.pluginExtension(origin: nil)?.object)
         #expect(ext["builtin"] == .bool(true) && ext["lang"]?.string?.isEmpty == false && ext["cookie"] != nil)
