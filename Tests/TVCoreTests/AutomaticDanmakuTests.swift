@@ -12,6 +12,7 @@ private actor DanmakuTestTransport {
     var counts: [String: Int] = [:]
     var mode: String
     init(_ mode: String) { self.mode = mode }
+    func setMode(_ mode: String) { self.mode = mode }
     func send(_ request: URLRequest) async throws -> Data {
         let host = request.url!.host()!, path = request.url!.path
         counts[host + path, default: 0] += 1
@@ -25,12 +26,13 @@ private actor DanmakuTestTransport {
         }
         if host == "pbaccess.video.qq.com" { return Data(#"{"ret":0,"data":{"areaBoxList":[]}}"#.utf8) }
         if host == "backup.test" {
+            if mode == "down" { throw URLError(.timedOut) }
             if mode != "backup" { throw TVError.http(404) }
             return Data(##"{"code":200,"count":2,"danmuku":[[1,5,"#4994c4","有2条弹幕正在赶来，请遵守弹幕礼仪，祝您观影愉快~","1"],[3,1,"#ffffff","备用解析","1721178153"],[8,5,"#f00","顶部","1721178153"]]}"##.utf8)
         }
         if host == "dmku.test" {
-            if ["dandan", "none", "limit", "limit-http"].contains(mode) { throw TVError.http(503) }
-            if mode == "backup" { return Data(#"{"code":23,"danmuku":[]}"#.utf8) }
+            if ["dandan", "limit", "limit-http", "down"].contains(mode) { throw TVError.http(503) }
+            if mode == "backup" || mode == "none" { return Data(#"{"code":23,"danmuku":[]}"#.utf8) }
             return Data(##"{"code":23,"danmuku":[[1.5,"right","#fff","32px","真实协议测试"],[4,"top","#f00","32px","顶部"]]}"##.utf8)
         }
         if host == "dandan.test" || host.hasPrefix("limit") {
@@ -198,4 +200,40 @@ private actor DanmakuTestTransport {
     cache.remove(scope: automaticContext().id)
     _ = try await pending.value
     #expect(cache.summary().danmaku == 0)
+}
+
+
+@Test func aCommentServerThatIsDownIsSkippedForAWhileAndTheViewerIsToldServicesAreUnavailable() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    // dmku answers 503 and the backup times out. Dandanplay doesn't list the title, which is not why nothing came.
+    let transport = DanmakuTestTransport("down")
+    let resolver = DanmakuResolver(cache: MediaCache(root: root), http: DanmakuHTTP { try await transport.send($0) },
+        dandanServer: "https://dandan.test", dmkuServer: URL(string: "https://dmku.test")!, backupServer: URL(string: "https://backup.test/")!)
+    let first = try await resolver.resolve(automaticContext())
+    #expect(first.comments.isEmpty)
+    #expect(first.state == "unavailable")
+    #expect(await transport.count(host: "dmku.test") == 1)
+    #expect(await transport.count(host: "backup.test") == 1)
+    // The next episode asks neither server again, nor searches iQIYI again: the page list was kept.
+    let next = try await resolver.resolve(automaticContext(episode: "第2集"))
+    #expect(next.state == "unavailable")
+    #expect(await transport.count(host: "dmku.test") == 1)
+    #expect(await transport.count(host: "backup.test") == 1)
+    #expect(await transport.count("mesh.if.iqiyi.com/portal/lw/search/homePageV3") == 1)
+    // A retry asks them again, and they are back.
+    resolver.forgetUnreachableServers()
+    await transport.setMode("dmku")
+    resolver.cache.remove(DanmakuResolver.episodeKey(automaticContext(episode: "第2集")), kind: .danmaku, scope: automaticContext().id)
+    let recovered = try await resolver.resolve(automaticContext(episode: "第2集"))
+    #expect(recovered.state == "loaded")
+    #expect(await transport.count(host: "dmku.test") == 2)
+}
+
+@Test func onlyServerFailuresPauseACommentServer() {
+    #expect(DanmakuResolver.serverFailed(TVError.http(522)))
+    #expect(DanmakuResolver.serverFailed(URLError(.timedOut)))
+    #expect(!DanmakuResolver.serverFailed(URLError(.cancelled)))
+    #expect(!DanmakuResolver.serverFailed(TVError.http(404)))
+    #expect(!DanmakuResolver.serverFailed(TVError.invalidConfiguration))
 }
