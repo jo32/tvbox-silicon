@@ -19,6 +19,7 @@ struct SitesView: View {
     /// The fold as it was when a search began; restored when the search is cleared.
     @State private var foldBeforeSearch: Set<String>?
     @State private var arranging = false
+    @State private var choosingHidden = false
     var body: some View {
         Group {
             if let config = store.subscription {
@@ -28,7 +29,10 @@ struct SitesView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: Layout.cardSpacing) {
                         if pick == nil, query.isEmpty && sites.count > 1 {
-                            SourceOrderCard(sites: sites) { arranging = true }.tvFocusSection()
+                            VStack(alignment: .leading, spacing: Layout.cardSpacing) {
+                                SourceOrderCard(sites: sites) { arranging = true }
+                                HideSourcesCard(hidden: groups.first { $0.kind == .hidden }?.sites.count ?? 0) { choosingHidden = true }
+                            }.tvFocusSection()
                         }
                         ForEach(groups) { group in
                             groupHeader(group)
@@ -61,6 +65,7 @@ struct SitesView: View {
                 .onAppear { if pick != nil, let picked { proxy.scrollTo(picked, anchor: .center) } }
                 }
                 .sheet(isPresented: $arranging) { SourceOrderEditor(sites: sites, automatic: store.automaticSites(config)) }
+                .sheet(isPresented: $choosingHidden) { HiddenSourcesEditor() }
                 #if DEBUG
                 // `-qaArrangeSources 1` opens the editor for screenshots.
                 .task {
@@ -651,6 +656,183 @@ struct SourceOrderEditor: View {
     }
     #endif
 }
+
+/// Opens `HiddenSourcesEditor`, under the search order on the sources page.
+struct HideSourcesCard: View {
+    let hidden: Int
+    let open: () -> Void
+    private var value: String { hidden > 0 ? L10n.text("%lld hidden", hidden) : "" }
+    var body: some View {
+        #if os(tvOS)
+        Button(action: open) { TVSettingsRowLabel(title: L10n.text("Hide or Show Sources"), value: value, chevron: true) }
+            .glassRow()
+            .accessibilityIdentifier("sources.hidden.open")
+        #else
+        Button(action: open) {
+            HStack(spacing: 14) {
+                IconTile(symbol: "eye.slash", tint: Brand.teal, size: 40)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(L10n.text("Hide or Show Sources")).font(.headline).foregroundStyle(.primary)
+                    Text(L10n.text("Choose many sources at once, or a whole subscription.")).font(.subheadline).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                if !value.isEmpty { Text(value).font(.subheadline).monospacedDigit().foregroundStyle(.secondary).lineLimit(1) }
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+            }
+            .padding(16)
+            .contentPanel(cornerRadius: 22)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("sources.hidden.open")
+        #endif
+    }
+}
+
+/// Hiding or showing many sources at once: a ticked source is shown; Show All and Hide All take a whole group.
+/// Sources stay in their own group here, hidden or not, and each change is saved at once.
+struct HiddenSourcesEditor: View {
+    @Environment(Store.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    private func isHidden(_ site: Site) -> Bool {
+        store.subscription.map { store.hiddenSources.contains(site, origin: $0.origin) } ?? false
+    }
+    private func setHidden(_ sites: [Site], _ hidden: Bool) {
+        guard let config = store.subscription else { return }
+        store.hiddenSources.setHidden(sites, origin: config.origin, hidden: hidden)
+    }
+
+    var body: some View {
+        let groups = store.sourceGroups(includeHidden: true)
+        let hiddenCount = groups.flatMap(\.sites).filter(isHidden).count
+        #if os(tvOS)
+        NavigationStack {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.text("Ticked sources are shown. Hidden sources stay out of Watch Now and search."))
+                        .font(.system(size: 24)).foregroundStyle(.secondary).padding(.bottom, 12)
+                    if hiddenCount > 0 {
+                        TVSettingsAction(title: L10n.text("Show All Sources")) { setHidden(groups.flatMap(\.sites), false) }
+                            .padding(.bottom, 16)
+                    }
+                    ForEach(groups) { group in
+                        let hidden = group.sites.filter(isHidden)
+                        Text(L10n.text(group.title)).font(.system(size: 31, weight: .semibold)).lineLimit(1)
+                            .padding(.top, 20).padding(.bottom, 6)
+                            .accessibilityAddTraits(.isHeader)
+                        HStack(spacing: 16) {
+                            TVSettingsAction(title: L10n.text("Show All")) { setHidden(group.sites, false) }.disabled(hidden.isEmpty)
+                            TVSettingsAction(title: L10n.text("Hide All")) { setHidden(group.sites, true) }.disabled(hidden.count == group.sites.count)
+                        }
+                        .focusSection()
+                        ForEach(group.sites) { site in
+                            let shown = !isHidden(site)
+                            Button { setHidden([site], shown) } label: {
+                                TVSettingsRowLabel(title: SourceLabel(site.name).parts[0], value: shown ? nil : L10n.text("Hidden")) {
+                                    Image(systemName: shown ? "checkmark.circle.fill" : "circle").font(.system(size: 30))
+                                }
+                            }
+                            .glassRow()
+                            .accessibilityAddTraits(shown ? [.isSelected] : [])
+                            .accessibilityIdentifier("sources.hidden.row." + site.key)
+                        }
+                    }
+                }
+                .glassRowInsets()
+            }
+            .screenTitle(L10n.text("Hide or Show Sources"))
+            .screenBackdrop()
+        }
+        .frame(width: 1100, height: 800)
+        .onExitCommand { dismiss() }
+        #else
+        NavigationStack {
+            List {
+                Section {
+                    Text(L10n.text("Ticked sources are shown. Hidden sources stay out of Watch Now and search."))
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        #if os(iOS)
+                        .listRowBackground(Surface())
+                        #endif
+                }
+                ForEach(groups) { group in
+                    let hidden = group.sites.filter(isHidden)
+                    Section {
+                        ForEach(group.sites) { site in
+                            let shown = !isHidden(site)
+                            Button { setHidden([site], shown) } label: { HiddenSourceRow(site: site, shown: shown) }
+                                .buttonStyle(.plain)
+                                .accessibilityAddTraits(shown ? [.isSelected] : [])
+                                .accessibilityIdentifier("sources.hidden.row." + site.key)
+                                #if os(iOS)
+                                .listRowBackground(Surface())
+                                #endif
+                        }
+                    } header: {
+                        HStack(spacing: 12) {
+                            Text(L10n.text(group.title)).lineLimit(1)
+                            Spacer(minLength: 8)
+                            Button(L10n.text("Show All")) { setHidden(group.sites, false) }.disabled(hidden.isEmpty)
+                            Button(L10n.text("Hide All")) { setHidden(group.sites, true) }.disabled(hidden.count == group.sites.count)
+                        }
+                        .buttonStyle(.borderless)
+                        .textCase(nil)
+                    }
+                }
+            }
+            #if os(iOS)
+            .scrollContentBackground(.hidden)
+            .background { Backdrop() }
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .navigationTitle(L10n.text("Hide or Show Sources"))
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.text("Done")) { dismiss() }.fontWeight(.semibold)
+                        .accessibilityIdentifier("sources.hidden.done")
+                }
+                #if os(iOS)
+                ToolbarItem(placement: .bottomBar) {
+                    Button(L10n.text("Show All Sources")) { setHidden(groups.flatMap(\.sites), false) }.disabled(hiddenCount == 0)
+                }
+                #else
+                ToolbarItem(placement: .destructiveAction) {
+                    Button(L10n.text("Show All Sources")) { setHidden(groups.flatMap(\.sites), false) }.disabled(hiddenCount == 0)
+                }
+                #endif
+            }
+        }
+        #if os(macOS)
+        .frame(width: 480, height: 600)
+        #endif
+        #endif
+    }
+}
+
+#if !os(tvOS)
+/// One source in `HiddenSourcesEditor`: a tick while it is shown, its icon and name.
+private struct HiddenSourceRow: View {
+    let site: Site
+    let shown: Bool
+    var body: some View {
+        let label = SourceLabel(site.name)
+        HStack(spacing: 12) {
+            Image(systemName: shown ? "checkmark.circle.fill" : "circle").font(.title3)
+                .foregroundStyle(shown ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(.secondary))
+            SourceIcon(site: site, label: label, size: 32).opacity(shown ? 1 : 0.45)
+            Text(label.parts[0]).font(.body.weight(.medium)).lineLimit(1)
+                .foregroundStyle(shown ? Color.primary : Color.secondary)
+            Spacer(minLength: 8)
+            if !shown { Text(L10n.text("Hidden")).font(.caption).foregroundStyle(.secondary) }
+        }
+        .padding(.vertical, 3)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+#endif
 
 struct SiteView: View {
     @Environment(Store.self) private var store

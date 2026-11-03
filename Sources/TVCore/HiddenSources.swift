@@ -41,6 +41,25 @@ import Observation
         onChange?()
     }
 
+    /// Hides or shows many sources in one change: one save, one revision, one sync.
+    public func setHidden(_ sites: [Site], origin: URL, hidden: Bool) {
+        let changed = Set(sites.map { key($0, origin: origin) })
+        var next = keys
+        if hidden {
+            for site in sites {
+                let key = key(site, origin: origin)
+                if !next.contains(key) { next.append(key) }
+            }
+        } else {
+            next.removeAll { changed.contains($0) }
+        }
+        guard next != keys else { return }
+        keys = next
+        defaults.set(keys, forKey: Self.storageKey)
+        revision += 1
+        onChange?()
+    }
+
     /// The saved keys, in order, as iCloud sync compares them.
     public var savedKeys: [String] { keys }
     /// The list merged with other devices'.

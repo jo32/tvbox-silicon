@@ -617,6 +617,13 @@
 "Manage Sources" = "Manage Sources";
 "Hidden Sources" = "Hidden Sources";
 "Hidden" = "Hidden";
+"Hide or Show Sources" = "Hide or Show Sources";
+"%lld hidden" = "%lld hidden";
+"Choose many sources at once, or a whole subscription." = "Choose many sources at once, or a whole subscription.";
+"Ticked sources are shown. Hidden sources stay out of Watch Now and search." = "Ticked sources are shown. Hidden sources stay out of Watch Now and search.";
+"Show All Sources" = "Show All Sources";
+"Show All" = "Show All";
+"Hide All" = "Hide All";
 "Pinned Sources" = "Pinned Sources";
 "Search history" = "Search history";
 "Manage history" = "Manage history";
