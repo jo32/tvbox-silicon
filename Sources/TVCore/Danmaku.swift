@@ -30,6 +30,21 @@ public enum DanmakuSource {
         }
     }
 
+    /// The Bilibili comment track a play result's `danmaku` feed names
+    /// (`https://api.bilibili.com/x/v2/dm/web/seg.so?type=1&oid=<cid>`), or nil for any other feed.
+    public static func bilibiliCID(_ feed: String) -> String? {
+        guard let components = URLComponents(string: feed), components.host?.hasSuffix("bilibili.com") == true,
+              let oid = components.queryItems?.first(where: { $0.name == "oid" })?.value, let cid = UInt64(oid), cid > 0 else { return nil }
+        return String(cid)
+    }
+
+    /// Registers a play result's comment feed for its media address. Returns whether the feed was usable.
+    @discardableResult public static func register(_ url: URL, feed: String?, duration: Double?) -> Bool {
+        guard let cid = feed.flatMap(bilibiliCID) else { return false }
+        register(url, bilibiliCID: cid, duration: duration)
+        return true
+    }
+
     /// A Bilibili media address cast by the phone (…/upgcxcode/…/<cid>-<n>-<quality>.mp4) names its part's cid,
     /// which is all the comments need. Returns whether the address had one.
     @discardableResult public static func registerBilibiliMedia(_ url: URL) -> Bool {

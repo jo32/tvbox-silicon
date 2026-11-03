@@ -176,7 +176,7 @@ import Testing
     @Test func driveSourcesAreBuiltInAndRunHere() {
         let site = CloudFilesSource.site(.quark)
         #expect(site.isCloudFiles && site.isBuiltIn && site.searchable && site.canBrowse(jarURL: nil))
-        #expect(site.key == "builtin.files.quark" && !Site.bilibili.isCloudFiles)
+        #expect(site.key == "builtin.files.quark")
         let webdav = AListServer(name: "NAS", address: "http://nas:5005", kind: .webdav)
         #expect(!CloudFilesDrive.alist(webdav).searches && CloudFilesDrive.uc.searches)
     }

@@ -129,15 +129,6 @@ private func client() -> HTTPClient {
     #expect(saved.subtitles.isEmpty && saved.url == channel.url)
 }
 
-@Test func biliDashProxyBecomesProgressiveMP4() async throws {
-    let base = URL(string: "https://example.com/config.json")!
-    let sub = try Subscription.parse(Data(#"{"sites":[{"key":"a","type":4,"api":"/bili"}]}"#.utf8), origin: base)
-    let api = CatalogClient(site: sub.sites[0], origin: base, http: client())
-    let channel = try await api.playback(Episode(id: "a", name: "Episode", address: "id", flag: ""))
-    #expect(channel.url.absoluteString == "https://cdn.example.com/video.mp4")
-    #expect(channel.headers["Referer"] == "https://www.bilibili.com/")
-}
-
 @Test func resolvedMediaWithStaleParseFlagCanPlay() async throws {
     let base = URL(string: "https://example.com/config.json")!
     let sub = try Subscription.parse(Data(#"{"sites":[{"key":"a","type":4,"api":"/api"}]}"#.utf8), origin: base)
@@ -212,7 +203,7 @@ private actor SearchCollector {
 
 @Test @MainActor func searchDoesNotAskBuiltInsTheViewerHid() async throws {
     let base = URL(string: "https://example.com/config")!
-    let sub = try Subscription.parse(Data(#"{"sites":[{"key":"a","type":4,"api":"/api"}]}"#.utf8), origin: base).withBuiltInSites()
+    let sub = try Subscription.parse(Data(#"{"sites":[{"key":"a","type":4,"api":"/api"}]}"#.utf8), origin: base).withCloudSources(nil)
     let model = SearchModel(http: client())
     model.search("movie", config: sub) { $0.isBuiltIn }
     // The search page shows a chip for each built-in it is still asking; hidden ones get none.

@@ -483,7 +483,7 @@ import TVCore
             // A live room becomes its current stream address now; the address expires.
             var channel = channel
             var liveQualities: [StreamQuality] = [], liveQuality: Int?
-            if let room = BilibiliLive.room(channel.url) { self.listen(room: room, generation: activeGeneration) }
+            if let (platform, id) = LiveCatalog.room(channel.url), platform.chat == "bilibili", let room = Int(id) { self.listen(room: room, generation: activeGeneration) }
             if LiveCatalog.isRoom(channel.url) {
                 self.note(L10n.text("Finding the live stream"))
                 do { (channel, liveQualities, liveQuality) = try await LiveCatalog.resolve(channel) }
@@ -520,7 +520,7 @@ import TVCore
             let address = prepared.url
             self.configure(channel, url: address, generation: activeGeneration)
             self.playing = channel; self.automatic = address
-            self.qualities = liveQualities.isEmpty ? BilibiliStreams.qualities(for: address) : liveQualities
+            self.qualities = liveQualities.isEmpty ? DashStreams.qualities(for: address) : liveQualities
             self.quality = liveQuality
             if DanmakuSource.has(channel.url), let comments = await DanmakuSource.comments(for: channel.url),
                self.generation == activeGeneration { self.sourceDanmaku = comments }
@@ -559,7 +559,7 @@ import TVCore
     private func makeItem(_ channel: Channel, url: URL) -> AVPlayerItem {
         // Some providers require request headers. AVURLAsset's HTTP-header option is
         // best-effort and is not a guarantee for every redirected HLS segment.
-        let asset = CloudStreams.asset(for: url) ?? HongguoStreams.asset(for: url) ?? BilibiliStreams.asset(for: url) ?? DouyuStreams.asset(for: url)
+        let asset = CloudStreams.asset(for: url) ?? HongguoStreams.asset(for: url) ?? DashStreams.asset(for: url) ?? LiveRepair.asset(for: url)
             ?? AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": channel.headers])
         let item = AVPlayerItem(asset: asset)
         if url.scheme == HongguoStreams.scheme { item.preferredForwardBufferDuration = HongguoStreams.forwardBufferDuration }
@@ -1229,7 +1229,7 @@ extension PlaybackSession {
         loading = upcoming.item.status != .readyToPlay
         playing = channel; automatic = upcoming.prepared.url
         player.allowsExternalPlayback = !Remux.isRemuxed(upcoming.prepared.url)
-        qualities = BilibiliStreams.qualities(for: upcoming.prepared.url)
+        qualities = DashStreams.qualities(for: upcoming.prepared.url)
         watch(upcoming.item, channel: channel, url: upcoming.prepared.url, generation: activeGeneration)
         if DanmakuSource.has(channel.url) {
             Task { [weak self] in

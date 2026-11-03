@@ -10,7 +10,7 @@ public actor ScriptRuntime {
     public static var available: Bool { ScriptAssets.root != nil }
     private var sessions: [String: ScriptSession] = [:]
     private var recent: [String] = []
-    private static let maximumSessions = 6
+    private static let maximumSessions = 10
 
     public func request(site: Site, scriptURL: URL, params: [String: String], http: HTTPClient, origin: URL) async throws -> [String: JSONValue] {
         let started = ContinuousClock.now

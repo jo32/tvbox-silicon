@@ -3,13 +3,18 @@ import AVFoundation
 import CoreMedia
 import VideoToolbox
 
-/// Bilibili serves each quality as separate DASH video and audio files (fragmented MP4), which
-/// AVPlayer cannot open. Every file starts with a `sidx` index of its fragments, so the same files
-/// can be described as HLS byte ranges instead: a media playlist per file and a master playlist that
-/// pairs each video quality with the audio. AVPlayer reads the playlists through a resource loader,
-/// fetches the fragments straight from the CDN, and picks the quality by bandwidth.
-public enum BilibiliStreams {
-    public static let scheme = "tvbox-bili"
+/// Sources can answer a play request with DASH: separate video and audio files (fragmented MP4) per
+/// quality, which AVPlayer cannot open (`dash` in the play result; Yingxia's Bilibili source does this).
+/// Every file starts with a `sidx` index of its fragments, so the same files can be described as HLS
+/// byte ranges instead: a media playlist per file and a master playlist that pairs each video quality
+/// with the audio. AVPlayer reads the playlists through a resource loader, fetches the fragments
+/// straight from the CDN with the source's headers, and picks the quality by bandwidth.
+///
+/// `dash` is `{"video": [Representation], "audio": [Representation], "duration": seconds}`, each
+/// representation `{id, label, codecs, width, height, bandwidth, frameRate, range, urls, initialization,
+/// indexRange}` (byte ranges as "start-end"; `range` "PQ" for HDR10).
+public enum DashStreams {
+    public static let scheme = "tvbox-dash"
 
     /// The qualities a stream from `stream` can be switched to, best first; empty for any other address.
     public static func qualities(for url: URL) -> [StreamQuality] { url.scheme == scheme ? PlaylistStore.shared.qualities(url) : [] }
@@ -27,29 +32,17 @@ public enum BilibiliStreams {
     /// An asset for an address from `stream`, or nil for any other address.
     public static func asset(for url: URL) -> AVURLAsset? {
         guard url.scheme == scheme else { return nil }
-        let asset = AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": Bilibili.mediaHeaders,
-                                                   AVURLAssetHTTPUserAgentKey: Bilibili.userAgent])
+        let headers = PlaylistStore.shared.headers(url)
+        var options: [String: Any] = ["AVURLAssetHTTPHeaderFieldsKey": headers]
+        if let agent = headers.first(where: { $0.key.lowercased() == "user-agent" })?.value { options[AVURLAssetHTTPUserAgentKey] = agent }
+        let asset = AVURLAsset(url: url, options: options)
         asset.resourceLoader.setDelegate(PlaylistLoader.shared, queue: PlaylistLoader.shared.queue)
         return asset
     }
 
-    /// Bilibili declined to play the item (membership, region, login); no other format will work either.
-    struct Refusal: Error { let message: String }
-
-    /// The master playlist address for a video part or PGC episode (or a PGC episode's single MP4),
-    /// or nil when it has neither.
-    static func stream(aid: String, cid: String, episode: String?, session: URLSession = .shared) async throws -> URL? {
-        let info = try await playInfo(aid: aid, cid: cid, episode: episode, session: session)
-        // Members-only PGC answers a few minutes' preview instead of the episode.
-        if info["is_preview"]?.int == 1 { throw Refusal(message: L10n.text("This episode needs a Bilibili premium membership. Only a short preview is available.")) }
-        guard let dash = info["dash"]?.object else {
-            // Some PGC episodes come only as one MP4, which AVPlayer opens directly.
-            let files = info["durl"]?.array ?? []
-            guard episode != nil, files.count == 1, let address = files[0].object?["url"]?.string else { return nil }
-            let url = try WebAddress.resolve(address)
-            DanmakuSource.register(url, bilibiliCID: cid, duration: info["timelength"]?.int.map { Double($0) / 1000 })
-            return url
-        }
+    /// The master playlist address for a play result's `dash`, or nil when it has no usable video.
+    /// `danmaku` is the result's comment feed, which the files keep for downloads.
+    static func stream(_ dash: [String: JSONValue], headers: [String: String], danmaku: String?, session: URLSession = .shared) async throws -> URL? {
         let videos = choose((dash["video"]?.array ?? []).compactMap { $0.object.flatMap(Representation.init) })
         guard !videos.isEmpty else { return nil }
         let audio = (dash["audio"]?.array ?? []).compactMap { $0.object.flatMap(Representation.init) }.max { $0.bandwidth < $1.bandwidth }
@@ -57,14 +50,14 @@ public enum BilibiliStreams {
         // Each index is a small range request; a quality whose files are unreachable is left out.
         let indexed = await withTaskGroup(of: (Int, SegmentIndex?).self) { group in
             for (position, item) in (videos + [audio].compactMap { $0 }).enumerated() {
-                group.addTask { (position, try? await index(item, session: session)) }
+                group.addTask { (position, try? await index(item, headers: headers, session: session)) }
             }
             var found: [Int: SegmentIndex] = [:]
             for await (position, index) in group { found[position] = index }
             return found
         }
         let video = videos.indices.compactMap { position in indexed[position].map { (videos[position], $0) } }
-        guard !video.isEmpty else { throw TVError.unsupported(L10n.text("Bilibili's video servers could not be reached. Try again later.")) }
+        guard !video.isEmpty else { throw TVError.unsupported(L10n.text("The video servers could not be reached. Try again later.")) }
         let sound = audio.flatMap { audio in indexed[videos.count].map { (audio, $0) } }
 
         // Absolute addresses: AVFoundation resolves nothing relative to a custom scheme.
@@ -86,7 +79,7 @@ public enum BilibiliStreams {
             let rates = [index.bitRates, sound?.1.bitRates].compactMap { $0 }
             var attributes = ["BANDWIDTH=\(rates.reduce(0) { $0 + $1.peak })", "AVERAGE-BANDWIDTH=\(rates.reduce(0) { $0 + $1.average })",
                               "CODECS=\"\([item.codecs, sound?.0.codecs].compactMap { $0 }.joined(separator: ","))\"",
-                              "RESOLUTION=\(item.width)x\(item.height)", "VIDEO-RANGE=\(item.quality == 125 ? "PQ" : "SDR")"]
+                              "RESOLUTION=\(item.width)x\(item.height)", "VIDEO-RANGE=\(item.range)"]
             if let rate = item.frameRate { attributes.append(String(format: "FRAME-RATE=%.3f", rate)) }
             if sound != nil { attributes.append("AUDIO=\"audio\"") }
             streamInfo[item.quality] = attributes.joined(separator: ",")
@@ -94,79 +87,44 @@ public enum BilibiliStreams {
             master += variant
             let single = "master-\(item.quality).m3u8"
             files[single] = (header + variant).joined(separator: "\n") + "\n"
-            if let url = URL(string: address(single)) { qualities.append(StreamQuality(id: item.quality, label: StreamQuality.label(item.quality, height: item.height), url: url)) }
+            if let url = URL(string: address(single)) { qualities.append(StreamQuality(id: item.quality, label: item.label, url: url)) }
         }
         files["master.m3u8"] = master.joined(separator: "\n") + "\n"
-        let duration = info["timelength"]?.int.map { Double($0) / 1000 } ?? dash["duration"]?.int.map(Double.init)
+        let duration = (dash["duration"]).flatMap { $0.string.flatMap(Double.init) }.flatMap { $0 > 0 ? $0 : nil }
+        let cid = danmaku.flatMap(DanmakuSource.bilibiliCID)
         // The files themselves, for downloads: the address whose index answered first.
         let sources = video.map { item, index in
-            DashFiles(quality: item.quality, label: StreamQuality.label(item.quality, height: item.height),
+            DashFiles(quality: item.quality, label: item.label,
                       video: [index.url] + item.urls.filter { $0 != index.url },
                       audio: sound.map { audio, index in [index.url] + audio.urls.filter { $0 != index.url } } ?? [],
                       videoInitialization: item.initialization, videoIndex: item.index,
                       audioInitialization: sound?.0.initialization, audioIndex: sound?.0.index,
-                      streamInfo: streamInfo[item.quality] ?? "", cid: cid, duration: duration)
+                      streamInfo: streamInfo[item.quality] ?? "", headers: headers, cid: cid, duration: duration)
         }
-        PlaylistStore.shared.add(files, token: token, qualities: qualities, sources: sources)
-        Diagnostics.shared.record(.info, "bilibili", "dash aid=\(aid) cid=\(cid) qualities=\(video.map { "\($0.0.quality)/\($0.0.codecs)" }.joined(separator: ",")) audio=\(sound?.0.codecs ?? "-") host=\(video[0].1.url.host() ?? "-")")
+        PlaylistStore.shared.add(files, token: token, headers: headers, qualities: qualities, sources: sources)
+        Diagnostics.shared.record(.info, "dash", "qualities=\(video.map { "\($0.0.quality)/\($0.0.codecs)" }.joined(separator: ",")) audio=\(sound?.0.codecs ?? "-") host=\(video[0].1.url.host() ?? "-")")
         guard let master = URL(string: address("master.m3u8")) else { return nil }
-        DanmakuSource.register(master, bilibiliCID: cid, duration: duration)
+        if let cid { DanmakuSource.register(master, bilibiliCID: cid, duration: duration) }
         return master
-    }
-
-    /// The playurl answer's media object: `data` for videos, `result.video_info` for PGC episodes.
-    private static func playInfo(aid: String, cid: String, episode: String?, session: URLSession) async throws -> [String: JSONValue] {
-        let account = BilibiliAccount.load()
-        let signer = BilibiliSigner.shared
-        let cookie = await signer.cookie(account: account.cookie, session: session)
-        let reply: [String: JSONValue]
-        if let episode {
-            var components = URLComponents(string: "https://api.bilibili.com/pgc/player/web/v2/playurl")!
-            components.queryItems = ["ep_id": episode, "cid": cid, "qn": "127", "fnval": "4048", "fnver": "0", "fourk": "1"]
-                .sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) }
-            reply = try await signer.json(components.url!, cookie: cookie, session: session)
-        } else {
-            // The web player's parameters. Guests get 720P/1080P only with `try_look`; the dm_* fields
-            // must be present (random values, as the web player's are) or the request meets risk control.
-            var parameters = ["avid": aid, "cid": cid, "qn": account.signedIn ? "127" : "80", "fnval": "4048", "fnver": "0", "fourk": "1",
-                              "web_location": "1315873", "gaia_source": "pre-load", "isGaiaAvoided": "true",
-                              "dm_img_list": "[]", "dm_img_str": noise(16...64), "dm_cover_img_str": noise(32...128),
-                              "dm_img_inter": #"{"ds":[],"wh":[0,0,0],"of":[0,0,0]}"#]
-            if !account.signedIn { parameters["try_look"] = "1" }
-            let query = try await signer.sign(parameters, cookie: cookie, session: session)
-            reply = try await signer.json(URL(string: "https://api.bilibili.com/x/player/wbi/playurl?" + query)!, cookie: cookie, session: session)
-        }
-        guard reply["code"]?.int == 0 else {
-            let message = reply["message"]?.string.flatMap { $0.isEmpty ? nil : $0 } ?? L10n.text("Bilibili refused the request. Try again later.")
-            throw Refusal(message: message)
-        }
-        return (episode == nil ? reply["data"] : reply["result"]?.object?["video_info"])?.object ?? [:]
-    }
-
-    private static func noise(_ length: ClosedRange<Int>) -> String {
-        let letters = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
-        let text = String((0..<Int.random(in: length)).map { _ in letters.randomElement()! })
-        return String(Data(text.utf8).base64EncodedString().dropLast(2))
     }
 
     /// One stream per quality, in the codec this device decodes best: HEVC where it is hardware
     /// decoded, else AVC, else AV1 where that is. Highest quality first, which AVPlayer starts with.
-    /// Dolby Vision (126) is left out: its CODECS needs a profile mapping the files don't state.
+    /// HDR (PQ) needs HEVC or AV1: AVC files labelled PQ are left out.
     static func choose(_ streams: [Representation]) -> [Representation] {
         let hevc = VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)
         let av1 = VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1)
         func rank(_ item: Representation) -> Int? {
-            switch item.codecID {
-            case 12: hevc ? 0 : nil
-            case 7: item.quality == 125 ? nil : 1
-            case 13: av1 ? 2 : nil
-            default: nil
-            }
+            let codec = item.codecs.lowercased()
+            if codec.hasPrefix("hvc1") || codec.hasPrefix("hev1") { return hevc ? 0 : nil }
+            if codec.hasPrefix("avc1") || codec.hasPrefix("avc3") { return item.range == "PQ" ? nil : 1 }
+            if codec.hasPrefix("av01") { return av1 ? 2 : nil }
+            return nil
         }
-        let usable = streams.filter { $0.quality != 126 && rank($0) != nil }
+        let usable = streams.filter { rank($0) != nil }
         return Dictionary(grouping: usable, by: \.quality).values
             .compactMap { $0.min { rank($0)! < rank($1)! } }
-            .sorted { $0.quality > $1.quality }
+            .sorted { ($0.quality, $0.bandwidth) > ($1.quality, $1.bandwidth) }
     }
 
     static func media(_ index: SegmentIndex) -> String {
@@ -185,12 +143,12 @@ public enum BilibiliStreams {
     }
 
     /// Reads a stream's fragment index, trying its addresses in order.
-    private static func index(_ item: Representation, session: URLSession) async throws -> SegmentIndex {
+    private static func index(_ item: Representation, headers: [String: String], session: URLSession) async throws -> SegmentIndex {
         var failure: Error = TVError.invalidURL
         for url in item.urls {
             do {
                 var request = URLRequest(url: url, timeoutInterval: 8)
-                Bilibili.mediaHeaders.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+                headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
                 request.setValue("bytes=\(item.index.lowerBound)-\(item.index.upperBound)", forHTTPHeaderField: "Range")
                 let (data, response) = try await session.data(for: request)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -198,12 +156,12 @@ public enum BilibiliStreams {
                 return try SegmentIndex(sidx: data, at: item.index.lowerBound, initialization: item.initialization, url: url)
             } catch { failure = error }
         }
-        Diagnostics.shared.record(.warning, "bilibili", "index failed quality=\(item.quality) codec=\(item.codecs): \(failure.localizedDescription)")
+        Diagnostics.shared.record(.warning, "dash", "index failed quality=\(item.quality) codec=\(item.codecs): \(failure.localizedDescription)")
         throw failure
     }
 }
 
-/// One quality of a Bilibili stream, by Bilibili's quality number (qn).
+/// One quality of a stream, by the source's quality number.
 public struct StreamQuality: Sendable, Hashable, Identifiable {
     public let id: Int
     public let label: String
@@ -242,20 +200,25 @@ public struct DashFiles: Sendable, Hashable {
     let audioIndex: ClosedRange<Int>?
     /// The master playlist's EXT-X-STREAM-INF attributes for this quality.
     let streamInfo: String
-    public let cid: String
+    /// The headers the CDN wants.
+    public let headers: [String: String]
+    /// The Bilibili comment track, when the source named one.
+    public let cid: String?
     public let duration: Double?
 }
 
-/// A DASH representation from playurl (`data.dash.video[]` / `audio[]`).
+/// A DASH representation from a play result's `dash` (`video[]` / `audio[]`).
 struct Representation: Sendable {
     let quality: Int
-    let codecID: Int
+    let label: String
     let codecs: String
     let width: Int
     let height: Int
     let bandwidth: Int
     let frameRate: Double?
-    /// Main and backup addresses, origin CDN first: peer CDNs (PCDN) are slower and often refuse ranges.
+    /// "SDR", "PQ" or "HLG", as HLS names video ranges.
+    let range: String
+    /// The addresses in the order to try them.
     let urls: [URL]
     let initialization: ClosedRange<Int>
     let index: ClosedRange<Int>
@@ -265,26 +228,25 @@ struct Representation: Sendable {
             let parts = (text ?? "").split(separator: "-").compactMap { Int($0) }
             return parts.count == 2 && parts[0] <= parts[1] ? parts[0]...parts[1] : nil
         }
-        let base = json["segment_base"]?.object ?? json["SegmentBase"]?.object
-        guard let quality = json["id"]?.int, let codecs = json["codecs"]?.string, !codecs.contains("\""),
-              let initialization = range(base?["initialization"]?.string ?? base?["Initialization"]?.string),
-              let index = range(base?["index_range"]?.string ?? base?["indexRange"]?.string) else { return nil }
-        let addresses = [json["base_url"] ?? json["baseUrl"]].compactMap { $0?.string } + (json["backup_url"]?.array ?? json["backupUrl"]?.array ?? []).compactMap(\.string)
-        func peer(_ url: URL) -> Bool {
-            let host = url.host() ?? ""
-            return host.contains("mcdn.bilivideo") || host.contains("szbdyd.com") || host.contains("mountaintoys") || (url.port != nil && url.port != 443)
-        }
-        let urls = addresses.compactMap { URL(string: $0) }.filter { $0.scheme == "https" || $0.scheme == "http" }
+        func number(_ value: JSONValue?) -> Double? { value?.double ?? value?.string.flatMap(Double.init) }
+        guard let quality = number(json["id"]).map(Int.init), let codecs = json["codecs"]?.string, !codecs.isEmpty, !codecs.contains("\""),
+              let initialization = range(json["initialization"]?.string), let index = range(json["indexRange"]?.string) else { return nil }
+        let urls = (json["urls"]?.array ?? []).compactMap { $0.string.flatMap(URL.init(string:)) }.filter { $0.scheme == "https" || $0.scheme == "http" }
         guard !urls.isEmpty else { return nil }
-        self.urls = urls.filter { !peer($0) } + urls.filter(peer)
+        self.urls = urls
         self.quality = quality; self.codecs = codecs; self.initialization = initialization; self.index = index
-        codecID = json["codecid"]?.int ?? 0
-        width = json["width"]?.int ?? 0
-        height = json["height"]?.int ?? 0
-        bandwidth = json["bandwidth"]?.int ?? 0
-        let rate = (json["frame_rate"] ?? json["frameRate"])?.string ?? ""
-        let fraction = rate.split(separator: "/").compactMap { Double($0) }
-        frameRate = fraction.count == 2 && fraction[1] > 0 ? fraction[0] / fraction[1] : Double(rate)
+        width = number(json["width"]).map(Int.init) ?? 0
+        height = number(json["height"]).map(Int.init) ?? 0
+        bandwidth = number(json["bandwidth"]).map(Int.init) ?? 0
+        let given = json["label"]?.string ?? ""
+        label = given.isEmpty ? StreamQuality.label(quality, height: height) : given
+        let videoRange = (json["range"]?.string ?? "SDR").uppercased()
+        self.range = ["PQ", "HLG"].contains(videoRange) ? videoRange : "SDR"
+        if let rate = json["frameRate"]?.double { frameRate = rate > 0 ? rate : nil } else {
+            let rate = json["frameRate"]?.string ?? ""
+            let fraction = rate.split(separator: "/").compactMap { Double($0) }
+            frameRate = fraction.count == 2 && fraction[1] > 0 ? fraction[0] / fraction[1] : Double(rate).flatMap { $0 > 0 ? $0 : nil }
+        }
     }
 }
 
@@ -341,19 +303,24 @@ final class PlaylistStore: @unchecked Sendable {
     private var streams: [String: [String: String]] = [:]
     private var choices: [String: [StreamQuality]] = [:]
     private var files: [String: [DashFiles]] = [:]
+    private var requestHeaders: [String: [String: String]] = [:]
     private var order: [String] = []
 
     /// A new playback's identity, used as the playlist addresses' host.
     static func token() -> String { UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "") }
-    func add(_ playlists: [String: String], token: String, qualities: [StreamQuality] = [], sources: [DashFiles] = []) {
+    func add(_ playlists: [String: String], token: String, headers: [String: String] = [:], qualities: [StreamQuality] = [], sources: [DashFiles] = []) {
         lock.withLock {
-            streams[token] = playlists; choices[token] = qualities; files[token] = sources; order.append(token)
-            while order.count > 4 { let old = order.removeFirst(); streams[old] = nil; choices[old] = nil; files[old] = nil }
+            streams[token] = playlists; choices[token] = qualities; files[token] = sources; requestHeaders[token] = headers; order.append(token)
+            while order.count > 4 { let old = order.removeFirst(); streams[old] = nil; choices[old] = nil; files[old] = nil; requestHeaders[old] = nil }
         }
     }
     func sources(_ url: URL) -> [DashFiles] {
         guard let token = url.host() else { return [] }
         return lock.withLock { files[token] ?? [] }
+    }
+    func headers(_ url: URL) -> [String: String] {
+        guard let token = url.host() else { return [:] }
+        return lock.withLock { requestHeaders[token] ?? [:] }
     }
     func qualities(_ url: URL) -> [StreamQuality] {
         guard let token = url.host() else { return [] }
@@ -365,13 +332,13 @@ final class PlaylistStore: @unchecked Sendable {
     }
 }
 
-/// Answers AVPlayer's requests for `tvbox-bili://` playlists; media requests go to the CDN directly.
+/// Answers AVPlayer's requests for `tvbox-dash://` playlists; media requests go to the CDN directly.
 final class PlaylistLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecked Sendable {
     static let shared = PlaylistLoader()
-    let queue = DispatchQueue(label: "tvbox.bilibili.playlists")
+    let queue = DispatchQueue(label: "tvbox.dash.playlists")
 
     func resourceLoader(_ resourceLoader: AVAssetResourceLoader, shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest) -> Bool {
-        guard let url = loadingRequest.request.url, url.scheme == BilibiliStreams.scheme else { return false }
+        guard let url = loadingRequest.request.url, url.scheme == DashStreams.scheme else { return false }
         guard let text = PlaylistStore.shared.playlist(url) else {
             loadingRequest.finishLoading(with: TVError.unsupported(L10n.text("This playback has expired. Open the video again.")))
             return true

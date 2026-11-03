@@ -6,6 +6,8 @@ import Network
 /// in its own web page, so iPhone, iPad and Mac sign in in a web view, and an Apple TV receives the
 /// sign-in from the iPhone app over the local network (`DouyinHandoff`).
 public struct DouyinAccount: Codable, Equatable, Sendable {
+    /// The desktop browser Douyin's sign-in page and its account check expect.
+    public static let userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
     /// The douyin.com cookies of the signed-in web session.
     public var cookie = ""
     public var name = ""
@@ -64,7 +66,7 @@ public struct DouyinAccount: Codable, Equatable, Sendable {
     public mutating func refresh() async -> Bool {
         guard signedIn else { return false }
         let url = LiveHTTP.url("https://live.douyin.com/webcast/user/me/", [("aid", "6383")])
-        guard let reply = try? await LiveHTTP.json(url, headers: ["Cookie": cookie, "Referer": "https://live.douyin.com/", "User-Agent": DouyinSign.userAgent]) else { return true }
+        guard let reply = try? await LiveHTTP.json(url, headers: ["Cookie": cookie, "Referer": "https://live.douyin.com/", "User-Agent": DouyinAccount.userAgent]) else { return true }
         if let nickname = reply["data"]?.object?["nickname"]?.string, !nickname.isEmpty { name = nickname; return true }
         // 20003 is "please sign in"; anything else (a network hiccup, a new error) keeps the sign-in.
         return reply["status_code"]?.int != 20003

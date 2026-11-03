@@ -229,7 +229,7 @@ actor HongguoMedia {
         if (response as? HTTPURLResponse)?.statusCode == 403 {
             try? FileManager.default.removeItem(at: temporary)
             try Task.checkCancellation()
-            request.setValue(Hongguo.mediaReferer, forHTTPHeaderField: "Referer")
+            request.setValue(HongguoStreams.mediaReferer, forHTTPHeaderField: "Referer")
             (temporary, response) = try await http.session.download(for: request)
         }
         guard let response = response as? HTTPURLResponse, response.statusCode == 200 else { throw HongguoMP4.Failure.invalid }

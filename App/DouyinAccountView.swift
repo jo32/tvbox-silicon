@@ -147,7 +147,7 @@ extension DouyinAccount {
 struct DouyinSignInBanner: View {
     var body: some View {
         HStack(spacing: 16) {
-            LivePlatformMark(platform: .douyin, size: 44)
+            if let douyin = LivePlatform(rawValue: "douyin") { LivePlatformMark(platform: douyin, size: 44) }
             VStack(alignment: .leading, spacing: 4) {
                 Text(L10n.text("Sign In to Douyin")).font(.headline)
                 Text(L10n.text("Douyin answers live searches only for signed-in accounts."))
@@ -172,7 +172,7 @@ struct DouyinLoginView: View {
         configuration.websiteDataStore = .nonPersistent()
         let view = WKWebView(frame: .zero, configuration: configuration)
         // The desktop page offers text-message and code sign-in; the phone page sends people to the app.
-        view.customUserAgent = DouyinSign.userAgent
+        view.customUserAgent = DouyinAccount.userAgent
         return view
     }()
     @State private var error: String?
@@ -182,7 +182,7 @@ struct DouyinLoginView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                LivePlatformMark(platform: .douyin, size: 28)
+                if let douyin = LivePlatform(rawValue: "douyin") { LivePlatformMark(platform: douyin, size: 28) }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L10n.text("Sign In to Douyin")).font(.headline)
                     Text(L10n.text("Use Douyin's Log In button on the page.")).font(.caption).foregroundStyle(.secondary)

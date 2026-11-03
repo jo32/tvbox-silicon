@@ -69,7 +69,7 @@ public enum PlayOn {
     /// A stream address another device can open as it is: on the network rather than inside this app
     /// (a plugin's proxy, a download or a drive file all live on 127.0.0.1 or behind an app scheme).
     public static func isPortable(_ url: URL) -> Bool {
-        if LiveCatalog.isRoom(url) { return true }
+        if LiveCatalog.isRoomAddress(url) { return true }
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
               let host = url.host()?.lowercased(), !host.isEmpty else { return false }
         return !["127.0.0.1", "localhost", "::1", "[::1]", "0.0.0.0"].contains(host)

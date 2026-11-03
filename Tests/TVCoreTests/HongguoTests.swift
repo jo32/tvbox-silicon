@@ -3,187 +3,6 @@ import Testing
 @testable import TVCore
 
 struct HongguoTests {
-    @Test func builtInsAreIndependentAndDoNotRequireASubscriptionPlugin() throws {
-        let base = URL(string: "https://example.com/config")!
-        for sites in [[Site.bilibili], [Site.hongguo], Site.builtInSites] {
-            let config = Subscription(origin: base, importedAt: .now, sites: sites, lives: [], raw: [:]).withBuiltInSites().withBuiltInSites()
-            #expect(Set(config.sites.map(\.key)) == [Bilibili.siteKey, Hongguo.siteKey, ShortDramas.xifanKey, ShortDramas.hemaKey])
-            #expect(config.sites.count == 4)
-        }
-        for site in [Site.xifan, Site.hema] {
-            #expect(site.isBuiltIn && site.canBrowse(jarURL: nil) && site.searchable)
-            #expect(try site.pluginExtension(origin: base)?.object?["locked"]?.string?.contains(site.name) == true)
-        }
-        #expect(Site.xifan.liteScript?.absoluteString == "assets://sites/Xifan.js")
-        #expect(Site.hema.liteScript?.absoluteString == "assets://sites/Hema.js")
-        #expect(Site.hongguo.isBuiltIn && !Site.hongguo.isBilibili)
-        #expect(Site.hongguo.canBrowse(jarURL: nil) && Site.hongguo.searchable)
-        #expect(Site.hongguo.liteScript?.absoluteString == "assets://sites/Hongguo.js")
-        #expect(try Site.hongguo.pluginExtension(origin: base)?.object?["cookie"] == nil)
-    }
-
-    @Test func quickJSCatalogAndAppProtocolKeepCompleteEpisodeIdentity() async throws {
-        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: folder) }
-        let source = #"""
-        import spider, { routerData, catalog, detail, search, webMedia } from 'assets://sites/Hongguo.js';
-        import { fetchAppPlayUrl, deriveContentKey, decryptSpadeUrl, xGorgon, branchOf } from 'assets://sites/hongguo/app-source.js';
-        import { Buffer, crypto } from 'assets://sites/hongguo/crypto.js';
-        import { playbackDevice } from 'assets://sites/hongguo/playback-device.js';
-        import sm3 from 'assets://sites/hongguo/sm3.js';
-        const sid = '7686713195246930968', vids = ['7686715217652223038', '7686715203864416318', '7686715213118835774', '7686715221196414014'];
-        const page = data => '<script>window._ROUTER_DATA = ' + JSON.stringify({ loaderData: { page: data } }) + ';globalThis.untrusted = true;</script>';
-        const series = { series_id: sid, series_name: 'A "quoted } title', series_cover: 'https://example.com/a.jpg', vid_list: vids, accessible_episode_cnt: 3 };
-        const player = page({ isSuccess: true, series_id: sid, vid: vids[3], seriesDetail: series });
-        export default { async home() {
-            const checks = {};
-            let rejected;
-            spider.init({ episode: 'Episode %@', name: 'Hongguo' });
-            const parsed = detail(player, sid).list[0];
-            checks.complete = parsed.vod_play_url.split('#').length === 4 && parsed.vod_play_url.endsWith(sid + '/' + vids[3]);
-            checks.identity = parsed.vod_id === sid && parsed.vod_name === series.series_name;
-            checks.noEval = !globalThis.untrusted;
-            checks.empty = search(JSON.stringify({ searchList: [], totalCount: '0', hasMore: false }), 1).list.length === 0;
-            const results = search(JSON.stringify({ searchList: [{ doc_type: 23, keyword: sid, video_data: { ...series, series_name: undefined, series_title: 'Search title' } }], totalCount: '30', pageNum: 1, totalPages: 3, hasMore: true }), 1);
-            checks.search = results.list[0].vod_name === 'Search title' && results.page === 1 && results.pagecount === 3;
-            checks.lastPage = search(JSON.stringify({ searchList: [], pageNum: 3, totalPages: 3, hasMore: false }), 3).pagecount === 3;
-            rejected = false; try { search(page({ isSuccess: true, searchList: [] }), 1); } catch { rejected = true; }
-            checks.searchShell = rejected;
-            let searched;
-            globalThis.req = url => { searched = url; return { code: 200, content: JSON.stringify({ searchList: [], hasMore: false }) }; };
-            spider.search(' 总裁 ', false, '2');
-            checks.searchRequest = searched === 'https://hongguoduanju.com/api/search/result?query=%E6%80%BB%E8%A3%81&page=2';
-            const answer = code => ({ code, content: code === 200 ? JSON.stringify({ searchList: [{ video_data: series }], hasMore: false }) : '{"code":"upstream_unavailable"}' });
-            // Retrying belongs to the native race; the script asks once and fails on the race's answer.
-            let raced, asked = 0;
-            globalThis.req = (url, options) => { raced = options; asked++; return answer(200); };
-            checks.race = spider.search('总裁', false, '1').list.length === 1 && raced.racers === 4 && raced.hedge === 2000 && raced.timeout === 8000;
-            globalThis.req = () => { asked++; return answer(502); };
-            asked = 0; rejected = false;
-            try { spider.search('总裁', false, '1'); } catch { rejected = true; }
-            checks.noScriptRetry = rejected && asked === 1;
-            const categoryPage = page({ isSuccess: true, categoryRoute: { contentType: 'real-drama' }, recommendList: [series], pagination: { totalPages: 3 } });
-            const requested = [];
-            globalThis.req = url => { requested.push(url); return { code: 200, content: categoryPage }; };
-            spider.category('real-drama', '1'); spider.category('real-drama', '2');
-            checks.firstPage = requested[0] === 'https://hongguoduanju.com/category/real-drama' && requested[1] === 'https://hongguoduanju.com/category/real-drama?page=2';
-            const list = catalog(page({ isSuccess: true, categoryRoute: { contentType: 'real-drama' }, recommendList: [series, series], pagination: { totalPages: 3 } }), 'real-drama', 2);
-            checks.catalog = list.list.length === 1 && list.page === 2 && list.pagecount === 3;
-            const rank = `<article><span>1</span><h2 id="rank-title-${sid}">Title</h2><a href="/detail?series_id=${sid}"><img src="https://example.com/a.jpg"></a></article><nav aria-label="榜单分页"><a href="/rank/hot-drama?page=3">3</a></nav>`;
-            checks.ranking = catalog(rank, 'hot-drama', 1).pagecount === 3;
-            const seo = '<script type="application/ld+json">' + JSON.stringify({ '@type': 'VideoObject', contentUrl: `https://hongguoduanju.com/video/public/${vids[0]}/360p.mp4` }) + '</script>';
-            checks.noWrongVideo = webMedia(player + seo, sid, vids[3]) === null;
-            const own = `https://hongguoduanju.com/video/public/${vids[3]}/360p.mp4`;
-            const ownSeo = '<script type="application/ld+json">' + JSON.stringify({ '@type': 'VideoObject', '@id': `https://hongguoduanju.com/player/${sid}#video`, contentUrl: own }) + '</script>';
-            const preview = page({ isSuccess: true, series_id: sid, vid: vids[3], seriesDetail: series, protectedPlayback: true, publicVideoSeo: { available: true } });
-            checks.preview = webMedia(player + ownSeo, sid, vids[3]) === own && webMedia(preview + ownSeo, sid, vids[3]) === null;
-            rejected = false; try { routerData('<script>window._ROUTER_DATA = {broken</script>'); } catch { rejected = true; }
-            checks.malformed = rejected;
-            checks.sm3 = sm3('abc').toString('hex') === '66c7f0f462eeedd9d1f2d46bdc10e4e24167c4875cf2f7a2297da02b8f4ba8e0';
-            checks.sha512 = crypto.createHash('sha512').update('abc').digest('hex').startsWith('ddaf35a193617aba');
-            const key = '0123456789abcdef0123456789abcdef';
-            const plain = Buffer.from('0' + key), raw = Buffer.alloc(34), previous = [246, 85];
-            for (let i = 0; i < plain.length; i++) {
-                raw[i + 1] = ((plain[i] + 21 + i.toString(2).split('1').length - 1) & 255) ^ previous[i & 1];
-                previous[i & 1] = raw[i + 1];
-            }
-            raw[0] = 48 ^ raw[1] ^ raw[2];
-            checks.contentKey = deriveContentKey(raw.toString('base64')).toString('hex') === key;
-            const seed = Buffer.alloc(16, 7), constants = Buffer.from('4dd4c2e6b83162090e52b3c7a6733ba41cb2462b829ab58a196b39db57177524f49baf7f08e8d68d26a72e37c1a95a2f1f05a51892aef2949732b62a38aadd58', 'hex');
-            const material = crypto.createHash('sha512').update(Buffer.concat([crypto.createHash('sha512').update(seed).digest(), constants])).digest();
-            const media = 'https://v3-reading.qznovelvod.com/video.mp4';
-            const encrypted = Buffer.from(nativeCrypto({ op: 'aes', encrypt: true, key: material.subarray(0, 16).toString('base64'), iv: material.subarray(16, 32).toString('base64'), dataText: media }).data, 'base64');
-            const spade = Buffer.concat([Buffer.from([0xa8, 0, 1, 0]), encrypted]).toString('base64');
-            checks.spade = decryptSpadeUrl(spade, seed) === media;
-            const backup = 'https://v9-reading.fqnovelvod.com/video.mp4';
-            const backupSpade = Buffer.concat([Buffer.from([0xa8, 0, 1, 0]), Buffer.from(nativeCrypto({ op: 'aes', encrypt: true, key: material.subarray(0, 16).toString('base64'), iv: material.subarray(16, 32).toString('base64'), dataText: backup }).data, 'base64')]).toString('base64');
-            let calls = 0, registrations = 0, wrongEpisode = false, badDestination = false, refused = false, inlineModel = false;
-            let emptyAnswers = 0, playbackHosts = [];
-            const device = '1234567890123456', install = '6543210987654321';
-            const videoList = {
-                unsupported: { codec_type: 'bytevc2', quality_desc: '2160p', main_url: media },
-                selected: { codec_type: 'h264', quality_desc: '1080p', main_url: spade, backup_url_1: backupSpade, backup_url_list: [spade, 'not base64'], spade_a: raw.toString('base64') }
-            };
-            // An inline 1080p row without its key is skipped, not played encrypted.
-            const inlineList = [{ codec_type: 'h264', quality_desc: '1080p', main_url: backup, encrypt_info: { encrypt: true } },
-                { codec_type: 'h264', quality_desc: '720p', main_url: media, spade_a: raw.toString('base64') }];
-            const appAnswer = (url, options) => {
-                calls++;
-                if (url.includes('/device_register/')) {
-                    registrations++;
-                    // ttEncrypt: a magic header, 32 random bytes, then whole AES-CBC blocks.
-                    const sent = Buffer.from(options.bodyBase64, 'base64');
-                    if (sent.subarray(0, 6).toString('hex') !== '746305100000' || (sent.length - 38) % 16 !== 0 ||
-                        options.headers['x-ss-stub'] !== crypto.createHash('md5').update(sent).digest('hex').toUpperCase()) throw new Error('Invalid registration');
-                    return { code: 200, content: JSON.stringify({ device_id_str: device, install_id_str: install }) };
-                }
-                if (options.method === 'POST') {
-                    const body = JSON.parse(Buffer.from(options.bodyBase64, 'base64').toString('utf8'));
-                    if (body.mixed_video_id_map['1004'][0] !== vids[3] || !url.includes('&device_id=' + device) || !url.includes('&iid=' + install) || options.redirect !== false) throw new Error('Invalid playback request');
-                    // Signed like the app since 2026-11-02 (unsigned requests get an empty body): the signature covers this
-                    // query and body, its time and ticket are the query's, and only branch 0 is used.
-                    const headers = options.headers, sent = Buffer.from(options.bodyBase64, 'base64'), query = url.split('?')[1];
-                    const time = Number(headers['x-khronos']), gorgon = Buffer.from(headers['x-gorgon'] || '', 'hex'), random = gorgon[2] | (gorgon[3] << 8);
-                    if (url.match(/[?&]ts=(\d+)/)?.[1] !== String(time) || url.match(/[?&]_rticket=(\d+)/)?.[1] !== headers['x-ss-req-ticket'] ||
-                        branchOf(url, sent, time) !== 0 || gorgon.length !== 26 || headers['x-gorgon'] !== xGorgon(query, sent, time, random) ||
-                        headers['x-gorgon'] === xGorgon(query, Buffer.from('altered body'), time, random) ||
-                        !['x-medusa', 'x-helios', 'x-ladon', 'x-argus'].every(name => headers[name]) || 'Cookie' in headers) throw new Error('Unsigned playback request');
-                    playbackHosts.push(url.split('/')[2]);
-                    if (emptyAnswers > 0) { emptyAnswers--; return { code: 200, content: '' }; }
-                    const model = inlineModel ? { video_list: inlineList } : { fallback_api: badDestination ? 'https://127.0.0.1/info' : 'https://vod.snssdk.com/info' };
-                    return { code: 200, content: JSON.stringify({ code: 0, data: { [wrongEpisode ? vids[0] : vids[3]]: { video_model: JSON.stringify(model) } } }) };
-                }
-                return { code: 200, content: JSON.stringify({ video_info: { code: refused ? 10001 : 0, data: { key_seed: seed.toString('base64'), video_list: videoList } } }) };
-            };
-            // A failed registration is forgotten, so the next episode registers again.
-            let attempts = 0; rejected = false;
-            try { await playbackDevice(async () => { attempts++; throw new Error('offline'); }); } catch { rejected = true; }
-            checks.registrationRetry = rejected && attempts === 1;
-            globalThis.req = appAnswer;
-            const playback = await fetchAppPlayUrl(vids[3]);
-            checks.app = calls === 3 && registrations === 1 && playback.contentKey === key && playback.url === media && playback.quality === '1080p';
-            checks.backups = JSON.stringify(playback.backups) === JSON.stringify([backup]);
-            const sourcePlayback = await spider.play('Hongguo', sid + '/' + vids[3]);
-            checks.mediaHeaders = sourcePlayback.header['User-Agent'].startsWith('com.phoenix.read/') && !('Referer' in sourcePlayback.header);
-            checks.sourceBackups = JSON.stringify(sourcePlayback.hongguoBackups) === JSON.stringify([backup]);
-            const ids = [];
-            globalThis.req = (url, options) => { if (options.method === 'POST') ids.push(url.match(/[?&]device_id=([0-9]+)/)?.[1]); throw new Error('offline'); };
-            for (let i = 0; i < 2; i++) { try { await fetchAppPlayUrl(vids[3]); } catch { /* Only the identities matter here. */ } }
-            checks.oneDevice = ids.length === 2 && ids.every(id => id === device) && registrations === 1;
-            refused = true; calls = 0; rejected = false;
-            globalThis.req = appAnswer;
-            try { await fetchAppPlayUrl(vids[3]); } catch (error) { rejected = /暂未提供/.test(error.message); }
-            checks.refusal = rejected && calls === 2;
-            refused = false;
-            globalThis.req = appAnswer;
-            wrongEpisode = true; calls = 0; rejected = false;
-            try { await fetchAppPlayUrl(vids[3]); } catch { rejected = true; }
-            checks.exactEpisode = rejected && calls === 1;
-            wrongEpisode = false; badDestination = true; calls = 0; rejected = false;
-            try { await fetchAppPlayUrl(vids[3]); } catch { rejected = true; }
-            checks.destination = rejected && calls === 1;
-            badDestination = false; inlineModel = true; calls = 0;
-            const inlinePlayback = await fetchAppPlayUrl(vids[3]);
-            checks.inline = calls === 1 && inlinePlayback.url === media && inlinePlayback.contentKey === key && inlinePlayback.headers['User-Agent'].startsWith('com.phoenix.read/71532');
-            // An empty answer is asked once more at the other official host, signed again; a second one is the failure.
-            emptyAnswers = 1; playbackHosts = [];
-            checks.otherHost = (await fetchAppPlayUrl(vids[3])).url === media &&
-                JSON.stringify(playbackHosts) === JSON.stringify(['api5-normal-sinfonlineb.fqnovel.com', 'api5-normal-hl.fqnovel.com']);
-            emptyAnswers = 2; playbackHosts = []; rejected = false;
-            try { await fetchAppPlayUrl(vids[3]); } catch { rejected = true; }
-            checks.emptyTwice = rejected && playbackHosts.length === 2;
-            return { checks };
-        } };
-        """#
-        let session = try await ScriptSession.start(api: "https://fixture.example/hongguo.js", key: "hongguo-fixture", ext: "", profile: folder, label: "hongguo-fixture", source: source)
-        defer { session.close() }
-        let envelope = try await session.call([:])
-        let json = try #require(envelope["result"]?.string, "\(envelope)")
-        let checks = try #require(JSONDecoder().decode([String: JSONValue].self, from: Data(json.utf8))["checks"]?.object)
-        #expect(checks.count == 32)
-        for (name, result) in checks { #expect(result == .bool(true), "\(name)") }
-    }
-
     @Test(arguments: [false, true]) func cencDecryptionPreservesOffsetsAndClearSubsamples(subsamples: Bool) throws {
         let fixture = makeMovie(subsamples: subsamples)
         let file = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".mp4")
@@ -318,7 +137,7 @@ struct HongguoTests {
             #expect(requests.allSatisfy { $0.value(forHTTPHeaderField: "Referer") == nil })
         } else {
             #expect(ranges == (policy == "always-forbidden" ? ["bytes=0-31", "bytes=0-31"] : ["bytes=0-31", "bytes=0-31", "bytes=32-63"]))
-            #expect(requests.dropFirst().allSatisfy { $0.value(forHTTPHeaderField: "Referer") == Hongguo.mediaReferer })
+            #expect(requests.dropFirst().allSatisfy { $0.value(forHTTPHeaderField: "Referer") == HongguoStreams.mediaReferer })
         }
     }
 
@@ -426,7 +245,7 @@ private final class HongguoRangeProtocol: URLProtocol, @unchecked Sendable {
     override func startLoading() {
         Self.lock.withLock { Self.observed.append(request) }
         let mode = request.url!.lastPathComponent
-        let hasReferer = request.value(forHTTPHeaderField: "Referer") == Hongguo.mediaReferer
+        let hasReferer = request.value(forHTTPHeaderField: "Referer") == HongguoStreams.mediaReferer
         let forbidden = mode == "always-forbidden" || (mode == "referer-required" && !hasReferer) || (mode == "referer-forbidden" && hasReferer)
         let range = request.value(forHTTPHeaderField: "Range")?.replacingOccurrences(of: "bytes=", with: "bytes ") ?? "bytes 0-31"
         let response = HTTPURLResponse(url: request.url!, statusCode: forbidden ? 403 : mode == "ignored" ? 200 : 206, httpVersion: "HTTP/1.1",

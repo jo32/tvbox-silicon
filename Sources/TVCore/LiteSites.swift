@@ -22,6 +22,8 @@ enum LiteSites {
     /// The bundled script for a `csp_` class, or nil when the class has no enabled port.
     static func script(for api: String) -> URL? {
         guard api.hasPrefix("csp_"), let entry = enabled[String(api.dropFirst(4))] else { return nil }
+        // A port can also be one of Yingxia's own scripts, served with its subscription (`CloudSources`).
+        if entry.script.hasPrefix("https://") { return URL(string: entry.script) }
         return URL(string: "assets://sites/" + entry.script)
     }
 

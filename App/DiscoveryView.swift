@@ -43,7 +43,7 @@ struct GlobalSearchView: View {
     /// Built-in sources can be selected while their first search is still in flight. One the viewer
     /// hid, or one paused for failing, isn't asked and gets no chip.
     private var sourceItems: [SearchSourceItem] {
-        let builtins = (store.subscription?.sites ?? Site.builtInSites).filter(\.isBuiltIn).filter { site in
+        let builtins = (store.subscription?.sites ?? []).filter(\.isBuiltIn).filter { site in
             model.total > 0 && (model.results.contains { $0.site.key == site.key } ||
                 (model.busy && model.asking.contains(site.key)))
         }.map { site in
@@ -1347,7 +1347,7 @@ private struct SourceChip: View {
         // The chip under the pointer receives the mouse-up that ends a drag.
         Button { if drag?.active != true { action() } } label: {
             HStack(spacing: 6) {
-                if name == Site.bilibili.name { BilibiliGlyph(size: 15).foregroundStyle(selected ? Brand.onAccent : BilibiliMark.blue) } else if let symbol = label.symbol { Text(symbol) }
+                if name == CloudSources.site(where: \.isBilibili)?.name { BilibiliGlyph(size: 15).foregroundStyle(selected ? Brand.onAccent : BilibiliMark.blue) } else if let symbol = label.symbol { Text(symbol) }
                 Text(label.title).lineLimit(1)
                 if let count { Text("\(count)").monospacedDigit().opacity(0.55) }
                 if let dot { Image(systemName: "circle.fill").font(.system(size: 7)).foregroundStyle(dot) }

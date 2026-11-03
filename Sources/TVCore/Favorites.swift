@@ -119,7 +119,7 @@ public enum FavoriteItem: Codable, Hashable, Sendable, Identifiable {
     public var key: String {
         switch self {
         case .live(let channel):
-            if LiveCatalog.isRoom(channel.url) { return "live|" + channel.url.absoluteString }
+            if LiveCatalog.isRoomAddress(channel.url) { return "live|" + channel.url.absoluteString }
             return "live|" + channel.id
         case .video(let video):
             return "video|" + EpisodeSkipSettings.scope(origin: video.origin, source: video.sourceKey, video: video.videoID)
@@ -138,7 +138,7 @@ public enum FavoriteItem: Codable, Hashable, Sendable, Identifiable {
     public func matches(_ other: FavoriteItem) -> Bool {
         switch (self, other) {
         case (.live(let saved), .live(let channel)):
-            return saved.id == channel.id || (LiveCatalog.isRoom(channel.url) && saved.url == channel.url)
+            return saved.id == channel.id || (LiveCatalog.isRoomAddress(channel.url) && saved.url == channel.url)
         default:
             return key == other.key
         }
