@@ -1034,6 +1034,7 @@
 "Touch and Hold Speed" = "長押しの再生速度";
 "Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go." = "動画を長押しするとこの速度で再生します。押したまま左右にスライドすると速度を変更、下にスライドすると指を離しても維持します。";
 "Slide sideways to change the speed, or down to keep it" = "左右にスライドで速度を変更、下にスライドで固定";
+"Slowed down to keep up with the connection" = "通信速度に合わせて速度を下げています";
 "Back to Normal Speed" = "通常の速度に戻す";
 "%lld s" = "%lld 秒";
 "Brightness" = "明るさ";

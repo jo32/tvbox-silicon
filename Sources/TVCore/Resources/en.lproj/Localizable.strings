@@ -1035,6 +1035,7 @@
 "Touch and Hold Speed" = "Touch and Hold Speed";
 "Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go." = "Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go.";
 "Slide sideways to change the speed, or down to keep it" = "Slide sideways to change the speed, or down to keep it";
+"Slowed down to keep up with the connection" = "Slowed down to keep up with the connection";
 "Back to Normal Speed" = "Back to Normal Speed";
 "%lld s" = "%lld s";
 "Brightness" = "Brightness";

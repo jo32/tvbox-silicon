@@ -388,7 +388,7 @@ import TVCore
     }
 
     func setSpeed(_ speed: Float) {
-        boost = nil
+        clearBoost()
         player.defaultRate = speed
         if player.rate != 0 { player.rate = speed }
     }
@@ -396,12 +396,35 @@ import TVCore
     /// Another rate while the picture is held (`SpeedBoost`); nil plays at the chosen speed again. It never becomes
     /// the chosen speed, so the speed menu and a later play keep the one picked there. Pausing ends it.
     /// Up to 4× even where the item says it can't fast-forward: an HLS stream without I-frame playlists says so, yet
-    /// plays at 3× and 4× in full, as the menu's speeds do.
+    /// plays at 3× and 4× in full, as the menu's speeds do. A connection too slow for it holds it lower
+    /// (`SpeedBoost.Throttle`, issue #364); `boostWanted` is then the rate the hold asked for.
     private(set) var boost: Float?
+    private(set) var boostWanted: Float?
+    @ObservationIgnored private var throttle: SpeedBoost.Throttle?
     func setBoost(_ rate: Float?) {
         guard rate == nil || !paused else { return }
-        boost = rate
+        throttle = rate.map { SpeedBoost.Throttle(wanted: Double($0), after: throttle) }
+        applyBoost()
+    }
+    private func applyBoost() {
+        boost = throttle.map { Float($0.rate) }
+        boostWanted = throttle.flatMap { $0.limited ? Float($0.wanted) : nil }
         if player.rate != 0 { player.rate = boost ?? player.defaultRate }
+    }
+    private func clearBoost() { throttle = nil; boost = nil; boostWanted = nil }
+    /// Once a second while a hold plays faster than normal: slower before the buffered video runs out, and faster
+    /// again while the download keeps up.
+    private func throttleBoost(_ item: AVPlayerItem) {
+        guard var throttle, throttle.wanted > 1, player.rate != 0, item.status == .readyToPlay else { return }
+        let now = player.currentTime()
+        let buffered = item.loadedTimeRanges.lazy.map(\.timeRangeValue).first { CMTimeRangeContainsTime($0, time: now) }
+        let ahead = buffered.map { CMTimeRangeGetEnd($0).seconds - now.seconds } ?? 0
+        throttle.update(ahead: ahead, waiting: player.timeControlStatus == .waitingToPlayAtSpecifiedRate)
+        let changed = throttle.rate != self.throttle?.rate
+        self.throttle = throttle
+        guard changed else { return }
+        Diagnostics.shared.record(.info, "player", "hold speed \(throttle.rate)x of \(throttle.wanted)x ahead=\(Int(ahead))s")
+        applyBoost()
     }
     private var generation = UUID()
     init() {
@@ -726,7 +749,7 @@ import TVCore
                 guard let self, self.generation == activeGeneration else { return }
                 self.buffering = waiting
                 self.paused = paused
-                if paused { self.boost = nil }
+                if paused { self.clearBoost() }
                 // The first frame lands a beat after playback starts; keep the artwork until then, so no black flashes between.
                 if playing, !self.showsPicture {
                     Task { @MainActor [weak self] in
@@ -758,6 +781,7 @@ import TVCore
         guard let item, player.currentItem === item else { return true }
         restorePositionIfNeeded(item)
         updateSkipping(item)
+        throttleBoost(item)
         catchUpLive(item)
         queueUpcomingIfDue(item)
         if let url = playing?.url { HongguoStreams.updatePosition(for: url, seconds: pendingResume ?? player.currentTime().seconds) }
@@ -867,7 +891,7 @@ import TVCore
         saveHistory()
         discardUpcoming()
         upcomingAttempted = false; skipsToUpcoming = false; advanced = nil
-        upcomingEpisode = nil; onAdvance = nil; playsOn = { false }; boost = nil
+        upcomingEpisode = nil; onAdvance = nil; playsOn = { false }; clearBoost()
         if let url = playing?.url { HongguoStreams.stop(url) }
         if let automatic { CloudStreams.stop(automatic); Remux.stop(automatic) }
         if playing != nil { ErrorReports.shared.stoppedPlaying() }
