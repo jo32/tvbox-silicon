@@ -358,11 +358,14 @@ private struct FeedbackPage: View {
             Divider()
             HStack(spacing: 10) {
                 attachButton
-                // What is sent: the message and the included details.
-                let count = Feedback.combined(message, context: context).count
-                Text(verbatim: "\(count.formatted()) / \(Feedback.limit.formatted())")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(count > Feedback.limit ? AnyShapeStyle(Brand.amber) : AnyShapeStyle(.tertiary))
+                // What is sent: the message and the included details. Not while sending: on a phone the
+                // row has no room for it next to the progress and the button (#363).
+                if !sending {
+                    let count = Feedback.combined(message, context: context).count
+                    Text(verbatim: "\(count.formatted()) / \(Feedback.limit.formatted())")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(count > Feedback.limit ? AnyShapeStyle(Brand.amber) : AnyShapeStyle(.tertiary))
+                }
                 Spacer()
                 if sending, let progress {
                     ProgressView(value: progress).frame(width: compact ? 56 : 110)
@@ -376,7 +379,7 @@ private struct FeedbackPage: View {
                 #endif
                 Button(action: send) {
                     Label(sending ? (progress == nil ? L10n.text("Sending…") : L10n.text("Uploading…")) : L10n.text("Send"),
-                          systemImage: "paperplane.fill").padding(.horizontal, 6)
+                          systemImage: "paperplane.fill").lineLimit(1).fixedSize().padding(.horizontal, 6)
                 }
                 .buttonStyle(.borderedProminent).tint(systemAccent).feedbackButton(compact ? .regular : .large)
                 .keyboardShortcut(.return, modifiers: .command)
