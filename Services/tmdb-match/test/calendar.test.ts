@@ -21,14 +21,15 @@ const bangumiCalendar = () => Response.json(Array.from({ length: 7 }, (_, d) => 
 const entry = (n: number, extra: Record<string, unknown> = {}) => ({
   title: `日本語${n}`, titleTranslate: { "zh-Hans": [`中文${n}`] }, type: "tv", begin: "2026-10-07T15:00:00.000Z",
   broadcast: `R/2026-10-0${(n % 7) + 1}T15:00:00.000Z/P7D`, end: "",
-  sites: [{ site: "bangumi", id: String(n) }, { site: "aniList", id: String(100 + n) }, { site: "tmdb", id: `tv/${500 + n}/season/2` }, { site: "bilibili", id: "28" }, { site: "dmhy", id: "x" }],
+  sites: [{ site: "bangumi", id: String(n) }, { site: "mal", id: String(100 + n) }, { site: "tmdb", id: `tv/${500 + n}/season/2` }, { site: "bilibili", id: "28" }, { site: "dmhy", id: "x" }],
   ...extra,
 });
 const october = () => Response.json(Array.from({ length: 22 }, (_, i) => entry(i + 1)));
-const schedule = (n: number) => () => Response.json({ data: { Page: { pageInfo: { hasNextPage: false }, airingSchedules: Array.from({ length: n }, (_, i) => ({
-  airingAt: Date.parse("2026-11-05T15:30:00Z") / 1000 + i * 60, episode: 5, mediaId: 101 + i,
-  media: { isAdult: false, title: { native: `ネイティブ${i}`, romaji: `romaji ${i}` }, coverImage: { large: `https://s4.anilist.co/${i}.jpg` }, averageScore: 81 },
-})) } } });
+// Simkl's calendar: a timed episode Thursday 00:30 Japan time (Wednesday 23:30 in China), then untimed ones on Friday.
+const schedule = (n: number) => () => Response.json(Array.from({ length: n }, (_, i) => ({
+  title: `English ${i}`, date: i === 0 ? "2026-11-05T00:30:00+09:00" : "2026-11-06T00:00:00+09:00", poster: `15/abc${i}`,
+  ids: { simkl_id: 9000 + i, mal: String(101 + i) }, episode: { episode: 5 }, ratings: { simkl: { rating: 8.06 } },
+})).concat([{ title: "Next week", date: "2026-11-12T00:00:00+09:00", poster: "x", ids: { mal: "999" }, episode: { episode: 1 } } as any]));
 
 test("the week runs Monday to Sunday in China time", () => {
   const w = week(NOW);
@@ -51,51 +52,64 @@ test("bangumi-data entries give links, TMDB IDs and this week's airings", () => 
   assert.deepEqual(airings(readEntry(entry(3, { broadcast: "" }))!, week(NOW)), []);
 });
 
-test("anime comes from Bangumi, timed by AniList and linked by bangumi-data", async () => {
+test("anime comes from Bangumi, timed and linked by bangumi-data, numbered by Simkl", async () => {
   const calls: string[] = [];
   const calendar = await buildAnime({ now: NOW, retryDelay: 0, fetch: fetcher([
     [/api\.bgm\.tv\/calendar/, bangumiCalendar],
     [/items\/2026\/10\.json/, october],
     [/items\/2026\/07\.json/, () => Response.json([])],
-    [/anilist/, schedule(1)],
+    [/simkl/, schedule(1)],
   ], calls) });
   assert.equal(calendar.source, "bangumi");
   assert.equal(calendar.fallback, false);
   assert.deepEqual(calendar.days.map((day) => day.date)[0], "2026-11-02");
   assert.equal(calendar.days.reduce((n, day) => n + day.items.length, 0), 25);
-  // Show 1 is a Monday show on Bangumi, but AniList says this week's episode is Thursday night, China time.
-  const show = calendar.days[3].items.find((item) => item.bangumi === 1)!;
+  // Show 1 is a Monday show on Bangumi; bangumi-data's rule puts this week's episode on Friday night, China time,
+  // and Simkl numbers it.
+  const show = calendar.days[4].items.find((item) => item.bangumi === 1)!;
   assert.equal(show.title, "番剧1");
-  assert.equal(show.airsAt, "2026-11-05T15:30:00.000Z");
+  assert.equal(show.airsAt, "2026-11-06T15:00:00.000Z");
   assert.equal(show.episode, 5);
   assert.equal(show.cover, "https://lain.bgm.tv/c/1.jpg");
   assert.deepEqual(show.tmdb, { type: "tv", id: 501, season: 2 });
   assert.equal(show.links[0].site, "bilibili");
-  // Show 2 has no AniList airing: bangumi-data's rule times it.
-  assert.ok(calendar.days.flatMap((day) => day.items).find((item) => item.bangumi === 2)!.airsAt);
-  assert.deepEqual(calendar.attribution.map((credit) => credit.url), ["https://bgm.tv", "https://github.com/bangumi-data/bangumi-data", "https://anilist.co"]);
+  // Show 2 has no Simkl episode: timed, but unnumbered.
+  const second = calendar.days.flatMap((day) => day.items).find((item) => item.bangumi === 2)!;
+  assert.ok(second.airsAt);
+  assert.equal(second.episode, null);
+  assert.deepEqual(calendar.attribution.map((credit) => credit.url), ["https://bgm.tv", "https://github.com/bangumi-data/bangumi-data", "https://simkl.com"]);
   assert.ok(calls.some((url) => url.startsWith("https://cdn.jsdelivr.net/")));
   assert.ok(!calls.some((url) => url.includes("raw.githubusercontent")));
+  assert.deepEqual(calendar.issues, []);
 });
 
-test("anime falls back to AniList, then bangumi-data, and fails only when all three do", async () => {
-  const anilist = await buildAnime({ now: NOW, retryDelay: 0, fetch: fetcher([
-    [/api\.bgm\.tv/, down], [/jsdelivr.*items\/2026\/10/, down], [/githubusercontent.*items\/2026\/10/, october], [/anilist/, schedule(24)],
+test("anime falls back to Simkl, then bangumi-data, and fails only when all three do", async () => {
+  const fromSimkl = await buildAnime({ now: NOW, retryDelay: 0, fetch: fetcher([
+    [/api\.bgm\.tv/, down], [/jsdelivr.*items\/2026\/10/, down], [/githubusercontent.*items\/2026\/10/, october], [/simkl/, schedule(24)],
   ]) });
-  assert.equal(anilist.source, "anilist");
-  assert.equal(anilist.fallback, true);
-  const first = anilist.days[3].items[0];
-  assert.equal(first.title, "中文1"); // Chinese name from bangumi-data (mirror), not AniList's romaji
-  assert.equal(first.originalTitle, "ネイティブ0");
+  assert.equal(fromSimkl.source, "simkl");
+  assert.equal(fromSimkl.fallback, true);
+  // Simkl's 00:30 Japan time is Wednesday 23:30 in China; bangumi-data has no Wednesday rule for show 1, so Simkl's
+  // time stands. Names come from bangumi-data (its mirror), not Simkl's English.
+  const first = fromSimkl.days[2].items[0];
+  assert.equal(first.title, "中文1");
+  assert.equal(first.originalTitle, "日本語1");
+  assert.equal(first.airsAt, "2026-11-04T15:30:00.000Z");
   assert.equal(first.bangumi, 1);
   assert.equal(first.rating, 8.1);
+  assert.equal(first.cover, "https://simkl.in/posters/15/abc0_m.jpg");
+  // Untimed Friday episodes take bangumi-data's Friday time where it has one; next week's is left out.
+  assert.equal(fromSimkl.days[4].items.length, 23);
+  assert.ok(!fromSimkl.days.flatMap((day) => day.items).some((item) => item.title === "Next week"));
+  assert.deepEqual(fromSimkl.issues, ["api.bgm.tv 503"]);
 
   // Bangumi answers but with almost nothing: that's broken, not a quiet week.
   const thin = () => Response.json([{ weekday: { id: 1 }, items: subjects.slice(0, 2) }]);
-  const data = await buildAnime({ now: NOW, retryDelay: 0, fetch: fetcher([[/api\.bgm\.tv/, thin], [/items\/2026\/10/, october], [/anilist/, down]]) });
+  const data = await buildAnime({ now: NOW, retryDelay: 0, fetch: fetcher([[/api\.bgm\.tv/, thin], [/items\/2026\/10/, october], [/simkl/, down]]) });
   assert.equal(data.source, "bangumi-data");
   assert.equal(data.days.reduce((n, day) => n + day.items.length, 0), 22);
   assert.equal(data.days[0].items[0].cover, null);
+  assert.deepEqual(data.issues, ["bangumi: 2 shows", "data.simkl.in 503"]);
 
   await assert.rejects(buildAnime({ now: NOW, retryDelay: 0, fetch: fetcher([[/./, down]]) }), /No anime calendar: api\.bgm\.tv 503/);
 });
@@ -117,12 +131,31 @@ test("TV comes from TMDB by air date, Chinese-language titles included", async (
   assert.equal(calendar.source, "tmdb");
   assert.equal(urls.length, 14);
   assert.ok(urls[0].includes("air_date.gte=2026-11-02") && urls[0].includes("air_date.lte=2026-11-02") && urls[0].includes("language=zh-TW"));
-  assert.ok(urls[0].includes("timezone=Asia%2FShanghai") && urls[0].includes("without_genres=16%2C10763%2C10767"));
+  // Chinese first for a Chinese-speaking viewer; reality shows only from the Chinese list.
+  assert.ok(urls[0].includes("timezone=Asia%2FShanghai") && urls[0].includes("with_original_language=zh") && urls[0].includes("without_genres=16%2C10763%2C10766%2C10767"));
+  assert.ok(urls[1].includes("with_origin_country=US%7CGB%7CKR%7CJP%7CTW%7CHK%7CTH") && urls[1].includes("without_genres=16%2C10763%2C10764%2C10766%2C10767"));
   const day = calendar.days[2];
   assert.equal(day.items.length, 16);
-  assert.deepEqual(day.items[0].tmdb, { type: "tv", id: 1, season: null });
+  assert.deepEqual(day.items.map((item) => item.tmdb!.id).slice(0, 9), [1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1]);
   assert.equal(day.items[0].cover, "https://images.tmdb.org/t/p/w342/0.jpg");
   assert.equal(day.items[0].rating, 7.3);
+});
+
+test("a TV region asks TMDB for its origin countries, and TVmaze for its own schedules", async () => {
+  const urls: string[] = [];
+  const tmdb = new TMDB("token", async (url) => { urls.push(url); return tmdbShows(1); }, null);
+  const us = await buildTV({ now: NOW, retryDelay: 0, tmdb, region: "us", fetch: fetcher([]) });
+  assert.equal(us.source, "tmdb");
+  assert.equal(urls.length, 7);
+  assert.ok(urls.every((url) => url.includes("with_origin_country=US&") && url.includes("without_genres=16%2C10763%2C10764%2C10766%2C10767") && !url.includes("with_original_language")));
+  const korean = await buildTV({ now: NOW, retryDelay: 0, tmdb, region: "kr", fetch: fetcher([]) });
+  assert.ok(urls.at(-1)!.includes("with_origin_country=KR&") && urls.at(-1)!.includes("without_genres=16%2C10763%2C10766%2C10767"));
+  assert.equal(korean.source, "tmdb");
+  const asked: string[] = [];
+  const fallback = await buildTV({ now: NOW, retryDelay: 0, tmdb: null, region: "hktw", fetch: fetcher([[/tvmaze/, tvmaze]], asked) });
+  assert.equal(fallback.source, "tvmaze");
+  assert.equal(asked.length, 28);
+  assert.ok(asked.some((url) => url.includes("country=HK")) && asked.some((url) => url.includes("country=TW")));
 });
 
 test("TV falls back to TVmaze when TMDB fails or comes back empty", async () => {
@@ -132,6 +165,7 @@ test("TV falls back to TVmaze when TMDB fails or comes back empty", async () => 
     assert.equal(calendar.source, "tvmaze");
     assert.equal(calendar.fallback, true);
     assert.equal(calendar.attribution[0].url, "https://www.tvmaze.com");
+    assert.equal(calendar.issues.length, 1);
     // One item per show per day (news and anime left out), with its episode and time.
     assert.deepEqual(calendar.days[2].items.map((item) => [item.title, item.episode, item.airsAt, item.network]), [["Wan Jie Du Zun", 7, "2026-11-04T12:00:00.000Z", "Tencent QQ"], ["Drama Four", 3, "2026-11-04T11:30:00.000Z", null]]);
   }
@@ -151,7 +185,7 @@ function memory(initial?: Calendar) {
   return store;
 }
 const made = (now: number, source = "bangumi", fallback = false): Calendar => ({ kind: "anime", source, fallback, stale: false, built: Math.floor(now / 1000), timeZone: "Asia/Shanghai",
-  days: week(now).dates.map((date, i) => ({ date, weekday: i + 1, items: [{ title: "A", originalTitle: "A", cover: null, airsAt: `${date}T15:00:00.000Z`, episode: 3, season: null, rating: null, network: null, bangumi: 1, tmdb: null, links: [] }] })), attribution: [] });
+  days: week(now).dates.map((date, i) => ({ date, weekday: i + 1, items: [{ title: "A", originalTitle: "A", cover: null, airsAt: `${date}T15:00:00.000Z`, episode: 3, season: null, rating: null, network: null, bangumi: 1, tmdb: null, links: [] }] })), attribution: [], issues: [] });
 
 test("a kept calendar is served while fresh and rebuilt in the background once it ages", async () => {
   let builds = 0;

@@ -2,11 +2,12 @@
 // Each kind asks its best source first and falls back to the next one when a source fails or answers with too
 // little to be real; the last good calendar kept in D1 is the final fallback. See README.md › Calendar.
 //
-//   anime: Bangumi /calendar (Chinese names, covers, ratings), with air times and episodes from AniList and
-//          streaming links and TMDB IDs from bangumi-data  →  AniList's airing schedule  →  bangumi-data alone
-//   tv:    TMDB's discover by air date (localized names, IDs the detail page opens)  →  TVmaze's schedule
+//   anime: Bangumi /calendar (Chinese names, covers, ratings), with air times and TMDB IDs and streaming links from
+//          bangumi-data and episode numbers from Simkl  →  Simkl's anime calendar  →  bangumi-data alone
+//   tv:    TMDB's discover by air date (localized names, IDs the detail page opens), per region  →  TVmaze's schedule
 //
-// Sized for the Workers Free plan: one build makes at most ~20 outside requests and parses well under 1 MB.
+// AniList's airing schedule would be the natural second source, but it answers 403 ("manually blocked") to every
+// request from Cloudflare Workers. Sized for the Workers Free plan: one build makes at most ~30 outside requests.
 import { image, TMDB } from "./tmdb.ts";
 
 export type CalendarKind = "anime" | "tv";
@@ -26,6 +27,7 @@ export interface CalendarItem {
   season: number | null;
   rating: number | null; // out of 10
   network: string | null;
+  overview: string | null; // a line or two about the show, when the source has one
   bangumi: number | null; // bgm.tv subject ID
   tmdb: { type: "tv" | "movie"; id: number; season: number | null } | null;
   links: { site: string; name: string; url: string }[]; // where it streams
@@ -46,6 +48,7 @@ export interface Calendar {
   timeZone: string;
   days: CalendarDay[];
   attribution: { name: string; url: string }[];
+  issues: string[]; // sources that failed or were skipped, for checking from outside
 }
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
@@ -55,13 +58,28 @@ export interface Upstream {
   now: number; // ms
   tmdb?: TMDB | null;
   language?: string;
+  region?: Region; // TV only
   retryDelay?: number; // ms
 }
+
+// TV by where it's made: TMDB's origin countries, and TVmaze's for the fallback. Reality shows count where they are
+// popular variety (China, Hong Kong and Taiwan, Korea); `all` is Chinese-language plus the regions below.
+export const REGIONS = {
+  all: { countries: "", tvmaze: ["CN"], reality: true },
+  cn: { countries: "CN", tvmaze: ["CN"], reality: true },
+  hktw: { countries: "HK|TW", tvmaze: ["HK", "TW"], reality: true },
+  us: { countries: "US", tvmaze: ["US"], reality: false },
+  jp: { countries: "JP", tvmaze: ["JP"], reality: false },
+  kr: { countries: "KR", tvmaze: ["KR"], reality: true },
+  gb: { countries: "GB", tvmaze: ["GB"], reality: false },
+} as const;
+export type Region = keyof typeof REGIONS;
+export const isRegion = (value: string): value is Region => Object.hasOwn(REGIONS, value);
 
 const CREDITS = {
   bangumi: { name: "Bangumi 番组计划", url: "https://bgm.tv" },
   bangumiData: { name: "bangumi-data (CC BY 4.0)", url: "https://github.com/bangumi-data/bangumi-data" },
-  anilist: { name: "AniList", url: "https://anilist.co" },
+  simkl: { name: "Simkl", url: "https://simkl.com" },
   tmdb: { name: "TMDB", url: "https://www.themoviedb.org" },
   tvmaze: { name: "TVmaze (CC BY-SA 4.0)", url: "https://www.tvmaze.com" },
 };
@@ -158,7 +176,7 @@ export interface Entry {
   title: string;
   zh: string | null;
   bangumi: number | null;
-  anilist: number | null;
+  mal: number | null; // MyAnimeList, which Simkl lists by
   tmdb: CalendarItem["tmdb"];
   links: CalendarItem["links"];
   broadcast: { start: number; period: number } | null; // ms; period 0 = once
@@ -184,7 +202,7 @@ export function readEntry(raw: any): Entry | null {
     title: str(raw.title),
     zh: str(raw.titleTranslate?.["zh-Hans"]?.[0]) || null,
     bangumi: int(id("bangumi")),
-    anilist: int(id("aniList")),
+    mal: int(id("mal")),
     tmdb: tmdb ? { type: tmdb[1] as "tv" | "movie", id: Number(tmdb[2]), season: tmdb[3] ? Number(tmdb[3]) : null } : null,
     links,
     broadcast: Number.isFinite(start) ? { start, period: Number(rule![2]) * DAY_MS } : null,
@@ -229,45 +247,26 @@ async function bangumiData(up: Upstream): Promise<Entry[]> {
   return files.flatMap((file) => (Array.isArray(file) ? file : [])).map(readEntry).filter((entry): entry is Entry => entry !== null);
 }
 
-interface Airing { at: number; episode: number | null; anilist: number; title: string; native: string; cover: string | null; rating: number | null }
+// An episode from Simkl's anime calendar, a static file for the coming weeks. `at` is null where Simkl writes 00:00
+// Japan time, its way of saying "that day" (late-night shows usually say 24:00 or later on the day before).
+interface Airing { at: number | null; day: number; episode: number | null; mal: number; title: string; cover: string | null; rating: number | null }
 
-const AIRING = `query ($page: Int, $from: Int, $to: Int) {
-  Page(page: $page, perPage: 50) {
-    pageInfo { hasNextPage }
-    airingSchedules(airingAt_greater: $from, airingAt_lesser: $to, sort: TIME) {
-      airingAt episode mediaId
-      media { isAdult title { native romaji } coverImage { large } averageScore }
-    }
-  }
-}`;
-
-async function anilist(up: Upstream, w: Week): Promise<Airing[]> {
-  const airings: Airing[] = [];
-  for (let page = 1; page <= 5; page++) {
-    const body = await getJSON(up, "https://graphql.anilist.co", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ query: AIRING, variables: { page, from: w.start / 1000 - 1, to: w.end / 1000 } }),
-    });
-    const value = body?.data?.Page;
-    if (!Array.isArray(value?.airingSchedules)) throw new Error("graphql.anilist.co: no schedule");
-    for (const each of value.airingSchedules) {
-      const at = Number(each?.airingAt) * 1000;
-      const anilistID = int(each?.mediaId);
-      if (!Number.isFinite(at) || !anilistID || each.media?.isAdult) continue;
-      airings.push({
-        at,
-        episode: int(each.episode),
-        anilist: anilistID,
-        title: str(each.media?.title?.romaji) || str(each.media?.title?.native),
-        native: str(each.media?.title?.native) || str(each.media?.title?.romaji),
-        cover: https(each.media?.coverImage?.large),
-        rating: score(each.media?.averageScore / 10),
-      });
-    }
-    if (!value.pageInfo?.hasNextPage) break;
-  }
-  return airings;
+async function simkl(up: Upstream, w: Week): Promise<Airing[]> {
+  const body = await getJSON(up, "https://data.simkl.in/calendar/anime.json");
+  if (!Array.isArray(body)) throw new Error("data.simkl.in: no calendar");
+  return body.flatMap((each: any) => {
+    const mal = int(each?.ids?.mal);
+    const parts = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(String(each?.date ?? ""));
+    const at = Date.parse(each?.date);
+    if (!mal || !parts || !Number.isFinite(at)) return [];
+    const timed = parts[2] !== "00" || parts[3] !== "00";
+    // An untimed episode goes on its own date, China time.
+    const day = dayOf(w, timed ? at : Date.parse(`${parts[1]}T00:00:00Z`) - OFFSET);
+    if (day < 0 || day > 6) return [];
+    const poster = str(each.poster);
+    return [{ at: timed ? at : null, day, episode: int(each.episode?.episode), mal, title: str(each.title),
+      cover: /^[\w/]+$/.test(poster) ? `https://simkl.in/posters/${poster}_m.jpg` : null, rating: score(each.ratings?.simkl?.rating) }];
+  }).sort((a, b) => a.day - b.day || (a.at ?? 0) - (b.at ?? 0));
 }
 
 interface Subject { id: number; weekday: number; title: string; original: string; cover: string | null; rating: number | null }
@@ -287,52 +286,58 @@ async function bangumi(up: Upstream): Promise<Subject[]> {
   });
 }
 
-const blank = (): Omit<CalendarItem, "title" | "originalTitle"> => ({ cover: null, airsAt: null, episode: null, season: null, rating: null, network: null, bangumi: null, tmdb: null, links: [] });
+const blank = (): Omit<CalendarItem, "title" | "originalTitle"> => ({ cover: null, airsAt: null, episode: null, season: null, rating: null, network: null, overview: null, bangumi: null, tmdb: null, links: [] });
 
 export async function buildAnime(up: Upstream): Promise<Calendar> {
   const w = week(up.now);
   // All three at once: each is needed whichever ends up as the list.
-  const [subjects, entries, schedule] = await Promise.allSettled([bangumi(up), bangumiData(up), anilist(up, w)]);
+  const [subjects, entries, schedule] = await Promise.allSettled([bangumi(up), bangumiData(up), simkl(up, w)]);
   const data = entries.status === "fulfilled" ? entries.value : [];
   const airing = schedule.status === "fulfilled" ? schedule.value : [];
   const byBangumi = new Map(data.filter((entry) => entry.bangumi).map((entry) => [entry.bangumi!, entry]));
-  const byAnilist = new Map(data.filter((entry) => entry.anilist).map((entry) => [entry.anilist!, entry]));
+  const byMal = new Map(data.filter((entry) => entry.mal).map((entry) => [entry.mal!, entry]));
   const failures: string[] = [];
+  const reason = (result: PromiseSettledResult<unknown>) => (result.status === "rejected" ? String(result.reason?.message ?? result.reason) : null);
+  // The helpers' failures too: a Bangumi list without Simkl has no episode numbers.
+  const issues = () => [...failures, ...[entries, schedule].map(reason).filter((value): value is string => value !== null && !failures.includes(value))];
   const made = (source: string, fallback: boolean, days: CalendarDay[], credits: { name: string; url: string }[]): Calendar =>
-    ({ kind: "anime", source, fallback, stale: false, built: Math.floor(up.now / 1000), timeZone: ZONE, days, attribution: credits });
+    ({ kind: "anime", source, fallback, stale: false, built: Math.floor(up.now / 1000), timeZone: ZONE, days, attribution: credits, issues: issues() });
 
-  // 1. Bangumi: every show of the season on its weekday, timed by AniList or bangumi-data where they know it.
+  // 1. Bangumi: every show of the season on its weekday, timed by bangumi-data's broadcast rule (or Simkl), with
+  //    Simkl's episode number.
   if (subjects.status === "fulfilled") {
     const firstAiring = new Map<number, Airing>();
     for (const each of airing) {
-      const id = byAnilist.get(each.anilist)?.bangumi;
+      const id = byMal.get(each.mal)?.bangumi;
       if (id && !firstAiring.has(id)) firstAiring.set(id, each);
     }
-    const days = bucket(w, subjects.value, (subject) => {
-      const at = firstAiring.get(subject.id)?.at ?? (byBangumi.has(subject.id) ? airings(byBangumi.get(subject.id)!, w)[0] : undefined);
-      return at !== undefined ? dayOf(w, at) : subject.weekday - 1;
-    }, (subject) => {
+    const slot = (subject: Subject) => {
       const entry = byBangumi.get(subject.id);
-      const timed = firstAiring.get(subject.id);
-      const at = timed?.at ?? (entry ? airings(entry, w)[0] : undefined);
+      const episode = firstAiring.get(subject.id);
+      const at = (entry ? airings(entry, w)[0] : undefined) ?? episode?.at ?? undefined;
+      return { entry, episode, at, day: at !== undefined ? dayOf(w, at) : episode ? episode.day : subject.weekday - 1 };
+    };
+    const days = bucket(w, subjects.value, (subject) => slot(subject).day, (subject) => {
+      const { entry, episode, at } = slot(subject);
       return { ...blank(), title: subject.title, originalTitle: subject.original, cover: subject.cover, rating: subject.rating, bangumi: subject.id,
-        airsAt: at !== undefined ? new Date(at).toISOString() : null, episode: timed?.episode ?? null, tmdb: entry?.tmdb ?? null, links: entry?.links ?? [] };
+        airsAt: at !== undefined ? new Date(at).toISOString() : null, episode: episode?.episode ?? null, tmdb: entry?.tmdb ?? null, links: entry?.links ?? [] };
     }, byTime);
     if (count(days) >= MINIMUM.anime) {
-      return made("bangumi", false, days, [CREDITS.bangumi, ...(data.length ? [CREDITS.bangumiData] : []), ...(airing.length ? [CREDITS.anilist] : [])]);
+      return made("bangumi", false, days, [CREDITS.bangumi, ...(data.length ? [CREDITS.bangumiData] : []), ...(airing.length ? [CREDITS.simkl] : [])]);
     }
     failures.push(`bangumi: ${count(days)} shows`);
   } else failures.push(String(subjects.reason?.message ?? subjects.reason));
 
-  // 2. AniList: every episode that airs this week, named in Chinese from bangumi-data.
+  // 2. Simkl: every episode that airs this week, named in Chinese and timed from bangumi-data where it knows the show.
   if (schedule.status === "fulfilled") {
-    const days = bucket(w, airing, (each) => dayOf(w, each.at), (each) => {
-      const entry = byAnilist.get(each.anilist);
-      return { ...blank(), title: entry?.zh ?? (each.native || each.title), originalTitle: each.native, cover: each.cover, rating: each.rating,
-        airsAt: new Date(each.at).toISOString(), episode: each.episode, bangumi: entry?.bangumi ?? null, tmdb: entry?.tmdb ?? null, links: entry?.links ?? [] };
+    const days = bucket(w, airing, (each) => each.day, (each) => {
+      const entry = byMal.get(each.mal);
+      const at = (entry ? airings(entry, w).find((time) => dayOf(w, time) === each.day) : undefined) ?? each.at;
+      return { ...blank(), title: entry?.zh ?? each.title, originalTitle: entry?.title ?? each.title, cover: each.cover, rating: each.rating,
+        airsAt: at !== null ? new Date(at).toISOString() : null, episode: each.episode, bangumi: entry?.bangumi ?? null, tmdb: entry?.tmdb ?? null, links: entry?.links ?? [] };
     }, byTime);
-    if (count(days) >= MINIMUM.anime) return made("anilist", true, days, [CREDITS.anilist, ...(data.length ? [CREDITS.bangumiData] : [])]);
-    failures.push(`anilist: ${count(days)} episodes`);
+    if (count(days) >= MINIMUM.anime) return made("simkl", true, days, [CREDITS.simkl, ...(data.length ? [CREDITS.bangumiData] : [])]);
+    failures.push(`simkl: ${count(days)} episodes`);
   } else failures.push(String(schedule.reason?.message ?? schedule.reason));
 
   // 3. bangumi-data alone: this season's shows by their broadcast rules (no covers).
@@ -346,14 +351,30 @@ export async function buildAnime(up: Upstream): Promise<Calendar> {
 
 // ---- TV ----
 
-// TMDB: the most popular series with an episode on each day, overall and Chinese-language (which the overall list
-// would crowd out). Animation (the anime calendar has it), news and talk shows are left out.
+// TMDB: the most popular series with an episode on each day, in Chinese, and from the places the app's viewers watch
+// most (by popularity alone, European game shows and soaps filled the list). Animation (the anime calendar has it),
+// news, daily soaps and talk shows are left out, and reality shows unless they are Chinese (variety shows).
+const ABROAD = "US|GB|KR|JP|TW|HK|TH";
+const genres = (reality: boolean) => (reality ? "16,10763,10766,10767" : "16,10763,10764,10766,10767");
+// The start of a synopsis: the card shows two or three lines, so the rest would only make the response bigger.
+function blurb(text: unknown): string | null {
+  const clean = str(text).replace(/\s+/g, " ").trim();
+  if (!clean) return null;
+  return clean.length > 120 ? clean.slice(0, 119).trimEnd() + "…" : clean;
+}
+
 async function tmdbWeek(up: Upstream, w: Week): Promise<CalendarDay[]> {
   if (!up.tmdb) throw new Error("TMDB: no token");
-  const queries = w.dates.flatMap((date, index) => [{ index, date, extra: {} }, { index, date, extra: { with_original_language: "zh" } }]);
+  const region = REGIONS[up.region ?? "all"];
+  const chinese = { with_original_language: "zh", without_genres: genres(true) };
+  const abroad = { with_origin_country: ABROAD, without_genres: genres(false) };
+  // Chinese first for a Chinese-speaking viewer: TMDB's popularity ranks them below the American ones.
+  const lists: Record<string, string>[] = region.countries ? [{ with_origin_country: region.countries, without_genres: genres(region.reality) }]
+    : (up.language ?? "zh-CN").startsWith("zh") ? [chinese, abroad] : [abroad, chinese];
+  const queries = w.dates.flatMap((date, index) => lists.map((extra, list) => ({ index, date, list, extra })));
   const pages = await mapLimit(queries, 4, (query) => up.tmdb!.get("/discover/tv", {
     "air_date.gte": query.date, "air_date.lte": query.date, timezone: ZONE, language: up.language ?? "zh-CN",
-    sort_by: "popularity.desc", include_adult: "false", without_genres: "16,10763,10767", page: 1, ...query.extra,
+    sort_by: "popularity.desc", include_adult: "false", page: 1, ...query.extra,
   }));
   const failed = pages.filter((page) => page.status === "rejected");
   // A stray failure leaves a thinner day; more means TMDB is having trouble.
@@ -361,7 +382,7 @@ async function tmdbWeek(up: Upstream, w: Week): Promise<CalendarDay[]> {
   const shows = queries.flatMap((query, i) => {
     const page = pages[i];
     const results = page.status === "fulfilled" && Array.isArray(page.value?.results) ? page.value.results : [];
-    return results.map((show: any) => ({ index: query.index, show }));
+    return results.map((show: any) => ({ index: query.index, list: query.list, show }));
   });
   const seen = new Set<string>();
   const unique = shows.filter(({ index, show }) => {
@@ -369,17 +390,17 @@ async function tmdbWeek(up: Upstream, w: Week): Promise<CalendarDay[]> {
     if (!int(show?.id) || !str(show?.name) || !show.poster_path || show.adult || seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).sort((a, b) => (Number(b.show.popularity) || 0) - (Number(a.show.popularity) || 0));
+  }).sort((a, b) => a.list - b.list || (Number(b.show.popularity) || 0) - (Number(a.show.popularity) || 0));
   return bucket(w, unique, ({ index }) => index, ({ show }) => ({ ...blank(), title: str(show.name), originalTitle: str(show.original_name) || str(show.name),
-    cover: image(show.poster_path, "w342"), rating: show.vote_count > 0 ? score(show.vote_average) : null, tmdb: { type: "tv", id: show.id, season: null } }), asGiven);
+    cover: image(show.poster_path, "w342"), rating: show.vote_count > 0 ? score(show.vote_average) : null, overview: blurb(show.overview), tmdb: { type: "tv", id: show.id, season: null } }), asGiven);
 }
 
-// TVmaze: Chinese streaming and broadcast schedules, with episode numbers and times (names are often pinyin).
+// TVmaze: the region's streaming and broadcast schedules, with episode numbers and times (English or pinyin names).
 async function tvmazeWeek(up: Upstream, w: Week): Promise<CalendarDay[]> {
-  const queries = w.dates.flatMap((date, index) => [
-    { index, url: `https://api.tvmaze.com/schedule/web?date=${date}&country=CN` },
-    { index, url: `https://api.tvmaze.com/schedule?country=CN&date=${date}` },
-  ]);
+  const queries = w.dates.flatMap((date, index) => REGIONS[up.region ?? "all"].tvmaze.flatMap((country) => [
+    { index, url: `https://api.tvmaze.com/schedule/web?date=${date}&country=${country}` },
+    { index, url: `https://api.tvmaze.com/schedule?country=${country}&date=${date}` },
+  ]));
   const pages = await mapLimit(queries, 3, (query) => getJSON(up, query.url));
   const failed = pages.filter((page) => page.status === "rejected");
   if (failed.length > 2) throw new Error(String((failed[0] as PromiseRejectedResult).reason?.message));
@@ -398,15 +419,16 @@ async function tvmazeWeek(up: Upstream, w: Week): Promise<CalendarDay[]> {
   return bucket(w, episodes, ({ index }) => index, ({ episode, show }) => {
     const at = Date.parse(episode.airstamp);
     return { ...blank(), title: str(show.name), originalTitle: str(show.name), cover: https(show.image?.medium), airsAt: Number.isFinite(at) ? new Date(at).toISOString() : null,
-      episode: int(episode.number), season: int(episode.season), rating: score(show.rating?.average), network: str((show.network ?? show.webChannel)?.name) || null };
+      episode: int(episode.number), season: int(episode.season), rating: score(show.rating?.average), network: str((show.network ?? show.webChannel)?.name) || null,
+      overview: blurb(str(show.summary).replace(/<[^>]*>/g, "")) };
   }, asGiven);
 }
 
 export async function buildTV(up: Upstream): Promise<Calendar> {
   const w = week(up.now);
-  const made = (source: string, fallback: boolean, days: CalendarDay[], credit: { name: string; url: string }): Calendar =>
-    ({ kind: "tv", source, fallback, stale: false, built: Math.floor(up.now / 1000), timeZone: ZONE, days, attribution: [credit] });
   const failures: string[] = [];
+  const made = (source: string, fallback: boolean, days: CalendarDay[], credit: { name: string; url: string }): Calendar =>
+    ({ kind: "tv", source, fallback, stale: false, built: Math.floor(up.now / 1000), timeZone: ZONE, days, attribution: [credit], issues: [...failures] });
   try {
     const days = await tmdbWeek(up, w);
     if (count(days) >= MINIMUM.tv) return made("tmdb", false, days, CREDITS.tmdb);

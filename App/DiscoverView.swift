@@ -11,6 +11,8 @@ import TVCore
     /// Douban's hot lists, only fetched while their section is shown. A list that fails is just left out.
     private(set) var douban: [DoubanCatalog.Feed: [DoubanCatalog.Item]] = [:]
     private var doubanLoading = false
+    /// This week's airing calendars (Airing Today); not on Apple TV. One that fails is just left out.
+    private(set) var calendar: [TMDBCalendar.Kind: TMDBCalendar.Week] = [:]
     static let feeds: [TMDBCatalog.Feed] = [.trending, .nowPlaying, .onTheAir, .variety, .chinese, .animation, .topMovies, .topTelevision, .family, .kids, .netflix, .disney, .appleTV, .hbo, .warner, .universal, .paramount, .sony]
     func items(_ feed: TMDBCatalog.Feed) -> [TMDBCatalog.Item] { pages[feed]?.items ?? [] }
 
@@ -20,6 +22,10 @@ import TVCore
         defer { loading = false }
         let pending = Self.feeds.filter { refresh || pages[$0] == nil }
         async let metadata = try? TMDBCatalog.collections()
+        #if !os(tvOS)
+        async let anime = try? TMDBCalendar.week(.anime)
+        async let series = try? TMDBCalendar.week(.tv)
+        #endif
         await withTaskGroup(of: (TMDBCatalog.Feed, TMDBCatalog.Page?).self) { group in
             for feed in pending {
                 group.addTask { (feed, try? await TMDBCatalog.page(feed)) }
@@ -31,6 +37,13 @@ import TVCore
             }
         }
         let fresh = await metadata
+        #if !os(tvOS)
+        let weeks = (anime: await anime, series: await series)
+        if !Task.isCancelled {
+            if let week = weeks.anime { calendar[.anime] = week }
+            if let week = weeks.series { calendar[.tv] = week }
+        }
+        #endif
         if !Task.isCancelled {
             if let fresh { collections = fresh; collectionsFailed = false }
             else { collectionsFailed = true }
@@ -67,6 +80,7 @@ struct DiscoverView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var editing = false
     @State private var searchShown = false
+    @Environment(\.openRoute) private var openRoute
     #if os(tvOS)
     @FocusState private var tvFocus: DiscoverTVFocus?
     #endif
@@ -85,7 +99,7 @@ struct DiscoverView: View {
                         if featured.isEmpty, model.loading {
                             ProgressView().frame(maxWidth: .infinity).frame(height: min(proxy.size.width * 1.5, 660))
                         }
-                        ForEach(DiscoverSection.allCases.filter(visible)) { section in
+                        ForEach(DiscoverSection.available.filter(visible)) { section in
                             sectionView(section, width: proxy.size.width)
                         }
                         if !model.failures.isEmpty || model.collectionsFailed {
@@ -196,7 +210,7 @@ struct DiscoverView: View {
         .sheet(isPresented: $editing) {
             NavigationStack {
                 Form {
-                    ForEach(DiscoverSection.allCases) { section in
+                    ForEach(DiscoverSection.available) { section in
                         Toggle(section.title, isOn: shown(section))
                             #if !os(tvOS)
                             .settingsSwitch()
@@ -234,6 +248,7 @@ struct DiscoverView: View {
                 #endif
             }
         case .douban: doubanShelves
+        case .calendar: airingToday
         case .nowPlaying: shelf(.nowPlaying)
         case .onTheAir: shelf(.onTheAir)
         case .trending: shelf(.trending, landscape: true)
@@ -245,6 +260,25 @@ struct DiscoverView: View {
         case .rankings: rankings(width: width)
         case .companies: brands(model.collections?.companies ?? [], title: section.title, width: 197, studio: true)
         }
+    }
+
+    /// Today's anime and series, and the week's calendar behind the heading.
+    @ViewBuilder private var airingToday: some View {
+        #if !os(tvOS)
+        if !model.calendar.isEmpty {
+            DiscoverAiringToday(weeks: model.calendar)
+            #if DEBUG
+                .task {
+                    // QA: -qaCalendarOpen anime|tv opens the week page (with -qaCalendar for a local Worker).
+                    if let value = UserDefaults.standard.string(forKey: "qaCalendarOpen"), !DiscoverQA.calendarOpened {
+                        DiscoverQA.calendarOpened = true
+                        let kind = TMDBCalendar.Kind(rawValue: value) ?? .anime
+                        openRoute?(Route { AnyView(DiscoverCalendarView(initial: model.calendar, kind: kind)) })
+                    }
+                }
+            #endif
+        }
+        #endif
     }
 
     private func sectionHeading(_ title: String) -> some View {
@@ -1376,12 +1410,25 @@ private extension TMDBCatalog.Feed {
     }
 }
 
+#if DEBUG
+@MainActor private enum DiscoverQA { static var calendarOpened = false }
+#endif
+
 private enum DiscoverSection: String, CaseIterable, Identifiable {
-    case hero, douban, nowPlaying, onTheAir, trending, collections, animation, people, networks, genres, rankings, companies
+    case hero, calendar, douban, nowPlaying, onTheAir, trending, collections, animation, people, networks, genres, rankings, companies
     var id: String { rawValue }
+    /// The ones this platform has: Apple TV has no airing calendar.
+    static var available: [DiscoverSection] {
+        #if os(tvOS)
+        allCases.filter { $0 != .calendar }
+        #else
+        allCases
+        #endif
+    }
     var title: String {
         switch self {
         case .hero: L10n.text("Featured Titles")
+        case .calendar: L10n.text("Airing Today")
         case .douban: L10n.text("Douban Hot Lists")
         case .nowPlaying: L10n.text("In Theaters")
         case .onTheAir: L10n.text("On the Air")

@@ -1396,3 +1396,21 @@
 "Douban" = "Douban";
 
 "%@ (Translated from %@)" = "%@ (Translated from %@)";
+
+"Airing Today" = "Airing Today";
+"Airing Schedule" = "Airing Schedule";
+"Anime" = "Anime";
+"Nothing Airing" = "Nothing Airing";
+"Couldn't load the airing schedule." = "Couldn't load the airing schedule.";
+"Data:" = "Data:";
+"The schedule sources can't be reached right now, so this is an older copy." = "The schedule sources can't be reached right now, so this is an older copy.";
+"Full Schedule" = "Full Schedule";
+"Aired" = "Aired";
+"Chinese Series" = "Chinese Series";
+"Hong Kong & Taiwan Series" = "Hong Kong & Taiwan Series";
+"American Series" = "American Series";
+"Japanese Series" = "Japanese Series";
+"Korean Series" = "Korean Series";
+"British Series" = "British Series";
+"Today" = "Today";
+"Airs Next" = "Airs Next";

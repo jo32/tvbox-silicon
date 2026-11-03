@@ -1396,3 +1396,21 @@
 "Douban" = "豆瓣";
 
 "%@ (Translated from %@)" = "%@（译自%@）";
+
+"Airing Today" = "今日播出";
+"Airing Schedule" = "播出时间表";
+"Anime" = "番剧";
+"Nothing Airing" = "当天没有播出";
+"Couldn't load the airing schedule." = "无法加载播出时间表。";
+"Data:" = "数据来源：";
+"The schedule sources can't be reached right now, so this is an older copy." = "暂时无法连接时间表来源，以下为较早的版本。";
+"Full Schedule" = "完整时间表";
+"Aired" = "已播出";
+"Chinese Series" = "国产剧";
+"Hong Kong & Taiwan Series" = "港台剧";
+"American Series" = "美剧";
+"Japanese Series" = "日剧";
+"Korean Series" = "韩剧";
+"British Series" = "英剧";
+"Today" = "今天";
+"Airs Next" = "即将播出";

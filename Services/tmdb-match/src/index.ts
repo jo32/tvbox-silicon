@@ -13,7 +13,7 @@ import { catalogPerson } from "./catalog-person.ts";
 import { catalogSearch, readCatalogSearch } from "./catalog-search.ts";
 import { catalog, catalogCollections, isCatalogFeed } from "./catalog.ts";
 import { modelConfig } from "./provider.ts";
-import { buildCalendar, type Calendar, calendarFor, type CalendarKind, type CalendarStore } from "./calendar.ts";
+import { buildCalendar, type Calendar, calendarFor, type CalendarKind, type CalendarStore, isRegion } from "./calendar.ts";
 
 interface Env {
   DB: D1Database;
@@ -494,14 +494,15 @@ async function airing(request: Request, env: Env, ctx: ExecutionContext): Promis
   const url = new URL(request.url);
   const kind = url.searchParams.get("kind") ?? "anime";
   const language = url.searchParams.get("language") ?? "zh-CN";
-  if ((kind !== "anime" && kind !== "tv") || !LANGUAGES.has(language)) return new Response(null, { status: 400 });
+  const region = url.searchParams.get("region") ?? "all";
+  if ((kind !== "anime" && kind !== "tv") || !LANGUAGES.has(language) || !isRegion(region)) return new Response(null, { status: 400 });
   if (!(await env.DETAILS_LIMITER.limit({ key: request.headers.get("cf-connecting-ip") ?? "" })).success) return new Response(null, { status: 429 });
   const now = Date.now();
   // No Cache API for the builds' TMDB requests: a build runs a few times a day, and every lookup counts as a subrequest.
-  const build = () => buildCalendar(kind as CalendarKind, { fetch: (input, init) => fetch(input, init), now: Date.now(), language,
+  const build = () => buildCalendar(kind as CalendarKind, { fetch: (input, init) => fetch(input, init), now: Date.now(), language, region,
     tmdb: env.TMDB_TOKEN ? new TMDB(env.TMDB_TOKEN, undefined, null) : null });
   try {
-    const calendar = await calendarFor(kind, kind === "anime" ? "*" : language, calendarStore(env.DB), build, now, (job) => ctx.waitUntil(job));
+    const calendar = await calendarFor(kind, kind === "anime" ? "*" : `${language}|${region}`, calendarStore(env.DB), build, now, (job) => ctx.waitUntil(job));
     return Response.json(calendar, { headers: { "cache-control": "public, max-age=900" } });
   } catch (error) {
     return Response.json({ error: (error as Error).message.slice(0, 300) }, { status: 502 });
