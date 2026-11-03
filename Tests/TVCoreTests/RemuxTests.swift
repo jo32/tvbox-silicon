@@ -501,8 +501,9 @@ import VideoToolbox
         #expect(segments[1].key?.iv == Data(repeating: 0, count: 15) + Data([42]))
         #expect(segments[2].key == nil)
         #expect(HLSRemux.iv(258) == Data(repeating: 0, count: 14) + Data([1, 2]))
-        // Live, fragmented MP4 and SAMPLE-AES are left to AVPlayer.
-        #expect(HLSRemux.segments(text.replacingOccurrences(of: "#EXT-X-ENDLIST", with: ""), base: base) == nil)
+        // A live playlist is read as well (#361); fragmented MP4 and SAMPLE-AES are left to AVPlayer.
+        #expect(HLSRemux.segments(text.replacingOccurrences(of: "#EXT-X-ENDLIST", with: ""), base: base) == segments)
+        #expect(HLSRemux.targetDuration("#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:5.5,\na.ts") == 6)
         #expect(HLSRemux.segments("#EXTM3U\n#EXT-X-MAP:URI=\"i.mp4\"\n#EXTINF:1,\na.m4s\n#EXT-X-ENDLIST", base: base) == nil)
         #expect(HLSRemux.segments("#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI=\"k\"\n#EXTINF:1,\na.ts\n#EXT-X-ENDLIST", base: base) == nil)
     }
@@ -525,6 +526,69 @@ import VideoToolbox
         let played = await picture(master)
         #expect(played.status == .readyToPlay && abs(played.duration - 4) < 0.2)
         #expect(played.size == CGSize(width: 320, height: 180) && played.video)
+    }
+
+    /// A live channel's HEVC in MPEG-TS (an IPTV channel in 4K, #361). The repackaged playlist stays live and follows
+    /// the source's as AVPlayer reloads it: segments keep their names as the window moves, a discontinuity's
+    /// initialization segment outlasts the segment it began with, and a gap in the media sequence begins one.
+    @Test func liveHEVCInTransportStreamFollowsItsPlaylist() async throws {
+        let prefix = "live-\(UUID().uuidString)"
+        for index in 0..<2 { _ = RangeServer.add("\(prefix)-\(index).ts", try Data(contentsOf: fixture("remux-hevc-ts-\(index).ts"))) }
+        // The two clips over and over; each time the first comes back, its clock starts again.
+        func source(_ sequence: Int, _ names: [Int]) -> URL {
+            let lines = ["#EXTM3U", "#EXT-X-VERSION:3", "#EXT-X-TARGETDURATION:2", "#EXT-X-MEDIA-SEQUENCE:\(sequence)"]
+                + names.enumerated().flatMap { index, name in
+                    (index > 0 && name == 0 ? ["#EXT-X-DISCONTINUITY"] : []) + ["#EXTINF:2.000000,", "\(prefix)-\(name).ts"]
+                }
+            return RangeServer.add("\(prefix).m3u8", Data((lines.joined(separator: "\n") + "\n").utf8))
+        }
+        let master = try await HLSRemux.open(source(100, [0, 1, 0, 1]), headers: [:], network: RangeServer.session)
+        defer { Remux.stop(master) }
+        let folder = master.deletingLastPathComponent()
+        func text(_ file: String) async throws -> String { String(decoding: try await fetch(folder.appending(path: file)), as: UTF8.self) }
+        func moved(_ sequence: Int, _ names: [Int]) async throws -> String {
+            _ = source(sequence, names)
+            try await Task.sleep(for: .milliseconds(1100))
+            return try await text("0.m3u8")
+        }
+        var video = try await text("0.m3u8")
+        #expect(video.hasSuffix("""
+        #EXT-X-TARGETDURATION:2
+        #EXT-X-MEDIA-SEQUENCE:0
+        #EXT-X-DISCONTINUITY-SEQUENCE:0
+        #EXT-X-MAP:URI="0-0.mp4"
+        #EXTINF:2.000000,
+        0-0.m4s
+        #EXTINF:2.000000,
+        0-1.m4s
+        #EXT-X-DISCONTINUITY
+        #EXT-X-MAP:URI="0-2.mp4"
+        #EXTINF:2.000000,
+        0-2.m4s
+        #EXTINF:2.000000,
+        0-3.m4s
+
+        """), "\(video)")
+        // Repackaged, AVPlayer shows the live picture.
+        let played = await picture(master)
+        #expect(played.status == .readyToPlay && played.size == CGSize(width: 320, height: 180) && played.video, "\(played)")
+
+        // One segment joins and two leave: names stay as they were.
+        video = try await moved(102, [0, 1, 0])
+        #expect(video.contains("#EXT-X-MEDIA-SEQUENCE:2\n#EXT-X-DISCONTINUITY-SEQUENCE:0\n#EXT-X-DISCONTINUITY\n#EXT-X-MAP:URI=\"0-2.mp4\"\n#EXTINF:2.000000,\n0-2.m4s\n"), "\(video)")
+        #expect(video.hasSuffix("0-3.m4s\n#EXT-X-DISCONTINUITY\n#EXT-X-MAP:URI=\"0-4.mp4\"\n#EXTINF:2.000000,\n0-4.m4s\n"), "\(video)")
+        // The discontinuity's first segment leaves; its initialization segment stays, and is counted.
+        video = try await moved(103, [1, 0])
+        #expect(video.contains("#EXT-X-MEDIA-SEQUENCE:3\n#EXT-X-DISCONTINUITY-SEQUENCE:1\n#EXT-X-MAP:URI=\"0-2.mp4\"\n#EXTINF:2.000000,\n0-3.m4s\n"), "\(video)")
+        #expect(RemuxPlan.box("hvcC", in: try await fetch(folder.appending(path: "0-2.mp4"))) != nil)
+        #expect(try await text("1.m3u8").contains("1-3.m4s"))
+        // Sequences 105 and 106 were missed: the next segment begins a discontinuity of its own.
+        video = try await moved(107, [1])
+        #expect(video.contains("#EXT-X-MEDIA-SEQUENCE:5\n#EXT-X-DISCONTINUITY-SEQUENCE:2\n#EXT-X-DISCONTINUITY\n#EXT-X-MAP:URI=\"0-5.mp4\"\n#EXTINF:2.000000,\n0-5.m4s\n"), "\(video)")
+        for file in ["0-5.mp4", "0-5.m4s", "1-5.m4s"] {
+            let data = try await fetch(folder.appending(path: file))
+            #expect(data.count > 8 && data.subdata(in: 4..<8) == Data((file.hasSuffix("mp4") ? "ftyp" : "moof").utf8), "\(file)")
+        }
     }
 
     /// Segments disguised behind an image header, AES-128 encrypted (the IV from the media sequence), and an advert's
@@ -575,7 +639,7 @@ import VideoToolbox
         _ = RangeServer.add("\(name).ts", try Data(contentsOf: fixture("remux-h264.ts")))
         let url = RangeServer.add("\(name).m3u8", Data("#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXTINF:0.2,\n\(name).ts\n#EXT-X-ENDLIST\n".utf8))
         await #expect(throws: (any Error).self) { try await HLSRemux.open(url, headers: [:], network: RangeServer.session) }
-        // A live stream isn't repackaged either.
+        // Nor is a live one.
         let live = RangeServer.add("live-\(name).m3u8", Data("#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXTINF:0.2,\n\(name).ts\n".utf8))
         await #expect(throws: (any Error).self) { try await HLSRemux.open(live, headers: [:], network: RangeServer.session) }
     }
