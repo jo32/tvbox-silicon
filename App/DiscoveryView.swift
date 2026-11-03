@@ -28,6 +28,8 @@ struct GlobalSearchView: View {
     /// Titles iQiyi suggests for the draft, and 360kan's chart for an empty field (`SearchSuggestions`).
     @State private var suggested: [String] = []
     @State private var trending: [String] = []
+    /// The keyboard's own screen, opened from the search field.
+    @State private var entering = false
     #endif
     private var model: SearchModel { store.searchModel }
     private var history: [String] { (try? JSONDecoder().decode([String].self, from: historyData)) ?? [] }
@@ -60,21 +62,15 @@ struct GlobalSearchView: View {
         @Bindable var model = model
         #if os(tvOS)
         searchResults
-            .searchable(text: $model.draft, prompt: Text(L10n.text("Search videos")))
-            .searchSuggestions {
-                // Past searches first, then titles for what is typed: a remote spells "xyj" and picks 西游记, as on
-                // FongMi's TV search. A completion only fills the field; the Search button below still starts the search.
-                let past = Array(history.filter { model.draft.isEmpty || $0.localizedCaseInsensitiveContains(model.draft) }.prefix(6))
-                ForEach(past + (model.draft.isEmpty ? trending : suggested).filter { !past.contains($0) }, id: \.self) { query in
-                    Text(query).searchCompletion(query)
-                }
-            }
-            .task(id: model.draft) { await suggest(model.draft) }
-            .onSubmit(of: .search) { if let config = store.subscription { submit(config) } }
+            // A field beside the sidebar button rather than the system keyboard across the top of the page, so the
+            // results get the screen (#415). Selecting it opens the keyboard on a screen of its own.
+            .modifier(BesideSidebarButton(title: AppSection.search.title) { searchField })
             .screenBackdrop()
+            .fullScreenCover(isPresented: $entering) { searchEntry }
             .sheet(isPresented: $showFailures) { failureDetails }
             .onAppear { if let config = store.subscription { model.resumeSuspended(config: config) } }
-            .onDisappear { endVisible = false; model.suspend() }
+            // The keyboard's screen covers the page without leaving it, so a running search goes on under it.
+            .onDisappear { if !entering { endVisible = false; model.suspend() } }
         #else
         searchResults
             .scrollPosition(id: $model.scrollID)
@@ -122,20 +118,20 @@ struct GlobalSearchView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 #if os(tvOS)
-                // Editing, dictation and search completions only update the draft. The remote
-                // needs an explicit, focusable submit action before starting expensive plugins.
-                if let config = store.subscription {
-                    let query = model.draft.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !query.isEmpty, query != model.keyword {
-                        SearchQueryButton(query: query) { submit(config) }.accessibilityIdentifier("search.submit")
-                    }
-                    if !model.keyword.isEmpty {
-                        searchHeader(config).padding(.horizontal, -Layout.gutter)
-                    }
+                if let config = store.subscription, !model.keyword.isEmpty {
+                    searchHeader(config).padding(.horizontal, -Layout.gutter)
                 }
                 #endif
                 if let config = store.subscription {
-                    if model.keyword.isEmpty { idle.frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity) }
+                    if model.keyword.isEmpty {
+                        #if os(tvOS)
+                        // Recent searches are on the keyboard's screen, with the suggestions.
+                        Text(L10n.text("Search all available sources in your subscription.")).font(.body).foregroundStyle(.secondary)
+                            .frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+                        #else
+                        idle.frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+                        #endif
+                    }
                     else {
                         if model.total == 0 {
                             EmptyResults(symbol: "magnifyingglass", title: L10n.text("No searchable sources are available on this device."))
@@ -195,6 +191,57 @@ struct GlobalSearchView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 420)
     }
+
+    #if os(tvOS)
+    /// Drawn as a text field showing the draft; selecting it opens `searchEntry`.
+    private var searchField: some View {
+        Button { entering = true } label: {
+            Label {
+                Text(model.draft.isEmpty ? L10n.text("Search videos") : model.draft)
+                    .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                    .opacity(model.draft.isEmpty ? 0.6 : 1)
+            } icon: { Image(systemName: "magnifyingglass") }
+            .frame(width: 560)
+        }
+        .glassPill()
+        .accessibilityLabel(L10n.text("Search videos"))
+        .accessibilityValue(model.draft)
+        .accessibilityIdentifier("search.field")
+    }
+
+    /// The system search keyboard, full screen: past searches and suggested titles under it, then the button that
+    /// runs the search and closes it. Back closes it without searching.
+    private var searchEntry: some View {
+        @Bindable var model = model
+        return NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Editing, dictation and search completions only update the draft. The remote
+                    // needs an explicit, focusable submit action before starting expensive plugins.
+                    if let config = store.subscription {
+                        let query = model.draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !query.isEmpty, query != model.keyword {
+                            SearchQueryButton(query: query) { submit(config) }.accessibilityIdentifier("search.submit")
+                        }
+                    }
+                    idle.frame(maxWidth: 760, alignment: .leading).frame(maxWidth: .infinity)
+                }.pageContainer()
+            }
+            .searchable(text: $model.draft, prompt: Text(L10n.text("Search videos")))
+            .searchSuggestions {
+                // Past searches first, then titles for what is typed: a remote spells "xyj" and picks 西游记, as on
+                // FongMi's TV search. A completion only fills the field; the Search button below still starts the search.
+                let past = Array(history.filter { model.draft.isEmpty || $0.localizedCaseInsensitiveContains(model.draft) }.prefix(6))
+                ForEach(past + (model.draft.isEmpty ? trending : suggested).filter { !past.contains($0) }, id: \.self) { query in
+                    Text(query).searchCompletion(query)
+                }
+            }
+            .task(id: model.draft) { await suggest(model.draft) }
+            .onSubmit(of: .search) { if let config = store.subscription { submit(config) } }
+            .screenBackdrop()
+        }
+    }
+    #endif
 
     private func searchHeader(_ config: Subscription) -> some View {
         @Bindable var model = model
@@ -492,6 +539,9 @@ struct GlobalSearchView: View {
         guard !keyword.isEmpty else { return }
         rememberQuery(keyword)
         inputFocused = false
+        #if os(tvOS)
+        entering = false
+        #endif
         model.search(keyword, config: config) { [store] site in
             store.hiddenSources.contains(site, origin: config.origin)
         }
@@ -572,6 +622,31 @@ private struct SearchActivityList: View {
 }
 
 #if os(tvOS)
+/// Puts `field` in the row of the collapsed sidebar's button, just after it. The system draws that button (the section's
+/// symbol and name) at the top left and gives no way to add to its row, so a hidden copy of the name, at the button's
+/// font and insets as tvOS 27 draws it, takes its width. tvOS 17 has the tab bar along the top instead: the field
+/// goes in the navigation bar under it.
+private struct BesideSidebarButton<Field: View>: ViewModifier {
+    let title: String
+    @ViewBuilder let field: Field
+    func body(content: Content) -> some View {
+        if #available(tvOS 18, *) {
+            content.overlay(alignment: .topLeading) {
+                HStack(spacing: 32) {
+                    Text(title).font(.system(size: 31, weight: .medium)).lineLimit(1).fixedSize()
+                        .padding(.leading, 83).hidden().accessibilityHidden(true)
+                    field
+                }
+                .frame(height: 58)
+                .padding(.leading, 50).padding(.top, 51)
+                .ignoresSafeArea()
+            }
+        } else {
+            content.toolbar { ToolbarItem(placement: .topBarLeading) { field } }
+        }
+    }
+}
+
 /// The search's progress, drawn rather than a linear `ProgressView`. On tvOS that is a UIProgressView, and setting
 /// its progress makes UIKit's accessibility ask SwiftUI for the focused element in the middle of a view update.
 /// With the remote moving through the results as sources answer, AttributeGraph then loops on the cycle with the
