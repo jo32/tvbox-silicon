@@ -390,6 +390,8 @@ struct MobilePlayerView: View {
                     HStack(spacing: 6) {
                         if boost.locked { Image(systemName: "lock.fill") }
                         Text(Self.speedLabel(rate))
+                        // Held lower than asked: the connection can't keep up with the faster speed.
+                        if let wanted = session.boostWanted { Text(Self.speedLabel(wanted)).strikethrough().opacity(0.55) }
                         Image(systemName: "forward.fill")
                     }
                     .font(.subheadline.weight(.semibold).monospacedDigit())
@@ -402,7 +404,11 @@ struct MobilePlayerView: View {
                 .accessibilityLabel(L10n.text("Back to Normal Speed"))
                 .accessibilityValue(Self.speedLabel(rate))
                 .accessibilityIdentifier("player.boost")
-                if holding && !boost.locked {
+                if session.boostWanted != nil {
+                    Text(L10n.text("Slowed down to keep up with the connection"))
+                        .font(.caption).shadow(color: .black.opacity(0.6), radius: 4)
+                        .accessibilityHidden(true)
+                } else if holding && !boost.locked {
                     Text(L10n.text("Slide sideways to change the speed, or down to keep it"))
                         .font(.caption).shadow(color: .black.opacity(0.6), radius: 4)
                         .accessibilityHidden(true)

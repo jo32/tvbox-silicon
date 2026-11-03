@@ -1034,6 +1034,7 @@
 "Touch and Hold Speed" = "长按倍速";
 "Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go." = "长按视频画面以此速度播放。按住时左右滑动可调整倍速，向下滑动可在松手后保持。";
 "Slide sideways to change the speed, or down to keep it" = "左右滑动调整倍速，向下滑动锁定";
+"Slowed down to keep up with the connection" = "网速跟不上，已自动降低倍速";
 "Back to Normal Speed" = "恢复正常速度";
 "%lld s" = "%lld 秒";
 "Brightness" = "亮度";
