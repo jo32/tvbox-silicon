@@ -42,6 +42,9 @@ import TVCore
     let favorites: Favorites
     var importing = false
     var error: String?
+    /// Why the last subscription import failed. It shows under the address field, not in the app-wide alert: on
+    /// iPhone and iPad that alert closed the Add Subscription sheet over it and took the viewer out of the form (#357).
+    var importError: String?
     var notice: String?
     var playing: Channel? {
         // An episode of a listening source (audiobooks, radio, songs) plays in the music player instead (#289).
@@ -283,7 +286,7 @@ import TVCore
     /// adds every subscription it lists, switched off, for the viewer to choose from.
     func importSubscription(address: String? = nil) async {
         guard !importing else { return }
-        importing = true; error = nil; notice = nil
+        importing = true; importError = nil; notice = nil
         defer { importing = false }
         let typed = (address ?? subscriptionAddress).trimmingCharacters(in: .whitespacesAndNewlines)
         do {
@@ -314,7 +317,7 @@ import TVCore
             rebuildSubscription()
         } catch {
             Diagnostics.shared.failure("subscription", "import host=\((try? WebAddress.resolve(typed))?.host() ?? "-")", error)
-            self.error = L10n.text("Import failed: %@", error.localizedDescription)
+            importError = L10n.text("Import failed: %@", error.localizedDescription)
         }
     }
     /// Adds a subscription, or one spider script, from a file the viewer picked. The file is copied
@@ -324,7 +327,7 @@ import TVCore
         let copied = Result { try ImportedFiles.add(file) }
         if scoped { file.stopAccessingSecurityScopedResource() }
         guard case .success(let url) = copied else {
-            if case .failure(let error) = copied { self.error = L10n.text("Import failed: %@", error.localizedDescription) }
+            if case .failure(let error) = copied { importError = L10n.text("Import failed: %@", error.localizedDescription) }
             return
         }
         let address = url.absoluteString, known = subscriptions.contains { $0.address == address }
@@ -335,7 +338,7 @@ import TVCore
     /// Fetches every enabled subscription again; one that fails keeps its last good copy.
     func refreshSubscriptions() async {
         guard !importing else { return }
-        importing = true; error = nil; notice = nil
+        importing = true; importError = nil; notice = nil
         defer { importing = false }
         await fetch(subscriptions.filter(\.enabled))
         let failed = subscriptions.filter { $0.enabled && subscriptionErrors[$0.address] != nil }.count

@@ -446,7 +446,7 @@ struct FormSettingsView: View {
                 Text(L10n.text("Subscriptions"))
                 #endif
             } footer: {
-                if let message = store.error ?? store.notice { Text(message) }
+                if let message = store.importError ?? store.notice { Text(message) }
             }
 
             Section(L10n.text("Accounts")) {
@@ -942,7 +942,7 @@ private struct AddSubscriptionSheet: View {
                         .submitLabel(.done)
                         .onSubmit(add)
                 } footer: {
-                    if let error = store.error { Text(error).foregroundStyle(Brand.amber) }
+                    if let error = store.importError { Text(error).foregroundStyle(Brand.amber) }
                     else { Text(L10n.text("Paste the address of a TVBox JSON subscription, an M3U or TXT live playlist, or an AList server.")) }
                 }
                 // Offered, never filled in or imported on its own.
@@ -972,12 +972,12 @@ private struct AddSubscriptionSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
-        .onAppear { store.error = nil; focused = true }
+        .onAppear { store.importError = nil; focused = true }
         .fileImporter(isPresented: $choosesFile, allowedContentTypes: SubscriptionFile.types) { result in
             guard case .success(let file) = result else { return }
             Task {
                 await store.importSubscriptionFile(file)
-                if store.error == nil { dismiss() }
+                if store.importError == nil { dismiss() }
             }
         }
     }
@@ -986,7 +986,7 @@ private struct AddSubscriptionSheet: View {
         guard canAdd else { return }
         Task {
             await store.importSubscription()
-            if store.error == nil { dismiss() }
+            if store.importError == nil { dismiss() }
         }
     }
 }
@@ -1920,14 +1920,14 @@ private struct TVAddSubscriptionPage: View {
         @Bindable var store = store
         let empty = store.subscriptionAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         TVSettingsSubpage(symbol: "plus.rectangle.on.rectangle", title: L10n.text("Add Subscription")) {
-            TVSettingsSection(title: L10n.text("Subscription"), footer: store.error ?? store.notice) {
+            TVSettingsSection(title: L10n.text("Subscription"), footer: store.importError ?? store.notice) {
                 TVSettingsField(title: L10n.text("Subscription URL (TVBox JSON, M3U or TXT)"), text: $store.subscriptionAddress)
                 TVSettingsField(title: L10n.text("Name (optional)"), text: $store.subscriptionName)
                 TVSettingsAction(title: store.importing ? L10n.text("Importing…") : L10n.text("Add Subscription"), busy: store.importing) {
                     Task {
                         let before = store.subscriptions.count
                         await store.importSubscription()
-                        if store.error == nil, store.subscriptions.count > before { dismiss() }
+                        if store.importError == nil, store.subscriptions.count > before { dismiss() }
                     }
                 }
                 .disabled(store.importing || empty)
