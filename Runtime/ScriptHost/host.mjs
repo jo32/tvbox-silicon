@@ -460,7 +460,7 @@ async function callCatPaw(params) {
         if (!response.ok) {
             let message = text;
             try { message = JSON.parse(text).message || text; } catch { }
-            throw new Error(`The source failed (HTTP ${response.status}): ${String(message).slice(0, 300)}`);
+            throw Object.assign(new Error(`The source failed (HTTP ${response.status}): ${String(message).slice(0, 300)}`), { status: response.status });
         }
         return text;
     };
@@ -480,7 +480,10 @@ async function callCatPaw(params) {
     else if ('wd' in params) { route = '/search'; body = { wd: params.wd, page: Number(params.pg || 1), quick: params.quick === 'true' }; }
     else if ('t' in params) { route = '/category'; body = { id: params.t, page: Number(params.pg || 1), filter: true, filters: params.filters ? JSON.parse(params.filters) : {} }; }
     else { route = '/home'; body = {}; }
-    const { text, page } = await watchingPages(route, () => send(api + route, body));
+    // A search that finds nothing answers HTTP 404 in some bundles: the 9280.kstore.vip sites (木偶, 虎斑, 蜡笔…) pass on
+    // their site's 404 for a search without matches, and a source without search has no route. Neither is a failure.
+    const { text, page } = await watchingPages(route, () => send(api + route, body)
+        .catch(error => { if (route === '/search' && error.status === 404) return '{"list":[]}'; throw error; }));
     // Sources address the bundle's own proxy by the Mac's network address, but the server is on loopback.
     const result = text.replace(new RegExp(`http://\\d+\\.\\d+\\.\\d+\\.\\d+:${port}/`, 'g'), `http://127.0.0.1:${port}/`);
     return { result: page ? withPage(result, page) : result };

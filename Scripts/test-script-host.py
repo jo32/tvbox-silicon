@@ -59,4 +59,47 @@ export default {
                 assert process.wait(timeout=5) == 0
             finally:
                 if process.poll() is None: process.kill(); process.wait()
-print('Script host checks passed: modules, HTML parsing, persistent state, restart preferences, response protocol.')
+
+# A CatPawOpen bundle (猫源): a search that finds nothing may answer HTTP 404, which is no results rather than a failure.
+with tempfile.TemporaryDirectory() as folder:
+    job = pathlib.Path(folder)
+    bundle = job / 'index.js'
+    bundle.write_text("""
+exports.start = async () => {
+  const server = globalThis.catServerFactory((req, res) => {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      const reply = (status, value) => { res.writeHead(status, {'content-type': 'application/json'}); res.end(JSON.stringify(value)); };
+      if (req.url.endsWith('/init')) return reply(200, {});
+      if (req.url === '/spider/site/3/home') return reply(500, {message: 'home broke'});
+      if (req.url === '/spider/site/3/search') {
+        const {wd} = JSON.parse(body);
+        if (wd === 'found') return reply(200, {list: [{vod_id: '1', vod_name: 'Found'}]});
+        return reply(404, {statusCode: 404, message: 'Request failed with status code 404'});
+      }
+      reply(404, {message: `Route ${req.method}:${req.url} not found`});
+    });
+  });
+  server.listen();
+};
+""")
+    request = job / 'request.json'
+    request.write_text(json.dumps(dict(script=str(bundle), cache=str(job), api='http://127.0.0.1:9/index.js', key='site', catPawOpen=True)))
+    with open(job / 'log', 'w') as log:
+        process = subprocess.Popen([str(host / 'node'), '--no-warnings', '--experimental-vm-modules', str(host / 'host.mjs'), '--serve', str(request)], stdin=subprocess.PIPE, stdout=log, stderr=log, text=True)
+        try:
+            assert wait(job / 'ready.json') == {'ready': True}
+            def answer(ident, params):
+                process.stdin.write(json.dumps(dict(id=ident, params=params)) + '\n'); process.stdin.flush()
+                return wait(job / 'responses' / (ident + '.json'))
+            assert json.loads(answer('found', {'catPawOpen': '/spider/site/3', 'wd': 'found'})['result'])['list'] == [{'vod_id': '1', 'vod_name': 'Found'}]
+            assert json.loads(answer('none', {'catPawOpen': '/spider/site/3', 'wd': 'nothing'})['result'])['list'] == []
+            assert json.loads(answer('nosearch', {'catPawOpen': '/spider/other/3', 'wd': 'x'})['result'])['list'] == []
+            home = answer('home', {'catPawOpen': '/spider/site/3'})
+            assert 'home broke' in json.dumps(home, ensure_ascii=False), home
+            process.stdin.close()
+            assert process.wait(timeout=5) == 0
+        finally:
+            if process.poll() is None: process.kill(); process.wait()
+print('Script host checks passed: modules, HTML parsing, persistent state, restart preferences, response protocol, CatPawOpen searches.')
