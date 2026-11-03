@@ -527,6 +527,7 @@
 "Storage" = "儲存空間";
 "%@ free" = "可用 %@";
 "used by downloads" = "已被下載佔用";
+"%@ used by downloads" = "下載已佔用 %@";
 "Other" = "其他";
 "Free" = "可用";
 "tvOS may remove downloads when Apple TV runs low on storage." = "Apple TV 儲存空間不足時，tvOS 可能會刪除下載內容。";
