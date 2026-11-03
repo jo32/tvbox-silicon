@@ -379,6 +379,8 @@
 "Try another keyword." = "请更换关键词。";
 "Show Details" = "查看详情";
 "Hide Details" = "收起详情";
+"Show as List" = "以列表显示";
+"Show as Grid" = "以网格显示";
 "%lld of %lld sources responded" = "%lld / %lld 个源已响应";
 "First-time setup can take a few minutes. Keep the app open." = "首次准备可能需要几分钟，请保持 App 打开。";
 "This source requires Android features that the plugin runtime does not support yet." = "此源依赖插件运行时尚未支持的 Android 功能。";
