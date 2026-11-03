@@ -328,24 +328,35 @@ async function call(spider, params) {
     return { result: typeof result === 'string' ? result : JSON.stringify(result) };
 }
 // Bundles ask the app for things by POSTing {action, opt} to http://127.0.0.1:<catDartServerPort()>/msg, as the CatVod
-// Open apps take them. The bundle's own server answers that address here (`answerMessage`). The one request kept is a
+// Open apps take them. The host's `messages` server answers that address (`answerMessage`). The one request kept is a
 // page to open: a config center entry asks for its page that way ("openInternalWebview") and may say nothing else
 // about it (#315). Keep in step with NodeHost/main.mjs.
-const pageWatchers = new Set(); // the detail calls under way, each collecting the loopback pages asked for
+// The 豆儿 and Lmentor bundles ask for their own page at the device's network address, as a phone would scan it
+// (http://192.168.1.5:<port>/website, #385): it counts once it is on the bundle's server (`loopbackPage`).
+const pageWatchers = new Set(); // the detail calls under way, each told the pages asked for
 async function answerMessage(req, res) {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     let message = {};
     try { message = JSON.parse(Buffer.concat(chunks).toString('utf8')) || {}; } catch { }
     const page = String(message.opt?.url || '');
-    if (['openInternalWebview', 'openWeb'].includes(message.action) && /^http:\/\/(127\.0\.0\.1|localhost):\d+(\/|$)/.test(page)) {
-        for (const pages of pageWatchers) pages.push(page);
+    if (['openInternalWebview', 'openWeb'].includes(message.action) && /^http:\/\/(127\.0\.0\.1|localhost|\d+\.\d+\.\d+\.\d+):\d+(\/|$)/.test(page)) {
+        for (const watch of pageWatchers) watch(page);
     }
     // Anything else gets nothing back, as when no one answered: the bundle carries on without it.
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end('null');
 }
+// The page on loopback, as the app opens it, or undefined when it is served anywhere else.
+const loopbackPage = page => page && /^http:\/\/(127\.0\.0\.1|localhost):\d+(\/|$)/.test(page) ? page : undefined;
 const isMessage = req => req.method === 'POST' && req.url === '/msg';
+// Messages go to a server of the host's own: a bundle that finds its own port behind catDartServerPort() skips the call
+// as a call to itself (BRIDGE_SELF_CALL in the 豆儿 and Lmentor bundles), so pages they ask for never arrived (#385).
+const messages = http.createServer((req, res) => {
+    if (isMessage(req)) return answerMessage(req, res);
+    res.writeHead(404); res.end();
+});
+messages.on('error', error => log('CATPAW_MESSAGES', error?.stack || String(error)));
 // A detail answer for which the bundle asked to open a page: the page's address joins the video's synopsis, where the
 // app finds a config center (CatPawOpen.configCenter). Some bundles answer such an entry with an empty list.
 function withPage(text, page) {
@@ -360,11 +371,22 @@ function withPage(text, page) {
     answer.list = [video, ...list.slice(1)];
     return JSON.stringify(answer);
 }
-// The detail calls collect what pages the bundle asks to open while it answers.
+// The detail calls collect what pages the bundle asks to open while it answers. The 豆儿 and Lmentor bundles answer a
+// config entry with an empty video first and ask for its page a moment later (#385), so an answer with nothing to play
+// waits briefly for that; a video's details come back at once.
 async function watchingPages(route, send) {
-    const pages = [];
-    if (route.endsWith('/detail')) pageWatchers.add(pages);
-    try { return { text: await send(), page: pages.at(-1) }; } finally { pageWatchers.delete(pages); }
+    if (!route.endsWith('/detail')) return { text: await send() };
+    let page, arrived;
+    const watch = address => { page = address; arrived?.(); };
+    pageWatchers.add(watch);
+    try {
+        const text = await send();
+        if (!page && !playable(text)) await new Promise(resolve => { arrived = resolve; setTimeout(resolve, 300); });
+        return { text, page };
+    } finally { pageWatchers.delete(watch); }
+}
+function playable(text) {
+    try { return (JSON.parse(text)?.list ?? []).some(video => video?.vod_play_url); } catch { return true; }
 }
 // CatPawOpen bundles (猫源) are Node servers in the CatVod Open format: `start(config)` builds a Fastify app
 // on the server `catServerFactory` makes, the app lists its sources at GET /config and serves each at
@@ -378,10 +400,10 @@ async function startCatPaw() {
     Object.assign(console, { log, info: log, warn: log, error: log, debug: log });
     // Some bundles' handlers answer a request twice; the CatVod apps keep serving, so this does too.
     process.on('uncaughtException', error => log('CATPAW_UNCAUGHT', error?.stack || String(error)));
-    globalThis.catDartServerPort = () => catServer?.address()?.port || 0;
+    await new Promise(resolve => messages.listen(0, '127.0.0.1', resolve));
+    globalThis.catDartServerPort = () => messages.address()?.port || 0;
     globalThis.catServerFactory = handler => {
         catServer = http.createServer((req, res) => {
-            if (isMessage(req)) return answerMessage(req, res);
             // Anything but the host's own calls is the player reading the bundle's media proxy.
             if (!req.headers['x-yingxia-host'] && Date.now() - catProxyTouched > 5000) {
                 catProxyTouched = Date.now();
@@ -482,8 +504,9 @@ async function callCatPaw(params) {
     else { route = '/home'; body = {}; }
     const { text, page } = await watchingPages(route, () => send(api + route, body));
     // Sources address the bundle's own proxy by the Mac's network address, but the server is on loopback.
-    const result = text.replace(new RegExp(`http://\\d+\\.\\d+\\.\\d+\\.\\d+:${port}/`, 'g'), `http://127.0.0.1:${port}/`);
-    return { result: page ? withPage(result, page) : result };
+    const local = address => address.replace(new RegExp(`http://\\d+\\.\\d+\\.\\d+\\.\\d+:${port}/`, 'g'), `http://127.0.0.1:${port}/`);
+    const result = local(text), shown = loopbackPage(page && local(page));
+    return { result: shown ? withPage(result, shown) : result };
 }
 try {
     const spider = input.catPawOpen ? await startCatPaw() : await initialize();

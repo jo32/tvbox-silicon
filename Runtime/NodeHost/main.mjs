@@ -17,9 +17,8 @@ Object.assign(console, { log, info: log, warn: log, error: log, debug: log });
 // Some bundles' handlers answer a request twice; the CatVod apps keep serving, so this does too.
 process.on('uncaughtException', error => log('CATPAW_UNCAUGHT', error?.stack || String(error)));
 process.on('unhandledRejection', error => log('CATPAW_UNHANDLED', error?.stack || String(error)));
-// The bundle in the current call; its server also takes the bundle's messages to the app.
-let messagePort = 0;
-globalThis.catDartServerPort = () => messagePort;
+// Where bundles send their messages to the app (`messages`).
+globalThis.catDartServerPort = () => messages?.address()?.port || 0;
 
 // The app reaches the internet through the system's HTTP proxy when one is set (Settings > Wi-Fi > Configure
 // Proxy), but Node's sockets don't, so every agent's connections tunnel through it with CONNECT. A VPN-style
@@ -91,24 +90,36 @@ function request(url, { method = 'GET', headers = {}, body, timeout = 60_000 } =
 }
 
 // Bundles ask the app for things by POSTing {action, opt} to http://127.0.0.1:<catDartServerPort()>/msg, as the CatVod
-// Open apps take them. The bundle's own server answers that address here (`answerMessage`). The one request kept is a
+// Open apps take them. The host's `messages` server answers that address (`answerMessage`). The one request kept is a
 // page to open: a config center entry asks for its page that way ("openInternalWebview") and may say nothing else
 // about it (#315). Keep in step with host.mjs.
-const pageWatchers = new Set(); // the detail calls under way, each collecting the loopback pages asked for
+// The 豆儿 and Lmentor bundles ask for their own page at the device's network address, as a phone would scan it
+// (http://192.168.1.5:<port>/website, #385): it counts once it is on the bundle's server (`loopbackPage`).
+const pageWatchers = new Set(); // the detail calls under way, each told the pages asked for
 async function answerMessage(req, res) {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     let message = {};
     try { message = JSON.parse(Buffer.concat(chunks).toString('utf8')) || {}; } catch { }
     const page = String(message.opt?.url || '');
-    if (['openInternalWebview', 'openWeb'].includes(message.action) && /^http:\/\/(127\.0\.0\.1|localhost):\d+(\/|$)/.test(page)) {
-        for (const pages of pageWatchers) pages.push(page);
+    if (['openInternalWebview', 'openWeb'].includes(message.action) && /^http:\/\/(127\.0\.0\.1|localhost|\d+\.\d+\.\d+\.\d+):\d+(\/|$)/.test(page)) {
+        for (const watch of pageWatchers) watch(page);
     }
     // Anything else gets nothing back, as when no one answered: the bundle carries on without it.
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end('null');
 }
+// The page on loopback, as the app opens it, or undefined when it is served anywhere else.
+const loopbackPage = page => page && /^http:\/\/(127\.0\.0\.1|localhost):\d+(\/|$)/.test(page) ? page : undefined;
 const isMessage = req => req.method === 'POST' && req.url === '/msg';
+// Messages go to a server of the host's own: a bundle that finds its own port behind catDartServerPort() skips the call
+// as a call to itself (BRIDGE_SELF_CALL in the 豆儿 and Lmentor bundles), so pages they ask for never arrived (#385).
+const messages = http.createServer((req, res) => {
+    if (isMessage(req)) return answerMessage(req, res);
+    res.writeHead(404); res.end();
+});
+messages.on('error', error => log('CATPAW_MESSAGES', error?.stack || String(error)));
+messages.listen(0, '127.0.0.1');
 // A detail answer for which the bundle asked to open a page: the page's address joins the video's synopsis, where the
 // app finds a config center (CatPawOpen.configCenter). Some bundles answer such an entry with an empty list.
 function withPage(text, page) {
@@ -123,11 +134,22 @@ function withPage(text, page) {
     answer.list = [video, ...list.slice(1)];
     return JSON.stringify(answer);
 }
-// The detail calls collect what pages the bundle asks to open while it answers.
+// The detail calls collect what pages the bundle asks to open while it answers. The 豆儿 and Lmentor bundles answer a
+// config entry with an empty video first and ask for its page a moment later (#385), so an answer with nothing to play
+// waits briefly for that; a video's details come back at once.
 async function watchingPages(route, send) {
-    const pages = [];
-    if (route.endsWith('/detail')) pageWatchers.add(pages);
-    try { return { text: await send(), page: pages.at(-1) }; } finally { pageWatchers.delete(pages); }
+    if (!route.endsWith('/detail')) return { text: await send() };
+    let page, arrived;
+    const watch = address => { page = address; arrived?.(); };
+    pageWatchers.add(watch);
+    try {
+        const text = await send();
+        if (!page && !playable(text)) await new Promise(resolve => { arrived = resolve; setTimeout(resolve, 300); });
+        return { text, page };
+    } finally { pageWatchers.delete(watch); }
+}
+function playable(text) {
+    try { return (JSON.parse(text)?.list ?? []).some(video => video?.vod_play_url); } catch { return true; }
 }
 
 // A bundle's `start(config)` builds a Fastify app on the server `catServerFactory` makes, then lists its
@@ -137,7 +159,7 @@ let starting = Promise.resolve();
 async function start({ bundle, api, profile }) {
     let server;
     globalThis.catServerFactory = handler => {
-        server = http.createServer((req, res) => isMessage(req) ? answerMessage(req, res) : handler(req, res));
+        server = http.createServer(handler);
         const listen = server.listen.bind(server);
         server.listen = (...args) => listen(0, '127.0.0.1', args.find(arg => typeof arg === 'function'));
         return server;
@@ -208,7 +230,7 @@ async function shareAccounts(instance, accountsFile, profile) {
 async function call(instance, params) {
     const send = async (route, body) => {
         const init = body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) };
-        const ask = () => { messagePort = instance.port; return request(`http://127.0.0.1:${instance.port}${route}`, init); };
+        const ask = () => request(`http://127.0.0.1:${instance.port}${route}`, init);
         // A refused connection means iOS took the bundle's socket back while the app was suspended.
         const { status, text } = await ask().catch(async error => {
             if (error.code !== 'ECONNREFUSED') throw error;
@@ -242,8 +264,9 @@ async function call(instance, params) {
     // Sources address the bundle's own proxy by the device's network address, or by a port from before a relisten,
     // but the server is on loopback.
     const ports = instance.ports.join('|');
-    const result = text.replace(new RegExp(`http://\\d+\\.\\d+\\.\\d+\\.\\d+:(?:${ports})/`, 'g'), `http://127.0.0.1:${instance.port}/`);
-    return { result: page ? withPage(result, page) : result };
+    const local = address => address.replace(new RegExp(`http://\\d+\\.\\d+\\.\\d+\\.\\d+:(?:${ports})/`, 'g'), `http://127.0.0.1:${instance.port}/`);
+    const result = local(text), shown = loopbackPage(page && local(page));
+    return { result: shown ? withPage(result, shown) : result };
 }
 
 const control = http.createServer(async (req, res) => {
@@ -287,6 +310,7 @@ function relisten() {
             instance.port = instance.server.address().port;
             instance.ports.push(instance.port);
         }
+        await listen(messages);
         await listen(control);
         announce();
         log('CATPAW_RELISTEN', control.address().port);
