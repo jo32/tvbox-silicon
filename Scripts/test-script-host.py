@@ -18,6 +18,7 @@ export default {
   init() { local.set('test', 'runs', Number(local.get('test', 'runs') || 0) + 1); },
   home() { return {class: [{type_id: String(local.get('test', 'runs')), type_name: load('<b>title</b>')('b').text()}], list: [{vod_id: 'fallback'}]}; },
   homeVod() { return Number(local.get('test', 'runs')) === 1 ? JSON.stringify({list: [{vod_id: 'recommended', vod_name: 'Recommendation'}]}) : ''; },
+  category(tid, pg, filter, extend) { return {list: [{vod_id: tid + '-' + pg, vod_name: JSON.stringify(extend)}]}; },
   detail(id) { selected = id; return {list: [{vod_id: id}]}; },
   play() { return {url: 'https://example.com/' + selected + '.mp4', parse: 0}; },
   search() { return {list: pdfa('<div><a href="/one">One</a><a href="/two">Two</a></div>', 'div&&a').map(html => ({vod_id: pd(html, 'a&&href', 'https://example.com'), vod_name: pdfh(html, 'a&&Text')}))}; }
@@ -49,6 +50,8 @@ export default {
                 home = call({})
                 assert home['class'][0] == {'type_id': str(run), 'type_name': 'title'}
                 assert home['list'][0] == ({'vod_id': 'recommended', 'vod_name': 'Recommendation'} if run == 1 else {'vod_id': 'fallback'})
+                assert call({'t': 'movie', 'pg': '2', 'filters': json.dumps({'area': '美国'})})['list'] == [{'vod_id': 'movie-2', 'vod_name': '{"area":"美国"}'}]
+                assert call({'t': 'movie', 'pg': '1'})['list'] == [{'vod_id': 'movie-1', 'vod_name': '{}'}]
                 call({'ids': 'chosen'})
                 assert call({'play': 'opaque'})['url'] == 'https://example.com/chosen.mp4'
                 assert call({'wd': 'test'})['list'] == [{'vod_id':'https://example.com/one', 'vod_name':'One'}, {'vod_id':'https://example.com/two', 'vod_name':'Two'}]

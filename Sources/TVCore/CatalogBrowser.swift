@@ -5,11 +5,14 @@ import Observation
 @MainActor @Observable public final class CatalogBrowser {
     public enum Request: Equatable, Sendable {
         case home
-        case list(category: String?, query: String, page: Int)
+        /// `filters`: the category's filter choices, key to value (see `CategoryFilter`).
+        case list(category: String?, query: String, page: Int, filters: [String: String] = [:])
     }
     public private(set) var categories: [Category] = []
     public private(set) var videos: [Video] = []
     public private(set) var category = ""
+    /// The shown category's filter choices; kept when paging.
+    public private(set) var filters: [String: String] = [:]
     public private(set) var query = ""
     public private(set) var page = 1
     public private(set) var pageCount = 1
@@ -37,7 +40,7 @@ import Observation
         await load(request, context: client.reportContext) { request in
             switch request {
             case .home: return try await client.home()
-            case let .list(category, query, page): return try await client.list(category: category, query: query, page: page)
+            case let .list(category, query, page, filters): return try await client.list(category: category, query: query, page: page, filters: filters)
             }
         }
     }
@@ -49,7 +52,7 @@ import Observation
         var seen = Set<String>()
         self.videos = videos.filter { seen.insert($0.id).inserted }
         self.categories = categories
-        request = .home; category = ""; query = ""; page = 1; pageCount = 1
+        request = .home; category = ""; query = ""; page = 1; pageCount = 1; filters = [:]
         seeded = true
     }
 
@@ -77,8 +80,9 @@ import Observation
         self.request = request
         busy = !refreshing; loaded = false; error = nil
         switch request {
-        case .home: category = ""; query = ""; page = 1
-        case let .list(category, query, page): self.category = category ?? ""; self.query = query; self.page = page
+        case .home: category = ""; query = ""; page = 1; filters = [:]
+        case let .list(category, query, page, filters):
+            self.category = category ?? ""; self.query = query; self.page = page; self.filters = filters
         }
         if !refreshing { videos = []; pageCount = 1 }
         defer { if generation == current { pending = nil; busy = false; if !Task.isCancelled { loaded = true } } }
@@ -94,7 +98,8 @@ import Observation
                 if !refreshing || !result.categories.isEmpty { categories = result.categories }
                 if result.videos.isEmpty, let first = categories.first {
                     category = first.id
-                    self.request = .list(category: first.id, query: "", page: 1)
+                    filters = CategoryFilter.initialChoices(first.filters)
+                    self.request = .list(category: first.id, query: "", page: 1, filters: filters)
                     result = try await perform(self.request)
                 }
             }

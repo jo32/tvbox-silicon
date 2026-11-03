@@ -3,6 +3,58 @@ import Foundation
 public struct Category: Identifiable, Sendable {
     public let id: String
     public let name: String
+    /// The source's filters for this category (TVBox `filters`), such as 类型, 地区 or 年份, in its order.
+    public let filters: [CategoryFilter]
+    public init(id: String, name: String, filters: [CategoryFilter] = []) {
+        self.id = id; self.name = name; self.filters = filters
+    }
+}
+
+/// One of a category's filters: a group of values (TVBox `{key, name, init, value: [{n, v}]}`) of which the chosen one
+/// goes to the source's category request in `extend`, under `key`.
+public struct CategoryFilter: Identifiable, Hashable, Sendable {
+    public struct Option: Hashable, Sendable {
+        public let name: String
+        public let value: String
+    }
+    public let key: String
+    public let name: String
+    public let options: [Option]
+    /// The value chosen before the viewer picks one: the source's `init`, else its first option's.
+    public let initial: String
+    public var id: String { key }
+
+    public init(key: String, name: String, options: [Option], initial: String? = nil) {
+        self.key = key; self.name = name; self.options = options
+        self.initial = initial ?? options.first?.value ?? ""
+    }
+
+    init?(json: [String: JSONValue]) {
+        guard let key = json["key"]?.string, !key.isEmpty else { return nil }
+        var seen = Set<String>()
+        let options = (json["value"]?.array ?? []).compactMap { entry -> Option? in
+            guard let fields = entry.object, let value = fields["v"]?.string ?? fields["value"]?.string else { return nil }
+            let name = (fields["n"]?.string ?? fields["name"]?.string).map(HTMLText.name) ?? value
+            return seen.insert(value).inserted ? Option(name: name.isEmpty ? value : name, value: value) : nil
+        }
+        guard options.count > 1 else { return nil }
+        self.init(key: key, name: json["name"]?.string.map(HTMLText.name) ?? key, options: options, initial: json["init"]?.string)
+    }
+
+    /// A home answer's `filters`: an object of category id to filter list, sometimes sent as JSON text.
+    static func all(_ value: JSONValue?) -> [String: [CategoryFilter]] {
+        var value = value
+        if let text = value?.string, let data = text.data(using: .utf8) { value = try? JSONDecoder().decode(JSONValue.self, from: data) }
+        return (value?.object ?? [:]).compactMapValues { list in
+            let filters = (list.array ?? []).compactMap { $0.object.flatMap(CategoryFilter.init(json:)) }
+            return filters.isEmpty ? nil : filters
+        }
+    }
+
+    /// The choices a category opens with: each filter's initial value, as other TVBox clients send them.
+    public static func initialChoices(_ filters: [CategoryFilter]) -> [String: String] {
+        Dictionary(filters.map { ($0.key, $0.initial) }, uniquingKeysWith: { first, _ in first })
+    }
 }
 public struct Episode: Identifiable, Hashable, Sendable, Codable {
     public let id: String
@@ -126,9 +178,10 @@ public struct CatalogPage: Sendable {
     public let videos: [Video]
     public let pageCount: Int
     public init(json: [String: JSONValue], origin: URL) {
+        let filters = CategoryFilter.all(json["filters"])
         categories = (json["class"]?.array ?? []).compactMap {
             guard let v = $0.object, let id = v["type_id"]?.string else { return nil }
-            return Category(id: id, name: v["type_name"]?.string.map(HTMLText.name) ?? id)
+            return Category(id: id, name: v["type_name"]?.string.map(HTMLText.name) ?? id, filters: filters[id] ?? [])
         }
         videos = (json["list"]?.array ?? []).compactMap { $0.object.flatMap { Video(json: $0, origin: origin) } }
         pageCount = max(1, json["pagecount"]?.int ?? 1)
@@ -175,6 +228,11 @@ public struct CatalogClient: Sendable {
             else if let data = try? JSONEncoder().encode(ext) { values["extend"] = String(data: data, encoding: .utf8) }
         }
         parts.queryItems = (parts.queryItems ?? []).filter { values[$0.name] == nil } + values.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) }
+        // A query item keeps `+`, which servers read as a space: escape it in the filters (base64 has `+`).
+        parts.percentEncodedQueryItems = parts.percentEncodedQueryItems?.map { item in
+            params[item.name] == nil || !["ext", "f"].contains(item.name) ? item
+                : URLQueryItem(name: item.name, value: item.value?.replacingOccurrences(of: "+", with: "%2B"))
+        }
         guard let url = parts.url else { throw TVError.invalidURL }
         return url
     }
@@ -288,11 +346,29 @@ public struct CatalogClient: Sendable {
         }.filter { seen.insert($0.id).inserted }
         return (items, CatalogPage(json: json, origin: origin).categories)
     }
-    public func list(category: String?, query: String, page: Int) async throws -> CatalogPage {
+    /// A search (`query`) or one page of a category, narrowed by the category's filter `choices` (key to value).
+    public func list(category: String?, query: String, page: Int, filters choices: [String: String] = [:]) async throws -> CatalogPage {
         var params = ["pg": String(page)]
         if !query.isEmpty { params["wd"] = query; params["quick"] = "false" }
-        else { params["ac"] = "detail"; params["t"] = category }
+        else {
+            params["ac"] = "detail"; params["t"] = category
+            params.merge(Self.filterParameters(choices, siteType: site.type)) { _, new in new }
+        }
         return CatalogPage(json: try await request(params), origin: origin)
+    }
+
+    /// A category's filter choices as the source reads them, leaving out empty ("全部") values: as other TVBox clients
+    /// send them, base64 JSON in `ext` for an HTTP spider (type 4) and JSON in `f` for a CMS API; a plugin host gets the
+    /// JSON in `filters` and hands the spider its `extend` map.
+    static func filterParameters(_ choices: [String: String], siteType: Int) -> [String: String] {
+        let extend = choices.filter { !$0.value.isEmpty }
+        guard !extend.isEmpty, let data = try? JSONSerialization.data(withJSONObject: extend, options: [.sortedKeys, .withoutEscapingSlashes])
+        else { return [:] }
+        switch siteType {
+        case 4: return ["ext": data.base64EncodedString()]
+        case 0, 1: return ["f": String(decoding: data, as: UTF8.self)]
+        default: return ["filters": String(decoding: data, as: UTF8.self)]
+        }
     }
     public func detail(_ id: String, cached: Bool = false) async throws -> Video {
         let scope = EpisodeSkipSettings.scope(origin: origin, source: site.sourceKey, video: id)

@@ -69,13 +69,26 @@ public final class PluginSession {
             return result;
         }
         if (params.has("wd")) return content(() -> spider.searchContent(params.getString("wd"), false, params.optString("pg", "1")), true);
-        if (params.has("t")) return content(() -> spider.categoryContent(params.getString("t"), params.optString("pg", "1"), true, new java.util.HashMap<>()), true);
+        if (params.has("t")) return content(() -> spider.categoryContent(params.getString("t"), params.optString("pg", "1"), true, extend(params)), true);
         JSONObject home = new JSONObject(content(() -> spider.homeContent(true), true, false));
         JSONObject recommendations = new JSONObject(content(() -> spider.homeVideoContent(), true, false));
         var videos = recommendations.optJSONArray("list");
         if (videos != null && videos.length() > 0) home.put("list", videos);
         checkInitialization(home);
         return home.toString();
+    }
+
+    /** The category's filter choices (`filters`, JSON text) as the spider's `extend` map. */
+    static java.util.HashMap<String, String> extend(JSONObject params) throws org.json.JSONException {
+        var extend = new java.util.HashMap<String, String>();
+        String text = params.optString("filters", "");
+        if (text.isEmpty()) return extend;
+        JSONObject filters = new JSONObject(text);
+        for (var keys = filters.keys(); keys.hasNext();) {
+            String key = (String) keys.next();
+            extend.put(key, filters.optString(key));
+        }
+        return extend;
     }
 
     /** Releases this source only; a shared plugin runtime and its native guard stay loaded. */

@@ -16,7 +16,7 @@ public class HostCompatibilityTest {
             }
             return;
         }
-        reflectiveArrayCloneWorks(); conversionCacheReusesAndRepairs(); partialInitializationDoesNotHideWorkingSources(); recommendationsMerge(); stateSurvivesAndRestores(); interfaceCallsExecute(); sourceFailuresStaySpecific(); androidScreensAreNamed(); cloudLoginReturnsToTheApp(); asyncCloudLoginEndsPlayback(); packageContextExists(); androidLogHasEveryOverload(); androidDrawingWorks(); pluginKeepsItsOwnSlf4j(); conversionFailuresNameTheClass();
+        reflectiveArrayCloneWorks(); conversionCacheReusesAndRepairs(); partialInitializationDoesNotHideWorkingSources(); recommendationsMerge(); stateSurvivesAndRestores(); interfaceCallsExecute(); sourceFailuresStaySpecific(); categoryFiltersReachTheSpider(); androidScreensAreNamed(); cloudLoginReturnsToTheApp(); asyncCloudLoginEndsPlayback(); packageContextExists(); androidLogHasEveryOverload(); androidDrawingWorks(); pluginKeepsItsOwnSlf4j(); conversionFailuresNameTheClass();
         System.out.println("Java host regression checks passed (state, interface bytecode, HTTP failures, Android context).");
     }
 
@@ -248,6 +248,21 @@ public class HostCompatibilityTest {
         var media = new RuntimeException("Stub!");
         media.setStackTrace(new StackTraceElement[]{ new StackTraceElement("android.media.MediaPlayer", "start", null, -1) });
         check(NativeProbe.failure(media).optString("errorCode").equals("unsupported_android"), "Other Android stubs changed");
+    }
+
+    /** A category's filter choices (issue #358) reach the spider's extend map. */
+    private static void categoryFiltersReachTheSpider() throws Exception {
+        var seen = new java.util.HashMap<String, String>();
+        PluginSession session = new PluginSession(new Spider() {
+            public String categoryContent(String tid, String pg, boolean filter, java.util.HashMap<String, String> extend) {
+                seen.clear(); seen.putAll(extend);
+                return "{\"list\":[{\"vod_id\":\"1\",\"vod_name\":\"a\"}]}";
+            }
+        });
+        session.request(new JSONObject().put("t", "1").put("pg", "1").put("filters", "{\"area\":\"美国\",\"year\":\"2024\"}"));
+        check(seen.equals(java.util.Map.of("area", "美国", "year", "2024")), "Filter choices lost: " + seen);
+        session.request(new JSONObject().put("t", "1"));
+        check(seen.isEmpty(), "An unfiltered category got filters: " + seen);
     }
 
     private static void sourceFailuresStaySpecific() throws Exception {

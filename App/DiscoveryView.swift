@@ -641,6 +641,8 @@ struct RecommendationsView: View {
     /// The source category shown instead of its recommendations; nil shows the recommendations.
     @State private var category: String?
     @State private var categoryPage = 1
+    /// The open category's filter choices (key to value), set with `category`.
+    @State private var categoryFilters: [String: String] = [:]
     /// The source `category` belongs to. A source change clears it inside the load task, which is the last writer.
     @State private var categorySite: String?
     @State private var browser = CatalogBrowser()
@@ -855,6 +857,9 @@ struct RecommendationsView: View {
             if let loadedSite = model.site, !model.categories.isEmpty {
                 categoryChips(loadedSite).tvFocusSection()
             }
+            if let category, let current = model.categories.first(where: { $0.id == category }), !current.filters.isEmpty {
+                CategoryFilterBar(filters: current.filters, choices: categoryFilters) { categoryFilters = $0; categoryPage = 1 }.tvFocusSection()
+            }
             if category != nil, let loadedSite = model.site {
                 categoryContent(loadedSite)
             } else if !model.busy && model.error == nil && model.items.isEmpty {
@@ -906,13 +911,13 @@ struct RecommendationsView: View {
             guard !Task.isCancelled, site.key == requested else { return }
             // A source whose home names only categories (list sites) opens its first one.
             if category == nil, !model.busy, model.error == nil, model.items.isEmpty, let first = model.categories.first {
-                category = first.id; categoryPage = 1
+                category = first.id; categoryPage = 1; categoryFilters = CategoryFilter.initialChoices(first.filters)
             }
         }
-        .task(id: "\(requestID)|\(category ?? "")|\(categoryPage)") {
+        .task(id: "\(requestID)|\(category ?? "")|\(categoryPage)|" + categoryFilters.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "&")) {
             // The rows load their own categories.
             guard !rails, let category, let loadedSite = model.site, loadedSite.key == site?.key else { return }
-            await browser.load(.list(category: category, query: "", page: categoryPage),
+            await browser.load(.list(category: category, query: "", page: categoryPage, filters: categoryFilters),
                                client: CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL))
         }
         .onDisappear { browser.cancel() }
@@ -1068,7 +1073,9 @@ struct RecommendationsView: View {
                     Chip(title: L10n.text("Recommendations"), selected: category == nil) { category = nil; categoryPage = 1 }
                 }
                 ForEach(model.categories) { item in
-                    Chip(title: item.name, selected: category == item.id) { category = item.id; categoryPage = 1 }
+                    Chip(title: item.name, selected: category == item.id) {
+                        category = item.id; categoryPage = 1; categoryFilters = CategoryFilter.initialChoices(item.filters)
+                    }
                 }
             }.padding(.vertical, 4)
         }

@@ -236,7 +236,7 @@ async function call(instance, params) {
     if ('play' in params) { route = '/play'; body = { flag: params.flag || '', id: params.play }; }
     else if ('ids' in params) { route = '/detail'; body = { id: params.ids }; }
     else if ('wd' in params) { route = '/search'; body = { wd: params.wd, page: Number(params.pg || 1), quick: params.quick === 'true' }; }
-    else if ('t' in params) { route = '/category'; body = { id: params.t, page: Number(params.pg || 1), filter: true, filters: {} }; }
+    else if ('t' in params) { route = '/category'; body = { id: params.t, page: Number(params.pg || 1), filter: true, filters: params.filters ? JSON.parse(params.filters) : {} }; }
     else { route = '/home'; body = {}; }
     const { text, page } = await watchingPages(route, () => send(api + route, body));
     // Sources address the bundle's own proxy by the device's network address, or by a port from before a relisten,

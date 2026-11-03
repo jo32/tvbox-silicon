@@ -31,6 +31,7 @@ class Spider(Spider):
     def homeVideoContent(self):
         return {'list': [{'vod_id': 'recommended', 'vod_name': self.ext}]}
     def categoryContent(self, tid, pg, filter, extend):
+        if extend: return {'list': [{'vod_id': tid + '-' + pg, 'vod_name': ','.join(k + '=' + v for k, v in sorted(extend.items()))}]}
         return {'list': [{'vod_id': tid + '-' + pg}], 'pagecount': 3}
     def detailContent(self, ids):
         self.selected = ids[0]
@@ -79,6 +80,8 @@ class Spider(Spider):
                 assert home['class'][0] == {'type_id': str(run), 'type_name': 'title'}, home
                 assert home['list'] == [{'vod_id': 'recommended', 'vod_name': 'from-url'}], home
                 assert call({'t': 'movie', 'pg': '2'})['list'] == [{'vod_id': 'movie-2'}]
+                filtered = call({'t': 'movie', 'pg': '1', 'filters': json.dumps({'area': '美国', 'year': '2024'})})
+                assert filtered['list'] == [{'vod_id': 'movie-1', 'vod_name': 'area=美国,year=2024'}], filtered
                 assert call({'ids': 'chosen'})['list'] == [{'vod_id': 'chosen', 'vod_name': 'x'}]
                 assert call({'wd': 'key', 'pg': '1'})['list'] == [{'vod_id': '/one', 'vod_name': 'key16'}]
                 url = call({'play': 'opaque', 'flag': 'line'})['url']

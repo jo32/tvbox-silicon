@@ -714,6 +714,11 @@ struct SiteView: View {
                         #endif
                         if site.isBilibili && !BilibiliAccount.load().signedIn { BilibiliSignInBanner() }
                         if !browser.categories.isEmpty { categoryBar } else if initialLoading && folder == nil { ChipSkeletonRow() }
+                        if browser.query.isEmpty, let current = browser.categories.first(where: { $0.id == browser.category }), !current.filters.isEmpty {
+                            CategoryFilterBar(filters: current.filters, choices: browser.filters) { choices in
+                                startRequest { await browser.load(.list(category: current.id, query: "", page: 1, filters: choices), client: client) }
+                            }
+                        }
                         if isIndex && !browser.videos.isEmpty {
                             Text(L10n.text("Choose a title to find it across your sources.")).font(.subheadline).foregroundStyle(.secondary)
                         }
@@ -794,7 +799,8 @@ struct SiteView: View {
                     ForEach(browser.categories) { item in
                         Chip(title: item.name, selected: browser.query.isEmpty && browser.category == item.id) {
                             query = ""
-                            startRequest { await browser.load(.list(category: item.id, query: "", page: 1), client: client) }
+                            let filters = CategoryFilter.initialChoices(item.filters)
+                            startRequest { await browser.load(.list(category: item.id, query: "", page: 1, filters: filters), client: client) }
                         }
                     }
                 }
@@ -825,7 +831,61 @@ struct SiteView: View {
         else { await browser.load(.list(category: nil, query: text, page: 1), client: client) }
     }
     private func load(page next: Int) async {
-        await browser.load(.list(category: browser.category.isEmpty ? nil : browser.category, query: browser.query, page: next), client: client)
+        await browser.load(.list(category: browser.category.isEmpty ? nil : browser.category, query: browser.query, page: next, filters: browser.filters),
+                           client: client)
+    }
+}
+
+/// A category's filters (TVBox `filters`: 类型, 地区, 年份…). The Filter chip names what is chosen and opens one row of
+/// choices per filter; each choice reloads the category from its first page.
+struct CategoryFilterBar: View {
+    let filters: [CategoryFilter]
+    let choices: [String: String]
+    let choose: ([String: String]) -> Void
+    @State private var expanded = false
+
+    private func value(_ filter: CategoryFilter) -> String { choices[filter.key] ?? filter.initial }
+    /// The choices that differ from the category's opening ones, by name.
+    private var chosen: [String] {
+        filters.compactMap { filter in
+            let current = value(filter)
+            guard current != filter.initial else { return nil }
+            return filter.options.first { $0.value == current }?.name
+        }
+    }
+
+    var body: some View {
+        let chosen = chosen
+        VStack(alignment: .leading, spacing: 4) {
+            ChipRow {
+                HStack(spacing: 8) {
+                    Chip(title: ([L10n.text("Filter")] + chosen).joined(separator: " · "), selected: expanded || !chosen.isEmpty) {
+                        withAnimation(.smooth) { expanded.toggle() }
+                    }
+                    .accessibilityIdentifier("site.filters")
+                    if !chosen.isEmpty {
+                        Chip(title: L10n.text("Reset Filters")) { choose(CategoryFilter.initialChoices(filters)) }
+                    }
+                }.padding(.vertical, 4)
+            }
+            if expanded {
+                ForEach(filters) { filter in
+                    ChipRow {
+                        HStack(spacing: 8) {
+                            Text(filter.name).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
+                            ForEach(filter.options, id: \.value) { option in
+                                Chip(title: option.name, selected: value(filter) == option.value) {
+                                    guard value(filter) != option.value else { return }
+                                    var next = choices
+                                    next[filter.key] = option.value
+                                    choose(next)
+                                }
+                            }
+                        }.padding(.vertical, 2)
+                    }
+                }
+            }
+        }
     }
 }
 
