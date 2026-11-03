@@ -91,6 +91,32 @@ struct CloudStreamsTests {
         await stream.clear()
     }
 
+    /// Issue #433: on the iPhone AVPlayer reads a video on two overlapping requests, the newer starting a few chunks
+    /// behind where the older got to, while another request reads its sound further back. The newer one counted as a
+    /// third reader, a seek, which cancelled the chunks the others were reading ahead: a bundle's proxy then fetched them
+    /// again and again, and a 4K episode stalled once the speed fell below its bitrate.
+    @Test func overlappingRequestsDoNotFetchChunksAgain() async throws {
+        let chunk = CloudByteStream.chunkSize
+        let size = chunk * 48
+        var bytes = Data(count: size)
+        bytes.withUnsafeMutableBytes { raw in for i in 0..<size { raw[i] = UInt8(truncatingIfNeeded: i &* 11 &+ i >> 13) } }
+        let name = "overlap-\(UUID().uuidString).mp4"
+        // Answered a little later, so the chunks read ahead are still on their way when the next read comes.
+        let url = RangeServer.add(name, bytes, connections: 64)
+        let stream = CloudByteStream(source: .init(url: url, headers: [:], length: size, name: name), session: RangeServer.session, parallel: 2) { nil }
+        for step in 0..<16 {
+            // The sound, the video, and the video's newer request three chunks behind it.
+            for index in [step, 14 + step, 11 + step] {
+                let at = index * chunk + 5
+                #expect(try await stream.read(at: at, count: 16) == bytes[at..<at + 16])
+            }
+        }
+        // None was dropped on its way, and chunks 0 to 29 plus at most 8 read ahead were each fetched once.
+        #expect(RangeServer.cancels(name) == 0)
+        #expect(RangeServer.requests(name) <= 38)
+        await stream.clear()
+    }
+
     /// AVPlayer opens and plays a real movie through the resource loader. Set TVBOX_CLOUD_MEDIA to
     /// an MP4 (for example one whose moov comes after a large mdat, as on cloud drives).
     @Test(.enabled(if: ProcessInfo.processInfo.environment["TVBOX_CLOUD_MEDIA"] != nil))
@@ -227,6 +253,9 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) private static var limits: [String: Int] = [:]
     nonisolated(unsafe) private static var active: [String: Int] = [:]
     nonisolated(unsafe) private static var refused: [String: Int] = [:]
+    nonisolated(unsafe) private static var cancelled: [String: Int] = [:]
+    /// Whether this request was answered, so a stop before that is a cancel.
+    private var answered = false
     static let configuration: URLSessionConfiguration = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [RangeServer.self]
@@ -247,6 +276,8 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
     static func requests(_ name: String) -> Int { lock.withLock { counts[name, default: 0] } }
     /// How many requests a file with a connection limit refused.
     static func refusals(_ name: String) -> Int { lock.withLock { refused[name, default: 0] } }
+    /// How many requests to a file with a connection limit were cancelled before their answer.
+    static func cancels(_ name: String) -> Int { lock.withLock { cancelled[name, default: 0] } }
     override class func canInit(with request: URLRequest) -> Bool { request.url?.host() == "cloud.test" }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
@@ -292,6 +323,7 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
         // Held open for a while, so the stream's other connections overlap it.
         let body = data.subdata(in: range)
         DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(40)) { [self, status, headers] in
+            RangeServer.lock.withLock { self.answered = true }
             if let client = self.client {
                 client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!, cacheStoragePolicy: .notAllowed)
                 client.urlProtocol(self, didLoad: body)
@@ -300,5 +332,8 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
             RangeServer.lock.withLock { RangeServer.active[name, default: 1] -= 1 }
         }
     }
-    override func stopLoading() {}
+    override func stopLoading() {
+        guard let name = request.url?.lastPathComponent else { return }
+        Self.lock.withLock { if Self.limits[name] != nil, !answered { Self.cancelled[name, default: 0] += 1 } }
+    }
 }
