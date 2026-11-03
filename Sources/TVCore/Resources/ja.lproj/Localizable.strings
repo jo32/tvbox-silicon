@@ -1394,3 +1394,5 @@
 "Douban Hot Series" = "Douban 人気ドラマ";
 "Douban Hot Variety Shows" = "Douban 人気バラエティ";
 "Douban" = "Douban";
+
+"%@ (Translated from %@)" = "%@（%@から翻訳）";

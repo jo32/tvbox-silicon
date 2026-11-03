@@ -26,6 +26,7 @@ import TVCore
         _ = MusicRemoteControl.shared
         DownloadsLifecycle.install()
         #endif
+        SubtitleTranslationSetup.install()
     }
     var body: some Scene {
         WindowGroup {

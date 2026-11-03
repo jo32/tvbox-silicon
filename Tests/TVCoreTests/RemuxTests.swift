@@ -295,6 +295,30 @@ import VideoToolbox
         #expect(group?.options.map(\.displayName).contains("Chinese") == true && group?.options.count == 2)
     }
 
+    @Test func foreignSubtitlesGetATranslatedTwin() async throws {
+        let srt = RangeServer.add("film-\(UUID().uuidString).srt", Data("1\n00:00:07,000 --> 00:00:07,500\nWe have to leave before dawn, nobody knows the way.\n".utf8))
+        let url = try await Remux.open(try Remux.fileSource(fixture("remux-copy.mkv")), subtitles: [ExternalSubtitle(name: "film.srt", url: srt)],
+                                       headers: [:], session: RangeServer.session, translator: FakeTranslator())
+        defer { Remux.stop(url) }
+        let master = String(decoding: try await fetch(url), as: UTF8.self)
+        // The file's English track gets one. The untagged file is English by its words, so it adds none.
+        let twins = master.components(separatedBy: "\n").filter { $0.contains("AUTOSELECT=NO") }
+        #expect(twins.count == 1 && twins.first?.contains(#"URI="5.m3u8""#) == true)
+        let first = String(decoding: try await fetch(url.deletingLastPathComponent().appending(path: "5-0.vtt")), as: UTF8.self)
+        #expect(first.contains("00:00:00.500 --> 00:00:02.000\n译&lt;Hello &amp; welcome&gt;"))
+        let second = String(decoding: try await fetch(url.deletingLastPathComponent().appending(path: "5-1.vtt")), as: UTF8.self)
+        #expect(second.contains("译&lt;Second") && !second.contains("Hello"))
+        // The track it translates is served as it was, and AVFoundation lists the twin with the others.
+        let original = String(decoding: try await fetch(url.deletingLastPathComponent().appending(path: "3-0.vtt")), as: UTF8.self)
+        #expect(original.contains("<i>Hello</i> &amp; welcome"))
+        let group = try await AVURLAsset(url: url).loadMediaSelectionGroup(for: .legible)
+        #expect(group?.options.count == 3)
+        // Without a translator nothing changes.
+        let plain = try await Remux.open(try Remux.fileSource(fixture("remux-copy.mkv")), subtitles: [], headers: [:], session: RangeServer.session, translator: nil)
+        defer { Remux.stop(plain) }
+        #expect(!String(decoding: try await fetch(plain), as: UTF8.self).contains("AUTOSELECT=NO"))
+    }
+
     @Test func picturesAVPlayerCantDecodeAreRepackagedWhenThatShowsThem() {
         #expect(Remux.showsPicture(["hev1"]) && Remux.showsPicture(["dvhe"]) && Remux.showsPicture(["vp09"]))
         #expect(!Remux.showsPicture([]) && !Remux.showsPicture(["av01"]) && !Remux.showsPicture(["hev1", "av01"]))
