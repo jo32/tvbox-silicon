@@ -416,7 +416,7 @@ private final class SniffStage {
         }
         window.orderFrontRegardless()
         #else
-        if let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first {
+        if let scene = UIApplication.shared.appWindowScene {
             let window = UIWindow(windowScene: scene)
             let controller = UIViewController()
             controller.view = container
@@ -487,7 +487,7 @@ private final class SniffChallenge: NSObject, NSWindowDelegate {
 private final class SniffChallenge {
     private var window: UIWindow?
     init(webView: WKWebView, onClose: @escaping () -> Void) {
-        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
+        guard let scene = UIApplication.shared.appWindowScene else { return }
         let window = UIWindow(windowScene: scene)
         let controller = UIViewController()
         window.rootViewController = controller

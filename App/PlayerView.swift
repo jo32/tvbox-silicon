@@ -164,7 +164,7 @@ struct PlaybackView: View {
                      + " · drawing: \(session.enhancer.status.upscaling ? "upscaled " : "")\(session.enhancer.status.smoothing ? "smoothed" : session.enhancer.status.active ? "" : "AVKit picture")",
                      session.enhancer.summary]
         #if !os(macOS)
-        if let screen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen {
+        if let screen = UIApplication.shared.appWindowScene?.screen {
             lines.append("screen \(screen.maximumFramesPerSecond) Hz \(Int(screen.nativeBounds.width))×\(Int(screen.nativeBounds.height))")
         }
         #endif
@@ -593,7 +593,7 @@ private struct PlayerSurface: NSViewRepresentable {
     static private var holdsPortrait = false
 
     static func set(landscape: Bool) {
-        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
+        guard let scene = UIApplication.shared.appWindowScene else { return }
         mask = landscape ? .landscape : holdsPortrait ? .portrait : .allButUpsideDown
         var controller = scene.keyWindow?.rootViewController
         while let next = controller?.presentedViewController { controller = next }
