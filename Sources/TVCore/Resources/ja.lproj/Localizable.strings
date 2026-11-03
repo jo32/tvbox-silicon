@@ -1389,3 +1389,8 @@
 "None of your LX Music sources plays this song's catalog." = "追加した LX Music の音源はどれもこの曲のカタログに対応していません。";
 "This extension asks an LX Music source for something Yingxia doesn't support." = "この拡張機能が LX Music の音源に求める内容には、映匣はまだ対応していません。";
 "Scripts in the Listenify music extension format. Their charts and playlists show on the Music page and their songs in Music search; songs play from what the extension gives, or through your LX Music sources when it asks for one. Yingxia includes none: add only extensions you trust." = "Listenify 形式の音楽拡張機能スクリプトです。チャートとプレイリストはミュージックページに、曲はミュージック検索に表示されます。曲は拡張機能が示すアドレスから、または必要なとき LX Music の音源を通して再生されます。映匣には拡張機能は含まれていません。信頼できるものだけを追加してください。";
+"Douban Hot Lists" = "Douban 人気リスト";
+"Douban Hot Movies" = "Douban 人気映画";
+"Douban Hot Series" = "Douban 人気ドラマ";
+"Douban Hot Variety Shows" = "Douban 人気バラエティ";
+"Douban" = "Douban";

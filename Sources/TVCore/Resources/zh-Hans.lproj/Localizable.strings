@@ -1389,3 +1389,8 @@
 "None of your LX Music sources plays this song's catalog." = "你添加的洛雪音源都不支持这首歌所在的曲库。";
 "This extension asks an LX Music source for something Yingxia doesn't support." = "这个扩展向洛雪音源请求的内容映匣尚不支持。";
 "Scripts in the Listenify music extension format. Their charts and playlists show on the Music page and their songs in Music search; songs play from what the extension gives, or through your LX Music sources when it asks for one. Yingxia includes none: add only extensions you trust." = "Listenify 格式的音乐扩展脚本。它们的榜单和歌单显示在音乐页，歌曲出现在音乐搜索中；歌曲从扩展给出的地址播放，扩展需要时也会通过你的洛雪音源播放。映匣不自带任何扩展：只添加你信任的扩展。";
+"Douban Hot Lists" = "豆瓣热门";
+"Douban Hot Movies" = "豆瓣热门电影";
+"Douban Hot Series" = "豆瓣热门剧集";
+"Douban Hot Variety Shows" = "豆瓣热门综艺";
+"Douban" = "豆瓣";
