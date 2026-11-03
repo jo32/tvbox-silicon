@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { airings, buildAnime, buildTV, type Calendar, calendarFor, type CalendarStore, months, readEntry, redate, week } from "../src/calendar.ts";
+import { airings, buildAnime, buildTV, type Calendar, calendarFor, type CalendarStore, coverSource, months, readEntry, redate, servingCovers, week } from "../src/calendar.ts";
 import { TMDB } from "../src/tmdb.ts";
 
 // Wednesday 4 November 2026, noon in China.
@@ -223,4 +223,15 @@ test("when every source fails, last week's calendar is moved onto this week; wit
   // A kept copy from today is never rebuilt inline, even right after a failure.
   const today = await calendarFor("anime", "test", memory({ ...made(NOW - 30 * 3600_000), kind: "anime" }), failing, NOW, () => {});
   assert.equal(today.stale, true);
+});
+
+test("Bangumi covers are served by the Worker at 400 px, and the cover route only fetches Bangumi covers", () => {
+  const item = (cover: string | null) => ({ title: "t", originalTitle: "t", cover, airsAt: null, episode: null, season: null, rating: null, network: null, overview: null, bangumi: null, tmdb: null, links: [] });
+  const calendar = { ...made(NOW), days: [{ date: "2026-11-04", weekday: 3, items: [
+    item("https://lain.bgm.tv/pic/cover/c/52/fe/418229_gcFij.jpg"), item("https://image.tmdb.org/t/p/w342/x.jpg"), item(null)] }] } as Calendar;
+  const served = servingCovers(calendar, "https://w.example").days[0].items.map((each) => each.cover);
+  assert.deepEqual(served, ["https://w.example/v1/cover/r/400/pic/cover/l/52/fe/418229_gcFij.jpg", "https://image.tmdb.org/t/p/w342/x.jpg", null]);
+  assert.equal(calendar.days[0].items[0].cover, "https://lain.bgm.tv/pic/cover/c/52/fe/418229_gcFij.jpg");
+  assert.equal(coverSource("r/400/pic/cover/l/52/fe/418229_gcFij.jpg"), "https://lain.bgm.tv/r/400/pic/cover/l/52/fe/418229_gcFij.jpg");
+  for (const path of ["r/400/pic/cover/l/52/fe/../../x.jpg", "r/4000/pic/cover/l/52/fe/a.jpg", "https://evil.example/a.jpg", "pic/user/l/52/fe/a.jpg"]) assert.equal(coverSource(path), null);
 });

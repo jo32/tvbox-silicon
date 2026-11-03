@@ -202,6 +202,19 @@ enum DiscoverAiring {
         return item.rating.map { "★ " + $0.formatted(.number.precision(.fractionLength(1))) } ?? " "
     }
 
+    /// The page an airing title opens: its TMDB detail page, or for an anime TMDB's list doesn't name, the TMDB title
+    /// found by its name.
+    @MainActor @ViewBuilder static func destination(_ item: TMDBCalendar.Item) -> some View {
+        if let work = item.tmdb { DiscoverDetailView(item: item.catalogItem(work)) } else { DiscoverAiringTitleView(item: item) }
+    }
+
+    #if os(tvOS)
+    /// A title for the TV's native shelf.
+    static func entry(_ item: TMDBCalendar.Item, next: Bool) -> DiscoverTVNativeShelf.Entry {
+        DiscoverTVNativeShelf.Entry(key: item.id, title: item.title, detail: caption(item), image: item.cover, highlight: next)
+    }
+    #endif
+
     /// "Today", else the weekday and day of the month ("Sun 8", "周日 8").
     static func dayName(_ date: String, in week: TMDBCalendar.Week) -> String {
         if date == week.today()?.date { return L10n.text("Today") }
@@ -270,9 +283,7 @@ struct DiscoverAiringLink<Label: View>: View {
     let item: TMDBCalendar.Item
     @ViewBuilder let label: Label
     var body: some View {
-        RouteLink {
-            if let work = item.tmdb { DiscoverDetailView(item: item.catalogItem(work)) } else { DiscoverAiringTitleView(item: item) }
-        } label: { label }
+        RouteLink { DiscoverAiring.destination(item) } label: { label }
         #if os(tvOS)
         .cardButton()
         #else
@@ -283,7 +294,7 @@ struct DiscoverAiringLink<Label: View>: View {
 
 /// An anime without a TMDB ID opens as the TMDB series of the same name. Without one it keeps the calendar's
 /// card, and Search Sources looks for it by name.
-private struct DiscoverAiringTitleView: View {
+struct DiscoverAiringTitleView: View {
     @Environment(Store.self) private var store
     let item: TMDBCalendar.Item
     @State private var match: TMDBCatalog.Item?
@@ -321,21 +332,36 @@ private struct DiscoverAiringTitleView: View {
                 Text(item.title).font(.title2.weight(.semibold)).multilineTextAlignment(.center)
                 if item.originalTitle != item.title { Text(item.originalTitle).font(.headline).opacity(0.7) }
                 Text(DiscoverAiring.caption(item)).font(.subheadline).opacity(0.6)
-                Button {
-                    if store.subscription == nil { store.section = .settings } else { store.searchVideos(item.title) }
-                } label: {
-                    Label(L10n.text(store.subscription == nil ? "Add Subscription" : "Search Sources"), systemImage: "magnifyingglass")
-                }
-                #if os(tvOS)
-                .controlButton()
-                #else
-                .buttonStyle(.borderedProminent)
-                #endif
-                .accessibilityIdentifier("calendar.findSources")
+                DiscoverFindSourcesButton(title: item.title).padding(.top, 8).accessibilityIdentifier("calendar.findSources")
             }.padding(40).frame(maxWidth: .infinity)
         }
         .background { DiscoverCanvas(poster: item.cover) }
         .foregroundStyle(.white).preferredColorScheme(.dark)
+    }
+}
+
+/// Search Sources (Add Subscription without one) as the detail page draws it: a white capsule, or the TV's
+/// action button.
+struct DiscoverFindSourcesButton: View {
+    @Environment(Store.self) private var store
+    let title: String
+    var body: some View {
+        Button {
+            if store.subscription == nil { store.section = .settings } else { store.searchVideos(title) }
+        } label: {
+            Label(L10n.text(store.subscription == nil ? "Add Subscription" : "Search Sources"), systemImage: "magnifyingglass")
+                #if os(tvOS)
+                .frame(width: 380)
+                #else
+                .font(.system(size: 15, weight: .semibold)).frame(width: 260).frame(height: 50)
+                .foregroundStyle(Color.black).background(Color.white, in: Capsule()).contentShape(Capsule())
+                #endif
+        }
+        #if os(tvOS)
+        .buttonStyle(DiscoverTVActionStyle(height: 86, font: 30))
+        #else
+        .buttonStyle(.plain)
+        #endif
     }
 }
 

@@ -13,7 +13,7 @@ import { catalogPerson } from "./catalog-person.ts";
 import { catalogSearch, readCatalogSearch } from "./catalog-search.ts";
 import { catalog, catalogCollections, isCatalogFeed } from "./catalog.ts";
 import { modelConfig } from "./provider.ts";
-import { buildCalendar, type Calendar, calendarFor, type CalendarKind, type CalendarStore, isRegion } from "./calendar.ts";
+import { buildCalendar, type Calendar, calendarFor, type CalendarKind, type CalendarStore, coverSource, isRegion, servingCovers } from "./calendar.ts";
 
 interface Env {
   DB: D1Database;
@@ -425,6 +425,7 @@ export default {
     if (pathname === "/v1/sources" && request.method === "GET") return sources(request, env);
     if (pathname === "/v1/link" && request.method === "POST") return chosen(request, env);
     if (pathname === "/v1/calendar" && request.method === "GET") return airing(request, env, ctx);
+    if (pathname.startsWith("/v1/cover/") && request.method === "GET") return cover(request, ctx);
     return new Response(null, { status: 404 });
   },
 
@@ -503,8 +504,23 @@ async function airing(request: Request, env: Env, ctx: ExecutionContext): Promis
     tmdb: env.TMDB_TOKEN ? new TMDB(env.TMDB_TOKEN, undefined, null) : null });
   try {
     const calendar = await calendarFor(kind, kind === "anime" ? "*" : `${language}|${region}`, calendarStore(env.DB), build, now, (job) => ctx.waitUntil(job));
-    return Response.json(calendar, { headers: { "cache-control": "public, max-age=900" } });
+    return Response.json(servingCovers(calendar, url.origin), { headers: { "cache-control": "public, max-age=900" } });
   } catch (error) {
     return Response.json({ error: (error as Error).message.slice(0, 300) }, { status: 502 });
   }
+}
+
+// A calendar cover from Bangumi's image host (see servingCovers), cached at the edge: covers never change.
+async function cover(request: Request, ctx: ExecutionContext): Promise<Response> {
+  const source = coverSource(new URL(request.url).pathname.slice("/v1/cover/".length));
+  if (!source) return new Response(null, { status: 404 });
+  const cache = caches.default;
+  const kept = await cache.match(request);
+  if (kept) return kept;
+  const upstream = await fetch(source, { cf: { cacheEverything: true, cacheTtl: 30 * DAY } });
+  const type = upstream.headers.get("content-type") ?? "";
+  if (!upstream.ok || !type.startsWith("image/")) return new Response(null, { status: upstream.status === 404 ? 404 : 502 });
+  const response = new Response(upstream.body, { headers: { "content-type": type, "cache-control": `public, max-age=${30 * DAY}, immutable` } });
+  ctx.waitUntil(cache.put(request, response.clone()));
+  return response;
 }

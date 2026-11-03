@@ -116,6 +116,13 @@ public enum TMDBCalendar {
         guard let response = response as? HTTPURLResponse, response.statusCode == 200 else {
             throw TMDBMatch.Failure(code: "http", message: "HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)")
         }
+        #if DEBUG
+        // A Worker under `wrangler dev --remote` sees the production host, so the covers it serves name that host.
+        if base != TMDBMatch.endpoint, let text = String(data: data, encoding: .utf8) {
+            let local = text.replacingOccurrences(of: TMDBMatch.endpoint.absoluteString + "cover/", with: base.absoluteString + "cover/")
+            return try JSONDecoder().decode(Week.self, from: Data(local.utf8))
+        }
+        #endif
         return try JSONDecoder().decode(Week.self, from: data)
     }
 }

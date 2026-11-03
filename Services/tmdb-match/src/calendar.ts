@@ -442,6 +442,24 @@ export async function buildTV(up: Upstream): Promise<Calendar> {
   throw new Error(`No TV calendar: ${failures.join("; ")}`);
 }
 
+// Bangumi's image host is unreachable on some networks (its DNS answers poisoned, connections reset) where this
+// Worker's own domain is not, and its "common" cover is only 150 px wide. Covers go out as this Worker's
+// /v1/cover/<path>, a 400 px resize of the large cover that the Worker fetches and caches.
+const BANGUMI_COVER = /^https?:\/\/lain\.bgm\.tv\/(?:r\/\d+\/)?pic\/cover\/[a-z]\/([0-9a-f]{2}\/[0-9a-f]{2}\/\w+\.(?:jpe?g|png|webp|gif))$/i;
+const COVER_PATH = /^r\/400\/pic\/cover\/l\/[0-9a-f]{2}\/[0-9a-f]{2}\/\w+\.(?:jpe?g|png|webp|gif)$/i;
+
+/** The calendar with its Bangumi covers served from `origin` (this Worker's), others untouched. */
+export function servingCovers(calendar: Calendar, origin: string): Calendar {
+  const cover = (url: string | null) => {
+    const match = url ? BANGUMI_COVER.exec(url) : null;
+    return match ? `${origin}/v1/cover/r/400/pic/cover/l/${match[1]}` : url;
+  };
+  return { ...calendar, days: calendar.days.map((day) => ({ ...day, items: day.items.map((item) => ({ ...item, cover: cover(item.cover) })) })) };
+}
+
+/** The Bangumi image a /v1/cover/<path> stands for, or null for any other path: this is not an open proxy. */
+export const coverSource = (path: string) => (COVER_PATH.test(path) ? `https://lain.bgm.tv/${path}` : null);
+
 export const buildCalendar = (kind: CalendarKind, up: Upstream) => (kind === "anime" ? buildAnime(up) : buildTV(up));
 
 // ---- Keeping and serving ----

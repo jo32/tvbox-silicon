@@ -265,16 +265,17 @@ struct DiscoverView: View {
             let next = DiscoverAiring.next(today.items)
             VStack(alignment: .leading, spacing: 0) {
                 #if os(tvOS)
+                // The native row, as the TMDB shelves: Left from the first title brings out See All (the week page).
                 sectionHeading(kind.shelfTitle)
-                DiscoverTVRow {
-                    ForEach(DiscoverAiring.fromNow(today.items)) { item in
-                        DiscoverAiringLink(item: item) { DiscoverAiringTile(item: item, next: item.id == next) }
-                            .accessibilityIdentifier("discover.calendar.\(item.id)")
+                let items = DiscoverAiring.fromNow(today.items)
+                DiscoverTVNativeShelf(entries: items.map { DiscoverAiring.entry($0, next: $0.id == next) }, identifier: "calendar.\(kind.rawValue)") { index in
+                    if let index {
+                        let item = items[index]
+                        openRoute?(Route { AnyView(DiscoverAiring.destination(item)) })
+                    } else {
+                        openRoute?(Route { AnyView(DiscoverCalendarView(initial: model.calendar, kind: kind)) })
                     }
-                    RouteLink { DiscoverCalendarView(initial: model.calendar, kind: kind) } label: {
-                        DiscoverTVSeeAllCard(symbol: "calendar", title: L10n.text("Full Schedule"))
-                    }.panelCardButton(cornerRadius: 12).accessibilityIdentifier("discover.more.calendar.\(kind.rawValue)")
-                }
+                }.frame(height: DiscoverLayout.posterWidth * 1.5 + DiscoverLayout.captionHeight + 48)
                 #else
                 moreHeading(kind.shelfTitle, identifier: "discover.more.calendar.\(kind.rawValue)") {
                     DiscoverCalendarView(initial: model.calendar, kind: kind)
@@ -478,17 +479,17 @@ struct DiscoverView: View {
                 if !items.isEmpty {
                     VStack(alignment: .leading, spacing: 0) {
                         #if os(tvOS)
+                        // The native row, as the TMDB shelves: Left from the first title brings out See All.
                         sectionHeading(feed.title)
-                        DiscoverTVRow {
-                            ForEach(items) { item in
-                                RouteLink { DoubanTitleView(item: item) } label: { DoubanTile(item: item) }
-                                    .cardButton()
-                                    .accessibilityIdentifier("discover.douban.\(feed.rawValue).\(item.id)")
+                        DiscoverTVNativeShelf(entries: items.map { .init(key: $0.id, title: $0.title, detail: $0.caption, image: $0.cover) },
+                                              identifier: "douban.\(feed.rawValue)") { index in
+                            if let index {
+                                let item = items[index]
+                                openRoute?(Route { AnyView(DoubanTitleView(item: item)) })
+                            } else {
+                                openRoute?(Route { AnyView(DoubanListView(feed: feed, initial: items)) })
                             }
-                            RouteLink { DoubanListView(feed: feed, initial: items) } label: {
-                                DiscoverTVSeeAllCard(symbol: "square.grid.2x2", title: L10n.text("See All"))
-                            }.panelCardButton(cornerRadius: 12).accessibilityIdentifier("discover.more.douban.\(feed.rawValue)")
-                        }
+                        }.frame(height: DiscoverLayout.posterWidth * 1.5 + DiscoverLayout.captionHeight + 48)
                         #else
                         moreHeading(feed.title, identifier: "discover.more.douban.\(feed.rawValue)") {
                             DoubanListView(feed: feed, initial: items)
@@ -1662,23 +1663,6 @@ private struct DoubanListView: View {
     }
 }
 
-#if os(tvOS)
-/// The last card of a shelf on the TV, which opens the whole list: Apple TV has no heading to click.
-private struct DiscoverTVSeeAllCard: View {
-    let symbol: String
-    let title: String
-    var body: some View {
-        VStack(spacing: 18) {
-            Image(systemName: symbol).font(.system(size: 54, weight: .medium))
-            Text(title).font(.system(size: 28, weight: .semibold)).multilineTextAlignment(.center).lineLimit(2)
-        }
-        .padding(20)
-        .frame(width: DiscoverLayout.posterWidth, height: DiscoverLayout.posterWidth * 1.5)
-        .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-}
-#endif
-
 /// A Douban title opens as the TMDB title of the same kind, name and year, with its seasons, cast and Search
 /// Sources. Without one it keeps Douban's card, and Search Sources looks for it by its Douban name.
 private struct DoubanTitleView: View {
@@ -1708,17 +1692,7 @@ private struct DoubanTitleView: View {
                 Text(item.title).font(.title2.weight(.semibold)).multilineTextAlignment(.center)
                 if !item.caption.isEmpty { Text(item.caption).font(.headline).opacity(0.7) }
                 if !item.subtitle.isEmpty { Text(item.subtitle).font(.subheadline).opacity(0.6).multilineTextAlignment(.center) }
-                Button {
-                    if store.subscription == nil { store.section = .settings } else { store.searchVideos(item.title) }
-                } label: {
-                    Label(L10n.text(store.subscription == nil ? "Add Subscription" : "Search Sources"), systemImage: "magnifyingglass")
-                }
-                #if os(tvOS)
-                .controlButton()
-                #else
-                .buttonStyle(.borderedProminent)
-                #endif
-                .accessibilityIdentifier("discover.douban.findSources")
+                DiscoverFindSourcesButton(title: item.title).padding(.top, 8).accessibilityIdentifier("discover.douban.findSources")
             }.padding(40).frame(maxWidth: .infinity)
         }
         .background { DiscoverCanvas(poster: item.cover) }
