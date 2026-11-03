@@ -1,6 +1,129 @@
 {
   "releases": [
     {
+      "version": "1.8.8",
+      "build": 46,
+      "date": "2026-11-04",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "display",
+          "title": {
+            "en": "Play on an external display",
+            "zh-Hans": "在外接显示器上播放",
+            "zh-Hant": "在外接顯示器上播放",
+            "ja": "外部ディスプレイで再生"
+          },
+          "detail": {
+            "en": "Connect an iPad or iPhone to a TV or monitor over HDMI, USB-C or AirPlay: the video fills that screen while the controls stay on your device. Close the player and the display mirrors again.",
+            "zh-Hans": "用 HDMI、USB-C 或隔空播放把 iPad 或 iPhone 连到电视或显示器，视频会铺满那块屏幕，控制条留在手上的设备里。关掉播放器后显示器恢复镜像。",
+            "zh-Hant": "用 HDMI、USB-C 或 AirPlay 把 iPad 或 iPhone 連到電視或顯示器，影片會佔滿那個螢幕，控制列留在手上的裝置裡。關掉播放器後顯示器恢復鏡像。",
+            "ja": "iPad や iPhone を HDMI、USB-C、AirPlay でテレビやモニタにつなぐと、動画はその画面いっぱいに表示され、操作は手元のデバイスで行えます。プレーヤーを閉じるとミラーリングに戻ります。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "character.bubble",
+          "title": {
+            "en": "Translated subtitles",
+            "zh-Hans": "字幕翻译",
+            "zh-Hant": "字幕翻譯",
+            "ja": "字幕の翻訳"
+          },
+          "detail": {
+            "en": "Subtitles in another language now have a translated twin in the Subtitles menu, such as \"Chinese (Translated from English)\". It is translated on the device by Apple's Translation. Needs iOS 18 or macOS 15.",
+            "zh-Hans": "外语字幕在“字幕”菜单里多了一条翻译版，比如“中文（译自英语）”。翻译用的是 Apple 的设备端翻译，需要 iOS 18 或 macOS 15。",
+            "zh-Hant": "外語字幕在「字幕」選單裡多了一條翻譯版，例如「中文（譯自英文）」。翻譯使用 Apple 的裝置端翻譯，需要 iOS 18 或 macOS 15。",
+            "ja": "外国語の字幕には、字幕メニューに「中国語（英語から翻訳）」のような翻訳版が加わります。翻訳は Apple の翻訳機能でデバイス上で行われます。iOS 18 または macOS 15 が必要です。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "line.3.horizontal.decrease.circle",
+          "title": {
+            "en": "Category filters",
+            "zh-Hans": "分类筛选",
+            "zh-Hant": "分類篩選",
+            "ja": "カテゴリの絞り込み"
+          },
+          "detail": {
+            "en": "A source's categories now show its own filters, such as genre, region and year, and the source returns titles that match your choice.",
+            "zh-Hans": "片源的分类页现在会显示它自带的筛选项，比如类型、地区、年份，选了之后片源会按你的选择返回影片。",
+            "zh-Hant": "片源的分類頁現在會顯示它自帶的篩選項，例如類型、地區、年份，選了之後片源會依你的選擇回傳影片。",
+            "ja": "ソースのカテゴリに、ジャンル・地域・年などそのソース独自の絞り込みが表示され、選んだ条件に合う作品が返ってきます。"
+          }
+        },
+        {
+          "symbol": "eye.slash",
+          "title": {
+            "en": "Hide or show many sources at once",
+            "zh-Hans": "批量隐藏或显示源",
+            "zh-Hant": "批次隱藏或顯示來源",
+            "ja": "ソースをまとめて表示・非表示"
+          },
+          "detail": {
+            "en": "Sources has a new Hide or Show Sources list: tick sources on or off, or use Show All and Hide All for a whole group, instead of hiding them one by one.",
+            "zh-Hans": "“点播源”页新增“隐藏或显示源”列表：勾选或取消各个源，也可以对整组用“全部显示”“全部隐藏”，不用再一个一个关。",
+            "zh-Hant": "「隨選來源」頁新增「隱藏或顯示來源」清單：勾選或取消各個來源，也可以對整組用「全部顯示」「全部隱藏」，不用再一個一個關。",
+            "ja": "「配信ソース」に「ソースの表示と非表示」リストが加わりました。ソースごとにチェックを切り替えたり、グループ単位で「すべて表示」「すべて隠す」を使ったりでき、1つずつ隠す必要はありません。"
+          }
+        },
+        {
+          "symbol": "flame",
+          "title": {
+            "en": "Douban hot lists in Discover",
+            "zh-Hans": "“发现”里有豆瓣热门了",
+            "zh-Hant": "「探索」裡有豆瓣熱門了",
+            "ja": "「見つける」に Douban 人気リスト"
+          },
+          "detail": {
+            "en": "Discover can show Douban's hot movies, series and variety shows with their Douban scores. It's on when the app is in Chinese; in other languages, turn it on in Edit Layout at the bottom of Discover.",
+            "zh-Hans": "“发现”页可以显示豆瓣热门电影、剧集和综艺，并附上豆瓣评分。中文界面默认打开；其他语言可以在“发现”页底部的“编辑布局”里打开。",
+            "zh-Hant": "「探索」頁可以顯示豆瓣熱門電影、劇集和綜藝，並附上豆瓣評分。中文介面預設開啟；其他語言可以在「探索」頁底部的「編輯版面」裡開啟。",
+            "ja": "「見つける」に Douban の人気映画・ドラマ・バラエティを Douban の評価つきで表示できます。中国語表示では最初からオンです。ほかの言語では「見つける」の一番下の「レイアウトを編集」でオンにできます。"
+          }
+        },
+        {
+          "symbol": "cloud",
+          "title": {
+            "en": "Built-in sources from the cloud",
+            "zh-Hans": "内置源改为在线更新",
+            "zh-Hant": "內建來源改為線上更新",
+            "ja": "内蔵ソースをクラウドから"
+          },
+          "detail": {
+            "en": "Bilibili, Hongguo, Xifan and Hema, and the Bilibili, Douyu, Huya and Douyin live channels, now come from Yingxia's online source list, so fixes reach you without an app update. They appear, together with Music, once you have added a subscription that works.",
+            "zh-Hans": "哔哩哔哩、红果、稀饭、河马，以及哔哩哔哩、斗鱼、虎牙、抖音直播，现在来自映匣的在线源列表，修复不用等 App 更新。添加一个能用的订阅后，它们和“音乐”就会出现。",
+            "zh-Hant": "嗶哩嗶哩、紅果、稀飯、河馬，以及嗶哩嗶哩、鬥魚、虎牙、抖音直播，現在來自映匣的線上來源清單，修正不用等 App 更新。加入一個能用的訂閱後，它們和「音樂」就會出現。",
+            "ja": "Bilibili・紅果・稀飯・河馬と、Bilibili・斗魚・虎牙・抖音のライブは、映匣のオンラインのソース一覧から届くようになり、アプリを更新しなくても修正が届きます。使える購読を追加すると、ミュージックと一緒に表示されます。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "4K live channels that played sound only now show a picture. Holding to speed up slows down when the connection can't keep up. A video opened from history picks the line you watched. Wex config centers open in the app. 猫源 searches with no match no longer count as failures. Music over AirPlay plays as audio. Danmaku skips a server that is down and says so. The Mac icon is rounded on macOS 15.",
+            "zh-Hans": "只有声音的 4K 直播频道现在有画面了。长按倍速在网速跟不上时会自动降速。从观看历史打开的视频会选中上次看的线路。Wex 配置中心可以在 App 里打开。猫源搜不到结果不再算作失败。音乐用隔空播放时按音频播放。弹幕会跳过宕掉的服务器并提示。macOS 15 上 Mac 图标显示为圆角。",
+            "zh-Hant": "只有聲音的 4K 直播頻道現在有畫面了。長按倍速在網速跟不上時會自動降速。從觀看紀錄打開的影片會選中上次看的線路。Wex 設定中心可以在 App 裡打開。貓源搜不到結果不再算作失敗。音樂用 AirPlay 時以音訊播放。彈幕會跳過當機的伺服器並提示。macOS 15 上 Mac 圖示顯示為圓角。",
+            "ja": "音声だけだった 4K ライブチャンネルに映像が出るようになりました。長押しの倍速は回線が追いつかないと自動で下がります。履歴から開いた動画は前回見たラインを選びます。Wex の設定センターをアプリ内で開けます。猫源で検索結果がなくても失敗扱いになりません。AirPlay の音楽は音声として再生されます。弾幕は停止中のサーバーを飛ばし、そのことを表示します。macOS 15 で Mac のアイコンが角丸になりました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.7",
       "build": 45,
       "date": "2026-11-03",
