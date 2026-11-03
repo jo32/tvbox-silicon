@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.8",
+          "buildVersion": "46",
+          "date": "2026-11-04",
+          "localizedDescription": "• 在外接显示器上播放\n• 字幕翻译\n• 分类筛选\n• 批量隐藏或显示源\n• “发现”里有豆瓣热门了\n• 内置源改为在线更新\n• 其他修复\n\n• Play on an external display\n• Translated subtitles\n• Category filters\n• Hide or show many sources at once\n• Douban hot lists in Discover\n• Built-in sources from the cloud\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.8/Yingxia-1.8.8-ios.ipa",
+          "size": 117877153,
+          "sha256": "417c45e513e36d62eace1bfeeb9cbf56a16fa2ebc38fadc5229808d33fd7b91b",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.7",
           "buildVersion": "45",
           "date": "2026-11-03",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.4/Yingxia-1.8.4-ios.ipa",
           "size": 116425308,
           "sha256": "133309eeb1827acbc2b5ac1b5567838185d9c460921794927b1e7022ecbfcea3",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.3",
-          "buildVersion": "41",
-          "date": "2026-10-29",
-          "localizedDescription": "• 更多源可以播放了\n• 修复有声音没画面\n• 贡献者名单\n• 其他修复\n\n• More sources play\n• Sound but no picture, fixed\n• Meet the contributors\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.3/Yingxia-1.8.3-ios.ipa",
-          "size": 115154751,
-          "sha256": "d60b94496055ae978f0b1e00cbf3e06ddc72a710e8bae3f7f0dd78628e62843c",
           "minOSVersion": "17.0"
         }
       ],
