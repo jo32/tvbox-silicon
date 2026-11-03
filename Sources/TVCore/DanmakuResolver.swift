@@ -27,6 +27,22 @@ public struct DanmakuResolver: Sendable {
         var responded = false
         /// Dandanplay answered and has no work with this title.
         var unlisted = false
+        /// The episode's official page was found, but no comment server could be reached for it.
+        var unreachable = false
+    }
+    /// How long a comment server that timed out or answered 5xx is left out of automatic matching, so later
+    /// episodes don't each wait for it again (a Cloudflare 522 takes ~20 s to arrive).
+    static let serverPause: TimeInterval = 600
+    private static func pauseKey(_ server: URL) -> String { "danmaku-server-down|" + server.absoluteString }
+    /// Whether the server itself failed, rather than had nothing for this page.
+    static func serverFailed(_ error: Error) -> Bool {
+        if case TVError.http(let code) = error { return code >= 500 }
+        if let error = error as? URLError { return error.code != .cancelled }
+        return false
+    }
+    /// Lets the comment servers be asked again at once, for a retry the viewer asked for.
+    public func forgetUnreachableServers() {
+        for server in [dmkuServer] + (backupServer.map { [$0] } ?? []) { cache.remove(Self.pauseKey(server), kind: .lookup) }
     }
     public func remember(_ mapping: DanmakuMapping, for context: PlaybackHistoryContext, ticket: MediaCache.Ticket) {
         let key = lookupKey(context)
@@ -65,7 +81,7 @@ public struct DanmakuResolver: Sendable {
         // first, as that costs one request; the wait stays bounded so the others aren't held up.
         let dandanSaved = saved.first { $0.provider == "dandan" }
         let dandanFirst = dandanSaved?.track(for: context) != nil
-        var responded = false
+        var responded = false, unreachable = false
         if dandanFirst, let outcome = await askDandanplay(context, cached: dandanSaved, lookupKey: lookupKey, wait: 5, ticket: ticket) {
             try Task.checkCancellation()
             responded = outcome.responded
@@ -77,16 +93,17 @@ public struct DanmakuResolver: Sendable {
                 group.addTask {
                     let mapping = DanmakuMapping(provider: "direct", title: context.videoName, year: context.year,
                         tracks: [DanmakuTrack(number: CatalogDanmakuMatcher.episodeNumber(context.episodeName), title: context.episodeName, page: page)])
-                    return await self.official(context, provider: "direct", cached: mapping)
+                    return await self.official(context, provider: "direct", cached: mapping, ticket: ticket)
                 }
             } else if officialLookup {
                 for provider in ["iqiyi", "tencent"] {
-                    group.addTask { await self.official(context, provider: provider, cached: saved.first { $0.provider == provider }) }
+                    group.addTask { await self.official(context, provider: provider, cached: saved.first { $0.provider == provider }, ticket: ticket) }
                 }
             }
             for try await outcome in group {
                 try Task.checkCancellation()
                 responded = responded || outcome.responded
+                unreachable = unreachable || outcome.unreachable
                 keep(outcome.mapping, in: &mappings, key: lookupKey, ticket: ticket)
                 if let result = outcome.result, !result.comments.isEmpty {
                     group.cancelAll()
@@ -103,11 +120,14 @@ public struct DanmakuResolver: Sendable {
             if let result = outcome.result, !result.comments.isEmpty { return keep(result, context: context, ticket: ticket) }
         }
         try Task.checkCancellation()
-        let result = AutomaticDanmakuResult(comments: [], track: "", source: "", state: responded ? "unmatched" : "unavailable")
+        // A page that has comments but whose servers are down is "unavailable", not "no match", even when another
+        // provider answered that it doesn't list the title.
+        let matched = responded && !unreachable
+        let result = AutomaticDanmakuResult(comments: [], track: "", source: "", state: matched ? "unmatched" : "unavailable")
         // Short negative caching prevents repeated searches during rapid revisits.
         // An explicit retry bypasses it, and failures expire much sooner than real tracks.
         if let data = try? JSONEncoder().encode(result) {
-            cache.store(data, for: key, kind: .danmaku, scope: context.id, ttl: responded ? 300 : 30, ticket: ticket)
+            cache.store(data, for: key, kind: .danmaku, scope: context.id, ttl: matched ? 300 : 30, ticket: ticket)
         }
         return result
     }
@@ -132,11 +152,11 @@ public struct DanmakuResolver: Sendable {
         if outcome.unlisted { cache.store(Data([1]), for: unlistedKey, kind: .lookup, ttl: 7 * 86400, ticket: ticket) }
         return outcome
     }
-    private func official(_ context: PlaybackHistoryContext, provider: String, cached: DanmakuMapping?) async -> Outcome {
+    private func official(_ context: PlaybackHistoryContext, provider: String, cached: DanmakuMapping?, ticket: MediaCache.Ticket) async -> Outcome {
         let started = Date()
         var stage = "lookup"
+        var mapping = cached
         do {
-            var mapping = cached
             if mapping?.track(for: context) == nil {
                 let catalog = OfficialDanmakuCatalog(http: http)
                 mapping = try await provider == "iqiyi" ? catalog.iqiyi(context) : catalog.tencent(context)
@@ -149,8 +169,13 @@ public struct DanmakuResolver: Sendable {
             if let backupServer {
                 servers.append((backupServer.host() ?? "backup", backupServer, [.init(name: "type", value: "json"), .init(name: "id", value: safe.absoluteString)]))
             }
-            var comments: [CatalogDanmakuComment] = [], source = "dmku", failure: Error? = nil, answered = false
+            var comments: [CatalogDanmakuComment] = [], source = "dmku", failure: Error = URLError(.cannotConnectToHost), answered = false
             for (name, server, query) in servers {
+                // A server that just failed is skipped for a while, and the next one asked at once.
+                if cache.data(for: Self.pauseKey(server), kind: .lookup) != nil {
+                    Diagnostics.shared.record(.debug, "danmaku", "provider=\(provider) server=\(name) skipped=paused")
+                    continue
+                }
                 var url = URLComponents(url: server, resolvingAgainstBaseURL: false)!
                 url.queryItems = query
                 do {
@@ -160,10 +185,13 @@ public struct DanmakuResolver: Sendable {
                 } catch {
                     if error is CancellationError { throw error }
                     failure = error
+                    if Self.serverFailed(error), !Task.isCancelled {
+                        cache.store(Data([1]), for: Self.pauseKey(server), kind: .lookup, ttl: Self.serverPause, ticket: ticket)
+                    }
                     Diagnostics.shared.record(.debug, "danmaku", "provider=\(provider) server=\(name) failed=\((error as NSError).domain):\((error as NSError).code)")
                 }
             }
-            if !answered, let failure { throw failure }
+            if !answered { throw failure }
             try Task.checkCancellation()
             Diagnostics.shared.record(.debug, "danmaku", "provider=\(provider) server=\(source) comments=\(comments.count) seconds=\(Int(Date().timeIntervalSince(started)))")
             return Outcome(result: AutomaticDanmakuResult(comments: comments, track: mapping.title + " · " + track.title,
@@ -173,7 +201,8 @@ public struct DanmakuResolver: Sendable {
                 let failure = error as NSError
                 Diagnostics.shared.record(.debug, "danmaku", "provider=\(provider) stage=\(stage) failed=\(failure.domain):\(failure.code) seconds=\(Int(Date().timeIntervalSince(started)))")
             }
-            return Outcome()
+            // The page was found: keep it for the next episode, and say its comments couldn't be fetched.
+            return stage == "comments" ? Outcome(mapping: mapping, unreachable: true) : Outcome()
         }
     }
     private func dandan(_ context: PlaybackHistoryContext, cached: DanmakuMapping?) async -> Outcome {

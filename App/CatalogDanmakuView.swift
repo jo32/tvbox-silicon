@@ -64,11 +64,7 @@ import UniformTypeIdentifiers
             guard let self else { return }
             defer { if self.generation == active { self.automaticTask = nil } }
             do {
-                let defaults = UserDefaults.standard
-                let resolver = DanmakuResolver(dandanServer: defaults.string(forKey: "danmakuServer") ?? CatalogDanmakuClient.defaultServer,
-                    dmkuServer: URL(string: defaults.string(forKey: "danmakuDmkuServer") ?? "https://dmku.hls.one/") ?? URL(string: "https://dmku.hls.one/")!,
-                    officialLookup: defaults.object(forKey: "danmakuOfficialLookup") == nil || defaults.bool(forKey: "danmakuOfficialLookup"))
-                let result = try await resolver.resolve(context)
+                let result = try await Self.resolver().resolve(context)
                 try Task.checkCancellation()
                 guard self.generation == active, self.enabled, self.automatic else { return }
                 self.comments = result.comments
@@ -98,16 +94,20 @@ import UniformTypeIdentifiers
             guard !Task.isCancelled, self.generation == active, !self.comments.isEmpty else { return }
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled, self.generation == active else { return }
-            let defaults = UserDefaults.standard
-            let resolver = DanmakuResolver(dandanServer: defaults.string(forKey: "danmakuServer") ?? CatalogDanmakuClient.defaultServer,
-                dmkuServer: URL(string: defaults.string(forKey: "danmakuDmkuServer") ?? "https://dmku.hls.one/") ?? URL(string: "https://dmku.hls.one/")!,
-                officialLookup: defaults.object(forKey: "danmakuOfficialLookup") == nil || defaults.bool(forKey: "danmakuOfficialLookup"))
-            _ = try? await resolver.resolve(context, ticket: ticket)
+            _ = try? await Self.resolver().resolve(context, ticket: ticket)
         }
+    }
+    private static func resolver() -> DanmakuResolver {
+        let defaults = UserDefaults.standard
+        return DanmakuResolver(dandanServer: defaults.string(forKey: "danmakuServer") ?? CatalogDanmakuClient.defaultServer,
+            dmkuServer: URL(string: defaults.string(forKey: "danmakuDmkuServer") ?? "https://dmku.hls.one/") ?? URL(string: "https://dmku.hls.one/")!,
+            officialLookup: defaults.object(forKey: "danmakuOfficialLookup") == nil || defaults.bool(forKey: "danmakuOfficialLookup"))
     }
     func retryAutomatic() {
         let context = automaticContext
         if let context { MediaCache.shared.remove(DanmakuResolver.episodeKey(context), kind: .danmaku, scope: context.id) }
+        // A retry asks comment servers that failed a moment ago, too.
+        Self.resolver().forgetUnreachableServers()
         clear(); startAutomatic(context)
     }
 
