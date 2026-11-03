@@ -663,7 +663,8 @@ import TVCore
                 return
             }
             let position = self.player.currentTime().seconds
-            if self.pendingResume == nil, position.isFinite, position > 1 { self.pendingResume = position }
+            // A live stream (no duration) has no place to return to: it opens again at its live edge.
+            if self.pendingResume == nil, item.duration.isNumeric, position.isFinite, position > 1 { self.pendingResume = position }
             self.loading = true
             self.detachItem(); self.observation = nil
             self.configure(channel, url: remuxed, generation: active)

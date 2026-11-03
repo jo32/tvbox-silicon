@@ -6,8 +6,9 @@ import TVMedia
 /// carries HEVC only in fragmented MP4), so such a stream opens again here (#292). Each segment is repackaged on its
 /// own into fragmented MP4 when AVPlayer asks for it, video and audio copied as they are, and served from the
 /// repackager's loopback server under the playlist's own durations and discontinuities. AES-128 keys are applied
-/// here. Only streams that end (VOD) are handled; a live one plays as before. An HDR picture is tone mapped to SDR
-/// on a device that doesn't show HDR now, as a repackaged file's is: AVPlayer refuses its HDR variant there (#345).
+/// here. A live stream's playlist is read again as AVPlayer reloads the repackaged one, which then lists the same
+/// segments (an IPTV channel in 4K, #361). An HDR picture is tone mapped to SDR on a device that doesn't show HDR
+/// now, as a repackaged file's is: AVPlayer refuses its HDR variant there (#345).
 public enum HLSRemux {
     /// Opens the stream behind `url` (a master or media playlist) and returns the address of its repackaged master
     /// playlist. Throws when its first segment isn't MPEG-TS carrying HEVC, or the playlist is one this doesn't handle.
@@ -38,10 +39,9 @@ public enum HLSRemux {
         var discontinuity: Bool
     }
 
-    /// A media playlist's segments; nil for one this doesn't handle: live (no end), already fragmented MP4, byte
-    /// ranges, or a key other than AES-128.
+    /// A media playlist's segments; nil for one this doesn't handle: already fragmented MP4, byte ranges, or a key
+    /// other than AES-128.
     static func segments(_ text: String, base: URL) -> [Segment]? {
-        guard text.contains("#EXT-X-ENDLIST") else { return nil }
         var result: [Segment] = []
         var sequence = 0, duration: Double?, key: Segment.Key?, discontinuity = false
         for raw in text.components(separatedBy: .newlines) {
@@ -72,6 +72,16 @@ public enum HLSRemux {
             }
         }
         return result.isEmpty ? nil : result
+    }
+
+    /// A playlist's EXT-X-TARGETDURATION, in whole seconds.
+    static func targetDuration(_ text: String) -> Int? {
+        for raw in text.components(separatedBy: .newlines) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            guard line.hasPrefix("#EXT-X-TARGETDURATION:") else { continue }
+            return Double(line.dropFirst("#EXT-X-TARGETDURATION:".count).trimmingCharacters(in: .whitespaces)).map { Int($0.rounded(.up)) }
+        }
+        return nil
     }
 
     /// The bytes of an IV attribute (`0x` and 32 hex digits).
@@ -198,7 +208,8 @@ public enum HLSRemux {
 }
 
 /// One HLS stream played through `HLSRemux`. Segments are made as AVPlayer asks for them, the next one ahead, and
-/// the last few are kept for both tracks' requests.
+/// the last few are kept for both tracks' requests. A segment is named by its position: its place in a VOD
+/// playlist, or in the order a live one listed it, so a live stream's names stay put as its playlist moves on.
 final class HLSRemuxSession: RemuxStored, @unchecked Sendable {
     static let network: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
@@ -210,87 +221,101 @@ final class HLSRemuxSession: RemuxStored, @unchecked Sendable {
     static let kept = 6
 
     let id = UUID().uuidString.lowercased()
-    let segments: [HLSRemux.Segment]
+    /// The playlist has no end: it is read again as AVPlayer reloads the repackaged one (#361).
+    let live: Bool
     /// Whether HDR plays here (`RemuxSession.device`), decided once so that every segment matches the first.
     let device: RemuxPlan.Device
     /// The picture is HDR, copied as it is.
     private(set) var copiesHDR = false
     private(set) var master = ""
-    private(set) var playlists: [Int: String] = [:]
+    /// The media playlist, read again while the stream is live.
+    private let source: URL
     private let headers: [String: String]
     private let network: URLSession
     private let lock = NSLock()
+    /// The segments the playlist lists now, the first at position `first`.
+    private var listed: [HLSRemux.Segment]
+    private var first = 0
+    /// For each listed segment, the position of the one beginning its discontinuity, which names its
+    /// initialization segment.
+    private var runs: [Int]
+    /// Discontinuities that left a live playlist (its EXT-X-DISCONTINUITY-SEQUENCE).
+    private var discontinuities = 0
+    /// Each listed discontinuity's initialization segments by track, kept so that a live one's outlast its segments.
+    private var initializations: [Int: [Int: Data]] = [:]
+    private var tracks = [0]
+    private var target: Int
+    private var refreshed = Date()
+    private var refreshing: Task<Void, Never>?
     private var made: [Int: Task<HLSRemux.Output, Error>] = [:]
     private var order: [Int] = []
     private var keys: [URL: Task<Data, Error>] = [:]
     private var closed = false
 
-    private init(segments: [HLSRemux.Segment], headers: [String: String], network: URLSession, device: RemuxPlan.Device) {
-        self.segments = segments; self.headers = headers; self.network = network; self.device = device
+    private init(segments: [HLSRemux.Segment], source: URL, live: Bool, target: Int, headers: [String: String],
+                 network: URLSession, device: RemuxPlan.Device) {
+        listed = segments; runs = Self.runs(segments, start: 0, run: 0)
+        self.source = source; self.live = live; self.target = target
+        self.headers = headers; self.network = network; self.device = device
     }
 
-    /// Reads the playlist (the variant with the highest bandwidth of a master one) and repackages the first segment,
-    /// which must be MPEG-TS carrying HEVC.
+    /// Reads the playlist (the variant with the highest bandwidth of a master one) and repackages one segment, which
+    /// must be MPEG-TS carrying HEVC: a VOD stream's first, a live one's newest.
     static func make(_ url: URL, headers: [String: String], network: URLSession, device: RemuxPlan.Device) async throws -> HLSRemuxSession {
         let began = Date()
-        var address = url
-        var text = try await playlist(url, headers: headers, network: network)
+        var source = url
+        var (text, address) = try await playlist(url, headers: headers, network: network)
         if text.contains("#EXT-X-STREAM-INF") {
             guard let variant = HLS.variants(text, base: address).max(by: { $0.bandwidth < $1.bandwidth }) else {
                 throw TVError.unsupported("no variant")
             }
-            address = variant.url
-            text = try await playlist(address, headers: headers, network: network)
+            source = variant.url
+            (text, address) = try await playlist(source, headers: headers, network: network)
         }
         guard let segments = HLSRemux.segments(text, base: address) else { throw TVError.unsupported("playlist not repackaged") }
-        let session = HLSRemuxSession(segments: segments, headers: headers, network: network, device: device)
+        let live = !text.contains("#EXT-X-ENDLIST")
+        let target = max(1, HLSRemux.targetDuration(text) ?? 0, Int((segments.map(\.duration).max() ?? 1).rounded(.up)))
+        let session = HLSRemuxSession(segments: segments, source: source, live: live, target: target, headers: headers,
+                                      network: network, device: device)
+        let probe = live ? segments.count - 1 : 0
         let first: HLSRemux.Output
-        do { first = try await session.output(0) } catch { session.close(); throw error }
+        do { first = try await session.output(probe) } catch { session.close(); throw error }
         guard first.format == "mpegts", first.video == "hevc" else {
             session.close()
             throw TVError.unsupported("not HEVC in MPEG-TS: \(first.format) \(first.video)")
         }
-        session.describe(first)
-        Diagnostics.shared.record(.info, "remux", "hls open host=\(address.host() ?? "-") segments=\(segments.count) audio=\(first.audio ?? "-") size=\(first.width)x\(first.height) transfer=\(first.transfer) hdr=\(device.hdr) sdr=\(first.toneMapped) discontinuities=\(segments.filter(\.discontinuity).count) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
+        session.describe(first, at: probe)
+        Diagnostics.shared.record(.info, "remux", "hls open host=\(address.host() ?? "-") segments=\(segments.count) live=\(live) audio=\(first.audio ?? "-") size=\(first.width)x\(first.height) transfer=\(first.transfer) hdr=\(device.hdr) sdr=\(first.toneMapped) discontinuities=\(segments.filter(\.discontinuity).count) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
         return session
     }
 
-    private static func playlist(_ url: URL, headers: [String: String], network: URLSession) async throws -> String {
+    /// The playlist's text, and the address it came from after redirects, which its relative addresses follow.
+    private static func playlist(_ url: URL, headers: [String: String], network: URLSession) async throws -> (String, URL) {
         var request = URLRequest(url: url)
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         let (data, response) = try await network.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 200
         guard (200..<300).contains(status) else { throw TVError.http(status) }
         guard Transfer.isPlaylist(data) else { throw TVError.unsupported("not a playlist") }
-        return String(decoding: data, as: UTF8.self)
+        return (String(decoding: data, as: UTF8.self), response.url ?? url)
     }
 
-    /// The master playlist and each track's: the source's durations and discontinuities, each discontinuity with
-    /// its own initialization segment (an inserted advert can differ in size or codec).
-    private func describe(_ first: HLSRemux.Output) {
+    /// The master playlist, from the segment at `position`, whose initialization segments are kept for its discontinuity.
+    private func describe(_ first: HLSRemux.Output, at position: Int) {
         let audio = first.media[1] != nil
-        let tracks = audio ? [0, 1] : [0]
         copiesHDR = first.transfer == 16 || first.transfer == 18
-        let target = max(1, Int((segments.map(\.duration).max() ?? 1).rounded(.up)))
-        for track in tracks {
-            var lines = ["#EXTM3U", "#EXT-X-VERSION:7", "#EXT-X-TARGETDURATION:\(target)", "#EXT-X-MEDIA-SEQUENCE:0", "#EXT-X-PLAYLIST-TYPE:VOD"]
-            for (index, segment) in segments.enumerated() {
-                if segment.discontinuity { lines.append("#EXT-X-DISCONTINUITY") }
-                if index == 0 || segment.discontinuity { lines.append("#EXT-X-MAP:URI=\"\(track)-\(index).mp4\"") }
-                lines.append(String(format: "#EXTINF:%.6f,", segment.duration))
-                lines.append("\(track)-\(index).m4s")
-            }
-            lines.append("#EXT-X-ENDLIST")
-            playlists[track] = lines.joined(separator: "\n") + "\n"
+        let (seconds, discontinuous) = lock.withLock { () -> (Double, Bool) in
+            tracks = audio ? [0, 1] : [0]
+            initializations[runs[position - self.first]] = first.initializations
+            return (listed[position - self.first].duration, listed.contains(where: \.discontinuity))
         }
         var lines = ["#EXTM3U", "#EXT-X-VERSION:7"]
         if audio {
             lines.append("#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"Audio\",DEFAULT=YES,AUTOSELECT=YES,URI=\"1.m3u8\"")
         }
-        let seconds = segments.first?.duration ?? 0
         var attributes = ["BANDWIDTH=\(seconds > 0 ? Int(Double(first.bytes) * 8 / seconds * 1.5) : 8_000_000)"]
         // Codecs are named only when one picture runs throughout: an inserted advert can bring another.
-        if !segments.contains(where: \.discontinuity), let codecs = codecs(first) { attributes.append("CODECS=\"\(codecs)\"") }
+        if !discontinuous, let codecs = codecs(first) { attributes.append("CODECS=\"\(codecs)\"") }
         if first.width > 0 { attributes.append("RESOLUTION=\(first.width)x\(first.height)") }
         if first.transfer == 16 || first.transfer == 18 { attributes.append("VIDEO-RANGE=\(first.transfer == 16 ? "PQ" : "HLG")") }
         if audio { attributes.append("AUDIO=\"audio\"") }
@@ -314,25 +339,105 @@ final class HLSRemuxSession: RemuxStored, @unchecked Sendable {
         return name.map { "\(video),\($0)" }
     }
 
+    /// A track's media playlist: the source's durations and discontinuities, each discontinuity with its own
+    /// initialization segment (an inserted advert can differ in size or codec). A live one is read again first.
+    func playlist(_ track: Int) async -> String? {
+        if live { await refresh() }
+        return lock.withLock { () -> String? in
+            guard tracks.contains(track) else { return nil }
+            var lines = ["#EXTM3U", "#EXT-X-VERSION:7", "#EXT-X-TARGETDURATION:\(target)", "#EXT-X-MEDIA-SEQUENCE:\(first)"]
+            lines.append(live ? "#EXT-X-DISCONTINUITY-SEQUENCE:\(discontinuities)" : "#EXT-X-PLAYLIST-TYPE:VOD")
+            for (offset, segment) in listed.enumerated() {
+                if segment.discontinuity { lines.append("#EXT-X-DISCONTINUITY") }
+                if offset == 0 || segment.discontinuity { lines.append("#EXT-X-MAP:URI=\"\(track)-\(runs[offset]).mp4\"") }
+                lines.append(String(format: "#EXTINF:%.6f,", segment.duration))
+                lines.append("\(track)-\(first + offset).m4s")
+            }
+            if !live { lines.append("#EXT-X-ENDLIST") }
+            return lines.joined(separator: "\n") + "\n"
+        }
+    }
+
+    /// Reads a live playlist again, at most twice a target duration, while AVPlayer reloads the repackaged one.
+    private func refresh() async {
+        let task: Task<Void, Never>? = lock.withLock {
+            if let refreshing { return refreshing }
+            guard !closed, Date().timeIntervalSince(refreshed) >= Double(target) / 2 else { return nil }
+            let task = Task { [self] in
+                do {
+                    let (text, address) = try await Self.playlist(source, headers: headers, network: network)
+                    if let segments = HLSRemux.segments(text, base: address) { lock.withLock { list(segments) } }
+                } catch {
+                    Diagnostics.shared.record(.debug, "remux", "hls playlist \(Diagnostics.describe(error))")
+                }
+                lock.withLock { refreshed = Date(); refreshing = nil }
+            }
+            refreshing = task
+            return task
+        }
+        await task?.value
+    }
+
+    /// Lists a live playlist read again: its segments after the last one listed join (after a gap, or a count
+    /// that began again, with a discontinuity), and as many old ones leave as keep the source's length. Called
+    /// with the lock held.
+    private func list(_ fresh: [HLSRemux.Segment]) {
+        guard let last = listed.last, let oldest = listed.first, let newest = fresh.last else { return }
+        var added = newest.sequence < oldest.sequence ? fresh : fresh.filter { $0.sequence > last.sequence }
+        if let next = added.first, next.sequence != last.sequence + 1 { added[0].discontinuity = true }
+        let start = first + listed.count
+        listed += added
+        runs += Self.runs(added, start: start, run: runs.last ?? start)
+        let drop = max(0, listed.count - fresh.count)
+        if drop > 0 {
+            discontinuities += listed.prefix(drop).filter(\.discontinuity).count
+            listed.removeFirst(drop); runs.removeFirst(drop); first += drop
+            let current = Set(runs)
+            initializations = initializations.filter { current.contains($0.key) }
+        }
+        if let longest = added.map(\.duration).max() { target = max(target, Int(longest.rounded(.up))) }
+    }
+
+    /// The position of the segment beginning each one's discontinuity: `run` until one of them begins another.
+    private static func runs(_ segments: [HLSRemux.Segment], start: Int, run: Int) -> [Int] {
+        var run = run
+        return segments.indices.map { index in
+            if segments[index].discontinuity { run = start + index }
+            return run
+        }
+    }
+
     func close() {
         let running: [Task<HLSRemux.Output, Error>] = lock.withLock {
             closed = true
+            refreshing?.cancel()
             defer { made = [:]; order = []; keys = [:] }
             return Array(made.values)
         }
         running.forEach { $0.cancel() }
     }
 
-    /// The initialization segment of `track` for the discontinuity that begins at segment `index`.
+    /// The initialization segment of `track` for the discontinuity that begins at segment `index`: any of its
+    /// segments' (they match), kept once made.
     func initialization(track: Int, index: Int) async throws -> Data {
-        guard segments.indices.contains(index), index == 0 || segments[index].discontinuity else { throw TVError.unsupported("no such initialization") }
-        guard let data = try await output(index).initializations[track] else { throw TVError.unsupported("segment \(index) has no track \(track)") }
+        let (cached, member) = lock.withLock { () -> ([Int: Data]?, Int?) in
+            if let cached = initializations[index] { return (cached, nil) }
+            let members = runs.indices.filter { runs[$0] == index }.map { first + $0 }
+            return (nil, members.first { made[$0] != nil } ?? members.first)
+        }
+        var outputs = cached
+        if outputs == nil {
+            guard let member else { throw TVError.unsupported("no such initialization") }
+            let fresh = try await output(member).initializations
+            lock.withLock { if runs.contains(index) { initializations[index] = fresh } }
+            outputs = fresh
+        }
+        guard let data = outputs?[track] else { throw TVError.unsupported("segment \(index) has no track \(track)") }
         return data
     }
 
     func segment(track: Int, index: Int) async throws -> Data {
-        guard segments.indices.contains(index) else { throw TVError.unsupported("no such segment") }
-        if segments.indices.contains(index + 1) { lock.withLock { if !closed { _ = start(index + 1) } } }
+        lock.withLock { if !closed, segment(at: index + 1) != nil { _ = try? start(index + 1) } }
         guard let data = try await output(index).media[track] else { throw TVError.unsupported("segment \(index) has no track \(track)") }
         return data
     }
@@ -340,18 +445,24 @@ final class HLSRemuxSession: RemuxStored, @unchecked Sendable {
     func output(_ index: Int) async throws -> HLSRemux.Output {
         let task = try lock.withLock { () throws -> Task<HLSRemux.Output, Error> in
             if closed { throw CancellationError() }
-            return start(index)
+            return try start(index)
         }
         return try await task.value
     }
 
+    /// The listed segment at `position`. Called with the lock held.
+    private func segment(at position: Int) -> HLSRemux.Segment? {
+        listed.indices.contains(position - first) ? listed[position - first] : nil
+    }
+
     /// The segment's repackaging, started now unless it already is. Called with the lock held.
-    private func start(_ index: Int) -> Task<HLSRemux.Output, Error> {
+    private func start(_ index: Int) throws -> Task<HLSRemux.Output, Error> {
         order.removeAll { $0 == index }
+        if let task = made[index] { order.append(index); return task }
+        guard let segment = segment(at: index) else { throw TVError.unsupported("no such segment") }
         order.append(index)
-        if let task = made[index] { return task }
         let task = Task { [self] in
-            do { return try await make(index) }
+            do { return try await make(segment) }
             catch {
                 // Made again when AVPlayer asks again.
                 lock.withLock { _ = made.removeValue(forKey: index); order.removeAll { $0 == index } }
@@ -364,8 +475,7 @@ final class HLSRemuxSession: RemuxStored, @unchecked Sendable {
         return task
     }
 
-    private func make(_ index: Int) async throws -> HLSRemux.Output {
-        let segment = segments[index]
+    private func make(_ segment: HLSRemux.Segment) async throws -> HLSRemux.Output {
         var data = try await fetch(segment.url)
         if let key = segment.key {
             data = try HLSRemux.decrypt(data, key: try await keyData(key.url), iv: key.iv ?? HLSRemux.iv(segment.sequence))
