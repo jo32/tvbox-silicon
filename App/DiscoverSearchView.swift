@@ -103,10 +103,7 @@ struct DiscoverSearchView: View {
         }.padding(.top, 16).padding(.bottom, 5)
     }
     private func filterChip(_ section: DiscoverFilterSection) -> some View {
-        HStack(spacing: 8) {
-            Text(section.chipTitle(filter)).lineLimit(1)
-            Image(systemName: "chevron.down").font(.system(size: 13, weight: .semibold))
-        }.font(.system(size: 15)).padding(.horizontal, 14).frame(height: 38).glassSurface(.regular, in: Capsule())
+        FilterChipLabel(title: section.chipTitle(filter))
     }
     private var bottomChrome: some View {
         HStack(spacing: 8) {
@@ -459,14 +456,7 @@ struct DiscoverMacSearchView: View {
     }
 
     private func chip(_ title: String, open: Bool) -> some View {
-        HStack(spacing: 6) {
-            Text(title).lineLimit(1)
-            Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
-        }
-        .font(.system(size: 13)).padding(.horizontal, 12).frame(height: 30)
-        .background(.primary.opacity(open ? 0.16 : 0.07), in: Capsule())
-        .overlay { Capsule().strokeBorder(.primary.opacity(0.1), lineWidth: 0.5) }
-        .contentShape(Capsule())
+        FilterChipLabel(title: title, open: open)
     }
 
     private var history: some View {

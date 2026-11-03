@@ -528,6 +528,7 @@
 "Storage" = "Storage";
 "%@ free" = "%@ free";
 "used by downloads" = "used by downloads";
+"%@ used by downloads" = "%@ used by downloads";
 "Other" = "Other";
 "Free" = "Free";
 "tvOS may remove downloads when Apple TV runs low on storage." = "tvOS may remove downloads when Apple TV runs low on storage.";

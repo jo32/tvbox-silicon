@@ -36,6 +36,9 @@ struct DownloadsView: View {
         .task { await library.measure() }
         .onChange(of: library.items.filter { $0.status == .completed }.count) { Task { await library.measure() } }
         #if os(macOS)
+        // Space in one line under the window title, as Finder's status bar has it: beside a whole disk the
+        // downloads were a sliver on a bar that was nearly all "Other".
+        .navigationSubtitle(library.items.isEmpty || (hasMusic && kind == .music) ? "" : storageSummary)
         // Files may have been deleted or moved in Finder while the app was in the background.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Task { await library.measure() }
@@ -61,10 +64,20 @@ struct DownloadsView: View {
     /// Songs are saved apart, in Music; this page leads there too.
     private var hasMusic: Bool { !MusicDownloadLibrary.shared.items.isEmpty }
 
+    #if os(macOS)
+    private var storageSummary: String {
+        let used = L10n.text("%@ used by downloads", DownloadFormat.size(library.usage.downloads + MusicDownloadLibrary.shared.size))
+        guard let free = library.usage.available else { return used }
+        return used + " · " + L10n.text("%@ free", DownloadFormat.size(free))
+    }
+    #endif
+
     private func content(pending: [DownloadItem], shows: [DownloadShow]) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
+                #if !os(macOS)
                 StorageCard(usage: library.usage, songs: MusicDownloadLibrary.shared.size)
+                #endif
                 if !pending.isEmpty { queue(pending) }
                 if !shows.isEmpty {
                     VStack(alignment: .leading, spacing: Layout.headerSpacing) {
@@ -82,6 +95,44 @@ struct DownloadsView: View {
         }
     }
 
+    #if os(macOS)
+    /// The queue as Safari's downloads list: one grouped box of rows, with quiet text controls above it.
+    private func queue(_ pending: [DownloadItem]) -> some View {
+        let paused = pending.filter { $0.status == .paused || $0.status == .failed }
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(L10n.text("Downloading")).font(.title3.weight(.semibold))
+                Text("\(pending.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
+                Spacer(minLength: 12)
+                Menu {
+                    Picker(L10n.text("At a Time"), selection: Binding(get: { library.simultaneous }, set: { library.simultaneous = $0 })) {
+                        ForEach(1...4, id: \.self) { Text(L10n.text("%lld at a time", $0)).tag($0) }
+                    }
+                    .pickerStyle(.inline).labelsHidden()
+                } label: {
+                    Text(L10n.text("%lld at a time", library.simultaneous))
+                }
+                .menuStyle(.button).buttonStyle(.borderless).fixedSize()
+                Divider().frame(height: 12)
+                if paused.count == pending.count {
+                    Button(L10n.text("Resume All")) { library.resumeAll() }.buttonStyle(.borderless)
+                } else {
+                    Button(L10n.text("Pause All")) { library.pauseAll() }.buttonStyle(.borderless)
+                }
+            }
+            .font(.subheadline)
+            .padding(.horizontal, 4)
+            VStack(spacing: 0) {
+                ForEach(Array(pending.enumerated()), id: \.element.id) { index, item in
+                    if index > 0 { Divider().padding(.leading, 70) }
+                    QueueRow(item: item, rate: library.rates[item.id], position: queuePosition(item, in: pending))
+                }
+            }
+            .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.primary.opacity(0.07)) }
+        }
+    }
+    #else
     private func queue(_ pending: [DownloadItem]) -> some View {
         let paused = pending.filter { $0.status == .paused || $0.status == .failed }
         return VStack(alignment: .leading, spacing: Layout.headerSpacing) {
@@ -111,6 +162,7 @@ struct DownloadsView: View {
             }
         }.tvFocusSection()
     }
+    #endif
 
     /// 1 for the next download to start.
     private func queuePosition(_ item: DownloadItem, in pending: [DownloadItem]) -> Int? {
@@ -301,6 +353,77 @@ private struct QueueRow: View {
     let position: Int?
     private var library: DownloadLibrary { .shared }
     var body: some View {
+        #if os(macOS)
+        macRow.contextMenu { menu }
+        #else
+        regularRow.contextMenu { menu }
+        #endif
+    }
+
+    @ViewBuilder private var menu: some View {
+        if item.status == .queued, (position ?? 1) > 1 {
+            Button(L10n.text("Download Next"), systemImage: "arrow.up.to.line") { library.prioritize(item.id) }
+        }
+        Button(L10n.text("Cancel Download"), systemImage: "xmark", role: .destructive) { library.remove([item.id]) }
+    }
+
+    #if os(macOS)
+    /// A row of the grouped queue, as in Safari's downloads: the title, then the episode and quality, a thin bar,
+    /// the numbers, and small round controls.
+    private var macRow: some View {
+        let detail = [item.episode == item.title ? nil : item.episode, item.quality].compactMap { $0?.isEmpty == false ? $0 : nil }
+        let tint = item.status == .failed ? Brand.rose : item.status == .paused || item.status == .queued ? Color.secondary : Brand.accent
+        return HStack(spacing: 14) {
+            Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit).frame(width: 40)
+                .overlay { PosterImage(url: item.poster, headers: item.posterHeaders) }
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(Color.primary.opacity(0.1)) }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title).font(.body.weight(.semibold)).lineLimit(1).help(item.title)
+                if !detail.isEmpty {
+                    Text(detail.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                GeometryReader { proxy in
+                    Capsule().fill(Color.primary.opacity(0.1))
+                        .overlay(alignment: .leading) {
+                            Capsule().fill(tint).frame(width: max(item.fraction > 0 ? 4 : 0, proxy.size.width * item.fraction))
+                        }
+                }
+                .frame(height: 4).padding(.vertical, 2)
+                .animation(.smooth, value: item.fraction)
+                .accessibilityHidden(true)
+                Text(status(compact: false)).font(.caption).monospacedDigit().lineLimit(1)
+                    .foregroundStyle(item.status == .failed ? AnyShapeStyle(Brand.rose) : AnyShapeStyle(.secondary))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 6) {
+                switch item.status {
+                case .paused, .failed:
+                    roundControl(item.status == .failed ? "arrow.clockwise.circle.fill" : "play.circle.fill",
+                                 L10n.text(item.status == .failed ? "Retry" : "Resume")) { library.resume(item.id) }
+                case .finishing, .queued: EmptyView()
+                default:
+                    roundControl("pause.circle.fill", L10n.text("Pause")) { library.pause(item.id) }
+                }
+                roundControl("xmark.circle.fill", L10n.text("Cancel Download")) { library.remove([item.id]) }
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+
+    private func roundControl(_ symbol: String, _ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 22)).symbolRenderingMode(.hierarchical).foregroundStyle(.secondary)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .help(label)
+    }
+    #endif
+
+    private var regularRow: some View {
         HStack(spacing: 14) {
             Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit).frame(width: DownloadMetrics.thumb)
                 .overlay { PosterImage(url: item.poster, headers: item.posterHeaders) }
@@ -335,12 +458,6 @@ private struct QueueRow: View {
         }
         .padding(DownloadMetrics.thumb > 60 ? 18 : 12)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .contextMenu {
-            if item.status == .queued, (position ?? 1) > 1 {
-                Button(L10n.text("Download Next"), systemImage: "arrow.up.to.line") { library.prioritize(item.id) }
-            }
-            Button(L10n.text("Cancel Download"), systemImage: "xmark", role: .destructive) { library.remove([item.id]) }
-        }
     }
 
     private func status(compact: Bool) -> String {
@@ -535,7 +652,14 @@ struct DownloadPicker: View {
     private var library: DownloadLibrary { .shared }
     private func source(_ episode: Episode) -> DownloadSource { DownloadSource(site: site, videoID: video.id, episode: episode) }
     private var available: [Episode] { episodes.filter { library.item(for: source($0)).map { $0.status == .failed } ?? true } }
-    var body: some View {
+    #if os(macOS)
+    /// The checklist's natural height, so the sheet fits a few episodes instead of a fixed, mostly empty box.
+    @State private var listHeight: CGFloat = 0
+    var body: some View { macBody.task { await library.measure() } }
+    #else
+    var body: some View { regularBody }
+
+    private var regularBody: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top, spacing: 14) {
                 Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit).frame(width: DownloadMetrics.thumb * 1.2)
@@ -576,24 +700,14 @@ struct DownloadPicker: View {
             HStack(spacing: 10) {
                 Spacer(minLength: 0)
                 Button(L10n.text("Cancel")) { dismiss() }.controlButton()
-                Button {
-                    let chosen = episodes.filter { selection.contains($0.id) }
-                    for episode in chosen { library.download(source(episode), title: video.name, poster: video.poster, posterHeaders: video.posterHeaders) }
-                    added(chosen.count)
-                    dismiss()
-                } label: {
-                    Label(selection.isEmpty ? L10n.text("Download") : L10n.text("Download %lld", selection.count), systemImage: "arrow.down.circle.fill")
-                }
-                .controlButton(prominent: true).disabled(selection.isEmpty)
+                downloadButton
             }
             // A full-width focus section: the buttons sit at the right, out of line with most episodes,
             // and the remote only finds them moving down when the whole row takes focus.
             .tvFocusSection()
         }
         .padding(DownloadMetrics.thumb > 60 ? 60 : 22)
-        #if os(macOS)
-        .frame(width: 600, height: 620)
-        #elseif os(iOS)
+        #if os(iOS)
         .presentationDetents([.medium, .large])
         #else
         .frame(maxWidth: 1300).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -601,6 +715,156 @@ struct DownloadPicker: View {
         #endif
         .task { await library.measure() }
     }
+    #endif
+
+    private var downloadButton: some View {
+        Button {
+            let chosen = episodes.filter { selection.contains($0.id) }
+            for episode in chosen { library.download(source(episode), title: video.name, poster: video.poster, posterHeaders: video.posterHeaders) }
+            added(chosen.count)
+            dismiss()
+        } label: {
+            Label(selection.isEmpty ? L10n.text("Download") : L10n.text("Download %lld", selection.count), systemImage: "arrow.down.circle.fill")
+        }
+        .controlButton(prominent: true).disabled(selection.isEmpty)
+    }
+
+    #if os(macOS)
+    /// A compact header, the episodes as a checklist that grows with them up to a scrolling height, and a footer
+    /// with Select All beside Cancel and Download (Esc and Return).
+    private var macBody: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 14) {
+                Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit).frame(width: 44)
+                    .overlay { PosterImage(url: video.poster, headers: video.posterHeaders) }
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .overlay { RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.primary.opacity(0.1)) }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(L10n.text("Download Episodes")).font(.title3.weight(.semibold))
+                    Text(video.name).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(macSubtitle).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 20).padding(.vertical, 16)
+            Divider()
+            ScrollView {
+                macChecklist
+                    .padding(16)
+                    .onGeometryChange(for: CGFloat.self, of: \.size.height) { listHeight = $0 }
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(height: min(max(listHeight, 56), 380))
+            Divider()
+            HStack(spacing: 10) {
+                Toggle(L10n.text("Select All"), isOn: Binding(
+                    get: { !available.isEmpty && available.allSatisfy { selection.contains($0.id) } },
+                    set: { selection = $0 ? Set(available.map(\.id)) : [] }))
+                .toggleStyle(.checkbox)
+                .disabled(available.isEmpty)
+                if let free = library.usage.available {
+                    Text(L10n.text("%@ free", DownloadFormat.size(free))).font(.caption).monospacedDigit().foregroundStyle(.tertiary)
+                        .lineLimit(1).fixedSize()
+                }
+                Spacer(minLength: 12)
+                // Liquid Glass, as the sheet's own surface is.
+                Button(L10n.text("Cancel")) { dismiss() }.controlButton().keyboardShortcut(.cancelAction)
+                downloadButton.keyboardShortcut(.defaultAction)
+            }
+            .environment(\.glassControls, true)
+            .padding(.horizontal, 20).padding(.vertical, 12)
+        }
+        .frame(width: 540)
+    }
+
+    /// The line's name and how many episodes it has.
+    private var macSubtitle: String {
+        let count = episodes.count == 1 ? L10n.text("1 episode") : L10n.text("%lld episodes", episodes.count)
+        return flag.isEmpty ? count : SourceLabel(flag).text + " · " + count
+    }
+
+    /// Short names (第1集, EP01) as a grid of chips; long ones (a film's full title) as a list, one per row.
+    @ViewBuilder private var macChecklist: some View {
+        if episodes.allSatisfy({ $0.name.count <= 10 }) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 8)], spacing: 8) {
+                ForEach(episodes) { episode in macChip(episode) }
+            }
+        } else {
+            VStack(spacing: 0) {
+                ForEach(Array(episodes.enumerated()), id: \.element.id) { index, episode in
+                    if index > 0 { Divider().padding(.leading, 40) }
+                    macRow(episode)
+                }
+            }
+            .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.primary.opacity(0.06)) }
+        }
+    }
+
+    private func macRow(_ episode: Episode) -> some View {
+        let existing = library.item(for: source(episode))
+        let locked = existing.map { $0.status != .failed } ?? false
+        let selected = selection.contains(episode.id)
+        return Button { toggle(episode) } label: {
+            HStack(spacing: 10) {
+                checkmark(selected: selected, locked: locked)
+                Text(episode.name).lineLimit(1).truncationMode(.middle)
+                    .foregroundStyle(locked ? .secondary : .primary)
+                Spacer(minLength: 8)
+                if let existing, locked { stateLabel(existing) }
+            }
+            .padding(.horizontal, 12).frame(minHeight: 38)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(locked)
+        .help(episode.name)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+
+    private func macChip(_ episode: Episode) -> some View {
+        let existing = library.item(for: source(episode))
+        let locked = existing.map { $0.status != .failed } ?? false
+        let selected = selection.contains(episode.id)
+        return Button { toggle(episode) } label: {
+            HStack(spacing: 6) {
+                checkmark(selected: selected, locked: locked)
+                Text(episode.name).lineLimit(1).foregroundStyle(locked ? .secondary : .primary)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10).frame(height: 32)
+            .background(selected ? Brand.accent.opacity(0.16) : Color.primary.opacity(0.05),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(selected ? Brand.accent.opacity(0.5) : Color.primary.opacity(0.06))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(locked)
+        .help(existing.flatMap { locked ? ($0.status == .completed ? L10n.text("Downloaded") : L10n.text("In Queue")) : nil } ?? episode.name)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+    }
+
+    /// Downloaded or queued episodes show the download mark instead of a box to tick.
+    private func checkmark(selected: Bool, locked: Bool) -> some View {
+        Image(systemName: locked ? "arrow.down.circle.fill" : selected ? "checkmark.circle.fill" : "circle")
+            .font(.system(size: 15))
+            .foregroundStyle(locked ? AnyShapeStyle(.tertiary) : selected ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(.tertiary))
+            .frame(width: 18)
+    }
+
+    private func stateLabel(_ item: DownloadItem) -> some View {
+        Text(item.status == .completed ? L10n.text("Downloaded") : L10n.text("In Queue"))
+            .font(.caption).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+    }
+
+    private func toggle(_ episode: Episode) {
+        if selection.contains(episode.id) { selection.remove(episode.id) } else { selection.insert(episode.id) }
+    }
+    #endif
 
     private static var columns: [GridItem] {
         #if os(tvOS)

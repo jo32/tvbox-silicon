@@ -1018,57 +1018,117 @@ struct SiteView: View {
     }
 }
 
-/// A category's filters (TVBox `filters`: 类型, 地区, 年份…). The Filter chip names what is chosen and opens one row of
-/// choices per filter; each choice reloads the category from its first page.
+/// A category's filters (TVBox `filters`: 类型, 地区, 年份…) drawn as Discover's catalog search draws its own: one
+/// "地区：全部 ⌄" chip per filter. On the Mac a chip opens a popover of choices, on iPhone, iPad and Apple TV a
+/// menu. Each choice reloads the category from its first page.
 struct CategoryFilterBar: View {
     let filters: [CategoryFilter]
     let choices: [String: String]
     let choose: ([String: String]) -> Void
-    @State private var expanded = false
+    #if os(macOS)
+    @State private var open: String?
+    #endif
 
     private func value(_ filter: CategoryFilter) -> String { choices[filter.key] ?? filter.initial }
-    /// The choices that differ from the category's opening ones, by name.
-    private var chosen: [String] {
-        filters.compactMap { filter in
-            let current = value(filter)
-            guard current != filter.initial else { return nil }
-            return filter.options.first { $0.value == current }?.name
-        }
+    private func changed(_ filter: CategoryFilter) -> Bool { value(filter) != filter.initial }
+    private var anyChanged: Bool { filters.contains(where: changed) }
+    private func title(_ filter: CategoryFilter) -> String {
+        let current = value(filter)
+        return filter.name + "：" + (filter.options.first { $0.value == current }?.name ?? current)
     }
+    private func pick(_ filter: CategoryFilter, _ option: String) {
+        guard value(filter) != option else { return }
+        var next = choices
+        next[filter.key] = option
+        choose(next)
+    }
+    private func reset() { choose(CategoryFilter.initialChoices(filters)) }
 
     var body: some View {
-        let chosen = chosen
-        VStack(alignment: .leading, spacing: 4) {
-            ChipRow {
-                HStack(spacing: 8) {
-                    Chip(title: ([L10n.text("Filter")] + chosen).joined(separator: " · "), selected: expanded || !chosen.isEmpty) {
-                        withAnimation(.smooth) { expanded.toggle() }
+        #if os(macOS)
+        DiscoverChipFlow(spacing: 8) {
+            ForEach(filters) { filter in
+                Button { open = open == filter.key ? nil : filter.key } label: { FilterChipLabel(title: title(filter), open: open == filter.key) }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: Binding(get: { open == filter.key }, set: { if !$0, open == filter.key { open = nil } }), arrowEdge: .bottom) {
+                        panel(filter)
                     }
-                    .accessibilityIdentifier("site.filters")
-                    if !chosen.isEmpty {
-                        Chip(title: L10n.text("Reset Filters")) { choose(CategoryFilter.initialChoices(filters)) }
-                    }
-                }.padding(.vertical, 4)
+                    .accessibilityIdentifier("site.filter.\(filter.key)")
             }
-            if expanded {
+            if anyChanged {
+                Button(action: reset) {
+                    Label(L10n.text("Reset Filters"), systemImage: "xmark").font(.system(size: 13)).padding(.horizontal, 12).frame(height: 30)
+                        .contentShape(Capsule())
+                }.buttonStyle(.plain).foregroundStyle(.secondary).accessibilityIdentifier("site.filters.reset")
+            }
+        }
+        .accessibilityIdentifier("site.filters")
+        #if DEBUG
+        // `-qaOpenFilter <key>` opens that filter's choices, for screenshots.
+        .task { if let key = UserDefaults.standard.string(forKey: "qaOpenFilter") { try? await Task.sleep(for: .seconds(1)); open = key } }
+        #endif
+        #elseif os(tvOS)
+        ScrollView(.horizontal) {
+            HStack(spacing: 18) {
                 ForEach(filters) { filter in
-                    ChipRow {
-                        HStack(spacing: 8) {
-                            Text(filter.name).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
-                            ForEach(filter.options, id: \.value) { option in
-                                Chip(title: option.name, selected: value(filter) == option.value) {
-                                    guard value(filter) != option.value else { return }
-                                    var next = choices
-                                    next[filter.key] = option.value
-                                    choose(next)
-                                }
-                            }
-                        }.padding(.vertical, 2)
+                    Menu { picker(filter) } label: { Text(title(filter)) }
+                        .menuStyle(.button)
+                        .buttonStyle(DiscoverTVChipStyle(active: changed(filter)))
+                        .accessibilityIdentifier("site.filter.\(filter.key)")
+                }
+                if anyChanged {
+                    Button(action: reset) { Label(L10n.text("Reset Filters"), systemImage: "xmark") }
+                        .buttonStyle(DiscoverTVChipStyle(active: false))
+                        .accessibilityIdentifier("site.filters.reset")
+                }
+            }.padding(.vertical, 16)
+        }
+        .scrollIndicators(.hidden).scrollClipDisabled().focusSection()
+        .accessibilityIdentifier("site.filters")
+        #else
+        ScrollView(.horizontal) {
+            GlassGroup(spacing: 8) {
+                HStack(spacing: 8) {
+                    ForEach(filters) { filter in
+                        Menu { picker(filter) } label: { FilterChipLabel(title: title(filter)) }
+                            .accessibilityIdentifier("site.filter.\(filter.key)")
+                    }
+                    if anyChanged {
+                        Button(action: reset) { Image(systemName: "xmark").frame(width: 38, height: 38).glassSurface(.regular, in: Circle()) }
+                            .accessibilityLabel(L10n.text("Reset Filters")).accessibilityIdentifier("site.filters.reset")
                     }
                 }
             }
         }
+        .scrollIndicators(.hidden).scrollClipDisabled().frame(height: 38)
+        .tint(.primary)
+        .accessibilityIdentifier("site.filters")
+        #endif
     }
+
+    #if os(macOS)
+    /// The filter's choices as Discover's filter popovers lay them out; a long list (years) scrolls.
+    private func panel(_ filter: CategoryFilter) -> some View {
+        let grid = LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+            ForEach(filter.options, id: \.value) { option in
+                FilterChoiceButton(title: option.name, selected: value(filter) == option.value) {
+                    pick(filter, option.value)
+                    open = nil
+                }
+            }
+        }.padding(14)
+        return Group {
+            if filter.options.count > 30 { ScrollView { grid }.frame(height: 340) } else { grid }
+        }
+        .frame(width: 360)
+    }
+    #else
+    private func picker(_ filter: CategoryFilter) -> some View {
+        Picker(filter.name, selection: Binding(get: { value(filter) }, set: { pick(filter, $0) })) {
+            ForEach(filter.options, id: \.value) { Text($0.name).tag($0.value) }
+        }
+    }
+    #endif
 }
 
 /// Where a listed title opens: its details, or for a drive source's folder the folder's listing.

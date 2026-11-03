@@ -174,23 +174,7 @@ struct DiscoverSearchFilters: View {
         }
     }
     private func choice(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        #if os(macOS)
-        Button(action: action) {
-            Text(title).font(.system(size: 13, weight: selected ? .semibold : .regular)).lineLimit(1).minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity).frame(height: 28)
-                .foregroundStyle(selected ? Brand.onAccent : Color.primary)
-                .background(selected ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(.primary.opacity(0.08)), in: Capsule())
-                .contentShape(Capsule())
-        }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
-        #else
-        Button(action: action) {
-            Text(title).font(.system(size: 15)).lineLimit(1).minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity).frame(height: 36)
-                .foregroundStyle(selected ? (scheme == .dark ? Color.black : Color.white) : Color.primary)
-                .background { if selected { Capsule().fill(Color.primary) } }
-                .glassSurface(selected ? .identity : .regular, in: Capsule())
-        }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
-        #endif
+        FilterChoiceButton(title: title, selected: selected, action: action)
     }
     private func range(_ title: String, from: Binding<String>, to: Binding<String>, hint: String, id: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -213,6 +197,59 @@ struct DiscoverSearchFilters: View {
         [("popularity.desc", "Popularity ↓"), ("popularity.asc", "Popularity ↑"), ("vote_average.desc", "Rating ↓"), ("vote_average.asc", "Rating ↑"),
          ("date.desc", "Newest First"), ("date.asc", "Oldest First"), ("vote_count.desc", "Most Votes")]
         + (kind == .movie ? [("revenue.desc", "Highest Revenue")] : [])
+    }
+}
+
+/// One choice in a filter's panel: a capsule filled when chosen. Shared by Discover's catalog search and the
+/// sources' category filters.
+struct FilterChoiceButton: View {
+    let title: String
+    let selected: Bool
+    let action: () -> Void
+    @Environment(\.colorScheme) private var scheme
+    var body: some View {
+        #if os(macOS)
+        Button(action: action) {
+            Text(title).font(.system(size: 13, weight: selected ? .semibold : .regular)).lineLimit(1).minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity).frame(height: 28)
+                .foregroundStyle(selected ? Brand.onAccent : Color.primary)
+                .background(selected ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(.primary.opacity(0.08)), in: Capsule())
+                .contentShape(Capsule())
+        }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
+        #else
+        Button(action: action) {
+            Text(title).font(.system(size: 15)).lineLimit(1).minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity).frame(height: 36)
+                .foregroundStyle(selected ? (scheme == .dark ? Color.black : Color.white) : Color.primary)
+                .background { if selected { Capsule().fill(Color.primary) } }
+                .glassSurface(selected ? .identity : .regular, in: Capsule())
+        }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
+        #endif
+    }
+}
+
+/// A filter's chip, "Region：Any ⌄", that opens its choices. Shared by Discover's catalog search and the sources'
+/// category filters. Apple TV pages use `DiscoverTVChipStyle` buttons instead.
+struct FilterChipLabel: View {
+    let title: String
+    /// Its panel is showing.
+    var open = false
+    var body: some View {
+        #if os(macOS)
+        HStack(spacing: 6) {
+            Text(title).lineLimit(1)
+            Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+        }
+        .font(.system(size: 13)).padding(.horizontal, 12).frame(height: 30)
+        .background(.primary.opacity(open ? 0.16 : 0.07), in: Capsule())
+        .overlay { Capsule().strokeBorder(.primary.opacity(0.1), lineWidth: 0.5) }
+        .contentShape(Capsule())
+        #else
+        HStack(spacing: 8) {
+            Text(title).lineLimit(1)
+            Image(systemName: "chevron.down").font(.system(size: 13, weight: .semibold))
+        }.font(.system(size: 15)).padding(.horizontal, 14).frame(height: 38).glassSurface(.regular, in: Capsule())
+        #endif
     }
 }
 
