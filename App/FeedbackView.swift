@@ -502,6 +502,7 @@ private struct FeedbackPage: View {
             #if os(macOS)
             .toggleStyle(.switch).controlSize(.small)
             #endif
+            .settingsSwitch()
             .padding(.top, 6)
             Text(FeedbackView.logNote).font(compact ? .footnote : .callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

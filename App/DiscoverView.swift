@@ -165,19 +165,27 @@ struct DiscoverView: View {
             NavigationStack {
                 Form {
                     ForEach(DiscoverSection.allCases) { section in
-                        Toggle(section.title, isOn: Binding(get: {
-                            !hiddenSections.split(separator: ",").contains(Substring(section.rawValue))
-                        }, set: { shown in
-                            var hidden = Set(hiddenSections.split(separator: ",").map(String.init))
-                            if shown { hidden.remove(section.rawValue) } else { hidden.insert(section.rawValue) }
-                            hiddenSections = hidden.sorted().joined(separator: ",")
-                        }))
+                        Toggle(section.title, isOn: shown(section))
+                            #if !os(tvOS)
+                            .settingsSwitch()
+                            #endif
                     }
                 }
                 .navigationTitle(L10n.text("Edit Layout"))
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { editing = false } } }
             }.preferredColorScheme(.dark).discoverSheetSize(width: 420, height: 560)
         }
+    }
+
+    /// Whether Edit Layout shows the section on the page.
+    private func shown(_ section: DiscoverSection) -> Binding<Bool> {
+        Binding(get: {
+            !hiddenSections.split(separator: ",").contains(Substring(section.rawValue))
+        }, set: { shown in
+            var hidden = Set(hiddenSections.split(separator: ",").map(String.init))
+            if shown { hidden.remove(section.rawValue) } else { hidden.insert(section.rawValue) }
+            hiddenSections = hidden.sorted().joined(separator: ",")
+        })
     }
 
     @ViewBuilder private func sectionView(_ section: DiscoverSection, width: CGFloat) -> some View {
