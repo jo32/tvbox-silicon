@@ -563,6 +563,15 @@ struct MobilePlayerView: View {
                     .pickerStyle(.inline)
                 }
             }
+            // A file whose sound tracks AVFoundation offers no choice between (#428).
+            if session.audioChoices.count > 1 {
+                Menu(L10n.text("Audio")) {
+                    Picker(L10n.text("Audio"), selection: Binding(get: { session.audioChoice }, set: { if let id = $0 { session.chooseAudio(id) } })) {
+                        ForEach(session.audioChoices) { Text($0.name).tag(Optional($0.id)) }
+                    }
+                    .pickerStyle(.inline)
+                }
+            }
             if let legible = tracks.legible, !legible.options.isEmpty {
                 Menu(L10n.text("Subtitles")) {
                     Picker(L10n.text("Subtitles"), selection: Binding(get: { tracks.selected(in: legible) }, set: { tracks.select($0, in: legible) })) {

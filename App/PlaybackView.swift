@@ -116,6 +116,10 @@ import TVCore
     private var switchNotice: String?
     /// Qualities the stream can switch between (Bilibili), and the one chosen; nil is automatic.
     private(set) var qualities: [StreamQuality] = []
+    /// The sound tracks of a file that groups none of them (`UngroupedAudio`), for the player's Audio choice, and the
+    /// one playing. Empty when AVFoundation offers the choice itself, or there is none.
+    private(set) var audioChoices: [UngroupedAudio.Choice] = []
+    private(set) var audioChoice: CMPersistentTrackID?
     /// A live stream: played at the live edge, without scrubbing.
     private(set) var isLive = false
     /// The item is ready and has a finite duration, so there is a timeline to scrub. A live stream that
@@ -220,6 +224,13 @@ import TVCore
                 if self.sourceDanmaku.count > 4000 { self.sourceDanmaku.removeFirst(1000) }
             }
         }
+    }
+
+    /// Plays the sound track `id` of a file whose tracks AVFoundation offers no choice between (`audioChoices`).
+    func chooseAudio(_ id: CMPersistentTrackID) {
+        guard let item else { return }
+        UngroupedAudio.play(id, in: item)
+        audioChoice = UngroupedAudio.playing(item)
     }
 
     /// Plays the stream at `quality` (nil: automatic) from where it is now.
@@ -676,6 +687,7 @@ import TVCore
     /// Follows the episode's item (ready, failed, ended), the player's state, and the transfer, for this playback.
     private func watch(_ item: AVPlayerItem, channel: Channel, url: URL, generation activeGeneration: UUID) {
         self.item = item
+        audioChoices = []; audioChoice = nil
         hasTimeline = item.status == .readyToPlay && item.duration.isNumeric
         observation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             let status = item.status
@@ -689,6 +701,13 @@ import TVCore
                 guard let self, self.generation == activeGeneration else { return }
                 self.hasTimeline = timeline
                 if status == .readyToPlay {
+                    if UngroupedAudio.playOne(item) { Diagnostics.shared.record(.info, "player", "ungrouped audio tracks; playing the first") }
+                    Task { [weak self] in
+                        let choices = await UngroupedAudio.choices(item)
+                        guard let self, self.generation == activeGeneration, self.item === item else { return }
+                        self.audioChoices = choices
+                        self.audioChoice = choices.isEmpty ? nil : UngroupedAudio.playing(item)
+                    }
                     self.checkingPicture = Self.repackagable(url)
                     self.restorePositionIfNeeded(item)
                     self.loading = self.pendingResume != nil || self.restoringPosition
@@ -1165,9 +1184,13 @@ extension PlaybackSession {
                     if status == .failed {
                         Diagnostics.shared.record(.warning, "player", "upcoming failed \(failure.map(Self.describe) ?? "-")")
                         self.discardUpcoming()
-                    } else if status == .readyToPlay, let intro, intro.enabled, intro.introEnd > 0,
-                              intro.validationError(duration: queued.duration.seconds) == nil, queued.currentTime().seconds < intro.introEnd {
-                        queued.seek(to: CMTime(seconds: intro.introEnd, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero, completionHandler: nil)
+                    } else if status == .readyToPlay {
+                        // Before it plays, so a file with ungrouped dubs starts with one of them.
+                        UngroupedAudio.playOne(queued)
+                        if let intro, intro.enabled, intro.introEnd > 0,
+                           intro.validationError(duration: queued.duration.seconds) == nil, queued.currentTime().seconds < intro.introEnd {
+                            queued.seek(to: CMTime(seconds: intro.introEnd, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero, completionHandler: nil)
+                        }
                     }
                 }
             }
