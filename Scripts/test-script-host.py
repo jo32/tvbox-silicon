@@ -73,6 +73,14 @@ exports.start = async () => {
       const reply = (status, value) => { res.writeHead(status, {'content-type': 'application/json'}); res.end(JSON.stringify(value)); };
       if (req.url.endsWith('/init')) return reply(200, {});
       if (req.url === '/spider/site/3/home') return reply(500, {message: 'home broke'});
+      // A source whose search returns nothing answers 200 with an empty body.
+      if (req.url === '/spider/blank/3/search') { res.writeHead(200); return res.end(); }
+      // A site connection the far end dropped fails at once ("socket hang up"); the next try works.
+      if (req.url === '/spider/stale/3/search') return (globalThis.stale = (globalThis.stale || 0) + 1) === 1
+        ? reply(500, {message: 'socket hang up'}) : reply(200, {list: [{vod_id: '2', vod_name: 'Fresh'}]});
+      // A server that drops every request does so slowly, and is asked once.
+      if (req.url === '/spider/dead/3/search') { globalThis.dead = (globalThis.dead || 0) + 1; return setTimeout(() => reply(500, {message: 'socket hang up'}), 2700); }
+      if (req.url === '/spider/dead/3/home') return reply(200, {class: [], list: [], asked: globalThis.dead});
       if (req.url === '/spider/site/3/search') {
         const {wd} = JSON.parse(body);
         if (wd === 'found') return reply(200, {list: [{vod_id: '1', vod_name: 'Found'}]});
@@ -96,6 +104,10 @@ exports.start = async () => {
             assert json.loads(answer('found', {'catPawOpen': '/spider/site/3', 'wd': 'found'})['result'])['list'] == [{'vod_id': '1', 'vod_name': 'Found'}]
             assert json.loads(answer('none', {'catPawOpen': '/spider/site/3', 'wd': 'nothing'})['result'])['list'] == []
             assert json.loads(answer('nosearch', {'catPawOpen': '/spider/other/3', 'wd': 'x'})['result'])['list'] == []
+            assert json.loads(answer('blank', {'catPawOpen': '/spider/blank/3', 'wd': 'x'})['result'])['list'] == []
+            assert json.loads(answer('stale', {'catPawOpen': '/spider/stale/3', 'wd': 'x'})['result'])['list'] == [{'vod_id': '2', 'vod_name': 'Fresh'}]
+            assert 'socket hang up' in answer('dead', {'catPawOpen': '/spider/dead/3', 'wd': 'x'})['error']
+            assert json.loads(answer('deadhome', {'catPawOpen': '/spider/dead/3'})['result'])['asked'] == 1
             home = answer('home', {'catPawOpen': '/spider/site/3'})
             assert 'home broke' in json.dumps(home, ensure_ascii=False), home
             process.stdin.close()

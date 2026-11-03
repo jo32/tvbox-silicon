@@ -612,6 +612,24 @@ import TVCore
             }
             return
         }
+        if args[1] == "--search-check", args.count >= 4 {
+            // Searches every source of a subscription the way global search does (same lanes and widths) and
+            // prints each source's outcome: --search-check <subscription> <keyword>...
+            actor Tally { var ok = 0, empty = 0, failed = 0; func add(_ videos: Int?) { if let videos { if videos > 0 { ok += 1 } else { empty += 1 } } else { failed += 1 } } }
+            let config = try await HTTPClient().subscription(WebAddress.resolve(args[2]))
+            for keyword in args.dropFirst(3) {
+                let started = Date(), tally = Tally()
+                await GlobalSearch.search(sites: config.sites, origin: config.origin, jarURL: config.spiderURL, query: keyword) { result in
+                    let at = String(format: "+%.1fs", Date().timeIntervalSince(started))
+                    let videos = result.error == nil ? result.page?.videos.count ?? 0 : nil
+                    await tally.add(videos)
+                    let label = videos == nil ? "FAIL" : videos == 0 ? "NONE" : "OK  "
+                    print("\(label) \(keyword) \(result.site.key) \(result.site.name) \(at) \(videos.map { "videos=\($0)" } ?? String((result.error ?? "").prefix(220)))")
+                }
+                print("SUMMARY \(keyword): ok=\(await tally.ok) empty=\(await tally.empty) failed=\(await tally.failed) seconds=\(Int(Date().timeIntervalSince(started)))")
+            }
+            return
+        }
         if args[1] == "--home-check", args.count >= 3 {
             // Loads each source's home the way the app's source page does and reports what its
             // category bar would show.
