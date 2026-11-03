@@ -91,3 +91,35 @@ This product uses the TMDB API but is not endorsed or certified by TMDB.
 `GET /v1/catalog/search?mode=profile&id=<person-id>&language=<language>` returns a localized person profile and combined movie/TV credits. Each work retains its full date, roles and contribution departments; duplicate cast/crew appearances merge by typed media identity. Undated works follow dated works.
 
 Title details retain optional person IDs, `genreItems` (ID and localized name), and studio IDs with `network`/`company` kind. Related pages query the existing discover mode with `genres`, `networks` or `companies`, preserving media type, sorting and pagination. Platform IDs accept bounded positive integers instead of only the home page's preset brands. Profile requests share the catalog search limiter.
+
+## Calendar
+
+`GET /v1/calendar?kind=anime|tv&language=zh-CN[&region=all|cn|hktw|us|jp|kr|gb]` gives this week's airing calendar,
+Monday to Sunday in China time (`timeZone`, `days[].date`, `days[].weekday` 1–7). Each item has `title`,
+`originalTitle`, `cover`, and when the source knows them `airsAt` (ISO), `episode`, `season`, `rating`, `network`,
+`bangumi` (bgm.tv ID), `tmdb` (`{type, id, season}`: the app's detail page can open it) and `links` (streaming sites).
+`region` (series only, default `all`) picks where they are made. Code: `src/calendar.ts`.
+
+Each kind tries its sources in order. A source that fails, or answers with less than a real week (under 20 anime or
+10 series), is skipped for the next:
+
+| kind  | 1st choice | then | then |
+|-------|------------|------|------|
+| anime | Bangumi `api.bgm.tv/calendar` (Chinese names, covers, ratings), timed and linked by bangumi-data, numbered by Simkl | Simkl's `data.simkl.in/calendar/anime.json`, named in Chinese and timed by bangumi-data | bangumi-data's broadcast rules alone (no covers) |
+| tv    | TMDB `/discover/tv` by air date and origin country (no animation, news, daily soaps or talk shows; reality only for cn, hktw, kr). `all` = Chinese-language first, then US, GB, KR, JP, TW, HK, TH | TVmaze `/schedule/web` + `/schedule` for the region's countries (English or pinyin names, with episodes and times) | — |
+
+AniList's airing schedule is not used: it answers 403 "You have been manually blocked" to every request from
+Cloudflare Workers. bangumi-data comes per month (this month and this and the last season's first month) from
+jsDelivr, or from raw.githubusercontent.com when jsDelivr fails. Requests that fail with a network error, 429 or 5xx
+are tried once more. The answer says which source it came from (`source`, and `fallback: true` when it isn't the
+first choice), what failed on the way (`issues`), and whom to credit (`attribution`: the app must show these; TVmaze
+is CC BY-SA, bangumi-data CC BY).
+
+Calendars are kept in D1 (`calendars`, one row per kind and language|region; anime names don't depend on the
+language, so anime is kept once as `*`). A request is answered from D1; a calendar older than 6 hours (1 hour when it
+came from a fallback) is rebuilt in the background. With none kept for this week a request waits for a build, and
+when every source fails it gets the last calendar kept, moved onto this week by weekday, with `stale: true` and no
+episode numbers. A failed build is not retried for 5 minutes. With nothing kept at all, it answers 502 with the
+reasons. A build makes at most about 30 outside requests (Workers Free allows 50).
+
+Add the table to an existing database with `migrations/0005-calendars.sql`.

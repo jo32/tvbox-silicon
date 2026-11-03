@@ -144,10 +144,32 @@ private struct DiscoverTVDotStyle: ButtonStyle {
 /// A native horizontal collection owns its boundary focus event: See All opens at the start of the row only when the
 /// first title receives Left, as in Rex. Before then it is invisible and absent from accessibility.
 struct DiscoverTVNativeShelf: UIViewControllerRepresentable {
-    let items: [TMDBCatalog.Item]
+    /// One title of the row: any list's titles (TMDB's, Douban's, the airing calendar's) as cover and two captions.
+    struct Entry: Equatable {
+        let key: String
+        let title: String
+        let detail: String
+        let image: URL?
+        /// The detail in the accent colour (the next title to air).
+        var highlight = false
+    }
+    let entries: [Entry]
     let identifier: String
     let landscape: Bool
-    let select: (TMDBCatalog.Item?) -> Void
+    /// The index of the chosen title, or nil for See All.
+    let select: (Int?) -> Void
+
+    init(entries: [Entry], identifier: String, landscape: Bool = false, select: @escaping (Int?) -> Void) {
+        self.entries = entries; self.identifier = identifier; self.landscape = landscape; self.select = select
+    }
+    init(items: [TMDBCatalog.Item], identifier: String, landscape: Bool, select: @escaping (TMDBCatalog.Item?) -> Void) {
+        let entries = items.map { item in
+            Entry(key: item.key, title: item.name,
+                  detail: [item.year.map(String.init), landscape && !item.genreNames.isEmpty ? item.genreNames : nil].compactMap { $0 }.joined(separator: "  "),
+                  image: landscape ? item.backdrop ?? item.poster : item.poster)
+        }
+        self.init(entries: entries, identifier: identifier, landscape: landscape) { index in select(index.map { items[$0] }) }
+    }
 
     static func posterSize(landscape: Bool) -> CGSize {
         landscape ? CGSize(width: DiscoverLayout.landscapeWidth, height: DiscoverLayout.landscapeWidth * 9 / 16)
@@ -220,7 +242,7 @@ struct DiscoverTVNativeShelf: UIViewControllerRepresentable {
         }
 
         func update(_ value: DiscoverTVNativeShelf) {
-            let changed = source.items.map(\.key) != value.items.map(\.key) || source.landscape != value.landscape
+            let changed = source.entries != value.entries || source.landscape != value.landscape
             source = value
             if changed, isViewLoaded { collection.reloadData() }
         }
@@ -229,7 +251,7 @@ struct DiscoverTVNativeShelf: UIViewControllerRepresentable {
         // and outside accessibility, so that Left lands on it (rather than finding nothing and opening the sidebar)
         // and it widens in that same focus move.
         func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-            source.items.isEmpty ? 0 : source.items.count + 1
+            source.entries.isEmpty ? 0 : source.entries.count + 1
         }
         private func itemSize(_ index: Int) -> CGSize {
             let poster = DiscoverTVNativeShelf.posterSize(landscape: source.landscape)
@@ -244,12 +266,12 @@ struct DiscoverTVNativeShelf: UIViewControllerRepresentable {
                 return cell
             }
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "title", for: indexPath) as! Cell
-            let item = source.items[indexPath.item - 1]
-            cell.show(item, landscape: source.landscape, size: poster, identifier: "discover.title.\(source.identifier).\(item.key)")
+            let entry = source.entries[indexPath.item - 1]
+            cell.show(entry, size: poster, identifier: "discover.title.\(source.identifier).\(entry.key)")
             return cell
         }
         func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-            source.select(indexPath.item == 0 ? nil : source.items[indexPath.item - 1])
+            source.select(indexPath.item == 0 ? nil : indexPath.item - 1)
         }
         func collectionView(_ collectionView: UICollectionView, shouldUpdateFocusIn context: UICollectionViewFocusUpdateContext) -> Bool {
             guard context.nextFocusedIndexPath?.item == 0 else { return true }
@@ -320,13 +342,14 @@ struct DiscoverTVNativeShelf: UIViewControllerRepresentable {
             coordinator.addCoordinatedAnimations { [title, detail] in title.transform = shift; detail.transform = shift }
         }
 
-        func show(_ item: TMDBCatalog.Item, landscape: Bool, size: CGSize, identifier: String) {
+        func show(_ entry: Entry, size: CGSize, identifier: String) {
             accessibilityIdentifier = identifier
-            accessibilityLabel = [item.name, item.year.map(String.init)].compactMap { $0 }.joined(separator: "、")
-            title.text = item.name
-            detail.text = [item.year.map(String.init), landscape && !item.genreNames.isEmpty ? item.genreNames : nil].compactMap { $0 }.joined(separator: "  ")
+            accessibilityLabel = [entry.title, entry.detail].filter { !$0.isEmpty }.joined(separator: "、")
+            title.text = entry.title
+            detail.text = entry.detail
+            detail.textColor = entry.highlight ? UIColor(Brand.accent) : UIColor(white: 1, alpha: 0.55)
             posterHeight.constant = size.height
-            let url = landscape ? item.backdrop ?? item.poster : item.poster
+            let url = entry.image
             guard url != self.url || size != self.size || poster.image == nil else { return }
             self.url = url; self.size = size
             task?.cancel()

@@ -890,7 +890,7 @@ private struct DiscoverTVStarLabel: LabelStyle {
 }
 
 /// The detail page's actions: Liquid Glass plates that turn white under focus.
-private struct DiscoverTVActionStyle: ButtonStyle {
+struct DiscoverTVActionStyle: ButtonStyle {
     let height: CGFloat
     let font: CGFloat
     var corner: CGFloat?
