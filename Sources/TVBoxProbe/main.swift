@@ -8,14 +8,14 @@ import TVCore
         library.resolver = { _ in
             guard target.hasPrefix("bili:") else { return Channel(name: "probe", url: URL(string: target)!) }
             let parts = target.split(separator: ":").map(String.init)
-            let client = CatalogClient(site: .bilibili, origin: URL(string: "https://example.invalid/")!)
+            let client = CatalogClient(site: try await cloudSite(\.isBilibili), origin: CloudSources.address)
             let video = try await client.detail(parts[1])
             let channel = try await client.playback(video.episodes[min(parts.count > 2 ? Int(parts[2]) ?? 0 : 0, video.episodes.count - 1)])
             print("resolved \(channel.url.absoluteString.prefix(100))")
             return channel
         }
         let episode = Episode(id: target, name: "Probe", address: target, flag: "probe")
-        let item = library.download(DownloadSource(site: .bilibili, videoID: target, episode: episode), title: "Probe", poster: nil)
+        let item = library.download(DownloadSource(site: try await cloudSite(\.isBilibili), videoID: target, episode: episode), title: "Probe", poster: nil)
         let started = Date()
         var paused = false
         while true {
@@ -106,8 +106,18 @@ import TVCore
         let seconds = Date().timeIntervalSince(started)
         return String(format: "%d MB in %.1fs = %.2f MB/s", bytes >> 20, seconds, Double(bytes) / seconds / 1_048_576)
     }
+    /// One of Yingxia's own sources, from its subscription (fetched once).
+    static func cloudSite(_ matches: @Sendable (Site) -> Bool) async throws -> Site {
+        if CloudSources.current == nil { CloudSources.current = try await CloudSources.fetch(http: HTTPClient()) }
+        guard let site = CloudSources.site(where: matches) else { throw TVError.invalidConfiguration }
+        return site
+    }
     static func main() async throws {
         let args = CommandLine.arguments
+        // Yingxia's own sources and live platforms come from its subscription.
+        if args.count >= 2, args[1] == "--live" || args[1] == "--cloud-site" || args[1].hasPrefix("--bili") || args[1] == "--download" {
+            CloudSources.current = try await CloudSources.fetch(http: HTTPClient())
+        }
         guard args.count >= 2 else {
             print("Usage: TVBoxProbe <jar path> [class descriptor] [static int method]")
             print("       TVBoxProbe --subscription-check <URL> [...]")
@@ -140,18 +150,6 @@ import TVCore
             chat.start { text, color, position in print("danmaku \(String(format: "%06x", color)) \(position) \(text)") }
             try await Task.sleep(for: .seconds(args.count > 3 ? Double(args[3]) ?? 20 : 20))
             chat.stop()
-            return
-        }
-        if args[1] == "--bili-rooms" {
-            // --bili-rooms: the built-in Bilibili Live source's channels, by group, then plays the first.
-            let channels = try await HTTPClient().channels(.bilibili)
-            for group in Dictionary(grouping: channels, by: \.group).sorted(by: { $0.key < $1.key }) { print(group.key, group.value.count, group.value.first?.name ?? "") }
-            if let first = channels.first { let live = try await BilibiliLive.resolve(first); print("resolved", live.channel.url.absoluteString.prefix(90), "qualities", live.qualities.map { "\($0.id) \($0.label)" }, "current", live.current ?? -1) }
-            return
-        }
-        if args[1] == "--douyin-sign", args.count >= 4, let now = Int64(args[3]) {
-            // --douyin-sign <query> <epoch ms>: a_bogus with every random draw 0.5, to compare with the reference.
-            print(DouyinSign.aBogus(query: args[2], now: now, random: { 0.5 }))
             return
         }
         if args[1] == "--douyin-handoff" {
@@ -198,7 +196,7 @@ import TVCore
             let live = try await LiveCatalog.resolve(Channel(name: "", url: address))
             print("resolved \(live.channel.name) \(live.channel.url.absoluteString.prefix(110))")
             print("qualities \(live.qualities.map { "\($0.id) \($0.label)" }) current \(live.current ?? -1)")
-            let item = AVPlayerItem(asset: DouyuStreams.asset(for: live.channel.url)
+            let item = AVPlayerItem(asset: LiveRepair.asset(for: live.channel.url)
                 ?? AVURLAsset(url: live.channel.url, options: ["AVURLAssetHTTPHeaderFieldsKey": live.channel.headers]))
             let player = AVPlayer(playerItem: item); player.isMuted = true; player.play()
             for second in 1...10 {
@@ -207,19 +205,6 @@ import TVCore
             }
             // Recoverable problems too, such as a playlist contradicting an earlier reload (-12312).
             for event in item.errorLog()?.events ?? [] { print("errorlog \(event.errorStatusCode) \(event.errorComment ?? "-")") }
-            return
-        }
-        if args[1] == "--bili-live", args.count >= 3, let room = Int(args[2]) {
-            // --bili-live <room>: a live room's stream through AVPlayer for a few seconds.
-            setvbuf(stdout, nil, _IONBF, 0)
-            let channel = try await Bilibili.liveChannel(room: room)
-            print("live \(channel.name) \(channel.url.absoluteString.prefix(100))")
-            let item = AVPlayerItem(asset: AVURLAsset(url: channel.url, options: ["AVURLAssetHTTPHeaderFieldsKey": channel.headers]))
-            let player = AVPlayer(playerItem: item); player.isMuted = true; player.play()
-            for second in 1...8 {
-                try await Task.sleep(for: .seconds(1))
-                print("t=\(second) status=\(item.status.rawValue) time=\(String(format: "%.1f", player.currentTime().seconds)) size=\(Int(item.presentationSize.width))x\(Int(item.presentationSize.height)) error=\(item.error.map { "\($0)" } ?? "-")")
-            }
             return
         }
         if args[1] == "--cast-listen" {
@@ -237,8 +222,8 @@ import TVCore
         if args[1] == "--drama-check", args.count > 2 {
             // --drama-check xifan|hema [keyword]: home, search, a detail and two seconds of its first episode.
             setvbuf(stdout, nil, _IONBF, 0)
-            let site: Site = args[2] == "hema" ? .hema : .xifan
-            let client = CatalogClient(site: site, origin: URL(string: "https://example.invalid/")!)
+            let site = try await cloudSite { $0.key == (args[2] == "hema" ? "builtin.hema" : "builtin.xifan") }
+            let client = CatalogClient(site: site, origin: CloudSources.address)
             let home = try await client.home()
             print("home categories=\(home.categories.count) videos=\(home.videos.count) first=\(home.categories.prefix(3).map(\.name))")
             let search = try await client.list(category: nil, query: args.count > 3 ? args[3] : "总裁", page: 1)
@@ -261,7 +246,7 @@ import TVCore
             // --hongguo-play <series id> [episode number] isolates playback from catalog/search availability.
             // --hongguo-check [series id] [episode number] also checks the catalog, search and rankings.
             setvbuf(stdout, nil, _IONBF, 0)
-            let client = CatalogClient(site: .hongguo, origin: URL(string: "https://example.invalid/")!)
+            let client = CatalogClient(site: try await cloudSite { $0.key == "builtin.hongguo" }, origin: CloudSources.address)
             var defaultID: String?
             if args[1] == "--hongguo-check" {
                 let home = try await client.home()
@@ -344,7 +329,7 @@ import TVCore
                 _ = withUnsafeMutablePointer(to: &info) { $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_POWER_INFO), $0, &count) } }
                 return (cpu, info.task_interrupt_wakeups + info.task_platform_idle_wakeups)
             }
-            let client = CatalogClient(site: .hongguo, origin: URL(string: "https://example.invalid/")!)
+            let client = CatalogClient(site: try await cloudSite { $0.key == "builtin.hongguo" }, origin: CloudSources.address)
             let id: String
             if args.count > 4 { id = args[4] } else { guard let first = try await client.home().videos.first?.id else { throw TVError.emptyPlaylist }; id = first }
             let video = try await client.detail(id)
@@ -378,10 +363,38 @@ import TVCore
             HongguoStreams.stop(url)
             return
         }
+        if args[1] == "--cloud-site", args.count >= 3 {
+            // --cloud-site <key> [keyword]: one of Yingxia's own sources end to end: home, a search (or the
+            // home's first video), details, the first episode's stream through AVPlayer for a few seconds.
+            setvbuf(stdout, nil, _IONBF, 0)
+            let site = try await cloudSite { $0.key == args[2] }
+            let client = CatalogClient(site: site, origin: CloudSources.address)
+            let home = try await client.home()
+            print("home \(site.name) categories=\(home.categories.map(\.name).joined(separator: ",")) videos=\(home.videos.count)")
+            var videos = home.videos
+            if args.count > 3 { videos = try await client.list(category: nil, query: args[3], page: 1).videos; print("search \(args[3]): \(videos.count)") }
+            if videos.isEmpty, let first = home.categories.first { videos = try await client.list(category: first.id, query: "", page: 1).videos }
+            guard let first = videos.first else { print("no videos"); return }
+            let video = try await client.detail(first.id)
+            print("detail \(video.name) episodes=\(video.episodes.count)")
+            guard let episode = video.episodes.first else { return }
+            let channel = try await client.playback(episode)
+            print("channel \(channel.url.absoluteString.prefix(120)) qualities=\(DashStreams.qualities(for: channel.url).map(\.label))")
+            print("danmaku \(DanmakuSource.has(channel.url) ? (await DanmakuSource.comments(for: channel.url))?.count ?? 0 : -1)")
+            let asset = DashStreams.asset(for: channel.url) ?? HongguoStreams.asset(for: channel.url)
+                ?? AVURLAsset(url: channel.url, options: ["AVURLAssetHTTPHeaderFieldsKey": channel.headers])
+            let item = AVPlayerItem(asset: asset)
+            let player = AVPlayer(playerItem: item); player.isMuted = true; player.play()
+            for second in 1...10 {
+                try await Task.sleep(for: .seconds(1))
+                print("t=\(second) status=\(item.status.rawValue) time=\(String(format: "%.1f", player.currentTime().seconds)) size=\(Int(item.presentationSize.width))x\(Int(item.presentationSize.height)) error=\(item.error.map { "\($0)" } ?? "-")")
+            }
+            return
+        }
         if args[1] == "--bili-categories" {
             // --bili-categories [filter]: every category of the built-in Bilibili source with its first page's size.
             setvbuf(stdout, nil, _IONBF, 0)
-            let client = CatalogClient(site: .bilibili, origin: URL(string: "https://example.invalid/")!)
+            let client = CatalogClient(site: try await cloudSite(\.isBilibili), origin: CloudSources.address)
             let home = try await client.home()
             print("home categories=\(home.categories.count) videos=\(home.videos.count)")
             for category in home.categories where args.count < 3 || category.id.contains(args[2]) || category.name.contains(args[2]) {
@@ -398,7 +411,7 @@ import TVCore
             // --bili-play <BV id | season_N> [part index] [seconds]: the built-in Bilibili source end to end,
             // through its script port, playback resolution and AVPlayer.
             setvbuf(stdout, nil, _IONBF, 0)
-            let client = CatalogClient(site: .bilibili, origin: URL(string: "https://example.invalid/")!)
+            let client = CatalogClient(site: try await cloudSite(\.isBilibili), origin: CloudSources.address)
             let video = try await client.detail(args[2])
             let episode = video.episodes[min(args.count > 3 ? Int(args[3]) ?? 0 : 0, video.episodes.count - 1)]
             print("detail \(video.name) parts=\(video.episodes.count) playing=\(episode.name) \(episode.address)")
@@ -409,8 +422,8 @@ import TVCore
             let windows = Dictionary(grouping: comments) { Int($0.time / 10) * 10 }.mapValues(\.count)
             print("busiest 10s windows \(windows.sorted { $0.value > $1.value }.prefix(5).map { "\($0.key)s:\($0.value)" })")
             print("per 10s \(windows.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: " "))")
-            let asset = BilibiliStreams.asset(for: channel.url) ?? AVURLAsset(url: channel.url, options: ["AVURLAssetHTTPHeaderFieldsKey": channel.headers])
-            if channel.url.scheme == BilibiliStreams.scheme {
+            let asset = DashStreams.asset(for: channel.url) ?? AVURLAsset(url: channel.url, options: ["AVURLAssetHTTPHeaderFieldsKey": channel.headers])
+            if channel.url.scheme == DashStreams.scheme {
                 for variant in try await asset.load(.variants) {
                     let video = variant.videoAttributes
                     print("variant peak=\(Int(variant.peakBitRate ?? 0)) size=\(video.map { "\(Int($0.presentationSize.width))x\(Int($0.presentationSize.height))" } ?? "-") codecs=\(video?.codecTypes.map { String(format: "%08x", $0) } ?? [])")

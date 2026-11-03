@@ -1,25 +1,33 @@
 import Foundation
 import AVFoundation
 
-/// Douyu's live HLS, read through a resource loader. When a room is new to Douyu's edge server, the
+/// Live HLS whose source asks for repair (`repair: "discontinuity"` in the play result; Yingxia's Douyu
+/// script does), read through a resource loader. When a room is new to Douyu's edge server, the
 /// edge starts it at MEDIA-SEQUENCE 0 and marks that first segment as a discontinuity in some reloads
 /// of the playlist but not in others. AVPlayer stops on the contradiction a few seconds in (CoreMedia
 /// -12312, "Media Entry discontinuity value does not match previous playlist"); a second try plays
 /// because the edge has moved past segment 0 by then. Nothing comes before a stream's first segment,
 /// so a discontinuity there means nothing and the loader drops it. Only the playlists pass through
 /// here: their segment addresses are made absolute and load from the CDN directly.
-public enum DouyuStreams {
-    public static let scheme = "tvbox-douyu"
-    static let headers = ["User-Agent": LiveHTTP.mobileAgent, "Referer": "https://m.douyu.com/"]
+public enum LiveRepair {
+    public static let scheme = "tvbox-live-repair"
+    nonisolated(unsafe) private static var hostHeaders: [String: [String: String]] = [:]
+    private static let lock = NSLock()
 
-    /// The address AVPlayer opens for one of Douyu's playlists.
-    static func address(_ url: URL) -> URL {
+    /// The address AVPlayer opens for one of these playlists; the server's playlists are asked for with `headers`.
+    static func address(_ url: URL, headers: [String: String]? = nil) -> URL {
+        if let headers, let host = url.host()?.lowercased() { lock.withLock { hostHeaders[host] = headers } }
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.scheme = scheme
         return components?.url ?? url
     }
 
-    /// The playlist on Douyu's server behind an address from `address`.
+    /// The headers the playlist's server was asked with.
+    static func headers(for url: URL) -> [String: String] {
+        lock.withLock { hostHeaders[url.host()?.lowercased() ?? ""] ?? [:] }
+    }
+
+    /// The playlist on the server behind an address from `address`.
     static func upstream(_ url: URL) -> URL? {
         guard url.scheme == scheme, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
         components.scheme = "https"
@@ -30,7 +38,7 @@ public enum DouyuStreams {
     public static func asset(for url: URL) -> AVURLAsset? {
         guard url.scheme == scheme else { return nil }
         let asset = AVURLAsset(url: url)
-        asset.resourceLoader.setDelegate(DouyuPlaylistLoader.shared, queue: DouyuPlaylistLoader.shared.queue)
+        asset.resourceLoader.setDelegate(RepairedPlaylistLoader.shared, queue: RepairedPlaylistLoader.shared.queue)
         return asset
     }
 
@@ -58,27 +66,27 @@ public enum DouyuStreams {
     }
 }
 
-/// Answers AVPlayer's requests for `tvbox-douyu://` playlists from Douyu's server. Requests stay on
+/// Answers AVPlayer's requests for `tvbox-live-repair://` playlists from the server. Requests stay on
 /// one serial queue; the download re-enters it to respond, so a cancelled request gets nothing late.
-private final class DouyuPlaylistLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecked Sendable {
-    static let shared = DouyuPlaylistLoader()
-    let queue = DispatchQueue(label: "tvbox.douyu.playlists")
+private final class RepairedPlaylistLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecked Sendable {
+    static let shared = RepairedPlaylistLoader()
+    let queue = DispatchQueue(label: "tvbox.live.playlists")
     private var pending: [ObjectIdentifier: (request: AVAssetResourceLoadingRequest, task: Task<Void, Never>)] = [:]
 
     func resourceLoader(_ loader: AVAssetResourceLoader, shouldWaitForLoadingOfRequestedResource request: AVAssetResourceLoadingRequest) -> Bool {
-        guard let url = request.request.url, let upstream = DouyuStreams.upstream(url) else { return false }
+        guard let url = request.request.url, let upstream = LiveRepair.upstream(url) else { return false }
         let id = ObjectIdentifier(request)
         let task = Task { [weak self] in
             let result: Result<Data, Error>
             do {
                 var fetch = URLRequest(url: upstream, timeoutInterval: 15)
-                DouyuStreams.headers.forEach { fetch.setValue($1, forHTTPHeaderField: $0) }
+                LiveRepair.headers(for: upstream).forEach { fetch.setValue($1, forHTTPHeaderField: $0) }
                 let (data, response) = try await URLSession.shared.data(for: fetch)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 guard (200..<300).contains(status) else { throw TVError.http(status) }
-                result = .success(Data(DouyuStreams.rewrite(String(decoding: data, as: UTF8.self), origin: response.url ?? upstream).utf8))
+                result = .success(Data(LiveRepair.rewrite(String(decoding: data, as: UTF8.self), origin: response.url ?? upstream).utf8))
             } catch {
-                if !(error is CancellationError) { Diagnostics.shared.record(.warning, "live", "douyu playlist host=\(upstream.host() ?? "-") \(error.localizedDescription)") }
+                if !(error is CancellationError) { Diagnostics.shared.record(.warning, "live", "repaired playlist host=\(upstream.host() ?? "-") \(error.localizedDescription)") }
                 result = .failure(error)
             }
             self?.queue.async { [weak self] in

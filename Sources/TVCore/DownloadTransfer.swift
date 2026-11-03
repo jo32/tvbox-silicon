@@ -139,10 +139,10 @@ struct Transfer: Sendable {
 
     // MARK: Planning
 
-    /// Works out what the resolved address is: Bilibili DASH, an HLS playlist, or a plain file.
+    /// Works out what the resolved address is: DASH, an HLS playlist, or a plain file.
     func prepare(_ channel: Channel) async throws -> TransferPlan {
-        if let dash = BilibiliStreams.files(for: channel.url) { return try await prepare(dash) }
-        if channel.url.scheme == BilibiliStreams.scheme { throw TVError.unsupported(L10n.text("This playback has expired. Open the video again.")) }
+        if let dash = DashStreams.files(for: channel.url) { return try await prepare(dash) }
+        if channel.url.scheme == DashStreams.scheme { throw TVError.unsupported(L10n.text("This playback has expired. Open the video again.")) }
         var headers = channel.headers
         if !headers.keys.contains(where: { $0.lowercased() == "user-agent" }) { headers["User-Agent"] = HTTPClient.userAgent }
         let (head, response) = try await get([channel.url], headers: headers, range: 0...65_535, limit: 65_536, counts: false)
@@ -166,14 +166,14 @@ struct Transfer: Sendable {
         var files: [TransferPlan.RemoteFile] = []
         let halves = [("video.m4s", dash.video, dash.videoInitialization, dash.videoIndex), ("audio.m4s", dash.audio, dash.audioInitialization, dash.audioIndex)]
         for (name, urls, initialization, index) in halves where !urls.isEmpty {
-            let (_, response) = try await get(urls, headers: Bilibili.mediaHeaders, range: 0...0, limit: 1, counts: false)
+            let (_, response) = try await get(urls, headers: dash.headers, range: 0...0, limit: 1, counts: false)
             guard response.statusCode == 206, let length = Self.total(response) else { throw TransferError.rangeLost }
             // Keep the mirror that answered first.
             let first = response.url.flatMap { answered in urls.first { $0.host() == answered.host() } }
             files.append(.init(urls: first.map { [$0] + urls.filter { $0 != first } } ?? urls, name: name, length: length, ranged: true,
                                initialization: initialization, index: index))
         }
-        return TransferPlan(kind: .dash, headers: Bilibili.mediaHeaders, files: files, quality: dash.quality,
+        return TransferPlan(kind: .dash, headers: dash.headers, files: files, quality: dash.quality,
                             streamInfo: dash.streamInfo, label: dash.label, cid: dash.cid, duration: dash.duration)
     }
 
@@ -196,7 +196,7 @@ struct Transfer: Sendable {
     private func renew(_ old: TransferPlan) async throws -> TransferPlan {
         let channel = try await resolve()
         var plan: TransferPlan
-        if old.kind == .dash, let dash = BilibiliStreams.files(for: channel.url, quality: old.quality) { plan = try await prepare(dash) }
+        if old.kind == .dash, let dash = DashStreams.files(for: channel.url, quality: old.quality) { plan = try await prepare(dash) }
         else { plan = try await prepare(channel) }
         if plan.kind == old.kind {
             switch plan.kind {
@@ -409,7 +409,7 @@ struct Transfer: Sendable {
                 let sidx = try handle.read(upToCount: range.count) ?? Data()
                 let index = try SegmentIndex(sidx: sidx, at: range.lowerBound, initialization: initialization, url: URL(string: "parts/" + file.name)!)
                 let name = position == 0 ? "video.m3u8" : "audio.m3u8"
-                try Self.writing { try Data(BilibiliStreams.media(index).utf8).write(to: folder.appending(path: name), options: .atomic) }
+                try Self.writing { try Data(DashStreams.media(index).utf8).write(to: folder.appending(path: name), options: .atomic) }
                 if position == 1 { master.append("#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio\",NAME=\"Audio\",DEFAULT=YES,AUTOSELECT=YES,URI=\"audio.m3u8\"") }
             }
             master += ["#EXT-X-STREAM-INF:" + (plan.streamInfo ?? "BANDWIDTH=1"), "video.m3u8"]

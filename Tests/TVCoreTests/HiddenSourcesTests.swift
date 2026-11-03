@@ -54,6 +54,10 @@ private func source(_ key: String) -> Site {
 
 private struct Failure: Error {}
 
+/// Sources like those of Yingxia's own subscription.
+private let hongguo = Site(key: "builtin.hongguo", name: "Hongguo", type: 3, api: "https://example.com/hongguo.js", raw: ["yingxia": .object(["builtin": .bool(true)])])
+private let builtIns = [Site(key: "builtin.bilibili", name: "Bilibili", type: 3, api: "https://example.com/bili.js", raw: ["yingxia": .object(["builtin": .bool(true)])]), hongguo]
+
 @Test @MainActor func failingSourcesGoRedWithoutBeingHidden() throws {
     let suite = "hidden.red." + UUID().uuidString
     let defaults = try #require(UserDefaults(suiteName: suite))
@@ -61,13 +65,13 @@ private struct Failure: Error {}
     let hidden = HiddenSources(defaults: defaults)
     let health = SourceHealth(file: nil)
     let now = Date()
-    for site in [source("a")] + Site.builtInSites {
+    for site in [source("a")] + builtIns {
         health.record(site, origin: origin, seconds: 1, error: Failure(), now: now)
         health.record(site, origin: origin, seconds: 1, error: Failure(), now: now)
         #expect(health.status(site, origin: origin, now: now) == .failing)
         #expect(!hidden.contains(site, origin: origin))
     }
-    hidden.restoreAutoHidden([source("a")] + Site.builtInSites, origin: origin, health: health)
+    hidden.restoreAutoHidden([source("a")] + builtIns, origin: origin, health: health)
     #expect(!hidden.contains(source("a"), origin: origin))
 }
 
@@ -108,16 +112,16 @@ private struct Failure: Error {}
     defer { defaults.removePersistentDomain(forName: suite) }
     let hidden = HiddenSources(defaults: defaults)
     let site = source("a")
-    hidden.insert(.hongguo, origin: origin)
+    hidden.insert(hongguo, origin: origin)
     hidden.insert(site, origin: origin)
     hidden.restoreBuiltIns([], origin: origin)
-    #expect(hidden.contains(.hongguo, origin: origin))
-    let sites = [site] + Site.builtInSites
+    #expect(hidden.contains(hongguo, origin: origin))
+    let sites = [site] + builtIns
     hidden.restoreBuiltIns(sites, origin: origin)
-    #expect(!hidden.contains(.hongguo, origin: origin))
+    #expect(!hidden.contains(hongguo, origin: origin))
     #expect(hidden.contains(site, origin: origin))
-    #expect(!HiddenSources(defaults: defaults).contains(.hongguo, origin: origin))
-    hidden.toggle(.hongguo, origin: origin)
+    #expect(!HiddenSources(defaults: defaults).contains(hongguo, origin: origin))
+    hidden.toggle(hongguo, origin: origin)
     hidden.restoreBuiltIns(sites, origin: origin)
-    #expect(hidden.contains(.hongguo, origin: origin))
+    #expect(hidden.contains(hongguo, origin: origin))
 }

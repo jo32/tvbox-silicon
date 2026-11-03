@@ -1,47 +1,15 @@
 import Foundation
 import CryptoKit
 
-/// Bilibili as a source of its own: a built-in site that runs the bundled Bili.js port in its
-/// built-in mode (feeds, rankings, zones, PGC and search), the signed-in account, and the request
-/// signing that playback needs. Playback itself is `BilibiliStreams`.
+/// The Bilibili account the app signs in to, the request signing its account features need (the cast
+/// receiver, live comments), and the key of the Bilibili source in Yingxia's own subscription
+/// (`CloudSources`), whose script does the browsing and playback.
 public enum Bilibili {
     public static let siteKey = "builtin.bilibili"
     static let referer = "https://www.bilibili.com"
     /// The video CDN answers 403 to AVFoundation's own user agent and to requests without the referer.
     static let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15"
     static var mediaHeaders: [String: String] { ["Referer": referer, "User-Agent": userAgent] }
-}
-
-extension Site {
-    /// Offered with every subscription, after the subscription's own sources.
-    public static let bilibili: Site = {
-        let name = L10n.text("Bilibili")
-        let raw: [String: JSONValue] = ["key": .string(Bilibili.siteKey), "name": .string(name), "type": .number(3), "api": .string("csp_Bili"),
-                                        "searchable": .number(1), "quickSearch": .number(1), "filterable": .number(1)]
-        return Site(key: Bilibili.siteKey, name: name, type: 3, api: "csp_Bili", raw: raw)
-    }()
-    /// A source the app provides itself; it never falls back to a subscription's JAR.
-    public var isBuiltIn: Bool { isBilibili || key == Hongguo.siteKey || ShortDramas.keys.contains(key) || isCloudFiles }
-    public var isBilibili: Bool { key == Bilibili.siteKey }
-    public static var builtInSites: [Site] { [.bilibili, .hongguo, .xifan, .hema] }
-    /// Per-source bundled configuration. Bilibili reads the account on each request so login
-    /// changes start a new session; Hongguo receives localized labels without account cookies.
-    var builtInExtension: JSONValue {
-        if key == Hongguo.siteKey { return Hongguo.configuration }
-        if isCloudFiles { return .object([:]) }
-        if ShortDramas.keys.contains(key) { return ShortDramas.configuration(name: name) }
-        return .object(["builtin": .bool(true), "cookie": .string(BilibiliAccount.load().cookie)])
-    }
-}
-
-extension Subscription {
-    /// The subscription's sources and live playlists plus the built-in ones and the drives in Cloud Files;
-    /// the app shows this, the document keeps only its own.
-    public func withBuiltInSites() -> Subscription {
-        let sites = self.sites + (Site.builtInSites + CloudFilesSource.sites()).filter { builtin in !self.sites.contains { $0.key == builtin.key } }
-        let lives = LiveSource.builtIn.filter { builtin in !self.lives.contains { $0.url == builtin.url } } + self.lives
-        return Subscription(origin: origin, importedAt: importedAt, sites: sites, lives: lives, raw: raw)
-    }
 }
 
 /// The signed-in Bilibili account. Kept outside disposable caches like `CloudDriveAccounts`.
@@ -202,7 +170,7 @@ actor BilibiliSigner {
 
 extension Bilibili {
     /// What a cast from the phone plays: a video part (aid, with cid when known) or a PGC episode.
-    public static func castChannel(aid: Int, cid: Int, episode: Int, http: HTTPClient = HTTPClient()) async throws -> Channel {
+    public static func castChannel(aid: Int, cid: Int, episode: Int, in subscription: Subscription?, http: HTTPClient = HTTPClient()) async throws -> Channel {
         let signer = BilibiliSigner.shared
         let cookie = await signer.cookie(account: BilibiliAccount.load().cookie)
         var aid = aid, cid = cid, title = ""
@@ -226,55 +194,14 @@ extension Bilibili {
             }
         }
         guard aid > 0, cid > 0 else { throw TVError.unsupported(L10n.text("The phone sent a video this app can't open.")) }
-        let address = "http://127.0.0.1:9978/proxy?do=bili&aid=\(aid)&cid=\(cid)" + (episode > 0 ? "&ep=\(episode)" : "")
-        guard let resolved = try await BilibiliPlayback.resolve(address, headers: mediaHeaders, http: http) else { throw TVError.invalidURL }
+        // The Bilibili source in Yingxia's own subscription plays it, as it plays the source's videos.
+        guard let subscription, let site = subscription.sites.first(where: \.isBilibili) else {
+            throw TVError.unsupported(L10n.text("The phone sent a video this app can't open."))
+        }
+        let address = "\(aid)_\(cid)" + (episode > 0 ? "_\(episode)" : "")
+        let resolved = try await CatalogClient(site: site, origin: subscription.origin, http: http)
+            .playback(Episode(id: address, name: title, address: address, flag: "B站"))
         return Channel(name: title.isEmpty ? L10n.text("Bilibili") : title, group: L10n.text("Bilibili"), url: resolved.url, headers: resolved.headers)
-    }
-}
-
-extension Bilibili {
-    /// A live room's stream as HLS (TS where offered, else fMP4), at the best quality the account may watch.
-    public static func liveChannel(room: Int) async throws -> Channel { try await liveStream(room: room).channel }
-
-    /// A live room's stream at `quality` (Bilibili's live qn; 10000 is the original), with the qualities
-    /// the room offers this account (as `bilibili-live://room/<id>?qn=` addresses) and the one served.
-    public static func liveStream(room: Int, quality: Int = 10000) async throws -> (channel: Channel, qualities: [StreamQuality], current: Int?) {
-        let signer = BilibiliSigner.shared
-        let cookie = await signer.cookie(account: BilibiliAccount.load().cookie)
-        let reply = try await signer.json(URL(string: "https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo?room_id=\(room)&protocol=0,1&format=0,1,2&codec=0&qn=\(quality)&platform=web&ptype=8")!, cookie: cookie)
-        let data = reply["data"]?.object
-        guard reply["code"]?.int == 0, data?["live_status"]?.int == 1 else { throw TVError.unsupported(L10n.text("This live room is not broadcasting right now.")) }
-        let playurl = data?["playurl_info"]?.object?["playurl"]?.object
-        let streams = playurl?["stream"]?.array?.compactMap(\.object) ?? []
-        var offered: [Int] = [], current: Int?
-        func address(format: String) -> String? {
-            for stream in streams where stream["protocol_name"]?.string == "http_hls" {
-                for entry in stream["format"]?.array?.compactMap(\.object) ?? [] where entry["format_name"]?.string == format {
-                    for codec in entry["codec"]?.array?.compactMap(\.object) ?? [] where codec["codec_name"]?.string == "avc" {
-                        guard let base = codec["base_url"]?.string, let host = codec["url_info"]?.array?.first?.object else { continue }
-                        offered = codec["accept_qn"]?.array?.compactMap(\.int) ?? []
-                        current = codec["current_qn"]?.int
-                        return (host["host"]?.string ?? "") + base + (host["extra"]?.string ?? "")
-                    }
-                }
-            }
-            return nil
-        }
-        // TS first: its 4-second segments buffer smoothly, while the fMP4 playlist's 1-second segments, which
-        // start at the window's oldest edge, leave AVPlayer refilling at every segment and stuttering.
-        guard let stream = address(format: "ts") ?? address(format: "fmp4") else { throw TVError.unsupported(L10n.text("This live room has no stream this device can play.")) }
-        let info = try? await signer.json(URL(string: "https://api.live.bilibili.com/room/v1/Room/get_info?room_id=\(room)")!, cookie: cookie)
-        let title = info?["data"]?.object?["title"]?.string ?? L10n.text("Bilibili Live")
-        let names = Dictionary((playurl?["g_qn_desc"]?.array ?? []).compactMap { entry -> (Int, String)? in
-            guard let object = entry.object, let qn = object["qn"]?.int, let name = object["desc"]?.string else { return nil }
-            return (qn, name)
-        }) { first, _ in first }
-        let qualities = offered.sorted(by: >).compactMap { qn in
-            URL(string: "\(BilibiliLive.scheme)://room/\(room)?qn=\(qn)").map { StreamQuality(id: qn, label: names[qn] ?? "\(qn)", url: $0) }
-        }
-        let channel = Channel(name: title, group: L10n.text("Bilibili Live"), url: try WebAddress.resolve(stream),
-                              headers: ["Referer": "https://live.bilibili.com/", "User-Agent": userAgent])
-        return (channel, qualities, current)
     }
 }
 

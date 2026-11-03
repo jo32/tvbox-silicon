@@ -40,7 +40,7 @@ struct LivePlatformView: View {
     }
 
     @ViewBuilder private var browse: some View {
-        if platform == .douyin && !searchable { DouyinSignInBanner() }
+        if platform.account == "douyin" && !searchable { DouyinSignInBanner() }
         if areas.count > 1 {
             ChipRow {
                 GlassGroup(spacing: 8) {
@@ -83,7 +83,7 @@ struct LivePlatformView: View {
                 more()
             } catch {
                 guard !Task.isCancelled else { return }
-                Diagnostics.shared.failure("live", "\(platform.rawValue) areas", error)
+                Diagnostics.shared.failure("live", "\(platform.id) areas", error)
                 self.error = error.localizedDescription; loader = nil
             }
         }
@@ -111,7 +111,7 @@ struct LivePlatformView: View {
                 if fresh.isEmpty { exhausted = true }
             } catch {
                 guard !Task.isCancelled else { return }
-                Diagnostics.shared.failure("live", "\(platform.rawValue) rooms page=\(next)", error)
+                Diagnostics.shared.failure("live", "\(platform.id) rooms page=\(next)", error)
                 if rooms.isEmpty { self.error = error.localizedDescription } else { exhausted = true }
             }
             loader = nil
@@ -148,7 +148,7 @@ private struct LiveRoomSearch: View {
             catch is CancellationError { return }
             catch {
                 guard !Task.isCancelled else { return }
-                Diagnostics.shared.failure("live", "\(platform.rawValue) search", error)
+                Diagnostics.shared.failure("live", "\(platform.id) search", error)
                 self.error = error.localizedDescription; rooms = []
             }
             if !Task.isCancelled { searching = false }
@@ -309,13 +309,10 @@ struct LiveRoomCard: View {
 
 extension LivePlatform {
     /// The platform's brand colour, behind its mark and its card.
-    var tint: Color {
-        switch self {
-        case .bilibili: Color(red: 0.98, green: 0.45, blue: 0.60)
-        case .douyu: Color(red: 1.0, green: 0.42, blue: 0.10)
-        case .huya: Color(red: 1.0, green: 0.62, blue: 0.0)
-        case .douyin: Color(red: 0.07, green: 0.07, blue: 0.09)
-        }
+    var color: Color {
+        let hex = tint.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        guard hex.count == 6, let value = UInt32(hex, radix: 16) else { return Brand.rose }
+        return Color(red: Double(value >> 16 & 0xff) / 255, green: Double(value >> 8 & 0xff) / 255, blue: Double(value & 0xff) / 255)
     }
 }
 
@@ -384,9 +381,9 @@ struct LivePlatformCard: View {
 
     @ViewBuilder private var backdrop: some View {
         ZStack {
-            platform.tint
+            platform.color
             LinearGradient(colors: [.white.opacity(0.18), .black.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing)
-            if platform == .douyin {
+            if platform.split {
                 RadialGradient(colors: [Color(red: 0.15, green: 0.96, blue: 0.94).opacity(0.35), .clear], center: .topTrailing, startRadius: 0, endRadius: 260)
                 RadialGradient(colors: [Color(red: 1.0, green: 0.17, blue: 0.33).opacity(0.35), .clear], center: .bottomLeading, startRadius: 0, endRadius: 260)
             }
@@ -446,13 +443,9 @@ struct LivePlatformMark: View {
         #if os(tvOS)
         let size = size >= 44 ? max(size, 56) : size
         #endif
-        switch platform {
-        case .bilibili: BilibiliMark(size: size)
-        case .douyu: tile("斗", platform.tint, size: size)
-        case .huya: tile("虎", platform.tint, size: size)
-        // Douyin's glyph with its cyan and red offsets, on black.
-        case .douyin: tile("抖", platform.tint, size: size, split: true)
-        }
+        if platform.mark == "bilibili" { BilibiliMark(size: size) }
+        // A split glyph has cyan and red offsets, like Douyin's.
+        else { tile(platform.glyph, platform.color, size: size, split: platform.split) }
     }
 
     private func tile(_ glyph: String, _ color: Color, size: CGFloat, split: Bool = false) -> some View {

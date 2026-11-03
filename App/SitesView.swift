@@ -313,7 +313,7 @@ struct SourceIcon: View {
     var size: CGFloat
     var body: some View {
         if site.isBilibili { BilibiliMark(size: size) } else {
-            MonogramIcon(seed: site.name, label: label, size: size, systemImage: site.key == Hongguo.siteKey ? "play.rectangle.fill" : nil)
+            MonogramIcon(seed: site.name, label: label, size: size, systemImage: site.symbol)
         }
     }
 }

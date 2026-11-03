@@ -4,6 +4,8 @@ import AVFoundation
 /// A virtual clear MP4. AVPlayer requests byte ranges; only those samples are fetched and
 /// decrypted. Neither opening an episode nor seeking requires a complete local movie.
 public enum HongguoStreams {
+    /// What the encrypted files' CDN wants on a retry after a 403 (Hongguo's app pages).
+    static let mediaReferer = "https://novelquickapp.com/"
     public static let scheme = "tvbox-hongguo"
     public static let forwardBufferDuration: Double = 60
 
@@ -111,7 +113,7 @@ actor HongguoRangeReader {
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         let retry = usesReferer
-        if retry { request.setValue(Hongguo.mediaReferer, forHTTPHeaderField: "Referer") }
+        if retry { request.setValue(HongguoStreams.mediaReferer, forHTTPHeaderField: "Referer") }
         request.setValue("bytes=\(range.lowerBound)-\(range.upperBound - 1)", forHTTPHeaderField: "Range")
         request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
         let (bytes, response) = try await http.session.bytes(for: request)

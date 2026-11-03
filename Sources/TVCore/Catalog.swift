@@ -252,6 +252,10 @@ public struct CatalogClient: Sendable {
     }
     private func perform(_ params: [String: String]) async throws -> [String: JSONValue] {
         if site.isCloudFiles { return try await CloudFilesSource.request(site, params: params) }
+        // Yingxia's own sources run in-process on every platform, the Mac's included.
+        if site.runsInProcess {
+            return try await ScriptRuntime.shared.request(site: site, scriptURL: site.scriptURL(origin: origin), params: params, http: http, origin: origin)
+        }
         // A bundled lite port runs first, in-process on QuickJS everywhere; when it fails or answers
         // with nothing usable, the source's JAR spider answers instead.
         if let script = site.liteScript, ScriptRuntime.available, await LiteFallback.shared.prefersPort(site.key) {
@@ -417,10 +421,26 @@ public struct CatalogClient: Sendable {
             }
             var choices = PlaybackChoice.parse(result["url"], prefix: prefix, fallbackName: episode.name)
             guard !choices.isEmpty else { throw TVError.unsupported(L10n.text("The API did not return a single playback URL.")) }
-            if site.key == Hongguo.siteKey, let key = result["hongguoKey"]?.string, !key.isEmpty {
+            let duration = result["duration"]?.double.flatMap { $0 > 0 ? $0 : nil }
+            let danmaku = result["danmaku"]?.string
+            // Separate video and audio files (DASH), which the app describes as HLS for the player.
+            if let dash = result["dash"]?.object {
+                do {
+                    guard let master = try await DashStreams.stream(dash, headers: headers, danmaku: danmaku, session: http.session) else {
+                        throw TVError.unsupported(L10n.text("The API did not return a single playback URL."))
+                    }
+                    return PlaybackPlan(choices: [PlaybackChoice(id: 0, name: episode.name, address: master.absoluteString)], headers: headers,
+                                        group: episode.flag, requiresWebDetection: false, subtitles: ExternalSubtitle.parse(result["subs"]))
+                } catch {
+                    if error is CancellationError || Task.isCancelled { throw CancellationError() }
+                    throw error
+                }
+            }
+            // An encrypted MP4 with its key, which the app decrypts as it plays.
+            if let key = result["decryptKey"]?.string, !key.isEmpty {
                 do {
                     let remote = try WebAddress.resolve(choices[0].address)
-                    let backups = (result["hongguoBackups"]?.array ?? []).compactMap { $0.string.flatMap { try? WebAddress.resolve($0) } }
+                    let backups = (result["backupUrls"]?.array ?? []).compactMap { $0.string.flatMap { try? WebAddress.resolve($0) } }
                     let address: URL
                     if forDownload {
                         address = try await HongguoMedia.shared.prepare(url: remote, backups: backups, key: key, headers: headers, http: http)
@@ -433,6 +453,8 @@ public struct CatalogClient: Sendable {
                     if error is CancellationError || Task.isCancelled { throw CancellationError() }
                     throw TVError.unsupported(L10n.text("This Hongguo video could not be prepared for playback. Please try again."))
                 }
+            } else if danmaku != nil, let url = try? WebAddress.resolve(choices[0].address) {
+                DanmakuSource.register(url, feed: danmaku, duration: duration)
             }
             return PlaybackPlan(choices: choices, headers: headers, group: episode.flag,
                                 requiresWebDetection: (result["parse"]?.int ?? 0) != 0 || (result["jx"]?.int ?? 0) != 0 || !prefix.isEmpty, click: click, webPlayURL: "",
@@ -460,8 +482,9 @@ public struct CatalogClient: Sendable {
     /// Neither exists on Apple TV, which throws the existing web-detection error.
     /// This does not call a spider `isVideoFormat`.
     public func resolvePlayback(_ plan: PlaybackPlan, choice: PlaybackChoice) async throws -> Channel {
-        if site.key == Hongguo.siteKey, let url = URL(string: choice.address), url.scheme == HongguoStreams.scheme {
-            return Channel(name: choice.name, group: plan.group, url: url, headers: [:])
+        // Addresses the app made itself from the play result: a keyed MP4 or DASH described as HLS.
+        if let url = URL(string: choice.address), url.scheme == HongguoStreams.scheme || url.scheme == DashStreams.scheme {
+            return Channel(name: choice.name, group: plan.group, url: url, headers: url.scheme == DashStreams.scheme ? plan.headers : [:])
         }
         // A drive in Cloud Files hands over its stream, which carries the CDN's headers itself.
         if site.isCloudFiles, let url = URL(string: choice.address), url.scheme == CloudStreams.scheme {
@@ -513,12 +536,25 @@ public struct CatalogClient: Sendable {
         let address = Self.unwrapPluginProxy(choice.address)
         if address.lowercased().hasPrefix("magnet:") { throw TVError.unsupported(L10n.text("This source returned a magnet link. Torrent playback is not supported.")) }
         if Self.isPluginProxy(address) {
-            if let result = try await BilibiliPlayback.resolve(address, headers: plan.headers, http: http) {
-                return Channel(name: choice.name, group: plan.group, url: result.url, headers: result.headers)
+            // A Bili JAR spider's proxy id: Yingxia's own Bilibili source plays the same video.
+            if let id = Self.bilibiliProxyID(address), let bilibili = CloudSources.site(where: \.isBilibili) {
+                let channel = try await CatalogClient(site: bilibili, origin: CloudSources.address, http: http)
+                    .playback(Episode(id: id, name: choice.name, address: id, flag: plan.group))
+                return Channel(name: choice.name, group: plan.group, url: channel.url, headers: channel.headers, subtitles: channel.subtitles)
             }
             throw TVError.unsupported(L10n.text("This source needs a playback proxy that is not supported yet."))
         }
         return Channel(name: choice.name, group: plan.group, url: try WebAddress.resolve(address), headers: plan.headers, subtitles: plan.subtitles)
+    }
+
+    /// `aid_cid[_ep]` from a Bili spider's proxy address (`…/proxy?do=bili&aid=…&cid=…&ep=…`).
+    static func bilibiliProxyID(_ address: String) -> String? {
+        guard isPluginProxy(address), let marker = address.range(of: "/proxy?") else { return nil }
+        var proxy = URLComponents(); proxy.percentEncodedQuery = String(address[marker.upperBound...])
+        let items = proxy.queryItems ?? []
+        func parameter(_ name: String) -> String? { items.first(where: { $0.name == name })?.value.flatMap { UInt64($0) != nil ? $0 : nil } }
+        guard items.first(where: { $0.name == "do" })?.value == "bili", let aid = parameter("aid"), let cid = parameter("cid") else { return nil }
+        return [aid, cid, parameter("ep")].compactMap { $0 }.joined(separator: "_")
     }
 
     private func sniff(_ plan: PlaybackPlan, choice: PlaybackChoice, target: String, headers: [String: String], click: String) async throws -> Channel {

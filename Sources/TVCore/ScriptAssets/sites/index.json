@@ -1,21 +1,6 @@
 {
  "about": "Lightweight JavaScript ports of TVBox csp_ JAR spiders. Each enabled class runs on the in-process QuickJS runtime (ScriptRuntime) instead of the JVM. Remove a class here to fall back to its JAR spider. Entries whose class ends in Guard come from the fty.json subscription; a port that fails falls back to its JAR spider.",
  "classes": {
-  "YingxiaHongguo": {
-   "script": "Hongguo.js",
-   "sites": "红果短剧",
-   "status": "Built-in; web catalog and signed app playback"
-  },
-  "YingxiaXifan": {
-   "script": "Xifan.js",
-   "sites": "西饭短剧",
-   "status": "Built-in; public app API, free episodes only"
-  },
-  "YingxiaHema": {
-   "script": "Hema.js",
-   "sites": "河马短剧",
-   "status": "Built-in; website catalog, free episodes only"
-  },
   "App3Q": {
    "script": "App3Q.js",
    "sites": "三秋, 马猴",
@@ -62,12 +47,12 @@
    "status": "OK"
   },
   "Bili": {
-   "script": "Bili.js",
+   "script": "https://yingxia-sources.getmegaportal.com/v1/js/bili.js",
    "sites": "笔触琉璃, 少儿教育, 小学/初中/高中课堂, 笔璃合集/歌曲",
-   "status": "OK; playback via the app's proxy?do=bili MP4 resolver"
+   "status": "OK; the Bilibili script from Yingxia's own subscription (CloudSources), DASH playback"
   },
   "BiliGuard": {
-   "script": "Bili.js",
+   "script": "https://yingxia-sources.getmegaportal.com/v1/js/bili.js",
    "sites": "哔哔/课堂/MV (fty)",
    "status": "OK"
   },
