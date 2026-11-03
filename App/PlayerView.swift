@@ -100,6 +100,9 @@ struct PlaybackView: View {
             #endif
         }
         #if os(iOS)
+        // Registers the external-display accessory while the player is on screen (iOS 27): the system only
+        // offers the display to apps that ask for it, and takes it back when the player closes.
+        .background(ExternalDisplaySceneRegistrar().allowsHitTesting(false))
         // On a watch page the rest of the page keeps its own appearance.
         .modifier(PlayerScheme(ownsScreen: watch == nil))
         #else
@@ -117,7 +120,12 @@ struct PlaybackView: View {
         .simultaneousGesture(TapGesture().onEnded { poke() })
         #endif
         #endif
-        .onAppear { startCatalogPlayback(session, channel: channel, store: store); showOnStart() }
+        .onAppear {
+            startCatalogPlayback(session, channel: channel, store: store); showOnStart()
+            #if os(iOS)
+            ExternalDisplay.shared.attach(session.player)
+            #endif
+        }
         #if DEBUG && os(iOS)
         // `-qaWatchFullScreen <seconds>`: a watch page's player goes full screen after that long, for screenshots.
         .task(id: watch != nil) {
@@ -137,6 +145,7 @@ struct PlaybackView: View {
         .onDisappear {
             hideTask?.cancel(); store.cancelEpisodeSelection(); session.stop()
             #if os(iOS)
+            ExternalDisplay.shared.detach(session.player)
             PlayerOrientation.release()
             #endif
         }

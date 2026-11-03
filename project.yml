@@ -157,6 +157,14 @@ targets:
         NSPhotoLibraryAddUsageDescription: Saves a sign-in code to Photos, so the app on this phone can scan it.
         # Downloads keep going in the background as continued-processing tasks (iOS 26, App/DownloadsView.swift).
         BGTaskSchedulerPermittedIdentifiers: [$(PRODUCT_BUNDLE_IDENTIFIER).downloads.*]
+        # The video plays on a connected display (App/ExternalDisplay.swift). iOS 27 also needs the scene
+        # accessory the player screen registers; earlier systems offer the scene from this role alone.
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleExternalDisplayNonInteractive:
+              - UISceneConfigurationName: External Display
+                UISceneDelegateClassName: ExternalDisplaySceneDelegate
         # yingxia://douyin-login, the code an Apple TV shows to receive the Douyin sign-in.
         CFBundleURLTypes:
           - CFBundleURLName: com.tvbox.yingxia.handoff

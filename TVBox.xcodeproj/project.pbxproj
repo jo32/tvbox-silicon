@@ -197,6 +197,7 @@
 		A149AE9D183C5FB64D411761 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ADB3063A14E368A71892DCEE /* Assets.xcassets */; };
 		A6CF37D3E8E26FD498A15CD1 /* JavaHost in Resources */ = {isa = PBXBuildFile; fileRef = F1B927CC6ECB2F8BDFB22287 /* JavaHost */; };
 		A75BCD1DBB7A45ED27CEBA63 /* DiscoverBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */; };
+		A7C1E5F92B4D80631F7A2C93 /* ExternalDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2F4A9C7B1E35608A9C4F27B /* ExternalDisplay.swift */; };
 		AA2B9DEAC822A56D57A10055 /* DiscoverPersonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */; };
 		AC043E4B83A36550FA487318 /* MacUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ACBC18014BA7190EBA2EDD7 /* MacUpdater.swift */; };
 		B02B784DE4DDF64B05C8FA0F /* MusicRemoteControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E59EDBC7BE62078557E781 /* MusicRemoteControl.swift */; };
@@ -222,6 +223,7 @@
 		C10EEC4D7AED0BE564BF2246 /* DanmakuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A5737402EC96F0FBF79243E /* DanmakuView.swift */; };
 		C1C46AE3262D5E734B72F980 /* OpenJDK-additional.txt in Resources */ = {isa = PBXBuildFile; fileRef = 49F3577BBD5630331F34E84E /* OpenJDK-additional.txt */; };
 		C4A3779AB55BFE31030743DF /* XunleiSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00C471D2D671003876D2A4F9 /* XunleiSignInView.swift */; };
+		C4B8D2E6F0A351799E2B6D84 /* ExternalDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2F4A9C7B1E35608A9C4F27B /* ExternalDisplay.swift */; };
 		C505C16C48F9D001FF7BF6AE /* MusicDownloadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F678BCB59DDEA3AD1329B11 /* MusicDownloadsView.swift */; };
 		C5E9C8C7F693011882FC1F22 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CB1FA4BB4990588B428781E /* PlayerView.swift */; };
 		C627C9461759A04D2BDC82FE /* XunleiSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00C471D2D671003876D2A4F9 /* XunleiSignInView.swift */; };
@@ -260,6 +262,7 @@
 		E691C693ADA5C3F13E48A0B5 /* MusicNowPlayingPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D10D9BAFE11E31196C70422 /* MusicNowPlayingPanels.swift */; };
 		E8A225058F954A38DDAE052A /* MusicMacBrowse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D442D4FB2D2EB656FBBCB2C /* MusicMacBrowse.swift */; };
 		E8E7D31FA6802352FA66EB56 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 335A7E05458DD9DA9AA04125 /* InfoPlist.strings */; };
+		E9F3A7B1C5D24680B3E7F9A2 /* ExternalDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2F4A9C7B1E35608A9C4F27B /* ExternalDisplay.swift */; };
 		EA59E4954399A7E5BC6C2348 /* unidbg.txt in Resources */ = {isa = PBXBuildFile; fileRef = 995F5F0DB35FE66B4F90B4FF /* unidbg.txt */; };
 		EBDFAB717675C3CBCA05B75F /* DetailAurora.swift in Sources */ = {isa = PBXBuildFile; fileRef = A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */; };
 		ED3A1F1DAE4D25F3AA743AC7 /* WebSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367AD12D73554C3C3667315D /* WebSignInView.swift */; };
@@ -370,6 +373,7 @@
 		BF5733BA144503E76421BCFD /* MusicTVPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicTVPlayer.swift; sourceTree = "<group>"; };
 		C093554D3863FDB5D2E832B5 /* CatalogDanmakuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogDanmakuView.swift; sourceTree = "<group>"; };
 		CEE19E104EAA6C4F620B8E53 /* CloudDriveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudDriveView.swift; sourceTree = "<group>"; };
+		D2F4A9C7B1E35608A9C4F27B /* ExternalDisplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalDisplay.swift; sourceTree = "<group>"; };
 		D7B1CEF969E4F3D3301A8D61 /* BilibiliCastController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BilibiliCastController.swift; sourceTree = "<group>"; };
 		D7F15799E2A2FB8B88DCF8E4 /* MusicPlaybackSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlaybackSession.swift; sourceTree = "<group>"; };
 		DF5CB8DD12A92056BFD50444 /* MusicMacMiniPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicMacMiniPlayer.swift; sourceTree = "<group>"; };
@@ -494,6 +498,7 @@
 				AB7347843C885A97DFE397DD /* DouyinAccountView.swift */,
 				B45CB8261D922949ADBDBE15 /* DownloadsView.swift */,
 				B451E5612B33CF005EEAAE08 /* EpisodeSkipSettingsView.swift */,
+				D2F4A9C7B1E35608A9C4F27B /* ExternalDisplay.swift */,
 				9BD8F5818C392424F43FF0C9 /* FavoriteControls.swift */,
 				559683A9A4BDFA11A4A9FE67 /* FeedbackView.swift */,
 				739A64FB51780D4314D2DDF8 /* GlassKit.swift */,
@@ -1035,6 +1040,7 @@
 				6D7F63E735B2F3624CD39974 /* DouyinAccountView.swift in Sources */,
 				2B263C305CDC1687A050CCBC /* DownloadsView.swift in Sources */,
 				5E064141ADA8E6A4E7A97D0B /* EpisodeSkipSettingsView.swift in Sources */,
+				E9F3A7B1C5D24680B3E7F9A2 /* ExternalDisplay.swift in Sources */,
 				D4A131B02DE0A206E18B4F0A /* FavoriteControls.swift in Sources */,
 				FBE0D58826319D7544827004 /* FeedbackView.swift in Sources */,
 				1050D617A22F09CD0A01DE66 /* GlassKit.swift in Sources */,
@@ -1112,6 +1118,7 @@
 				731566BD0371FFCF447852DD /* DouyinAccountView.swift in Sources */,
 				14FA5947D5B1472F7AF31530 /* DownloadsView.swift in Sources */,
 				F792BA02C02390291EEE4838 /* EpisodeSkipSettingsView.swift in Sources */,
+				C4B8D2E6F0A351799E2B6D84 /* ExternalDisplay.swift in Sources */,
 				E0B7524BAA3500D6675442D7 /* FavoriteControls.swift in Sources */,
 				EE69AE0800A8DAB7450170D3 /* FeedbackView.swift in Sources */,
 				F3B63B43988E72A87677A7AC /* GlassKit.swift in Sources */,
@@ -1191,6 +1198,7 @@
 				1D206EDCE9B6412346BCC150 /* DouyinAccountView.swift in Sources */,
 				B351A3B692D2C43212B5F65F /* DownloadsView.swift in Sources */,
 				51E4D236D0D94E65A7881D6C /* EpisodeSkipSettingsView.swift in Sources */,
+				A7C1E5F92B4D80631F7A2C93 /* ExternalDisplay.swift in Sources */,
 				4FDAA1091EFC2C8B0EA634C7 /* FavoriteControls.swift in Sources */,
 				67E6A7CC3D496FB46C963AC7 /* FeedbackView.swift in Sources */,
 				338825790412D642115F2BD3 /* GlassKit.swift in Sources */,
