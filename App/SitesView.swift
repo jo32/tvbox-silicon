@@ -1177,10 +1177,10 @@ struct VideoDetailView: View {
         guard !TMDBMatch.labeledNotOnTMDB(request) else { tmdb.skip(); return }
         await tmdb.run(key: key, request: request)
     }
-    /// A video without episodes. A CatPawOpen bundle's config center entry opens its page in the app (#311).
+    /// A video without episodes. A config center entry (a CatPawOpen bundle's, #311, or a Wex plugin's, #360) opens its page in the app.
     @ViewBuilder private func noEpisodes(_ detail: Video) -> some View {
         #if os(iOS)
-        if CatPawOpen.configCenter(of: detail, site: client.site) != nil {
+        if ConfigCenter.page(of: detail, site: client.site) != nil {
             Button { showsConfigCenter = true } label: { Label(L10n.text("Open Config Center"), systemImage: "gearshape") }
                 .buttonStyle(.borderedProminent)
                 .accessibilityIdentifier("detail.configCenter")
@@ -1196,7 +1196,7 @@ struct VideoDetailView: View {
     /// back its socket while the app was suspended; the page's details can be older than that, or cached.
     private func configCenterAddress() async -> URL? {
         let fresh = try? await client.detail(video.id)
-        return (fresh ?? detail).flatMap { CatPawOpen.configCenter(of: $0, site: client.site) }
+        return (fresh ?? detail).flatMap { ConfigCenter.page(of: $0, site: client.site) }
     }
     #endif
     /// TMDB's story when it has one, else the source's synopsis.
