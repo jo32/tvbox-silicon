@@ -47,6 +47,7 @@ enum MobilePlayerLayout {
 // MARK: - Surface
 
 /// Decides how the player's auxiliary screens are presented for one layout.
+#if os(iOS)
 struct PlayerSurface {
     let layout: MobilePlayerLayout
 
@@ -135,3 +136,4 @@ struct PlayerAuxiliaryHost<Panel: View, EndScreen: View>: View {
         }
     }
 }
+#endif

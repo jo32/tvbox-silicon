@@ -13,7 +13,7 @@ settings:
     MARKETING_VERSION: '1.8.10'
     CURRENT_PROJECT_VERSION: '48'
     GENERATE_INFOPLIST_FILE: YES
-    INFOPLIST_KEY_CFBundleDisplayName: Yingxia
+    INFOPLIST_KEY_CFBundleDisplayName: mi3s
     INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.entertainment
     ENABLE_USER_SCRIPT_SANDBOXING: NO
     CODE_SIGN_STYLE: Automatic
@@ -46,12 +46,12 @@ targetTemplates:
     info:
       path: Config/Info-${target_name}.plist
       properties:
-        CFBundleDisplayName: Yingxia
+        CFBundleDisplayName: mi3s
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations: [en, zh-Hans, zh-Hant, ja]
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
-        NSLocalNetworkUsageDescription: Connect to the local media and subscription services you configure, and find Yingxia on your other devices.
+        NSLocalNetworkUsageDescription: Connect to the local media and subscription services you configure, and find Mi3s on your other devices.
         # Play On (Sources/TVCore/PlayOn.swift): iOS browses and advertises only the Bonjour types listed here.
         NSBonjourServices: [_yingxia._tcp]
         UILaunchScreen: {}
@@ -142,7 +142,7 @@ targets:
       # and JNI entry points with dlsym; keep the global ones that -export_dynamic exports.
       STRIP_STYLE: non-global
       ARCHS: arm64
-      PRODUCT_BUNDLE_IDENTIFIER: com.jo32.yingxia.ios
+      PRODUCT_BUNDLE_IDENTIFIER: wda.prdc.yingxia.dev
       CODE_SIGN_ENTITLEMENTS: $(ICLOUD_ENTITLEMENTS)
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       TARGETED_DEVICE_FAMILY: '1,2'

@@ -57,11 +57,13 @@ struct PrivacyShade: ViewModifier {
             }
     }
 
-    /// The cover's colour. Only iOS has `systemBackground`; the Mac window and the TV are covered
-    /// with the app's own canvas colour instead.
+    /// The cover's colour. `systemBackground` exists on iOS only, so the Mac uses its window colour
+    /// and the TV, which is dark only, uses the canvas colour it draws everywhere else.
     private var shadeColor: Color {
         #if os(iOS)
         Color(.systemBackground)
+        #elseif os(macOS)
+        Color(nsColor: .windowBackgroundColor)
         #else
         TVStyle.background
         #endif

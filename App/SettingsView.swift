@@ -689,7 +689,7 @@ struct FormSettingsView: View {
                 AppMark(size: 96)
                     .background { AppMark(size: 96).blur(radius: 22).opacity(0.7).accessibilityHidden(true) }
                     .padding(.top, 36).padding(.bottom, 18)
-                Text(L10n.text("Yingxia")).font(.system(size: 32, weight: .bold, design: .rounded))
+                Text(L10n.text("Mi3s")).font(.system(size: 32, weight: .bold, design: .rounded))
                 HStack(spacing: 6) {
                     if let version { Text(version) }
                     if updates.availableTitle == nil, Updates.channel != .none, updates.lastChecked != nil {

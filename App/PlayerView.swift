@@ -182,7 +182,7 @@ struct PlaybackView: View {
         #endif
         .onChange(of: showsDanmaku) { _, value in session.catalogDanmaku.enabled = value }
         .onChange(of: session.catalogDanmaku.enabled) { _, value in showsDanmaku = value }
-        #if !os(tvOS)
+        #if os(iOS)
         // The episode sheet and the end-of-series screen, presented according to
         // the shape on screen: a sheet when the player fills the display, a panel
         // inside the picture at the top of a watch page. `PlayerSurface` holds
@@ -276,7 +276,7 @@ struct PlaybackView: View {
                 .disabled(next.busy)
                 .accessibilityLabel(L10n.text("Next Episode")).help(next.name)
             }
-            CatalogPlaybackActions(channel: channel, session: session) { showsEpisodes = true }
+            CatalogPlaybackActions(channel: channel, session: session)
             if session.qualities.count > 1 {
                 Menu {
                     QualityPicker(session: session)
@@ -1179,7 +1179,7 @@ private struct DesktopPlaybackView: View {
                             playingOn = receiver
                         }
                     }
-                    CatalogPlaybackActions(channel: channel, session: session) { showsEpisodes = true }
+                    CatalogPlaybackActions(channel: channel, session: session)
                     optionsMenu
                     barButton("arrow.up.left.and.arrow.down.right", L10n.text("Enter / Exit Full Screen")) { window.toggleFullScreen(nil) }
                 }
