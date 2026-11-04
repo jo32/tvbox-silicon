@@ -31,6 +31,13 @@ import UIKit
     private var window: UIWindow?
     private var picture: ExternalDisplayViewController?
     private var sceneNotifications: [NSObjectProtocol] = []
+    private weak var store: Store?
+    private var seriesEndHost: UIHostingController<AnyView>?
+    /// Which end-of-series this host is showing. Rebuilding on every change would
+    /// restart the countdown the viewer is watching, so the host is reused for the
+    /// same one — but a different title must replace it, or the display keeps naming
+    /// the show that finished before.
+    private var seriesEndShown: SeriesEndKey?
 
     private init() {
         let center = NotificationCenter.default
@@ -42,8 +49,9 @@ import UIKit
     }
 
     /// The player screen appeared: put its picture on the display, if one is connected.
-    func attach(_ player: AVPlayer) {
+    func attach(_ player: AVPlayer, store: Store? = nil) {
         self.player = player
+        if let store { self.store = store }
         refresh()
     }
 
@@ -54,6 +62,7 @@ import UIKit
         guard self.player === player else { return }
         self.player = nil
         picture?.player = nil
+        removeSeriesEnd()
         window?.isHidden = true
         window = nil
         picture = nil
@@ -78,12 +87,93 @@ import UIKit
         }
         picture?.player = player
         window?.isHidden = false
+        syncSeriesEnd()
+    }
+
+    /// The store's end-of-series state changed (it appeared, changed titles, or went
+    /// away): bring the display's copy in step. Called by `Store` so the card does not
+    /// wait for the next scene notification.
+    func seriesEndChanged() {
+        syncSeriesEnd()
+    }
+
+    // MARK: End of series on the display
+
+    /// Mirrors the end-of-series screen onto the display.
+    ///
+    /// The display showed only the picture, so on a folded-out Duo the inner screen
+    /// offered "what next" while the television stayed on the last frame. The card is
+    /// the same `SeriesEndScreen` the player draws, hosted here as a plain overlay so
+    /// the two stay one piece of UI rather than drifting apart.
+    ///
+    /// Asked for synchronously from the store's own change, so the card appears with
+    /// the countdown rather than a frame later. The card is non-interactive on the
+    /// display on purpose: an external display in the non-interactive role cannot take
+    /// touches, and offering buttons that cannot be pressed would be worse than none.
+    private func syncSeriesEnd() {
+        guard let store, let picture, let window, !window.isHidden else { removeSeriesEnd(); return }
+        guard let end = store.seriesEnd else { removeSeriesEnd(); return }
+        // Already showing this one: nothing to rebuild, and rebuilding would restart
+        // the countdown the viewer is watching. A different title replaces it.
+        let key = SeriesEndKey(end)
+        if seriesEndHost != nil, seriesEndShown == key { return }
+        removeSeriesEnd()
+
+        let card = SeriesEndScreen(
+            finishedTitle: end.title,
+            suggestions: end.suggestions,
+            replay: {},
+            choose: { _ in },
+            dismiss: {}
+        )
+        .allowsHitTesting(false)
+
+        let host = UIHostingController(rootView: AnyView(card))
+        host.view.backgroundColor = .clear
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        picture.addChild(host)
+        picture.view.addSubview(host.view)
+        NSLayoutConstraint.activate([
+            host.view.leadingAnchor.constraint(equalTo: picture.view.leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: picture.view.trailingAnchor),
+            host.view.topAnchor.constraint(equalTo: picture.view.topAnchor),
+            host.view.bottomAnchor.constraint(equalTo: picture.view.bottomAnchor),
+        ])
+        host.didMove(toParent: picture)
+        seriesEndHost = host
+        seriesEndShown = key
+        Diagnostics.shared.record(.info, "player", "external display shows end of series \(end.suggestions.count) suggestions")
+    }
+
+    private func removeSeriesEnd() {
+        guard let host = seriesEndHost else { return }
+        host.willMove(toParent: nil)
+        host.view.removeFromSuperview()
+        host.removeFromParent()
+        seriesEndHost = nil
+        seriesEndShown = nil
     }
 
     private var externalScene: UIWindowScene? {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .first { $0.session.role == .windowExternalDisplayNonInteractive }
+    }
+}
+
+/// Identity of one end-of-series card, so the external display can tell "the same
+/// one, keep its countdown" from "a different title, replace it" without comparing
+/// whole suggestion lists.
+@MainActor
+private struct SeriesEndKey: Equatable {
+    let title: String
+    let count: Int
+    let firstSuggestion: String
+
+    init(_ end: Store.SeriesEnd) {
+        title = end.title
+        count = end.suggestions.count
+        firstSuggestion = end.suggestions.first?.id ?? ""
     }
 }
 

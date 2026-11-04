@@ -116,6 +116,18 @@ import TVCore
         return watchPageScopes.contains(scope)
     }
     var playbackCatalog: PlaybackCatalog?
+    /// Set when the last episode of a line ends: what the end screen should offer.
+    /// Nil while nothing has finished, which is also what dismisses the screen.
+    var seriesEnd: SeriesEnd?
+    /// What the end-of-series screen draws. `suggestions` is ranked with the same
+    /// source and the same show first (a follow-up season, 红果 style); the
+    /// screen auto-plays the top "next season" row after a countdown.
+    struct SeriesEnd: Identifiable {
+        let id = UUID()
+        let channel: Channel
+        let title: String
+        let suggestions: [SeriesSuggestion]
+    }
     /// The Cloud Files folder the playing file came from; its next file plays after it.
     var filesFolder: CloudFilesFolder?
     var resolvingEpisode: Episode?
@@ -125,6 +137,8 @@ import TVCore
     }
     private var episodeRequest = UUID()
     private var episodeTask: Task<Void, Never>?
+    /// Loads the end-of-series suggestions; cancelled when the screen is dismissed.
+    private var seriesEndTask: Task<Void, Never>?
     var section: AppSection = .home
     /// Every build shows the built-in services (Music, Bilibili, Douyin), the default subscription and
     /// the plugin pages only once a subscription that works has been added: one that is on and whose
@@ -789,6 +803,85 @@ import TVCore
     func previousEpisode(before channel: Channel) -> Episode? {
         guard let context = channel.historyContext else { return nil }
         return catalog(for: channel)?.playlist.previous(before: context)
+    }
+
+    /// The last episode of a line just ended. Ask the same source for titles that
+    /// belong with this one — a follow-up season, 红果 style — and let the end
+    /// screen offer them. When the source answers nothing useful, the screen is
+    /// still shown (empty) so the viewer is not dropped onto a dead player.
+    func finishSeries(_ channel: Channel) {
+        guard let context = channel.historyContext, let catalog = catalog(for: channel) else { return }
+        let title = catalog.video.name
+        let client = catalog.client
+        seriesEndTask?.cancel()
+        seriesEndTask = Task { [weak self] in
+            guard let self else { return }
+            let candidates = await self.seriesCandidates(for: catalog, client: client)
+            guard !Task.isCancelled else { return }
+            let ranked = SeriesSuggestionRanker.rank(
+                finished: catalog.video,
+                candidates: candidates,
+                sourceKey: context.sourceKey,
+                sourceName: context.sourceName,
+                origin: context.origin
+            )
+            self.seriesEnd = SeriesEnd(channel: channel, title: title, suggestions: ranked)
+            #if os(iOS)
+            ExternalDisplay.shared.seriesEndChanged()
+            #endif
+        }
+    }
+
+    /// Titles from the same source that could follow `catalog.video`.
+    /// Searches the base title (season wording stripped), which is how a series
+    /// lists its other seasons on these sources. A failure is not an error the
+    /// viewer needs to see: the end screen simply arrives with no rows.
+    private func seriesCandidates(for catalog: PlaybackCatalog, client: CatalogClient) async -> [Video] {
+        let base = SeriesTitleMatcher.split(catalog.video.name).base
+        guard base.count >= 2 else { return [] }
+        var found: [Video] = []
+        if let page = try? await client.list(category: nil, query: base, page: 1) {
+            found.append(contentsOf: page.videos)
+        }
+        return found
+    }
+
+    func dismissSeriesEnd() {
+        seriesEndTask?.cancel(); seriesEndTask = nil
+        seriesEnd = nil
+        #if os(iOS)
+        ExternalDisplay.shared.seriesEndChanged()
+        #endif
+    }
+
+    /// Play a suggestion from the end screen: open that title on its own line.
+    func playSeriesSuggestion(_ suggestion: SeriesSuggestion) {
+        seriesEnd = nil
+        seriesEndTask?.cancel(); seriesEndTask = nil
+        openSeriesVideo(suggestion)
+    }
+
+    /// Resolves the suggestion's detail and starts its first episode.
+    private func openSeriesVideo(_ suggestion: SeriesSuggestion) {
+        guard let config = subscription,
+              let site = config.sites.first(where: {
+                  $0.origin(or: config.origin) == suggestion.origin && $0.sourceKey == suggestion.sourceKey
+              }) else { reportMissingFavoriteSource(); return }
+        let client = CatalogClient(site: resolvedSite(site, origin: config.origin), origin: config.origin, jarURL: config.spiderURL).applying(config)
+        let known = suggestion.video
+        seriesEndTask = Task { [weak self] in
+            guard let self else { return }
+            let video = (try? await client.detail(known.id))?.keepingPoster(known.poster, headers: known.posterHeaders) ?? known
+            guard !Task.isCancelled, let first = video.episodes.first else { return }
+            do {
+                let channel = try await client.playback(first)
+                self.remember(video, client: client, for: channel)
+                self.playing = channel
+            } catch {
+                Diagnostics.shared.failure("catalog", "series suggestion \(client.reportContext) id=\(video.id)", error)
+                self.error = error.localizedDescription
+            }
+        }
     }
 
     /// The same episode on a transcoded line (FTY's 智 lines are the drive's own HLS) when the
