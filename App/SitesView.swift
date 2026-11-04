@@ -2343,7 +2343,10 @@ struct VideoDetailView: View {
         // carries the back button). Full Screen stays fully immersive on every size.
         .toolbar(fullScreen || !duoExpanded ? .hidden : .visible, for: .navigationBar)
         .background { EdgeSwipeBack(enabled: !fullScreen && !duoExpanded) }
-        .toolbar(fullScreen || !duoExpanded ? .hidden : .visible, for: .tabBar)
+        // The Duo's section menu stays resident even in Full Screen: it floats over the picture
+        // (sidebarAdaptable never widens the safe area for it), so a viewer can hop sections without
+        // leaving playback. The upright phone hides it in Full Screen, as before.
+        .toolbar(!duoExpanded ? .hidden : .visible, for: .tabBar)
         .onAppear {
             store.watchPageScopes.formUnion(watchScopes)
             // The folded-out Duo is its own landscape screen; only the upright outer display is held
@@ -2359,6 +2362,11 @@ struct VideoDetailView: View {
             // inner display (which ignores orientation locks). Re-assert the right hold each way so
             // an unfold doesn't leave the upright lock fighting a landscape Full Screen.
             PlayerOrientation.holdPortrait(!expanded)
+            // A Full Screen started on the inner display must not carry onto the outer one: folding
+            // while full-screen left the player filling a portrait screen it could not turn, with the
+            // watch page's own layout gone. Fold the page back to its normal (non-full-screen) state
+            // so it reads correctly again; unfolding re-opens the two-column watch page.
+            if !expanded && fullScreen { fullScreen = false }
         }
         .onDisappear {
             // An iPhone Duo fold/unfold swaps `watchBody` for `pageBody` (and back) without the page leaving, so the

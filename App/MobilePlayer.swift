@@ -771,7 +771,13 @@ struct MobilePlayerView: View {
     }
     /// Landscape split: the box is taller than the frame's own shape, so filling avoids side bars.
     /// A folded-out Duo gives the picture the same tall box beside the episode list.
-    private var fillsLandscape: Bool { inline && (verticalSizeClass == .compact || duoExpanded) }
+    ///
+    /// A phone held sideways (`verticalSizeClass == .compact`) has a short, wide picture area where a
+    /// 16:9 film would letterbox top and bottom, so it fills instead. The Duo's inner display is
+    /// different: its left column is much taller than wide, so filling crops the film's sides — up to
+    /// 70% of the frame — while a `fit` keeps the whole picture with a symmetric letterbox above and
+    /// below. That read as the more graceful of the two, so the Duo keeps the picture whole.
+    private var fillsLandscape: Bool { inline && verticalSizeClass == .compact }
     private var seekable: Bool { session.hasTimeline && !session.isLive }
 
     private var controls: some View {
