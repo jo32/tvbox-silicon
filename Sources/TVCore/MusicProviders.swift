@@ -5,15 +5,16 @@ import Foundation
 public protocol MusicStreamProvider: Sendable {
     var id: MusicProviderID { get }
     var platforms: Set<MusicPlatform> { get }
-    /// Asks for the best quality the provider offers.
-    func resolve(_ songID: String, platform: MusicPlatform) async throws -> ResolvedMusicStream
+    /// Asks for `quality`: lossless, or 320 or 128 kbps lossy audio. A provider that can't ask for
+    /// that tier plays its best instead, and probing tells what came back.
+    func resolve(_ songID: String, platform: MusicPlatform, quality: MusicAudioQuality) async throws -> ResolvedMusicStream
     /// The same, for providers that also want the song's title and artist (LX Music sources).
-    func resolve(_ songID: String, platform: MusicPlatform, track: MusicTrack?) async throws -> ResolvedMusicStream
+    func resolve(_ songID: String, platform: MusicPlatform, track: MusicTrack?, quality: MusicAudioQuality) async throws -> ResolvedMusicStream
 }
 
 extension MusicStreamProvider {
-    public func resolve(_ songID: String, platform: MusicPlatform, track: MusicTrack?) async throws -> ResolvedMusicStream {
-        try await resolve(songID, platform: platform)
+    public func resolve(_ songID: String, platform: MusicPlatform, track: MusicTrack?, quality: MusicAudioQuality) async throws -> ResolvedMusicStream {
+        try await resolve(songID, platform: platform, quality: quality)
     }
 }
 
@@ -27,9 +28,18 @@ public struct VKeysProvider: MusicStreamProvider {
     static let timeout: TimeInterval = 8
     public init(transport: MusicTransport = URLSessionMusicTransport()) { self.transport = transport }
 
-    public func resolve(_ songID: String, platform: MusicPlatform) async throws -> ResolvedMusicStream {
-        let url = MusicHTTP.url("https://api.vkeys.cn/music/tencent/song/link", [("mid", songID), ("quality", "10")])
+    public func resolve(_ songID: String, platform: MusicPlatform, quality: MusicAudioQuality) async throws -> ResolvedMusicStream {
+        let url = MusicHTTP.url("https://api.vkeys.cn/music/tencent/song/link", [("mid", songID), ("quality", Self.code(for: quality))])
         return try Self.parse(try await MusicHTTP.json(transport, MusicHTTP.request(url, timeout: Self.timeout), timeout: Self.timeout))
+    }
+
+    /// The endpoint's codes, found by probing on 2026-11-04: 10 FLAC, 8 320 kbps MP3, 6 128 kbps MP3.
+    static func code(for quality: MusicAudioQuality) -> String {
+        switch quality {
+        case .lossless: "10"
+        case .high: "8"
+        case .standard: "6"
+        }
     }
 
     static func parse(_ json: JSONValue, now: Date = Date()) throws -> ResolvedMusicStream {
@@ -59,10 +69,19 @@ public struct GDStudioProvider: MusicStreamProvider {
         self.transport = transport; self.health = health
     }
 
-    public func resolve(_ songID: String, platform: MusicPlatform) async throws -> ResolvedMusicStream {
+    public func resolve(_ songID: String, platform: MusicPlatform, quality: MusicAudioQuality) async throws -> ResolvedMusicStream {
         try await health.admit("gdstudio")
-        let url = MusicHTTP.url("https://music-api.gdstudio.xyz/api.php", [("types", "url"), ("source", "netease"), ("id", songID), ("br", "999")])
+        let url = MusicHTTP.url("https://music-api.gdstudio.xyz/api.php", [("types", "url"), ("source", "netease"), ("id", songID), ("br", Self.bitrate(for: quality))])
         return try Self.parse(try await MusicHTTP.json(transport, MusicHTTP.request(url, timeout: Self.timeout), timeout: Self.timeout))
+    }
+
+    /// The API's bitrates: 999 for its highest tier, 320 or 128 kbps for lossy audio.
+    static func bitrate(for quality: MusicAudioQuality) -> String {
+        switch quality {
+        case .lossless: "999"
+        case .high: "320"
+        case .standard: "128"
+        }
     }
 
     static func parse(_ json: JSONValue, now: Date = Date()) throws -> ResolvedMusicStream {
@@ -89,12 +108,21 @@ public struct HYWProvider: MusicStreamProvider {
         self.key = key.trimmingCharacters(in: .whitespacesAndNewlines); self.transport = transport
     }
 
-    public func resolve(_ songID: String, platform: MusicPlatform) async throws -> ResolvedMusicStream {
+    public func resolve(_ songID: String, platform: MusicPlatform, quality: MusicAudioQuality) async throws -> ResolvedMusicStream {
         guard !key.isEmpty else { throw MusicProviderError.authRequired }
-        let url = MusicHTTP.url(Self.base, [("platform", "tx"), ("source", "tx"), ("songId", songID), ("quality", "flac"), ("key", key)])
+        let url = MusicHTTP.url(Self.base, [("platform", "tx"), ("source", "tx"), ("songId", songID), ("quality", Self.quality(for: quality)), ("key", key)])
         var headers: [String: String] = [:]
         if key.allSatisfy({ $0.isASCII }) { headers["X-Card-Key"] = key }
         return try Self.parse(try await MusicHTTP.json(transport, MusicHTTP.request(url, timeout: Self.timeout, headers: headers), timeout: Self.timeout))
+    }
+
+    /// The tiers its published script gives: "flac", "320k" and "128k".
+    static func quality(for quality: MusicAudioQuality) -> String {
+        switch quality {
+        case .lossless: "flac"
+        case .high: "320k"
+        case .standard: "128k"
+        }
     }
 
     static func parse(_ json: JSONValue, now: Date = Date()) throws -> ResolvedMusicStream {
@@ -123,15 +151,25 @@ public struct NianxinProvider: MusicStreamProvider {
     static let timeout: TimeInterval = 8
     public init(transport: MusicTransport = URLSessionMusicTransport()) { self.transport = transport }
 
-    public func resolve(_ songID: String, platform: MusicPlatform) async throws -> ResolvedMusicStream {
+    public func resolve(_ songID: String, platform: MusicPlatform, quality: MusicAudioQuality) async throws -> ResolvedMusicStream {
         let base = "https://mcp.nianxinxz.com/share/ceshi/" + (platform == .kuwo ? "kw.php" : "wy.php")
         var lastError = MusicProviderError.noResource
-        for level in ["lossless", "exhigh"] {
+        for level in Self.levels(for: quality) {
             let url = MusicHTTP.url(base, [("id", songID), ("level", level)])
             do { return try Self.parse(try await MusicHTTP.json(transport, MusicHTTP.request(url, timeout: Self.timeout), timeout: Self.timeout), level: level) }
             catch let error as MusicProviderError where error == .noResource { lastError = error }
         }
         throw lastError
+    }
+
+    /// The resolver's levels. Lossless falls back to 320 kbps, and 320 to 128, but Standard never
+    /// asks for more than the 128 kbps the viewer chose.
+    static func levels(for quality: MusicAudioQuality) -> [String] {
+        switch quality {
+        case .lossless: ["lossless", "exhigh"]
+        case .high: ["exhigh", "standard"]
+        case .standard: ["standard"]
+        }
     }
 
     static func parse(_ json: JSONValue, level: String, now: Date = Date()) throws -> ResolvedMusicStream {
@@ -155,12 +193,29 @@ public struct XinghaiProvider: MusicStreamProvider {
         self.transport = transport; self.health = health
     }
 
-    public func resolve(_ songID: String, platform: MusicPlatform) async throws -> ResolvedMusicStream {
+    public func resolve(_ songID: String, platform: MusicPlatform, quality: MusicAudioQuality) async throws -> ResolvedMusicStream {
         try await health.admit("xinghai")
         let url = MusicHTTP.url("https://yy.zddyr.top/lx/api/", [
-            ("source", platform == .kuwo ? "kw" : "netease"), ("name", ""), ("songmid", songID), ("quality", platform == .kuwo ? "flac" : "lossless"),
+            ("source", platform == .kuwo ? "kw" : "netease"), ("name", ""), ("songmid", songID), ("quality", Self.quality(for: quality, platform: platform)),
         ])
         return try Self.parse(try await MusicHTTP.json(transport, MusicHTTP.request(url, timeout: Self.timeout), timeout: Self.timeout))
+    }
+
+    /// Kuwo's endpoint names its tiers with bitrates, NetEase's with its own words.
+    static func quality(for quality: MusicAudioQuality, platform: MusicPlatform) -> String {
+        if platform == .kuwo {
+            switch quality {
+            case .lossless: "flac"
+            case .high: "320k"
+            case .standard: "128k"
+            }
+        } else {
+            switch quality {
+            case .lossless: "lossless"
+            case .high: "exhigh"
+            case .standard: "standard"
+            }
+        }
     }
 
     static func parse(_ json: JSONValue, now: Date = Date()) throws -> ResolvedMusicStream {

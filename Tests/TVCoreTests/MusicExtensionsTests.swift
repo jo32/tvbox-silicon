@@ -144,9 +144,9 @@ private func library() throws -> (MusicExtensionLibrary, URL) {
 
     // A song's address comes from getSongInfo, with its headers; an LX request is answered and the call repeated.
     let provider = try #require(MusicExtensionProvider(library: library, runtime: runtime))
-    let plain = try await provider.resolve(try #require(artistSongs[0].ids[.ext]), platform: .ext)
+    let plain = try await provider.resolve(try #require(artistSongs[0].ids[.ext]), platform: .ext, quality: .lossless)
     #expect(plain.url.absoluteString == "https://audio.example/m11.mp3" && plain.headers == ["Referer": "https://audio.example/"])
-    let throughLX = try await provider.resolve(try #require(found[0].ids[.ext]), platform: .ext)
+    let throughLX = try await provider.resolve(try #require(found[0].ids[.ext]), platform: .ext, quality: .lossless)
     #expect(throughLX.url.absoluteString == "https://lx.example/m7.flac")
     #expect(MusicResolver(providers: [provider]).candidates(for: found[0]).map(\.provider) == [.extension])
 

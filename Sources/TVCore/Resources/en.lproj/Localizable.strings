@@ -783,7 +783,7 @@
 "Open in Video Player" = "Open in Video Player";
 "The quality shown is read from the audio itself, not taken from what a channel claims." = "The quality shown is read from the audio itself, not taken from what a channel claims.";
 "Not tried yet" = "Not tried yet";
-"Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead.";
+"Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead. High and Standard ask every channel for 320 or 128 kbps lossy audio, which uses far less data." = "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead. High and Standard ask every channel for 320 or 128 kbps lossy audio, which uses far less data.";
 "QQ Music" = "QQ Music";
 "NetEase Cloud Music" = "NetEase Cloud Music";
 "QQ Music, when VKeys fails" = "QQ Music, when VKeys fails";
@@ -803,6 +803,8 @@
 "GD Music" = "GD Music";
 "Lossless first" = "Lossless first";
 "Lossless only" = "Lossless only";
+"High (320 kbps)" = "High (320 kbps)";
+"Standard (128 kbps)" = "Standard (128 kbps)";
 "No matching song was found." = "No matching song was found.";
 "This channel has no audio for the song." = "This channel has no audio for the song.";
 "This channel only has a %lld-second preview." = "This channel only has a %lld-second preview.";

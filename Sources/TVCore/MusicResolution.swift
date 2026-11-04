@@ -306,6 +306,7 @@ public struct MusicResolver: Sendable {
     public func select(_ track: MusicTrack, preference: MusicQualityPreference, excluding: Set<String> = [],
                        cache: MusicStreamCache = MusicStreamCache()) async throws -> MusicPlaybackSelection {
         let deadline = Date().addingTimeInterval(budget)
+        let quality = preference.requested
         var ready: [MusicCandidate] = [], cooling: [MusicCandidate] = []
         for candidate in candidates(for: track) where !excluding.contains(candidate.id) {
             let key = MusicHealth.key(candidate.provider.rawValue, candidate.platform, .resolve)
@@ -327,7 +328,7 @@ public struct MusicResolver: Sendable {
             queue.removeFirst(wave.count)
             let winner: Found? = await withTaskGroup(of: (MusicCandidate, Result<(ResolvedMusicStream, MusicProbeResult), MusicProviderError>, Double).self) { group in
                 for candidate in wave {
-                    group.addTask { await self.attempt(candidate, track: track, timeout: remaining, cache: cache) }
+                    group.addTask { await self.attempt(candidate, track: track, quality: quality, timeout: remaining, cache: cache) }
                 }
                 for await (candidate, result, seconds) in group {
                     switch result {
@@ -335,7 +336,9 @@ public struct MusicResolver: Sendable {
                         attempts.append(MusicAttempt(candidate: candidate, outcome: .playable(probe), seconds: seconds))
                         let item = Found(candidate: candidate, stream: stream, probe: probe, order: order); order += 1
                         found.append(item)
-                        if probe.format.isLossless && probe.completeness == .complete { group.cancelAll(); return item }
+                        // The wanted kind of audio, complete: nothing left to compare.
+                        let wanted = preference.wantsLossless ? probe.format.isLossless : !probe.format.isLossless
+                        if wanted && probe.completeness == .complete { group.cancelAll(); return item }
                     case .failure(let error):
                         attempts.append(MusicAttempt(candidate: candidate, outcome: .failed(error), seconds: seconds))
                     }
@@ -349,7 +352,7 @@ public struct MusicResolver: Sendable {
         for candidate in queue {
             attempts.append(MusicAttempt(candidate: candidate, outcome: .skipped(found.isEmpty ? .timeout : .cancelled), seconds: 0))
         }
-        let usable = preference == .losslessOnly ? found.filter(\.probe.format.isLossless) : found
+        let usable = Self.usable(found, for: preference)
         // Every channel failed: the same recording in another catalog may have one that works.
         if usable.isEmpty, let companions, deadline.timeIntervalSinceNow > 2,
            let wider = await companions.find(track), wider.ids.count > track.ids.count {
@@ -360,25 +363,39 @@ public struct MusicResolver: Sendable {
                 return selection
             }
         }
-        guard let best = usable.min(by: { Self.better($0, than: $1) }) else {
+        guard let best = usable.min(by: { Self.better($0, than: $1, preference: preference) }) else {
             if !found.isEmpty { throw MusicProviderError.notLossless }
             throw Self.summary(attempts.compactMap { attempt in
                 if case .failed(let error) = attempt.outcome { return error }
                 return nil
             }, budgetSpent: !queue.isEmpty)
         }
-        return selection(track, best, degraded: !best.probe.format.isLossless, attempts: attempts, untried: queue)
+        return selection(track, best, degraded: preference.wantsLossless && !best.probe.format.isLossless, attempts: attempts, untried: queue)
+    }
+
+    /// What can play: only lossless for lossless-only; for a lossy preference, lossy streams, with
+    /// lossless kept as a fallback for a channel that ignored the request.
+    private static func usable(_ found: [Found], for preference: MusicQualityPreference) -> [Found] {
+        switch preference {
+        case .losslessOnly: return found.filter(\.probe.format.isLossless)
+        case .losslessPreferred: return found
+        case .high, .standard:
+            let lossy = found.filter { !$0.probe.format.isLossless }
+            return lossy.isEmpty ? found : lossy
+        }
     }
 
     /// Resolves one candidate again, ignoring its cached address: for an address that stopped working.
-    public func refresh(_ candidate: MusicCandidate, track: MusicTrack, cache: MusicStreamCache) async throws -> MusicPlaybackSelection {
-        await cache.invalidate(candidate.id)
-        let (_, result, seconds) = await attempt(candidate, track: track, timeout: budget, cache: cache)
+    public func refresh(_ candidate: MusicCandidate, track: MusicTrack, preference: MusicQualityPreference,
+                        cache: MusicStreamCache) async throws -> MusicPlaybackSelection {
+        let quality = preference.requested
+        await cache.invalidate(candidate.id + "|" + quality.rawValue)
+        let (_, result, seconds) = await attempt(candidate, track: track, quality: quality, timeout: budget, cache: cache)
         switch result {
         case .success(let (stream, probe)):
             let attempt = MusicAttempt(candidate: candidate, outcome: .playable(probe), seconds: seconds)
             return MusicPlaybackSelection(track: track, candidate: candidate, stream: stream, probe: probe,
-                                          degraded: !probe.format.isLossless, attempts: [attempt], untried: [])
+                                          degraded: preference.wantsLossless && !probe.format.isLossless, attempts: [attempt], untried: [])
         case .failure(let error): throw error
         }
     }
@@ -388,12 +405,22 @@ public struct MusicResolver: Sendable {
                                degraded: degraded, attempts: attempts, untried: untried)
     }
 
-    /// Complete before unknown, lossless before lossy, then more bits and a higher rate, then what answered first.
-    private static func better(_ a: Found, than b: Found) -> Bool {
+    /// Complete first, then the kind of audio asked for, then the best within it, then what answered first.
+    private static func better(_ a: Found, than b: Found, preference: MusicQualityPreference) -> Bool {
         func key(_ found: Found) -> [Int] {
             let format = found.probe.format
-            return [found.probe.completeness == .complete ? 0 : 1, format.isLossless ? 0 : 1,
-                    -(format.bitDepth ?? 0), -(format.sampleRate ?? 0), -(format.bitrate ?? 0), found.order]
+            let complete = found.probe.completeness == .complete ? 0 : 1
+            switch preference {
+            case .losslessPreferred, .losslessOnly:
+                return [complete, format.isLossless ? 0 : 1,
+                        -(format.bitDepth ?? 0), -(format.sampleRate ?? 0), -(format.bitrate ?? 0), found.order]
+            case .high:
+                return [complete, format.isLossless ? 1 : 0,
+                        -(format.bitrate ?? 0), -(format.sampleRate ?? 0), found.order]
+            case .standard:
+                // The lightest stream wins, and one whose rate the header stated beats an unknown one.
+                return [complete, format.isLossless ? 1 : 0, format.bitrate == nil ? 1 : 0, format.bitrate ?? 0, found.order]
+            }
         }
         return key(a).lexicographicallyPrecedes(key(b))
     }
@@ -413,21 +440,26 @@ public struct MusicResolver: Sendable {
         return budgetSpent ? .timeout : .noResource
     }
 
-    private func attempt(_ candidate: MusicCandidate, track: MusicTrack, timeout: TimeInterval, cache: MusicStreamCache) async
+    private func attempt(_ candidate: MusicCandidate, track: MusicTrack, quality: MusicAudioQuality, timeout: TimeInterval,
+                         cache: MusicStreamCache) async
         -> (MusicCandidate, Result<(ResolvedMusicStream, MusicProbeResult), MusicProviderError>, Double) {
         let start = Date()
-        if let cached = await cache.get(candidate.id) { return (candidate, .success((cached.stream, cached.probe)), 0) }
+        // Each quality gets its own address: a lossless resolution is no stand-in for a 128 kbps request.
+        let cacheKey = candidate.id + "|" + quality.rawValue
+        if let cached = await cache.get(cacheKey) { return (candidate, .success((cached.stream, cached.probe)), 0) }
         let key = MusicHealth.key(candidate.provider.rawValue, candidate.platform, .resolve)
         do {
             guard let provider = providers[candidate.provider] else { throw MusicProviderError.authRequired }
-            let stream = try await MusicHTTP.withTimeout(min(8, timeout)) { try await provider.resolve(candidate.songID, platform: candidate.platform, track: track) }
+            let stream = try await MusicHTTP.withTimeout(min(8, timeout)) {
+                try await provider.resolve(candidate.songID, platform: candidate.platform, track: track, quality: quality)
+            }
             await health.record(key, error: nil)
             let probe = try await prober.probe(stream, expected: track.duration)
             if probe.completeness == .preview { throw MusicProviderError.preview(probe.duration ?? 0) }
             if let expected = track.duration, let duration = probe.duration, duration > expected + MusicMatching.durationTolerance(expected) {
                 throw MusicProviderError.differentRecording(duration)
             }
-            await cache.put(candidate.id, .init(stream: stream, probe: probe))
+            await cache.put(cacheKey, .init(stream: stream, probe: probe))
             Diagnostics.shared.record(.info, "music", "\(candidate.provider.rawValue) \(candidate.platform.rawValue) host=\(stream.url.host() ?? "-") \(probe.format.label) \(probe.completeness.rawValue) in \(String(format: "%.1f", Date().timeIntervalSince(start)))s")
             return (candidate, .success((stream, probe)), Date().timeIntervalSince(start))
         } catch {
