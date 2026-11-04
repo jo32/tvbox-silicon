@@ -137,10 +137,10 @@
             "ja": "その他の修正"
           },
           "detail": {
-            "en": "The Top Rated lists show each title's score. Tap a picture in a feedback message to see it full size. Hiding Featured Titles also hides its backdrop and trailer. 饭太硬's Quark lines play again after you sign in to Quark. More CatPawOpen sites open and load reliably on iPhone. On the Mac, Discover has no hard edge by the sidebar, and its arrows no longer open the title. Fixed a crash in the iPad app on a Mac.",
-            "zh-Hans": "高分电影和高分剧集列表会显示评分。在反馈里点一下图片可以查看大图。隐藏“精选影片”时，它的背景和预告片也会一起隐藏。登录夸克后，饭太硬的夸克线路又能播放了。更多猫源站点可以打开，在 iPhone 上加载也更稳定。Mac 的发现页在侧边栏旁边不再有生硬的边缘，点箭头也不会再打开影片。修复了 iPad 版在 Mac 上运行时的一个崩溃。",
-            "zh-Hant": "高分電影和高分影集列表會顯示評分。在意見回饋裡點一下圖片可以查看大圖。隱藏「精選影片」時，它的背景和預告片也會一起隱藏。登入夸克後，飯太硬的夸克線路又能播放了。更多貓源站點可以打開，在 iPhone 上載入也更穩定。Mac 的「探索」在側邊欄旁邊不再有生硬的邊緣，點箭頭也不會再打開影片。修正了 iPad 版在 Mac 上執行時的一個當機問題。",
-            "ja": "高評価リストに各作品のスコアが表示されます。フィードバックの写真をタップすると大きく表示できます。「注目の作品」を非表示にすると背景と予告編も隠れます。Quark にサインインすると、饭太硬の Quark ラインが再び再生できます。より多くの猫源サイトが開け、iPhone での読み込みも安定しました。Mac の「見つける」でサイドバー脇の硬い境目がなくなり、矢印でタイトルが開かなくなりました。Mac で動く iPad 版のクラッシュを修正しました。"
+            "en": "The Top Rated lists show each title's score. Tap a picture in a feedback message to see it full size. Hiding Featured Titles also hides its backdrop and trailer. 饭太硬's Quark lines play again after you sign in to Quark. More CatPawOpen sites open and load reliably on iPhone. On the Mac, Discover has no hard edge by the sidebar, and its arrows no longer open the title. Fixed a crash in the iPad app on a Mac. More sources from subscriptions with Java plugins, such as aowu.json, work on iPhone and iPad.",
+            "zh-Hans": "高分电影和高分剧集列表会显示评分。在反馈里点一下图片可以查看大图。隐藏“精选影片”时，它的背景和预告片也会一起隐藏。登录夸克后，饭太硬的夸克线路又能播放了。更多猫源站点可以打开，在 iPhone 上加载也更稳定。Mac 的发现页在侧边栏旁边不再有生硬的边缘，点箭头也不会再打开影片。修复了 iPad 版在 Mac 上运行时的一个崩溃。在 iPhone 和 iPad 上，aowu.json 等带 Java 插件的订阅里有更多点播源可以使用了。",
+            "zh-Hant": "高分電影和高分影集列表會顯示評分。在意見回饋裡點一下圖片可以查看大圖。隱藏「精選影片」時，它的背景和預告片也會一起隱藏。登入夸克後，飯太硬的夸克線路又能播放了。更多貓源站點可以打開，在 iPhone 上載入也更穩定。Mac 的「探索」在側邊欄旁邊不再有生硬的邊緣，點箭頭也不會再打開影片。修正了 iPad 版在 Mac 上執行時的一個當機問題。在 iPhone 和 iPad 上，aowu.json 等帶 Java 外掛的訂閱裡有更多隨選來源可以使用了。",
+            "ja": "高評価リストに各作品のスコアが表示されます。フィードバックの写真をタップすると大きく表示できます。「注目の作品」を非表示にすると背景と予告編も隠れます。Quark にサインインすると、饭太硬の Quark ラインが再び再生できます。より多くの猫源サイトが開け、iPhone での読み込みも安定しました。Mac の「見つける」でサイドバー脇の硬い境目がなくなり、矢印でタイトルが開かなくなりました。Mac で動く iPad 版のクラッシュを修正しました。iPhone と iPad で、aowu.json など Java プラグインを含む配信設定の配信ソースがより多く使えるようになりました。"
           }
         }
       ]
