@@ -104,6 +104,18 @@ private func fixture(_ name: String, _ ext: String) throws -> Data {
     #expect(HTMLText.plain("<p>Tom &amp;amp; Jerry&#39;s &ldquo;day&rdquo;</p><br/>Part&#x20;2") == "Tom & Jerry's “day”\nPart 2")
     #expect(HTMLText.plain("R&D &unknown; a&b") == "R&D &unknown; a&b")
 }
+@Test func synopsisStripsAggregatorNoise() {
+    // URL、线路标记、广告语、弹幕提示都被清掉，剧情文字保留。
+    #expect(HTMLText.synopsis("《xxx》讲述了……<br>最新网址 http://abc.com<br>线路1<br>永久域名 www.xyz.net") == "《xxx》讲述了……")
+    #expect(HTMLText.synopsis("本站最新地址：m.danmu.tv<br>高清线路二<br>蓝光") == "")
+    #expect(HTMLText.synopsis("<p>一段正经剧情。</p><br>播放线路1<br>含弹幕版") == "一段正经剧情。")
+    // 无噪声时与 plain 一致，不误伤正常文本。
+    #expect(HTMLText.synopsis("主角历经磨难，最终成长。") == "主角历经磨难，最终成长。")
+    // App 自身地址（CatPawOpen 配置中心）必须保留，只清公网广告 URL。
+    #expect(HTMLText.synopsis("手机扫码打开：http://127.0.0.1:52380/website") == "手机扫码打开：http://127.0.0.1:52380/website")
+    #expect(HTMLText.synopsis("http://localhost:41234/website/#/webdav?tab=1") == "http://localhost:41234/website/#/webdav?tab=1")
+}
+
 @Test func namesDecodeEntitiesWithoutStrippingText() {
     #expect(HTMLText.name("宝可梦 太阳&amp;月亮 第三季") == "宝可梦 太阳&月亮 第三季")
     #expect(HTMLText.name("I &lt;3 &amp;amp; you") == "I <3 & you")
