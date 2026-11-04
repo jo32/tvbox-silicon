@@ -178,7 +178,10 @@ import TVCore
             // The session playing survives an iPhone Duo fold/unfold. It is dropped when playback stops, or when
             // a different channel starts playing.
             if playing == nil { activeSession = nil; activeSessionChannel = nil }
-            else if let session = activeSession, !session.isPlaying(playing!) { activeSession = nil; activeSessionChannel = nil }
+            // Judged on the channel alone. `isPlaying` only turns true once the async `prepare` has
+            // finished, so anything that re-assigned `playing` mid-load — a Duo fold, a body
+            // re-evaluation — threw the in-flight session away and started the episode again.
+            else if let current = activeSessionChannel, current != playing { activeSession = nil; activeSessionChannel = nil }
         }
     }
     /// The playback session handed across an iPhone Duo fold/unfold, so the watch page and the full-screen player
@@ -291,8 +294,12 @@ import TVCore
         // These two are read from global `.shared` singletons in the playback/edit paths
         // (PlaybackSession has no Store), so they must BE those singletons — a separate instance
         // here would silently split the data and break per-line routing and source overrides.
-        sourceOverrides = SourceOverrides.shared
-        lineSettings = LineSettings.shared
+        // Built on this Store's own defaults, then published as the shared instance: the player and
+        // the source editor have no Store to ask, so they must read the same suite the app writes.
+        sourceOverrides = SourceOverrides(defaults: playbackDefaults)
+        lineSettings = LineSettings(defaults: playbackDefaults)
+        SourceOverrides.shared = sourceOverrides
+        LineSettings.shared = lineSettings
         sourceReassignment = SourceReassignment(defaults: playbackDefaults)
         cloudSync = defaults === UserDefaults.standard && !defaults.bool(forKey: "qaIsolatedData") ? CloudSync() : nil
         favorites = Favorites(defaults: defaults)

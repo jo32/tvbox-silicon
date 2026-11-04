@@ -492,7 +492,11 @@ struct FormSettingsView: View {
                 Text(L10n.text("Subscriptions"))
                 #endif
             } footer: {
-                if let message = store.error ?? store.importError ?? store.notice { Text(message) }
+                // `store.error` is deliberately not repeated here: it already raises the app-wide
+                // "Unable to Complete" alert, so showing it in the footer too meant the same failure
+                // arrived twice with two different tones. Import failures have their own field-level
+                // message, which is the one that belongs under the form.
+                if let message = store.importError ?? store.notice { Text(message) }
             }
 
             if !store.subscriptions.isEmpty {

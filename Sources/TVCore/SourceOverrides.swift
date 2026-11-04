@@ -17,7 +17,13 @@ import Observation
         }
     }
 
-    public static let shared = SourceOverrides()
+    /// The instance the app reads.
+    ///
+    /// Assignable so a Store built on its own defaults (QA's isolated data, tests) can point every
+    /// reader at the same suite. `PlaybackSession` and the source editor have no `Store` to ask, and
+    /// reading `.shared` there while the app wrote through `playbackDefaults` meant a line route set
+    /// in one place was invisible in the other.
+    @MainActor public static var shared = SourceOverrides()
 
     private var overrides: [String: Override]
     public private(set) var revision = 0
