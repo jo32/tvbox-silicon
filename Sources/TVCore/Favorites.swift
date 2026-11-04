@@ -148,24 +148,49 @@ public enum FavoriteItem: Codable, Hashable, Sendable, Identifiable {
 struct FavoriteDocument: Codable {
     var version: Int
     var items: [FavoriteItem]
+    /// version 3 adds per-record environments, kept beside `items` so an old list decodes unchanged.
+    var environments: [String: String]?
+}
+
+/// One favourite plus the environment it belongs to. `FavoriteItem` stays as-is; the environment
+/// rides alongside in the document so an item's identity (its `key`) is never polluted.
+struct FavoriteRecord: Codable, Hashable, Sendable {
+    var item: FavoriteItem
+    var environment: UUID?
 }
 
 @MainActor @Observable public final class Favorites {
-    public private(set) var items: [FavoriteItem] = []
+    /// Every favourite, across all environments. The environment is stored per record, not per item,
+    /// so `FavoriteItem` and its `key` stay untouched and sync keeps working.
+    private var records: [FavoriteRecord] = []
+    /// The environment whose favourites `items` exposes. The app keeps this in step with
+    /// `Environments.activeID`; nil means "default environment" and matches records with no
+    /// environment (everything saved before environments existed).
+    public var activeEnvironmentID: UUID?
+    public var defaultEnvironmentID: UUID?
     public private(set) var persistenceError: String?
     private let defaults: UserDefaults
     private static let storageKey = "favorites"
     /// Called after the viewer changes the list (not after `adopt`), for iCloud sync.
     @ObservationIgnored public var onChange: (@MainActor () -> Void)?
 
+    /// The favourites of the active environment, in order.
+    public var items: [FavoriteItem] {
+        let active = activeEnvironmentID ?? defaultEnvironmentID
+        return records.filter { ($0.environment ?? defaultEnvironmentID) == active }.map(\.item)
+    }
+
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         var migrated = false
         if let data = defaults.data(forKey: Self.storageKey) {
-            if let document = try? JSONDecoder().decode(FavoriteDocument.self, from: data), document.version == 2 {
-                items = document.items
+            if let document = try? JSONDecoder().decode(FavoriteDocument.self, from: data), document.version >= 2 {
+                let env = document.environments ?? [:]
+                records = document.items.map { item in
+                    FavoriteRecord(item: item, environment: env[item.key].flatMap(UUID.init(uuidString:)))
+                }
             } else if let channels = try? JSONDecoder().decode([Channel].self, from: data) {
-                items = channels.map { .live($0) }
+                records = channels.map { FavoriteRecord(item: .live($0), environment: nil) }
                 migrated = true
             }
         }
@@ -184,20 +209,27 @@ struct FavoriteDocument: Codable {
         for show in shows.reversed() {
             let video = FavoriteVideo(origin: show.origin, sourceKey: show.sourceKey, sourceName: show.sourceName, videoID: show.videoID, videoName: show.name, poster: show.poster, posterHeaders: show.posterHeaders ?? [:], year: show.year)
             let item = FavoriteItem.video(video)
-            guard !items.contains(where: { $0.matches(item) }) else { continue }
-            items.insert(item, at: 0)
+            guard !records.contains(where: { $0.item.matches(item) }) else { continue }
+            records.insert(FavoriteRecord(item: item, environment: nil), at: 0)
             added = true
         }
         return added
     }
 
-    public func contains(_ item: FavoriteItem) -> Bool { items.contains { $0.matches(item) } }
+    public func contains(_ item: FavoriteItem) -> Bool { records.contains { $0.item.matches(item) && isActive($0) } }
 
     public func toggle(_ item: FavoriteItem) {
-        if let index = items.firstIndex(where: { $0.matches(item) }) { items.remove(at: index) }
-        else { items.insert(item, at: 0) }
+        if let index = records.firstIndex(where: { $0.item.matches(item) && isActive($0) }) {
+            records.remove(at: index)
+        } else {
+            records.insert(FavoriteRecord(item: item, environment: activeEnvironmentID ?? defaultEnvironmentID), at: 0)
+        }
         persist()
         onChange?()
+    }
+
+    private func isActive(_ record: FavoriteRecord) -> Bool {
+        (record.environment ?? defaultEnvironmentID) == (activeEnvironmentID ?? defaultEnvironmentID)
     }
 
     /// Every item by its key, as iCloud sync compares them.
@@ -205,11 +237,15 @@ struct FavoriteDocument: Codable {
 
     /// The list merged with other devices': the newest change first; items changed at the same moment keep this device's order.
     public func adopt(_ synced: [CloudSyncItem<FavoriteItem>]) {
+        let active = activeEnvironmentID ?? defaultEnvironmentID
         let rank = Dictionary(items.enumerated().map { ($0.element.key, $0.offset) }, uniquingKeysWith: min)
-        items = synced.sorted { lhs, rhs in
+        let incoming = synced.sorted { lhs, rhs in
             if lhs.stamp != rhs.stamp { return lhs.stamp > rhs.stamp }
             return (rank[lhs.id] ?? Int.max, lhs.id) < (rank[rhs.id] ?? Int.max, rhs.id)
-        }.map(\.value)
+        }.map { FavoriteRecord(item: $0.value, environment: active) }
+        let incomingKeys = Set(incoming.map { $0.item.key })
+        records.removeAll { isActive($0) && incomingKeys.contains($0.item.key) }
+        records.insert(contentsOf: incoming, at: 0)
         persist()
     }
 
@@ -221,7 +257,13 @@ struct FavoriteDocument: Codable {
 
     private func persist() {
         do {
-            defaults.set(try JSONEncoder().encode(FavoriteDocument(version: 2, items: items)), forKey: Self.storageKey)
+            var env: [String: String] = [:]
+            for record in records {
+                if let id = record.environment { env[record.item.key] = id.uuidString }
+            }
+            // version stays 2: `environments` is an additive optional field, so a v2 reader that
+            // predates environments still decodes the items and simply ignores the mapping.
+            defaults.set(try JSONEncoder().encode(FavoriteDocument(version: 2, items: records.map(\.item), environments: env)), forKey: Self.storageKey)
             persistenceError = nil
         } catch {
             persistenceError = error.localizedDescription

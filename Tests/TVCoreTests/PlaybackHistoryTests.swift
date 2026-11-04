@@ -105,3 +105,38 @@ private func historyContext(video: String = "series", episode: String = "1", sou
     #expect(posted.keepingPoster(list).poster == own)
     #expect(bare.keepingPoster(nil).poster == nil)
 }
+
+// MARK: - 环境隔离
+
+@Test @MainActor func historyPartitionsByEnvironmentAndDefaultsToTheActiveOne() throws {
+    let file = FileManager.default.temporaryDirectory.appending(path: "history-env-" + UUID().uuidString + ".json")
+    defer { try? FileManager.default.removeItem(at: file) }
+    let history = PlaybackHistory(file: file)
+    let first = UUID(), second = UUID()
+    history.defaultEnvironmentID = first
+    // 不传 environment 的记录（视频播放器走的就是这条路）应落在 active 环境，而不是 nil 全归默认。
+    history.activeEnvironmentID = first
+    history.record(historyContext(video: "A"), position: 10, duration: 100)
+    history.activeEnvironmentID = second
+    history.record(historyContext(video: "B"), position: 20, duration: 100)
+    // 第一个环境只看到 A，第二个只看到 B。
+    #expect(history.entries(in: first).map(\.context.videoID) == ["A"])
+    #expect(history.entries(in: second).map(\.context.videoID) == ["B"])
+    // 落盘后再读，环境跟着记录走。
+    let restored = PlaybackHistory(file: file)
+    restored.defaultEnvironmentID = first
+    #expect(restored.entries(in: first).map(\.context.videoID) == ["A"])
+    #expect(restored.entries(in: second).map(\.context.videoID) == ["B"])
+}
+
+@Test @MainActor func historyBeforeEnvironmentsBelongsToTheDefault() throws {
+    let file = FileManager.default.temporaryDirectory.appending(path: "history-legacy-" + UUID().uuidString + ".json")
+    defer { try? FileManager.default.removeItem(at: file) }
+    let history = PlaybackHistory(file: file)
+    let defaultID = UUID()
+    // 升级前写的记录 environment == nil，必须归默认环境而不是凭空消失。
+    history.defaultEnvironmentID = defaultID
+    history.record(historyContext(video: "legacy"), position: 10, duration: 100, environment: nil)
+    #expect(history.entries(in: defaultID).map(\.context.videoID) == ["legacy"])
+    #expect(history.entries(in: UUID()).isEmpty)
+}

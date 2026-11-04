@@ -135,3 +135,53 @@ private func episode(_ id: String, flag: String, name: String, episodeID: String
     #expect(withoutHeaders.poster == plain.url)
     #expect(withoutHeaders.posterHeaders.isEmpty)
 }
+
+// MARK: - 环境隔离
+
+@Test @MainActor func favoritesPartitionByEnvironmentAndSurviveRelaunch() throws {
+    let suite = "favorites." + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let first = UUID(), second = UUID()
+    let favorites = Favorites(defaults: defaults)
+    favorites.defaultEnvironmentID = first
+
+    favorites.activeEnvironmentID = first
+    favorites.toggle(.video(video("A", origin: origin)))
+    favorites.activeEnvironmentID = second
+    favorites.toggle(.video(video("B", origin: origin)))
+
+    favorites.activeEnvironmentID = first
+    #expect(favorites.items.map(\.key) == [FavoriteItem.video(video("A", origin: origin)).key])
+    favorites.activeEnvironmentID = second
+    #expect(favorites.items.map(\.key) == [FavoriteItem.video(video("B", origin: origin)).key])
+
+    // 同一 item 在两个环境各自 toggle，互不影响。
+    favorites.activeEnvironmentID = first
+    favorites.toggle(.music(MusicTrack(platform: .qq, songID: "9", title: "S", artists: ["A"])))
+    favorites.activeEnvironmentID = second
+    #expect(!favorites.contains(.music(MusicTrack(platform: .qq, songID: "9", title: "S", artists: ["A"]))))
+
+    // 落盘再读，环境跟着记录走。第一个环境此时有 music(S) + A；第二个只有 B。
+    let restored = Favorites(defaults: defaults)
+    restored.defaultEnvironmentID = first
+    restored.activeEnvironmentID = first
+    #expect(restored.items.map(\.key) == [
+        FavoriteItem.music(MusicTrack(platform: .qq, songID: "9", title: "S", artists: ["A"])).key,
+        FavoriteItem.video(video("A", origin: origin)).key,
+    ])
+    restored.activeEnvironmentID = second
+    #expect(restored.items.map(\.key) == [FavoriteItem.video(video("B", origin: origin)).key])
+}
+
+@Test @MainActor func favoritesBeforeEnvironmentsBelongToTheDefault() throws {
+    let suite = "favorites." + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let favorites = Favorites(defaults: defaults)
+    let defaultID = UUID()
+    favorites.defaultEnvironmentID = defaultID
+    // 升级前的收藏 environment == nil，归默认环境，不消失。
+    favorites.toggle(.video(video("legacy", origin: origin)))
+    #expect(favorites.items.map(\.key) == [FavoriteItem.video(video("legacy", origin: origin)).key])
+}

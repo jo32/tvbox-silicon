@@ -103,6 +103,10 @@ import TVCore
         if let blob = try? JSONEncoder().encode(environments) { playbackDefaults.set(blob, forKey: Self.environmentsKey) }
         if let blob = try? JSONEncoder().encode(skipSources) { playbackDefaults.set(blob, forKey: Self.skipSourcesKey) }
         if let blob = try? JSONEncoder().encode(resourceRanking) { playbackDefaults.set(blob, forKey: Self.resourceRankingKey) }
+        // Every environment change (add/remove/activate) funnels through here, so this is the one
+        // place to keep the player's shared history pointed at the environment on screen.
+        playbackHistory.activeEnvironmentID = environments.activeID
+        favorites.activeEnvironmentID = environments.activeID
     }
 
     /// Relocks the vault the moment the screen is captured — a screenshot or an active screen
@@ -333,6 +337,13 @@ import TVCore
         // The default environment owns everything written before environments existed, so history
         // needs its id to filter those legacy rows correctly.
         playbackHistory.defaultEnvironmentID = loadedEnvironments.all.first?.id
+        // New records go to the environment on screen. Without this the video player — which holds
+        // `PlaybackHistory.shared` and has no store — stamped every row `nil`, so all environments
+        // shared one history and switching did nothing.
+        playbackHistory.activeEnvironmentID = loadedEnvironments.activeID
+        // Favourites are partitioned the same way, and for the same reason.
+        favorites.defaultEnvironmentID = loadedEnvironments.all.first?.id
+        favorites.activeEnvironmentID = loadedEnvironments.activeID
         if let blob = playbackDefaults.data(forKey: Self.artworkLanguageKey),
            let decoded = try? JSONDecoder().decode(ArtworkLanguage.self, from: blob) { artworkLanguage = decoded }
         if let blob = playbackDefaults.data(forKey: Self.skipSourcesKey),

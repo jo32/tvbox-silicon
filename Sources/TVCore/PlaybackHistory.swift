@@ -98,6 +98,11 @@ extension PlaybackHistoryEntry {
 
     /// The id of the default environment. Set by the app once `Environments` is loaded.
     public var defaultEnvironmentID: UUID?
+    /// The environment new records belong to when the caller does not say. The app keeps this in
+    /// step with `Environments.activeID`, because most recorders — the video player above all — hold
+    /// `PlaybackHistory.shared` and have no reference to the store to ask. Nil means "not set yet,
+    /// write to the default environment".
+    public var activeEnvironmentID: UUID?
     public private(set) var entries: [PlaybackHistoryEntry] = []
     public private(set) var persistenceError: String?
     private let file: URL
@@ -126,8 +131,12 @@ extension PlaybackHistoryEntry {
     public func record(_ context: PlaybackHistoryContext, position: Double, duration: Double,
                        now: Date = Date(), environment: UUID? = nil) {
         guard position.isFinite, position >= 1, duration.isFinite, duration >= 0 else { return }
+        // An explicit environment wins; otherwise stamp the environment the app is showing now.
+        // Callers that pass nothing (the video player, QA seeds) used to write `nil` and every
+        // environment saw the same row — the "environment isolation does nothing" report.
+        let target = environment ?? activeEnvironmentID
         let entry = PlaybackHistoryEntry(context: context, position: duration > 0 ? min(position, duration) : position,
-                                         duration: duration, updatedAt: now, environment: environment)
+                                         duration: duration, updatedAt: now, environment: target)
         guard Self.valid(entry) else { return }
         if let old = entries.first(where: { $0.id == entry.id && $0.environment == entry.environment }),
            old.context == context,
