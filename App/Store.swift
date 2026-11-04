@@ -458,7 +458,11 @@ import TVCore
     /// nothing to overwrite. Runs only when the backed-up slices are empty on this launch, so a
     /// device that already has data never gets it replaced by an older snapshot.
     private func restoreKeychainBackupIfFresh() {
-        guard persistsChanges, keychainBackupEnabled else { return }
+        // Deliberately NOT gated on `keychainBackupEnabled`: that flag lives inside the backed-up
+        // preferences, so it is `false` on a fresh install and gating here would dead-lock recovery.
+        // The keychain is only non-empty when the switch was last on (turning it off calls
+        // `KeychainBackup.clear()`), so "a backup exists" already means the user wants it back.
+        guard persistsChanges else { return }
         // "Fresh" = no subscriptions, no history, no favourites, no vault passcode and no accounts.
         let empty = subscriptions.isEmpty && playbackHistory.entries.isEmpty
             && favorites.syncValues.isEmpty && !vault.hasPasscode
