@@ -742,8 +742,16 @@ struct MobilePlayerView: View {
     /// At the top of a watch page: smaller controls, and the page has the title.
     private var inline: Bool { layout == .inline }
 
+    /// iPhone Duo's inner display: still a phone (`idiom == .phone`) but regular in both directions.
+    /// It is a real folded-out tablet-sized screen, so it treats the player as landscape even though
+    /// `verticalSizeClass` reports `.regular` here.
+    private var duoExpanded: Bool {
+        UIDevice.current.userInterfaceIdiom == .phone
+            && horizontalSizeClass == .regular && verticalSizeClass == .regular
+    }
     /// Landscape split: the box is taller than the frame's own shape, so filling avoids side bars.
-    private var fillsLandscape: Bool { inline && verticalSizeClass == .compact }
+    /// A folded-out Duo gives the picture the same tall box beside the episode list.
+    private var fillsLandscape: Bool { inline && (verticalSizeClass == .compact || duoExpanded) }
     private var seekable: Bool { session.hasTimeline && !session.isLive }
 
     private var controls: some View {
@@ -774,7 +782,8 @@ struct MobilePlayerView: View {
 
     /// The player on its own screen, held sideways: the transport at the left, the buttons at the
     /// right, the seek bar across the bottom — the left/right layout the upright stack can't give.
-    private var landscapeLayout: Bool { !inline && verticalSizeClass == .compact }
+    /// A folded-out Duo uses the same sideways chrome across its wide inner display.
+    private var landscapeLayout: Bool { !inline && (verticalSizeClass == .compact || duoExpanded) }
 
     private var landscapeControls: some View {
         VStack(spacing: 0) {

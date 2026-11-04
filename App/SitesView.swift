@@ -2240,12 +2240,18 @@ struct VideoDetailView: View {
 
     private var watchLayout: Bool { WatchPage.applies(sizeClass, verticalSizeClass) }
 
-    /// Landscape on a phone: the page splits left/right rather than stacking.
-    ///
-    /// A Duo unfolded is regular in both directions and must not split — it is wide, but stacking
-    /// a tall episode list beside the picture there wastes the height it does have. The compact
-    /// height class is the honest signal for "held sideways".
+    /// Landscape on a phone held sideways (the compact height class): the page splits left/right
+    /// rather than stacking — the picture on the left, the episode list on the right.
     private var landscapePage: Bool { verticalSizeClass == .compact }
+    /// iPhone Duo's inner display: still a phone (`idiom == .phone`) but regular in both directions.
+    /// It is not "held sideways" — it is a real folded-out tablet-sized screen — so it gets its own
+    /// three-column layout (picture | info + episodes | actions) instead of the two-column landscape
+    /// split. A real iPad (`idiom == .pad`) never reaches here: `WatchPage.applies` keeps it on the
+    /// plain detail page.
+    private var duoExpanded: Bool {
+        UIDevice.current.userInterfaceIdiom == .phone
+            && sizeClass == .regular && verticalSizeClass == .regular
+    }
     /// What plays at the top of the page: one of this video's episodes.
     private var watchChannel: Channel? {
         store.playing.flatMap { watchScopes.contains($0.historyContext?.id ?? "") ? $0 : nil }
@@ -2267,8 +2273,13 @@ struct VideoDetailView: View {
         let ratio = playerAspectRatio
         let side = containerWidth > 0 ? containerWidth : 390
         // Landscape splits the page left/right instead of stacking, as One does: the picture keeps
-        // the width it needs and the episode list uses the space beside it rather than below.
-        let splits = landscapePage && !fullScreen
+        // the width it needs and the episode list uses the space beside it rather than below. A Duo
+        // unfolded does the same across its wide inner display — picture on the left, the synopsis
+        // and episodes on the right — and the system sidebar fills the far edge.
+        let splits = (landscapePage || duoExpanded) && !fullScreen
+        // The folded-out Duo gives the right column a fixed share; a phone held sideways lets it take
+        // the rest after the picture's own width.
+        let detailWidth = duoExpanded ? max(0, containerWidth * 0.34) : nil
         // Upright: the box is the picture's own shape, so there are no bars inside it. The status
         // bar strip is part of the box (the page hides the bar), which is why nothing is subtracted.
         let playerHeight = splits ? containerHeight : side / max(ratio, 0.5)
@@ -2277,10 +2288,10 @@ struct VideoDetailView: View {
                 if splits {
                     HStack(spacing: 0) {
                         watchPlayer
-                            .frame(width: max(0, containerWidth - side * 0.42), height: containerHeight)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                         ScrollView { watchDetails.padding(.horizontal, 16).padding(.vertical, 14) }
                             .scrollIndicators(.never)
-                            .frame(maxWidth: .infinity)
+                            .frame(width: detailWidth ?? max(0, containerWidth - side * 0.42))
                     }
                 } else {
                     VStack(spacing: 0) {
@@ -2305,29 +2316,31 @@ struct VideoDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
             store.watchPageScopes.formUnion(watchScopes)
-            PlayerOrientation.holdPortrait(true)
-            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            // The folded-out Duo is its own landscape screen; only the upright outer display is held
+            // portrait. (The inner display ignores orientation locks anyway, but holding it here also
+            // keeps Full Screen's turn from fighting the page.)
+            if !duoExpanded { PlayerOrientation.holdPortrait(true) }
         }
         .onChange(of: watchScopes) { old, new in
             store.watchPageScopes.subtract(old.subtracting(new)); store.watchPageScopes.formUnion(new)
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
-            phoneTurned()
+        .onChange(of: duoExpanded) { _, expanded in
+            // Fold/unfold swaps the watch page between the outer display (held portrait) and the
+            // inner display (which ignores orientation locks). Re-assert the right hold each way so
+            // an unfold doesn't leave the upright lock fighting a landscape Full Screen.
+            PlayerOrientation.holdPortrait(!expanded)
         }
         .onDisappear {
-            UIDevice.current.endGeneratingDeviceOrientationNotifications()
             // An iPhone Duo fold/unfold swaps `watchBody` for `pageBody` (and back) without the page leaving, so the
             // page-level `onDisappear` handles stopping playback and leaving Full Screen. Here only the watch page's
             // own contributions are undone; they are re-established by `onAppear` when the watch page returns.
             store.watchPageScopes.subtract(watchScopes)
-            PlayerOrientation.holdPortrait(false)
+            if !duoExpanded { PlayerOrientation.holdPortrait(false) }
         }
         .onChange(of: watchChannel == nil) { _, ended in
             playerStarted = false
             if ended { playerSession = nil }
             if ended && fullScreen { setFullScreen(landscape: false) }
-            // Started with the phone already sideways: Full Screen at once, as turning it would.
-            if !ended { phoneTurned() }
         }
         .sheet(isPresented: $showsAllEpisodes) { allEpisodes }
     }
@@ -2653,11 +2666,13 @@ struct VideoDetailView: View {
 }
 
 #if os(iOS)
-/// iPhone: a video's page is a watch page, its player at the top (`VideoDetailView`). Not on iPhone Duo's inner
-/// display (regular both ways), which has an iPad's room.
+/// iPhone: a video's page is a watch page, its player at the top (`VideoDetailView`). iPhone Duo's inner
+/// display (regular both ways) keeps the watch page too — it is still a phone (`idiom == .phone`), and it
+/// folds back to the compact outer screen, so the playback page must survive the fold. Only a real iPad
+/// (`idiom == .pad`) takes the tablet's plain detail page.
 enum WatchPage {
     @MainActor static func applies(_ horizontal: UserInterfaceSizeClass?, _ vertical: UserInterfaceSizeClass?) -> Bool {
-        UIDevice.current.userInterfaceIdiom == .phone && !(horizontal == .regular && vertical == .regular)
+        UIDevice.current.userInterfaceIdiom == .phone
     }
 }
 
