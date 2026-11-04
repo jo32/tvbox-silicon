@@ -253,17 +253,6 @@ struct RootView: View {
         }
     }
 
-    /// The iOS 26 floating tab bar sits over the scroll content instead of reserving a strip, so a
-    /// page's last row would sit under it. `.safeAreaPadding(.bottom)` lets every page scroll its
-    /// final row clear of the capsule; the system adds the tab bar's height to the safe area there.
-    @ViewBuilder private func tabSafeArea() -> some View {
-        #if os(iOS)
-        if #available(iOS 26, *) { self.safeAreaPadding(.bottom) } else { self }
-        #else
-        self
-        #endif
-    }
-
     #if os(tvOS)
     private func openInMore(_ section: AppSection) {
         guard tvMore.contains(section) else { return }
@@ -564,6 +553,17 @@ extension View {
         navigationDestination(for: Route.self) { $0.build() }
         #endif
     }
+
+    /// The iOS 26 floating tab bar sits over the scroll content instead of reserving a strip, so a
+    /// page's last row would sit under it. `.safeAreaPadding(.bottom)` lets every page scroll its
+    /// final row clear of the capsule; the system adds the tab bar's height to the safe area there.
+    @ViewBuilder func tabSafeArea() -> some View {
+        #if os(iOS)
+        if #available(iOS 26, *) { safeAreaPadding(.bottom) } else { self }
+        #else
+        self
+        #endif
+    }
 }
 
 #if os(macOS) || os(tvOS)
@@ -580,3 +580,4 @@ private struct MacRouteDestinations: ViewModifier {
     }
 }
 #endif
+
