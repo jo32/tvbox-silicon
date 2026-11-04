@@ -274,6 +274,8 @@ import TVCore
         if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
         endObserver = nil; failureObserver = nil
         sampler?.cancel(); sampler = nil
+        // The pending live catch-up seek belongs to the old item; a new item must be free to catch up again.
+        catchingUpLive = false
     }
 
     /// A live room whose playlist contradicted itself (CoreMedia -12312) gets one fresh address before
@@ -286,14 +288,14 @@ import TVCore
         detachItem(); observation = nil
         let active = generation
         Diagnostics.shared.record(.warning, "player", "live retry room=\(room.url.absoluteString)")
-        Task {
+        preparation = Task { [weak self] in
             do {
                 let resolved = try await LiveCatalog.resolve(room)
-                guard self.generation == active else { return }
+                guard let self, self.generation == active, !Task.isCancelled else { return }
                 self.liveRetrying = false
                 self.configure(resolved.channel, url: resolved.channel.url, generation: active)
             } catch {
-                guard self.generation == active else { return }
+                guard let self, self.generation == active, !Task.isCancelled else { return }
                 self.liveRetrying = false
                 self.error = error.localizedDescription; self.loading = false
             }
@@ -358,6 +360,27 @@ import TVCore
             try? await Task.sleep(for: delay)
             guard let self, self.generation == active, !Task.isCancelled else { return }
             if position > 1 { self.pendingResume = position }
+            self.configure(channel, url: url, generation: active)
+        }
+        return true
+    }
+
+    /// A live stream whose connection dropped (NSURL -1005) or whose media stalled (-15628) reopens from the
+    /// live edge, a few times and a little later each time, before the error shows. Unlike an episode there is
+    /// no position to keep: a fresh item starts at the edge, which is exactly where a live viewer wants to be.
+    private func recoverLiveAfterDrop(_ failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
+        guard isLive, !savedDownload, !url.isFileURL else { return false }
+        guard PlaybackDropRecovery.isDrop(failure) else { return false }
+        // Live HLS reports the program clock as currentTime, so it advances during healthy playback and
+        // lets the recovery counter reset after a stretch of clean viewing, exactly as an episode's does.
+        let position = player.currentTime().seconds
+        guard let delay = dropRecovery.delay(after: failure, position: position.isFinite ? position : 0) else { return false }
+        detachItem(); observation = nil; loading = true
+        Diagnostics.shared.record(.warning, "player", "live dropped host=\(transfer.host ?? url.host() ?? "-") attempt=\(dropRecovery.attempts) \(failure.map(Self.describe) ?? "-"); reopening at edge")
+        note(L10n.text("The connection dropped. Reconnecting"))
+        preparation = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard let self, self.generation == active, !Task.isCancelled else { return }
             self.configure(channel, url: url, generation: active)
         }
         return true
@@ -748,6 +771,7 @@ import TVCore
                     if self.retryHDR(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
                     if self.reopenedAfterDrop, self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
+                    if self.recoverLiveAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
                     Diagnostics.shared.record(.error, "player", "failed host=\(self.transfer.host ?? channel.url.host() ?? "-") \(self.transfer.failure.map { "upstream=\($0) " } ?? "")\(detail) \(self.failureContext(channel, url: url, item: item))")
                     if self.retryLive(after: failure) { return }
                     // A refused link is usually an expired one: say so in plain words rather than the system's.
@@ -767,6 +791,7 @@ import TVCore
                 guard let self, self.generation == activeGeneration else { return }
                 if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
                 if self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
+                if self.recoverLiveAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
                 Diagnostics.shared.record(.error, "player", "interrupted host=\(self.transfer.host ?? channel.url.host() ?? "-") at=\(Int(self.player.currentTime().seconds.isFinite ? self.player.currentTime().seconds : -1))s \(failure.map(Self.describe) ?? "-") \(self.failureContext(channel, url: url, item: item))")
                 if self.retryLive(after: failure) { return }
                 self.error = message ?? L10n.text("Playback was interrupted."); self.loading = false

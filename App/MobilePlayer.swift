@@ -198,7 +198,9 @@ struct MobilePlayerView: View {
                                options: headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": headers])
         let name = L10n.text("Subtitles From the Sound")
         let hint = channel.name
-        Task {
+        // Keep the handle so leaving the player cancels the export/recognition rather than
+        // letting it run to completion with no one watching.
+        speechTask = Task {
             do {
                 let track = try await SpeechSubtitles().transcribe(asset: asset, language: language, name: name,
                                                                    hint: [hint]) { value in
@@ -257,6 +259,9 @@ struct MobilePlayerView: View {
     @State private var chosenSubtitle: String?
     /// Set while the on-device recogniser is working through this title's sound track.
     @State private var generatingSubtitles = false
+    /// The running speech-to-subtitle task, so leaving the player cancels it instead of
+    /// letting a 40-minute export finish on its own with no one watching.
+    @State private var speechTask: Task<Void, Never>?
     @State private var subtitleProgress: Double = 0
     /// Why the last attempt produced nothing, shown in place of the menu item.
     @State private var subtitleError: String?
@@ -409,6 +414,7 @@ struct MobilePlayerView: View {
         }
         .onDisappear {
             clock.detach(); nowPlaying.stop(); tvBrowser.stop()
+            speechTask?.cancel(); speechTask = nil
             if let brightnessBefore { screen?.brightness = brightnessBefore }
         }
         // Played here again (the Lock Screen, say): the other device no longer has it to itself.
