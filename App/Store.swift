@@ -1279,15 +1279,26 @@ import TVCore
 
     /// Runs `operation`, giving up after `seconds`. The result is nil on a timeout or a throw, so a
     /// host that never answers cannot hold a whole sweep.
+    ///
+    /// The operation runs in its own task rather than in a task group. A group does not return until
+    /// every child has finished, so `group.next()` returning the sleeper's nil still left the caller
+    /// waiting on the original task: a plugin call that ignores cancellation held the sweep open past
+    /// its own deadline, which is the opposite of what a deadline is for. Whoever finishes first
+    /// claims the continuation; the loser is cancelled and forgotten.
     private nonisolated static func withDeadline<T: Sendable>(seconds: Double, _ operation: @escaping @Sendable () async throws -> T) async -> T? {
-        await withTaskGroup(of: T?.self) { group in
-            group.addTask { try? await operation() }
-            group.addTask {
-                try? await Task.sleep(for: .seconds(seconds))
-                return nil
+        let claim = DeadlineClaim()
+        return await withCheckedContinuation { (continuation: CheckedContinuation<T?, Never>) in
+            let work = Task {
+                let value = try? await operation()
+                if claim.claim() { continuation.resume(returning: value) }
             }
-            defer { group.cancelAll() }
-            return await group.next() ?? nil
+            Task {
+                try? await Task.sleep(for: .seconds(seconds))
+                if claim.claim() {
+                    work.cancel()
+                    continuation.resume(returning: nil)
+                }
+            }
         }
     }
 
@@ -1828,5 +1839,21 @@ struct SyncedSubscription: Codable, Equatable, Sendable {
     /// Equality ignores the document cache: it only decides whether the subscription list changed.
     static func == (lhs: SyncedSubscription, rhs: SyncedSubscription) -> Bool {
         lhs.entry == rhs.entry && lhs.rank == rhs.rank
+    }
+}
+
+
+/// Lets one of two racing tasks answer a continuation, never both.
+private final class DeadlineClaim: @unchecked Sendable {
+    private let lock = NSLock()
+    private var taken = false
+
+    /// True for the first caller only.
+    func claim() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !taken else { return false }
+        taken = true
+        return true
     }
 }
