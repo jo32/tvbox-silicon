@@ -1,6 +1,151 @@
 {
   "releases": [
     {
+      "version": "1.8.9",
+      "build": 47,
+      "date": "2026-11-05",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "calendar",
+          "title": {
+            "en": "Airing Today in Discover",
+            "zh-Hans": "发现页新增今日播出",
+            "zh-Hant": "「探索」新增今日播出",
+            "ja": "「見つける」に今日の放送"
+          },
+          "detail": {
+            "en": "Discover has new Anime Airing Today and Series Airing Today rows. Open one to see the whole week's schedule, Monday to Sunday.",
+            "zh-Hans": "发现页新增“今日番剧”和“今日剧集”两行。点开可以查看从周一到周日的整周时间表。",
+            "zh-Hant": "「探索」新增「今日番劇」和「今日劇集」兩列。點開可以查看從週一到週日的整週時間表。",
+            "ja": "「見つける」に「今日のアニメ」と「今日のドラマ」の行が加わりました。開くと月曜から日曜までの 1 週間の放送予定を見られます。"
+          }
+        },
+        {
+          "symbol": "list.bullet",
+          "title": {
+            "en": "Global Search as a list",
+            "zh-Hans": "全局搜索可以用列表显示",
+            "zh-Hant": "全域搜尋可以用列表顯示",
+            "ja": "横断検索の結果をリストで表示"
+          },
+          "detail": {
+            "en": "A new button next to Stop switches the results between posters and a list. The list shows each whole title, the source's note (episodes, quality) and the source's name, so similar titles from different sources are easier to tell apart.",
+            "zh-Hans": "“停止”旁边新增一个按钮，可以在海报和列表之间切换搜索结果。列表会显示完整片名、源的备注（集数、清晰度）和源的名字，更容易分辨不同源里相似的片名。",
+            "zh-Hant": "「停止」旁邊新增一個按鈕，可以在海報和列表之間切換搜尋結果。列表會顯示完整片名、來源的備註（集數、畫質）和來源名稱，更容易分辨不同來源裡相似的片名。",
+            "ja": "「停止」の横に、検索結果をポスターとリストで切り替えるボタンが加わりました。リストにはタイトル全体、ソースの備考（話数・画質）、ソース名が表示され、ソースごとの似たタイトルを見分けやすくなります。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "externaldrive.badge.icloud",
+          "title": {
+            "en": "Smoother cloud-drive playback",
+            "zh-Hans": "网盘视频播放更顺畅",
+            "zh-Hant": "雲端硬碟影片播放更順暢",
+            "ja": "クラウドドライブの再生がなめらかに"
+          },
+          "detail": {
+            "en": "Big 4K files from Baidu, Quark and UC buffer up to a minute ahead and stall less often. A file with two dubs, such as Mandarin and Cantonese, now plays one of them, and the other is in the Audio menu.",
+            "zh-Hans": "百度、夸克、UC 网盘里的 4K 大文件会提前缓冲最多一分钟，卡顿更少。带两条配音（比如国语和粤语）的文件现在只播放其中一条，另一条可以在“音频”菜单里切换。",
+            "zh-Hant": "百度、夸克、UC 雲端硬碟裡的 4K 大檔案會提前緩衝最多一分鐘，卡頓更少。帶兩條配音（例如國語和粵語）的檔案現在只播放其中一條，另一條可以在「音訊」選單裡切換。",
+            "ja": "Baidu・Quark・UC の大きな 4K ファイルは最大 1 分先まで読み込み、止まりにくくなりました。北京語と広東語など 2 つの吹き替えがあるファイルは片方だけを再生し、もう片方は「オーディオ」メニューで選べます。"
+          }
+        },
+        {
+          "symbol": "music.note",
+          "title": {
+            "en": "Choose your music quality",
+            "zh-Hans": "可以选择音乐音质",
+            "zh-Hant": "可以選擇音樂音質",
+            "ja": "音楽の音質を選べます"
+          },
+          "detail": {
+            "en": "Music Settings adds High (320 kbps) and Standard (128 kbps) next to Lossless first and Lossless only. They use far less data.",
+            "zh-Hans": "音乐设置在“无损优先”和“仅无损”之外，新增“高（320 kbps）”和“标准（128 kbps）”，流量小得多。",
+            "zh-Hant": "音樂設定在「無損優先」和「僅無損」之外，新增「高（320 kbps）」和「標準（128 kbps）」，流量小得多。",
+            "ja": "ミュージックの設定に「ロスレス優先」「ロスレスのみ」に加えて「高（320 kbps）」と「標準（128 kbps）」が加わりました。通信量を大幅に抑えられます。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "line.3.horizontal.decrease.circle",
+          "title": {
+            "en": "Tidier filters and Mac downloads",
+            "zh-Hans": "更清爽的筛选和 Mac 下载",
+            "zh-Hant": "更清爽的篩選和 Mac 下載",
+            "ja": "すっきりした絞り込みと Mac のダウンロード"
+          },
+          "detail": {
+            "en": "A source's category filters are now one chip each, like Region: All, as in Discover's Search Catalog. On the Mac, the Download Episodes sheet and the Downloads page are redesigned.",
+            "zh-Hans": "源的分类筛选现在每项一个按钮，比如“地区：全部”，和发现页的“搜索影视”一样。Mac 上的“下载剧集”窗口和“下载”页面也重新设计了。",
+            "zh-Hant": "來源的分類篩選現在每項一個按鈕，例如「地區：全部」，和「探索」的「搜尋影視」一樣。Mac 上的「下載劇集」視窗和「下載」頁面也重新設計了。",
+            "ja": "ソースのカテゴリ絞り込みは、「見つける」の「作品を検索」と同じく、「地域：すべて」のような項目ごとのボタンになりました。Mac では「エピソードをダウンロード」シートと「ダウンロード」ページのデザインも新しくなりました。"
+          }
+        },
+        {
+          "symbol": "iphone",
+          "title": {
+            "en": "Turn sideways for Full Screen",
+            "zh-Hans": "横过手机即可全屏",
+            "zh-Hant": "橫過手機即可全螢幕",
+            "ja": "横にすると全画面に"
+          },
+          "detail": {
+            "en": "On the iPhone watch page, turning the phone sideways opens Full Screen, and turning it upright again goes back. On iPad, Settings > Edit Tab Bar now arranges the sidebar too, and the iPhone tab bar keeps fewer than four tabs if you choose fewer.",
+            "zh-Hans": "在 iPhone 的观看页，把手机横过来就会进入全屏，竖回来就会返回。在 iPad 上，“设置”>“编辑标签栏”现在也能调整侧边栏的顺序；iPhone 的标签栏也可以少于四个标签了。",
+            "zh-Hant": "在 iPhone 的觀看頁，把手機橫過來就會進入全螢幕，直回來就會返回。在 iPad 上，「設定」>「編輯標籤列」現在也能調整側邊欄的順序；iPhone 的標籤列也可以少於四個標籤了。",
+            "ja": "iPhone の視聴ページでは、端末を横にすると全画面になり、縦に戻すと元に戻ります。iPad では「設定」>「タブバーを編集」でサイドバーの並びも変えられます。iPhone のタブバーは 4 つより少なくもできます。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "magnifyingglass",
+          "title": {
+            "en": "New search on Apple TV",
+            "zh-Hans": "Apple TV 上的新搜索",
+            "zh-Hant": "Apple TV 上的新搜尋",
+            "ja": "Apple TV の新しい検索"
+          },
+          "detail": {
+            "en": "Global Search puts its search field next to the sidebar button, so results start higher on the screen. Selecting the field opens the keyboard with your recent searches and suggestions.",
+            "zh-Hans": "全局搜索的输入框移到了侧边栏按钮旁边，结果从屏幕更上方开始显示。选中输入框会打开键盘，并显示最近搜索和推荐。",
+            "zh-Hant": "全域搜尋的輸入框移到了側邊欄按鈕旁邊，結果從螢幕更上方開始顯示。選取輸入框會打開鍵盤，並顯示最近搜尋和建議。",
+            "ja": "横断検索の入力欄がサイドバーのボタンの横に移り、結果が画面の上のほうから表示されます。入力欄を選ぶと、最近の検索と候補つきのキーボードが開きます。"
+          },
+          "platforms": [
+            "tvos"
+          ]
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "The Top Rated lists show each title's score. Tap a picture in a feedback message to see it full size. Hiding Featured Titles also hides its backdrop and trailer. 饭太硬's Quark lines play again after you sign in to Quark. More CatPawOpen sites open and load reliably on iPhone. On the Mac, Discover has no hard edge by the sidebar, and its arrows no longer open the title. Fixed a crash in the iPad app on a Mac.",
+            "zh-Hans": "高分电影和高分剧集列表会显示评分。在反馈里点一下图片可以查看大图。隐藏“精选影片”时，它的背景和预告片也会一起隐藏。登录夸克后，饭太硬的夸克线路又能播放了。更多猫源站点可以打开，在 iPhone 上加载也更稳定。Mac 的发现页在侧边栏旁边不再有生硬的边缘，点箭头也不会再打开影片。修复了 iPad 版在 Mac 上运行时的一个崩溃。",
+            "zh-Hant": "高分電影和高分影集列表會顯示評分。在意見回饋裡點一下圖片可以查看大圖。隱藏「精選影片」時，它的背景和預告片也會一起隱藏。登入夸克後，飯太硬的夸克線路又能播放了。更多貓源站點可以打開，在 iPhone 上載入也更穩定。Mac 的「探索」在側邊欄旁邊不再有生硬的邊緣，點箭頭也不會再打開影片。修正了 iPad 版在 Mac 上執行時的一個當機問題。",
+            "ja": "高評価リストに各作品のスコアが表示されます。フィードバックの写真をタップすると大きく表示できます。「注目の作品」を非表示にすると背景と予告編も隠れます。Quark にサインインすると、饭太硬の Quark ラインが再び再生できます。より多くの猫源サイトが開け、iPhone での読み込みも安定しました。Mac の「見つける」でサイドバー脇の硬い境目がなくなり、矢印でタイトルが開かなくなりました。Mac で動く iPad 版のクラッシュを修正しました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.8",
       "build": 46,
       "date": "2026-11-04",
