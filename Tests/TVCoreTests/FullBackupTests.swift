@@ -120,6 +120,36 @@ import Testing
         #expect(restored.integer(forKey: "webCast.port") == 8090)
     }
 
+    @Test func searchHistoryRidesTheBackup() {
+        let (defaults, playback) = clean(#function)
+        // 视频搜索历史：@AppStorage("videoSearchHistory") 存 JSON 编码的 [String]（Data blob）。
+        let history = try! JSONEncoder().encode(["狂飙", "庆余年", "三体"])
+        defaults.set(history, forKey: "videoSearchHistory")
+
+        let snapshot = FullBackupPreferences.snapshot(defaults: defaults, playbackDefaults: playback)
+        #expect(snapshot["videoSearchHistory"] == history)
+
+        let (restored, _) = clean(#function + ".restore")
+        FullBackupPreferences.restore(snapshot, defaults: restored, playbackDefaults: playback)
+        #expect(restored.data(forKey: "videoSearchHistory") == history)
+        let decoded = restored.data(forKey: "videoSearchHistory").flatMap { try? JSONDecoder().decode([String].self, from: $0) }
+        #expect(decoded == ["狂飙", "庆余年", "三体"])
+    }
+
+    @Test func discoverSearchKeywordsRideTheBackup() {
+        let (defaults, playback) = clean(#function)
+        // 发现页搜索词：stringArray(forKey:) 存 [String]（scalar 数组）。
+        let keywords = ["电影", "电视剧", "综艺"]
+        defaults.set(keywords, forKey: "discover.search.keywords")
+
+        let snapshot = FullBackupPreferences.snapshot(defaults: defaults, playbackDefaults: playback)
+        #expect(snapshot["discover.search.keywords"] != nil)
+
+        let (restored, _) = clean(#function + ".restore")
+        FullBackupPreferences.restore(snapshot, defaults: restored, playbackDefaults: playback)
+        #expect(restored.stringArray(forKey: "discover.search.keywords") == keywords)
+    }
+
     @Test func restoreWritesDataBlobsToBothSuites() {
         let (defaults, playback) = clean(#function)
         defaults.set(Data("fav".utf8), forKey: "favorites")

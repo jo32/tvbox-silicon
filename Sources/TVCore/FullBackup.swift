@@ -113,6 +113,7 @@ public enum FullBackupDefaults {
     public static let dataKeys: [String] = [
         "favorites",              // Favorites.FavoriteDocument (all environments)
         "videoFavorites",         // legacy video favourites, read before adoption
+        "videoSearchHistory",     // JSON-encoded [String] (search history, max 20)
         "sourceRouting.v1",
         "sourceOverrides.v1",
         "lineSettings.v1",
@@ -160,6 +161,7 @@ public enum FullBackupDefaults {
         "player.playLine.probes.order",
         "autoPlayNextEpisode",
         "keychainBackup.enabled",
+        "discover.search.keywords",   // [String] (discover search history)
     ]
 
     /// A prefix match, for keys that fan out (`episodeSkip.v1.<scope>`).
