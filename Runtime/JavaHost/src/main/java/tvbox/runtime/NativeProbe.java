@@ -194,11 +194,10 @@ public class NativeProbe extends AbstractJni {
             emulator.getMemory().setLibraryResolver(new AndroidResolver(23));
             VM vm = emulator.createDalvikVM();
             vm.setDvmClassFactory(new HierarchyProxyFactory(NativeProbe.class.getClassLoader()).configClassNameMapper(name -> {
+                Class<?> handed = dalvik.system.DexClassLoader.guestClass(name);
+                if (handed != null) return handed;
                 try { return Class.forName(name, false, NativeProbe.class.getClassLoader()); }
-                catch (ClassNotFoundException missing) {
-                    try { return dalvik.system.DexClassLoader.current == null ? null : dalvik.system.DexClassLoader.current.loadClass(name); }
-                    catch (ClassNotFoundException ignored) { return null; }
-                }
+                catch (ClassNotFoundException missing) { return dalvik.system.DexClassLoader.pluginClass(name); }
             }));
             vm.setJni(new NativeProbe());
             var jarLoader = new java.net.URLClassLoader(new java.net.URL[]{ jar.toURI().toURL() }, NativeProbe.class.getClassLoader());
