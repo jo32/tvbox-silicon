@@ -366,7 +366,7 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case hiddenSources, legacyKeys, hiddenSubscriptions, salt, digest, rounds, unlockDuration,
-             failedAttempts, cooldownEnds
+             failedAttempts, cooldownEnds, requireDigits
     }
 
     public init(from decoder: Decoder) throws {
@@ -384,6 +384,7 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
         unlockDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .unlockDuration) ?? 300
         failedAttempts = try container.decodeIfPresent(Int.self, forKey: .failedAttempts) ?? 0
         cooldownEnds = try container.decodeIfPresent(Date.self, forKey: .cooldownEnds)
+        requireDigits = try container.decodeIfPresent(Bool.self, forKey: .requireDigits) ?? false
         // unlockedAt is deliberately not restored: a copied file, or a relaunch, must never start in
         // the unlocked state. failedAttempts and cooldownEnds ARE restored so the rate limit
         // survives a relaunch and cannot be reset by killing the app.
@@ -400,6 +401,7 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
         try container.encode(unlockDuration, forKey: .unlockDuration)
         try container.encode(failedAttempts, forKey: .failedAttempts)
         try container.encodeIfPresent(cooldownEnds, forKey: .cooldownEnds)
+        try container.encode(requireDigits, forKey: .requireDigits)
     }
 }
 

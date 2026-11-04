@@ -147,6 +147,35 @@ private func vaultInCooldown(now: Date = fixedNow) throws -> (PrivacyVault, Date
     #expect(oldWorks)
 }
 
+/// 开关本身也要跨重启保留：`requireDigits = true` 经 Codable 往返后仍为 true，
+/// 换设备/重启后设置依然生效，不用重新开。
+@Test func requireDigitsSurvivesRelaunch() throws {
+    var vault = PrivacyVault(rounds: 10)
+    vault.requireDigits = true
+    try vault.setPasscode("123456", now: fixedNow)
+
+    let data = try JSONEncoder().encode(vault)
+    let reopened = try JSONDecoder().decode(PrivacyVault.self, from: data)
+    #expect(reopened.requireDigits)
+}
+
+/// 旧数据没有 `requireDigits` 字段时，解码回落到默认 false（向后兼容，不误伤存量口令）。
+@Test func requireDigitsDefaultsToFalseForLegacyData() throws {
+    // 直接造一个不含 requireDigits 键的 JSON 存档，模拟旧版本写出的数据。
+    var vault = PrivacyVault(rounds: 10)
+    try vault.setPasscode("abcdef", now: fixedNow) // 旧版允许的字母口令
+    let data = try JSONEncoder().encode(vault)
+    var raw = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+    raw.removeValue(forKey: "requireDigits")
+    let legacy = try JSONSerialization.data(withJSONObject: raw)
+
+    var reopened = try JSONDecoder().decode(PrivacyVault.self, from: legacy)
+    #expect(!reopened.requireDigits)
+    // 存量字母口令仍能解锁，不受新开关影响。
+    let opened = reopened.unlock("abcdef", now: fixedNow)
+    #expect(opened)
+}
+
 // MARK: - 替换口令需验证当前口令
 
 /// 已设口令后，`setPasscode(_:replacing:)` 必须提供正确的 `current`。
