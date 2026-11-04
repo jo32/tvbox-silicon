@@ -98,7 +98,10 @@ struct DiscoverView: View {
                 }
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 30) {
-                        if featured.isEmpty, model.loading {
+                        // No featured titles yet: hold the hero's height with a loader whether we are
+                        // still fetching (loading) or already failed (loaded but empty), so the top
+                        // of the page is never a blank black strip while the shelves below render.
+                        if featured.isEmpty {
                             ProgressView().frame(maxWidth: .infinity).frame(height: heroShown ? min(proxy.size.width * 1.5, 660) : 160)
                         }
                         ForEach(DiscoverSection.allCases.filter(visible)) { section in

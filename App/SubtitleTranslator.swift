@@ -161,3 +161,58 @@ private struct SubtitleTranslationHost: ViewModifier {
     }
 }
 #endif
+
+// MARK: - AI translation as the repackager's translator
+
+/// Makes the AI translator usable through the same `SubtitleTranslating` seam the device's
+/// Translation uses, so the repackager offers an AI-translated twin with no change on its side.
+///
+/// The two are not competitors; they fail in opposite places. Apple's Translation is free and
+/// offline but only covers the language pairs iOS ships (Rex's own footer lists twelve and says so).
+/// An OpenAI-compatible service covers any pair — including the source's own dialect — for the price
+/// of an API key and a network round trip per batch of cues.
+///
+/// `supports` answers true for any pair: the service is not consulted ahead of time because asking
+/// would cost a request per language just to render a menu. A wrong key surfaces on the first real
+/// translation, as a failed twin the viewer can ignore.
+struct AITranslatorAdapter: SubtitleTranslating {
+    let configuration: SubtitleTranslator.Configuration
+    let target: Locale.Language
+
+    init(configuration: SubtitleTranslator.Configuration) {
+        self.configuration = configuration
+        // The protocol asks for the language in the app's own term; the configuration already
+        // holds the BCP-47 string the service expects.
+        self.target = Locale.Language(identifier: configuration.targetLanguage)
+    }
+
+    func supports(_ source: Locale.Language) async -> Bool {
+        // Anything but the target itself is worth offering.
+        source.languageCode != target.languageCode
+    }
+
+    func translate(_ lines: [String], from source: Locale.Language) async throws -> [String] {
+        // Build a track from the lines so the batching and the count check are the ones already
+        // written, then read the text back out in the same order.
+        let cues = lines.enumerated().map { index, text in
+            SubtitleTrack.Cue(start: Int64(index) * 1_000_000,
+                              end: Int64(index + 1) * 1_000_000,
+                              text: text)
+        }
+        let track = SubtitleTrack(name: "lines", language: source.minimalIdentifier, cues: cues)
+        let translated = try await SubtitleTranslator().translate(track, configuration: configuration)
+        return translated.cues.map(\.text)
+    }
+}
+
+extension SubtitleTranslationSetup {
+    /// Prefers a configured AI service over the device's translation, when the viewer has filled one
+    /// in. Falls back to whatever `install()` already set, so an unconfigured app behaves as before.
+    ///
+    /// Called after `install()`: the AI configuration, when present, replaces the device translator.
+    @MainActor
+    static func installAI(configuration: SubtitleTranslator.Configuration?) {
+        guard let configuration, configuration.isComplete else { return }
+        SubtitleTranslation.translator = AITranslatorAdapter(configuration: configuration)
+    }
+}

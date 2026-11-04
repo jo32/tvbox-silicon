@@ -1634,3 +1634,14 @@
 
 /* restore */
 "Removed %lld subscriptions that this file does not list." = "Removed %lld subscriptions that this file does not list.";
+
+/* AI translation */
+"AI Translation" = "AI Translation";
+"Service" = "Service";
+"None" = "None";
+"Model" = "Model";
+"Testing" = "Testing";
+"Test succeeded: %@" = "Test succeeded: %@";
+"Leave every field empty to keep the device's own translation, which is free and offline but limited to the language pairs the system carries. A service covers any pair, at the cost of an API key and a network request per batch." = "Leave every field empty to keep the device's own translation, which is free and offline but limited to the language pairs the system carries. A service covers any pair, at the cost of an API key and a network request per batch.";
+"Rules are added to the built-in ones, which already ask the model to keep tone, register, humour and implied subjects using nearby subtitle context." = "Rules are added to the built-in ones, which already ask the model to keep tone, register, humour and implied subjects using nearby subtitle context.";
+"Sends one test line, to confirm the address, model and key work together." = "Sends one test line, to confirm the address, model and key work together.";

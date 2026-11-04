@@ -43,7 +43,7 @@ public struct SubtitleTranslator: Sendable {
     }
 
     /// What to send. Everything except `apiKey` has a usable default.
-    public struct Configuration: Sendable {
+    public struct Configuration: Codable, Equatable, Sendable {
         public var baseURL: String
         public var model: String
         public var apiKey: String
@@ -71,7 +71,7 @@ public struct SubtitleTranslator: Sendable {
                       contextWindow: contextWindow)
         }
 
-        var isComplete: Bool {
+        public var isComplete: Bool {
             !baseURL.isEmpty && !model.isEmpty && !apiKey.isEmpty && !targetLanguage.isEmpty
         }
     }

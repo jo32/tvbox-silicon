@@ -540,6 +540,8 @@ struct FormSettingsView: View {
                          value: rankingSummary) { ResourceRankingView() }
                 FormLink(symbol: "forward.end.alt.fill", tint: .cyan, title: L10n.text("Segment Sources")) { SkipSourceSettingsView() }
                 FormLink(symbol: "waveform.badge.plus", tint: .purple, title: L10n.text("Speech Subtitles")) { SpeechSubtitleView() }
+                FormLink(symbol: "character.bubble.fill", tint: .mint, title: L10n.text("AI Translation"),
+                         value: store.aiTranslation.isComplete ? L10n.text("On") : nil) { AITranslationView() }
                 FormLink(symbol: "textformat.alt", tint: .indigo, title: L10n.text("Artwork Language")) { ArtworkLanguageView() }
                 FormLink(symbol: "rectangle.stack.fill", tint: .orange, title: L10n.text("Environments")) { EnvironmentsView() }
             } header: {

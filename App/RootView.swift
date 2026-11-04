@@ -248,7 +248,20 @@ struct RootView: View {
                     .navigationDestination(for: AppSection.self) { content($0).tvDefaultControls() }
             }
             .environment(\.openRoute, RouteOpener { morePath.append($0) })
-        } else { RouteStack { content(item).tvDefaultControls() } }
+        } else {
+            RouteStack { content(item).tvDefaultControls().tabSafeArea() }
+        }
+    }
+
+    /// The iOS 26 floating tab bar sits over the scroll content instead of reserving a strip, so a
+    /// page's last row would sit under it. `.safeAreaPadding(.bottom)` lets every page scroll its
+    /// final row clear of the capsule; the system adds the tab bar's height to the safe area there.
+    @ViewBuilder private func tabSafeArea() -> some View {
+        #if os(iOS)
+        if #available(iOS 26, *) { self.safeAreaPadding(.bottom) } else { self }
+        #else
+        self
+        #endif
     }
 
     #if os(tvOS)

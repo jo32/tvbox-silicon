@@ -1634,3 +1634,14 @@
 
 /* restore */
 "Removed %lld subscriptions that this file does not list." = "已移除 %lld 個檔案裡沒有的訂閱。";
+
+/* AI translation */
+"AI Translation" = "AI 翻譯";
+"Service" = "服務商";
+"None" = "不使用";
+"Model" = "模型";
+"Testing" = "測試中";
+"Test succeeded: %@" = "測試成功：%@";
+"Leave every field empty to keep the device's own translation, which is free and offline but limited to the language pairs the system carries. A service covers any pair, at the cost of an API key and a network request per batch." = "全部留空則繼續使用系統內建翻譯：免費、離線，但只支援系統提供的那些語言對。改用服務可以翻譯任意語言對，代價是填一個 API Key，且每批字幕要發一次網路請求。";
+"Rules are added to the built-in ones, which already ask the model to keep tone, register, humour and implied subjects using nearby subtitle context." = "這裡的規則會追加到內建規則之後。內建規則已經要求模型藉助上下文字幕保留語氣、語域、幽默與隱含主語。";
+"Sends one test line, to confirm the address, model and key work together." = "發送一句測試字幕，確認位址、模型與 Key 能配合工作。";

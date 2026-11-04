@@ -79,6 +79,9 @@ import TVCore
     var vault = PrivacyVault()
     /// Which language artwork comes in. Persisted beside the vault, in the playback defaults.
     var artworkLanguage = ArtworkLanguage()
+    /// The AI translation service, when the viewer configured one. Empty means "use the device's
+    /// Translation instead", which is what the app does by default.
+    var aiTranslation = SubtitleTranslator.Configuration(baseURL: "", model: "", apiKey: "", targetLanguage: "")
     /// Separate viewing lives. See `Environments`.
     var environments = Environments()
     /// Where intro/credits markers come from, in priority order.
@@ -87,6 +90,7 @@ import TVCore
     var resourceRanking = ResourceRanking.standard
     private static let vaultKey = "privacyVault"
     private static let artworkLanguageKey = "artworkLanguage"
+    private static let aiTranslationKey = "aiSubtitleTranslation"
     private static let environmentsKey = "environments"
     private static let skipSourcesKey = "skipSegmentSources"
     private static let resourceRankingKey = "resourceRanking"
@@ -95,6 +99,7 @@ import TVCore
     func saveVault() {
         if let blob = try? JSONEncoder().encode(vault) { playbackDefaults.set(blob, forKey: Self.vaultKey) }
         if let blob = try? JSONEncoder().encode(artworkLanguage) { playbackDefaults.set(blob, forKey: Self.artworkLanguageKey) }
+        if let blob = try? JSONEncoder().encode(aiTranslation) { playbackDefaults.set(blob, forKey: Self.aiTranslationKey) }
         if let blob = try? JSONEncoder().encode(environments) { playbackDefaults.set(blob, forKey: Self.environmentsKey) }
         if let blob = try? JSONEncoder().encode(skipSources) { playbackDefaults.set(blob, forKey: Self.skipSourcesKey) }
         if let blob = try? JSONEncoder().encode(resourceRanking) { playbackDefaults.set(blob, forKey: Self.resourceRankingKey) }
@@ -303,6 +308,14 @@ import TVCore
         sourceReassignment = SourceReassignment(defaults: playbackDefaults)
         cloudSync = defaults === UserDefaults.standard && !defaults.bool(forKey: "qaIsolatedData") ? CloudSync() : nil
         favorites = Favorites(defaults: defaults)
+        var loadedAI = SubtitleTranslator.Configuration(baseURL: "", model: "", apiKey: "", targetLanguage: "")
+        if let blob = playbackDefaults.data(forKey: Self.aiTranslationKey),
+           let decoded = try? JSONDecoder().decode(SubtitleTranslator.Configuration.self, from: blob) { loadedAI = decoded }
+        aiTranslation = loadedAI
+        // Install the AI translator here rather than at launch: the configuration lives in these
+        // defaults, so this is the first moment it is known. `install()` has already set the
+        // device's translator; a configured service replaces it, an unconfigured one leaves it.
+        SubtitleTranslationSetup.installAI(configuration: loadedAI)
         if let blob = playbackDefaults.data(forKey: Self.artworkLanguageKey),
            let decoded = try? JSONDecoder().decode(ArtworkLanguage.self, from: blob) { artworkLanguage = decoded }
         if let blob = playbackDefaults.data(forKey: Self.environmentsKey),

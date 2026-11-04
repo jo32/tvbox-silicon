@@ -1634,3 +1634,14 @@
 
 /* restore */
 "Removed %lld subscriptions that this file does not list." = "このファイルにないサブスクリプションを %lld 件削除しました。";
+
+/* AI translation */
+"AI Translation" = "AI 翻訳";
+"Service" = "サービス";
+"None" = "使用しない";
+"Model" = "モデル";
+"Testing" = "テスト中";
+"Test succeeded: %@" = "テスト成功：%@";
+"Leave every field empty to keep the device's own translation, which is free and offline but limited to the language pairs the system carries. A service covers any pair, at the cost of an API key and a network request per batch." = "すべて空欄のままにすると、システム内蔵の翻訳を使い続けます（無料・オフラインですが、対応する言語ペアはシステムが提供するものに限られます）。サービスを使えば任意の言語ペアを翻訳できますが、API キーとバッチごとの通信が必要です。";
+"Rules are added to the built-in ones, which already ask the model to keep tone, register, humour and implied subjects using nearby subtitle context." = "ここでのルールは組み込みルールに追加されます。組み込みルールはすでに、周辺の字幕を手がかりに語調・語域・ユーモア・含意された主語を保つようモデルに指示しています。";
+"Sends one test line, to confirm the address, model and key work together." = "テスト用の一行を送り、アドレス・モデル・キーが揃って動作するか確認します。";
