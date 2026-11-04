@@ -570,8 +570,20 @@ import TVCore
     private func makeItem(_ channel: Channel, url: URL) -> AVPlayerItem {
         // Some providers require request headers. AVURLAsset's HTTP-header option is
         // best-effort and is not a guarantee for every redirected HLS segment.
+        // When the viewer assigned this source a custom HTTP/HTTPS/SOCKS5 proxy, the asset URL goes
+        // through the local relay, which opens the proxy tunnel and forwards the bytes (TLS intact).
+        var assetURL = url
+        if let context = channel.historyContext {
+            // A line-level route (set on the line chip) wins over the source-level route.
+            let flag = context.episodeFlag
+            let lineRoute = LineSettings.shared.route(origin: context.origin, sourceKey: context.sourceKey, flag: flag)
+            let proxyID = lineRoute?.proxyID ?? CustomProxyStore.shared.route(origin: context.origin, sourceKey: context.sourceKey).proxyID
+            if let proxyID, let base = LocalProxyServer.shared.baseSync {
+                assetURL = LocalProxyServer.proxyURL(base: base, url: url, proxyID: proxyID)
+            }
+        }
         let asset = CloudStreams.asset(for: url) ?? HongguoStreams.asset(for: url) ?? DashStreams.asset(for: url) ?? LiveRepair.asset(for: url)
-            ?? AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": channel.headers])
+            ?? AVURLAsset(url: assetURL, options: ["AVURLAssetHTTPHeaderFieldsKey": channel.headers])
         let item = AVPlayerItem(asset: asset)
         if url.scheme == HongguoStreams.scheme { item.preferredForwardBufferDuration = HongguoStreams.forwardBufferDuration }
         return item
