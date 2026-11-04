@@ -508,7 +508,12 @@ async function callCatPaw(params) {
     }
     const api = String(params.catPawOpen || '');
     if (!/^\/spider\/[^?#]+$/.test(api)) throw new Error('Invalid CatPawOpen source');
-    if (!catStarted.has(api)) { await send(api + '/init', {}); catStarted.add(api); }
+    // A site without an init route is ready as it is: the xiaosage.361123.xyz bundle's drive sites (玩偶, 花卷, 原盘…)
+    // answer its POST with HTTP 404 "站点或接口不存在" and serve everything else (#446). Keep in step with NodeHost/main.mjs.
+    if (!catStarted.has(api)) {
+        await send(api + '/init', {}).catch(error => { if (error.status !== 404) throw error; });
+        catStarted.add(api);
+    }
     let route, body;
     if ('play' in params) { route = '/play'; body = { flag: params.flag || '', id: params.play }; }
     else if ('ids' in params) { route = '/detail'; body = { id: params.ids }; }

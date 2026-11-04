@@ -71,6 +71,9 @@ exports.start = async () => {
     req.on('data', chunk => body += chunk);
     req.on('end', () => {
       const reply = (status, value) => { res.writeHead(status, {'content-type': 'application/json'}); res.end(JSON.stringify(value)); };
+      // A site without an init route (#446) answers it 404 and serves the rest.
+      if (req.url === '/spider/noinit/3/init') return reply(404, {error: '站点或接口不存在: noinit/init'});
+      if (req.url === '/spider/noinit/3/home') return reply(200, {class: [{type_id: '1', type_name: 'Films'}], list: []});
       if (req.url.endsWith('/init')) return reply(200, {});
       if (req.url === '/spider/site/3/home') return reply(500, {message: 'home broke'});
       // A source whose search returns nothing answers 200 with an empty body.
@@ -108,10 +111,11 @@ exports.start = async () => {
             assert json.loads(answer('stale', {'catPawOpen': '/spider/stale/3', 'wd': 'x'})['result'])['list'] == [{'vod_id': '2', 'vod_name': 'Fresh'}]
             assert 'socket hang up' in answer('dead', {'catPawOpen': '/spider/dead/3', 'wd': 'x'})['error']
             assert json.loads(answer('deadhome', {'catPawOpen': '/spider/dead/3'})['result'])['asked'] == 1
+            assert json.loads(answer('noinit', {'catPawOpen': '/spider/noinit/3'})['result'])['class'] == [{'type_id': '1', 'type_name': 'Films'}]
             home = answer('home', {'catPawOpen': '/spider/site/3'})
             assert 'home broke' in json.dumps(home, ensure_ascii=False), home
             process.stdin.close()
             assert process.wait(timeout=5) == 0
         finally:
             if process.poll() is None: process.kill(); process.wait()
-print('Script host checks passed: modules, HTML parsing, persistent state, restart preferences, response protocol, CatPawOpen searches.')
+print('Script host checks passed: modules, HTML parsing, persistent state, restart preferences, response protocol, CatPawOpen searches and sites without init.')

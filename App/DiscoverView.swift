@@ -85,15 +85,21 @@ struct DiscoverView: View {
     @AppStorage("discover.doubanShown") private var doubanShown = TMDBMatch.language.hasPrefix("zh")
     private var featured: [TMDBCatalog.Item] { Array(model.items(.trending).filter { $0.poster != nil }.prefix(8)) }
     var body: some View {
+        // Turning Featured Titles off in Edit Layout also drops its backdrop, trailer and colours (#447).
+        let heroShown = visible(.hero)
         GeometryReader { proxy in
             let heroHeight = DiscoverLayout.heroHeight(proxy.size.width)
             ZStack(alignment: .top) {
-                DiscoverHeroBackground(state: heroState, items: featured, width: proxy.size.width, height: heroHeight,
-                                       active: onScreen && scenePhase == .active)
+                if heroShown {
+                    DiscoverHeroBackground(state: heroState, items: featured, width: proxy.size.width, height: heroHeight,
+                                           active: onScreen && scenePhase == .active)
+                } else {
+                    DiscoverBackdrop(paint: nil, width: proxy.size.width, heroHeight: heroHeight, scrollY: 0, trailer: nil, playsTrailer: false)
+                }
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 30) {
                         if featured.isEmpty, model.loading {
-                            ProgressView().frame(maxWidth: .infinity).frame(height: min(proxy.size.width * 1.5, 660))
+                            ProgressView().frame(maxWidth: .infinity).frame(height: heroShown ? min(proxy.size.width * 1.5, 660) : 160)
                         }
                         ForEach(DiscoverSection.allCases.filter(visible)) { section in
                             sectionView(section, width: proxy.size.width)
@@ -137,6 +143,10 @@ struct DiscoverView: View {
                         }.padding(.horizontal, DiscoverLayout.gutter).padding(.vertical, 20)
                     }
                     .padding(.bottom, 28)
+                    #if os(tvOS)
+                    // Without the hero the first shelf would sit under the search button.
+                    .padding(.top, heroShown ? 0 : 150)
+                    #endif
                     .background {
                         GeometryReader { geometry in
                             Color.clear.preference(key: DiscoverScrollKey.self, value: -geometry.frame(in: .named("discoverScroll")).minY)
@@ -155,7 +165,7 @@ struct DiscoverView: View {
                 }
             }
         }
-        .modifier(DiscoverHeroTheme(state: heroState))
+        .modifier(DiscoverHeroTheme(state: heroState, hero: heroShown))
         .navigationTitle("")
         #if !os(macOS)
         .toolbar(.visible, for: .navigationBar)
@@ -163,7 +173,7 @@ struct DiscoverView: View {
         #if os(tvOS)
         .toolbarColorScheme(.dark, for: .navigationBar)
         #else
-        .toolbarColorScheme(heroState.paint?.isDark == false ? .light : .dark, for: .navigationBar)
+        .toolbarColorScheme(heroShown && heroState.paint?.isDark == false ? .light : .dark, for: .navigationBar)
         #endif
         #endif
         #if os(tvOS)
@@ -174,7 +184,7 @@ struct DiscoverView: View {
             }.tileButton()
                 .focused($tvFocus, equals: .search)
                 .onMoveCommand { direction in
-                    if direction == .down, !featured.isEmpty {
+                    if direction == .down, heroShown, !featured.isEmpty {
                         tvFocus = .page(featured.firstIndex { $0.key == heroState.id } ?? 0)
                     }
                 }
@@ -197,7 +207,8 @@ struct DiscoverView: View {
         #if os(tvOS)
         .ignoresSafeArea()
         #else
-        .ignoresSafeArea(edges: .top)
+        // Only the hero runs under the status and navigation bars; without it the first shelf starts below them.
+        .ignoresSafeArea(edges: heroShown ? .top : [])
         #endif
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }
@@ -592,12 +603,15 @@ struct DiscoverView: View {
 
 private struct DiscoverHeroTheme: ViewModifier {
     let state: DiscoverHeroState
+    /// Off: Featured Titles is hidden, and the page keeps the plain dark backdrop's colours.
+    let hero: Bool
     func body(content: Content) -> some View {
         #if os(tvOS)
         content.foregroundStyle(.white).environment(\.colorScheme, .dark)
         #else
-        content.foregroundStyle(state.paint?.isDark == false ? Color.black : Color.white)
-            .environment(\.colorScheme, state.paint?.isDark == false ? .light : .dark)
+        let light = hero && state.paint?.isDark == false
+        content.foregroundStyle(light ? Color.black : Color.white)
+            .environment(\.colorScheme, light ? .light : .dark)
         #endif
     }
 }

@@ -64,11 +64,13 @@ struct PhoneTabs: Equatable {
     var stored: String { bar.map(\.rawValue).joined(separator: ",") + "|" + more.map(\.rawValue).joined(separator: ",") }
 
     /// For a bar with `slots` places and without the sections `hidden`: the sections keep their order, the bar
-    /// takes the first and More the rest. Opening iPhone Duo moves the top of More into its wider side bar, and
-    /// closing it moves them back.
+    /// takes the first and More the rest. A bar the viewer trimmed below four in the editor keeps that many
+    /// places (#449; a hidden one is still refilled from More). A full bar fills every place: opening iPhone Duo
+    /// moves the top of More into its wider side bar, and closing it moves them back.
     func arranged(slots: Int, hiding hidden: [AppSection] = []) -> PhoneTabs {
         let all = (bar + more).filter { !hidden.contains($0) }
-        return PhoneTabs(bar: Array(all.prefix(slots)), more: Array(all.dropFirst(slots)))
+        let places = bar.count < Self.barSlots ? min(bar.count, slots) : slots
+        return PhoneTabs(bar: Array(all.prefix(places)), more: Array(all.dropFirst(places)))
     }
 }
 
@@ -272,6 +274,7 @@ struct EditTabBarRow: View {
 
 /// One draggable list: the tab bar's sections, an "In More" divider, then More's. Dragging a section
 /// above the divider puts it in the tab bar; a fifth pushes the bar's last section down into More.
+/// Dragging one below it leaves the bar shorter, down to one section besides More.
 /// For the iPad's sidebar there is no divider: every section is listed, in order.
 private struct TabBarEditor: View {
     private enum Row: Hashable, Identifiable {
