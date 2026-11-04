@@ -32,6 +32,9 @@ import Observation
     private let defaults: UserDefaults
     private static let storageKey = "lineSettings.v1"
     @ObservationIgnored public var onChange: (@MainActor () -> Void)?
+    /// When true, `adopt` also fires `onChange` and bumps `revision`. Defaults to false: a merge
+    /// from another device should be silent, so it does not trigger a redundant sync write-back.
+    public var notifyOnAdopt = false
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -108,7 +111,7 @@ import Observation
     public func adopt(_ synced: [String: Setting]) {
         guard synced != values else { return }
         values = synced
-        persist()
+        persist(notify: notifyOnAdopt)
     }
 
     private func mutate(origin: URL, sourceKey: String, flag: String, _ change: (inout Setting) -> Void) {
@@ -119,9 +122,11 @@ import Observation
         persist()
     }
 
-    private func persist() {
+    private func persist(notify: Bool = true) {
         if let data = try? JSONEncoder().encode(values) { defaults.set(data, forKey: Self.storageKey) }
-        revision += 1
-        onChange?()
+        if notify {
+            revision += 1
+            onChange?()
+        }
     }
 }

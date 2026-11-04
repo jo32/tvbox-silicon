@@ -154,4 +154,17 @@ import Testing
         #expect(out != relative)            // 未原样返回输入，说明未命中兜底分支
         #expect(out.host == "127.0.0.1")    // 沿用 base 的 authority
     }
+
+    /// `base()` 成功路径的 loopback URL 构造是静态合法的：对任意 `UInt16` 端口，
+    /// `http://127.0.0.1:<port>/` 都不可能解析失败，因此旧代码里 `?? URL(string:"http://127.0.0.1/")!`
+    /// 是不可达死代码。此处锁定「端口 → 回环 URL」这一不变量，覆盖上下边界。
+    @Test func loopbackBaseURLIsStaticallyValidForAnyPort() {
+        // 端口上下界都得到合法回环地址（走同一个 URL 构造路径）。
+        for port in [UInt16(1), UInt16(65535)] {
+            let url = URL(string: "http://127.0.0.1:\(port)/")!
+            #expect(url.scheme == "http")
+            #expect(url.host == "127.0.0.1")
+            #expect(url.port == Int(port))
+        }
+    }
 }

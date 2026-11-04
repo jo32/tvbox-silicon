@@ -76,9 +76,9 @@ private func vaultInCooldown(now: Date = fixedNow) throws -> (PrivacyVault, Date
     #expect(!vault.hasPasscode)
 }
 
-/// 源码只校验长度、不校验字符集：任意 ≥6 个字符（含字母、含空格）都被接受。
-/// 这是对源码行为的如实记录——若未来加上「必须为数字」的校验，此测试会失败并提示规则变化。
-@Test func anySixOrMoreCharactersAreAcceptedBecauseOnlyLengthIsChecked() throws {
+/// 源码默认只校验长度、不校验字符集：任意 ≥6 个字符（含字母、含空格）都被接受。
+/// 这是对默认行为的如实记录——`requireDigits` 默认关闭，字符集校验是可选收紧，不影响存量口令。
+@Test func anySixOrMoreCharactersAreAcceptedBecauseOnlyLengthIsCheckedByDefault() throws {
     var letters = PrivacyVault(rounds: 10)
     try letters.setPasscode("abcdef", now: fixedNow)
     let openedLetters = letters.unlock("abcdef", now: fixedNow)
@@ -88,6 +88,63 @@ private func vaultInCooldown(now: Date = fixedNow) throws -> (PrivacyVault, Date
     try mixed.setPasscode("12 456", now: fixedNow) // 含空格的 6 字符
     let openedMixed = mixed.unlock("12 456", now: fixedNow)
     #expect(openedMixed)
+}
+
+// MARK: - 数字口令开关（requireDigits）
+
+/// 开关关闭（默认）：含字母的口令照常被接受，行为与旧版完全一致。
+@Test func lettersAreAcceptedWhenRequireDigitsIsOff() throws {
+    var vault = PrivacyVault(rounds: 10)
+    vault.requireDigits = false
+    try vault.setPasscode("abcdef", now: fixedNow)
+    #expect(vault.hasPasscode)
+    let opened = vault.unlock("abcdef", now: fixedNow)
+    #expect(opened)
+}
+
+/// 开关打开：含字母的 ≥6 字符口令被拒，且不产生任何口令状态。
+@Test func lettersAreRefusedWhenRequireDigitsIsOn() throws {
+    var vault = PrivacyVault(rounds: 10)
+    vault.requireDigits = true
+    #expect(throws: PrivacyVault.PasscodeError.notNumeric) {
+        try vault.setPasscode("abcdef", now: fixedNow)
+    }
+    #expect(!vault.hasPasscode)
+}
+
+/// 开关打开：含空格/标点的口令同样被拒。
+@Test func punctuationAndSpaceAreRefusedWhenRequireDigitsIsOn() throws {
+    var vault = PrivacyVault(rounds: 10)
+    vault.requireDigits = true
+    #expect(throws: PrivacyVault.PasscodeError.notNumeric) {
+        try vault.setPasscode("12 456", now: fixedNow)
+    }
+    // 仍不能设出口令。
+    #expect(!vault.hasPasscode)
+}
+
+/// 开关打开：纯数字口令（含 6 位下限）被接受，正常解锁。
+@Test func digitsAreAcceptedWhenRequireDigitsIsOn() throws {
+    var vault = PrivacyVault(rounds: 10)
+    vault.requireDigits = true
+    try vault.setPasscode("123456", now: fixedNow)
+    #expect(vault.hasPasscode)
+    let opened = vault.unlock("123456", now: fixedNow)
+    #expect(opened)
+}
+
+/// 开关打开：替换口令时同样校验字符集——用错误字符集替换应被拒且旧口令不变。
+@Test func replacingStillChecksDigitsWhenRequireDigitsIsOn() throws {
+    var vault = PrivacyVault(rounds: 10)
+    vault.requireDigits = true
+    try vault.setPasscode("123456", now: fixedNow)
+
+    #expect(throws: PrivacyVault.PasscodeError.notNumeric) {
+        try vault.setPasscode("abcdef", replacing: "123456", now: fixedNow)
+    }
+    // 旧口令仍有效。
+    let oldWorks = vault.unlock("123456", now: fixedNow)
+    #expect(oldWorks)
 }
 
 // MARK: - 替换口令需验证当前口令

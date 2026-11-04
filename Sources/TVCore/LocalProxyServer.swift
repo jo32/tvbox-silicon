@@ -38,7 +38,10 @@ public final class LocalProxyServer: @unchecked Sendable {
         do {
             // `starting` is left in place once it succeeds: every later call returns the running
             // port above, and keeping the finished task costs nothing.
-            return try Self.url(for: await task.value) ?? URL(string: "http://127.0.0.1/")!
+            //
+            // `task.value` is a non-nil `UInt16`, and the loopback URL for it is statically valid,
+            // so this cannot fail — the `??` fallback the old code carried was unreachable dead code.
+            return try Self.url(for: await task.value)
         } catch {
             // Nothing bound, so the next caller has to be allowed to try again.
             lock.withLock { starting = nil }
@@ -47,7 +50,13 @@ public final class LocalProxyServer: @unchecked Sendable {
     }
 
     private static func url(for port: UInt16?) -> URL? {
-        port.map { URL(string: "http://127.0.0.1:\($0)/")! }
+        port.map { Self.url(for: $0) }
+    }
+
+    /// The loopback base URL for a bound port. The string is statically well-formed for any
+    /// `UInt16`, so this never returns nil and needs no fallback.
+    private static func url(for port: UInt16) -> URL {
+        URL(string: "http://127.0.0.1:\(port)/")!
     }
 
     /// The base address if the server is already running, else nil. Synchronous, for callers (the

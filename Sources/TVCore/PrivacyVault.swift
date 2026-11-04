@@ -90,11 +90,18 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
         case coolingDown(seconds: TimeInterval)
         /// A new passcode was too short to be worth the digest.
         case tooShort
+        /// The passcode must be all digits (only when `requireDigits` is on).
+        case notNumeric
     }
 
     /// Shortest passcode accepted. Six digits: four is brute-forceable in minutes from a copied
     /// preferences file, and the feature is opt-in — someone who wants a short lock can skip it.
     public static let minimumLength = 6
+
+    /// Whether new passcodes must be all digits. Defaults to false so an existing vault with a
+    /// letter or space passcode keeps working after an update; a caller that wants a numeric-only
+    /// PIN turns this on. Off by default — an opt-in tightening, not a behaviour change.
+    public var requireDigits = false
 
     /// Sets the first passcode, or replaces one after verifying `current`.
     public mutating func setPasscode(_ passcode: String, replacing current: String? = nil,
@@ -103,6 +110,9 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
             guard let current, verify(current) else { throw PasscodeError.wrongPasscode }
         }
         guard passcode.count >= Self.minimumLength else { throw PasscodeError.tooShort }
+        if requireDigits {
+            guard passcode.allSatisfy(\.isNumber) else { throw PasscodeError.notNumeric }
+        }
         let newSalt = Self.randomSalt()
         salt = newSalt
         digest = Self.derive(passcode, salt: newSalt, rounds: rounds)

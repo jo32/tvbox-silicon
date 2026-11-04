@@ -33,6 +33,9 @@ public enum SourceRoute: String, Codable, CaseIterable, Sendable {
     private let defaults: UserDefaults
     /// Called after the list changes here (not after `adopt`), for iCloud sync.
     @ObservationIgnored public var onChange: (@MainActor () -> Void)?
+    /// When true, `adopt` also fires `onChange` and bumps `revision`. Defaults to false: a merge
+    /// from another device should be silent, so it does not trigger a redundant sync write-back.
+    public var notifyOnAdopt = false
     private static let storageKey = "sourceRouting.v1"
 
     public init(defaults: UserDefaults = .standard) {
@@ -73,13 +76,15 @@ public enum SourceRoute: String, Codable, CaseIterable, Sendable {
         let next = raw.compactMapValues { SourceRoute(rawValue: $0) }
         guard next != values else { return }
         values = next
-        persist()
+        persist(notify: notifyOnAdopt)
     }
 
-    private func persist() {
+    private func persist(notify: Bool = true) {
         defaults.set(values.mapValues(\.rawValue), forKey: Self.storageKey)
-        revision += 1
-        onChange?()
+        if notify {
+            revision += 1
+            onChange?()
+        }
     }
 }
 

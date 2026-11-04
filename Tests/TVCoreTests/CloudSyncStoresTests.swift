@@ -76,6 +76,30 @@ private func moved(_ key: String = "movie") -> Site {
         store.clear(site, origin: origin)
         #expect(notes == 2)
     }
+
+    /// `adopt` 默认静默：本地编辑触发 onChange，但来自另一台设备的合并不得再触发一次上云写回。
+    @Test func anAdoptIsSilentByDefault() {
+        let store = SourceRouting(defaults: clean(#function))
+        var notes = 0
+        store.onChange = { notes += 1 }
+        store.set(.proxy, for: site, origin: origin)
+        #expect(notes == 1)
+
+        let before = notes
+        store.adopt(["other": "direct"])
+        #expect(notes == before)                     // 静默，不触发 onChange
+        #expect(store.savedValues == ["other": "direct"]) // 但值确实已合并
+    }
+
+    /// 可选开关打开时，`adopt` 也触发 onChange（供需要写回同步的接入方使用）。
+    @Test func adoptNotifiesWhenNotifyOnAdoptIsEnabled() {
+        let store = SourceRouting(defaults: clean(#function))
+        var notes = 0
+        store.onChange = { notes += 1 }
+        store.notifyOnAdopt = true
+        store.adopt(["other": "direct"])
+        #expect(notes == 1)
+    }
 }
 
 // MARK: - SourceOverrides（改名 + API 覆盖）
@@ -139,6 +163,32 @@ private func moved(_ key: String = "movie") -> Site {
         #expect(notes == 1)
         store.toggleHidden(origin: origin, sourceKey: sourceKey, flag: flag)
         #expect(notes == 2)
+    }
+
+    /// `adopt` 默认静默，与 SourceOverrides 的既有契约对齐。
+    @Test func anAdoptIsSilentByDefault() {
+        let store = LineSettings(defaults: clean(#function))
+        var notes = 0
+        store.onChange = { notes += 1 }
+        store.setHidden(true, origin: origin, sourceKey: sourceKey, flag: flag)
+        #expect(notes == 1)
+
+        let before = notes
+        var synced = store.savedValues
+        synced[EpisodeSkipSettings.scope(origin: origin, source: "other", video: "l2")] = .init(hidden: true)
+        store.adopt(synced)
+        #expect(notes == before)                          // 静默，不触发 onChange
+        #expect(store.savedValues == synced)              // 但值确实已合并
+    }
+
+    /// 可选开关打开时，`adopt` 触发 onChange。
+    @Test func adoptNotifiesWhenNotifyOnAdoptIsEnabled() {
+        let store = LineSettings(defaults: clean(#function))
+        var notes = 0
+        store.onChange = { notes += 1 }
+        store.notifyOnAdopt = true
+        store.adopt(["k": .init(hidden: true)])
+        #expect(notes == 1)
     }
 }
 
