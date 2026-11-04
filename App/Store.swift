@@ -215,8 +215,11 @@ import TVCore
         sourceOrder = SourceOrder(defaults: playbackDefaults)
         sourceRouting = SourceRouting(defaults: playbackDefaults)
         customProxy = CustomProxyRouter.shared
-        sourceOverrides = SourceOverrides(defaults: playbackDefaults)
-        lineSettings = LineSettings(defaults: playbackDefaults)
+        // These two are read from global `.shared` singletons in the playback/edit paths
+        // (PlaybackSession has no Store), so they must BE those singletons — a separate instance
+        // here would silently split the data and break per-line routing and source overrides.
+        sourceOverrides = SourceOverrides.shared
+        lineSettings = LineSettings.shared
         sourceReassignment = SourceReassignment(defaults: playbackDefaults)
         cloudSync = defaults === UserDefaults.standard && !defaults.bool(forKey: "qaIsolatedData") ? CloudSync() : nil
         favorites = Favorites(defaults: defaults)

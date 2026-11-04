@@ -56,6 +56,21 @@
    "sites": "哔哔/课堂/MV (fty)",
    "status": "OK"
   },
+  "YingxiaHongguo": {
+   "script": "Hongguo.js",
+   "sites": "红果短剧",
+   "status": "Built-in; local script (independent of the CloudSources remote copy); web catalog and signed app playback"
+  },
+  "YingxiaXifan": {
+   "script": "Xifan.js",
+   "sites": "西饭短剧",
+   "status": "Built-in; local script (independent of the CloudSources remote copy); public app API, free episodes only"
+  },
+  "YingxiaHema": {
+   "script": "Hema.js",
+   "sites": "河马短剧",
+   "status": "Built-in; local script (independent of the CloudSources remote copy); website catalog, free episodes only"
+  },
   "BttwooGuard": {
    "script": "Bttwoo.js",
    "sites": "比特 (fty)",
