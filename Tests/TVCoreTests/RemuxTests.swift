@@ -409,6 +409,34 @@ import VideoToolbox
         #expect(played.status == .readyToPlay && abs(played.duration - 8) < 0.2)
     }
 
+    /// A drive's slow stretch uses up AVPlayer's own buffer, and segments made one at a time as it asked then came
+    /// too late (issue #437). They are made ahead, and AVPlayer catching up with them doesn't start the one being
+    /// made again, which would read its part of the file twice.
+    @Test func segmentsAreMadeAheadOfAVPlayer() async throws {
+        let source = TricklingSource(try Remux.fileSource(fixture("remux-long.mkv")))
+        let url = try await Remux.open(source)
+        defer { Remux.stop(url) }
+        let folder = url.deletingLastPathComponent()
+        #expect(try await playlist(url, track: 0).segments.count >= 8)
+        _ = try await fetch(folder.appending(path: "0-0.m4s"))
+        source.watch()
+        // AVPlayer asks for the next segments while later ones are being made.
+        for _ in 0..<100 where source.furthest < source.length * 4 / 10 { try await Task.sleep(for: .milliseconds(20)) }
+        for index in 1...3 { _ = try await fetch(folder.appending(path: "0-\(index).m4s")) }
+        for _ in 0..<100 where source.furthest < source.length * 9 / 10 { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(source.furthest >= source.length * 9 / 10)
+        #expect(Remux.session(url)?.abandoned == 0)
+    }
+
+    @Test func segmentsAreMadeAheadForAMinute() {
+        let bounds = (0...600).map { Int64($0) * 6_000_000 }
+        #expect(RemuxSession.makesAhead(1, latest: 0, bounds: bounds))
+        #expect(RemuxSession.makesAhead(10, latest: 0, bounds: bounds))
+        #expect(!RemuxSession.makesAhead(11, latest: 0, bounds: bounds))
+        #expect(RemuxSession.makesAhead(110, latest: 100, bounds: bounds) && !RemuxSession.makesAhead(111, latest: 100, bounds: bounds))
+        #expect(RemuxSession.makesAhead(600, latest: 599, bounds: bounds))
+    }
+
     /// The segments a track's playlist lists, and how long they run together.
     private func playlist(_ master: URL, track: Int) async throws -> (segments: [String], seconds: Double) {
         let text = String(decoding: try await fetch(master.deletingLastPathComponent().appending(path: "\(track).m3u8")), as: UTF8.self)
@@ -685,4 +713,27 @@ import VideoToolbox
         try #require(status == kCCSuccess)
         return output.prefix(moved)
     }
+}
+
+/// A file read slowly and a little at a time, like a drive in a slow stretch. After `watch` it notes how far it was
+/// read.
+private final class TricklingSource: RemuxSource, @unchecked Sendable {
+    private let file: RemuxSource
+    private let lock = NSLock()
+    private var end: Int64 = 0
+    private var watching = false
+    init(_ file: RemuxSource) { self.file = file }
+    var length: Int64 { file.length }
+    var transfer: (received: Int64, host: String?)? { nil }
+    var furthest: Int64 { lock.withLock { end } }
+    func watch() { lock.withLock { watching = true } }
+
+    func read(at offset: Int64, count: Int) async throws -> Data {
+        try await Task.sleep(for: .milliseconds(150))
+        let data = try await file.read(at: offset, count: min(count, 8192))
+        lock.withLock { if watching { end = max(end, offset + Int64(data.count)) } }
+        return data
+    }
+
+    func close() async { await file.close() }
 }

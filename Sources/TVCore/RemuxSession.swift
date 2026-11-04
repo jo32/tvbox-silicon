@@ -20,6 +20,11 @@ public protocol RemuxSource: Sendable {
 final class RemuxSession: @unchecked Sendable {
     /// Added to every output time, so audio priming and reordered video never start before zero.
     static let offset: Int64 = 10_000_000
+    /// How far past the segment AVPlayer asked for last the file is repackaged before it asks. A drive's slow
+    /// stretches use up AVPlayer's own buffer, and segments made one at a time as it asked then came too late:
+    /// it gave up on them ("No response for media file", HTTP 500) and stalled (issue #437). The segments made
+    /// ahead stay within half the memory budget that already holds the ones played.
+    static let ahead: Int64 = 60_000_000
     let id = UUID().uuidString.lowercased()
     let source: RemuxSource
     private(set) var plan: RemuxPlan!
@@ -50,6 +55,8 @@ final class RemuxSession: @unchecked Sendable {
     private var closed = false
     private var produced: Int?
     private let budget: Int
+    /// Segments given up part-way for another one AVPlayer asked for.
+    private(set) var abandoned = 0
 
     private struct Key: Hashable { var track: Int, segment: Int }
 
@@ -141,8 +148,9 @@ final class RemuxSession: @unchecked Sendable {
         segment.join()
         if plan.tracks[track].kind == .audio { asked[track] = Date() }
         latest = index
-        // A segment no one waits for gives way to this one.
-        if let producing, producing != index, !segments.contains(where: { $0.key.segment == producing && $0.value.readers > 0 }) { abandon = true }
+        // A segment no one waits for gives way to this one, unless this one is made already: AVPlayer catching up
+        // with the segments made ahead doesn't throw away the one being made.
+        if let producing, producing != index, segment.state != .done, !segments.contains(where: { $0.key.segment == producing && $0.value.readers > 0 }) { abandon = true }
         condition.broadcast()
         return segment
     }
@@ -305,7 +313,7 @@ final class RemuxSession: @unchecked Sendable {
             abandon = false
             let waited = segments.filter { $0.value.state == .waiting && $0.value.readers > 0 }.min { $0.value.created < $1.value.created }?.key.segment
             var index = waited
-            if index == nil, let produced, produced + 1 < plan.segments, produced + 1 <= latest + 1, storedBytes < budget { index = produced + 1 }
+            if index == nil, let produced, produced + 1 < plan.segments, makesAhead(produced + 1), storedBytes < budget { index = produced + 1 }
             if let index {
                 if let job = job(index) { producing = index; return job }
                 continue
@@ -315,6 +323,19 @@ final class RemuxSession: @unchecked Sendable {
     }
 
     private var storedBytes: Int { segments.values.reduce(0) { $0 + $1.count } }
+
+    /// Whether segment `next` is made before AVPlayer asks for it. The ones made past the segment it asked for
+    /// last stay within half the budget, so keeping the budget evicts segments already played, not these.
+    private func makesAhead(_ next: Int) -> Bool {
+        guard Self.makesAhead(next, latest: latest, bounds: plan.bounds) else { return false }
+        return segments.filter { $0.key.segment > latest }.reduce(0) { $0 + $1.value.count } < budget / 2
+    }
+
+    /// Whether segment `next` begins less than `ahead` after the end of segment `latest`; the one right after
+    /// it always does.
+    static func makesAhead(_ next: Int, latest: Int, bounds: [Int64]) -> Bool {
+        next <= latest + 1 || bounds[next] < bounds[min(latest + 1, bounds.count - 1)] + ahead
+    }
 
     /// The tracks a segment is made for: those asked for, the picture, the audio AVPlayer plays, the subtitles
     /// (which cost nothing). Tracks it already has are left out.
@@ -352,6 +373,7 @@ final class RemuxSession: @unchecked Sendable {
         }
         condition.lock()
         let gaveWay = abandon || closed
+        if status < 0, abandon, !closed { abandoned += 1 }
         producing = nil
         for (track, segment) in writing {
             let key = Key(track: track, segment: index)
