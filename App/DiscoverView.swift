@@ -977,6 +977,8 @@ private struct DiscoverHero: View {
 struct DiscoverTile: View {
     let item: TMDBCatalog.Item
     var landscape = false
+    /// Shows the score under the title, as the lists' pages do (#467).
+    var showsRating = false
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Color.clear.aspectRatio(landscape ? 16.0 / 9 : 2.0 / 3, contentMode: .fit)
@@ -988,6 +990,9 @@ struct DiscoverTile: View {
                 HStack(spacing: 5) {
                     if let year = item.year { Text(String(year)) }
                     if landscape, !item.genreNames.isEmpty { Text(item.genreNames).lineLimit(1) }
+                    if showsRating, let rating = item.rating {
+                        Text("★ " + rating.formatted(.number.precision(.fractionLength(1))))
+                    }
                 }.font(.system(size: DiscoverLayout.secondary, design: .rounded)).foregroundStyle(.primary.opacity(0.56))
             }.frame(maxWidth: .infinity, alignment: .leading).frame(height: DiscoverLayout.captionHeight)
         }
@@ -1149,6 +1154,8 @@ struct DiscoverTVGrid<Chips: View, Footer: View>: View {
     let title: String
     let items: [TMDBCatalog.Item]
     let identifier: String
+    /// Shows the score under the title, as the lists' pages do (#467).
+    var showsRating = false
     let reachedEnd: () async -> Void
     @ViewBuilder let chips: () -> Chips
     @ViewBuilder let footer: () -> Footer
@@ -1179,11 +1186,14 @@ struct DiscoverTVGrid<Chips: View, Footer: View>: View {
     }
 
     private func tile(_ item: TMDBCatalog.Item) -> some View {
-        VStack(spacing: 5) {
+        let caption = [item.date ?? item.year.map(String.init),
+                       showsRating ? item.rating.map { "★ " + $0.formatted(.number.precision(.fractionLength(1))) } : nil]
+            .compactMap { $0 }.joined(separator: " · ")
+        return VStack(spacing: 5) {
             PosterImage(url: item.poster).frame(width: 224, height: 336)
             VStack(spacing: 0) {
                 Text(item.name).font(.system(size: 29))
-                Text(item.date ?? item.year.map(String.init) ?? " ").font(.system(size: 23, weight: .medium)).foregroundStyle(.white.opacity(0.5))
+                Text(caption.isEmpty ? " " : caption).font(.system(size: 23, weight: .medium)).foregroundStyle(.white.opacity(0.5))
             }.lineLimit(1).cardCaption()
         }.frame(width: 224)
     }
@@ -1385,7 +1395,7 @@ private struct DiscoverListView: View {
     }
     var body: some View {
         #if os(tvOS)
-        DiscoverTVGrid(title: feed.title, items: items, identifier: "discover.list.title", reachedEnd: loadMore) {
+        DiscoverTVGrid(title: feed.title, items: items, identifier: "discover.list.title", showsRating: true, reachedEnd: loadMore) {
             EmptyView()
         } footer: {
             if failed { Button(L10n.text("Try Again")) { Task { await loadMore() } } }
@@ -1400,7 +1410,7 @@ private struct DiscoverListView: View {
         ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: DiscoverLayout.posterWidth), spacing: DiscoverLayout.spacing)], alignment: .leading, spacing: 22) {
                 ForEach(items, id: \.key) { item in
-                    RouteLink { DiscoverDetailView(item: item) } label: { DiscoverTile(item: item) }.tmdbCardButton()
+                    RouteLink { DiscoverDetailView(item: item) } label: { DiscoverTile(item: item, showsRating: true) }.tmdbCardButton()
                         .accessibilityIdentifier("discover.list.title.\(item.key)")
                         .task {
                             if item.key == items.last?.key { await loadMore() }
