@@ -246,7 +246,7 @@ struct RootView: View {
             NavigationStack(path: $morePath) {
                 content(.more).routeDestinations()
                     // Any section can be moved into More, so any can be pushed here.
-                    .navigationDestination(for: AppSection.self) { content($0).tvDefaultControls() }
+                    .navigationDestination(for: AppSection.self) { content($0).tvDefaultControls().tabSafeArea() }
                     .tabSafeArea()
             }
             .environment(\.openRoute, RouteOpener { morePath.append($0) })
@@ -561,11 +561,19 @@ extension View {
     }
 
     /// The iOS 26 floating tab bar sits over the scroll content instead of reserving a strip, so a
-    /// page's last row would sit under it. `.safeAreaPadding(.bottom)` lets every page scroll its
-    /// final row clear of the capsule; the system adds the tab bar's height to the safe area there.
+    /// page's last row would sit under it. The floating Liquid Glass capsule does not widen the safe
+    /// area (it overlays the content), so on iPhone the `.safeAreaPadding(.bottom)` and
+    /// `.safeAreaInset` paths both read zero and the final row stays trapped under the capsule. A
+    /// plain `.padding` reserves the capsule's own height outright — its top edge sits ~52pt off the
+    /// bottom on iPhone Duo and ~67pt on a standard iPhone, home indicator included — so 72pt leaves
+    /// a little air under the last row while the rest still scrolls underneath the capsule.
     @ViewBuilder func tabSafeArea() -> some View {
         #if os(iOS)
-        if #available(iOS 26, *) { safeAreaPadding(.bottom) } else { self }
+        if #available(iOS 26, *) {
+            padding(.bottom, 72)
+        } else {
+            safeAreaPadding(.bottom)
+        }
         #else
         self
         #endif
