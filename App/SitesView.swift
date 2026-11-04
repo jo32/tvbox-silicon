@@ -1157,6 +1157,8 @@ struct VideoDetailView: View {
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var fullScreen = false
+    /// Full Screen came from turning the phone sideways, so turning it upright again returns to the page.
+    @State private var turnedFullScreen = false
     @State private var showsAllEpisodes = false
     @State private var episodeScroll: Episode.ID?
     /// The page's player shows its picture (or an error); until then the page's cover stays over it.
@@ -2043,21 +2045,29 @@ struct VideoDetailView: View {
         .onAppear {
             store.watchPageScopes.formUnion(watchScopes)
             PlayerOrientation.holdPortrait(true)
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
         }
         .onChange(of: watchScopes) { old, new in
             store.watchPageScopes.subtract(old.subtracting(new)); store.watchPageScopes.formUnion(new)
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+            phoneTurned()
+        }
         .onDisappear {
+            UIDevice.current.endGeneratingDeviceOrientationNotifications()
             // Leaving the page ends its playback, as the full-screen player's Back does.
             if watchChannel != nil { store.playing = nil }
             store.watchPageScopes.subtract(watchScopes)
             if fullScreen { fullScreen = false; PlayerOrientation.set(landscape: false) }
+            turnedFullScreen = false
             PlayerOrientation.holdPortrait(false)
         }
         .onChange(of: watchChannel == nil) { _, ended in
             playerStarted = false
             if ended { playerSession = nil }
             if ended && fullScreen { setFullScreen(landscape: false) }
+            // Started with the phone already sideways: Full Screen at once, as turning it would.
+            if !ended { phoneTurned() }
         }
         .sheet(isPresented: $showsAllEpisodes) { allEpisodes }
     }
@@ -2087,9 +2097,30 @@ struct VideoDetailView: View {
 
     private func setFullScreen(landscape: Bool) {
         let entering = !fullScreen
+        // A button's Full Screen stays until the viewer leaves it; turning the phone back upright ends only a
+        // Full Screen the turning opened.
+        if !entering { turnedFullScreen = false }
         withAnimation(.smooth(duration: 0.3)) { fullScreen = entering }
         // A landscape picture turns the phone; a portrait one fills the screen upright.
         if !entering { PlayerOrientation.set(landscape: false) } else if landscape { PlayerOrientation.set(landscape: true) }
+    }
+
+    /// Turning the phone sideways while its video plays opens Full Screen, as the player's button does, and turning
+    /// it upright again returns to the page. The watch page holds the interface upright (`PlayerOrientation`), so it
+    /// doesn't turn by itself: this listens to the phone's own turning instead.
+    private func phoneTurned() {
+        guard watchChannel != nil, PlayerOrientation.available else { return }
+        switch UIDevice.current.orientation {
+        case .landscapeLeft, .landscapeRight:
+            guard !fullScreen else { return }
+            turnedFullScreen = true
+            setFullScreen(landscape: true)
+        case .portrait:
+            guard fullScreen, turnedFullScreen else { return }
+            setFullScreen(landscape: false)
+        default:
+            break
+        }
     }
 
     /// The cover's Play: where the viewer stopped, else the line's first episode.
