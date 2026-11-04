@@ -49,16 +49,21 @@ public struct PlaybackHistoryEntry: Identifiable, Codable, Hashable, Sendable {
     public let position: Double
     public let duration: Double
     public let updatedAt: Date
+    /// The environment that recorded this. Nil for entries written before environments existed, which
+    /// belong to the default one — so an upgrade never hides a viewer's whole history.
+    public let environment: UUID?
     public var id: String { context.id }
     public var completed: Bool { duration > 0 && position >= duration - 1 }
     public var resumePosition: Double { completed ? 0 : position }
     public var progress: Double { duration > 0 ? min(1, max(0, position / duration)) : 0 }
 
-    public init(context: PlaybackHistoryContext, position: Double, duration: Double, updatedAt: Date) {
+    public init(context: PlaybackHistoryContext, position: Double, duration: Double,
+                updatedAt: Date, environment: UUID? = nil) {
         self.context = context
         self.position = position
         self.duration = duration
         self.updatedAt = updatedAt
+        self.environment = environment
     }
 
     public static func resumeTarget(_ position: Double, duration: Double) -> Double? {
@@ -83,6 +88,16 @@ extension PlaybackHistoryEntry {
 @MainActor @Observable public final class PlaybackHistory {
     public static let shared = PlaybackHistory()
     public static let limit = 200
+
+    /// The entries that belong to one environment. `nil` selects the default environment, which owns
+    /// everything written before environments existed.
+    public func entries(in environment: UUID?) -> [PlaybackHistoryEntry] {
+        let defaultID = defaultEnvironmentID
+        return entries.filter { ($0.environment ?? defaultID) == (environment ?? defaultID) }
+    }
+
+    /// The id of the default environment. Set by the app once `Environments` is loaded.
+    public var defaultEnvironmentID: UUID?
     public private(set) var entries: [PlaybackHistoryEntry] = []
     public private(set) var persistenceError: String?
     private let file: URL
@@ -108,14 +123,16 @@ extension PlaybackHistoryEntry {
         prioritizeCaches()
     }
 
-    public func record(_ context: PlaybackHistoryContext, position: Double, duration: Double, now: Date = Date()) {
+    public func record(_ context: PlaybackHistoryContext, position: Double, duration: Double,
+                       now: Date = Date(), environment: UUID? = nil) {
         guard position.isFinite, position >= 1, duration.isFinite, duration >= 0 else { return }
         let entry = PlaybackHistoryEntry(context: context, position: duration > 0 ? min(position, duration) : position,
-                                         duration: duration, updatedAt: now)
+                                         duration: duration, updatedAt: now, environment: environment)
         guard Self.valid(entry) else { return }
-        if let old = entries.first(where: { $0.id == entry.id }), old.context == context,
+        if let old = entries.first(where: { $0.id == entry.id && $0.environment == entry.environment }),
+           old.context == context,
            abs(old.position - entry.position) < 0.25, old.duration == duration { return }
-        entries.removeAll { $0.id == entry.id }
+        entries.removeAll { $0.id == entry.id && $0.environment == entry.environment }
         entries.insert(entry, at: 0)
         let dropped = entries.dropFirst(Self.limit)
         for entry in dropped { clean(entry) }

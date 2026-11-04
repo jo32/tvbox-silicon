@@ -132,7 +132,17 @@ import TVCore
     #endif
 
     /// Rows the viewer may see. Every listing that shows history goes through this.
-    var visibleHistory: [PlaybackHistoryEntry] { vault.visibleHistory(playbackHistory.entries) }
+    /// History for the environment on screen, then hidden rows removed.
+    ///
+    /// Order matters: the environment filter runs first because a hidden row from another
+    /// environment must not be unhidden by this one.
+    var visibleHistory: [PlaybackHistoryEntry] {
+        vault.visibleHistory(playbackHistory.entries(in: environments.activeID))
+    }
+
+    /// Which environment new records belong to. Kept on the history object so its own `record`
+    /// can stamp without knowing about `Environments`.
+    var activeEnvironmentID: UUID? { environments.activeID }
     /// Favourites the viewer may see.
     var visibleFavorites: [FavoriteItem] { vault.visibleFavorites(favorites.items) }
     /// Sources a search or a recommendation may fan out to.
@@ -315,11 +325,16 @@ import TVCore
         // Install the AI translator here rather than at launch: the configuration lives in these
         // defaults, so this is the first moment it is known. `install()` has already set the
         // device's translator; a configured service replaces it, an unconfigured one leaves it.
+        var loadedEnvironments = Environments()
+        if let blob = playbackDefaults.data(forKey: Self.environmentsKey),
+           let decoded = try? JSONDecoder().decode(Environments.self, from: blob) { loadedEnvironments = decoded }
+        environments = loadedEnvironments
         SubtitleTranslationSetup.installAI(configuration: loadedAI)
+        // The default environment owns everything written before environments existed, so history
+        // needs its id to filter those legacy rows correctly.
+        playbackHistory.defaultEnvironmentID = loadedEnvironments.all.first?.id
         if let blob = playbackDefaults.data(forKey: Self.artworkLanguageKey),
            let decoded = try? JSONDecoder().decode(ArtworkLanguage.self, from: blob) { artworkLanguage = decoded }
-        if let blob = playbackDefaults.data(forKey: Self.environmentsKey),
-           let decoded = try? JSONDecoder().decode(Environments.self, from: blob) { environments = decoded }
         if let blob = playbackDefaults.data(forKey: Self.skipSourcesKey),
            let decoded = try? JSONDecoder().decode(SkipSegmentSources.self, from: blob) { skipSources = decoded }
         if let blob = playbackDefaults.data(forKey: Self.resourceRankingKey),
@@ -404,7 +419,8 @@ import TVCore
             return try await self.resolveListening(source)
         }
         music.recordSource = { [weak self] source, position, duration in
-            self?.playbackHistory.record(source.context, position: position, duration: duration)
+            self?.playbackHistory.record(source.context, position: position, duration: duration,
+                                        environment: self?.environments.activeID)
         }
         music.handOffSource = { [weak self] stream, position, picture, covered in
             guard let self, let context = stream.historyContext else { return }
