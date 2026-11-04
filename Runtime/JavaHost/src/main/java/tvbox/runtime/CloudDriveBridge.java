@@ -586,8 +586,9 @@ public final class CloudDriveBridge implements AutoCloseable {
      * Z, N0, then k), so the account is found by what its code does, not by name. Cloud_quark keeps
      * its name and fetches the account through exactly one static singleton. In the account class,
      * the sign-in response handler {@code (okhttp3.Response, String) -> boolean} stores the web cookie
-     * and the static {@code (account, String)} setter stores the mobile ticket. Each must store exactly
-     * one public String field, or nothing is restored. Only these two classes are read.
+     * and a static {@code (account, String, ...)} method stores the mobile ticket: the QR poll, which
+     * took {@code (account, String)} until 2026-11 and also takes a timestamp since. Each must store
+     * exactly one public String field, or nothing is restored. Only these two classes are read.
      */
     static FtyQuarkAccount ftyQuarkAccount(Class<?> quark) throws ReflectiveOperationException, IOException {
         byte[] code = classBytes(quark);
@@ -613,7 +614,7 @@ public final class CloudDriveBridge implements AutoCloseable {
             @Override public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
                 boolean instance = (access & Opcodes.ACC_STATIC) == 0;
                 Set<String> stored = instance && descriptor.equals("(Lokhttp3/Response;Ljava/lang/String;)Z") ? web
-                    : !instance && descriptor.equals("(L" + owner + ";Ljava/lang/String;)V") ? mobile : null;
+                    : !instance && descriptor.startsWith("(L" + owner + ";Ljava/lang/String;") && descriptor.endsWith(")V") ? mobile : null;
                 return stored == null ? null : new MethodVisitor(Opcodes.ASM9) {
                     @Override public void visitFieldInsn(int opcode, String fieldOwner, String field, String fieldType) {
                         if (opcode == Opcodes.PUTFIELD && fieldOwner.equals(owner) && fieldType.equals("Ljava/lang/String;")) stored.add(field);
