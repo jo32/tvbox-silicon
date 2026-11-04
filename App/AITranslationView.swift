@@ -71,6 +71,7 @@ struct AITranslationView: View {
                 Text(L10n.text("Sends one test line, to confirm the address, model and key work together."))
             }
         }
+            .settingsPage()
         .settingsForm(L10n.text("AI Translation"))
         .task {
             draft = store.aiTranslation

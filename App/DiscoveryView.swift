@@ -1500,7 +1500,7 @@ private struct SourceChip: View {
                 if name == CloudSources.site(where: \.isBilibili)?.name { BilibiliGlyph(size: 15).foregroundStyle(selected ? Brand.onAccent : BilibiliMark.blue) } else if let symbol = label.symbol { Text(symbol) }
                 Text(label.title).lineLimit(1)
                 if let count { Text("\(count)").monospacedDigit().opacity(0.55) }
-                if let dot { Image(systemName: "circle.fill").font(.system(size: 7)).foregroundStyle(dot) }
+                if let dot { Image(systemName: "circle.fill").font(.system(size: 11)).foregroundStyle(dot) }
             }
             .font(.system(size: 13, weight: selected ? .semibold : .medium))
             .foregroundStyle(selected ? Brand.onAccent : Color.primary.opacity(0.82))

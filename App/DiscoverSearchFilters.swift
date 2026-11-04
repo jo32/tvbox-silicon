@@ -238,7 +238,7 @@ struct FilterChipLabel: View {
         #if os(macOS)
         HStack(spacing: 6) {
             Text(title).lineLimit(1)
-            Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+            Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
         }
         .font(.system(size: 13)).padding(.horizontal, 12).frame(height: 30)
         .background(.primary.opacity(open ? 0.16 : 0.07), in: Capsule())

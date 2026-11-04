@@ -1637,7 +1637,7 @@ struct VideoDetailView: View {
                 Spacer(minLength: 0)
                 #if !os(tvOS)
                 Button { withAnimation(.smooth(duration: 0.2)) { playbackIssue = nil } } label: {
-                    Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
+                    Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.secondary)
                         .frame(width: 22, height: 22)
                         .background(Color.primary.opacity(0.07), in: Circle())
                         .contentShape(Circle())

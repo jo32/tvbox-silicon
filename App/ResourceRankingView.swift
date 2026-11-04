@@ -93,6 +93,7 @@ struct ResourceRankingView: View {
                 }
             }
         }
+            .settingsPage()
         .settingsForm(L10n.text("Resource Order"))
         #if !os(macOS)
         // Edit mode is what turns the rows into draggable ones on iOS; a Mac has no such mode and

@@ -52,6 +52,7 @@ struct SpeechSubtitleView: View {
                 Text(L10n.text("Recognition runs entirely on this device. No audio leaves the phone. Only languages this device has a model for are listed; the player uses the one picked here."))
             }
         }
+            .settingsPage()
         .settingsForm(L10n.text("Speech Subtitles"))
         .task { await load() }
     }

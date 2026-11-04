@@ -270,7 +270,7 @@ struct DiscoverAiringTile: View {
                 #if os(tvOS)
                 .font(.system(size: 20, weight: .bold)).padding(.horizontal, 12).padding(.vertical, 5)
                 #else
-                .font(.system(size: 10, weight: .bold)).padding(.horizontal, 6).padding(.vertical, 2)
+                .font(.system(size: 11, weight: .bold)).padding(.horizontal, 6).padding(.vertical, 2)
                 #endif
                 .foregroundStyle(Brand.onAccent).background(Brand.accent, in: Capsule())
         }

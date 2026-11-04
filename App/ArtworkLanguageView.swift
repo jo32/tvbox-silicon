@@ -22,6 +22,7 @@ struct ArtworkLanguageView: View {
                 Text(L10n.text("Choosing a poster language other than Follow Metadata makes one extra TMDB image request per title when it scrolls into view, and the result is cached on this device. The original poster shows first, then is replaced."))
             }
         }
+            .settingsPage()
         .settingsForm(L10n.text("Artwork Language"))
         .task { settings = store.artworkLanguage }
         .onChange(of: settings) { _, new in

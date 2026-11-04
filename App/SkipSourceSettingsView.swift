@@ -55,6 +55,7 @@ struct SkipSourceSettingsView: View {
                 Text(L10n.text("Drag to reorder. The first source with a usable segment wins. Your own markers and the file's chapters are read on this device; the public timestamp databases are not connected yet, and their switches stay off until they are."))
             }
         }
+            .settingsPage()
         .settingsForm(L10n.text("Segment Sources"))
         #if !os(macOS)
         .environment(\.editMode, .constant(.active))

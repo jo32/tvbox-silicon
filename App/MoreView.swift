@@ -118,7 +118,7 @@ struct TabBarPreview: View {
             ForEach(bar + [.more]) { item in
                 VStack(spacing: 3) {
                     Image(systemName: item.icon).font(.system(size: 17, weight: .medium)).frame(height: 22)
-                    Text(item.title).font(.system(size: 10, weight: .medium)).lineLimit(1).minimumScaleFactor(0.7)
+                    Text(item.title).font(.system(size: 11, weight: .medium)).lineLimit(1).minimumScaleFactor(0.7)
                 }
                 .foregroundStyle(item == bar.first ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
                 .frame(maxWidth: .infinity)

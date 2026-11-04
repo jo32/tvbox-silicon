@@ -624,6 +624,9 @@ struct FormSettingsView: View {
             #endif
 
             Section {
+                #if WEBCAST
+                FormLink(symbol: "globe", tint: .blue, title: L10n.text("Web Cast")) { WebCastSettingsView() }
+                #endif
                 FormLink(symbol: "internaldrive", tint: .blue, title: L10n.text("Local Cache")) { CacheSettingsView() }
                 if store.extrasUnlocked {
                     FormLink(symbol: "cpu.fill", tint: .orange, title: L10n.text("JAR Runtime and Compatibility")) { RuntimeView() }
@@ -1641,7 +1644,7 @@ private struct DiagnosticRow: View {
                     badge.frame(width: DiagnosticGrid.level, alignment: .leading)
                     module.frame(width: DiagnosticGrid.module, alignment: .leading)
                     message.lineLimit(1)
-                    Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(.tertiary)
+                    Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(.tertiary)
                         .frame(width: DiagnosticGrid.accessory)
                 }
                 .frame(height: 44)
@@ -1662,7 +1665,7 @@ private struct DiagnosticRow: View {
             .lineLimit(1)
     }
     private var badge: some View {
-        Text(entry.level.rawValue.uppercased()).font(.system(size: 10, weight: .semibold, design: .monospaced))
+        Text(entry.level.rawValue.uppercased()).font(.system(size: 11, weight: .semibold, design: .monospaced))
             .foregroundStyle(entry.level.tint).frame(width: 60, height: 20)
             .background(entry.level.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 5))
     }

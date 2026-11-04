@@ -30,6 +30,7 @@ struct EnvironmentsView: View {
                 }
             }
         }
+            .settingsPage()
         .settingsForm(L10n.text("Environments"))
         .alert(L10n.text("New Environment"), isPresented: $adding) {
             TextField(L10n.text("Name"), text: $newName)

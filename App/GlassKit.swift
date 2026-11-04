@@ -191,6 +191,9 @@ extension Color {
 /// The icon's navy canvases with neutral controls: the active state is light on dark (dark on light),
 /// never a hue, so it reads the same on Liquid Glass.
 enum Brand {
+    /// The page fill behind a scrolling list. Matches the hand-drawn pages, which
+    /// paint the window background rather than a card colour.
+    static let pageBackground = Color(light: Color(white: 0.97), dark: Color(white: 0.07))
     /// Selection, prominent actions and progress. A fixed grey rather than `.primary`: as a tint,
     /// `.primary` turned prominent buttons white-on-white. On Apple TV no button is filled with it,
     /// so it never sits beside the white focus.
@@ -204,8 +207,53 @@ enum Brand {
     static let amber = Color(red: 1.0, green: 0.76, blue: 0.30)
     static let rose = Color(red: 0.95, green: 0.38, blue: 0.42)
     /// Yingxia's own credit. Third-party notices keep their authors' copyright lines unchanged.
+    // MARK: - Type scale
+    //
+    // Every on-screen text should map to exactly one of these. The point is not
+    // to ban `.font(.system(size:))` — plenty of legacy call sites still use it —
+    // but to give new code a token to reach for, so the set stops growing.
+    //
+    // The semantic ones (body/meta) scale with the system's text size setting.
+    // The fixed ones exist because a hero title or a poster caption is a piece
+    // of layout, not running prose: making it 3× larger breaks the grid before
+    // it helps anyone read it.
+
+    /// Screen title: a film's name on its detail page, a section header.
+    static let hero = Font.system(size: 34, weight: .semibold)
+    /// Card and row title.
+    static let title = Font.system(size: 20, weight: .semibold)
+    /// Section heading inside a page.
+    static let heading = Font.system(size: 15, weight: .semibold)
+    /// Running prose: overviews, settings descriptions. Follows Dynamic Type.
+    static let body = Font.body
+    /// Secondary prose. Follows Dynamic Type.
+    static let callout = Font.callout
+    /// Metadata under a title: year, rating, episode count. Follows Dynamic Type.
+    static let meta = Font.caption
+    /// Metadata that must not reflow the layout around it. 11pt is the floor —
+    /// below that a caption stops being readable long before it stops fitting.
+    static let metaFixed = Font.system(size: 11)
+    /// Numeric badge overlaid on artwork. Monospaced so digits do not jitter.
+    static let badge = Font.system(size: 11, weight: .semibold, design: .rounded)
+
     static let copyright = "© 2026 getmegaportal.com"
     static let website = URL(string: "https://www.getmegaportal.com")!
+}
+
+// MARK: - Settings page shell
+//
+// The settings sub-pages (AI translation, environments, artwork language …) are
+// built on SwiftUI's `Form`, which is the right control for a list of labelled
+// switches and fields. The problem was that a bare `Form` brings its own
+// background and its own type ramp, so walking from a hand-drawn page like
+// Cloud Files into one of these felt like leaving the app. This modifier keeps
+// the control and gives it the house background, so only the layout differs.
+extension View {
+    func settingsPage() -> some View {
+        self
+            .scrollContentBackground(.hidden)
+            .background(Brand.pageBackground)
+    }
 }
 
 enum Layout {
