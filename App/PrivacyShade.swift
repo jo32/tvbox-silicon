@@ -57,12 +57,13 @@ struct PrivacyShade: ViewModifier {
             }
     }
 
-    /// The cover's colour. tvOS has no `systemBackground` and is dark only, so it is flat black there.
+    /// The cover's colour. Only iOS has `systemBackground`; the Mac window and the TV are covered
+    /// with the app's own canvas colour instead.
     private var shadeColor: Color {
-        #if os(tvOS)
-        Color.black
-        #else
+        #if os(iOS)
         Color(.systemBackground)
+        #else
+        TVStyle.background
         #endif
     }
 }

@@ -50,7 +50,9 @@ struct PasscodeGate: View {
                 Section {
                     SecureField(L10n.text("Passcode"), text: $entry)
                         .textContentType(.password)
+                        #if os(iOS)
                         .keyboardType(.numberPad)
+                        #endif
                         .focused($focused)
                         .submitLabel(.go)
                         .onSubmit(submit)
@@ -82,7 +84,7 @@ struct PasscodeGate: View {
                 }
             }
             .navigationTitle(purpose.title)
-            #if !os(tvOS)
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
@@ -149,7 +151,7 @@ struct PrivacyVaultView: View {
             }
         }
         .navigationTitle(L10n.text("Privacy"))
-        #if !os(tvOS)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .task { reload() }

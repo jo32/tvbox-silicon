@@ -51,7 +51,7 @@ struct PosterViewer: View {
             }
             .animation(reduceMotion ? nil : .spring(duration: 0.28), value: zoom)
         }
-        #if !os(tvOS)
+        #if os(iOS)
         .statusBarHidden()
         #endif
         .overlay(alignment: .topTrailing) {

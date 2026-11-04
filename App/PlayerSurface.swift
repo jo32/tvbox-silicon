@@ -32,6 +32,18 @@
 import SwiftUI
 import TVCore
 
+#if !os(iOS)
+/// `MobilePlayerLayout` is declared in `MobilePlayer.swift`, which is an iPhone and iPad file, so the
+/// Mac and the TV could not see it. Both ask for the same three shapes through `PlayerView` and
+/// `PlayerSurface`, so they get the same cases here instead of a fourth layout of their own. The two
+/// declarations must stay in step: same names, same cases.
+enum MobilePlayerLayout {
+    case screen
+    case inline
+    case pageFullScreen
+}
+#endif
+
 // MARK: - Surface
 
 /// Decides how the player's auxiliary screens are presented for one layout.

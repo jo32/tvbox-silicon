@@ -1147,6 +1147,9 @@ struct FormLabel: View {
 extension View {
     /// Tinting a switch green is an iPhone idiom; on the TV the system draws it.
     @ViewBuilder func settingsSwitch() -> some View { self }
+
+    /// The Mac needs a plain button style inside a form; every other platform leaves the row alone.
+    @ViewBuilder func formRowButton() -> some View { self }
 }
 #endif
 

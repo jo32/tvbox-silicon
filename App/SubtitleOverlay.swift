@@ -154,7 +154,7 @@ struct SubtitleSettingsView: View {
             }
         }
         .navigationTitle(L10n.text("Subtitles"))
-        #if !os(tvOS)
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
     }
@@ -199,6 +199,7 @@ struct SubtitleSettingsView: View {
 /// The menu lists only players that are actually installed — a row that does nothing is worse than
 /// no row, because it teaches the viewer that the menu cannot be trusted. Copying the address is
 /// always offered, since it is the one action that works with nothing installed.
+#if !os(macOS)
 struct ExternalPlayerMenu: View {
     let stream: URL
     let headers: [String: String]
@@ -261,7 +262,7 @@ struct ExternalPlayerMenu: View {
                 }
             }
             .navigationTitle(L10n.text("Open in Another Player"))
-            #if !os(tvOS)
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
@@ -273,3 +274,5 @@ struct ExternalPlayerMenu: View {
         }
     }
 }
+
+#endif
