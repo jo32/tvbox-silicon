@@ -848,6 +848,7 @@
 "Choose your tabs and their order." = "选择要显示的标签及其顺序。";
 "Drag to reorder. Up to four sections fit in the tab bar; the rest stay in More." = "拖动即可调整顺序。标签栏最多放四项，其余的留在“更多”中。";
 "Drag to reorder. Up to seven sections fit in the tab bar here, and four when the phone is closed; the rest stay in More." = "拖动即可调整顺序。这里的标签栏最多放七项，合上时放四项，其余的留在“更多”中。";
+"Drag to reorder. The tab bar and the sidebar show sections in this order." = "拖动即可调整顺序。标签栏和边栏会按这个顺序显示。";
 "Add" = "添加";
 "Paste the address of a TVBox JSON subscription, an M3U or TXT live playlist, or an AList server." = "粘贴 TVBox JSON 订阅地址、M3U / TXT 直播列表地址，或 AList 服务器地址。";
 "Up to Date" = "已是最新";

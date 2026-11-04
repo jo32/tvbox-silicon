@@ -27,10 +27,22 @@ struct PhoneTabs: Equatable {
         horizontal == .regular && vertical == .regular ? wideBarSlots : barSlots
     }
     static let standard = PhoneTabs(bar: [.home, .discover, .live, .search], more: [.music, .sites, .files, .history, .favorites, .downloads, .messages, .settings])
+    /// The iPad sidebar's order until the viewer arranges it. Messages is left out: only the phone lists it.
+    static let sidebarStandard: [AppSection] = [.home, .discover, .live, .music, .search, .sites, .files, .history, .favorites, .downloads, .settings]
     var bar: [AppSection]
     var more: [AppSection]
 
     init(bar: [AppSection], more: [AppSection]) { self.bar = bar; self.more = more }
+
+    /// One list, as the iPad's sidebar has it: the bar takes as many as it can hold and More the rest, so a narrow
+    /// Split View window's tab bar keeps the same order.
+    init(order: [AppSection]) { self.init(bar: Array(order.prefix(Self.wideBarSlots)), more: Array(order.dropFirst(Self.wideBarSlots))) }
+
+    /// The sections of the iPad's sidebar (iOS 18 and later, full width), in the tab bar editor's order (#427).
+    static func sidebar(stored: String, hiding hidden: [AppSection] = []) -> [AppSection] {
+        let order = stored.isEmpty ? sidebarStandard : { let tabs = PhoneTabs(stored: stored); return tabs.bar + tabs.more }()
+        return order.filter { $0 != .messages && !hidden.contains($0) }
+    }
 
     init(stored: String) {
         let halves = stored.split(separator: "|", omittingEmptySubsequences: false).map {
@@ -222,7 +234,7 @@ private struct MoreTile: View {
     }
 }
 
-/// Settings' row for the tab bar editor, on screens that use the phone's tab bar.
+/// Settings' row for the tab bar editor. On an iPad's sidebar, which has no More, the editor is one list.
 struct EditTabBarRow: View {
     @Environment(Store.self) private var store
     @AppStorage(PhoneTabs.storageKey) private var storedTabs = ""
@@ -232,7 +244,7 @@ struct EditTabBarRow: View {
     private var slots: Int { PhoneTabs.slots(horizontal: horizontalSizeClass, vertical: verticalSizeClass) }
 
     var body: some View {
-        if PhoneTabs.inUse(horizontal: horizontalSizeClass) {
+        Group {
             Button { editing = true } label: {
                 HStack(spacing: 8) {
                     FormLabel(symbol: "arrow.up.arrow.down", title: L10n.text("Edit Tab Bar"),
@@ -245,8 +257,12 @@ struct EditTabBarRow: View {
             // A button in a list draws its title in the tint; this one reads like the rows around it.
             .tint(.primary)
             .sheet(isPresented: $editing) {
-                TabBarEditor(tabs: PhoneTabs(stored: storedTabs).arranged(slots: slots, hiding: store.hiddenSections),
-                             slots: slots) { storedTabs = $0.stored }
+                if PhoneTabs.inUse(horizontal: horizontalSizeClass) {
+                    TabBarEditor(tabs: PhoneTabs(stored: storedTabs).arranged(slots: slots, hiding: store.hiddenSections),
+                                 slots: slots) { storedTabs = $0.stored }
+                } else {
+                    TabBarEditor(sidebar: PhoneTabs.sidebar(stored: storedTabs, hiding: store.hiddenSections)) { storedTabs = $0.stored }
+                }
             }
             #if DEBUG
             // `-qaEditTabs 1` opens the editor for screenshots once Settings is shown.
@@ -259,11 +275,14 @@ struct EditTabBarRow: View {
 /// One draggable list: the tab bar's sections, an "In More" divider, then More's. Dragging a section
 /// above the divider puts it in the tab bar; a fifth pushes the bar's last section down into More.
 /// Dragging one below it leaves the bar shorter, down to one section besides More.
+/// For the iPad's sidebar there is no divider: every section is listed, in order.
 private struct TabBarEditor: View {
     private enum Row: Hashable, Identifiable {
         case section(AppSection), divider
         var id: Self { self }
-        static func rows(_ tabs: PhoneTabs) -> [Row] { tabs.bar.map(Row.section) + [.divider] + tabs.more.map(Row.section) }
+        static func rows(_ tabs: PhoneTabs, sidebar: Bool) -> [Row] {
+            sidebar ? (tabs.bar + tabs.more).map(Row.section) : tabs.bar.map(Row.section) + [.divider] + tabs.more.map(Row.section)
+        }
         static func tabs(_ rows: [Row], slots: Int) -> PhoneTabs {
             let split = rows.firstIndex(of: .divider) ?? rows.count
             let sections: (ArraySlice<Row>) -> [AppSection] = { $0.compactMap { if case .section(let s) = $0 { s } else { nil } } }
@@ -275,24 +294,38 @@ private struct TabBarEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var rows: [Row]
     private let slots: Int
+    private let sidebar: Bool
+    private let standard: PhoneTabs
     private let save: (PhoneTabs) -> Void
 
     init(tabs: PhoneTabs, slots: Int, save: @escaping (PhoneTabs) -> Void) {
-        _rows = State(initialValue: Row.rows(tabs))
+        _rows = State(initialValue: Row.rows(tabs, sidebar: false))
         self.slots = slots
+        sidebar = false
+        standard = PhoneTabs.standard.arranged(slots: slots)
+        self.save = save
+    }
+
+    /// The iPad sidebar's sections in their order.
+    init(sidebar order: [AppSection], save: @escaping (PhoneTabs) -> Void) {
+        _rows = State(initialValue: Row.rows(PhoneTabs(order: order), sidebar: true))
+        slots = PhoneTabs.wideBarSlots
+        sidebar = true
+        standard = PhoneTabs(order: PhoneTabs.sidebarStandard.filter(order.contains))
         self.save = save
     }
 
     private var tabs: PhoneTabs { Row.tabs(rows, slots: slots) }
-    private var standard: PhoneTabs { PhoneTabs.standard.arranged(slots: slots) }
 
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    TabBarPreview(bar: tabs.bar)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                if !sidebar {
+                    Section {
+                        TabBarPreview(bar: tabs.bar)
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                    }
                 }
                 Section {
                     ForEach(rows) { row in
@@ -315,7 +348,8 @@ private struct TabBarEditor: View {
                 } header: {
                     heading(L10n.text("Tab Bar"), symbol: "dock.rectangle")
                 } footer: {
-                    Text(L10n.text(slots > PhoneTabs.barSlots
+                    Text(L10n.text(sidebar ? "Drag to reorder. The tab bar and the sidebar show sections in this order."
+                                   : slots > PhoneTabs.barSlots
                                    ? "Drag to reorder. Up to seven sections fit in the tab bar here, and four when the phone is closed; the rest stay in More."
                                    : "Drag to reorder. Up to four sections fit in the tab bar; the rest stay in More."))
                 }
@@ -334,7 +368,7 @@ private struct TabBarEditor: View {
                     Button(L10n.text("Done")) { save(tabs); dismiss() }.fontWeight(.semibold)
                 }
                 ToolbarItem(placement: .bottomBar) {
-                    Button(L10n.text("Reset")) { withAnimation(.smooth) { rows = Row.rows(standard) } }
+                    Button(L10n.text("Reset")) { withAnimation(.smooth) { rows = Row.rows(standard, sidebar: sidebar) } }
                         .disabled(tabs == standard)
                 }
             }
@@ -352,7 +386,7 @@ private struct TabBarEditor: View {
         next.move(fromOffsets: source, toOffset: destination)
         let tabs = Row.tabs(next, slots: slots)
         guard !tabs.bar.isEmpty else { return } // The tab bar keeps at least one section besides More.
-        withAnimation(.smooth) { rows = Row.rows(tabs) }
+        withAnimation(.smooth) { rows = Row.rows(tabs, sidebar: sidebar) }
     }
 }
 #endif
