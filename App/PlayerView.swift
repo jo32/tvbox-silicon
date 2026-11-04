@@ -49,6 +49,7 @@ struct PlaybackView: View {
             if session.error == nil {
                 NativePlayerView(player: session.player, comments: session.danmaku, showsDanmaku: $showsDanmaku, opacity: session.danmakuOpacity, revision: session.danmakuRevision,
                                  qualities: session.qualities, quality: session.quality, choose: { session.choose(quality: $0) },
+                                 audio: session.audioChoices, audioChoice: session.audioChoice, chooseAudio: { session.chooseAudio($0) },
                                  live: session.isLive, previous: episodeAction(store.step(back: true, from: channel, session: session)),
                                  next: episodeAction(store.step(back: false, from: channel, session: session)), waiting: waitContent,
                                  enhancer: session.enhancer, upscale: $upscalesVideo, smooth: $smoothsVideo, info: $showsPlaybackInfo,
@@ -229,6 +230,19 @@ struct PlaybackView: View {
                 }
                 .chromeButton()
                 .accessibilityLabel(L10n.text("Quality"))
+            }
+            // A file whose sound tracks AVKit's own menu can't offer (#428).
+            if session.audioChoices.count > 1 {
+                Menu {
+                    Picker(L10n.text("Audio"), selection: Binding(get: { session.audioChoice }, set: { if let id = $0 { session.chooseAudio(id) } })) {
+                        ForEach(session.audioChoices) { Text($0.name).tag(Optional($0.id)) }
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    Image(systemName: "speaker.wave.2").font(.headline).frame(width: 22, height: 22)
+                }
+                .chromeButton()
+                .accessibilityLabel(L10n.text("Audio"))
             }
             // One button for danmaku: show or hide them, or open the list.
             if !session.danmaku.isEmpty {
@@ -651,6 +665,10 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     var qualities: [StreamQuality] = []
     var quality: Int? = nil
     var choose: @MainActor (Int?) -> Void = { _ in }
+    /// The sound tracks AVKit's own Audio menu can't offer (`PlaybackSession.audioChoices`), and the one playing.
+    var audio: [UngroupedAudio.Choice] = []
+    var audioChoice: CMPersistentTrackID? = nil
+    var chooseAudio: @MainActor (CMPersistentTrackID) -> Void = { _ in }
     var live = false
     /// The neighbouring episodes of a catalog video, as transport-bar buttons beside the menus.
     var previous: EpisodeAction? = nil
@@ -731,6 +749,11 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             let options = [UIAction(title: L10n.text("Auto"), state: quality == nil ? .on : .off) { _ in choose(nil) }]
                 + qualities.map { option in UIAction(title: option.label, state: quality == option.id ? .on : .off) { _ in choose(option.id) } }
             items.append(UIMenu(title: L10n.text("Quality") + " · " + current, image: UIImage(systemName: "sparkles.tv"), children: options))
+        }
+        if audio.count > 1 {
+            let chooseAudio = chooseAudio
+            let options = audio.map { option in UIAction(title: option.name, state: option.id == audioChoice ? .on : .off) { _ in chooseAudio(option.id) } }
+            items.append(UIMenu(title: L10n.text("Audio"), image: UIImage(systemName: "speaker.wave.2"), children: options))
         }
         if let previous {
             items.insert(UIAction(title: L10n.text("Previous Episode"), subtitle: previous.name, image: UIImage(systemName: "backward.end.fill"),
