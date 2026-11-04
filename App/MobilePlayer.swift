@@ -28,6 +28,8 @@ struct MobilePlayerView: View {
     var layout: MobilePlayerLayout = .screen
     /// On a watch page: Full Screen, or back to the page.
     var toggleFullScreen: (() -> Void)? = nil
+    /// Open the episode picker from the options menu.
+    var openEpisodes: () -> Void = {}
 
     @Environment(Store.self) private var store
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -511,7 +513,7 @@ struct MobilePlayerView: View {
                 .accessibilityIdentifier("player.pip")
             }
             // On a watch page the episodes are on the page itself.
-            if !inline { CatalogPlaybackActions(channel: channel, session: session) }
+            if !inline { CatalogPlaybackActions(channel: channel, session: session, openEpisodes: openEpisodes) }
             // One button for danmaku: show or hide them, or open the list.
             if !session.danmaku.isEmpty {
                 Menu {

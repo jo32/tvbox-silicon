@@ -20,6 +20,8 @@ struct PlaybackView: View {
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
     @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @State private var showsDanmakuList = false
+    /// The episode sheet, opened from the options menu.
+    @State private var showsEpisodes = false
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     #if os(tvOS)
@@ -70,7 +72,8 @@ struct PlaybackView: View {
             #elseif os(iOS)
             MobilePlayerView(channel: channel, session: session, showsDanmaku: $showsDanmaku, upscalesVideo: $upscalesVideo, smoothsVideo: $smoothsVideo,
                              waiting: waitContent, chromeVisible: chromeVisible, toggleChrome: toggleChrome, poke: poke, hold: holdChrome,
-                             close: exit, layout: playerLayout, toggleFullScreen: watch.map { _ in toggleFullScreen })
+                             close: exit, layout: playerLayout, toggleFullScreen: watch.map { _ in toggleFullScreen },
+                             openEpisodes: { showsEpisodes = true })
             #else
             NativePlayerView(player: session.player, comments: session.danmaku, showsDanmaku: $showsDanmaku, opacity: session.danmakuOpacity, revision: session.danmakuRevision).ignoresSafeArea()
             chrome.opacity(chromeVisible ? 1 : 0).allowsHitTesting(chromeVisible)
@@ -145,6 +148,22 @@ struct PlaybackView: View {
         #endif
         .onChange(of: showsDanmaku) { _, value in session.catalogDanmaku.enabled = value }
         .onChange(of: session.catalogDanmaku.enabled) { _, value in showsDanmaku = value }
+        #if !os(tvOS)
+        // The episode sheet and the end-of-series screen, presented according to
+        // the shape on screen: a sheet when the player fills the display, a panel
+        // inside the picture at the top of a watch page. `PlayerSurface` holds
+        // that rule so all three iPhone Duo shapes agree.
+        .overlay {
+            PlayerAuxiliaryHost(
+                surface: PlayerSurface(layout: playerLayout),
+                showsPanel: $showsEpisodes,
+                panel: { episodePanel },
+                showsEndScreen: store.seriesEnd != nil,
+                endScreen: { endScreenContent }
+            )
+            .allowsHitTesting(true)
+        }
+        #endif
         .onDisappear {
             hideTask?.cancel(); store.cancelEpisodeSelection(); session.stop()
             #if os(iOS)
@@ -221,7 +240,7 @@ struct PlaybackView: View {
                 .disabled(next.busy)
                 .accessibilityLabel(L10n.text("Next Episode")).help(next.name)
             }
-            CatalogPlaybackActions(channel: channel, session: session)
+            CatalogPlaybackActions(channel: channel, session: session) { showsEpisodes = true }
             if session.qualities.count > 1 {
                 Menu {
                     QualityPicker(session: session)
@@ -312,6 +331,40 @@ struct PlaybackView: View {
     }
 
     #if os(iOS)
+    /// The episode sheet for this channel, seeded with the saved context so it
+    /// reopens on the same line and the same episode at its saved position.
+    @ViewBuilder private var episodePanel: some View {
+        if let catalog = store.catalog(for: channel), let context = channel.historyContext {
+            EpisodePicker(
+                video: catalog.video,
+                sourceKey: context.sourceKey,
+                sourceName: context.sourceName,
+                origin: context.origin,
+                resumeContext: context,
+                resumePosition: channel.resumePosition,
+                headers: channel.headers
+            ) { episode in
+                store.selectEpisode(episode, from: channel)
+            }
+        }
+    }
+
+    /// What to watch after the last episode: same source, same show first.
+    @ViewBuilder private var endScreenContent: some View {
+        if let end = store.seriesEnd {
+            SeriesEndScreen(
+                finishedTitle: end.title,
+                suggestions: end.suggestions,
+                replay: {
+                    store.dismissSeriesEnd()
+                    session.start(end.channel)
+                },
+                choose: { store.playSeriesSuggestion($0) },
+                dismiss: { store.dismissSeriesEnd() }
+            )
+        }
+    }
+
     private var playerLayout: MobilePlayerLayout {
         guard let watch else { return .screen }
         return watch.fullScreen ? .pageFullScreen : .inline
@@ -1022,7 +1075,7 @@ private struct DesktopPlaybackView: View {
                             playingOn = receiver
                         }
                     }
-                    CatalogPlaybackActions(channel: channel, session: session)
+                    CatalogPlaybackActions(channel: channel, session: session) { showsEpisodes = true }
                     optionsMenu
                     barButton("arrow.up.left.and.arrow.down.right", L10n.text("Enter / Exit Full Screen")) { window.toggleFullScreen(nil) }
                 }

@@ -3,9 +3,19 @@ import SwiftUI
 import TVCore
 
 /// Catalog-only actions alongside the existing native transport controls.
+///
+/// This menu does not present the episode sheet itself. It asks its host to, via
+/// `openEpisodes`, because the sheet's presentation depends on which of the
+/// iPhone Duo's three player shapes is on screen — a sheet over a full-screen
+/// player, a panel inside the picture at the top of a watch page. That decision
+/// belongs to `PlayerSurface` in the player, not to this menu, and having the
+/// menu present its own sheet as well meant two different episode experiences
+/// depending on where the viewer tapped.
 struct CatalogPlaybackActions: View {
     let channel: Channel
     let session: PlaybackSession
+    /// Ask the player to open its episode sheet or panel.
+    var openEpisodes: () -> Void = {}
     @Environment(Store.self) private var store
     @State private var showsSkip = false
     @State private var showsDanmaku = false
@@ -13,19 +23,16 @@ struct CatalogPlaybackActions: View {
     var body: some View {
         if channel.historyContext != nil {
             Menu {
-                if let catalog = store.catalog(for: channel) {
+                if store.catalog(for: channel) != nil {
                     Toggle(L10n.text("Auto-play next episode"), isOn: Binding(
                         get: { store.autoPlayNext }, set: { store.autoPlayNext = $0 }))
-                    Menu(L10n.text("Episodes")) {
-                        ForEach(catalog.playlist.flags, id: \.self) { flag in
-                            Menu(flag) {
-                                ForEach(catalog.playlist.episodes(for: flag)) { episode in
-                                    Button(catalog.labels[episode.id] ?? episode.name) { store.selectEpisode(episode, from: channel) }
-                                }
-                            }
-                        }
+                    // One tap into the episode sheet: lines, their health and the
+                    // whole grid, instead of a two-level menu.
+                    Button(action: openEpisodes) {
+                        Label(L10n.text("Episodes"), systemImage: "list.bullet.rectangle")
                     }
                     .disabled(store.resolvingEpisode != nil)
+                    .accessibilityIdentifier("player.episodes")
                 }
                 Toggle(L10n.text("Automatically skip intro and outro"), isOn: Binding(
                     get: { session.skipSettings.enabled },
