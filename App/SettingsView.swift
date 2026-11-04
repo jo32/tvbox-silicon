@@ -862,17 +862,22 @@ struct FormSettingsView: View {
     #if os(iOS)
     /// Reads a chosen configuration file, then asks whether to merge or restore-overwrite before applying it.
     private func importConfig(from file: URL) {
-        let scoped = file.startAccessingSecurityScopedResource()
-        defer { if scoped { file.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: file), let config = SubscriptionConfig.decode(data) else {
-            store.importError = L10n.text("This isn't a Mi3s configuration file.")
-            return
+        Task {
+            let scoped = file.startAccessingSecurityScopedResource()
+            defer { if scoped { file.stopAccessingSecurityScopedResource() } }
+            // A backup file can be large; read it off the main thread instead of blocking the picker's
+            // dismiss on a synchronous `Data(contentsOf:)`.
+            let data = await Task.detached(priority: .userInitiated) { try? Data(contentsOf: file) }.value
+            guard let data, let config = SubscriptionConfig.decode(data) else {
+                store.importError = L10n.text("This isn't a Mi3s configuration file.")
+                return
+            }
+            if config.version != SubscriptionConfig.version {
+                store.importError = L10n.text("This configuration file is from a newer version and can't be imported.")
+                return
+            }
+            pendingConfig = config
         }
-        if config.version != SubscriptionConfig.version {
-            store.importError = L10n.text("This configuration file is from a newer version and can't be imported.")
-            return
-        }
-        pendingConfig = config
     }
 
     private func applyPendingConfig(overwrite: Bool) {
@@ -891,6 +896,9 @@ struct FormSettingsView: View {
             }
             Spacer()
             if store.importing { ProgressView().controlSize(.small); ElapsedTime() }
+            if store.importing, store.importTotal > 1 {
+                Text(L10n.text("%lld of %lld", store.importDone, store.importTotal)).font(.caption2).foregroundStyle(.secondary)
+            }
             Button(L10n.text("Use a Demo URL")) { store.subscriptionAddress = Store.defaultURL }
             Button(L10n.text("Add from File…")) { choosesFile = true }.disabled(store.importing)
                 .help(L10n.text("A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider."))

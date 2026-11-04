@@ -88,6 +88,8 @@ import TVCore
     var skipSources = SkipSegmentSources()
     /// How to order several files of the same title.
     var resourceRanking = ResourceRanking.standard
+    /// The embedded Web Cast server that projects the catalog to a browser on the same Wi-Fi.
+    let webCast = WebCastController()
     private static let vaultKey = "privacyVault"
     private static let artworkLanguageKey = "artworkLanguage"
     private static let aiTranslationKey = "aiSubtitleTranslation"
@@ -159,6 +161,10 @@ import TVCore
     /// subscription's, used only where the source carries no origin of its own.
     func maySee(_ site: Site, origin: URL) -> Bool { vault.permits(site: site, fallback: origin) }
     var importing = false
+    /// How many subscriptions of the current import/refresh have answered, of `importTotal`. `0` while
+    /// nothing is importing; the UI shows "N of M" from these so a refresh reads as progress, not a wait.
+    var importDone = 0
+    var importTotal = 0
     /// Whether an import owns the gate, and who is waiting for it.
     ///
     /// A second import used to be dropped on the floor: `guard !importing else { return }` meant a
@@ -397,6 +403,10 @@ import TVCore
         #if os(iOS)
         installCaptureGuards()
         #endif
+        // Start the web server if the feature is compiled in and switched on.
+        #if WEBCAST
+        Task { await webCast.start(with: self) }
+        #endif
     }
     // MARK: Listening sources (#289)
 
@@ -535,11 +545,19 @@ import TVCore
     /// as the app refusing to take no for an answer.
     func seedAggregatedSubscriptions() async {
         guard !Distribution.isAppStore else { return }
-        for address in Self.aggregatedSubscriptionAddresses
-        where !dismissedAggregateAddresses.contains(address) && !subscriptions.contains(where: { $0.address == address }) {
-            guard !Task.isCancelled else { break }
-            await importSubscription(address: address)
+        let pending = Self.aggregatedSubscriptionAddresses.filter { address in
+            !dismissedAggregateAddresses.contains(address) && !subscriptions.contains { $0.address == address }
         }
+        guard !pending.isEmpty else { return }
+        // Add them up front, then fetch side by side: the merged list grows as each one answers,
+        // instead of a serial loop where the viewer waits through every full fetch in turn.
+        let entries = pending.map { SubscriptionEntry(address: $0, name: "") }
+        subscriptions += entries
+        saveSubscriptionList()
+        await beginImport()
+        importing = true; importError = nil; notice = nil
+        defer { importing = false; endImport() }
+        await fetch(entries)
     }
     /// Adds the typed address, or refreshes it when it is already in the list. A directory (多仓)
     /// adds every subscription it lists, switched off, for the viewer to choose from.
@@ -765,35 +783,50 @@ import TVCore
 
     /// Fetches subscriptions side by side, keeps what arrives, and shows the merged result. A
     /// subscription that turns out to be a directory is replaced by the ones it lists, switched off.
+    /// Each source is folded in and the merged list rebuilt as soon as it answers — the viewer sees
+    /// sources appear one by one instead of waiting for the slowest subscription (a dead host would
+    /// otherwise hold up every result for its whole timeout).
     private func fetch(_ entries: [SubscriptionEntry]) async {
         let http = http
-        let results = await withTaskGroup(of: (SubscriptionEntry, Result<SubscriptionImport, any Error>).self) { group in
+        var rebuilt = false
+        importTotal = entries.count
+        importDone = 0
+        await withTaskGroup(of: (SubscriptionEntry, Result<SubscriptionImport, any Error>).self) { group in
             for entry in entries {
                 group.addTask {
                     do { return (entry, .success(try await http.subscriptionImport(WebAddress.resolve(entry.address)))) }
                     catch { return (entry, .failure(error)) }
                 }
             }
-            var all: [(SubscriptionEntry, Result<SubscriptionImport, any Error>)] = []
-            for await result in group { all.append(result) }
-            return all
-        }
-        for (entry, result) in results {
-            switch result {
-            case .success(.subscription(let value)): keep(value, for: entry)
-            case .success(.directory(let listed)):
-                guard let index = subscriptions.firstIndex(where: { $0.address == entry.address }) else { continue }
-                let known = Set(subscriptions.map(\.address))
-                subscriptions.replaceSubrange(index...index, with: listed.filter { !known.contains($0.address) })
-            case .success(.alist):
-                subscriptionErrors[entry.address] = L10n.text("This address is now an AList server. Add it again to browse it in Cloud Files.")
-            case .failure(let error):
-                Diagnostics.shared.failure("subscription", "refresh host=\(URL(string: entry.address)?.host() ?? "-")", error)
-                subscriptionErrors[entry.address] = error.localizedDescription
+            for await (entry, result) in group {
+                await MainActor.run {
+                    self.apply(result, for: entry)
+                    self.importDone += 1
+                    // The first result resets the search/recommendation models; later ones merge in
+                    // without resetting, so a search the viewer already started stays put.
+                    self.rebuildSubscription(resetting: !rebuilt)
+                }
+                rebuilt = true
             }
+            await MainActor.run { self.saveSubscriptionList() }
         }
-        saveSubscriptionList()
-        rebuildSubscription()
+    }
+
+    /// Folds one fetched result into the store: a subscription is kept, a directory is expanded, and a
+    /// failure is remembered against its address.
+    private func apply(_ result: Result<SubscriptionImport, any Error>, for entry: SubscriptionEntry) {
+        switch result {
+        case .success(.subscription(let value)): keep(value, for: entry)
+        case .success(.directory(let listed)):
+            guard let index = subscriptions.firstIndex(where: { $0.address == entry.address }) else { return }
+            let known = Set(subscriptions.map(\.address))
+            subscriptions.replaceSubrange(index...index, with: listed.filter { !known.contains($0.address) })
+        case .success(.alist):
+            subscriptionErrors[entry.address] = L10n.text("This address is now an AList server. Add it again to browse it in Cloud Files.")
+        case .failure(let error):
+            Diagnostics.shared.failure("subscription", "refresh host=\(URL(string: entry.address)?.host() ?? "-")", error)
+            subscriptionErrors[entry.address] = error.localizedDescription
+        }
     }
     private func keep(_ value: Subscription, for entry: SubscriptionEntry) {
         documents[entry.address] = value

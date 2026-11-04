@@ -375,7 +375,10 @@ struct DiscoverDetailView: View {
                 PosterImage(url: artwork.backdrop ?? item.backdrop).frame(height: 210)
                     .overlay { Image(systemName: "play.fill").font(.system(size: 28)).frame(width: 64, height: 64).glassSurface(.regular, in: Circle()) }
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            }.buttonStyle(.plain).padding(.horizontal, 20).accessibilityIdentifier("discover.detail.trailer")
+            }
+                .buttonStyle(.plain).padding(.horizontal, 20)
+                .accessibilityLabel(L10n.text("Play Trailer"))
+                .accessibilityIdentifier("discover.detail.trailer")
         }
     }
 

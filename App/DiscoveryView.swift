@@ -495,7 +495,9 @@ struct GlobalSearchView: View {
                                 Image(systemName: "arrow.up.left").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
                                     .padding(.trailing, 18).frame(height: 48)
                                     .contentShape(Rectangle())
-                            }.buttonStyle(.plain)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(L10n.text("Use This Search"))
                         }
                         if index < history.count - 1 { Divider().padding(.leading, 56) }
                     }

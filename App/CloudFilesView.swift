@@ -152,6 +152,7 @@ struct CloudFolderView: View {
             }
             .glassRow()
             .contextMenu { FavoriteMenuButton(item: item, name: file.name) }
+            .accessibilityLabel(L10n.text("Play %@", file.name))
             .accessibilityIdentifier("files.play." + file.name)
         } else {
             // Focusable on Apple TV all the same, or the remote couldn't scroll past these rows.

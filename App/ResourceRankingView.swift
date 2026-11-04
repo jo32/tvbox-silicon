@@ -23,9 +23,11 @@ struct ResourceRankingView: View {
                             Button { move(key, by: -1) } label: { Image(systemName: "chevron.up") }
                                 .buttonStyle(.borderless)
                                 .disabled(keys.first == key)
+                                .accessibilityLabel(L10n.text("Move %@ up", key))
                             Button { move(key, by: 1) } label: { Image(systemName: "chevron.down") }
                                 .buttonStyle(.borderless)
                                 .disabled(keys.last == key)
+                                .accessibilityLabel(L10n.text("Move %@ down", key))
                         }
                         #endif
                         // Direction is per key: smaller is better for bitrate and size when the

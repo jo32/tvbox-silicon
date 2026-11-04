@@ -184,7 +184,9 @@ struct DiscoverView: View {
             Button { searchShown = true } label: {
                 Image(systemName: "text.magnifyingglass").font(.system(size: 28))
                     .frame(width: 76, height: 76).glassSurface(.regular, in: Circle())
-            }.tileButton()
+            }
+                .accessibilityLabel(L10n.text("Search Catalog"))
+                .tileButton()
                 .focused($tvFocus, equals: .search)
                 .onMoveCommand { direction in
                     if direction == .down, heroShown, !featured.isEmpty {

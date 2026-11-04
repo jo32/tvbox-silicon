@@ -39,9 +39,11 @@ struct SkipSourceSettingsView: View {
                             Button { move(source, by: -1) } label: { Image(systemName: "chevron.up") }
                                 .buttonStyle(.borderless)
                                 .disabled(order.first == source)
+                                .accessibilityLabel(L10n.text("Move %@ up", source.name))
                             Button { move(source, by: 1) } label: { Image(systemName: "chevron.down") }
                                 .buttonStyle(.borderless)
                                 .disabled(order.last == source)
+                                .accessibilityLabel(L10n.text("Move %@ down", source.name))
                         }
                         #endif
                     }

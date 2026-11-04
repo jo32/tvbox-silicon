@@ -293,6 +293,7 @@ struct PrivacyVaultView: View {
                         Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.text("Clear Search"))
                 }
             }
         } footer: {

@@ -181,9 +181,11 @@ struct SubtitleSettingsView: View {
                 Button { value.wrappedValue = max(range.lowerBound, value.wrappedValue - step) } label: {
                     Image(systemName: "minus.circle.fill")
                 }
+                .accessibilityLabel(L10n.text("Decrease"))
                 Button { value.wrappedValue = min(range.upperBound, value.wrappedValue + step) } label: {
                     Image(systemName: "plus.circle.fill")
                 }
+                .accessibilityLabel(L10n.text("Increase"))
             }
             .font(.title3)
             #else

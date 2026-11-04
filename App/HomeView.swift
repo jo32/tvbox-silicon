@@ -238,7 +238,8 @@ struct HomeView: View {
             }
             .controlSize(.large)
             if store.importing {
-                LoadingCard { .server(URL(string: store.subscriptionAddress)?.host(), title: L10n.text("Importing…")) }
+                LoadingCard { .server(URL(string: store.subscriptionAddress)?.host(),
+                    title: store.importTotal > 1 ? L10n.text("Importing… %lld of %lld", store.importDone, store.importTotal) : L10n.text("Importing…")) }
                     .frame(maxWidth: heroTitle * 9)
                     .padding(.top, 24)
             }

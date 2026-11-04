@@ -2308,11 +2308,6 @@ struct VideoDetailView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         ScrollView { watchDetails
                             .padding(.horizontal, 16).padding(.vertical, 14)
-                            // The folded-out Duo keeps the system sidebar (the section icons in a capsule
-                            // on the far edge). It floats over the content without widening the safe area,
-                            // so the episode list on the right ran under it and its last column read cut off.
-                            // End the list clear of the sidebar (16 base + the sidebar's own width).
-                            .padding(.trailing, duoExpanded ? 80 : 16)
                         }
                             .scrollIndicators(.never)
                             .frame(width: detailColumn)

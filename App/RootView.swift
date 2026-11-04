@@ -247,6 +247,7 @@ struct RootView: View {
                 content(.more).routeDestinations()
                     // Any section can be moved into More, so any can be pushed here.
                     .navigationDestination(for: AppSection.self) { content($0).tvDefaultControls() }
+                    .tabSafeArea()
             }
             .environment(\.openRoute, RouteOpener { morePath.append($0) })
         } else {
