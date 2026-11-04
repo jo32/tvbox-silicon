@@ -53,7 +53,7 @@ struct FeedbackView: View {
         L10n.text("Your subscriptions and what you played lately help find the problem. Edit or remove anything you'd rather keep private.")
     }
     private var freshContext: String {
-        Feedback.context(subscriptions: store.subscriptions, errors: store.subscriptionErrors, history: store.playbackHistory.entries)
+        Feedback.context(subscriptions: store.subscriptions, errors: store.subscriptionErrors, history: store.visibleHistory)
     }
     private var empty: Bool { message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var thanks: String? { sent.map { L10n.text("Thanks! Your feedback is issue #%lld.", $0.number) } }

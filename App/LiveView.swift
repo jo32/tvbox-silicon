@@ -412,9 +412,16 @@ private struct TVGuideCategoryStyle: ButtonStyle {
 
 struct FavoritesView: View {
     @Environment(Store.self) private var store
+    /// Only what the viewer may see right now: vault-hidden sources are gone (and, once favourites
+    /// carry an environment, so is any other environment's). The raw `store.favorites.items` list
+    /// must never be read directly here — that is how a hidden source stayed on screen.
+    private var visible: [FavoriteItem] { store.visibleFavorites }
+    private func visible(_ kind: FavoriteKind) -> [FavoriteItem] { visible.filter { $0.kind == kind } }
+    private var visibleLive: [Channel] { visible.compactMap { if case .live(let c) = $0 { c } else { nil } } }
+
     var body: some View {
         Group {
-            if store.favorites.items.isEmpty {
+            if visible.isEmpty {
                 EmptyPage(symbol: AppSection.favorites.icon, title: L10n.text("No Favorites Yet"),
                           message: L10n.text("Save a live channel, a video, an episode, a song, or a cloud file with the heart."),
                           action: AppSection.live.title, actionSymbol: AppSection.live.icon, perform: { store.section = .live })
@@ -424,11 +431,11 @@ struct FavoritesView: View {
                         if let error = store.favorites.persistenceError {
                             StatusNotice(text: L10n.text("Unable to save favorites: %@", error))
                         }
-                        if !store.favorites.items(.live).isEmpty { liveSection }
-                        if !store.favorites.items(.video).isEmpty { filmSection }
-                        if !store.favorites.items(.episode).isEmpty { episodeSection }
-                        if !store.favorites.items(.music).isEmpty { musicSection }
-                        if !store.favorites.items(.cloud).isEmpty { cloudSection }
+                        if !visible(.live).isEmpty { liveSection }
+                        if !visible(.video).isEmpty { filmSection }
+                        if !visible(.episode).isEmpty { episodeSection }
+                        if !visible(.music).isEmpty { musicSection }
+                        if !visible(.cloud).isEmpty { cloudSection }
                     }
                     .pageContainer()
                 }
@@ -442,7 +449,7 @@ struct FavoritesView: View {
         VStack(alignment: .leading, spacing: Layout.headerSpacing) {
             SectionHeader(title: L10n.text("Live TV"))
             LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.cardMin), spacing: 12)], spacing: 12) {
-                ForEach(store.favorites.liveChannels) { ChannelCard(channel: $0) }
+                ForEach(visibleLive) { ChannelCard(channel: $0) }
             }
         }
         .tvFocusSection()
@@ -452,7 +459,7 @@ struct FavoritesView: View {
         VStack(alignment: .leading, spacing: Layout.headerSpacing) {
             SectionHeader(title: L10n.text("Films"))
             LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
-                ForEach(store.favorites.items(.video)) { item in
+                ForEach(visible(.video)) { item in
                     if case .video(let video) = item { FavoriteFilmCard(video: video) }
                 }
             }
@@ -464,7 +471,7 @@ struct FavoritesView: View {
         VStack(alignment: .leading, spacing: Layout.headerSpacing) {
             SectionHeader(title: L10n.text("Saved Episodes"))
             LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
-                ForEach(store.favorites.items(.episode)) { item in
+                ForEach(visible(.episode)) { item in
                     if case .episode(let episode) = item { FavoriteEpisodeCard(episode: episode) }
                 }
             }
@@ -476,7 +483,7 @@ struct FavoritesView: View {
         VStack(alignment: .leading, spacing: Layout.headerSpacing) {
             SectionHeader(title: L10n.text("Music"))
             LazyVStack(alignment: .leading, spacing: MusicLayout.rowSpacing) {
-                ForEach(store.favorites.items(.music)) { item in
+                ForEach(visible(.music)) { item in
                     if case .music(let track) = item {
                         HStack(spacing: 10) {
                             MusicTrackRow(track: track, showsFavoriteMark: false) { store.music.play(track) }
@@ -498,7 +505,7 @@ struct FavoritesView: View {
         VStack(alignment: .leading, spacing: Layout.headerSpacing) {
             SectionHeader(title: L10n.text("Cloud Files"))
             LazyVStack(alignment: .leading, spacing: Layout.cardSpacing) {
-                ForEach(store.favorites.items(.cloud)) { item in
+                ForEach(visible(.cloud)) { item in
                     if case .cloud(let file) = item { FavoriteCloudRow(file: file) }
                 }
             }

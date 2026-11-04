@@ -105,22 +105,22 @@ struct HomeView: View {
 
     /// A section that will be on the page once it is built. Empty data is skipped so a placeholder does not appear and then vanish.
     private func showsPlaceholder(_ config: Subscription) -> Bool {
-        (showsContinueWatching && !store.playbackHistory.entries.isEmpty)
+        (showsContinueWatching && !store.visibleHistory.isEmpty)
             || (showsPinnedSources && !store.pinnedSources.isEmpty)
             || showsRecommendations
-            || (showsFavorites && !store.favorites.items.isEmpty)
+            || (showsFavorites && !store.visibleFavorites.isEmpty)
             || (showsLiveTV && !config.lives.isEmpty)
     }
 
     @ViewBuilder private var sections: some View {
         VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-            if showsContinueWatching, !store.playbackHistory.entries.isEmpty { continueWatching }
+            if showsContinueWatching, !store.visibleHistory.isEmpty { continueWatching }
             if let config = store.subscription {
                 if showsPinnedSources, store.orderedSites(config).contains(where: { store.pinnedSources.contains($0, origin: config.origin) }) {
                     pinnedSources(config)
                 }
                 if showsRecommendations { RecommendationsView(config: config) }
-                if showsFavorites, !store.favorites.items.isEmpty { favorites }
+                if showsFavorites, !store.visibleFavorites.isEmpty { favorites }
                 if showsLiveTV, !config.lives.isEmpty { playlists(config).id("live") }
                 if !(showsContinueWatching || showsPinnedSources || showsRecommendations || showsFavorites || showsLiveTV) { allHidden }
             } else {
@@ -131,7 +131,7 @@ struct HomeView: View {
 
     private func placeholders(_ config: Subscription) -> some View {
         VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-            if showsContinueWatching, !store.playbackHistory.entries.isEmpty {
+            if showsContinueWatching, !store.visibleHistory.isEmpty {
                 loadingSection(HomeSection.continueWatching.title, action: { store.section = .history }) { cardRow }
             }
             if showsPinnedSources, !store.pinnedSources.isEmpty {
@@ -145,7 +145,7 @@ struct HomeView: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(L10n.text("Loading…"))
             }
-            if showsFavorites, !store.favorites.items.isEmpty {
+            if showsFavorites, !store.visibleFavorites.isEmpty {
                 loadingSection(HomeSection.favorites.title, action: { store.section = .favorites }) { cardRow }
             }
             if showsLiveTV, !config.lives.isEmpty {
@@ -301,7 +301,7 @@ struct HomeView: View {
             SectionHeader(title: L10n.text("Continue Watching")) { store.section = .history }
             ChipRow {
                 HStack(spacing: Layout.cardSpacing) {
-                    ForEach(store.playbackHistory.entries.prefix(12)) { HistoryCard(entry: $0) }
+                    ForEach(store.visibleHistory.prefix(12)) { HistoryCard(entry: $0) }
                 }.padding(.vertical, 6)
             }
         }
@@ -312,7 +312,7 @@ struct HomeView: View {
             SectionHeader(title: L10n.text("Favorites")) { store.section = .favorites }
             ChipRow {
                 HStack(spacing: Layout.cardSpacing) {
-                    ForEach(Array(store.favorites.items.prefix(12))) { item in
+                    ForEach(Array(store.visibleFavorites.prefix(12))) { item in
                         HomeFavoriteCard(item: item).frame(width: Layout.cardMin)
                     }
                 }.padding(.vertical, 6)

@@ -2221,7 +2221,7 @@ struct VideoDetailView: View {
     }
     /// Where the viewer stopped last time, for Continue.
     private var watchHistory: PlaybackHistoryEntry? {
-        store.playbackHistory.entries.first { watchScopes.contains($0.context.id) }
+        store.visibleHistory.first { watchScopes.contains($0.context.id) }
     }
     /// The line of the episode playing, else of the one watched last, while the details still have it: the page opens
     /// on that line so the episode shows in its list, not on the first line (#362).
@@ -2249,7 +2249,13 @@ struct VideoDetailView: View {
     /// A real iPad (`idiom == .pad`) never reaches here: `WatchPage.applies` keeps it on the plain
     /// detail page.
     private var duoExpanded: Bool {
-        UIDevice.current.userInterfaceIdiom == .phone
+        #if DEBUG
+        // `-qaDuoExpanded 1` renders this branch anywhere, so the folded-out layout can be photographed
+        // without an iPhone Duo simulator — that model needs an iOS 27.1 runtime, and on a machine that
+        // only has 26.5 / 27.0 the device type refuses to be created at all.
+        if UserDefaults.standard.bool(forKey: "qaDuoExpanded") { return true }
+        #endif
+        return UIDevice.current.userInterfaceIdiom == .phone
             && sizeClass == .regular && verticalSizeClass == .regular
     }
     /// What plays at the top of the page: one of this video's episodes.

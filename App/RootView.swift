@@ -92,7 +92,6 @@ struct RootView: View {
         #endif
         return busy
     }
-    @AppStorage("hidesInAppSwitcher") private var hidesInAppSwitcher = true
     var body: some View {
         @Bindable var store = store
         Group {
@@ -156,8 +155,10 @@ struct RootView: View {
         .alert(L10n.text("Unable to Complete"), isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
             Button(L10n.text("OK"), role: .cancel) { store.error = nil }
         } message: { Text(store.error ?? "") }
-        // Above every page, sheet and the player: the app switcher snapshots the whole window.
-        .privacyShade(enabled: hidesInAppSwitcher)
+        // The app-switcher shade lives on the scene in TVBoxApp, not here: it must sit above sheets,
+        // the player and every page, and there can be only one. A second one here used to read a
+        // dead `hidesInAppSwitcher` key no settings screen ever wrote, so turning the switch off in
+        // Settings left this inner shade on and the snapshot stayed covered (2026-11-04).
     }
 
     #if !os(macOS)

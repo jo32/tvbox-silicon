@@ -10,13 +10,15 @@ struct PlaybackHistoryView: View {
     @State private var confirmsDelete = false
     @State private var deletionIDs = Set<String>()
     private var history: PlaybackHistory { store.playbackHistory }
+    /// The rows this page may show: the active environment's history, with vault-hidden sources gone.
+    private var visible: [PlaybackHistoryEntry] { store.visibleHistory }
     private var entries: [PlaybackHistoryEntry] {
-        history.entries.filter { query.isEmpty || $0.context.videoName.localizedCaseInsensitiveContains(query) || $0.context.sourceName.localizedCaseInsensitiveContains(query) }
+        visible.filter { query.isEmpty || $0.context.videoName.localizedCaseInsensitiveContains(query) || $0.context.sourceName.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
         Group {
-            if history.entries.isEmpty {
+            if visible.isEmpty {
                 EmptyPage(symbol: AppSection.history.icon, title: L10n.text("No Playback History Yet"),
                           message: L10n.text("Videos you watch appear here, ready to pick up where you left off."),
                           action: L10n.text("Browse Sources"), actionSymbol: AppSection.sites.icon, perform: { store.section = .sites })
@@ -27,7 +29,7 @@ struct PlaybackHistoryView: View {
         .screenBackdrop()
         .historyDetailsDestination()
         .tabTitle(L10n.text("Playback History"))
-        .onChange(of: history.entries.isEmpty) { _, empty in if empty { managing = false; selected.removeAll() } }
+        .onChange(of: visible.isEmpty) { _, empty in if empty { managing = false; selected.removeAll() } }
         // Leaving the page gives up a title still being prepared.
         .onDisappear { if store.playing == nil { store.cancelResume() } }
         .confirmationDialog(L10n.text("Remove selected history and its cached content?"), isPresented: $confirmsDelete, titleVisibility: .visible) {

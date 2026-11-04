@@ -178,8 +178,8 @@ struct MoreView: View {
         switch section {
         case .messages: announcements.all.count
         case .sites: store.subscription.map { store.orderedSites($0).count }
-        case .history: store.playbackHistory.entries.count
-        case .favorites: store.favorites.items.count
+        case .history: store.visibleHistory.count
+        case .favorites: store.visibleFavorites.count
         case .downloads: DownloadLibrary.shared.items.count
         default: nil
         }
