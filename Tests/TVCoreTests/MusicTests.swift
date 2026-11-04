@@ -25,7 +25,26 @@ private struct FakeProvider: MusicStreamProvider {
     let id: MusicProviderID
     let platforms: Set<MusicPlatform>
     let handler: @Sendable (String) async throws -> ResolvedMusicStream
-    func resolve(_ songID: String, platform: MusicPlatform) async throws -> ResolvedMusicStream { try await handler(songID) }
+    func resolve(_ songID: String, platform: MusicPlatform, quality: MusicAudioQuality) async throws -> ResolvedMusicStream { try await handler(songID) }
+}
+
+/// Records which quality each channel was asked for.
+private final class QualityLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _qualities: [MusicAudioQuality] = []
+    func record(_ quality: MusicAudioQuality) { lock.withLock { _qualities.append(quality) } }
+    var qualities: [MusicAudioQuality] { lock.withLock { _qualities } }
+}
+
+private struct QualityProvider: MusicStreamProvider {
+    let id: MusicProviderID
+    let platforms: Set<MusicPlatform>
+    let log: QualityLog
+    let handler: @Sendable (MusicAudioQuality) async throws -> ResolvedMusicStream
+    func resolve(_ songID: String, platform: MusicPlatform, quality: MusicAudioQuality) async throws -> ResolvedMusicStream {
+        log.record(quality)
+        return try await handler(quality)
+    }
 }
 
 /// A FLAC file's first bytes: "fLaC" and a STREAMINFO block.
@@ -292,6 +311,35 @@ private func resolver(_ providers: [any MusicStreamProvider], health: MusicHealt
     }
 }
 
+@Test func lossyPreferencesAskChannelsForLossyAudioAndNeverCallItDegraded() async throws {
+    let track = qqTrack("晴天", ["周杰伦"], duration: 269.75, id: "q")
+    let log = QualityLog()
+    let flac = QualityProvider(id: .vkeys, platforms: [.qq], log: log) { _ in stream("/flac/16/44100/269.75") }
+    let mp3 = QualityProvider(id: .hyw, platforms: [.qq], log: log) { _ in stream("/mp3/269.75") }
+    // A lossless answer is not the wanted kind: the fallback gets its turn, and its MP3 wins.
+    let high = try await resolver([flac, mp3]).select(track, preference: .high)
+    #expect(high.candidate.provider == .hyw && high.probe.format.codec == .mp3 && !high.degraded)
+    #expect(log.qualities == [.high, .high])
+
+    // A channel that only has lossless still plays it rather than failing.
+    let standard = try await resolver([flac]).select(track, preference: .standard)
+    #expect(standard.candidate.provider == .vkeys && standard.probe.format.isLossless && !standard.degraded)
+    #expect(log.qualities.last == .standard)
+}
+
+@Test func channelsAskForTheChosenTier() {
+    #expect(MusicQualityPreference.high.requested == .high && MusicQualityPreference.standard.requested == .standard)
+    #expect(MusicQualityPreference.losslessPreferred.wantsLossless && !MusicQualityPreference.high.wantsLossless)
+    #expect(VKeysProvider.code(for: .lossless) == "10" && VKeysProvider.code(for: .high) == "8" && VKeysProvider.code(for: .standard) == "6")
+    #expect(GDStudioProvider.bitrate(for: .lossless) == "999" && GDStudioProvider.bitrate(for: .high) == "320" && GDStudioProvider.bitrate(for: .standard) == "128")
+    #expect(HYWProvider.quality(for: .lossless) == "flac" && HYWProvider.quality(for: .standard) == "128k")
+    #expect(NianxinProvider.levels(for: .lossless) == ["lossless", "exhigh"] && NianxinProvider.levels(for: .standard) == ["standard"])
+    #expect(XinghaiProvider.quality(for: .lossless, platform: .kuwo) == "flac" && XinghaiProvider.quality(for: .high, platform: .kuwo) == "320k")
+    #expect(XinghaiProvider.quality(for: .lossless, platform: .netease) == "lossless" && XinghaiProvider.quality(for: .standard, platform: .netease) == "standard")
+    #expect(MiguProvider.tiers(for: .lossless).map(\.name) == ["SQ", "HQ"] && MiguProvider.tiers(for: .high).map(\.name) == ["HQ"])
+    #expect(MiguProvider.tiers(for: .standard).isEmpty)
+}
+
 @Test func lossyFirstKeepsLookingForLossless() async throws {
     var track = qqTrack("十年", ["陈奕迅"], duration: 205.4, id: "q")
     track.ids[.netease] = "66842"
@@ -393,7 +441,7 @@ private func resolver(_ providers: [any MusicStreamProvider], health: MusicHealt
     let again = try await resolver.select(track, preference: .losslessPreferred, cache: cache)
     #expect(again.stream.url == first.stream.url)
     // ...until it fails, when the same channel is asked again.
-    let refreshed = try await resolver.refresh(first.candidate, track: track, cache: cache)
+    let refreshed = try await resolver.refresh(first.candidate, track: track, preference: .losslessPreferred, cache: cache)
     #expect(refreshed.stream.url != first.stream.url)
     #expect(MusicRecovery.canResume(from: first.probe, to: refreshed.probe))
 }

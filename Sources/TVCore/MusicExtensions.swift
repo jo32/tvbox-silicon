@@ -541,7 +541,8 @@ public struct MusicExtensionProvider: MusicStreamProvider {
         self.library = library; self.runtime = runtime
     }
 
-    public func resolve(_ songID: String, platform: MusicPlatform) async throws -> ResolvedMusicStream {
+    public func resolve(_ songID: String, platform: MusicPlatform, quality: MusicAudioQuality) async throws -> ResolvedMusicStream {
+        // The extension decides what its getSongInfo answer holds; probing tells what it really is.
         guard let reference = MusicExtensionReference.decode(songID), let item = library.item(reference.extensionID), item.enabled else {
             throw MusicProviderError.noResource
         }

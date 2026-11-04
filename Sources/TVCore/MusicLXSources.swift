@@ -61,9 +61,21 @@ public enum LXSourceKey {
         }
     }
 
-    /// The quality a lookup asks for: lossless at CD quality first, as the other channels do; the stream is probed anyway.
-    public static func quality(from declared: [String]) -> String {
-        ["flac", "flac24bit", "320k", "128k"].first(where: declared.contains) ?? "320k"
+    /// The quality a lookup asks for: lossless at CD quality first, as the other channels do; the
+    /// stream is probed anyway. High and Standard ask only for a lossy tier the source declared,
+    /// and a source with none is skipped rather than sent lossless audio the viewer chose to avoid.
+    public static func quality(from declared: [String], for quality: MusicAudioQuality) -> String? {
+        if declared.isEmpty {
+            switch quality {
+            case .lossless, .high: return "320k"
+            case .standard: return "128k"
+            }
+        }
+        switch quality {
+        case .lossless: return ["flac", "flac24bit", "320k", "128k"].first(where: declared.contains) ?? "320k"
+        case .high: return ["320k", "128k"].first(where: declared.contains)
+        case .standard: return ["128k"].first(where: declared.contains)
+        }
     }
 
     /// The `musicInfo` an LX source receives, in LX Music's format, from what the catalog listed.
@@ -284,21 +296,22 @@ public struct LXMusicProvider: MusicStreamProvider {
         platforms = Set(sources.flatMap(\.platforms))
     }
 
-    public func resolve(_ songID: String, platform: MusicPlatform) async throws -> ResolvedMusicStream {
-        try await resolve(songID, platform: platform, track: nil)
+    public func resolve(_ songID: String, platform: MusicPlatform, quality: MusicAudioQuality) async throws -> ResolvedMusicStream {
+        try await resolve(songID, platform: platform, track: nil, quality: quality)
     }
 
-    public func resolve(_ songID: String, platform: MusicPlatform, track: MusicTrack?) async throws -> ResolvedMusicStream {
+    public func resolve(_ songID: String, platform: MusicPlatform, track: MusicTrack?, quality: MusicAudioQuality) async throws -> ResolvedMusicStream {
         let key = LXSourceKey.key(platform)
         let info = LXSourceKey.musicInfo(songID: songID, platform: platform, track: track)
         var failure = MusicProviderError.noResource
         for source in sources {
-            guard let declared = source.sources[key] else { continue }
+            guard let declared = source.sources[key],
+                  let tier = LXSourceKey.quality(from: declared, for: quality) else { continue }
             try Task.checkCancellation()
             try await health.admit("lx")
             do {
-                let url = try await runtime.musicURL(source, library: library, key: key, quality: LXSourceKey.quality(from: declared), musicInfo: info)
-                return ResolvedMusicStream(url: url, claimedQuality: LXSourceKey.quality(from: declared), upstream: "lx:" + source.info.name)
+                let url = try await runtime.musicURL(source, library: library, key: key, quality: tier, musicInfo: info)
+                return ResolvedMusicStream(url: url, claimedQuality: tier, upstream: "lx:" + source.info.name)
             } catch { failure = MusicProviderError(error) }
         }
         throw failure

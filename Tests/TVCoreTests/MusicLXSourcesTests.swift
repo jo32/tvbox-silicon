@@ -60,9 +60,12 @@ private func temporaryLibrary() throws -> (LXSourceLibrary, URL, UserDefaults) {
     #expect(LXSourceKey.platform("tx") == .qq && LXSourceKey.platform("wy") == .netease)
     #expect(LXSourceKey.platform("kw") == .kuwo && LXSourceKey.platform("mg") == .migu && LXSourceKey.platform("kg") == nil)
     for platform in MusicPlatform.allCases where platform != .ext { #expect(LXSourceKey.platform(LXSourceKey.key(platform)) == platform) }
-    #expect(LXSourceKey.quality(from: ["128k", "320k", "flac", "flac24bit"]) == "flac")
-    #expect(LXSourceKey.quality(from: ["128k", "320k"]) == "320k")
-    #expect(LXSourceKey.quality(from: []) == "320k")
+    #expect(LXSourceKey.quality(from: ["128k", "320k", "flac", "flac24bit"], for: .lossless) == "flac")
+    #expect(LXSourceKey.quality(from: ["128k", "320k", "flac", "flac24bit"], for: .high) == "320k")
+    #expect(LXSourceKey.quality(from: ["128k", "320k", "flac", "flac24bit"], for: .standard) == "128k")
+    #expect(LXSourceKey.quality(from: ["128k", "320k"], for: .lossless) == "320k")
+    #expect(LXSourceKey.quality(from: [], for: .high) == "320k")
+    #expect(LXSourceKey.quality(from: [], for: .standard) == "128k")
 
     var track = MusicTrack(platform: .migu, songID: "600902000006889366_60054701923", title: "晴天", artists: ["周杰伦", "费玉清"], album: "叶惠美", duration: 269.4)
     track.ids[.qq] = "0039MnYb0qxYhV"
@@ -87,7 +90,7 @@ private func temporaryLibrary() throws -> (LXSourceLibrary, URL, UserDefaults) {
     let provider = try #require(LXMusicProvider(sources: library.enabled, library: library, runtime: runtime, health: health))
     #expect(provider.id == .lx && provider.platforms == [.qq, .migu])
     let track = MusicTrack(platform: .qq, songID: "0039MnYb0qxYhV", title: "晴天", artists: ["周杰伦"])
-    let stream = try await provider.resolve("0039MnYb0qxYhV", platform: .qq, track: track)
+    let stream = try await provider.resolve("0039MnYb0qxYhV", platform: .qq, track: track, quality: .lossless)
     let query = try #require(URLComponents(url: stream.url, resolvingAgainstBaseURL: false)?.queryItems)
     func value(_ name: String) -> String? { query.first { $0.name == name }?.value }
     #expect(stream.url.path() == "/tx/0039MnYb0qxYhV.flac" && stream.upstream == "lx:测试音源" && stream.claimedQuality == "flac")
@@ -97,13 +100,13 @@ private func temporaryLibrary() throws -> (LXSourceLibrary, URL, UserDefaults) {
     #expect(value("aes")?.count == 32 && value("r") == "8" && value("z") == "zlib")
 
     // The runtime is kept: the second song reuses it.
-    let migu = try await provider.resolve("600902000006889366_60054701923", platform: .migu, track: nil)
+    let migu = try await provider.resolve("600902000006889366_60054701923", platform: .migu, track: nil, quality: .lossless)
     #expect(migu.url.path() == "/mg/60054701923.320k" && migu.url.query()?.contains("calls=2") == true)
 
     // Failures never pass the script's own message on.
-    await #expect(throws: MusicProviderError.noResource) { try await provider.resolve("bad", platform: .qq, track: nil) }
-    await #expect(throws: MusicProviderError.noResource) { try await provider.resolve("offline", platform: .qq, track: nil) }
-    await #expect(throws: MusicProviderError.noResource) { try await provider.resolve("x", platform: .kuwo, track: nil) }
+    await #expect(throws: MusicProviderError.noResource) { try await provider.resolve("bad", platform: .qq, track: nil, quality: .lossless) }
+    await #expect(throws: MusicProviderError.noResource) { try await provider.resolve("offline", platform: .qq, track: nil, quality: .lossless) }
+    await #expect(throws: MusicProviderError.noResource) { try await provider.resolve("x", platform: .kuwo, track: nil, quality: .lossless) }
 
     library.setEnabled(source.id, false)
     #expect(library.enabled.isEmpty && LXMusicProvider(sources: library.enabled) == nil)
@@ -128,7 +131,7 @@ private func temporaryLibrary() throws -> (LXSourceLibrary, URL, UserDefaults) {
 @Test func lxChannelComesAfterTheBuiltInOnes() {
     struct Stub: MusicStreamProvider {
         let id: MusicProviderID; let platforms: Set<MusicPlatform>
-        func resolve(_ songID: String, platform: MusicPlatform) async throws -> ResolvedMusicStream { throw MusicProviderError.noResource }
+        func resolve(_ songID: String, platform: MusicPlatform, quality: MusicAudioQuality) async throws -> ResolvedMusicStream { throw MusicProviderError.noResource }
     }
     let resolver = MusicResolver(providers: [Stub(id: .lx, platforms: [.qq, .kuwo]), Stub(id: .vkeys, platforms: [.qq]), Stub(id: .nianxin, platforms: [.kuwo])])
     var track = MusicTrack(platform: .qq, songID: "q", title: "t", artists: ["a"])

@@ -255,10 +255,10 @@ typealias MusicTrack = TVCore.MusicTrack
         let run = UUID(); generation = run
         task?.cancel(); startWatch?.cancel()
         phase = .resolving
-        let resolver = MusicResolver(preferences: preferences), cache = cache
+        let resolver = MusicResolver(preferences: preferences), preference = preferences.quality, cache = cache
         task = Task {
             do {
-                var chosen = try await resolver.refresh(candidate, track: track, cache: cache)
+                var chosen = try await resolver.refresh(candidate, track: track, preference: preference, cache: cache)
                 guard self.generation == run else { return }
                 chosen.untried = self.alternatives.filter { $0 != candidate }
                 self.record(chosen.attempts)
@@ -531,7 +531,7 @@ typealias MusicTrack = TVCore.MusicTrack
         let at = currentSeconds, previous = selection.probe
         startWatch?.cancel()
         let step = recovery.next(failed: selection.candidate, untried: alternatives)
-        let resolver = MusicResolver(preferences: preferences), cache = cache
+        let resolver = MusicResolver(preferences: preferences), preference = preferences.quality, cache = cache
         switch step {
         case .giveUp:
             failureDetail = reason
@@ -542,7 +542,7 @@ typealias MusicTrack = TVCore.MusicTrack
             phase = .resolving
             task = Task {
                 do {
-                    var chosen = try await resolver.refresh(candidate, track: track, cache: cache)
+                    var chosen = try await resolver.refresh(candidate, track: track, preference: preference, cache: cache)
                     guard self.generation == next else { return }
                     chosen.untried = self.alternatives.filter { $0 != candidate }
                     self.record(chosen.attempts)

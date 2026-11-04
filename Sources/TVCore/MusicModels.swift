@@ -210,16 +210,40 @@ public struct ResolvedMusicStream: Hashable, Sendable {
     }
 }
 
+/// What a channel is asked for: its lossless audio, or lossy audio at 320 or 128 kbps, which
+/// costs far less data to stream.
+public enum MusicAudioQuality: String, Codable, Sendable, Equatable {
+    case lossless
+    case high
+    case standard
+}
+
 public enum MusicQualityPreference: String, Codable, Sendable, CaseIterable {
     /// Lossless when any channel has it within the budget, otherwise the best lossy stream, marked.
     case losslessPreferred
     case losslessOnly
+    /// 320 kbps audio, lossy.
+    case high
+    /// 128 kbps audio, lossy and the lightest on data.
+    case standard
     public var name: String {
         switch self {
         case .losslessPreferred: L10n.text("Lossless first")
         case .losslessOnly: L10n.text("Lossless only")
+        case .high: L10n.text("High (320 kbps)")
+        case .standard: L10n.text("Standard (128 kbps)")
         }
     }
+    /// The tier every channel is asked for.
+    public var requested: MusicAudioQuality {
+        switch self {
+        case .losslessPreferred, .losslessOnly: .lossless
+        case .high: .high
+        case .standard: .standard
+        }
+    }
+    /// Whether the viewer asked for lossless; the lossy choices play it only as a last resort.
+    public var wantsLossless: Bool { requested == .lossless }
 }
 
 /// One channel tried for a track, and how it went; the player's channel list shows these.

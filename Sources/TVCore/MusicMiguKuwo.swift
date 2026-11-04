@@ -74,7 +74,7 @@ public struct MiguProvider: MusicStreamProvider {
     ]
     public init(transport: MusicTransport = URLSessionMusicTransport()) { self.transport = transport }
 
-    public func resolve(_ songID: String, platform: MusicPlatform) async throws -> ResolvedMusicStream {
+    public func resolve(_ songID: String, platform: MusicPlatform, quality: MusicAudioQuality) async throws -> ResolvedMusicStream {
         guard let ids = MiguMusicCatalog.ids(songID) else { throw MusicProviderError.noResource }
         let url = MusicHTTP.url("https://c.musicapp.migu.cn/strategy/listen-url/h5/v2.4", [
             ("contentId", ids.content), ("copyrightId", ids.copyright), ("resourceType", "2"), ("netType", "01"),
@@ -86,11 +86,22 @@ public struct MiguProvider: MusicStreamProvider {
         let response = try await MusicHTTP.withTimeout(Self.timeout) { try await transport.send(request, limit: MusicHTTP.jsonLimit) }
         guard (200..<300).contains(response.status) else { throw MusicProviderError.invalidResponse("Migu HTTP \(response.status)") }
         let base = try Self.address(Self.unscramble(response.body))
-        for tier in Self.tiers.dropLast() {
+        // The answer is always PQ; the tiers above it are sibling paths, each confirmed first.
+        for tier in Self.tiers(for: quality) {
             guard let better = Self.retone(base, to: tier.name), await exists(better) else { continue }
             return ResolvedMusicStream(url: better, claimedQuality: tier.name, upstream: "migu")
         }
         return ResolvedMusicStream(url: base, claimedQuality: "PQ", upstream: "migu")
+    }
+
+    /// The tiers above PQ to try: lossless falls back to 320 kbps, High asks for 320 kbps, and
+    /// Standard keeps the 128 kbps answer.
+    static func tiers(for quality: MusicAudioQuality) -> [(name: String, path: String, ext: String)] {
+        switch quality {
+        case .lossless: Array(tiers.dropLast())
+        case .high: [tiers[1]]
+        case .standard: []
+        }
     }
 
     private func exists(_ url: URL) async -> Bool {

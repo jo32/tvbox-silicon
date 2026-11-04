@@ -782,7 +782,7 @@
 "Open in Video Player" = "在影片播放器中打開";
 "The quality shown is read from the audio itself, not taken from what a channel claims." = "顯示的音質讀取自音訊本身，而非渠道的聲稱。";
 "Not tried yet" = "尚未嘗試";
-"Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "「無損優先」在沒有渠道提供無損音訊時，會播放最好的有損版本並加以標示；「僅無損」則停止播放。";
+"Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead. High and Standard ask every channel for 320 or 128 kbps lossy audio, which uses far less data." = "「無損優先」在沒有渠道提供無損音訊時，會播放最好的有損版本並加以標示；「僅無損」則停止播放。「高」和「標準」會讓所有渠道提供 320 或 128 kbps 的有損音訊，流量小得多。";
 "QQ Music" = "QQ 音樂";
 "NetEase Cloud Music" = "網易雲音樂";
 "QQ Music, when VKeys fails" = "QQ 音樂，VKeys 失敗時使用";
@@ -802,6 +802,8 @@
 "GD Music" = "GD音樂台";
 "Lossless first" = "無損優先";
 "Lossless only" = "僅無損";
+"High (320 kbps)" = "高（320 kbps）";
+"Standard (128 kbps)" = "標準（128 kbps）";
 "No matching song was found." = "沒有找到相符的歌曲。";
 "This channel has no audio for the song." = "此渠道沒有這首歌的音訊。";
 "This channel only has a %lld-second preview." = "此渠道只有 %lld 秒試聽。";

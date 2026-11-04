@@ -782,7 +782,7 @@
 "Open in Video Player" = "ビデオプレーヤーで開く";
 "The quality shown is read from the audio itself, not taken from what a channel claims." = "表示される音質は、チャンネルの申告ではなく音声そのものから読み取ったものです。";
 "Not tried yet" = "未試行";
-"Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "「ロスレス優先」は、ロスレス音声のあるチャンネルがないとき、最良の非可逆圧縮音声をその旨を表示して再生します。「ロスレスのみ」は再生しません。";
+"Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead. High and Standard ask every channel for 320 or 128 kbps lossy audio, which uses far less data." = "「ロスレス優先」は、ロスレス音声のあるチャンネルがないとき、最良の非可逆圧縮音声をその旨を表示して再生します。「ロスレスのみ」は再生しません。「高」と「標準」はすべてのチャンネルに 320 または 128 kbps の非可逆圧縮音声を要求し、通信量を大幅に抑えます。";
 "QQ Music" = "QQ Music";
 "NetEase Cloud Music" = "NetEase Cloud Music";
 "QQ Music, when VKeys fails" = "QQ Music（VKeys が失敗したとき）";
@@ -802,6 +802,8 @@
 "GD Music" = "GD音乐台";
 "Lossless first" = "ロスレス優先";
 "Lossless only" = "ロスレスのみ";
+"High (320 kbps)" = "高（320 kbps）";
+"Standard (128 kbps)" = "標準（128 kbps）";
 "No matching song was found." = "一致する曲が見つかりませんでした。";
 "This channel has no audio for the song." = "このチャンネルにはこの曲の音声がありません。";
 "This channel only has a %lld-second preview." = "このチャンネルには %lld 秒の試聴しかありません。";

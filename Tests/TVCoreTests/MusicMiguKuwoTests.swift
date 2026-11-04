@@ -57,7 +57,7 @@ private func json(_ text: String) throws -> JSONValue { try JSONDecoder().decode
 @Test func miguAndKuwoLeadTheChannelOrder() {
     struct Stub: MusicStreamProvider {
         let id: MusicProviderID; let platforms: Set<MusicPlatform>
-        func resolve(_ songID: String, platform: MusicPlatform) async throws -> ResolvedMusicStream { throw MusicProviderError.noResource }
+        func resolve(_ songID: String, platform: MusicPlatform, quality: MusicAudioQuality) async throws -> ResolvedMusicStream { throw MusicProviderError.noResource }
     }
     var track = MusicTrack(platform: .qq, songID: "q", title: "晴天", artists: ["周杰伦"])
     track.ids[.netease] = "n"; track.ids[.migu] = "c_r"; track.ids[.kuwo] = "k"
