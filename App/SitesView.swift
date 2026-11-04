@@ -2356,9 +2356,14 @@ struct VideoDetailView: View {
             // portrait. (The inner display ignores orientation locks anyway, but holding it here also
             // keeps Full Screen's turn from fighting the page.)
             if !duoExpanded { PlayerOrientation.holdPortrait(true) }
+            // Turning the phone sideways opens Full Screen, so listen for its orientation while a video plays.
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
         }
         .onChange(of: watchScopes) { old, new in
             store.watchPageScopes.subtract(old.subtracting(new)); store.watchPageScopes.formUnion(new)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+            phoneTurned()
         }
         .onChange(of: duoExpanded) { _, expanded in
             // Fold/unfold swaps the watch page between the outer display (held portrait) and the
@@ -2372,10 +2377,12 @@ struct VideoDetailView: View {
             if !expanded && fullScreen { fullScreen = false }
         }
         .onDisappear {
+            UIDevice.current.endGeneratingDeviceOrientationNotifications()
             // An iPhone Duo fold/unfold swaps `watchBody` for `pageBody` (and back) without the page leaving, so the
             // page-level `onDisappear` handles stopping playback and leaving Full Screen. Here only the watch page's
             // own contributions are undone; they are re-established by `onAppear` when the watch page returns.
             store.watchPageScopes.subtract(watchScopes)
+            turnedFullScreen = false
             // Unconditional: an unfold sets the hold to false already, but closing the page while
             // folded shut used to skip this and leave the app held upright.
             PlayerOrientation.holdPortrait(false)
@@ -2384,6 +2391,8 @@ struct VideoDetailView: View {
             playerStarted = false
             if ended { playerSession = nil }
             if ended && fullScreen { setFullScreen(landscape: false) }
+            // Started with the phone already sideways: Full Screen at once, as turning it would.
+            if !ended { phoneTurned() }
         }
         .sheet(isPresented: $showsAllEpisodes) { allEpisodes }
     }
