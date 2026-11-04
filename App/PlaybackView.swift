@@ -23,6 +23,8 @@ import TVCore
     private var editingSkip = false
     private var resumeAfterEditing = false
     private var seekingSegment = false
+    /// Whether the player was paused before a quality switch, so the resumed position stays paused too.
+    private var resumePausedAfterQualitySwitch = false
 
     func beginEditingSkip() {
         editingSkip = true
@@ -259,9 +261,11 @@ import TVCore
         let time = player.currentTime(), paused = player.rate == 0
         detachItem()
         self.quality = quality
+        // Route through pendingResume so the position is restored *before* playback starts:
+        // a naive seek after configure() races the item becoming ready and flashes back from 0.
+        if time.seconds.isFinite, time.seconds > 0 { pendingResume = time.seconds }
+        resumePausedAfterQualitySwitch = paused
         configure(Channel(name: channel.name, group: channel.group, url: url, logo: channel.logo, headers: channel.headers), url: url, generation: generation)
-        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
-        if paused { player.pause() }
     }
 
     /// Stops listening to the current item, before another replaces it in the same playback.
@@ -937,6 +941,7 @@ import TVCore
         playing = nil
         catalogDanmaku.clear()
         historyContext = nil; pendingResume = nil; restoringPosition = false
+        resumePausedAfterQualitySwitch = false
         requestedResumePosition = nil; restoredPosition = nil
         skipScope = nil; skipSettings = EpisodeSkipSettings(); skipPass = EpisodeSkipPass()
         position = 0; duration = 0; editingSkip = false; resumeAfterEditing = false; seekingSegment = false
@@ -962,6 +967,12 @@ import TVCore
         if let failureObserver { NotificationCenter.default.removeObserver(failureObserver) }
         failureObserver = nil
         player.pause(); player.removeAllItems(); item = nil
+        #if !os(macOS)
+        // Let the system reclaim the audio focus so other apps can play sound again,
+        // and drop the .moviePlayback routing mode that only matters while playing.
+        do { try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
+        catch { Diagnostics.shared.failure("player", "audio session deactivate", error) }
+        #endif
     }
     /// Records where the episode is; `item` is the episode's own, which the queue may already have moved past.
     func saveHistory(completed: Bool = false, item: AVPlayerItem? = nil) {
@@ -1007,7 +1018,13 @@ import TVCore
                 }
                 self.restoredPosition = self.player.currentTime().seconds
                 Diagnostics.shared.record(.info, "player", "history resume requested=\(requested) restored=\(self.restoredPosition ?? -1)")
-                if !self.editingSkip { self.player.play() }
+                // A quality switch keeps the pause state it started from, instead of always resuming.
+                if self.resumePausedAfterQualitySwitch {
+                    self.resumePausedAfterQualitySwitch = false
+                    self.player.pause()
+                } else if !self.editingSkip {
+                    self.player.play()
+                }
                 self.saveHistory()
             }
         }

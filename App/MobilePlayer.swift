@@ -1020,7 +1020,10 @@ struct MobilePlayerView: View {
                     .pickerStyle(.inline)
                 }
             }
-            if let legible = tracks.legible, !legible.options.isEmpty {
+            // When external subtitle files are on screen the overlay draws them; the embedded
+            // legible track is already deselected, so don't offer a menu that could turn it back
+            // on and leave two captions stacked over each other.
+            if subtitleTracks.isEmpty, let legible = tracks.legible, !legible.options.isEmpty {
                 Menu(L10n.text("Subtitles")) {
                     Picker(L10n.text("Subtitles"), selection: Binding(get: { tracks.selected(in: legible) }, set: { tracks.select($0, in: legible) })) {
                         if legible.group.allowsEmptySelection { Text(L10n.text("Off")).tag(AVMediaSelectionOption?.none) }
