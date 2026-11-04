@@ -23,6 +23,11 @@ struct GlobalSearchView: View {
     @AppStorage("searchShowsActivity") private var showsActivity = false
     /// Whether the end of the results is on screen, so finished pages can ask for the next.
     @State private var endVisible = false
+    #if !os(tvOS)
+    /// Results as rows of a small cover beside the whole title, instead of the poster grid: long or similar titles
+    /// are cut to one line under a poster (#426).
+    @AppStorage("searchResultsAsList") private var showsList = false
+    #endif
     @AppStorage("videoSearchHistory") private var historyData = Data()
     #if os(tvOS)
     /// Titles iQiyi suggests for the draft, and 360kan's chart for an empty field (`SearchSuggestions`).
@@ -146,7 +151,8 @@ struct GlobalSearchView: View {
                                 emptyResults(config)
                             }
                         } else {
-                            LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
+                            LazyVGrid(columns: listed ? Self.rowColumns : Layout.posterColumns,
+                                      spacing: listed ? Layout.gridSpacing : Layout.gridRowSpacing) {
                                 resultLinks(config)
                             }.scrollTargetLayout()
                             // Scrolling the end into view asks for the next page; while it stays in view each new page asks again.
@@ -339,6 +345,19 @@ struct GlobalSearchView: View {
     }
 
     @ViewBuilder private func searchActionButtons(_ config: Subscription) -> some View {
+        #if !os(tvOS)
+        // Shows what it switches to; the symbol morphs into the other one as the results rearrange.
+        let layoutTitle = L10n.text(showsList ? "Show as Grid" : "Show as List")
+        Button { withAnimation(.smooth(duration: 0.35)) { showsList.toggle() } } label: {
+            Image(systemName: showsList ? "square.grid.2x2" : "list.bullet")
+                .font(.footnote.weight(.semibold))
+                .contentTransition(.symbolEffect(.replace))
+                .frame(minWidth: 16)
+        }
+        .searchAction()
+        .accessibilityLabel(layoutTitle).help(layoutTitle)
+        .accessibilityIdentifier("search.layout")
+        #endif
         if model.busy {
             Button { model.stop() } label: { searchActionLabel(L10n.text("Stop"), symbol: "stop.fill") }.searchAction()
             let title = L10n.text(showsActivity ? "Hide Details" : "Show Details")
@@ -367,9 +386,51 @@ struct GlobalSearchView: View {
             RouteLink {
                 CatalogDestination(video: item.video, client: CatalogClient(site: item.site, origin: config.origin, jarURL: config.spiderURL))
                     .onAppear { rememberQuery() }
-            } label: { searchPoster(item) }
+            } label: {
+                if listed { searchRow(item) } else { searchPoster(item) }
+            }
             .cardButton().id(item.id)
         }
+    }
+
+    private var listed: Bool {
+        #if os(tvOS)
+        false
+        #else
+        showsList
+        #endif
+    }
+
+    /// Rows side by side where they fit: one column on a phone, two or three on an iPad or a Mac window.
+    private static let rowColumns = [GridItem(.adaptive(minimum: 320), spacing: Layout.gridSpacing, alignment: .top)]
+
+    /// A small cover beside the whole title (up to three lines), what the source says of it, and the source.
+    private func searchRow(_ item: SearchPoster) -> some View {
+        let video = item.video
+        let detail = [video.year, video.category?.split(separator: ",").first.map(String.init)].compactMap { $0 }.joined(separator: " · ")
+        return HStack(alignment: .top, spacing: 12) {
+            Color.clear.frame(width: 64, height: 96)
+                .overlay { PosterImage(url: video.poster, headers: video.posterHeaders) }
+                .posterClip(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(video.name).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                    .lineLimit(3).multilineTextAlignment(.leading)
+                if !video.remarks.isEmpty {
+                    Text(video.remarks).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                if !detail.isEmpty {
+                    Text(detail).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Text(SourceLabel(item.site.name).text).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
+        // A plain fill, not glass: a long list of results would otherwise draw a glass layer per row.
+        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private func searchPoster(_ item: SearchPoster) -> some View {

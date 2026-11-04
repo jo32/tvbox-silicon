@@ -379,6 +379,8 @@
 "Try another keyword." = "別のキーワードを試してください。";
 "Show Details" = "詳細を表示";
 "Hide Details" = "詳細を隠す";
+"Show as List" = "リスト表示";
+"Show as Grid" = "グリッド表示";
 "%lld of %lld sources responded" = "%lld / %lld ソースが応答";
 "First-time setup can take a few minutes. Keep the app open." = "初回の準備には数分かかることがあります。アプリを開いたままにしてください。";
 "This source requires Android features that the plugin runtime does not support yet." = "この配信ソースは、プラグイン実行環境で未対応のAndroid機能を必要とします。";
