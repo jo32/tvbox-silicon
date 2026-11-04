@@ -85,6 +85,18 @@ extension View {
     }
     #endif
 
+    #if os(macOS)
+    /// A page whose artwork runs under the window toolbar: the toolbar draws no backing and, on macOS 26, the scroll
+    /// edge is soft, so the art fades under the toolbar instead of stopping at a solid band.
+    @ViewBuilder func artUnderToolbar() -> some View {
+        if #available(macOS 26, *) {
+            toolbarBackgroundVisibility(.hidden, for: .windowToolbar).scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        }
+    }
+    #endif
+
     #if os(iOS)
     @ViewBuilder func minimizesTabBarOnScroll() -> some View {
         if #available(iOS 26, *) { tabBarMinimizeBehavior(.onScrollDown) } else { self }
