@@ -37,11 +37,22 @@ export interface Related {
   overview: string | null;
 }
 
+/** One image asset, whatever its language: the app picks the one it wants by ISO 639-1 tag. */
+export interface ImageAsset {
+  file: string;
+  language: string | null;
+  width: number;
+  height: number;
+  votes: number;
+}
+
 export interface Details {
   mediaType: MediaType;
   id: number;
   name: string;
   originalName: string;
+  /// TMDB's own language for the title (`original_language`), for the artwork-language picker.
+  originalLanguage: string | null;
   tagline: string;
   overview: string;
   year: number | null;
@@ -57,6 +68,9 @@ export interface Details {
   backdrop: string | null;
   logo: string | null;
   heroPoster: string | null;
+  /// Every poster, backdrop and logo TMDB keeps for this title, tagged by language, so the app can
+  /// choose artwork in the language the viewer asked for rather than the one the metadata came in.
+  images: { posters: ImageAsset[]; backdrops: ImageAsset[]; logos: ImageAsset[] };
   trailer: { site: "YouTube" | "IMDb"; key: string } | null;
   stills: string[];
   studios: { id: number | null; kind: "network" | "company"; name: string; logo: string | null }[];
@@ -160,6 +174,18 @@ export async function details(tmdb: TMDB, type: MediaType, id: number, language:
   });
   if (!item) return null;
   const tv = type === "tv";
+  // Every artwork TMDB keeps, tagged by language, for the artwork-language picker to choose from.
+  const imageAssets = (kind: "posters" | "backdrops" | "logos"): ImageAsset[] =>
+    list(item.images?.[kind])
+      .filter((entry) => typeof entry.file_path === "string")
+      .map((entry) => ({
+        file: image(entry.file_path, kind === "backdrops" ? "w1280" : "w500")!,
+        language: typeof entry.iso_639_1 === "string" && entry.iso_639_1 ? entry.iso_639_1 : null,
+        width: number(entry.width) ?? 0,
+        height: number(entry.height) ?? 0,
+        votes: number(entry.vote_count) ?? 0,
+      }))
+      .filter((entry) => entry.file);
   const credits = tv ? item.aggregate_credits : item.credits;
   const cast: Person[] = list(credits?.cast)
     .slice(0, 16)
@@ -210,6 +236,7 @@ export async function details(tmdb: TMDB, type: MediaType, id: number, language:
     id,
     name: clip(tv ? item.name : item.title, 200) || translated(item.translations, language, tv ? "name" : "title"),
     originalName: clip(tv ? item.original_name : item.original_title, 200),
+    originalLanguage: typeof item.original_language === "string" && item.original_language ? item.original_language : null,
     tagline: clip(item.tagline, 300) || translated(item.translations, language, "tagline"),
     overview: clip(item.overview, 2000) || translated(item.translations, language, "overview"),
     year: yearOf(date),
@@ -225,6 +252,7 @@ export async function details(tmdb: TMDB, type: MediaType, id: number, language:
     backdrop: image(item.backdrop_path, "w1280"),
     logo: logo(item.images, language),
     heroPoster: heroPoster(item.images, item.poster_path),
+    images: { posters: imageAssets("posters"), backdrops: imageAssets("backdrops"), logos: imageAssets("logos") },
     trailer: trailer(item.videos, language, item.imdb_id ?? item.external_ids?.imdb_id),
     stills: [...new Set(list(item.images?.backdrops).filter((entry) => typeof entry.file_path === "string" && entry.aspect_ratio > 1).map((entry) => image(entry.file_path, "w780")!))].slice(0, 8),
     studios: list(tv ? item.networks : item.production_companies).slice(0, 8).map((entry) => ({ id: Number.isSafeInteger(entry.id) && entry.id > 0 ? entry.id : null, kind: tv ? "network" : "company", name: clip(entry.name, 60), logo: image(entry.logo_path, "w300") })),

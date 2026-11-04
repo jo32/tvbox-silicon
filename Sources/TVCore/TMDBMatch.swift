@@ -186,6 +186,8 @@ public enum TMDBMatch {
         public let id: Int
         public let name: String
         public let originalName: String
+        /// TMDB's own language for the title, for the artwork-language picker. Absent in details cached before it.
+        public let originalLanguage: String?
         public let tagline: String
         public let overview: String
         public let year: Int?
@@ -202,6 +204,9 @@ public enum TMDBMatch {
         public let logo: URL?
         /// Optional for details cached before Discover; prefers a text-free portrait behind the wordmark.
         public let heroPoster: URL?
+        /// Every artwork TMDB keeps, tagged by language; the artwork-language picker chooses from it.
+        /// Absent in details cached before it.
+        public let images: TMDBImages?
         public let trailer: Trailer?
         public let stills: [URL]?
         public let studios: [Studio]?
@@ -213,6 +218,20 @@ public enum TMDBMatch {
         /// "You may like": TMDB's recommendations, then similar titles. Absent in details saved before it was added.
         public let recommendations: [Candidate]?
         public let link: URL
+    }
+
+    /// One artwork asset with its language tag, as TMDB keeps it. The artwork-language picker uses these.
+    public struct TMDBImages: Codable, Hashable, Sendable {
+        public struct Asset: Codable, Hashable, Sendable {
+            public let file: URL
+            public let language: String?
+            public let width: Int
+            public let height: Int
+            public let votes: Int
+        }
+        public let posters: [Asset]
+        public let backdrops: [Asset]
+        public let logos: [Asset]
     }
 
     public struct Match: Codable, Hashable, Sendable {
