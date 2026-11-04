@@ -54,11 +54,27 @@ import TVCore
     /// `permits…` methods so a hidden source disappears from every listing at once, rather than
     /// being filtered again in each view.
     var vault = PrivacyVault()
+    /// Which language artwork comes in. Persisted beside the vault, in the playback defaults.
+    var artworkLanguage = ArtworkLanguage()
+    /// Separate viewing lives. See `Environments`.
+    var environments = Environments()
+    /// Where intro/credits markers come from, in priority order.
+    var skipSources = SkipSegmentSources()
+    /// How to order several files of the same title.
+    var resourceRanking = ResourceRanking.standard
     private static let vaultKey = "privacyVault"
+    private static let artworkLanguageKey = "artworkLanguage"
+    private static let environmentsKey = "environments"
+    private static let skipSourcesKey = "skipSegmentSources"
+    private static let resourceRankingKey = "resourceRanking"
 
     /// Persists the vault. Called by every mutation so a passcode change or a hide survives a crash.
     func saveVault() {
         if let blob = try? JSONEncoder().encode(vault) { playbackDefaults.set(blob, forKey: Self.vaultKey) }
+        if let blob = try? JSONEncoder().encode(artworkLanguage) { playbackDefaults.set(blob, forKey: Self.artworkLanguageKey) }
+        if let blob = try? JSONEncoder().encode(environments) { playbackDefaults.set(blob, forKey: Self.environmentsKey) }
+        if let blob = try? JSONEncoder().encode(skipSources) { playbackDefaults.set(blob, forKey: Self.skipSourcesKey) }
+        if let blob = try? JSONEncoder().encode(resourceRanking) { playbackDefaults.set(blob, forKey: Self.resourceRankingKey) }
     }
 
     /// Relocks the vault the moment the screen is captured — a screenshot or an active screen
@@ -223,6 +239,14 @@ import TVCore
         sourceReassignment = SourceReassignment(defaults: playbackDefaults)
         cloudSync = defaults === UserDefaults.standard && !defaults.bool(forKey: "qaIsolatedData") ? CloudSync() : nil
         favorites = Favorites(defaults: defaults)
+        if let blob = playbackDefaults.data(forKey: Self.artworkLanguageKey),
+           let decoded = try? JSONDecoder().decode(ArtworkLanguage.self, from: blob) { artworkLanguage = decoded }
+        if let blob = playbackDefaults.data(forKey: Self.environmentsKey),
+           let decoded = try? JSONDecoder().decode(Environments.self, from: blob) { environments = decoded }
+        if let blob = playbackDefaults.data(forKey: Self.skipSourcesKey),
+           let decoded = try? JSONDecoder().decode(SkipSegmentSources.self, from: blob) { skipSources = decoded }
+        if let blob = playbackDefaults.data(forKey: Self.resourceRankingKey),
+           let decoded = try? JSONDecoder().decode(ResourceRanking.self, from: blob) { resourceRanking = decoded }
         if let blob = playbackDefaults.data(forKey: Self.vaultKey),
            let saved = try? JSONDecoder().decode(PrivacyVault.self, from: blob) {
             vault = saved
@@ -1205,6 +1229,25 @@ import TVCore
         orderedCache = nil
         recommendationCache = nil
         groupsCache = [:]
+    }
+
+    /// Reorders the sources by what the last sweep measured: the sharpest picture first, and a source
+    /// that has never been probed after every one that has. The result is saved as the viewer's own
+    /// order, which is what makes it survive a subscription refreshing and a relaunch.
+    ///
+    /// Built-in sources keep the top of the page. They are not a subscription's rows, a probe never
+    /// compares them with one, and burying Bilibili under a 480p source would read as a bug.
+    func rankSourcesByMeasuredQuality() {
+        guard let config = subscription else { return }
+        let sites = orderedSites(config)
+        let probes = SourceProbeStore.shared
+        let ranked = ResourceRanking.standard.sort(sites.filter { !$0.isBuiltIn }) { site in
+            guard let reading = probes.latest(sourceKey: site.sourceKey) else { return ResourceRanking.Candidate() }
+            return ResourceRanking.Candidate(reading)
+        }
+        sourceOrder.save(sites.filter(\.isBuiltIn) + ranked, origin: config.origin)
+        sourceOrder.enabled = true
+        notice = L10n.text("Sorted by measured picture quality. Sources that were never probed are last.")
     }
 
     /// Turns the viewer's own source order on or off. The first time, it starts from the order on

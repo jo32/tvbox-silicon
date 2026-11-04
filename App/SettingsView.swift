@@ -330,6 +330,12 @@ private enum SettingsNote {
     static var iCloud: String {
         L10n.text("Keeps favorites, Continue Watching, subscriptions, and the sources you pinned, hid or ordered the same on your devices signed in to the same iCloud account. Accounts, passwords and downloads stay on each device.")
     }
+    static var privacyVault: String {
+        L10n.text("Hides the subscriptions and sources you choose behind a passcode. Hidden sources stay out of the list, search, and Continue Watching until the vault is unlocked.")
+    }
+    static var appSwitcher: String {
+        L10n.text("While the app is in the background, the app switcher shows a lock instead of what was on screen.")
+    }
     static var support: String {
         L10n.text("Supports TVBox JSON subscriptions, M3U / TXT live playlists, and standard type 1 / type 4 JSON APIs. Media formats depend on the device. Local JavaScript and Python plugins are experimental on Mac, and JAR plugins are experimental on every platform; compatibility varies by source.")
     }
@@ -589,6 +595,11 @@ struct FormSettingsView: View {
                     FormLink(symbol: "cpu.fill", tint: .orange, title: L10n.text("JAR Runtime and Compatibility")) { RuntimeView() }
                 }
                 FormLink(symbol: "doc.text.magnifyingglass", tint: .gray, title: L10n.text("Diagnostic Logs")) { DiagnosticsView() }
+                // Its own row rather than a corner of another page: this is the only setting here
+                // that hides content instead of changing how content looks, and a person looking
+                // for "where do I hide a source" should not have to read the Advanced list twice.
+                FormLink(symbol: "lock.shield.fill", tint: .indigo, title: L10n.text("Privacy Vault"),
+                         value: store.vault.hasPasscode ? L10n.text("On") : L10n.text("Off")) { PrivacyVaultView() }
                 #if os(iOS)
                 // The two switches that send something off the device, with their notes, on a page of their own.
                 FormLink(symbol: "hand.raised.fill", tint: .blue, title: L10n.text("Privacy")) { PrivacySettingsView() }
@@ -975,10 +986,22 @@ struct PlaybackSettingsView: View {
 
 /// The two switches that send something off the device, each with what it sends.
 struct PrivacySettingsView: View {
+    @Environment(Store.self) private var store
     @AppStorage(ErrorReports.key) private var sendsErrorReports = true
     @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
+    @AppStorage(PrivacyShade.key) private var coversAppSwitcher = true
     var body: some View {
         SettingsPage(title: L10n.text("Privacy"), symbol: "hand.raised.fill") {
+            SettingsGroup(footer: SettingsNote.privacyVault) {
+                FormLink(symbol: "lock.shield.fill", tint: .indigo, title: L10n.text("Privacy Vault"),
+                         value: store.vault.hasPasscode ? L10n.text("On") : L10n.text("Off")) { PrivacyVaultView() }
+            }
+            SettingsGroup(footer: SettingsNote.appSwitcher) {
+                Toggle(isOn: $coversAppSwitcher) {
+                    FormLabel(symbol: "eye.slash.fill", tint: .purple, title: L10n.text("Hide Content in the App Switcher"))
+                }
+                .settingsSwitch()
+            }
             SettingsGroup(footer: SettingsNote.errorReports) {
                 Toggle(isOn: $sendsErrorReports) {
                     FormLabel(symbol: "ladybug.fill", tint: .red, title: L10n.text("Send Error Reports"))
@@ -1725,6 +1748,10 @@ struct TVSettingsView: View {
                 TVSettingsLink(title: L10n.text("Local Cache")) { CacheSettingsView() }
                 if store.extrasUnlocked { TVSettingsLink(title: L10n.text("JAR Runtime and Compatibility")) { RuntimeView() } }
                 TVSettingsLink(title: L10n.text("Diagnostic Logs")) { DiagnosticsView() }
+                // The same page the phone and the Mac reach from Advanced: what is hidden, and the
+                // passcode that guards it. Without a row here the TV could apply a vault it had no
+                // way to edit.
+                TVSettingsLink(title: L10n.text("Privacy Vault")) { PrivacyVaultView() }
                 TVSettingsToggle(title: L10n.text("Send Error Reports"), isOn: $sendsErrorReports)
                     .onChange(of: sendsErrorReports) { _, on in if !on { ErrorReports.shared.discard() } }
                 TVSettingsToggle(title: L10n.text("Look Up Titles on TMDB"), isOn: $looksUpTMDB)

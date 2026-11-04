@@ -76,3 +76,9 @@ extension View {
         modifier(PrivacyShade(enabled: enabled))
     }
 }
+
+extension PrivacyShade {
+    /// Where the switch is kept. On unless turned off: the cost is one flat rectangle drawn when the
+    /// app leaves the foreground, and what it prevents is a poster or a hidden list in a snapshot.
+    static let key = "privacyShade.enabled.v1"
+}

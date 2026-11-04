@@ -155,6 +155,9 @@ targets:
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         # Save Code to Photos, where a sign-in code can be scanned by the app on the same phone.
         NSPhotoLibraryAddUsageDescription: Saves a sign-in code to Photos, so the app on this phone can scan it.
+        # Subtitles from a video's own sound track (Sources/TVCore/SpeechSubtitles.swift). Recognition
+        # runs on device; the text never leaves the phone.
+        NSSpeechRecognitionUsageDescription: Writes subtitles from a video's own sound track, on this device.
         # Downloads keep going in the background as continued-processing tasks (iOS 26, App/DownloadsView.swift).
         BGTaskSchedulerPermittedIdentifiers: [$(PRODUCT_BUNDLE_IDENTIFIER).downloads.*]
         # The video plays on a connected display (App/ExternalDisplay.swift). iOS 27 also needs the scene

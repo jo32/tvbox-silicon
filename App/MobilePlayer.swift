@@ -64,6 +64,63 @@ struct MobilePlayerView: View {
         if let blob = try? JSONEncoder().encode(subtitleStyle.sanitized) { subtitleStyleData = blob }
     }
 
+    #if canImport(Speech)
+    /// The language to recognise in: the phone's own first, then the two this app is most used in.
+    ///
+    /// Checked against the on-device models before the item is offered at all. A row that fails the
+    /// moment it is tapped teaches the viewer the feature is broken, when the truth is that this
+    /// device has no model for that language and nothing was ever going to happen.
+    private static var speechLanguage: String? {
+        let candidates = Locale.preferredLanguages + ["zh-Hans-CN", "zh-CN", "en-US"]
+        return SpeechSubtitles.availableLanguages(from: candidates).first
+    }
+
+    /// Recognises the sound track and appends the result as another subtitle file.
+    @MainActor
+    private func generateSubtitles(language: String) {
+        guard !generatingSubtitles else { return }
+        generatingSubtitles = true
+        subtitleProgress = 0
+        subtitleError = nil
+        // The headers matter: a source that needs a Referer answers nothing without them, and the
+        // recogniser would read an error page as silence.
+        let headers = channel.headers
+        let asset = AVURLAsset(url: channel.url,
+                               options: headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": headers])
+        let name = L10n.text("Subtitles From the Sound")
+        let hint = channel.name
+        Task {
+            do {
+                let track = try await SpeechSubtitles().transcribe(asset: asset, language: language, name: name,
+                                                                   hint: [hint]) { value in
+                    Task { @MainActor in subtitleProgress = value }
+                }
+                subtitleTracks.removeAll { $0.id == track.id }
+                subtitleTracks.append(track)
+                chosenSubtitle = track.id
+                generatingSubtitles = false
+            } catch is CancellationError {
+                generatingSubtitles = false
+            } catch {
+                subtitleError = Self.describe(error)
+                generatingSubtitles = false
+            }
+        }
+    }
+
+    private static func describe(_ error: any Error) -> String {
+        guard let failure = error as? SpeechSubtitles.Failure else { return error.localizedDescription }
+        switch failure {
+        case .languageUnavailable(let language): return L10n.text("No on-device speech model for %@.", language)
+        case .notAuthorized: return L10n.text("Allow Speech Recognition in Settings to write subtitles.")
+        case .noAudio: return L10n.text("This video has no sound track to read.")
+        case .empty: return L10n.text("Nothing was recognised in this video's sound.")
+        case .cancelled: return L10n.text("Cancelled.")
+        case .failed(let reason): return reason
+        }
+    }
+    #endif
+
     @Environment(Store.self) private var store
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -81,6 +138,11 @@ struct MobilePlayerView: View {
     /// rather than by the player, so size, opacity and position can be set.
     @State private var subtitleTracks: [SubtitleTrack] = []
     @State private var chosenSubtitle: String?
+    /// Set while the on-device recogniser is working through this title's sound track.
+    @State private var generatingSubtitles = false
+    @State private var subtitleProgress: Double = 0
+    /// Why the last attempt produced nothing, shown in place of the menu item.
+    @State private var subtitleError: String?
     /// Persisted appearance, shared by every title.
     @AppStorage("subtitleStyle") private var subtitleStyleData = Data()
     /// Where the bubble was dragged to, per title.
@@ -799,6 +861,26 @@ struct MobilePlayerView: View {
             }
             Toggle(L10n.text("Fill Screen"), isOn: $fillsScreen)
             Toggle(L10n.text("Show Video Info"), isOn: $showsPlaybackInfo)
+            // The case this answers: a file that arrived with no subtitle at all. Recognition reads
+            // the video's own sound track on device, and the result is drawn by the same overlay as
+            // every other subtitle file, so size and position work the same way.
+            #if canImport(Speech)
+            if let language = Self.speechLanguage {
+                Button {
+                    generateSubtitles(language: language)
+                } label: {
+                    if generatingSubtitles {
+                        Label(L10n.text("Writing Subtitles…"), systemImage: "waveform")
+                        Text("\(Int(subtitleProgress * 100))%")
+                    } else if let subtitleError {
+                        Label(L10n.text("Subtitles Could Not Be Written: %@", subtitleError), systemImage: "exclamationmark.triangle")
+                    } else {
+                        Label(L10n.text("Write Subtitles From the Sound"), systemImage: "waveform.badge.plus")
+                    }
+                }
+                .disabled(generatingSubtitles || !session.hasTimeline)
+            }
+            #endif
         } label: {
             Image(systemName: "slider.horizontal.3").font(.headline).frame(width: 22, height: 22)
                 .symbolVariant(pictureSwitches && (upscalesVideo || smoothsVideo) ? .fill : .none)

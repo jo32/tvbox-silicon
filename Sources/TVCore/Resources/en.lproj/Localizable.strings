@@ -1575,3 +1575,20 @@
 "Lock Controls" = "Lock Controls";
 "Unlock Controls" = "Unlock Controls";
 "Rotate" = "Rotate";
+
+"Privacy Vault" = "Privacy Vault";
+"Hide Content in the App Switcher" = "Hide Content in the App Switcher";
+"Hides the subscriptions and sources you choose behind a passcode. Hidden sources stay out of the list, search, and Continue Watching until the vault is unlocked." = "Hides the subscriptions and sources you choose behind a passcode. Hidden sources stay out of the list, search, and Continue Watching until the vault is unlocked.";
+"While the app is in the background, the app switcher shows a lock instead of what was on screen." = "While the app is in the background, the app switcher shows a lock instead of what was on screen.";
+"Write Subtitles From the Sound" = "Write Subtitles From the Sound";
+"Writing Subtitles…" = "Writing Subtitles…";
+"Subtitles Could Not Be Written: %@" = "Subtitles Could Not Be Written: %@";
+"Subtitles From the Sound" = "Subtitles From the Sound";
+"No on-device speech model for %@." = "No on-device speech model for %@.";
+"Allow Speech Recognition in Settings to write subtitles." = "Allow Speech Recognition in Settings to write subtitles.";
+"This video has no sound track to read." = "This video has no sound track to read.";
+"Nothing was recognised in this video's sound." = "Nothing was recognised in this video's sound.";
+
+"Sort by Measured Quality" = "Sort by Measured Quality";
+"Sort" = "Sort";
+"Sorted by measured picture quality. Sources that were never probed are last." = "Sorted by measured picture quality. Sources that were never probed are last.";

@@ -253,6 +253,21 @@ public final class SourceProbeStore {
         probes[storageKey(sourceKey: sourceKey, videoID: videoID, lineFlag: lineFlag)]
     }
 
+    /// The freshest reading for one source, whatever video or line it was measured on.
+    ///
+    /// Ranking sources needs one number per source, and a probe measures a sample video inside one
+    /// source: the newest reading is the best guess at what that source serves now. A source that
+    /// has never been probed answers nil, which ranks it as unknown rather than as bad.
+    public func latest(sourceKey: String) -> SourceProbeResult? {
+        let prefix = sourceKey + "|"
+        var newest: SourceProbeResult?
+        for (key, value) in probes where key.hasPrefix(prefix) {
+            guard let found = newest else { newest = value; continue }
+            if value.measuredAt > found.measuredAt { newest = value }
+        }
+        return newest
+    }
+
     /// Every reading known for one video, keyed by line flag.
     public func probes(sourceKey: String, videoID: String) -> [String: SourceProbeResult] {
         let prefix = "\(sourceKey)|\(videoID)|"

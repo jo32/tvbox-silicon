@@ -1575,3 +1575,20 @@
 "Lock Controls" = "コントロールをロック";
 "Unlock Controls" = "ロック解除";
 "Rotate" = "回転";
+
+"Privacy Vault" = "プライバシー金庫";
+"Hide Content in the App Switcher" = "アプリスイッチャーで内容を隠す";
+"Hides the subscriptions and sources you choose behind a passcode. Hidden sources stay out of the list, search, and Continue Watching until the vault is unlocked." = "選んだ購読とソースをパスコードの背後に隠します。金庫がロックされている間、隠したソースは一覧・検索・視聴中に表示されません。";
+"While the app is in the background, the app switcher shows a lock instead of what was on screen." = "アプリがバックグラウンドにある間、アプリスイッチャーには画面の内容ではなくロックが表示されます。";
+"Write Subtitles From the Sound" = "音声から字幕を作成";
+"Writing Subtitles…" = "字幕を作成中…";
+"Subtitles Could Not Be Written: %@" = "字幕を作成できません：%@";
+"Subtitles From the Sound" = "音声から作成した字幕";
+"No on-device speech model for %@." = "このデバイスには %@ の音声モデルがありません。";
+"Allow Speech Recognition in Settings to write subtitles." = "字幕を作成するには「設定」で音声認識を許可してください。";
+"This video has no sound track to read." = "この動画には読み取れる音声トラックがありません。";
+"Nothing was recognised in this video's sound." = "この動画の音声からは何も認識できませんでした。";
+
+"Sort by Measured Quality" = "計測した画質で並べ替え";
+"Sort" = "並べ替え";
+"Sorted by measured picture quality. Sources that were never probed are last." = "計測した画質で並べ替えました。未計測のソースは最後になります。";

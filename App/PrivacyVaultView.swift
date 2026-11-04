@@ -187,7 +187,9 @@ struct PrivacyVaultView: View {
                 dangerSection
             }
         }
-        .navigationTitle(L10n.text("Privacy"))
+        // Named for the lock, not for "Privacy": it is a page inside the privacy settings, and a
+        // page that repeats its parent's title reads as if the tap did nothing.
+        .navigationTitle(L10n.text("Privacy Vault"))
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif

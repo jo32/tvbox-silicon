@@ -136,6 +136,17 @@ struct SitesView: View {
                         Label(L10n.text("Fix Dead Lines"), systemImage: "wrench.and.screwdriver")
                     }
                     .accessibilityIdentifier("sources.fixDeadLines")
+                    Menu {
+                        // Ten questions about a long source list — "which of these is worth opening" —
+                        // answered by the sweep, so the answer should be able to reorder the list.
+                        Button { withAnimation(.snappy(duration: 0.3)) { store.rankSourcesByMeasuredQuality() } } label: {
+                            Label(L10n.text("Sort by Measured Quality"), systemImage: "arrow.up.arrow.down")
+                        }
+                        .disabled(store.probeRun != nil)
+                    } label: {
+                        Label(L10n.text("Sort"), systemImage: "arrow.up.arrow.down")
+                    }
+                    .accessibilityIdentifier("sources.sortByProbe")
                     // The record of what was dragged where, and the way to undo it. Only while there
                     // is something to undo: an always-present button would be a second Settings page.
                     movedSourcesButton

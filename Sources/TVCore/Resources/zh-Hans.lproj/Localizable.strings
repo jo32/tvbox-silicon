@@ -1575,3 +1575,20 @@
 "Lock Controls" = "锁定控件";
 "Unlock Controls" = "解锁控件";
 "Rotate" = "旋转";
+
+"Privacy Vault" = "隐私保险箱";
+"Hide Content in the App Switcher" = "在应用切换器中隐藏内容";
+"Hides the subscriptions and sources you choose behind a passcode. Hidden sources stay out of the list, search, and Continue Watching until the vault is unlocked." = "把你选择的订阅和源藏在密码后面。保险箱未解锁时，被隐藏的源不会出现在列表、搜索和继续观看里。";
+"While the app is in the background, the app switcher shows a lock instead of what was on screen." = "App 在后台时，应用切换器显示锁，而不是刚才屏幕上的内容。";
+"Write Subtitles From the Sound" = "用声音生成字幕";
+"Writing Subtitles…" = "正在生成字幕…";
+"Subtitles Could Not Be Written: %@" = "无法生成字幕：%@";
+"Subtitles From the Sound" = "声音生成的字幕";
+"No on-device speech model for %@." = "本机没有 %@ 的语音模型。";
+"Allow Speech Recognition in Settings to write subtitles." = "请在“设置”里允许语音识别，才能生成字幕。";
+"This video has no sound track to read." = "这个视频没有可读取的音轨。";
+"Nothing was recognised in this video's sound." = "在这个视频的声音里没有识别出内容。";
+
+"Sort by Measured Quality" = "按实测画质排序";
+"Sort" = "排序";
+"Sorted by measured picture quality. Sources that were never probed are last." = "已按实测画质排序。从未测速的源排在最后。";

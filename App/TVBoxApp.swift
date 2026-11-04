@@ -10,6 +10,9 @@ import TVCore
     #endif
     @State private var updates = Updates()
     @State private var announcements = Announcements()
+    /// Covers the window while the app is in the background, so the app switcher's snapshot shows a
+    /// lock rather than whatever was on screen.
+    @AppStorage(PrivacyShade.key) private var coversAppSwitcher = true
     #if os(iOS)
     /// An Apple TV's Douyin code, scanned with the Camera.
     @State private var douyinHandoff: DouyinHandoff.Link?
@@ -33,6 +36,7 @@ import TVCore
     var body: some Scene {
         WindowGroup {
             RootView().environment(store).environment(updates).environment(announcements)
+                .privacyShade(enabled: coversAppSwitcher)
                 #if !os(tvOS)
                 // tvOS draws plain buttons and section links in the tint, so it keeps the neutral default.
                 .tint(Brand.accent)

@@ -1575,3 +1575,20 @@
 "Lock Controls" = "鎖定控制項";
 "Unlock Controls" = "解鎖控制項";
 "Rotate" = "旋轉";
+
+"Privacy Vault" = "隱私保險箱";
+"Hide Content in the App Switcher" = "在 App 切換器中隱藏內容";
+"Hides the subscriptions and sources you choose behind a passcode. Hidden sources stay out of the list, search, and Continue Watching until the vault is unlocked." = "把你選擇的訂閱和源藏在密碼後面。保險箱未解鎖時，被隱藏的源不會出現在列表、搜尋和繼續觀看裡。";
+"While the app is in the background, the app switcher shows a lock instead of what was on screen." = "App 在背景時，App 切換器顯示鎖，而不是剛才螢幕上的內容。";
+"Write Subtitles From the Sound" = "用聲音產生字幕";
+"Writing Subtitles…" = "正在產生字幕…";
+"Subtitles Could Not Be Written: %@" = "無法產生字幕：%@";
+"Subtitles From the Sound" = "聲音產生的字幕";
+"No on-device speech model for %@." = "本機沒有 %@ 的語音模型。";
+"Allow Speech Recognition in Settings to write subtitles." = "請在「設定」裡允許語音辨識，才能產生字幕。";
+"This video has no sound track to read." = "這個影片沒有可讀取的聲音軌。";
+"Nothing was recognised in this video's sound." = "在這個影片的聲音裡沒有辨識出內容。";
+
+"Sort by Measured Quality" = "按實測畫質排序";
+"Sort" = "排序";
+"Sorted by measured picture quality. Sources that were never probed are last." = "已按實測畫質排序。從未測速的源排在最後。";

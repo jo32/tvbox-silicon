@@ -1,4 +1,8 @@
-#if canImport(UIKit) && canImport(AVFoundation)
+// The decision itself is framework-light — CoreMedia for the transfer, CoreVideo for the format —
+// so the whole type is built everywhere, and only "can this screen show HDR right now" needs UIKit.
+// The Mac answers false there, which is what makes it the same SDR path the iPhone takes with the
+// brightness turned down.
+#if canImport(AVFoundation)
 import Foundation
 import AVFoundation
 import CoreVideo
@@ -151,4 +155,28 @@ public struct HDRDisplay: Sendable {
                            : kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
     }
 }
+
+extension HDRDisplay.Transfer {
+    /// The transfer an ffprobe `color_transfer` value means.
+    ///
+    /// Remux plans are made from ffprobe, before any `CMFormatDescription` exists, so the tone-map
+    /// decision cannot go through `transfer(of:)`. The numbers are ffprobe's: 16 is SMPTE ST 2084
+    /// (PQ, what HDR10 and Dolby Vision carry), 18 is ARIB STD-B67 (HLG), 1 and 6 are the Rec.709
+    /// and Rec.601 SDR curves. Anything else is unknown, which the caller treats as SDR: converting
+    /// something that may already be SDR would wash it out.
+    public init(colorTransfer: Int, dolbyVisionProfile: Int? = nil) {
+        // Dolby Vision is an overlay on a PQ base layer, so the profile decides, not the curve.
+        if let dolbyVisionProfile, dolbyVisionProfile >= 0 {
+            self = .dolbyVision
+            return
+        }
+        switch colorTransfer {
+        case 16: self = .pq
+        case 18: self = .hlg
+        case 1, 6: self = .sdr
+        default: self = .unknown
+        }
+    }
+}
+
 #endif

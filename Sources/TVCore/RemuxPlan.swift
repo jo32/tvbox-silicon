@@ -109,8 +109,13 @@ struct RemuxPlan: Sendable, Equatable {
     static func videoTrack(_ stream: Stream, device: Device) -> Track {
         var track = Track(stream: stream)
         let plain = stream.chroma == 420 || stream.chroma == 0
-        // Dolby Vision 5 has no HDR10 picture to map; it stays as it is.
-        if !device.hdr, [16, 18].contains(stream.colorTransfer), stream.doviProfile != 5 {
+        // Whether the picture has to be flattened to SDR is one decision, made in `HDRDisplay`: it
+        // owns which transfers are HDR, and that a Dolby Vision track without a decoder is left
+        // alone rather than mapped from a picture DV5 never encoded as HDR10.
+        let profile = stream.doviProfile >= 0 ? stream.doviProfile : nil
+        let transfer = HDRDisplay.Transfer(colorTransfer: stream.colorTransfer, dolbyVisionProfile: profile)
+        switch HDRDisplay().action(for: transfer, displaySupportsHDR: device.hdr, dolbyVisionProfile: profile) {
+        case .toneMapToSDR:
             track.mode = device.hevcEncoder ? .hevc : .h264
             track.toneMap = true
             var sized = stream
@@ -121,6 +126,10 @@ struct RemuxPlan: Sendable, Equatable {
             }
             track.bitRate = videoBitRate(sized, hevc: track.mode == .hevc)
             return track
+        // The screen can show this picture as it is, or the picture is SDR already, or it is a
+        // Dolby Vision track this device has no decoder for: copy it and let the system decide.
+        case .passthrough, .unchanged, .unsupportedDolbyVision:
+            break
         }
         switch stream.codec {
         case "h264" where stream.bitDepth <= 8 && plain && !stream.intraRefresh: return track
