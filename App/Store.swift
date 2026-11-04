@@ -269,7 +269,9 @@ import TVCore
     @ObservationIgnored private var cloudFetch: Task<Void, Never>?
     /// Sections kept out of the tab bar and sidebar until then.
     var hiddenSections: [AppSection] { extrasUnlocked ? [] : [.music] }
-    private let defaults: UserDefaults
+    /// The app's preference store. Internal (not private) so the full-backup extension can snapshot
+    /// and restore the whitelisted keys.
+    let defaults: UserDefaults
     private let http = HTTPClient()
     /// Rebuilt source rows are expensive (every source is classified and copied) and Watch Now reads
     /// them many times while drawing one frame. The stamp is the inputs, so a later frame reuses the row.

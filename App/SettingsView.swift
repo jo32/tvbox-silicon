@@ -379,6 +379,11 @@ struct FormSettingsView: View {
     @State private var choosesConfig = false
     @State private var exportsConfig = false
     @State private var pendingConfig: SubscriptionConfig?
+    @State private var choosesFullBackup = false
+    @State private var exportsFullBackup = false
+    @State private var picksBackupCategories = false
+    @State private var pendingFullBackup: FullBackup?
+    @State private var backupCategories: BackupCategory = .all
     @Environment(\.openURL) private var openURL
     @AppStorage(PhoneTabs.labelsKey) private var showsTabLabels = true
     #endif
@@ -462,6 +467,13 @@ struct FormSettingsView: View {
                 }
                 Button { choosesConfig = true } label: {
                     FormLabel(symbol: "square.and.arrow.down", tint: .indigo, title: L10n.text("Import Configuration")).foregroundStyle(.primary)
+                }
+                // A complete backup: every slice, sign-in state included, not just subscriptions.
+                Button { picksBackupCategories = true } label: {
+                    FormLabel(symbol: "externaldrive.badge.icloud", tint: .teal, title: L10n.text("Full Backup")).foregroundStyle(.primary)
+                }
+                Button { choosesFullBackup = true } label: {
+                    FormLabel(symbol: "icloud.and.arrow.down", tint: .teal, title: L10n.text("Restore Full Backup")).foregroundStyle(.primary)
                 }
                 #else
                 TextField(L10n.text("Subscription URL (TVBox JSON, M3U or TXT)"), text: $store.subscriptionAddress, prompt: Text(L10n.text("Subscription URL (TVBox JSON, M3U or TXT)")))
@@ -774,6 +786,28 @@ struct FormSettingsView: View {
         } message: {
             Text(L10n.text("Merge adds only subscriptions you don't have yet. Restore overwrites names, switches and order to match the backup."))
         }
+        // Full backup: pick slices, then export; restore reads the whole file.
+        .sheet(isPresented: $picksBackupCategories) {
+            BackupCategoryPicker(selection: $backupCategories) {
+                picksBackupCategories = false
+                exportsFullBackup = true
+            }
+        }
+        .fileImporter(isPresented: $choosesFullBackup, allowedContentTypes: [.json]) { result in
+            if case .success(let file) = result { importFullBackup(from: file) }
+        }
+        .fileExporter(isPresented: $exportsFullBackup, document: FullBackupDocument(store.exportFullBackup(categories: backupCategories)),
+                      contentType: .json, defaultFilename: "mi3s-full-backup") { result in
+            if case .success = result { store.notice = L10n.text("Full backup exported.") }
+            else if case .failure(let error) = result { store.importError = L10n.text("Export failed: %@", error.localizedDescription) }
+        }
+        .confirmationDialog(L10n.text("Restore Full Backup"), isPresented: Binding(
+            get: { pendingFullBackup != nil }, set: { if !$0 { pendingFullBackup = nil } })) {
+            Button(L10n.text("Restore everything")) { applyPendingFullBackup() }
+            Button(L10n.text("Cancel"), role: .cancel) { pendingFullBackup = nil }
+        } message: {
+            Text(L10n.text("This overwrites the matching data on this device with the backup. Sign-in state, history, favourites, settings and proxies are all included."))
+        }
         #if DEBUG
         // `-qaAddSubscription 1` opens the sheet for screenshots.
         .onAppear { if UserDefaults.standard.bool(forKey: "qaAddSubscription") { addingSubscription = true } }
@@ -884,6 +918,37 @@ struct FormSettingsView: View {
         guard let config = pendingConfig else { return }
         pendingConfig = nil
         store.importConfig(config, overwrite: overwrite)
+    }
+
+    /// Reads a full-backup file, then asks for confirmation before overwriting.
+    private func importFullBackup(from file: URL) {
+        Task {
+            let scoped = file.startAccessingSecurityScopedResource()
+            defer { if scoped { file.stopAccessingSecurityScopedResource() } }
+            let data = await Task.detached(priority: .userInitiated) { try? Data(contentsOf: file) }.value
+            guard let data, let backup = try? JSONDecoder().decode(FullBackup.self, from: data) else {
+                store.importError = L10n.text("This isn't a Mi3s backup file.")
+                return
+            }
+            if backup.schemaVersion != FullBackup.version {
+                store.importError = L10n.text("This backup is from a newer version and can't be restored.")
+                return
+            }
+            pendingFullBackup = backup
+        }
+    }
+
+    private func applyPendingFullBackup() {
+        guard let backup = pendingFullBackup else { return }
+        pendingFullBackup = nil
+        let result = store.importFullBackup(backup, categories: .all)
+        let restored = result.restored.count
+        let missing = result.skippedMissing.count
+        if missing > 0 {
+            store.notice = L10n.text("Restored %@ categories; %@ were empty in the backup.", String(restored), String(missing))
+        } else {
+            store.notice = L10n.text("Full backup restored. Restart the app to apply everything.")
+        }
     }
     #endif
 
@@ -1163,7 +1228,61 @@ private struct ConfigDocument: FileDocument {
         FileWrapper(regularFileWithContents: data)
     }
 }
+
+/// The full-backup file handed to `fileExporter`.
+private struct FullBackupDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+    let data: Data
+
+    init(_ backup: FullBackup) {
+        self.data = (try? JSONEncoder().encode(backup)) ?? Data()
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        self.data = configuration.file.regularFileContents ?? Data()
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
+    }
+}
 #endif
+
+/// A sheet that lets the viewer tick which slices a full backup carries, then confirm.
+private struct BackupCategoryPicker: View {
+    @Binding var selection: BackupCategory
+    let onConfirm: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    ForEach(BackupCategory.titles, id: \.0.rawValue) { category, title in
+                        Toggle(isOn: Binding(
+                            get: { selection.contains(category) },
+                            set: { on in
+                                if on { selection.insert(category) } else { selection.remove(category) }
+                            }
+                        )) {
+                            Text(title)
+                        }
+                    }
+                } footer: {
+                    Text("Sign-in & accounts carries cookies and tokens; restoring them may still require re-signing in if a service expired them.")
+                }
+            }
+            .navigationTitle(L10n.text("Backup contents"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(L10n.text("Cancel")) { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.text("Export")) { dismiss(); onConfirm() }
+                }
+            }
+        }
+    }
+}
 
 /// One subscription: switch it on or off, move it (earlier subscriptions win duplicate sources), or remove it.
 private struct SubscriptionDetailView: View {
