@@ -1,6 +1,6 @@
 import http.server, socketserver, json, os, re
 PORT=8899; BASE=f"http://127.0.0.1:{PORT}"
-SUB={"sites":[{"key":"qa","name":"QA Fixture","type":3,"api":f"{BASE}/qa.js","searchable":1,"quickSearch":1}],
+SUB={"sites":[{"key":"qa","name":"QA Fixture","type":1,"api":f"{BASE}/api","searchable":1,"quickSearch":1}],
      "lives":[{"name":"QA Live","type":0,"url":f"{BASE}/lives.json","playerType":1}]}
 LIVES={"lives":[{"name":"QA Channel","group":"QA","urls":[{"name":"HD","url":f"{BASE}/clip.mp4"}]}]}
 HOME={"class":[{"type_id":"movie","type_name":"Movies"}]}

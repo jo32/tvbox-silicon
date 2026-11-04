@@ -125,11 +125,18 @@ final class DuoAcceptanceUITests: XCTestCase {
         for _ in 0..<8 {
             let alert = springboard.alerts.firstMatch
             guard alert.waitForExistence(timeout: 2) else { return }
-            // Allow, so the prompt does not come back next launch; anything else is better than leaving it up.
+            // Two kinds of prompt show up here and they want opposite answers.
+            // "在 xx 中打开?" comes from a stale `simctl openurl`; answering it would hand the app to
+            // another bundle, so cancel. Permission prompts want Allow, so they stop coming back.
+            let cancel = ["取消", "Cancel"].compactMap { alert.buttons[$0].exists ? alert.buttons[$0] : nil }.first
+            let reopens = alert.buttons["打开"].exists || alert.buttons["Open"].exists
             let allow = ["允许", "始终允许", "好", "Allow", "Always Allow", "OK"]
                 .compactMap { alert.buttons[$0].exists ? alert.buttons[$0] : nil }
                 .first
-            if let allow { allow.tap() } else if alert.buttons.count > 0 { alert.buttons.element(boundBy: alert.buttons.count - 1).tap() }
+            if let cancel, reopens { cancel.tap() }
+            else if let allow { allow.tap() }
+            else if let cancel { cancel.tap() }
+            else if alert.buttons.count > 0 { alert.buttons.element(boundBy: alert.buttons.count - 1).tap() }
             Thread.sleep(forTimeInterval: 0.8)
         }
     }

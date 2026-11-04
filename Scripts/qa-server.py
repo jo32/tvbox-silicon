@@ -128,6 +128,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send({'list':[{'vod_id':'drive','vod_name':'玩具总动员 5','vod_pic':base+'/poster.png','vod_remarks':'4K HDR',
                     'vod_content':'这是一段用于检查详情页布局的简介。 '*24,
                     'vod_play_from':'夸父原1$$$夸父智1$$$嘟嘟无限2','vod_play_url':'$$$'.join(f'[18.35GB] 玩-居-宗 01.mkv$file-{i}' for i in range(3))}]})
+            # A single-episode video: opening its page auto-plays in the in-page watchBody, so pose
+            # switches (fold/unfold) can be photographed with real playback, not the full-screen player.
+            if q.get('ids')=='single':
+                return self.send({'list':[{'vod_id':'single','vod_name':'单集影片 / Single','vod_pic':base+'/poster.png',
+                    'vod_content':'这是一段用于检查播放态形态切换的简介。 '*24,
+                    'vod_play_from':'线路一','vod_play_url':'第 1 集$episode-0'}]})
             if 'ids' in q:
                 return self.send({'list':[{'vod_id':q['ids'],'vod_name':'测试影片 '+q['ids'],'vod_pic':base+'/poster.png',
                     'vod_content':'这是一段用于检查详情页布局的简介。 '*24,
