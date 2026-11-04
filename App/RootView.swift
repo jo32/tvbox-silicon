@@ -286,9 +286,13 @@ struct RootView: View {
 
     @ViewBuilder private func content(_ section: AppSection) -> some View {
         #if DEBUG
-        if QALaunch.overrides(section) { QALaunch.page(for: section, store: store) } else { sectionRoot(section) }
+        if QALaunch.overrides(section) {
+            QALaunch.page(for: section, store: store).sectionMarker(section)
+        } else {
+            sectionRoot(section).sectionMarker(section)
+        }
         #else
-        sectionRoot(section)
+        sectionRoot(section).sectionMarker(section)
         #endif
     }
 
@@ -563,6 +567,18 @@ extension View {
         #else
         self
         #endif
+    }
+}
+
+extension View {
+    /// Names the section a page belongs to, so an acceptance test can tell "the section opened" from
+    /// "some window is on screen".
+    ///
+    /// Without it every section assertion reduces to `windows.count > 0`, which Home satisfies — the
+    /// phone's tab bar draws Home first while a deep link is still landing, so `收藏` and `下载`
+    /// photographed Home and the run passed anyway (2026-11-04).
+    func sectionMarker(_ section: AppSection) -> some View {
+        accessibilityIdentifier("section.\(section.rawValue)")
     }
 }
 

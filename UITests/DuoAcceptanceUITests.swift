@@ -29,12 +29,15 @@ final class DuoAcceptanceUITests: XCTestCase {
     /// JS runtime, and twelve in a row made the runner die of its own weight ("Restarting after unexpected
     /// exit, crash, or test timeout") — the screen list was fine, the harness was not. Eight is what fits.
     func testEverySectionOpens() throws {
-        for section in ["home", "discover", "live", "sites", "favorites", "downloads", "settings", "more"] {
-            launch(section: section)
-            // A section that fails to build shows an empty window; the window itself is always there.
-            XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 30), "\(section) never drew a window")
+        for section in Self.sections {
+            launch(section: section.key)
+            // The section's own marker, not `windows.count > 0`. Home satisfies the window assertion —
+            // it draws first while a deep link is still landing — so `收藏` and `下载` used to pass by
+            // photographing Home (2026-11-04). App/RootView.swift sets `section.<title>` on each root.
+            XCTAssertTrue(marker(section.title).waitForExistence(timeout: 30),
+                          "\(section.key) never opened: no \(section.title) section marker")
             Thread.sleep(forTimeInterval: 2)
-            attach(section)
+            attach(section.key)
             // Hand the memory back before the next launch, or the runner accumulates eight catalogs.
             app.terminate()
             Thread.sleep(forTimeInterval: 1)
@@ -49,7 +52,7 @@ final class DuoAcceptanceUITests: XCTestCase {
     /// build that had lost every subscription and kept the built-ins.
     func testSourcesListsSubscriptions() throws {
         launch(section: "sites")
-        XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 30), "Sources never opened")
+        XCTAssertTrue(marker("Sources").waitForExistence(timeout: 30), "Sources never opened")
         Thread.sleep(forTimeInterval: 3)
         attach("sites")
 
@@ -62,7 +65,7 @@ final class DuoAcceptanceUITests: XCTestCase {
     /// that was just installed rather than a stale copy.
     func testSettingsShowsVersion() throws {
         launch(section: "settings")
-        XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 30), "Settings never opened")
+        XCTAssertTrue(marker("Settings").waitForExistence(timeout: 30), "Settings never opened")
         Thread.sleep(forTimeInterval: 2)
         attach("settings")
         let version = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "1.8")).firstMatch
@@ -78,7 +81,7 @@ final class DuoAcceptanceUITests: XCTestCase {
     /// unlock pad once a passcode exists.
     func testPrivacyVaultDraws() throws {
         launch(section: "settings", page: "vault")
-        XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 30), "The vault never opened")
+        XCTAssertTrue(marker("Settings").waitForExistence(timeout: 30), "The vault never opened")
         Thread.sleep(forTimeInterval: 2)
         attach("vault")
 
@@ -91,6 +94,17 @@ final class DuoAcceptanceUITests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    /// The eight sections, as `-qaSection <key>` and the `AppSection` title the app marks the page with.
+    /// The title is not the key: `-qaSection sites` opens "Sources", whose page carries `section.Sources`.
+    private static let sections: [(key: String, title: String)] = [
+        ("home", "Watch Now"), ("discover", "Discover"), ("live", "Live TV"), ("sites", "Sources"),
+        ("favorites", "Favorites"), ("downloads", "Downloads"), ("settings", "Settings"), ("more", "More"),
+    ]
+
+    private func marker(_ title: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: "section.\(title)").firstMatch
+    }
 
     private func launch(section: String, page: String? = nil) {
         dismissSystemAlerts()

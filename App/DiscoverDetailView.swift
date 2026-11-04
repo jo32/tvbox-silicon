@@ -6,6 +6,22 @@ import AVKit
 /// Available actions use Yingxia's source search and system share sheet.
 struct DiscoverDetailView: View {
     @Environment(Store.self) private var store
+
+    /// The poster, backdrop and logo for this title, in the language the viewer chose.
+    ///
+    /// TMDB's plain `poster`/`logo` fields answer in the *metadata* language, so a viewer who chose
+    /// "the film's own language" still saw the metadata poster until this ran. Everything that draws
+    /// artwork on this page reads from here, so one place decides instead of six.
+    private var artwork: (poster: URL?, backdrop: URL?, logo: URL?) {
+        store.artworkLanguage.artwork(
+            poster: details?.poster,
+            backdrop: details?.backdrop,
+            logo: details?.logo,
+            images: details?.images,
+            originalLanguage: details?.originalLanguage,
+            metadataLanguage: TMDBMatch.language
+        )
+    }
     @Environment(\.scenePhase) private var scenePhase
     let item: TMDBCatalog.Item
     @State private var model = DiscoverDetailModel()
@@ -32,7 +48,8 @@ struct DiscoverDetailView: View {
         .modifier(DiscoverSearchPresentation(isPresented: $searchShown))
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }
-        .task(id: item.key) { await model.load(item) }
+        .task(id: item.key) { model.artworkLanguage = store.artworkLanguage
+            await model.load(item) }
         .onChange(of: details?.id) { _, _ in
             if seasonNumber == nil { seasonNumber = seasons.first?.number }
         }
@@ -60,7 +77,7 @@ struct DiscoverDetailView: View {
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        PosterImage(url: selection.value.still ?? details?.backdrop).aspectRatio(16.0 / 9, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 16))
+                        PosterImage(url: selection.value.still ?? artwork.backdrop).aspectRatio(16.0 / 9, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 16))
                         Text(selection.value.name).font(.title2.bold())
                         Text(selection.value.overview).lineSpacing(4)
                         sourceButton
@@ -161,7 +178,7 @@ struct DiscoverDetailView: View {
         VStack(spacing: 16) {
             Color.clear.frame(height: width < 600 ? width * 0.95 : width * 0.25)
             Group {
-                if let logo = details?.logo {
+                if let logo = artwork.logo {
                     TMDBArtwork(url: logo, maxPixels: 1000, fill: false)
                         .frame(width: min(width * 0.82, 440), height: 116)
                         .accessibilityLabel(details?.name ?? item.name)
@@ -247,7 +264,7 @@ struct DiscoverDetailView: View {
                         ForEach(season.episodes, id: \.number) { value in
                             DiscoverButton { episode = DiscoverEpisode(value: value) } label: {
                                 VStack(alignment: .leading, spacing: 7) {
-                                    PosterImage(url: value.still ?? details?.backdrop).frame(width: 260, height: 146.25)
+                                    PosterImage(url: value.still ?? artwork.backdrop).frame(width: 260, height: 146.25)
                                         .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
                                         .overlay(alignment: .bottomTrailing) {
                                             if let runtime = value.runtime { Text("\(Int(runtime)) " + L10n.text("min")).font(.caption2).padding(5).background(.black.opacity(0.55), in: Capsule()).padding(8).foregroundStyle(.white) }
@@ -355,7 +372,7 @@ struct DiscoverDetailView: View {
         VStack(alignment: .leading, spacing: 14) {
             heading(L10n.text("Trailer"))
             Button { trailerShown = true } label: {
-                PosterImage(url: details?.backdrop ?? item.backdrop).frame(height: 210)
+                PosterImage(url: artwork.backdrop ?? item.backdrop).frame(height: 210)
                     .overlay { Image(systemName: "play.fill").font(.system(size: 28)).frame(width: 64, height: 64).glassSurface(.regular, in: Circle()) }
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             }.buttonStyle(.plain).padding(.horizontal, 20).accessibilityIdentifier("discover.detail.trailer")
@@ -411,6 +428,9 @@ struct DiscoverDetailView: View {
 }
 
 @MainActor @Observable private final class DiscoverDetailModel {
+    /// Set by the view, which has the store; the model loads the details and paints the hero, and
+    /// both must agree on which language's artwork to use.
+    var artworkLanguage = ArtworkLanguage()
     var details: TMDBMatch.Details?
     var paint: DiscoverPaint?
     var loading = true
@@ -423,7 +443,14 @@ struct DiscoverDetailView: View {
             let value = try await TMDBMatch.details(item.mediaType, id: item.id, season: nil)
             guard !Task.isCancelled else { return }
             details = value
-            if let poster = value.heroPoster ?? item.poster { paint = await DiscoverPainter.shared.paint(poster) }
+            // Computed from `value`, not the `artwork` property: that reads `details`, which was set
+            // on the line above and would still be the previous answer inside this same pass.
+            let chosen = artworkLanguage.artwork(
+                poster: value.poster, backdrop: value.backdrop, logo: value.logo,
+                images: value.images, originalLanguage: value.originalLanguage,
+                metadataLanguage: TMDBMatch.language
+            )
+            if let poster = value.heroPoster ?? chosen.poster ?? item.poster { paint = await DiscoverPainter.shared.paint(poster) }
         } catch { if !Task.isCancelled { failed = true } }
     }
 }
@@ -597,7 +624,7 @@ extension DiscoverDetailView {
     private var tvBackdrop: some View {
         ZStack {
             Color.black
-            if let url = details?.backdrop ?? item.backdrop { TMDBArtwork(url: url, maxPixels: 2400) }
+            if let url = artwork.backdrop ?? item.backdrop { TMDBArtwork(url: url, maxPixels: 2400) }
             // The trailer plays behind the title, as in Rex, until the page scrolls or something covers it.
             if let trailer = details?.trailer, tvPlaysTrailer { DiscoverTrailer(trailer: trailer) }
             LinearGradient(colors: [.black.opacity(0.85), .black.opacity(0.35), .clear], startPoint: .leading, endPoint: .trailing)
@@ -611,7 +638,7 @@ extension DiscoverDetailView {
     private var tvHero: some View {
         VStack(alignment: .leading, spacing: 34) {
             Group {
-                if let logo = details?.logo {
+                if let logo = artwork.logo {
                     TMDBArtwork(url: logo, maxPixels: 1400, fill: false)
                         .frame(width: 600, height: 240, alignment: .bottomLeading)
                         .accessibilityLabel(details?.name ?? item.name)
@@ -689,7 +716,7 @@ extension DiscoverDetailView {
     func tvEpisodeScreen(_ value: TMDBMatch.EpisodeInfo) -> some View {
         ZStack(alignment: .bottomLeading) {
             Color.black
-            PosterImage(url: value.still ?? details?.backdrop).frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
+            PosterImage(url: value.still ?? artwork.backdrop).frame(maxWidth: .infinity, maxHeight: .infinity).clipped()
             LinearGradient(stops: [.init(color: .clear, location: 0.3), .init(color: .black.opacity(0.92), location: 1)], startPoint: .top, endPoint: .bottom)
             VStack(alignment: .leading, spacing: 24) {
                 Text("\(value.number). \(value.name)").font(.system(size: 56, weight: .bold)).lineLimit(2)

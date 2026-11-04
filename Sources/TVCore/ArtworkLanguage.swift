@@ -107,3 +107,53 @@ public struct ArtworkLanguage: Codable, Hashable, Sendable {
         "zh-Hans", "zh-Hant", "en", "ja", "ko", "fr", "de", "es", "it", "pt", "ru", "ar",
     ]
 }
+
+// MARK: - Choosing from what TMDB carries
+
+extension ArtworkLanguage {
+    /// The artwork to show, given the viewer's choice and everything TMDB keeps.
+    ///
+    /// TMDB parents a language's assets with a tag, and the plain `poster` field on details is
+    /// whatever it picked for the language *the request asked in* — which is the metadata language,
+    /// not the artwork language. So a viewer who chose "the film's own language" still gets the
+    /// metadata-language poster unless this runs.
+    ///
+    /// Falling back to the plain field (rather than nil) is deliberate: a title TMDB has no artwork
+    /// for in the wanted language should still show *something*, and the caller cannot usefully
+    /// distinguish "wrong language" from "no poster" on screen.
+    public func artwork(poster: URL?,
+                        backdrop: URL?,
+                        logo: URL?,
+                        images: TMDBMatch.TMDBImages?,
+                        originalLanguage: String?,
+                        metadataLanguage: String) -> (poster: URL?, backdrop: URL?, logo: URL?) {
+        guard let images else { return (poster, backdrop, logo) }
+
+        let posterCode = language(for: self.poster, originalLanguage: originalLanguage, metadataLanguage: metadataLanguage)
+        let logoCode = language(for: self.logo, originalLanguage: originalLanguage, metadataLanguage: metadataLanguage)
+
+        // A backdrop carries no written language, so it follows the metadata language: choosing a
+        // poster language must not silently change the backdrop too.
+        let backdropCode = metadataLanguage
+
+        func pick(_ assets: [TMDBMatch.TMDBImages.Asset], _ code: String) -> URL? {
+            bestImage(assets,
+                      language: code,
+                      languageOf: { $0.language },
+                      scoreOf: { Double($0.votes) },
+                      widthOf: { $0.width })?.file
+        }
+
+        return (
+            pick(images.posters, posterCode) ?? poster,
+            pick(images.backdrops, backdropCode) ?? backdrop,
+            pick(images.logos, logoCode) ?? logo
+        )
+    }
+
+    /// Whether the choice actually changes what is on screen. `false` means the plain fields already
+    /// carry it, which is when the page should skip the picker's work entirely.
+    public var needsArtworkSelection: Bool {
+        poster != .metadata || logo != .metadata
+    }
+}
