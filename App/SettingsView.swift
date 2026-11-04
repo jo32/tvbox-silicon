@@ -384,6 +384,7 @@ struct FormSettingsView: View {
     @State private var picksBackupCategories = false
     @State private var pendingFullBackup: FullBackup?
     @State private var backupCategories: BackupCategory = .all
+    @State private var cloudBackupMode: CloudBackupSheet.Mode?
     @Environment(\.openURL) private var openURL
     @AppStorage(PhoneTabs.labelsKey) private var showsTabLabels = true
     #endif
@@ -474,6 +475,15 @@ struct FormSettingsView: View {
                 }
                 Button { choosesFullBackup = true } label: {
                     FormLabel(symbol: "icloud.and.arrow.down", tint: .teal, title: L10n.text("Restore Full Backup")).foregroundStyle(.primary)
+                }
+                // The cloud-drive leg: write the backup into a signed-in drive and pull it back on
+                // another device, no file hand-off needed.
+                Button { picksBackupCategories = true; cloudBackupMode = .backup } label: {
+                    FormLabel(symbol: "externaldrive.badge.plus", tint: .teal, title: L10n.text("Back Up to Cloud Drive"),
+                              subtitle: L10n.text("Into a signed-in Quark, UC, 115, AList or WebDAV")).foregroundStyle(.primary)
+                }
+                Button { picksBackupCategories = true; cloudBackupMode = .restore } label: {
+                    FormLabel(symbol: "externaldrive.badge.checkmark", tint: .teal, title: L10n.text("Restore from Cloud Drive")).foregroundStyle(.primary)
                 }
                 // The automatic keychain leg: keeps a snapshot that survives uninstall, so a reinstall
                 // restores everything without a manual file. Off by default.
@@ -792,12 +802,16 @@ struct FormSettingsView: View {
         } message: {
             Text(L10n.text("Merge adds only subscriptions you don't have yet. Restore overwrites names, switches and order to match the backup."))
         }
-        // Full backup: pick slices, then export; restore reads the whole file.
+        // Full backup: pick slices, then export to a file or a cloud drive.
         .sheet(isPresented: $picksBackupCategories) {
             BackupCategoryPicker(selection: $backupCategories) {
                 picksBackupCategories = false
+                if cloudBackupMode != nil { return }  // the cloud-drive sheet opens instead
                 exportsFullBackup = true
             }
+        }
+        .sheet(item: $cloudBackupMode) { mode in
+            CloudBackupSheet(mode: mode, categories: backupCategories)
         }
         .fileImporter(isPresented: $choosesFullBackup, allowedContentTypes: [.json]) { result in
             if case .success(let file) = result { importFullBackup(from: file) }

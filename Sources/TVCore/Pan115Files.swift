@@ -29,6 +29,15 @@ actor Pan115Files {
 
     private var name: String { L10n.text("115 Cloud") }
 
+    /// Creates a folder named `name` under `parent` (a 115 cid), returning its cid.
+    func mkdir(_ name: String, parent: String) async throws -> String {
+        let answer = try await call(URL(string: "https://webapi.115.com/files/add?pid=\(parent)&cname=\(name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name)")!)
+        guard let cid = Self.text(answer["cid"]), !cid.isEmpty else {
+            throw TVError.unsupported(L10n.text("%@ couldn't create the folder.", name))
+        }
+        return cid
+    }
+
     func list(_ folder: String) async throws -> [CloudFile] {
         var files: [CloudFile] = [], offset = 0
         for _ in 0..<50 {
@@ -66,6 +75,57 @@ actor Pan115Files {
         guard CloudFile.playsOriginal(name) else { throw CloudFilesError.unsupportedFormat((name as NSString).pathExtension) }
         let source = try await link(pickCode, name: name)
         return CloudStreams.register(source) { [self] in try? await link(pickCode, name: name) }
+    }
+
+    /// Writes `data` as a file named `name` inside the folder `cid`. 115's upload API takes the whole
+    /// file in one multipart POST (backup files are far below its per-file limits), so no pre-sign or
+    /// sharding is needed. Returns the new file's pick code.
+    @discardableResult
+    func upload(_ cid: String, name: String, data: Data) async throws -> String {
+        let boundary = "tvbox-\(UUID().uuidString)"
+        var body = Data()
+        func field(_ name: String, _ value: String) {
+            body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".data(using: .utf8)!)
+        }
+        field("uid", "")
+        field("target", "U_1_\(cid)")
+        body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(name)\"\r\nContent-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+
+        let saved = account().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !saved.isEmpty else { throw CloudFilesError.signInRequired(name) }
+        if saved != signedIn { signedIn = saved; jar = CookieJar(saved) }
+        var request = URLRequest(url: URL(string: "https://uplb.115.com/3.0/upload.php")!)
+        request.httpMethod = "POST"
+        request.setValue(jar.header, forHTTPHeaderField: "Cookie")
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+        let (data, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse { jar.update(http) }
+        let answer = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if answer["state"] as? Bool == true, (200..<300).contains(status) {
+            return Self.text(answer["pickcode"]) ?? Self.text(answer["pc"]) ?? ""
+        }
+        let message = (answer["error"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? answer["msg"] as? String ?? ""
+        let code = Self.number(answer["errno"]) ?? Self.number(answer["errNo"]) ?? -1
+        Diagnostics.shared.record(.warning, "files", "pan115 upload status=\(status) errno=\(code) \(message)")
+        if status == 401 || code == 99 || code == 990001 || message.contains("登录") { throw CloudFilesError.signInRequired(name) }
+        if !message.isEmpty { throw TVError.unsupported(L10n.text("%@ says: %@", name, message)) }
+        throw TVError.http(status)
+    }
+
+    /// Reads a whole file back (a backup's JSON) through its download link.
+    func download(_ pickCode: String) async throws -> Data {
+        let source = try await link(pickCode, name: "backup")
+        var request = URLRequest(url: source.url)
+        cdnHeaders.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        let (bytes, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else { throw TVError.http(status) }
+        return bytes
     }
 
     /// The file's download link, through the app API the 115 browser uses; its request and answer are m115-encoded.

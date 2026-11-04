@@ -1677,3 +1677,18 @@
 "This overwrites the matching data on this device with the backup. Sign-in state, history, favourites, settings and proxies are all included." = "バックアップでこの端末の対応データを上書きします。ログイン状態、再生履歴、お気に入り、設定、プロキシがすべて含まれます。";
 "Auto-backup to keychain" = "キーチェーンに自動バックアップ";
 "Survives uninstall and restores automatically" = "アンインストール後も残り、再インストール時に自動復元";
+// Cloud-drive backup (クラウドドライブへのバックアップ)
+"Back Up to Cloud Drive" = "クラウドドライブにバックアップ";
+"Into a signed-in Quark, UC, 115, AList or WebDAV" = "ログイン済みの Quark、UC、115、AList、WebDAV に保存";
+"Restore from Cloud Drive" = "クラウドドライブから復元";
+"No Cloud Drive" = "クラウドドライブがありません";
+"Sign in to a cloud drive or add a server in Cloud Files first." = "まずクラウドファイルでドライブにログインするか、サーバーを追加してください。";
+"Back up here" = "ここにバックアップ";
+"Restore from here" = "ここから復元";
+"No Backups Yet" = "バックアップはまだありません";
+"Back up from another device first." = "まず別のデバイスでバックアップしてください。";
+"Backups" = "バックアップ";
+"Couldn't Open Backups" = "バックアップを開けません";
+"Backed up to %@." = "%@ にバックアップしました。";
+"Restored from %@." = "%@ から復元しました。";
+"Sign in to %@ first." = "まず %@ にログインしてください。";

@@ -180,4 +180,29 @@ extension Store {
             FullBackupPreferences.restore(payload.preferences, defaults: defaults, playbackDefaults: playbackDefaults)
         }
     }
+
+    // MARK: - 云盘备份通道
+
+    /// Writes the full backup into a signed-in cloud drive, so another device can restore it through
+    /// the same drive. The JSON is the same payload `exportFullBackup` produces; `categories` picks
+    /// which slices travel.
+    func backupToCloudDrive(categories: BackupCategory, drive: CloudFilesDrive) async throws {
+        let backup = exportFullBackup(categories: categories)
+        let data = try JSONEncoder().encode(backup)
+        try await CloudDriveBackup.upload(data, name: CloudDriveBackup.timestampedName(), to: drive)
+        notice = L10n.text("Backed up to %@.", drive.name)
+    }
+
+    /// Pulls a backup file back from a cloud drive and restores it. `id` is the drive's identifier
+    /// for the file and `name` its name; the caller (the settings sheet) passes the file the viewer
+    /// picked from the drive's listing.
+    func restoreFromCloudDrive(id: String, name: String, drive: CloudFilesDrive, categories: BackupCategory) async throws {
+        let data = try await CloudDriveBackup.download(id: id, name: name, from: drive)
+        guard let backup = try? JSONDecoder().decode(FullBackup.self, from: data) else {
+            throw TVError.unsupported(L10n.text("This isn't a Mi3s backup file."))
+        }
+        importFullBackup(backup, categories: categories)
+        notice = L10n.text("Restored from %@.", drive.name)
+    }
 }
+

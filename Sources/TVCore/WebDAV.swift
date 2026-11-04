@@ -57,6 +57,40 @@ public actor WebDAV {
         return CloudStreams.register(source) { [self] in try? await self.source(server, path: path, name: name) }
     }
 
+    /// Writes `data` as a file named `name` inside `folder` on the share. WebDAV's `PUT` is the whole
+    /// file at once, which suits a backup that's a single JSON blob. Overwrites an existing file of the
+    /// same name, as a fresh backup should.
+    func upload(_ server: AListServer, folder: String, name: String, data: Data) async throws {
+        let parent = AListServer.folder(folder)
+        let path = parent == "/" ? "/\(name)" : "\(parent)/\(name)"
+        var request = URLRequest(url: try Self.url(server, path: path, folder: false))
+        request.httpMethod = "PUT"
+        request.httpBody = data
+        request.setValue(HTTPClient.userAgent, forHTTPHeaderField: "User-Agent")
+        Self.headers(server).forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        let (_, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            Diagnostics.shared.record(.warning, "files", "webdav PUT status=\(status)")
+            if status == 401 { throw refusal(server) }
+            throw TVError.http(status)
+        }
+    }
+
+    /// Reads a whole file back (a backup's JSON) with a `GET`.
+    func download(_ server: AListServer, path: String) async throws -> Data {
+        var request = URLRequest(url: try Self.url(server, path: path, folder: false))
+        request.setValue(HTTPClient.userAgent, forHTTPHeaderField: "User-Agent")
+        Self.headers(server).forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        let (data, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            if status == 401 { throw refusal(server) }
+            throw TVError.http(status)
+        }
+        return data
+    }
+
     func source(_ server: AListServer, path: String, name: String) async throws -> CloudStreams.Source {
         let size = try await entries(server, path: path, folder: false, depth: 0).first?.size ?? 0
         return CloudStreams.Source(url: try Self.url(server, path: path, folder: false), headers: Self.headers(server), length: Int(size), name: name)

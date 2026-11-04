@@ -229,6 +229,48 @@ public actor AList {
         return parts.url ?? link
     }
 
+    /// Writes `data` as a file named `name` inside `folder`. AList's `/api/fs/put` takes the whole
+    /// file in one `PUT` body (as its web UI's upload does), which suits a single-JSON backup.
+    func upload(_ server: AListServer, folder: String, name: String, data: Data) async throws {
+        var token = tokens[server.id]
+        if token == nil, !server.username.isEmpty { token = try await login(server) }
+        let path = (AListServer.folder(folder) == "/" ? "/\(name)" : "\(AListServer.folder(folder))/\(name)")
+        guard let url = URL(string: server.address + "/api/fs/put") else { throw TVError.invalidURL }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        request.setValue(HTTPClient.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(path, forHTTPHeaderField: "File-Path")
+        request.setValue(folderPassword(server, AListServer.folder(folder)), forHTTPHeaderField: "Password")
+        if let token { request.setValue(token, forHTTPHeaderField: "Authorization") }
+        request.httpBody = data
+        let (answerData, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let answer = (try? JSONSerialization.jsonObject(with: answerData)) as? [String: Any]
+        let code = answer?["code"] as? Int ?? 0
+        if code == 200, (200..<300).contains(status) { return }
+        Diagnostics.shared.record(.warning, "files", "alist put code=\(code) status=\(status) \(answer?["message"] ?? "")")
+        if code == 401 || status == 401 { throw CloudFilesError.signInRequired(server.name) }
+        let message = answer?["message"] as? String ?? ""
+        throw TVError.unsupported(message.isEmpty ? L10n.text("The server returned HTTP %lld.", Int64(status)) : L10n.text("%@ says: %@", server.name, message))
+    }
+
+    /// Reads a whole file back (a backup's JSON). AList serves raw bytes through `/api/fs/get`'s raw
+    /// URL, so just `GET` that link with the auth header.
+    func download(_ server: AListServer, path: String) async throws -> Data {
+        let data = try await call(server, "/api/fs/get", ["path": path, "password": folderPassword(server, path)])
+        guard let address = data["raw_url"] as? String ?? data["url"] as? String, let url = URL(string: address) else {
+            throw TVError.unsupported(L10n.text("%@ didn't return a link for this file. Try again.", server.name))
+        }
+        var request = URLRequest(url: url)
+        request.setValue(HTTPClient.userAgent, forHTTPHeaderField: "User-Agent")
+        if let token = tokens[server.id] { request.setValue(token, forHTTPHeaderField: "Authorization") }
+        let (bytes, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else { throw TVError.http(status) }
+        return bytes
+    }
+
     private func folderPassword(_ server: AListServer, _ path: String) -> String {
         let saved = passwords[server.id] ?? [:]
         var folder = path

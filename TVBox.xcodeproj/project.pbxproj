@@ -17,6 +17,7 @@
 		03EDA66F1A059D8515CE0C80 /* LiveRoomsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675EA4CF000337C94DF5B1D3 /* LiveRoomsView.swift */; };
 		05392A45E74A244DECCD26BB /* MusicPlayerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2CD4FD12F4DD3AAE1F8592A /* MusicPlayerViews.swift */; };
 		053C107CA3CDC2619D78C3F1 /* SkipSegmentButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 730EFA0F65236AF3FA40F76A /* SkipSegmentButton.swift */; };
+		065AAF78D2BC847D0C238E7A /* CloudBackupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB66FB7D520F445FF983F9E1 /* CloudBackupView.swift */; };
 		081D3FFA4A0024F6BCBCD60F /* Store+WebCast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33AB1E848AA3F905713200A7 /* Store+WebCast.swift */; };
 		089C2D01F3B95CB1738D9AD9 /* PlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6876ACF1E9D9F80BBC4F22C4 /* PlaybackView.swift */; };
 		08D3E297F1A378855A7ED222 /* WebCastController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEE38BD161B2EB5B2C7E4EAA /* WebCastController.swift */; };
@@ -26,6 +27,7 @@
 		0C95000B36C5B15AF33D6C8C /* Capstone.txt in Resources */ = {isa = PBXBuildFile; fileRef = E84A48E8E87E4B3CC3DCDA8C /* Capstone.txt */; };
 		0F6089AD2912330CB32F7472 /* ResourceRankingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0119708AAA410683832EA99B /* ResourceRankingView.swift */; };
 		1050D617A22F09CD0A01DE66 /* GlassKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 739A64FB51780D4314D2DDF8 /* GlassKit.swift */; };
+		11177F98FE2063D428A87302 /* CloudBackupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB66FB7D520F445FF983F9E1 /* CloudBackupView.swift */; };
 		1236A790753CA813B297575D /* DiscoverPersonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */; };
 		132081666C25952D7CC9E2F4 /* SourceMovesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77A78070906EA4356510F510 /* SourceMovesView.swift */; };
 		1331896EA47189E426A4DE6C /* DiscoverBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */; };
@@ -262,6 +264,7 @@
 		B46BA76AB9687CE1727B05D9 /* unidbg.txt in Resources */ = {isa = PBXBuildFile; fileRef = 995F5F0DB35FE66B4F90B4FF /* unidbg.txt */; };
 		B5B9BEFC49D2638D3A92F9C0 /* MusicNowPlayingScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0131105AAF88C36366936A /* MusicNowPlayingScreen.swift */; };
 		B5DCC83D47D5AEB70A55028D /* RuntimeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2075419FEF0E1C161A31A9F0 /* RuntimeView.swift */; };
+		B707210418BAE0B5004182C3 /* CloudBackupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB66FB7D520F445FF983F9E1 /* CloudBackupView.swift */; };
 		B7C3291A656E2548E80F1E4B /* ApplePython.c in Sources */ = {isa = PBXBuildFile; fileRef = E740CFD276F4B76892EB0AF1 /* ApplePython.c */; };
 		B85FBE9366F3D7487A517779 /* MusicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 235375CC2420B76124FCEBC2 /* MusicView.swift */; };
 		BA97CE75C2E0DF21635E17EA /* CloudFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A0D2EAF4F07329DAB40B97D /* CloudFilesView.swift */; };
@@ -455,6 +458,7 @@
 		B70E10B1B4ED09D544D6F679 /* WatchNowPhone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchNowPhone.swift; sourceTree = "<group>"; };
 		B9098502DF807ADE4698AA88 /* EpisodePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpisodePicker.swift; sourceTree = "<group>"; };
 		BB24E05B7991A6EC8248BB34 /* ScriptHost */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ScriptHost; path = build/ScriptHost; sourceTree = SOURCE_ROOT; };
+		BB66FB7D520F445FF983F9E1 /* CloudBackupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudBackupView.swift; sourceTree = "<group>"; };
 		BD71FD8B3E72803C426D91CC /* OpenJDK.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OpenJDK.txt; sourceTree = "<group>"; };
 		BF5733BA144503E76421BCFD /* MusicTVPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicTVPlayer.swift; sourceTree = "<group>"; };
 		C093554D3863FDB5D2E832B5 /* CatalogDanmakuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogDanmakuView.swift; sourceTree = "<group>"; };
@@ -574,6 +578,7 @@
 				C093554D3863FDB5D2E832B5 /* CatalogDanmakuView.swift */,
 				46C4D3FABE1C6E7A7B63BA62 /* CatalogPlaybackActions.swift */,
 				688641B892E4732AFEB875A3 /* CatPawSignInView.swift */,
+				BB66FB7D520F445FF983F9E1 /* CloudBackupView.swift */,
 				CEE19E104EAA6C4F620B8E53 /* CloudDriveView.swift */,
 				4A0D2EAF4F07329DAB40B97D /* CloudFilesView.swift */,
 				E78573DE76BCF27CABBB20F3 /* CloudQRLoginView.swift */,
@@ -1139,6 +1144,7 @@
 				E0832AB8995164BECCE1DEDA /* CatPawSignInView.swift in Sources */,
 				FFE8085D174DC6F8A20E5CD6 /* CatalogDanmakuView.swift in Sources */,
 				762AAE7DEDF6675A62474B19 /* CatalogPlaybackActions.swift in Sources */,
+				B707210418BAE0B5004182C3 /* CloudBackupView.swift in Sources */,
 				C6D7579CAFFAB9B441C0703C /* CloudDriveView.swift in Sources */,
 				8EB254B55B70CF8A923D1CD0 /* CloudFilesView.swift in Sources */,
 				91C07692EFFEE27619AA9FF3 /* CloudQRLoginView.swift in Sources */,
@@ -1240,6 +1246,7 @@
 				5FD01522B8D935B4CF540C64 /* CatPawSignInView.swift in Sources */,
 				37B3CD8A4542A1B2304DBB75 /* CatalogDanmakuView.swift in Sources */,
 				FC0F00688179660407FD70E1 /* CatalogPlaybackActions.swift in Sources */,
+				11177F98FE2063D428A87302 /* CloudBackupView.swift in Sources */,
 				D10B5A0245BDE1A5E05A6BD7 /* CloudDriveView.swift in Sources */,
 				1D82C5470FDA73053EAD6398 /* CloudFilesView.swift in Sources */,
 				277D741E2A86C06612A8034A /* CloudQRLoginView.swift in Sources */,
@@ -1343,6 +1350,7 @@
 				616DE5FBCAE2BD0044BD32AA /* CatPawSignInView.swift in Sources */,
 				6BD7887B6DFF159358B27ACD /* CatalogDanmakuView.swift in Sources */,
 				78CE336AE6714726DFDFDB43 /* CatalogPlaybackActions.swift in Sources */,
+				065AAF78D2BC847D0C238E7A /* CloudBackupView.swift in Sources */,
 				59953BBDD74AED0A292F7079 /* CloudDriveView.swift in Sources */,
 				BA97CE75C2E0DF21635E17EA /* CloudFilesView.swift in Sources */,
 				31D893FEF33876FD07BB58BA /* CloudQRLoginView.swift in Sources */,

@@ -1677,3 +1677,18 @@
 "This overwrites the matching data on this device with the backup. Sign-in state, history, favourites, settings and proxies are all included." = "此操作會用備份覆蓋本機對應的資料，包括登入狀態、播放紀錄、收藏、設定和代理。";
 "Auto-backup to keychain" = "自動備份到鑰匙圈";
 "Survives uninstall and restores automatically" = "解除安裝後仍保留，重新安裝時自動恢復";
+// Cloud-drive backup (網盤備份)
+"Back Up to Cloud Drive" = "備份到網盤";
+"Into a signed-in Quark, UC, 115, AList or WebDAV" = "存入已登入的夸克、UC、115、AList 或 WebDAV";
+"Restore from Cloud Drive" = "從網盤恢復";
+"No Cloud Drive" = "沒有網盤";
+"Sign in to a cloud drive or add a server in Cloud Files first." = "請先在網盤檔案裡登入網盤或新增伺服器。";
+"Back up here" = "備份到這裡";
+"Restore from here" = "從這裡恢復";
+"No Backups Yet" = "還沒有備份";
+"Back up from another device first." = "請先在另一台裝置上備份。";
+"Backups" = "備份";
+"Couldn't Open Backups" = "無法開啟備份";
+"Backed up to %@." = "已備份到 %@。";
+"Restored from %@." = "已從 %@ 恢復。";
+"Sign in to %@ first." = "請先登入 %@。";

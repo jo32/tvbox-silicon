@@ -35,6 +35,15 @@ actor QuarkFiles {
     private var query: String { service == .quark ? "pr=ucpro&fr=pc&uc_param_str=" : "pr=UCBrowser&fr=pc&uc_param_str=" }
     private var referer: String { service == .quark ? "https://pan.quark.cn/" : "https://drive.uc.cn/" }
 
+    /// Creates a folder named `name` under `parent` (a drive folder id), returning its id.
+    func mkdir(_ name: String, parent: String) async throws -> String {
+        let answer = try await call("/file?\(query)&pdir_fid=\(parent)&file_name=\(name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name)&dir=1", body: ["pdir_fid": parent, "file_name": name, "dir": true])
+        guard let fid = answer["data"] as? String, !fid.isEmpty else {
+            throw TVError.unsupported(L10n.text("%@ couldn't create the folder.", self.name))
+        }
+        return fid
+    }
+
     func list(_ folder: String) async throws -> [CloudFile] {
         var files: [CloudFile] = []
         for page in 1...50 {
@@ -82,6 +91,53 @@ actor QuarkFiles {
         return CloudStreams.register(copy.source) { [self] in try? await transcoded(id, name: name).source }
     }
 
+    /// Writes `data` as a file named `name` inside the folder `pdirFid`. Quark uploads through a
+    /// two-step dance: `/file/upload` opens an upload session for the size (or reports it already
+    /// stored by SHA-1), then the file's bytes go to the returned endpoint. Backup files are small,
+    /// so one whole-file POST is enough.
+    @discardableResult
+    func upload(_ pdirFid: String, name: String, data: Data) async throws -> String {
+        let answer = try await call("/file/upload?\(query)", body: [
+            "pdir_fid": pdirFid, "file_name": name, "size": data.count, "dir": false
+        ])
+        guard let info = answer["data"] as? [String: Any], let uploadId = info["upload_id"] as? String, !uploadId.isEmpty else {
+            throw TVError.unsupported(L10n.text("%@ didn't open an upload for this file. Try again.", self.name))
+        }
+        // A duplicate is already on the drive: nothing more to send.
+        if let exists = info["exists"] as? Bool, exists { return info["fid"] as? String ?? "" }
+
+        var request = URLRequest(url: URL(string: "\(api)/file/upload?\(query)&upload_id=\(uploadId)&size=\(data.count)&file_name=\(name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name)")!)
+        request.httpMethod = "POST"
+        request.setValue(jar.header, forHTTPHeaderField: "Cookie")
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(referer, forHTTPHeaderField: "Referer")
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        request.httpBody = data
+        let (uploadData, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse { jar.update(http) }
+        let uploadAnswer = (try? JSONSerialization.jsonObject(with: uploadData)) as? [String: Any] ?? [:]
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if (uploadAnswer["code"] as? Int) == 0, (200..<300).contains(status) {
+            return uploadAnswer["data"] as? String ?? ""
+        }
+        let message = uploadAnswer["message"] as? String ?? ""
+        Diagnostics.shared.record(.warning, "files", "\(service) upload status=\(status) code=\(uploadAnswer["code"] ?? "-") \(message)")
+        if status == 401 || message.lowercased().contains("login") { throw CloudFilesError.signInRequired(self.name) }
+        if !message.isEmpty { throw TVError.unsupported(L10n.text("%@ says: %@", self.name, message)) }
+        throw TVError.http(status)
+    }
+
+    /// Reads a whole file back (a backup's JSON) through its download link.
+    func download(_ id: String, name: String) async throws -> Data {
+        let source = try await original(id, name: name)
+        var request = URLRequest(url: source.url)
+        cdnHeaders.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        let (bytes, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else { throw TVError.http(status) }
+        return bytes
+    }
+
     private func original(_ id: String, name: String) async throws -> CloudStreams.Source {
         let answer = try await call("/file/download?\(query)", body: ["fids": [id]])
         guard let item = (answer["data"] as? [[String: Any]])?.first, let address = item["download_url"] as? String,
@@ -90,7 +146,6 @@ actor QuarkFiles {
         }
         return CloudStreams.Source(url: url, headers: cdnHeaders, length: size, name: name)
     }
-
     /// The best transcoded copy this account may play: free accounts get the lower resolutions.
     private func transcoded(_ id: String, name: String) async throws -> (source: CloudStreams.Source, playlist: Bool) {
         let answer = try await call("/file/v2/play?\(query)", body: ["fid": id, "resolutions": "normal,low,high,super,2k,4k", "supports": "fmp4,m3u8"])

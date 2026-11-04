@@ -26,3 +26,6 @@ exports/
 
 # E2E 截图产物（每次运行各不相同，不进仓库）
 Scripts/e2e-shots/
+
+# xcodebuild -derivedDataPath 构建产物（体积大，不进仓库）
+build-out/

@@ -1677,3 +1677,18 @@
 "This overwrites the matching data on this device with the backup. Sign-in state, history, favourites, settings and proxies are all included." = "此操作会用备份覆盖本机对应的数据，包括登录状态、播放历史、收藏、设置和代理。";
 "Auto-backup to keychain" = "自动备份到钥匙串";
 "Survives uninstall and restores automatically" = "卸载后仍保留，重装时自动恢复";
+// Cloud-drive backup (网盘备份)
+"Back Up to Cloud Drive" = "备份到网盘";
+"Into a signed-in Quark, UC, 115, AList or WebDAV" = "存入已登录的夸克、UC、115、AList 或 WebDAV";
+"Restore from Cloud Drive" = "从网盘恢复";
+"No Cloud Drive" = "没有网盘";
+"Sign in to a cloud drive or add a server in Cloud Files first." = "请先在网盘文件里登录网盘或添加服务器。";
+"Back up here" = "备份到这里";
+"Restore from here" = "从这里恢复";
+"No Backups Yet" = "还没有备份";
+"Back up from another device first." = "请先在另一台设备上备份。";
+"Backups" = "备份";
+"Couldn't Open Backups" = "无法打开备份";
+"Backed up to %@." = "已备份到 %@。";
+"Restored from %@." = "已从 %@ 恢复。";
+"Sign in to %@ first." = "请先登录 %@。";
