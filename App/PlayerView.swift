@@ -138,6 +138,11 @@ struct PlaybackView: View {
         .background(ExternalDisplaySceneRegistrar().allowsHitTesting(false))
         // On a watch page the rest of the page keeps its own appearance.
         .modifier(PlayerScheme(ownsScreen: watch == nil))
+        // The full-screen player owns the whole display, so it hides the status bar. A watch page's inline
+        // player keeps it (the page hides it itself). This is what kept the time visible over the letterbox
+        // bars on the iPhone Duo's inner display — a 16:9 picture on the ~1.42:1 inner screen leaves bars
+        // above and below, and the un-hidden clock sat on the top bar.
+        .statusBarHidden(watch == nil)
         #else
         .preferredColorScheme(.dark)
         #endif

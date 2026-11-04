@@ -1443,6 +1443,12 @@ struct VideoDetailView: View {
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
             containerWidth = size.width
             containerHeight = size.height
+            #if DEBUG
+            if UserDefaults.standard.bool(forKey: "qaLogGeometry") {
+                NSLog("GEO w=%.0f h=%.0f hSize=%@ vSize=%@ duo=%@", size.width, size.height,
+                      String(describing: sizeClass), String(describing: verticalSizeClass), String(describing: duoExpanded))
+            }
+            #endif
         }
         #if os(macOS)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -2300,7 +2306,14 @@ struct VideoDetailView: View {
                     HStack(spacing: 0) {
                         watchPlayer
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        ScrollView { watchDetails.padding(.horizontal, 16).padding(.vertical, 14) }
+                        ScrollView { watchDetails
+                            .padding(.horizontal, 16).padding(.vertical, 14)
+                            // The folded-out Duo keeps the system sidebar (the section icons in a capsule
+                            // on the far edge). It floats over the content without widening the safe area,
+                            // so the episode list on the right ran under it and its last column read cut off.
+                            // End the list clear of the sidebar (16 base + the sidebar's own width).
+                            .padding(.trailing, duoExpanded ? 80 : 16)
+                        }
                             .scrollIndicators(.never)
                             .frame(width: detailColumn)
                     }
@@ -2527,6 +2540,7 @@ struct VideoDetailView: View {
                                 Button { showsAllEpisodes = true } label: {
                                     HStack(spacing: 3) { Text(L10n.text("All")); Image(systemName: "chevron.right").font(.caption.weight(.semibold)) }
                                         .font(.subheadline).foregroundStyle(.secondary)
+                                        .lineLimit(1).fixedSize(horizontal: true, vertical: false)
                                         .padding(.horizontal, 12).frame(minHeight: 32)
                                         .glassOrFill(.regular.interactive(), Color.clear, in: Capsule())
                                         .frame(minHeight: 44).contentShape(Rectangle())
