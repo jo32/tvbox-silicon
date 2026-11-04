@@ -30,6 +30,58 @@ public struct CustomProxyEndpoint: Codable, Hashable, Identifiable, Sendable {
         guard !host.isEmpty, (1...65535).contains(port) else { return nil }
         return host
     }
+
+    // MARK: 编解码 —— 凭证明文不进盘
+
+    /// `username` / `password` are stored obfuscated so a copied preferences file does not show
+    /// proxy credentials at a glance. This is **not** encryption — a single XOR + Base64 layer —
+    /// and exists only because the settings blob is otherwise plain JSON. The real fix would be
+    /// Keychain, which is deliberately out of scope here.
+    private static let obfuscationKey = Array("yingxia.customproxy".utf8)
+    private static let obfuscationMarker = "v1:"
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, scheme, host, port, username, password
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        scheme = try container.decode(Scheme.self, forKey: .scheme)
+        host = try container.decode(String.self, forKey: .host)
+        port = try container.decode(Int.self, forKey: .port)
+        username = Self.deobfuscate(try container.decodeIfPresent(String.self, forKey: .username) ?? "")
+        password = Self.deobfuscate(try container.decodeIfPresent(String.self, forKey: .password) ?? "")
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(scheme, forKey: .scheme)
+        try container.encode(host, forKey: .host)
+        try container.encode(port, forKey: .port)
+        try container.encode(Self.obfuscate(username), forKey: .username)
+        try container.encode(Self.obfuscate(password), forKey: .password)
+    }
+
+    private static func obfuscate(_ text: String) -> String {
+        let key = obfuscationKey
+        let bytes = Array(text.utf8)
+        let mixed = bytes.enumerated().map { $0.element ^ key[$0.offset % key.count] }
+        return obfuscationMarker + Data(mixed).base64EncodedString()
+    }
+
+    private static func deobfuscate(_ text: String) -> String {
+        // Values saved by earlier builds carry no marker and are plain text.
+        guard text.hasPrefix(obfuscationMarker) else { return text }
+        let payload = String(text.dropFirst(obfuscationMarker.count))
+        guard let data = Data(base64Encoded: payload) else { return text }
+        let key = obfuscationKey
+        let bytes = data.enumerated().map { $0.element ^ key[$0.offset % key.count] }
+        return String(decoding: bytes, as: UTF8.self)
+    }
 }
 
 /// Which way one source's requests leave: direct, or through one of the configured proxies.
@@ -54,6 +106,8 @@ public final class CustomProxyTunnel: @unchecked Sendable {
     private let targetPort: UInt16
     private let queue = DispatchQueue(label: "tvbox.proxy.tunnel")
     private let connection: NWConnection
+    private let lock = NSLock()
+    private var answered = false
 
     public init(endpoint: CustomProxyEndpoint, targetHost: String, targetPort: UInt16) throws {
         guard let address = endpoint.address,
@@ -71,16 +125,35 @@ public final class CustomProxyTunnel: @unchecked Sendable {
             connection.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
-                    self.negotiate { result in continuation.resume(with: result) }
+                    self.negotiate { self.finish($0) { continuation.resume(with: $0) } }
                 case .failed(let error):
-                    continuation.resume(throwing: error)
+                    self.finish(.failure(error)) { continuation.resume(with: $0) }
                 case .cancelled:
-                    continuation.resume(throwing: CancellationError())
+                    self.finish(.failure(CancellationError())) { continuation.resume(with: $0) }
                 default: break
                 }
             }
             connection.start(queue: queue)
         }
+    }
+
+    /// Answers `done` once, whatever else the connection reports afterwards.
+    ///
+    /// `NWConnection` keeps calling the state handler for the life of the connection, and the
+    /// handshake runs after `.ready`: a `.failed` or `.cancelled` arriving in the middle of it would
+    /// answer a continuation that was already answered, which traps the process rather than
+    /// surfacing as an error. Clearing the handler at the same time stops the rest of the states
+    /// from even reaching this code.
+    private func finish(_ result: Result<Void, Error>, _ done: (Result<Void, Error>) -> Void) {
+        lock.lock()
+        guard !answered else {
+            lock.unlock()
+            return
+        }
+        answered = true
+        lock.unlock()
+        connection.stateUpdateHandler = nil
+        done(result)
     }
 
     private func negotiate(_ done: @escaping (Result<Void, Error>) -> Void) {
@@ -194,9 +267,9 @@ public final class CustomProxyTunnel: @unchecked Sendable {
     public func open(queue: DispatchQueue, done: @escaping @Sendable (Result<Void, Error>) -> Void) {
         connection.stateUpdateHandler = { state in
             switch state {
-            case .ready: self.negotiate { done($0) }
-            case .failed(let error): done(.failure(error))
-            case .cancelled: done(.failure(CancellationError()))
+            case .ready: self.negotiate { self.finish($0, done) }
+            case .failed(let error): self.finish(.failure(error), done)
+            case .cancelled: self.finish(.failure(CancellationError()), done)
             default: break
             }
         }
@@ -209,11 +282,21 @@ public final class CustomProxyTunnel: @unchecked Sendable {
     // MARK: Request relay
 
     /// Sends an HTTP request through the already-open tunnel and returns the response body.
-    /// `url` is absolute (HTTP proxies take the full URI) or origin-form (SOCKS tunnels take
-    /// `GET /path HTTP/1.1`). The response is read up to `maxBytes`.
+    ///
+    /// The tunnel is a raw pipe to the target — CONNECT for an HTTP proxy, RFC 1928 for SOCKS5 — so
+    /// the request has to be origin-form (`GET /path?query HTTP/1.1`). The absolute URI this used to
+    /// send is what a *forward* proxy expects; after CONNECT or SOCKS5 there is no proxy left to
+    /// interpret it, and a real server answers 400. The port only belongs in `Host` when it is not
+    /// the one the scheme implies.
     public func request(_ url: URL, headers: [String: String], timeout: TimeInterval, maxBytes: Int = 20_000_000) async throws -> Data {
-        var request = "GET \(url.absoluteString) HTTP/1.1\r\nHost: \(url.host ?? "")\r\n"
-        for (key, value) in headers { request += "\(key): \(value)\r\n" }
+        var path = url.path.isEmpty ? "/" : url.path
+        if let query = url.query { path += "?" + query }
+        var host = url.host ?? ""
+        let implied = url.scheme?.lowercased() == "https" ? 443 : 80
+        if let port = url.port, port != implied { host += ":\(port)" }
+
+        var request = "GET \(path) HTTP/1.1\r\nHost: \(host)\r\n"
+        for (key, value) in headers where key.lowercased() != "host" { request += "\(key): \(value)\r\n" }
         request += "Connection: close\r\n\r\n"
         let bytes = Data(request.utf8)
         let connection = self.connection
@@ -272,10 +355,15 @@ public final class CustomProxyStore: @unchecked Sendable {
     private static let routesKey = "proxyRoutes.v1"
 
     private let lock = NSLock()
+    private let defaults: UserDefaults
     private var _endpoints: [CustomProxyEndpoint] = []
     private var _routes: [String: CustomProxyRoute] = [:]
 
+    /// `defaults` is kept, not just read once: writing through `.standard` while reading from the
+    /// injected suite meant a store built for a test or a QA session read its own empty list back on
+    /// the next launch, and a route the viewer set was silently written somewhere else.
     public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         if let data = defaults.data(forKey: Self.endpointsKey),
            let saved = try? JSONDecoder().decode([CustomProxyEndpoint].self, from: data) { _endpoints = saved }
         if let data = defaults.data(forKey: Self.routesKey),
@@ -296,7 +384,7 @@ public final class CustomProxyStore: @unchecked Sendable {
         lock.withLock {
             if let index = _endpoints.firstIndex(where: { $0.id == endpoint.id }) { _endpoints[index] = endpoint }
             else { _endpoints.append(endpoint) }
-            persistLocked(defaults: .standard)
+            persistLocked()
         }
     }
 
@@ -304,7 +392,7 @@ public final class CustomProxyStore: @unchecked Sendable {
         lock.withLock {
             _endpoints.removeAll { $0.id == id }
             for (key, route) in _routes where route.proxyID == id { _routes[key] = .direct }
-            persistLocked(defaults: .standard)
+            persistLocked()
         }
     }
 
@@ -315,7 +403,7 @@ public final class CustomProxyStore: @unchecked Sendable {
             case .direct: _routes.removeValue(forKey: key)
             case .proxy: _routes[key] = route
             }
-            persistLocked(defaults: .standard)
+            persistLocked()
         }
     }
 
@@ -330,7 +418,7 @@ public final class CustomProxyStore: @unchecked Sendable {
         origin.absoluteString + "|" + sourceKey
     }
 
-    private func persistLocked(defaults: UserDefaults) {
+    private func persistLocked() {
         if let data = try? JSONEncoder().encode(_endpoints) { defaults.set(data, forKey: Self.endpointsKey) }
         if let data = try? JSONEncoder().encode(_routes) { defaults.set(data, forKey: Self.routesKey) }
     }

@@ -61,10 +61,12 @@ public struct ResourceRanking: Codable, Hashable, Sendable {
         Key(.resolution), Key(.colourRange), Key(.bitrate),
     ])
 
-    /// For a viewer on a weak connection: the smallest thing that still looks acceptable.
-    public static let speed = ResourceRanking(keys: [
-        Key(.bitrate, descending: false), Key(.fileSize, descending: false),
-    ])
+    /// For a viewer on a weak connection: the lightest copy first.
+    ///
+    /// Resolution is the only attribute the sweep actually reads, so "smallest first" has to be
+    /// expressed through it. The preset used to be bitrate and file size ascending — neither of
+    /// which the sweep measures — so choosing it reordered nothing while looking like it had.
+    public static let speed = ResourceRanking(keys: [Key(.resolution, descending: false)])
 
     public static let presets: [(name: String, ranking: ResourceRanking)] = [
         ("Default", standard), ("Quality", quality), ("Speed", speed),

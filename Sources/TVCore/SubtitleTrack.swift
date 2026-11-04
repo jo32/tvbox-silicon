@@ -92,15 +92,17 @@ public struct SubtitleTrack: Identifiable, Sendable {
     /// Every subtitle the source offered, loaded together; the ones that fail are left out rather
     /// than failing the whole set, because one broken file should not hide the others.
     public static func loadAll(_ subtitles: [ExternalSubtitle], headers: [String: String] = [:]) async -> [SubtitleTrack] {
-        await withTaskGroup(of: SubtitleTrack?.self) { group in
-            for subtitle in subtitles {
-                group.addTask { try? await load(subtitle, headers: headers) }
+        await withTaskGroup(of: (Int, SubtitleTrack?).self) { group in
+            for (index, subtitle) in subtitles.enumerated() {
+                group.addTask { (index, try? await load(subtitle, headers: headers)) }
             }
-            var tracks: [SubtitleTrack] = []
-            for await track in group { if let track { tracks.append(track) } }
-            // Keep the source's order, so the list does not reshuffle as responses arrive.
-            let order = subtitles.map(\.name)
-            return tracks.sorted { (order.firstIndex(of: $0.name) ?? 0) < (order.firstIndex(of: $1.name) ?? 0) }
+            var loaded: [(index: Int, track: SubtitleTrack)] = []
+            for await (index, track) in group {
+                if let track { loaded.append((index, track)) }
+            }
+            // Keep the source's order by the input index, so the list does not reshuffle as
+            // responses arrive, and two same-named tracks (different languages) cannot trade places.
+            return loaded.sorted { $0.index < $1.index }.map(\.track)
         }
     }
 }

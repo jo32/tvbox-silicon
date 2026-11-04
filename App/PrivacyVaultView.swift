@@ -126,6 +126,9 @@ extension PasscodeGate.PasscodePurpose: Equatable {}
 struct PrivacyVaultView: View {
     @Environment(Store.self) private var store
     @State private var gated: Gate?
+    /// The current passcode after it has been verified, held while the owner types its replacement.
+    /// `setPasscode(_:replacing:)` re-verifies it, so it must be kept from the confirm step.
+    @State private var verifiedPasscode: String?
     /// Whether the page is currently allowed to show hidden rows. Re-read on every appearance so a
     /// timeout while the page is open closes it.
     @State private var unlocked = false
@@ -193,7 +196,15 @@ struct PrivacyVaultView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .task { reload() }
+        .task(id: store.vault.revision) {
+            // A timeout can fire while this page is open and nothing else mutates the vault, so the
+            // "Unlocked" label would stay stale. Watch the mutating check — it flips a stale unlock
+            // into a lock and bumps `revision`, which restarts this task and triggers `.onChange`.
+            while !Task.isCancelled {
+                guard store.vault.isUnlocked() else { return }
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
         .onAppear { reload() }
         .onChange(of: store.vault.revision) { _, _ in reload() }
         .sheet(item: $gated) { gate in
@@ -201,7 +212,12 @@ struct PrivacyVaultView: View {
             case .setPasscode:
                 PasscodeGate(purpose: .setNew) { code in
                     do {
-                        try store.vault.setPasscode(code)
+                        if let current = verifiedPasscode {
+                            try store.vault.setPasscode(code, replacing: current)
+                        } else {
+                            try store.vault.setPasscode(code)
+                        }
+                        verifiedPasscode = nil
                         store.saveVault()
                         unlocked = true
                         return true
@@ -209,7 +225,12 @@ struct PrivacyVaultView: View {
                 }
             case .confirmCurrent:
                 PasscodeGate(purpose: .confirmCurrent) { code in
-                    store.vault.unlock(code)
+                    guard store.vault.unlock(code) else { return false }
+                    verifiedPasscode = code
+                    // Present the set-new sheet after this one dismisses, so the two gates do not
+                    // fight over the same `.sheet(item:)` binding.
+                    DispatchQueue.main.async { gated = .setPasscode }
+                    return true
                 }
             case .unlock:
                 PasscodeGate(purpose: .unlock) { code in

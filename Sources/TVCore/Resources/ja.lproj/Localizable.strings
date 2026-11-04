@@ -1464,7 +1464,7 @@
 "Reset Position" = "位置をリセット";
 "Reset Size and Transparency" = "サイズと透明度をリセット";
 "Drag the subtitle over the picture to move it; it is remembered for this video." = "画面の上で字幕をドラッグすると移動できます。位置はこの動画ごとに記憶されます。";
-"This line has stopped. Switching…" = "この回線が停止しました。切り替え中…";
+"This line has stopped. Choose another line" = "この回線が停止しました。別の回線を選ぶ";
 "Hide in App Switcher" = "アプリスイッチャーで隠す";
 "Covers the screen when the app leaves the foreground." = "アプリが前面から離れたときに画面を覆い、サムネイルに内容が出ないようにします。";
 "Retry in %@s" = "%@ 秒後に再試行";
@@ -1631,3 +1631,6 @@
 "Dead lines set to play direct: %lld" = "直接接続にした回線: %lld 件";
 "Dead lines hidden from the episode list: %lld" = "エピソード一覧から隠した回線: %lld 件";
 "This video's sound could not be read on this device." = "この動画の音声をこの端末で読み取れませんでした。";
+
+/* restore */
+"Removed %lld subscriptions that this file does not list." = "このファイルにないサブスクリプションを %lld 件削除しました。";

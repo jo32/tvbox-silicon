@@ -199,6 +199,14 @@ struct PlaybackView: View {
             .allowsHitTesting(true)
         }
         #endif
+        #if os(macOS)
+        // On the Mac the sheet is the only episode surface, so it is presented here rather than by
+        // the surface rule the iPhone Duo needs.
+        .sheet(isPresented: $showsEpisodes) {
+            episodePanel
+                .frame(minWidth: 560, minHeight: 600)
+        }
+        #endif
         .onDisappear {
             hideTask?.cancel(); store.cancelEpisodeSelection()
             if ownsSession { session.stop() }
@@ -277,7 +285,7 @@ struct PlaybackView: View {
                 .disabled(next.busy)
                 .accessibilityLabel(L10n.text("Next Episode")).help(next.name)
             }
-            CatalogPlaybackActions(channel: channel, session: session)
+            CatalogPlaybackActions(channel: channel, session: session, openEpisodes: { showsEpisodes = true })
             if session.qualities.count > 1 {
                 Menu {
                     QualityPicker(session: session)
@@ -367,25 +375,15 @@ struct PlaybackView: View {
         }
     }
 
-    #if os(iOS)
     /// The episode sheet for this channel, seeded with the saved context so it
     /// reopens on the same line and the same episode at its saved position.
-    @ViewBuilder private var episodePanel: some View {
-        if let catalog = store.catalog(for: channel), let context = channel.historyContext {
-            EpisodePicker(
-                video: catalog.video,
-                sourceKey: context.sourceKey,
-                sourceName: context.sourceName,
-                origin: context.origin,
-                resumeContext: context,
-                resumePosition: channel.resumePosition,
-                headers: channel.headers
-            ) { episode in
-                store.selectEpisode(episode, from: channel)
-            }
-        }
-    }
+    ///
+    /// Available on both platforms. The Mac used to have no way to open it at all: the transport
+    /// menu asked its host to present the sheet and no host passed the closure, so "Episodes" was a
+    /// button that did nothing, and the two-level episode menu it replaced was gone.
+    private var episodePanel: some View { CatalogEpisodePanel(channel: channel) }
 
+    #if os(iOS)
     /// What to watch after the last episode: same source, same show first.
     @ViewBuilder private var endScreenContent: some View {
         if let end = store.seriesEnd {
@@ -761,8 +759,13 @@ private struct PlayerSurface: NSViewRepresentable {
     }
 
     /// Back to portrait when the player closes, if the button turned it.
+    ///
+    /// The portrait hold is cleared too. It is set by the watch page, and the page only clears it
+    /// when it disappears while folded shut — closing the player on an unfolded Duo, or leaving the
+    /// page from Full Screen, left the whole app pinned upright for the rest of the session.
     static func release() {
         isLocked = false
+        holdsPortrait = false
         if mask == .landscape { set(landscape: false) }
     }
 
@@ -1083,6 +1086,8 @@ private struct DesktopPlaybackView: View {
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
     @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @State private var showsDanmakuList = false
+    /// The episode sheet, which the transport bar's "Episodes" asks for.
+    @State private var showsEpisodes = false
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
@@ -1143,6 +1148,10 @@ private struct DesktopPlaybackView: View {
             DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
                 .danmakuListPresentation()
         }
+        .sheet(isPresented: $showsEpisodes) {
+            CatalogEpisodePanel(channel: channel)
+                .frame(minWidth: 560, minHeight: 600)
+        }
         .onDisappear { idle.detach(); tvBrowser.stop() }
     }
 
@@ -1177,7 +1186,7 @@ private struct DesktopPlaybackView: View {
                             playingOn = receiver
                         }
                     }
-                    CatalogPlaybackActions(channel: channel, session: session)
+                    CatalogPlaybackActions(channel: channel, session: session, openEpisodes: { showsEpisodes = true })
                     optionsMenu
                     barButton("arrow.up.left.and.arrow.down.right", L10n.text("Enter / Exit Full Screen")) { window.toggleFullScreen(nil) }
                 }
@@ -1487,5 +1496,31 @@ struct PlaybackInfoPanel: View {
         // The video and audio tracks playing now, and the ones before a variant switch.
         known = Array(([(track, format)] + known).prefix(4))
         return format
+    }
+}
+
+/// The episode list, as a sheet.
+///
+/// One view for both hosts — the iPhone's overlay panel and the Mac's window — so the two cannot
+/// drift into different pickers. It reads the catalog and the saved context here rather than taking
+/// them as parameters, because both hosts already have the `Channel` and nothing else.
+private struct CatalogEpisodePanel: View {
+    let channel: Channel
+    @Environment(Store.self) private var store
+
+    var body: some View {
+        if let catalog = store.catalog(for: channel), let context = channel.historyContext {
+            EpisodePicker(
+                video: catalog.video,
+                sourceKey: context.sourceKey,
+                sourceName: context.sourceName,
+                origin: context.origin,
+                resumeContext: context,
+                resumePosition: channel.resumePosition,
+                headers: channel.headers
+            ) { episode in
+                store.selectEpisode(episode, from: channel)
+            }
+        }
     }
 }

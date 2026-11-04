@@ -56,8 +56,8 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
 
     /// When the current unlock began. Not encoded: a relaunch always starts locked.
     private var unlockedAt: Date?
-    /// Failed attempts, to slow down guessing. Not encoded, so it resets on relaunch — the
-    /// persisted digest is the real barrier.
+    /// Failed attempts, to slow down guessing. Persisted so a relaunch cannot reset the rate limit;
+    /// the digest is still the real barrier, this only raises the cost of guessing.
     public private(set) var failedAttempts: Int = 0
     /// Bumps whenever what is visible changes — a hide, a show, a lock, an unlock. Cached source
     /// lists compare it, and a view that reads it redraws when the vault is opened or closed.
@@ -92,9 +92,9 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
         case tooShort
     }
 
-    /// Shortest passcode accepted. Four digits is the familiar phone-lock length; six is better,
-    /// but refusing four would push people to disable the feature.
-    public static let minimumLength = 4
+    /// Shortest passcode accepted. Six digits: four is brute-forceable in minutes from a copied
+    /// preferences file, and the feature is opt-in — someone who wants a short lock can skip it.
+    public static let minimumLength = 6
 
     /// Sets the first passcode, or replaces one after verifying `current`.
     public mutating func setPasscode(_ passcode: String, replacing current: String? = nil,
@@ -321,38 +321,69 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
         return difference == 0
     }
 
+    // MARK: 名单混淆
+
+    /// The hidden lists are stored obfuscated rather than as plain JSON, so a copied preferences
+    /// file does not show the hidden sources' names at a glance. This is **not** encryption — a
+    /// single XOR + Base64 layer — and the real barrier is the passcode digest above.
+    private static let obfuscationKey = Array("yingxia.privacy.vault".utf8)
+    private static let obfuscationMarker = "v1:"
+
+    private static func obfuscate(_ text: String) -> String {
+        let key = obfuscationKey
+        let bytes = Array(text.utf8)
+        let mixed = bytes.enumerated().map { $0.element ^ key[$0.offset % key.count] }
+        return obfuscationMarker + Data(mixed).base64EncodedString()
+    }
+
+    private static func deobfuscate(_ text: String) -> String {
+        // Values saved by earlier builds carry no marker and are plain text.
+        guard text.hasPrefix(obfuscationMarker) else { return text }
+        let payload = String(text.dropFirst(obfuscationMarker.count))
+        guard let data = Data(base64Encoded: payload) else { return text }
+        let key = obfuscationKey
+        let bytes = data.enumerated().map { $0.element ^ key[$0.offset % key.count] }
+        return String(decoding: bytes, as: UTF8.self)
+    }
+
     // MARK: 编解码 —— 只存能存的东西
 
     private enum CodingKeys: String, CodingKey {
-        case hiddenSources, legacyKeys, hiddenSubscriptions, salt, digest, rounds, unlockDuration
+        case hiddenSources, legacyKeys, hiddenSubscriptions, salt, digest, rounds, unlockDuration,
+             failedAttempts, cooldownEnds
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let saved = Set(try container.decodeIfPresent([String].self, forKey: .hiddenSources) ?? [])
+        let saved = Set((try container.decodeIfPresent([String].self, forKey: .hiddenSources) ?? []).map(Self.deobfuscate))
         // Builds before this one saved bare keys. Everything is read through one set, so split the
         // saved list by whether an identity carries its origin.
         hiddenSources = saved.filter { $0.contains("|") }
-        legacyKeys = Set(try container.decodeIfPresent([String].self, forKey: .legacyKeys) ?? [])
+        legacyKeys = Set((try container.decodeIfPresent([String].self, forKey: .legacyKeys) ?? []).map(Self.deobfuscate))
             .union(saved.filter { !$0.contains("|") })
-        hiddenSubscriptions = Set(try container.decodeIfPresent([String].self, forKey: .hiddenSubscriptions) ?? [])
+        hiddenSubscriptions = Set((try container.decodeIfPresent([String].self, forKey: .hiddenSubscriptions) ?? []).map(Self.deobfuscate))
         salt = try container.decodeIfPresent(Data.self, forKey: .salt) ?? Data()
         digest = try container.decodeIfPresent(Data.self, forKey: .digest) ?? Data()
         rounds = try container.decodeIfPresent(Int.self, forKey: .rounds) ?? Self.defaultRounds
         unlockDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .unlockDuration) ?? 300
-        // unlockedAt and failedAttempts are deliberately not restored: a copied file, or a relaunch,
-        // must never start in the unlocked state.
+        failedAttempts = try container.decodeIfPresent(Int.self, forKey: .failedAttempts) ?? 0
+        cooldownEnds = try container.decodeIfPresent(Date.self, forKey: .cooldownEnds)
+        // unlockedAt is deliberately not restored: a copied file, or a relaunch, must never start in
+        // the unlocked state. failedAttempts and cooldownEnds ARE restored so the rate limit
+        // survives a relaunch and cannot be reset by killing the app.
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(Array(hiddenSources).sorted(), forKey: .hiddenSources)
-        try container.encode(Array(legacyKeys).sorted(), forKey: .legacyKeys)
-        try container.encode(Array(hiddenSubscriptions).sorted(), forKey: .hiddenSubscriptions)
+        try container.encode(Array(hiddenSources).sorted().map(Self.obfuscate), forKey: .hiddenSources)
+        try container.encode(Array(legacyKeys).sorted().map(Self.obfuscate), forKey: .legacyKeys)
+        try container.encode(Array(hiddenSubscriptions).sorted().map(Self.obfuscate), forKey: .hiddenSubscriptions)
         try container.encode(salt, forKey: .salt)
         try container.encode(digest, forKey: .digest)
         try container.encode(rounds, forKey: .rounds)
         try container.encode(unlockDuration, forKey: .unlockDuration)
+        try container.encode(failedAttempts, forKey: .failedAttempts)
+        try container.encodeIfPresent(cooldownEnds, forKey: .cooldownEnds)
     }
 }
 

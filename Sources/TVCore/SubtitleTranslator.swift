@@ -34,7 +34,7 @@ public struct SubtitleTranslator: Sendable {
 
         /// Rex's five, in its own order.
         public static let known: [Provider] = [
-            Provider(name: "Doubao", baseURL: "https://ark.cn-beijing.volces.com/api/v3", model: ""),
+            Provider(name: "Doubao", baseURL: "https://ark.cn-beijing.volces.com/api/v3", model: "doubao-pro-32k"),
             Provider(name: "GLM", baseURL: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash"),
             Provider(name: "Kimi", baseURL: "https://api.moonshot.cn/v1", model: "moonshot-v1-8k"),
             Provider(name: "Qwen", baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-turbo"),
@@ -99,9 +99,8 @@ public struct SubtitleTranslator: Sendable {
         and the same count as the input. Do not add numbering, quotes, or commentary.
 
         Translate meaning, tone, register, humor, slang, and implied subjects using nearby subtitle \
-        context. Keep names as they would be written in \(configuration.targetLanguage). Keep line \
-        breaks inside a cue. If a line is a sound effect in brackets, translate it as an interjection \
-        rather than describing it.
+        context. Keep names as they would be written in \(configuration.targetLanguage). If a line is \
+        a sound effect in brackets, translate it as an interjection rather than describing it.
 
         The subtitles are in \(configuration.targetLanguage)'s target language when the request \
         reaches you; translate into \(configuration.targetLanguage).

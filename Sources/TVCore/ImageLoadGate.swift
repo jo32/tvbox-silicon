@@ -153,6 +153,10 @@ public final class ImageLoadGate: @unchecked Sendable {
         lock.lock()
         let dropped = waiters
         waiters.removeAll()
+        // Each resumed waiter's `begin()` returns `true` and its later `finish()` decrements
+        // `inFlight`, so account for them exactly as a normal release does — otherwise the
+        // decrements underflow a count that was never incremented.
+        inFlight += dropped.count
         lock.unlock()
         for continuation in dropped { continuation.resume() }
     }

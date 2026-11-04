@@ -157,6 +157,9 @@ public struct SpeechSubtitles: Sendable {
     /// fragmented streams. Whatever comes out, the file is local, so nothing downstream has to
     /// authenticate again.
     static func soundFile(from asset: AVAsset) async throws -> URL {
+        // A composition, a stream, or any asset without a URL has no file to export; exporting it
+        // would produce an empty track that the recogniser then reads back as silence.
+        guard asset is AVURLAsset else { throw Failure.noAudio }
         let output = FileManager.default.temporaryDirectory
             .appending(path: "speech-\(UUID().uuidString).m4a")
         if (try? await export(asset, to: output, preset: AVAssetExportPresetAppleM4A)) != nil,

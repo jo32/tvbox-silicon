@@ -6,11 +6,22 @@ import TVCore
     /// Every subscription a fresh install should carry. The three addresses aggregate the two
     /// bundles' sources so an overwritten install keeps nothing orphaned: the public fty.json,
     /// the 124.223.214.31 server, and the local Rex aggregate served by the Mac on the LAN.
-    static let aggregatedSubscriptionAddresses = [
-        "https://raw.githubusercontent.com/qist/tvbox/master/fty.json",
-        "http://124.223.214.31:55316/9981",
-        "http://macdemacbook-pro.local:8081/api/rex/movie-degraded.json",
-    ]
+    /// Feeds this build adds on a fresh install.
+    ///
+    /// A `.local` name is not one of them: `macdemacbook-pro.local` only resolves on the LAN it was
+    /// named on, so every fresh install on a phone elsewhere spent its first launch on a DNS failure
+    /// and an error banner. The development Mac's feed is kept for debug builds, where the Mac is
+    /// usually the machine serving it.
+    static let aggregatedSubscriptionAddresses: [String] = {
+        var addresses = [
+            "https://raw.githubusercontent.com/qist/tvbox/master/fty.json",
+            "http://124.223.214.31:55316/9981",
+        ]
+        #if DEBUG
+        addresses.append("http://macdemacbook-pro.local:8081/api/rex/movie-degraded.json")
+        #endif
+        return addresses
+    }()
     private static let dismissedAggregatesKey = "dismissedAggregateSubscriptions"
     /// Aggregate addresses the viewer deleted on purpose. Launch-time seeding skips them; adding one
     /// back by hand clears it again.
@@ -94,7 +105,9 @@ import TVCore
     /// lock only matters when a passcode is set; otherwise the vault hides nothing.
     #if os(iOS)
     func installCaptureGuards() {
-        guard vault.hasPasscode else { return }
+        // No `guard vault.hasPasscode` here: it is installed once at init, before a passcode exists, so
+        // a passcode set later in the same session must still get the guard. `relock` re-checks the
+        // passcode at the moment of the capture, which is the only time it matters.
         let relock = { [weak self] in
             guard let self, self.vault.hasPasscode else { return }
             Task { @MainActor in
@@ -127,6 +140,32 @@ import TVCore
     /// subscription's, used only where the source carries no origin of its own.
     func maySee(_ site: Site, origin: URL) -> Bool { vault.permits(site: site, fallback: origin) }
     var importing = false
+    /// Whether an import owns the gate, and who is waiting for it.
+    ///
+    /// A second import used to be dropped on the floor: `guard !importing else { return }` meant a
+    /// `yingxia://subscribe` link that arrived while launch-time seeding was still running — the
+    /// normal case on a fresh install — silently imported nothing. Imports now queue behind the one
+    /// running, which is what the caller already assumed when it awaited them in a loop.
+    @ObservationIgnored private var importBusy = false
+    @ObservationIgnored private var importWaiters: [CheckedContinuation<Void, Never>] = []
+
+    /// Waits for the running import, then takes the gate.
+    private func beginImport() async {
+        if !importBusy {
+            importBusy = true
+            return
+        }
+        await withCheckedContinuation { importWaiters.append($0) }
+    }
+
+    /// Hands the gate to the next waiter, or releases it.
+    private func endImport() {
+        if importWaiters.isEmpty {
+            importBusy = false
+        } else {
+            importWaiters.removeFirst().resume()
+        }
+    }
     var error: String?
     /// Why the last subscription import failed. It shows under the address field, not in the app-wide alert: on
     /// iPhone and iPad that alert closed the Add Subscription sheet over it and took the viewer out of the form (#357).
@@ -138,17 +177,22 @@ import TVCore
             if let channel = playing, let queue = listeningQueue(for: channel) { playing = nil; listen(queue, from: channel); return }
             // The session playing survives an iPhone Duo fold/unfold. It is dropped when playback stops, or when
             // a different channel starts playing.
-            if playing == nil { activeSession = nil }
-            else if let session = activeSession, !session.isPlaying(playing!) { activeSession = nil }
+            if playing == nil { activeSession = nil; activeSessionChannel = nil }
+            else if let session = activeSession, !session.isPlaying(playing!) { activeSession = nil; activeSessionChannel = nil }
         }
     }
     /// The playback session handed across an iPhone Duo fold/unfold, so the watch page and the full-screen player
     /// reuse the same player instead of each building a new one (which dropped the position and episode).
     @ObservationIgnored private var activeSession: PlaybackSession?
+    /// The channel the session was handed out for. `isPlaying` only reports true once the async `prepare`
+    /// has finished, so a fold/unfold during that load would otherwise build a fresh session and restart
+    /// the episode. Matching on the channel keeps the in-flight session.
+    @ObservationIgnored private var activeSessionChannel: Channel?
     func playbackSession(for channel: Channel) -> PlaybackSession {
-        if let session = activeSession, session.isPlaying(channel) { return session }
+        if let session = activeSession, activeSessionChannel == channel { return session }
         let session = PlaybackSession()
         activeSession = session
+        activeSessionChannel = channel
         return session
     }
     /// Set while a listening source's episode goes to the video player on purpose.
@@ -429,9 +473,10 @@ import TVCore
     /// Refetches enabled subscriptions whose cached copy is gone.
     func restoreSubscription() async {
         let missing = subscriptions.filter { $0.enabled && documents[$0.address] == nil }
-        guard !missing.isEmpty, !importing else { return }
+        guard !missing.isEmpty else { return }
+        await beginImport()
         importing = true
-        defer { importing = false }
+        defer { importing = false; endImport() }
         await fetch(missing)
     }
     /// On launch, makes sure the aggregated subscriptions are all present, importing any that are
@@ -442,7 +487,7 @@ import TVCore
     /// deleting the local Rex feed or the 124.223 server was undone by the next launch, which reads
     /// as the app refusing to take no for an answer.
     func seedAggregatedSubscriptions() async {
-        guard !importing, !Distribution.isAppStore else { return }
+        guard !Distribution.isAppStore else { return }
         for address in Self.aggregatedSubscriptionAddresses
         where !dismissedAggregateAddresses.contains(address) && !subscriptions.contains(where: { $0.address == address }) {
             guard !Task.isCancelled else { break }
@@ -452,9 +497,9 @@ import TVCore
     /// Adds the typed address, or refreshes it when it is already in the list. A directory (多仓)
     /// adds every subscription it lists, switched off, for the viewer to choose from.
     func importSubscription(address: String? = nil) async {
-        guard !importing else { return }
+        await beginImport()
         importing = true; importError = nil; notice = nil
-        defer { importing = false }
+        defer { importing = false; endImport() }
         let typed = (address ?? subscriptionAddress).trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             let url = try WebAddress.resolve(typed)
@@ -507,9 +552,9 @@ import TVCore
     }
     /// Fetches every enabled subscription again; one that fails keeps its last good copy.
     func refreshSubscriptions() async {
-        guard !importing else { return }
+        await beginImport()
         importing = true; importError = nil; notice = nil
-        defer { importing = false }
+        defer { importing = false; endImport() }
         await fetch(subscriptions.filter(\.enabled))
         refreshCloudSources(force: true)
         let failed = subscriptions.filter { $0.enabled && subscriptionErrors[$0.address] != nil }.count
@@ -595,48 +640,50 @@ import TVCore
             return
         }
         let incoming = config.subscriptions.sorted { ($0.rank, $0.entry.address) < ($1.rank, $1.entry.address) }
-        let existing = Set(subscriptions.map(\.address))
         let incomingSet = Set(incoming.map(\.entry.address))
 
-        var added: [SubscriptionEntry] = []
-        var updated: [SubscriptionEntry] = []
-        var restored: [(SubscriptionEntry, Subscription)] = []
+        // The file is the authority on which subscriptions exist. This used to be a merge that never
+        // appended the new ones and never dropped the old ones: `added` was collected and then
+        // dropped on the floor, so the sheet said "Imported 3" and the list was unchanged, and an
+        // address removed from the file was deleted from disk only to be appended back at the end
+        // and re-fetched as "missing content". Both directions now go through `next`.
+        var current: [String: SubscriptionEntry] = [:]
+        for entry in subscriptions { current[entry.address] = entry }
 
-        // Drop this device's subscriptions that the file no longer lists (a restore is authoritative).
-        let removed = subscriptions.filter { !incomingSet.contains($0.address) }
-        for entry in removed {
+        var removedCount = 0
+        for entry in subscriptions where !incomingSet.contains(entry.address) {
+            current[entry.address] = nil
+            removedCount += 1
             documents[entry.address] = nil; subscriptionErrors[entry.address] = nil
             if persistsChanges { try? FileManager.default.removeItem(at: Self.file(for: entry)); ImportedFiles.remove(entry.address) }
         }
 
+        var added: [SubscriptionEntry] = []
+        var restored: [(SubscriptionEntry, Subscription)] = []
+        var next: [SubscriptionEntry] = []
+
         for synced in incoming {
-            if existing.contains(synced.entry.address) {
+            if var entry = current[synced.entry.address] {
                 if overwrite {
                     // Restore the exported name / switch / routing over the current copy.
-                    if let index = subscriptions.firstIndex(where: { $0.address == synced.entry.address }) {
-                        subscriptions[index].name = synced.entry.name
-                        subscriptions[index].enabled = synced.entry.enabled
-                        subscriptions[index].routing = synced.entry.routing
-                        updated.append(subscriptions[index])
-                    }
-                    if let document = synced.document { restored.append((synced.entry, document)) }
+                    entry.name = synced.entry.name
+                    entry.enabled = synced.entry.enabled
+                    entry.routing = synced.entry.routing
+                    if let document = synced.document { restored.append((entry, document)) }
                 }
+                next.append(entry)
             } else {
+                // A subscription the file has and this device does not. It used to be collected and
+                // never inserted, which is why a fresh install could not restore anything.
+                next.append(synced.entry)
                 added.append(synced.entry)
                 if let document = synced.document { restored.append((synced.entry, document)) }
             }
         }
 
-        // Reorder the surviving list to the file's rank, then append any brand-new entries.
-        let incomingAddresses = incoming.map(\.entry.address)
-        var reordered = incomingAddresses.compactMap { address in
-            subscriptions.first { $0.address == address }
-        }
-        // Any entry not in the file (shouldn't happen after the removal above) is kept at the end.
-        for entry in subscriptions where !incomingAddresses.contains(entry.address) { reordered.append(entry) }
-        subscriptions = reordered
+        subscriptions = next
 
-        guard !added.isEmpty || overwrite else {
+        guard !added.isEmpty || overwrite || removedCount > 0 else {
             notice = L10n.text("Every subscription in this file is already imported; nothing was added.")
             return
         }
@@ -650,8 +697,10 @@ import TVCore
 
         if overwrite {
             notice = L10n.text("Restored %lld subscriptions from the backup.", incoming.count)
-        } else {
+        } else if !added.isEmpty {
             notice = L10n.text("Imported %lld subscriptions.", added.count)
+        } else {
+            notice = L10n.text("Removed %lld subscriptions that this file does not list.", removedCount)
         }
     }
 

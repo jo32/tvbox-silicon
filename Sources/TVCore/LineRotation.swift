@@ -75,7 +75,7 @@ public struct HostRotation: Sendable {
         self.preferred = preferred
         self.maxConcurrent = max(1, maxConcurrent)
         self.backoff = backoff
-        self.states = Dictionary(uniqueKeysWithValues: hosts.map { ($0, HostState()) })
+        self.states = Dictionary(hosts.map { ($0, HostState()) }, uniquingKeysWith: { first, _ in first })
     }
 
     // MARK: - 查询
@@ -95,7 +95,7 @@ public struct HostRotation: Sendable {
     /// Hosts sorted by observed health: fewer failures first, then more successes, then the
     /// caller's original order. Unavailable hosts are still listed, at the end.
     public func ranked(now: Date = Date()) -> [String] {
-        let order = Dictionary(uniqueKeysWithValues: hosts.enumerated().map { ($1, $0) })
+        let order = Dictionary(hosts.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
         let usable = Set(available(now: now))
         return hosts.sorted { left, right in
             let l = states[left] ?? HostState(), r = states[right] ?? HostState()
@@ -177,7 +177,7 @@ public struct HostRotation: Sendable {
     public mutating func replace(hosts newHosts: [String], preferred newPreferred: String? = nil) {
         let carried = states
         hosts = newHosts
-        states = Dictionary(uniqueKeysWithValues: newHosts.map { ($0, carried[$0] ?? HostState()) })
+        states = Dictionary(newHosts.map { ($0, carried[$0] ?? HostState()) }, uniquingKeysWith: { first, _ in first })
         preferred = newPreferred.flatMap { newHosts.contains($0) ? $0 : nil }
     }
 }
@@ -194,7 +194,7 @@ extension HostRotation: Codable {
                   maxConcurrent: try c.decodeIfPresent(Int.self, forKey: .maxConcurrent) ?? 4,
                   backoff: Backoff(base: base, cap: cap, jitter: jitter))
         if let decoded = try c.decodeIfPresent([String: HostState].self, forKey: .states) {
-            states = Dictionary(uniqueKeysWithValues: hosts.map { ($0, decoded[$0] ?? HostState()) })
+            states = Dictionary(hosts.map { ($0, decoded[$0] ?? HostState()) }, uniquingKeysWith: { first, _ in first })
         }
     }
     public func encode(to encoder: Encoder) throws {

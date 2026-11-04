@@ -2244,10 +2244,10 @@ struct VideoDetailView: View {
     /// rather than stacking — the picture on the left, the episode list on the right.
     private var landscapePage: Bool { verticalSizeClass == .compact }
     /// iPhone Duo's inner display: still a phone (`idiom == .phone`) but regular in both directions.
-    /// It is not "held sideways" — it is a real folded-out tablet-sized screen — so it gets its own
-    /// three-column layout (picture | info + episodes | actions) instead of the two-column landscape
-    /// split. A real iPad (`idiom == .pad`) never reaches here: `WatchPage.applies` keeps it on the
-    /// plain detail page.
+    /// It is not "held sideways" — it is a real folded-out tablet-sized screen — so it uses the same
+    /// two-column layout as a landscape phone (picture on the left, synopsis + episodes on the right).
+    /// A real iPad (`idiom == .pad`) never reaches here: `WatchPage.applies` keeps it on the plain
+    /// detail page.
     private var duoExpanded: Bool {
         UIDevice.current.userInterfaceIdiom == .phone
             && sizeClass == .regular && verticalSizeClass == .regular
@@ -2283,6 +2283,11 @@ struct VideoDetailView: View {
         // Upright: the box is the picture's own shape, so there are no bars inside it. The status
         // bar strip is part of the box (the page hides the bar), which is why nothing is subtracted.
         let playerHeight = splits ? containerHeight : side / max(ratio, 0.5)
+        // Black belongs behind the picture, not behind the page. In the split layout this band was
+        // the full width at full height, so the synopsis and the episode list on the right sat on
+        // pure black — black text on black in light mode, which reads as an empty column.
+        let detailColumn = detailWidth ?? max(0, containerWidth - side * 0.42)
+        let playerWidth = splits && containerWidth > 0 ? max(1, containerWidth - detailColumn) : containerWidth
         ZStack(alignment: .top) {
             if !fullScreen {
                 if splits {
@@ -2291,7 +2296,7 @@ struct VideoDetailView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         ScrollView { watchDetails.padding(.horizontal, 16).padding(.vertical, 14) }
                             .scrollIndicators(.never)
-                            .frame(width: detailWidth ?? max(0, containerWidth - side * 0.42))
+                            .frame(width: detailColumn)
                     }
                 } else {
                     VStack(spacing: 0) {
@@ -2308,7 +2313,9 @@ struct VideoDetailView: View {
             }
         }
         // The status bar's strip above the player is the player's black.
-        .background(alignment: .top) { Color.black.frame(height: playerHeight).ignoresSafeArea(edges: .top) }
+        .background(alignment: .topLeading) {
+            Color.black.frame(width: playerWidth, height: playerHeight).ignoresSafeArea(edges: .top)
+        }
         .background { if fullScreen { Color.black.ignoresSafeArea() } }
         .statusBarHidden(true)
         // The upright watch page is immersive: the edge swipe is its way back. On a folded-out Duo
@@ -2339,7 +2346,9 @@ struct VideoDetailView: View {
             // page-level `onDisappear` handles stopping playback and leaving Full Screen. Here only the watch page's
             // own contributions are undone; they are re-established by `onAppear` when the watch page returns.
             store.watchPageScopes.subtract(watchScopes)
-            if !duoExpanded { PlayerOrientation.holdPortrait(false) }
+            // Unconditional: an unfold sets the hold to false already, but closing the page while
+            // folded shut used to skip this and leave the app held upright.
+            PlayerOrientation.holdPortrait(false)
         }
         .onChange(of: watchChannel == nil) { _, ended in
             playerStarted = false

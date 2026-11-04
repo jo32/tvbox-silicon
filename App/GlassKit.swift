@@ -135,6 +135,7 @@ extension View {
                     .onChanged { _ in Task { await PosterLoader.shared.setScrolling(true) } }
                     .onEnded { _ in Task { await PosterLoader.shared.setScrolling(false) } }
             )
+            .onDisappear { Task { await PosterLoader.shared.setScrolling(false) } }
             #endif
         }
     }

@@ -727,22 +727,29 @@ struct MobilePlayerView: View {
     private var showsTransport: Bool { !session.loading && session.error == nil }
     /// A line that stopped making progress. Shown as a thin strip over the picture rather than a
     /// dialog: the picture stays visible, and the strip goes away by itself once progress resumes.
+    ///
+    /// Tapping it opens the episode picker, where the other lines for this episode are listed with
+    /// their health. It used to say "Switching…" and switch nothing — there was no code behind the
+    /// word, so the strip promised a recovery that never came and the viewer waited on a dead line.
     @ViewBuilder private var stallNotice: some View {
         if clock.stalled, showsTransport {
             VStack {
                 Spacer(minLength: 0)
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small).tint(.white)
-                    Text(L10n.text("This line has stopped. Switching…"))
-                        .font(.footnote)
+                Button { openEpisodes() } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.triangle.2.circlepath").font(.footnote)
+                        Text(L10n.text("This line has stopped. Choose another line"))
+                            .font(.footnote)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 7)
+                    .background(.black.opacity(0.66), in: Capsule())
+                    .foregroundStyle(.white)
                 }
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(.black.opacity(0.66), in: Capsule())
-                .foregroundStyle(.white)
+                .buttonStyle(.plain)
                 .padding(.bottom, inline ? 60 : 110)
                 .transition(.opacity)
+                .accessibilityIdentifier("player.stalled")
             }
-            .allowsHitTesting(false)
             .animation(.easeOut(duration: 0.2), value: clock.stalled)
         }
     }
@@ -1159,11 +1166,16 @@ struct MobilePlayerView: View {
         nowPlaying.update(title: channel.name, session: session)
     }
 
-    /// Locks or unlocks the controls. Locking only stops the picture's taps and slides; the orientation
-    /// keeps following the gyroscope, because the lock is for fat-finger protection, not for pinning
-    /// the screen. (The rotate button still turns the picture by hand either way.)
+    /// Locks or unlocks the controls, and the orientation with them.
+    ///
+    /// The button used to stop the taps and slides and nothing else, while `PlayerOrientation.lock()`
+    /// and `unlock()` sat there with no caller: a lock button that lets the gyroscope turn the film
+    /// while you are holding the phone is not much of a lock. Pinning the orientation it is in when
+    /// the lock goes on is what the label promises; the rotate button still turns the picture by
+    /// hand either way, because it asks for a specific orientation rather than for the lock to end.
     private func toggleLock() {
         controlsLocked.toggle()
+        if controlsLocked { PlayerOrientation.lock() } else { PlayerOrientation.unlock() }
         poke()
     }
 

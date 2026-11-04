@@ -11,7 +11,10 @@ private func source(_ key: String, origin: URL? = nil) -> Site {
     return site
 }
 
-private func unlockedVault(_ passcode: String = "1234", now: Date = Date()) throws -> PrivacyVault {
+/// A vault with a passcode already set, for the tests that are about hiding rather than about the
+/// passcode. Six digits is `PrivacyVault.minimumLength`: four was brute-forceable from a copied
+/// preferences file, and the tests used to encode the old rule.
+private func unlockedVault(_ passcode: String = "123456", now: Date = Date()) throws -> PrivacyVault {
     var vault = PrivacyVault(rounds: 10)
     try vault.setPasscode(passcode, now: now)
     return vault
@@ -40,7 +43,7 @@ private func unlockedVault(_ passcode: String = "1234", now: Date = Date()) thro
     vault.lock()
     #expect(!vault.permits(sourceKey: "a", origin: one, now: now))
 
-    let opened = vault.unlock("1234", now: now)
+    let opened = vault.unlock("123456", now: now)
     #expect(opened)
     #expect(vault.permits(sourceKey: "a", origin: one, now: now))
 }
@@ -102,7 +105,7 @@ private func unlockedVault(_ passcode: String = "1234", now: Date = Date()) thro
     #expect(!reopened.permits(sourceKey: "keep", origin: two, now: now))
     #expect(reopened.permits(sourceKey: "keep", origin: one, now: now))
 
-    let opened = reopened.unlock("1234", now: now)
+    let opened = reopened.unlock("123456", now: now)
     #expect(opened)
     #expect(reopened.permits(sourceKey: "legacyKey", origin: one, now: now))
 }
@@ -119,7 +122,7 @@ private func unlockedVault(_ passcode: String = "1234", now: Date = Date()) thro
     vault.lock()
     #expect(vault.revision > hidden)
     let locked = vault.revision
-    let opened = vault.unlock("1234", now: now)
+    let opened = vault.unlock("123456", now: now)
     #expect(opened)
     #expect(vault.revision > locked)
 }
@@ -144,4 +147,17 @@ private func unlockedVault(_ passcode: String = "1234", now: Date = Date()) thro
                                          episodeID: "e", episodeName: "E", episodeFlag: "line")
     #expect(!vault.permits(PlaybackHistoryEntry(context: context, position: 1, duration: 2, updatedAt: now), now: now))
     #expect(vault.visibleHistory([PlaybackHistoryEntry(context: context, position: 1, duration: 2, updatedAt: now)], now: now).isEmpty)
+}
+
+
+@Test func aPasscodeShorterThanTheMinimumIsRefused() {
+    var vault = PrivacyVault(rounds: 10)
+    #expect(throws: PrivacyVault.PasscodeError.tooShort) {
+        try vault.setPasscode("1234")
+    }
+    #expect(!vault.hasPasscode)
+    #expect(throws: Never.self) {
+        try vault.setPasscode(String(repeating: "1", count: PrivacyVault.minimumLength))
+    }
+    #expect(vault.hasPasscode)
 }

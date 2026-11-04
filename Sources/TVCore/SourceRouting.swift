@@ -110,18 +110,25 @@ public enum SourceRelay {
         guard parts.count >= 2 else { return api }
         // parts[0] is cms|cmsr, parts[1] is the token, the rest is host + optional path
         guard parts.count >= 3 else { return api }
-        let scheme = api.hasPrefix("https") ? "https" : "http"
+        // cmsr marks a source that was https; the relay itself is always http.
+        let scheme = parts[0] == "cmsr" ? "https" : "http"
         return "\(scheme)://" + parts.dropFirst(2).joined(separator: "/")
     }
 
     /// The relay address for a source's own address. Non-HTTP apis (JAR/csp classes, local files)
     /// are returned unchanged: only native CMS endpoints are relayed.
     public static func relayedAddress(_ api: String) -> String {
-        guard let url = URL(string: api), let host = url.host(),
+        guard let url = URL(string: api), let sourceHost = url.host(),
               url.scheme == "http" || url.scheme == "https" else { return api }
         guard !isRelayed(api) else { return api }
-        let path = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
-        return cmsPrefix + host + "/" + path
+        // Encode the whole direct address behind the relay so nothing is lost:
+        // http — /cms/<token>/<host[:port]>/<path[?query]>; https — /cmsr/<token>/…
+        let route = url.scheme == "https" ? "cmsr" : "cms"
+        var target = sourceHost
+        if let sourcePort = url.port { target += ":\(sourcePort)" }
+        var path = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
+        if let query = url.query { path += "?\(query)" }
+        return "http://\(host):\(port)/\(route)/\(token)/\(target)/\(path)"
     }
 
     /// Applies a route to a source's api string.

@@ -41,6 +41,8 @@ struct EpisodeLine: Identifiable, Hashable {
 @Observable
 final class EpisodeProbeController {
     private(set) var readings: [String: SourceProbeResult] = [:]
+    /// Line flag → probe host, so cooldown is queried by host (the rotator's key), not by flag.
+    private var bases: [String: String] = [:]
     private var inFlight: Set<String> = []
     private let store = SourceProbeStore.shared
 
@@ -58,6 +60,7 @@ final class EpisodeProbeController {
         force: Bool = false
     ) async {
         guard !line.isEmpty, let url = URL(string: address), !inFlight.contains(line) else { return }
+        if let host = url.host { bases[line] = host }
         if !force, let known = readings[line] ?? store.probe(sourceKey: sourceKey, videoID: videoID, lineFlag: line),
            !known.isStale(), known.reachability != .unknown {
             readings[line] = known
@@ -67,7 +70,22 @@ final class EpisodeProbeController {
         inFlight.insert(line)
         defer { inFlight.remove(line) }
 
+        // HostRotation is keyed by host: claim it, then record success/failure/cancel on the same key.
+        let base = url.host
+        if let base, !store.beginBase(base) { return }
+
         let result = await SourceProbeRunner.probe(url: url, headers: headers)
+        if Task.isCancelled {
+            if let base { store.cancelBase(base) }
+            return
+        }
+        if let base {
+            switch result.reachability {
+            case .reachable, .slow: store.succeedBase(base)
+            case .unreachable: store.failBase(base)
+            case .unknown: store.cancelBase(base)
+            }
+        }
         readings[line] = result
         store.record(result, sourceKey: sourceKey, videoID: videoID, lineFlag: line)
     }
@@ -76,7 +94,8 @@ final class EpisodeProbeController {
 
     /// Seconds until `line` may be tried again, or nil when it may be tried now.
     func cooldownRemaining(for line: String, now: Date = Date()) -> TimeInterval? {
-        store.cooldownRemaining(for: line, now: now)
+        guard let base = bases[line] else { return nil }
+        return store.cooldownRemaining(for: base, now: now)
     }
 
     /// The soonest any cooling line becomes usable, or nil when one already is.

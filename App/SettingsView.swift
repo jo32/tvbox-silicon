@@ -322,7 +322,7 @@ private enum SettingsNote {
     static var playbackInfo: String { L10n.text("Shows the video's format, resolution, frame rate and bitrate in a corner of the player.") }
     static var danmaku: String { L10n.text("Bilibili's bullet comments, drawn over the video. You can also switch them in the player.") }
     static var tmdb: String {
-        L10n.text("Shows cast, artwork and episode details from TMDB on video pages. Sends the video's title, its details from the source and the source's name to Yingxia's lookup service, never your accounts or subscription addresses.")
+        L10n.text("Shows cast, artwork and episode details from TMDB on video pages. Sends the video's title, its details from the source and the source's name to Mi3s's lookup service, never your accounts or subscription addresses.")
     }
     static var errorReports: String {
         L10n.text("Sends errors to the developer a few times a day so they can be fixed: the error text with web addresses cut to the server name, the app and system versions, and a random ID. Never your accounts, passwords or viewing history.")
@@ -575,7 +575,7 @@ struct FormSettingsView: View {
                     }
                     Toggle(isOn: $receivesCasts) {
                         FormLabel(symbol: "tv.and.mediabox.fill", tint: BilibiliMark.blue, title: L10n.text("Cast from the Bilibili App"),
-                                  subtitle: L10n.text("With your phone on the same network, tap the TV button in a Bilibili video and choose %@.", L10n.text("Yingxia")))
+                                  subtitle: L10n.text("With your phone on the same network, tap the TV button in a Bilibili video and choose %@.", L10n.text("Mi3s")))
                     }
                     .onChange(of: receivesCasts) { _, on in
                         if on { BilibiliCastController.shared.start(store) } else { BilibiliCastController.shared.stop() }
@@ -583,7 +583,7 @@ struct FormSettingsView: View {
                 }
                 Toggle(isOn: $receivesPlayOn) {
                     FormLabel(symbol: "play.tv.fill", tint: Brand.indigo, title: L10n.text("Play from Other Devices"),
-                              subtitle: L10n.text("With Yingxia open here, your other devices on the same network can send it what they play: tap Play On in their player."))
+                              subtitle: L10n.text("With Mi3s open here, your other devices on the same network can send it what they play: tap Play On in their player."))
                 }
                 .settingsSwitch()
                 .onChange(of: receivesPlayOn) { _, on in
@@ -708,7 +708,7 @@ struct FormSettingsView: View {
                         }
                         .disabled(updates.checking)
                     } label: {
-                        FormLabel(symbol: "checkmark.circle.fill", tint: .green, title: L10n.text("Yingxia is up to date"),
+                        FormLabel(symbol: "checkmark.circle.fill", tint: .green, title: L10n.text("Mi3s is up to date"),
                                   subtitle: updates.lastChecked.map { L10n.text("Last checked %@", $0.formatted(date: .abbreviated, time: .shortened)) })
                     }
                 }
@@ -716,7 +716,7 @@ struct FormSettingsView: View {
                 if let installer = updates.installer {
                     Toggle(isOn: Binding(get: { installer.automaticallyInstalls }, set: { installer.automaticallyInstalls = $0 })) {
                         FormLabel(symbol: "arrow.down.circle.fill", tint: .blue, title: L10n.text("Install Updates Automatically"),
-                                  subtitle: L10n.text("Yingxia downloads updates in the background and installs them the next time it quits."))
+                                  subtitle: L10n.text("Mi3s downloads updates in the background and installs them the next time it quits."))
                     }
                     .settingsSwitch()
                 }
@@ -753,9 +753,9 @@ struct FormSettingsView: View {
             if case .success(let file) = result { importConfig(from: file) }
         }
         .fileExporter(isPresented: $exportsConfig, document: ConfigDocument(store.exportConfig()),
-                      contentType: .json, defaultFilename: "yingxia-config") { result in
+                      contentType: .json, defaultFilename: "mi3s-config") { result in
             if case .success = result { store.notice = L10n.text("Configuration exported.") }
-            else if case .failure(let error) = result { store.error = L10n.text("Export failed: %@", error.localizedDescription) }
+            else if case .failure(let error) = result { store.importError = L10n.text("Export failed: %@", error.localizedDescription) }
         }
         .confirmationDialog(L10n.text("Import Configuration"), isPresented: Binding(
             get: { pendingConfig != nil }, set: { if !$0 { pendingConfig = nil } })) {
@@ -819,7 +819,7 @@ struct FormSettingsView: View {
             HStack(spacing: 14) {
                 AppMark(size: FormMetrics.hero)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.text("Yingxia")).font(.title3.weight(.semibold))
+                    Text(L10n.text("Mi3s")).font(.title3.weight(.semibold))
                     if let version { Text(version).font(.subheadline).foregroundStyle(.secondary) }
                     Text(Brand.copyright).font(.caption).foregroundStyle(.tertiary)
                 }
@@ -856,11 +856,11 @@ struct FormSettingsView: View {
         let scoped = file.startAccessingSecurityScopedResource()
         defer { if scoped { file.stopAccessingSecurityScopedResource() } }
         guard let data = try? Data(contentsOf: file), let config = SubscriptionConfig.decode(data) else {
-            store.error = L10n.text("This isn't a Mi3s configuration file.")
+            store.importError = L10n.text("This isn't a Mi3s configuration file.")
             return
         }
         if config.version != SubscriptionConfig.version {
-            store.error = L10n.text("This configuration file is from a newer version and can't be imported.")
+            store.importError = L10n.text("This configuration file is from a newer version and can't be imported.")
             return
         }
         pendingConfig = config
@@ -1323,7 +1323,7 @@ struct LicensesView: View {
     var body: some View {
         #if os(tvOS)
         // Each paragraph is a row the remote can land on, which is how the page scrolls.
-        SettingsPage(title: L10n.text("Open Source Licenses"), symbol: "doc.plaintext", subtitle: "Yingxia \(Brand.copyright)") {
+        SettingsPage(title: L10n.text("Open Source Licenses"), symbol: "doc.plaintext", subtitle: "Mi3s \(Brand.copyright)") {
             SettingsGroup {
                 ForEach(Array(notices.components(separatedBy: "\n\n").enumerated()), id: \.offset) { _, paragraph in
                     Button {} label: {
@@ -1339,7 +1339,7 @@ struct LicensesView: View {
         SettingsPage(title: L10n.text("Open Source Licenses")) {
             Section {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Yingxia \(Brand.copyright)").font(.headline)
+                    Text("Mi3s \(Brand.copyright)").font(.headline)
                     Link("www.getmegaportal.com", destination: Brand.website).font(.subheadline)
                 }
             }
@@ -1799,9 +1799,9 @@ struct TVSettingsView: View {
     }
 
     private var playbackFooter: String {
-        let phones = L10n.text("With Yingxia open here, your other devices on the same network can send it what they play: tap Play On in their player.")
+        let phones = L10n.text("With Mi3s open here, your other devices on the same network can send it what they play: tap Play On in their player.")
         guard store.extrasUnlocked else { return phones }
-        return L10n.text("With your phone on the same network, tap the TV button in a Bilibili video and choose %@.", L10n.text("Yingxia")) + "\n" + phones
+        return L10n.text("With your phone on the same network, tap the TV button in a Bilibili video and choose %@.", L10n.text("Mi3s")) + "\n" + phones
     }
 
     private var subscriptionSection: some View {
@@ -1872,7 +1872,7 @@ private struct TVSettingsHero: View {
         VStack(spacing: 34) {
             AppMark(size: 300)
             VStack(spacing: 10) {
-                Text(L10n.text("Yingxia")).font(.system(size: 48, weight: .bold))
+                Text(L10n.text("Mi3s")).font(.system(size: 48, weight: .bold))
                 if let version { Text(version).font(.system(size: 26)).foregroundStyle(.secondary) }
                 Text(Brand.copyright).font(.system(size: 22)).foregroundStyle(.tertiary)
             }

@@ -73,23 +73,29 @@ import Observation
 
     /// All flags hidden for a source, so a bulk "hide every dead line" can be offered.
     public func hiddenFlags(origin: URL, sourceKey: String) -> Set<String> {
-        let prefix = EpisodeSkipSettings.scope(origin: origin, source: sourceKey, video: "")
         var found = Set<String>()
-        for (k, v) in values where v.hidden && k.hasPrefix(prefix) {
-            // The key is origin|sourceKey|flag; the flag is the part after the last '|'.
-            if let idx = k.lastIndex(of: "|") { found.insert(String(k[k.index(after: idx)...])) }
+        for (k, v) in values where v.hidden {
+            if let flag = flag(in: k, origin: origin, sourceKey: sourceKey) { found.insert(flag) }
         }
         return found
     }
 
     /// Restores every hidden line of a source at once.
     public func restoreAll(origin: URL, sourceKey: String) {
-        let prefix = EpisodeSkipSettings.scope(origin: origin, source: sourceKey, video: "")
-        for (k, var v) in values where k.hasPrefix(prefix) && v.hidden {
+        for (k, var v) in values where v.hidden && flag(in: k, origin: origin, sourceKey: sourceKey) != nil {
             v.hidden = false
             values[k] = v
         }
         persist()
+    }
+
+    /// Extracts the flag from a stored key when it belongs to `origin`/`sourceKey`. The key is the
+    /// JSON array `["origin","source","flag"]` produced by `EpisodeSkipSettings.scope`, so the flag is
+    /// the last decoded element rather than a `|`-separated tail.
+    private func flag(in key: String, origin: URL, sourceKey: String) -> String? {
+        guard let parts = try? JSONDecoder().decode([String].self, from: Data(key.utf8)),
+              parts.count == 3, parts[0] == origin.absoluteString, parts[1] == sourceKey else { return nil }
+        return parts[2]
     }
 
     public var savedValues: [String: Setting] { values }

@@ -1464,7 +1464,7 @@
 "Reset Position" = "Reset Position";
 "Reset Size and Transparency" = "Reset Size and Transparency";
 "Drag the subtitle over the picture to move it; it is remembered for this video." = "Drag the subtitle over the picture to move it; it is remembered for this video.";
-"This line has stopped. Switching…" = "This line has stopped. Switching…";
+"This line has stopped. Choose another line" = "This line has stopped. Choose another line";
 "Hide in App Switcher" = "Hide in App Switcher";
 "Covers the screen when the app leaves the foreground." = "Covers the screen when the app leaves the foreground.";
 "Retry in %@s" = "Retry in %@s";
@@ -1631,3 +1631,6 @@
 "Dead lines set to play direct: %lld" = "Dead lines set to play direct: %lld";
 "Dead lines hidden from the episode list: %lld" = "Dead lines hidden from the episode list: %lld";
 "This video's sound could not be read on this device." = "This video's sound could not be read on this device.";
+
+/* restore */
+"Removed %lld subscriptions that this file does not list." = "Removed %lld subscriptions that this file does not list.";

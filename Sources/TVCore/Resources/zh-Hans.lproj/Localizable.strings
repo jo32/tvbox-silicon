@@ -1464,7 +1464,7 @@
 "Reset Position" = "重置位置";
 "Reset Size and Transparency" = "重置大小与透明度";
 "Drag the subtitle over the picture to move it; it is remembered for this video." = "在画面上拖动字幕即可移动，位置会按这个视频记住。";
-"This line has stopped. Switching…" = "这条线路卡住了，正在切换…";
+"This line has stopped. Choose another line" = "这条线路卡住了，点击换一条";
 "Hide in App Switcher" = "在后台切换器中隐藏";
 "Covers the screen when the app leaves the foreground." = "App 离开前台时盖住画面，避免缩略图露出内容。";
 "Retry in %@s" = "%@ 秒后重试";
@@ -1631,3 +1631,6 @@
 "Dead lines set to play direct: %lld" = "已让 %lld 条线路直连";
 "Dead lines hidden from the episode list: %lld" = "已从选集列表隐藏 %lld 条线路";
 "This video's sound could not be read on this device." = "无法在本机读取这个视频的声音。";
+
+/* restore */
+"Removed %lld subscriptions that this file does not list." = "已移除 %lld 个文件里没有的订阅。";

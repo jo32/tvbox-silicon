@@ -213,7 +213,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 16) {
                 AppMark(size: heroTitle * 1.4)
-                Text(L10n.text("Yingxia")).font(.title3.weight(.semibold)).foregroundStyle(.secondary)
+                Text(L10n.text("Mi3s")).font(.title3.weight(.semibold)).foregroundStyle(.secondary)
             }
             .padding(.bottom, 32)
             Text(L10n.text("Your cinema,\non every screen."))
