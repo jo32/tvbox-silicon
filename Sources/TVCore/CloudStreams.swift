@@ -181,7 +181,8 @@ actor CloudByteStream {
     private var recent: [Int] = []
     private var inflight: [Int: Task<Data, Error>] = [:]
     /// Where AVPlayer is reading. A file whose audio sits far from its video is read in two
-    /// places at once; a jump away from all of them is a seek.
+    /// places at once; a jump away from all of them is a seek. On the iPhone AVPlayer also reads one
+    /// place on two overlapping requests, the newer starting a few chunks behind the older (issue #433).
     private var readers: [Int] = []
     /// How many reads wait on each chunk; a seek never cancels a chunk someone still needs.
     private var waiting: [Int: Int] = [:]
@@ -241,15 +242,15 @@ actor CloudByteStream {
     func read(at offset: Int, count: Int) async throws -> Data {
         guard offset >= 0, offset < source.length, count > 0 else { throw TVError.unsupported("Invalid range") }
         let index = offset / Self.chunkSize
-        let near = { (reader: Int) in index >= reader - 1 && index <= reader + Self.readAhead + 1 }
-        if let current = readers.firstIndex(where: near) { readers[current] = index }
+        let near = { (reader: Int) in index >= reader - Self.readAhead && index <= reader + Self.readAhead + 1 }
+        if let current = readers.firstIndex(where: near) { readers[current] = max(readers[current], index) }
         else {
             if !readers.isEmpty { Diagnostics.shared.record(.debug, "cloud.stream", "reader at=\(index) others=\(readers)") }
             readers.append(index)
             // Keep the two most recent positions (video and audio); a third means the user seeked.
             if readers.count > 2 {
                 readers.removeFirst(readers.count - 2)
-                let windows = readers.map { $0 - 1...$0 + Self.readAhead }
+                let windows = readers.map { $0 - Self.readAhead...$0 + Self.readAhead }
                 for (key, task) in inflight where waiting[key, default: 0] == 0 && !windows.contains(where: { $0.contains(key) }) {
                     task.cancel(); inflight[key] = nil
                 }
@@ -288,7 +289,8 @@ actor CloudByteStream {
     }
 
     private func download(_ index: Int) async throws -> Data {
-        defer { inflight[index] = nil }
+        // A cancelled download was already let go, and the chunk may be on its way again in another.
+        defer { if !Task.isCancelled { inflight[index] = nil } }
         let first = index * Self.chunkSize, last = min(source.length, first + Self.chunkSize) - 1
         var attempt = 0, cut = 0, refusals = 0
         var received = Data()
