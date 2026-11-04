@@ -1,6 +1,34 @@
 {
   "releases": [
     {
+      "version": "1.8.10",
+      "build": 48,
+      "date": "2026-11-05",
+      "links": {
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "magnifyingglass",
+          "title": {
+            "en": "Search again on Apple TV",
+            "zh-Hans": "Apple TV 上可以重新搜索",
+            "zh-Hant": "Apple TV 上可以重新搜尋",
+            "ja": "Apple TV でもう一度検索"
+          },
+          "detail": {
+            "en": "Global Search's search field now runs across the top of the page. After a search, press Up from any result to get back to it and search again.",
+            "zh-Hans": "全局搜索的搜索框现在横跨页面顶部。搜索之后，在任何结果上按“上”就能回到搜索框，重新搜索。",
+            "zh-Hant": "全域搜尋的搜尋框現在橫跨頁面頂部。搜尋之後，在任何結果上按「上」就能回到搜尋框，重新搜尋。",
+            "ja": "横断検索の検索欄がページ上部いっぱいに広がりました。検索したあとも、どの結果からでも上を押せば検索欄に戻り、もう一度検索できます。"
+          },
+          "platforms": [
+            "tvos"
+          ]
+        }
+      ]
+    },
+    {
       "version": "1.8.9",
       "build": 47,
       "date": "2026-11-05",
