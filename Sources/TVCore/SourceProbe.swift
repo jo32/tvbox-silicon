@@ -186,9 +186,19 @@ public final class SourceProbeStore {
     /// "没有可播放的地址", because the two have different fixes.
     public func allBasesCoolingDown(now: Date = Date()) -> Bool { rotation.allCoolingDown(now: now) }
 
+    /// Registers a base in the pool on first sight, so `HostRotation.begin` does not drop it
+    /// (it only claims hosts that are already known). Surviving hosts keep their state.
+    private func ensureBase(_ base: String) {
+        guard !rotation.hosts.contains(base) else { return }
+        var hosts = rotation.hosts
+        hosts.append(base)
+        rotation.replace(hosts: hosts, preferred: rotation.preferred)
+    }
+
     /// Claims a base for one probe. Returns false when it is cooling down or saturated, which means
     /// "skip this round", not "this base is dead".
     public func beginBase(_ base: String, now: Date = Date()) -> Bool {
+        ensureBase(base)
         let claimed = rotation.begin(base, now: now)
         if claimed { persistRotation() }
         return claimed
@@ -276,6 +286,35 @@ public final class SourceProbeStore {
             found[String(key.dropFirst(prefix.count))] = value
         }
         return found
+    }
+
+    /// One row per dead line, whatever video it was measured on.
+    ///
+    /// Fixing a dead line needs the source and the flag — the route is stored per (origin, source,
+    /// flag), not per episode — so the reader gets exactly those two, de-duplicated across every
+    /// video the sweep happened to probe.
+    ///
+    /// The newest reading decides, reachable or not: a line that failed on Monday and was measured
+    /// again as reachable on Tuesday is not dead, and filtering before taking the newest would have
+    /// kept it in the list forever, since the two readings live under different video ids.
+    public func unreadableLines() -> [(sourceKey: String, lineFlag: String)] {
+        var best: [String: (sourceKey: String, lineFlag: String, at: Date, dead: Bool)] = [:]
+        for (key, value) in probes {
+            // key = "sourceKey|videoID|lineFlag"; a source key never contains a bar, a video id is
+            // the feed's own id, and a flag is the feed's line name.
+            let parts = key.split(separator: "|", omittingEmptySubsequences: false)
+            guard parts.count >= 3 else { continue }
+            let flag = String(parts[parts.count - 1])
+            guard !flag.isEmpty else { continue }
+            let sourceKey = parts.dropLast(2).joined(separator: "|")
+            let id = "\(sourceKey)|\(flag)"
+            if let seen = best[id], seen.at >= value.measuredAt { continue }
+            best[id] = (sourceKey, flag, value.measuredAt, value.reachability == .unreachable)
+        }
+        return best.values
+            .filter(\.dead)
+            .sorted { $0.at > $1.at }
+            .map { (sourceKey: $0.sourceKey, lineFlag: $0.lineFlag) }
     }
 
     public func record(_ result: SourceProbeResult, sourceKey: String, videoID: String, lineFlag: String) {
@@ -381,6 +420,11 @@ public enum SourceProbeRunner {
                 measuredAt: Date()
             )
         } catch {
+            // A cancelled probe (line switch / sheet closed) is not a verdict: recording it as
+            // unreachable would poison the 5-minute cache with a lie.
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled {
+                return SourceProbeResult(reachability: .unknown)
+            }
             return SourceProbeResult(reachability: .unreachable, measuredAt: Date())
         }
     }

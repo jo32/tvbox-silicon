@@ -1623,3 +1623,11 @@
 "No Data" = "No Data";
 "No On-Device Speech Model" = "No On-Device Speech Model";
 "Attributes are applied top to bottom. Drag to reorder; swipe to stop using one. The speed test measures resolution only, so ordering by bitrate, file size or colour range does not change which source comes first yet." = "Attributes are applied top to bottom. Drag to reorder; swipe to stop using one. The speed test measures resolution only, so ordering by bitrate, file size or colour range does not change which source comes first yet.";
+
+/* batch line fix + speech audio */
+"No dead lines have been measured yet. Run Probe All first — this uses those readings rather than asking every source again." = "No dead lines have been measured yet. Run Probe All first — this uses those readings rather than asking every source again.";
+"No custom proxy is set up. Add one under Playback → Custom Proxy, or force the lines direct instead." = "No custom proxy is set up. Add one under Playback → Custom Proxy, or force the lines direct instead.";
+"Dead lines routed through the proxy: %lld" = "Dead lines routed through the proxy: %lld";
+"Dead lines set to play direct: %lld" = "Dead lines set to play direct: %lld";
+"Dead lines hidden from the episode list: %lld" = "Dead lines hidden from the episode list: %lld";
+"This video's sound could not be read on this device." = "This video's sound could not be read on this device.";

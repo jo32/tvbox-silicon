@@ -41,4 +41,52 @@ import Testing
         }
         #expect(ranked == ["high", "mid", "low", "never"])
     }
+
+    // MARK: - Dead lines, for "fix every unreachable line"
+
+    @MainActor
+    @Test func deadLinesAreListedOncePerSourceAndLine() {
+        // The batch fix writes one route per (source, line), so two dead videos on the same line are
+        // one row, not two — otherwise the same fix is applied twice and counted twice.
+        let probes = store()
+        let now = Date()
+        probes.record(SourceProbeResult(reachability: .unreachable, measuredAt: now),
+                      sourceKey: "alpha", videoID: "v1", lineFlag: "l1")
+        probes.record(SourceProbeResult(reachability: .unreachable, measuredAt: now.addingTimeInterval(-60)),
+                      sourceKey: "alpha", videoID: "v2", lineFlag: "l1")
+        probes.record(SourceProbeResult(reachability: .unreachable, measuredAt: now),
+                      sourceKey: "alpha", videoID: "v1", lineFlag: "l2")
+        // Healthy, so it is not in the list at all.
+        probes.record(SourceProbeResult(reachability: .reachable, measuredAt: now),
+                      sourceKey: "beta", videoID: "v1", lineFlag: "l1")
+
+        let rows = probes.unreadableLines()
+        #expect(rows.count == 2)
+        #expect(rows.contains { $0.sourceKey == "alpha" && $0.lineFlag == "l1" })
+        #expect(rows.contains { $0.sourceKey == "alpha" && $0.lineFlag == "l2" })
+        #expect(!rows.contains { $0.sourceKey == "beta" })
+    }
+
+    @MainActor
+    @Test func aLineThatMeasuredHealthyAgainIsNotDead() {
+        // Readings live under the video they were taken on, so the newest has to win across videos:
+        // filtering for `.unreachable` first would keep a line listed forever after one bad day.
+        let probes = store()
+        let now = Date()
+        probes.record(SourceProbeResult(reachability: .unreachable, measuredAt: now.addingTimeInterval(-3600)),
+                      sourceKey: "alpha", videoID: "v1", lineFlag: "l1")
+        probes.record(SourceProbeResult(reachability: .reachable, measuredAt: now),
+                      sourceKey: "alpha", videoID: "v2", lineFlag: "l1")
+        #expect(probes.unreadableLines().isEmpty)
+    }
+
+    @MainActor
+    @Test func aLineNeverMeasuredIsNotCalledDead() {
+        // `.unknown` is "we have not looked", not "it does not work". The batch fix must not route a
+        // line through a proxy on the strength of a reading nobody took.
+        let probes = store()
+        probes.record(SourceProbeResult(reachability: .unknown, measuredAt: Date()),
+                      sourceKey: "alpha", videoID: "v1", lineFlag: "l1")
+        #expect(probes.unreadableLines().isEmpty)
+    }
 }

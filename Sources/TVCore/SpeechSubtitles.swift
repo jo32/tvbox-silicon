@@ -96,6 +96,18 @@ public struct SpeechSubtitles: Sendable {
     /// `hint` seeds recognition with names that are in the title (character names, places) because
     /// speech recognisers otherwise spell them phonetically; it is the same reason a human subtitler
     /// reads the script first.
+    ///
+    /// The audio is pulled through `asset` itself, then recognised in slices. Both details are
+    /// load-bearing:
+    ///
+    /// * **Through the asset, not through the URL.** `SFSpeechURLRecognitionRequest` fetches the
+    ///   address itself and carries none of the player's headers, so every source behind a Referer
+    ///   check answered it with an error page — which recognition reads as silence, after a full
+    ///   download. The asset already knows the headers; exporting from it keeps them.
+    /// * **In slices.** One recognition task is good for about a minute of audio. A 45-minute
+    ///   episode handed over whole ended early, at whatever the service's cap was, and the request
+    ///   asked for final results only, so nothing usable came back at all. Slices are ~55 seconds,
+    ///   and each one's timestamps are shifted by where it started.
     public func transcribe(asset: AVAsset,
                            language: String,
                            name: String,
@@ -109,36 +121,176 @@ public struct SpeechSubtitles: Sendable {
 
         try await Self.requestAuthorization()
 
-        let duration = (try? await asset.load(.duration)).map(CMTimeGetSeconds) ?? 0
-        let total = duration.isFinite && duration > 0 ? duration : 0
+        // Getting the sound off the network is the slow half and the recogniser cannot start until
+        // it is done, so it gets its own slice of the progress bar rather than a long 0%.
+        progress?(0.02)
+        let sound = try await Self.soundFile(from: asset)
+        defer { try? FileManager.default.removeItem(at: sound) }
+        progress?(0.12)
 
-        let request = SFSpeechURLRecognitionRequest(url: (asset as? AVURLAsset)?.url ?? URL(fileURLWithPath: "/dev/null"))
+        let duration = (try? await AVURLAsset(url: sound).load(.duration)).map(CMTimeGetSeconds) ?? 0
+        let total = duration.isFinite && duration > 0 ? duration : 0
+        let slices = Self.slices(duration: total)
+        guard !slices.isEmpty else { throw Failure.noAudio }
+
+        var spans: [Span] = []
+        for (index, range) in slices.enumerated() {
+            try Task.checkCancellation()
+            let piece = try await Self.slice(sound, range: range)
+            defer { try? FileManager.default.removeItem(at: piece) }
+            let found = try await Self.recognise(piece, recogniser: recogniser, hint: hint)
+            let offset = range.start.seconds
+            spans += found.map { Span(text: $0.text, start: $0.start + offset, duration: $0.duration) }
+            progress?(0.12 + 0.88 * Double(index + 1) / Double(slices.count))
+        }
+
+        guard !spans.isEmpty else { throw Failure.empty }
+        return Self.makeTrack(segments: spans, duration: total, name: name, language: language)
+    }
+
+    // MARK: - Getting the sound
+
+    /// Exports the asset's sound track to a local file.
+    ///
+    /// Two presets are tried because they fail on different things: AppleM4A re-encodes and handles
+    /// odd sample rates, while passthrough keeps a codec the recogniser accepts but refuses some
+    /// fragmented streams. Whatever comes out, the file is local, so nothing downstream has to
+    /// authenticate again.
+    static func soundFile(from asset: AVAsset) async throws -> URL {
+        let output = FileManager.default.temporaryDirectory
+            .appending(path: "speech-\(UUID().uuidString).m4a")
+        if (try? await export(asset, to: output, preset: AVAssetExportPresetAppleM4A)) != nil,
+           FileManager.default.fileExists(atPath: output.path) {
+            return output
+        }
+        try? FileManager.default.removeItem(at: output)
+        if (try? await export(asset, to: output, preset: AVAssetExportPresetPassthrough)) != nil,
+           FileManager.default.fileExists(atPath: output.path) {
+            return output
+        }
+        throw Failure.failed(L10n.text("This video's sound could not be read on this device."))
+    }
+
+    /// One 55-second piece of the exported file, as its own file.
+    static func slice(_ file: URL, range: CMTimeRange) async throws -> URL {
+        let output = FileManager.default.temporaryDirectory
+            .appending(path: "speech-\(UUID().uuidString).m4a")
+        try await export(AVURLAsset(url: file), to: output,
+                         preset: AVAssetExportPresetAppleM4A, range: range)
+        return output
+    }
+
+    /// Runs one export and waits for it, turning a failed export into a thrown error.
+    ///
+    /// Cancellation actually stops the export. Without it a viewer who leaves the player mid-way
+    /// kept a session writing a 40-minute file until it finished on its own, and the `await` below
+    /// never came back — the subscription leaked and the temp file stayed on disk.
+    static func export(_ asset: AVAsset,
+                       to url: URL,
+                       preset: String,
+                       range: CMTimeRange? = nil) async throws {
+        guard let session = AVAssetExportSession(asset: asset, presetName: preset) else {
+            throw Failure.failed(L10n.text("This video's sound could not be read on this device."))
+        }
+        session.outputURL = url
+        session.outputFileType = .m4a
+        session.shouldOptimizeForNetworkUse = false
+        if let range { session.timeRange = range }
+
+        let once = Once()
+        let handle = ExportHandle(session)
+        try await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                once.arm { continuation.resume() }
+                session.exportAsynchronously { once.fire() }
+            }
+            try Task.checkCancellation()
+        } onCancel: {
+            handle.cancel()
+            once.fire()
+        }
+
+        guard session.status == .completed else {
+            try? FileManager.default.removeItem(at: url)
+            throw Failure.failed(session.error?.localizedDescription
+                                 ?? L10n.text("This video's sound could not be read on this device."))
+        }
+    }
+
+    /// Even slices of `duration`, because one recognition task only takes about a minute.
+    ///
+    /// Slice boundaries land on silence about as often as on a word; an overlap would recognise the
+    /// same sentence twice and duplicate the cue, so they butt up against each other instead, and a
+    /// word split across the seam is the accepted cost.
+    ///
+    /// Two edge cases decide the shape. A clip shorter than one slice is one slice — not zero, which
+    /// is what a loop that only runs while `start + length < duration` produces. And a final scrap
+    /// under a quarter second is folded into the piece before it: the muxer refuses a fragment that
+    /// short, and one failed slice fails the whole transcription, so dropping the scrap costs a word
+    /// at worst while keeping it costs every subtitle after it.
+    static func slices(duration: Double, length: Double = 55) -> [CMTimeRange] {
+        guard duration.isFinite, duration > 0, length > 0 else { return [] }
+        func tick(_ seconds: Double) -> CMTime {
+            CMTime(seconds: seconds, preferredTimescale: 1_000_000)
+        }
+        guard duration > length else {
+            return [CMTimeRange(start: .zero, duration: tick(duration))]
+        }
+
+        var cuts: [Double] = []
+        var start: Double = 0
+        while start + length < duration {
+            start += length
+            cuts.append(start)
+        }
+        if let last = cuts.last, duration - last <= 0.25 { cuts.removeLast() }
+        cuts.append(duration)
+
+        var edges: [Double] = [0]
+        edges.append(contentsOf: cuts)
+        return zip(edges, edges.dropFirst()).map { CMTimeRange(start: tick($0), end: tick($1)) }
+    }
+
+    /// One recognition task over one local file.
+    ///
+    /// The completion handler arrives on a queue of the framework's choosing and cancellation comes
+    /// from another one, so the "have we answered yet?" state lives behind a lock in `Relay` rather
+    /// than in a captured `var` — and cancelling the surrounding task now cancels the recognition
+    /// task and answers, instead of leaving a continuation that never resumed.
+    static func recognise(_ file: URL,
+                          recogniser: SFSpeechRecognizer,
+                          hint: [String]) async throws -> [Span] {
+        let request = SFSpeechURLRecognitionRequest(url: file)
         request.requiresOnDeviceRecognition = true
         request.shouldReportPartialResults = false
         request.addsPunctuation = true
         request.taskHint = .dictation
         if !hint.isEmpty { request.contextualStrings = hint }
 
-        let spans = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[Span], Error>) in
-            var finished = false
-            recogniser.recognitionTask(with: request) { result, error in
-                guard !finished else { return }
-                if let error {
-                    finished = true
-                    continuation.resume(throwing: Failure.failed(error.localizedDescription))
-                    return
-                }
-                guard let result, result.isFinal else { return }
-                finished = true
-                progress?(1)
-                continuation.resume(returning: result.bestTranscription.segments.map {
-                    Span(text: $0.substring, start: $0.timestamp, duration: $0.duration)
+        let relay = Relay<[Span]>()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[Span], Error>) in
+                relay.arm(continuation)
+                relay.attach(recogniser.recognitionTask(with: request) { result, error in
+                    if let error {
+                        // A cancelled task reports `kAFAssistantErrorDomain 216`; that is the
+                        // cancellation we asked for, not a reason to show an error.
+                        if (error as NSError).code == 216 {
+                            relay.finish(.failure(CancellationError()))
+                        } else {
+                            relay.finish(.failure(Failure.failed(error.localizedDescription)))
+                        }
+                        return
+                    }
+                    guard let result, result.isFinal else { return }
+                    relay.finish(.success(result.bestTranscription.segments.map {
+                        Span(text: $0.substring, start: $0.timestamp, duration: $0.duration)
+                    }))
                 })
             }
+        } onCancel: {
+            relay.cancel()
         }
-
-        guard !spans.isEmpty else { throw Failure.empty }
-        return Self.makeTrack(segments: spans, duration: total, name: name, language: language)
     }
 
     /// Turns recognised segments into cues.
@@ -183,6 +335,105 @@ public struct SpeechSubtitles: Sendable {
             SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
         }
         guard speech == .authorized else { throw Failure.notAuthorized }
+    }
+}
+
+/// Carries an export session into the cancellation handler.
+///
+/// `AVAssetExportSession` is not `Sendable` and never will be, but cancellation arrives on whatever
+/// thread cancelled the task, and all it needs to do is ask the session to stop.
+final class ExportHandle: @unchecked Sendable {
+    private let session: AVAssetExportSession
+    init(_ session: AVAssetExportSession) { self.session = session }
+    func cancel() { session.cancelExport() }
+}
+
+/// Runs one piece of work exactly once, whichever thread gets there first.
+///
+/// `AVAssetExportSession` reports completion on a queue of its own and is cancelled from another,
+/// so a captured `var done = false` would be read and written from two threads at once. The lock
+/// also covers the ordering: an export can finish before the continuation has been registered, and
+/// the late registration then has to run immediately instead of waiting forever.
+final class Once: @unchecked Sendable {
+    private let lock = NSLock()
+    private var action: (@Sendable () -> Void)?
+    private var used = false
+
+    func arm(_ action: @escaping @Sendable () -> Void) {
+        lock.lock()
+        if used {
+            lock.unlock()
+            action()
+            return
+        }
+        self.action = action
+        lock.unlock()
+    }
+
+    func fire() {
+        lock.lock()
+        guard !used else {
+            lock.unlock()
+            return
+        }
+        used = true
+        let action = self.action
+        self.action = nil
+        lock.unlock()
+        action?()
+    }
+}
+
+/// Answers one continuation exactly once, from either the recogniser's callback or a cancellation.
+///
+/// Kept separate from `Once` because the answer carries a value, and because cancellation has to
+/// hang on to the recognition task so it can be stopped — otherwise a viewer who backs out of the
+/// player leaves the recogniser running to the end of the clip.
+final class Relay<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Value, Error>?
+    private var pending: Result<Value, Error>?
+    private var task: SFSpeechRecognitionTask?
+
+    func arm(_ continuation: CheckedContinuation<Value, Error>) {
+        lock.lock()
+        if let pending {
+            lock.unlock()
+            continuation.resume(with: pending)
+            return
+        }
+        self.continuation = continuation
+        lock.unlock()
+    }
+
+    func attach(_ task: SFSpeechRecognitionTask) {
+        lock.lock()
+        let finished = continuation == nil && pending != nil
+        if !finished { self.task = task }
+        lock.unlock()
+        if finished { task.cancel() }
+    }
+
+    func finish(_ result: Result<Value, Error>) {
+        lock.lock()
+        guard let continuation else {
+            if pending == nil { pending = result }
+            lock.unlock()
+            return
+        }
+        self.continuation = nil
+        self.task = nil
+        lock.unlock()
+        continuation.resume(with: result)
+    }
+
+    func cancel() {
+        lock.lock()
+        let task = self.task
+        self.task = nil
+        lock.unlock()
+        task?.cancel()
+        finish(.failure(CancellationError()))
     }
 }
 #endif

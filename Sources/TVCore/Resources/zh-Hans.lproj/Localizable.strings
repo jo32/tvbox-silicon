@@ -1623,3 +1623,11 @@
 "No Data" = "暂无数据";
 "No On-Device Speech Model" = "本机没有语音识别模型";
 "Attributes are applied top to bottom. Drag to reorder; swipe to stop using one. The speed test measures resolution only, so ordering by bitrate, file size or colour range does not change which source comes first yet." = "属性从上到下依次生效。拖动可调整顺序，左滑可停用某一项。测速只测得分辨率，因此按视频码率、文件大小或色彩范围排序，现在不会改变哪个源排在前面。";
+
+/* batch line fix + speech audio */
+"No dead lines have been measured yet. Run Probe All first — this uses those readings rather than asking every source again." = "还没有测到任何不可用线路。请先运行「全部测速」——这里用的是那些测速结果，不会再去请求每个源。";
+"No custom proxy is set up. Add one under Playback → Custom Proxy, or force the lines direct instead." = "还没有设置自定义代理。可在「播放 → 自定义代理」里添加，或者改为让这些线路直连。";
+"Dead lines routed through the proxy: %lld" = "已让 %lld 条线路走代理";
+"Dead lines set to play direct: %lld" = "已让 %lld 条线路直连";
+"Dead lines hidden from the episode list: %lld" = "已从选集列表隐藏 %lld 条线路";
+"This video's sound could not be read on this device." = "无法在本机读取这个视频的声音。";

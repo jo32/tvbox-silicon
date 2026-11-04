@@ -591,7 +591,7 @@ import TVCore
     /// file's rank, and a fresh entry that carries a content snapshot is restored without a fetch.
     func importConfig(_ config: SubscriptionConfig, overwrite: Bool = false) {
         guard config.isValid else {
-            error = L10n.text("This isn't a Mi3s configuration file.")
+            importError = L10n.text("This isn't a Mi3s configuration file.")
             return
         }
         let incoming = config.subscriptions.sorted { ($0.rank, $0.entry.address) < ($1.rank, $1.entry.address) }
@@ -1220,30 +1220,62 @@ import TVCore
     }
 
     /// After a full probe, applies one fix to every line that came back unreachable: route it
-    /// through the first custom proxy, force it direct, or hide it from the picker. Returns how
-    /// many lines were touched, for the confirmation.
+    /// through the first custom proxy, force it direct, or hide it from the picker.
+    ///
+    /// The work comes from the probe store, not from the feeds. Asking each source for its home page
+    /// to rediscover which lines are dead meant one request per source, covered only the first video
+    /// in each, and took long enough to look frozen. The sweep has already measured every video it
+    /// touched, and a route is stored per (origin, source, line) — no episode is needed to fix one.
+    ///
+    /// The origin is the source's own, not the merged document's: a source that came from a second
+    /// subscription is read back with its own origin, so writing under the first one silently fixed
+    /// nothing for it. `notice` reports what actually happened, including the honest zero.
+    @discardableResult
     func batchFixUnreachableLines(_ fix: LineFix) async -> Int {
         guard let config = subscription else { return 0 }
-        var touched = 0
-        for site in automaticSites(config) {
-            guard !Task.isCancelled else { break }
-            let client = CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL)
-            guard let page = try? await client.home(), let video = page.videos.first else { continue }
-            for episode in video.episodes where !episode.flag.isEmpty {
-                guard let probe = SourceProbeStore.shared.probe(sourceKey: site.sourceKey, videoID: video.id, lineFlag: episode.flag),
-                      probe.reachability == .unreachable else { continue }
-                switch fix {
-                case .proxy:
-                    if let proxy = customProxy.store.endpoints.first {
-                        lineSettings.setRoute(.proxy(proxy.id), origin: config.origin, sourceKey: site.sourceKey, flag: episode.flag)
-                    }
-                case .direct:
-                    lineSettings.setRoute(.direct, origin: config.origin, sourceKey: site.sourceKey, flag: episode.flag)
-                case .hide:
-                    lineSettings.setHidden(true, origin: config.origin, sourceKey: site.sourceKey, flag: episode.flag)
-                }
-                touched += 1
+        let rows = SourceProbeStore.shared.unreadableLines()
+        guard !rows.isEmpty else {
+            notice = L10n.text("No dead lines have been measured yet. Run Probe All first — this uses those readings rather than asking every source again.")
+            return 0
+        }
+        var proxy: CustomProxyEndpoint?
+        if case .proxy = fix {
+            guard let first = customProxy.store.endpoints.first else {
+                notice = L10n.text("No custom proxy is set up. Add one under Playback → Custom Proxy, or force the lines direct instead.")
+                return 0
             }
+            proxy = first
+        }
+
+        // One lookup for the whole batch: the origin a source belongs to is what the player reads
+        // back when it picks a line, so it has to be the same value on both sides.
+        var origins: [String: URL] = [:]
+        for site in config.sites where origins[site.sourceKey] == nil {
+            origins[site.sourceKey] = site.origin(or: config.origin)
+        }
+
+        var touched = 0
+        for row in rows {
+            guard !Task.isCancelled else { break }
+            let origin = origins[row.sourceKey] ?? config.origin
+            switch fix {
+            case .proxy:
+                guard let proxy else { continue }
+                lineSettings.setRoute(.proxy(proxy.id), origin: origin, sourceKey: row.sourceKey, flag: row.lineFlag)
+            case .direct:
+                lineSettings.setRoute(.direct, origin: origin, sourceKey: row.sourceKey, flag: row.lineFlag)
+            case .hide:
+                lineSettings.setHidden(true, origin: origin, sourceKey: row.sourceKey, flag: row.lineFlag)
+            }
+            touched += 1
+        }
+
+        // Counted rather than pluralised: "1 dead lines" is the kind of detail that makes a fix look
+        // unfinished, and a bare number after a colon reads correctly for one and for many.
+        switch fix {
+        case .proxy: notice = L10n.text("Dead lines routed through the proxy: %lld", touched)
+        case .direct: notice = L10n.text("Dead lines set to play direct: %lld", touched)
+        case .hide: notice = L10n.text("Dead lines hidden from the episode list: %lld", touched)
         }
         return touched
     }
@@ -1694,7 +1726,7 @@ struct PlaybackCatalog {
 /// snapshot, so importing it restores the sources even offline, and — because `importConfig` merges
 /// by address — re-importing the same file never duplicates or overwrites what is already there.
 struct SubscriptionConfig: Codable, Sendable {
-    static let format = "yingxia-config"
+    static let format = "mi3s-config"
     static let version = 1
     var format: String
     var version: Int

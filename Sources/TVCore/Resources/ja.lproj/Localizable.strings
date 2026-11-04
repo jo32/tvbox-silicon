@@ -1623,3 +1623,11 @@
 "No Data" = "データなし";
 "No On-Device Speech Model" = "この端末に音声認識モデルがありません";
 "Attributes are applied top to bottom. Drag to reorder; swipe to stop using one. The speed test measures resolution only, so ordering by bitrate, file size or colour range does not change which source comes first yet." = "属性は上から順に適用されます。ドラッグで並べ替え、左スワイプで項目を外せます。速度テストが測るのは解像度だけなので、ビットレート・ファイルサイズ・色範囲で並べても、どのソースが先に来るかはまだ変わりません。";
+
+/* batch line fix + speech audio */
+"No dead lines have been measured yet. Run Probe All first — this uses those readings rather than asking every source again." = "まだ利用できない回線が計測されていません。先に「すべて計測」を実行してください。ここではその結果を使い、各ソースへ問い合わせ直しません。";
+"No custom proxy is set up. Add one under Playback → Custom Proxy, or force the lines direct instead." = "カスタムプロキシが設定されていません。「再生 → カスタムプロキシ」で追加するか、これらの回線を直接接続に切り替えてください。";
+"Dead lines routed through the proxy: %lld" = "プロキシ経由にした回線: %lld 件";
+"Dead lines set to play direct: %lld" = "直接接続にした回線: %lld 件";
+"Dead lines hidden from the episode list: %lld" = "エピソード一覧から隠した回線: %lld 件";
+"This video's sound could not be read on this device." = "この動画の音声をこの端末で読み取れませんでした。";
