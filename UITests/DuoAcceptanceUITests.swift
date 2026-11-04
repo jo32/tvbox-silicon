@@ -73,18 +73,20 @@ final class DuoAcceptanceUITests: XCTestCase {
     /// sources again. `-qaPage vault` opens it directly (App/QALaunch.swift) — a page inside Privacy
     /// rather than a tab, so there is nothing to find and tap.
     ///
-    /// The test never guesses a passcode. It asserts that one of the two faces is drawn: the set-a-passcode
-    /// form on a fresh install, or the unlock pad once a passcode exists.
+    /// The test never guesses a passcode. Three faces count as drawn, and which one appears depends on the
+    /// device: the set-a-passcode row on a fresh install, the passcode field while setting one, and the
+    /// unlock pad once a passcode exists.
     func testPrivacyVaultDraws() throws {
         launch(section: "settings", page: "vault")
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 30), "The vault never opened")
         Thread.sleep(forTimeInterval: 2)
         attach("vault")
 
+        let setup = app.buttons["privacy.setup"]
         let passcode = app.secureTextFields["privacy.passcode"]
         let unlock = app.secureTextFields["privacy.unlock"]
-        let field = passcode.waitForExistence(timeout: 10) ? passcode : unlock
-        XCTAssertTrue(field.exists, "The vault drew neither the passcode form nor the unlock pad")
+        let drew = setup.waitForExistence(timeout: 10) || passcode.exists || unlock.exists
+        XCTAssertTrue(drew, "The vault drew none of: set-a-passcode row, passcode field, unlock pad")
         XCTAssertEqual(app.state, .runningForeground, "The vault dismissed the app")
     }
 

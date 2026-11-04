@@ -175,6 +175,9 @@ struct PrivacyVaultView: View {
                         FormLabel(symbol: "lock.fill", tint: .blue, title: L10n.text("Set a Passcode"),
                                   subtitle: L10n.text("Needed before anything can be hidden."))
                     }
+                    // A fresh install shows this row instead of a passcode field, so acceptance can assert
+                    // "the vault drew" without guessing a passcode: one of setup/passcode/unlock is present.
+                    .accessibilityIdentifier("privacy.setup")
                 } footer: {
                     Text(L10n.text("Without a passcode nothing can be hidden, because hiding without a lock would only confuse."))
                 }

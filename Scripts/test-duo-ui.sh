@@ -94,7 +94,8 @@ if [[ -z "$SIMULATOR" ]]; then
 fi
 
 step "生成工程"
-rm -rf "$OUT"; mkdir -p "$OUT"
+python3 -c "import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)" "$OUT" 2>/dev/null || true
+mkdir -p "$OUT"
 # 占位宿主：XCUITest 的 bundle 必须挂在一个 app target 上。它从不被启动，只用来让 xcodebuild 推导
 # TEST_HOST / TEST_TARGET_NAME；真正被测的是已安装的映匣。
 cat > "$OUT/QAAnchor.swift" <<'SWIFT'
@@ -154,17 +155,24 @@ cd "$OUT"
 xcodegen generate --spec project.yml >/dev/null
 
 step "跑用例"
-# 测试写完不删：失败时 result.xcresult 里留着日志和截图。
+# 结果包不放 -resultBundlePath：那条路在 Xcode 27 上偶发 "mkstemp: No such file or directory"，
+# 留下一个只有 Data/Staging、没有 Info.plist 的坏包，截图也就跟着丢了。让 xcodebuild 写进
+# DerivedData 的标准位置（Logs/Test），跑完再挑最新那个。
 set +e
 xcodebuild -project DuoUI.xcodeproj -scheme DuoAcceptance \
     -destination "$DESTINATION" \
     -derivedDataPath "$OUT/DerivedData" \
-    -resultBundlePath "$OUT/result.xcresult" \
     "${SIGNING[@]}" \
     -collect-test-diagnostics never \
     test "${EXTRA[@]+"${EXTRA[@]}"}" 2>&1 | tee "$OUT/test.log" | grep -E "Test Suite|Test Case|error:|warning: .*(sign|provision)|XCTAssert|TEST (SUCCEEDED|FAILED)" || true
 STATUS=${PIPESTATUS[0]}
 set -e
+
+RESULT=$(ls -1dt "$OUT"/DerivedData/Logs/Test/*.xcresult 2>/dev/null | head -1)
+if [[ -n "$RESULT" ]]; then
+    rm -rf "$OUT/result.xcresult"
+    cp -R "$RESULT" "$OUT/result.xcresult" 2>/dev/null || true
+fi
 
 step "导出截图"
 mkdir -p "$OUT/shots"
@@ -173,6 +181,8 @@ if [[ -d "$OUT/result.xcresult" ]]; then
     # 附件导出来后是随机 UUID 文件名；按附件名改回 <屏名>.png。
     # 名字长这样：settings_0_CB149FA5-DEF7-405F-982F-CE64EE4656E0.png —— 中间那段是 xcresult
     # 自己加的序号和 UUID，去掉后剩下的才是用例里给的名字。
+    # 其余附件（XCTest 自己的 "UI Snapshot …"、元素快照、mp4 录像）一律不动：那些是失败时的证据，
+    # 名字里带空格和中文，改了反而不好找。
     python3 - "$OUT/shots" <<'PY'
 import json, os, re, sys
 root = sys.argv[1]
@@ -180,16 +190,22 @@ manifest = os.path.join(root, "manifest.json")
 if os.path.exists(manifest):
     for entry in json.load(open(manifest)):
         for attachment in entry.get("attachments", []):
+            exported = attachment.get("exportedFileName", "")
             name = (attachment.get("suggestedHumanReadableName") or "").strip()
-            src = os.path.join(root, attachment.get("exportedFileName", ""))
-            if not name or not os.path.exists(src):
+            src = os.path.join(root, exported)
+            if not name or not os.path.exists(src) or not exported.lower().endswith(".png"):
                 continue
             stem = re.sub(r"_\d+_[0-9A-Fa-f-]{36}$", "", re.sub(r"\.png$", "", name, flags=re.I))
-            os.replace(src, os.path.join(root, stem.replace("/", "-") + ".png"))
+            # 用例里给的名字都是简单标识符；对不上的就是 XCTest 的诊断附件。
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9-]*", stem):
+                continue
+            os.replace(src, os.path.join(root, stem + ".png"))
 PY
-    COUNT=$(ls "$OUT/shots"/*.png 2>/dev/null | wc -l | tr -d ' ')
-    echo "截图 $COUNT 张 → $OUT/shots"
-    ls "$OUT/shots"/*.png 2>/dev/null | xargs -n1 basename | sed 's/^/  /'
+    COUNT=$(ls "$OUT"/shots/*.png 2>/dev/null | grep -cE "/[A-Za-z][A-Za-z0-9-]*\.png$" || true)
+    echo "截图 ${COUNT} 张 → $OUT/shots"
+    ls -1 "$OUT"/shots/*.png 2>/dev/null | grep -E "/[A-Za-z][A-Za-z0-9-]*\.png$" | while read -r shot; do
+        echo "  $(basename "$shot")"
+    done
 fi
 
 if [[ $STATUS -ne 0 ]]; then
