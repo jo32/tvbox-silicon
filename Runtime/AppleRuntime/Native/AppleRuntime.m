@@ -6,6 +6,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <os/proc.h>
+#include <sys/mman.h>
 #include <TargetConditionals.h>
 
 // Called from the app's plugin worker threads (several at once for searches), never the UI thread.
@@ -90,6 +91,15 @@ static NSString *heapLimit(void) {
     unsigned long long megabytes = available / 3 / (1024 * 1024);
     if (megabytes < 384) megabytes = 384;
     if (megabytes > 1024) megabytes = 1024;
+    // The JVM reserves the whole heap (and the class space) in one piece at start, and ends the app when it
+    // can't: a 3 GB iPhone just after a web sign-in had no 384 MB + 128 MB gap left ("Universe::reserve_heap",
+    // a TestFlight crash). Try the reservation first and take a smaller heap until it fits.
+    while (megabytes > 128) {
+        size_t size = (size_t)(megabytes + 128 + 64) << 20;
+        void *probe = mmap(NULL, size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
+        if (probe != MAP_FAILED) { munmap(probe, size); break; }
+        megabytes = megabytes * 3 / 4;
+    }
     return [NSString stringWithFormat:@"-Xmx%llum", megabytes];
 }
 

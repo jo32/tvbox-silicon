@@ -86,7 +86,8 @@ struct DiscoverDetailView: View {
         #elseif os(iOS)
         // The movie player, full screen: SwiftUI's VideoPlayer in a sheet had no full screen, Fill or speed (#300).
         .fullScreenCover(isPresented: $trailerShown) {
-            if let trailer = details?.trailer { DiscoverMobileTrailerScreen(trailer: trailer, title: details?.name ?? item.name) }
+            // Store handed in, as for every full-screen cover: the iPad app on a Mac leaves environment objects behind.
+            if let trailer = details?.trailer { DiscoverMobileTrailerScreen(trailer: trailer, title: details?.name ?? item.name).environment(store) }
         }
         #else
         .sheet(isPresented: $trailerShown) {
@@ -507,7 +508,8 @@ struct DiscoverSearchPresentation: ViewModifier {
     @Environment(Store.self) private var store
     func body(content: Content) -> some View {
         #if os(iOS)
-        content.fullScreenCover(isPresented: $isPresented) { DiscoverSearchView() }
+        // Store handed in: the iPad app on a Mac presents a full-screen cover without the presenter's environment objects.
+        content.fullScreenCover(isPresented: $isPresented) { DiscoverSearchView().environment(store) }
             // Search Sources on a detail page opened from here switches to the Search tab, which is behind this
             // full-screen sheet: close it so the source results show instead of the catalog search.
             .onChange(of: store.section) { if isPresented { isPresented = false } }

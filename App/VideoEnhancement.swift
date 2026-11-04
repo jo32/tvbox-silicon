@@ -377,6 +377,10 @@ private final class EnhancementPipeline: EnhancementEngine, @unchecked Sendable 
         var work: CVPixelBuffer? = nil
         /// A frame of the video itself, not one made in between.
         var real = true
+        /// The output's read-only wrapper, kept while the frame lives: it lends `buffer` only for as long as it
+        /// exists. Dropped at the end of `tick`, the next frame's `previous = current` released a freed buffer
+        /// (a TestFlight crash in `handle`).
+        var owner: CVReadOnlyPixelBuffer? = nil
     }
 
     private let queue = DispatchQueue(label: "com.tvbox.video-enhancement", qos: .userInteractive)
@@ -541,7 +545,7 @@ private final class EnhancementPipeline: EnhancementEngine, @unchecked Sendable 
         nonisolated(unsafe) var pixels: CVPixelBuffer?
         readOnly.withUnsafeBuffer { pixels = $0 }
         guard let buffer = pixels else { return }
-        handle(Frame(buffer: buffer, time: pulled.itemTimeForDisplay), output: output)
+        handle(Frame(buffer: buffer, time: pulled.itemTimeForDisplay, owner: readOnly), output: output)
     }
 
     private func handle(_ frame: Frame, output: AVPlayerItemVideoOutput) {
@@ -779,7 +783,8 @@ private final class EnhancementPipeline: EnhancementEngine, @unchecked Sendable 
         let phases = Array(Set(slots.map(\.phase).filter { $0 > 0 && $0 < 1 })).sorted()
         var made: [Float: CVPixelBuffer] = [:]
         if cut {
-            return slots.map { Frame(buffer: $0.phase < 0.5 ? last.buffer : frame.buffer, time: $0.time) }
+            return slots.map { $0.phase < 0.5 ? Frame(buffer: last.buffer, time: $0.time, owner: last.owner)
+                                              : Frame(buffer: frame.buffer, time: $0.time, owner: frame.owner) }
         }
         if !phases.isEmpty {
             guard let source = VTFrameProcessorFrame(buffer: frame.work ?? frame.buffer, presentationTimeStamp: frame.time),
@@ -813,7 +818,9 @@ private final class EnhancementPipeline: EnhancementEngine, @unchecked Sendable 
         }
         return slots.map { slot in
             let made = slot.phase <= 0 || slot.phase >= 1 ? nil : made[slot.phase]
-            return Frame(buffer: made ?? (slot.phase < 0.5 ? last.buffer : frame.buffer), time: slot.time, real: made == nil)
+            if let made { return Frame(buffer: made, time: slot.time, real: false) }
+            let source = slot.phase < 0.5 ? last : frame
+            return Frame(buffer: source.buffer, time: slot.time, owner: source.owner)
         }
     }
 

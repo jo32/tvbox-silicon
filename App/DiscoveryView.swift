@@ -101,6 +101,9 @@ struct GlobalSearchView: View {
                 // button, so there would be no way to leave without searching.
                 #if os(macOS)
                 if model.keyword.isEmpty { inputFocused = true }
+                #elseif DEBUG
+                // `-qaFocusSearch 1` puts the cursor in the field, as tapping it does.
+                if UserDefaults.standard.bool(forKey: "qaFocusSearch") { inputFocused = true }
                 #endif
                 if let config = store.subscription { model.resumeSuspended(config: config) }
             }
