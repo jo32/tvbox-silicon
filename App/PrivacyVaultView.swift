@@ -308,30 +308,66 @@ struct PrivacyVaultView: View {
             .settingsSwitch()
             .accessibilityIdentifier("privacy.feed." + feed.entry.address)
 
-            DisclosureGroup(isExpanded: expansion(feed)) {
-                ForEach(sites) { site in
-                    Toggle(isOn: sourceBinding(site, origin: feed.origin)) {
-                        FormLabel(symbol: "square.stack.3d.up.fill", tint: .purple, title: site.name,
-                                  subtitle: site.sourceKey)
-                    }
-                    .settingsSwitch()
-                    // A hidden feed hides all of its sources at once; the rows inside would only
-                    // disagree with it, so they wait until the feed itself is visible again.
-                    .disabled(store.vault.isHidden(subscription: feed.origin))
-                    .accessibilityIdentifier("privacy.source." + site.sourceKey)
-                }
-                if sites.isEmpty {
-                    Text(L10n.text("No source matches %@.", query))
+            #if os(tvOS)
+            // `DisclosureGroup` is not on the TV, so the fold is a row of its own: pressing it opens
+            // the feed, the same way the chevron does on a phone.
+            Button { toggle(feed) } label: {
+                HStack {
+                    foldLabel(feed, sites)
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded(feed) ? 90 : 0))
                 }
-            } label: {
-                Text(query.isEmpty ? L10n.text("Sources") : L10n.text("Matching sources (%lld)", sites.count))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
             }
+            if isExpanded(feed) { sourceToggles(feed, sites) }
+            #else
+            DisclosureGroup(isExpanded: expansion(feed)) {
+                sourceToggles(feed, sites)
+            } label: {
+                foldLabel(feed, sites)
+            }
+            #endif
         } footer: {
             Text(L10n.text("Hidden sources disappear from history, search, favourites and the source picker."))
         }
+    }
+
+    /// One switch per source, for the feed whose fold is open.
+    @ViewBuilder private func sourceToggles(_ feed: Feed, _ sites: [Site]) -> some View {
+        ForEach(sites) { site in
+            Toggle(isOn: sourceBinding(site, origin: feed.origin)) {
+                FormLabel(symbol: "square.stack.3d.up.fill", tint: .purple, title: site.name,
+                          subtitle: site.sourceKey)
+            }
+            .settingsSwitch()
+            // A hidden feed hides all of its sources at once; the rows inside would only disagree
+            // with it, so they wait until the feed itself is visible again.
+            .disabled(store.vault.isHidden(subscription: feed.origin))
+            .accessibilityIdentifier("privacy.source." + site.sourceKey)
+        }
+        if sites.isEmpty {
+            Text(L10n.text("No source matches %@.", query))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// The fold's own line: how many sources it holds, or how many matched what was typed.
+    private func foldLabel(_ feed: Feed, _ sites: [Site]) -> some View {
+        Text(query.isEmpty ? L10n.text("Sources") : L10n.text("Matching sources (%lld)", sites.count))
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+    }
+
+    /// Whether a feed's sources are showing. A search opens them all, so a match is never hidden
+    /// behind a fold the viewer has to find.
+    private func isExpanded(_ feed: Feed) -> Bool {
+        !query.isEmpty || expanded.contains(feed.id)
+    }
+
+    private func toggle(_ feed: Feed) {
+        if expanded.contains(feed.id) { expanded.remove(feed.id) } else { expanded.insert(feed.id) }
     }
 
     @ViewBuilder private var dangerSection: some View {

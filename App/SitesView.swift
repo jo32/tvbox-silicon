@@ -49,7 +49,10 @@ struct SitesView: View {
                                         RouteLink { SiteView(site: site, origin: config.origin, jarURL: config.spiderURL) } label: { SiteCard(site: site, dimmed: group.kind == .hidden) }.tileButton()
                                             // Dragging a card onto another subscription's header files it
                                             // there; the move outlives a refresh (see SourceReassignment).
+                                            // The TV has no drag gesture, so it files sources from the menu.
+                                            #if !os(tvOS)
                                             .draggable(SourceDrag(key: site.sourceKey, origin: site.origin(or: config.origin).absoluteString))
+                                            #endif
                                             .contextMenu {
                                                 PinSourceButton(site: site, origin: config.origin)
                                                 HideSourceButton(site: site, origin: config.origin)
