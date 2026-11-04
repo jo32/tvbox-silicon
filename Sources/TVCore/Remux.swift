@@ -133,7 +133,7 @@ public enum Remux {
         let parts = url.path().split(separator: "/")
         return parts.count == 3 ? String(parts[1]) : nil
     }
-    private static func session(_ url: URL) -> RemuxSession? { identifier(url).flatMap(RemuxStore.shared.session) }
+    static func session(_ url: URL) -> RemuxSession? { identifier(url).flatMap(RemuxStore.shared.session) }
 }
 
 struct CloudRemuxSource: RemuxSource {
