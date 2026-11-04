@@ -570,7 +570,22 @@ extension View {
     @ViewBuilder func tabSafeArea() -> some View {
         #if os(iOS)
         if #available(iOS 26, *) {
-            padding(.bottom, 72)
+            // The Liquid Glass capsule floats over the content, so reserve its height so the last
+            // row scrolls clear, and fade the content out as it slides underneath so it never reads
+            // through the capsule as a jumbled double exposure. The fade uses the page background so
+            // it matches in both light and dark.
+            overlay(alignment: .bottom) {
+                LinearGradient(colors: [.clear, Color(.systemBackground), Color(.systemBackground)],
+                               startPoint: .top, endPoint: .bottom)
+                    .frame(height: 96)
+                    .allowsHitTesting(false)
+                    .ignoresSafeArea(edges: .bottom)
+            }
+            // The capsule already publishes its own height as the window's bottom safe-area inset;
+            // adding a literal 72 on top of that double-counted it, which is what left the dead
+            // strip above the bar and let the last row travel under the glass. Let the system
+            // inset do the work — it tracks Dynamic Type, orientation and the OS version.
+            .padding(.bottom, 8)
         } else {
             safeAreaPadding(.bottom)
         }

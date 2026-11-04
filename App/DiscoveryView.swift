@@ -587,6 +587,7 @@ struct GlobalSearchView: View {
         let keyword = query ?? model.keyword
         guard !keyword.isEmpty else { return }
         historyData = (try? JSONEncoder().encode(Array(([keyword] + history.filter { $0 != keyword }).prefix(20)))) ?? Data()
+        store.persistKeychainBackup()
     }
 
     #if os(tvOS)

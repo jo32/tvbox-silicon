@@ -836,7 +836,7 @@ struct EmptyResults: View {
             }
         }
         .padding(.vertical, inset).padding(.horizontal, Layout.gutter)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Down from filters at the leading edge reaches the centred button.
         .tvFocusSection()
         .accessibilityElement(children: .contain)
