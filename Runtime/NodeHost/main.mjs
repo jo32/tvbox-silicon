@@ -9,6 +9,14 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 
+// Node 18 (nodejs-mobile) defaults to a new connection for every request; desktop Node 19+ keeps them
+// alive. Bundles using axios's default agents can make several requests to one site in quick succession
+// (address probes, searches with fallback paths, challenge cookies). Reuse those connections on iOS too:
+// repeatedly opening TLS connections made the 9280.kstore.vip sites reset the handshake before answering.
+// Bundles' own agents and their TLS verification settings remain theirs.
+http.globalAgent.keepAlive = true;
+https.globalAgent.keepAlive = true;
+
 const [controlFile, relistenFile] = process.argv.slice(2);
 const token = crypto.randomBytes(16).toString('hex');
 function log(...values) { process.stderr.write(values.map(v => typeof v === 'string' ? v : JSON.stringify(v)).join(' ') + '\n'); }

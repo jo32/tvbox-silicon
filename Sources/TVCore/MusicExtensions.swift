@@ -399,7 +399,8 @@ public struct MusicExtensionLX: MusicExtensionLXBridge {
         for source in sources {
             try Task.checkCancellation()
             let declared = source.sources[key] ?? []
-            let quality = data["type"]?.string.flatMap { declared.contains($0) ? $0 : nil } ?? LXSourceKey.quality(from: declared)
+            let quality = data["type"]?.string.flatMap { declared.contains($0) ? $0 : nil }
+                ?? LXSourceKey.quality(from: declared, for: .lossless) ?? "320k"
             do {
                 return .string(try await runtime.musicURL(source, library: library, key: key, quality: quality, musicInfo: musicInfo).absoluteString)
             } catch { failure = error }
