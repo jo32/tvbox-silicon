@@ -23,3 +23,6 @@ exports/
 .env
 .env.*
 !.env.example
+
+# E2E 截图产物（每次运行各不相同，不进仓库）
+Scripts/e2e-shots/
