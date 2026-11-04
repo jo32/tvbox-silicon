@@ -710,9 +710,10 @@ private struct BesideSidebarButton<Field: View>: ViewModifier {
                 .frame(height: 58)
                 // Out to the right edge of the results, so pressing up from anywhere on the page reaches it (as a
                 // section, the whole row takes the move): a 560-point field left most of the results with nothing above.
+                // The page sits inside the 80-point side safe area, which this overlay ignores, so it ends where the results do.
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .focusSection()
-                .padding(.leading, 50).padding(.trailing, Layout.gutter + max(0, (1920 - Layout.maxWidth) / 2)).padding(.top, 51)
+                .padding(.leading, 50).padding(.trailing, Layout.gutter + max(80, (1920 - Layout.maxWidth) / 2)).padding(.top, 51)
                 .ignoresSafeArea()
             }
         } else {
