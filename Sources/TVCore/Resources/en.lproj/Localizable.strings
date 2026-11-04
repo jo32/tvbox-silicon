@@ -1645,3 +1645,35 @@
 "Leave every field empty to keep the device's own translation, which is free and offline but limited to the language pairs the system carries. A service covers any pair, at the cost of an API key and a network request per batch." = "Leave every field empty to keep the device's own translation, which is free and offline but limited to the language pairs the system carries. A service covers any pair, at the cost of an API key and a network request per batch.";
 "Rules are added to the built-in ones, which already ask the model to keep tone, register, humour and implied subjects using nearby subtitle context." = "Rules are added to the built-in ones, which already ask the model to keep tone, register, humour and implied subjects using nearby subtitle context.";
 "Sends one test line, to confirm the address, model and key work together." = "Sends one test line, to confirm the address, model and key work together.";
+
+// Web Cast
+"Web Cast" = "Web Cast";
+"Drive Yingxia from a browser on the same Wi-Fi." = "Drive Yingxia from a browser on the same Wi-Fi.";
+"When on, a computer on the same network opens the address below and gets a web version of Yingxia." = "When on, a computer on the same network opens the address below and gets a web version of Yingxia.";
+"The TCP port the web server listens on." = "The TCP port the web server listens on.";
+"Default %lld. Change it only if another app uses that port." = "Default %lld. Change it only if another app uses that port.";
+"Open this address in a browser on your computer or tablet. The token keeps other devices on the network from driving your app." = "Open this address in a browser on your computer or tablet. The token keeps other devices on the network from driving your app.";
+"Login Password" = "Login Password";
+"Protect the web page with a password." = "Protect the web page with a password.";
+"Password" = "Password";
+"Entered in the browser to log in." = "Entered in the browser to log in.";
+"When on, opening the address asks for this password before showing anything. Leave it off to let anyone on the network in." = "When on, opening the address asks for this password before showing anything. Leave it off to let anyone on the network in.";
+"Open this address in a browser on your computer or tablet. If you set a password, the page will ask for it." = "Open this address in a browser on your computer or tablet. If you set a password, the page will ask for it.";
+"Relay Playback" = "Relay Playback";
+"Route video through the phone's proxy." = "Route video through the phone's proxy.";
+"On by default: streams go through the phone so Referer and HTTPS work, but this uses the phone's upload bandwidth. Turn it off to let the browser fetch streams directly, which is lighter on the phone but only works for sources that allow it." = "On by default: streams go through the phone so Referer and HTTPS work, but this uses the phone's upload bandwidth. Turn it off to let the browser fetch streams directly, which is lighter on the phone but only works for sources that allow it.";
+"Open this address in a browser on your computer or tablet. If you set a password, the page will ask for it. Scan the code with another phone to open it instantly." = "Open this address in a browser on your computer or tablet. If you set a password, the page will ask for it. Scan the code with another phone to open it instantly.";
+"This source is no longer available." = "This source is no longer available.";
+"Not Running" = "Not Running";
+"The server could not start. Check the port and try again." = "The server could not start. Check the port and try again.";
+
+// Full backup (完整备份)
+"Full Backup" = "Full Backup";
+"Restore Full Backup" = "Restore Full Backup";
+"Backup contents" = "Backup contents";
+"Full backup exported." = "Full backup exported.";
+"Restore everything" = "Restore everything";
+"Export failed: %@" = "Export failed: %@";
+"This overwrites the matching data on this device with the backup. Sign-in state, history, favourites, settings and proxies are all included." = "This overwrites the matching data on this device with the backup. Sign-in state, history, favourites, settings and proxies are all included.";
+"Auto-backup to keychain" = "Auto-backup to keychain";
+"Survives uninstall and restores automatically" = "Survives uninstall and restores automatically";

@@ -1645,3 +1645,35 @@
 "Leave every field empty to keep the device's own translation, which is free and offline but limited to the language pairs the system carries. A service covers any pair, at the cost of an API key and a network request per batch." = "全部留空则继续使用系统自带翻译：免费、离线，但只支持系统提供的那些语言对。改用服务可以翻译任意语言对，代价是填一个 API Key，且每批字幕要发一次网络请求。";
 "Rules are added to the built-in ones, which already ask the model to keep tone, register, humour and implied subjects using nearby subtitle context." = "这里的规则会追加到内置规则之后。内置规则已经要求模型借助上下文字幕保留语气、语域、幽默与隐含主语。";
 "Sends one test line, to confirm the address, model and key work together." = "发送一句测试字幕，确认地址、模型与 Key 能配合工作。";
+
+// Web Cast (网页投射)
+"Web Cast" = "网页投射";
+"Drive Yingxia from a browser on the same Wi-Fi." = "在浏览器里控制映匣";
+"When on, a computer on the same network opens the address below and gets a web version of Yingxia." = "开启后，同一网络下的电脑打开下方地址即可获得映匣网页版。";
+"The TCP port the web server listens on." = "网页服务监听的 TCP 端口。";
+"Default %lld. Change it only if another app uses that port." = "默认 %lld。仅当其它应用占用该端口时才需更改。";
+"Open this address in a browser on your computer or tablet. The token keeps other devices on the network from driving your app." = "在电脑或平板浏览器中打开此地址。令牌可防止同一网络下的其它设备操控你的应用。";
+"Login Password" = "登录密码";
+"Protect the web page with a password." = "用密码保护网页。";
+"Password" = "密码";
+"Entered in the browser to log in." = "在浏览器中输入以登录。";
+"When on, opening the address asks for this password before showing anything. Leave it off to let anyone on the network in." = "开启后，打开地址会先要求输入此密码。关闭则允许同一网络下的任何设备访问。";
+"Open this address in a browser on your computer or tablet. If you set a password, the page will ask for it." = "在电脑或平板浏览器中打开此地址。若设置了密码，页面会要求输入。";
+"Relay Playback" = "播放走中转";
+"Route video through the phone's proxy." = "视频经手机代理中转。";
+"On by default: streams go through the phone so Referer and HTTPS work, but this uses the phone's upload bandwidth. Turn it off to let the browser fetch streams directly, which is lighter on the phone but only works for sources that allow it." = "默认开启：视频经手机中转，可解决防盗链与 HTTPS 问题，但会占用手机上行带宽。关闭后浏览器直连取流，更省手机流量，但仅对允许直连的源有效。";
+"Open this address in a browser on your computer or tablet. If you set a password, the page will ask for it. Scan the code with another phone to open it instantly." = "在电脑或平板浏览器中打开此地址。若设置了密码，页面会要求输入。用另一台手机扫码可立即打开。";
+"This source is no longer available." = "此源已不可用。";
+"Not Running" = "未运行";
+"The server could not start. Check the port and try again." = "服务无法启动。请检查端口后重试。";
+
+// Full backup (完整备份)
+"Full Backup" = "完整备份";
+"Restore Full Backup" = "恢复完整备份";
+"Backup contents" = "备份内容";
+"Full backup exported." = "完整备份已导出。";
+"Restore everything" = "恢复全部";
+"Export failed: %@" = "导出失败：%@";
+"This overwrites the matching data on this device with the backup. Sign-in state, history, favourites, settings and proxies are all included." = "此操作会用备份覆盖本机对应的数据，包括登录状态、播放历史、收藏、设置和代理。";
+"Auto-backup to keychain" = "自动备份到钥匙串";
+"Survives uninstall and restores automatically" = "卸载后仍保留，重装时自动恢复";

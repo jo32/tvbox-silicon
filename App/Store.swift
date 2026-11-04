@@ -60,6 +60,8 @@ import TVCore
     /// The history entry being resumed; another entry, or leaving the page, replaces or cancels it.
     private(set) var resumingHistoryID: String?
     private var resumeTask: Task<Void, Never>?
+    /// The debounced keychain-backup write, cancelled and restarted on every change.
+    @ObservationIgnored private var keychainBackupTask: Task<Void, Never>?
     /// Every enabled subscription merged in list order, plus the built-in sources.
     var subscription: Subscription?
     /// The address being typed in to add a subscription.
@@ -96,6 +98,10 @@ import TVCore
     private static let environmentsKey = "environments"
     private static let skipSourcesKey = "skipSegmentSources"
     private static let resourceRankingKey = "resourceRanking"
+    /// Whether the keychain auto-backup leg is on. Persisted like the other optional toggles. Off by
+    /// default: it costs a keychain write on every change and, unlike the manual file, restores
+    /// everything (including subscriptions) without the viewer choosing what comes back.
+    private static let keychainBackupKey = "keychainBackup.enabled"
 
     /// Persists the vault. Called by every mutation so a passcode change or a hide survives a crash.
     func saveVault() {
@@ -111,6 +117,22 @@ import TVCore
         favorites.activeEnvironmentID = environments.activeID
         // The vault and the preferences persisted here are part of the lightweight iCloud backup.
         cloudSync?.changed("cloudBackup")
+        persistKeychainBackup()
+    }
+
+    /// Writes the full backup into the keychain when the leg is on, so a reinstall restores it
+    /// without a manual file. Debounced: called from many mutation points, but only the first write
+    /// in a burst goes through, and the trailing edge is flushed on background.
+    func persistKeychainBackup() {
+        guard persistsChanges, keychainBackupEnabled else { return }
+        keychainBackupTask?.cancel()
+        keychainBackupTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self, !Task.isCancelled else { return }
+            self.keychainBackupTask = nil
+            let backup = self.exportFullBackup(categories: .all)
+            _ = KeychainBackup.save(backup)
+        }
     }
 
     /// Relocks the vault the moment the screen is captured — a screenshot or an active screen
@@ -253,6 +275,17 @@ import TVCore
     var episodeError: String?
     var autoPlayNext: Bool {
         didSet { if persistsChanges { defaults.set(autoPlayNext, forKey: "autoPlayNextEpisode") } }
+    }
+    /// Whether the keychain auto-backup leg is on. Toggled in Settings; when on, every change to the
+    /// backed-up slices (accounts, vault, proxies, preferences, history, favourites, subscriptions)
+    /// rewrites the keychain snapshot so a reinstall restores them without a manual file.
+    var keychainBackupEnabled: Bool {
+        get { defaults.object(forKey: Self.keychainBackupKey) as? Bool ?? false }
+        set {
+            defaults.set(newValue, forKey: Self.keychainBackupKey)
+            if newValue { persistKeychainBackup() }
+            else if persistsChanges { KeychainBackup.clear() }
+        }
     }
     private var episodeRequest = UUID()
     private var episodeTask: Task<Void, Never>?
@@ -415,6 +448,23 @@ import TVCore
         #if WEBCAST
         Task { await webCast.start(with: self) }
         #endif
+        // A reinstall has no sandbox data but the keychain leg survived. When the viewer turned the
+        // leg on, restore it automatically — but only into an empty install, so it can never clobber
+        // a freshly-signed-in account on a different device that happens to share the keychain.
+        restoreKeychainBackupIfFresh()
+    }
+
+    /// Restores the keychain snapshot once, on a fresh install where the leg is on and there is
+    /// nothing to overwrite. Runs only when the backed-up slices are empty on this launch, so a
+    /// device that already has data never gets it replaced by an older snapshot.
+    private func restoreKeychainBackupIfFresh() {
+        guard persistsChanges, keychainBackupEnabled else { return }
+        // "Fresh" = no subscriptions, no history, no favourites, no vault passcode and no accounts.
+        let empty = subscriptions.isEmpty && playbackHistory.entries.isEmpty
+            && favorites.syncValues.isEmpty && !vault.hasPasscode
+            && FullBackupAccountStore.collect().isEmpty
+        guard empty, let result = KeychainBackup.load() else { return }
+        importFullBackup(result.backup, categories: .all)
     }
     // MARK: Listening sources (#289)
 
@@ -884,8 +934,8 @@ import TVCore
             guard let self, let payload = items.first(where: { $0.id == "backup" })?.value else { return }
             self.applyCloudBackupPayload(payload)
         })
-        favorites.onChange = { sync.changed("favorites") }
-        history.onChange = { sync.changed("history") }
+        favorites.onChange = { sync.changed("favorites"); self.persistKeychainBackup() }
+        history.onChange = { sync.changed("history"); self.persistKeychainBackup() }
         pinned.onChange = { sync.changed("pinnedSources") }
         hidden.onChange = { sync.changed("hiddenSources") }
         order.onChange = { sync.changed("sourceOrder"); sync.changed("sourceOrderOn") }

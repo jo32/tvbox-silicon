@@ -1645,3 +1645,35 @@
 "Leave every field empty to keep the device's own translation, which is free and offline but limited to the language pairs the system carries. A service covers any pair, at the cost of an API key and a network request per batch." = "全部留空則繼續使用系統內建翻譯：免費、離線，但只支援系統提供的那些語言對。改用服務可以翻譯任意語言對，代價是填一個 API Key，且每批字幕要發一次網路請求。";
 "Rules are added to the built-in ones, which already ask the model to keep tone, register, humour and implied subjects using nearby subtitle context." = "這裡的規則會追加到內建規則之後。內建規則已經要求模型藉助上下文字幕保留語氣、語域、幽默與隱含主語。";
 "Sends one test line, to confirm the address, model and key work together." = "發送一句測試字幕，確認位址、模型與 Key 能配合工作。";
+
+// Web Cast (網頁投射)
+"Web Cast" = "網頁投射";
+"Drive Yingxia from a browser on the same Wi-Fi." = "在瀏覽器裡控制映匣";
+"When on, a computer on the same network opens the address below and gets a web version of Yingxia." = "開啟後，同一網路下的電腦開啟下方網址即可獲得映匣網頁版。";
+"The TCP port the web server listens on." = "網頁服務監聽的 TCP 連接埠。";
+"Default %lld. Change it only if another app uses that port." = "預設 %lld。僅當其它應用程式佔用該連接埠時才需更改。";
+"Open this address in a browser on your computer or tablet. The token keeps other devices on the network from driving your app." = "在電腦或平板瀏覽器中開啟此網址。權杖可防止同一網路下的其它裝置操控你的應用程式。";
+"Login Password" = "登入密碼";
+"Protect the web page with a password." = "用密碼保護網頁。";
+"Password" = "密碼";
+"Entered in the browser to log in." = "在瀏覽器中輸入以登入。";
+"When on, opening the address asks for this password before showing anything. Leave it off to let anyone on the network in." = "開啟後，開啟網址會先要求輸入此密碼。關閉則允許同一網路下的任何裝置存取。";
+"Open this address in a browser on your computer or tablet. If you set a password, the page will ask for it." = "在電腦或平板瀏覽器中開啟此網址。若設定了密碼，頁面會要求輸入。";
+"Relay Playback" = "播放走中轉";
+"Route video through the phone's proxy." = "影片經手機代理中轉。";
+"On by default: streams go through the phone so Referer and HTTPS work, but this uses the phone's upload bandwidth. Turn it off to let the browser fetch streams directly, which is lighter on the phone but only works for sources that allow it." = "預設開啟：影片經手機中轉，可解決防盜鏈與 HTTPS 問題，但會佔用手機上行頻寬。關閉後瀏覽器直連取流，更省手機流量，但僅對允許直連的來源有效。";
+"Open this address in a browser on your computer or tablet. If you set a password, the page will ask for it. Scan the code with another phone to open it instantly." = "在電腦或平板瀏覽器中開啟此網址。若設定了密碼，頁面會要求輸入。用另一台手機掃碼可立即開啟。";
+"This source is no longer available." = "此來源已不可用。";
+"Not Running" = "未執行";
+"The server could not start. Check the port and try again." = "服務無法啟動。請檢查連接埠後重試。";
+
+// Full backup (完整備份)
+"Full Backup" = "完整備份";
+"Restore Full Backup" = "恢復完整備份";
+"Backup contents" = "備份內容";
+"Full backup exported." = "完整備份已匯出。";
+"Restore everything" = "恢復全部";
+"Export failed: %@" = "匯出失敗：%@";
+"This overwrites the matching data on this device with the backup. Sign-in state, history, favourites, settings and proxies are all included." = "此操作會用備份覆蓋本機對應的資料，包括登入狀態、播放紀錄、收藏、設定和代理。";
+"Auto-backup to keychain" = "自動備份到鑰匙圈";
+"Survives uninstall and restores automatically" = "解除安裝後仍保留，重新安裝時自動恢復";

@@ -133,6 +133,29 @@ import Testing
         #expect(restoredPlayback.data(forKey: "favorites") == Data("fav".utf8))
     }
 
+    /// 回归测试：`player.playLine.rotation/learning/probes` 是 `Data` 而非 scalar。
+    /// 早先把它们误放进 scalarKeys，导致 `JSONSerialization` 遇 `Data` 抛 NSException 直接崩溃
+    /// （`try?` 抓不到 NSException）。现在它们已归入 dataKeys，且 scalar 快照对非法类型做了
+    /// 防御性白名单，任何 `Data` 值都不会再走进 JSONSerialization。
+    @Test func dataValuedKeysNeverCrashTheSnapshot() {
+        let (defaults, playback) = clean(#function)
+        // 模拟真实场景：这几个 key 存的是 Data blob。
+        defaults.set(Data("rotation-blob".utf8), forKey: "player.playLine.rotation")
+        defaults.set(Data("learning-blob".utf8), forKey: "player.playLine.learning")
+        defaults.set(Data("probes-blob".utf8), forKey: "player.playLine.probes")
+
+        // 不应崩溃，且这三个 Data 值走 dataKeys 路径被如实带走。
+        let snapshot = FullBackupPreferences.snapshot(defaults: defaults, playbackDefaults: playback)
+        #expect(snapshot["player.playLine.rotation"] == Data("rotation-blob".utf8))
+        #expect(snapshot["player.playLine.learning"] == Data("learning-blob".utf8))
+        #expect(snapshot["player.playLine.probes"] == Data("probes-blob".utf8))
+
+        // 恢复也应如实写回。
+        let (restored, _) = clean(#function + ".restore")
+        FullBackupPreferences.restore(snapshot, defaults: restored, playbackDefaults: playback)
+        #expect(restored.data(forKey: "player.playLine.rotation") == Data("rotation-blob".utf8))
+    }
+
     // MARK: - ProxySnapshot 往返
 
     @Test func proxySnapshotRoundTrips() throws {

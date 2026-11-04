@@ -1645,3 +1645,35 @@
 "Leave every field empty to keep the device's own translation, which is free and offline but limited to the language pairs the system carries. A service covers any pair, at the cost of an API key and a network request per batch." = "すべて空欄のままにすると、システム内蔵の翻訳を使い続けます（無料・オフラインですが、対応する言語ペアはシステムが提供するものに限られます）。サービスを使えば任意の言語ペアを翻訳できますが、API キーとバッチごとの通信が必要です。";
 "Rules are added to the built-in ones, which already ask the model to keep tone, register, humour and implied subjects using nearby subtitle context." = "ここでのルールは組み込みルールに追加されます。組み込みルールはすでに、周辺の字幕を手がかりに語調・語域・ユーモア・含意された主語を保つようモデルに指示しています。";
 "Sends one test line, to confirm the address, model and key work together." = "テスト用の一行を送り、アドレス・モデル・キーが揃って動作するか確認します。";
+
+// Web Cast (ウェブキャスト)
+"Web Cast" = "ウェブキャスト";
+"Drive Yingxia from a browser on the same Wi-Fi." = "ブラウザから映匣を操作";
+"When on, a computer on the same network opens the address below and gets a web version of Yingxia." = "オンにすると、同じネットワーク上のパソコンで下記のアドレスを開くと映匣のウェブ版が表示されます。";
+"The TCP port the web server listens on." = "ウェブサーバーが待ち受ける TCP ポート。";
+"Default %lld. Change it only if another app uses that port." = "既定値 %lld。他のアプリがそのポートを使用している場合のみ変更してください。";
+"Open this address in a browser on your computer or tablet. The token keeps other devices on the network from driving your app." = "パソコンまたはタブレットのブラウザでこのアドレスを開いてください。トークンにより、同じネットワーク上の他のデバイスがアプリを操作するのを防ぎます。";
+"Login Password" = "ログインパスワード";
+"Protect the web page with a password." = "パスワードでウェブページを保護します。";
+"Password" = "パスワード";
+"Entered in the browser to log in." = "ブラウザで入力してログインします。";
+"When on, opening the address asks for this password before showing anything. Leave it off to let anyone on the network in." = "オンにすると、アドレスを開いた際にこのパスワードの入力を求めます。オフにすると、同じネットワーク上の誰でもアクセスできます。";
+"Open this address in a browser on your computer or tablet. If you set a password, the page will ask for it." = "パソコンまたはタブレットのブラウザでこのアドレスを開いてください。パスワードを設定した場合、ページで入力を求められます。";
+"Relay Playback" = "再生を中継";
+"Route video through the phone's proxy." = "動画をスマホのプロキシ経由で中継します。";
+"On by default: streams go through the phone so Referer and HTTPS work, but this uses the phone's upload bandwidth. Turn it off to let the browser fetch streams directly, which is lighter on the phone but only works for sources that allow it." = "デフォルトでオン：動画をスマホ経由で中継し、Referer と HTTPS の問題を解決しますが、スマホのアップロード帯域を使います。オフにするとブラウザが直接ストリームを取得し、スマホの負荷が軽くなりますが、直接取得を許可するソースでのみ機能します。";
+"Open this address in a browser on your computer or tablet. If you set a password, the page will ask for it. Scan the code with another phone to open it instantly." = "パソコンまたはタブレットのブラウザでこのアドレスを開いてください。パスワードを設定した場合、ページで入力を求められます。別のスマホでコードをスキャンするとすぐに開けます。";
+"This source is no longer available." = "このソースは利用できなくなりました。";
+"Not Running" = "未実行";
+"The server could not start. Check the port and try again." = "サーバーを起動できませんでした。ポートを確認して再試行してください。";
+
+// Full backup (完全バックアップ)
+"Full Backup" = "完全バックアップ";
+"Restore Full Backup" = "完全バックアップを復元";
+"Backup contents" = "バックアップ内容";
+"Full backup exported." = "完全バックアップを書き出しました。";
+"Restore everything" = "すべて復元";
+"Export failed: %@" = "書き出しに失敗：%@";
+"This overwrites the matching data on this device with the backup. Sign-in state, history, favourites, settings and proxies are all included." = "バックアップでこの端末の対応データを上書きします。ログイン状態、再生履歴、お気に入り、設定、プロキシがすべて含まれます。";
+"Auto-backup to keychain" = "キーチェーンに自動バックアップ";
+"Survives uninstall and restores automatically" = "アンインストール後も残り、再インストール時に自動復元";

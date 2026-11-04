@@ -475,6 +475,12 @@ struct FormSettingsView: View {
                 Button { choosesFullBackup = true } label: {
                     FormLabel(symbol: "icloud.and.arrow.down", tint: .teal, title: L10n.text("Restore Full Backup")).foregroundStyle(.primary)
                 }
+                // The automatic keychain leg: keeps a snapshot that survives uninstall, so a reinstall
+                // restores everything without a manual file. Off by default.
+                Toggle(isOn: Binding(get: { store.keychainBackupEnabled }, set: { store.keychainBackupEnabled = $0 })) {
+                    FormLabel(symbol: "key.fill", tint: .teal, title: L10n.text("Auto-backup to keychain"),
+                              subtitle: L10n.text("Survives uninstall and restores automatically"))
+                }
                 #else
                 TextField(L10n.text("Subscription URL (TVBox JSON, M3U or TXT)"), text: $store.subscriptionAddress, prompt: Text(L10n.text("Subscription URL (TVBox JSON, M3U or TXT)")))
                     .labelsHidden()

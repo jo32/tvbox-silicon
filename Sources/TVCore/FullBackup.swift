@@ -136,6 +136,9 @@ public enum FullBackupDefaults {
         "environments",
         "skipSegmentSources",
         "resourceRanking",
+        "player.playLine.probes",     // [String: SourceProbeResult]
+        "player.playLine.rotation",   // HostRotation
+        "player.playLine.learning",   // HostLearning
     ]
 
     /// Keys whose value is a scalar (Bool / String / Int / Double). Stored as a JSON-encoded scalar
@@ -154,11 +157,9 @@ public enum FullBackupDefaults {
         "webCast.requiresToken",
         "webCast.proxyMedia",
         "downloadsSimultaneous",
-        "player.playLine.rotation",
-        "player.playLine.learning",
-        "player.playLine.probes",
         "player.playLine.probes.order",
         "autoPlayNextEpisode",
+        "keychainBackup.enabled",
     ]
 
     /// A prefix match, for keys that fan out (`episodeSkip.v1.<scope>`).
@@ -179,7 +180,7 @@ public enum FullBackupPreferences {
         }
         for key in FullBackupDefaults.scalarKeys {
             let source = defaults.object(forKey: key) ?? playbackDefaults.object(forKey: key)
-            guard let value = source else { continue }
+            guard let value = source, isJSONScalar(value) else { continue }
             if let data = try? JSONSerialization.data(withJSONObject: [key: value]) { out[key] = data }
         }
         for prefix in FullBackupDefaults.prefixKeys {
@@ -207,6 +208,17 @@ public enum FullBackupPreferences {
 
     private static func keys(matchingPrefix prefix: String, in defaults: UserDefaults) -> [String] {
         defaults.dictionaryRepresentation().keys.filter { $0.hasPrefix(prefix) }
+    }
+
+    /// `JSONSerialization` throws NSException (not a Swift `Error`) on non-JSON types like `Data`,
+    /// which `try?` cannot catch and crashes the app. Gate scalars to the plist/JSON-safe types first.
+    private static func isJSONScalar(_ value: Any) -> Bool {
+        switch value {
+        case is String, is Bool, is NSNumber, is Int, is Double, is Float: return true
+        case let array as [Any]: return array.allSatisfy(isJSONScalar)
+        case let dict as [String: Any]: return dict.values.allSatisfy(isJSONScalar)
+        default: return false
+        }
     }
 }
 
