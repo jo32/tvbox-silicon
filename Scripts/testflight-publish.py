@@ -12,6 +12,7 @@ TestFlight builds of the app announce the release (deploy the website afterwards
 live yet keeps its previous build.
 """
 
+import os
 import json
 import re
 import sys
@@ -26,6 +27,9 @@ ISSUER = "cc097225-575e-4c18-837b-b44d6f57024f"
 API = "https://api.appstoreconnect.apple.com/v1"
 GROUP = "Cloud Drive Browsing"
 APPS = {"iOS": "6825717102", "tvOS": "6825717931"}
+# TF_PLATFORMS="tvOS" (as testflight-upload.sh takes it) limits this to the platforms uploaded.
+if os.environ.get("TF_PLATFORMS"):
+    APPS = {k: v for k, v in APPS.items() if k in os.environ["TF_PLATFORMS"].split()}
 FEED_KEYS = {"iOS": "ios", "tvOS": "tvos"}  # ReleaseFeed.platform
 FEED = Path(__file__).resolve().parent.parent / "website/public/releases.json"
 LIVE = ("IN_BETA_TESTING", "BETA_APPROVED")  # com.jo32.yingxia.ios / .tv
