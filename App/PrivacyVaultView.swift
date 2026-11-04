@@ -132,6 +132,8 @@ struct PrivacyVaultView: View {
     /// Whether the page is currently allowed to show hidden rows. Re-read on every appearance so a
     /// timeout while the page is open closes it.
     @State private var unlocked = false
+    /// The timer that closes the page when the unlock lapses.
+    @State private var relock: Task<Void, Never>?
     @State private var query = ""
     /// The subscriptions whose sources are showing. All folded on arrival: a long list of feeds
     /// reads better folded, and the field above finds a source anyway.
@@ -207,6 +209,7 @@ struct PrivacyVaultView: View {
         }
         .onAppear { reload() }
         .onChange(of: store.vault.revision) { _, _ in reload() }
+        .onDisappear { relock?.cancel() }
         .sheet(item: $gated) { gate in
             switch gate {
             case .setPasscode:
@@ -448,5 +451,24 @@ struct PrivacyVaultView: View {
         )
     }
 
-    private func reload() { unlocked = store.vault.unlocked() }
+    private func reload() {
+        unlocked = store.vault.unlocked()
+        scheduleRelock()
+    }
+
+    /// Closes the page when the unlock window lapses.
+    ///
+    /// The vault has always expired the unlock, but nothing acted on it: the page kept showing the
+    /// hidden subscriptions and the switches to unhide them until the viewer happened to leave and
+    /// come back. A timeout that only takes effect on navigation is not a timeout.
+    private func scheduleRelock() {
+        relock?.cancel()
+        guard unlocked, let expires = store.vault.unlockExpiresAt else { return }
+        relock = Task { @MainActor in
+            let wait = expires.timeIntervalSinceNow
+            if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+            guard !Task.isCancelled else { return }
+            reload()
+        }
+    }
 }

@@ -144,6 +144,12 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
         revision += 1
     }
 
+    /// When the current unlock lapses, for a page that closes itself instead of leaving the hidden
+    /// sources on screen after the time limit. Nil when the vault is locked.
+    public var unlockExpiresAt: Date? {
+        unlockedAt.map { $0.addingTimeInterval(unlockDuration) }
+    }
+
     /// Whether hidden items may be shown right now. Also expires a stale unlock, so a caller does
     /// not have to run a timer to be safe — reading this is enough.
     public mutating func isUnlocked(now: Date = Date()) -> Bool {

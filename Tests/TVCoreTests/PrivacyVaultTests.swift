@@ -161,3 +161,14 @@ private func unlockedVault(_ passcode: String = "123456", now: Date = Date()) th
     }
     #expect(vault.hasPasscode)
 }
+
+@Test func theUnlockWindowHasADeadlineThePageCanWaitFor() throws {
+    // A page that closes itself when the unlock lapses needs the deadline, not just a yes/no.
+    let start = Date()
+    var vault = PrivacyVault(rounds: 10, unlockDuration: 300)
+    #expect(vault.unlockExpiresAt == nil)
+    try vault.setPasscode("123456", now: start)
+    #expect(vault.unlockExpiresAt == start.addingTimeInterval(300))
+    vault.lock()
+    #expect(vault.unlockExpiresAt == nil)
+}

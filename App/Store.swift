@@ -767,6 +767,7 @@ import TVCore
     private func setUpCloudSync() {
         guard let sync = cloudSync else { return }
         let favorites = favorites, history = playbackHistory, pinned = pinnedSources, hidden = hiddenSources, order = sourceOrder
+        let routing = sourceRouting, overrides = sourceOverrides, lines = lineSettings, reassignment = sourceReassignment
         sync.register("favorites", current: { favorites.syncValues }, apply: { favorites.adopt($0) })
         sync.register("history", delay: .seconds(30), current: { Dictionary(history.entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }) },
                       apply: { history.adopt($0.map(\.value)) })
@@ -777,11 +778,26 @@ import TVCore
         sync.register("sourceOrder", current: { CloudSync.ranks(order.savedKeys) }, apply: { order.adopt(CloudSync.ordered($0)) })
         // Only "on" is an item: a new device's default (off) is no change, so it can't switch the order off everywhere.
         sync.register("sourceOrderOn", current: { order.enabled ? ["on": true] : [:] }, apply: { if order.enabled == $0.isEmpty { order.enabled = !$0.isEmpty } })
+        // The source-level edits follow the viewer too. They were left out of the first pass, so a
+        // rename, an API override, a hidden line or a moved source only lived on the device that made it.
+        sync.register("sourceRouting", current: { routing.savedValues }, apply: { routing.adopt(Self.dictionary($0)) })
+        sync.register("sourceOverrides", current: { overrides.savedValues }, apply: { overrides.adopt(Self.dictionary($0)) })
+        sync.register("lineSettings", current: { lines.savedValues }, apply: { lines.adopt(Self.dictionary($0)) })
+        sync.register("sourceReassignment", current: { reassignment.savedValues }, apply: { reassignment.adopt(Self.dictionary($0)) })
         favorites.onChange = { sync.changed("favorites") }
         history.onChange = { sync.changed("history") }
         pinned.onChange = { sync.changed("pinnedSources") }
         hidden.onChange = { sync.changed("hiddenSources") }
         order.onChange = { sync.changed("sourceOrder"); sync.changed("sourceOrderOn") }
+        routing.onChange = { sync.changed("sourceRouting") }
+        overrides.onChange = { sync.changed("sourceOverrides") }
+        lines.onChange = { sync.changed("lineSettings") }
+        reassignment.onChange = { sync.changed("sourceReassignment") }
+    }
+    /// CloudSync hands an `apply` closure a list of `CloudSyncItem`s; the source-level stores each
+    /// adopt a plain `[String: Value]`, so this folds the items back into one dictionary.
+    private static func dictionary<Value>(_ items: [CloudSyncItem<Value>]) -> [String: Value] {
+        Dictionary(items.map { ($0.id, $0.value) }, uniquingKeysWith: { first, _ in first })
     }
     private var syncedSubscriptions: [String: SyncedSubscription] {
         Dictionary(subscriptions.enumerated().map { ($0.element.address, SyncedSubscription(entry: $0.element, rank: $0.offset, document: documents[$0.element.address])) },

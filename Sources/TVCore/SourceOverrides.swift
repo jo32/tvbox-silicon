@@ -69,6 +69,7 @@ import Observation
     }
 
     public var savedKeys: [String] { overrides.keys.sorted() }
+    public var savedValues: [String: Override] { overrides }
     public func adopt(_ synced: [String: Override]) {
         guard synced != overrides else { return }
         overrides = synced

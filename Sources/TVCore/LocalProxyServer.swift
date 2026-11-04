@@ -15,24 +15,45 @@ public final class LocalProxyServer: @unchecked Sendable {
     public static let shared = LocalProxyServer()
 
     private let queue = DispatchQueue(label: "tvbox.proxy.server")
+    /// `port` is read from the main actor (`baseSync`) and written from the listener's queue, and
+    /// `starting` is touched by whoever asks for the base address, so both live behind this lock.
+    private let lock = NSLock()
     private var listener: NWListener?
     private var port: UInt16?
     private var starting: Task<UInt16, Error>?
 
+    /// The base address, starting the server if it is not up yet.
+    ///
+    /// One start at a time. Two callers could both read `starting == nil`, both create a listener,
+    /// and the second one's port belonged to a listener nothing held a reference to any more — a
+    /// port that answered and could never be shut down.
     public func base() async throws -> URL {
-        if let port { return URL(string: "http://127.0.0.1:\(port)/")! }
-        if let starting { return URL(string: "http://127.0.0.1:\(try await starting.value)/")! }
-        let task = Task { try await self.start() }
-        starting = task
-        defer { starting = nil }
-        let p = try await task.value
-        return URL(string: "http://127.0.0.1:\(p)/")!
+        if let running = Self.url(for: lock.withLock { port }) { return running }
+        let task = lock.withLock { () -> Task<UInt16, Error> in
+            if let starting { return starting }
+            let task = Task { try await self.start() }
+            starting = task
+            return task
+        }
+        do {
+            // `starting` is left in place once it succeeds: every later call returns the running
+            // port above, and keeping the finished task costs nothing.
+            return try Self.url(for: await task.value) ?? URL(string: "http://127.0.0.1/")!
+        } catch {
+            // Nothing bound, so the next caller has to be allowed to try again.
+            lock.withLock { starting = nil }
+            throw error
+        }
+    }
+
+    private static func url(for port: UInt16?) -> URL? {
+        port.map { URL(string: "http://127.0.0.1:\($0)/")! }
     }
 
     /// The base address if the server is already running, else nil. Synchronous, for callers (the
     /// player) that can't await — they ask the server to start earlier and fall back to direct.
     public var baseSync: URL? {
-        port.map { URL(string: "http://127.0.0.1:\($0)/")! }
+        Self.url(for: lock.withLock { port })
     }
 
     /// The local address that relays `url` directly.
@@ -59,25 +80,52 @@ public final class LocalProxyServer: @unchecked Sendable {
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
         let server = try NWListener(using: parameters)
-        listener = server
+        lock.withLock { listener = server }
         let queue = self.queue
         server.newConnectionHandler = { connection in
             connection.start(queue: queue)
             Self.readRequest(connection, buffer: Data(), queue: queue)
         }
+        // `NWListener` keeps calling the state handler for its whole life, so a `.failed` that
+        // arrives after `.ready` would resume the same continuation a second time, which traps.
+        let answer = StartAnswer()
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<UInt16, Error>) in
+            answer.arm(continuation)
             server.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
                     guard let p = server.port?.rawValue else { return }
-                    self.port = p
-                    continuation.resume(returning: p)
-                case .failed(let error): continuation.resume(throwing: error)
-                case .cancelled: continuation.resume(throwing: CancellationError())
+                    self.lock.withLock { self.port = p }
+                    answer.finish(.success(p))
+                case .failed(let error): answer.finish(.failure(error))
+                case .cancelled: answer.finish(.failure(CancellationError()))
                 default: break
                 }
             }
             server.start(queue: queue)
+        }
+    }
+
+    /// Answers the start continuation exactly once, whichever state gets there first.
+    private final class StartAnswer: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<UInt16, Error>?
+
+        func arm(_ continuation: CheckedContinuation<UInt16, Error>) {
+            lock.lock()
+            self.continuation = continuation
+            lock.unlock()
+        }
+
+        func finish(_ result: Result<UInt16, Error>) {
+            lock.lock()
+            guard let continuation else {
+                lock.unlock()
+                return
+            }
+            self.continuation = nil
+            lock.unlock()
+            continuation.resume(with: result)
         }
     }
 
