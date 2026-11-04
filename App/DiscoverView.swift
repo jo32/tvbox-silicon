@@ -972,7 +972,7 @@ private struct DiscoverHero: View {
                     .font(.system(size: 14)).lineLimit(1).frame(height: 17)
                 Text("「\(item.name)」" + item.overview)
                     .font(.system(size: 12)).lineLimit(2).multilineTextAlignment(.center)
-                    .frame(height: 29, alignment: .top).padding(.top, 5)
+                    .frame(height: 34, alignment: .top).padding(.top, 5)
                 HStack(spacing: 4) {
                     if let rating = item.rating {
                         TMDBBadge()
