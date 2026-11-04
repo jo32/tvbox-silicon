@@ -30,6 +30,8 @@ struct MobilePlayerView: View {
     var toggleFullScreen: (() -> Void)? = nil
     /// Open the episode picker from the options menu.
     var openEpisodes: () -> Void = {}
+    /// The picture's width over height, once the stream is known: the page sizes its box from it.
+    var aspect: (CGFloat) -> Void = { _ in }
 
     /// The subtitle file on screen, or nil when the channel offers none or it has not loaded.
     private var activeSubtitleTrack: SubtitleTrack? {
@@ -59,7 +61,14 @@ struct MobilePlayerView: View {
         if !subtitleTracks.isEmpty, let group = tracks.legible { tracks.select(nil, in: group) }
     }
 
-    /// Writes the appearance back whenever it changes.
+    /// The segment the playhead is inside, if any. Credits win at the end of a file, and the intro
+    /// wins anywhere else, so a marker that overlaps another cannot show two buttons.
+    private var currentSkipSegment: SkipSegmentSources.Segment? {
+        let position = clock.position
+        if let credits = skipCredits, position >= credits.start, position < credits.end { return credits }
+        return skipSegment
+    }
+
     /// Asks each configured source for an intro/credits marker and keeps the first usable one.
     ///
     /// Only file-level sources are trusted directly. A title-level database describes a different
@@ -68,21 +77,42 @@ struct MobilePlayerView: View {
     /// button can behave accordingly.
     private func loadSkipSegment() async {
         skipSegment = nil
+        skipCredits = nil
         skipIsFileLevel = false
         guard let item = clock.item else { return }
         let duration = clock.duration > 0 ? clock.duration : 0
 
-        // Chapters are the one file-level source available without a network call.
-        var reported: [SkipSegmentSources.Source: SkipSegmentSources.Segment] = [:]
+        // One dictionary per kind: a dictionary can hold one segment per source, and the viewer's
+        // markers can name both an intro and a credits segment.
+        var intro: [SkipSegmentSources.Source: SkipSegmentSources.Segment] = [:]
+        var credits: [SkipSegmentSources.Source: SkipSegmentSources.Segment] = [:]
+
+        // The viewer's own markers: the intro end and outro length they set on the episode skip
+        // page. Highest authority, and the only source that works offline with no chapters.
+        if store.skipSources.isActive(.manual), let scope = channel.skipScope {
+            let settings = EpisodeSkipSettings.load(scope: scope)
+            if settings.introEnd > 0 {
+                intro[.manual] = SkipSegmentSources.Segment(kind: .intro, start: 0, end: settings.introEnd)
+            }
+            if settings.outroLength > 0, duration > settings.outroLength {
+                credits[.manual] = SkipSegmentSources.Segment(
+                    kind: .credits, start: duration - settings.outroLength, end: duration)
+            }
+        }
+        // Chapters are the other file-level source, available without a network call.
         if store.skipSources.isActive(.mediaServer),
            let chapters = chapterSegments(of: item) {
-            reported[.mediaServer] = chapters
+            intro[.mediaServer] = chapters
         }
-        guard !reported.isEmpty else { return }
+        guard !intro.isEmpty || !credits.isEmpty else { return }
 
-        if let chosen = store.skipSources.choose(kind: .intro, duration: duration, reported: reported) {
+        if let chosen = store.skipSources.choose(kind: .intro, duration: duration, reported: intro) {
             skipSegment = chosen.segment
             skipIsFileLevel = chosen.source.isFileLevel
+        }
+        if let chosen = store.skipSources.choose(kind: .credits, duration: duration, reported: credits) {
+            skipCredits = chosen.segment
+            skipIsFileLevel = skipIsFileLevel || chosen.source.isFileLevel
         }
     }
 
@@ -124,19 +154,34 @@ struct MobilePlayerView: View {
         }
     }
 
+    /// Writes the appearance back whenever it changes.
+    /// Reports the picture's shape to the page, once, when it is known.
+    ///
+    /// The page sizes the player's box from this. Assuming 16:9 leaves letterbox bars *inside* the
+    /// player for a 4:3 or 2.35:1 film — which is what the white strip at the right edge was.
+    private func reportAspect() {
+        guard let size = clock.item?.presentationSize, size.width > 0, size.height > 0 else { return }
+        let ratio = size.width / size.height
+        guard ratio.isFinite, ratio > 0.2, ratio < 6 else { return }
+        aspect(ratio)
+    }
+
     private func saveSubtitleStyle() {
         if let blob = try? JSONEncoder().encode(subtitleStyle.sanitized) { subtitleStyleData = blob }
     }
 
     #if canImport(Speech)
-    /// The language to recognise in: the phone's own first, then the two this app is most used in.
+    /// The language the viewer picked on the settings page, if any.
+    @AppStorage(SpeechSubtitles.preferredLanguageKey) private var speechLanguageCode = ""
+
+    /// The language to recognise in: the viewer's pick first, then the phone's own, then the two
+    /// this app is most used in.
     ///
     /// Checked against the on-device models before the item is offered at all. A row that fails the
     /// moment it is tapped teaches the viewer the feature is broken, when the truth is that this
     /// device has no model for that language and nothing was ever going to happen.
-    private static var speechLanguage: String? {
-        let candidates = Locale.preferredLanguages + ["zh-Hans-CN", "zh-CN", "en-US"]
-        return SpeechSubtitles.availableLanguages(from: candidates).first
+    private var speechLanguage: String? {
+        SpeechSubtitles.preferredLanguage(stored: speechLanguageCode)
     }
 
     /// Recognises the sound track and appends the result as another subtitle file.
@@ -200,6 +245,8 @@ struct MobilePlayerView: View {
     @State private var externalPlayerStream: HandoffStream?
     /// The intro or credits segment for this item, once a source has claimed one.
     @State private var skipSegment: SkipSegmentSources.Segment?
+    /// The end-of-episode segment, kept apart because the playhead can be in either one.
+    @State private var skipCredits: SkipSegmentSources.Segment?
     /// Whether that segment came from a source that knows this exact file.
     @State private var skipIsFileLevel = false
     /// Set when the file is Dolby Vision this device cannot decode; shown once, not as a dialog.
@@ -252,9 +299,12 @@ struct MobilePlayerView: View {
 
     var body: some View {
         ZStack {
-            PlayerLayerView(player: session.player, fills: fillsScreen, pip: pip).playerBleed(!inline)
+            // In landscape the page gives the picture a tall box beside the episode list; a 16:9
+            // film in a taller box leaves bars at the sides, which is the white strip. Fill instead,
+            // cropping the frame's edges rather than the frame itself.
+            PlayerLayerView(player: session.player, fills: fillsScreen || fillsLandscape, pip: pip).playerBleed(!inline)
             // The enhanced picture covers the layer's own, under everything else.
-            EnhancedVideoSurface(enhancer: session.enhancer, fills: fillsScreen, bleeds: !inline)
+            EnhancedVideoSurface(enhancer: session.enhancer, fills: fillsScreen || fillsLandscape, bleeds: !inline)
             if showsDanmaku && !session.danmaku.isEmpty {
                 DanmakuOverlay(player: session.player, comments: session.danmaku, opacity: session.danmakuOpacity, revision: session.danmakuRevision)
                     // Across the whole width, but below the Dynamic Island and above the home indicator when upright.
@@ -274,21 +324,22 @@ struct MobilePlayerView: View {
             .allowsHitTesting(activeSubtitleTrack != nil)
             // Floating, not a sheet: an intro is short, and dismissing a dialog takes longer than
             // the intro does.
-            SkipSegmentButton(
-                segment: skipSegment ?? SkipSegmentSources.Segment(kind: .intro, start: 0, end: 0),
-                position: clock.position,
-                isFileLevel: skipIsFileLevel
-            ) {
-                if let segment = skipSegment { clock.seek(to: segment.end) }
+            if let segment = currentSkipSegment {
+                SkipSegmentButton(segment: segment, position: clock.position, isFileLevel: skipIsFileLevel) {
+                    clock.seek(to: segment.end)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(.trailing, 20)
+                .padding(.bottom, inline ? 84 : 128)
+                .playerBleed(!inline, edges: .horizontal)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            .padding(.trailing, 20)
-            .padding(.bottom, inline ? 84 : 128)
-            .playerBleed(!inline, edges: .horizontal)
             if let hdrNotice {
                 VStack {
                     Spacer(minLength: 0)
-                    Label(L10n.text("Dolby Vision Unsupported"), systemImage: "exclamationmark.triangle")
+                    // The reason, not a generic sentence: "this file's Dolby Vision profile cannot
+                    // be decoded here" tells the viewer to pick another source, which a bare
+                    // "Unsupported" does not.
+                    Label(hdrNotice, systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .padding(.horizontal, 12).padding(.vertical, 7)
                         .background(.black.opacity(0.66), in: Capsule())
@@ -352,6 +403,9 @@ struct MobilePlayerView: View {
             nowPlaying.start(session)
             nowPlaying.update(title: channel.name, session: session)
             tvBrowser.start()
+            // AVKit's queued advance is unreliable inside the floating window, so while PiP is up the
+            // session falls back to the ordinary end-of-episode switch, which works everywhere.
+            pip.onActiveChange = { session.queueingDisabled = $0 }
         }
         .onDisappear {
             clock.detach(); nowPlaying.stop(); tvBrowser.stop()
@@ -377,6 +431,7 @@ struct MobilePlayerView: View {
             await loadSubtitles()
             await loadSkipSegment()
             await inspectColour()
+            reportAspect()
         }
         // Persist the caption appearance whenever it changes, so a resize survives the next launch.
         .onChange(of: subtitleStyle) { _, _ in saveSubtitleStyle() }
@@ -686,6 +741,9 @@ struct MobilePlayerView: View {
     }
     /// At the top of a watch page: smaller controls, and the page has the title.
     private var inline: Bool { layout == .inline }
+
+    /// Landscape split: the box is taller than the frame's own shape, so filling avoids side bars.
+    private var fillsLandscape: Bool { inline && verticalSizeClass == .compact }
     private var seekable: Bool { session.hasTimeline && !session.isLive }
 
     private var controls: some View {
@@ -962,7 +1020,7 @@ struct MobilePlayerView: View {
             // the video's own sound track on device, and the result is drawn by the same overlay as
             // every other subtitle file, so size and position work the same way.
             #if canImport(Speech)
-            if let language = Self.speechLanguage {
+            if let language = speechLanguage {
                 Button {
                     generateSubtitles(language: language)
                 } label: {
@@ -1077,11 +1135,11 @@ struct MobilePlayerView: View {
         nowPlaying.update(title: channel.name, session: session)
     }
 
-    /// Locks or unlocks the controls. Locking pins the orientation too, so the gyroscope can't
-    /// turn the picture while the controls are held; unlocking lets it follow the phone again.
+    /// Locks or unlocks the controls. Locking only stops the picture's taps and slides; the orientation
+    /// keeps following the gyroscope, because the lock is for fat-finger protection, not for pinning
+    /// the screen. (The rotate button still turns the picture by hand either way.)
     private func toggleLock() {
         controlsLocked.toggle()
-        if controlsLocked { PlayerOrientation.lock() } else { PlayerOrientation.unlock() }
         poke()
     }
 
@@ -1195,6 +1253,9 @@ struct WatchPlayback {
     var started: (Bool) -> Void = { _ in }
     /// The page's player, so the cover over it can say how its wait goes.
     var opened: (PlaybackSession) -> Void = { _ in }
+    /// The picture's width over height, once the stream is known, so the page can size its box to the
+    /// picture instead of assuming 16:9.
+    var aspect: (CGFloat) -> Void = { _ in }
 }
 
 /// The full-screen player sets the app's appearance; one at the top of a page sets only its own.
@@ -1555,6 +1616,9 @@ private struct PlayerLayerView: UIViewRepresentable {
     let supported = AVPictureInPictureController.isPictureInPictureSupported()
     private(set) var possible = false
     private(set) var active = false
+    /// Called on the main actor when Picture in Picture starts or stops, so the session can turn off
+    /// its queued-advance while PiP is active (AVKit's queue is unreliable inside the floating window).
+    var onActiveChange: (@MainActor (Bool) -> Void)?
     @ObservationIgnored private var controller: AVPictureInPictureController?
     @ObservationIgnored private var observation: NSKeyValueObservation?
 
@@ -1577,10 +1641,10 @@ private struct PlayerLayerView: UIViewRepresentable {
     }
 
     nonisolated func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
-        Task { @MainActor [weak self] in self?.active = true }
+        Task { @MainActor [weak self] in self?.active = true; self?.onActiveChange?(true) }
     }
     nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
-        Task { @MainActor [weak self] in self?.active = false }
+        Task { @MainActor [weak self] in self?.active = false; self?.onActiveChange?(false) }
     }
     nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
         let detail = Diagnostics.describe(error)

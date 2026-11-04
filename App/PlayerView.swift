@@ -101,7 +101,8 @@ struct PlaybackView: View {
             MobilePlayerView(channel: channel, session: session, showsDanmaku: $showsDanmaku, upscalesVideo: $upscalesVideo, smoothsVideo: $smoothsVideo,
                              waiting: waitContent, chromeVisible: chromeVisible, toggleChrome: toggleChrome, poke: poke, hold: holdChrome,
                              close: exit, layout: playerLayout, toggleFullScreen: watch.map { _ in toggleFullScreen },
-                             openEpisodes: { showsEpisodes = true })
+                             openEpisodes: { showsEpisodes = true },
+                             aspect: { watch?.aspect($0) })
             #else
             NativePlayerView(player: session.player, comments: session.danmaku, showsDanmaku: $showsDanmaku, opacity: session.danmakuOpacity, revision: session.danmakuRevision).ignoresSafeArea()
             chrome.opacity(chromeVisible ? 1 : 0).allowsHitTesting(chromeVisible)
@@ -761,26 +762,23 @@ private struct PlayerSurface: NSViewRepresentable {
 
     /// Back to portrait when the player closes, if the button turned it.
     static func release() {
-        suspendedLandscape = nil
         isLocked = false
         if mask == .landscape { set(landscape: false) }
     }
 
-    /// The landscape lock the viewer had when the phone folded shut, kept so reopening it
-    /// restores the same grip (landscape or portrait) instead of always falling back upright.
-    static private(set) var suspendedLandscape: Bool?
-
     /// iPhone Duo closed onto the inner display: it ignores orientations, so drop a landscape
-    /// lock but remember it. Reopening (`restore()`) puts the outer display back to how it was.
+    /// lock while closed. Reopening (`restore()`) puts the outer display back to landscape.
     static func suspend() {
-        suspendedLandscape = mask == .landscape ? true : nil
         if mask == .landscape { set(landscape: false) }
     }
 
-    /// Reopened onto the outer display: put back the grip the viewer had before folding.
+    /// Reopened onto the outer display: the iPhone Duo's outer screen is landscape by default, so a
+    /// playback that ran on the inner display comes back landscape — unless the viewer explicitly
+    /// held portrait (a watch page, or a portrait lock), which stays upright.
     static func restore() {
-        if suspendedLandscape == true { set(landscape: true) }
-        suspendedLandscape = nil
+        if !isLocked {
+            set(landscape: !holdsPortrait)
+        }
     }
 
     /// While a watch page shows, the app stays upright (the page turns to landscape for Full Screen only).

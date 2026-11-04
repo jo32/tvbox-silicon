@@ -270,6 +270,10 @@ enum QALaunch {
             // The vault is a page inside Privacy rather than a tab, so a screenshot of it needs a
             // route of its own.
             case "vault": PrivacyVaultView()
+            // The pages under Settings → What Plays, one route each for screenshot QA.
+            case "resource-order": ResourceRankingView()
+            case "segment-sources": SkipSourceSettingsView()
+            case "speech-subtitles": SpeechSubtitleView()
             #endif
             case "licenses": LicensesView()
             case "bilibili-account": BilibiliAccountView()
@@ -330,7 +334,7 @@ enum QALaunch {
 
     static func overrides(_ section: AppSection) -> Bool {
         guard section == self.section, let page else { return false }
-        return ["site", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "vault", "licenses", "cloud-login", "cloud-accounts", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add"].contains(page.split(separator: ":").first.map(String.init) ?? "")
+        return ["site", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "vault", "resource-order", "segment-sources", "speech-subtitles", "licenses", "cloud-login", "cloud-accounts", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add"].contains(page.split(separator: ":").first.map(String.init) ?? "")
     }
 }
 

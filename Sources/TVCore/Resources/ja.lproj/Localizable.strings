@@ -1607,3 +1607,14 @@
 "Skip Credits" = "エンドロールをスキップ";
 "Describes this exact file" = "このファイル自体の情報";
 "Describes the title; used only if the timing fits" = "作品の情報のみ。時間が合う場合だけ使用";
+
+/* Segment sources, speech subtitles, and the settings group they live in */
+"What Plays" = "再生する内容";
+"The intro end and outro you set on a video's page" = "動画ページで設定したイントロ終了位置とアウトロの長さ";
+"Chapters carried inside the file" = "ファイルに含まれるチャプター";
+"Not connected yet: no request is made to these databases." = "未接続：これらのデータベースへの問い合わせは行いません。";
+"Drag to reorder. The first source with a usable segment wins. Your own markers and the file's chapters are read on this device; the public timestamp databases are not connected yet, and their switches stay off until they are." = "ドラッグで優先順位を変更できます。利用できる区間を返した、いちばん上のソースが使われます。自分のマーカーとファイル内のチャプターは端末内で読み取ります。公開タイムスタンプのデータベースは未接続で、接続するまでスイッチはオフのままです。";
+"Recognition runs entirely on this device. No audio leaves the phone. Only languages this device has a model for are listed; the player uses the one picked here." = "認識はすべて端末内で行われ、音声が端末の外に出ることはありません。ここには端末にモデルがある言語だけを表示します。プレイヤーはここで選んだ言語を使います。";
+
+/* HDR */
+"Dolby Vision profile 5 needs an HDR screen" = "Dolby Vision プロファイル 5 には HDR 画面が必要です";

@@ -17,6 +17,17 @@ struct ResourceRankingView: View {
                     HStack {
                         Text(title(key.attribute))
                         Spacer()
+                        #if os(macOS)
+                        // A Mac has no edit mode and no swipe, so the arrows are the reorder here.
+                        HStack(spacing: 2) {
+                            Button { move(key, by: -1) } label: { Image(systemName: "chevron.up") }
+                                .buttonStyle(.borderless)
+                                .disabled(keys.first == key)
+                            Button { move(key, by: 1) } label: { Image(systemName: "chevron.down") }
+                                .buttonStyle(.borderless)
+                                .disabled(keys.last == key)
+                        }
+                        #endif
                         // Direction is per key: smaller is better for bitrate and size when the
                         // viewer is on a weak connection.
                         Picker("", selection: directionBinding(key)) {
@@ -35,9 +46,9 @@ struct ResourceRankingView: View {
                     keys.remove(atOffsets: offsets)
                     commit()
                 }
-            } header: {
-                Text(L10n.text("Resource Order"))
             } footer: {
+                // No header: the page's own title already says what this is, and a second copy an
+                // inch below it is noise.
                 Text(L10n.text("Attributes are applied top to bottom. Drag to reorder; swipe to stop using one."))
             }
 
@@ -77,9 +88,23 @@ struct ResourceRankingView: View {
             }
         }
         .settingsForm(L10n.text("Resource Order"))
+        #if !os(macOS)
+        // Edit mode is what turns the rows into draggable ones on iOS; a Mac has no such mode and
+        // uses the arrows in each row instead.
         .environment(\.editMode, .constant(.active))
+        #endif
         .task { keys = store.resourceRanking.keys }
     }
+
+    #if os(macOS)
+    private func move(_ key: ResourceRanking.Key, by offset: Int) {
+        guard let index = keys.firstIndex(of: key) else { return }
+        let target = index + offset
+        guard keys.indices.contains(target) else { return }
+        keys.swapAt(index, target)
+        commit()
+    }
+    #endif
 
     private var unusedAttributes: [ResourceRanking.Key.Attribute] {
         ResourceRanking.Key.Attribute.allCases.filter { attribute in

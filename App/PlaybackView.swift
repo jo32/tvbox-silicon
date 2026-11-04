@@ -103,6 +103,9 @@ import TVCore
     private var upcomingObservation: NSKeyValueObservation?
     /// Whether this episode has already tried to queue the next one (once each, even when that failed).
     private var upcomingAttempted = false
+    /// Picture in Picture is active: AVKit's queued advance is unreliable there, so skip the
+    /// queue and fall back to the ordinary end-of-episode switch, which always works in PiP.
+    var queueingDisabled = false { didSet { if queueingDisabled { discardUpcoming() } } }
     /// The queue moves past this episode because the next one was asked for, not because it ended.
     private var skipsToUpcoming = false
     /// The episode the queue moved on to, which `start` then finds already playing.
@@ -1164,7 +1167,7 @@ extension PlaybackSession {
     /// switches as before.
     fileprivate func queueUpcomingIfDue(_ item: AVPlayerItem) {
         if upcoming != nil, looping || !playsOn() { return discardUpcoming() }
-        guard !upcomingAttempted, !looping, !isLive, playsOn(), let upcomingEpisode, item.status == .readyToPlay,
+        guard !queueingDisabled, !upcomingAttempted, !looping, !isLive, playsOn(), let upcomingEpisode, item.status == .readyToPlay,
               pendingResume == nil, !restoringPosition else { return }
         let length = item.duration.seconds, time = item.currentTime().seconds
         guard length.isFinite, length > 0, time.isFinite else { return }

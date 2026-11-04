@@ -532,12 +532,8 @@ struct FormSettingsView: View {
             // What plays, and how it is chosen. One list for both platforms: on the phone these sit
             // beside the app's other pages, and on a Mac this is the only door to them.
             Section {
-                FormLink(symbol: "photo.on.rectangle.angled", tint: .pink, title: L10n.text("Artwork Language"),
-                         value: store.artworkLanguage.costsExtraRequests ? L10n.text("Changed") : nil) { ArtworkLanguageView() }
                 FormLink(symbol: "arrow.up.arrow.down.square.fill", tint: .teal, title: L10n.text("Resource Order"),
                          value: rankingSummary) { ResourceRankingView() }
-                FormLink(symbol: "person.2.crop.square.stack.fill", tint: .indigo, title: L10n.text("Environments"),
-                         value: store.environments.all.count > 1 ? "\(store.environments.all.count)" : nil) { EnvironmentsView() }
                 FormLink(symbol: "forward.end.alt.fill", tint: .cyan, title: L10n.text("Segment Sources")) { SkipSourceSettingsView() }
                 FormLink(symbol: "waveform.badge.plus", tint: .purple, title: L10n.text("Speech Subtitles")) { SpeechSubtitleView() }
             } header: {
@@ -2261,5 +2257,16 @@ struct ContributorsSection: View {
             }
         }
     }
+}
+#endif
+
+#if os(tvOS)
+extension View {
+    /// Apple TV has no grouped settings form and no page chrome of its own inside a settings
+    /// subpage: the TV draws the title and the rows already, so this only has to exist.
+    ///
+    /// The pages it is applied to are shared with the phone and the Mac, where the grouped form and
+    /// the screen title are what make them look like Settings.
+    func settingsForm(_ title: String) -> some View { self }
 }
 #endif

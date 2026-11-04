@@ -125,7 +125,7 @@ public struct HDRDisplay: Sendable {
             // Profile 5 cannot be shown without a DV decoder; the others have a PQ base layer the
             // system can tone-map on its own.
             if let profile = dolbyVisionProfile, profile == 5, !displaySupportsHDR {
-                return .unsupportedDolbyVision("Dolby Vision profile 5 on an SDR display")
+                return .unsupportedDolbyVision(L10n.text("Dolby Vision profile 5 needs an HDR screen"))
             }
             return displaySupportsHDR ? .passthrough : .toneMapToSDR
         }

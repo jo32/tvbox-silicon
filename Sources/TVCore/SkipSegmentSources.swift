@@ -40,6 +40,19 @@ public struct SkipSegmentSources: Codable, Hashable, Sendable {
             case .theIntroDB, .introDB, .publicMetaDB: return false
             }
         }
+
+        /// Whether anything in the app can ask this source yet.
+        ///
+        /// The viewer's markers are stored locally and the chapters come with the file, so both
+        /// answer offline. The public databases need a network call that is not written yet, and a
+        /// switch that changes nothing is worse than one that says so — the settings page greys
+        /// those out rather than pretending they take part.
+        public var isConnected: Bool {
+            switch self {
+            case .manual, .mediaServer: return true
+            case .theIntroDB, .introDB, .publicMetaDB: return false
+            }
+        }
     }
 
     /// One segment a source found, in seconds from the start.

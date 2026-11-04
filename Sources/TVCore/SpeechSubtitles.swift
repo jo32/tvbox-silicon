@@ -77,6 +77,20 @@ public struct SpeechSubtitles: Sendable {
         candidates.filter { canRecogniseOnDevice($0) }
     }
 
+    /// Where the viewer's chosen recognition language is stored.
+    ///
+    /// Shared by the settings page that offers the choice and the player that uses it, so the phone
+    /// recognises in the language that was picked rather than in whatever the system prefers.
+    public static let preferredLanguageKey = SpeechSubtitlePreference.key
+
+    /// The language to recognise in, given what the viewer picked and what this device supports.
+    ///
+    /// The preference comes first, then the phone's own languages — an empty answer means this
+    /// device has no model at all and the item should not be offered.
+    public static func preferredLanguage(stored: String) -> String? {
+        availableLanguages(from: SpeechSubtitlePreference.candidates(stored: stored)).first
+    }
+
     /// Transcribes `asset` and returns a subtitle track.
     ///
     /// `hint` seeds recognition with names that are in the title (character names, places) because

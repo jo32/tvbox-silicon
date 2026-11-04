@@ -1607,3 +1607,14 @@
 "Skip Credits" = "跳過片尾";
 "Describes this exact file" = "描述的就是這個檔案";
 "Describes the title; used only if the timing fits" = "只描述這部劇，時間對得上才用";
+
+/* Segment sources, speech subtitles, and the settings group they live in */
+"What Plays" = "播放內容";
+"The intro end and outro you set on a video's page" = "你在影片頁面設定的片頭結束與片尾長度";
+"Chapters carried inside the file" = "隨檔案一起的章節";
+"Not connected yet: no request is made to these databases." = "尚未接入：不會向這些資料庫發出請求。";
+"Drag to reorder. The first source with a usable segment wins. Your own markers and the file's chapters are read on this device; the public timestamp databases are not connected yet, and their switches stay off until they are." = "拖曳可調整優先順序。排在最前、且給出可用片段的來源生效。你自己的標記與檔案內建章節在本機讀取；公開時間戳資料庫尚未接入，接入前它們的開關保持關閉。";
+"Recognition runs entirely on this device. No audio leaves the phone. Only languages this device has a model for are listed; the player uses the one picked here." = "辨識完全在本機進行，聲音不會離開手機。這裡只列出本機擁有模型的語言；播放器使用你在這裡選定的那一種。";
+
+/* HDR */
+"Dolby Vision profile 5 needs an HDR screen" = "杜比視界 Profile 5 需要 HDR 螢幕";

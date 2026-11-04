@@ -1382,6 +1382,10 @@ struct VideoDetailView: View {
     /// Play takes over focus from the loading placeholder; otherwise nothing is focused once details load.
     @FocusState private var playFocused: Bool
     @State private var containerWidth: CGFloat = 0
+    @State private var containerHeight: CGFloat = 0
+    /// The picture's own width-over-height, reported by the player once the stream is known.
+    /// 16:9 until then, which is what most sources serve and therefore the least surprising guess.
+    @State private var playerAspectRatio: CGFloat = 16.0 / 9.0
     /// The cover's width over height once it loads; landscape covers are common (Bilibili, short dramas).
     @State private var artAspect: CGFloat?
     /// TMDB's backdrop once its picture has loaded. The source's cover stays until then, and when it never does
@@ -1436,7 +1440,10 @@ struct VideoDetailView: View {
             #endif
         }
         .safeAreaInset(edge: .bottom) { if !isWatchPage { loadingCard } }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            containerWidth = size.width
+            containerHeight = size.height
+        }
         #if os(macOS)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background { DetailAurora(poster: video.poster, headers: video.posterHeaders) }
@@ -2232,6 +2239,13 @@ struct VideoDetailView: View {
     // MARK: iPhone watch page
 
     private var watchLayout: Bool { WatchPage.applies(sizeClass, verticalSizeClass) }
+
+    /// Landscape on a phone: the page splits left/right rather than stacking.
+    ///
+    /// A Duo unfolded is regular in both directions and must not split — it is wide, but stacking
+    /// a tall episode list beside the picture there wastes the height it does have. The compact
+    /// height class is the honest signal for "held sideways".
+    private var landscapePage: Bool { verticalSizeClass == .compact }
     /// What plays at the top of the page: one of this video's episodes.
     private var watchChannel: Channel? {
         store.playing.flatMap { watchScopes.contains($0.historyContext?.id ?? "") ? $0 : nil }
@@ -2245,18 +2259,42 @@ struct VideoDetailView: View {
     /// As in Bilibili's app: the player at the top, under the status bar, and the title, actions, synopsis and
     /// episodes scrolling below it. Full Screen grows the same player over the page, so playback carries on.
     @ViewBuilder private var watchBody: some View {
-        let playerHeight = (containerWidth > 0 ? containerWidth : 390) * 9 / 16
+        // The picture, not a fixed 16:9 box. The player reports what the stream actually is; until
+        // it does, 16:9 is the guess. Sizing the box by the picture is what removes the letterbox
+        // bars on a 4:3 or a 2.35:1 film: `.resizeAspect` fills whatever box it is given, so a box
+        // of the wrong shape leaves bars *inside* the player, which read as a white strip at the
+        // right edge once the black behind it does not line up.
+        let ratio = playerAspectRatio
+        let side = containerWidth > 0 ? containerWidth : 390
+        // Landscape splits the page left/right instead of stacking, as One does: the picture keeps
+        // the width it needs and the episode list uses the space beside it rather than below.
+        let splits = landscapePage && !fullScreen
+        // Upright: the box is the picture's own shape, so there are no bars inside it. The status
+        // bar strip is part of the box (the page hides the bar), which is why nothing is subtracted.
+        let playerHeight = splits ? containerHeight : side / max(ratio, 0.5)
         ZStack(alignment: .top) {
             if !fullScreen {
-                VStack(spacing: 0) {
-                    Color.clear.frame(height: playerHeight)
-                    ScrollView { watchDetails.padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 24) }
-                        .scrollIndicators(.never)
+                if splits {
+                    HStack(spacing: 0) {
+                        watchPlayer
+                            .frame(width: max(0, containerWidth - side * 0.42), height: containerHeight)
+                        ScrollView { watchDetails.padding(.horizontal, 16).padding(.vertical, 14) }
+                            .scrollIndicators(.never)
+                            .frame(maxWidth: .infinity)
+                    }
+                } else {
+                    VStack(spacing: 0) {
+                        Color.clear.frame(height: playerHeight)
+                        ScrollView { watchDetails.padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 24) }
+                            .scrollIndicators(.never)
+                    }
                 }
             }
-            watchPlayer
-                .frame(height: fullScreen ? nil : playerHeight)
-                .frame(maxWidth: .infinity, maxHeight: fullScreen ? .infinity : nil, alignment: .top)
+            if !splits {
+                watchPlayer
+                    .frame(height: fullScreen ? nil : playerHeight)
+                    .frame(maxWidth: .infinity, maxHeight: fullScreen ? .infinity : nil, alignment: .top)
+            }
         }
         // The status bar's strip above the player is the player's black.
         .background(alignment: .top) { Color.black.frame(height: playerHeight).ignoresSafeArea(edges: .top) }
@@ -2302,7 +2340,13 @@ struct VideoDetailView: View {
             if let channel = watchChannel {
                 PlaybackView(channel: channel, session: store.playbackSession(for: channel),
                              watch: WatchPlayback(fullScreen: fullScreen, toggleFullScreen: setFullScreen, leave: { dismiss() },
-                                                  started: { playerStarted = $0 }, opened: { playerSession = $0 }))
+                                                  started: { playerStarted = $0 }, opened: { playerSession = $0 },
+                                                  aspect: { ratio in
+                                                      // Only grow, never shrink below 16:9 into a squat box: a
+                                                      // source that reports nothing keeps the usual shape.
+                                                      guard ratio.isFinite, ratio > 0.2, ratio < 6 else { return }
+                                                      if abs(ratio - playerAspectRatio) > 0.01 { playerAspectRatio = ratio }
+                                                  }))
             }
             if covered { watchCover.transition(.opacity) }
         }
