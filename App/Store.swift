@@ -678,6 +678,77 @@ import TVCore
         return arranged
     }
 
+    /// Probes every source in the subscription at once, recording each line's reachability,
+    /// latency and speed so the picker can rank them and a later "fix dead lines" pass can act.
+    func probeAllSources(onSource: ((Site) -> Void)? = nil) async {
+        guard let config = subscription else { return }
+        for site in automaticSites(config) {
+            guard !Task.isCancelled else { break }
+            onSource?(site)
+            let client = CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL)
+            do {
+                let page = try await client.home()
+                guard let video = page.videos.first else { continue }
+                // Probe the video's lines with a bounded amount of concurrency, so a source with
+                // many lines neither floods the network nor stalls on one slow address.
+                let lines = video.episodes.filter { !$0.flag.isEmpty }
+                await withTaskGroup(of: (String, SourceProbeResult).self) { group in
+                    var inflight = 0
+                    var iterator = lines.makeIterator()
+                    func launchNext() {
+                        guard inflight < 4, let episode = iterator.next(), let url = URL(string: episode.address) else { return }
+                        inflight += 1
+                        group.addTask {
+                            let result = await SourceProbeRunner.probe(url: url)
+                            return (episode.flag, result)
+                        }
+                    }
+                    while inflight < 4 { launchNext() }
+                    for await (flag, result) in group {
+                        SourceProbeStore.shared.record(result, sourceKey: site.sourceKey, videoID: video.id, lineFlag: flag)
+                        inflight -= 1
+                        launchNext()
+                    }
+                }
+            } catch {
+                // The source's own failure is already recorded by CatalogClient.request (SourceHealth),
+                // and line-level backoff belongs to the host a line points at, not the source key. Do
+                // not call `failBase` here: it would key on the wrong value and never take effect.
+            }
+        }
+    }
+
+    /// After a full probe, applies one fix to every line that came back unreachable: route it
+    /// through the first custom proxy, force it direct, or hide it from the picker. Returns how
+    /// many lines were touched, for the confirmation.
+    func batchFixUnreachableLines(_ fix: LineFix) async -> Int {
+        guard let config = subscription else { return 0 }
+        var touched = 0
+        for site in automaticSites(config) {
+            guard !Task.isCancelled else { break }
+            let client = CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL)
+            guard let page = try? await client.home(), let video = page.videos.first else { continue }
+            for episode in video.episodes where !episode.flag.isEmpty {
+                guard let probe = SourceProbeStore.shared.probe(sourceKey: site.sourceKey, videoID: video.id, lineFlag: episode.flag),
+                      probe.reachability == .unreachable else { continue }
+                switch fix {
+                case .proxy:
+                    if let proxy = customProxy.store.endpoints.first {
+                        lineSettings.setRoute(.proxy(proxy.id), origin: config.origin, sourceKey: site.sourceKey, flag: episode.flag)
+                    }
+                case .direct:
+                    lineSettings.setRoute(.direct, origin: config.origin, sourceKey: site.sourceKey, flag: episode.flag)
+                case .hide:
+                    lineSettings.setHidden(true, origin: config.origin, sourceKey: site.sourceKey, flag: episode.flag)
+                }
+                touched += 1
+            }
+        }
+        return touched
+    }
+
+    enum LineFix { case proxy, direct, hide }
+
     /// The order the app picks: built-in sources, then `SourceStrategy`'s, with pinned sources first. Hidden sources stay out.
     func automaticSites(_ config: Subscription) -> [Site] {
         let stamp = currentSiteListStamp()
