@@ -13,6 +13,8 @@ import TVCore
     #if os(iOS)
     /// An Apple TV's Douyin code, scanned with the Camera.
     @State private var douyinHandoff: DouyinHandoff.Link?
+    /// Keeps a `yingxia://subscribe` import alive across the view's lifetime.
+    @State private var pendingImport: Task<Void, Never>?
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     #endif
     init() {
@@ -36,6 +38,7 @@ import TVCore
                 .tint(Brand.accent)
                 #endif
                 .task { Diagnostics.shared.record(.info, "app", "Application scene opened") }
+                .task { try? await LocalProxyServer.shared.base() }
                 .task { await ErrorReports.shared.start() }
                 .task {
                     #if DEBUG
@@ -71,7 +74,22 @@ import TVCore
                 .task { PlayOnController.shared.start(store) }
                 #endif
                 #if os(iOS)
-                .onOpenURL { url in if let link = DouyinHandoff.Link(url) { douyinHandoff = link } }
+                .onOpenURL { url in
+                    if let link = DouyinHandoff.Link(url) { douyinHandoff = link; return }
+                    // yingxia://subscribe?url=<address>[&url=<address>…] — imports subscriptions over
+                    // Wi-Fi without touching the preferences files, which cfprefsd caches in memory.
+                    if url.scheme == DouyinHandoff.scheme, url.host() == "subscribe",
+                       let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems {
+                        let addresses = items.filter { $0.name == "url" }.compactMap(\.value)
+                        let task = Task { @MainActor in
+                            for address in addresses {
+                                guard !Task.isCancelled else { break }
+                                await store.importSubscription(address: address)
+                            }
+                        }
+                        pendingImport = task
+                    }
+                }
                 .sheet(item: $douyinHandoff) { DouyinHandoffView(link: $0) }
                 #endif
                 // A launch that ends while active, without passing through here, crashed or was ended.
@@ -80,6 +98,9 @@ import TVCore
                     if phase == .background {
                         Task { _ = await Diagnostics.shared.snapshot(); ErrorReports.shared.save() }
                         store.cloudSync?.flushPending()
+                        // A passcode unlock is for the moment it was given. Leaving the app re-locks,
+                        // so handing the phone to someone else never exposes what is hidden.
+                        if store.vault.hasPasscode { store.vault.lock(); store.saveVault() }
                     }
                     if phase == .active { Task { await ErrorReports.shared.sendIfDue() } }
                     #if os(tvOS) || os(macOS)

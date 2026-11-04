@@ -75,6 +75,7 @@ struct SitesView: View {
                         }
                     }.pageContainer()
                 }
+                .reportsScrollingToPosterLoader()
                 // Picking opens on the current choice rather than the top of a long page.
                 .defaultFocus($focusedSite, picked)
                 .onAppear { if pick != nil, let picked { proxy.scrollTo(picked, anchor: .center) } }

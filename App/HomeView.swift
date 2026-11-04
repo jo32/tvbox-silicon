@@ -78,6 +78,7 @@ struct HomeView: View {
                     .pageContainer()
                     .frame(width: proxy.size.width, alignment: .top)
                 }
+                .reportsScrollingToPosterLoader()
                 #if DEBUG
                 .task { if let target = QALaunch.scrollTarget { try? await Task.sleep(for: .seconds(8)); reader.scrollTo(target, anchor: .bottom) } }
                 #endif

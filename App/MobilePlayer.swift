@@ -640,6 +640,18 @@ struct MobilePlayerView: View {
                     .accessibilityLabel(L10n.text("Back"))
                     .accessibilityIdentifier("player.close")
                 Spacer(minLength: 0)
+                // The episodes live on the watch page below the picture, so the picture itself
+                // offered no way to change one. This is the same sheet the full-screen player
+                // opens, asked for the same way.
+                if channel.historyContext != nil {
+                    Button(action: openEpisodes) {
+                        Image(systemName: "list.bullet.rectangle").font(.headline).frame(width: 22, height: 22)
+                    }
+                    .chromeButton()
+                    .disabled(store.resolvingEpisode != nil)
+                    .accessibilityLabel(L10n.text("Episodes"))
+                    .accessibilityIdentifier("player.episodes.inline")
+                }
                 toolbar
                 optionsMenu
             }

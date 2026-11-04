@@ -119,6 +119,26 @@ extension View {
         }
     }
 
+    /// Tells the poster loader whether this scroll view is moving, so decoding is capped while the
+    /// finger is down. Pairs with `ImageLoadGate`: the phase is the input, the gate is the policy.
+    @ViewBuilder func reportsScrollingToPosterLoader() -> some View {
+        if #available(iOS 18, tvOS 18, *) {
+            onScrollPhaseChange { _, phase in
+                Task { await PosterLoader.shared.setScrolling(phase != .idle) }
+            }
+        } else {
+            #if os(tvOS)
+            self
+            #else
+            simultaneousGesture(
+                DragGesture(minimumDistance: 8)
+                    .onChanged { _ in Task { await PosterLoader.shared.setScrolling(true) } }
+                    .onEnded { _ in Task { await PosterLoader.shared.setScrolling(false) } }
+            )
+            #endif
+        }
+    }
+
     /// `onScrollVisibilityChange`; before iOS 18 and tvOS 18 the visible share comes from the view's bounds
     /// against its scroll view's.
     @ViewBuilder func onScrolledIntoView(threshold: Double, _ action: @escaping (Bool) -> Void) -> some View {
@@ -873,6 +893,10 @@ private final class PosterBitmap: @unchecked Sendable {
 
 private actor PosterLoader {
     static let shared = PosterLoader()
+    /// Caps how many posters decode at once while a grid is moving. Scrolling competes with
+    /// decoding for the same cores, so a fast fling that asks for twenty posters is slower than one
+    /// that asks for two — the gate turns that into a policy instead of a hope.
+    private let gate = ImageLoadGate()
     private let cache = NSCache<NSString, PosterBitmap>()
     private var pending: [PosterResource: Task<PosterBitmap, Error>] = [:]
     private var revision = MediaCache.shared.revision
@@ -884,6 +908,10 @@ private actor PosterLoader {
         let key = resource.cacheKey as NSString
         if let image = cache.object(forKey: key) { return image }
         if let task = pending[resource] { return try await task.value }
+        // No slot means the queue is full while scrolling: this poster is off screen by the time a
+        // slot frees, so skip it rather than piling work behind the finger. It will be asked for
+        // again if it scrolls back.
+        guard await gate.begin() else { throw CancellationError() }
         let task = Task {
             let disk = MediaCache.shared
             let ticket = disk.ticket()
@@ -912,10 +940,14 @@ private actor PosterLoader {
         do {
             let bitmap = try await task.value
             pending[resource] = nil
+            await gate.finish()
             if current == MediaCache.shared.revision { cache.setObject(bitmap, forKey: key, cost: bitmap.image.bytesPerRow * bitmap.image.height) }
             return bitmap
-        } catch { pending[resource] = nil; throw error }
+        } catch { pending[resource] = nil; await gate.finish(); throw error }
     }
+
+    /// Told by a grid as it starts and stops moving.
+    func setScrolling(_ scrolling: Bool) { gate.setScrolling(scrolling) }
 }
 
 struct PosterImage: View {
@@ -1060,7 +1092,12 @@ struct Shimmer: ViewModifier {
                 .allowsHitTesting(false)
             }
         }
-        .onAppear { withAnimation(.linear(duration: 1.35).repeatForever(autoreverses: false)) { phase = 1 } }
+        // The gradient is already hidden when motion is reduced; starting the loop anyway would
+        // keep a repeating animation alive for nothing, which is exactly what the setting is for.
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.linear(duration: 1.35).repeatForever(autoreverses: false)) { phase = 1 }
+        }
     }
 }
 
