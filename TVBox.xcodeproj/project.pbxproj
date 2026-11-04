@@ -1416,7 +1416,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				ICLOUD_ENTITLEMENTS = "";
-				INFOPLIST_KEY_CFBundleDisplayName = mi3s;
+				INFOPLIST_KEY_CFBundleDisplayName = Mi3s;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
@@ -1591,7 +1591,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				ICLOUD_ENTITLEMENTS = "";
-				INFOPLIST_KEY_CFBundleDisplayName = mi3s;
+				INFOPLIST_KEY_CFBundleDisplayName = Mi3s;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
