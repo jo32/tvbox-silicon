@@ -22,6 +22,16 @@ import TVCore
     let pinnedSources: PinnedSources
     let hiddenSources: HiddenSources
     let sourceOrder: SourceOrder
+    /// Per-source direct/proxy choices and the automatic connectivity fallback.
+    let sourceRouting: SourceRouting
+    /// The viewer's own HTTP/HTTPS/SOCKS5 proxy endpoints, chosen per source instead of the built-in relay.
+    let customProxy: CustomProxyRouter
+    /// Per-source rename and API override (the viewer edits one source without editing the subscription).
+    let sourceOverrides: SourceOverrides
+    /// Per-line (flag) route and hide choices, finer than the source-level routing.
+    let lineSettings: LineSettings
+    /// Where a source was dragged across subscriptions (displayed group override).
+    let sourceReassignment: SourceReassignment
     /// Keeps the viewer's library the same on their other devices; nil for tests and QA's isolated data.
     let cloudSync: CloudSync?
     /// The history entry being resumed; another entry, or leaving the page, replaces or cancels it.
@@ -40,6 +50,52 @@ import TVCore
     /// The last good copy of each subscription, by address.
     private(set) var documents: [String: Subscription] = [:]
     let favorites: Favorites
+    /// Passcode-locked hiding of subscriptions and sources. Reads go through its `visible…` and
+    /// `permits…` methods so a hidden source disappears from every listing at once, rather than
+    /// being filtered again in each view.
+    var vault = PrivacyVault()
+    private static let vaultKey = "privacyVault"
+
+    /// Persists the vault. Called by every mutation so a passcode change or a hide survives a crash.
+    func saveVault() {
+        if let blob = try? JSONEncoder().encode(vault) { playbackDefaults.set(blob, forKey: Self.vaultKey) }
+    }
+
+    /// Relocks the vault the moment the screen is captured — a screenshot or an active screen
+    /// recording / mirroring — so a hidden subscription or source is never caught mid-view. The
+    /// lock only matters when a passcode is set; otherwise the vault hides nothing.
+    #if os(iOS)
+    func installCaptureGuards() {
+        guard vault.hasPasscode else { return }
+        let relock = { [weak self] in
+            guard let self, self.vault.hasPasscode else { return }
+            Task { @MainActor in
+                guard self.vault.isUnlocked() else { return }
+                self.vault.lock()
+                self.saveVault()
+            }
+        }
+        NotificationCenter.default.addObserver(forName: UIApplication.userDidTakeScreenshotNotification,
+                                               object: nil, queue: .main) { _ in relock() }
+        NotificationCenter.default.addObserver(forName: UIScreen.capturedDidChangeNotification,
+                                               object: nil, queue: .main) { note in
+            guard let screen = note.object as? UIScreen, screen.isCaptured else { return }
+            relock()
+        }
+    }
+    #endif
+
+    /// Rows the viewer may see. Every listing that shows history goes through this.
+    var visibleHistory: [PlaybackHistoryEntry] { vault.visibleHistory(playbackHistory.entries) }
+    /// Favourites the viewer may see.
+    var visibleFavorites: [FavoriteItem] { vault.visibleFavorites(favorites.items) }
+    /// Sources a search or a recommendation may fan out to.
+    func searchableSites(_ sites: [Site]) -> [Site] {
+        let keys = Set(vault.visibleSources(sites.map(\.key)))
+        return sites.filter { keys.contains($0.key) }
+    }
+    /// Whether an episode may be opened, for a deep link or a resumed session.
+    func mayPlay(sourceKey: String) -> Bool { vault.permitsPlayback(sourceKey: sourceKey) }
     var importing = false
     var error: String?
     /// Why the last subscription import failed. It shows under the address field, not in the app-wide alert: on
@@ -126,8 +182,17 @@ import TVCore
         WebSniff.install(WKWebSniffer())
         #endif
         sourceOrder = SourceOrder(defaults: playbackDefaults)
+        sourceRouting = SourceRouting(defaults: playbackDefaults)
+        customProxy = CustomProxyRouter.shared
+        sourceOverrides = SourceOverrides(defaults: playbackDefaults)
+        lineSettings = LineSettings(defaults: playbackDefaults)
+        sourceReassignment = SourceReassignment(defaults: playbackDefaults)
         cloudSync = defaults === UserDefaults.standard && !defaults.bool(forKey: "qaIsolatedData") ? CloudSync() : nil
         favorites = Favorites(defaults: defaults)
+        if let blob = playbackDefaults.data(forKey: Self.vaultKey),
+           let saved = try? JSONDecoder().decode(PrivacyVault.self, from: blob) {
+            vault = saved
+        }
         autoPlayNext = defaults.object(forKey: "autoPlayNextEpisode") == nil || defaults.bool(forKey: "autoPlayNextEpisode")
         let saved = defaults.data(forKey: "subscriptions").flatMap { try? JSONDecoder().decode([SubscriptionEntry].self, from: $0) }
         var entries = saved ?? [], copies: [String: Subscription] = [:]
@@ -168,6 +233,9 @@ import TVCore
         MusicDownloadLibrary.shared.wake()
         setUpListening()
         setUpCloudSync()
+        #if os(iOS)
+        installCaptureGuards()
+        #endif
     }
     // MARK: Listening sources (#289)
 
