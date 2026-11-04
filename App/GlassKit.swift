@@ -591,10 +591,12 @@ private struct FilterChipStyle: ButtonStyle {
 /// white glass lift on focus, as in the TV app.
 private struct TVChipStyle: ButtonStyle {
     let selected: Bool
-    func makeBody(configuration: Configuration) -> some View { Plate(configuration: configuration, selected: selected) }
+    var anchor: UnitPoint = .center
+    func makeBody(configuration: Configuration) -> some View { Plate(configuration: configuration, selected: selected, anchor: anchor) }
     private struct Plate: View {
         let configuration: ButtonStyleConfiguration
         let selected: Bool
+        let anchor: UnitPoint
         @Environment(\.isFocused) private var focused
         @Environment(\.isEnabled) private var enabled
         var body: some View {
@@ -605,7 +607,7 @@ private struct TVChipStyle: ButtonStyle {
                 .frame(minHeight: 58)
                 .glassSurface(glass, in: Capsule())
                 .opacity(enabled ? 1 : 0.4)
-                .scaleEffect(configuration.isPressed ? 0.97 : focused ? 1.06 : 1)
+                .scaleEffect(configuration.isPressed ? 0.97 : focused ? 1.06 : 1, anchor: anchor)
                 .shadow(color: .black.opacity(focused ? 0.35 : 0), radius: 16, y: 10)
                 .animation(.easeOut(duration: 0.18), value: focused)
                 .animation(.smooth(duration: 0.2), value: selected)
@@ -620,7 +622,8 @@ private struct TVChipStyle: ButtonStyle {
 
 extension View {
     /// A Liquid Glass capsule that turns white on focus, like the chips.
-    func glassPill() -> some View { buttonStyle(TVChipStyle(selected: false)) }
+    /// `anchor` is where it grows from on focus: a wide pill grown from its centre reaches far past both ends.
+    func glassPill(anchor: UnitPoint = .center) -> some View { buttonStyle(TVChipStyle(selected: false, anchor: anchor)) }
 }
 
 /// The query as a glass pill after a magnifying glass, as in the TV app's search. The remote's

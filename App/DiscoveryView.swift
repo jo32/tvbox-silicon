@@ -217,7 +217,8 @@ struct GlobalSearchView: View {
             } icon: { Image(systemName: "magnifyingglass") }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .glassPill()
+        // Grown from the left on focus: from its centre the full-width field grew over the sidebar button.
+        .glassPill(anchor: .leading)
         .accessibilityLabel(L10n.text("Search videos"))
         .accessibilityValue(model.draft)
         .accessibilityIdentifier("search.field")
