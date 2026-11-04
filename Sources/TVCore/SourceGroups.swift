@@ -32,7 +32,12 @@ public struct SourceGroup: Equatable, Sendable, Identifiable {
 }
 
 public enum SourceGroups {
-    public static func make(entries: [SubscriptionEntry], documents: [String: Subscription], builtIns: [Site], builtInOrigin: URL, mergedSites: [Site], pinOrder: [Site], userHidden: (Site) -> Bool, includeHidden: Bool, jarURL: URL?, reassign: (Site, String) -> String? = { _, _ in nil }) -> [SourceGroup] {
+    /// `privacyHidden` marks a source the privacy vault keeps off the list *while locked*. Unlike a
+    /// plain `userHidden` source — which waits in the "Hidden Sources" group so the viewer can unhide
+    /// it — a privacy-hidden source must disappear entirely when locked, or the "Hidden Sources" group
+    /// and its count would tell a locked-out viewer how much is in the vault. Unlock and it returns
+    /// to its own group.
+    public static func make(entries: [SubscriptionEntry], documents: [String: Subscription], builtIns: [Site], builtInOrigin: URL, mergedSites: [Site], pinOrder: [Site], userHidden: (Site) -> Bool, includeHidden: Bool, jarURL: URL?, privacyHidden: (Site) -> Bool = { _ in false }, reassign: (Site, String) -> String? = { _, _ in nil }) -> [SourceGroup] {
         /// An entry is known by the address the viewer typed; its copy is known by where the address
         /// finally landed — a redirect, a mirror, an http-to-https hop. Grouping used to compare the
         /// two directly, so every subscription that redirected filed nothing: its sources silently
@@ -58,7 +63,7 @@ public enum SourceGroups {
             return pinOrder.contains { $0.sourceKey == site.sourceKey && $0.origin(or: fallback) == origin }
         }
         func eligible(_ site: Site) -> Bool {
-            !site.hidden && site.canBrowse(jarURL: jarURL) && (includeHidden || !userHidden(site))
+            !site.hidden && site.canBrowse(jarURL: jarURL) && !privacyHidden(site) && (includeHidden || !userHidden(site))
         }
         var groups: [SourceGroup] = []
         let pinnedSites = pinOrder.filter(eligible)
@@ -78,8 +83,9 @@ public enum SourceGroups {
         let unplaced = mergedSites.filter { !$0.isBuiltIn && !placed.contains($0.id) && eligible($0) && !isPinned($0, fallback: builtInOrigin) }
         if !unplaced.isEmpty { groups.append(SourceGroup(kind: .other, title: "Other Sources", sites: SourceStrategy.arrange(unplaced, where: { _ in true }))) }
         // Hidden sources leave their groups and wait in one group at the end, where they can be unhidden.
+        // Privacy-hidden sources are not here: a locked vault must not reveal them, even as a count.
         if !includeHidden {
-            let hidden = (builtIns + mergedSites.filter { !$0.isBuiltIn }).filter { !$0.hidden && $0.canBrowse(jarURL: jarURL) && userHidden($0) }
+            let hidden = (builtIns + mergedSites.filter { !$0.isBuiltIn }).filter { !$0.hidden && $0.canBrowse(jarURL: jarURL) && userHidden($0) && !privacyHidden($0) }
             if !hidden.isEmpty { groups.append(SourceGroup(kind: .hidden, title: "Hidden Sources", sites: hidden)) }
         }
         return groups

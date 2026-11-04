@@ -989,6 +989,10 @@ import TVCore
     }
 
     func play(_ episode: FavoriteEpisode) {
+        guard vault.permitsPlayback(sourceKey: episode.video.sourceKey, origin: episode.video.origin) else {
+            error = L10n.text("This title is hidden. Unlock the Privacy Vault to watch it.")
+            return
+        }
         guard catalogClient(for: episode.video) != nil else { reportMissingFavoriteSource(); return }
         let position = episode.resumePosition(in: playbackHistory.entries)
         resume(PlaybackHistoryEntry(context: episode.historyContext(), position: position, duration: 0, updatedAt: Date()))
@@ -1461,7 +1465,7 @@ import TVCore
         if stamp == siteListStamp, let cached = groupsCache[includeHidden] { return cached }
         guard let config = subscription else { return [] }
         let pins = pinnedSources.arrange(config.sites, origin: config.origin).filter { pinnedSources.contains($0, origin: config.origin) }
-        var groups = SourceGroups.make(entries: subscriptions, documents: documents, builtIns: config.sites.filter(\.isBuiltIn), builtInOrigin: config.origin, mergedSites: config.sites, pinOrder: pins, userHidden: { hiddenSources.contains($0, origin: config.origin) || !vault.permits(site: $0, fallback: config.origin) }, includeHidden: includeHidden, jarURL: config.spiderURL, reassign: { site, address in
+        var groups = SourceGroups.make(entries: subscriptions, documents: documents, builtIns: config.sites.filter(\.isBuiltIn), builtInOrigin: config.origin, mergedSites: config.sites, pinOrder: pins, userHidden: { hiddenSources.contains($0, origin: config.origin) || !vault.permits(site: $0, fallback: config.origin) }, includeHidden: includeHidden, jarURL: config.spiderURL, privacyHidden: { !vault.permits(site: $0, fallback: config.origin) && !hiddenSources.contains($0, origin: config.origin) }, reassign: { site, address in
             // Address first: the subscription keeps the address the viewer added, so a refresh that
             // lands on a new mirror keeps every move. The origin is only for older records.
             sourceReassignment.destination(address: address, sourceKey: site.sourceKey, origin: site.provenance?.origin)
@@ -1693,6 +1697,13 @@ import TVCore
     func resumeHistory(_ entry: PlaybackHistoryEntry) async {
         resumingHistoryID = entry.id
         defer { if resumingHistoryID == entry.id, !Task.isCancelled { resumingHistoryID = nil } }
+        // The listing hides a vault-hidden source, but a row that was already on screen, a deep link,
+        // or a stale card must not resume it either. This is the single choke point for every
+        // "continue watching" path, so the check lives here rather than at each card.
+        guard vault.permitsPlayback(sourceKey: entry.context.sourceKey, origin: entry.context.origin) else {
+            error = L10n.text("This title is hidden. Unlock the Privacy Vault to watch it.")
+            return
+        }
         if entry.context.sourceKey == CloudFiles.sourceKey { return resumeFile(entry) }
         guard let config = subscription, let client = historyClient(entry) else {
             error = L10n.text("This history source is no longer in the current subscription. Restore that subscription to continue.")
