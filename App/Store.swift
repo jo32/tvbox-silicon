@@ -3,6 +3,14 @@ import TVCore
 
 @MainActor @Observable final class Store {
     static let defaultURL = "https://raw.githubusercontent.com/qist/tvbox/master/fty.json"
+    /// Every subscription a fresh install should carry. The three addresses aggregate the two
+    /// bundles' sources so an overwritten install keeps nothing orphaned: the public fty.json,
+    /// the 124.223.214.31 server, and the local Rex aggregate served by the Mac on the LAN.
+    static let aggregatedSubscriptionAddresses = [
+        "https://raw.githubusercontent.com/qist/tvbox/master/fty.json",
+        "http://124.223.214.31:55316/9981",
+        "http://macdemacbook-pro.local:8081/api/rex/movie-degraded.json",
+    ]
     let searchModel = SearchModel()
     /// Song search and the music player; both outlive the Music page, so a song keeps playing elsewhere in the app.
     /// The Mac and Apple TV list every kind at once, in rows; a phone or iPad starts on songs.
@@ -420,6 +428,16 @@ import TVCore
         importing = true
         defer { importing = false }
         await fetch(missing)
+    }
+    /// On launch, makes sure the aggregated subscriptions are all present, importing any that are
+    /// missing. Existing entries are left untouched (their saved copy wins), so overwriting either
+    /// bundle never orphans the other bundle's sources.
+    func seedAggregatedSubscriptions() async {
+        guard !importing, !Distribution.isAppStore else { return }
+        for address in Self.aggregatedSubscriptionAddresses where !subscriptions.contains(where: { $0.address == address }) {
+            guard !Task.isCancelled else { break }
+            await importSubscription(address: address)
+        }
     }
     /// Adds the typed address, or refreshes it when it is already in the list. A directory (多仓)
     /// adds every subscription it lists, switched off, for the viewer to choose from.

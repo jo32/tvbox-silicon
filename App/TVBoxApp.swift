@@ -49,6 +49,9 @@ import TVCore
                     if QALaunch.section != nil || QALaunch.page != nil { await QALaunch.start(store); return }
                     #endif
                     await store.restoreSubscription()
+                    // Ensure the aggregated sources (fty.json, the 124.223 server, and the local Rex
+                    // aggregate) are all present, so an overwritten install keeps every bundle's sources.
+                    await store.seedAggregatedSubscriptions()
                     // Optionally re-fetch every enabled subscription on launch, so sources whose
                     // addresses changed refresh themselves without a manual tap.
                     if UserDefaults.standard.bool(forKey: "refreshSubscriptionsOnLaunch") {
