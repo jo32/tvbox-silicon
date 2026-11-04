@@ -848,6 +848,7 @@
 "Choose your tabs and their order." = "表示するタブとその順番を選べます。";
 "Drag to reorder. Up to four sections fit in the tab bar; the rest stay in More." = "ドラッグして並べ替えます。タブバーには4つまで置けて、残りは「その他」に入ります。";
 "Drag to reorder. Up to seven sections fit in the tab bar here, and four when the phone is closed; the rest stay in More." = "ドラッグして並べ替えます。ここではタブバーに7つまで、閉じたときは4つまで置けて、残りは「その他」に入ります。";
+"Drag to reorder. The tab bar and the sidebar show sections in this order." = "ドラッグして並べ替えます。タブバーとサイドバーはこの順番で表示されます。";
 "Add" = "追加";
 "Paste the address of a TVBox JSON subscription, an M3U or TXT live playlist, or an AList server." = "TVBox JSON 配信設定、M3U / TXT ライブ再生リスト、または AList サーバのアドレスを貼り付けます。";
 "Up to Date" = "最新";

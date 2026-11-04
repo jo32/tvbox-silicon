@@ -849,6 +849,7 @@
 "Choose your tabs and their order." = "Choose your tabs and their order.";
 "Drag to reorder. Up to four sections fit in the tab bar; the rest stay in More." = "Drag to reorder. Up to four sections fit in the tab bar; the rest stay in More.";
 "Drag to reorder. Up to seven sections fit in the tab bar here, and four when the phone is closed; the rest stay in More." = "Drag to reorder. Up to seven sections fit in the tab bar here, and four when the phone is closed; the rest stay in More.";
+"Drag to reorder. The tab bar and the sidebar show sections in this order." = "Drag to reorder. The tab bar and the sidebar show sections in this order.";
 "Add" = "Add";
 "Paste the address of a TVBox JSON subscription, an M3U or TXT live playlist, or an AList server." = "Paste the address of a TVBox JSON subscription, an M3U or TXT live playlist, or an AList server.";
 "Up to Date" = "Up to Date";
