@@ -76,6 +76,10 @@ struct GlobalSearchView: View {
             .onAppear { if let config = store.subscription { model.resumeSuspended(config: config) } }
             // The keyboard's screen covers the page without leaving it, so a running search goes on under it.
             .onDisappear { if !entering { endVisible = false; model.suspend() } }
+            #if DEBUG
+            // Yingxia's own sources arrive after the subscription and rebuild it, which clears the search.
+            .task(id: store.subscription?.sites.count) { qaSearch() }
+            #endif
         #else
         searchResults
             .scrollPosition(id: $model.scrollID)
@@ -106,15 +110,19 @@ struct GlobalSearchView: View {
             }
             .onDisappear { endVisible = false; model.suspend() }
             #if DEBUG
-            // `-qaSection search -qaQuery <text>` searches once the subscription has loaded, for screenshots.
-            .task(id: store.subscription?.origin) {
-                guard QALaunch.section == .search, model.keyword.isEmpty, let config = store.subscription,
-                      let text = UserDefaults.standard.string(forKey: "qaQuery") else { return }
-                model.draft = text; submit(config)
-            }
+            .task(id: store.subscription?.origin) { qaSearch() }
             #endif
         #endif
     }
+
+    #if DEBUG
+    /// `-qaSection search -qaQuery <text>` searches once the subscription has loaded, for screenshots and UI tests.
+    private func qaSearch() {
+        guard QALaunch.section == .search, model.keyword.isEmpty, let config = store.subscription,
+              let text = UserDefaults.standard.string(forKey: "qaQuery") else { return }
+        model.draft = text; submit(config)
+    }
+    #endif
 
     /// The search field is the system's, so the bar below it waits for a search.
     private var showsHeader: Bool { !model.keyword.isEmpty }
@@ -207,7 +215,7 @@ struct GlobalSearchView: View {
                     .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                     .opacity(model.draft.isEmpty ? 0.6 : 1)
             } icon: { Image(systemName: "magnifyingglass") }
-            .frame(width: 560)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .glassPill()
         .accessibilityLabel(L10n.text("Search videos"))
@@ -696,10 +704,14 @@ private struct BesideSidebarButton<Field: View>: ViewModifier {
                 HStack(spacing: 32) {
                     Text(title).font(.system(size: 31, weight: .medium)).lineLimit(1).fixedSize()
                         .padding(.leading, 83).hidden().accessibilityHidden(true)
-                    field
+                    field.frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(height: 58)
-                .padding(.leading, 50).padding(.top, 51)
+                // Out to the right edge of the results, so pressing up from anywhere on the page reaches it (as a
+                // section, the whole row takes the move): a 560-point field left most of the results with nothing above.
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .focusSection()
+                .padding(.leading, 50).padding(.trailing, Layout.gutter + max(0, (1920 - Layout.maxWidth) / 2)).padding(.top, 51)
                 .ignoresSafeArea()
             }
         } else {
