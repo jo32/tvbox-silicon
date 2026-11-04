@@ -13,7 +13,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT="$ROOT/build/DuoUI"
+# 产物目录。两个会话同时跑会共用它 —— 一个在 rmtree，另一个正在写结果包，于是报
+# "mkstemp: No such file or directory" 这种查不到源头的假失败（2026-11-04 实测踩到）。
+# 要并行就各自指定 DUO_UI_OUT。
+OUT="${DUO_UI_OUT:-$ROOT/build/DuoUI}"
 BUNDLE_ID="wda.prdc.yingxia.dev"
 CERT_DIR="$HOME/Documents/windows11/编程工具/mac/证书/Duo 证书"
 PROFILE="$CERT_DIR/all1023.mobileprovision"
@@ -35,6 +38,17 @@ done
 step() { printf '\n\033[1m▸ %s\033[0m\n' "$1"; }
 
 step "挑设备"
+# 同一个产物目录只能有一个跑者。发现另一个实例正在跑就先退，别让两边互相删目录：
+# 症状是结果包报 mkstemp / activity log 导入失败，看上去像用例炸了，其实是被踩了。
+LOCK="$ROOT/build/duo-ui-$(basename "$OUT").lock"
+mkdir -p "$ROOT/build"
+if [[ -f "$LOCK" ]] && kill -0 "$(cat "$LOCK" 2>/dev/null)" 2>/dev/null; then
+    echo "另一个 test-duo-ui.sh（pid $(cat "$LOCK")）正在用 $OUT。" >&2
+    echo "等它结束，或 DUO_UI_OUT=$ROOT/build/DuoUI-2 另开一个产物目录。" >&2
+    exit 7
+fi
+echo $$ > "$LOCK"
+trap 'rm -f "$LOCK"' EXIT
 if [[ -n "$SIMULATOR" ]]; then
     # 模拟器不需要签名，但 App 必须已经装进去 —— 用例驱动的是已安装的映匣，不是刚构建的产物。
     if ! xcrun simctl get_app_container "$SIMULATOR" "$BUNDLE_ID" >/dev/null 2>&1; then
@@ -48,7 +62,8 @@ if [[ -n "$SIMULATOR" ]]; then
 else
     if [[ ! -f "$PROFILE" ]]; then echo "找不到描述文件：$PROFILE" >&2; exit 1; fi
     PROFILE_PLIST=$(mktemp)
-    trap 'rm -f "$PROFILE_PLIST"' EXIT
+    # 这个 trap 会顶掉上面那个，所以锁也一并在这里清。
+    trap 'rm -f "$PROFILE_PLIST" "$LOCK"' EXIT
     security cms -D -i "$PROFILE" > "$PROFILE_PLIST"
     PROFILE_DEVICES=$(/usr/libexec/PlistBuddy -c "Print :ProvisionedDevices" "$PROFILE_PLIST" 2>/dev/null \
         | grep -oE '[0-9A-F]{8}-[0-9A-F]{16}' | tr '\n' ' ')
@@ -170,7 +185,9 @@ set -e
 
 RESULT=$(ls -1dt "$OUT"/DerivedData/Logs/Test/*.xcresult 2>/dev/null | head -1)
 if [[ -n "$RESULT" ]]; then
-    rm -rf "$OUT/result.xcresult"
+    # 不用 `rm -rf`：本机的 safe-delete 拦截器会把一次删 60 个文件的递归删除拦下来，脚本在 set -e 下
+    # 直接退出 —— 用例明明是绿的，截图却一张没导，看上去像「跑完了但没产物」。
+    python3 -c "import shutil,sys; shutil.rmtree(sys.argv[1], ignore_errors=True)" "$OUT/result.xcresult" 2>/dev/null || true
     cp -R "$RESULT" "$OUT/result.xcresult" 2>/dev/null || true
 fi
 
