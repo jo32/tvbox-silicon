@@ -65,9 +65,18 @@ codesign -dv --entitlements :- "$APP" 2>&1 | grep -E "TeamIdentifier|Identifier=
 
 step "挑设备"
 if [[ -z "$DEVICE" ]]; then
-    DEVICE=$(xcrun devicectl list devices 2>/dev/null \
-        | awk '/available \(paired\)/ && /physical/ {print $0}' | head -1 \
+    # 真机可能报 available (paired)，也可能报 connected；模拟器虽然也是 connected，
+    # 但 Reality 列是 simulated，所以要连 physical 一起卡住。
+    CANDIDATES=$(xcrun devicectl list devices 2>/dev/null \
+        | awk '/physical/ && (/available \(paired\)/ || /connected/) {print $0}' \
         | grep -oE '[0-9A-F]{8}-[0-9A-F]{16}')
+    # 插了两台手机时，优先挑描述文件授权的那台，否则一定装不上。
+    for candidate in $CANDIDATES; do
+        if [[ -z "$PROFILE_DEVICES" || "$PROFILE_DEVICES" == *"$candidate"* ]]; then
+            DEVICE="$candidate"; break
+        fi
+    done
+    [[ -z "$DEVICE" ]] && DEVICE=$(echo "$CANDIDATES" | head -1)
 fi
 if [[ -z "$DEVICE" ]]; then
     echo "没有可用的真机。解锁手机、开开发者模式、连上数据线后再跑。" >&2
