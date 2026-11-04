@@ -55,3 +55,32 @@ cat "$DATA/Library/Caches/qa-playback.json"
 - `server.py` —— 订阅 + 原生 API + 静态文件（支持 Range）
 - `clip.mp4` —— 3 秒 H.264+AAC 测试片（640x360）
 - `poster.jpg` —— 海报
+
+## 逐源矩阵：区分「源不行」和「我们解析坏了」
+
+```bash
+Scripts/qa-fixture/matrix.sh <DEV_UDID> 玩偶 MTV1 seed YGP
+```
+
+判据只看 `qa-playback.json`：**文件不存在 = 通过**（`ready=true` 时代码根本不写这个文件）。
+
+实测（2026-11-04，模拟器，真实源）：
+
+| 源 | 结果 |
+|---|---|
+| `MTV1` 易听音乐 | 通过 |
+| `YGP` 荐影预告片 | 通过 |
+| `玩偶` 4K弹幕 | `resolve: No videos` |
+| `seed` 聚剧四盘 | `resolve: 插件没有返回内容` |
+
+**结论：解析链路是好的，`玩偶`/`seed` 是源自身的问题**（首页和分类都返回空）。
+这条矩阵的价值就在这里 —— 单个源失败时能立刻分辨是代码坏了还是源挂了。
+
+## 字幕这一段的结论（重要）
+
+type 3/4 源在 `Catalog.preparePlayback` 里解析 `result["subs"]`（见 `ExternalSubtitle.parse`），
+但 **type 1（原生 API）的直连分支根本不传 `subtitles`** —— 上游 `Catalog.swift:468`
+也是同一个写法。所以：
+
+- 想在字幕自绘层上做验证，fixture 必须是 **type 3**，并用 `play=` 返回 `subs`
+- type 1 源没有外挂字幕，这是上游本来的限制，不是我们的回归

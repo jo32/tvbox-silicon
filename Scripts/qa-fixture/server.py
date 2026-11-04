@@ -1,9 +1,19 @@
 import http.server, socketserver, json, os, re
 PORT=8899; BASE=f"http://127.0.0.1:{PORT}"
-SUB={"sites":[{"key":"qa","name":"QA Fixture","type":1,"api":f"{BASE}/api","searchable":1,"quickSearch":1}],"lives":[]}
+SUB={"sites":[{"key":"qa","name":"QA Fixture","type":3,"api":f"{BASE}/qa.js","searchable":1,"quickSearch":1}],
+     "lives":[{"name":"QA Live","type":0,"url":f"{BASE}/lives.json","playerType":1}]}
+LIVES={"lives":[{"name":"QA Channel","group":"QA","urls":[{"name":"HD","url":f"{BASE}/clip.mp4"}]}]}
 HOME={"class":[{"type_id":"movie","type_name":"Movies"}]}
 LIST={"page":1,"pagecount":1,"list":[{"vod_id":"1","vod_name":"QA Fixture Movie","vod_pic":f"{BASE}/poster.jpg","vod_year":"2024","vod_remarks":"QA"}]}
-DETAIL={"list":[{"vod_id":"1","vod_name":"QA Fixture Movie","vod_pic":f"{BASE}/poster.jpg","vod_year":"2024","vod_content":"Fixture.","vod_play_from":"qa","vod_play_url":f"第1集${BASE}/clip.mp4"}]}
+DETAIL={"list":[{
+  "vod_id":"1","vod_name":"QA Fixture Movie",
+  "vod_pic":f"{BASE}/poster.jpg","vod_year":"2024","vod_content":"Fixture.",
+  # 两条线路：qa 是 16:9，wide 是 2.35:1 —— 验证「按真实比例定高」
+  "vod_play_from":"qa$$$wide",
+  "vod_play_url":f"第1集${BASE}/clip.mp4#第2集${BASE}/clip.mp4$$$第1集${BASE}/wide.mp4",
+  # 字幕（TVBox 用 vod_sub / 或 ext 里的 sub）
+  
+}]}
 
 class H(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -35,11 +45,18 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         p=self.path.split("?")[0]
         if p=="/sub.json": return self._j(SUB)
+        if p=="/lives.json": return self._j(LIVES)
+        if p=="/qa.js":
+            body=b"var rule={};"
+            self.send_response(200); self.send_header("Content-Type","application/javascript")
+            self.send_header("Content-Length",str(len(body))); self.end_headers(); self.wfile.write(body); return
         if p.rstrip("/")=="/api":
             q=self.path.partition("?")[2]
             if "ac=detail" in q: return self._j(DETAIL)
             if "ac=list" in q or "t=" in q: return self._j(LIST)
-            if "play=" in q: return self._j({"parse":0,"playUrl":"","url":f"{BASE}/clip.mp4"})
+            if "play=" in q:
+                return self._j({"parse":0,"playUrl":"","url":f"{BASE}/clip.mp4",
+                                "subs":[{"name":"QA 中文字幕","url":f"{BASE}/sub.srt","lang":"zh","format":"srt"}]})
             return self._j(HOME)
         n=p.lstrip("/")
         if n and os.path.exists(n): return self._file(n)
