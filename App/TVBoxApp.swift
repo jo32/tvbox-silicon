@@ -83,6 +83,14 @@ import TVCore
                 #if os(iOS)
                 .onOpenURL { url in
                     if let link = DouyinHandoff.Link(url) { douyinHandoff = link; return }
+                    // yingxia://section/<name> — jumps straight to a section; the E2E smoke script
+                    // (Scripts/e2e-verify.sh) drives the whole app through it.
+                    if url.scheme == DouyinHandoff.scheme, url.host() == "section",
+                       let name = url.pathComponents.dropFirst().first,
+                       let section = AppSection(rawValue: name) {
+                        store.section = section
+                        return
+                    }
                     // yingxia://subscribe?url=<address>[&url=<address>…] — imports subscriptions over
                     // Wi-Fi without touching the preferences files, which cfprefsd caches in memory.
                     if url.scheme == DouyinHandoff.scheme, url.host() == "subscribe",

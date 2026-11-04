@@ -65,15 +65,18 @@ shot() { xcrun simctl io "$DEVICE" screenshot "$RUN/$1.png" >/dev/null 2>&1; }
 shot "home"
 echo "首屏 → $RUN/home.png"
 
-# 5. 每个 section 深链打开 + 截图（app 支持 route 深链时生效；不支持则只保留首屏）。
-#    深链约定见 App 的 Route 解析；URL scheme 需在 Info.plist 注册。当前先对首屏做健壮性验证，
-#    逐 section 遍历留给接视觉模型的后续步骤（见脚本顶部注释）。
-SECTIONS=(home discover live music search sites files history favorites downloads settings)
-for s in "${SECTIONS[@]}"; do
-    if xcrun simctl openurl "$DEVICE" "yingxia://section/$s" >/dev/null 2>&1; then
+# 5. 每个 section 深链打开 + 截图。深链是 yingxia://section/<rawValue>，rawValue 即 AppSection 的
+#    显示名（见 App/RootView.swift 的 AppSection 枚举，注意空格需 URL 编码）。
+SECTIONS=("Watch Now:home" "Discover:discover" "Live TV:live" "Music:music" "Global Search:search" \
+          "Sources:sites" "Cloud Files:files" "Favorites:favorites" "Playback History:history" \
+          "Downloads:downloads" "Settings:settings")
+for entry in "${SECTIONS[@]}"; do
+    name="${entry%%:*}"; tag="${entry##*:}"
+    encoded=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$name")
+    if xcrun simctl openurl "$DEVICE" "yingxia://section/$encoded" >/dev/null 2>&1; then
         sleep 1
-        shot "section-$s"
-        echo "section $s → $RUN/section-$s.png"
+        shot "section-$tag"
+        echo "section $name → $RUN/section-$tag.png"
     fi
 done
 
