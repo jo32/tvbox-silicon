@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.9",
+          "buildVersion": "47",
+          "date": "2026-11-05",
+          "localizedDescription": "• 发现页新增今日播出\n• 全局搜索可以用列表显示\n• 网盘视频播放更顺畅\n• 可以选择音乐音质\n• 更清爽的筛选和 Mac 下载\n• 横过手机即可全屏\n• 其他修复\n\n• Airing Today in Discover\n• Global Search as a list\n• Smoother cloud-drive playback\n• Choose your music quality\n• Tidier filters and Mac downloads\n• Turn sideways for Full Screen\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.9/Yingxia-1.8.9-ios.ipa",
+          "size": 118106652,
+          "sha256": "f751de0653dcf5363b032954728345f0da4d14403f11b1e43f35c2fa5dbc3fe4",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.8",
           "buildVersion": "46",
           "date": "2026-11-04",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.5/Yingxia-1.8.5-ios.ipa",
           "size": 117006225,
           "sha256": "2757f3c59c7a3aeab5b120580fee956e88fcd2c59bc21e4a7c0fda3dc6c3bd45",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.4",
-          "buildVersion": "42",
-          "date": "2026-10-31",
-          "localizedDescription": "• 发现\n• 你的 NAS 和媒体服务器\n• 弹幕区域可调\n• 其他修复\n\n• Discover\n• Your NAS and media server\n• Choose where danmaku go\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.4/Yingxia-1.8.4-ios.ipa",
-          "size": 116425308,
-          "sha256": "133309eeb1827acbc2b5ac1b5567838185d9c460921794927b1e7022ecbfcea3",
           "minOSVersion": "17.0"
         }
       ],
