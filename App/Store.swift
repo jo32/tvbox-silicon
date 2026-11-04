@@ -302,11 +302,13 @@ import TVCore
     /// The current media address of a downloading episode, from its source; the queue asks again when a link expires.
     private func resolveDownload(_ item: DownloadItem) async throws -> Channel {
         let config = subscription
-        guard let site = config?.sites.first(where: { $0.key == item.source.siteKey })
+        guard let found = config?.sites.first(where: { $0.key == item.source.siteKey })
                 ?? cloudDocument?.sites.first(where: { $0.key == item.source.siteKey }) else {
             throw TVError.unsupported(L10n.text("%@ is no longer in your subscription, so this download can't continue.", item.source.siteName))
         }
-        let base = CatalogClient(site: site, origin: config?.origin ?? URL(string: "https://example.invalid/")!, jarURL: config?.spiderURL)
+        let origin = config?.origin ?? URL(string: "https://example.invalid/")!
+        let site = config == nil ? found : resolvedSite(found, origin: origin)
+        let base = CatalogClient(site: site, origin: origin, jarURL: config?.spiderURL)
         let client = config.map { base.applying($0) } ?? base
         let plan = try await client.preparePlayback(item.source.episode, forDownload: true)
         let channel = try await client.resolvePlayback(plan, choice: plan.choices[0])
@@ -609,10 +611,14 @@ import TVCore
     func toggleFavorite(_ channel: Channel) { favorites.toggle(.live(channel)) }
     func isFavorite(_ channel: Channel) -> Bool { favorites.contains(.live(channel)) }
 
+    func resolvedSite(_ site: Site, origin: URL) -> Site {
+        sourceOverrides.apply(to: site, origin: origin)
+    }
+
     func catalogClient(for video: FavoriteVideo) -> CatalogClient? {
         guard let config = subscription,
               let site = config.sites.first(where: { $0.origin(or: config.origin) == video.origin && $0.sourceKey == video.sourceKey }) else { return nil }
-        return CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL)
+        return CatalogClient(site: resolvedSite(site, origin: config.origin), origin: config.origin, jarURL: config.spiderURL)
     }
     func reportMissingFavoriteSource() {
         error = L10n.text("This favorite's source is no longer in the current subscription. Restore that subscription to open it.")
@@ -844,7 +850,7 @@ import TVCore
         guard entry.context.sourceKey != CloudFiles.sourceKey, let config = subscription,
               let site = config.sites.first(where: { $0.origin(or: config.origin) == entry.context.origin && $0.sourceKey == entry.context.sourceKey })
         else { return nil }
-        return CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL).applying(config)
+        return CatalogClient(site: resolvedSite(site, origin: config.origin), origin: config.origin, jarURL: config.spiderURL).applying(config)
     }
 
     func resumeHistory(_ entry: PlaybackHistoryEntry) async {
