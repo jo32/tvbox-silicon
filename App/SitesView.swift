@@ -943,8 +943,13 @@ struct SiteView: View {
         }
         .onDisappear { requestTask?.cancel(); browser.cancel() }
         .toolbar {
-            PinSourceButton(site: site, origin: origin)
-            HideSourceButton(site: site, origin: origin)
+            // Handed the store: UIKit can size a bar item before SwiftUI gives it the page's environment, and these
+            // buttons read Store first thing (a TestFlight crash on iPhone).
+            Group {
+                PinSourceButton(site: site, origin: origin)
+                HideSourceButton(site: site, origin: origin)
+            }
+            .environment(store)
         }
         .screenBackdrop()
         .onAppear {
