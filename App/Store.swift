@@ -742,10 +742,10 @@ import TVCore
     }
 
     /// Drag-and-drop entry point: finds the source by its key + origin and files it under `address`.
-    func reassignSourceByKey(_ key: String, origin: URL, to address: String?) {
-        guard let config = subscription,
-              let site = config.sites.first(where: { $0.sourceKey == key && $0.origin(or: config.origin) == origin })
-        else { return }
+    func reassignSourceByKey(_ key: String, origin: String, to address: String?) {
+        guard let config = subscription else { return }
+        let site = config.sites.first { $0.sourceKey == key && $0.origin(or: config.origin).absoluteString == origin }
+        guard let site else { return }
         reassignSource(site, to: address)
     }
 

@@ -185,14 +185,14 @@ struct SitesView: View {
                     return true
                 }
                 // A dropped card is a source, not a group: it files that one source here.
-                .dropDestination(for: SourceDrag.self) { items, _ in
+                .dropDestination(for: SourceDrag.self) { (items: [SourceDrag], _: CGPoint) -> Bool in
                     guard query.isEmpty, let drag = items.first else { return false }
                     store.reassignSourceByKey(drag.key, origin: drag.origin, to: address)
                     return true
                 }
         } else if group.kind == .other, query.isEmpty {
             // Dropping into "Other Sources" is the way back: the source returns to its own subscription.
-            header.dropDestination(for: SourceDrag.self) { items, _ in
+            header.dropDestination(for: SourceDrag.self) { (items: [SourceDrag], _: CGPoint) -> Bool in
                 guard query.isEmpty, let drag = items.first else { return false }
                 store.reassignSourceByKey(drag.key, origin: drag.origin, to: nil)
                 return true

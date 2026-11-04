@@ -20,6 +20,7 @@
 		0C95000B36C5B15AF33D6C8C /* Capstone.txt in Resources */ = {isa = PBXBuildFile; fileRef = E84A48E8E87E4B3CC3DCDA8C /* Capstone.txt */; };
 		1050D617A22F09CD0A01DE66 /* GlassKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 739A64FB51780D4314D2DDF8 /* GlassKit.swift */; };
 		1236A790753CA813B297575D /* DiscoverPersonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */; };
+		132081666C25952D7CC9E2F4 /* SourceMovesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77A78070906EA4356510F510 /* SourceMovesView.swift */; };
 		1331896EA47189E426A4DE6C /* DiscoverBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */; };
 		13A266A0565733CC2C7A66E6 /* Updates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D706229ED242AE96AE52F8 /* Updates.swift */; };
 		13AB1C878E7990BF8FB16849 /* HLSProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B44CBA0E5BBD1D129D5D64E3 /* HLSProxy.swift */; };
@@ -179,6 +180,7 @@
 		8253F7BDC07638BD6F654962 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A90392B70C28DA6CC7497B9F /* Assets.xcassets */; };
 		827566269F191FCBF27F2FEA /* Keystone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 3A398E8AF0C7E4C94787F4B3 /* Keystone-LLVM.txt */; };
 		82933DAB592E786763C7D05B /* MusicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 235375CC2420B76124FCEBC2 /* MusicView.swift */; };
+		829F1ACAF6DE6911C6B114CF /* SourceMovesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77A78070906EA4356510F510 /* SourceMovesView.swift */; };
 		82E7112F0FCDD1CEB5A40E59 /* Unicorn-GPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = B61DBAA2E8637B976A160D47 /* Unicorn-GPL2.txt */; };
 		84C5345267FA2D8221B2F9FB /* Keystone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 3A398E8AF0C7E4C94787F4B3 /* Keystone-LLVM.txt */; };
 		854245265CFB2D739FCBDAEB /* PlaybackWaitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57642E0B8E9377FD57BC9D7F /* PlaybackWaitView.swift */; };
@@ -315,6 +317,7 @@
 		FBD490433241B703DEC0B46B /* SubtitleTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13947E20489465F172C8B5B7 /* SubtitleTranslator.swift */; };
 		FBE0D58826319D7544827004 /* FeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 559683A9A4BDFA11A4A9FE67 /* FeedbackView.swift */; };
 		FC0F00688179660407FD70E1 /* CatalogPlaybackActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46C4D3FABE1C6E7A7B63BA62 /* CatalogPlaybackActions.swift */; };
+		FD10F6E020810184F27999BF /* SourceMovesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77A78070906EA4356510F510 /* SourceMovesView.swift */; };
 		FD9721B84A06B25F362AF291 /* AppleRuntime.m in Sources */ = {isa = PBXBuildFile; fileRef = FFE4BA19E4F4F2797D929A6F /* AppleRuntime.m */; };
 		FDA61F14FE9C263521D69DD7 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CB1FA4BB4990588B428781E /* PlayerView.swift */; };
 		FDB9BF271E35ADEFD6FD6568 /* DiscoverSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76143E60685F2F76994F90D7 /* DiscoverSearchView.swift */; };
@@ -375,6 +378,7 @@
 		7459A3EBEF2E7C346B508738 /* LiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveView.swift; sourceTree = "<group>"; };
 		75124CC2471CF95C1FFB168A /* SitesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SitesView.swift; sourceTree = "<group>"; };
 		76143E60685F2F76994F90D7 /* DiscoverSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverSearchView.swift; sourceTree = "<group>"; };
+		77A78070906EA4356510F510 /* SourceMovesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceMovesView.swift; sourceTree = "<group>"; };
 		77D75493765469B6134467AE /* Unicorn-LGPL2.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Unicorn-LGPL2.txt"; sourceTree = "<group>"; };
 		781912838F2DF6F1DD3963CF /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		7A5737402EC96F0FBF79243E /* DanmakuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DanmakuView.swift; sourceTree = "<group>"; };
@@ -586,6 +590,7 @@
 				B442C75C212445F3786397ED /* SettingsView.swift */,
 				75124CC2471CF95C1FFB168A /* SitesView.swift */,
 				64BAC6685AECD9293F2D5503 /* SourceEditor.swift */,
+				77A78070906EA4356510F510 /* SourceMovesView.swift */,
 				2D1010816125FBC3792AF838 /* Store.swift */,
 				FE1212366D71C455D6EAE5E4 /* SubtitleOverlay.swift */,
 				13947E20489465F172C8B5B7 /* SubtitleTranslator.swift */,
@@ -1139,6 +1144,7 @@
 				90F4C8847D5EE49C3388A326 /* SettingsView.swift in Sources */,
 				53F697A2DD9E8D5443E43646 /* SitesView.swift in Sources */,
 				1A4ABEB13035613C1D5039BE /* SourceEditor.swift in Sources */,
+				829F1ACAF6DE6911C6B114CF /* SourceMovesView.swift in Sources */,
 				1FAC6965CB4F8B33135C85C5 /* Store.swift in Sources */,
 				982EF0148420E135FF05E244 /* SubtitleOverlay.swift in Sources */,
 				E5D5A7C6283C6370DF14ECC2 /* SubtitleTranslator.swift in Sources */,
@@ -1228,6 +1234,7 @@
 				3DB703B04E4659AB8623A1A7 /* SettingsView.swift in Sources */,
 				B0AA965C1DB5AA7CF03E9415 /* SitesView.swift in Sources */,
 				E7816C26A17D7B66ABB4CC91 /* SourceEditor.swift in Sources */,
+				132081666C25952D7CC9E2F4 /* SourceMovesView.swift in Sources */,
 				4C65106175D517040E98330B /* Store.swift in Sources */,
 				68DA47E6E8C42E446AC17E45 /* SubtitleOverlay.swift in Sources */,
 				FBD490433241B703DEC0B46B /* SubtitleTranslator.swift in Sources */,
@@ -1319,6 +1326,7 @@
 				26A1C218652FCEEE9FC60E0F /* SettingsView.swift in Sources */,
 				F8EB061662C5CB6EB47B41F2 /* SitesView.swift in Sources */,
 				7AA851C4D0805EE7D4EAD670 /* SourceEditor.swift in Sources */,
+				FD10F6E020810184F27999BF /* SourceMovesView.swift in Sources */,
 				BF897F1F4B399DAA732ED4ED /* Store.swift in Sources */,
 				5CB8BD265BA21805A9BF8CD9 /* SubtitleOverlay.swift in Sources */,
 				9DFF07E1B415DEBA91C79373 /* SubtitleTranslator.swift in Sources */,
@@ -1408,7 +1416,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				ICLOUD_ENTITLEMENTS = "";
-				INFOPLIST_KEY_CFBundleDisplayName = Yingxia;
+				INFOPLIST_KEY_CFBundleDisplayName = mi3s;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
@@ -1456,7 +1464,7 @@
 					"@executable_path/Frameworks",
 				);
 				OTHER_LDFLAGS = "$(inherited) -Wl,-force_load,$(SRCROOT)/build/AppleRuntime/$(PLATFORM_NAME)/lib/libTVAppleRuntime.a -Wl,-export_dynamic -lc++ -lz -liconv -framework Security -framework CoreGraphics";
-				PRODUCT_BUNDLE_IDENTIFIER = com.jo32.yingxia.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = wda.prdc.yingxia.dev;
 				SDKROOT = iphoneos;
 				STRIP_STYLE = "non-global";
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -1502,7 +1510,7 @@
 					"@executable_path/Frameworks",
 				);
 				OTHER_LDFLAGS = "$(inherited) -Wl,-force_load,$(SRCROOT)/build/AppleRuntime/$(PLATFORM_NAME)/lib/libTVAppleRuntime.a -Wl,-export_dynamic -lc++ -lz -liconv -framework Security -framework CoreGraphics";
-				PRODUCT_BUNDLE_IDENTIFIER = com.jo32.yingxia.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = wda.prdc.yingxia.dev;
 				SDKROOT = iphoneos;
 				STRIP_STYLE = "non-global";
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -1583,7 +1591,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				ICLOUD_ENTITLEMENTS = "";
-				INFOPLIST_KEY_CFBundleDisplayName = Yingxia;
+				INFOPLIST_KEY_CFBundleDisplayName = mi3s;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
