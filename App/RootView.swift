@@ -362,7 +362,9 @@ private struct PlayerPresentation: ViewModifier {
         // An iPhone watch page plays its own video at the top of the page (`VideoDetailView`).
         content.fullScreenCover(item: Binding(get: { store.playsInWatchPage(playing) ? nil : playing.map(PlayerSlot.init) },
                                               set: { if $0 == nil, !store.playsInWatchPage(playing) { playing = nil } })) {
-            PlaybackView(channel: $0.channel)
+            // Handed in: the iPad app on a Mac presents a full-screen cover without the presenter's environment
+            // objects, and every video stopped the app there ("No Observable object of type Store found").
+            PlaybackView(channel: $0.channel).environment(store)
         }
         #endif
     }
