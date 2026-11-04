@@ -11,6 +11,10 @@ import TVCore
         "http://124.223.214.31:55316/9981",
         "http://macdemacbook-pro.local:8081/api/rex/movie-degraded.json",
     ]
+    private static let dismissedAggregatesKey = "dismissedAggregateSubscriptions"
+    /// Aggregate addresses the viewer deleted on purpose. Launch-time seeding skips them; adding one
+    /// back by hand clears it again.
+    private(set) var dismissedAggregateAddresses: Set<String> = []
     let searchModel = SearchModel()
     /// Song search and the music player; both outlive the Music page, so a song keeps playing elsewhere in the app.
     /// The Mac and Apple TV list every kind at once, in rows; a phone or iPad starts on songs.
@@ -222,6 +226,7 @@ import TVCore
         if defaults === UserDefaults.standard { Self.adoptPreviousBundleDefaults(defaults) }
         #endif
         self.defaults = defaults
+        dismissedAggregateAddresses = Set(defaults.stringArray(forKey: Self.dismissedAggregatesKey) ?? [])
         #if DEBUG
         playbackDefaults = defaults.bool(forKey: "qaIsolatedData")
             ? UserDefaults(suiteName: "com.tvbox.yingxia.qa.player") ?? defaults : defaults
@@ -432,9 +437,14 @@ import TVCore
     /// On launch, makes sure the aggregated subscriptions are all present, importing any that are
     /// missing. Existing entries are left untouched (their saved copy wins), so overwriting either
     /// bundle never orphans the other bundle's sources.
+    ///
+    /// One exception, and it is the viewer's: an address they deleted is not put back. Without it,
+    /// deleting the local Rex feed or the 124.223 server was undone by the next launch, which reads
+    /// as the app refusing to take no for an answer.
     func seedAggregatedSubscriptions() async {
         guard !importing, !Distribution.isAppStore else { return }
-        for address in Self.aggregatedSubscriptionAddresses where !subscriptions.contains(where: { $0.address == address }) {
+        for address in Self.aggregatedSubscriptionAddresses
+        where !dismissedAggregateAddresses.contains(address) && !subscriptions.contains(where: { $0.address == address }) {
             guard !Task.isCancelled else { break }
             await importSubscription(address: address)
         }
@@ -456,6 +466,9 @@ import TVCore
                     subscriptions[index].enabled = true
                     if !name.isEmpty { subscriptions[index].name = name }
                 } else { subscriptions.append(entry) }
+                // Added back by hand: forget that it was ever deleted, so launch-time seeding
+                // treats it like any other subscription again.
+                if dismissedAggregateAddresses.remove(entry.address) != nil { saveDismissedAggregates() }
                 keep(value, for: entry)
                 if persistsChanges { defaults.set(url.absoluteString, forKey: "subscriptionAddress") }
                 notice = L10n.text("Imported sources: %lld · Live playlists: %lld", value.sites.count, value.lives.count)
@@ -520,6 +533,13 @@ import TVCore
         let removed = subscriptions.filter { addresses.contains($0.address) }
         guard !removed.isEmpty else { return }
         subscriptions.removeAll { addresses.contains($0.address) }
+        // Deleting one of the feeds this build seeds at launch has to stick, or the next launch
+        // adds it back and the delete looked like it failed.
+        let aggregates = removed.map(\.address).filter(Self.aggregatedSubscriptionAddresses.contains)
+        if !aggregates.isEmpty {
+            dismissedAggregateAddresses.formUnion(aggregates)
+            saveDismissedAggregates()
+        }
         for entry in removed {
             documents[entry.address] = nil; subscriptionErrors[entry.address] = nil
             if persistsChanges { try? FileManager.default.removeItem(at: Self.file(for: entry)); ImportedFiles.remove(entry.address) }
@@ -688,6 +708,10 @@ import TVCore
         guard persistsChanges else { return }
         defaults.set(try? JSONEncoder().encode(subscriptions), forKey: "subscriptions")
         cloudSync?.changed("subscriptions")
+    }
+    private func saveDismissedAggregates() {
+        guard persistsChanges else { return }
+        defaults.set(Array(dismissedAggregateAddresses), forKey: Self.dismissedAggregatesKey)
     }
     /// Favorites, Continue Watching, subscriptions and the viewer's pins, hides and order follow them to their other
     /// devices. Continue Watching changes every few seconds while a video plays, so it waits longer between writes.

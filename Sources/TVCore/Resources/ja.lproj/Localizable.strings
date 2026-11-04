@@ -1618,3 +1618,8 @@
 
 /* HDR */
 "Dolby Vision profile 5 needs an HDR screen" = "Dolby Vision プロファイル 5 には HDR 画面が必要です";
+
+/* ranking honesty + speech availability */
+"No Data" = "データなし";
+"No On-Device Speech Model" = "この端末に音声認識モデルがありません";
+"Attributes are applied top to bottom. Drag to reorder; swipe to stop using one. The speed test measures resolution only, so ordering by bitrate, file size or colour range does not change which source comes first yet." = "属性は上から順に適用されます。ドラッグで並べ替え、左スワイプで項目を外せます。速度テストが測るのは解像度だけなので、ビットレート・ファイルサイズ・色範囲で並べても、どのソースが先に来るかはまだ変わりません。";

@@ -1618,3 +1618,8 @@
 
 /* HDR */
 "Dolby Vision profile 5 needs an HDR screen" = "Dolby Vision profile 5 needs an HDR screen";
+
+/* ranking honesty + speech availability */
+"No Data" = "No Data";
+"No On-Device Speech Model" = "No On-Device Speech Model";
+"Attributes are applied top to bottom. Drag to reorder; swipe to stop using one. The speed test measures resolution only, so ordering by bitrate, file size or colour range does not change which source comes first yet." = "Attributes are applied top to bottom. Drag to reorder; swipe to stop using one. The speed test measures resolution only, so ordering by bitrate, file size or colour range does not change which source comes first yet.";

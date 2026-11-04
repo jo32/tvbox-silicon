@@ -30,12 +30,18 @@ struct ResourceRankingView: View {
                         #endif
                         // Direction is per key: smaller is better for bitrate and size when the
                         // viewer is on a weak connection.
-                        Picker("", selection: directionBinding(key)) {
-                            Text(L10n.text("Largest First")).tag(true)
-                            Text(L10n.text("Smallest First")).tag(false)
+                        if key.attribute.speedTestProvides {
+                            Picker("", selection: directionBinding(key)) {
+                                Text(L10n.text("Largest First")).tag(true)
+                                Text(L10n.text("Smallest First")).tag(false)
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                        } else {
+                            // A direction for something nothing measures is a switch that does
+                            // nothing; the row stays so the order can be set up, but says so.
+                            Text(L10n.text("No Data")).font(.footnote).foregroundStyle(.tertiary)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
                     }
                 }
                 .onMove { from, to in
@@ -49,7 +55,7 @@ struct ResourceRankingView: View {
             } footer: {
                 // No header: the page's own title already says what this is, and a second copy an
                 // inch below it is noise.
-                Text(L10n.text("Attributes are applied top to bottom. Drag to reorder; swipe to stop using one."))
+                Text(L10n.text("Attributes are applied top to bottom. Drag to reorder; swipe to stop using one. The speed test measures resolution only, so ordering by bitrate, file size or colour range does not change which source comes first yet."))
             }
 
             Section {

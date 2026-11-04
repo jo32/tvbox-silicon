@@ -34,6 +34,10 @@ struct PrivacyShade: ViewModifier {
                         .ignoresSafeArea()
                         .opacity(covered ? 1 : 0)
                         .allowsHitTesting(covered)
+                        // Appear at once, fade out on the way back. The system snapshots the
+                        // window the instant the app leaves the foreground, so a cover that fades
+                        // *in* is still half transparent in the thumbnail it was meant to hide.
+                        .animation(covered ? nil : .easeOut(duration: 0.12), value: covered)
                         // The app's name, so a person returning knows which app this is, and nothing
                         // about what was on screen.
                         .overlay {
@@ -47,7 +51,6 @@ struct PrivacyShade: ViewModifier {
                                 .foregroundStyle(.secondary)
                             }
                         }
-                        .animation(.easeOut(duration: 0.12), value: covered)
                 }
             }
             .onChange(of: scenePhase, initial: true) { _, phase in

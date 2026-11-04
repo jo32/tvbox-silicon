@@ -1618,3 +1618,8 @@
 
 /* HDR */
 "Dolby Vision profile 5 needs an HDR screen" = "杜比视界 Profile 5 需要 HDR 屏幕";
+
+/* ranking honesty + speech availability */
+"No Data" = "暂无数据";
+"No On-Device Speech Model" = "本机没有语音识别模型";
+"Attributes are applied top to bottom. Drag to reorder; swipe to stop using one. The speed test measures resolution only, so ordering by bitrate, file size or colour range does not change which source comes first yet." = "属性从上到下依次生效。拖动可调整顺序，左滑可停用某一项。测速只测得分辨率，因此按视频码率、文件大小或色彩范围排序，现在不会改变哪个源排在前面。";

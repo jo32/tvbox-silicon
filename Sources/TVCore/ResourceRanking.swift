@@ -25,6 +25,14 @@ public struct ResourceRanking: Codable, Hashable, Sendable {
     public struct Key: Codable, Hashable, Sendable, Identifiable {
         public enum Attribute: String, Codable, Sendable, CaseIterable {
             case resolution, bitrate, fileSize, colourRange
+
+            /// Whether the source speed test can supply this attribute at all.
+            ///
+            /// It measures what a source's newest video declares (its height) and how fast the host
+            /// serves bytes. Bitrate, file size and HDR belong to one *file*, and a source is not a
+            /// file: the sweep never reads them, so ordering sources by them changes nothing. The
+            /// settings page says so instead of offering three switches that do nothing.
+            public var speedTestProvides: Bool { self == .resolution }
         }
         public var attribute: Attribute
         /// True when larger is better (resolution, bitrate, HDR). False when smaller is better.

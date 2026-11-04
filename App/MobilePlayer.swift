@@ -433,6 +433,13 @@ struct MobilePlayerView: View {
             await inspectColour()
             reportAspect()
         }
+        // The duration arrives after the item does, and the credit roll is measured back from the
+        // end of the file: resolved once at item load, when it is still zero, the skip-credits
+        // marker could never be placed. Resolve again the first time it becomes known.
+        .onChange(of: clock.duration > 0) { _, known in
+            guard known else { return }
+            Task { await loadSkipSegment() }
+        }
         // Persist the caption appearance whenever it changes, so a resize survives the next launch.
         .onChange(of: subtitleStyle) { _, _ in saveSubtitleStyle() }
         .onChange(of: subtitlePositions) { _, _ in
@@ -1043,6 +1050,14 @@ struct MobilePlayerView: View {
                     }
                 }
                 .disabled(generatingSubtitles || !session.hasTimeline)
+            } else {
+                // Nothing to offer, and the reason matters: an item that simply vanished reads as a
+                // build without the feature, when the truth is that this phone has no on-device
+                // model for any of the languages the app runs in.
+                Button {} label: {
+                    Label(L10n.text("No On-Device Speech Model"), systemImage: "speaker.slash")
+                }
+                .disabled(true)
             }
             #endif
         } label: {

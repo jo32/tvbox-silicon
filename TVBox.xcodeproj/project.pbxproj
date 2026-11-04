@@ -785,8 +785,8 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					30A036AA0B7CC9BDB73B6532 = {
-						DevelopmentTeam = "";
-						ProvisioningStyle = Automatic;
+						DevelopmentTeam = G4XMHC9NWZ;
+						ProvisioningStyle = Manual;
 					};
 					6329C5C5F90A7209CE803328 = {
 						DevelopmentTeam = "";
@@ -1487,6 +1487,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "$(ICLOUD_ENTITLEMENTS)";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = G4XMHC9NWZ;
 				ENABLE_DEBUG_DYLIB = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -1498,6 +1499,7 @@
 				);
 				OTHER_LDFLAGS = "$(inherited) -Wl,-force_load,$(SRCROOT)/build/AppleRuntime/$(PLATFORM_NAME)/lib/libTVAppleRuntime.a -Wl,-export_dynamic -lc++ -lz -liconv -framework Security -framework CoreGraphics";
 				PRODUCT_BUNDLE_IDENTIFIER = wda.prdc.yingxia.dev;
+				PROVISIONING_PROFILE_SPECIFIER = all1023;
 				SDKROOT = iphoneos;
 				STRIP_STYLE = "non-global";
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -1534,6 +1536,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "$(ICLOUD_ENTITLEMENTS)";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = G4XMHC9NWZ;
 				ENABLE_DEBUG_DYLIB = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -1545,6 +1548,7 @@
 				);
 				OTHER_LDFLAGS = "$(inherited) -Wl,-force_load,$(SRCROOT)/build/AppleRuntime/$(PLATFORM_NAME)/lib/libTVAppleRuntime.a -Wl,-export_dynamic -lc++ -lz -liconv -framework Security -framework CoreGraphics";
 				PRODUCT_BUNDLE_IDENTIFIER = wda.prdc.yingxia.dev;
+				PROVISIONING_PROFILE_SPECIFIER = all1023;
 				SDKROOT = iphoneos;
 				STRIP_STYLE = "non-global";
 				TARGETED_DEVICE_FAMILY = "1,2";

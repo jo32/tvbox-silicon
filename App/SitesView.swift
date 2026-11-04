@@ -2311,9 +2311,13 @@ struct VideoDetailView: View {
         .background(alignment: .top) { Color.black.frame(height: playerHeight).ignoresSafeArea(edges: .top) }
         .background { if fullScreen { Color.black.ignoresSafeArea() } }
         .statusBarHidden(true)
-        .toolbar(.hidden, for: .navigationBar)
-        .background { EdgeSwipeBack(enabled: !fullScreen) }
-        .toolbar(.hidden, for: .tabBar)
+        // The upright watch page is immersive: the edge swipe is its way back. On a folded-out Duo
+        // the page sits beside the system sidebar and its own tab bar, so keep both bars visible for
+        // an explicit way back (the sidebar is the menu, the tab bar the sections, and the nav bar
+        // carries the back button). Full Screen stays fully immersive on every size.
+        .toolbar(fullScreen || !duoExpanded ? .hidden : .visible, for: .navigationBar)
+        .background { EdgeSwipeBack(enabled: !fullScreen && !duoExpanded) }
+        .toolbar(fullScreen || !duoExpanded ? .hidden : .visible, for: .tabBar)
         .onAppear {
             store.watchPageScopes.formUnion(watchScopes)
             // The folded-out Duo is its own landscape screen; only the upright outer display is held
