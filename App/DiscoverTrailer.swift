@@ -125,10 +125,13 @@ actor DiscoverTrailerResolver {
 
 struct DiscoverTrailer: View {
     let trailer: TMDBMatch.Trailer
+    /// Mac: the leading part of the frame that lies under the floating sidebar. It shows a mirrored, blurred copy of
+    /// the video, as `backgroundExtensionEffect()` does for SwiftUI content, which can't reach this layer.
+    var mirrorWidth: CGFloat = 0
     var readyChanged: (Bool) -> Void = { _ in }
     @State private var playback = DiscoverTrailerPlayback()
     var body: some View {
-        DiscoverTrailerLayer(player: playback.player)
+        DiscoverTrailerLayer(player: playback.player, mirrorWidth: mirrorWidth)
             .opacity(playback.ready ? 1 : 0)
             .animation(.easeOut(duration: 0.4), value: playback.ready)
             .accessibilityHidden(true)
@@ -141,16 +144,26 @@ struct DiscoverTrailer: View {
 #if os(macOS)
 private struct DiscoverTrailerLayer: NSViewRepresentable {
     let player: AVPlayer
+    let mirrorWidth: CGFloat
     final class Host: NSView {
         let video = AVPlayerLayer()
+        /// The same player again, flipped about the content's leading edge and blurred, under the sidebar.
+        let mirror = AVPlayerLayer()
+        private let videoClip = CALayer()
+        private let mirrorClip = CALayer()
+        var mirrorWidth: CGFloat = 0 { didSet { if mirrorWidth != oldValue { needsLayout = true } } }
         let fade = CAGradientLayer()
         /// AppKit owns a layer-backed view's own layer and drops a mask set on it, so the video and its fade sit in
         /// a sublayer. The view is flipped to match UIKit, so the fade runs to the bottom as on iOS.
         private let clip = CALayer()
         override var isFlipped: Bool { true }
         override init(frame: NSRect) {
-            super.init(frame: frame); wantsLayer = true; layer?.addSublayer(clip); clip.addSublayer(video); video.videoGravity = .resizeAspectFill
-            clip.masksToBounds = true
+            super.init(frame: frame); wantsLayer = true; layerUsesCoreImageFilters = true; layer?.addSublayer(clip)
+            clip.addSublayer(mirrorClip); clip.addSublayer(videoClip); videoClip.addSublayer(video); mirrorClip.addSublayer(mirror)
+            video.videoGravity = .resizeAspectFill; mirror.videoGravity = .resizeAspectFill
+            clip.masksToBounds = true; videoClip.masksToBounds = true; mirrorClip.masksToBounds = true
+            mirror.transform = CATransform3DMakeScale(-1, 1, 1)
+            mirror.filters = [CIFilter(name: "CIGaussianBlur", parameters: [kCIInputRadiusKey: 24])].compactMap { $0 }
             fade.startPoint = CGPoint(x: 0.5, y: 0); fade.endPoint = CGPoint(x: 0.5, y: 1)
             fade.colors = [1.0, 1.0, 0.85, 0.35, 0.0].map { NSColor.black.withAlphaComponent($0).cgColor }
             fade.locations = [0, 0.5, 0.7, 0.87, 1]; clip.mask = fade
@@ -159,18 +172,32 @@ private struct DiscoverTrailerLayer: NSViewRepresentable {
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
         override func layout() {
             super.layout(); CATransaction.begin(); CATransaction.setDisableActions(true)
-            clip.frame = bounds
-            video.frame = bounds.insetBy(dx: -bounds.width * 0.1, dy: -bounds.height * 0.1); fade.frame = bounds
+            clip.frame = bounds; fade.frame = bounds
+            let edge = min(max(mirrorWidth, 0), bounds.width)
+            let content = CGRect(x: edge, y: 0, width: bounds.width - edge, height: bounds.height)
+            videoClip.frame = content
+            let picture = CGRect(origin: .zero, size: content.size).insetBy(dx: -content.width * 0.1, dy: -content.height * 0.1)
+            video.frame = picture
+            mirrorClip.frame = CGRect(x: 0, y: 0, width: edge, height: bounds.height)
+            mirrorClip.isHidden = edge <= 0
+            // Reflect the picture about the content's leading edge (x = edge in the mirror clip's space).
+            mirror.bounds = CGRect(origin: .zero, size: picture.size)
+            mirror.position = CGPoint(x: edge - picture.midX, y: picture.midY)
             CATransaction.commit()
         }
     }
-    func makeNSView(context: Context) -> Host { let view = Host(); view.video.player = player; return view }
-    func updateNSView(_ view: Host, context: Context) { view.video.player = player }
-    static func dismantleNSView(_ view: Host, coordinator: ()) { view.video.player = nil }
+    func makeNSView(context: Context) -> Host {
+        let view = Host(); view.video.player = player; view.mirror.player = player; view.mirrorWidth = mirrorWidth; return view
+    }
+    func updateNSView(_ view: Host, context: Context) {
+        view.video.player = player; view.mirror.player = player; view.mirrorWidth = mirrorWidth
+    }
+    static func dismantleNSView(_ view: Host, coordinator: ()) { view.video.player = nil; view.mirror.player = nil }
 }
 #else
 private struct DiscoverTrailerLayer: UIViewRepresentable {
     let player: AVPlayer
+    var mirrorWidth: CGFloat = 0
     final class Host: UIView {
         let video = AVPlayerLayer()
         let fade = CAGradientLayer()

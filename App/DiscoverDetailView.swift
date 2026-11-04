@@ -135,7 +135,9 @@ struct DiscoverDetailView: View {
         .environment(\.colorScheme, dark ? .dark : .light)
         .ignoresSafeArea(edges: .top)
         .navigationTitle("")
-        #if !os(macOS)
+        #if os(macOS)
+        .artUnderToolbar()
+        #else
         .toolbar(.visible, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(dark ? .dark : .light, for: .navigationBar)
@@ -530,11 +532,16 @@ struct DiscoverSearchPresentation: ViewModifier {
 }
 
 extension View {
-    /// Artwork that runs under the bars. On the Mac it stops at the sidebar: the split view's detail reports the
-    /// sidebar's width as a leading inset, so ignoring every edge stretched the art under the sidebar.
-    func discoverFullBleed() -> some View {
+    /// Artwork that runs under the bars. On the Mac it is laid out beside the sidebar: the split view's detail reports
+    /// the sidebar's width as a leading inset, so ignoring every edge stretched the art under the sidebar. On macOS 26
+    /// a mirrored, blurred copy fills the space under the floating sidebar instead, so the page has no hard edge there.
+    @ViewBuilder func discoverFullBleed() -> some View {
         #if os(macOS)
-        ignoresSafeArea(edges: .top)
+        if #available(macOS 26, *) {
+            backgroundExtensionEffect().ignoresSafeArea(edges: .top)
+        } else {
+            ignoresSafeArea(edges: .top)
+        }
         #else
         ignoresSafeArea()
         #endif

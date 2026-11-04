@@ -117,6 +117,8 @@ struct DiscoverBackdrop: View {
     let trailer: TMDBMatch.Trailer?
     let playsTrailer: Bool
     @State private var videoReady = false
+    /// Mac: the floating sidebar's width, which the split view reports as a leading inset.
+    @State private var leadingInset: CGFloat = 0
     var body: some View {
         #if os(tvOS)
         ZStack(alignment: .top) {
@@ -153,16 +155,23 @@ struct DiscoverBackdrop: View {
                     }
             }
             if let trailer, playsTrailer {
-                DiscoverTrailer(trailer: trailer) { ready in
-                    withAnimation(.easeOut(duration: 0.4)) { videoReady = ready }
+                // On the Mac the video runs on under the sidebar, mirrored there, while staying centred on the page
+                // (the inset is 0 elsewhere). An overlay, so the wider video doesn't widen the page.
+                Color.clear.frame(width: width, height: heroHeight).overlay(alignment: .trailing) {
+                    DiscoverTrailer(trailer: trailer, mirrorWidth: leadingInset) { ready in
+                        withAnimation(.easeOut(duration: 0.4)) { videoReady = ready }
+                    }
+                        .frame(width: width + leadingInset, height: heroHeight)
+                        .clipped()
                 }
-                    .frame(width: width, height: heroHeight)
-                    .clipped()
                     .offset(y: -max(0, scrollY) * 0.78)
                     .opacity(max(0, 1 - max(0, scrollY) / (heroHeight * 0.35)))
                     .allowsHitTesting(false)
             }
         }
+        #if os(macOS)
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.leading } action: { leadingInset = $0 }
+        #endif
         .discoverFullBleed()
         .accessibilityHidden(true)
         .onChange(of: trailer?.key) { _, _ in videoReady = false }

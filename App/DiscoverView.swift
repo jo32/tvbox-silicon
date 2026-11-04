@@ -682,6 +682,7 @@ private struct DiscoverHeroCarousel: View {
     let width: CGFloat
     #if os(macOS)
     @State private var hovering = false
+    @Environment(\.openRoute) private var openRoute
     #endif
     #if os(tvOS)
     var tvFocus: FocusState<DiscoverTVFocus?>.Binding
@@ -700,13 +701,18 @@ private struct DiscoverHeroCarousel: View {
             // One title at a time: in the split view's detail a horizontal scroll view takes the sidebar's width as
             // a content inset, which shifted every page. The arrows and the dots move between titles.
             let index = items.firstIndex { $0.key == selectedID } ?? 0
-            RouteLink { DiscoverDetailView(item: items[index]) } label: {
-                DiscoverHero(item: items[index], details: state.details[items[index].key])
-                    .frame(width: width, height: height)
-            }
-            .buttonStyle(.plain).id(items[index].key).transition(.opacity)
-            .accessibilityIdentifier("discover.hero.\(items[index].key)")
-            .overlay {
+            // A plain button pushes the title: a NavigationLink here also took the clicks on the arrows over it, so
+            // an arrow moved to the next title and then opened it.
+            ZStack {
+                Button {
+                    let item = items[index]
+                    openRoute?(Route { AnyView(DiscoverDetailView(item: item)) })
+                } label: {
+                    DiscoverHero(item: items[index], details: state.details[items[index].key])
+                        .frame(width: width, height: height)
+                }
+                .buttonStyle(.plain).id(items[index].key).transition(.opacity)
+                .accessibilityIdentifier("discover.hero.\(items[index].key)")
                 HStack {
                     heroArrow("chevron.left", label: L10n.text("Previous"), to: index - 1)
                     Spacer()
@@ -766,7 +772,10 @@ private struct DiscoverHeroCarousel: View {
         Button {
             withAnimation(.easeInOut(duration: 0.35)) { state.id = items[(index + items.count) % items.count].key }
         } label: {
+            // A plain button takes clicks only on what it draws: without the shape a click between the chevron's
+            // strokes fell through to the title under it and opened that.
             Image(systemName: symbol).font(.system(size: 17, weight: .semibold)).frame(width: 44, height: 44).glassSurface(.regular, in: Circle())
+                .contentShape(Circle())
         }.buttonStyle(.plain).accessibilityLabel(label)
     }
     #endif
