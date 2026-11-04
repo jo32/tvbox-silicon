@@ -320,3 +320,13 @@ public struct Channel: Identifiable, Codable, Hashable, Sendable {
     }
     private enum CodingKeys: String, CodingKey { case name, group, url, logo, headers, skipScope, historyContext, resumePosition }
 }
+
+extension Subscription {
+    /// The same subscription with a different set of source entries, everything else (its live
+    /// playlists, its raw document, when it was imported) unchanged. Per-source routing rewrites a
+    /// subscription this way: the viewer's choices live in `Site.api`, so the merged list has to be
+    /// rebuilt from the rewritten sites rather than mutated field by field.
+    public func with(sites: [Site]) -> Subscription {
+        Subscription(origin: origin, importedAt: importedAt, sites: sites, lives: lives, raw: raw)
+    }
+}

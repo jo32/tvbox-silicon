@@ -12,9 +12,12 @@ struct SitesView: View {
     @FocusState private var focusedSite: String?
     @State private var query = ""
     /// Groups the viewer folded. Every group starts open, subscriptions and hidden sources included,
-    /// so nothing on the page needs finding. Reset with the page, not with a pushed source: the state
-    /// lives here and `prepared` keeps the reset to once per visit.
+    /// so nothing on the page needs finding; after that the fold is what the viewer left it as, kept
+    /// by `foldState`. Restored with the page, not with a pushed source: the state lives here and
+    /// `prepared` keeps the restore to once per visit.
     @State private var collapsed: Set<String> = []
+    /// Where the fold survives leaving the page.
+    private let foldState = SourceFoldState()
     @State private var prepared = false
     @State private var editingSource: Site?
     /// The fold as it was when a search began; restored when the search is cleared.
@@ -57,6 +60,7 @@ struct SitesView: View {
                                                 PinSourceButton(site: site, origin: config.origin)
                                                 HideSourceButton(site: site, origin: config.origin)
                                                 SourceMoveMenu(site: site)
+                                                SourceRouteMenu(site: site)
                                                 Button { editingSource = site } label: {
                                                     Label(L10n.text("Edit Source"), systemImage: "pencil")
                                                 }
@@ -134,6 +138,7 @@ struct SitesView: View {
                     // The record of what was dragged where, and the way to undo it. Only while there
                     // is something to undo: an always-present button would be a second Settings page.
                     movedSourcesButton
+                    foldButtons
                 }
             }
         }
@@ -163,6 +168,7 @@ struct SitesView: View {
         let header = Button {
             withAnimation(.snappy(duration: 0.3)) {
                 if open { collapsed.insert(group.id) } else { collapsed.remove(group.id) }
+                foldState.save(collapsed)
             }
         } label: {
             HStack(spacing: 8) {
@@ -208,6 +214,26 @@ struct SitesView: View {
         #endif
     }
 
+    /// Every group folded, or every group open, in one press.
+    private var foldButtons: some View {
+        let allCollapsed = !collapsed.isEmpty && store.sourceGroups(includeHidden: false).allSatisfy { collapsed.contains($0.id) }
+        return Button {
+            setAllCollapsed(!allCollapsed)
+        } label: {
+            Label(allCollapsed ? L10n.text("Expand All") : L10n.text("Collapse All"),
+                  systemImage: allCollapsed ? "rectangle.expand.vertical" : "rectangle.compress.vertical")
+        }
+        .disabled(!query.isEmpty)
+        .help(allCollapsed ? L10n.text("Expand All") : L10n.text("Collapse All"))
+    }
+
+    /// Every group open, or every group folded, at once.
+    private func setAllCollapsed(_ all: Bool) {
+        let ids = store.sourceGroups(includeHidden: false).map(\.id)
+        withAnimation(.snappy(duration: 0.3)) { collapsed = all ? Set(ids) : [] }
+        foldState.save(collapsed)
+    }
+
     /// Entry to the record of moved sources, shown only while a move is in effect.
     @ViewBuilder
     private var movedSourcesButton: some View {
@@ -219,9 +245,9 @@ struct SitesView: View {
         }
     }
 
-    /// The default view of the page: every group open.
+    /// The page as the viewer left it: the fold they saved, else every group open.
     private func applyDefaultFold() {
-        collapsed = []
+        collapsed = foldState.collapsed ?? []
         foldBeforeSearch = nil
     }
 }
@@ -493,6 +519,43 @@ struct SourceMoveMenu: View {
             }
             .disabled(targets.isEmpty && moved == nil)
             .accessibilityIdentifier("source.move." + site.key)
+        }
+    }
+}
+
+/// Context-menu routing: force this source direct or proxied, or let it follow connectivity. Shown
+/// only for native (type 1/4) sources whose address the relay can front.
+struct SourceRouteMenu: View {
+    @Environment(Store.self) private var store
+    let site: Site
+    var body: some View {
+        if site.native, !site.api.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let origin = store.subscription?.origin ?? site.origin(or: URL(fileURLWithPath: "/"))
+            let current = store.effectiveRoute(site)
+            Menu {
+                ForEach(SourceRoute.allCases, id: \.self) { route in
+                    Button { store.setRoute(route, for: site) } label: {
+                        Label(route.title, systemImage: current == route ? "checkmark" : symbol(route))
+                    }
+                }
+                if store.sourceRouting.route(site, origin: origin) != nil {
+                    Divider()
+                    Button { store.setRoute(.auto, for: site) } label: {
+                        Label(L10n.text("Follow Subscription"), systemImage: "arrow.uturn.backward")
+                    }
+                }
+            } label: {
+                Label(L10n.text("Connection"), systemImage: "network")
+            }
+            .accessibilityIdentifier("source.route." + site.key)
+        }
+    }
+
+    private func symbol(_ route: SourceRoute) -> String {
+        switch route {
+        case .auto: "arrow.triangle.2.circlepath"
+        case .direct: "bolt"
+        case .proxy: "network.badge.shield.half.filled"
         }
     }
 }

@@ -490,6 +490,106 @@ import TVCore
         saveSubscriptionList()
         rebuildSubscription()
     }
+    /// Switches every subscription on or off at once — the fast path out of a directory import,
+    /// which adds every listed subscription switched off.
+    func setAllSubscriptions(enabled: Bool) {
+        guard !subscriptions.isEmpty else { return }
+        subscriptions = subscriptions.map { var entry = $0; entry.enabled = enabled; return entry }
+        saveSubscriptionList()
+        if enabled { Task { await restoreSubscription() } } else { rebuildSubscription() }
+    }
+    /// Total bytes of the parsed subscription copies on disk, for the cache row in Settings.
+    func subscriptionCacheSize() -> Int64 {
+        let dir = Self.subscriptionDirectory.appending(path: "subscriptions")
+        guard let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.fileSizeKey]) else { return 0 }
+        return files.reduce(0) { total, url in
+            total + (Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0))
+        }
+    }
+    /// Deletes the on-disk copies; enabled subscriptions are re-fetched, so nothing is lost.
+    func clearSubscriptionCache() {
+        let dir = Self.subscriptionDirectory.appending(path: "subscriptions")
+        try? FileManager.default.removeItem(at: dir)
+        documents.removeAll()
+        Task { await restoreSubscription() }
+    }
+    /// A portable copy of every subscription and its parsed content, for a file or a share.
+    func exportConfig() -> SubscriptionConfig {
+        SubscriptionConfig(subscriptions: subscriptions.enumerated().map { index, entry in
+            SyncedSubscription(entry: entry, rank: index, document: documents[entry.address])
+        })
+    }
+    /// Merges a configuration file in. `overwrite` decides what happens to an address that is
+    /// already present: by default (merge) it is left untouched, so re-importing never duplicates or
+    /// overwrites; with `overwrite` the file's name, enabled state and routing win, so a backup
+    /// restores the exact state it was exported in. In both modes the list is reordered to the
+    /// file's rank, and a fresh entry that carries a content snapshot is restored without a fetch.
+    func importConfig(_ config: SubscriptionConfig, overwrite: Bool = false) {
+        guard config.isValid else {
+            error = L10n.text("This isn't a Mi3s configuration file.")
+            return
+        }
+        let incoming = config.subscriptions.sorted { ($0.rank, $0.entry.address) < ($1.rank, $1.entry.address) }
+        let existing = Set(subscriptions.map(\.address))
+        let incomingSet = Set(incoming.map(\.entry.address))
+
+        var added: [SubscriptionEntry] = []
+        var updated: [SubscriptionEntry] = []
+        var restored: [(SubscriptionEntry, Subscription)] = []
+
+        // Drop this device's subscriptions that the file no longer lists (a restore is authoritative).
+        let removed = subscriptions.filter { !incomingSet.contains($0.address) }
+        for entry in removed {
+            documents[entry.address] = nil; subscriptionErrors[entry.address] = nil
+            if persistsChanges { try? FileManager.default.removeItem(at: Self.file(for: entry)); ImportedFiles.remove(entry.address) }
+        }
+
+        for synced in incoming {
+            if existing.contains(synced.entry.address) {
+                if overwrite {
+                    // Restore the exported name / switch / routing over the current copy.
+                    if let index = subscriptions.firstIndex(where: { $0.address == synced.entry.address }) {
+                        subscriptions[index].name = synced.entry.name
+                        subscriptions[index].enabled = synced.entry.enabled
+                        subscriptions[index].routing = synced.entry.routing
+                        updated.append(subscriptions[index])
+                    }
+                    if let document = synced.document { restored.append((synced.entry, document)) }
+                }
+            } else {
+                added.append(synced.entry)
+                if let document = synced.document { restored.append((synced.entry, document)) }
+            }
+        }
+
+        // Reorder the surviving list to the file's rank, then append any brand-new entries.
+        let incomingAddresses = incoming.map(\.entry.address)
+        var reordered = incomingAddresses.compactMap { address in
+            subscriptions.first { $0.address == address }
+        }
+        // Any entry not in the file (shouldn't happen after the removal above) is kept at the end.
+        for entry in subscriptions where !incomingAddresses.contains(entry.address) { reordered.append(entry) }
+        subscriptions = reordered
+
+        guard !added.isEmpty || overwrite else {
+            notice = L10n.text("Every subscription in this file is already imported; nothing was added.")
+            return
+        }
+
+        for (entry, document) in restored { keep(document, for: entry) }
+        saveSubscriptionList()
+        rebuildSubscription()
+        // Entries that carried no snapshot still need their content fetched.
+        let needFetch = subscriptions.filter { $0.enabled && documents[$0.address] == nil }
+        if !needFetch.isEmpty { Task { await restoreSubscription() } }
+
+        if overwrite {
+            notice = L10n.text("Restored %lld subscriptions from the backup.", incoming.count)
+        } else {
+            notice = L10n.text("Imported %lld subscriptions.", added.count)
+        }
+    }
+
     func moveSourceGroup(_ address: String, onto target: String, includeHidden: Bool) {
         let shown = sourceGroups(includeHidden: includeHidden).compactMap { group -> String? in
             guard case .subscription(let value) = group.kind else { return nil }
@@ -566,11 +666,21 @@ import TVCore
         order.onChange = { sync.changed("sourceOrder"); sync.changed("sourceOrderOn") }
     }
     private var syncedSubscriptions: [String: SyncedSubscription] {
-        Dictionary(subscriptions.enumerated().map { ($0.element.address, SyncedSubscription(entry: $0.element, rank: $0.offset)) },
+        Dictionary(subscriptions.enumerated().map { ($0.element.address, SyncedSubscription(entry: $0.element, rank: $0.offset, document: documents[$0.element.address])) },
                    uniquingKeysWith: { first, _ in first })
     }
     /// Subscriptions another device added, renamed, switched, moved or removed. A new one that is on loads.
+    /// Subscription content another device synced, so a second device lists a feed's sources without
+    /// fetching it again. A copy already on disk wins.
+    private func adoptSyncedDocuments(_ synced: [CloudSyncItem<SyncedSubscription>]) {
+        for item in synced {
+            guard let document = item.value.document, documents[item.id] == nil else { continue }
+            documents[item.id] = document
+            if persistsChanges, let data = try? JSONEncoder().encode(document) { try? Self.save(data, to: Self.file(for: SubscriptionEntry(address: item.id))) }
+        }
+    }
     private func adoptSubscriptions(_ synced: [CloudSyncItem<SyncedSubscription>]) {
+        adoptSyncedDocuments(synced)
         let next = synced.sorted { ($0.value.rank, $0.id) < ($1.value.rank, $1.id) }.map(\.value.entry)
         guard next != subscriptions else { return }
         let kept = Set(next.map(\.address))
@@ -587,6 +697,7 @@ import TVCore
     private func rebuildSubscription(resetting: Bool = true) {
         if resetting { searchModel.reset(); recommendationModel.reset() }
         subscription = Subscription.merge(subscriptions.filter(\.enabled).compactMap { documents[$0.address] })?.withCloudSources(extrasUnlocked ? cloudDocument : nil)
+        if let subscription { applySourceRouting(subscription) }
         refreshCloudSources()
         if let subscription {
             Self.registerPlugins(subscription)
@@ -606,6 +717,40 @@ import TVCore
     /// maintenance list reads. Without this an upgraded library keeps *applying* those moves but can
     /// never show or undo them: they are invisible in the list and their source's menu offers no
     /// "move back". Runs after every rebuild, and is a no-op once each one has been rewritten.
+    /// Rewrites each source's `api` to direct or proxy according to the viewer's choices; `.auto`
+    /// follows connectivity: a source that is failing on its own address is retried through the relay,
+    /// and switched back once the direct line recovers.
+    private func applySourceRouting(_ config: Subscription) {
+        let byAddress = Dictionary(subscriptions.map { ($0.address, $0) }, uniquingKeysWith: { $1 })
+        let sites = config.sites.map { site -> Site in
+            let origin = site.origin(or: config.origin)
+            let sub: SubscriptionEntry? = {
+                if let po = site.provenance?.origin, let entry = byAddress[po.absoluteString] { return entry }
+                return byAddress[origin.absoluteString]
+            }()
+            let explicit = sourceRouting.route(site, origin: origin)
+            let effective = explicit ?? (sub?.routing ?? .auto)
+            switch effective {
+            case .direct:
+                return site.routed(.direct)
+            case .proxy:
+                return site.routed(.proxy)
+            case .auto:
+                // Follow connectivity only for native sources whose address can be relayed.
+                guard site.native, !site.api.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return site }
+                let relayed = SourceRelay.isRelayed(site.api)
+                let failing = SourceHealth.shared.failedRepeatedly(site, origin: origin)
+                if failing && !relayed {
+                    return site.routed(.proxy)
+                } else if !failing && relayed {
+                    return site.routed(.direct)
+                }
+                return site
+            }
+        }
+        subscription = config.with(sites: sites)
+    }
+
     private func adoptLegacyMoves() {
         guard let config = subscription else { return }
         for legacy in sourceReassignment.pendingLegacy {
@@ -753,6 +898,38 @@ import TVCore
     func entryAddress(of site: Site) -> String? {
         guard let origin = site.provenance?.origin else { return nil }
         return subscriptions.first { documents[$0.address]?.origin == origin }?.address
+    }
+
+    /// The route a source is using right now (explicit choice, then its subscription's).
+    func effectiveRoute(_ site: Site) -> SourceRoute {
+        guard let config = subscription else { return .auto }
+        let origin = site.origin(or: config.origin)
+        let sub: SubscriptionEntry? = {
+            if let po = site.provenance?.origin, let entry = subscriptions.first(where: { $0.address == po.absoluteString }) { return entry }
+            return subscriptions.first { $0.address == origin.absoluteString }
+        }()
+        return sourceRouting.effectiveRoute(site, origin: origin, subscription: sub?.routing)
+    }
+
+    /// Sets one source's route; `.auto` follows connectivity, the others pin it.
+    func setRoute(_ route: SourceRoute, for site: Site) {
+        guard let config = subscription else { return }
+        sourceRouting.set(route, for: site, origin: site.origin(or: config.origin))
+        rebuildSubscription()
+    }
+
+    /// Sets a whole subscription's default route; its sources without their own choice follow it.
+    func setRoute(_ route: SourceRoute, for entry: SubscriptionEntry) {
+        guard let index = subscriptions.firstIndex(where: { $0.address == entry.address }) else { return }
+        subscriptions[index].routing = route
+        saveSubscriptionList()
+        rebuildSubscription()
+    }
+
+    /// Whether a source's direct line is what is failing right now (drives the automatic switch).
+    func directLineFailing(_ site: Site) -> Bool {
+        guard let config = subscription else { return false }
+        return SourceHealth.shared.failedRepeatedly(site, origin: site.origin(or: config.origin))
     }
 
     /// One row of the maintenance list: a move, where it came from, where it went, and whether it
@@ -1421,8 +1598,40 @@ struct PlaybackCatalog {
     var playlist: EpisodePlaylist { EpisodePlaylist(video.episodes) }
 }
 
+/// A self-contained configuration file the viewer exports to a file (or shares) and imports later,
+/// on this device or another. It carries the subscription list with each address's parsed content
+/// snapshot, so importing it restores the sources even offline, and — because `importConfig` merges
+/// by address — re-importing the same file never duplicates or overwrites what is already there.
+struct SubscriptionConfig: Codable, Sendable {
+    static let format = "yingxia-config"
+    static let version = 1
+    var format: String
+    var version: Int
+    var exportedAt: Date
+    /// The subscriptions in list order, each with its last good copy.
+    var subscriptions: [SyncedSubscription]
+
+    init(subscriptions: [SyncedSubscription], exportedAt: Date = Date()) {
+        self.format = Self.format; self.version = Self.version; self.exportedAt = exportedAt
+        self.subscriptions = subscriptions
+    }
+
+    var isValid: Bool { format == Self.format && version == Self.version }
+
+    static func decode(_ data: Data) -> SubscriptionConfig? {
+        try? JSONDecoder().decode(SubscriptionConfig.self, from: data)
+    }
+}
+
 /// A subscription as iCloud sync keeps it: the entry and its place in the list.
 struct SyncedSubscription: Codable, Equatable, Sendable {
     var entry: SubscriptionEntry
     var rank: Int
+    /// The subscription's parsed content, so a fresh install restores its sources without re-fetching.
+    var document: Subscription?
+
+    /// Equality ignores the document cache: it only decides whether the subscription list changed.
+    static func == (lhs: SyncedSubscription, rhs: SyncedSubscription) -> Bool {
+        lhs.entry == rhs.entry && lhs.rank == rhs.rank
+    }
 }

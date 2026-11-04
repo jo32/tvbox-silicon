@@ -111,9 +111,24 @@ public struct SubscriptionEntry: Codable, Hashable, Identifiable, Sendable {
     public var address: String
     public var name: String
     public var enabled: Bool
+    /// How this subscription's sources reach their upstream by default. Individual sources may
+    /// override it; `.auto` lets the app follow connectivity.
+    public var routing: SourceRoute
     public var id: String { address }
-    public init(address: String, name: String = "", enabled: Bool = true) {
-        self.address = address; self.name = name; self.enabled = enabled
+    public init(address: String, name: String = "", enabled: Bool = true, routing: SourceRoute = .auto) {
+        self.address = address; self.name = name; self.enabled = enabled; self.routing = routing
+    }
+
+    private enum CodingKeys: String, CodingKey { case address, name, enabled, routing }
+
+    /// A list saved by a build without per-subscription routing decodes as `.auto`, so an upgrade
+    /// keeps every subscription exactly as it behaved before.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        address = try c.decode(String.self, forKey: .address)
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        routing = try c.decodeIfPresent(SourceRoute.self, forKey: .routing) ?? .auto
     }
     /// Its name, else where it lives and its file: many subscriptions share a host such as
     /// raw.githubusercontent.com, so a GitHub address reads as its repository.

@@ -348,12 +348,16 @@ struct FormSettingsView: View {
     @AppStorage(ErrorReports.key) private var sendsErrorReports = true
     @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
     @AppStorage(CloudSync.enabledKey) private var syncsWithICloud = true
+    @AppStorage("refreshSubscriptionsOnLaunch") private var refreshesOnLaunch = false
     #if os(macOS)
     @State private var choosesFile = false
     #endif
     #if os(iOS)
     @State private var addingSubscription = false
     @State private var showsFeedback = false
+    @State private var choosesConfig = false
+    @State private var exportsConfig = false
+    @State private var pendingConfig: SubscriptionConfig?
     @Environment(\.openURL) private var openURL
     @AppStorage(PhoneTabs.labelsKey) private var showsTabLabels = true
     #endif
@@ -411,6 +415,12 @@ struct FormSettingsView: View {
                 }
                 if store.subscriptions.count > 1 {
                     FormLink(symbol: "trash.fill", tint: .red, title: L10n.text("Remove Subscriptions")) { RemoveSubscriptionsView() }
+                    Button { store.setAllSubscriptions(enabled: true) } label: {
+                        FormLabel(symbol: "checkmark.circle.fill", tint: .green, title: L10n.text("Enable All Subscriptions")).foregroundStyle(.primary)
+                    }
+                    Button { store.setAllSubscriptions(enabled: false) } label: {
+                        FormLabel(symbol: "circle.dashed", tint: .gray, title: L10n.text("Disable All Subscriptions")).foregroundStyle(.primary)
+                    }
                 }
                 // Every move the viewer made by dragging one source onto another subscription, and
                 // the way to undo it. Shown only while there is something to undo.
@@ -423,6 +433,14 @@ struct FormSettingsView: View {
                 // One row instead of an always-open field and three text buttons; the address goes in a sheet.
                 Button { addingSubscription = true } label: {
                     FormLabel(symbol: "plus", tint: .green, title: L10n.text("Add Subscription")).foregroundStyle(.primary)
+                }
+                if !store.subscriptions.isEmpty {
+                    Button { exportsConfig = true } label: {
+                        FormLabel(symbol: "square.and.arrow.up", tint: .cyan, title: L10n.text("Export Configuration")).foregroundStyle(.primary)
+                    }
+                }
+                Button { choosesConfig = true } label: {
+                    FormLabel(symbol: "square.and.arrow.down", tint: .indigo, title: L10n.text("Import Configuration")).foregroundStyle(.primary)
                 }
                 #else
                 TextField(L10n.text("Subscription URL (TVBox JSON, M3U or TXT)"), text: $store.subscriptionAddress, prompt: Text(L10n.text("Subscription URL (TVBox JSON, M3U or TXT)")))
@@ -453,7 +471,23 @@ struct FormSettingsView: View {
                 Text(L10n.text("Subscriptions"))
                 #endif
             } footer: {
-                if let message = store.importError ?? store.notice { Text(message) }
+                if let message = store.error ?? store.importError ?? store.notice { Text(message) }
+            }
+
+            if !store.subscriptions.isEmpty {
+                Section {
+                    Toggle(isOn: $refreshesOnLaunch) {
+                        FormLabel(symbol: "arrow.clockwise.circle.fill", tint: .teal, title: L10n.text("Refresh on Launch"),
+                                  subtitle: L10n.text("Re-fetch every enabled subscription each time the app opens, so changed source addresses update themselves."))
+                    }
+                    .settingsSwitch()
+                    Button {
+                        store.clearSubscriptionCache()
+                    } label: {
+                        FormLabel(symbol: "trash.circle", tint: .orange, title: L10n.text("Clear Subscription Cache"),
+                                  subtitle: L10n.text("Frees %@ of parsed copies; enabled subscriptions are fetched again.", ByteCountFormatter.string(fromByteCount: store.subscriptionCacheSize(), countStyle: .file)))
+                    }
+                }
             }
 
             Section(L10n.text("Accounts")) {
@@ -676,6 +710,22 @@ struct FormSettingsView: View {
         #if os(iOS)
         .sheet(isPresented: $addingSubscription) { AddSubscriptionSheet() }
         .navigationDestination(isPresented: $showsFeedback) { FeedbackView() }
+        .fileImporter(isPresented: $choosesConfig, allowedContentTypes: [.json]) { result in
+            if case .success(let file) = result { importConfig(from: file) }
+        }
+        .fileExporter(isPresented: $exportsConfig, document: ConfigDocument(store.exportConfig()),
+                      contentType: .json, defaultFilename: "yingxia-config") { result in
+            if case .success = result { store.notice = L10n.text("Configuration exported.") }
+            else if case .failure(let error) = result { store.error = L10n.text("Export failed: %@", error.localizedDescription) }
+        }
+        .confirmationDialog(L10n.text("Import Configuration"), isPresented: Binding(
+            get: { pendingConfig != nil }, set: { if !$0 { pendingConfig = nil } })) {
+            Button(L10n.text("Merge (keep current, add missing)")) { applyPendingConfig(overwrite: false) }
+            Button(L10n.text("Restore (overwrite with backup)")) { applyPendingConfig(overwrite: true) }
+            Button(L10n.text("Cancel"), role: .cancel) { pendingConfig = nil }
+        } message: {
+            Text(L10n.text("Merge adds only subscriptions you don't have yet. Restore overwrites names, switches and order to match the backup."))
+        }
         #if DEBUG
         // `-qaAddSubscription 1` opens the sheet for screenshots.
         .onAppear { if UserDefaults.standard.bool(forKey: "qaAddSubscription") { addingSubscription = true } }
@@ -760,6 +810,29 @@ struct FormSettingsView: View {
     private var supportNote: String { SettingsNote.support }
     private var errorReportsNote: String { SettingsNote.errorReports }
     private func add() { if canAdd { Task { await store.importSubscription() } } }
+
+    #if os(iOS)
+    /// Reads a chosen configuration file, then asks whether to merge or restore-overwrite before applying it.
+    private func importConfig(from file: URL) {
+        let scoped = file.startAccessingSecurityScopedResource()
+        defer { if scoped { file.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: file), let config = SubscriptionConfig.decode(data) else {
+            store.error = L10n.text("This isn't a Mi3s configuration file.")
+            return
+        }
+        if config.version != SubscriptionConfig.version {
+            store.error = L10n.text("This configuration file is from a newer version and can't be imported.")
+            return
+        }
+        pendingConfig = config
+    }
+
+    private func applyPendingConfig(overwrite: Bool) {
+        guard let config = pendingConfig else { return }
+        pendingConfig = nil
+        store.importConfig(config, overwrite: overwrite)
+    }
+    #endif
 
     #if os(macOS)
     @ViewBuilder private var subscriptionActions: some View {
@@ -1004,6 +1077,26 @@ enum SubscriptionFile {
     static let types: [UTType] = [.json, .pythonScript, .javaScript]
 }
 
+#if os(iOS)
+/// The JSON configuration file handed to `fileExporter` for "Export Configuration".
+private struct ConfigDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+    let data: Data
+
+    init(_ config: SubscriptionConfig) {
+        self.data = (try? JSONEncoder().encode(config)) ?? Data()
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        self.data = configuration.file.regularFileContents ?? Data()
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
+    }
+}
+#endif
+
 /// One subscription: switch it on or off, move it (earlier subscriptions win duplicate sources), or remove it.
 private struct SubscriptionDetailView: View {
     @Environment(Store.self) private var store
@@ -1022,6 +1115,18 @@ private struct SubscriptionDetailView: View {
                 }
                 .settingsSwitch()
                 .disabled(store.importing)
+                // A subscription's default route: its sources without a choice of their own follow it.
+                LabeledContent(L10n.text("Connection")) {
+                    Picker(L10n.text("Connection"), selection: Binding(
+                        get: { current.routing },
+                        set: { route in store.setRoute(route, for: current) }
+                    )) {
+                        ForEach(SourceRoute.allCases, id: \.self) { route in
+                            Text(route.title).tag(route)
+                        }
+                    }
+                    .labelsHidden()
+                }
                 LabeledContent(L10n.text("Name")) {
                     // Empty shows the name it would otherwise have.
                     TextField(L10n.text("Name"), text: Binding(get: { current.name }, set: { store.renameSubscription(current, to: $0) }),

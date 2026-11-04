@@ -1,8 +1,8 @@
 import Foundation
 
 /// Remembers which source groups the viewer folded on the Sources page, so the page reopens as it was
-/// left. When nothing was saved yet, groups start collapsed (the opposite of the old always-open default),
-/// so a long page does not need to be scrolled through on first visit.
+/// left. Before anything was saved every group opens: a page that starts folded reads as a page with
+/// no sources at all, which is the one thing this page must never look like.
 public struct SourceFoldState {
     private let defaults: UserDefaults
     private static let storageKey = "sourceFoldState.v1"

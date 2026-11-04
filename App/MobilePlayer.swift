@@ -31,6 +31,39 @@ struct MobilePlayerView: View {
     /// Open the episode picker from the options menu.
     var openEpisodes: () -> Void = {}
 
+    /// The subtitle file on screen, or nil when the channel offers none or it has not loaded.
+    private var activeSubtitleTrack: SubtitleTrack? {
+        guard let id = chosenSubtitle else { return subtitleTracks.first }
+        return subtitleTracks.first { $0.id == id }
+    }
+
+    /// Reads the stored appearance and positions, then loads this channel's subtitle files.
+    /// Called from the view's task so a title change reloads rather than reusing the old cues.
+    private func loadSubtitles() async {
+        if let style = try? JSONDecoder().decode(SubtitleStyle.self, from: subtitleStyleData) {
+            subtitleStyle = style.sanitized
+        }
+        if let memory = try? JSONDecoder().decode(SubtitlePositionMemory.self, from: subtitlePositionsData) {
+            subtitlePositions = memory
+        }
+        // Put the bubble back where it was left for this title.
+        let remembered = subtitlePositions.position(for: channel.url.absoluteString)
+        subtitleStyle.centerX = remembered.x
+        subtitleStyle.centerY = remembered.y
+
+        let files = channel.subtitles
+        guard !files.isEmpty else { subtitleTracks = []; return }
+        subtitleTracks = await SubtitleTrack.loadAll(files, headers: channel.headers)
+        // While the overlay is drawing a track, the player must not draw its own, or both appear.
+        // Selecting nothing is how AVPlayer turns a legible track off.
+        if !subtitleTracks.isEmpty, let group = tracks.legible { tracks.select(nil, in: group) }
+    }
+
+    /// Writes the appearance back whenever it changes.
+    private func saveSubtitleStyle() {
+        if let blob = try? JSONEncoder().encode(subtitleStyle.sanitized) { subtitleStyleData = blob }
+    }
+
     @Environment(Store.self) private var store
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -42,6 +75,18 @@ struct MobilePlayerView: View {
     @State private var speed: Float = 1
     @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @State private var showsDanmakuList = false
+    /// Set to the stream's address when the viewer asks to hand it to another app.
+    @State private var externalPlayerStream: HandoffStream?
+    /// The subtitle files this channel offers, parsed once per title. Drawn by `SubtitleOverlay`
+    /// rather than by the player, so size, opacity and position can be set.
+    @State private var subtitleTracks: [SubtitleTrack] = []
+    @State private var chosenSubtitle: String?
+    /// Persisted appearance, shared by every title.
+    @AppStorage("subtitleStyle") private var subtitleStyleData = Data()
+    /// Where the bubble was dragged to, per title.
+    @AppStorage("subtitlePositions") private var subtitlePositionsData = Data()
+    @State private var subtitleStyle = SubtitleStyle.standard
+    @State private var subtitlePositions = SubtitlePositionMemory()
     /// Devices with Yingxia open, for the Play On button; and the one the video was sent to.
     @State private var tvBrowser = PlayOnBrowser()
     @State private var playingOn: String?
@@ -83,6 +128,19 @@ struct MobilePlayerView: View {
                     // Across the whole width, but below the Dynamic Island and above the home indicator when upright.
                     .playerBleed(!inline, edges: .horizontal)
             }
+            // Parsed subtitle tracks are drawn here, not by the player, so they can be resized and
+            // moved. Empty when the channel offers no subtitle files, so a film without them is
+            // untouched.
+            SubtitleOverlay(
+                track: activeSubtitleTrack,
+                position: clock.position,
+                style: $subtitleStyle,
+                positionKey: channel.url.absoluteString,
+                memory: $subtitlePositions
+            )
+            .playerBleed(!inline, edges: .horizontal)
+            .allowsHitTesting(activeSubtitleTrack != nil)
+            stallNotice
             // The artwork dissolves into the first frame.
             if let waiting {
                 if inline {
@@ -154,7 +212,18 @@ struct MobilePlayerView: View {
             guard let old else { return .impact(weight: .light) }
             return new.locked != old.locked ? .impact(weight: .medium) : new.rate != old.rate ? .selection : nil
         }
-        .task(id: clock.item.map(ObjectIdentifier.init)) { await tracks.load(clock.item) }
+        .sheet(item: $externalPlayerStream) { handoff in
+            ExternalPlayerMenu(stream: handoff.url, headers: channel.headers)
+        }
+        .task(id: clock.item.map(ObjectIdentifier.init)) {
+            await tracks.load(clock.item)
+            await loadSubtitles()
+        }
+        // Persist the caption appearance whenever it changes, so a resize survives the next launch.
+        .onChange(of: subtitleStyle) { _, _ in saveSubtitleStyle() }
+        .onChange(of: subtitlePositions) { _, _ in
+            if let blob = try? JSONEncoder().encode(subtitlePositions) { subtitlePositionsData = blob }
+        }
         .sheet(isPresented: $showsDanmakuList) {
             DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
                 .danmakuListPresentation()
@@ -435,6 +504,27 @@ struct MobilePlayerView: View {
 
     /// Play, skip and the seek bar wait for the stream: while it connects or after it fails, only the top row shows.
     private var showsTransport: Bool { !session.loading && session.error == nil }
+    /// A line that stopped making progress. Shown as a thin strip over the picture rather than a
+    /// dialog: the picture stays visible, and the strip goes away by itself once progress resumes.
+    @ViewBuilder private var stallNotice: some View {
+        if clock.stalled, showsTransport {
+            VStack {
+                Spacer(minLength: 0)
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small).tint(.white)
+                    Text(L10n.text("This line has stopped. Switching…"))
+                        .font(.footnote)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(.black.opacity(0.66), in: Capsule())
+                .foregroundStyle(.white)
+                .padding(.bottom, inline ? 60 : 110)
+                .transition(.opacity)
+            }
+            .allowsHitTesting(false)
+            .animation(.easeOut(duration: 0.2), value: clock.stalled)
+        }
+    }
     /// At the top of a watch page: smaller controls, and the page has the title.
     private var inline: Bool { layout == .inline }
     private var seekable: Bool { session.hasTimeline && !session.isLive }
@@ -648,6 +738,13 @@ struct MobilePlayerView: View {
     private var optionsMenu: some View {
         Menu {
             if session.qualities.count > 1 { Menu(L10n.text("Quality")) { QualityPicker(session: session) } }
+            // Offered always, not only after a failure: a viewer who knows the built-in player will
+            // not open this file should not have to watch it fail first.
+            Button {
+                externalPlayerStream = HandoffStream(url: channel.url)
+            } label: {
+                Label(L10n.text("Open in Another Player"), systemImage: "play.rectangle.on.rectangle")
+            }
             if pictureSwitches {
                 Section(L10n.text("Picture")) {
                     if VideoEnhancement.canSmooth { Toggle(L10n.text("Smooth Motion (60 fps)"), isOn: $smoothsVideo) }
@@ -1308,6 +1405,13 @@ private struct PlayerLayerView: UIViewRepresentable {
     private(set) var item: AVPlayerItem?
     /// Where the seek bar is held, until the precise seek it ends with lands.
     private(set) var scrubbing: Double?
+    /// Watches for absence of progress, not for errors: a stream that dies without failing sits at
+    /// the same position for ever, and only this notices.
+    @ObservationIgnored private let watchdog = StallWatchdog()
+    /// The four marks of one attempt, so "it takes ages" becomes resolution, buffering and start.
+    private(set) var marks = PlaybackMarks()
+    /// Set when the watchdog has given up on this line, for the view to act on.
+    private(set) var stalled = false
     @ObservationIgnored private weak var player: AVPlayer?
     @ObservationIgnored private var token: Any?
 
@@ -1404,6 +1508,18 @@ private struct PlayerLayerView: UIViewRepresentable {
         if item !== player.currentItem { item = player.currentItem }
         let seconds = time.seconds
         position = seconds.isFinite ? max(0, seconds) : 0
+        // The first non-zero position means a frame reached the screen.
+        if marks.firstFrame == nil, position > 0 { marks.firstFrame = Date() }
+        if scrubbing == nil, player.timeControlStatus == .playing {
+            switch watchdog.report(position: position) {
+            case .stalled:
+                stalled = true
+            case .exhausted:
+                stalled = true
+            default:
+                if stalled { stalled = false }
+            }
+        }
         let length = player.currentItem?.duration.seconds ?? 0
         let finite = length.isFinite ? max(0, length) : 0
         // Observation reports every assignment, even of the same value; the duration rarely changes.
@@ -1543,5 +1659,12 @@ private struct PlayerLayerView: UIViewRepresentable {
             center.playbackState = .stopped
         }
     }
+}
+
+/// A stream address wrapped so it can drive a `sheet(item:)`. `URL` is `Hashable` but not
+/// `Identifiable`, and conforming it globally would be a surprising thing to do to a Foundation type.
+private struct HandoffStream: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
 }
 #endif
