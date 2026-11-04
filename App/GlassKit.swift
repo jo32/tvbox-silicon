@@ -1338,7 +1338,7 @@ struct LoadingCard: View {
                         Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                     }
                     ForEach(Array(state.steps.suffix(2).enumerated()), id: \.offset) { _, step in
-                        Text(step).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                        Text(step).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
                 Spacer(minLength: 16)

@@ -103,7 +103,7 @@ struct PluginSignInView: View {
                 Text(L10n.text("Open the %@ app on your phone, scan this code, and confirm the sign-in.", name))
                     .font(.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Text(L10n.text("%@ needs this account for the line you chose. The video plays once you confirm.", prompt.source))
-                    .font(.callout).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             if expired {
                 Label(L10n.text("This code has expired."), systemImage: "clock.badge.exclamationmark").foregroundStyle(.secondary)

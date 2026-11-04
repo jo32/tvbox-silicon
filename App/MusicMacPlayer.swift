@@ -443,7 +443,7 @@ struct MusicMacNowPlaying: View {
             } else if let quality = Self.quality(music) {
                 Button { showsChannels = true } label: { Text(quality) }.buttonStyle(.plain)
             }
-            if let credit = Self.credit(music) { Text(credit).foregroundStyle(.tertiary) }
+            if let credit = Self.credit(music) { Text(credit).foregroundStyle(.secondary) }
         }
         .font(.caption.weight(.medium)).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
         .frame(maxWidth: .infinity, minHeight: 32, alignment: .topLeading)

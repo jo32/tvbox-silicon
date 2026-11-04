@@ -279,7 +279,7 @@ struct HistoryCard: View {
             if details {
                 Text("\(entry.context.episodeName) · \(SourceLabel(entry.context.sourceName).text)")
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
-                Text(HistoryFormat.status(entry)).font(.caption).monospacedDigit().foregroundStyle(.tertiary).lineLimit(1)
+                Text(HistoryFormat.status(entry)).font(.caption).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
                     .cardCaption()
             } else {
                 // The bar on the poster already says how far; the line names the episode.

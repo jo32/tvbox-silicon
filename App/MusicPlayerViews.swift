@@ -180,9 +180,9 @@ struct MusicNowPlaying: View {
         // Both services ask to be named when their audio plays.
         if music.failure == nil, let provider = music.selection?.candidate.provider {
             if provider == .gdstudio {
-                Text(L10n.text("Source: GD Music (music.gdstudio.xyz)")).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                Text(L10n.text("Source: GD Music (music.gdstudio.xyz)")).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             } else if provider == .xinghai {
-                Text(L10n.text("Source: Xinghai (yy.zddyr.top)")).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                Text(L10n.text("Source: Xinghai (yy.zddyr.top)")).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
         }
     }
@@ -359,7 +359,7 @@ struct MusicLyricLines: View {
                     #endif
                     .id(index)
                 }
-                Text(L10n.text("Lyrics from %@", lyrics.platform.name)).font(.caption).foregroundStyle(.tertiary).padding(.top, 12)
+                Text(L10n.text("Lyrics from %@", lyrics.platform.name)).font(.caption).foregroundStyle(.secondary).padding(.top, 12)
             }
             .scrollTargetLayout()
             .padding(.horizontal, Layout.gutter * 1.5).padding(.vertical, 40)

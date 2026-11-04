@@ -410,7 +410,7 @@ struct TMDBFooter: View {
                     #endif
             }
             Text(L10n.text("This product uses the TMDB API but is not endorsed or certified by TMDB."))
-                .font(.caption2).foregroundStyle(.tertiary)
+                .font(.caption2).foregroundStyle(.secondary)
         }
         #if DEBUG
         // `-qaTMDBPicker 1` opens the picker, for screenshots.

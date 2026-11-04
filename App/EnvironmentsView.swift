@@ -72,7 +72,7 @@ struct EnvironmentsView: View {
                         .foregroundStyle(isActive ? Color.accentColor : .secondary)
                     Text(environment.name)
                     Spacer()
-                    if isDefault { Text(L10n.text("Default")).font(.caption).foregroundStyle(.tertiary) }
+                    if isDefault { Text(L10n.text("Default")).font(.caption).foregroundStyle(.secondary) }
                 }
             }
             .buttonStyle(.plain)

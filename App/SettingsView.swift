@@ -509,11 +509,12 @@ struct FormSettingsView: View {
                     if store.importing {
                         ProgressView().controlSize(.small)
                     } else if !store.subscriptions.isEmpty {
-                        // Quiet, in the header's own grey: a page of settings has no one blue action.
+                        // Quiet but legible in the header's own grey: primary keeps it tappable in dark mode
+                        // where `.secondary` fades into the black background.
                         Button { Task { await store.refreshSubscriptions() } } label: {
                             Label(L10n.text("Refresh All"), systemImage: "arrow.clockwise")
                         }
-                        .font(.footnote.weight(.semibold)).textCase(nil).tint(.secondary)
+                        .font(.footnote.weight(.semibold)).textCase(nil).tint(.primary)
                     }
                 }
                 #else
@@ -732,7 +733,7 @@ struct FormSettingsView: View {
                         else if let checked = updates.lastChecked { Text(L10n.text("Last checked %@", checked.formatted(date: .abbreviated, time: .shortened))) }
                     }
                     // The page ends on the copyright, centred, as the hero no longer carries it.
-                    Text(Brand.copyright).font(.caption2).foregroundStyle(.tertiary)
+                    Text(Brand.copyright).font(.caption2).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity).padding(.top, 28)
                 }
             }
@@ -884,7 +885,7 @@ struct FormSettingsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.text("Mi3s")).font(.title3.weight(.semibold))
                     if let version { Text(version).font(.subheadline).foregroundStyle(.secondary) }
-                    Text(Brand.copyright).font(.caption).foregroundStyle(.tertiary)
+                    Text(Brand.copyright).font(.caption).foregroundStyle(.secondary)
                 }
                 .lineLimit(1)
             }
@@ -2030,7 +2031,7 @@ private struct TVSettingsHero: View {
             VStack(spacing: 10) {
                 Text(L10n.text("Mi3s")).font(.system(size: 48, weight: .bold))
                 if let version { Text(version).font(.system(size: 26)).foregroundStyle(.secondary) }
-                Text(Brand.copyright).font(.system(size: 22)).foregroundStyle(.tertiary)
+                Text(Brand.copyright).font(.system(size: 22)).foregroundStyle(.secondary)
             }
         }
         .accessibilityElement(children: .combine)
@@ -2050,7 +2051,7 @@ struct TVSettingsSection<Content: View>: View {
             }
             content
             if let footer, !footer.isEmpty {
-                Text(footer).font(.system(size: 22)).foregroundStyle(.tertiary)
+                Text(footer).font(.system(size: 22)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 28).padding(.top, 8)
             }

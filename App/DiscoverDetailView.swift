@@ -70,7 +70,10 @@ struct DiscoverDetailView: View {
         // Full-screen pages, as the TV presents things: the iPhone's sheets froze the TV app when they opened.
         .fullScreenCover(item: $episode) { selection in tvEpisodeScreen(selection.value) }
         .fullScreenCover(item: $still) { selection in
-            ZStack { Color.black; TMDBArtwork(url: selection.url, maxPixels: 2400, fill: false) }.ignoresSafeArea()
+            // PosterViewer was written and then never wired, so tapping a still only ever gave a
+            // fixed-size picture. It brings pinch-to-zoom and pull-down-to-dismiss, which is what a
+            // viewer reaching for a long title or a camera credit actually needs.
+            PosterViewer(url: selection.url, title: item.name)
         }
         #else
         .sheet(item: $episode) { selection in

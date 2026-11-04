@@ -342,7 +342,7 @@ private struct FeedbackPage: View {
             ZStack(alignment: .topLeading) {
                 // TextEditor has no prompt: this sits where its first line starts.
                 if message.isEmpty {
-                    Text(kind.prompt).foregroundStyle(.tertiary).padding(.leading, 5)
+                    Text(kind.prompt).foregroundStyle(.secondary).padding(.leading, 5)
                         #if os(iOS)
                         .padding(.top, 8)
                         #endif
@@ -380,7 +380,7 @@ private struct FeedbackPage: View {
                     ProgressView().controlSize(.small)
                 }
                 #if os(macOS)
-                Text(verbatim: "⌘↩").font(.callout).foregroundStyle(.tertiary)
+                Text(verbatim: "⌘↩").font(.callout).foregroundStyle(.secondary)
                 #endif
                 Button(action: send) {
                     Label(sending ? (progress == nil ? L10n.text("Sending…") : L10n.text("Uploading…")) : L10n.text("Send"),

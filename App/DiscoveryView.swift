@@ -428,7 +428,7 @@ struct GlobalSearchView: View {
                     Text(video.remarks).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 if !detail.isEmpty {
-                    Text(detail).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                    Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 Text(SourceLabel(item.site.name).text).font(.caption).foregroundStyle(.secondary).lineLimit(1)

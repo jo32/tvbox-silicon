@@ -248,7 +248,7 @@ struct ExternalPlayerMenu: View {
                             HStack {
                                 Text(player.name).foregroundStyle(.secondary)
                                 Spacer()
-                                Text(L10n.text("Not Installed")).font(.caption).foregroundStyle(.tertiary)
+                                Text(L10n.text("Not Installed")).font(.caption).foregroundStyle(.secondary)
                             }
                         }
                     } footer: {

@@ -42,7 +42,7 @@ struct ResourceRankingView: View {
                         } else {
                             // A direction for something nothing measures is a switch that does
                             // nothing; the row stays so the order can be set up, but says so.
-                            Text(L10n.text("No Data")).font(.footnote).foregroundStyle(.tertiary)
+                            Text(L10n.text("No Data")).font(.footnote).foregroundStyle(.secondary)
                         }
                     }
                 }

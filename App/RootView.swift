@@ -472,7 +472,7 @@ struct SidebarStatus: View {
     var body: some View {
         if let version {
             Text(version)
-                .font(.caption).monospacedDigit().foregroundStyle(.tertiary).lineLimit(1)
+                .font(.caption).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20).frame(height: 40)
                 .overlay(alignment: .top) { Divider().padding(.horizontal, 12) }

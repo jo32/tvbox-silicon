@@ -881,7 +881,7 @@ struct HideSourcesCard: View {
                 }
                 Spacer(minLength: 8)
                 if !value.isEmpty { Text(value).font(.subheadline).monospacedDigit().foregroundStyle(.secondary).lineLimit(1) }
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
             }
             .padding(16)
             .contentPanel(cornerRadius: 22)

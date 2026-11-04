@@ -743,7 +743,7 @@ struct DownloadPicker: View {
                     Text(L10n.text("Download Episodes")).font(.title3.weight(.semibold))
                     Text(video.name).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(macSubtitle).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
+                    Text(macSubtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
             }
@@ -764,7 +764,7 @@ struct DownloadPicker: View {
                 .toggleStyle(.checkbox)
                 .disabled(available.isEmpty)
                 if let free = library.usage.available {
-                    Text(L10n.text("%@ free", DownloadFormat.size(free))).font(.caption).monospacedDigit().foregroundStyle(.tertiary)
+                    Text(L10n.text("%@ free", DownloadFormat.size(free))).font(.caption).monospacedDigit().foregroundStyle(.secondary)
                         .lineLimit(1).fixedSize()
                 }
                 Spacer(minLength: 12)
