@@ -101,8 +101,12 @@ import TVCore
     private var upcoming: Upcoming?
     private var upcomingTask: Task<Void, Never>?
     private var upcomingObservation: NSKeyValueObservation?
-    /// Whether this episode has already tried to queue the next one (once each, even when that failed).
+    /// Whether this episode has already tried to queue the next one, so a tick doesn't repeat it.
     private var upcomingAttempted = false
+    /// Whether this episode's failed pre-queue already got the one retry `upcomingRetryDelay` allows.
+    private var upcomingRetried = false
+    /// Retries a pre-queue that failed, while this episode still plays.
+    private var upcomingRetry: Task<Void, Never>?
     /// The queue moves past this episode because the next one was asked for, not because it ended.
     private var skipsToUpcoming = false
     /// The episode the queue moved on to, which `start` then finds already playing.
@@ -112,6 +116,9 @@ import TVCore
     private var queueObservation: NSKeyValueObservation?
     /// How long before an episode's end (or its skipped outro) the next one starts loading.
     static let upcomingLead: Double = 30
+    /// How long a pre-queue that failed waits before trying once more: Hongguo's device registration, for
+    /// one, refuses further requests for ten seconds after a failure.
+    static let upcomingRetryDelay: Double = 10
     /// Why the player is switching lines, shown while the other line loads.
     private var switchNotice: String?
     /// Qualities the stream can switch between (Bilibili), and the one chosen; nil is automatic.
@@ -538,6 +545,12 @@ import TVCore
         }
     }
     private func configure(_ channel: Channel, url: URL, generation activeGeneration: UUID) {
+        // Replacing the current item drops everything queued behind it; the next episode is resolved again
+        // rather than left in the queue's wake, which would keep it from ever playing.
+        if upcoming != nil {
+            discardUpcoming()
+            upcomingAttempted = false; upcomingRetried = false
+        }
         #if !os(macOS)
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
@@ -911,7 +924,9 @@ import TVCore
     func stop() {
         saveHistory()
         discardUpcoming()
-        upcomingAttempted = false; skipsToUpcoming = false; advanced = nil
+        upcomingAttempted = false; upcomingRetried = false
+        upcomingRetry?.cancel(); upcomingRetry = nil
+        skipsToUpcoming = false; advanced = nil
         upcomingEpisode = nil; onAdvance = nil; playsOn = { false }; clearBoost()
         if let url = playing?.url { HongguoStreams.stop(url) }
         if let automatic { CloudStreams.stop(automatic); Remux.stop(automatic) }
@@ -1148,7 +1163,12 @@ extension PlaybackSession {
     /// episode, a plugin-proxied stream or an original that won't play, a failure), the episode ends and
     /// switches as before.
     fileprivate func queueUpcomingIfDue(_ item: AVPlayerItem) {
-        if upcoming != nil, looping || !playsOn() { return discardUpcoming() }
+        if upcoming != nil, looping || !playsOn() {
+            discardUpcoming()
+            // Back on later (or looping off): this episode may queue its next episode again.
+            upcomingAttempted = false; upcomingRetried = false
+            return
+        }
         guard !upcomingAttempted, !looping, !isLive, playsOn(), let upcomingEpisode, item.status == .readyToPlay,
               pendingResume == nil, !restoringPosition else { return }
         let length = item.duration.seconds, time = item.currentTime().seconds
@@ -1158,11 +1178,15 @@ extension PlaybackSession {
         upcomingAttempted = true
         let activeGeneration = generation
         upcomingTask = Task { [weak self] in
-            guard let next = await upcomingEpisode(), let self, self.generation == activeGeneration, !Task.isCancelled else { return }
+            guard let provider = self?.upcomingEpisode else { return }
+            let next = await provider()
+            guard let self, !Task.isCancelled, self.generation == activeGeneration else { return }
+            guard let next else { return self.scheduleUpcomingRetry(for: item, generation: activeGeneration) }
             let prepared: Prepared
             do { prepared = try await self.prepare(next) }
             catch {
                 Diagnostics.shared.record(.warning, "player", "upcoming not prepared \(Self.describe(error))")
+                self.scheduleUpcomingRetry(for: item, generation: activeGeneration)
                 return
             }
             guard self.generation == activeGeneration, !Task.isCancelled, !self.looping, self.playsOn(),
@@ -1184,6 +1208,9 @@ extension PlaybackSession {
                     if status == .failed {
                         Diagnostics.shared.record(.warning, "player", "upcoming failed \(failure.map(Self.describe) ?? "-")")
                         self.discardUpcoming()
+                        if let item = self.item {
+                            self.scheduleUpcomingRetry(for: item, generation: self.generation)
+                        }
                     } else if status == .readyToPlay {
                         // Before it plays, so a file with ungrouped dubs starts with one of them.
                         UngroupedAudio.playOne(queued)
@@ -1194,6 +1221,22 @@ extension PlaybackSession {
                     }
                 }
             }
+        }
+    }
+
+    /// A pre-queue that just failed gets one more try while the episode still plays: a source that was
+    /// briefly unavailable (Hongguo's device registration refuses for ten seconds, say) still starts the
+    /// next episode straight on instead of ending this one on its last frame.
+    private func scheduleUpcomingRetry(for item: AVPlayerItem, generation active: UUID) {
+        guard !upcomingRetried, !Task.isCancelled, generation == active, upcoming == nil else { return }
+        upcomingRetried = true
+        Diagnostics.shared.record(.info, "player", "upcoming retry in \(Int(Self.upcomingRetryDelay))s")
+        upcomingRetry?.cancel()
+        upcomingRetry = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.upcomingRetryDelay))
+            guard let self, !Task.isCancelled, self.generation == active, self.upcoming == nil,
+                  self.player.currentItem === item, self.playsOn(), !self.looping else { return }
+            self.upcomingAttempted = false
         }
     }
 
@@ -1241,7 +1284,8 @@ extension PlaybackSession {
         proxy = upcoming.prepared.adapter
         #endif
         detachItem(); observation = nil
-        upcomingObservation = nil; upcomingTask = nil; self.upcoming = nil
+        upcomingObservation = nil; upcomingTask = nil; upcomingRetry?.cancel(); upcomingRetry = nil
+        upcomingAttempted = false; upcomingRetried = false; self.upcoming = nil
         player.actionAtItemEnd = .pause
         generation = UUID()
         let activeGeneration = generation
