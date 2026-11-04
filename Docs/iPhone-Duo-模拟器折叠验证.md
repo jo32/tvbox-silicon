@@ -91,6 +91,32 @@ hinge open; sleep 1; hinge screenshot inner.png
 hinge half; sleep 1; hinge screenshot book.png
 ```
 
+## 播放态形态切换验证（2026-11-04 实测通过）
+
+**目标**：播放器在真实播放状态下，用户折叠/展开设备，AVPlayer 在屏幕尺寸突变（外屏 1398×2034
+↔ 内屏 2007×2853）时是否黑屏、错位、丢状态。
+
+**关键前置**：`-qaPlay` 会设 `store.playing` 走全屏 `PlayerPresentation`，绕过 `duoExpanded` 分屏分支，
+验证不到。改用 **单集影片自动内嵌播放**（`qa-server.py` 的 `ids=single` 特例：`vod_play_url` 只放一集，
+`activeEpisodes.count <= 1` 时详情页 `watchBody` 自动内嵌播放），这样折叠/展开切的就是详情页内嵌播放器。
+
+**三方向切换实测**：
+
+| 动作 | hinge 命令 | 布局表现 | 播放 |
+|---|---|---|---|
+| 合拢 → 外屏 | `hinge close` | 单栏：视频在上，标题/简介/选集在下 | 正常，无黑屏 |
+| 展开 → 内屏 | `hinge open`（active 屏切到 LCD-1） | 左右分栏：左侧视频继续播，右侧标题/简介/选集，底部 tab 栏出现 | 正常，视频不中断 |
+| 折回 → 外屏 | `hinge close` | 回到单栏 | 正常，无错位 |
+
+**结论**：`duoExpanded` 分支（`phone + regular×regular`）在真实 Duo 模拟器上三个方向切换全部正常，
+播放全程不中断、无黑屏、无错位。截图留存：`/tmp/duo-outer-folded.png`、`/tmp/duo-inner-open.png`、
+`/tmp/duo-back-folded.png`。
+
+**注意**：这是**软件折叠（模拟器）**层面的验证；真机物理折叠时屏幕尺寸突变的时序更狠（会触发
+`viewWillTransition` 的尺寸渐变动画 + 可能的 `AVPlayerLayer` 重配），若要 100% 闭环仍需真机插线跑
+`test-duo-ui.sh --device`，但卡在「Enable UI Automation」需真机手动输锁屏密码授权这一步（见
+`Docs/真机验收.md`）。
+
 ## 双 framebuffer 与截图
 
 `xcrun simctl io booted enumerate` 列出两个集成 framebuffer：**外屏 1398×2034 + 内屏 2007×2853**。
