@@ -364,6 +364,12 @@ struct SiteCard: View {
         let pinned = marksPinned && (store.subscription.map { store.pinnedSources.contains(site, origin: $0.origin) } ?? false)
         let runs = site.isBuiltIn || site.canBrowse(jarURL: store.subscription?.spiderURL)
         let detail = runs ? (label.parts.dropFirst() + [engine].compactMap { $0 }).joined(separator: " · ") : site.compatibility
+        // The viewer renamed it, changed its API, or forced a route: the card says so, since none of
+        // those edits are visible on the tile itself and a quietly-overridden source confuses later.
+        let customized = store.subscription.map { sub in
+            store.sourceOverrides.override(for: site, origin: sub.origin) != nil
+                || store.sourceRouting.route(site, origin: sub.origin) != nil
+        } ?? false
         HStack(spacing: padding) {
             SourceIcon(site: site, label: label, size: icon)
                 .opacity(runs ? 1 : 0.45)
@@ -383,6 +389,7 @@ struct SiteCard: View {
                         .foregroundStyle(focused ? Color.black : runs ? Color.primary : Color.secondary)
                     if runs { SourceHealthDot(status: store.health(of: site)) }
                     if dimmed { Text(L10n.text("Hidden")).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                    if customized { Text(L10n.text("Customized")).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
                 }
                 if !detail.isEmpty {
                     Text(detail).font(.subheadline).lineLimit(1)
@@ -1377,8 +1384,9 @@ struct VideoDetailView: View {
     @State private var choosingQuality = false
     @State private var synopsisExpanded = false
     @State private var selectedFlag: String?
-    /// 倒序: the episode lists show the last episode first. Remembered for every video.
-    @AppStorage("episodesReversed") private var reversesEpisodes = false
+    /// 倒序: the episode lists show the last episode first. A per-page preference, so flipping one
+    /// video's list around never flips every other video's.
+    @State private var reversesEpisodes = false
     /// Play takes over focus from the loading placeholder; otherwise nothing is focused once details load.
     @FocusState private var playFocused: Bool
     @State private var containerWidth: CGFloat = 0

@@ -204,7 +204,7 @@ struct DiscoverSearchView: View {
         }
     }
     private func titleButton(_ item: TMDBCatalog.Item) -> some View {
-        Button { model.remember(keyword); model.rememberOpened(item); focused = false; path.append(item) } label: { DiscoverSearchRow(item: item) }
+        Button { model.remember(keyword); focused = false; path.append(item) } label: { DiscoverSearchRow(item: item) }
             .buttonStyle(.plain).accessibilityIdentifier("discover.search.result.\(item.key)")
     }
 }
@@ -320,7 +320,6 @@ struct DiscoverSearchGroup {
     var loading = false
     var failed = false
     var history: [String] = UserDefaults.standard.stringArray(forKey: "discover.search.keywords") ?? []
-    var opened: [TMDBCatalog.Item] = (UserDefaults.standard.data(forKey: "discover.search.opened").flatMap { try? JSONDecoder().decode([TMDBCatalog.Item].self, from: $0) }) ?? []
     private var generation = 0
     var isEmpty: Bool { groups.values.allSatisfy { $0.count == 0 } }
     func load(_ request: DiscoverSearchRequest) async {
@@ -371,12 +370,6 @@ struct DiscoverSearchGroup {
         history = Array(history.prefix(12)); UserDefaults.standard.set(history, forKey: "discover.search.keywords")
     }
     func clearHistory() { history = []; UserDefaults.standard.removeObject(forKey: "discover.search.keywords") }
-    func rememberOpened(_ item: TMDBCatalog.Item) {
-        opened.removeAll { $0.key == item.key }; opened.insert(item, at: 0); opened = Array(opened.prefix(12)); saveOpened()
-    }
-    func clearOpened() { opened = []; saveOpened() }
-    func removeOpened(_ item: TMDBCatalog.Item) { opened.removeAll { $0.key == item.key }; saveOpened() }
-    private func saveOpened() { UserDefaults.standard.set(try? JSONEncoder().encode(opened), forKey: "discover.search.opened") }
 }
 #if os(macOS)
 /// The Mac's catalog search, a page in the window rather than the iPhone's full-screen sheet: the search field sits in
@@ -517,7 +510,7 @@ struct DiscoverMacSearchView: View {
     }
 
     private func open(_ item: TMDBCatalog.Item) {
-        model.remember(keyword); model.rememberOpened(item)
+        model.remember(keyword)
         openRoute?(Route { AnyView(DiscoverDetailView(item: item)) })
     }
     private func open(_ person: TMDBCatalog.SearchPerson) {

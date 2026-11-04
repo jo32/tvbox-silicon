@@ -1484,7 +1484,9 @@ import TVCore
         }
         sourceOrder.save(sites.filter(\.isBuiltIn) + ranked, origin: config.origin)
         sourceOrder.enabled = true
-        notice = L10n.text("Sorted by measured picture quality. Sources that were never probed are last.")
+        // Say what turned on: the sort reorders the sources and puts the list into the viewer's own
+        // order, so a source added later stays at the end until it is probed and sorted again.
+        notice = L10n.text("Sorted by measured picture quality. Custom source order is now on — new sources stay at the end until you sort again or turn the custom order off.")
     }
 
     /// Turns the viewer's own source order on or off. The first time, it starts from the order on

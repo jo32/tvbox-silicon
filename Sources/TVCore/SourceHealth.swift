@@ -41,7 +41,14 @@ import Observation
     public init(file: URL?) {
         self.file = file
         if let file, let data = try? Data(contentsOf: file),
-           let saved = try? JSONDecoder().decode([String: Record].self, from: data) { records = saved }
+           let saved = try? JSONDecoder().decode([String: Record].self, from: data) {
+            // A cooldown is a wall-clock deadline for *this* run: persisting it across a restart left a
+            // source silently excluded long after it recovered. Drop the deadline on load, so a restart
+            // retries the source; the failure count stays, so it still reads as unstable.
+            var loaded = saved
+            for key in loaded.keys { loaded[key]?.cooldownUntil = nil }
+            records = loaded
+        }
     }
 
     public nonisolated static func key(origin: URL, sourceKey: String) -> String { origin.absoluteString + "|" + sourceKey }

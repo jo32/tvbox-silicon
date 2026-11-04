@@ -275,7 +275,8 @@ struct EpisodePicker: View {
                 Button {
                     store.lineSettings.restoreAll(origin: origin, sourceKey: sourceKey)
                 } label: {
-                    Label(L10n.text("Show %lld hidden lines", hiddenFlags.count), systemImage: "eye")
+                    // A hidden line is hidden for every video from this source, so the label says so.
+                    Label(L10n.text("Show %lld hidden lines (all videos)", hiddenFlags.count), systemImage: "eye")
                         .font(.caption)
                         .foregroundStyle(.tint)
                 }

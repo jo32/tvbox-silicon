@@ -27,7 +27,6 @@ import Observation
     private var resultsVisible = true
     /// Changes only with a new search, unlike `generation`, which pausing also changes.
     private var runID = UUID()
-    private static let sourceKey = "searchSource"
     /// When the current run began and how many sources were already done, for a time estimate.
     public private(set) var runStart: (date: Date, completed: Int)?
     private var generation = UUID()
@@ -62,10 +61,11 @@ import Observation
         (results.first { $0.id == source }?.page?.videos ?? []) + batches.filter { $0.source == source }.flatMap(\.videos)
     }
 
-    /// Shows one source's results (nil: every source). The choice carries over to later searches.
+    /// Shows one source's results (nil: every source). The choice lives only for the current session:
+    /// a fresh search resets it to every source, so a source picked last time can never quietly filter
+    /// the next search.
     public func select(_ source: String?) {
         selectedSource = source; scrollID = nil
-        UserDefaults.standard.set(source, forKey: Self.sourceKey)
     }
 
     /// Whether a source (nil: any matching source) has another page of results.
@@ -172,8 +172,9 @@ import Observation
         let held = Set(paused.map(\.id))
         let sites = eligible.filter { !held.contains($0.id) }
         asking = Set(sites.map(\.key))
-        let preferred = UserDefaults.standard.string(forKey: Self.sourceKey)
-        selectedSource = sites.contains { $0.id == preferred } ? preferred : nil; scrollID = nil
+        // A new search asks every source: the single-source filter is reset here (the view already
+        // cleared it on submit), so results stream in from all of them instead of waiting on one.
+        selectedSource = nil; scrollID = nil
         rank = Dictionary(arrange(eligible, config: config, failing: failing(config)).enumerated().map { ($1.id, $0) }) { first, _ in first }
         total = sites.count
         if let hit = cache[value], Date().timeIntervalSince(hit.created) < 300 {
