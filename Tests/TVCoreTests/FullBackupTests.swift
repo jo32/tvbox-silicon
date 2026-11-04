@@ -148,4 +148,35 @@ import Testing
         #expect(decoded.endpoints[0].username == "u")
         #expect(decoded.routes["a|b"]?.proxyID == endpoint.id)
     }
+
+    // MARK: - CloudBackupPayload 往返（iCloud 轻量同步载荷）
+
+    @Test func cloudBackupPayloadRoundTrips() throws {
+        var vault = PrivacyVault(rounds: 10)
+        try vault.setPasscode("123456")
+        let endpoint = CustomProxyEndpoint(name: "p", scheme: .http, host: "h", port: 8080)
+        let payload = CloudBackupPayload(
+            accounts: ["douyin": Data("cookie".utf8)],
+            vault: vault,
+            proxies: ProxySnapshot(endpoints: [endpoint], routes: ["k": .proxy(endpoint.id)]),
+            preferences: ["sourceOrder.enabled": try JSONEncoder().encode(true)]
+        )
+
+        #expect(!payload.isEmpty)
+
+        let data = try JSONEncoder().encode(payload)
+        let decoded = try JSONDecoder().decode(CloudBackupPayload.self, from: data)
+
+        #expect(decoded.accounts == payload.accounts)
+        // PrivacyVault 的运行时解锁态（unlockedAt）刻意不持久化，所以不比较整对象相等，
+        // 只比较会随备份保存的部分：口令摘要仍在，重启后仍是锁定态。
+        #expect(decoded.vault?.hasPasscode == true)
+        #expect(decoded.proxies?.endpoints.count == 1)
+        #expect(decoded.preferences == payload.preferences)
+    }
+
+    @Test func emptyCloudBackupPayloadReportsEmpty() {
+        let payload = CloudBackupPayload()
+        #expect(payload.isEmpty)
+    }
 }

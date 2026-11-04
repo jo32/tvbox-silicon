@@ -109,6 +109,8 @@ import TVCore
         // place to keep the player's shared history pointed at the environment on screen.
         playbackHistory.activeEnvironmentID = environments.activeID
         favorites.activeEnvironmentID = environments.activeID
+        // The vault and the preferences persisted here are part of the lightweight iCloud backup.
+        cloudSync?.changed("cloudBackup")
     }
 
     /// Relocks the vault the moment the screen is captured — a screenshot or an active screen
@@ -391,7 +393,11 @@ import TVCore
         rebuildSubscription(resetting: false)
         // Signing in to a drive or adding a server adds its source; signing out or removing one takes it away.
         cloudDrivesObserver = NotificationCenter.default.addObserver(forName: CloudFiles.drivesChanged, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refreshCloudFilesSources() }
+            MainActor.assumeIsolated {
+                self?.refreshCloudFilesSources()
+                // A sign-in changed the account files that the lightweight iCloud backup carries.
+                self?.cloudSync?.changed("cloudBackup")
+            }
         }
         searchModel.order = sourceOrder
         DownloadLibrary.shared.resolver = { [weak self] item in
@@ -866,6 +872,18 @@ import TVCore
         sync.register("sourceOverrides", current: { overrides.savedValues }, apply: { overrides.adopt(Self.dictionary($0)) })
         sync.register("lineSettings", current: { lines.savedValues }, apply: { lines.adopt(Self.dictionary($0)) })
         sync.register("sourceReassignment", current: { reassignment.savedValues }, apply: { reassignment.adopt(Self.dictionary($0)) })
+        // The lightweight slices a fresh install would otherwise lose — sign-in state, the vault,
+        // proxies and preferences — travel as one small payload (subscriptions/history/favourites
+        // already have their own channels above).
+        sync.register("cloudBackup", current: { [weak self] () -> [String: CloudBackupPayload] in
+            guard let self else { return [:] }
+            let payload = self.cloudBackupPayload()
+            guard !payload.isEmpty else { return [:] }
+            return ["backup": payload]
+        }, apply: { [weak self] items in
+            guard let self, let payload = items.first(where: { $0.id == "backup" })?.value else { return }
+            self.applyCloudBackupPayload(payload)
+        })
         favorites.onChange = { sync.changed("favorites") }
         history.onChange = { sync.changed("history") }
         pinned.onChange = { sync.changed("pinnedSources") }

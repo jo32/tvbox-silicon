@@ -218,6 +218,31 @@ enum FullBackupAccounts {
     static let alist = "alist"
 }
 
+/// The lightweight slice of a full backup that travels through iCloud key-value storage (the same
+/// channel as favourites and history). It deliberately omits subscriptions — those are megabytes and
+/// already have their own sync channel — and carries only what a fresh install otherwise loses:
+/// sign-in state, the passcode vault, proxies, and the whitelisted preferences.
+///
+/// Every field is `Data` or a small value type so the whole payload stays far under the 256 KB
+/// per-key limit the key-value store imposes.
+public struct CloudBackupPayload: Codable, Equatable, Sendable {
+    /// Sign-in files, keyed by `FullBackupAccounts`, verbatim bytes.
+    public var accounts: [String: Data]
+    /// The passcode vault, or nil when none is set.
+    public var vault: PrivacyVault?
+    /// The proxy endpoints and routes, or nil when none are configured.
+    public var proxies: ProxySnapshot?
+    /// Whitelisted preference keys → raw blob.
+    public var preferences: [String: Data]
+
+    public init(accounts: [String: Data] = [:], vault: PrivacyVault? = nil,
+                proxies: ProxySnapshot? = nil, preferences: [String: Data] = [:]) {
+        self.accounts = accounts; self.vault = vault; self.proxies = proxies; self.preferences = preferences
+    }
+
+    public var isEmpty: Bool { accounts.isEmpty && vault == nil && proxies == nil && preferences.isEmpty }
+}
+
 /// Reads and writes the sign-in files a full backup carries. Lives in TVCore so it can reach the
 /// stores' `fileURL` members, which are internal (not public) on most of them.
 public enum FullBackupAccountStore {

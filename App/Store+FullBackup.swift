@@ -139,4 +139,45 @@ extension Store {
         if let data = try? JSONEncoder().encode(snapshot.endpoints) { defaults.set(data, forKey: "proxyEndpoints.v1") }
         if let data = try? JSONEncoder().encode(snapshot.routes) { defaults.set(data, forKey: "proxyRoutes.v1") }
     }
+
+    // MARK: - iCloud 轻量同步
+
+    /// The lightweight slice that follows the viewer through iCloud key-value storage, so a fresh
+    /// install (after uninstall/reinstall) recovers sign-in state, the vault, proxies and preferences
+    /// without a manual backup file. Subscriptions, history and favourites already have their own
+    /// channels; this covers the rest.
+    func cloudBackupPayload() -> CloudBackupPayload {
+        var vaultValue: PrivacyVault?
+        if let data = playbackDefaults.data(forKey: "privacyVault"),
+           let decoded = try? JSONDecoder().decode(PrivacyVault.self, from: data), decoded.hasPasscode {
+            vaultValue = decoded
+        }
+        let endpoints = customProxy.store.endpoints
+        let routes = Self.proxyRoutesSnapshot()
+        let proxies = (endpoints.isEmpty && routes.isEmpty) ? nil : ProxySnapshot(endpoints: endpoints, routes: routes)
+        let prefs = FullBackupPreferences.snapshot(defaults: defaults, playbackDefaults: playbackDefaults)
+        return CloudBackupPayload(accounts: FullBackupAccountStore.collect(),
+                                  vault: vaultValue,
+                                  proxies: proxies,
+                                  preferences: prefs)
+    }
+
+    /// Applies a payload pulled from another device. Returns the slices that changed, so the caller
+    /// can bump the relevant revision/touch.
+    func applyCloudBackupPayload(_ payload: CloudBackupPayload) {
+        if !payload.accounts.isEmpty { FullBackupAccountStore.restore(payload.accounts) }
+        if let vaultValue = payload.vault {
+            if let data = try? JSONEncoder().encode(vaultValue) {
+                playbackDefaults.set(data, forKey: "privacyVault")
+                vault = vaultValue
+            }
+        }
+        if let proxies = payload.proxies {
+            Self.restoreProxies(proxies, defaults: defaults)
+            customProxy.touch()
+        }
+        if !payload.preferences.isEmpty {
+            FullBackupPreferences.restore(payload.preferences, defaults: defaults, playbackDefaults: playbackDefaults)
+        }
+    }
 }

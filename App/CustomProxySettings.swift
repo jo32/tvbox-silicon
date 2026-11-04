@@ -118,6 +118,7 @@ private struct CustomProxyEndpointEditor: View {
             .confirmationDialog(L10n.text("Remove Proxy"), isPresented: $confirmsRemoval) {
                 Button(L10n.text("Remove"), role: .destructive) {
                     if let endpoint { store.customProxy.store.removeEndpoint(id: endpoint.id); store.customProxy.touch() }
+                    store.cloudSync?.changed("cloudBackup")
                     dismiss()
                 }
             }
@@ -142,6 +143,7 @@ private struct CustomProxyEndpointEditor: View {
                                   username: username, password: password)
         store.customProxy.store.upsert(value)
         store.customProxy.touch()
+        store.cloudSync?.changed("cloudBackup")
         dismiss()
     }
 }
