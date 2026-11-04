@@ -16,7 +16,7 @@ public class HostCompatibilityTest {
             }
             return;
         }
-        reflectiveArrayCloneWorks(); conversionCacheReusesAndRepairs(); partialInitializationDoesNotHideWorkingSources(); recommendationsMerge(); stateSurvivesAndRestores(); interfaceCallsExecute(); sourceFailuresStaySpecific(); categoryFiltersReachTheSpider(); androidScreensAreNamed(); cloudLoginReturnsToTheApp(); asyncCloudLoginEndsPlayback(); packageContextExists(); androidLogHasEveryOverload(); androidDrawingWorks(); pluginKeepsItsOwnSlf4j(); conversionFailuresNameTheClass();
+        reflectiveArrayCloneWorks(); conversionCacheReusesAndRepairs(); partialInitializationDoesNotHideWorkingSources(); recommendationsMerge(); androidBase64IsLenient(); stateSurvivesAndRestores(); interfaceCallsExecute(); sourceFailuresStaySpecific(); categoryFiltersReachTheSpider(); androidScreensAreNamed(); cloudLoginReturnsToTheApp(); asyncCloudLoginEndsPlayback(); packageContextExists(); androidLogHasEveryOverload(); androidDrawingWorks(); pluginKeepsItsOwnSlf4j(); conversionFailuresNameTheClass();
         System.out.println("Java host regression checks passed (state, interface bytecode, HTTP failures, Android context).");
     }
 
@@ -184,6 +184,34 @@ public class HostCompatibilityTest {
             public String homeContent(boolean filter) { return "{\"list\":[{\"vod_id\":\"original\"}]}"; }
         });
         check(new JSONObject(fallback.request(new JSONObject())).getJSONArray("list").length() == 1, "Empty recommendations erased home list");
+        // The aowu Bili spiders answer "[]" when they have no recommendations; TVBox shows the categories anyway.
+        PluginSession array = new PluginSession(new Spider() {
+            public String homeContent(boolean filter) { return "{\"class\":[{\"type_id\":\"music\"}]}"; }
+            public String homeVideoContent() { return "[]"; }
+        });
+        check(new JSONObject(array.request(new JSONObject())).getJSONArray("class").length() == 1, "Recommendations that are not an object failed the home page");
+    }
+
+    /** Android's Base64 skips bytes outside the alphabet; java.util.Base64 throws on them. */
+    private static void androidBase64IsLenient() {
+        var utf8 = java.nio.charset.StandardCharsets.UTF_8;
+        int plain = android.util.Base64.DEFAULT, web = android.util.Base64.URL_SAFE;
+        check(new String(android.util.Base64.decode("aGVsbG8gd29ybGQ=", plain), utf8).equals("hello world"), "Padded Base64");
+        check(new String(android.util.Base64.decode("aGVsbG8gd29ybGQ", plain), utf8).equals("hello world"), "Unpadded Base64");
+        check(new String(android.util.Base64.decode("aGVs\nbG8g d29y\r\nbGQ=", plain), utf8).equals("hello world"), "Whitespace");
+        // 七味: a '.'-separated token; SeedHub: '_' in DEFAULT mode. Android drops both characters.
+        check(new String(android.util.Base64.decode("aGVs.bG8g.d29y.bGQ=", plain), utf8).equals("hello world"), "'.' must be skipped like on Android");
+        check(new String(android.util.Base64.decode("aGVs_bG8g", plain), utf8).equals("hello "), "'_' must be skipped in DEFAULT mode");
+        check(Arrays.equals(android.util.Base64.decode("-_8", web), new byte[]{(byte) 0xfb, (byte) 0xff}), "URL-safe alphabet");
+        check(Arrays.equals(android.util.Base64.decode("+/8=", plain), new byte[]{(byte) 0xfb, (byte) 0xff}), "Standard alphabet");
+        check(android.util.Base64.decode("", plain).length == 0, "Empty input");
+        for (String bad : new String[]{"a", "aGVsbG8=x", "aG=", "=aGVs"}) {
+            try { android.util.Base64.decode(bad, plain); throw new AssertionError("Android rejects " + bad); }
+            catch (IllegalArgumentException expected) { }
+        }
+        byte[] random = new byte[257]; new Random(7).nextBytes(random);
+        for (int flags : new int[]{plain, web, android.util.Base64.NO_WRAP, android.util.Base64.NO_PADDING | web})
+            check(Arrays.equals(android.util.Base64.decode(android.util.Base64.encodeToString(random, flags), flags), random), "Round trip with flags " + flags);
     }
 
     private static void stateSurvivesAndRestores() throws Exception {
@@ -204,6 +232,19 @@ public class HostCompatibilityTest {
         Stateful restarted = new Stateful();
         new PluginSession(restarted).request(play);
         check(restarted.details == 1 && restarted.selected.equals("a"), "Restarted session did not restore details");
+        class Renaming extends Spider {
+            int details;
+            public String detailContent(List<String> ids) {
+                details++;
+                if (!ids.get(0).contains("$")) throw new ArrayIndexOutOfBoundsException("Index 1 out of bounds for length 1");
+                return "{\"list\":[{\"vod_id\":\"song\"}]}";
+            }
+            public String playerContent(String flag, String id, List<String> flags) { return "{\"url\":\"https://example.com/song.mp3\"}"; }
+        }
+        Renaming renaming = new Renaming(); PluginSession renamed = new PluginSession(renaming);
+        renamed.request(new JSONObject().put("ids", "card$song"));
+        renamed.request(new JSONObject().put("play", "episode").put("detailID", "song"));
+        check(renaming.details == 1, "Asked again for details by the id the plugin's answer named");
     }
 
     private static void interfaceCallsExecute() throws Exception {

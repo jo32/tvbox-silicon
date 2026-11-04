@@ -658,6 +658,9 @@ public final class CloudDriveBridge implements AutoCloseable {
     }
 
     public String rewriteAddress(String address) {
+        // FongMi's player turns proxy://<query> into its local /proxy?<query> server; the aowu Bili spiders
+        // (合集, 歌曲, 教育...) answer with these. Give it the loopback form the rules below already route.
+        if (address.startsWith("proxy://")) address = "http://127.0.0.1:9978/proxy?" + address.substring("proxy://".length());
         for (int port : ports) {
             String prior = "http://127.0.0.1:" + port + "/" + capability + "/";
             if (address.startsWith(prior)) return base() + address.substring(prior.length());

@@ -9,6 +9,9 @@ public final class PluginSession {
     private final Spider spider;
     private final Throwable initializationWarning;
     private String detailID;
+    /** The vod_id the plugin's detail answer named, which the app sends back as detailID; 酷狗 answers
+     *  with another id than it was asked for and crashes when asked for details with its own. */
+    private String detailVideoID;
     private final CloudDriveBridge bridge;
 
     public PluginSession(Spider spider) { this(spider, null); }
@@ -50,10 +53,11 @@ public final class PluginSession {
     private String performRequest(JSONObject params) throws Exception {
         if (params.has("play")) {
             String required = params.optString("detailID", "");
-            if (!required.isEmpty() && !required.equals(detailID)) {
+            if (!required.isEmpty() && !required.equals(detailID) && !required.equals(detailVideoID)) {
                 String detail = content(() -> spider.detailContent(List.of(required)), false);
                 if (detail == null || detail.isBlank()) throw new IllegalStateException("The source returned no video details before playback");
                 detailID = required;
+                detailVideoID = videoID(detail);
             }
             Operation play = () -> spider.playerContent(params.optString("flag"), params.getString("play"), List.of());
             String result = content(play, false);
@@ -66,12 +70,16 @@ public final class PluginSession {
             String id = params.getString("ids");
             String result = content(() -> spider.detailContent(List.of(id)), false);
             detailID = id;
+            detailVideoID = videoID(result);
             return result;
         }
         if (params.has("wd")) return content(() -> spider.searchContent(params.getString("wd"), false, params.optString("pg", "1")), true);
         if (params.has("t")) return content(() -> spider.categoryContent(params.getString("t"), params.optString("pg", "1"), true, extend(params)), true);
         JSONObject home = new JSONObject(content(() -> spider.homeContent(true), true, false));
-        JSONObject recommendations = new JSONObject(content(() -> spider.homeVideoContent(), true, false));
+        // Recommendations are optional, and TVBox ignores anything that isn't an object: the aowu
+        // Bili spiders answer "[]" here, which used to fail their whole home page.
+        String recommended = content(() -> spider.homeVideoContent(), true, false);
+        JSONObject recommendations = recommended != null && recommended.trim().startsWith("{") ? new JSONObject(recommended) : new JSONObject();
         var videos = recommendations.optJSONArray("list");
         if (videos != null && videos.length() > 0) home.put("list", videos);
         checkInitialization(home);
@@ -146,5 +154,12 @@ public final class PluginSession {
     @FunctionalInterface private interface Operation { String run() throws Exception; }
     public static final class EmptyContentException extends Exception {
         public EmptyContentException() { super("The plugin returned no content"); }
+    }
+
+    private static String videoID(String detail) {
+        try {
+            JSONObject first = new JSONObject(detail).getJSONArray("list").getJSONObject(0);
+            return first.has("vod_id") ? first.get("vod_id").toString() : null;
+        } catch (Exception notADetail) { return null; }
     }
 }

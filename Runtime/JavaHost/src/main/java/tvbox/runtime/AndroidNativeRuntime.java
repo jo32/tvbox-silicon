@@ -12,13 +12,48 @@ import org.objectweb.asm.Type;
 
 /** Routes plugin JNI into an Android guest. Android ELF is never loaded into macOS. */
 public final class AndroidNativeRuntime {
-    private static AndroidEmulator emulator;
-    private static VM vm;
+    /**
+     * One emulator per nesting level. On Android, native code may call Java that calls native code again
+     * (the aowu proxyInvoke runs the spider's Java proxy, which calls MyCrypto in another library). A
+     * unidbg emulator cannot start a run inside a run ("IllegalStateException: running"), so a nested call
+     * goes to the next guest, which has loaded the same libraries. Most plugins only ever use the first.
+     */
+    private static final class Guest {
+        final AndroidEmulator emulator;
+        final VM vm;
+        final HashSet<File> libraries = new HashSet<>();
+        Guest(File root) {
+            emulator = new HeadlessAndroidEmulator(root);
+            emulator.setTimeout(10_000_000L);
+            emulator.getMemory().setLibraryResolver(new AndroidResolver(23));
+            vm = emulator.createDalvikVM();
+            vm.setDvmClassFactory(new HierarchyProxyFactory(loader).configClassNameMapper(name -> {
+                // A class a plugin loader handed to native code keeps meaning that class, not a same-named stub.
+                Class<?> handed = dalvik.system.DexClassLoader.guestClass(name);
+                if (handed != null) return handed;
+                try { return Class.forName(name, false, loader); }
+                catch (ClassNotFoundException absent) { return dalvik.system.DexClassLoader.pluginClass(name); }
+            }));
+            vm.setJni(new AbstractJni() {});
+            vm.setVerbose(Boolean.getBoolean("tvbox.traceJNI"));
+            new AndroidModule(emulator, vm).register(emulator.getMemory());
+        }
+        void load(File library) {
+            if (!libraries.add(library)) return;
+            vm.loadLibrary(library, true).callJNI_OnLoad(emulator);
+        }
+    }
+
+    /** Deeper nesting than this is runaway recursion, not a plugin pattern. */
+    private static final int MAX_GUESTS = 4;
+    private static final java.util.ArrayList<Guest> guests = new java.util.ArrayList<>();
     private static ClassLoader loader;
     private static File plugin;
     private static File cache;
     private static File guestRoot;
     private static final HashSet<String> loaded = new HashSet<>();
+    /** Every library loaded so far, as kept copies in load order: a new guest loads them all. */
+    private static final java.util.ArrayList<File> libraries = new java.util.ArrayList<>();
     /** Libraries loaded from Java code that guest native code called into; see {@link #load}. */
     private static final java.util.ArrayList<File> deferred = new java.util.ArrayList<>();
     private static int depth;
@@ -28,23 +63,22 @@ public final class AndroidNativeRuntime {
     }
 
     private static void initialize() {
-        if (vm != null) return;
+        if (!guests.isEmpty()) return;
         File root = new File(cache, "android-guest"); root.mkdirs();
         guestRoot = root;
-        emulator = new HeadlessAndroidEmulator(root);
-        emulator.setTimeout(10_000_000L);
-        emulator.getMemory().setLibraryResolver(new AndroidResolver(23));
-        vm = emulator.createDalvikVM();
-        vm.setDvmClassFactory(new HierarchyProxyFactory(loader).configClassNameMapper(name -> {
-            try { return Class.forName(name, false, loader); }
-            catch (ClassNotFoundException absent) {
-                try { return dalvik.system.DexClassLoader.current == null ? null : Class.forName(name, false, dalvik.system.DexClassLoader.current); }
-                catch (ClassNotFoundException missing) { return null; }
-            }
-        }));
-        vm.setJni(new AbstractJni() {});
-        vm.setVerbose(Boolean.getBoolean("tvbox.traceJNI"));
-        new AndroidModule(emulator, vm).register(emulator.getMemory());
+        guests.add(new Guest(root));
+    }
+
+    /** The guest for the current nesting level, created with every library loaded so far. */
+    private static Guest guest(int level) {
+        if (level >= MAX_GUESTS) throw new IllegalStateException("Native code nested " + level + " calls deep");
+        while (guests.size() <= level) {
+            System.err.println("NATIVE_GUEST " + guests.size() + " for a nested native call");
+            Guest guest = new Guest(guestRoot);
+            for (File library : libraries) guest.load(library);
+            guests.add(guest);
+        }
+        return guests.get(level);
     }
 
     /** Native code writes files inside the guest file system; map such a path back to the host. */
@@ -55,8 +89,8 @@ public final class AndroidNativeRuntime {
     }
 
     public static synchronized void close() throws java.io.IOException {
-        if (emulator != null) emulator.close();
-        emulator = null; vm = null; guestRoot = null; loaded.clear(); deferred.clear(); depth = 0; loader = null; plugin = null; cache = null;
+        for (Guest guest : guests) guest.emulator.close();
+        guests.clear(); guestRoot = null; loaded.clear(); libraries.clear(); deferred.clear(); depth = 0; loader = null; plugin = null; cache = null;
     }
 
     public static synchronized void load(String path) {
@@ -67,19 +101,22 @@ public final class AndroidNativeRuntime {
             try (var stream = Files.newInputStream(file.toPath())) { header = stream.readNBytes(20); }
             NativeLibraries.validateARM64(header, file.getName());
             initialize();
+            // Keep a copy: plugins often delete the extracted file right after System.load, and a nested
+            // guest created later, or a deferred load, still needs it.
+            File copy = new File(new File(cache, "native-loaded"), Integer.toHexString(file.getPath().hashCode()) + "-" + file.getName());
+            copy.getParentFile().mkdirs();
+            Files.copy(file.toPath(), copy.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             if (depth > 0) {
-                // Guest code called Java (e.g. a class initializer) that loads another library. The
-                // emulator cannot start a nested run, so load it once the outer call returns. Copy it
-                // first: plugins often delete the extracted file right after System.load.
-                File copy = new File(new File(cache, "native-deferred"), file.getName());
-                copy.getParentFile().mkdirs();
-                Files.copy(file.toPath(), copy.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                // Guest code called Java (e.g. a class initializer) that loads another library. The busy
+                // emulator cannot start a nested run, so load it once the outer call returns.
                 deferred.add(copy);
+                libraries.add(copy);
                 loaded.add(file.getPath());
                 System.err.println("NATIVE_LOAD_DEFERRED " + file.getName());
                 return;
             }
-            vm.loadLibrary(file, true).callJNI_OnLoad(emulator);
+            for (Guest guest : guests) guest.load(copy);
+            libraries.add(copy);
             loaded.add(file.getPath());
         } catch (Exception error) {
             // Plugins usually catch this and print only the message.
@@ -98,20 +135,25 @@ public final class AndroidNativeRuntime {
     private static void loadDeferred() {
         while (depth == 0 && !deferred.isEmpty()) {
             File file = deferred.remove(0);
-            try { vm.loadLibrary(file, true).callJNI_OnLoad(emulator); }
-            catch (Exception error) { System.err.println("NATIVE_LOAD_FAILED " + file); error.printStackTrace(System.err); }
+            for (Guest guest : guests) {
+                try { guest.load(file); }
+                catch (Exception error) { System.err.println("NATIVE_LOAD_FAILED " + file); error.printStackTrace(System.err); }
+            }
         }
     }
 
     public static synchronized Object invoke(String owner, String signature, Object receiver, Object[] values) {
-        if (vm == null) throw new IllegalStateException("Plugin called JNI before loading its native library: " + owner);
+        if (guests.isEmpty()) throw new IllegalStateException("Plugin called JNI before loading its native library: " + owner);
         loadDeferred();
+        Guest guest = guest(depth);
         depth++;
-        try { return call(owner, signature, receiver, values); }
+        try { return call(guest, owner, signature, receiver, values); }
         finally { depth--; loadDeferred(); }
     }
 
-    private static Object call(String owner, String signature, Object receiver, Object[] values) {
+    private static Object call(Guest guest, String owner, String signature, Object receiver, Object[] values) {
+        VM vm = guest.vm;
+        AndroidEmulator emulator = guest.emulator;
         Type[] types = Type.getArgumentTypes(signature.substring(signature.indexOf('(')));
         Object[] arguments = new Object[values.length];
         for (int i = 0; i < values.length; i++) {

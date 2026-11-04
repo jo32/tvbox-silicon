@@ -11,6 +11,88 @@ import java.util.jar.JarFile;
 /** Converts loaded DEX to JVM bytecode while retaining the plugin's own classes. */
 public class DexClassLoader extends URLClassLoader {
     public static DexClassLoader current;
+    /** Every plugin DEX loader, oldest first. A plugin can open several (its spiders, then a helper
+     *  such as tink-dex.jar); `current` is only the newest one. */
+    private static final java.util.List<java.lang.ref.WeakReference<DexClassLoader>> loaders = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    /**
+     * The class `name` from whichever plugin DEX defines it, for native code that names classes
+     * without a loader (JNI FindClass/NewObject). Asking only `current` broke every spider created
+     * after a plugin opened a second DEX: the aowu loader opens tink-dex.jar, and then the native
+     * getSpider could no longer find TStzg, KuGou, Wgdj... Newest loader first, own classes only,
+     * so a later DEX's placeholder never hides the real class; then `current` as before.
+     */
+    public static Class<?> pluginClass(String name) {
+        for (int i = loaders.size() - 1; i >= 0; i--) {
+            DexClassLoader loader = loaders.get(i).get();
+            if (loader == null) continue;
+            try { return loader.ownLoadedOrDefined(name); }
+            catch (ClassNotFoundException absent) { }
+        }
+        if (current == null) return null;
+        try { return Class.forName(name, false, current); }
+        catch (ClassNotFoundException missing) { return null; }
+    }
+
+    /** Classes guest code got from a plugin loader's loadClass, by name; see {@link #guestClass}. */
+    private static final java.util.Map<String, java.lang.ref.WeakReference<Class<?>>> handedToGuest = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final StackWalker WALKER = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE);
+
+    /**
+     * The class a plugin loader last gave guest native code under this name. unidbg turns a Class that
+     * JNI receives into a class name, so `loader.loadClass("...Proxy")` followed by GetStaticMethodID
+     * resolved "Proxy" again by name, which found the outer archive's stub instead of the inner DEX's
+     * class. The aowu proxyInvoke then called itself ("IllegalStateException: running") and every
+     * proxied stream (韩剧, 秋天, 经典, 魔都, 爱看) answered 502. Class name mappers ask this first.
+     */
+    public static Class<?> guestClass(String name) {
+        var reference = handedToGuest.get(name);
+        return reference == null ? null : reference.get();
+    }
+
+    /**
+     * A DEX the plugin opens itself gets `context.getClassLoader()` as parent. On Android that is the app's
+     * loader; here it is the plugin's own archive, whose same-named spider classes (the aowu jar's Proxy,
+     * Init, Danmaku stubs) would win parent-first. Like PluginClassLoader, a DEX's own spider classes come
+     * first; the shared crawler API still comes from the host.
+     */
+    @Override protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+        if (name.startsWith("com.github.catvod.") && !name.startsWith("com.github.catvod.crawler.")) {
+            synchronized (getClassLoadingLock(name)) {
+                Class<?> loaded = findLoadedClass(name);
+                if (loaded == null) {
+                    try { loaded = findOwnClass(name); } catch (ClassNotFoundException inherited) { }
+                }
+                if (loaded != null) {
+                    if (resolve) resolveClass(loaded);
+                    return loaded;
+                }
+            }
+        }
+        return super.loadClass(name, resolve);
+    }
+
+    @Override public Class<?> loadClass(String name) throws ClassNotFoundException {
+        Class<?> loaded = super.loadClass(name);
+        if (loaded.getClassLoader() instanceof DexClassLoader && calledByGuest()) handedToGuest.put(name, new java.lang.ref.WeakReference<>(loaded));
+        return loaded;
+    }
+
+    /** Whether the first caller outside reflection and class loading is unidbg's JNI bridge (guest code). */
+    private static boolean calledByGuest() {
+        return WALKER.walk(frames -> frames.skip(1)
+            .filter(frame -> !ClassLoader.class.isAssignableFrom(frame.getDeclaringClass()) && frame.getDeclaringClass() != Class.class
+                && !frame.getClassName().startsWith("java.lang.reflect.") && !frame.getClassName().startsWith("jdk.internal.reflect.")
+                && !frame.getClassName().startsWith("java.lang.invoke."))
+            .findFirst().map(frame -> frame.getClassName().startsWith("com.github.unidbg.")).orElse(false));
+    }
+
+    private Class<?> ownLoadedOrDefined(String name) throws ClassNotFoundException {
+        synchronized (getClassLoadingLock(name)) {
+            Class<?> loaded = findLoadedClass(name);
+            return loaded != null ? loaded : findPluginClass(name);
+        }
+    }
     private tvbox.runtime.LazyDexArchive lazy;
     private final java.util.Map<String, Path> preparedClasses = new java.util.HashMap<>();
     private final Path archive;
@@ -33,6 +115,8 @@ public class DexClassLoader extends URLClassLoader {
         }
         archive = Path.of(path);
         current = this;
+        loaders.removeIf(reference -> reference.get() == null);
+        loaders.add(new java.lang.ref.WeakReference<>(this));
         System.err.println("DEX_LOADER_READY " + path);
     }
     @Override protected Class<?> findClass(String name) throws ClassNotFoundException {

@@ -93,6 +93,10 @@ public class CloudDriveBridgeTest {
             check(bridge.rewriteAddress("https://example.com/proxy?do=quark").startsWith("https://example.com"), "Remote proxy rewritten");
             String array = bridge.playback("{\"url\":[\"HD\",\"http://127.0.0.1:9978/proxy?do=quark\"],\"header\":{\"Referer\":\"https://example.com\"}}");
             check(new JSONObject(array).getJSONArray("url").getString(1).contains("/media?"), "Quality array lost proxy routing");
+            // FongMi's proxy:// shorthand (aowu Bili spiders): Bili ids stay loopback /proxy? addresses for the app's
+            // Bilibili source, other actions go through the plugin's media route.
+            check(bridge.rewriteAddress("proxy://do=bili&aid=1&cid=2&type=mpd").equals("http://127.0.0.1:9978/proxy?do=bili&aid=1&cid=2&type=mpd"), "proxy:// Bili id not kept for the app");
+            check(bridge.rewriteAddress("proxy://do=Hxq&data=x").matches("http://127\\.0\\.0\\.1:\\d+/.+/media\\?do=Hxq&data=x"), "proxy:// not routed to the plugin proxy");
             check(bridge.extension("{\"Cloud-drive\":\"original\"}", new JSONObject()).contains("original"), "Empty credentials replaced existing config");
         }
         cloudFamilyCredentials();
