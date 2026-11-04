@@ -60,6 +60,70 @@ struct MobilePlayerView: View {
     }
 
     /// Writes the appearance back whenever it changes.
+    /// Asks each configured source for an intro/credits marker and keeps the first usable one.
+    ///
+    /// Only file-level sources are trusted directly. A title-level database describes a different
+    /// cut, so its segment is accepted only when the timing actually fits this file — the check
+    /// lives in `SkipSegmentSources.choose`, and `skipIsFileLevel` records which kind won so the
+    /// button can behave accordingly.
+    private func loadSkipSegment() async {
+        skipSegment = nil
+        skipIsFileLevel = false
+        guard let item = clock.item else { return }
+        let duration = clock.duration > 0 ? clock.duration : 0
+
+        // Chapters are the one file-level source available without a network call.
+        var reported: [SkipSegmentSources.Source: SkipSegmentSources.Segment] = [:]
+        if store.skipSources.isActive(.mediaServer),
+           let chapters = chapterSegments(of: item) {
+            reported[.mediaServer] = chapters
+        }
+        guard !reported.isEmpty else { return }
+
+        if let chosen = store.skipSources.choose(kind: .intro, duration: duration, reported: reported) {
+            skipSegment = chosen.segment
+            skipIsFileLevel = chosen.source.isFileLevel
+        }
+    }
+
+    /// Reads the asset's own chapters as candidate intro/credits segments.
+    ///
+    /// A "chapter" is only useful here when there are at least three of them: with one or two, the
+    /// chapter is the whole file or half of it, and neither is an intro.
+    private func chapterSegments(of item: AVPlayerItem) -> SkipSegmentSources.Segment? {
+        // No async variant of this property exists; it reads from metadata already loaded with the
+        // asset, so calling it on the player's queue is cheap.
+        let groups = item.asset.chapterMetadataGroups(bestMatchingPreferredLanguages: Locale.preferredLanguages)
+        guard groups.count >= 3 else { return nil }
+        let first = groups.first
+        guard let start = first?.timeRange.start.seconds,
+              let length = first?.timeRange.duration.seconds,
+              start.isFinite, length.isFinite, length > 3 else { return nil }
+        return SkipSegmentSources.Segment(kind: .intro, start: start, end: start + length)
+    }
+
+    /// Records what the picture is, and warns only when the answer is "this cannot be shown".
+    ///
+    /// The decision itself lives in `HDRDisplay`; this only reads the track's format description.
+    /// Nothing is tone-mapped by hand — when the display cannot take HDR the system does it, and
+    /// doing it here as well would clip the highlights twice.
+    private func inspectColour() async {
+        hdrNotice = nil
+        guard let item = clock.item else { return }
+        guard let track = try? await item.asset.loadTracks(withMediaType: .video).first,
+              let descriptions = try? await track.load(.formatDescriptions),
+              let description = descriptions.first else { return }
+
+        let transfer = HDRDisplay.transfer(of: description)
+        let action = HDRDisplay().action(
+            for: transfer,
+            displaySupportsHDR: await HDRDisplay.displaySupportsHDR()
+        )
+        if case let .unsupportedDolbyVision(reason) = action {
+            hdrNotice = reason
+        }
+    }
+
     private func saveSubtitleStyle() {
         if let blob = try? JSONEncoder().encode(subtitleStyle.sanitized) { subtitleStyleData = blob }
     }
@@ -134,6 +198,12 @@ struct MobilePlayerView: View {
     @State private var showsDanmakuList = false
     /// Set to the stream's address when the viewer asks to hand it to another app.
     @State private var externalPlayerStream: HandoffStream?
+    /// The intro or credits segment for this item, once a source has claimed one.
+    @State private var skipSegment: SkipSegmentSources.Segment?
+    /// Whether that segment came from a source that knows this exact file.
+    @State private var skipIsFileLevel = false
+    /// Set when the file is Dolby Vision this device cannot decode; shown once, not as a dialog.
+    @State private var hdrNotice: String?
     /// The subtitle files this channel offers, parsed once per title. Drawn by `SubtitleOverlay`
     /// rather than by the player, so size, opacity and position can be set.
     @State private var subtitleTracks: [SubtitleTrack] = []
@@ -202,6 +272,31 @@ struct MobilePlayerView: View {
             )
             .playerBleed(!inline, edges: .horizontal)
             .allowsHitTesting(activeSubtitleTrack != nil)
+            // Floating, not a sheet: an intro is short, and dismissing a dialog takes longer than
+            // the intro does.
+            SkipSegmentButton(
+                segment: skipSegment ?? SkipSegmentSources.Segment(kind: .intro, start: 0, end: 0),
+                position: clock.position,
+                isFileLevel: skipIsFileLevel
+            ) {
+                if let segment = skipSegment { clock.seek(to: segment.end) }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .padding(.trailing, 20)
+            .padding(.bottom, inline ? 84 : 128)
+            .playerBleed(!inline, edges: .horizontal)
+            if let hdrNotice {
+                VStack {
+                    Spacer(minLength: 0)
+                    Label(L10n.text("Dolby Vision Unsupported"), systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        .background(.black.opacity(0.66), in: Capsule())
+                        .foregroundStyle(.white)
+                        .padding(.bottom, inline ? 60 : 110)
+                }
+                .allowsHitTesting(false)
+            }
             stallNotice
             // The artwork dissolves into the first frame.
             if let waiting {
@@ -280,6 +375,8 @@ struct MobilePlayerView: View {
         .task(id: clock.item.map(ObjectIdentifier.init)) {
             await tracks.load(clock.item)
             await loadSubtitles()
+            await loadSkipSegment()
+            await inspectColour()
         }
         // Persist the caption appearance whenever it changes, so a resize survives the next launch.
         .onChange(of: subtitleStyle) { _, _ in saveSubtitleStyle() }

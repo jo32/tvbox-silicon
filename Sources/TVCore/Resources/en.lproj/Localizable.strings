@@ -1592,3 +1592,18 @@
 "Sort by Measured Quality" = "Sort by Measured Quality";
 "Sort" = "Sort";
 "Sorted by measured picture quality. Sources that were never probed are last." = "Sorted by measured picture quality. Sources that were never probed are last.";
+
+"Attributes are applied top to bottom. Drag to reorder; swipe to stop using one." = "Attributes are applied top to bottom. Drag to reorder; swipe to stop using one.";
+"Presets" = "Presets";
+
+/* UI wiring */
+"New Environment" = "New Environment";
+"Create" = "Create";
+"Delete Environment?" = "Delete Environment?";
+"Only this environment's history, watchlist and favourites are removed. Libraries and modules another environment still uses are kept." = "Only this environment's history, watchlist and favourites are removed. Libraries and modules another environment still uses are kept.";
+"Checking" = "Checking";
+"Speech Subtitles" = "Speech Subtitles";
+"Skip Intro" = "Skip Intro";
+"Skip Credits" = "Skip Credits";
+"Describes this exact file" = "Describes this exact file";
+"Describes the title; used only if the timing fits" = "Describes the title; used only if the timing fits";

@@ -1592,3 +1592,18 @@
 "Sort by Measured Quality" = "按實測畫質排序";
 "Sort" = "排序";
 "Sorted by measured picture quality. Sources that were never probed are last." = "已按實測畫質排序。從未測速的源排在最後。";
+
+"Attributes are applied top to bottom. Drag to reorder; swipe to stop using one." = "屬性從上到下依次生效。拖動可調整順序，左滑可停用某一項。";
+"Presets" = "預設";
+
+/* UI wiring */
+"New Environment" = "新環境";
+"Create" = "建立";
+"Delete Environment?" = "刪除環境？";
+"Only this environment's history, watchlist and favourites are removed. Libraries and modules another environment still uses are kept." = "只刪除這個環境的觀看記錄、待看和收藏。其他環境仍在使用的資源庫和模組會保留。";
+"Checking" = "檢查中";
+"Speech Subtitles" = "語音字幕";
+"Skip Intro" = "跳過片頭";
+"Skip Credits" = "跳過片尾";
+"Describes this exact file" = "描述的就是這個檔案";
+"Describes the title; used only if the timing fits" = "只描述這部劇，時間對得上才用";

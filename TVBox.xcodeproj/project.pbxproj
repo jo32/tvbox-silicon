@@ -54,6 +54,12 @@
 		24A10F4DDF5D0BC9B37A66DB /* Unicorn-LGPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 77D75493765469B6134467AE /* Unicorn-LGPL2.txt */; };
 		255C64CDFFBEE99EEEA11AA6 /* JNA-Apache2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 8320284C7FB9590C44BA7102 /* JNA-Apache2.txt */; };
 		26A1C218652FCEEE9FC60E0F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B442C75C212445F3786397ED /* SettingsView.swift */; };
+		BDAD26FC14632FEFA72CCCD7 /* SkipSegmentButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5719C58A52A967935300999 /* SkipSegmentButton.swift */; };
+		296A5EB87EF5D6161BE056AE /* SkipSourceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9B0FCC541F6C2086AA40AD3 /* SkipSourceSettingsView.swift */; };
+		4F447BC1E6DF9A9E6154F9A7 /* SpeechSubtitleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 734A270AFBF78AF1CC503651 /* SpeechSubtitleView.swift */; };
+		C74EAFDFEB0FE76A5EB04C26 /* ResourceRankingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46509125B57EB8F44A1BCADA /* ResourceRankingView.swift */; };
+		FFB68A09A40561697AC074A4 /* EnvironmentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D9B678CBE8F9E42D2E243CA /* EnvironmentsView.swift */; };
+		CEF7563588CA984A81ACE306 /* ArtworkLanguageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10931A1ADAD8F54481CAC2A4 /* ArtworkLanguageView.swift */; };
 		2750CF15FA8542E4C8196B3B /* MusicMacPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73C9A2A4F2D8A180EBDF8C8E /* MusicMacPlayer.swift */; };
 		277D741E2A86C06612A8034A /* CloudQRLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E78573DE76BCF27CABBB20F3 /* CloudQRLoginView.swift */; };
 		2813CE0358963C61D7865EF7 /* DiscoverSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76143E60685F2F76994F90D7 /* DiscoverSearchView.swift */; };
@@ -406,6 +412,12 @@
 		ADB3063A14E368A71892DCEE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B2CD4FD12F4DD3AAE1F8592A /* MusicPlayerViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlayerViews.swift; sourceTree = "<group>"; };
 		B442C75C212445F3786397ED /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		D5719C58A52A967935300999 /* SkipSegmentButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkipSegmentButton.swift; sourceTree = "<group>"; };
+		F9B0FCC541F6C2086AA40AD3 /* SkipSourceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkipSourceSettingsView.swift; sourceTree = "<group>"; };
+		734A270AFBF78AF1CC503651 /* SpeechSubtitleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechSubtitleView.swift; sourceTree = "<group>"; };
+		46509125B57EB8F44A1BCADA /* ResourceRankingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourceRankingView.swift; sourceTree = "<group>"; };
+		6D9B678CBE8F9E42D2E243CA /* EnvironmentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnvironmentsView.swift; sourceTree = "<group>"; };
+		10931A1ADAD8F54481CAC2A4 /* ArtworkLanguageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtworkLanguageView.swift; sourceTree = "<group>"; };
 		B44CBA0E5BBD1D129D5D64E3 /* HLSProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HLSProxy.swift; sourceTree = "<group>"; };
 		B451E5612B33CF005EEAAE08 /* EpisodeSkipSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EpisodeSkipSettingsView.swift; sourceTree = "<group>"; };
 		B45CB8261D922949ADBDBE15 /* DownloadsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadsView.swift; sourceTree = "<group>"; };
@@ -588,6 +600,12 @@
 				2075419FEF0E1C161A31A9F0 /* RuntimeView.swift */,
 				ACD30D2EA188370FBBBD2946 /* SeriesEndScreen.swift */,
 				B442C75C212445F3786397ED /* SettingsView.swift */,
+				D5719C58A52A967935300999 /* SkipSegmentButton.swift */,
+				F9B0FCC541F6C2086AA40AD3 /* SkipSourceSettingsView.swift */,
+				734A270AFBF78AF1CC503651 /* SpeechSubtitleView.swift */,
+				46509125B57EB8F44A1BCADA /* ResourceRankingView.swift */,
+				6D9B678CBE8F9E42D2E243CA /* EnvironmentsView.swift */,
+				10931A1ADAD8F54481CAC2A4 /* ArtworkLanguageView.swift */,
 				75124CC2471CF95C1FFB168A /* SitesView.swift */,
 				64BAC6685AECD9293F2D5503 /* SourceEditor.swift */,
 				77A78070906EA4356510F510 /* SourceMovesView.swift */,
@@ -1324,6 +1342,12 @@
 				D5140B80F4BA053665F4D30A /* RuntimeView.swift in Sources */,
 				9F565D1EB1788AF63B0AB3B6 /* SeriesEndScreen.swift in Sources */,
 				26A1C218652FCEEE9FC60E0F /* SettingsView.swift in Sources */,
+				BDAD26FC14632FEFA72CCCD7 /* SkipSegmentButton.swift in Sources */,
+				296A5EB87EF5D6161BE056AE /* SkipSourceSettingsView.swift in Sources */,
+				4F447BC1E6DF9A9E6154F9A7 /* SpeechSubtitleView.swift in Sources */,
+				C74EAFDFEB0FE76A5EB04C26 /* ResourceRankingView.swift in Sources */,
+				FFB68A09A40561697AC074A4 /* EnvironmentsView.swift in Sources */,
+				CEF7563588CA984A81ACE306 /* ArtworkLanguageView.swift in Sources */,
 				F8EB061662C5CB6EB47B41F2 /* SitesView.swift in Sources */,
 				7AA851C4D0805EE7D4EAD670 /* SourceEditor.swift in Sources */,
 				FD10F6E020810184F27999BF /* SourceMovesView.swift in Sources */,

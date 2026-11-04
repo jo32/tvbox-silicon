@@ -1592,3 +1592,18 @@
 "Sort by Measured Quality" = "按实测画质排序";
 "Sort" = "排序";
 "Sorted by measured picture quality. Sources that were never probed are last." = "已按实测画质排序。从未测速的源排在最后。";
+
+"Attributes are applied top to bottom. Drag to reorder; swipe to stop using one." = "属性从上到下依次生效。拖动可调整顺序，左滑可停用某一项。";
+"Presets" = "预设";
+
+/* UI wiring */
+"New Environment" = "新环境";
+"Create" = "创建";
+"Delete Environment?" = "删除环境？";
+"Only this environment's history, watchlist and favourites are removed. Libraries and modules another environment still uses are kept." = "只删除这个环境的观看记录、待看和收藏。其他环境仍在使用的资源库和模块会保留。";
+"Checking" = "检查中";
+"Speech Subtitles" = "语音字幕";
+"Skip Intro" = "跳过片头";
+"Skip Credits" = "跳过片尾";
+"Describes this exact file" = "描述的就是这个文件";
+"Describes the title; used only if the timing fits" = "只描述这部剧，时间对得上才用";

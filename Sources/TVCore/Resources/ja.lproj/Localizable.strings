@@ -1592,3 +1592,18 @@
 "Sort by Measured Quality" = "計測した画質で並べ替え";
 "Sort" = "並べ替え";
 "Sorted by measured picture quality. Sources that were never probed are last." = "計測した画質で並べ替えました。未計測のソースは最後になります。";
+
+"Attributes are applied top to bottom. Drag to reorder; swipe to stop using one." = "属性は上から順に適用されます。ドラッグで並べ替え、スワイプで外せます。";
+"Presets" = "プリセット";
+
+/* UI wiring */
+"New Environment" = "新しい環境";
+"Create" = "作成";
+"Delete Environment?" = "環境を削除しますか？";
+"Only this environment's history, watchlist and favourites are removed. Libraries and modules another environment still uses are kept." = "この環境の視聴履歴・ウォッチリスト・お気に入りだけが削除されます。他の環境が使用中のライブラリとモジュールは残ります。";
+"Checking" = "確認中";
+"Speech Subtitles" = "音声字幕";
+"Skip Intro" = "オープニングをスキップ";
+"Skip Credits" = "エンドロールをスキップ";
+"Describes this exact file" = "このファイル自体の情報";
+"Describes the title; used only if the timing fits" = "作品の情報のみ。時間が合う場合だけ使用";

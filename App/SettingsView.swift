@@ -355,6 +355,21 @@ struct FormSettingsView: View {
     @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
     @AppStorage(CloudSync.enabledKey) private var syncsWithICloud = true
     @AppStorage("refreshSubscriptionsOnLaunch") private var refreshesOnLaunch = false
+
+    /// The ranking in one line — what the Sources page's sort will do — for the row that opens it.
+    private var rankingSummary: String {
+        let keys = store.resourceRanking.keys
+        guard !keys.isEmpty else { return L10n.text("Default") }
+        return keys.map { Self.rankingName($0.attribute) + ($0.descending ? " \u{2193}" : " \u{2191}") }.joined(separator: " ")
+    }
+    private static func rankingName(_ attribute: ResourceRanking.Key.Attribute) -> String {
+        switch attribute {
+        case .resolution: return L10n.text("Resolution")
+        case .bitrate: return L10n.text("Bitrate")
+        case .fileSize: return L10n.text("File Size")
+        case .colourRange: return L10n.text("Colour Range")
+        }
+    }
     #if os(macOS)
     @State private var choosesFile = false
     #endif
@@ -512,6 +527,21 @@ struct FormSettingsView: View {
                 .onChange(of: syncsWithICloud) { _, on in store.cloudSync?.setEnabled(on) }
             } footer: {
                 Text(SettingsNote.iCloud)
+            }
+
+            // What plays, and how it is chosen. One list for both platforms: on the phone these sit
+            // beside the app's other pages, and on a Mac this is the only door to them.
+            Section {
+                FormLink(symbol: "photo.on.rectangle.angled", tint: .pink, title: L10n.text("Artwork Language"),
+                         value: store.artworkLanguage.costsExtraRequests ? L10n.text("Changed") : nil) { ArtworkLanguageView() }
+                FormLink(symbol: "arrow.up.arrow.down.square.fill", tint: .teal, title: L10n.text("Resource Order"),
+                         value: rankingSummary) { ResourceRankingView() }
+                FormLink(symbol: "person.2.crop.square.stack.fill", tint: .indigo, title: L10n.text("Environments"),
+                         value: store.environments.all.count > 1 ? "\(store.environments.all.count)" : nil) { EnvironmentsView() }
+                FormLink(symbol: "forward.end.alt.fill", tint: .cyan, title: L10n.text("Segment Sources")) { SkipSourceSettingsView() }
+                FormLink(symbol: "waveform.badge.plus", tint: .purple, title: L10n.text("Speech Subtitles")) { SpeechSubtitleView() }
+            } header: {
+                Text(L10n.text("What Plays"))
             }
 
             #if os(iOS)
@@ -1752,6 +1782,7 @@ struct TVSettingsView: View {
                 // passcode that guards it. Without a row here the TV could apply a vault it had no
                 // way to edit.
                 TVSettingsLink(title: L10n.text("Privacy Vault")) { PrivacyVaultView() }
+                TVSettingsLink(title: L10n.text("Resource Order")) { ResourceRankingView() }
                 TVSettingsToggle(title: L10n.text("Send Error Reports"), isOn: $sendsErrorReports)
                     .onChange(of: sendsErrorReports) { _, on in if !on { ErrorReports.shared.discard() } }
                 TVSettingsToggle(title: L10n.text("Look Up Titles on TMDB"), isOn: $looksUpTMDB)

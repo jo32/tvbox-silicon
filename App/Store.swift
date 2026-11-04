@@ -1241,7 +1241,10 @@ import TVCore
         guard let config = subscription else { return }
         let sites = orderedSites(config)
         let probes = SourceProbeStore.shared
-        let ranked = ResourceRanking.standard.sort(sites.filter { !$0.isBuiltIn }) { site in
+        // The viewer's own order of attributes, not a preset: a list they composed and can reorder
+        // is the whole point of having a ranking page.
+        let ranking = resourceRanking.keys.isEmpty ? ResourceRanking.standard : resourceRanking
+        let ranked = ranking.sort(sites.filter { !$0.isBuiltIn }) { site in
             guard let reading = probes.latest(sourceKey: site.sourceKey) else { return ResourceRanking.Candidate() }
             return ResourceRanking.Candidate(reading)
         }
