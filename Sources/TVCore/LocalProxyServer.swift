@@ -144,7 +144,7 @@ public final class LocalProxyServer: @unchecked Sendable {
         }
     }
 
-    private struct Target {
+    struct Target {
         let proxyID: String?
         let scheme: String
         let host: String
@@ -219,7 +219,7 @@ public final class LocalProxyServer: @unchecked Sendable {
     }
 
     /// Parses `/d/<scheme>/<host>/<port>/<path>` or `/p/<proxyID>/<scheme>/<host>/<port>/<path>`.
-    private static func parse(_ target: String) -> Target? {
+    static func parse(_ target: String) -> Target? {
         let parts = target.split(separator: "/", omittingEmptySubsequences: true)
         guard parts.count >= 4 else { return nil }
         var index = 0
