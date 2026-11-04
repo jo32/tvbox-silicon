@@ -70,6 +70,7 @@ struct SubtitleOverlay: View {
             .shadow(color: .black.opacity(style.textOpacity * 0.55), radius: 3, y: 1)
             .frame(maxWidth: size.width * 0.92)
             .position(x: x, y: y)
+            #if !os(tvOS)
             .gesture(
                 DragGesture()
                     .onChanged { value in drag = value.translation }
@@ -77,11 +78,14 @@ struct SubtitleOverlay: View {
                         settle(value, in: size)
                     }
             )
+            #endif
             .accessibilityLabel(cue.text)
     }
 
     /// Turns a finished drag into a stored position, clamped so the bubble cannot be thrown off
     /// screen, then clears the in-flight offset so the next frame reads from the stored value.
+    /// tvOS has no drag gesture, so a subtitle there stays where the style puts it.
+    #if !os(tvOS)
     private func settle(_ value: DragGesture.Value, in size: CGSize) {
         let settledX = min(max(style.centerX, 0.08), 0.92) + value.translation.width / max(size.width, 1)
         let settledY = min(max(style.centerY, 0.10), 0.94) + value.translation.height / max(size.height, 1)
@@ -91,6 +95,7 @@ struct SubtitleOverlay: View {
         memory.store(CGPoint(x: clamped.x, y: clamped.y), for: positionKey)
         drag = .zero
     }
+    #endif
 }
 
 /// The subtitle controls: size, both opacities, on/off, and a way back to the defaults.
@@ -149,13 +154,19 @@ struct SubtitleSettingsView: View {
             }
         }
         .navigationTitle(L10n.text("Subtitles"))
+        #if !os(tvOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
     }
 
     private func slider(_ title: String, value: Binding<Double>,
                         range: ClosedRange<Double>, format: String,
                         scaled: Bool = false, symbol: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        // On the TV one press moves a twentieth of the range, so a value is reachable in a few clicks.
+        #if os(tvOS)
+        let step = (range.upperBound - range.lowerBound) / 20
+        #endif
+        return VStack(alignment: .leading, spacing: 4) {
             HStack {
                 FormLabel(symbol: symbol, tint: .teal, title: title)
                 Spacer(minLength: 8)
@@ -164,7 +175,20 @@ struct SubtitleSettingsView: View {
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
+            #if os(tvOS)
+            // A TV remote cannot drag a slider; two presses move it instead.
+            HStack(spacing: 20) {
+                Button { value.wrappedValue = max(range.lowerBound, value.wrappedValue - step) } label: {
+                    Image(systemName: "minus.circle.fill")
+                }
+                Button { value.wrappedValue = min(range.upperBound, value.wrappedValue + step) } label: {
+                    Image(systemName: "plus.circle.fill")
+                }
+            }
+            .font(.title3)
+            #else
             Slider(value: value, in: range)
+            #endif
         }
         .padding(.vertical, 2)
     }
@@ -193,6 +217,8 @@ struct ExternalPlayerMenu: View {
                             FormLabel(symbol: "play.rectangle.fill", tint: .indigo, title: player.name)
                         }
                     }
+                    // tvOS has no clipboard to copy an address into.
+                    #if !os(tvOS)
                     Button {
                         UIPasteboard.general.string = stream.absoluteString
                         copied = true
@@ -201,6 +227,7 @@ struct ExternalPlayerMenu: View {
                                   tint: copied ? .green : .gray,
                                   title: copied ? L10n.text("Address Copied") : L10n.text("Copy Address"))
                     }
+                    #endif
                 } header: {
                     Text(L10n.text("Installed Players"))
                 } footer: {
@@ -234,7 +261,9 @@ struct ExternalPlayerMenu: View {
                 }
             }
             .navigationTitle(L10n.text("Open in Another Player"))
+            #if !os(tvOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(L10n.text("Cancel")) { dismiss() }

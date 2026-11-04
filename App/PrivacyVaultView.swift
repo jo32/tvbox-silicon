@@ -82,7 +82,9 @@ struct PasscodeGate: View {
                 }
             }
             .navigationTitle(purpose.title)
+            #if !os(tvOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(L10n.text("Cancel")) { dismiss() }
@@ -147,7 +149,9 @@ struct PrivacyVaultView: View {
             }
         }
         .navigationTitle(L10n.text("Privacy"))
+        #if !os(tvOS)
         .navigationBarTitleDisplayMode(.inline)
+        #endif
         .task { reload() }
         .onAppear { reload() }
         .sheet(item: $gated) { gate in

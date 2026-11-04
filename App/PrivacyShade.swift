@@ -30,7 +30,7 @@ struct PrivacyShade: ViewModifier {
                 if enabled {
                     // A flat colour, not a blur: a blurred snapshot is still a readable one, and a
                     // blur costs a render pass at the worst possible moment.
-                    Color(.systemBackground)
+                    shadeColor
                         .ignoresSafeArea()
                         .opacity(covered ? 1 : 0)
                         .allowsHitTesting(covered)
@@ -55,6 +55,15 @@ struct PrivacyShade: ViewModifier {
                 // switcher and during a call banner, which is exactly when the snapshot is taken.
                 covered = enabled && phase != .active
             }
+    }
+
+    /// The cover's colour. tvOS has no `systemBackground` and is dark only, so it is flat black there.
+    private var shadeColor: Color {
+        #if os(tvOS)
+        Color.black
+        #else
+        Color(.systemBackground)
+        #endif
     }
 }
 

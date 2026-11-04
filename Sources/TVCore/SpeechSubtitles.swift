@@ -1,4 +1,8 @@
-#if canImport(Speech) && canImport(AVFoundation)
+// Speech recognition is unavailable on tvOS: the framework ships, but `SFSpeechRecognizer`,
+// `SFSpeechURLRecognitionRequest` and the authorization status are all marked unavailable there, so
+// the target has never compiled with this file. Watch on the TV still plays; it just cannot build
+// subtitles from a video's audio, which is a phone-and-Mac feature.
+#if canImport(Speech) && canImport(AVFoundation) && !os(tvOS)
 import Foundation
 import AVFoundation
 import Speech

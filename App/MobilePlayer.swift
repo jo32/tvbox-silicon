@@ -69,6 +69,9 @@ struct MobilePlayerView: View {
     @State private var mountsVolume = false
     /// The screen's brightness before the first slide changed it, put back when the player closes.
     @State private var brightnessBefore: CGFloat?
+    /// The viewer locked the controls: the picture's taps and slides do nothing, and the orientation
+    /// stays put whatever the gyroscope says, until they unlock again.
+    @State private var controlsLocked = false
 
     var body: some View {
         ZStack {
@@ -184,13 +187,15 @@ struct MobilePlayerView: View {
     // MARK: Taps and slides
 
     private func tapped(_ x: CGFloat, _ width: CGFloat) {
-        let zone = PictureTaps.zone(x: x, width: width, seekable: seekable && showsTransport && playingOn == nil && !pip.active)
+        // Locked controls: a tap only shows or hides them; it never pauses or skips.
+        let zone = PictureTaps.zone(x: x, width: width, seekable: !controlsLocked && seekable && showsTransport && playingOn == nil && !pip.active)
         switch taps.tap(at: ProcessInfo.processInfo.systemUptime, in: zone) {
         case .toggleControls:
             let showing = !chromeVisible
             toggleChrome()
             if showing { settle(); clearLabels() }
         case .togglePlayback:
+            if controlsLocked { break }
             toggleChrome()
             session.togglePlayback()
         case .skip(let seconds, let total, _):
@@ -232,6 +237,7 @@ struct MobilePlayerView: View {
     private var screen: UIScreen? { UIApplication.shared.appWindowScene?.screen }
 
     private func swiped(_ phase: PictureGestures.Swipe) {
+        if controlsLocked { return }
         switch phase {
         case .began(.seek):
             guard showsTransport, seekable, clock.duration > 0, playingOn == nil, !pip.active else { return }
@@ -356,6 +362,7 @@ struct MobilePlayerView: View {
     private var boosts: Bool { showsTransport && seekable && !session.paused && playingOn == nil && !pip.active }
 
     private func held(_ phase: PictureGestures.Hold) {
+        if controlsLocked { return }
         switch phase {
         case .began:
             guard boosts else { return }
@@ -442,16 +449,93 @@ struct MobilePlayerView: View {
             }
             .playerBleed(!inline)
             .allowsHitTesting(false)
-            VStack(spacing: 0) {
-                topRow
-                Spacer(minLength: 0)
-                if showsTransport { bottomRow }
+            if landscapeLayout {
+                landscapeControls
+            } else {
+                VStack(spacing: 0) {
+                    topRow
+                    Spacer(minLength: 0)
+                    if showsTransport { bottomRow }
+                }
+                .padding(inline ? 8 : 16)
+                if showsTransport { centerRow }
             }
-            .padding(inline ? 8 : 16)
-            if showsTransport { centerRow }
         }
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
+    }
+
+    /// The player on its own screen, held sideways: the transport at the left, the buttons at the
+    /// right, the seek bar across the bottom — the left/right layout the upright stack can't give.
+    private var landscapeLayout: Bool { !inline && verticalSizeClass == .compact }
+
+    private var landscapeControls: some View {
+        VStack(spacing: 0) {
+            // Back and the title across the top.
+            HStack(spacing: 12) {
+                Button(action: close) { Image(systemName: "chevron.backward").font(.headline).frame(width: 22, height: 22) }
+                    .chromeButton()
+                    .accessibilityLabel(L10n.text("Back"))
+                    .accessibilityIdentifier("player.close")
+                Text(channel.name).font(.headline).lineLimit(1)
+                    .shadow(color: .black.opacity(0.6), radius: 4)
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 16).padding(.trailing, 16).padding(.top, 8)
+            Spacer(minLength: 0)
+            HStack(spacing: 0) {
+                // Transport: back/skip 10, play/pause, forward 10, stacked sideways against the left.
+                HStack(spacing: 20) {
+                    if seekable {
+                        Button { session.skip(-10); sought() } label: { Image(systemName: "gobackward.10") }
+                            .buttonStyle(PlayerCircleStyle(size: 52))
+                            .accessibilityLabel(L10n.text("Back 10 seconds"))
+                    }
+                    Button { session.togglePlayback() } label: {
+                        Image(systemName: session.paused ? "play.fill" : "pause.fill").contentTransition(.symbolEffect(.replace))
+                    }
+                    .buttonStyle(PlayerCircleStyle(size: 68))
+                    .accessibilityLabel(L10n.text(session.paused ? "Play" : "Pause"))
+                    .accessibilityIdentifier("player.playPause")
+                    if seekable {
+                        Button { session.skip(10); sought() } label: { Image(systemName: "goforward.10") }
+                            .buttonStyle(PlayerCircleStyle(size: 52))
+                            .accessibilityLabel(L10n.text("Forward 10 seconds"))
+                    }
+                }
+                .padding(.leading, 28)
+                Spacer(minLength: 0)
+                // The buttons, stacked down the right side.
+                VStack(spacing: 14) {
+                    toolbar
+                    optionsMenu
+                }
+                .padding(.trailing, 24)
+            }
+            Spacer(minLength: 0)
+            // The seek bar and step buttons across the bottom.
+            HStack {
+                if showsTransport { landscapeBottomRow }
+            }
+            .padding(.horizontal, 24).padding(.bottom, 16)
+        }
+        .simultaneousGesture(TapGesture().onEnded { poke() })
+    }
+
+    @ViewBuilder private var landscapeBottomRow: some View {
+        if session.isLive {
+            HStack {
+                Text(L10n.text("LIVE")).font(.caption.weight(.bold))
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(.red, in: Capsule())
+                Spacer(minLength: 0)
+                stepButtons
+            }
+        } else if session.hasTimeline {
+            SeekBar(clock: clock, moving: chromeVisible && !session.paused, hold: hold, sought: sought) { stepButtons }
+        } else {
+            HStack { Spacer(minLength: 0); stepButtons }
+        }
     }
 
     // MARK: Top row
@@ -530,15 +614,28 @@ struct MobilePlayerView: View {
                 .chromeButton()
                 .accessibilityLabel(L10n.text("Danmaku"))
             }
+            // Locks the controls: taps and slides stop touching the picture, and the orientation stays
+            // put whatever the gyroscope says, until unlocked.
+            if !inline {
+                Button { toggleLock() } label: {
+                    Image(systemName: controlsLocked ? "lock.fill" : "lock.open")
+                        .font(.headline).frame(width: 22, height: 22)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .chromeButton()
+                .accessibilityLabel(L10n.text(controlsLocked ? "Unlock Controls" : "Lock Controls"))
+                .accessibilityIdentifier("player.lock")
+            }
             // Turns the picture even with Portrait Orientation Lock on, the way the system's own rotation can't.
             // Only on a phone-sized screen: iPhone Duo's inner display (regular both ways) ignores orientations.
+            // It cycles portrait → landscape left → landscape right, so the picture can face either landscape.
             if !inline, PlayerOrientation.available, horizontalSizeClass == .compact || verticalSizeClass == .compact {
                 let landscape = verticalSizeClass == .compact
-                Button { PlayerOrientation.set(landscape: !landscape) } label: {
+                Button { rotate() } label: {
                     Image(systemName: landscape ? "rectangle.portrait.rotate" : "rectangle.landscape.rotate").font(.headline).frame(width: 22, height: 22)
                 }
                 .chromeButton()
-                .accessibilityLabel(L10n.text(landscape ? "Rotate to Portrait" : "Rotate to Landscape"))
+                .accessibilityLabel(L10n.text("Rotate"))
                 .accessibilityIdentifier("player.rotate")
             }
         }
@@ -690,6 +787,26 @@ struct MobilePlayerView: View {
     private func sought() {
         poke()
         nowPlaying.update(title: channel.name, session: session)
+    }
+
+    /// Locks or unlocks the controls. Locking pins the orientation too, so the gyroscope can't
+    /// turn the picture while the controls are held; unlocking lets it follow the phone again.
+    private func toggleLock() {
+        controlsLocked.toggle()
+        if controlsLocked { PlayerOrientation.lock() } else { PlayerOrientation.unlock() }
+        poke()
+    }
+
+    /// Turns the picture to the next orientation by hand; the controls follow the rotation.
+    private func rotate() {
+        let next: UIInterfaceOrientation
+        switch PlayerOrientation.currentOrientation {
+        case .landscapeLeft: next = .landscapeRight
+        case .landscapeRight: next = .portrait
+        default: next = .landscapeLeft
+        }
+        PlayerOrientation.rotate(to: next)
+        poke()
     }
 
     private var pipPlaceholder: some View {

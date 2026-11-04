@@ -1122,6 +1122,34 @@ private struct PlayURLView: View {
 }
 #endif
 
+#if os(tvOS)
+// The TV has its own settings layout (`SettingsPage` plus `SettingsGroup`), so the row views above
+// live in the iPhone/Mac-only block. Two pages are shared with them — the privacy vault and the
+// subtitle style — and both ask for this row. Give the TV the same two pieces, drawn as a plain
+// label, which is what a group row looks like there anyway.
+struct FormLabel: View {
+    let symbol: String
+    var tint: Color = .gray
+    let title: String
+    var subtitle: String? = nil
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                if let subtitle, !subtitle.isEmpty { Text(subtitle).font(.caption).foregroundStyle(.secondary) }
+            }
+        } icon: {
+            Image(systemName: symbol).foregroundStyle(tint)
+        }
+    }
+}
+
+extension View {
+    /// Tinting a switch green is an iPhone idiom; on the TV the system draws it.
+    @ViewBuilder func settingsSwitch() -> some View { self }
+}
+#endif
+
 struct LicensesView: View {
     private var notices: String {
         (Bundle.main.url(forResource: "ThirdPartyNotices", withExtension: "txt").flatMap { try? String(contentsOf: $0, encoding: .utf8) }) ?? "DexLoom · MIT License"
