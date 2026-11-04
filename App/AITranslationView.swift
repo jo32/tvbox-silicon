@@ -22,10 +22,17 @@ struct AITranslationView: View {
                         Text(provider.name).tag(provider.name)
                     }
                 }
+                // `textInputAutocapitalization` is iOS/tvOS only; the Mac's text field has no such modifier.
                 TextField(L10n.text("Complete Address"), text: $draft.baseURL)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    #if !os(macOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .autocorrectionDisabled()
                 TextField(L10n.text("Model"), text: $draft.model)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    #if !os(macOS)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .autocorrectionDisabled()
                 SecureField(L10n.text("API Key"), text: $draft.apiKey)
             } header: {
                 Text(L10n.text("Translate Subtitles"))
