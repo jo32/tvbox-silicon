@@ -27,9 +27,16 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
 
     // MARK: 存储的字段
 
-    /// Source keys the user hid. A subscription is hidden by hiding every source it contributed,
-    /// plus its origin, which `hiddenSubscriptions` records separately.
+    /// Source identities the user hid, each written as `<subscription origin>|<source key>`.
+    ///
+    /// The bare key is not enough: unrelated subscriptions very often use the same key (`csp_AppYsV2`
+    /// appears in dozens of public feeds), so a bare-key list flips every namesake at once — the
+    /// "turning off A also turned off B" report. The origin makes the identity the same one the rest of
+    /// the app uses (`EpisodeSkipSettings.scope`), so history, favourites and search agree with it.
     public private(set) var hiddenSources: Set<String>
+    /// Keys saved by builds before identities carried an origin. They still hide, matching by key
+    /// alone, so an existing vault does not quietly stop working after the update.
+    public private(set) var legacyKeys: Set<String>
     /// Subscription origins (`Subscription.origin`) the user hid, so an empty-but-present
     /// subscription does not linger in the list.
     public private(set) var hiddenSubscriptions: Set<String>
@@ -52,6 +59,9 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
     /// Failed attempts, to slow down guessing. Not encoded, so it resets on relaunch — the
     /// persisted digest is the real barrier.
     public private(set) var failedAttempts: Int = 0
+    /// Bumps whenever what is visible changes — a hide, a show, a lock, an unlock. Cached source
+    /// lists compare it, and a view that reads it redraws when the vault is opened or closed.
+    public private(set) var revision = 0
 
     /// The iteration count for a new digest. 120 000 keeps a four-digit passcode's search space
     /// expensive without making unlock feel slow on an old phone.
@@ -61,6 +71,7 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
 
     public init(rounds: Int = PrivacyVault.defaultRounds, unlockDuration: TimeInterval = 300) {
         self.hiddenSources = []
+        self.legacyKeys = []
         self.hiddenSubscriptions = []
         self.salt = Data()
         self.digest = Data()
@@ -99,6 +110,7 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
         unlockedAt = now
         failedAttempts = 0
         cooldownEnds = nil
+        revision += 1
     }
 
     /// Checks a passcode and, on success, unlocks. Returns whether it matched.
@@ -109,6 +121,7 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
         if verify(passcode) {
             unlockedAt = now
             failedAttempts = 0
+            revision += 1
             return true
         }
         failedAttempts += 1
@@ -125,7 +138,11 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
     public private(set) var cooldownEnds: Date?
 
     /// Relocks immediately. Called when the app goes to the background, or from a "lock now" row.
-    public mutating func lock() { unlockedAt = nil }
+    public mutating func lock() {
+        guard unlockedAt != nil else { return }
+        unlockedAt = nil
+        revision += 1
+    }
 
     /// Whether hidden items may be shown right now. Also expires a stale unlock, so a caller does
     /// not have to run a timer to be safe — reading this is enough.
@@ -133,6 +150,7 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
         guard let started = unlockedAt else { return false }
         guard now.timeIntervalSince(started) < unlockDuration else {
             unlockedAt = nil
+            revision += 1
             return false
         }
         return true
@@ -146,32 +164,50 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
 
     // MARK: 隐藏与显示
 
-    /// Hides sources. Requires an unlock, so a passer-by cannot hide things to confuse the owner.
-    public mutating func hide(sources: Set<String>, now: Date = Date()) throws {
+    /// The stored identity of one source. Every hide and every read builds it the same way, so a
+    /// source cannot be hidden under one name and looked for under another.
+    public static func scope(origin: URL, sourceKey: String) -> String {
+        origin.absoluteString + "|" + sourceKey
+    }
+
+    /// Hides sources, each identified by its subscription's origin. Requires an unlock, so a
+    /// passer-by cannot hide things to confuse the owner.
+    public mutating func hide(sourceKeys: some Sequence<String>, origin: URL, now: Date = Date()) throws {
         guard hasPasscode else { throw PasscodeError.noPasscode }
         guard isUnlocked(now: now) else { throw PasscodeError.wrongPasscode }
-        hiddenSources.formUnion(sources)
+        let scopes = sourceKeys.map { Self.scope(origin: origin, sourceKey: $0) }
+        guard scopes.contains(where: { !hiddenSources.contains($0) }) else { return }
+        hiddenSources.formUnion(scopes)
+        revision += 1
     }
 
     /// Unhides sources. Also requires an unlock.
-    public mutating func show(sources: Set<String>, now: Date = Date()) throws {
+    public mutating func show(sourceKeys: some Sequence<String>, origin: URL, now: Date = Date()) throws {
         guard hasPasscode else { throw PasscodeError.noPasscode }
         guard isUnlocked(now: now) else { throw PasscodeError.wrongPasscode }
-        hiddenSources.subtract(sources)
+        hiddenSources.subtract(sourceKeys.map { Self.scope(origin: origin, sourceKey: $0) })
+        // A key saved by an older build is cleared by key, since it cannot be told apart by origin.
+        legacyKeys.subtract(sourceKeys)
+        revision += 1
     }
 
     /// Hides a whole subscription by origin, and every source it contributed.
-    public mutating func hide(subscription origin: URL, sources: Set<String>, now: Date = Date()) throws {
-        try hide(sources: sources, now: now)
+    public mutating func hide(subscription origin: URL, sourceKeys: some Sequence<String>, now: Date = Date()) throws {
+        guard hasPasscode else { throw PasscodeError.noPasscode }
         guard isUnlocked(now: now) else { throw PasscodeError.wrongPasscode }
-        hiddenSubscriptions.insert(origin.absoluteString)
+        hiddenSources.formUnion(sourceKeys.map { Self.scope(origin: origin, sourceKey: $0) })
+        if hiddenSubscriptions.insert(origin.absoluteString).inserted { revision += 1 }
     }
 
     /// Unhides a subscription and its sources.
-    public mutating func show(subscription origin: URL, sources: Set<String>, now: Date = Date()) throws {
-        try show(sources: sources, now: now)
+    public mutating func show(subscription origin: URL, sourceKeys: some Sequence<String>, now: Date = Date()) throws {
+        guard hasPasscode else { throw PasscodeError.noPasscode }
         guard isUnlocked(now: now) else { throw PasscodeError.wrongPasscode }
+        let scopes = Set(sourceKeys.map { Self.scope(origin: origin, sourceKey: $0) })
+        hiddenSources.subtract(scopes)
+        legacyKeys.subtract(sourceKeys)
         hiddenSubscriptions.remove(origin.absoluteString)
+        revision += 1
     }
 
     /// Removes the passcode and unhides everything. Called from a "turn off" row, which must have
@@ -179,12 +215,14 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
     public mutating func removePasscode(now: Date = Date()) throws {
         guard isUnlocked(now: now) else { throw PasscodeError.wrongPasscode }
         hiddenSources.removeAll()
+        legacyKeys.removeAll()
         hiddenSubscriptions.removeAll()
         digest = Data()
         salt = Data()
         unlockedAt = nil
         failedAttempts = 0
         cooldownEnds = nil
+        revision += 1
     }
 
     // MARK: 过滤 —— 每个读取点都要问的问题
@@ -193,23 +231,51 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
     ///
     /// Every read site calls this. It is deliberately cheap and non-mutating: a `View` body calls
     /// it once per row.
-    public func permits(sourceKey: String, now: Date = Date()) -> Bool {
-        guard hiddenSources.contains(sourceKey) else { return true }
+    public func permits(sourceKey: String, origin: URL, now: Date = Date()) -> Bool {
+        // No passcode means nothing is hidden: a leftover list from a removed passcode must not
+        // quietly keep content out of the app with no way to bring it back.
+        guard hasPasscode else { return true }
+        let scope = Self.scope(origin: origin, sourceKey: sourceKey)
+        guard hiddenSources.contains(scope) || legacyKeys.contains(sourceKey) else { return true }
         return unlocked(now: now)
     }
 
-    /// Whether a subscription may be listed.
+    /// Whether a source counts as hidden at all, whatever the lock state. For a switch's position.
+    public func isHidden(sourceKey: String, origin: URL) -> Bool {
+        hiddenSources.contains(Self.scope(origin: origin, sourceKey: sourceKey)) || legacyKeys.contains(sourceKey)
+    }
+
+    /// Whether a subscription as a whole is hidden, whatever the lock state.
+    public func isHidden(subscription origin: URL) -> Bool {
+        hiddenSubscriptions.contains(origin.absoluteString)
+    }
+
+    /// Whether a whole subscription may be listed.
     public func permits(subscription origin: URL, now: Date = Date()) -> Bool {
+        guard hasPasscode else { return true }
         guard hiddenSubscriptions.contains(origin.absoluteString) else { return true }
         return unlocked(now: now)
     }
 
+    /// Whether one source of one subscription may be shown: neither it nor its whole subscription
+    /// hidden, unless the vault is open.
+    ///
+    /// The subscription test uses the source's *own* origin, never the merged document's. That
+    /// fallback belongs to the first subscription and the built-in sources carry no origin at all,
+    /// so testing it would hide every built-in source the moment one subscription was hidden.
+    public func permits(site: Site, fallback: URL, now: Date = Date()) -> Bool {
+        let origin = site.origin(or: fallback)
+        guard permits(sourceKey: site.sourceKey, origin: origin, now: now) else { return false }
+        guard let own = site.provenance?.origin else { return true }
+        return permits(subscription: own, now: now)
+    }
+
     /// Filters sources whose owners are hidden. Use it in the source picker, the search fan-out,
     /// and the recommendation fan-out — anywhere a set of keys becomes a set of requests.
-    public func visibleSources(_ keys: some Sequence<String>, now: Date = Date()) -> [String] {
+    public func visibleSources(_ keys: some Sequence<String>, origin: URL, now: Date = Date()) -> [String] {
         let open = unlocked(now: now)
         if open { return Array(keys) }
-        return keys.filter { !hiddenSources.contains($0) }
+        return keys.filter { !isHidden(sourceKey: $0, origin: origin) }
     }
 
     /// Filters subscriptions for the subscription list.
@@ -220,8 +286,8 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
     }
 
     /// Whether anything is hidden at all, so a settings row can show a count instead of a switch.
-    public var hasHiddenItems: Bool { !hiddenSources.isEmpty || !hiddenSubscriptions.isEmpty }
-    public var hiddenCount: Int { hiddenSources.count + hiddenSubscriptions.count }
+    public var hasHiddenItems: Bool { !hiddenSources.isEmpty || !hiddenSubscriptions.isEmpty || !legacyKeys.isEmpty }
+    public var hiddenCount: Int { hiddenSources.count + hiddenSubscriptions.count + legacyKeys.count }
 
     // MARK: 摘要
 
@@ -258,12 +324,17 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
     // MARK: 编解码 —— 只存能存的东西
 
     private enum CodingKeys: String, CodingKey {
-        case hiddenSources, hiddenSubscriptions, salt, digest, rounds, unlockDuration
+        case hiddenSources, legacyKeys, hiddenSubscriptions, salt, digest, rounds, unlockDuration
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        hiddenSources = Set(try container.decodeIfPresent([String].self, forKey: .hiddenSources) ?? [])
+        let saved = Set(try container.decodeIfPresent([String].self, forKey: .hiddenSources) ?? [])
+        // Builds before this one saved bare keys. Everything is read through one set, so split the
+        // saved list by whether an identity carries its origin.
+        hiddenSources = saved.filter { $0.contains("|") }
+        legacyKeys = Set(try container.decodeIfPresent([String].self, forKey: .legacyKeys) ?? [])
+            .union(saved.filter { !$0.contains("|") })
         hiddenSubscriptions = Set(try container.decodeIfPresent([String].self, forKey: .hiddenSubscriptions) ?? [])
         salt = try container.decodeIfPresent(Data.self, forKey: .salt) ?? Data()
         digest = try container.decodeIfPresent(Data.self, forKey: .digest) ?? Data()
@@ -276,6 +347,7 @@ public struct PrivacyVault: Codable, Equatable, Sendable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(Array(hiddenSources).sorted(), forKey: .hiddenSources)
+        try container.encode(Array(legacyKeys).sorted(), forKey: .legacyKeys)
         try container.encode(Array(hiddenSubscriptions).sorted(), forKey: .hiddenSubscriptions)
         try container.encode(salt, forKey: .salt)
         try container.encode(digest, forKey: .digest)
@@ -299,29 +371,29 @@ extension PrivacyVault {
     public func visibleHistory(_ entries: [PlaybackHistoryEntry], now: Date = Date()) -> [PlaybackHistoryEntry] {
         let open = unlocked(now: now)
         if open { return entries }
-        return entries.filter { !hiddenSources.contains($0.context.sourceKey) }
+        return entries.filter { permits($0, now: now) }
     }
 
     /// Whether one history row may be shown. For a view that renders rows one at a time.
     public func permits(_ entry: PlaybackHistoryEntry, now: Date = Date()) -> Bool {
-        permits(sourceKey: entry.context.sourceKey, now: now)
+        let context = entry.context
+        guard permits(sourceKey: context.sourceKey, origin: context.origin, now: now) else { return false }
+        return permits(subscription: context.origin, now: now)
     }
 
     /// Whether a favourite may be shown. A favourite with no source key (a live room, a song) is
     /// always visible — it cannot belong to a hidden source.
     public func permits(_ item: FavoriteItem, now: Date = Date()) -> Bool {
-        guard let key = Self.sourceKey(of: item) else { return true }
-        return permits(sourceKey: key, now: now)
+        guard let (key, origin) = Self.sourceKey(of: item) else { return true }
+        guard permits(sourceKey: key, origin: origin, now: now) else { return false }
+        return permits(subscription: origin, now: now)
     }
 
     /// Favourites the user may see.
     public func visibleFavorites(_ items: [FavoriteItem], now: Date = Date()) -> [FavoriteItem] {
         let open = unlocked(now: now)
         if open { return items }
-        return items.filter { item in
-            guard let key = Self.sourceKey(of: item) else { return true }
-            return !hiddenSources.contains(key)
-        }
+        return items.filter { permits($0, now: now) }
     }
 
     /// Source keys a search may fan out to.
@@ -329,19 +401,19 @@ extension PrivacyVault {
     /// This is the one that matters most in practice: a search that queries every source would
     /// otherwise *return results from a hidden source*, which reveals both its existence and its
     /// content. Filtering at the fan-out point, not at the results, is what makes hiding real.
-    public func searchableSources(_ keys: [String], now: Date = Date()) -> [String] {
-        visibleSources(keys, now: now)
+    public func searchableSources(_ keys: [String], origin: URL, now: Date = Date()) -> [String] {
+        visibleSources(keys, origin: origin, now: now)
     }
 
     /// Whether a search result may be shown, for a result that names the source it came from.
-    public func permits(searchResultFrom sourceKey: String, now: Date = Date()) -> Bool {
-        permits(sourceKey: sourceKey, now: now)
+    public func permits(searchResultFrom sourceKey: String, origin: URL, now: Date = Date()) -> Bool {
+        permits(sourceKey: sourceKey, origin: origin, now: now)
     }
 
     /// Whether an episode may be opened at all. A deep link, a resumed session, or a recommendation
     /// must all pass through this — otherwise hiding the row achieves nothing.
-    public func permitsPlayback(sourceKey: String, now: Date = Date()) -> Bool {
-        permits(sourceKey: sourceKey, now: now)
+    public func permitsPlayback(sourceKey: String, origin: URL, now: Date = Date()) -> Bool {
+        permits(sourceKey: sourceKey, origin: origin, now: now) && permits(subscription: origin, now: now)
     }
 
     /// The subscription list, filtered.
@@ -353,21 +425,20 @@ extension PrivacyVault {
 
     /// The source keys contributed by one subscription, for hiding a whole feed at once.
     public static func sourceKeys(of subscription: Subscription) -> Set<String> {
-        Set(subscription.sites.map(\.key))
+        Set(subscription.sites.map(\.sourceKey))
     }
 
-    /// The source key behind a favourite, when it has one.
+    /// The source key behind a favourite, and the subscription it came from, when it has one.
     ///
     /// Returns nil for a live channel and for a music track: neither carries a source key, because
     /// neither comes from a subscription's sources — a live room is addressed by URL and a song by
     /// its platform track id. They are therefore never hidden by this vault, and a view should
     /// treat nil as "always visible" rather than as "unknown".
-    static func sourceKey(of item: FavoriteItem) -> String? {
+    static func sourceKey(of item: FavoriteItem) -> (key: String, origin: URL)? {
         switch item {
-        case .video(let video): return video.sourceKey
-        case .episode(let episode): return episode.video.sourceKey
-        case .cloud: return CloudFiles.sourceKey
-        case .live, .music: return nil
+        case .video(let video): return (video.sourceKey, video.origin)
+        case .episode(let episode): return (episode.video.sourceKey, episode.video.origin)
+        case .cloud, .live, .music: return nil
         }
     }
 }

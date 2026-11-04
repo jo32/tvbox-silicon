@@ -115,19 +115,49 @@ extension PasscodeGate.PasscodePurpose: Equatable {}
 /// The page only lists *visible* rows plus a separate "hidden" section, so it never leaks the name
 /// of something the vault is protecting — a hidden source's real name appears here only after an
 /// unlock, which is the point.
+///
+/// One subscription is one foldable section: the switch on the section hides the whole feed, the
+/// switches inside hide one source each, and the field at the top narrows the list to the sources
+/// whose name or key matches. Sixty sources as one flat wall of switches is unusable.
+///
+/// A switch is bound to its own source identity — its subscription's address plus the key the feed
+/// gave it — never to the key alone. Unrelated feeds share keys all the time (`csp_AppYsV2` appears
+/// in dozens of public subscriptions), so a key-only binding turned one switch into two.
 struct PrivacyVaultView: View {
     @Environment(Store.self) private var store
     @State private var gated: Gate?
     /// Whether the page is currently allowed to show hidden rows. Re-read on every appearance so a
     /// timeout while the page is open closes it.
     @State private var unlocked = false
-    @State private var pendingSource: String?
+    @State private var query = ""
+    /// The subscriptions whose sources are showing. All folded on arrival: a long list of feeds
+    /// reads better folded, and the field above finds a source anyway.
+    @State private var expanded: Set<String> = []
 
     private enum Gate: Identifiable {
         case setPasscode
         case confirmCurrent
         case unlock
         var id: Int { hashValue }
+    }
+
+    /// One subscription and the sources it contributes, as the Privacy page sees them.
+    private struct Feed: Identifiable {
+        let entry: SubscriptionEntry
+        let document: Subscription
+        var id: String { entry.address }
+        var title: String { entry.name.isEmpty ? entry.address : entry.name }
+        var origin: URL { document.origin }
+        var keys: [String] { document.sites.map(\.sourceKey) }
+
+        /// The sources matching what was typed, by name or by key. An empty query keeps them all.
+        func matching(_ query: String) -> [Site] {
+            let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !needle.isEmpty else { return document.sites }
+            return document.sites.filter {
+                $0.name.lowercased().contains(needle) || $0.sourceKey.lowercased().contains(needle)
+            }
+        }
     }
 
     var body: some View {
@@ -145,8 +175,15 @@ struct PrivacyVaultView: View {
                 }
             } else {
                 passcodeSection
-                sourcesSection
-                subscriptionsSection
+                if unlocked {
+                    searchSection
+                    feedsSection
+                } else {
+                    Section {
+                        Text(L10n.text("Unlock to choose what to hide."))
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 dangerSection
             }
         }
@@ -156,6 +193,7 @@ struct PrivacyVaultView: View {
         #endif
         .task { reload() }
         .onAppear { reload() }
+        .onChange(of: store.vault.revision) { _, _ in reload() }
         .sheet(item: $gated) { gate in
             switch gate {
             case .setPasscode:
@@ -210,59 +248,89 @@ struct PrivacyVaultView: View {
         }
     }
 
+    // MARK: 搜索
+
+    @ViewBuilder private var searchSection: some View {
+        Section {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField(L10n.text("Find a source"), text: $query)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("privacy.search")
+                if !query.isEmpty {
+                    Button {
+                        query = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        } footer: {
+            Text(L10n.text("Narrows the list below; it does not change what is hidden."))
+        }
+    }
+
     // MARK: 源与订阅
 
-    /// Sources the viewer may hide, grouped by the subscription they came from so a whole feed can
-    /// be hidden in one switch.
-    private var groupedSites: [(entry: SubscriptionEntry, sites: [Site])] {
+    /// Every subscription with a copy, in the order they were added.
+    private var feeds: [Feed] {
         store.subscriptions.compactMap { entry in
-            guard let document = store.documents[entry.address] else { return nil }
-            let sites = document.sites
-            return sites.isEmpty ? nil : (entry, sites)
+            guard let document = store.documents[entry.address], !document.sites.isEmpty else { return nil }
+            return Feed(entry: entry, document: document)
         }
     }
 
-    @ViewBuilder private var sourcesSection: some View {
-        if unlocked, !groupedSites.isEmpty {
-            ForEach(groupedSites, id: \.entry.address) { group in
-                Section {
-                    ForEach(group.sites) { site in
-                        Toggle(isOn: binding(for: site.key)) {
-                            FormLabel(symbol: "square.stack.3d.up.fill", tint: .purple, title: site.name,
-                                      subtitle: site.key)
-                        }
-                        .settingsSwitch()
-                    }
-                } header: {
-                    Text(group.entry.name.isEmpty ? group.entry.address : group.entry.name)
-                } footer: {
-                    Text(L10n.text("Hidden sources disappear from history, search, favourites and the source picker."))
-                }
-            }
-        } else if !unlocked {
+    @ViewBuilder private var feedsSection: some View {
+        if feeds.isEmpty {
             Section {
-                Text(L10n.text("Unlock to choose what to hide."))
+                Text(L10n.text("No subscriptions to hide yet."))
                     .foregroundStyle(.secondary)
             }
+        } else {
+            ForEach(feeds) { feed in
+                feedSection(feed)
+            }
         }
     }
 
-    @ViewBuilder private var subscriptionsSection: some View {
-        if unlocked, !store.subscriptions.isEmpty {
-            Section {
-                ForEach(store.subscriptions) { entry in
-                    Toggle(isOn: binding(for: entry)) {
-                        FormLabel(symbol: "tray.full.fill", tint: .indigo,
-                                  title: entry.name.isEmpty ? entry.address : entry.name,
-                                  subtitle: entry.address)
+    @ViewBuilder private func feedSection(_ feed: Feed) -> some View {
+        let sites = feed.matching(query)
+        let hidden = feed.document.sites.filter { store.vault.isHidden(sourceKey: $0.sourceKey, origin: feed.origin) }.count
+        Section {
+            Toggle(isOn: subscriptionBinding(feed)) {
+                FormLabel(symbol: "tray.full.fill", tint: .indigo,
+                          title: feed.title,
+                          subtitle: hidden == 0
+                            ? L10n.text("%lld sources", feed.document.sites.count)
+                            : L10n.text("%lld hidden of %lld", hidden, feed.document.sites.count))
+            }
+            .settingsSwitch()
+            .accessibilityIdentifier("privacy.feed." + feed.entry.address)
+
+            DisclosureGroup(isExpanded: expansion(feed)) {
+                ForEach(sites) { site in
+                    Toggle(isOn: sourceBinding(site, origin: feed.origin)) {
+                        FormLabel(symbol: "square.stack.3d.up.fill", tint: .purple, title: site.name,
+                                  subtitle: site.sourceKey)
                     }
                     .settingsSwitch()
+                    // A hidden feed hides all of its sources at once; the rows inside would only
+                    // disagree with it, so they wait until the feed itself is visible again.
+                    .disabled(store.vault.isHidden(subscription: feed.origin))
+                    .accessibilityIdentifier("privacy.source." + site.sourceKey)
                 }
-            } header: {
-                Text(L10n.text("Subscriptions"))
-            } footer: {
-                Text(L10n.text("Hiding a subscription hides every source it provides."))
+                if sites.isEmpty {
+                    Text(L10n.text("No source matches %@.", query))
+                        .foregroundStyle(.secondary)
+                }
+            } label: {
+                Text(query.isEmpty ? L10n.text("Sources") : L10n.text("Matching sources (%lld)", sites.count))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
+        } footer: {
+            Text(L10n.text("Hidden sources disappear from history, search, favourites and the source picker."))
         }
     }
 
@@ -284,13 +352,22 @@ struct PrivacyVaultView: View {
 
     // MARK: 绑定
 
-    private func binding(for key: String) -> Binding<Bool> {
+    private func expansion(_ feed: Feed) -> Binding<Bool> {
         Binding(
-            get: { !store.vault.hiddenSources.contains(key) },
+            get: { !query.isEmpty || expanded.contains(feed.id) },
+            set: { open in
+                if open { expanded.insert(feed.id) } else { expanded.remove(feed.id) }
+            }
+        )
+    }
+
+    private func sourceBinding(_ site: Site, origin: URL) -> Binding<Bool> {
+        Binding(
+            get: { !store.vault.isHidden(sourceKey: site.sourceKey, origin: origin) },
             set: { visible in
                 do {
-                    if visible { try store.vault.show(sources: [key]) }
-                    else { try store.vault.hide(sources: [key]) }
+                    if visible { try store.vault.show(sourceKeys: [site.sourceKey], origin: origin) }
+                    else { try store.vault.hide(sourceKeys: [site.sourceKey], origin: origin) }
                     store.saveVault()
                 } catch {
                     // Refused (not unlocked, or no passcode): leave the switch where it was.
@@ -299,18 +376,13 @@ struct PrivacyVaultView: View {
         )
     }
 
-    private func binding(for entry: SubscriptionEntry) -> Binding<Bool> {
+    private func subscriptionBinding(_ feed: Feed) -> Binding<Bool> {
         Binding(
-            get: {
-                guard let origin = store.documents[entry.address]?.origin else { return true }
-                return !store.vault.hiddenSubscriptions.contains(origin.absoluteString)
-            },
+            get: { !store.vault.isHidden(subscription: feed.origin) },
             set: { visible in
-                guard let document = store.documents[entry.address] else { return }
-                let keys = PrivacyVault.sourceKeys(of: document)
                 do {
-                    if visible { try store.vault.show(subscription: document.origin, sources: keys) }
-                    else { try store.vault.hide(subscription: document.origin, sources: keys) }
+                    if visible { try store.vault.show(subscription: feed.origin, sourceKeys: feed.keys) }
+                    else { try store.vault.hide(subscription: feed.origin, sourceKeys: feed.keys) }
                     store.saveVault()
                 } catch {}
             }

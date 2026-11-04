@@ -17,7 +17,6 @@ struct SitesView: View {
     @State private var collapsed: Set<String> = []
     @State private var prepared = false
     @State private var editingSource: Site?
-    @State private var probingAll = false
     /// The fold as it was when a search began; restored when the search is cleared.
     @State private var foldBeforeSearch: Set<String>?
     @State private var arranging = false
@@ -48,9 +47,13 @@ struct SitesView: View {
                                                 .id(site.key)
                                         } else {
                                         RouteLink { SiteView(site: site, origin: config.origin, jarURL: config.spiderURL) } label: { SiteCard(site: site, dimmed: group.kind == .hidden) }.tileButton()
+                                            // Dragging a card onto another subscription's header files it
+                                            // there; the move outlives a refresh (see SourceReassignment).
+                                            .draggable(SourceDrag(key: site.sourceKey, origin: site.origin(or: config.origin).absoluteString))
                                             .contextMenu {
                                                 PinSourceButton(site: site, origin: config.origin)
                                                 HideSourceButton(site: site, origin: config.origin)
+                                                SourceMoveMenu(site: site)
                                                 Button { editingSource = site } label: {
                                                     Label(L10n.text("Edit Source"), systemImage: "pencil")
                                                 }
@@ -95,13 +98,21 @@ struct SitesView: View {
             if pick == nil {
                 ToolbarItemGroup(placement: .primaryAction) {
                     Button {
-                        guard !probingAll else { return }
-                        probingAll = true
-                        Task { await store.probeAllSources(); probingAll = false }
+                        // One button, two jobs: start the sweep, or stop the one running. A sweep
+                        // that cannot be stopped is how the app got stuck in the first place.
+                        if store.probeRun == nil { store.startProbingAllSources() }
+                        else { store.cancelProbingAllSources() }
                     } label: {
-                        if probingAll { ProgressView().controlSize(.small) }
-                        else { Label(L10n.text("Probe All"), systemImage: "speedometer") }
+                        if let run = store.probeRun {
+                            HStack(spacing: 6) {
+                                ProgressView().controlSize(.small)
+                                Text("\(run.done)/\(run.total)").monospacedDigit()
+                            }
+                        } else {
+                            Label(L10n.text("Probe All"), systemImage: "speedometer")
+                        }
                     }
+                    .help(store.probeRun == nil ? L10n.text("Probe All") : L10n.text("Stop Probing"))
                     .accessibilityIdentifier("sources.probeAll")
                     Menu {
                         Button { Task { await store.batchFixUnreachableLines(.proxy) } } label: {
@@ -117,6 +128,9 @@ struct SitesView: View {
                         Label(L10n.text("Fix Dead Lines"), systemImage: "wrench.and.screwdriver")
                     }
                     .accessibilityIdentifier("sources.fixDeadLines")
+                    // The record of what was dragged where, and the way to undo it. Only while there
+                    // is something to undo: an always-present button would be a second Settings page.
+                    movedSourcesButton
                 }
             }
         }
@@ -162,7 +176,7 @@ struct SitesView: View {
         .accessibilityAddTraits(.isHeader)
         .accessibilityIdentifier("sources.group." + group.id)
         #if !os(tvOS)
-        if case .subscription = group.kind, query.isEmpty {
+        if case .subscription(let address) = group.kind, query.isEmpty {
             header
                 .draggable(group.id)
                 .dropDestination(for: String.self) { items, _ in
@@ -170,12 +184,36 @@ struct SitesView: View {
                     store.moveSourceGroup(address, onto: group.id, includeHidden: false)
                     return true
                 }
+                // A dropped card is a source, not a group: it files that one source here.
+                .dropDestination(for: SourceDrag.self) { items, _ in
+                    guard query.isEmpty, let drag = items.first else { return false }
+                    store.reassignSourceByKey(drag.key, origin: drag.origin, to: address)
+                    return true
+                }
+        } else if group.kind == .other, query.isEmpty {
+            // Dropping into "Other Sources" is the way back: the source returns to its own subscription.
+            header.dropDestination(for: SourceDrag.self) { items, _ in
+                guard query.isEmpty, let drag = items.first else { return false }
+                store.reassignSourceByKey(drag.key, origin: drag.origin, to: nil)
+                return true
+            }
         } else {
             header
         }
         #else
         header
         #endif
+    }
+
+    /// Entry to the record of moved sources, shown only while a move is in effect.
+    @ViewBuilder
+    private var movedSourcesButton: some View {
+        if store.sourceReassignment.moveCount > 0 {
+            RouteLink { SourceMovesView() } label: {
+                Label(L10n.text("Moved Sources"), systemImage: "arrow.triangle.branch")
+            }
+            .accessibilityIdentifier("sources.movedSources")
+        }
     }
 
     /// The default view of the page: every group open.
@@ -412,6 +450,47 @@ struct HideSourceButton: View {
         Button { store.hiddenSources.toggle(site, origin: origin) } label: {
             Label(L10n.text(hidden ? "Unhide Source" : "Hide Source"), systemImage: hidden ? "eye" : "eye.slash")
         }.accessibilityIdentifier("source.hide." + site.key)
+    }
+}
+
+/// What a dragged source card carries: the key its own feed gave it, and the origin it came from, so
+/// the header it lands on can find it again in the merged list whatever its name is now.
+struct SourceDrag: Codable, Transferable, Hashable {
+    var key: String
+    var origin: String
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .data)
+        ProxyRepresentation(exporting: \.key)
+    }
+}
+
+/// Files one source under another subscription without dragging: the same move the Sources page's
+/// drop targets make, reachable where dragging is awkward (a phone in one hand, tvOS, VoiceOver).
+struct SourceMoveMenu: View {
+    @Environment(Store.self) private var store
+    let site: Site
+    var body: some View {
+        // A built-in source belongs to no subscription, so there is nothing to file it away from.
+        if !site.isBuiltIn {
+            let own = store.entryAddress(of: site)
+            let moved = store.reassignedAddress(site)
+            let targets = store.subscriptions.filter { $0.enabled && $0.address != own && $0.address != moved }
+            Menu {
+                ForEach(targets) { entry in
+                    Button(entry.title) { store.reassignSource(site, to: entry.address) }
+                }
+                if moved != nil {
+                    Divider()
+                    Button { store.reassignSource(site, to: nil) } label: {
+                        Label(L10n.text("Move Back"), systemImage: "arrow.uturn.backward")
+                    }
+                }
+            } label: {
+                Label(L10n.text("Move to Another Subscription"), systemImage: "arrow.triangle.branch")
+            }
+            .disabled(targets.isEmpty && moved == nil)
+            .accessibilityIdentifier("source.move." + site.key)
+        }
     }
 }
 

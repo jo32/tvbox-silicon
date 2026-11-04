@@ -12,6 +12,10 @@ public struct SourceGroup: Equatable, Sendable, Identifiable {
         case pinned, builtIn, subscription(String)
         /// The sources the viewer hid, last on the page.
         case hidden
+        /// Sources that reached the merged list but belong to no listed subscription: filed onto a
+        /// subscription that is now off, or carried by a copy whose address changed. They are listed
+        /// rather than dropped, because a source that exists and cannot be seen looks like a bug.
+        case other
     }
     public var kind: Kind
     public var title: String
@@ -22,12 +26,33 @@ public struct SourceGroup: Equatable, Sendable, Identifiable {
         case .builtIn: "builtIn"
         case .subscription(let address): address
         case .hidden: "hidden"
+        case .other: "other"
         }
     }
 }
 
 public enum SourceGroups {
-    public static func make(entries: [SubscriptionEntry], documents: [String: Subscription], builtIns: [Site], builtInOrigin: URL, mergedSites: [Site], pinOrder: [Site], userHidden: (Site) -> Bool, includeHidden: Bool, jarURL: URL?) -> [SourceGroup] {
+    public static func make(entries: [SubscriptionEntry], documents: [String: Subscription], builtIns: [Site], builtInOrigin: URL, mergedSites: [Site], pinOrder: [Site], userHidden: (Site) -> Bool, includeHidden: Bool, jarURL: URL?, reassign: (Site, String) -> String? = { _, _ in nil }) -> [SourceGroup] {
+        /// An entry is known by the address the viewer typed; its copy is known by where the address
+        /// finally landed — a redirect, a mirror, an http-to-https hop. Grouping used to compare the
+        /// two directly, so every subscription that redirected filed nothing: its sources silently
+        /// disappeared and only the built-in ones were left. Map one to the other instead.
+        var addressOfOrigin: [String: String] = [:]
+        for entry in entries {
+            guard let origin = documents[entry.address]?.origin.absoluteString, addressOfOrigin[origin] == nil else { continue }
+            addressOfOrigin[origin] = entry.address
+        }
+        /// The entry address of the subscription a source came from: what the viewer typed, which a
+        /// refresh never changes. An origin no entry claims keeps itself.
+        func ownAddress(_ site: Site) -> String {
+            let origin = site.origin(or: builtInOrigin).absoluteString
+            return addressOfOrigin[origin] ?? origin
+        }
+        /// The address a source belongs under: the one the viewer moved it to, else its own.
+        func home(_ site: Site) -> String {
+            let own = ownAddress(site)
+            return reassign(site, own) ?? own
+        }
         func isPinned(_ site: Site, fallback: URL) -> Bool {
             let origin = site.origin(or: fallback)
             return pinOrder.contains { $0.sourceKey == site.sourceKey && $0.origin(or: fallback) == origin }
@@ -40,12 +65,18 @@ public enum SourceGroups {
         if !pinnedSites.isEmpty { groups.append(SourceGroup(kind: .pinned, title: "Pinned Group", sites: pinnedSites)) }
         let builtInSites = builtIns.filter { eligible($0) && !isPinned($0, fallback: builtInOrigin) }
         if !builtInSites.isEmpty { groups.append(SourceGroup(kind: .builtIn, title: "Built-in", sites: builtInSites)) }
+        // A source the viewer dragged onto another subscription files under that subscription instead of its own.
         for entry in entries where entry.enabled {
             guard let origin = documents[entry.address]?.origin else { continue }
-            let own = mergedSites.filter { !$0.isBuiltIn && $0.provenance?.origin == origin && !isPinned($0, fallback: origin) && eligible($0) }
+            let own = mergedSites.filter { !$0.isBuiltIn && !isPinned($0, fallback: origin) && eligible($0) && home($0) == entry.address }
             let arranged = SourceStrategy.arrange(own, where: { _ in true })
             if !arranged.isEmpty { groups.append(SourceGroup(kind: .subscription(entry.address), title: entry.title, sites: arranged)) }
         }
+        // Sources with no listed subscription of their own still show at the end rather than vanishing:
+        // edited onto a subscription that is now off, or carried by a copy whose entry is gone.
+        let placed = Set(groups.flatMap(\.sites).map(\.id))
+        let unplaced = mergedSites.filter { !$0.isBuiltIn && !placed.contains($0.id) && eligible($0) && !isPinned($0, fallback: builtInOrigin) }
+        if !unplaced.isEmpty { groups.append(SourceGroup(kind: .other, title: "Other Sources", sites: SourceStrategy.arrange(unplaced, where: { _ in true }))) }
         // Hidden sources leave their groups and wait in one group at the end, where they can be unhidden.
         if !includeHidden {
             let hidden = (builtIns + mergedSites.filter { !$0.isBuiltIn }).filter { !$0.hidden && $0.canBrowse(jarURL: jarURL) && userHidden($0) }

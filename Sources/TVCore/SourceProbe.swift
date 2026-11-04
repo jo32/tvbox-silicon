@@ -278,6 +278,33 @@ public final class SourceProbeStore {
         defaults.set(order, forKey: Self.orderKey)
     }
 
+    /// Records a whole source's lines in one go.
+    ///
+    /// `record` re-encodes every saved reading and writes the defaults file, which is the right cost
+    /// for one line and the wrong one for a sweep of hundreds: a bulk probe used to spend its time
+    /// re-serialising the same dictionary on the main actor, which is what made the app look stuck.
+    public func record(_ rows: [(result: SourceProbeResult, lineFlag: String)], sourceKey: String, videoID: String) {
+        guard !rows.isEmpty else { return }
+        for row in rows where !row.lineFlag.isEmpty {
+            let key = storageKey(sourceKey: sourceKey, videoID: videoID, lineFlag: row.lineFlag)
+            probes[key] = row.result
+            order.removeAll { $0 == key }
+            order.append(key)
+        }
+        while order.count > Self.limit {
+            probes.removeValue(forKey: order.removeFirst())
+        }
+        persist()
+    }
+
+    /// Writes the readings once, after a batch.
+    private func persist() {
+        if let encoded = try? JSONEncoder().encode(probes) {
+            defaults.set(encoded, forKey: Self.probeKey)
+        }
+        defaults.set(order, forKey: Self.orderKey)
+    }
+
     public func clear(sourceKey: String, videoID: String) {
         let prefix = "\(sourceKey)|\(videoID)|"
         for key in probes.keys where key.hasPrefix(prefix) {

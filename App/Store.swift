@@ -90,12 +90,14 @@ import TVCore
     /// Favourites the viewer may see.
     var visibleFavorites: [FavoriteItem] { vault.visibleFavorites(favorites.items) }
     /// Sources a search or a recommendation may fan out to.
-    func searchableSites(_ sites: [Site]) -> [Site] {
-        let keys = Set(vault.visibleSources(sites.map(\.key)))
-        return sites.filter { keys.contains($0.key) }
+    func searchableSites(_ sites: [Site], origin: URL) -> [Site] {
+        sites.filter { maySee($0, origin: origin) }
     }
     /// Whether an episode may be opened, for a deep link or a resumed session.
-    func mayPlay(sourceKey: String) -> Bool { vault.permitsPlayback(sourceKey: sourceKey) }
+    func mayPlay(sourceKey: String, origin: URL) -> Bool { vault.permitsPlayback(sourceKey: sourceKey, origin: origin) }
+    /// Whether the vault lets this source be listed, searched or opened right now. `origin` is the merged
+    /// subscription's, used only where the source carries no origin of its own.
+    func maySee(_ site: Site, origin: URL) -> Bool { vault.permits(site: site, fallback: origin) }
     var importing = false
     var error: String?
     /// Why the last subscription import failed. It shows under the address field, not in the app-wide alert: on
@@ -182,7 +184,7 @@ import TVCore
     private func currentSiteListStamp() -> String {
         let imported = subscription?.importedAt.timeIntervalSince1970 ?? 0
         let entries = subscriptions.map { "\($0.address)=\($0.enabled)" }.joined(separator: "\n")
-        return "\(subscription?.origin.absoluteString ?? "")|\(imported)|\(subscription?.sites.count ?? 0)|\(entries)|\(pinnedSources.revision)|\(hiddenSources.revision)|\(sourceOrder.revision)"
+        return "\(subscription?.origin.absoluteString ?? "")|\(imported)|\(subscription?.sites.count ?? 0)|\(entries)|\(pinnedSources.revision)|\(hiddenSources.revision)|\(vault.revision)|\(sourceOrder.revision)|\(sourceReassignment.revision)"
     }
     private var persistsChanges: Bool {
         #if DEBUG
@@ -597,6 +599,24 @@ import TVCore
             Task { await PluginConversionAhead.shared.schedule(sites: visible, origin: origin, spider: spider) }
             #endif
         }
+        adoptLegacyMoves()
+    }
+
+    /// Folds moves saved by a build that keyed them by the subscription's origin into the record the
+    /// maintenance list reads. Without this an upgraded library keeps *applying* those moves but can
+    /// never show or undo them: they are invisible in the list and their source's menu offers no
+    /// "move back". Runs after every rebuild, and is a no-op once each one has been rewritten.
+    private func adoptLegacyMoves() {
+        guard let config = subscription else { return }
+        for legacy in sourceReassignment.pendingLegacy {
+            guard let origin = URL(string: legacy.origin),
+                  let address = subscriptions.first(where: { documents[$0.address]?.origin == origin })?.address,
+                  let site = config.sites.first(where: { $0.sourceKey == legacy.sourceKey && $0.origin(or: config.origin) == origin })
+            else { continue }
+            sourceReassignment.reassign(site, address: address, origin: origin,
+                                        to: legacy.target,
+                                        targetName: subscriptions.first { $0.address == legacy.target }?.title ?? "")
+        }
     }
     /// Fetches Yingxia's own subscription while a subscription works: at once when there is no copy, else
     /// every ten minutes at most. A failed fetch keeps the last copy.
@@ -632,8 +652,8 @@ import TVCore
         guard !keyword.isEmpty else { return }
         let old = defaults.data(forKey: "videoSearchHistory").flatMap { try? JSONDecoder().decode([String].self, from: $0) } ?? []
         defaults.set(try? JSONEncoder().encode(Array(([keyword] + old.filter { $0 != keyword }).prefix(20))), forKey: "videoSearchHistory")
-        searchModel.search(keyword, config: config) { [hiddenSources] site in
-            hiddenSources.contains(site, origin: config.origin)
+        searchModel.search(keyword, config: config) { [hiddenSources, vault] site in
+            hiddenSources.contains(site, origin: config.origin) || !vault.permits(site: site, fallback: config.origin)
         }
         section = .search
     }
@@ -693,43 +713,263 @@ import TVCore
         return arranged
     }
 
-    /// Probes every source in the subscription at once, recording each line's reachability,
-    /// latency and speed so the picker can rank them and a later "fix dead lines" pass can act.
-    func probeAllSources(onSource: ((Site) -> Void)? = nil) async {
-        guard let config = subscription else { return }
-        for site in automaticSites(config) {
-            guard !Task.isCancelled else { break }
-            onSource?(site)
-            let client = CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL)
-            do {
-                let page = try await client.home()
-                guard let video = page.videos.first else { continue }
-                // Probe the video's lines with a bounded amount of concurrency, so a source with
-                // many lines neither floods the network nor stalls on one slow address.
-                let lines = video.episodes.filter { !$0.flag.isEmpty }
-                await withTaskGroup(of: (String, SourceProbeResult).self) { group in
-                    var inflight = 0
-                    var iterator = lines.makeIterator()
-                    func launchNext() {
-                        guard inflight < 4, let episode = iterator.next(), let url = URL(string: episode.address) else { return }
-                        inflight += 1
-                        group.addTask {
-                            let result = await SourceProbeRunner.probe(url: url)
-                            return (episode.flag, result)
-                        }
-                    }
-                    while inflight < 4 { launchNext() }
-                    for await (flag, result) in group {
-                        SourceProbeStore.shared.record(result, sourceKey: site.sourceKey, videoID: video.id, lineFlag: flag)
-                        inflight -= 1
-                        launchNext()
-                    }
+    // MARK: 源改派（拖到别的订阅 / 维护清单）
+
+    /// Files one source under another subscription (dragged onto that subscription's header, or chosen
+    /// from its menu), or back into its own.
+    ///
+    /// The move is recorded against the subscription's *address* — what the viewer added — so a
+    /// refresh that lands on a new mirror keeps it. It also outlives a disabled or removed target:
+    /// the record stays until the viewer removes it, and files the source again once the target is back.
+    func reassignSource(_ site: Site, to address: String?) {
+        // The built-in sources belong to no subscription; a move would file them under a feed that
+        // does not know them, and a refresh that drops that feed would leave them in "Other Sources".
+        guard !site.isBuiltIn, let config = subscription else { return }
+        let origin = site.origin(or: config.origin)
+        let own = entryAddress(of: site) ?? origin.absoluteString
+        let target = subscriptions.first { $0.address == address }
+        sourceReassignment.reassign(site, address: own, origin: origin,
+                                    to: address, targetName: target?.title ?? "")
+        rebuildSubscription()
+    }
+
+    /// The subscription a source currently files under, after any move.
+    func reassignedAddress(_ site: Site) -> String? {
+        guard let config = subscription else { return nil }
+        let origin = site.origin(or: config.origin)
+        return sourceReassignment.destination(address: entryAddress(of: site) ?? origin.absoluteString,
+                                              sourceKey: site.sourceKey, origin: origin)
+    }
+
+    /// Drag-and-drop entry point: finds the source by its key + origin and files it under `address`.
+    func reassignSourceByKey(_ key: String, origin: URL, to address: String?) {
+        guard let config = subscription,
+              let site = config.sites.first(where: { $0.sourceKey == key && $0.origin(or: config.origin) == origin })
+        else { return }
+        reassignSource(site, to: address)
+    }
+
+    /// The address of the subscription a source came from: the entry whose copy has this origin.
+    func entryAddress(of site: Site) -> String? {
+        guard let origin = site.provenance?.origin else { return nil }
+        return subscriptions.first { documents[$0.address]?.origin == origin }?.address
+    }
+
+    /// One row of the maintenance list: a move, where it came from, where it went, and whether it
+    /// still describes anything.
+    struct SourceMoveEntry: Identifiable {
+        enum State: Equatable {
+            /// The source is in its target's group now.
+            case applied
+            /// The target subscription was removed; the move waits for it to come back.
+            case missingTarget
+            /// The target subscription is switched off, so the source waits in "Other Sources".
+            case targetOff
+            /// The source is no longer in the feed (renamed or dropped); the move no longer applies.
+            case missingSource
+        }
+        let move: SourceMove
+        let state: State
+        let ownTitle: String
+        let targetTitle: String
+        var id: String { move.id }
+        var title: String { move.title }
+    }
+
+    /// Every recorded move, newest first, with the names as they are now.
+    func sourceMoveEntries() -> [SourceMoveEntry] {
+        let sites = subscription?.sites ?? []
+        return sourceReassignment.moves.map { move in
+            let own = subscriptions.first { $0.address == move.address }
+            let target = subscriptions.first { $0.address == move.target }
+            let sourceStillThere = sites.contains { $0.sourceKey == move.sourceKey && entryAddress(of: $0) == move.address }
+            let state: SourceMoveEntry.State
+            if own == nil || !sourceStillThere { state = .missingSource }
+            else if target == nil { state = .missingTarget }
+            else if target?.enabled == false { state = .targetOff }
+            else { state = .applied }
+            return SourceMoveEntry(move: move,
+                                   state: state,
+                                   ownTitle: own?.title ?? (move.address.isEmpty ? move.origin : move.address),
+                                   targetTitle: target?.title ?? (move.targetName.isEmpty ? move.target : move.targetName))
+        }
+    }
+
+    /// Puts one source back under its own subscription.
+    func undoSourceMove(_ entry: SourceMoveEntry) {
+        sourceReassignment.remove(entry.move.id)
+        rebuildSubscription()
+    }
+
+    /// Puts every moved source back at once.
+    func undoAllSourceMoves() {
+        sourceReassignment.removeAll()
+        rebuildSubscription()
+    }
+
+    /// Files a moved source under another subscription, from the maintenance list.
+    func moveMovedSource(_ entry: SourceMoveEntry, to target: SubscriptionEntry?) {
+        guard let target else {
+            undoSourceMove(entry)
+            return
+        }
+        guard let site = subscription?.sites.first(where: { $0.sourceKey == entry.move.sourceKey && entryAddress(of: $0) == entry.move.address }) else { return }
+        reassignSource(site, to: target.address)
+    }
+
+    // MARK: 批量测速
+
+    /// A bulk probe in flight: how many sources are done, and how many there are.
+    struct ProbeRun: Equatable { var done: Int; var total: Int }
+
+    /// What the Sources page shows while a probe runs, and the way to stop it.
+    private(set) var probeRun: ProbeRun?
+    @ObservationIgnored private var probeTask: Task<Void, Never>?
+    /// Identifies the run in flight, so a stopped run finishing late cannot clear the next one's
+    /// progress or its handle.
+    @ObservationIgnored private var probeToken = UUID()
+
+    /// One source to measure: everything a `CatalogClient` needs, copied so the work can leave the
+    /// main actor.
+    private struct ProbeTarget: Sendable {
+        let site: Site
+        let origin: URL
+        let jarURL: URL?
+    }
+
+    private struct ProbeRow: Sendable {
+        let flag: String
+        let result: SourceProbeResult
+    }
+
+    private struct ProbeBatch: Sendable {
+        let sourceKey: String
+        let videoID: String
+        let rows: [ProbeRow]
+    }
+
+    /// Starts measuring every listed source — built-in ones included.
+    ///
+    /// The sweep runs off the main actor, a few sources at a time, and each source is given a
+    /// deadline. It used to run on the main actor, one source after another, waiting for a plugin to
+    /// compile and a dead host to time out at every step: the app looked frozen because it was. The
+    /// reader can stop it, and the progress is visible while it runs.
+    func startProbingAllSources() {
+        guard probeTask == nil, let config = subscription else { return }
+        let targets = probeTargets(config)
+        guard !targets.isEmpty else { return }
+        probeRun = ProbeRun(done: 0, total: targets.count)
+        let token = UUID()
+        probeToken = token
+        probeTask = Task { [weak self] in
+            var done = 0
+            for await batch in Self.probeBatches(targets) {
+                if !batch.videoID.isEmpty {
+                    SourceProbeStore.shared.record(batch.rows.map { ($0.result, $0.flag) },
+                                                   sourceKey: batch.sourceKey, videoID: batch.videoID)
                 }
-            } catch {
-                // The source's own failure is already recorded by CatalogClient.request (SourceHealth),
-                // and line-level backoff belongs to the host a line points at, not the source key. Do
-                // not call `failBase` here: it would key on the wrong value and never take effect.
+                done += 1
+                guard self?.probeToken == token else { return }
+                self?.probeRun = ProbeRun(done: done, total: targets.count)
+                if Task.isCancelled { break }
             }
+            guard self?.probeToken == token else { return }
+            self?.probeRun = nil
+            self?.probeTask = nil
+        }
+    }
+
+    /// Stops a running sweep. Results already measured stay.
+    func cancelProbingAllSources() {
+        probeTask?.cancel()
+        probeTask = nil
+        probeRun = nil
+        probeToken = UUID()
+    }
+
+    /// Every source the page lists, once each: pinned, built-in, then each subscription's, in the
+    /// order they are drawn. Built-in sources are as much a part of "probe everything" as the rest,
+    /// and used to be left out because the sweep only walked the automatic list.
+    private func probeTargets(_ config: Subscription) -> [ProbeTarget] {
+        var seen = Set<String>()
+        var targets: [ProbeTarget] = []
+        for group in sourceGroups(includeHidden: false) where group.kind != .hidden {
+            for site in group.sites where seen.insert(site.id).inserted {
+                targets.append(ProbeTarget(site: site, origin: config.origin, jarURL: config.spiderURL))
+            }
+        }
+        return targets
+    }
+
+    /// The sweep, as a stream of per-source batches. The producer runs detached, so neither a slow
+    /// host nor a plugin's first compile can hold the main actor.
+    private nonisolated static func probeBatches(_ targets: [ProbeTarget]) -> AsyncStream<ProbeBatch> {
+        AsyncStream { continuation in
+            let task = Task.detached(priority: .utility) {
+                await withTaskGroup(of: ProbeBatch?.self) { group in
+                    // Two sources at a time: enough to keep the network busy without a burst of
+                    // plugin compiles competing for the same device.
+                    let width = 2
+                    var next = 0
+                    func launch() -> Bool {
+                        guard next < targets.count, !Task.isCancelled else { return false }
+                        let target = targets[next]
+                        next += 1
+                        group.addTask { await probe(target) }
+                        return true
+                    }
+                    for _ in 0..<width { if !launch() { break } }
+                    for await batch in group {
+                        if let batch { continuation.yield(batch) }
+                        if !launch() { continue }
+                    }
+                    continuation.finish()
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// One source: its home page for a representative video, then that video's lines.
+    private nonisolated static func probe(_ target: ProbeTarget) async -> ProbeBatch {
+        let client = CatalogClient(site: target.site, origin: target.origin, jarURL: target.jarURL)
+        let empty = ProbeBatch(sourceKey: target.site.sourceKey, videoID: "", rows: [])
+        guard let page = await withDeadline(seconds: 25, { try await client.home() }),
+              let video = page.videos.first else { return empty }
+        let lines = video.episodes.filter { !$0.flag.isEmpty && URL(string: $0.address) != nil }
+        var rows: [ProbeRow] = []
+        await withTaskGroup(of: ProbeRow?.self) { group in
+            var next = 0
+            func launch() -> Bool {
+                guard next < lines.count, !Task.isCancelled else { return false }
+                let episode = lines[next]
+                next += 1
+                group.addTask {
+                    guard let url = URL(string: episode.address) else { return nil }
+                    return ProbeRow(flag: episode.flag, result: await SourceProbeRunner.probe(url: url))
+                }
+                return true
+            }
+            for _ in 0..<4 { if !launch() { break } }
+            for await row in group {
+                if let row { rows.append(row) }
+                if !launch() { continue }
+            }
+        }
+        return ProbeBatch(sourceKey: target.site.sourceKey, videoID: video.id, rows: rows)
+    }
+
+    /// Runs `operation`, giving up after `seconds`. The result is nil on a timeout or a throw, so a
+    /// host that never answers cannot hold a whole sweep.
+    private nonisolated static func withDeadline<T: Sendable>(seconds: Double, _ operation: @escaping @Sendable () async throws -> T) async -> T? {
+        await withTaskGroup(of: T?.self) { group in
+            group.addTask { try? await operation() }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(seconds))
+                return nil
+            }
+            defer { group.cancelAll() }
+            return await group.next() ?? nil
         }
     }
 
@@ -768,7 +1008,9 @@ import TVCore
     func automaticSites(_ config: Subscription) -> [Site] {
         let stamp = currentSiteListStamp()
         if stamp == siteListStamp, let cached = automaticCache { return cached }
-        let sites = SourceLists.browsable(config.sites, jarURL: config.spiderURL) { hiddenSources.contains($0, origin: config.origin) }
+        let sites = SourceLists.browsable(config.sites, jarURL: config.spiderURL) {
+            hiddenSources.contains($0, origin: config.origin) || !vault.permits(site: $0, fallback: config.origin)
+        }
         let arranged = pinnedSources.arrange(sites.filter(\.isBuiltIn) + sites.filter { !$0.isBuiltIn }, origin: config.origin)
         rememberSiteLists(stamp)
         automaticCache = arranged
@@ -807,7 +1049,11 @@ import TVCore
         if stamp == siteListStamp, let cached = groupsCache[includeHidden] { return cached }
         guard let config = subscription else { return [] }
         let pins = pinnedSources.arrange(config.sites, origin: config.origin).filter { pinnedSources.contains($0, origin: config.origin) }
-        var groups = SourceGroups.make(entries: subscriptions, documents: documents, builtIns: config.sites.filter(\.isBuiltIn), builtInOrigin: config.origin, mergedSites: config.sites, pinOrder: pins, userHidden: { hiddenSources.contains($0, origin: config.origin) }, includeHidden: includeHidden, jarURL: config.spiderURL)
+        var groups = SourceGroups.make(entries: subscriptions, documents: documents, builtIns: config.sites.filter(\.isBuiltIn), builtInOrigin: config.origin, mergedSites: config.sites, pinOrder: pins, userHidden: { hiddenSources.contains($0, origin: config.origin) || !vault.permits(site: $0, fallback: config.origin) }, includeHidden: includeHidden, jarURL: config.spiderURL, reassign: { site, address in
+            // Address first: the subscription keeps the address the viewer added, so a refresh that
+            // lands on a new mirror keeps every move. The origin is only for older records.
+            sourceReassignment.destination(address: address, sourceKey: site.sourceKey, origin: site.provenance?.origin)
+        })
         // The viewer's own order, while it is on, orders the sources inside each group too.
         if sourceOrder.enabled { groups = sourceOrder.arrange(groups, origin: config.origin) }
         rememberSiteLists(stamp)

@@ -412,6 +412,13 @@ struct FormSettingsView: View {
                 if store.subscriptions.count > 1 {
                     FormLink(symbol: "trash.fill", tint: .red, title: L10n.text("Remove Subscriptions")) { RemoveSubscriptionsView() }
                 }
+                // Every move the viewer made by dragging one source onto another subscription, and
+                // the way to undo it. Shown only while there is something to undo.
+                if store.sourceReassignment.moveCount > 0 {
+                    FormLink(symbol: "arrow.triangle.branch", tint: .purple, title: L10n.text("Moved Sources"),
+                             value: String(store.sourceReassignment.moveCount)) { SourceMovesView() }
+                        .accessibilityIdentifier("settings.movedSources")
+                }
                 #if os(iOS)
                 // One row instead of an always-open field and three text buttons; the address goes in a sheet.
                 Button { addingSubscription = true } label: {
