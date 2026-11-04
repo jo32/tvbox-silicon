@@ -16,6 +16,8 @@ struct SitesView: View {
     /// lives here and `prepared` keeps the reset to once per visit.
     @State private var collapsed: Set<String> = []
     @State private var prepared = false
+    @State private var editingSource: Site?
+    @State private var probingAll = false
     /// The fold as it was when a search began; restored when the search is cleared.
     @State private var foldBeforeSearch: Set<String>?
     @State private var arranging = false
@@ -49,6 +51,9 @@ struct SitesView: View {
                                             .contextMenu {
                                                 PinSourceButton(site: site, origin: config.origin)
                                                 HideSourceButton(site: site, origin: config.origin)
+                                                Button { editingSource = site } label: {
+                                                    Label(L10n.text("Edit Source"), systemImage: "pencil")
+                                                }
                                                 if store.sourceOrder.enabled { MoveSourceButtons(site: site, sites: sites) }
                                             }
                                         }
@@ -81,6 +86,40 @@ struct SitesView: View {
         .screenBackdrop()
         .catalogSearchable(text: $query, prompt: L10n.text("Find a source"))
         .modifier(SitesTitle(picking: pick != nil))
+        .sheet(item: $editingSource) { site in
+            if let origin = store.subscription?.origin {
+                SourceEditorSheet(site: site, origin: origin)
+            }
+        }
+        .toolbar {
+            if pick == nil {
+                ToolbarItemGroup(placement: .primaryAction) {
+                    Button {
+                        guard !probingAll else { return }
+                        probingAll = true
+                        Task { await store.probeAllSources(); probingAll = false }
+                    } label: {
+                        if probingAll { ProgressView().controlSize(.small) }
+                        else { Label(L10n.text("Probe All"), systemImage: "speedometer") }
+                    }
+                    .accessibilityIdentifier("sources.probeAll")
+                    Menu {
+                        Button { Task { await store.batchFixUnreachableLines(.proxy) } } label: {
+                            Label(L10n.text("Route Unreachable Lines Through Proxy"), systemImage: "network")
+                        }
+                        Button { Task { await store.batchFixUnreachableLines(.direct) } } label: {
+                            Label(L10n.text("Force Unreachable Lines Direct"), systemImage: "bolt")
+                        }
+                        Button(role: .destructive) { Task { await store.batchFixUnreachableLines(.hide) } } label: {
+                            Label(L10n.text("Hide Unreachable Lines"), systemImage: "eye.slash")
+                        }
+                    } label: {
+                        Label(L10n.text("Fix Dead Lines"), systemImage: "wrench.and.screwdriver")
+                    }
+                    .accessibilityIdentifier("sources.fixDeadLines")
+                }
+            }
+        }
         .task(id: store.section) {
             if store.section == .sites && !prepared {
                 applyDefaultFold()
