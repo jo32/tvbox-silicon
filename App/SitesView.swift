@@ -1300,13 +1300,27 @@ struct VideoDetailView: View {
             if continues, resume == nil, watchChannel == nil, store.resumingHistoryID == nil, activeEpisodes.count <= 1 {
                 playWatchCover()
             }
+            // Opened on a video of several episodes with nothing watched before: the viewer's next step is
+            // picking one, so the episode list comes up rather than a cover with a Play button that only leads
+            // to the same list. A video watched before skips this — its continuation is the point of opening it.
+            if opensIntoEpisodes, store.resumingHistoryID == nil, watchChannel == nil {
+                showsAllEpisodes = true
+            }
             #endif
             #if DEBUG
             // `-qaDownloadPicker 1` opens the episode picker, for screenshots.
             if UserDefaults.standard.bool(forKey: "qaDownloadPicker") { choosingDownloads = true }
             #endif
         }
-        .onDisappear { requestTask?.cancel() }
+        .onDisappear {
+            requestTask?.cancel()
+            #if os(iOS)
+            // The page itself is gone (not just folded/unfolded): stop its episode, as the full-screen player's Back
+            // does, and leave Full Screen. On a fold this view stays alive, so playback carries on into the other layout.
+            if watchChannel != nil { store.playing = nil }
+            if fullScreen { fullScreen = false; PlayerOrientation.set(landscape: false) }
+            #endif
+        }
         .task(id: detail?.id) { await startTMDB() }
         .onChange(of: choosingQuality) { _, open in if !open && !busy { loadingEpisode = nil } }
         #if os(iOS)
@@ -2028,6 +2042,19 @@ struct VideoDetailView: View {
         let origin = client.site.origin(or: client.origin)
         return Set([video.id, detail?.id].compactMap { $0 }.map { EpisodeSkipSettings.scope(origin: origin, source: client.site.sourceKey, video: $0) })
     }
+    /// Whether opening this page should land on the episode list instead of a cover.
+    ///
+    /// A video of several episodes with nothing watched before has no single episode to
+    /// start: the first one may be the wrong line, and the previous behaviour left the
+    /// viewer on a Play button that opened the very list they now get directly.
+    private var opensIntoEpisodes: Bool {
+        #if os(iOS)
+        guard watchLayout, activeEpisodes.count > 1 else { return false }
+        return watchHistory == nil
+        #else
+        return false
+        #endif
+    }
     /// Where the viewer stopped last time, for Continue.
     private var watchHistory: PlaybackHistoryEntry? {
         store.playbackHistory.entries.first { watchScopes.contains($0.context.id) }
@@ -2094,11 +2121,10 @@ struct VideoDetailView: View {
         }
         .onDisappear {
             UIDevice.current.endGeneratingDeviceOrientationNotifications()
-            // Leaving the page ends its playback, as the full-screen player's Back does.
-            if watchChannel != nil { store.playing = nil }
+            // An iPhone Duo fold/unfold swaps `watchBody` for `pageBody` (and back) without the page leaving, so the
+            // page-level `onDisappear` handles stopping playback and leaving Full Screen. Here only the watch page's
+            // own contributions are undone; they are re-established by `onAppear` when the watch page returns.
             store.watchPageScopes.subtract(watchScopes)
-            if fullScreen { fullScreen = false; PlayerOrientation.set(landscape: false) }
-            turnedFullScreen = false
             PlayerOrientation.holdPortrait(false)
         }
         .onChange(of: watchChannel == nil) { _, ended in
@@ -2117,8 +2143,9 @@ struct VideoDetailView: View {
         let covered = watchChannel == nil || (!playerStarted && !fullScreen)
         ZStack {
             if let channel = watchChannel {
-                PlaybackView(channel: channel, watch: WatchPlayback(fullScreen: fullScreen, toggleFullScreen: setFullScreen, leave: { dismiss() },
-                                                                    started: { playerStarted = $0 }, opened: { playerSession = $0 }))
+                PlaybackView(channel: channel, session: store.playbackSession(for: channel),
+                             watch: WatchPlayback(fullScreen: fullScreen, toggleFullScreen: setFullScreen, leave: { dismiss() },
+                                                  started: { playerStarted = $0 }, opened: { playerSession = $0 }))
             }
             if covered { watchCover.transition(.opacity) }
         }

@@ -104,7 +104,22 @@ import TVCore
     var notice: String?
     var playing: Channel? {
         // An episode of a listening source (audiobooks, radio, songs) plays in the music player instead (#289).
-        didSet { if let channel = playing, let queue = listeningQueue(for: channel) { playing = nil; listen(queue, from: channel) } }
+        didSet {
+            if let channel = playing, let queue = listeningQueue(for: channel) { playing = nil; listen(queue, from: channel); return }
+            // The session playing survives an iPhone Duo fold/unfold. It is dropped when playback stops, or when
+            // a different channel starts playing.
+            if playing == nil { activeSession = nil }
+            else if let session = activeSession, !session.isPlaying(playing!) { activeSession = nil }
+        }
+    }
+    /// The playback session handed across an iPhone Duo fold/unfold, so the watch page and the full-screen player
+    /// reuse the same player instead of each building a new one (which dropped the position and episode).
+    @ObservationIgnored private var activeSession: PlaybackSession?
+    func playbackSession(for channel: Channel) -> PlaybackSession {
+        if let session = activeSession, session.isPlaying(channel) { return session }
+        let session = PlaybackSession()
+        activeSession = session
+        return session
     }
     /// Set while a listening source's episode goes to the video player on purpose.
     @ObservationIgnored private var playsAsVideo = false

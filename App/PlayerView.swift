@@ -10,7 +10,10 @@ struct PlaybackView: View {
     #endif
     @Environment(\.dismiss) private var dismiss
     @Environment(Store.self) private var store
-    @State private var session = PlaybackSession()
+    @State private var session: PlaybackSession
+    /// Whether the session was made here (and must be stopped here), rather than owned by a caller that hands it
+    /// in so playback survives an iPhone Duo fold/unfold, where this view is torn down and rebuilt.
+    @State private var ownsSession: Bool
     @State private var showsChrome = true
     @State private var hideTask: Task<Void, Never>?
     #if os(iOS)
@@ -30,6 +33,31 @@ struct PlaybackView: View {
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    #endif
+
+    #if os(iOS)
+    init(channel: Channel, session: PlaybackSession? = nil, watch: WatchPlayback? = nil) {
+        self.channel = channel
+        self.watch = watch
+        if let session {
+            _session = State(initialValue: session)
+            _ownsSession = State(initialValue: false)
+        } else {
+            _session = State(initialValue: PlaybackSession())
+            _ownsSession = State(initialValue: true)
+        }
+    }
+    #else
+    init(channel: Channel, session: PlaybackSession? = nil) {
+        self.channel = channel
+        if let session {
+            _session = State(initialValue: session)
+            _ownsSession = State(initialValue: false)
+        } else {
+            _session = State(initialValue: PlaybackSession())
+            _ownsSession = State(initialValue: true)
+        }
+    }
     #endif
 
     private var chromeVisible: Bool {
@@ -127,9 +155,12 @@ struct PlaybackView: View {
         #endif
         #endif
         .onAppear {
-            startCatalogPlayback(session, channel: channel, store: store); showOnStart()
+            // A session handed in by an iPhone Duo's watch page already plays this channel after a fold/unfold:
+            // don't start it again, which would drop back to the beginning.
+            if !session.isPlaying(channel) { startCatalogPlayback(session, channel: channel, store: store) }
+            showOnStart()
             #if os(iOS)
-            ExternalDisplay.shared.attach(session.player)
+            ExternalDisplay.shared.attach(session.player, store: store)
             #endif
         }
         #if DEBUG && os(iOS)
@@ -141,7 +172,10 @@ struct PlaybackView: View {
             if !Task.isCancelled { toggleFullScreen() }
         }
         #endif
-        .onChange(of: channel) { _, channel in startCatalogPlayback(session, channel: channel, store: store); showOnStart() }
+        .onChange(of: channel) { _, channel in
+            if !session.isPlaying(channel) { startCatalogPlayback(session, channel: channel, store: store) }
+            showOnStart()
+        }
         #if os(iOS)
         .onChange(of: session.showsPicture || session.error != nil, initial: true) { _, started in watch?.started(started) }
         .onAppear { watch?.opened(session) }
@@ -165,17 +199,19 @@ struct PlaybackView: View {
         }
         #endif
         .onDisappear {
-            hideTask?.cancel(); store.cancelEpisodeSelection(); session.stop()
+            hideTask?.cancel(); store.cancelEpisodeSelection()
+            if ownsSession { session.stop() }
             #if os(iOS)
             ExternalDisplay.shared.detach(session.player)
             PlayerOrientation.release()
             #endif
         }
         #if os(iOS)
-        // Opening iPhone Duo moves the app to the inner display, which ignores orientations: drop a
-        // landscape lock so the outer display isn't left in landscape when it closes again.
+        // Opening iPhone Duo moves the app to the inner display, which ignores orientations. Suspend a
+        // landscape lock (remembering it) and restore the viewer's grip when the outer display returns,
+        // so a landscape playback stays landscape on the way back instead of snapping upright.
         .onChange(of: horizontalSizeClass == .regular && verticalSizeClass == .regular) { _, large in
-            if large { PlayerOrientation.release() }
+            if large { PlayerOrientation.suspend() } else { PlayerOrientation.restore() }
         }
         #endif
     }
@@ -660,30 +696,98 @@ private struct PlayerSurface: NSViewRepresentable {
     static var available: Bool { UIDevice.current.userInterfaceIdiom == .phone }
     /// An iPhone watch page is on screen: it stays upright, and only its Full Screen turns the phone.
     static private var holdsPortrait = false
+    /// The viewer locked the controls: the app stays in exactly one orientation and the gyroscope can't move it.
+    static private(set) var isLocked = false
+
+    /// The scene's current orientation, or nil when there is none to read.
+    static var currentOrientation: UIInterfaceOrientation? {
+        UIApplication.shared.appWindowScene?.interfaceOrientation
+    }
+
+    /// A single orientation as a mask, for pinning the app to it.
+    private static func singleMask(_ orientation: UIInterfaceOrientation) -> UIInterfaceOrientationMask {
+        switch orientation {
+        case .portrait: .portrait
+        case .portraitUpsideDown: .portraitUpsideDown
+        case .landscapeLeft: .landscapeLeft
+        case .landscapeRight: .landscapeRight
+        default: .allButUpsideDown
+        }
+    }
 
     static func set(landscape: Bool) {
         guard let scene = UIApplication.shared.appWindowScene else { return }
-        mask = landscape ? .landscape : holdsPortrait ? .portrait : .allButUpsideDown
+        // A locked player stays put whatever the rotate button or a full-screen toggle asks.
+        if !isLocked { mask = landscape ? .landscape : holdsPortrait ? .portrait : .allButUpsideDown }
+        apply(mask, scene: scene, geometry: landscape ? .landscape : .portrait)
+    }
+
+    /// Pins the app to the viewer's current orientation; the gyroscope can no longer turn the picture.
+    static func lock() {
+        guard let scene = UIApplication.shared.appWindowScene else { return }
+        isLocked = true
+        if let orientation = currentOrientation { mask = singleMask(orientation) }
+        apply(mask, scene: scene, geometry: currentOrientation.map(singleMask) ?? mask)
+    }
+
+    /// Lets the gyroscope turn the picture again.
+    static func unlock() {
+        guard isLocked else { return }
+        isLocked = false
+        mask = holdsPortrait ? .portrait : .allButUpsideDown
+        guard let scene = UIApplication.shared.appWindowScene else { return }
+        apply(mask, scene: scene, geometry: mask)
+    }
+
+    /// Turns the picture to a chosen orientation by hand; the controls follow. Locked or not, this
+    /// moves the app, but while locked it stays there (the gyroscope keeps out of it).
+    static func rotate(to orientation: UIInterfaceOrientation) {
+        guard let scene = UIApplication.shared.appWindowScene else { return }
+        let single = singleMask(orientation)
+        mask = single
+        apply(single, scene: scene, geometry: single)
+    }
+
+    private static func apply(_ mask: UIInterfaceOrientationMask, scene: UIWindowScene, geometry: UIInterfaceOrientationMask) {
         var controller = scene.keyWindow?.rootViewController
         while let next = controller?.presentedViewController { controller = next }
         controller?.setNeedsUpdateOfSupportedInterfaceOrientations()
         // UIKit calls the error handler on a background queue. @Sendable keeps it off the main actor;
         // without it Swift 6 checks the closure's main-actor isolation at entry and traps (issue #247).
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: landscape ? .landscape : .portrait)) { @Sendable error in
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: geometry)) { @Sendable error in
             Diagnostics.shared.record(.warning, "player", "Rotation refused: \(error.localizedDescription)")
         }
     }
 
     /// Back to portrait when the player closes, if the button turned it.
     static func release() {
+        suspendedLandscape = nil
+        isLocked = false
         if mask == .landscape { set(landscape: false) }
+    }
+
+    /// The landscape lock the viewer had when the phone folded shut, kept so reopening it
+    /// restores the same grip (landscape or portrait) instead of always falling back upright.
+    static private(set) var suspendedLandscape: Bool?
+
+    /// iPhone Duo closed onto the inner display: it ignores orientations, so drop a landscape
+    /// lock but remember it. Reopening (`restore()`) puts the outer display back to how it was.
+    static func suspend() {
+        suspendedLandscape = mask == .landscape ? true : nil
+        if mask == .landscape { set(landscape: false) }
+    }
+
+    /// Reopened onto the outer display: put back the grip the viewer had before folding.
+    static func restore() {
+        if suspendedLandscape == true { set(landscape: true) }
+        suspendedLandscape = nil
     }
 
     /// While a watch page shows, the app stays upright (the page turns to landscape for Full Screen only).
     static func holdPortrait(_ hold: Bool) {
         guard holdsPortrait != hold else { return }
         holdsPortrait = hold
-        if mask != .landscape { set(landscape: false) }
+        if !isLocked && mask != .landscape { set(landscape: false) }
     }
 }
 #else
@@ -1246,9 +1350,15 @@ extension Store {
         || UserDefaults.standard.bool(forKey: DanmakuPreference.key)
     session.start(channel)
     session.onPlaybackEnded = { [weak store] in
-        guard let store, store.autoPlayNext else { return }
-        if let file = store.nextFile(after: channel) { store.playing = file }
-        else if let next = store.nextEpisode(after: channel) { store.selectEpisode(next, from: channel) }
+        guard let store else { return }
+        // A next episode in the same line plays on, exactly as before.
+        if store.autoPlayNext {
+            if let file = store.nextFile(after: channel) { store.playing = file; return }
+            if let next = store.nextEpisode(after: channel) { store.selectEpisode(next, from: channel); return }
+        }
+        // This was the last episode of the line: offer what to watch next instead
+        // of stopping dead. `store` decides whether there is anything to show.
+        store.finishSeries(channel)
     }
     // Near the end the next episode is resolved and queued, so it plays on without stopping to load.
     session.playsOn = { [weak store] in store?.autoPlayNext == true }

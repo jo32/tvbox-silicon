@@ -130,6 +130,9 @@ import TVCore
     private(set) var muted = false
     private(set) var quality: Int?
     private var playing: Channel?
+    /// The channel on screen now, so a caller reusing this session across an iPhone Duo fold/unfold can tell
+    /// whether it already has this episode and must not start it again from the beginning.
+    func isPlaying(_ channel: Channel) -> Bool { playing == channel }
     /// The episode plays from a download on this device, which no server or connection holds up.
     private var savedDownload = false
     private var automatic: URL?

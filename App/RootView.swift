@@ -92,6 +92,7 @@ struct RootView: View {
         #endif
         return busy
     }
+    @AppStorage("hidesInAppSwitcher") private var hidesInAppSwitcher = true
     var body: some View {
         @Bindable var store = store
         Group {
@@ -155,6 +156,8 @@ struct RootView: View {
         .alert(L10n.text("Unable to Complete"), isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) {
             Button(L10n.text("OK"), role: .cancel) { store.error = nil }
         } message: { Text(store.error ?? "") }
+        // Above every page, sheet and the player: the app switcher snapshots the whole window.
+        .privacyShade(enabled: hidesInAppSwitcher)
     }
 
     #if !os(macOS)
@@ -364,7 +367,7 @@ private struct PlayerPresentation: ViewModifier {
                                               set: { if $0 == nil, !store.playsInWatchPage(playing) { playing = nil } })) {
             // Handed in: the iPad app on a Mac presents a full-screen cover without the presenter's environment
             // objects, and every video stopped the app there ("No Observable object of type Store found").
-            PlaybackView(channel: $0.channel).environment(store)
+            PlaybackView(channel: $0.channel, session: store.playbackSession(for: $0.channel)).environment(store)
         }
         #endif
     }
