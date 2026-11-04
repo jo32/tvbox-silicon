@@ -142,6 +142,10 @@ targets:
       # and JNI entry points with dlsym; keep the global ones that -export_dynamic exports.
       STRIP_STYLE: non-global
       ARCHS: arm64
+      # Compiles the Web Cast feature (embedded web server + settings page). Off = the IPA ships
+      # without it entirely. DEBUG is listed explicitly because xcodegen's built-in Debug value
+      # would otherwise overwrite the target-level setting and drop WEBCAST on Debug builds.
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited) DEBUG WEBCAST
       PRODUCT_BUNDLE_IDENTIFIER: wda.prdc.yingxia.dev
       # Device installs sign with the iPhone Duo's team and profile
       # (~/Documents/windows11/编程工具/mac/证书/Duo 证书: ios_development.p12 + all1023.mobileprovision,
@@ -158,6 +162,8 @@ targets:
     info:
       properties:
         ITSAppUsesNonExemptEncryption: false
+        # Default TCP port for the embedded Web Cast server (compiled in only with WEBCAST).
+        WebCastDefaultPort: 8090
         # Let UIKit and Core Animation use ProMotion rates during gestures and transitions.
         CADisableMinimumFrameDurationOnPhone: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]

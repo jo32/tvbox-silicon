@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>映霞 · 网页投射</title>
+<style>
+:root{
+  --bg:#f2f2f7; --card:#ffffff; --text:#1c1c1e; --muted:#8e8e93;
+  --accent:#0a84ff; --border:rgba(60,60,67,.18); --radius:14px;
+  --group:#f2f2f7; --sub:#3a3a3c; --search:rgba(120,120,128,.12);
+  --switch-off:rgba(120,120,128,.3); --input:rgba(120,120,128,.14);
+  --shadow:0 1px 2px rgba(0,0,0,.05); --topbar:rgba(242,242,247,.82);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#000000; --card:#1c1c1e; --text:#ffffff; --muted:#98989f;
+    --accent:#0a84ff; --border:rgba(84,84,88,.55); --group:#000;
+    --sub:#c7c7cc; --search:rgba(118,118,128,.24);
+    --switch-off:rgba(120,120,128,.4); --input:rgba(118,118,128,.24);
+    --shadow:0 1px 2px rgba(0,0,0,.4); --topbar:rgba(0,0,0,.72);
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Segoe UI",sans-serif;
+  background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;font-size:15px}
+a{color:inherit;text-decoration:none}
+/* 顶栏：映霞风格，大标题 + 半透明 */
+.topbar{position:sticky;top:0;z-index:10;padding:16px 20px 10px;
+  background:var(--topbar);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border)}
+.topbar h1{font-size:26px;font-weight:700;letter-spacing:-.3px}
+.topbar .sub{font-size:13px;color:var(--muted);margin-top:2px}
+/* 搜索框：iOS 圆角 */
+.search{margin:12px 20px 4px;position:relative}
+.search input{width:100%;padding:11px 16px;border:none;border-radius:12px;background:var(--search);
+  font-size:15px;outline:none;color:var(--text)}
+.search input::placeholder{color:var(--muted)}
+/* 源分组：iOS 分组列表 */
+.group-title{font-size:13px;color:var(--muted);text-transform:none;padding:16px 20px 6px;font-weight:500}
+.source-row{display:flex;align-items:center;gap:12px;padding:11px 20px;background:var(--card);
+  border-bottom:1px solid var(--border);cursor:pointer}
+.source-row:first-of-type{border-top-left-radius:12px;border-top-right-radius:12px}
+.source-row:last-of-type{border-bottom:none;border-bottom-left-radius:12px;border-bottom-right-radius:12px}
+.source-row .icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  color:#fff;font-size:15px;font-weight:600;flex-shrink:0}
+.source-row .name{flex:1;font-size:15px}
+.source-row .badge{font-size:11px;color:var(--muted);background:rgba(120,120,128,.14);
+  padding:2px 8px;border-radius:8px}
+.source-row.hidden{opacity:.4}
+/* 分类 chips 横滚 */
+.cats{display:flex;gap:8px;overflow-x:auto;padding:10px 20px;scrollbar-width:none}
+.cats::-webkit-scrollbar{display:none}
+.cats button{flex-shrink:0;padding:7px 15px;border:none;border-radius:16px;background:var(--card);
+  font-size:14px;cursor:pointer;color:var(--text);border:1px solid var(--border)}
+.cats button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* 卡片流 */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;padding:12px 20px 40px}
+.card{background:var(--card);border-radius:var(--radius);overflow:hidden;cursor:pointer;
+  transition:transform .12s;box-shadow:var(--shadow)}
+.card:active{transform:scale(.97)}
+.card .pic{aspect-ratio:3/4;background:#2c2c2e;position:relative;overflow:hidden}
+.card .pic img{width:100%;height:100%;object-fit:cover;display:block}
+.card .pic .tag{position:absolute;right:6px;top:6px;background:rgba(0,0,0,.6);color:#fff;
+  font-size:10px;padding:2px 7px;border-radius:7px}
+.card .name{padding:8px 10px;font-size:13px;line-height:1.35;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.empty{padding:60px 20px;text-align:center;color:var(--muted)}
+.loading{padding:30px;text-align:center;color:var(--muted)}
+.pager{display:flex;justify-content:center;gap:14px;padding:6px 20px 34px;align-items:center}
+.pager button{padding:8px 20px;border:none;border-radius:12px;background:var(--card);
+  font-size:14px;cursor:pointer;border:1px solid var(--border)}
+.pager button:disabled{opacity:.35}
+.pager span{font-size:13px;color:var(--muted)}
+/* 详情 sheet */
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:20;display:none;
+  align-items:flex-end;justify-content:center}
+.mask.show{display:flex}
+.sheet{background:var(--bg);width:min(720px,100%);max-height:88vh;border-radius:20px 20px 0 0;
+  overflow:hidden;display:flex;flex-direction:column}
+.sheet-grip{width:40px;height:5px;border-radius:3px;background:rgba(60,60,67,.3);margin:8px auto 0}
+.sheet-scroll{overflow-y:auto;padding:16px 20px 30px}
+.detail-head{display:flex;gap:16px}
+.detail-head img{width:120px;border-radius:12px;aspect-ratio:3/4;object-fit:cover;background:#2c2c2e;flex-shrink:0}
+.detail-info{flex:1;min-width:0}
+.detail-info h2{font-size:20px;font-weight:700;margin-bottom:6px}
+.detail-info .meta{font-size:13px;color:var(--muted);margin-bottom:10px}
+.detail-info .desc{font-size:13px;color:var(--sub);line-height:1.55}
+.ep-title{font-size:14px;font-weight:600;margin:18px 0 10px}
+.ep-list{display:flex;flex-wrap:wrap;gap:8px}
+.ep-list button{padding:8px 14px;border:none;border-radius:10px;background:var(--card);
+  font-size:13px;cursor:pointer;border:1px solid var(--border)}
+.ep-list button:active{background:var(--accent);color:#fff}
+.play-now{display:block;width:100%;margin:16px 0 10px;padding:13px;border:none;border-radius:12px;
+  background:var(--accent);color:#fff;font-size:16px;font-weight:600;cursor:pointer}
+.play-now:active{opacity:.85}
+.close-btn{position:sticky;top:0;right:0;float:right;background:rgba(120,120,128,.14);
+  border:none;border-radius:50%;width:28px;height:28px;font-size:15px;color:var(--text);cursor:pointer;margin:8px 8px 0 0}
+/* 播放 */
+.player-mask{position:fixed;inset:0;background:#000;z-index:30;display:none;flex-direction:column}
+.player-mask.show{display:flex}
+.player-top{display:flex;justify-content:space-between;align-items:center;color:#fff;padding:14px 18px}
+.player-top .t{font-size:15px}
+video{width:100%;flex:1;background:#000}
+.player-err{color:#ff9f0a;font-size:13px;padding:10px 18px;text-align:center;display:none}
+/* 设置面板 */
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:13px 20px;
+  background:var(--card);border-bottom:1px solid var(--border)}
+.settings-row .lbl{font-size:15px}
+.switch{position:relative;width:51px;height:31px;flex-shrink:0}
+.switch input{opacity:0;width:0;height:0}
+.switch .sl{position:absolute;inset:0;background:var(--switch-off);border-radius:31px;
+  transition:.2s;cursor:pointer}
+.switch .sl:before{content:"";position:absolute;height:27px;width:27px;left:2px;top:2px;
+  background:#fff;border-radius:50%;transition:.2s;box-shadow:0 2px 4px rgba(0,0,0,.2)}
+.switch input:checked+.sl{background:#34c759}
+.switch input:checked+.sl:before{transform:translateX(20px)}
+.settings-row input[type=number]{width:72px;padding:7px 10px;border:none;border-radius:8px;
+  background:var(--input);font-size:15px;text-align:center;color:var(--text)}
+.logout-btn{display:block;width:100%;padding:12px;border:1px solid #ff3b30;border-radius:12px;background:none;color:#ff3b30;font-size:15px;font-weight:600;cursor:pointer}
+/* 登录遮罩 */
+.login-mask{position:fixed;inset:0;background:var(--bg);z-index:40;display:none;
+  align-items:center;justify-content:center;flex-direction:column;padding:20px}
+.login-mask.show{display:flex}
+.login-card{width:min(360px,100%);background:var(--card);border-radius:18px;padding:28px 22px;
+  box-shadow:0 4px 20px rgba(0,0,0,.08)}
+.login-card h2{font-size:22px;font-weight:700;text-align:center;margin-bottom:6px}
+.login-card .sub{font-size:13px;color:var(--muted);text-align:center;margin-bottom:20px}
+.login-card input{width:100%;padding:12px 14px;border:none;border-radius:12px;
+  background:var(--search);font-size:15px;outline:none;color:var(--text);margin-bottom:14px}
+.login-card button{width:100%;padding:13px;border:none;border-radius:12px;background:var(--accent);
+  color:#fff;font-size:16px;font-weight:600;cursor:pointer}
+.login-card button:active{opacity:.85}
+.login-card .err{color:#ff3b30;font-size:13px;text-align:center;margin-top:10px;display:none}
+.login-remember{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);
+  margin:-4px 0 14px;cursor:pointer;user-select:none}
+.login-remember input{width:auto;margin:0}
+.pwd-toggle{position:absolute;right:10px;top:50%;transform:translateY(-50%);border:none;background:none;color:var(--accent);font-size:13px;cursor:pointer}
+/* 断线/错误 banner */
+.banner{display:none;margin:10px 20px 0;padding:11px 14px;border-radius:12px;font-size:14px;
+  line-height:1.4;background:rgba(255,149,0,.14);color:#ff9500;border:1px solid rgba(255,149,0,.3)}
+.banner.error{background:rgba(255,59,48,.12);color:#ff3b30;border-color:rgba(255,59,48,.3)}
+.banner .retry{margin-left:8px;color:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
+/* 播放中转开关提示 */
+.hint{font-size:12px;color:var(--muted);padding:0 20px 4px;line-height:1.4}
+@media (min-width: 560px){
+  .search,.group-title,.source-row,.cats,.grid,.settings-row,.hint,.pager{max-width:760px;margin-left:auto;margin-right:auto}
+  .source-row,.settings-row{border-radius:12px}
+}
+
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>映霞</h1>
+  <div class="sub" id="subtitle">网页投射 · 连接中…</div>
+</div>
+<div class="banner" id="banner"></div>
+<div class="search">
+  <input id="q" placeholder="搜索影片" onkeydown="if(event.key==='Enter')doSearch()">
+</div>
+
+<div id="main">
+  <div class="group-title">资源</div>
+  <div id="sourceList"></div>
+</div>
+
+<div id="catalog" style="display:none">
+  <div class="cats" id="cats"></div>
+  <div id="content"></div>
+  <div class="pager" id="pager" style="display:none">
+    <button id="prev" onclick="turn(-1)">上一页</button>
+    <span id="pageInfo"></span>
+    <button id="next" onclick="turn(1)">下一页</button>
+  </div>
+</div>
+
+<div class="mask" id="detailMask" onclick="if(event.target===this)closeDetail()">
+  <div class="sheet">
+    <div class="sheet-grip"></div>
+    <div class="sheet-scroll" id="detailBox"></div>
+  </div>
+</div>
+
+<div class="player-mask" id="playerMask">
+  <div class="player-top">
+    <span class="t" id="playerTitle"></span>
+    <button class="close-btn" style="position:static" onclick="closePlayer()">✕</button>
+  </div>
+  <video id="video" controls playsinline></video>
+  <div class="player-err" id="playerErr"></div>
+</div>
+
+<div class="login-mask" id="loginMask">
+  <div class="login-card">
+    <h2>映霞</h2>
+    <div class="sub">请输入登录密码</div>
+    <div style="position:relative">
+      <input type="password" id="loginPwd" placeholder="密码" onkeydown="if(event.key==='Enter')doLogin()" style="padding-right:48px">
+      <button type="button" class="pwd-toggle" onclick="togglePwd()">显示</button>
+    </div>
+    <label class="login-remember"><input type="checkbox" id="loginRemember"> 记住登录状态</label>
+    <button onclick="doLogin()">登录</button>
+    <div class="err" id="loginErr">密码错误</div>
+  </div>
+</div>
+
+<div id="settingsPanel" style="display:none">
+  <div class="group-title">控制映霞</div>
+  <div class="settings-row">
+    <span class="lbl">网页投射</span>
+    <label class="switch"><input type="checkbox" id="setEnabled" onchange="setEnabled(this.checked)"><span class="sl"></span></label>
+  </div>
+  <div class="settings-row">
+    <span class="lbl">映射端口</span>
+    <input type="number" id="setPort" min="1" max="65535" value="8090" onchange="setPort(this.value)">
+  </div>
+  <div class="settings-row">
+    <span class="lbl">视频走中转</span>
+    <label class="switch"><input type="checkbox" id="setProxy" onchange="setProxy(this.checked)"><span class="sl"></span></label>
+  </div>
+  <div class="hint">关闭后浏览器直接取流，省手机上行带宽，但部分源（需 Referer/防盗链）可能无法播放。</div>
+  <div class="group-title">账号</div>
+  <div class="settings-row">
+    <span class="lbl">登录密码</span>
+  </div>
+  <div class="settings-row"><button class="logout-btn" onclick="confirmLogout()">退出登录</button></div>
+  <div class="group-title">隐藏的资源</div>
+  <div id="hiddenSources"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+<script>
+const BASE = location.pathname.replace(/\/[^/]*$/, '/'); // '/'
+const ICON_COLORS = ['#0a84ff','#ff375f','#ff9500','#30d158','#5e5ce6','#64d2ff','#bf5af2','#ff9f0a','#00c7be'];
+let state = { sources: [], enabled: true, port: 8090, proxyMedia: true, requiresToken: false };
+let current = { source: null, cat: null, page: 1, pagecount: 1, mode: 'home', query: '' };
+let reconnectTimer = null;
+
+// 登录态：勾了「记住我」就持久化到 localStorage，否则只存 sessionStorage（关标签页即失效）。
+const TOKEN_KEY = 'webcast_token';
+const REMEMBER_KEY = 'webcast_remember';
+function getToken() {
+  return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || '';
+}
+function setToken(t, remember) {
+  localStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(TOKEN_KEY);
+  if (t) { (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, t); }
+}
+function isRemembered() { return localStorage.getItem(TOKEN_KEY) ? true : false; }
+
+async function api(path, opts) {
+  opts = opts || {};
+  opts.headers = Object.assign({}, opts.headers);
+  const t = getToken();
+  if (t) opts.headers['X-WebCast-Token'] = t;
+  let r;
+  try {
+    r = await fetch(BASE + 'api/' + path, opts);
+  } catch(e) {
+    // 网络层失败：手机可能息屏/切后台导致服务停，或网络抖动。
+    showBanner('已断开，正在尝试重连…', false, () => load());
+    scheduleReconnect();
+    throw new Error('网络断开');
+  }
+  if (r.status === 401) { setToken(''); showLogin(); throw new Error('需要登录'); }
+  if (r.status >= 500) { showBanner('服务异常（' + r.status + '）', true); throw new Error('服务异常 ' + r.status); }
+  return r.json();
+}
+
+function showBanner(msg, isError, onRetry) {
+  const b = document.getElementById('banner');
+  b.className = 'banner' + (isError ? ' error' : '');
+  b.innerHTML = esc(msg) + (onRetry ? '<span class="retry" onclick="retryLoad()">重试</span>' : '');
+  b.style.display = 'block';
+}
+function retryLoad() { hideBanner(); load(); }
+function hideBanner() { const b = document.getElementById('banner'); b.style.display = 'none'; }
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  reconnectTimer = setTimeout(async () => {
+    reconnectTimer = null;
+    try {
+      const r = await fetch(BASE + 'api/state', { headers: getToken() ? {'X-WebCast-Token': getToken()} : {} });
+      if (r.status === 200) { hideBanner(); load(); }
+      else scheduleReconnect();
+    } catch(e) { scheduleReconnect(); }
+  }, 3000);
+}
+
+function iconColor(i){ return ICON_COLORS[i % ICON_COLORS.length]; }
+
+// 代理 URL，附上 token 供 <img>/<video>（无法设 header）鉴权。直连模式（proxyMedia=false）下不中转。
+function px(url) {
+  const t = getToken();
+  if (state.proxyMedia === false) return url;
+  return '/proxy/' + encodeURIComponent(url) + (t ? '?token=' + encodeURIComponent(t) : '');
+}
+
+async function load() {
+  try {
+    state = await api('state');
+    hideBanner();
+    document.getElementById('subtitle').textContent = '网页投射 · ' + state.sources.length + ' 个资源';
+    renderSources();
+    renderSettings();
+  } catch(e) {
+    if (e.message !== '需要登录' && e.message !== '网络断开') {
+      document.getElementById('subtitle').textContent = '连接失败：' + e.message;
+    }
+  }
+}
+
+function renderSources() {
+  const el = document.getElementById('sourceList'); el.innerHTML = '';
+  const visible = state.sources.filter(s => !s.hidden);
+  const hidden = state.sources.filter(s => s.hidden);
+  const row = (s, idx) => {
+    const d = document.createElement('div');
+    d.className = 'source-row' + (s.hidden ? ' hidden' : '');
+    d.innerHTML = `<div class="icon" style="background:${iconColor(idx)}">${esc(s.name[0]||'?')}</div>
+      <div class="name">${esc(s.name)}</div>
+      <span class="badge">${esc(s.runtime)}</span>`;
+    d.onclick = () => openSource(s.key, s.name);
+    el.appendChild(d);
+  };
+  visible.forEach((s,i) => row(s,i));
+  if (hidden.length) {
+    const t = document.createElement('div');
+    t.className = 'group-title'; t.textContent = '已隐藏';
+    el.appendChild(t);
+    hidden.forEach((s,i) => row(s, visible.length + i));
+  }
+}
+
+function renderSettings() {
+  document.getElementById('setEnabled').checked = state.enabled;
+  document.getElementById('setPort').value = state.port;
+  document.getElementById('setProxy').checked = state.proxyMedia !== false;
+  const el = document.getElementById('hiddenSources'); el.innerHTML = '';
+  state.sources.filter(s => s.hidden).forEach(s => {
+    const d = document.createElement('div');
+    d.className = 'settings-row';
+    d.innerHTML = `<span class="lbl">${esc(s.name)}</span><button style="border:none;background:none;color:var(--accent);font-size:14px" onclick="showSource('${esc(s.key)}')">显示</button>`;
+    el.appendChild(d);
+  });
+}
+
+async function openSource(key, name) {
+  current.source = key; current.mode = 'home'; current.page = 1;
+  document.getElementById('main').style.display = 'none';
+  document.getElementById('catalog').style.display = 'block';
+  document.getElementById('settingsPanel').style.display = 'none';
+  document.getElementById('subtitle').textContent = '映霞 · ' + name;
+  document.getElementById('q').value = '';
+  showLoading();
+  try {
+    const d = await api(key + '/home');
+    renderCats(d.class || []);
+    if ((d.class || []).length) selectCat(d.class[0].type_id);
+    else { document.getElementById('content').innerHTML = '<div class="empty">暂无内容</div>'; }
+  } catch(e) { showEmpty('加载失败：' + e.message); }
+}
+
+function renderCats(cats) {
+  const el = document.getElementById('cats'); el.innerHTML = '';
+  const back = document.createElement('button');
+  back.textContent = '‹ 资源'; back.onclick = backToSources;
+  el.appendChild(back);
+  cats.forEach(c => {
+    const b = document.createElement('button');
+    b.textContent = c.type_name;
+    b.className = c.type_id === current.cat ? 'active' : '';
+    b.onclick = () => selectCat(c.type_id);
+    el.appendChild(b);
+  });
+}
+
+async function selectCat(id) {
+  current.cat = id; current.mode = 'category'; current.page = 1;
+  renderCats(document.querySelectorAll('#cats button').length ? [] : []);
+  // re-highlight
+  document.querySelectorAll('#cats button').forEach((b,i) => {
+    if (i === 0) return;
+    b.classList.toggle('active', false);
+  });
+  showLoading();
+  await loadList(id, 1);
+}
+async function loadList(cat, page) {
+  try {
+    const d = await api(`${current.source}/category?id=${encodeURIComponent(cat)}&pg=${page}`);
+    renderList(d.list || []); renderPager(page, d.pagecount || 1);
+  } catch(e) { showEmpty('加载失败：' + e.message); }
+}
+async function doSearch() {
+  const wd = document.getElementById('q').value.trim();
+  if (!wd) return;
+  current.mode = 'search'; current.query = wd; current.page = 1;
+  document.getElementById('cats').innerHTML = '';
+  showLoading();
+  try {
+    const d = await api(`${current.source}/search?wd=${encodeURIComponent(wd)}&pg=1`);
+    renderList(d.list || []); renderPager(1, d.pagecount || 1);
+  } catch(e) { showEmpty('搜索失败：' + e.message); }
+}
+function renderList(list) {
+  const el = document.getElementById('content'); el.innerHTML = '';
+  if (!list.length) { showEmpty(); return; }
+  const grid = document.createElement('div'); grid.className = 'grid';
+  list.forEach(v => {
+    const c = document.createElement('div'); c.className = 'card';
+    c.innerHTML = `<div class="pic">${v.poster ? `<img loading="lazy" src="${px(v.poster)}">` : ''}
+      ${v.remarks ? `<span class="tag">${esc(v.remarks)}</span>` : ''}</div>
+      <div class="name">${esc(v.name)}</div>`;
+    c.onclick = () => openDetail(v.id);
+    grid.appendChild(c);
+  });
+  el.appendChild(grid);
+}
+async function openDetail(id) {
+  showLoading();
+  try {
+    const d = await api(`${current.source}/detail?id=${encodeURIComponent(id)}`);
+    const v = d;
+    if (!v || !v.id) { showEmpty('无详情'); return; }
+    renderDetail(v);
+  } catch(e) { showEmpty('详情失败：' + e.message); }
+}
+function renderDetail(v) {
+  const box = document.getElementById('detailBox');
+  box.innerHTML = `
+    <button class="close-btn" onclick="closeDetail()">✕</button>
+    <div class="detail-head">
+      ${v.poster ? `<img src="${px(v.poster)}">` : ''}
+      <div class="detail-info">
+        <h2>${esc(v.name)}</h2>
+        <div class="meta">${esc([v.year, v.remarks, v.category].filter(Boolean).join(' · '))}</div>
+        <div class="desc">${esc(v.synopsis || '暂无简介')}</div>
+      </div>
+    </div>
+    ${(v.episodes || []).length ? `<button class="play-now" onclick='play(${JSON.stringify(v.episodes[0])})'>▶ 立即播放</button>` : ''}
+    <div class="ep-title">剧集</div>
+    <div class="ep-list">
+      ${(v.episodes || []).map(e => `<button onclick='play(${JSON.stringify(e)})'>${esc(e.name)}</button>`).join('')}
+    </div>`;
+  document.getElementById('detailMask').classList.add('show');
+}
+async function play(ep) {
+  document.getElementById('playerTitle').textContent = ep.name;
+  document.getElementById('playerMask').classList.add('show');
+  const err = document.getElementById('playerErr'); err.style.display = 'none';
+  try {
+    const d = await api(`${current.source}/play?flag=${encodeURIComponent(ep.flag||'')}&address=${encodeURIComponent(ep.address)}&name=${encodeURIComponent(ep.name)}`);
+    if (!d.url) { showErr('未解析到播放地址'); return; }
+    // 自定义 scheme（如 tvbox-xxx://）浏览器无法播放，明确提示而非转圈。
+    if (d.scheme) {
+      showErr('此源使用自定义播放协议（' + d.scheme + '://），请在手机映霞 App 内播放');
+      return;
+    }
+    playUrl(d.url);
+  } catch(e) { showErr('解析失败：' + e.message); }
+}
+function playUrl(url) {
+  const video = document.getElementById('video');
+  const finalUrl = px(url);
+  if (url.includes('.m3u8') && window.Hls && Hls.isSupported()) {
+    const hls = new Hls({ maxBufferLength: 60 });
+    hls.loadSource(finalUrl); hls.attachMedia(video);
+    hls.on(Hls.Events.ERROR, (e, d) => { if (d.fatal) showErr('播放出错：' + d.type); });
+    video.play();
+  } else {
+    video.src = finalUrl; video.play();
+  }
+}
+function showErr(msg) { const e = document.getElementById('playerErr'); e.textContent = msg; e.style.display = 'block'; }
+function closeDetail() { document.getElementById('detailMask').classList.remove('show'); }
+function closePlayer() {
+  document.getElementById('playerMask').classList.remove('show');
+  const v = document.getElementById('video'); v.pause(); v.removeAttribute('src');
+}
+function backToSources() {
+  document.getElementById('catalog').style.display = 'none';
+  document.getElementById('settingsPanel').style.display = 'block';
+  document.getElementById('main').style.display = 'block';
+  document.getElementById('subtitle').textContent = '网页投射 · ' + state.sources.length + ' 个资源';
+  document.getElementById('q').value = '';
+}
+function renderPager(page, pagecount) {
+  current.page = page; current.pagecount = pagecount;
+  const el = document.getElementById('pager');
+  if (pagecount <= 1) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  document.getElementById('pageInfo').textContent = page + ' / ' + pagecount;
+  document.getElementById('prev').disabled = page <= 1;
+  document.getElementById('next').disabled = page >= pagecount;
+}
+async function turn(delta) {
+  const p = current.page + delta;
+  if (p < 1 || p > current.pagecount) return;
+  showLoading();
+  if (current.mode === 'search') {
+    const d = await api(`${current.source}/search?wd=${encodeURIComponent(current.query)}&pg=${p}`);
+    renderList(d.list || []); renderPager(p, d.pagecount || 1);
+  } else {
+    await loadList(current.cat, p);
+  }
+}
+// 设置反向控制
+async function setEnabled(v) {
+  await api('settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ enabled: v }) });
+  load();
+}
+async function setPort(v) {
+  const p = parseInt(v) || 8090;
+  await api('settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ port: p }) });
+  load();
+}
+async function setProxy(v) {
+  await api('settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ proxyMedia: v }) });
+  load();
+}
+async function showSource(key) {
+  await api('settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ showSource: key }) });
+  load();
+}
+function showLoading() { document.getElementById('content').innerHTML = '<div class="loading">加载中…</div>'; }
+function showEmpty(msg) { document.getElementById('content').innerHTML = `<div class="empty">${esc(msg || '暂无内容')}</div>`; }
+function esc(s) { return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// 登录
+function showLogin() {
+  setToken('');
+  document.getElementById('loginErr').style.display = 'none';
+  document.getElementById('loginPwd').value = '';
+  document.getElementById('loginMask').classList.add('show');
+}
+function hideLogin() { document.getElementById('loginMask').classList.remove('show'); }
+async function doLogin() {
+  const pwd = document.getElementById('loginPwd').value;
+  const remember = document.getElementById('loginRemember').checked;
+  try {
+    const r = await fetch(BASE + 'api/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ pwd }) });
+    if (r.status === 200) {
+      setToken(pwd, remember);
+      hideLogin();
+      load();
+    } else {
+      document.getElementById('loginErr').style.display = 'block';
+    }
+  } catch(e) {
+    document.getElementById('loginErr').textContent = '连接失败：' + e.message;
+    document.getElementById('loginErr').style.display = 'block';
+  }
+}
+function logout() {
+  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+  location.reload();
+}
+function confirmLogout(){ if(confirm('确定要退出登录吗？')) logout(); }
+function togglePwd(){ var i=document.getElementById('loginPwd'); var b=document.querySelector('.pwd-toggle'); i.type = i.type==='password'?'text':'password'; b.textContent = i.type==='password'?'显示':'隐藏'; }
+
+load();
+</script>
+</body>
+</html>

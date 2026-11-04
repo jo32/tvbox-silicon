@@ -97,5 +97,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>WebCastDefaultPort</key>
+	<integer>8090</integer>
 </dict>
 </plist>

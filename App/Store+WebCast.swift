@@ -30,9 +30,13 @@ extension Store: WebCastDataSource {
 
     /// Applies a settings edit from the web UI (hide/show a source).
     func webCastSetHidden(_ key: String, hidden: Bool) {
-        guard let config = subscription,
-              let site = config.sites.first(where: { $0.sourceKey == key }) else { return }
+        guard let config = subscription else { return }
+        guard let site = config.sites.first(where: { $0.sourceKey == key }) else {
+            NSLog("[webcast] webCastSetHidden: site not found for key=\(key)")
+            return
+        }
+        NSLog("[webcast] webCastSetHidden key=\(key) hidden=\(hidden) site.sourceKey=\(site.sourceKey)")
         if hidden { hiddenSources.insert(site, origin: config.origin) }
-        else { hiddenSources.toggle(site, origin: config.origin) }
+        else { hiddenSources.setHidden([site], origin: config.origin, hidden: false) }
     }
 }
