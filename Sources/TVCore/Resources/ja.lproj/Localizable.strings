@@ -825,6 +825,9 @@
 "Continue Playing" = "再生を続ける";
 "Stopped at %@" = "%@ で停止";
 "%lld songs" = "%lld 曲";
+"Liked Songs" = "お気に入りの曲";
+"No Liked Songs" = "お気に入りの曲はまだありません";
+"Like a song from its menu, and it waits here, ready to play as one list." = "曲のメニューで「いいね」を選ぶと、ここに残り、1 つのリストとして再生できます。";
 "Unable to Load Songs" = "曲を読み込めません";
 "Shuffle" = "シャッフル";
 "Skipped “%@”: %@" = "「%@」をスキップしました：%@";

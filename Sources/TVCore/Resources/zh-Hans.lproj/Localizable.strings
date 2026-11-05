@@ -825,6 +825,9 @@
 "Continue Playing" = "继续播放";
 "Stopped at %@" = "停在 %@";
 "%lld songs" = "%lld 首";
+"Liked Songs" = "我喜欢的歌曲";
+"No Liked Songs" = "还没有喜欢的歌曲";
+"Like a song from its menu, and it waits here, ready to play as one list." = "在歌曲菜单中选择“喜欢”，歌曲就会留在这里，随时可以当一张歌单播放。";
 "Unable to Load Songs" = "无法载入歌曲";
 "Shuffle" = "随机播放";
 "Skipped “%@”: %@" = "已跳过“%@”：%@";

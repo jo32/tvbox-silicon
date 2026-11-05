@@ -825,6 +825,9 @@
 "Continue Playing" = "繼續播放";
 "Stopped at %@" = "停在 %@";
 "%lld songs" = "%lld 首";
+"Liked Songs" = "我喜歡的歌曲";
+"No Liked Songs" = "還沒有喜歡的歌曲";
+"Like a song from its menu, and it waits here, ready to play as one list." = "在歌曲選單中選擇「喜歡」，歌曲就會留在這裡，隨時可以當一張歌單播放。";
 "Unable to Load Songs" = "無法載入歌曲";
 "Shuffle" = "隨機播放";
 "Skipped “%@”: %@" = "已略過「%@」：%@";
