@@ -257,7 +257,8 @@ struct EditTabBarRow: View {
             }
             // A button in a list draws its title in the tint; this one reads like the rows around it.
             .tint(.primary)
-            .sheet(isPresented: $editing) {
+            // Pushed like the Settings rows around it, so it comes in from the side as they do (#355).
+            .navigationDestination(isPresented: $editing) {
                 if PhoneTabs.inUse(horizontal: horizontalSizeClass) {
                     TabBarEditor(tabs: PhoneTabs(stored: storedTabs).arranged(slots: slots, hiding: store.hiddenSections),
                                  slots: slots) { storedTabs = $0.stored }
@@ -319,59 +320,60 @@ private struct TabBarEditor: View {
     private var tabs: PhoneTabs { Row.tabs(rows, slots: slots) }
 
     var body: some View {
-        NavigationStack {
-            List {
-                if !sidebar {
-                    Section {
-                        TabBarPreview(bar: tabs.bar)
-                            .listRowBackground(Color.clear)
-                            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                    }
-                }
+        List {
+            if !sidebar {
                 Section {
-                    ForEach(rows) { row in
-                        switch row {
-                        case .section(let section):
-                            HStack(spacing: 12) {
-                                SectionGlyph(section: section, size: 30)
-                                Text(section.title).font(.body.weight(.medium)).lineLimit(1)
-                            }
-                            .padding(.vertical, 3)
-                            .listRowBackground(Surface().clipShape(.rect(cornerRadius: 16, style: .continuous)))
-                        case .divider:
-                            heading(L10n.text("In More"), symbol: AppSection.more.icon)
-                                .padding(.top, 10)
-                                .listRowBackground(Color.clear)
-                                .moveDisabled(true)
-                        }
-                    }
-                    .onMove(perform: move)
-                } header: {
-                    heading(L10n.text("Tab Bar"), symbol: "dock.rectangle")
-                } footer: {
-                    Text(L10n.text(sidebar ? "Drag to reorder. The tab bar and the sidebar show sections in this order."
-                                   : slots > PhoneTabs.barSlots
-                                   ? "Drag to reorder. Up to seven sections fit in the tab bar here, and four when the phone is closed; the rest stay in More."
-                                   : "Drag to reorder. Up to four sections fit in the tab bar; the rest stay in More."))
+                    TabBarPreview(bar: tabs.bar)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                 }
             }
-            .listRowSpacing(8)
-            .environment(\.editMode, .constant(.active))
-            .scrollContentBackground(.hidden)
-            .background { Backdrop() }
-            .navigationTitle(L10n.text("Edit Tab Bar"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.text("Cancel")) { dismiss() }
+            Section {
+                ForEach(rows) { row in
+                    switch row {
+                    case .section(let section):
+                        HStack(spacing: 12) {
+                            SectionGlyph(section: section, size: 30)
+                            Text(section.title).font(.body.weight(.medium)).lineLimit(1)
+                        }
+                        .padding(.vertical, 3)
+                        .listRowBackground(Surface().clipShape(.rect(cornerRadius: 16, style: .continuous)))
+                    case .divider:
+                        heading(L10n.text("In More"), symbol: AppSection.more.icon)
+                            .padding(.top, 10)
+                            .listRowBackground(Color.clear)
+                            .moveDisabled(true)
+                    }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(L10n.text("Done")) { save(tabs); dismiss() }.fontWeight(.semibold)
-                }
-                ToolbarItem(placement: .bottomBar) {
-                    Button(L10n.text("Reset")) { withAnimation(.smooth) { rows = Row.rows(standard, sidebar: sidebar) } }
-                        .disabled(tabs == standard)
-                }
+                .onMove(perform: move)
+            } header: {
+                heading(L10n.text("Tab Bar"), symbol: "dock.rectangle")
+            } footer: {
+                Text(L10n.text(sidebar ? "Drag to reorder. The tab bar and the sidebar show sections in this order."
+                               : slots > PhoneTabs.barSlots
+                               ? "Drag to reorder. Up to seven sections fit in the tab bar here, and four when the phone is closed; the rest stay in More."
+                               : "Drag to reorder. Up to four sections fit in the tab bar; the rest stay in More."))
+            }
+        }
+        .listRowSpacing(8)
+        .environment(\.editMode, .constant(.active))
+        .scrollContentBackground(.hidden)
+        .background { Backdrop() }
+        .navigationTitle(L10n.text("Edit Tab Bar"))
+        .navigationBarTitleDisplayMode(.inline)
+        // A push would otherwise offer Back, which would drop the drags made here as silently as Done keeps
+        // them: Cancel names that, as it did in the sheet this page replaces (#355).
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(L10n.text("Cancel")) { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button(L10n.text("Done")) { save(tabs); dismiss() }.fontWeight(.semibold)
+            }
+            ToolbarItem(placement: .bottomBar) {
+                Button(L10n.text("Reset")) { withAnimation(.smooth) { rows = Row.rows(standard, sidebar: sidebar) } }
+                    .disabled(tabs == standard)
             }
         }
     }
