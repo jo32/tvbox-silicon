@@ -1,6 +1,118 @@
 {
   "releases": [
     {
+      "version": "1.8.11",
+      "build": 49,
+      "date": "2026-11-06",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "book.pages",
+          "title": {
+            "en": "Read manga",
+            "zh-Hans": "阅读漫画",
+            "zh-Hant": "閱讀漫畫",
+            "ja": "漫画を読む"
+          },
+          "detail": {
+            "en": "Add a Venera comic source list with Add Subscription and a Manga section appears. Browse, search and read comics by scrolling down or turning pages, and carry on where you stopped. Install sources in Settings > Manga > Comic Sources.",
+            "zh-Hans": "用“添加订阅”添加 Venera 漫画源列表后，会出现“漫画”栏目。可以浏览、搜索和阅读漫画，支持竖向滚动或翻页，并从上次读到的地方继续。漫画源在“设置 > 漫画 > 漫画源”里安装。",
+            "zh-Hant": "用「新增訂閱」加入 Venera 漫畫源列表後，會出現「漫畫」欄目。可以瀏覽、搜尋和閱讀漫畫，支援直向捲動或翻頁，並從上次讀到的地方繼續。漫畫源在「設定 > 漫畫 > 漫畫源」裡安裝。",
+            "ja": "「配信設定を追加」で Venera のコミックソース一覧を追加すると「漫画」セクションが現れます。漫画を探したり検索したりして、縦スクロールまたはページめくりで読め、前回の続きから再開できます。ソースは「設定 > 漫画 > コミックソース」でインストールします。"
+          }
+        },
+        {
+          "symbol": "captions.bubble",
+          "title": {
+            "en": "Subtitle Style",
+            "zh-Hans": "字幕样式",
+            "zh-Hant": "字幕樣式",
+            "ja": "字幕のスタイル"
+          },
+          "detail": {
+            "en": "A new Subtitle Style page in Settings sets the size, font, color, bold or italic, shadow and background of subtitles, and where they sit: drag them on the preview, or move them with the remote on Apple TV. By default there's no longer a box behind the text.",
+            "zh-Hans": "设置里新增“字幕样式”页面，可以调整字幕的大小、字体、颜色、粗体或斜体、阴影和背景，以及字幕的位置：在预览画面上拖动，或在 Apple TV 上用遥控器移动。默认样式不再有文字后面的底框。",
+            "zh-Hant": "設定裡新增「字幕樣式」頁面，可以調整字幕的大小、字體、顏色、粗體或斜體、陰影和背景，以及字幕的位置：在預覽畫面上拖動，或在 Apple TV 上用遙控器移動。預設樣式不再有文字後面的底框。",
+            "ja": "設定に「字幕のスタイル」ページが加わり、字幕の大きさ、フォント、色、太字・斜体、影、背景と位置を変えられます。位置はプレビュー上でドラッグするか、Apple TV ではリモコンで動かします。標準では文字の後ろの箱がなくなりました。"
+          }
+        },
+        {
+          "symbol": "list.number",
+          "title": {
+            "en": "Episodes in the player",
+            "zh-Hans": "播放器里的选集",
+            "zh-Hant": "播放器裡的選集",
+            "ja": "プレーヤーでエピソードを選択"
+          },
+          "detail": {
+            "en": "An Episodes button next to Previous and Next Episode shows every episode in a sheet, with each episode's picture, title and length when TMDB has them.",
+            "zh-Hans": "“上一集”“下一集”旁新增“选集”按钮，在面板里显示全部剧集；TMDB 有资料时还会显示每集的剧照、标题和时长。",
+            "zh-Hant": "「上一集」「下一集」旁新增「選集」按鈕，在面板裡顯示全部劇集；TMDB 有資料時還會顯示每集的劇照、標題和片長。",
+            "ja": "「前のエピソード」「次のエピソード」の横に「エピソード」ボタンが加わり、全エピソードをシートで表示します。TMDB に情報があれば各話の画像、タイトル、長さも表示します。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "appletv",
+          "title": {
+            "en": "More in the Apple TV player",
+            "zh-Hans": "Apple TV 播放器选项更多",
+            "zh-Hant": "Apple TV 播放器選項更多",
+            "ja": "Apple TV のプレーヤーの機能が充実"
+          },
+          "detail": {
+            "en": "The player's bar now always has Playback Speed (0.5x to 4x) and a Picture menu with Fill Screen. Danmaku has its own menu with Danmaku Area, and the danmaku list (swipe down) scrolls smoothly.",
+            "zh-Hans": "播放器的控制栏现在总有“播放速度”（0.5x 到 4x）和带“填满屏幕”的“画面”菜单。弹幕有了自己的菜单，可以设置弹幕区域；向下轻扫打开的弹幕列表滚动也更流畅。",
+            "zh-Hant": "播放器的控制列現在總有「播放速度」（0.5x 到 4x）和帶「填滿螢幕」的「畫面」選單。彈幕有了自己的選單，可以設定彈幕區域；向下輕掃打開的彈幕列表捲動也更流暢。",
+            "ja": "プレーヤーのバーに「再生速度」（0.5x〜4x）と「画面いっぱいに表示」を含む「画質」メニューが常に表示されます。弾幕は専用メニューで表示範囲を選べ、下にスワイプして開く弾幕リストもなめらかにスクロールします。"
+          },
+          "platforms": [
+            "tvos"
+          ]
+        },
+        {
+          "symbol": "bolt.horizontal",
+          "title": {
+            "en": "CatPawOpen sources play better",
+            "zh-Hans": "CatPawOpen 源播放更稳",
+            "zh-Hant": "CatPawOpen 來源播放更穩",
+            "ja": "CatPawOpen のソースがより安定"
+          },
+          "detail": {
+            "en": "CatPawOpen sources show their own danmaku first, play drive files straight from the drive with far less memory, and keep playing after iPhone or iPad pauses the app in the background.",
+            "zh-Hans": "CatPawOpen 源会优先显示自带的弹幕；网盘文件直接从网盘播放，内存占用少得多；iPhone 或 iPad 在后台暂停应用后也能继续播放。",
+            "zh-Hant": "CatPawOpen 來源會優先顯示自帶的彈幕；雲端硬碟檔案直接從雲端硬碟播放，記憶體用量少得多；iPhone 或 iPad 在背景暫停 App 後也能繼續播放。",
+            "ja": "CatPawOpen のソースは独自の弾幕を優先して表示し、クラウドドライブのファイルはドライブから直接再生してメモリ使用量を大きく減らしました。iPhone や iPad がバックグラウンドでアプリを止めた後も再生を続けます。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "Live rooms reopen by themselves when the stream stops. Continue Watching and Playback History show the episode number instead of a file name. A yingxia://import link adds a subscription. Sign-in codes survive a dropped connection, Wex sources use your 115 sign-in, folded subscription groups stay folded, and Settings > Playback on iPhone is tidier. On Apple TV, Back on the sidebar goes to Watch Now first.",
+            "zh-Hans": "直播间断流后会自动重新打开。“继续观看”和“播放历史”显示集数，而不是文件名。yingxia://import 链接可以直接添加订阅。登录码在网络中断后不会丢失，Wex 源会使用你的 115 登录，折叠的订阅分组会保持折叠，iPhone 上的“设置 > 播放”也更整洁。在 Apple TV 的侧边栏按返回键会先回到“现在观看”。",
+            "zh-Hant": "直播間斷流後會自動重新打開。「繼續觀看」和「播放記錄」顯示集數，而不是檔名。yingxia://import 連結可以直接新增訂閱。登入碼在網路中斷後不會遺失，Wex 來源會使用你的 115 登入，摺疊的訂閱分組會保持摺疊，iPhone 上的「設定 > 播放」也更整潔。在 Apple TV 的側邊欄按返回鍵會先回到「立即觀看」。",
+            "ja": "ライブ配信が止まると自動で開き直します。「視聴を続ける」と「再生履歴」はファイル名ではなく話数を表示します。yingxia://import リンクで配信設定を追加できます。サインインコードは接続が切れても失われず、Wex のソースは 115 のサインインを使い、折りたたんだ配信設定のグループはそのまま保たれ、iPhone の「設定 > 再生」も見やすくなりました。Apple TV ではサイドバーで戻るを押すと、まず「今すぐ観る」に戻ります。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.10",
       "build": 48,
       "date": "2026-11-05",
