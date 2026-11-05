@@ -271,10 +271,12 @@ private struct WatchNowTVLogo: View {
 /// A section's name, as Discover's: plain, large, and not a button.
 struct WatchNowTVHeading: View {
     let title: String
+    /// The page's margin: Discover's by default; Manga's pages keep their own.
+    var gutter = DiscoverLayout.gutter
     var body: some View {
         Text(title).font(.system(size: DiscoverLayout.heading, weight: .semibold)).lineLimit(1)
             .frame(height: DiscoverLayout.headingHeight, alignment: .top)
-            .padding(.horizontal, DiscoverLayout.gutter)
+            .padding(.horizontal, gutter)
             .accessibilityAddTraits(.isHeader)
     }
 }
@@ -283,11 +285,12 @@ struct WatchNowTVHeading: View {
 struct WatchNowTVRail<Content: View>: View {
     let title: String
     var seeAll: WatchNowTVSeeAll? = nil
+    var gutter = DiscoverLayout.gutter
     @ViewBuilder let content: () -> Content
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            WatchNowTVHeading(title: title)
-            WatchNowTVRow(seeAll: seeAll, content: content)
+            WatchNowTVHeading(title: title, gutter: gutter)
+            WatchNowTVRow(seeAll: seeAll, gutter: gutter, content: content)
         }
     }
 }
@@ -296,6 +299,7 @@ struct WatchNowTVRail<Content: View>: View {
 /// margin, invisible, that Left from the first cover lands on and opens; it closes again when focus leaves it.
 struct WatchNowTVRow<Content: View>: View {
     var seeAll: WatchNowTVSeeAll? = nil
+    var gutter = DiscoverLayout.gutter
     @ViewBuilder let content: () -> Content
     @FocusState private var seeAllFocused: Bool
     @State private var revealed = false
@@ -306,8 +310,8 @@ struct WatchNowTVRow<Content: View>: View {
                 if let seeAll { seeAll.revealing(revealed).focused($seeAllFocused) }
                 content()
             }
-            .padding(.leading, seeAll != nil && !revealed ? DiscoverLayout.gutter - DiscoverLayout.spacing - 1 : DiscoverLayout.gutter)
-            .padding(.trailing, DiscoverLayout.gutter).padding(.vertical, 24)
+            .padding(.leading, seeAll != nil && !revealed ? gutter - DiscoverLayout.spacing - 1 : gutter)
+            .padding(.trailing, gutter).padding(.vertical, 24)
         }
         .scrollClipDisabled().scrollIndicators(.hidden)
         .focusSection()

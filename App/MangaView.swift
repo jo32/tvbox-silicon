@@ -73,6 +73,11 @@ private struct MangaWelcome: View {
             Text(L10n.text("Read Comics")).font(.system(size: titleSize, weight: .bold))
             Text(L10n.text("Add comic sources in Settings › Comic Sources to read comics here."))
                 .font(.system(size: text)).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: width)
+            // Goes straight to the sources. On Apple TV it is also the page's only focusable control: with none, focus
+            // had nowhere to land when the section opened directly, and Back did nothing.
+            RouteLink { MangaSourcesView() } label: { Label(L10n.text("Comic Sources"), systemImage: "books.vertical") }
+                .controlButton(prominent: true).padding(.top, 10)
+                .accessibilityIdentifier("manga.welcome.sources")
         }
         .padding(Layout.gutter)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

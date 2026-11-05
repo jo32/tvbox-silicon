@@ -378,9 +378,11 @@ struct MangaPagedReader: View {
                 .focusable().focused($focused)
                 .onAppear { focused = true }
                 .onMoveCommand { direction in
+                    // Left is the previous page and Right the next in every reading mode, as on any TV list: pages fade
+                    // here rather than slide, and a remote's Left going forward in right-to-left comics read as backwards.
                     switch direction {
-                    case .left: turn(rtl ? 1 : -1)
-                    case .right: turn(rtl ? -1 : 1)
+                    case .left: turn(-1)
+                    case .right: turn(1)
                     case .down: Task { if model.hasNext { await model.open(model.position.chapter + 1) } }
                     case .up: Task { if model.hasPrevious { await model.open(model.position.chapter - 1) } }
                     default: break
@@ -503,6 +505,13 @@ struct MangaZoomablePage<Content: View>: UIViewRepresentable {
 private struct MangaReaderChrome: View {
     /// Dark glass: the chrome sits on white pages as often as dark ones, and its labels are white.
     static let glass = GlassStyle.regular.tint(.black.opacity(0.45)).interactive()
+    #if os(tvOS)
+    private static let titleFont = Font.system(size: 29, weight: .semibold), chapterFont = Font.system(size: 23)
+    private static let pillInset: CGFloat = 26, pillHeight: CGFloat = 76
+    #else
+    private static let titleFont = Font.subheadline.weight(.semibold), chapterFont = Font.caption
+    private static let pillInset: CGFloat = 14, pillHeight: CGFloat = 40
+    #endif
     let model: MangaReaderModel
     let visible: Bool
     @Binding var showsChapters: Bool
@@ -528,11 +537,11 @@ private struct MangaReaderChrome: View {
                 .accessibilityLabel(L10n.text("Close"))
             #endif
             VStack(alignment: .leading, spacing: 1) {
-                Text(model.comic.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                if !model.single { Text(model.title(model.position.chapter)).font(.caption).foregroundStyle(.white.opacity(0.75)).lineLimit(1) }
+                Text(model.comic.title).font(Self.titleFont).lineLimit(1)
+                if !model.single { Text(model.title(model.position.chapter)).font(Self.chapterFont).foregroundStyle(.white.opacity(0.75)).lineLimit(1) }
             }
             .foregroundStyle(.white)
-            .padding(.horizontal, 14).frame(minHeight: 40)
+            .padding(.horizontal, Self.pillInset).frame(minHeight: Self.pillHeight)
             .glassSurface(MangaReaderChrome.glass, in: Capsule())
             .layoutPriority(-1)
             Spacer(minLength: 0)
@@ -559,6 +568,31 @@ private struct MangaReaderChrome: View {
         .background(LinearGradient(colors: [.black.opacity(0.75), .clear], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
     }
 
+    #if os(tvOS)
+    /// Apple TV has no slider and the remote turns the pages, so the bar only says where you are: a short track and the
+    /// page count in one pill, centred, like the TV app's scrubber.
+    private var bottom: some View {
+        let count = max(model.currentPages.count, 1)
+        let page = min(model.position.page + 1, count)
+        let track: CGFloat = 420
+        return HStack(spacing: 24) {
+            // Fills from the left in every reading mode, as progress bars do on the TV: filled from the right for
+            // right-to-left comics, page 1 was a tick at the far end and read as the last page. The empty track stays dark
+            // so it doesn't pass for filled over a white page.
+            Capsule().fill(.black.opacity(0.35)).frame(width: track, height: 8)
+                .overlay(alignment: .leading) {
+                    Capsule().fill(.white).frame(width: max(track * CGFloat(page) / CGFloat(count), 8), height: 8)
+                }
+            Text("\(page) / \(count)").font(.system(size: 26, weight: .semibold).monospacedDigit()).foregroundStyle(.white)
+        }
+        .padding(.horizontal, 32).padding(.vertical, 18)
+        .glassSurface(MangaReaderChrome.glass, in: Capsule())
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, 40)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(page) / \(count)")
+    }
+    #else
     private var bottom: some View {
         let count = model.currentPages.count
         return HStack(spacing: 12) {
@@ -587,6 +621,7 @@ private struct MangaReaderChrome: View {
         .glassSurface(MangaReaderChrome.glass, in: Capsule())
         .padding(.horizontal, 16).padding(.bottom, 12)
     }
+    #endif
 }
 
 /// The comic's chapters, the one being read marked; picking one opens it.
