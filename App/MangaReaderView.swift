@@ -378,9 +378,11 @@ struct MangaPagedReader: View {
                 .focusable().focused($focused)
                 .onAppear { focused = true }
                 .onMoveCommand { direction in
+                    // Left is the previous page and Right the next in every reading mode, as on any TV list: pages fade
+                    // here rather than slide, and a remote's Left going forward in right-to-left comics read as backwards.
                     switch direction {
-                    case .left: turn(rtl ? 1 : -1)
-                    case .right: turn(rtl ? -1 : 1)
+                    case .left: turn(-1)
+                    case .right: turn(1)
                     case .down: Task { if model.hasNext { await model.open(model.position.chapter + 1) } }
                     case .up: Task { if model.hasPrevious { await model.open(model.position.chapter - 1) } }
                     default: break
