@@ -104,6 +104,22 @@ private func fixture(_ name: String, _ ext: String) throws -> Data {
     #expect(HTMLText.plain("<p>Tom &amp;amp; Jerry&#39;s &ldquo;day&rdquo;</p><br/>Part&#x20;2") == "Tom & Jerry's “day”\nPart 2")
     #expect(HTMLText.plain("R&D &unknown; a&b") == "R&D &unknown; a&b")
 }
+@Test func synopsisDropsOnlyLayoutLabelLines() {
+    // A line that holds only a 线路 label or a quality word is page layout, not plot.
+    #expect(HTMLText.synopsis("<p>一段正经剧情。</p><br>播放线路1<br>高清线路二<br>蓝光<br>1080P<br>线路：") == "一段正经剧情。")
+    #expect(HTMLText.synopsis("4K") == "")
+    // The provider's own text stays, its promotion and addresses included.
+    #expect(HTMLText.synopsis("《xxx》讲述了……<br>最新网址 http://abc.com<br>线路1<br>永久域名 www.xyz.net")
+            == "《xxx》讲述了……\n最新网址 http://abc.com\n永久域名 www.xyz.net")
+    for plot in ["他按照信上的地址找到了失散多年的妹妹。", "一名弹幕网站的UP主卷入风波。", "线路是他唯一的退路",
+                 "Adam.Smith.Jr returns to Boston.\nA 1080p remaster of the 1999 film.", "主角历经磨难，最终成长。"] {
+        #expect(HTMLText.synopsis(plot) == plot)
+    }
+    // A plugin's config center address must survive: ConfigCenter reads it from the synopsis (#360).
+    #expect(HTMLText.synopsis("请打开网页版配置中心：http://192.168.1.5:19988/config") == "请打开网页版配置中心：http://192.168.1.5:19988/config")
+    #expect(HTMLText.synopsis("手机扫码打开：http://127.0.0.1:52380/website") == "手机扫码打开：http://127.0.0.1:52380/website")
+}
+
 @Test func namesDecodeEntitiesWithoutStrippingText() {
     #expect(HTMLText.name("宝可梦 太阳&amp;月亮 第三季") == "宝可梦 太阳&月亮 第三季")
     #expect(HTMLText.name("I &lt;3 &amp;amp; you") == "I <3 & you")

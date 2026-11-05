@@ -100,7 +100,7 @@ public struct Video: Identifiable, Hashable, Sendable, Codable {
         let artwork = json["vod_pic"]?.string.flatMap { PosterResource(address: $0, origin: origin) }
         poster = artwork?.url; posterHeaders = artwork?.headers ?? [:]
         remarks = HTMLText.plain(json["vod_remarks"]?.string ?? "")
-        synopsis = HTMLText.plain(json["vod_content"]?.string ?? "")
+        synopsis = HTMLText.synopsis(json["vod_content"]?.string ?? "")
         let labels = ["type_name", "vod_class", "vod_tag"].compactMap { json[$0]?.string.map(HTMLText.name) }.filter { !$0.isEmpty }
         category = labels.isEmpty ? nil : labels.joined(separator: ",")
         let flags = (json["vod_play_from"]?.string ?? "").components(separatedBy: "$$$")
@@ -143,6 +143,21 @@ enum HTMLText {
             .replacingOccurrences(of: " *\n\\s*", with: "\n", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    /// A synopsis (`vod_content`): `plain`, minus the lines that hold nothing but a 线路 label ("线路1", "播放线路")
+    /// or a quality word ("蓝光", "1080P"), which aggregator pages leave behind as layout. Everything else is the
+    /// provider's own text and stays as written, links and promotion included: a plugin's synopsis can carry the
+    /// address the app opens (the Wex config center, #360), and a plot can mention 地址 or 弹幕.
+    static func synopsis(_ html: String) -> String {
+        let text = plain(html)
+        return text.split(separator: "\n").filter { line in
+            line.count > 12 || layoutLabel.firstMatch(in: String(line), range: NSRange(line.startIndex..., in: line)) == nil
+        }.joined(separator: "\n")
+    }
+    /// A whole line that is only a 线路 label or a quality word. Anchored at both ends, so plot text never matches.
+    private static let layoutLabel = try! NSRegularExpression(
+        pattern: "^\\s*(?:(?:播放|高清|蓝光|超清|备用|高速)?\\s*线路[一二三四五六七八九十0-9]*[:：]?|超清|高清|蓝光|标清|流畅|4k|1080p|720p|2160p)\\s*$",
+        options: [.caseInsensitive])
 
     /// A title or name: entities decoded ("太阳&amp;月亮" is "太阳&月亮"), spaces tidied, and nothing else touched,
     /// so a name that reads like markup after decoding ("&lt;3") keeps its text.
