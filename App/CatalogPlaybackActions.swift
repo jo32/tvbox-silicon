@@ -2,7 +2,8 @@
 import SwiftUI
 import TVCore
 
-/// Catalog-only actions alongside the existing native transport controls.
+/// Catalog-only actions alongside the existing native transport controls. The episodes have their own button
+/// (`PlayerEpisodesButton`, #524).
 struct CatalogPlaybackActions: View {
     let channel: Channel
     let session: PlaybackSession
@@ -13,19 +14,9 @@ struct CatalogPlaybackActions: View {
     var body: some View {
         if channel.historyContext != nil {
             Menu {
-                if let catalog = store.catalog(for: channel) {
+                if store.catalog(for: channel) != nil {
                     Toggle(L10n.text("Auto-play next episode"), isOn: Binding(
                         get: { store.autoPlayNext }, set: { store.autoPlayNext = $0 }))
-                    Menu(L10n.text("Episodes")) {
-                        ForEach(catalog.playlist.flags, id: \.self) { flag in
-                            Menu(flag) {
-                                ForEach(catalog.playlist.episodes(for: flag)) { episode in
-                                    Button(catalog.labels[episode.id] ?? episode.name) { store.selectEpisode(episode, from: channel) }
-                                }
-                            }
-                        }
-                    }
-                    .disabled(store.resolvingEpisode != nil)
                 }
                 Toggle(L10n.text("Automatically skip intro and outro"), isOn: Binding(
                     get: { session.skipSettings.enabled },
@@ -55,7 +46,7 @@ struct CatalogPlaybackActions: View {
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
             .fixedSize()
             .glassSurface(.regular.interactive(), in: Circle())
-            .help(L10n.text("Episodes"))
+            .help(L10n.text("Playback Options"))
             #else
             .chromeButton()
             #endif

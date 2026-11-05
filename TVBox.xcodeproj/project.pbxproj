@@ -120,6 +120,7 @@
 		58C0162322E0B17F1652E0AD /* ThirdPartyNotices.txt in Resources */ = {isa = PBXBuildFile; fileRef = A3012FC04D8DAD058B1A5168 /* ThirdPartyNotices.txt */; };
 		598C9B1ACA758778E88E48D5 /* DiscoverDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28110209CF4DBB819A2F3C74 /* DiscoverDetailView.swift */; };
 		59953BBDD74AED0A292F7079 /* CloudDriveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE19E104EAA6C4F620B8E53 /* CloudDriveView.swift */; };
+		5CAE176F68875F1B290E66AA /* PlayerEpisodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6411E1972F52DCE8C5E117F7 /* PlayerEpisodes.swift */; };
 		5CB8BD265BA21805A9BF8CD9 /* SubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1212366D71C455D6EAE5E4 /* SubtitleOverlay.swift */; };
 		5E064141ADA8E6A4E7A97D0B /* EpisodeSkipSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B451E5612B33CF005EEAAE08 /* EpisodeSkipSettingsView.swift */; };
 		5F05B8FEB75498291DBE83CB /* TVCore in Frameworks */ = {isa = PBXBuildFile; productRef = 150E7485ED76FF29A84D7C1D /* TVCore */; };
@@ -153,6 +154,7 @@
 		6F182F91BDACFBFC8E6B3B0E /* DetailAurora.swift in Sources */ = {isa = PBXBuildFile; fileRef = A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */; };
 		6F3F7DE9D8CB73FC2C1592D9 /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181C983C0018A97F2A086298 /* DiscoveryView.swift */; };
 		6FB75A9CED5DEEB931AD0C9A /* MusicRemoteControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E59EDBC7BE62078557E781 /* MusicRemoteControl.swift */; };
+		7142A1BCD94E8F10E0C623B5 /* PlayerEpisodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6411E1972F52DCE8C5E117F7 /* PlayerEpisodes.swift */; };
 		722A5C4D2DC5223EB611AC0A /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5938F1806109304A4FB816CF /* Sparkle */; };
 		72448F6E6FFCC74EE5950C1A /* Keystone-GPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 084C8344E2997DB3ED8FE974 /* Keystone-GPL2.txt */; };
 		7283989DBA1B1F0E96A2C383 /* LiveRoomsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675EA4CF000337C94DF5B1D3 /* LiveRoomsView.swift */; };
@@ -216,6 +218,7 @@
 		A75BCD1DBB7A45ED27CEBA63 /* DiscoverBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */; };
 		AA2B9DEAC822A56D57A10055 /* DiscoverPersonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */; };
 		AC043E4B83A36550FA487318 /* MacUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ACBC18014BA7190EBA2EDD7 /* MacUpdater.swift */; };
+		ACA5E3296CAC1496D0C5606B /* PlayerEpisodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6411E1972F52DCE8C5E117F7 /* PlayerEpisodes.swift */; };
 		B02B784DE4DDF64B05C8FA0F /* MusicRemoteControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E59EDBC7BE62078557E781 /* MusicRemoteControl.swift */; };
 		B03711CE7478DB53B6591F83 /* DiscoverTrailer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74376E0596FEAF3CE3FBE7C8 /* DiscoverTrailer.swift */; };
 		B0AA965C1DB5AA7CF03E9415 /* SitesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75124CC2471CF95C1FFB168A /* SitesView.swift */; };
@@ -358,6 +361,7 @@
 		559683A9A4BDFA11A4A9FE67 /* FeedbackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackView.swift; sourceTree = "<group>"; };
 		57642E0B8E9377FD57BC9D7F /* PlaybackWaitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackWaitView.swift; sourceTree = "<group>"; };
 		58E59EDBC7BE62078557E781 /* MusicRemoteControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicRemoteControl.swift; sourceTree = "<group>"; };
+		6411E1972F52DCE8C5E117F7 /* PlayerEpisodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerEpisodes.swift; sourceTree = "<group>"; };
 		66DF697EACE4307031398E5A /* MusicTVScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicTVScreen.swift; sourceTree = "<group>"; };
 		675EA4CF000337C94DF5B1D3 /* LiveRoomsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveRoomsView.swift; sourceTree = "<group>"; };
 		6876ACF1E9D9F80BBC4F22C4 /* PlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackView.swift; sourceTree = "<group>"; };
@@ -572,6 +576,7 @@
 				334B106CCFB47B5E27376A16 /* PlaybackHistoryView.swift */,
 				6876ACF1E9D9F80BBC4F22C4 /* PlaybackView.swift */,
 				57642E0B8E9377FD57BC9D7F /* PlaybackWaitView.swift */,
+				6411E1972F52DCE8C5E117F7 /* PlayerEpisodes.swift */,
 				8CB1FA4BB4990588B428781E /* PlayerView.swift */,
 				226C6E62CA6E50C8609C1EF3 /* PlayOn.swift */,
 				8C5AB58ECA34E84E70A20906 /* PluginSignInView.swift */,
@@ -1125,6 +1130,7 @@
 				49FAE12E9DA2ED063E9C4754 /* PlaybackHistoryView.swift in Sources */,
 				6DBF1FDBD1FD2889D191197E /* PlaybackView.swift in Sources */,
 				29CEEA35351802EDF4606161 /* PlaybackWaitView.swift in Sources */,
+				ACA5E3296CAC1496D0C5606B /* PlayerEpisodes.swift in Sources */,
 				FDA61F14FE9C263521D69DD7 /* PlayerView.swift in Sources */,
 				85586B8E5EBB58EE523F9FCE /* PluginSignInView.swift in Sources */,
 				DF010807CD40F2180FDE6793 /* QALaunch.swift in Sources */,
@@ -1213,6 +1219,7 @@
 				EE40CAB25587252D370219D3 /* PlaybackHistoryView.swift in Sources */,
 				089C2D01F3B95CB1738D9AD9 /* PlaybackView.swift in Sources */,
 				EF0B1C626478D79D1B6486D7 /* PlaybackWaitView.swift in Sources */,
+				7142A1BCD94E8F10E0C623B5 /* PlayerEpisodes.swift in Sources */,
 				97DFD3224F5E543A2BE6EDE0 /* PlayerView.swift in Sources */,
 				2158BE026F2A22702C9A2890 /* PluginSignInView.swift in Sources */,
 				0AF3C56A9798DD0C68EC63D8 /* QALaunch.swift in Sources */,
@@ -1303,6 +1310,7 @@
 				024BC7DE6E06F79B6511FC89 /* PlaybackHistoryView.swift in Sources */,
 				F418F8B8793AF0B489F83AB9 /* PlaybackView.swift in Sources */,
 				854245265CFB2D739FCBDAEB /* PlaybackWaitView.swift in Sources */,
+				5CAE176F68875F1B290E66AA /* PlayerEpisodes.swift in Sources */,
 				C5E9C8C7F693011882FC1F22 /* PlayerView.swift in Sources */,
 				9A75F15C645F052034EA6926 /* PluginSignInView.swift in Sources */,
 				C715A188F36F0CC004231464 /* QALaunch.swift in Sources */,

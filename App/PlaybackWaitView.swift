@@ -244,7 +244,12 @@ struct PlaybackWaitView: View {
     private func caption(_ wait: PlaybackWait) -> Text? {
         if let caption = wait.caption { return Text(caption) }
         guard wait.suggestsLines else { return nil }
+        #if os(tvOS)
         return Text(L10n.text("Another line may be faster:")) + Text(" ") + Text(Image(systemName: "ellipsis.circle")) + Text(" › " + L10n.text("Episodes"))
+        #else
+        // The player's Episodes button (#524).
+        return Text(L10n.text("Another line may be faster:")) + Text(" ") + Text(Image(systemName: PlayerEpisodesSheet.symbol)) + Text(" " + L10n.text("Episodes"))
+        #endif
     }
 
     #if os(tvOS)

@@ -20,6 +20,7 @@ struct PlaybackView: View {
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
     @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @State private var showsDanmakuList = false
+    @State private var showsEpisodes = false
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     #if os(tvOS)
@@ -192,6 +193,7 @@ struct PlaybackView: View {
         ChromeRow { chromeTitle; chromeButtons; chromeClose }
             .padding(16)
             .frame(maxHeight: .infinity, alignment: .top)
+        .playerEpisodesSheet(isPresented: $showsEpisodes, channel: channel)
         .sheet(isPresented: $showsDanmakuList) {
             DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
                 .danmakuListPresentation()
@@ -222,6 +224,10 @@ struct PlaybackView: View {
                 .disabled(next.busy)
                 .accessibilityLabel(L10n.text("Next Episode")).help(next.name)
             }
+            PlayerEpisodesButton(channel: channel, isPresented: $showsEpisodes) {
+                Image(systemName: PlayerEpisodesSheet.symbol).font(.headline).frame(width: 22, height: 22)
+            }
+            .chromeButton()
             CatalogPlaybackActions(channel: channel, session: session)
             if session.qualities.count > 1 {
                 Menu {
@@ -939,6 +945,7 @@ private struct DesktopPlaybackView: View {
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
     @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @State private var showsDanmakuList = false
+    @State private var showsEpisodes = false
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
@@ -997,6 +1004,7 @@ private struct DesktopPlaybackView: View {
         .onAppear { floats = window.level == .floating; idle.attach(window); tvBrowser.start() }
         // Played here again (Space, say): the other device no longer has it to itself.
         .onChange(of: session.paused) { _, paused in if !paused { playingOn = nil } }
+        .playerEpisodesSheet(isPresented: $showsEpisodes, channel: channel)
         .sheet(isPresented: $showsDanmakuList) {
             DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
                 .danmakuListPresentation()
@@ -1029,6 +1037,13 @@ private struct DesktopPlaybackView: View {
                         barButton("forward.end.fill", L10n.text("Next Episode"), help: next.name) { next.go() }
                             .disabled(next.busy)
                     }
+                    PlayerEpisodesButton(channel: channel, isPresented: $showsEpisodes) {
+                        Image(systemName: PlayerEpisodesSheet.symbol).font(.system(size: 14, weight: .medium))
+                            .frame(width: 34, height: 34)
+                            .glassSurface(.regular.interactive(), in: Circle())
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
                     if !tvBrowser.receivers.isEmpty {
                         PlayOnButton(channel: channel, session: session, browser: tvBrowser) { receiver in
                             session.player.pause()
