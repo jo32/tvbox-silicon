@@ -1049,7 +1049,8 @@ struct CategoryFilterBar: View {
     private var anyChanged: Bool { filters.contains(where: changed) }
     private func title(_ filter: CategoryFilter) -> String {
         let current = value(filter)
-        return filter.name + "：" + (filter.options.first { $0.value == current }?.name ?? current)
+        let choice = filter.options.first { $0.value == current }?.name ?? current
+        return filter.name.isEmpty ? choice : filter.name + "：" + choice
     }
     private func pick(_ filter: CategoryFilter, _ option: String) {
         guard value(filter) != option else { return }
