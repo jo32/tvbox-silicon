@@ -75,6 +75,24 @@ public actor EmbeddedNodeHost {
         return try JSONDecoder().decode([String: JSONValue].self, from: Data(text.utf8))
     }
 
+    /// A bundle's media proxy address at the port the bundle listens on now. iOS takes back a suspended app's listening
+    /// sockets and Node then listens again on new ports, so an episode that was playing when the screen went off can't
+    /// reach its address any more (#485). Nil when the address is still current, or Node can't say.
+    public func relocate(_ url: URL) async -> URL? {
+        guard Self.available, let control = try? await start(),
+              let body = try? JSONEncoder().encode(["relocate": url.absoluteString]) else { return nil }
+        let answer: Data
+        do { answer = try await send(body, to: control) }
+        catch let error as URLError where error.code == .cannotConnectToHost || error.code == .networkConnectionLost {
+            guard let fresh = try? await relisten(after: control), let data = try? await send(body, to: fresh) else { return nil }
+            answer = data
+        } catch { return nil }
+        guard let envelope = try? JSONDecoder().decode([String: JSONValue].self, from: answer),
+              let address = envelope["result"]?.string, let moved = URL(string: address), moved.port != url.port else { return nil }
+        Diagnostics.shared.record(.info, "node.start", "media proxy moved from port \(url.port ?? 0) to \(moved.port ?? 0)")
+        return moved
+    }
+
     private func send(_ body: Data, to control: Control) async throws -> Data {
         guard let port = control.port, let token = control.token else {
             throw TVError.unsupported(control.error ?? L10n.text("The CatPawOpen runtime stopped. Quit and reopen the app to use these sources."))

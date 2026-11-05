@@ -1042,7 +1042,8 @@ extension PlaybackSession {
             try Task.checkCancellation()
             // The bundle downloads each request with 10 to 16 threads of its own: reading ahead on six at once ran its
             // Node out of memory, and on one a 4K episode stalled whenever the drive slowed.
-            address = CloudStreams.register(media, parallel: 2) { nil }
+            // Its proxy moves to a new port when iOS took back the sockets of the suspended app (#485).
+            address = CloudStreams.register(media, parallel: 2) { await CatPawOpen.relocated(media) }
             prepared.url = address
             Diagnostics.shared.record(.info, "player", "catpaw stream length=\(media.length)")
         } else if EmbeddedJarHost.isPluginProxy(address) {
