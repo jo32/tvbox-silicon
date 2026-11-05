@@ -959,7 +959,7 @@ struct PosterImage: View {
         }
     }
 
-    private static let placeholder: CGImage = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { context in
+    static let placeholder: CGImage = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { context in
         UIColor(white: 0.2, alpha: 1).setFill(); context.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
     }.cgImage!
 
@@ -979,7 +979,7 @@ struct PosterImage: View {
     }
 
     /// The middle of the image at the frame's shape, as a fill would show it.
-    private static func cover(_ image: CGImage?, _ size: CGSize) -> CGImage {
+    static func cover(_ image: CGImage?, _ size: CGSize) -> CGImage {
         guard let image else { return placeholder }
         guard size.width > 0, size.height > 0 else { return image }
         let width = CGFloat(image.width), height = CGFloat(image.height), shape = size.width / size.height

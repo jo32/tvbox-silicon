@@ -138,6 +138,18 @@ struct MangaCover: View {
     @State private var failed = false
     private var key: String { source + "\n" + url }
     var body: some View {
+        #if os(tvOS)
+        // One image cropped to the frame and never clipped, as PosterImage draws Watch Now's and Discover's covers: the
+        // card button lifts the first image in its label and draws the glass rim around it. A clipped stack never grew.
+        GeometryReader { proxy in
+            Image(decorative: PosterImage.cover(image, proxy.size), scale: 1).resizable()
+                .overlay {
+                    if image == nil { Image(systemName: failed ? "photo" : "book.closed").font(.title2).foregroundStyle(.white.opacity(0.5)) }
+                }
+                .preference(key: CardCoverHeightKey.self, value: proxy.size.height)
+        }
+        .task(id: key) { await load() }
+        #else
         ZStack {
             Rectangle().fill(Color(white: 0.2))
             if let image {
@@ -147,7 +159,11 @@ struct MangaCover: View {
             }
         }
         .clipped()
-        .task(id: key) {
+        .task(id: key) { await load() }
+        #endif
+    }
+
+    private func load() async {
             if let cached = MangaCoverCache.shared.image(key) { image = cached; return }
             image = nil; failed = false
             guard !url.isEmpty else { failed = true; return }
@@ -157,7 +173,6 @@ struct MangaCover: View {
                 guard !Task.isCancelled else { return }
                 if let decoded { MangaCoverCache.shared.store(decoded, key); image = decoded } else { failed = true }
             } catch { if !Task.isCancelled { failed = true } }
-        }
     }
 }
 
@@ -167,6 +182,21 @@ struct MangaCard: View {
     var caption: String? = nil
     var showsSource = false
     var body: some View {
+        #if os(tvOS)
+        // Watch Now's and Discover's card (WatchNowTVCover): a 2:3 cover the focus lift grows, and one line of title and
+        // one of detail under it that move down with it.
+        let detail = caption ?? (showsSource ? MangaStore.shared.name(of: comic.sourceKey) : comic.subtitle)
+        VStack(spacing: 5) {
+            Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit)
+                .overlay { MangaCover(source: comic.sourceKey, url: comic.cover) }
+            VStack(spacing: 0) {
+                Text(comic.title).font(.system(size: 26))
+                Text(detail.isEmpty ? " " : detail).font(.system(size: 22, weight: .medium)).foregroundStyle(.white.opacity(0.5))
+            }
+            .lineLimit(1).cardCaption()
+        }
+        .accessibilityElement(children: .combine)
+        #else
         VStack(alignment: .leading, spacing: 8) {
             Color.clear.aspectRatio(3.0 / 4.0, contentMode: .fit)
                 .overlay { MangaCover(source: comic.sourceKey, url: comic.cover) }
@@ -180,6 +210,7 @@ struct MangaCard: View {
             .cardCaption()
         }
         .accessibilityElement(children: .combine)
+        #endif
     }
 }
 
@@ -225,16 +256,13 @@ struct MangaShelfRow: View {
 
     var body: some View {
         #if os(tvOS)
-        VStack(alignment: .leading, spacing: Layout.headerSpacing) {
-            HStack(alignment: .firstTextBaseline) {
-                SectionHeader(title: title)
-                Spacer(minLength: 8)
-                if let route { Button(L10n.text("See All")) { openRoute?(route) }.buttonStyle(.borderless) }
+        // Watch Now's rail: its heading, covers that lift, and See All waiting at the start of the row.
+        WatchNowTVRail(title: title, seeAll: route.map { WatchNowTVSeeAll(height: WatchNowTVCover.height, route: $0) }, gutter: gutter) {
+            ForEach(comics) { comic in
+                MangaComicLink(comic: comic, caption: captions[comic.identity], showsSource: showsSource)
+                    .frame(width: MangaLayout.cardWidth)
             }
-            .padding(.horizontal, gutter)
-            row
         }
-        .tvFocusSection()
         #else
         VStack(alignment: .leading, spacing: 0) {
             WatchNowPhoneHeading(title: title, route: route)

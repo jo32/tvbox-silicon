@@ -10,6 +10,50 @@ struct MangaSourcesView: View {
     @State private var message: String?
 
     var body: some View {
+        #if os(tvOS)
+        tvBody
+        #else
+        listBody
+        #endif
+    }
+
+    #if os(tvOS)
+    /// Apple TV: a Settings subpage like the others under Settings, with glass rows rather than the system's list.
+    private var tvBody: some View {
+        SettingsPage(title: L10n.text("Comic Sources"), symbol: "books.vertical",
+                     subtitle: L10n.text("Comic sources are Venera scripts (venera-configs). Each one reads a website; the website's content is its own.")) {
+            SettingsGroup(title: L10n.text("Installed"),
+                          footer: store.sources.isEmpty ? L10n.text("No comic sources yet. Open a comic source list in Subscriptions and install the sources you want.") : nil) {
+                ForEach(store.sources) { source in
+                    RouteLink { MangaSourceSettingsView(key: source.key) } label: {
+                        TVSettingsRowLabel(title: source.name, detail: source.version.isEmpty ? nil : source.version,
+                                           value: MangaSourceData.shared.isSignedIn(source.key) ? L10n.text("Signed In") : nil, chevron: true)
+                    }
+                    .glassRow()
+                }
+            }
+            if !store.repositories.isEmpty {
+                SettingsGroup(title: L10n.text("Install From")) {
+                    ForEach(store.repositories, id: \.self) { url in
+                        TVSettingsLink(title: MangaSources.title(of: url)) { MangaRepositoryView(url: url) }
+                    }
+                }
+            }
+            SettingsGroup(title: L10n.text("Add by Address"), footer: message) {
+                // A plain field: an alert or sheet on a pushed page hangs tvOS 27 (#272).
+                TextField(L10n.text("Source address (.js)"), text: $address)
+                    .textContentType(.URL).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .onSubmit(installAddress)
+                    .padding(.horizontal, 12)
+                TVSettingsAction(title: L10n.text("Install"), busy: working, action: installAddress)
+                    .disabled(address.trimmingCharacters(in: .whitespaces).isEmpty || working)
+            }
+        }
+        .onAppear { store.reloadSources() }
+    }
+    #endif
+
+    private var listBody: some View {
         List {
             Section {
                 if store.sources.isEmpty {
@@ -115,6 +159,59 @@ struct MangaRepositoryView: View {
     }
 
     var body: some View {
+        #if os(tvOS)
+        tvBody
+        #else
+        listBody
+        #endif
+    }
+
+    #if os(tvOS)
+    /// Apple TV: every source as a glass row; selecting one installs or updates it.
+    private var tvBody: some View {
+        TVSettingsSubpage(symbol: "books.vertical", title: MangaSources.title(of: url),
+                          subtitle: entries.map { L10n.text("%lld sources", $0.count) }) {
+            if let entries, !entries.isEmpty {
+                SettingsGroup { ForEach(entries) { tvRow($0) } }
+                SettingsGroup {
+                    TVSettingsAction(title: L10n.text("Remove Source List"), destructive: true) { store.removeRepository(url); dismiss() }
+                }
+            } else if entries != nil {
+                EmptyResults(symbol: "tray", title: L10n.text("This list has no sources."))
+            } else if let failure {
+                EmptyResults(symbol: "exclamationmark.triangle", title: L10n.text("Unable to Load"), message: failure, action: L10n.text("Try Again")) {
+                    Task { await load() }
+                }
+            } else {
+                ProgressView().frame(maxWidth: .infinity, minHeight: 300)
+            }
+        }
+        .task { if entries == nil { await load() } }
+    }
+
+    private func tvRow(_ entry: MangaRepositoryEntry) -> some View {
+        let installed = entry.key.flatMap { key in store.sources.first { $0.key == key } } != nil
+        let update = MangaSources.shared.hasUpdate(entry)
+        let working = busy.contains(entry.id)
+        let error = errors[entry.id]
+        let status = update ? L10n.text("Update") : installed ? L10n.text("Installed") : L10n.text("Install")
+        let symbol = update ? "arrow.triangle.2.circlepath" : installed ? "checkmark" : "arrow.down.circle"
+        let detail = error ?? [entry.version, entry.description].filter { !$0.isEmpty }.joined(separator: " · ")
+        return Button { if !installed || update { install(entry) } } label: {
+            TVSettingsRowLabel(title: entry.name, detail: detail.isEmpty ? nil : detail, value: working ? nil : status,
+                               warning: error != nil, busy: working) {
+                if !working {
+                    Image(systemName: symbol).font(.system(size: 26, weight: .semibold))
+                        .foregroundStyle(installed && !update ? HierarchicalShapeStyle.secondary : HierarchicalShapeStyle.primary)
+                }
+            }
+        }
+        .glassRow()
+        .accessibilityValue(status)
+    }
+    #endif
+
+    private var listBody: some View {
         Group {
             if let entries, !entries.isEmpty {
                 List {
@@ -200,6 +297,106 @@ struct MangaSourceSettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
+        #if os(tvOS)
+        tvBody
+        #else
+        listBody
+        #endif
+    }
+
+    #if os(tvOS)
+    /// Apple TV: the source's settings, account and removal as glass rows; choices step through on each press.
+    private var tvBody: some View {
+        let source = store.sources.first { $0.key == key }
+        return TVSettingsSubpage(symbol: "book", title: store.name(of: key),
+                                 subtitle: source.map { $0.version.isEmpty ? $0.key : L10n.text("Version %@", $0.version) }) {
+            if let info {
+                if !info.settings.isEmpty {
+                    SettingsGroup(title: L10n.text("Settings")) {
+                        ForEach(info.settings, id: \.key) { setting in tvSettingRow(setting, info: info) }
+                    }
+                }
+                if info.canSignIn || !info.cookieFields.isEmpty { tvAccount(info) }
+            } else if let failure {
+                SettingsGroup(footer: failure) { EmptyView() }
+            } else {
+                ProgressView().frame(maxWidth: .infinity, minHeight: 120)
+            }
+            SettingsGroup(footer: message ?? source?.origin?.absoluteString) {
+                TVSettingsAction(title: L10n.text("Remove Source"), destructive: true) { Task { await store.remove(key); dismiss() } }
+            }
+        }
+        .task(id: revision) { await loadInfo() }
+    }
+
+    @ViewBuilder private func tvSettingRow(_ setting: MangaSourceInfo.Setting, info: MangaSourceInfo) -> some View {
+        let title = info.text(setting.title)
+        let saved = MangaSourceData.shared.setting(key, setting.key)
+        switch setting.type {
+        case "select":
+            let current = (saved as? String) ?? (saved.map { "\($0)" }) ?? setting.defaultValue ?? setting.options.first ?? ""
+            let index = setting.options.firstIndex(of: current) ?? 0
+            let shown = info.text(setting.optionTexts.indices.contains(index) ? setting.optionTexts[index] : current)
+            TVSettingsAction(title: title, value: shown) {
+                guard !setting.options.isEmpty else { return }
+                change(setting.key, setting.options[(index + 1) % setting.options.count])
+            }
+        case "switch":
+            TVSettingsToggle(title: title, isOn: Binding(
+                get: { (saved as? Bool) ?? (setting.defaultValue.map { $0 == "true" || $0 == "1" }) ?? false },
+                set: { change(setting.key, $0) }))
+        case "callback":
+            TVSettingsAction(title: title) {
+                Task {
+                    do { try await MangaRuntime.shared.runSettingCallback(key, setting: setting.key) }
+                    catch { message = error.mangaMessage }
+                }
+            }
+        default:
+            MangaSettingField(title: title, value: (saved as? String) ?? (saved.map { "\($0)" }) ?? setting.defaultValue ?? "") { change(setting.key, $0) }
+        }
+    }
+
+    @ViewBuilder private func tvAccount(_ info: MangaSourceInfo) -> some View {
+        SettingsGroup(title: L10n.text("Account"),
+                      footer: L10n.text("Your account and password are sent only to this source's website, and kept on this device.")) {
+            if signedIn {
+                SettingsRow(symbol: "person.crop.circle", title: L10n.text("Signed In")) {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 28)).foregroundStyle(.green)
+                }
+                TVSettingsAction(title: L10n.text("Sign Out"), destructive: true) {
+                    Task { await MangaRuntime.shared.signOut(key); signedIn = false; message = nil }
+                }
+            } else {
+                if info.canSignIn {
+                    TextField(L10n.text("Account"), text: $account)
+                        .textContentType(.username).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .padding(.horizontal, 12)
+                    SecureField(L10n.text("Password"), text: $password).textContentType(.password)
+                        .padding(.horizontal, 12)
+                    TVSettingsAction(title: L10n.text("Sign In"), busy: working) {
+                        signIn { try await MangaRuntime.shared.signIn(key, account: account, password: password) }
+                    }
+                    .disabled(account.isEmpty || password.isEmpty || working)
+                }
+                if !info.cookieFields.isEmpty {
+                    ForEach(Array(info.cookieFields.enumerated()), id: \.offset) { index, field in
+                        TextField(field, text: Binding(get: { cookies.indices.contains(index) ? cookies[index] : "" },
+                                                       set: { if cookies.indices.contains(index) { cookies[index] = $0 } }))
+                            .textInputAutocapitalization(.never).autocorrectionDisabled()
+                            .padding(.horizontal, 12)
+                    }
+                    TVSettingsAction(title: L10n.text("Sign In with Cookies"), busy: working) {
+                        signIn { try await MangaRuntime.shared.signIn(key, cookies: cookies) }
+                    }
+                    .disabled(cookies.contains(where: \.isEmpty) || working)
+                }
+            }
+        }
+    }
+    #endif
+
+    private var listBody: some View {
         List {
             if let info {
                 if !info.settings.isEmpty {
@@ -225,13 +422,15 @@ struct MangaSourceSettingsView: View {
             if let message { Section { Text(message).font(.footnote).foregroundStyle(.secondary) } }
         }
         .screenTitle(store.name(of: key))
-        .task(id: revision) {
-            do {
-                info = try await MangaRuntime.shared.info(key)
-                signedIn = MangaSourceData.shared.isSignedIn(key)
-                if cookies.count != info?.cookieFields.count { cookies = Array(repeating: "", count: info?.cookieFields.count ?? 0) }
-            } catch { failure = error.mangaMessage }
-        }
+        .task(id: revision) { await loadInfo() }
+    }
+
+    private func loadInfo() async {
+        do {
+            info = try await MangaRuntime.shared.info(key)
+            signedIn = MangaSourceData.shared.isSignedIn(key)
+            if cookies.count != info?.cookieFields.count { cookies = Array(repeating: "", count: info?.cookieFields.count ?? 0) }
+        } catch { failure = error.mangaMessage }
     }
 
     @ViewBuilder private func settingRow(_ setting: MangaSourceInfo.Setting, info: MangaSourceInfo) -> some View {
@@ -330,6 +529,16 @@ private struct MangaSettingField: View {
     let save: (String) -> Void
     @State private var draft: String?
     var body: some View {
+        #if os(tvOS)
+        // The title over a plain field: a focused tvOS field draws its own white platter.
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.system(size: 25, weight: .semibold)).foregroundStyle(.secondary).padding(.leading, 28)
+            TextField(title, text: Binding(get: { draft ?? value }, set: { draft = $0 }))
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                .onSubmit { if let draft, draft != value { save(draft) } }
+                .padding(.horizontal, 12)
+        }
+        #else
         LabeledContent(title) {
             TextField(title, text: Binding(get: { draft ?? value }, set: { draft = $0 }))
                 .multilineTextAlignment(.trailing)
@@ -338,6 +547,7 @@ private struct MangaSettingField: View {
                 #endif
                 .onSubmit { if let draft, draft != value { save(draft) } }
         }
+        #endif
     }
 }
 
