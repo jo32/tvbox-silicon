@@ -561,29 +561,24 @@ extension View {
     }
 
     /// The iOS 26 floating tab bar sits over the scroll content instead of reserving a strip, so a
-    /// page's last row would sit under it. The floating Liquid Glass capsule does not widen the safe
-    /// area (it overlays the content), so on iPhone the `.safeAreaPadding(.bottom)` and
-    /// `.safeAreaInset` paths both read zero and the final row stays trapped under the capsule. A
-    /// plain `.padding` reserves the capsule's own height outright — its top edge sits ~52pt off the
-    /// bottom on iPhone Duo and ~67pt on a standard iPhone, home indicator included — so 72pt leaves
-    /// a little air under the last row while the rest still scrolls underneath the capsule.
+    /// page's last row would sit under it. On iOS 26 the system still reports the home-indicator
+    /// inset (34pt) — the floating Liquid Glass capsule does *not* publish its own height, because it
+    /// overlays the content rather than widening the safe area. So the last row (and any footer text
+    /// under it) needs an explicit extra reserve on top of that 34pt, sized by width class:
+    ///  • compact width — the phone's bottom capsule. A literal padding on top of the system inset
+    ///    double-counts and leaves a dead strip, so fade the content as it slides under and let the
+    ///    system 34pt inset hold the final row clear of the capsule.
+    ///  • regular width — the Duo's inner display and iPads. The wider floating dock tops out ~57pt
+    ///    off the bottom, so 34pt alone leaves the last row (and the copyright footer under it)
+    ///    caught under the dock's upper lip. Reserve extra with safeAreaPadding so the footer clears
+    ///    the dock. 24pt was not enough — the copyright line sits ~28pt under "Last checked" and was
+    ///    still clipped by the dock (measured with PIL row-scanning, 2026-11-05); 88pt clears it with
+    ///    a little air to spare.
     @ViewBuilder func tabSafeArea(_ horizontal: UserInterfaceSizeClass? = nil) -> some View {
         #if os(iOS)
         if #available(iOS 26, *) {
-            // The iOS 26 floating tab bar overlays the scroll content instead of reserving a strip.
-            // Two bars, two behaviours (verified with runtime safe-area reads on the three Duo forms
-            // plus a standard iPhone, 2026-11-05 — every form reports bottomSafeInset == 34pt, the
-            // home-indicator height, never the dock's own height, because the dock overlays):
-            //  • compact width — the phone's bottom Liquid Glass capsule. A literal padding on top of
-            //    the system inset double-counts and leaves a dead strip, so fade the content as it
-            //    slides under and let the system inset (34pt) hold the final row clear of the capsule.
-            //  • regular width — the Duo's inner display and iPads. The wider floating dock (or, folded
-            //    to cover, the left icon rail) tops out ~23pt above the home indicator, so the system's
-            //    34pt alone leaves the last row (and any footer text under it) caught under the dock's
-            //    upper lip. Reserve that extra with safeAreaPadding so the last row clears the dock
-            //    without a dead strip.
             if horizontal == .regular {
-                safeAreaPadding(.bottom, 24)
+                safeAreaPadding(.bottom, 88)
             } else {
                 overlay(alignment: .bottom) {
                     LinearGradient(colors: [.clear, Color(.systemBackground), Color(.systemBackground)],
