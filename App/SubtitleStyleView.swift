@@ -102,6 +102,7 @@ struct SubtitlePreview: View {
     var cornerRadius: CGFloat = 12
     @State private var start: SubtitleStyle?
 
+    private static let picture = "subtitlePreview.picture"
     static var sample: [String] { [L10n.text("This is how subtitles will look"), L10n.text("on every video you play")] }
 
     var body: some View {
@@ -127,6 +128,7 @@ struct SubtitlePreview: View {
                     .subtitlePlacement(shown, in: CGRect(origin: .zero, size: size))
             }
             .frame(width: size.width, height: size.height, alignment: .topLeading)
+            .coordinateSpace(.named(Self.picture))
         }
         .aspectRatio(16 / 9, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
@@ -139,8 +141,10 @@ struct SubtitlePreview: View {
     }
 
     #if !os(tvOS)
+    /// Measured on the picture, which stays put. In the subtitle's own space (the default) every step it moved
+    /// shifted the finger's position inside it back, so the drag came out short, then jumped: a jittery drag.
     private func drag(in size: CGSize) -> some Gesture {
-        DragGesture(minimumDistance: 0)
+        DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.picture))
             .onChanged { value in
                 if start == nil { start = style; adjusting.wrappedValue = true }
                 guard let start, size.width > 0, size.height > 0 else { return }
