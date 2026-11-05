@@ -535,6 +535,7 @@ struct FormSettingsView: View {
                     FormLabel(symbol: "info.circle.fill", tint: .blue, title: L10n.text("Show Video Info"), subtitle: SettingsNote.playbackInfo)
                 }
                 .settingsSwitch()
+                FormLink(symbol: "captions.bubble.fill", tint: .orange, title: L10n.text("Subtitle Style")) { SubtitleStyleView() }
                 FormLink(symbol: "play.fill", tint: Brand.indigo, title: L10n.text("Play a URL")) { PlayURLView() }
             } header: {
                 Text(L10n.text("Playback"))
@@ -870,6 +871,9 @@ struct PlaybackSettingsView: View {
                     FormLabel(symbol: "sun.max.fill", tint: .yellow, title: L10n.text("Slide for Brightness and Volume"))
                 }
                 .settingsSwitch()
+            }
+            SettingsGroup {
+                FormLink(symbol: "captions.bubble.fill", tint: .orange, title: L10n.text("Subtitle Style")) { SubtitleStyleView() }
             }
             SettingsGroup(footer: SettingsNote.playbackInfo) {
                 Toggle(isOn: $showsPlaybackInfo) {
@@ -1587,6 +1591,7 @@ struct TVSettingsView: View {
                 TVSettingsLink(title: L10n.text("Play a URL")) { TVPlayURLPage() }
             }
             TVSettingsSection(footer: L10n.text("Shows the video's format, resolution, frame rate and bitrate in a corner of the player.")) {
+                TVSettingsLink(title: L10n.text("Subtitle Style")) { SubtitleStyleView() }
                 TVSettingsToggle(title: L10n.text("Show Video Info"), isOn: $showsPlaybackInfo)
             }
             if VideoEnhancement.canUpscale || VideoEnhancement.canSmooth {

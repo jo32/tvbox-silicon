@@ -300,7 +300,9 @@ import TVCore
     }
     /// Adds the typed address, or refreshes it when it is already in the list. A directory (多仓)
     /// adds every subscription it lists, switched off, for the viewer to choose from.
-    func importSubscription(address: String? = nil) async {
+    /// `address` is one typed in Settings, or one a link or a file handed over; `name` labels it the way a
+    /// typed name does, and stays empty for a file.
+    func importSubscription(address: String? = nil, name: String? = nil) async {
         guard !importing else { return }
         importing = true; importError = nil; notice = nil
         defer { importing = false }
@@ -309,11 +311,11 @@ import TVCore
             let url = try WebAddress.resolve(typed)
             switch try await http.subscriptionImport(url) {
             case .subscription(let value):
-                let name = address == nil ? subscriptionName.trimmingCharacters(in: .whitespacesAndNewlines) : ""
-                let entry = SubscriptionEntry(address: url.absoluteString, name: name)
+                let title = (address == nil ? subscriptionName : (name ?? "")).trimmingCharacters(in: .whitespacesAndNewlines)
+                let entry = SubscriptionEntry(address: url.absoluteString, name: title)
                 if let index = subscriptions.firstIndex(where: { $0.address == entry.address }) {
                     subscriptions[index].enabled = true
-                    if !name.isEmpty { subscriptions[index].name = name }
+                    if !title.isEmpty { subscriptions[index].name = title }
                 } else { subscriptions.append(entry) }
                 keep(value, for: entry)
                 if persistsChanges { defaults.set(url.absoluteString, forKey: "subscriptionAddress") }

@@ -697,6 +697,8 @@
 // Multiple subscriptions and source health.
 "Subscriptions" = "订阅";
 "Add Subscription" = "添加订阅";
+"Add This Subscription?" = "添加这个订阅？";
+"A page can only ask: Yingxia adds this subscription after you agree, never on its own." = "网页只能发出请求：确认后映匣才会添加这个订阅，不会自行添加。";
 "Refresh All" = "全部更新";
 "Move Up" = "上移";
 "Move Down" = "下移";
@@ -1523,3 +1525,44 @@
 "Couldn't reach %@. The site may be down or blocked on your network." = "无法连接 %@。网站可能已关闭，或在你的网络中被屏蔽。";
 "This source needs you to sign in. Sign in under Settings › Comic Sources." = "此源需要登录。请在 设置 › 漫画源 中登录。";
 "The source said: %@" = "源返回的信息：%@";
+
+/* Subtitle Style (#547) */
+"Subtitle Style" = "字幕样式";
+"White" = "白色";
+"Yellow" = "黄色";
+"Cyan" = "青色";
+"Green" = "绿色";
+"Pink" = "粉色";
+"None" = "无";
+"Drop Shadow" = "投影";
+"Outline" = "描边";
+"Raised" = "浮雕";
+"Depressed" = "凹陷";
+"Translucent" = "半透明";
+"Solid" = "不透明";
+"System" = "系统";
+"Top" = "顶部";
+"Middle" = "中间";
+"Bottom" = "底部";
+"Custom" = "自定";
+"Position" = "位置";
+"Text" = "文字";
+"Size" = "大小";
+"Font" = "字体";
+"Style" = "样式";
+"Bold" = "粗体";
+"Italic" = "斜体";
+"Color" = "颜色";
+"Effects" = "效果";
+"Shadow" = "阴影";
+"Background" = "背景";
+"Reset to Standard" = "恢复默认";
+"Adjust Position" = "调整位置";
+"Smaller" = "更小";
+"Larger" = "更大";
+"This is how subtitles will look" = "字幕将显示成这样";
+"on every video you play" = "所有视频都会使用此样式";
+"Drag the subtitle on the picture to put it anywhere. It snaps to the center line." = "在画面上拖动字幕，可放到任意位置；靠近中线时会自动居中。";
+"Applies to subtitles in every video, including one that is playing." = "适用于所有视频的字幕，包括正在播放的视频。";
+"Adjust Position shows the subtitle over the whole screen. Move it with the remote, then press Select." = "“调整位置”会全屏显示字幕。用遥控器移动它，然后按下确认键。";
+"Swipe or press the arrows to move the subtitle. Press Select when it's in place." = "滑动或按方向键移动字幕，放好后按确认键。";

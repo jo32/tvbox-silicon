@@ -463,12 +463,35 @@ import TVCore
             }
         }
         #endif
+        // `-qaSubtitleStyle <JSON>` saves that subtitle style, as Settings › Subtitle Style does.
+        if let json = UserDefaults.standard.string(forKey: "qaSubtitleStyle"),
+           let style = try? JSONDecoder().decode(SubtitleStyle.self, from: Data(json.utf8)) { style.save() }
         #endif
         self.player = player
         enhancer = VideoEnhancer(player: player)
         queueObservation = player.observe(\.currentItem, options: [.new]) { [weak self] _, _ in
-            Task { @MainActor [weak self] in self?.queueMoved() }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.subtitles.follow(self.player.currentItem)
+                self.queueMoved()
+            }
         }
+        // A style chosen while a video plays (the Mac shows Settings beside the player) also reaches AVPlayer's own
+        // subtitles, drawn in Picture in Picture.
+        styleObserver = NotificationCenter.default.addObserver(forName: SubtitleStyle.changed, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let rules = Self.subtitleRules()
+                for item in self.player.items() { item.textStyleRules = rules }
+            }
+        }
+    }
+    private var styleObserver: NSObjectProtocol?
+    /// The subtitle lines the player's overlay draws (`SubtitleOverlay`).
+    let subtitles = SubtitleCues()
+    /// The saved subtitle style as the rule AVPlayer lays over every subtitle cue it draws itself.
+    private static func subtitleRules() -> [AVTextStyleRule] {
+        AVTextStyleRule(textMarkupAttributes: SubtitleStyle.load().attributes).map { [$0] } ?? []
     }
     private var observation: NSKeyValueObservation?
     private var failureObserver: NSObjectProtocol?
@@ -578,6 +601,20 @@ import TVCore
             ?? AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": channel.headers])
         let item = AVPlayerItem(asset: asset)
         if url.scheme == HongguoStreams.scheme { item.preferredForwardBufferDuration = HongguoStreams.forwardBufferDuration }
+        item.textStyleRules = Self.subtitleRules()
+        subtitles.attach(item)
+        #if DEBUG
+        // `-qaSubtitle <n>` turns on the item's nth subtitle track, for screenshots of how subtitles look.
+        if let index = UserDefaults.standard.string(forKey: "qaSubtitle").flatMap(Int.init) {
+            // Or the system's own choice (subtitles off) replaces it once the item loads.
+            player.appliesMediaSelectionCriteriaAutomatically = false
+            Task { @MainActor in
+                if let group = try? await asset.loadMediaSelectionGroup(for: .legible), group.options.indices.contains(index) {
+                    item.select(group.options[index], in: group)
+                }
+            }
+        }
+        #endif
         return item
     }
 

@@ -49,7 +49,7 @@ struct PlaybackView: View {
             // Remove the native focus environment while recovery controls are shown.
             if session.error == nil {
                 NativePlayerView(player: session.player, comments: session.danmaku, showsDanmaku: $showsDanmaku, opacity: session.danmakuOpacity, revision: session.danmakuRevision,
-                                 qualities: session.qualities, quality: session.quality, choose: { session.choose(quality: $0) },
+                                 subtitles: session.subtitles, qualities: session.qualities, quality: session.quality, choose: { session.choose(quality: $0) },
                                  audio: session.audioChoices, audioChoice: session.audioChoice, chooseAudio: { session.chooseAudio($0) },
                                  live: session.isLive, previous: episodeAction(store.step(back: true, from: channel, session: session)),
                                  next: episodeAction(store.step(back: false, from: channel, session: session)), waiting: waitContent,
@@ -73,7 +73,8 @@ struct PlaybackView: View {
                              waiting: waitContent, chromeVisible: chromeVisible, toggleChrome: toggleChrome, poke: poke, hold: holdChrome,
                              close: exit, layout: playerLayout, toggleFullScreen: watch.map { _ in toggleFullScreen })
             #else
-            NativePlayerView(player: session.player, comments: session.danmaku, showsDanmaku: $showsDanmaku, opacity: session.danmakuOpacity, revision: session.danmakuRevision).ignoresSafeArea()
+            NativePlayerView(player: session.player, comments: session.danmaku, showsDanmaku: $showsDanmaku, opacity: session.danmakuOpacity, revision: session.danmakuRevision,
+                             subtitles: session.subtitles).ignoresSafeArea()
             chrome.opacity(chromeVisible ? 1 : 0).allowsHitTesting(chromeVisible)
             #endif
             status
@@ -587,10 +588,12 @@ private struct NativePlayerView: View {
     @Binding var showsDanmaku: Bool
     var opacity = 0.9
     var revision = ""
+    var subtitles: SubtitleCues? = nil
     var body: some View {
         ZStack {
             PlayerSurface(player: player)
             if showsDanmaku && !comments.isEmpty { DanmakuOverlay(player: player, comments: comments, opacity: opacity, revision: revision).ignoresSafeArea() }
+            if let subtitles { SubtitleOverlay(cues: subtitles).ignoresSafeArea() }
         }
     }
 }
@@ -668,6 +671,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     @Binding var showsDanmaku: Bool
     var opacity = 0.9
     var revision = ""
+    var subtitles: SubtitleCues? = nil
     var qualities: [StreamQuality] = []
     var quality: Int? = nil
     var choose: @MainActor (Int?) -> Void = { _ in }
@@ -687,9 +691,13 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     /// Closes the player on Back until the picture starts. The overlay that takes focus for that loses it
     /// once the transport bar shows (an episode button takes it), and AVKit then keeps the press to itself.
     var exitWhileWaiting: (() -> Void)? = nil
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate, @preconcurrency AVPlayerViewControllerDelegate {
         var host: UIHostingController<AnyView>?; var listed = ""; var criteria: DisplayCriteriaKeeper?
         var exit: (() -> Void)?
+        var subtitles: SubtitleCues?
+        // Picture in Picture shows only the player's own picture, so AVPlayer draws the subtitles there.
+        func playerViewControllerWillStartPictureInPicture(_ controller: AVPlayerViewController) { subtitles?.native = true }
+        func playerViewControllerDidStopPictureInPicture(_ controller: AVPlayerViewController) { subtitles?.native = false }
         let back = UITapGestureRecognizer()
         override init() {
             super.init()
@@ -706,6 +714,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         // Decided before the controller is presented: AVKit refuses the change during playback.
         if VideoEnhancement.canSmooth, let enhancer { context.coordinator.criteria = DisplayCriteriaKeeper(controller: controller, player: player, enhancer: enhancer) }
         controller.player = player
+        controller.delegate = context.coordinator
+        context.coordinator.subtitles = subtitles
         let host = UIHostingController(rootView: overlay)
         host.view.backgroundColor = .clear
         host.view.isUserInteractionEnabled = false
@@ -790,6 +800,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         AnyView(ZStack {
             if let enhancer { EnhancedVideoSurface(enhancer: enhancer) }
             if showsDanmaku && !comments.isEmpty { DanmakuOverlay(player: player, comments: comments, opacity: opacity, revision: revision).ignoresSafeArea() }
+            if let subtitles { SubtitleOverlay(cues: subtitles) }
             if let waiting { waiting.view.transition(.opacity) }
         }
         .animation(.easeInOut(duration: 0.7), value: waiting == nil))
@@ -951,9 +962,11 @@ private struct DesktopPlaybackView: View {
                 Color.black
                 let bare = session.isLive || !session.hasTimeline
                 // A new player view whenever the controls come or go (see DesktopNativePlayer).
-                DesktopNativePlayer(player: session.player, fillsFrame: fillsFrame, live: bare, waiting: waitContent, enhancer: session.enhancer)
+                DesktopNativePlayer(player: session.player, fillsFrame: fillsFrame, live: bare, waiting: waitContent, enhancer: session.enhancer,
+                                    subtitles: session.subtitles)
                     .id(bare)
                 if showsDanmaku && !session.danmaku.isEmpty { DanmakuOverlay(player: session.player, comments: session.danmaku, opacity: session.danmakuOpacity, revision: session.danmakuRevision).ignoresSafeArea() }
+                SubtitleOverlay(cues: session.subtitles, fills: fillsFrame).ignoresSafeArea()
                 // Under the title bar's buttons, so it stays put while they come and go.
                 if showsPlaybackInfo && session.error == nil && session.showsPicture && playingOn == nil {
                     PlaybackInfoPanel(session: session)
@@ -1118,7 +1131,14 @@ private struct DesktopNativePlayer: NSViewRepresentable {
     var live = false
     var waiting: PlaybackWaitContent? = nil
     var enhancer: VideoEnhancer? = nil
-    final class Coordinator { var host: PassthroughHostingView<AnyView>? }
+    var subtitles: SubtitleCues? = nil
+    @MainActor final class Coordinator: NSObject, @preconcurrency AVPlayerViewPictureInPictureDelegate {
+        var host: PassthroughHostingView<AnyView>?
+        var subtitles: SubtitleCues?
+        // Picture in Picture shows only the player's own picture, so AVPlayer draws the subtitles there.
+        func playerViewWillStartPicture(inPicture playerView: AVPlayerView) { subtitles?.native = true }
+        func playerViewDidStopPicture(inPicture playerView: AVPlayerView) { subtitles?.native = false }
+    }
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> AVPlayerView {
         let view = AVPlayerView()
@@ -1138,6 +1158,8 @@ private struct DesktopNativePlayer: NSViewRepresentable {
         view.player = player
         view.showsFullScreenToggleButton = true
         view.allowsPictureInPicturePlayback = true
+        context.coordinator.subtitles = subtitles
+        view.pictureInPictureDelegate = context.coordinator
         view.showsSharingServiceButton = false
         view.speeds = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4].map { AVPlaybackSpeed(rate: Float($0), localizedName: "\($0)×") }
         return view

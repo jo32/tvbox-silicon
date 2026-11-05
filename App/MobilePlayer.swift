@@ -72,6 +72,8 @@ struct MobilePlayerView: View {
     var body: some View {
         ZStack {
             PlayerLayerView(player: session.player, fills: fillsScreen, pip: pip).playerBleed(!inline)
+                // Picture in Picture shows only the player's layer, so AVPlayer draws the subtitles there.
+                .onChange(of: pip.active) { _, active in session.subtitles.native = active }
             // The enhanced picture covers the layer's own, under everything else.
             EnhancedVideoSurface(enhancer: session.enhancer, fills: fillsScreen, bleeds: !inline)
             if showsDanmaku && !session.danmaku.isEmpty {
@@ -79,6 +81,7 @@ struct MobilePlayerView: View {
                     // Across the whole width, but below the Dynamic Island and above the home indicator when upright.
                     .playerBleed(!inline, edges: .horizontal)
             }
+            SubtitleOverlay(cues: session.subtitles, fills: fillsScreen).playerBleed(!inline)
             // The artwork dissolves into the first frame.
             if let waiting {
                 if inline {

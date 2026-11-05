@@ -698,6 +698,8 @@
 // Multiple subscriptions and source health.
 "Subscriptions" = "Subscriptions";
 "Add Subscription" = "Add Subscription";
+"Add This Subscription?" = "Add This Subscription?";
+"A page can only ask: Yingxia adds this subscription after you agree, never on its own." = "A page can only ask: Yingxia adds this subscription after you agree, never on its own.";
 "Refresh All" = "Refresh All";
 "Move Up" = "Move Up";
 "Move Down" = "Move Down";
@@ -1523,3 +1525,44 @@
 "Couldn't reach %@. The site may be down or blocked on your network." = "Couldn't reach %@. The site may be down or blocked on your network.";
 "This source needs you to sign in. Sign in under Settings › Comic Sources." = "This source needs you to sign in. Sign in under Settings › Comic Sources.";
 "The source said: %@" = "The source said: %@";
+
+/* Subtitle Style (#547) */
+"Subtitle Style" = "Subtitle Style";
+"White" = "White";
+"Yellow" = "Yellow";
+"Cyan" = "Cyan";
+"Green" = "Green";
+"Pink" = "Pink";
+"None" = "None";
+"Drop Shadow" = "Drop Shadow";
+"Outline" = "Outline";
+"Raised" = "Raised";
+"Depressed" = "Depressed";
+"Translucent" = "Translucent";
+"Solid" = "Solid";
+"System" = "System";
+"Top" = "Top";
+"Middle" = "Middle";
+"Bottom" = "Bottom";
+"Custom" = "Custom";
+"Position" = "Position";
+"Text" = "Text";
+"Size" = "Size";
+"Font" = "Font";
+"Style" = "Style";
+"Bold" = "Bold";
+"Italic" = "Italic";
+"Color" = "Color";
+"Effects" = "Effects";
+"Shadow" = "Shadow";
+"Background" = "Background";
+"Reset to Standard" = "Reset to Standard";
+"Adjust Position" = "Adjust Position";
+"Smaller" = "Smaller";
+"Larger" = "Larger";
+"This is how subtitles will look" = "This is how subtitles will look";
+"on every video you play" = "on every video you play";
+"Drag the subtitle on the picture to put it anywhere. It snaps to the center line." = "Drag the subtitle on the picture to put it anywhere. It snaps to the center line.";
+"Applies to subtitles in every video, including one that is playing." = "Applies to subtitles in every video, including one that is playing.";
+"Adjust Position shows the subtitle over the whole screen. Move it with the remote, then press Select." = "Adjust Position shows the subtitle over the whole screen. Move it with the remote, then press Select.";
+"Swipe or press the arrows to move the subtitle. Press Select when it's in place." = "Swipe or press the arrows to move the subtitle. Press Select when it's in place.";

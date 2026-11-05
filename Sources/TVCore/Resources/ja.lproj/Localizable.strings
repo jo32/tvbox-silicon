@@ -697,6 +697,8 @@
 // Multiple subscriptions and source health.
 "Subscriptions" = "配信設定";
 "Add Subscription" = "配信設定を追加";
+"Add This Subscription?" = "この購読を追加しますか？";
+"A page can only ask: Yingxia adds this subscription after you agree, never on its own." = "ページは依頼しかできません。確認したときにだけ、この購読を追加します。";
 "Refresh All" = "すべて更新";
 "Move Up" = "上へ移動";
 "Move Down" = "下へ移動";
@@ -1523,3 +1525,44 @@
 "Couldn't reach %@. The site may be down or blocked on your network." = "%@ に接続できませんでした。サイトが停止しているか、ネットワークでブロックされている可能性があります。";
 "This source needs you to sign in. Sign in under Settings › Comic Sources." = "このソースはサインインが必要です。設定 › コミックソース でサインインしてください。";
 "The source said: %@" = "ソースのメッセージ：%@";
+
+/* Subtitle Style (#547) */
+"Subtitle Style" = "字幕のスタイル";
+"White" = "白";
+"Yellow" = "黄";
+"Cyan" = "シアン";
+"Green" = "緑";
+"Pink" = "ピンク";
+"None" = "なし";
+"Drop Shadow" = "ドロップシャドウ";
+"Outline" = "縁取り";
+"Raised" = "浮き出し";
+"Depressed" = "くぼみ";
+"Translucent" = "半透明";
+"Solid" = "不透明";
+"System" = "システム";
+"Top" = "上";
+"Middle" = "中央";
+"Bottom" = "下";
+"Custom" = "カスタム";
+"Position" = "位置";
+"Text" = "テキスト";
+"Size" = "サイズ";
+"Font" = "フォント";
+"Style" = "スタイル";
+"Bold" = "太字";
+"Italic" = "斜体";
+"Color" = "色";
+"Effects" = "効果";
+"Shadow" = "影";
+"Background" = "背景";
+"Reset to Standard" = "標準に戻す";
+"Adjust Position" = "位置を調整";
+"Smaller" = "小さく";
+"Larger" = "大きく";
+"This is how subtitles will look" = "字幕はこのように表示されます";
+"on every video you play" = "すべてのビデオで使われます";
+"Drag the subtitle on the picture to put it anywhere. It snaps to the center line." = "画面上の字幕をドラッグすると好きな位置に置けます。中央線の近くでは中央に揃います。";
+"Applies to subtitles in every video, including one that is playing." = "再生中のビデオを含め、すべてのビデオの字幕に適用されます。";
+"Adjust Position shows the subtitle over the whole screen. Move it with the remote, then press Select." = "「位置を調整」では字幕を全画面で表示します。リモコンで動かしてから、選択ボタンを押してください。";
+"Swipe or press the arrows to move the subtitle. Press Select when it's in place." = "スワイプまたは矢印ボタンで字幕を動かし、位置が決まったら選択ボタンを押してください。";
