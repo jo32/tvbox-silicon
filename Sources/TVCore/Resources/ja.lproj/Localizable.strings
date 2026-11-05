@@ -1566,3 +1566,6 @@
 "Applies to subtitles in every video, including one that is playing." = "再生中のビデオを含め、すべてのビデオの字幕に適用されます。";
 "Adjust Position shows the subtitle over the whole screen. Move it with the remote, then press Select." = "「位置を調整」では字幕を全画面で表示します。リモコンで動かしてから、選択ボタンを押してください。";
 "Swipe or press the arrows to move the subtitle. Press Select when it's in place." = "スワイプまたは矢印ボタンで字幕を動かし、位置が決まったら選択ボタンを押してください。";
+"Gestures" = "ジェスチャ";
+"Brightness and Volume" = "明るさと音量";
+"Area" = "表示範囲";

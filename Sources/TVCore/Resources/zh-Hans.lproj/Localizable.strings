@@ -1566,3 +1566,6 @@
 "Applies to subtitles in every video, including one that is playing." = "适用于所有视频的字幕，包括正在播放的视频。";
 "Adjust Position shows the subtitle over the whole screen. Move it with the remote, then press Select." = "“调整位置”会全屏显示字幕。用遥控器移动它，然后按下确认键。";
 "Swipe or press the arrows to move the subtitle. Press Select when it's in place." = "滑动或按方向键移动字幕，放好后按确认键。";
+"Gestures" = "手势";
+"Brightness and Volume" = "亮度和音量";
+"Area" = "区域";
