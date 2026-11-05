@@ -169,7 +169,7 @@ struct RootView: View {
     private var barSlots: Int { PhoneTabs.slots(horizontal: sizeClass, vertical: verticalSizeClass) }
     #endif
     private var platformTabs: some View {
-        tabView
+        rootTabs
             #if os(tvOS)
             .musicSidebarHeader()
             // Now Playing is not a page: choosing it opens the full-screen player over the section
@@ -210,6 +210,21 @@ struct RootView: View {
                 }
             }
             #endif
+    }
+
+    /// On Apple TV, Back on the sidebar leaves the app, which is easy to do by mistake (#499). From any other section it
+    /// goes to Watch Now first, and only Back on Watch Now's sidebar leaves.
+    /// `onExitCommand` on the tab view hears Back only while the sidebar has focus: pages, pushed pages, sheets and the
+    /// player handle their own, and Back from a page still moves to the sidebar (#404). An empty handler would keep the
+    /// press too, so on Watch Now there is none (`nil`) and Back leaves as usual. The modifier stays in place rather than
+    /// in an `if`: swapping views would rebuild the tab view and every section's state with it when moving to or from
+    /// Watch Now. tvOS 17's tab bar with More is left as it was.
+    @ViewBuilder private var rootTabs: some View {
+        #if os(tvOS)
+        tabView.onExitCommand(perform: store.section == .home || !tvMore.isEmpty ? nil : { store.section = .home })
+        #else
+        tabView
+        #endif
     }
 
     @ViewBuilder private var tabView: some View {
