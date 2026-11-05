@@ -1,6 +1,53 @@
 {
   "releases": [
     {
+      "version": "1.8.12",
+      "build": 50,
+      "date": "2026-11-06",
+      "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.12/Yingxia-1.8.12-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.12/Yingxia-1.8.12-macos-x86_64.dmg"
+      },
+      "features": [
+        {
+          "symbol": "book.pages",
+          "title": {
+            "en": "Manga on the Mac",
+            "zh-Hans": "Mac 上的漫画",
+            "zh-Hant": "Mac 上的漫畫",
+            "ja": "Mac で漫画"
+          },
+          "detail": {
+            "en": "Manga now shows in the Mac sidebar once a Venera comic source list is subscribed. While you read, the sidebar and the window buttons step aside, so the pages fill the window.",
+            "zh-Hans": "订阅 Venera 漫画源列表后，Mac 侧边栏里会出现“漫画”。阅读时侧边栏和窗口按钮会让开，漫画页面铺满整个窗口。",
+            "zh-Hant": "訂閱 Venera 漫畫源列表後，Mac 側邊欄裡會出現「漫畫」。閱讀時側邊欄和視窗按鈕會讓開，漫畫頁面鋪滿整個視窗。",
+            "ja": "Venera のコミックソース一覧を配信設定に追加すると、Mac のサイドバーに「漫画」が表示されます。読んでいる間はサイドバーとウインドウのボタンが隠れ、ページがウインドウいっぱいに広がります。"
+          },
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "symbol": "display",
+          "title": {
+            "en": "The screen stays on during videos",
+            "zh-Hans": "播放视频时屏幕保持常亮",
+            "zh-Hant": "播放影片時螢幕保持常亮",
+            "ja": "動画の再生中は画面がついたまま"
+          },
+          "detail": {
+            "en": "While a video plays, your Mac no longer dims, sleeps or locks the screen. Pause, and it can sleep again as usual.",
+            "zh-Hans": "播放视频时，Mac 不会再让屏幕变暗、睡眠或锁定；暂停后照常可以睡眠。",
+            "zh-Hant": "播放影片時，Mac 不會再讓螢幕變暗、睡眠或鎖定；暫停後照常可以睡眠。",
+            "ja": "動画の再生中は、Mac の画面が暗くなったり、スリープやロックされたりしなくなりました。一時停止すると、通常どおりスリープできます。"
+          },
+          "platforms": [
+            "macos"
+          ]
+        }
+      ]
+    },
+    {
       "version": "1.8.11",
       "build": 49,
       "date": "2026-11-06",
