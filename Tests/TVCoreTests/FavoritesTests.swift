@@ -109,6 +109,21 @@ private func episode(_ id: String, flag: String, name: String, episodeID: String
     #expect(saved.resumePosition(in: [finished]) == 0)
 }
 
+@Test @MainActor func likedSongsListNewestFirstAndSurviveAReload() throws {
+    let suite = "favorites." + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let favorites = Favorites(defaults: defaults)
+    let first = MusicTrack(platform: .qq, songID: "1", title: "First", artists: ["A"])
+    let second = MusicTrack(platform: .netease, songID: "2", title: "Second", artists: ["B"])
+    favorites.toggle(.music(first))
+    favorites.toggle(.music(second))
+    #expect(favorites.musicTracks.map(\.title) == ["Second", "First"])
+    #expect(Favorites(defaults: defaults).musicTracks.map(\.id) == [second.id, first.id])
+    favorites.toggle(.music(second))
+    #expect(favorites.musicTracks.map(\.title) == ["First"])
+}
+
 @Test @MainActor func emptyKindsStayEmptyUntilSomethingIsSaved() {
     let favorites = Favorites(defaults: UserDefaults(suiteName: "favorites." + UUID().uuidString)!)
     favorites.toggle(.video(video("show", origin: origin)))
