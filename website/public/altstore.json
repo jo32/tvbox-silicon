@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.11",
+          "buildVersion": "49",
+          "date": "2026-11-06",
+          "localizedDescription": "• 阅读漫画\n• 字幕样式\n• 播放器里的选集\n• CatPawOpen 源播放更稳\n• 其他修复\n\n• Read manga\n• Subtitle Style\n• Episodes in the player\n• CatPawOpen sources play better\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.11/Yingxia-1.8.11-ios.ipa",
+          "size": 119203076,
+          "sha256": "9039e98597546e388071b50ad5b0dee8c84d6c7b93d39ac4f2d399d5f05b873f",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.9",
           "buildVersion": "47",
           "date": "2026-11-05",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.6/Yingxia-1.8.6-ios.ipa",
           "size": 117329114,
           "sha256": "199d9dd2b049d84fe59f5a359322410c687d3818cf18a941920be8dafd5ffede",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.5",
-          "buildVersion": "43",
-          "date": "2026-11-01",
-          "localizedDescription": "• 官方弹弹play弹幕\n• 更多网盘视频可以播放\n• 显示视频信息\n• 反馈可附图片和视频\n• JAR 源打开更快\n• 其他修复\n\n• Official Dandanplay danmaku\n• More videos from cloud drives play\n• Show Video Info\n• Pictures and videos in feedback\n• JAR sources open faster\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.5/Yingxia-1.8.5-ios.ipa",
-          "size": 117006225,
-          "sha256": "2757f3c59c7a3aeab5b120580fee956e88fcd2c59bc21e4a7c0fda3dc6c3bd45",
           "minOSVersion": "17.0"
         }
       ],
