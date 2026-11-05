@@ -158,8 +158,9 @@ import Observation
             videos += fresh
             page = next
             // A source that ignores the page number answers every page with the same list. One empty answer
-            // ends the list instead of scrolling forever.
-            pageCount = fresh.isEmpty ? next : max(next, result.pageCount)
+            // ends the list instead of scrolling forever. A later page without `pagecount` reads as 1, so the
+            // count only grows: the first page's count still holds.
+            pageCount = fresh.isEmpty ? next : max(pageCount, result.pageCount)
             self.request = .list(category: category, query: query, page: next, filters: filters)
         } catch {
             guard generation == currentGeneration, !Task.isCancelled else { return }

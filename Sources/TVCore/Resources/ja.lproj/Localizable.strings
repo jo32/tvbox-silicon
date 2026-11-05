@@ -90,7 +90,6 @@
 "Try selecting a category or searching." = "カテゴリーを選ぶか、検索してください。";
 "Previous" = "前へ";
 "Next" = "次へ";
-"Page %lld of %lld" = "%lld / %lld ページ";
 "No playable sources were found for this video." = "この動画の再生可能なソースが見つかりませんでした。";
 "Loading details…" = "詳細を読み込み中…";
 "Resolving playback URL…" = "再生 URL を取得中…";

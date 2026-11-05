@@ -90,7 +90,6 @@
 "Try selecting a category or searching." = "請嘗試選擇分類或搜尋。";
 "Previous" = "上一頁";
 "Next" = "下一頁";
-"Page %lld of %lld" = "第 %lld / %lld 頁";
 "No playable sources were found for this video." = "此影片沒有可識別的播放來源。";
 "Loading details…" = "正在取得詳細資訊…";
 "Resolving playback URL…" = "正在解析播放網址…";

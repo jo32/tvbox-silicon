@@ -63,6 +63,19 @@ private func page(_ names: [String], pageCount: Int) -> CatalogPage {
     #expect(model.videos.map(\.id) == ["a", "b"])
 }
 
+/// A source that sends `pagecount` only with the first page keeps appending: page 2's missing count (read as 1)
+/// doesn't end the list.
+@MainActor @Test func catalogLoadMoreKeepsTheFirstPageCount() async {
+    let model = CatalogBrowser()
+    await model.load(.list(category: "movies", query: "", page: 1)) { _ in page(["a"], pageCount: 4) }
+    await model.loadMore { _ in page("b") }
+    #expect(model.page == 2)
+    #expect(model.pageCount == 4)
+    #expect(model.hasMore)
+    await model.loadMore { _ in page("c") }
+    #expect(model.videos.map(\.id) == ["a", "b", "c"])
+}
+
 @MainActor @Test func aNewCatalogRequestCancelsLoadingMore() async {
     let model = CatalogBrowser()
     await model.load(.list(category: "movies", query: "", page: 1)) { _ in page(["a"], pageCount: 5) }

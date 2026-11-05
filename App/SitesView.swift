@@ -940,7 +940,8 @@ struct SiteView: View {
                         }
                         .opacity(browser.busy && !browser.videos.isEmpty ? 0.55 : 1).animation(.smooth, value: browser.busy)
                         if !browser.videos.isEmpty && (browser.hasMore || browser.loadingMore || browser.moreError != nil) {
-                            loadMoreFooter
+                            // A focus section, so moving down from a cover in any column reaches Load More or Try Again.
+                            loadMoreFooter.tvFocusSection()
                         }
                     }.pageContainer()
                 }
