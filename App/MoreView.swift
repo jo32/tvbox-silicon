@@ -364,6 +364,9 @@ private struct TabBarEditor: View {
         // A push would otherwise offer Back, which would drop the drags made here as silently as Done keeps
         // them: Cancel names that, as it did in the sheet this page replaces (#355).
         .navigationBarBackButtonHidden(true)
+        // The real tab bar covered Reset in the bottom toolbar, and a tap on it left the page mid-edit. The preview
+        // above stands in for it; the iPad's sidebar has no tab bar to hide (#355).
+        .toolbar(sidebar ? .automatic : .hidden, for: .tabBar)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button(L10n.text("Cancel")) { dismiss() }
