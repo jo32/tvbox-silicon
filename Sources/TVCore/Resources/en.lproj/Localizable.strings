@@ -388,6 +388,7 @@
 "This source needs an Android feature that isn't supported yet: %@." = "This source needs an Android feature that isn't supported yet: %@.";
 "This plugin couldn't be prepared on this device (missing %@)." = "This plugin couldn't be prepared on this device (missing %@).";
 "This plugin couldn't be prepared on this device (%@ could not be converted)." = "This plugin couldn't be prepared on this device (%@ could not be converted).";
+"The source says: %@" = "The source says: %@";
 "The source's plugin crashed. The site may have changed; try another source." = "The source's plugin crashed. The site may have changed; try another source.";
 
 /* Loading status */

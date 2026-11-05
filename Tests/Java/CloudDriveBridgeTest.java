@@ -417,6 +417,27 @@ public class CloudDriveBridgeTest {
         CloudDriveBridge.seedWexCookies(withShared.put("quarkCookie", "__pus=newest"), other);
         check(otherPreferences.getString("Wex_quark_cookie", "").equals("__pus=newest"), "A new app sign-in did not replace the plugin's Quark sign-in");
         check(otherPreferences.getString("Wex_pan115_cookie", "").equals("UID=115"), "The shared 115 sign-in was lost");
+
+        // #408: the app's own 115 sign-in reaches Wex sources, and beats a plugin sign-in made without one.
+        var app115 = new android.content.Context(Files.createTempDirectory("wex-115-test").toFile(), CloudDriveBridgeTest.class.getClassLoader());
+        var app115Preferences = app115.getSharedPreferences(CloudDriveBridge.WEX_PREFERENCES, 0);
+        CloudDriveBridge.seedWexCookies(new JSONObject().put("pan115Cookie", "UID=app; CID=c; SEID=s; KID=k"), app115);
+        check(app115Preferences.getString("Wex_pan115_cookie", "").equals("UID=app; CID=c; SEID=s; KID=k"), "The app's 115 sign-in did not reach the Wex preferences");
+        CloudDriveBridge.seedWexCookies(new JSONObject(withShared.toString()).put("pan115Cookie", "UID=app; CID=c; SEID=s; KID=k"), app115);
+        check(app115Preferences.getString("Wex_pan115_cookie", "").equals("UID=app; CID=c; SEID=s; KID=k"), "A plugin 115 sign-in made without an app one beat the app's");
+        // The plugin refused the app's 115 cookie and signed in itself: that sign-in holds until the app signs in again.
+        var replaced115 = new JSONObject(shared.toString()).put("Wex_pan115_cookie", "UID=plugin")
+            .put("yingxia.replaced.Wex_pan115_cookie", sha256("UID=app; CID=c; SEID=s; KID=k"));
+        CloudDriveBridge.seedWexCookies(new JSONObject().put("pan115Cookie", "UID=app; CID=c; SEID=s; KID=k").put("wexPreferences", replaced115), app115);
+        check(app115Preferences.getString("Wex_pan115_cookie", "").equals("UID=plugin"), "The plugin's 115 sign-in did not replace the app sign-in it refused");
+        CloudDriveBridge.seedWexCookies(new JSONObject().put("pan115Cookie", "UID=again").put("wexPreferences", replaced115), app115);
+        check(app115Preferences.getString("Wex_pan115_cookie", "").equals("UID=again"), "A new app 115 sign-in did not replace the plugin's");
+        var bridge = new CloudDriveBridge(Files.createTempDirectory("wex-115-bridge"));
+        try {
+            bridge.appAccounts(new JSONObject().put("pan115Cookie", "UID=app"));
+            var noted = CloudDriveBridge.class.getDeclaredMethod("appAccountDigest", String.class); noted.setAccessible(true);
+            check(sha256("UID=app").equals(noted.invoke(bridge, "pan115Cookie")), "The app's 115 sign-in was not noted for plugin sign-ins to replace");
+        } finally { bridge.close(); }
     }
 
     static void wexJavaThreads() throws Exception {
