@@ -349,6 +349,9 @@ actor CloudByteStream {
                 while recent.count > Self.cacheChunks { cache[recent.removeFirst()] = nil }
                 return playable
             } catch let error as URLError where error.code != .cancelled && attempt < 3 {
+                // A loopback proxy (a CatPawOpen bundle's) refuses once iOS took back the suspended app's sockets, and
+                // listens again on a new port: ask where (#485).
+                if error.code == .cannotConnectToHost, ["127.0.0.1", "localhost"].contains(current.url.host() ?? ""), await renew() { continue }
                 Diagnostics.shared.record(.debug, "cloud.stream", "chunk=\(index) retry \(error.code.rawValue)")
                 try await Task.sleep(for: .milliseconds(400 * attempt))
             }
