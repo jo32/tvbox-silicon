@@ -1,6 +1,9 @@
 import SwiftUI
 import AVKit
 import TVCore
+#if os(macOS)
+import IOKit.pwr_mgt
+#endif
 
 @MainActor @Observable final class PlaybackSession {
     /// A queue, so the next episode can wait behind this one and play straight on.
@@ -8,6 +11,10 @@ import TVCore
     /// Upscaling and 60 fps smoothing, drawn over AVKit's picture when switched on in Settings.
     let enhancer: VideoEnhancer
     let catalogDanmaku = CatalogDanmakuModel()
+    #if os(macOS)
+    /// Keeps the Mac from dimming, starting the screen saver and locking while a video plays (#565).
+    private let displayAwake = DisplayAwake()
+    #endif
     var history = PlaybackHistory.shared
     var skipDefaults = UserDefaults.standard
     private var historyContext: PlaybackHistoryContext?
@@ -814,6 +821,9 @@ import TVCore
                 guard let self, self.generation == activeGeneration else { return }
                 self.buffering = waiting
                 self.paused = paused
+                #if os(macOS)
+                self.displayAwake.hold(!paused)
+                #endif
                 if paused { self.clearBoost() }
                 // The first frame lands a beat after playback starts; keep the artwork until then, so no black flashes between.
                 if playing, !self.showsPicture {
@@ -953,6 +963,9 @@ import TVCore
         return text
     }
     func stop() {
+        #if os(macOS)
+        displayAwake.hold(false)
+        #endif
         saveHistory()
         discardUpcoming()
         upcomingAttempted = false; skipsToUpcoming = false; advanced = nil
@@ -1474,3 +1487,26 @@ extension PlaybackSession {
         return L10n.text("Getting it ready · from %@", Duration.seconds(Int(resume)).formatted(.time(pattern: pattern)))
     }
 }
+
+#if os(macOS)
+/// Our own hold on the Mac's display while a video plays. AVPlayer's `preventsDisplaySleepDuringVideoPlayback`
+/// leaves it to Core Media, which holds the display only while it counts the picture as on screen, so a Mac
+/// could still dim, start the screen saver and lock mid-film (#565). IINA and VLC hold one of their own too.
+final class DisplayAwake {
+    private var assertion: IOPMAssertionID?
+
+    func hold(_ on: Bool) {
+        if on, assertion == nil {
+            var id = IOPMAssertionID(0)
+            let made = IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
+                                                   IOPMAssertionLevel(kIOPMAssertionLevelOn), "Yingxia is playing a video" as CFString, &id)
+            if made == kIOReturnSuccess { assertion = id }
+        } else if !on, let id = assertion {
+            IOPMAssertionRelease(id)
+            assertion = nil
+        }
+    }
+
+    deinit { if let assertion { IOPMAssertionRelease(assertion) } }
+}
+#endif
