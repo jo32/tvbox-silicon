@@ -859,38 +859,38 @@ struct PlaybackSettingsView: View {
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     var body: some View {
         SettingsPage(title: L10n.text("Playback"), symbol: "slider.horizontal.below.rectangle") {
-            SettingsGroup(footer: L10n.text("Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go.")) {
+            // Few groups with short rows: one card per switch, each with its own long note, read as a stack of
+            // fragments, and a long title pushed the switch's row to two lines.
+            SettingsGroup(title: L10n.text("Gestures"), footer: L10n.text("Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go.")
+                          + " " + L10n.text("Slide up or down on the left of the video to change the brightness, or on the right to change the volume.")) {
                 Picker(selection: $holdSpeed) {
                     ForEach(SpeedBoost.startRates, id: \.self) { Text($0.formatted(.number.precision(.fractionLength(0...2))) + "×").tag($0) }
                 } label: {
                     FormLabel(symbol: "forward.fill", tint: .orange, title: L10n.text("Touch and Hold Speed"))
                 }
-            }
-            SettingsGroup(footer: L10n.text("Slide up or down on the left of the video to change the brightness, or on the right to change the volume.")) {
                 Toggle(isOn: $slidesLevels) {
-                    FormLabel(symbol: "sun.max.fill", tint: .yellow, title: L10n.text("Slide for Brightness and Volume"))
+                    FormLabel(symbol: "sun.max.fill", tint: .yellow, title: L10n.text("Brightness and Volume"))
                 }
                 .settingsSwitch()
             }
-            SettingsGroup {
-                FormLink(symbol: "captions.bubble.fill", tint: .orange, title: L10n.text("Subtitle Style")) { SubtitleStyleView() }
-            }
             SettingsGroup(footer: SettingsNote.playbackInfo) {
+                FormLink(symbol: "captions.bubble.fill", tint: .orange, title: L10n.text("Subtitle Style")) { SubtitleStyleView() }
                 Toggle(isOn: $showsPlaybackInfo) {
                     FormLabel(symbol: "info.circle.fill", tint: .blue, title: L10n.text("Show Video Info"))
                 }
                 .settingsSwitch()
             }
             if store.extrasUnlocked {
-                SettingsGroup(footer: SettingsNote.danmaku) {
+                SettingsGroup(title: L10n.text("Danmaku"), footer: SettingsNote.danmaku) {
                     Toggle(isOn: $showsDanmaku) {
                         FormLabel(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Show Danmaku"))
                     }
                     .settingsSwitch()
+                    // "Danmaku Area" beside "Top Three Quarters" didn't fit, and the picker put its value on a line of its own.
                     Picker(selection: $danmakuArea) {
                         ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
                     } label: {
-                        FormLabel(symbol: "rectangle.tophalf.inset.filled", tint: .teal, title: L10n.text("Danmaku Area"))
+                        FormLabel(symbol: "rectangle.tophalf.inset.filled", tint: .teal, title: L10n.text("Area"))
                     }
                 }
             }
