@@ -26,13 +26,14 @@ struct WatchNowTVPage: View {
                 ScrollViewReader { reader in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 30) {
-                            if entries.isEmpty {
-                                Color.clear.frame(height: 40)
-                            } else {
+                            if !entries.isEmpty {
                                 WatchNowTVHero(entries: entries, state: hero).frame(width: proxy.size.width, height: heroHeight)
                             }
                             rows
                         }
+                        // Without the hero (nothing watched yet) the first row would sit under the sidebar's Watch Now
+                        // pill, as on Discover.
+                        .padding(.top, entries.isEmpty ? 150 : 0)
                         .padding(.bottom, 60)
                         .background {
                             GeometryReader { geometry in
