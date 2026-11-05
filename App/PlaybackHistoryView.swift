@@ -238,6 +238,12 @@ struct HistoryCard: View {
         .cardButton()
     }
 
+    /// The short episode label when history kept a netdisk file's name (#521): the card cut a long name off after the
+    /// show's, so every episode of a series looked the same.
+    private var episodeLabel: String {
+        EpisodeLabels.labels(names: [entry.context.episodeName])?.first ?? entry.context.episodeName
+    }
+
     private var cardLabel: some View {
         VStack(alignment: centredCaptions ? .center : .leading, spacing: 8) {
             Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit)
@@ -281,7 +287,7 @@ struct HistoryCard: View {
                     .cardCaption()
             } else {
                 // The bar on the poster already says how far; the line names the episode.
-                Text(entry.context.episodeName).font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
+                Text(episodeLabel).font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
             }
         }
         .frame(width: details ? nil : HistoryMetrics.card)
