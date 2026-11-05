@@ -46,11 +46,11 @@ private func document(_ origin: String, keys: [String]) throws -> Subscription {
         "https://two.example/b.json": second,
     ]
     let hidden = SourceGroups.make(entries: entries, documents: documents, builtIns: [], builtInOrigin: first.origin, mergedSites: merged.sites, pinOrder: [secret], userHidden: { $0.key == "other" }, includeHidden: false, jarURL: nil)
-    // The hidden source leaves its subscription's group for the Hidden group at the end.
-    #expect(hidden.map(\.id) == ["pinned", "https://one.example/a.json", "hidden"])
+    // The hidden source leaves its subscription's group for the Hidden group under the pins.
+    #expect(hidden.map(\.id) == ["pinned", "hidden", "https://one.example/a.json"])
     #expect(hidden[0].sites.map(\.key) == ["secret"])
-    #expect(hidden[1].sites.map(\.key) == ["show"])
-    #expect(hidden[2].sites.map(\.key) == ["other"])
+    #expect(hidden[1].sites.map(\.key) == ["other"])
+    #expect(hidden[2].sites.map(\.key) == ["show"])
     let shown = SourceGroups.make(entries: entries, documents: documents, builtIns: [], builtInOrigin: first.origin, mergedSites: merged.sites, pinOrder: [secret], userHidden: { $0.key == "other" }, includeHidden: true, jarURL: nil)
     #expect(shown.map(\.id) == ["pinned", "https://one.example/a.json", "https://two.example/b.json"])
 }

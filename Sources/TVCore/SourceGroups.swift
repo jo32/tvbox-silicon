@@ -38,6 +38,13 @@ public enum SourceGroups {
         var groups: [SourceGroup] = []
         let pinnedSites = pinOrder.filter(eligible)
         if !pinnedSites.isEmpty { groups.append(SourceGroup(kind: .pinned, title: "Pinned Group", sites: pinnedSites)) }
+        // Hidden sources leave their groups for one group of their own near the top, under the pins: at the
+        // end of the page a long directory put them past a scroll the viewer never made (#503), and a source
+        // hidden by mistake has to be findable where the eye was tapped.
+        if !includeHidden {
+            let hidden = (builtIns + mergedSites.filter { !$0.isBuiltIn }).filter { !$0.hidden && $0.canBrowse(jarURL: jarURL) && userHidden($0) }
+            if !hidden.isEmpty { groups.append(SourceGroup(kind: .hidden, title: "Hidden Sources", sites: hidden)) }
+        }
         let builtInSites = builtIns.filter { eligible($0) && !isPinned($0, fallback: builtInOrigin) }
         if !builtInSites.isEmpty { groups.append(SourceGroup(kind: .builtIn, title: "Built-in", sites: builtInSites)) }
         for entry in entries where entry.enabled {
@@ -45,11 +52,6 @@ public enum SourceGroups {
             let own = mergedSites.filter { !$0.isBuiltIn && $0.provenance?.origin == origin && !isPinned($0, fallback: origin) && eligible($0) }
             let arranged = SourceStrategy.arrange(own, where: { _ in true })
             if !arranged.isEmpty { groups.append(SourceGroup(kind: .subscription(entry.address), title: entry.title, sites: arranged)) }
-        }
-        // Hidden sources leave their groups and wait in one group at the end, where they can be unhidden.
-        if !includeHidden {
-            let hidden = (builtIns + mergedSites.filter { !$0.isBuiltIn }).filter { !$0.hidden && $0.canBrowse(jarURL: jarURL) && userHidden($0) }
-            if !hidden.isEmpty { groups.append(SourceGroup(kind: .hidden, title: "Hidden Sources", sites: hidden)) }
         }
         return groups
     }
