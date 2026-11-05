@@ -64,7 +64,7 @@ import UniformTypeIdentifiers
             guard let self else { return }
             defer { if self.generation == active { self.automaticTask = nil } }
             do {
-                let result = try await Self.resolver().resolve(context)
+                let result = try await Self.resolver().resolve(context, first: CatPawDanmaku.comments)
                 try Task.checkCancellation()
                 guard self.generation == active, self.enabled, self.automatic else { return }
                 self.comments = result.comments
@@ -94,7 +94,7 @@ import UniformTypeIdentifiers
             guard !Task.isCancelled, self.generation == active, !self.comments.isEmpty else { return }
             try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled, self.generation == active else { return }
-            _ = try? await Self.resolver().resolve(context, ticket: ticket)
+            _ = try? await Self.resolver().resolve(context, ticket: ticket, first: CatPawDanmaku.comments)
         }
     }
     private static func resolver() -> DanmakuResolver {

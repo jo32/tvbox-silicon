@@ -128,15 +128,7 @@ public struct CatPawSignIn: Sendable {
     public func cancel() async { _ = try? await send("cancel") }
 
     private func send(_ step: String) async throws -> [String: JSONValue] {
-        let params = ["catLogin": step, "provider": provider, "taskId": task]
-        let site = client.site
-        #if os(macOS)
-        return try await LocalJarHost.shared.request(site: site, jarURL: site.scriptURL(origin: client.origin), params: params, http: client.http, scriptOrigin: client.origin)
-        #elseif os(iOS)
-        return try await EmbeddedNodeHost.shared.request(site: site, bundleURL: site.scriptURL(origin: client.origin), params: params, http: client.http, origin: client.origin)
-        #else
-        throw TVError.unsupported(L10n.text("This device can't run CatPawOpen sources."))
-        #endif
+        try await client.catPawRequest(["catLogin": step, "provider": provider, "taskId": task])
     }
 
     static func decode(_ png: Data) -> URL? {

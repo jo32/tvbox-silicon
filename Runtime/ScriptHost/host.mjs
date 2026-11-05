@@ -340,6 +340,14 @@ async function answerMessage(req, res) {
     let message = {};
     try { message = JSON.parse(Buffer.concat(chunks).toString('utf8')) || {}; } catch { }
     const page = String(message.opt?.url || '');
+    if (message.action === 'getPlayInfo') {
+        catPlaying.asked = Date.now();
+        const { title, episodeName, flag } = catPlaying;
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ title, episodeName, flag }));
+        return;
+    }
+    if (message.action === 'danmuPush' && loopbackPage(page)) catPushed = { url: page.replace('//localhost:', '//127.0.0.1:'), at: Date.now() };
     if (['openInternalWebview', 'openWeb'].includes(message.action) && /^http:\/\/(127\.0\.0\.1|localhost|\d+\.\d+\.\d+\.\d+):\d+(\/|$)/.test(page)) {
         for (const watch of pageWatchers) watch(page);
     }
@@ -350,6 +358,49 @@ async function answerMessage(req, res) {
 // The page on loopback, as the app opens it, or undefined when it is served anywhere else.
 const loopbackPage = page => page && /^http:\/\/(127\.0\.0\.1|localhost):\d+(\/|$)/.test(page) ? page : undefined;
 const isMessage = req => req.method === 'POST' && req.url === '/msg';
+
+// CatPawOpen bundles find danmaku for what plays, as the CatVod Open apps take it (#506): a moment after a play the
+// 9280.kstore.vip bundle asks the app what plays ("getPlayInfo": {title, episodeName, flag}), matches that in its own
+// danmu_api and sends the comments' address back ("danmuPush": http://127.0.0.1:<port>/danmu/auto?name=…&episode=…).
+// The host names each play from the detail answers it passed on; the app asks for the address with `catDanmaku` and
+// fetches the comments itself. A bundle that never asks gets no answer it didn't get before. Keep in step with NodeHost/main.mjs.
+const catTitles = new Map(); // play id -> {title, episodeName, flag}, from the latest detail answers
+let catPlaying = { title: '', episodeName: '', flag: '', at: 0, asked: 0 }, catPushed = { url: '', at: 0 };
+function rememberTitles(text) {
+    let list;
+    try { list = JSON.parse(text)?.list; } catch { return; }
+    for (const video of Array.isArray(list) ? list : []) {
+        const title = String(video?.vod_name ?? '').trim();
+        if (!title) continue;
+        const flags = String(video.vod_play_from ?? '').split('$$$');
+        String(video.vod_play_url ?? '').split('$$$').forEach((line, index) => {
+            for (const item of line.split('#')) {
+                const cut = item.indexOf('$');
+                const episodeName = cut < 0 ? '' : item.slice(0, cut).trim(), id = cut < 0 ? item : item.slice(cut + 1);
+                if (!id.trim()) continue;
+                catTitles.delete(id);
+                catTitles.set(id, { title, episodeName, flag: flags[index] || '' });
+            }
+        });
+    }
+    while (catTitles.size > 3000) catTitles.delete(catTitles.keys().next().value);
+}
+function startedPlaying(flag, id) {
+    const known = catTitles.get(id);
+    catPlaying = { title: known?.title || '', episodeName: known?.episodeName || '', flag: flag || known?.flag || '', at: Date.now(), asked: 0 };
+}
+// The comments' address for an episode: the one the bundle sent for this play, or else its /danmu/auto for the name
+// the app asks with (a bundle without it answers 404). `pending` while the bundle may still send one: it asks what
+// plays 800 ms after the play and sends the address straight after the answer.
+function danmakuAddress(port, params) {
+    const now = Date.now(), name = String(params.name || ''), episode = String(params.episode || '');
+    const current = catPlaying.title === name && catPlaying.episodeName === episode;
+    const pushed = current && catPushed.at >= catPlaying.at && catPushed.url.startsWith(`http://127.0.0.1:${port}/`) ? catPushed.url : '';
+    const pending = current && !pushed && now - catPlaying.at < 3000 && !(catPlaying.asked && now - catPlaying.asked > 500);
+    const query = new URLSearchParams({ name });
+    if (episode) query.set('episode', episode);
+    return { result: JSON.stringify({ url: pushed || `http://127.0.0.1:${port}/danmu/auto?${query}`, pushed: !!pushed, pending }) };
+}
 // Messages go to a server of the host's own: a bundle that finds its own port behind catDartServerPort() skips the call
 // as a call to itself (BRIDGE_SELF_CALL in the 豆儿 and Lmentor bundles), so pages they ask for never arrived (#385).
 const messages = http.createServer((req, res) => {
@@ -506,6 +557,7 @@ async function callCatPaw(params) {
         if (!['start', 'poll', 'cancel'].includes(params.catLogin)) throw new Error('Invalid CatPawOpen sign-in');
         return { result: await send(`/website/api/login/${params.catLogin}`, { provider: params.provider || '', taskId: params.taskId || '' }) };
     }
+    if (params.catDanmaku) return danmakuAddress(port, params);
     const api = String(params.catPawOpen || '');
     if (!/^\/spider\/[^?#]+$/.test(api)) throw new Error('Invalid CatPawOpen source');
     // A site without an init route is ready as it is: the xiaosage.361123.xyz bundle's drive sites (玩偶, 花卷, 原盘…)
@@ -515,7 +567,7 @@ async function callCatPaw(params) {
         catStarted.add(api);
     }
     let route, body;
-    if ('play' in params) { route = '/play'; body = { flag: params.flag || '', id: params.play }; }
+    if ('play' in params) { route = '/play'; body = { flag: params.flag || '', id: params.play }; startedPlaying(body.flag, body.id); }
     else if ('ids' in params) { route = '/detail'; body = { id: params.ids }; }
     else if ('wd' in params) { route = '/search'; body = { wd: params.wd, page: Number(params.pg || 1), quick: params.quick === 'true' }; }
     else if ('t' in params) { route = '/category'; body = { id: params.t, page: Number(params.pg || 1), filter: true, filters: params.filters ? JSON.parse(params.filters) : {} }; }
@@ -526,6 +578,7 @@ async function callCatPaw(params) {
     const { text, page } = await watchingPages(route, () => sendFresh(send, api + route, body)
         .then(text => route === '/search' && !text.trim() ? '{"list":[]}' : text)
         .catch(error => { if (route === '/search' && error.status === 404) return '{"list":[]}'; throw error; }));
+    if (route === '/detail') rememberTitles(text);
     // Sources address the bundle's own proxy by the Mac's network address, but the server is on loopback.
     const local = address => address.replace(new RegExp(`http://\\d+\\.\\d+\\.\\d+\\.\\d+:${port}/`, 'g'), `http://127.0.0.1:${port}/`);
     const result = local(text), shown = loopbackPage(page && local(page));

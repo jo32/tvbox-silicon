@@ -76,6 +76,20 @@ exports.start = async () => {
       if (req.url === '/spider/noinit/3/home') return reply(200, {class: [{type_id: '1', type_name: 'Films'}], list: []});
       if (req.url.endsWith('/init')) return reply(200, {});
       if (req.url === '/spider/site/3/home') return reply(500, {message: 'home broke'});
+      // Danmaku as the 9280.kstore.vip bundle finds it (#506): after a play it asks the app what plays, then sends the
+      // address of the comments.
+      if (req.url === '/spider/site/3/detail') return reply(200, {list: [{vod_id: 'v', vod_name: 'Show', vod_play_from: 'line$$$other',
+        vod_play_url: '第1集$ep1#第2集$ep2$$$第1集$o1'}]});
+      if (req.url === '/spider/site/3/play') {
+        setTimeout(async () => {
+          const ask = async message => (await fetch(`http://127.0.0.1:${globalThis.catDartServerPort()}/msg`, {method: 'POST',
+            headers: {'content-type': 'application/json'}, body: JSON.stringify(message)})).json();
+          globalThis.info = await ask({action: 'getPlayInfo', opt: {}});
+          await ask({action: 'danmuPush', opt: {url: `http://127.0.0.1:${server.address().port}/danmu/auto?name=Show&episode=2`}});
+        }, 300);
+        return reply(200, {parse: 0, url: 'https://example.com/ep2.m3u8'});
+      }
+      if (req.url === '/spider/site/3/category') return reply(200, {list: [], info: globalThis.info});
       // A source whose search returns nothing answers 200 with an empty body.
       if (req.url === '/spider/blank/3/search') { res.writeHead(200); return res.end(); }
       // A site connection the far end dropped fails at once ("socket hang up"); the next try works.
@@ -112,10 +126,22 @@ exports.start = async () => {
             assert 'socket hang up' in answer('dead', {'catPawOpen': '/spider/dead/3', 'wd': 'x'})['error']
             assert json.loads(answer('deadhome', {'catPawOpen': '/spider/dead/3'})['result'])['asked'] == 1
             assert json.loads(answer('noinit', {'catPawOpen': '/spider/noinit/3'})['result'])['class'] == [{'type_id': '1', 'type_name': 'Films'}]
+            # Danmaku (#506): the host names the play from the detail, answers what plays, keeps the address sent back,
+            # and says while one may still come; for an episode not playing, the bundle's /danmu/auto at once.
+            answer('detail', {'catPawOpen': '/spider/site/3', 'ids': 'v'})
+            answer('play', {'catPawOpen': '/spider/site/3', 'play': 'ep2', 'flag': 'line'})
+            danmaku = lambda ident, episode: json.loads(answer(ident, {'catDanmaku': '1', 'name': 'Show', 'episode': episode})['result'])
+            assert danmaku('danmaku1', '第2集')['pending'] is True
+            time.sleep(0.8)
+            pushed = danmaku('danmaku2', '第2集')
+            assert pushed['pushed'] is True and pushed['pending'] is False and pushed['url'].endswith('/danmu/auto?name=Show&episode=2'), pushed
+            other = danmaku('danmaku3', '第1集')
+            assert other['pushed'] is False and other['pending'] is False and other['url'].endswith('/danmu/auto?name=Show&episode=%E7%AC%AC1%E9%9B%86'), other
+            assert json.loads(answer('info', {'catPawOpen': '/spider/site/3', 't': '1'})['result'])['info'] == {'title': 'Show', 'episodeName': '第2集', 'flag': 'line'}
             home = answer('home', {'catPawOpen': '/spider/site/3'})
             assert 'home broke' in json.dumps(home, ensure_ascii=False), home
             process.stdin.close()
             assert process.wait(timeout=5) == 0
         finally:
             if process.poll() is None: process.kill(); process.wait()
-print('Script host checks passed: modules, HTML parsing, persistent state, restart preferences, response protocol, CatPawOpen searches and sites without init.')
+print('Script host checks passed: modules, HTML parsing, persistent state, restart preferences, response protocol, CatPawOpen searches, sites without init and danmaku.')
