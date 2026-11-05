@@ -218,22 +218,68 @@ struct DanmakuListView: View {
     }
 
     #if os(tvOS)
+    /// The rows that exist: a page around the current moment, grown a page at a time at either end. A lazy stack
+    /// alone still kept an identity for every comment (thousands in a busy episode) and, to open at the current
+    /// moment, sized every row above it.
+    @State private var window: Range<Int> = 0..<0
+    /// Rows are added above only once the list has opened at the current moment.
+    @State private var placed = false
+    private static let page = 100
+
     var body: some View {
         ScrollViewReader { proxy in
-            // Not a List: tvOS puts a square focus background behind list cells.
+            // Not a List: tvOS puts a square focus background behind list cells. Not glass rows either: the list sits
+            // over the playing video and its moving comments, so a glass row blurred a changing picture on every frame
+            // and every press of the remote lagged. A plain white plate, as in the TV's own lists.
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(shown, id: \.offset) { item in
-                        Button { jump(to: item.element.time) } label: { tvRow(item.element) }
-                            .glassRow()
-                            .id(item.offset)
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(window, id: \.self) { index in
+                        Button { jump(to: comments[index].time) } label: { tvRow(comments[index]) }
+                            .buttonStyle(TVDanmakuRowStyle())
+                            .id(index)
+                            .onAppear { grow(reaching: index, proxy) }
                     }
                 }
-                .glassRowInsets()
+                .padding(.horizontal, 40).padding(.vertical, 24)
             }
+            // Readable over a bright picture.
+            .background(.black.opacity(0.55))
+            // A TV scroll view draws its rows past its edges; these would run outside the panel.
+            .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
             .onAppear {
                 let now = player.currentTime().seconds
-                if now.isFinite, let target = comments.firstIndex(where: { $0.time >= now - 1 }) { proxy.scrollTo(target, anchor: .top) }
+                let start = now.isFinite ? comments.firstIndex { $0.time >= now - 1 } ?? max(0, comments.count - 1) : 0
+                window = max(0, start - 20)..<min(comments.count, start + Self.page)
+                Task { @MainActor in
+                    proxy.scrollTo(start, anchor: .top)
+                    placed = true
+                }
+            }
+        }
+    }
+
+    private func grow(reaching index: Int, _ proxy: ScrollViewProxy) {
+        if index == window.upperBound - 1, window.upperBound < comments.count {
+            window = window.lowerBound..<min(comments.count, window.upperBound + Self.page)
+        } else if placed, index == window.lowerBound, window.lowerBound > 0 {
+            // Rows added above push the ones shown down: keep the first one where it was.
+            let first = window.lowerBound
+            window = max(0, first - Self.page)..<window.upperBound
+            Task { @MainActor in proxy.scrollTo(first, anchor: .top) }
+        }
+    }
+
+    private struct TVDanmakuRowStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View { Row(configuration: configuration) }
+        private struct Row: View {
+            let configuration: ButtonStyleConfiguration
+            @Environment(\.isFocused) private var focused
+            var body: some View {
+                configuration.label
+                    .foregroundStyle(focused ? Color.black : Color.white)
+                    .padding(.horizontal, 28).padding(.vertical, 10)
+                    .background { if focused { Capsule().fill(.white) } }
+                    .scaleEffect(configuration.isPressed ? 0.99 : 1)
             }
         }
     }
