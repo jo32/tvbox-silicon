@@ -565,6 +565,10 @@ struct MusicLikedView: View {
         }
         .screenBackdrop()
         .screenTitle(Self.title)
+        #if os(macOS)
+        // The header names it in large type, as on the other Music pages.
+        .toolbar(removing: .title)
+        #endif
         .musicPlayerInset()
         #if os(tvOS)
         .onPlayPauseCommand { store.music.toggle() }
@@ -573,6 +577,9 @@ struct MusicLikedView: View {
 
     private func header(_ tracks: [MusicTrack]) -> some View {
         VStack(alignment: .leading, spacing: 14) {
+            #if os(macOS)
+            Text(Self.title).font(.largeTitle.weight(.bold))
+            #endif
             Text(L10n.text("%lld songs", tracks.count))
                 .font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
             HStack(spacing: 10) {
