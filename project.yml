@@ -90,6 +90,11 @@ targets:
       - package: ColorfulX
     info:
       properties:
+        # yingxia://import, the link a web page uses to hand over a subscription (#167). The same scheme
+        # carries the Douyin sign-in on iPhone, where the target below registers it.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.tvbox.yingxia.handoff
+            CFBundleURLSchemes: [yingxia]
         # Sparkle (App/MacUpdater.swift) picks the appcast for the package in code. Every update must be signed
         # with this key (private half: ~/.sparkle/yingxia_ed25519.key on the release Mac), and so must the appcast.
         SUPublicEDKey: GH90e0snzIFHgk1wn+91KyrD6jbOnOu7sC7GJPWdG6c=

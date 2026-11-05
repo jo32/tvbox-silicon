@@ -15,6 +15,10 @@ import TVCore
     @State private var douyinHandoff: DouyinHandoff.Link?
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     #endif
+    #if os(iOS) || os(macOS)
+    /// A link that asks to add a subscription, waiting for the viewer to agree (#167). Apple TV opens no links.
+    @State private var subscriptionLink: SubscriptionImportLink?
+    #endif
     init() {
         #if os(macOS)
         // Use thin overlay scrollers app-wide. With "Show scroll bars: Always" or a mouse attached,
@@ -66,8 +70,18 @@ import TVCore
                 .task { PlayOnController.shared.start(store) }
                 #endif
                 #if os(iOS)
-                .onOpenURL { url in if let link = DouyinHandoff.Link(url) { douyinHandoff = link } }
+                // Both links carry the app's one scheme, and only the action's host tells them apart.
+                .onOpenURL { url in
+                    if let link = DouyinHandoff.Link(url) { douyinHandoff = link }
+                    else if let link = SubscriptionImportLink(url) { subscriptionLink = link }
+                }
                 .sheet(item: $douyinHandoff) { DouyinHandoffView(link: $0) }
+                .sheet(item: $subscriptionLink) { SubscriptionImportView(link: $0) }
+                #elseif os(macOS)
+                .onOpenURL { url in if let link = SubscriptionImportLink(url) { subscriptionLink = link } }
+                .sheet(item: $subscriptionLink) { SubscriptionImportView(link: $0) }
+                // Without this, every link opened a second main window, and the sheet showed in both.
+                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
                 #endif
                 // A launch that ends while active, without passing through here, crashed or was ended.
                 .onChange(of: scenePhase, initial: true) { _, phase in ErrorReports.shared.onScreen(phase == .active) }
@@ -136,6 +150,88 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     /// The player's rotate button narrows this to landscape (see PlayerOrientation).
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         MainActor.assumeIsolated { PlayerOrientation.mask }
+    }
+}
+#endif
+
+#if !os(tvOS)
+/// What a `yingxia://import?url=` link opens: the subscription it names, and the viewer's agreement. A page
+/// can point at a subscription, but nothing is downloaded before Add (#167).
+struct SubscriptionImportView: View {
+    let link: SubscriptionImportLink
+    @Environment(Store.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var adding = false
+    @State private var failure: String?
+    /// What the import added, shown before the sheet closes: a directory's subscriptions arrive switched off.
+    @State private var added: String?
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 18) {
+                Image(systemName: "link.badge.plus")
+                    .font(.system(size: 40)).foregroundStyle(Brand.accent)
+                    .frame(maxWidth: .infinity)
+                Text(L10n.text("Add This Subscription?"))
+                    .font(.title3.weight(.bold)).multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                VStack(alignment: .leading, spacing: 10) {
+                    field(L10n.text("Subscription URL"), link.address.absoluteString)
+                    if let name = link.name { field(L10n.text("Name"), name) }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentPanel(cornerRadius: 16)
+                Text(L10n.text("A page can only ask: Yingxia adds this subscription after you agree, never on its own."))
+                    .font(.footnote).foregroundStyle(.secondary)
+                if let failure {
+                    Label(failure, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout).foregroundStyle(Brand.amber)
+                }
+                if let added {
+                    Label(added, systemImage: "checkmark.circle.fill")
+                        .font(.callout).foregroundStyle(.green)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background { Backdrop() }
+            .navigationTitle(L10n.text("Subscription"))
+            .toolbar {
+                if added == nil {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(L10n.text("Cancel")) { dismiss() }
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if added != nil { Button(L10n.text("Done")) { dismiss() }.fontWeight(.semibold) }
+                    // Settings may be importing already, and the store takes one import at a time.
+                    else if adding || store.importing { ProgressView() }
+                    else { Button(L10n.text("Add"), action: add).fontWeight(.semibold) }
+                }
+            }
+        }
+        #if os(iOS)
+        .presentationDetents([.medium, .large])
+        #endif
+    }
+
+    private func field(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Text(value).font(.callout).lineLimit(3).truncationMode(.middle).textSelection(.enabled)
+        }
+    }
+
+    private func add() {
+        adding = true; failure = nil
+        Task {
+            await store.importSubscription(address: link.address.absoluteString, name: link.name)
+            adding = false
+            // Settings shows these too; here they say what did or did not arrive.
+            if let error = store.importError { failure = error } else { added = store.notice ?? L10n.text("Done") }
+        }
     }
 }
 #endif
