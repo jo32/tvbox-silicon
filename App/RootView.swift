@@ -246,12 +246,12 @@ struct RootView: View {
             NavigationStack(path: $morePath) {
                 content(.more).routeDestinations()
                     // Any section can be moved into More, so any can be pushed here.
-                    .navigationDestination(for: AppSection.self) { content($0).tvDefaultControls().tabSafeArea() }
-                    .tabSafeArea()
+                    .navigationDestination(for: AppSection.self) { content($0).tvDefaultControls().tabSafeArea(sizeClass) }
+                    .tabSafeArea(sizeClass)
             }
             .environment(\.openRoute, RouteOpener { morePath.append($0) })
         } else {
-            RouteStack { content(item).tvDefaultControls().tabSafeArea() }
+            RouteStack { content(item).tvDefaultControls().tabSafeArea(sizeClass) }
         }
     }
 
@@ -567,25 +567,33 @@ extension View {
     /// plain `.padding` reserves the capsule's own height outright — its top edge sits ~52pt off the
     /// bottom on iPhone Duo and ~67pt on a standard iPhone, home indicator included — so 72pt leaves
     /// a little air under the last row while the rest still scrolls underneath the capsule.
-    @ViewBuilder func tabSafeArea() -> some View {
+    @ViewBuilder func tabSafeArea(_ horizontal: UserInterfaceSizeClass? = nil) -> some View {
         #if os(iOS)
         if #available(iOS 26, *) {
-            // The Liquid Glass capsule floats over the content, so reserve its height so the last
-            // row scrolls clear, and fade the content out as it slides underneath so it never reads
-            // through the capsule as a jumbled double exposure. The fade uses the page background so
-            // it matches in both light and dark.
-            overlay(alignment: .bottom) {
-                LinearGradient(colors: [.clear, Color(.systemBackground), Color(.systemBackground)],
-                               startPoint: .top, endPoint: .bottom)
-                    .frame(height: 96)
-                    .allowsHitTesting(false)
-                    .ignoresSafeArea(edges: .bottom)
+            // The iOS 26 floating tab bar overlays the scroll content instead of reserving a strip.
+            // Two bars, two behaviours (verified with runtime safe-area reads on the three Duo forms
+            // plus a standard iPhone, 2026-11-05 — every form reports bottomSafeInset == 34pt, the
+            // home-indicator height, never the dock's own height, because the dock overlays):
+            //  • compact width — the phone's bottom Liquid Glass capsule. A literal padding on top of
+            //    the system inset double-counts and leaves a dead strip, so fade the content as it
+            //    slides under and let the system inset (34pt) hold the final row clear of the capsule.
+            //  • regular width — the Duo's inner display and iPads. The wider floating dock (or, folded
+            //    to cover, the left icon rail) tops out ~23pt above the home indicator, so the system's
+            //    34pt alone leaves the last row (and any footer text under it) caught under the dock's
+            //    upper lip. Reserve that extra with safeAreaPadding so the last row clears the dock
+            //    without a dead strip.
+            if horizontal == .regular {
+                safeAreaPadding(.bottom, 24)
+            } else {
+                overlay(alignment: .bottom) {
+                    LinearGradient(colors: [.clear, Color(.systemBackground), Color(.systemBackground)],
+                                   startPoint: .top, endPoint: .bottom)
+                        .frame(height: 96)
+                        .allowsHitTesting(false)
+                        .ignoresSafeArea(edges: .bottom)
+                }
+                .padding(.bottom, 8)
             }
-            // The capsule already publishes its own height as the window's bottom safe-area inset;
-            // adding a literal 72 on top of that double-counted it, which is what left the dead
-            // strip above the bar and let the last row travel under the glass. Let the system
-            // inset do the work — it tracks Dynamic Type, orientation and the OS version.
-            .padding(.bottom, 8)
         } else {
             safeAreaPadding(.bottom)
         }
