@@ -239,37 +239,37 @@ private struct MoreTile: View {
 struct EditTabBarRow: View {
     @Environment(Store.self) private var store
     @AppStorage(PhoneTabs.storageKey) private var storedTabs = ""
-    @State private var editing = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    #if DEBUG
+    @Environment(\.openRoute) private var openRoute
+    @State private var qaOpened = false
+    #endif
     private var slots: Int { PhoneTabs.slots(horizontal: horizontalSizeClass, vertical: verticalSizeClass) }
 
     var body: some View {
-        Group {
-            Button { editing = true } label: {
-                HStack(spacing: 8) {
-                    FormLabel(symbol: "arrow.up.arrow.down", title: L10n.text("Edit Tab Bar"),
-                              subtitle: L10n.text("Choose your tabs and their order."))
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
-                }
-                .contentShape(Rectangle())
-            }
-            // A button in a list draws its title in the tint; this one reads like the rows around it.
-            .tint(.primary)
-            // Pushed like the Settings rows around it, so it comes in from the side as they do (#355).
-            .navigationDestination(isPresented: $editing) {
-                if PhoneTabs.inUse(horizontal: horizontalSizeClass) {
-                    TabBarEditor(tabs: PhoneTabs(stored: storedTabs).arranged(slots: slots, hiding: store.hiddenSections),
-                                 slots: slots) { storedTabs = $0.stored }
-                } else {
-                    TabBarEditor(sidebar: PhoneTabs.sidebar(stored: storedTabs, hiding: store.hiddenSections)) { storedTabs = $0.stored }
-                }
-            }
+        // Pushed onto Settings' path like the rows around it, so it comes in from the side as they do (#355). Not
+        // `navigationDestination(isPresented:)`: on a row of Settings' lazy Form that modifier isn't reliably seen,
+        // and its page isn't on the path, so picking another sidebar section left it on top (see `Route`).
+        SettingsLinkRow(symbol: "arrow.up.arrow.down", title: L10n.text("Edit Tab Bar"),
+                        subtitle: L10n.text("Choose your tabs and their order.")) { editor }
             #if DEBUG
-            // `-qaEditTabs 1` opens the editor for screenshots once Settings is shown.
-            .onAppear { if UserDefaults.standard.bool(forKey: "qaEditTabs") { editing = true } }
+            // `-qaEditTabs 1` opens the editor for screenshots once Settings is shown; once, since coming back to
+            // Settings shows the row again.
+            .onAppear {
+                guard UserDefaults.standard.bool(forKey: "qaEditTabs"), !qaOpened else { return }
+                qaOpened = true
+                openRoute?(Route { AnyView(editor) })
+            }
             #endif
+    }
+
+    @ViewBuilder private var editor: some View {
+        if PhoneTabs.inUse(horizontal: horizontalSizeClass) {
+            TabBarEditor(tabs: PhoneTabs(stored: storedTabs).arranged(slots: slots, hiding: store.hiddenSections),
+                         slots: slots) { storedTabs = $0.stored }
+        } else {
+            TabBarEditor(sidebar: PhoneTabs.sidebar(stored: storedTabs, hiding: store.hiddenSections)) { storedTabs = $0.stored }
         }
     }
 }
