@@ -1056,11 +1056,15 @@ struct Shimmer: ViewModifier {
                     LinearGradient(colors: [.clear, .white.opacity(0.20), .clear], startPoint: .leading, endPoint: .trailing)
                         .frame(width: proxy.size.width * 0.6)
                         .offset(x: -proxy.size.width * 0.6 + phase * proxy.size.width * 1.6)
+                        // Scoped to the band. `withAnimation` in `onAppear` gave the endless animation to everything
+                        // else that moved in that update: on iPadOS 18 the whole Watch Now page, laid out while
+                        // its placeholders shimmered, kept sliding up and jumping back every 1.35 s (#512).
+                        .animation(.linear(duration: 1.35).repeatForever(autoreverses: false), value: phase)
                 }
                 .allowsHitTesting(false)
             }
         }
-        .onAppear { withAnimation(.linear(duration: 1.35).repeatForever(autoreverses: false)) { phase = 1 } }
+        .onAppear { phase = 1 }
     }
 }
 
