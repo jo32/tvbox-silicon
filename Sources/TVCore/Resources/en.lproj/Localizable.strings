@@ -827,6 +827,9 @@
 "Continue Playing" = "Continue Playing";
 "Stopped at %@" = "Stopped at %@";
 "%lld songs" = "%lld songs";
+"Liked Songs" = "Liked Songs";
+"No Liked Songs" = "No Liked Songs";
+"Like a song from its menu, and it waits here, ready to play as one list." = "Like a song from its menu, and it waits here, ready to play as one list.";
 "Unable to Load Songs" = "Unable to Load Songs";
 "Shuffle" = "Shuffle";
 "Skipped “%@”: %@" = "Skipped “%@”: %@";
