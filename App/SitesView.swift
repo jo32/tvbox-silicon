@@ -922,18 +922,29 @@ struct SiteView: View {
                         if browser.videos.isEmpty && browser.loaded && !browser.busy && browser.error == nil { EmptyResults(symbol: "film", title: L10n.text("No Videos"), message: L10n.text("Try selecting a category or searching.")) }
                         LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
                             ForEach(browser.videos) { video in
-                                // An index source (a ranking or list site) names titles; other sources play them.
-                                if isIndex {
-                                    Button { store.searchVideos(video.name) } label: { PosterCard(video: video) }.cardButton()
-                                } else {
-                                    RouteLink { CatalogDestination(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
+                                Group {
+                                    // An index source (a ranking or list site) names titles; other sources play them.
+                                    if isIndex {
+                                        Button { store.searchVideos(video.name) } label: { PosterCard(video: video) }.cardButton()
+                                    } else {
+                                        RouteLink { CatalogDestination(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
+                                    }
+                                }
+                                .onAppear {
+                                    // The last cover coming on screen appends the next page, so scrolling never stops
+                                    // at a page boundary. A failed page waits for the footer's Retry instead.
+                                    guard browser.moreError == nil, video.id == browser.videos.last?.id else { return }
+                                    Task { await loadMore() }
                                 }
                             }
                         }
                         .opacity(browser.busy && !browser.videos.isEmpty ? 0.55 : 1).animation(.smooth, value: browser.busy)
+                        if !browser.videos.isEmpty && (browser.hasMore || browser.loadingMore || browser.moreError != nil) {
+                            // A focus section, so moving down from a cover in any column reaches Load More or Try Again.
+                            loadMoreFooter.tvFocusSection()
+                        }
                     }.pageContainer()
                 }
-                .safeAreaInset(edge: .bottom) { if browser.pageCount > 1 { pager } }
                 .catalogSearchable(text: Binding(get: { query }, set: { value in
                     query = value
                     if value.isEmpty && !browser.query.isEmpty { startRequest { await home() } }
@@ -994,22 +1005,25 @@ struct SiteView: View {
             }.padding(.vertical, 4)
         }
     }
-    private var pager: some View {
-        GlassGroup(spacing: 10) {
-            HStack(spacing: 10) {
-                Button { startRequest { await load(page: browser.page - 1) } } label: { Image(systemName: "chevron.left").frame(width: 22) }
-                    .controlButton().disabled(browser.page <= 1 || browser.busy).accessibilityLabel(L10n.text("Previous"))
-                Text(L10n.text("Page %lld of %lld", browser.page, browser.pageCount)).font(.subheadline.weight(.medium).monospacedDigit())
-                    .padding(.horizontal, 16).padding(.vertical, 10)
-                Button { startRequest { await load(page: browser.page + 1) } } label: { Image(systemName: "chevron.right").frame(width: 22) }
-                    .controlButton().disabled(browser.page >= browser.pageCount || browser.busy).accessibilityLabel(L10n.text("Next"))
+    @ViewBuilder private var loadMoreFooter: some View {
+        if let message = browser.moreError {
+            VStack(spacing: 12) {
+                Text(message).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Button(L10n.text("Try Again")) { startRequest { await loadMore() } }
+                    .controlButton()
+                    .accessibilityIdentifier("site.loadMore.retry")
             }
-        }.controlSize(.large)
-        #if os(tvOS)
-        .padding(.vertical, 20).frame(maxWidth: .infinity).background(TVStyle.background).focusSection()
-        #else
-        .padding(.vertical, 8).frame(maxWidth: .infinity).controlBackdrop()
-        #endif
+            .frame(maxWidth: .infinity).padding(.vertical, 16)
+        } else if browser.loadingMore {
+            ProgressView().controlSize(.large)
+                .frame(maxWidth: .infinity).padding(.vertical, 24)
+                .accessibilityLabel(L10n.text("Loading…"))
+        } else if browser.hasMore {
+            Button(L10n.text("Load More")) { startRequest { await loadMore() } }
+                .controlButton()
+                .frame(maxWidth: .infinity).padding(.vertical, 16)
+                .accessibilityIdentifier("site.loadMore")
+        }
     }
     private func home() async { await browser.load(folder.map { .list(category: $0.id, query: "", page: 1) } ?? .home, client: client) }
     private func search() async {
@@ -1017,10 +1031,7 @@ struct SiteView: View {
         if text.isEmpty { await home() }
         else { await browser.load(.list(category: nil, query: text, page: 1), client: client) }
     }
-    private func load(page next: Int) async {
-        await browser.load(.list(category: browser.category.isEmpty ? nil : browser.category, query: browser.query, page: next, filters: browser.filters),
-                           client: client)
-    }
+    private func loadMore() async { await browser.loadMore(client: client) }
 }
 
 /// A category's filters (TVBox `filters`: 类型, 地区, 年份…) drawn as Discover's catalog search draws its own: one

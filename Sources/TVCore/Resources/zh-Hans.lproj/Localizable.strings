@@ -90,7 +90,6 @@
 "Try selecting a category or searching." = "尝试选择分类或搜索。";
 "Previous" = "上一页";
 "Next" = "下一页";
-"Page %lld of %lld" = "第 %lld / %lld 页";
 "No playable sources were found for this video." = "此影片没有可识别的播放线路。";
 "Loading details…" = "正在获取详情…";
 "Resolving playback URL…" = "正在解析播放地址…";

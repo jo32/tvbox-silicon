@@ -35,7 +35,7 @@ import Testing
 }
 @Test func formattedTranslationsPreserveArguments() {
     #expect(L10n.text("The source %@ returned HTTP %lld.", "example.com", 403, language: "en") == "The source example.com returned HTTP 403.")
-    #expect(L10n.text("Page %lld of %lld", 2, 12, language: "ja") == "2 / 12 ページ")
+    #expect(L10n.text("Searched %lld of %lld sources", 2, 12, language: "ja") == "2 / 12 ソースを検索済み")
     #expect(L10n.text("Channels: %lld", 1, language: "en") == "Channels: 1")
     #expect(L10n.text("Remove %@ from favorites", "100% 日本語", language: "zh-Hant") == "取消收藏 100% 日本語")
 }
