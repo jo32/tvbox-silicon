@@ -358,6 +358,48 @@ final class TVNavigationUITests: XCTestCase {
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 10), "Selecting the field did not open the keyboard")
     }
 
+    /// A search whose results fit in one row (#481): Down from the search field, and from the far end of the rows
+    /// above the results, reaches them. Without Yingxia's own sources, which
+    /// would add more results.
+    func testDownReachesASingleRowOfSearchResults() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-qaSection", "search", "-qaQuery", "few", "-qaIsolatedData", "1", "-qaNoCloudSources", "1",
+                               "-qaSubscription", "http://127.0.0.1:8776/config.json",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        if app.buttons["OK"].waitForExistence(timeout: 20) { remote.press(.select); sleep(2) }
+        let field = app.buttons["search.field"]
+        let results = shown("few 01", in: app).waitForExistence(timeout: 60)
+        let first = XCTAttachment(screenshot: app.screenshot()); first.lifetime = .keepAlways; add(first)
+        XCTAssertTrue(results, "The search showed no results")
+        XCTAssertFalse(shown("few 03", in: app).exists, "The fixture should give two results per source")
+        // Wait for the slow source too, so the rows above the results stop changing.
+        sleep(5)
+        let focused = app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+        remote.press(.right); sleep(1)
+        for _ in 0..<8 where !field.hasFocus { remote.press(.up); usleep(800_000) }
+        XCTAssertTrue(field.hasFocus, "Up never reached the search field")
+        var trail: [String] = []
+        for _ in 0..<8 where !focused.label.contains("few") {
+            trail.append("\(focused.identifier):\(focused.label)")
+            remote.press(.down); sleep(1)
+        }
+        let down = XCTAttachment(screenshot: app.screenshot()); down.lifetime = .keepAlways; add(down)
+        XCTAssertTrue(focused.label.contains("few"), "Down from the field never reached the results; went \(trail.joined(separator: " > "))")
+        // Now from the far right of each row above the results.
+        for _ in 0..<8 where !field.hasFocus { remote.press(.up); usleep(800_000) }
+        remote.press(.down); sleep(1)
+        for _ in 0..<8 { remote.press(.right); usleep(600_000) }
+        trail = []
+        for _ in 0..<8 where !focused.label.contains("few") {
+            trail.append("\(focused.identifier):\(focused.label)")
+            remote.press(.down); sleep(1)
+        }
+        let far = XCTAttachment(screenshot: app.screenshot()); far.lifetime = .keepAlways; add(far)
+        XCTAssertTrue(focused.label.contains("few"), "Down from the right end never reached the results; went \(trail.joined(separator: " > "))")
+    }
+
     /// Poster titles are part of their card's label, so look for the text anywhere in a label.
     private func shown(_ text: String, in app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
