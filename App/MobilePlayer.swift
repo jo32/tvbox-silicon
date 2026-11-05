@@ -40,6 +40,7 @@ struct MobilePlayerView: View {
     @State private var speed: Float = 1
     @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @State private var showsDanmakuList = false
+    @State private var showsEpisodes = false
     /// Devices with Yingxia open, for the Play On button; and the one the video was sent to.
     @State private var tvBrowser = PlayOnBrowser()
     @State private var playingOn: String?
@@ -150,6 +151,7 @@ struct MobilePlayerView: View {
             return new.locked != old.locked ? .impact(weight: .medium) : new.rate != old.rate ? .selection : nil
         }
         .task(id: clock.item.map(ObjectIdentifier.init)) { await tracks.load(clock.item) }
+        .playerEpisodesSheet(isPresented: $showsEpisodes, channel: channel)
         .sheet(isPresented: $showsDanmakuList) {
             DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
                 .danmakuListPresentation()
@@ -632,11 +634,13 @@ struct MobilePlayerView: View {
     }
 
     /// Previous and Next Episode, small and at the right of the time above the seek bar. Beside ±10 and play, a tap
-    /// that ran past +10 out of habit changed the episode.
+    /// that ran past +10 out of habit changed the episode. Then 选集, which opens the episodes in a sheet (#524).
     @ViewBuilder private var stepButtons: some View {
         let previous = store.step(back: true, from: channel, session: session)
         let next = store.step(back: false, from: channel, session: session)
-        if previous != nil || next != nil || toggleFullScreen != nil {
+        // On a watch page the episodes are on the page itself.
+        let episodes = !inline && PlayerEpisodesSheet.offered(for: channel, in: store)
+        if previous != nil || next != nil || episodes || toggleFullScreen != nil {
             HStack(spacing: 10) {
                 if let previous {
                     Button { previous.go() } label: { Image(systemName: "backward.end.fill") }
@@ -649,6 +653,19 @@ struct MobilePlayerView: View {
                         .buttonStyle(PlayerCircleStyle(size: 36))
                         .disabled(next.busy)
                         .accessibilityLabel(L10n.text("Next Episode"))
+                }
+                if episodes {
+                    PlayerEpisodesButton(channel: channel, isPresented: $showsEpisodes) {
+                        HStack(spacing: 6) {
+                            Image(systemName: PlayerEpisodesSheet.symbol)
+                            Text(L10n.text("Episodes"))
+                        }
+                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 14).frame(height: 36)
+                        .glassSurface(.regular.interactive(), in: Capsule())
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
                 if let toggleFullScreen {
                     let full = layout == .pageFullScreen

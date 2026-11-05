@@ -2553,7 +2553,7 @@ private enum CloudDrive: String, Identifiable {
 }
 
 /// Episode names often lead with a size tag ("[1.18GB] S01E41.mkv"); show it as trailing detail.
-private struct EpisodeRow: View {
+struct EpisodeRow: View {
     let name: String
     /// The episode's short label (第1集), shown in place of the name; the size tag stays as detail.
     var label: String? = nil
