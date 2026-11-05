@@ -242,6 +242,9 @@ struct MangaVerticalReader: View {
     let model: MangaReaderModel
     @State private var zoom: CGFloat = 1
     @State private var pinch: CGFloat = 1
+    #if os(iOS)
+    @State private var zoomer = MangaZoomController()
+    #endif
     @Environment(\.displayScale) private var scale
     @Environment(\.mangaToggleChrome) private var toggleChrome
 
@@ -251,55 +254,69 @@ struct MangaVerticalReader: View {
         GeometryReader { outer in
         let top = outer.safeAreaInsets.top
         GeometryReader { proxy in
-            let width = proxy.size.width * zoom * pinch
-            ScrollViewReader { reader in
-                ScrollView(zoom > 1 ? [.vertical, .horizontal] : .vertical, showsIndicators: false) {
-                    LazyVStack(spacing: 0) {
-                        if model.hasPrevious, model.loaded.first?.index == model.position.chapter, let first = model.loaded.first {
-                            Button { Task { await model.open(first.index - 1, page: -1) } } label: {
-                                Label(L10n.text("Previous Chapter"), systemImage: "chevron.up").padding(.vertical, 24).frame(maxWidth: .infinity)
-                                    .padding(.top, top)
-                            }
-                            .buttonStyle(.plain).foregroundStyle(.white.opacity(0.7))
-                            .id("previous")
-                        }
-                        ForEach(model.loaded) { chapter in
-                            ForEach(Array(chapter.pages.enumerated()), id: \.offset) { index, url in
-                                MangaPageImage(model: model, chapter: chapter.index, index: index, url: url, pixelWidth: min(proxy.size.width * scale * 1.5, 2400))
-                                    .id(MangaReaderModel.Position(chapter: chapter.index, page: index))
-                                    .onAppear { model.seen(.init(chapter: chapter.index, page: index)) }
-                                    #if os(tvOS)
-                                    .focusable()
-                                    #endif
-                            }
-                            MangaChapterEnd(model: model, chapter: chapter.index)
-                        }
-                    }
-                    .frame(width: width)
-                }
-                .onChange(of: model.target) { _, target in
-                    guard let target else { return }
-                    reader.scrollTo(target, anchor: .top)
-                    model.target = nil
-                }
-                .onAppear {
-                    if let target = model.target { reader.scrollTo(target, anchor: .top); model.target = nil }
-                    #if DEBUG
-                    if UserDefaults.standard.bool(forKey: "qaMangaScrollTop") {
-                        Task { try? await Task.sleep(for: .seconds(4)); reader.scrollTo("previous", anchor: .top) }
-                    }
-                    #endif
-                }
-                #if os(iOS) || os(macOS)
+            #if os(iOS)
+            // UIKit zooms the whole column, so the spot between the fingers stays under them (see MangaZoomView).
+            MangaPinchZoom(controller: zoomer) {
+                column(proxy.size, top: top)
+                    .onTapGesture(count: 2, coordinateSpace: .local) { zoomer.toggle(at: $0) }
+                    .onTapGesture { toggleChrome?() }
+                    .environment(\.colorScheme, .dark)
+            }
+            #else
+            column(proxy.size, top: top)
+                #if os(macOS)
                 .simultaneousGesture(MagnifyGesture()
                     .onChanged { value in pinch = value.magnification }
                     .onEnded { value in zoom = min(4, max(1, zoom * value.magnification)); pinch = 1 })
                 .onTapGesture(count: 2) { withAnimation(.smooth) { zoom = zoom > 1 ? 1 : 2 } }
                 .onTapGesture { toggleChrome?() }
                 #endif
-            }
+            #endif
         }
         .ignoresSafeArea()
+        }
+    }
+
+    private func column(_ size: CGSize, top: CGFloat) -> some View {
+        let width = size.width * zoom * pinch
+        return ScrollViewReader { reader in
+            ScrollView(zoom > 1 ? [.vertical, .horizontal] : .vertical, showsIndicators: false) {
+                LazyVStack(spacing: 0) {
+                    if model.hasPrevious, model.loaded.first?.index == model.position.chapter, let first = model.loaded.first {
+                        Button { Task { await model.open(first.index - 1, page: -1) } } label: {
+                            Label(L10n.text("Previous Chapter"), systemImage: "chevron.up").padding(.vertical, 24).frame(maxWidth: .infinity)
+                                .padding(.top, top)
+                        }
+                        .buttonStyle(.plain).foregroundStyle(.white.opacity(0.7))
+                        .id("previous")
+                    }
+                    ForEach(model.loaded) { chapter in
+                        ForEach(Array(chapter.pages.enumerated()), id: \.offset) { index, url in
+                            MangaPageImage(model: model, chapter: chapter.index, index: index, url: url, pixelWidth: min(size.width * scale * 1.5, 2400))
+                                .id(MangaReaderModel.Position(chapter: chapter.index, page: index))
+                                .onAppear { model.seen(.init(chapter: chapter.index, page: index)) }
+                                #if os(tvOS)
+                                .focusable()
+                                #endif
+                        }
+                        MangaChapterEnd(model: model, chapter: chapter.index)
+                    }
+                }
+                .frame(width: width)
+            }
+            .onChange(of: model.target) { _, target in
+                guard let target else { return }
+                reader.scrollTo(target, anchor: .top)
+                model.target = nil
+            }
+            .onAppear {
+                if let target = model.target { reader.scrollTo(target, anchor: .top); model.target = nil }
+                #if DEBUG
+                if UserDefaults.standard.bool(forKey: "qaMangaScrollTop") {
+                    Task { try? await Task.sleep(for: .seconds(4)); reader.scrollTo("previous", anchor: .top) }
+                }
+                #endif
+            }
         }
     }
 }
@@ -347,14 +364,16 @@ struct MangaPagedReader: View {
                 #if os(iOS)
                 TabView(selection: $page) {
                     ForEach(Array(model.currentPages.enumerated()), id: \.offset) { index, url in
-                        MangaZoomablePage { MangaPageImage(model: model, chapter: model.position.chapter, index: index, url: url, pixelWidth: pixelWidth, fitsScreen: true) }
+                        // The page takes its own taps: a SwiftUI overlay over it would swallow the pinch.
+                        MangaZoomablePage(tapped: tapped) { MangaPageImage(model: model, chapter: model.position.chapter, index: index, url: url, pixelWidth: pixelWidth, fitsScreen: true) }
                             .tag(index)
                     }
-                    MangaPagedEnd(model: model).tag(count)
+                    MangaPagedEnd(model: model)
+                        .overlay { tapZones(proxy.size).environment(\.layoutDirection, .leftToRight) }
+                        .tag(count)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .environment(\.layoutDirection, rtl ? .rightToLeft : .leftToRight)
-                .overlay { tapZones(proxy.size) }
                 #else
                 ZStack {
                     if page < count {
@@ -419,15 +438,14 @@ struct MangaPagedReader: View {
     }
 
     #if !os(tvOS)
-    /// A third on each side turns the page; the middle shows the controls.
+    /// A tap `across` the screen (0 left, 1 right): a third on each side turns the page; the middle shows the controls.
+    private func tapped(_ across: CGFloat) {
+        if across < 0.3 { turn(rtl ? 1 : -1) } else if across > 0.7 { turn(rtl ? -1 : 1) } else { toggleChrome?() }
+    }
+
     private func tapZones(_ size: CGSize) -> some View {
-        HStack(spacing: 0) {
-            Color.clear.contentShape(Rectangle()).frame(width: size.width * 0.3).onTapGesture { turn(rtl ? 1 : -1) }
-            Color.clear.contentShape(Rectangle()).onTapGesture { toggleChrome?() }
-            Color.clear.contentShape(Rectangle()).frame(width: size.width * 0.3).onTapGesture { turn(rtl ? -1 : 1) }
-        }
-        // Pinches and drags reach the page under the zones.
-        .allowsHitTesting(true)
+        Color.clear.contentShape(Rectangle())
+            .onTapGesture(coordinateSpace: .local) { point in tapped(point.x / max(size.width, 1)) }
     }
     #endif
 }
@@ -454,6 +472,8 @@ private struct MangaPagedEnd: View {
 #if os(iOS)
 /// A page that zooms with a pinch or a double tap, then pans; at 1× drags fall through to the page turner.
 struct MangaZoomablePage<Content: View>: UIViewRepresentable {
+    /// A single tap, with where it landed across the page: 0 at the left edge, 1 at the right.
+    let tapped: (CGFloat) -> Void
     @ViewBuilder let content: Content
 
     func makeCoordinator() -> Coordinator { Coordinator(UIHostingController(rootView: content)) }
@@ -475,11 +495,18 @@ struct MangaZoomablePage<Content: View>: UIViewRepresentable {
         let doubleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.doubleTapped(_:)))
         doubleTap.numberOfTapsRequired = 2
         scroll.addGestureRecognizer(doubleTap)
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.singleTapped(_:)))
+        tap.require(toFail: doubleTap)
+        // A failed page's Try Again button still gets its tap.
+        tap.cancelsTouchesInView = false
+        scroll.addGestureRecognizer(tap)
+        context.coordinator.tapped = tapped
         return scroll
     }
 
     func updateUIView(_ scroll: UIScrollView, context: Context) {
         context.coordinator.host.rootView = content
+        context.coordinator.tapped = tapped
         DispatchQueue.main.async {
             if scroll.zoomScale == 1 { context.coordinator.host.view.frame = scroll.bounds; scroll.contentSize = scroll.bounds.size }
         }
@@ -487,8 +514,13 @@ struct MangaZoomablePage<Content: View>: UIViewRepresentable {
 
     final class Coordinator: NSObject, UIScrollViewDelegate {
         let host: UIHostingController<Content>
+        var tapped: (CGFloat) -> Void = { _ in }
         init(_ host: UIHostingController<Content>) { self.host = host }
         func viewForZooming(in scrollView: UIScrollView) -> UIView? { host.view }
+        @objc func singleTapped(_ gesture: UITapGestureRecognizer) {
+            guard let scroll = gesture.view as? UIScrollView, scroll.bounds.width > 0 else { return }
+            tapped((gesture.location(in: scroll).x - scroll.bounds.minX) / scroll.bounds.width)
+        }
         @objc func doubleTapped(_ gesture: UITapGestureRecognizer) {
             guard let scroll = gesture.view as? UIScrollView else { return }
             if scroll.zoomScale > 1 { scroll.setZoomScale(1, animated: true); return }
@@ -497,6 +529,183 @@ struct MangaZoomablePage<Content: View>: UIViewRepresentable {
             scroll.zoom(to: CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2, width: size.width, height: size.height), animated: true)
         }
     }
+}
+
+/// Lets SwiftUI taps reach the vertical reader's zoom.
+@MainActor final class MangaZoomController {
+    fileprivate weak var view: MangaZoomView?
+    /// Double tap: zooms in around `point` (in the column's own, unzoomed space), or back out.
+    func toggle(at point: CGPoint) {
+        guard let view else { return }
+        view.toggleZoom(at: view.content.convert(point, to: view))
+    }
+}
+
+/// Zooms the vertical reader's whole scrolling column, the way Mihon's webtoon reader does, so its pages stay lazy.
+struct MangaPinchZoom<Content: View>: UIViewRepresentable {
+    let controller: MangaZoomController
+    @ViewBuilder let content: Content
+
+    func makeCoordinator() -> UIHostingController<Content> { UIHostingController(rootView: content) }
+
+    func makeUIView(context: Context) -> MangaZoomView {
+        let host = context.coordinator
+        host.view.backgroundColor = .clear
+        host.safeAreaRegions = []
+        let view = MangaZoomView(content: host.view)
+        controller.view = view
+        return view
+    }
+
+    func updateUIView(_ view: MangaZoomView, context: Context) {
+        context.coordinator.rootView = content
+        controller.view = view
+    }
+}
+
+/// Scales and moves `content` with a transform, like a photo: the spot between the fingers stays under them while
+/// they pinch and move; one finger pans sideways when zoomed (the column's own scroll view keeps scrolling it down),
+/// and past its top or bottom moves the zoomed view up or down. Zoom past the limits gives a little, then springs back.
+final class MangaZoomView: UIView, UIGestureRecognizerDelegate {
+    let content: UIView
+    let maxScale: CGFloat = 4
+    private(set) var scale: CGFloat = 1
+    /// The content's centre, from the view's centre.
+    private var offset = CGPoint.zero
+    /// The last pinch centre, from the view's centre.
+    private var focal = CGPoint.zero
+    private var touches = 0
+    private let pinch = UIPinchGestureRecognizer()
+    private let pan = UIPanGestureRecognizer()
+    private weak var foundScroll: UIScrollView?
+
+    init(content: UIView) {
+        self.content = content
+        super.init(frame: .zero)
+        clipsToBounds = true
+        addSubview(content)
+        pinch.addTarget(self, action: #selector(pinched(_:)))
+        pan.addTarget(self, action: #selector(panned(_:)))
+        pan.maximumNumberOfTouches = 1
+        pan.cancelsTouchesInView = false
+        for recognizer in [pinch, pan] as [UIGestureRecognizer] {
+            recognizer.delegate = self
+            addGestureRecognizer(recognizer)
+        }
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        content.bounds = CGRect(origin: .zero, size: bounds.size)
+        content.center = CGPoint(x: bounds.midX, y: bounds.midY)
+        offset = clamped(offset, scale: scale)
+        apply()
+    }
+
+    /// The column's own scroll view (SwiftUI's ScrollView is a UIScrollView underneath).
+    private var scroll: UIScrollView? {
+        if let foundScroll, foundScroll.isDescendant(of: content) { return foundScroll }
+        var queue = [content]
+        while !queue.isEmpty {
+            let view = queue.removeFirst()
+            if let scroll = view as? UIScrollView { foundScroll = scroll; return scroll }
+            queue += view.subviews
+        }
+        return nil
+    }
+
+    private func apply() {
+        content.transform = CGAffineTransform(translationX: offset.x, y: offset.y).scaledBy(x: scale, y: scale)
+        // Zoomed, the edges move the view instead of stretching the column.
+        scroll?.bounces = scale <= 1.01
+    }
+
+    private func centred(_ point: CGPoint) -> CGPoint { CGPoint(x: point.x - bounds.midX, y: point.y - bounds.midY) }
+
+    /// Keeps the zoomed content covering the view.
+    private func clamped(_ offset: CGPoint, scale: CGFloat) -> CGPoint {
+        let x = max(0, (scale - 1) * bounds.width / 2), y = max(0, (scale - 1) * bounds.height / 2)
+        return CGPoint(x: min(x, max(-x, offset.x)), y: min(y, max(-y, offset.y)))
+    }
+
+    /// The offset that puts the content point now under `from` under `to` at `newScale`.
+    private func anchored(_ from: CGPoint, at to: CGPoint, scale newScale: CGFloat) -> CGPoint {
+        let point = CGPoint(x: (from.x - offset.x) / scale, y: (from.y - offset.y) / scale)
+        return CGPoint(x: to.x - point.x * newScale, y: to.y - point.y * newScale)
+    }
+
+    @objc private func pinched(_ gesture: UIPinchGestureRecognizer) {
+        let location = centred(gesture.location(in: self))
+        switch gesture.state {
+        case .began:
+            focal = location
+            touches = gesture.numberOfTouches
+            // Two fingers both pinch and move; the column must not scroll with them as well.
+            scroll?.panGestureRecognizer.isEnabled = false
+            fallthrough
+        case .changed:
+            // A finger lifted or landed moves the centre point; start from there without a jump.
+            if gesture.numberOfTouches != touches { touches = gesture.numberOfTouches; focal = location; gesture.scale = 1; return }
+            // Past the limits the zoom gives less and less.
+            let step = scale > maxScale || scale < 1 ? pow(gesture.scale, 0.35) : gesture.scale
+            let newScale = min(maxScale * 1.6, max(0.6, scale * step))
+            gesture.scale = 1
+            offset = clamped(anchored(focal, at: location, scale: newScale), scale: newScale)
+            scale = newScale
+            focal = location
+            apply()
+        case .ended, .cancelled, .failed:
+            scroll?.panGestureRecognizer.isEnabled = true
+            let settled = min(maxScale, max(1, scale))
+            zoom(to: settled, offset: anchored(focal, at: focal, scale: settled))
+        default: break
+        }
+    }
+
+    @objc private func panned(_ gesture: UIPanGestureRecognizer) {
+        let move = gesture.translation(in: self)
+        gesture.setTranslation(.zero, in: self)
+        guard pinch.state != .began, pinch.state != .changed else { return }
+        var next = offset
+        next.x += move.x
+        // The column scrolls itself; only at its top or bottom does the zoomed view move up or down.
+        if let scroll {
+            let top = -scroll.adjustedContentInset.top
+            let bottom = max(top, scroll.contentSize.height + scroll.adjustedContentInset.bottom - scroll.bounds.height)
+            if (move.y > 0 && scroll.contentOffset.y <= top + 1) || (move.y < 0 && scroll.contentOffset.y >= bottom - 1) { next.y += move.y }
+        }
+        offset = clamped(next, scale: scale)
+        apply()
+        if gesture.state == .ended {
+            // Glide on sideways, as a scroll view would.
+            let velocity = gesture.velocity(in: self).x
+            let target = clamped(CGPoint(x: offset.x + velocity * 0.25, y: offset.y), scale: scale)
+            guard target.x != offset.x else { return }
+            offset = target
+            UIView.animate(withDuration: 0.5, delay: 0, options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]) { self.apply() }
+        }
+    }
+
+    func toggleZoom(at point: CGPoint) {
+        if scale > 1.01 { zoom(to: 1, offset: .zero); return }
+        let location = centred(point)
+        zoom(to: 2.5, offset: anchored(location, at: location, scale: 2.5))
+    }
+
+    private func zoom(to newScale: CGFloat, offset newOffset: CGPoint) {
+        scale = newScale <= 1.01 ? 1 : newScale
+        offset = clamped(newOffset, scale: scale)
+        UIView.animate(withDuration: 0.35, delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0,
+                       options: [.allowUserInteraction, .beginFromCurrentState]) { self.apply() }
+    }
+
+    override func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
+        gesture === pan ? scale > 1.01 : super.gestureRecognizerShouldBegin(gesture)
+    }
+
+    func gestureRecognizer(_ gesture: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 }
 #endif
 
