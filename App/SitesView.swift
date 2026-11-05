@@ -12,14 +12,23 @@ struct SitesView: View {
     @FocusState private var focusedSite: String?
     @State private var query = ""
     /// Groups the viewer folded. Every group starts open, subscriptions and hidden sources included,
-    /// so nothing on the page needs finding. Reset with the page, not with a pushed source: the state
-    /// lives here and `prepared` keeps the reset to once per visit.
-    @State private var collapsed: Set<String> = []
+    /// so nothing on the page needs finding, and stays as the viewer left it: a fold is saved and comes
+    /// back on the next visit and launch (#517). Picking a source always starts open, so the current
+    /// choice can be shown. `prepared` keeps the reload to once per visit, not per pushed source.
+    @State private var collapsed: Set<String>
     @State private var prepared = false
     /// The fold as it was when a search began; restored when the search is cleared.
     @State private var foldBeforeSearch: Set<String>?
     @State private var arranging = false
     @State private var choosingHidden = false
+    init(pick: ((Site) -> Void)? = nil, pickable: [Site] = [], picked: String? = nil) {
+        self.pick = pick
+        self.pickable = pickable
+        self.picked = picked
+        _collapsed = State(initialValue: pick == nil ? Self.savedFold : [])
+    }
+    private static let foldKey = "sources.foldedGroups"
+    private static var savedFold: Set<String> { Set(UserDefaults.standard.stringArray(forKey: foldKey) ?? []) }
     var body: some View {
         Group {
             if let config = store.subscription {
@@ -108,6 +117,8 @@ struct SitesView: View {
             withAnimation(.snappy(duration: 0.3)) {
                 if open { collapsed.insert(group.id) } else { collapsed.remove(group.id) }
             }
+            // A search opens every group for the moment; only the page's own fold is kept.
+            if pick == nil && query.isEmpty { UserDefaults.standard.set(collapsed.sorted(), forKey: Self.foldKey) }
         } label: {
             HStack(spacing: 8) {
                 Text(L10n.text(group.title)).font(.headline).lineLimit(1)
@@ -139,9 +150,9 @@ struct SitesView: View {
         #endif
     }
 
-    /// The default view of the page: every group open.
+    /// The page as the viewer last left it: every group open unless they folded it.
     private func applyDefaultFold() {
-        collapsed = []
+        collapsed = pick == nil ? Self.savedFold : []
         foldBeforeSearch = nil
     }
 }

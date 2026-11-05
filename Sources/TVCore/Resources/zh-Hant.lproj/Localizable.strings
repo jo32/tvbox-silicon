@@ -387,6 +387,7 @@
 "This source needs an Android feature that isn't supported yet: %@." = "此來源需要尚未支援的 Android 功能：%@。";
 "This plugin couldn't be prepared on this device (missing %@)." = "無法在本機準備此外掛（缺少 %@）。";
 "This plugin couldn't be prepared on this device (%@ could not be converted)." = "無法在本機準備此外掛（%@ 轉換失敗）。";
+"The source says: %@" = "來源提示：%@";
 "The source's plugin crashed. The site may have changed; try another source." = "此來源的外掛崩潰了，網站可能已變更。請換一個來源。";
 
 /* Loading status */
@@ -825,6 +826,9 @@
 "Continue Playing" = "繼續播放";
 "Stopped at %@" = "停在 %@";
 "%lld songs" = "%lld 首";
+"Liked Songs" = "我喜歡的歌曲";
+"No Liked Songs" = "還沒有喜歡的歌曲";
+"Like a song from its menu, and it waits here, ready to play as one list." = "在歌曲選單中選擇「喜歡」，歌曲就會留在這裡，隨時可以當一張歌單播放。";
 "Unable to Load Songs" = "無法載入歌曲";
 "Shuffle" = "隨機播放";
 "Skipped “%@”: %@" = "已略過「%@」：%@";

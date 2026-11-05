@@ -41,6 +41,9 @@ public enum PluginFailure {
                 return L10n.text("This plugin couldn't be prepared on this device (%@ could not be converted).", broken, language: language)
             }
             return L10n.text("This plugin couldn't be prepared on this device (missing %@).", missing ?? detail, language: language)
+        case "plugin_message":
+            // The plugin's own words, such as a drive it has no sign-in for (#408).
+            if let text = envelope["message"]?.string { return L10n.text("The source says: %@", text, language: language) }
         case "plugin_crash":
             return L10n.text("The source's plugin crashed. The site may have changed; try another source.", language: language)
         default: break

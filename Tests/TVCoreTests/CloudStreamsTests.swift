@@ -238,6 +238,24 @@ struct CloudStreamsTests {
         #expect(calls.value == 1)
         await stream.clear()
     }
+
+    /// Issue #485: iOS took back the suspended app's sockets, so a bundle's proxy refuses connections on its old port.
+    /// The stream asks where the proxy listens now and reads on from there, instead of failing every read.
+    @Test func aRefusedLoopbackProxyMovesToItsNewPort() async throws {
+        let size = CloudByteStream.chunkSize + 10
+        let (url, bytes) = try await served("moved.mp4", size: size)
+        // Nothing listens on the discard port here, so connecting is refused (NSURLErrorCannotConnectToHost).
+        let stale = URL(string: "http://127.0.0.1:9/spider/wogg/3/proxy/quark/moved.mp4")!
+        let calls = CloudCounter()
+        let stream = CloudByteStream(source: .init(url: stale, headers: [:], length: size, name: "moved.mp4"), session: RangeServer.session, parallel: 1) {
+            calls.add(1)
+            return .init(url: url, headers: [:], length: size, name: "moved.mp4")
+        }
+        #expect(try await stream.read(at: size - 4, count: 4) == bytes[(size - 4)...])
+        #expect(calls.value == 1)
+        #expect(RangeServer.requests("moved.mp4") == 1)
+        await stream.clear()
+    }
 }
 
 /// Serves registered bytes for https://cloud.test/<name> with HTTP Range, in memory, so these

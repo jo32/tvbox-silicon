@@ -474,7 +474,7 @@ struct FavoritesView: View {
 
     private var musicSection: some View {
         VStack(alignment: .leading, spacing: Layout.headerSpacing) {
-            SectionHeader(title: L10n.text("Music"))
+            SectionHeader(title: L10n.text("Liked Songs"))
             LazyVStack(alignment: .leading, spacing: MusicLayout.rowSpacing) {
                 ForEach(store.favorites.items(.music)) { item in
                     if case .music(let track) = item {

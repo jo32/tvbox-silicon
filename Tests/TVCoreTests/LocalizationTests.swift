@@ -57,6 +57,10 @@ import Testing
     #expect(PluginFailure.message(screen, language: "zh-Hans") == "此条目会打开来源自带的设置或登录界面（例如二维码），映匣无法显示。请改在“设置 → 网盘账号”中登录。")
     #expect(PluginFailure.inPlugin(screen))
     #expect(PluginFailure.message(["error": .string("boom")], language: "en") == "Plugin error: boom")
+    let told: [String: JSONValue] = ["error": .string("java.lang.Exception: 还没有配置115 Cookie，请先到配置中心登录"), "errorCode": .string("plugin_message"),
+                                     "message": .string("还没有配置115 Cookie，请先到配置中心登录")]
+    #expect(PluginFailure.message(told, language: "zh-Hans") == "来源提示：还没有配置115 Cookie，请先到配置中心登录")
+    #expect(!PluginFailure.inPlugin(told))
 }
 @Test func embeddedPluginFailuresAreLocalizedAndKeepTheNativeReason() {
     let failure: [String: JSONValue] = ["error": .string("The embedded plugin request failed. See diagnostic logs."), "errorCode": .string("embedded_request")]

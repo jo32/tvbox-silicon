@@ -45,6 +45,17 @@ public enum CatPawOpen {
         return CloudStreams.Source(url: url, headers: headers, length: Int(probe.length), name: url.lastPathComponent)
     }
 
+    /// A bundle's media proxy stream at the port the bundle listens on now, after iOS took back the suspended app's
+    /// sockets (`EmbeddedNodeHost.relocate`, #485); nil when it hasn't moved. The Mac's Node is never suspended.
+    public static func relocated(_ source: CloudStreams.Source) async -> CloudStreams.Source? {
+        #if os(iOS)
+        guard let url = await EmbeddedNodeHost.shared.relocate(source.url) else { return nil }
+        return CloudStreams.Source(url: url, headers: source.headers, length: source.length, name: source.name)
+        #else
+        return nil
+        #endif
+    }
+
     /// The bundle's video sources, each a type 3 source on the bundle with its `/spider/…` path in `catPawOpen`.
     static func subscription(bundle: URL, origin: URL, http: HTTPClient) async throws -> Subscription {
         #if os(macOS) || os(iOS)

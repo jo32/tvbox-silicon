@@ -14,9 +14,10 @@ import org.json.JSONObject;
  * {@code waiting}, {@code success}, {@code expired} or {@code error}, and the plugin saves the account
  * itself. When a line answers that its drive has no sign-in ("[pan115](resolvePlay) 115 Cookie
  * 未配置或已失效"), the host starts that sign-in, the app shows the code (LoginPrompt), and once it is
- * confirmed the line is asked again. Drives the app signs in to itself (Quark, UC, Baidu) reach the
+ * confirmed the line is asked again. Drives the app signs in to itself (Quark, UC, Baidu, 115) reach the
  * plugin from the app's accounts (CloudDriveBridge.seedWexCookies); for them this is only the
- * fallback when the plugin still finds no usable sign-in. What the sign-in wrote to the plugin's
+ * fallback when the plugin still finds no usable sign-in. 115 is optional in the app, so without an app
+ * sign-in the plugin's own code is still offered for it. What the sign-in wrote to the plugin's
  * preferences goes to the app with the notice, so every Wex source gets it without another scan.
  */
 final class OwnDriveSignIn {
@@ -90,7 +91,9 @@ final class OwnDriveSignIn {
                 if (entry.getValue().equals(before.get(entry.getKey()))) continue;
                 written.put(entry.getKey(), entry.getValue());
                 String field = CloudDriveBridge.WEX_APP_KEYS.get(entry.getKey());
-                if (field != null) written.put(CloudDriveBridge.WEX_REPLACED + entry.getKey(), bridge.appAccountDigest(field));
+                // None when the app had no sign-in for that drive (115): the app's own sign-in, once made, wins.
+                String replaced = field == null ? "" : bridge.appAccountDigest(field);
+                if (!replaced.isEmpty()) written.put(CloudDriveBridge.WEX_REPLACED + entry.getKey(), replaced);
             }
         } catch (org.json.JSONException impossible) { }
         if (written.length() > 0) kept.put("wexPreferences", written);

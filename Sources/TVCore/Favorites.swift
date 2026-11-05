@@ -219,6 +219,11 @@ struct FavoriteDocument: Codable {
         items.compactMap { if case .live(let channel) = $0 { channel } else { nil } }
     }
 
+    /// The songs saved with Like, newest first, which Liked Songs plays as one list.
+    public var musicTracks: [MusicTrack] {
+        items.compactMap { if case .music(let track) = $0 { track } else { nil } }
+    }
+
     private func persist() {
         do {
             defaults.set(try JSONEncoder().encode(FavoriteDocument(version: 2, items: items)), forKey: Self.storageKey)

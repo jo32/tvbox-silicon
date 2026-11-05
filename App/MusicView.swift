@@ -233,6 +233,8 @@ private struct MusicHome: View {
         if let point = resumable, let track = point.queue.current {
             MusicContinueCard(point: point, track: track).padding(.bottom, 20)
         }
+        let liked = store.favorites.musicTracks.count
+        if liked > 0 { MusicLikedLink(count: liked).padding(.bottom, 20) }
         let downloads = !MusicDownloadLibrary.shared.items.isEmpty
         if downloads { MusicDownloadsLink().padding(.bottom, 20) }
         if !browse.sections.isEmpty {
@@ -494,5 +496,111 @@ struct MusicCollectionView: View {
         defer { loading = false }
         do { tracks = try await source.tracks(of: collection) }
         catch { self.error = MusicProviderError(error).localizedDescription + " (" + MusicProviderError(error).detail + ")" }
+    }
+}
+
+/// The way to liked songs, at the top of the Music page: every song saved with Like, played as one list.
+struct MusicLikedLink: View {
+    let count: Int
+
+    var body: some View {
+        RouteLink { MusicLikedView() } label: {
+            HStack(spacing: MusicLayout.gap) {
+                #if os(iOS)
+                SectionGlyph(section: .favorites, size: MusicLayout.art)
+                #else
+                Image(systemName: AppSection.favorites.icon)
+                    .font(.system(size: MusicLayout.art * 0.46, weight: .semibold)).foregroundStyle(.white)
+                    .frame(width: MusicLayout.art, height: MusicLayout.art)
+                    .background(Brand.rose.gradient, in: RoundedRectangle(cornerRadius: MusicLayout.art * 0.3, style: .continuous))
+                    .accessibilityHidden(true)
+                #endif
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(MusicLikedView.title).font(.headline).lineLimit(1).foregroundStyle(.primary)
+                    Text(L10n.text("%lld songs", count)).font(.subheadline).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right").font(.subheadline.weight(.semibold)).foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .glassRow()
+    }
+}
+
+/// The songs saved with Like, newest first. Play, Shuffle and Add to Up Next treat them as one list,
+/// so liking songs is all it takes to build a playlist.
+struct MusicLikedView: View {
+    @Environment(Store.self) private var store
+
+    static var title: String { L10n.text("Liked Songs") }
+
+    var body: some View {
+        let tracks = store.favorites.musicTracks
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: MusicLayout.rowSpacing) {
+                header(tracks).padding(.bottom, 20)
+                if tracks.isEmpty {
+                    ContentUnavailableView(L10n.text("No Liked Songs"), systemImage: "heart",
+                                           description: Text(L10n.text("Like a song from its menu, and it waits here, ready to play as one list.")))
+                        .frame(maxWidth: .infinity).padding(.vertical, 60)
+                }
+                ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
+                    HStack(spacing: 10) {
+                        MusicTrackRow(track: track, showsFavoriteMark: false) {
+                            store.music.play(MusicQueue(tracks: tracks, start: index, source: Self.title))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        // The row's own menu has Unlike, which is how the remote removes it.
+                        #if !os(tvOS)
+                        FavoriteHeartButton(item: .music(track), name: track.title)
+                            .fixedSize()
+                        #endif
+                    }
+                }
+            }
+            .glassRowInsets()
+            .pageContainer()
+        }
+        .screenBackdrop()
+        .screenTitle(Self.title)
+        #if os(macOS)
+        // The header names it in large type, as on the other Music pages.
+        .toolbar(removing: .title)
+        #endif
+        .musicPlayerInset()
+        #if os(tvOS)
+        .onPlayPauseCommand { store.music.toggle() }
+        #endif
+    }
+
+    private func header(_ tracks: [MusicTrack]) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            #if os(macOS)
+            Text(Self.title).font(.largeTitle.weight(.bold))
+            #endif
+            Text(L10n.text("%lld songs", tracks.count))
+                .font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                Group {
+                    Button { store.music.play(MusicQueue(tracks: tracks, start: 0, source: Self.title)) } label: {
+                        Label(L10n.text("Play"), systemImage: "play.fill")
+                    }
+                    .controlButton(prominent: true)
+                    Button { store.music.play(MusicQueue.shuffled(tracks, source: Self.title)) } label: {
+                        Label(L10n.text("Shuffle"), systemImage: "shuffle")
+                    }
+                    .controlButton()
+                    Button { store.music.addToUpNext(tracks) } label: {
+                        Label(L10n.text("Add to Up Next"), systemImage: "text.line.last.and.arrowtriangle.forward")
+                    }
+                    .controlButton()
+                }
+                .disabled(tracks.isEmpty)
+            }
+            .fixedSize()
+            .tvFocusSection()
+        }
     }
 }

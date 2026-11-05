@@ -388,6 +388,7 @@
 "This source needs an Android feature that isn't supported yet: %@." = "This source needs an Android feature that isn't supported yet: %@.";
 "This plugin couldn't be prepared on this device (missing %@)." = "This plugin couldn't be prepared on this device (missing %@).";
 "This plugin couldn't be prepared on this device (%@ could not be converted)." = "This plugin couldn't be prepared on this device (%@ could not be converted).";
+"The source says: %@" = "The source says: %@";
 "The source's plugin crashed. The site may have changed; try another source." = "The source's plugin crashed. The site may have changed; try another source.";
 
 /* Loading status */
@@ -826,6 +827,9 @@
 "Continue Playing" = "Continue Playing";
 "Stopped at %@" = "Stopped at %@";
 "%lld songs" = "%lld songs";
+"Liked Songs" = "Liked Songs";
+"No Liked Songs" = "No Liked Songs";
+"Like a song from its menu, and it waits here, ready to play as one list." = "Like a song from its menu, and it waits here, ready to play as one list.";
 "Unable to Load Songs" = "Unable to Load Songs";
 "Shuffle" = "Shuffle";
 "Skipped “%@”: %@" = "Skipped “%@”: %@";

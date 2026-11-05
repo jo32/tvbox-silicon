@@ -339,14 +339,14 @@ public final class CloudDriveBridge implements AutoCloseable {
     public void setDriveProxy(DriveProxy value) { driveProxy = value; }
     public void setProxy(Proxy value) { proxy = value; }
 
-    /** The drive cookies (quarkCookie, ucCookie, baiduCookie) the app holds a sign-in in, with their digests. */
+    /** The drive cookies (quarkCookie, ucCookie, baiduCookie, pan115Cookie) the app holds a sign-in in, with their digests. */
     private volatile Map<String, String> appAccounts = Map.of();
     /** The source's context, whose Wex preferences OwnDriveSignIn reads after the plugin signs in. */
     private volatile android.content.Context context;
     public void appAccounts(JSONObject accounts) { appAccounts(accounts, null); }
     public void appAccounts(JSONObject accounts, android.content.Context value) {
         var held = new HashMap<String, String>();
-        for (String key : List.of("quarkCookie", "ucCookie", "baiduCookie")) {
+        for (String key : WEX_APP_KEYS.values()) {
             String cookie = accounts == null ? "" : accounts.optString(key).trim();
             if (!cookie.isEmpty()) held.put(key, digest(cookie));
         }
@@ -436,17 +436,19 @@ public final class CloudDriveBridge implements AutoCloseable {
     public static final String WEX_PREFERENCES = "NewWexFnw_preferences";
 
     /** The Wex preferences that hold the drives the app signs in to, and the app's account field for each. */
-    static final Map<String, String> WEX_APP_KEYS = Map.of("Wex_quark_cookie", "quarkCookie", "Wex_ucpan_cookie", "ucCookie", "Wex_baidu_cookie", "baiduCookie");
+    static final Map<String, String> WEX_APP_KEYS = Map.of("Wex_quark_cookie", "quarkCookie", "Wex_ucpan_cookie", "ucCookie",
+        "Wex_baidu_cookie", "baiduCookie", "Wex_pan115_cookie", "pan115Cookie");
     /** In the shared {@code wexPreferences}: the digest of the app sign-in that a plugin sign-in replaced. */
     static final String WEX_REPLACED = "yingxia.replaced.";
 
     /**
-     * Wex spiders read raw drive cookies from {@code Wex_quark_cookie}, {@code Wex_ucpan_cookie} and
-     * {@code Wex_baidu_cookie} in {@link #WEX_PREFERENCES}, which only their config center fills. Each app
-     * sign-in goes there once (a digest marks what was given), so the plugin's own cookie refreshes stay
-     * until the user signs in again. A sign-in one Wex source made through its own code
-     * ({@code wexPreferences}, see OwnDriveSignIn) reaches every source the same way, also after a new jar
-     * version; one that replaced an app sign-in the plugin refused holds until the app signs in again.
+     * Wex spiders read raw drive cookies from {@code Wex_quark_cookie}, {@code Wex_ucpan_cookie},
+     * {@code Wex_baidu_cookie} and {@code Wex_pan115_cookie} in {@link #WEX_PREFERENCES}, which only their
+     * config center fills. Each app sign-in goes there once (a digest marks what was given), so the plugin's
+     * own cookie refreshes stay until the user signs in again. A sign-in one Wex source made through its own
+     * code ({@code wexPreferences}, see OwnDriveSignIn) reaches every source the same way, also after a new
+     * jar version; one that replaced an app sign-in the plugin refused holds until the app signs in again,
+     * and one made while the app had no sign-in for that drive (115) holds until the app gets one.
      */
     public static void seedWexCookies(JSONObject accounts, android.content.Context context) {
         if (accounts == null) return;
@@ -460,7 +462,7 @@ public final class CloudDriveBridge implements AutoCloseable {
             String key = String.valueOf(keys.next()), value = shared.optString(key);
             if (!key.startsWith("Wex_") || value.isEmpty()) continue;
             String field = WEX_APP_KEYS.get(key);
-            if (field != null && !digest(accounts.optString(field).trim()).equals(shared.optString(WEX_REPLACED + key))) continue;
+            if (field != null && !accountDigest(accounts.optString(field).trim()).equals(shared.optString(WEX_REPLACED + key))) continue;
             values.put(key, value);
         }
         if (values.isEmpty()) return;
@@ -492,6 +494,9 @@ public final class CloudDriveBridge implements AutoCloseable {
             System.err.println("CLOUD_ACCOUNT_SEED_FAILED " + WEX_THREAD_PROXY_MODE);
         }
     }
+
+    /** The digest of an app sign-in, or "" when there is none (what {@link #appAccountDigest} gives then). */
+    static String accountDigest(String cookie) { return cookie.isEmpty() ? "" : digest(cookie); }
 
     static String digest(String text) {
         try { return HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8))); }

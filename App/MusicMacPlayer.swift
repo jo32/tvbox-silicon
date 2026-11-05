@@ -268,6 +268,10 @@ private struct MusicMacMenu: View {
         Menu {
             if let quality = MusicMacNowPlaying.quality(music) { Text(quality) }
             if let credit = MusicMacNowPlaying.credit(music) { Text(credit) }
+            if let track = music.track {
+                FavoriteMenuButton(item: .music(track), name: track.title)
+                Divider()
+            }
             if music.sourceStream != nil {
                 Button { music.openInVideoPlayer() } label: { Label(L10n.text("Open in Video Player"), systemImage: "play.rectangle") }
             } else {
