@@ -80,8 +80,13 @@ import TVCore
     private(set) var cloudDocument: Subscription?
     @ObservationIgnored private var cloudFetchedAt: Date?
     @ObservationIgnored private var cloudFetch: Task<Void, Never>?
-    /// Sections kept out of the tab bar and sidebar until then.
-    var hiddenSections: [AppSection] { extrasUnlocked ? [] : [.music] }
+    /// Sections kept out of the tab bar and sidebar until then; Manga while no Venera comic source list
+    /// is subscribed (one is added with Add Subscription, like any other).
+    var hiddenSections: [AppSection] {
+        var hidden: [AppSection] = extrasUnlocked ? [] : [.music]
+        if MangaStore.shared.repositories.isEmpty { hidden.append(.manga) }
+        return hidden
+    }
     private let defaults: UserDefaults
     private let http = HTTPClient()
     /// Rebuilt source rows are expensive (every source is classified and copied) and Watch Now reads
@@ -317,6 +322,10 @@ import TVCore
                 let added = entries.filter { entry in !subscriptions.contains { $0.address == entry.address } }
                 subscriptions += added
                 notice = L10n.text("This address lists %lld subscriptions. They were added switched off; turn on the ones you want.", added.count)
+            case .comicSources(let count):
+                // Comic source lists feed Manga (and show it); they are listed under Subscriptions too.
+                MangaStore.shared.addRepository(url)
+                notice = L10n.text("Added a Venera comic source list (%lld sources). Choose the ones to install in Comic Sources.", count)
             case .alist(let servers):
                 // AList servers are browsed in Cloud Files, not merged as sources.
                 let saved = try AListServers.add(servers)
@@ -423,6 +432,8 @@ import TVCore
                 guard let index = subscriptions.firstIndex(where: { $0.address == entry.address }) else { continue }
                 let known = Set(subscriptions.map(\.address))
                 subscriptions.replaceSubrange(index...index, with: listed.filter { !known.contains($0.address) })
+            case .success(.comicSources):
+                subscriptionErrors[entry.address] = L10n.text("This address is now a comic source list. Add it again to use it for Manga.")
             case .success(.alist):
                 subscriptionErrors[entry.address] = L10n.text("This address is now an AList server. Add it again to browse it in Cloud Files.")
             case .failure(let error):
