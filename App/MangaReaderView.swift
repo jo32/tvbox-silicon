@@ -730,10 +730,6 @@ private struct MangaReaderChrome: View {
     let visible: Bool
     @Binding var showsChapters: Bool
     let close: () -> Void
-    #if os(macOS)
-    /// The window's own buttons (`MangaWindowButtonsReader`); nil in full screen.
-    @State private var windowButtons: MangaWindowButtons?
-    #endif
 
     var body: some View {
         VStack(spacing: 0) {
@@ -746,7 +742,7 @@ private struct MangaReaderChrome: View {
         .animation(.smooth(duration: 0.2), value: visible)
         #if os(macOS)
         .ignoresSafeArea(.container, edges: .top)
-        .background { MangaWindowButtonsReader { buttons in if windowButtons != buttons { windowButtons = buttons } } }
+        .background { MangaHidesWindowButtons() }
         #endif
     }
 
@@ -787,10 +783,9 @@ private struct MangaReaderChrome: View {
             #endif
         }
         #if os(macOS)
-        // In the title bar's row, beside the window's buttons, as Safari's toolbar is. Under the 52 pt title bar the
-        // top bar sat much further from the top edge than the bottom bar sits from the bottom.
-        .padding(.leading, windowButtons.map { $0.trailing + 14 } ?? 16).padding(.trailing, 16)
-        .padding(.top, windowButtons.map { max(4, $0.midY - Self.pillHeight / 2) } ?? 12).padding(.bottom, 10)
+        // Up in the title bar, lined up with the bottom bar. Under the 52 pt title bar the top bar sat much further
+        // from the top edge than the bottom bar sits from the bottom.
+        .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 10)
         #else
         .padding(.horizontal, 16).padding(.vertical, 10)
         #endif
@@ -887,41 +882,23 @@ private struct MangaChapterPicker: View {
 }
 
 #if os(macOS)
-/// Where the window's close, minimise and zoom buttons sit, in points from the window's top left corner.
-struct MangaWindowButtons: Equatable {
-    var trailing: CGFloat
-    var midY: CGFloat
-}
-
-/// Reports `MangaWindowButtons` for the reader's top bar. With the toolbar hidden, macOS keeps the 52 pt title bar and
-/// fades the buttons in when the pointer comes near, so the bar keeps clear of them even while they're invisible.
-/// Full screen has none: nil.
-private struct MangaWindowButtonsReader: NSViewRepresentable {
-    let report: @MainActor (MangaWindowButtons?) -> Void
-    func makeNSView(context: Context) -> Probe { Probe(report: report) }
-    func updateNSView(_ probe: Probe, context: Context) { probe.report = report }
+/// Hides the window's close, minimise and zoom buttons while the reader is open, so its top bar can sit in the title bar
+/// lined up with the bottom bar: with the toolbar hidden, macOS fades them in when the pointer comes near, over the bar's
+/// close button. The reader's own close button, Esc and Command-W still close it; the buttons come back with it.
+private struct MangaHidesWindowButtons: NSViewRepresentable {
+    func makeNSView(context: Context) -> Probe { Probe() }
+    func updateNSView(_ probe: Probe, context: Context) {}
 
     final class Probe: NSView {
-        var report: @MainActor (MangaWindowButtons?) -> Void
-        init(report: @escaping @MainActor (MangaWindowButtons?) -> Void) {
-            self.report = report
-            super.init(frame: .zero)
-        }
-        required init?(coder: NSCoder) { nil }
+        private static let kinds: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
-        override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); measure() }
-        /// Entering or leaving full screen resizes the reader too.
-        override func setFrameSize(_ size: NSSize) { super.setFrameSize(size); measure() }
-        private func measure() {
-            var buttons: MangaWindowButtons?
-            if let window, !window.styleMask.contains(.fullScreen),
-               let zoom = window.standardWindowButton(.zoomButton), !zoom.isHidden {
-                let rect = zoom.convert(zoom.bounds, to: nil)
-                buttons = MangaWindowButtons(trailing: rect.maxX, midY: window.frame.height - rect.midY)
-            }
-            // After the layout pass: state set during one is dropped with a warning.
-            let report = report
-            Task { @MainActor in report(buttons) }
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            super.viewWillMove(toWindow: newWindow)
+            show(true, in: window)
+            show(false, in: newWindow)
+        }
+        private func show(_ shown: Bool, in window: NSWindow?) {
+            for kind in Self.kinds { window?.standardWindowButton(kind)?.isHidden = !shown }
         }
     }
 }
