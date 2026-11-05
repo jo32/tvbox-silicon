@@ -45,6 +45,56 @@ public enum CatPawOpen {
         return CloudStreams.Source(url: url, headers: headers, length: Int(probe.length), name: url.lastPathComponent)
     }
 
+    /// The drive file behind a bundle's media proxy, for the app to fetch itself: then Node only signs in and resolves
+    /// the link, and the bytes of a 4K file never pass through it. Relaying them through the bundle filled the heap of
+    /// the phone's Node until it stopped (#530). Nil when the proxy doesn't reveal its link, or the link doesn't answer
+    /// with the same length and first bytes as the proxy: such a bundle strips a disguise or changes the file.
+    public static func directMedia(_ proxied: CloudStreams.Source) async -> CloudStreams.Source? {
+        guard let link = revealedLink(proxied.url) else { return nil }
+        return await sameFile(proxied, at: link.url, headers: link.headers, session: CloudByteStream.session)
+    }
+
+    /// The drive link and its headers a media proxy address carries. The 9280.kstore.vip bundle (its 4K drive sites:
+    /// 玩偶, 多多, 虎斑, 观影…) adds them to each `/proxy/<drive>/<session>` address as `pst`, base64url JSON
+    /// `{"url": …, "headers": {…}}`, so its proxy can resume a session it has forgotten.
+    static func revealedLink(_ url: URL) -> (url: URL, headers: [String: String])? {
+        guard isMediaProxy(url),
+              let value = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "pst" })?.value
+        else { return nil }
+        var base64 = value.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        base64 += String(repeating: "=", count: (4 - base64.count % 4) % 4)
+        guard let data = Data(base64Encoded: base64),
+              let fields = try? JSONDecoder().decode([String: JSONValue].self, from: data),
+              let address = fields["url"]?.string, let link = URL(string: address), ["http", "https"].contains(link.scheme ?? "")
+        else { return nil }
+        var headers: [String: String] = [:]
+        if case .object(let values)? = fields["headers"] { for (name, value) in values { headers[name] = value.string } }
+        return (link, headers)
+    }
+
+    /// `proxied` as `link` serves it, when both answer the same first bytes of a file of the same length.
+    static func sameFile(_ proxied: CloudStreams.Source, at link: URL, headers: [String: String], session: URLSession) async -> CloudStreams.Source? {
+        async let direct = head(link, headers: headers, session: session)
+        async let relayed = head(proxied.url, headers: proxied.headers, session: session)
+        guard let direct = await direct, let relayed = await relayed, direct.length == proxied.length, direct.bytes == relayed.bytes else {
+            Diagnostics.shared.record(.info, "player", "catpaw link host=\(link.host() ?? "-") differs from its proxy; streaming through the bundle")
+            return nil
+        }
+        return CloudStreams.Source(url: link, headers: headers, length: direct.length, name: proxied.name)
+    }
+
+    /// The first 16 bytes at `url` and the length of the file, from its answer to a range request.
+    private static func head(_ url: URL, headers: [String: String], session: URLSession) async -> (bytes: Data, length: Int)? {
+        var request = URLRequest(url: url)
+        headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        request.setValue("bytes=0-15", forHTTPHeaderField: "Range")
+        request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
+        guard let (data, response) = try? await session.data(for: request), let http = response as? HTTPURLResponse, http.statusCode == 206,
+              let range = http.value(forHTTPHeaderField: "Content-Range")?.firstMatch(of: /^bytes 0-(\d+)\/(\d+)$/),
+              let length = Int(range.2), length > 0, !data.isEmpty else { return nil }
+        return (data.prefix(16), length)
+    }
+
     /// A bundle's media proxy stream at the port the bundle listens on now, after iOS took back the suspended app's
     /// sockets (`EmbeddedNodeHost.relocate`, #485); nil when it hasn't moved. The Mac's Node is never suspended.
     public static func relocated(_ source: CloudStreams.Source) async -> CloudStreams.Source? {
@@ -128,15 +178,7 @@ public struct CatPawSignIn: Sendable {
     public func cancel() async { _ = try? await send("cancel") }
 
     private func send(_ step: String) async throws -> [String: JSONValue] {
-        let params = ["catLogin": step, "provider": provider, "taskId": task]
-        let site = client.site
-        #if os(macOS)
-        return try await LocalJarHost.shared.request(site: site, jarURL: site.scriptURL(origin: client.origin), params: params, http: client.http, scriptOrigin: client.origin)
-        #elseif os(iOS)
-        return try await EmbeddedNodeHost.shared.request(site: site, bundleURL: site.scriptURL(origin: client.origin), params: params, http: client.http, origin: client.origin)
-        #else
-        throw TVError.unsupported(L10n.text("This device can't run CatPawOpen sources."))
-        #endif
+        try await client.catPawRequest(["catLogin": step, "provider": provider, "taskId": task])
     }
 
     static func decode(_ png: Data) -> URL? {

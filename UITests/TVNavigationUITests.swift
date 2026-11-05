@@ -400,6 +400,47 @@ final class TVNavigationUITests: XCTestCase {
         XCTAssertTrue(focused.label.contains("few"), "Down from the right end never reached the results; went \(trail.joined(separator: " > "))")
     }
 
+    /// Back on the sidebar of any section other than Watch Now goes to Watch Now; only Back on Watch Now's sidebar
+    /// leaves the app (#499). Back from a page still moves to the sidebar first (#404).
+    func testBackOnTheSidebarGoesToWatchNowBeforeLeaving() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-qaSection", "sites", "-qaIsolatedData", "1", "-qaResetHistory", "1", "-qaSeedHistory", "qa-standard:1",
+                               "-qaSubscription", "http://127.0.0.1:8776/config.json",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        if app.buttons["OK"].waitForExistence(timeout: 20) { remote.press(.select); sleep(2) }
+        let sources = app.buttons["sources.order.toggle"], watchNow = app.buttons["home.upNext.resume"]
+        XCTAssertTrue(sources.waitForExistence(timeout: 60), "Sources did not appear")
+        sleep(3)
+        let focused = app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+        func focus() -> String { focused.exists ? "\(focused.elementType.rawValue):\(focused.identifier):\(focused.label)" : "none" }
+        func snap(_ name: String) { let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = name; shot.lifetime = .keepAlways; add(shot) }
+        // Focus starts in the page (the source filter); Back moves it to the sidebar and Sources stays.
+        let inPage = focus()
+        remote.press(.menu); sleep(2)
+        snap("sidebar on Sources")
+        XCTAssertEqual(app.state, .runningForeground, "Back from the page (focus was \(inPage)) left the app")
+        XCTAssertTrue(sources.exists, "Back from the page (focus was \(inPage)) left Sources; focus is \(focus())")
+        let onSidebar = focus()
+        // Back on Sources' sidebar goes to Watch Now.
+        remote.press(.menu)
+        let landed = watchNow.waitForExistence(timeout: 10)
+        sleep(2)
+        snap("Watch Now")
+        XCTAssertEqual(app.state, .runningForeground, "Back on Sources' sidebar (focus was \(onSidebar)) left the app")
+        XCTAssertTrue(landed && !sources.exists, "Back on Sources' sidebar (focus was \(onSidebar)) did not go to Watch Now; focus is \(focus())")
+        let onWatchNow = focus()
+        // Back on Watch Now's sidebar leaves.
+        var presses = 0, trail: [String] = []
+        for _ in 0..<4 where app.state == .runningForeground {
+            remote.press(.menu); presses += 1
+            for _ in 0..<6 where app.state == .runningForeground { sleep(1) }
+            if app.state == .runningForeground { trail.append(focus()); snap("after \(presses)") }
+        }
+        XCTAssertEqual(presses, 1, "Back on Watch Now's sidebar (focus was \(onWatchNow)) left after \(presses) presses: \(trail) state \(app.state.rawValue)")
+    }
+
     /// Poster titles are part of their card's label, so look for the text anywhere in a label.
     private func shown(_ text: String, in app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch

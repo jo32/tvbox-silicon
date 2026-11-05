@@ -65,7 +65,9 @@ public struct DanmakuResolver: Sendable {
         }
         return result
     }
-    public func resolve(_ context: PlaybackHistoryContext, ticket: MediaCache.Ticket? = nil) async throws -> AutomaticDanmakuResult {
+    /// `first` is asked before the comment servers: the source's own comments (a CatPawOpen bundle's, #506), or nil.
+    public func resolve(_ context: PlaybackHistoryContext, ticket: MediaCache.Ticket? = nil,
+                        first: (@Sendable (PlaybackHistoryContext) async -> AutomaticDanmakuResult?)? = nil) async throws -> AutomaticDanmakuResult {
         let ticket = ticket ?? cache.ticket()
         let key = Self.episodeKey(context)
         if let data = cache.data(for: key, kind: .danmaku, scope: context.id),
@@ -73,6 +75,11 @@ public struct DanmakuResolver: Sendable {
            ["loaded", "unmatched", "unavailable"].contains(result.state) {
             result.cached = true; return result
         }
+        if let first, let result = await first(context), !result.comments.isEmpty {
+            try Task.checkCancellation()
+            return keep(result, context: context, ticket: ticket)
+        }
+        try Task.checkCancellation()
         let lookupKey = lookupKey(context)
         var mappings = cache.data(for: lookupKey, kind: .lookup).flatMap { try? JSONDecoder().decode([DanmakuMapping].self, from: $0) } ?? []
         let saved = mappings
