@@ -144,33 +144,20 @@ enum HTMLText {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// A synopsis (`vod_content`): HTML stripped and, unlike `plain`, the leftover noise that
-    /// crawlers pack into the field is removed — bare `http(s)://…` and `www.…` addresses, the
-    /// 「线路N / 播放线路 / 高清线路」 labels, and the boilerplate 「本站最新网址 / 永久域名 /
-    /// 弹幕合集」 lines a lot of aggregators append. It keeps the real plot text, so a description
-    /// that only held noise collapses to empty (and the caller falls back gracefully).
+    /// A synopsis (`vod_content`): `plain`, minus the lines that hold nothing but a 线路 label ("线路1", "播放线路")
+    /// or a quality word ("蓝光", "1080P"), which aggregator pages leave behind as layout. Everything else is the
+    /// provider's own text and stays as written, links and promotion included: a plugin's synopsis can carry the
+    /// address the app opens (the Wex config center, #360), and a plot can mention 地址 or 弹幕.
     static func synopsis(_ html: String) -> String {
         let text = plain(html)
-        return text.split(whereSeparator: \.isNewline).map { line in
-            var s = String(line)
-            // Strip a public URL and anything it drags along: "最新网址 http://x.com" -> "最新网址 ".
-            // `127.0.0.1`/`localhost` are the app's own addresses (CatPawOpen config center), so they stay.
-            s = s.replacingOccurrences(of: "(?i)https?:\\/\\/(?!127\\.0\\.0\\.1|localhost)[^\\s\u{3000}]+", with: " ", options: .regularExpression)
-            s = s.replacingOccurrences(of: "(?i)(?:www\\.|m\\.)[a-z0-9\\-]+(?:\\.[a-z0-9\\-]+)+", with: " ", options: .regularExpression)
-            // The 「线路N / 播放线路 / 高清线路」 labels a line may carry on its own.
-            s = s.replacingOccurrences(of: "(?i)^[\\s\u{3000}]*(?:播放|高清|蓝光|超清|备用|高速)?[\\s\u{3000}]*线路[一二三四五六七八九十0-9]*[:：]?[\\s\u{3000}]*$", with: " ", options: .regularExpression)
-            // A bare quality label ("蓝光", "1080P", "4K") with no plot text is noise too.
-            s = s.replacingOccurrences(of: "(?i)^[\\s\u{3000}]*(?:超清|高清|蓝光|标清|流畅|4[kK]|1080[pP]|720[pP]|2160[pP])[\\s\u{3000}]*$", with: " ", options: .regularExpression)
-            // Boilerplate aggregators append.
-            s = s.replacingOccurrences(of: "(?i)(?:本站)?(?:最新|永久|备用)?(?:网址|地址|域名)[:：]?", with: " ", options: .regularExpression)
-            s = s.replacingOccurrences(of: "(?i)永久(?:域名|网址|地址)[:：]?", with: " ", options: .regularExpression)
-            s = s.replacingOccurrences(of: "(?i)(?:含|带|有)?弹幕(?:合集|版|版本)?", with: " ", options: .regularExpression)
-            return s.replacingOccurrences(of: "[ \\t\\u{00A0}\\u{3000}]+", with: " ", options: .regularExpression)
-                .trimmingCharacters(in: .whitespaces)
-        }
-        .filter { !$0.isEmpty && !$0.allSatisfy { $0 == ":" || $0 == "：" } }
-        .joined(separator: "\n")
+        return text.split(separator: "\n").filter { line in
+            line.count > 12 || layoutLabel.firstMatch(in: String(line), range: NSRange(line.startIndex..., in: line)) == nil
+        }.joined(separator: "\n")
     }
+    /// A whole line that is only a 线路 label or a quality word. Anchored at both ends, so plot text never matches.
+    private static let layoutLabel = try! NSRegularExpression(
+        pattern: "^\\s*(?:(?:播放|高清|蓝光|超清|备用|高速)?\\s*线路[一二三四五六七八九十0-9]*[:：]?|超清|高清|蓝光|标清|流畅|4k|1080p|720p|2160p)\\s*$",
+        options: [.caseInsensitive])
 
     /// A title or name: entities decoded ("太阳&amp;月亮" is "太阳&月亮"), spaces tidied, and nothing else touched,
     /// so a name that reads like markup after decoding ("&lt;3") keeps its text.
