@@ -1245,25 +1245,43 @@ struct RecommendationsView: View {
             }
             LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
                 ForEach(browser.videos) { video in
-                    if isIndex {
-                        Button { store.searchVideos(video.name) } label: { PosterCard(video: video) }.cardButton()
-                    } else {
-                        RouteLink { CatalogDestination(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
+                    Group {
+                        if isIndex {
+                            Button { store.searchVideos(video.name) } label: { PosterCard(video: video) }.cardButton()
+                        } else {
+                            RouteLink { CatalogDestination(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
+                        }
+                    }
+                    .onAppear {
+                        // The last cover coming on screen appends the next page, so scrolling never stops
+                        // at a page boundary. A failed page waits for the footer's Retry instead.
+                        guard browser.moreError == nil, video.id == browser.videos.last?.id else { return }
+                        Task { await browser.loadMore(client: client) }
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .opacity(browser.busy ? 0.55 : 1)
             .tvFocusSection()
-            if browser.pageCount > 1 {
-                HStack(spacing: 12) {
-                    Button { categoryPage -= 1 } label: { Image(systemName: "chevron.left").frame(width: 22) }
-                        .controlButton().disabled(categoryPage <= 1 || browser.busy).accessibilityLabel(L10n.text("Previous"))
-                    Text(L10n.text("Page %lld of %lld", browser.page, browser.pageCount)).font(.subheadline.weight(.medium).monospacedDigit())
-                    Button { categoryPage += 1 } label: { Image(systemName: "chevron.right").frame(width: 22) }
-                        .controlButton().disabled(categoryPage >= browser.pageCount || browser.busy).accessibilityLabel(L10n.text("Next"))
+            if browser.moreError != nil || browser.loadingMore || browser.hasMore {
+                if let message = browser.moreError {
+                    VStack(spacing: 12) {
+                        Text(message).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        Button(L10n.text("Try Again")) { Task { await browser.loadMore(client: client) } }
+                            .controlButton()
+                            .accessibilityIdentifier("recommendations.loadMore.retry")
+                    }
+                    .frame(maxWidth: .infinity).padding(.vertical, 16)
+                } else if browser.loadingMore {
+                    ProgressView().controlSize(.large)
+                        .frame(maxWidth: .infinity).padding(.vertical, 24)
+                        .accessibilityLabel(L10n.text("Loading…"))
+                } else if browser.hasMore {
+                    Button(L10n.text("Load More")) { Task { await browser.loadMore(client: client) } }
+                        .controlButton()
+                        .frame(maxWidth: .infinity).padding(.vertical, 16)
+                        .accessibilityIdentifier("recommendations.loadMore")
                 }
-                .frame(maxWidth: .infinity).tvFocusSection()
             }
         }
     }
