@@ -387,6 +387,7 @@
 "This source needs an Android feature that isn't supported yet: %@." = "このソースには未対応のAndroid機能が必要です：%@。";
 "This plugin couldn't be prepared on this device (missing %@)." = "この端末でプラグインを準備できませんでした（%@ がありません）。";
 "This plugin couldn't be prepared on this device (%@ could not be converted)." = "この端末でプラグインを準備できませんでした（%@ を変換できませんでした）。";
+"The source says: %@" = "ソースからのメッセージ：%@";
 "The source's plugin crashed. The site may have changed; try another source." = "ソースのプラグインがクラッシュしました。サイトが変更された可能性があります。別のソースをお試しください。";
 
 /* Loading status */

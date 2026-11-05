@@ -387,6 +387,7 @@
 "This source needs an Android feature that isn't supported yet: %@." = "此來源需要尚未支援的 Android 功能：%@。";
 "This plugin couldn't be prepared on this device (missing %@)." = "無法在本機準備此外掛（缺少 %@）。";
 "This plugin couldn't be prepared on this device (%@ could not be converted)." = "無法在本機準備此外掛（%@ 轉換失敗）。";
+"The source says: %@" = "來源提示：%@";
 "The source's plugin crashed. The site may have changed; try another source." = "此來源的外掛崩潰了，網站可能已變更。請換一個來源。";
 
 /* Loading status */

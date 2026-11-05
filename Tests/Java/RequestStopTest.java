@@ -44,6 +44,14 @@ public final class RequestStopTest {
         var envelope = tvbox.runtime.NativeProbe.failure(thrown);
         check("source_timeout".equals(envelope.optString("errorCode")), "Stop was not reported as a timeout: " + envelope);
 
+        // A plain Exception with a Chinese message is the plugin telling the viewer why (#408), not a crash.
+        var told = tvbox.runtime.NativeProbe.failure(new java.lang.reflect.InvocationTargetException(Thrower.plain("还没有配置115 Cookie，请先到配置中心登录")));
+        check("plugin_message".equals(told.optString("errorCode")) && "还没有配置115 Cookie，请先到配置中心登录".equals(told.optString("message")), "The plugin's message was not passed on: " + told);
+        var crashed = tvbox.runtime.NativeProbe.failure(new java.lang.reflect.InvocationTargetException(Thrower.plain("Index 3 out of bounds")));
+        check("plugin_crash".equals(crashed.optString("errorCode")), "A crash was taken for a message: " + crashed);
+        var npe = tvbox.runtime.NativeProbe.failure(new java.lang.reflect.InvocationTargetException(Thrower.npe("解析")));
+        check("plugin_crash".equals(npe.optString("errorCode")), "Only a plain Exception carries a message: " + npe);
+
         // A request without a deadline or cancel is never stopped by the host.
         var quick = new PluginSession(new QuickSpider());
         check(quick.request(new JSONObject().put("ids", "1")).contains("vod_id"), "Unstopped request failed");
@@ -275,5 +283,11 @@ public final class RequestStopTest {
 
     public static final class QuickSpider extends com.github.catvod.crawler.Spider {
         @Override public String detailContent(List<String> ids) { return "{\"list\":[{\"vod_id\":\"1\"}]}"; }
+    }
+
+    /** Exceptions made in "plugin" code, as their first stack frame shows. */
+    static final class Thrower {
+        static Exception plain(String message) { return new Exception(message); }
+        static NullPointerException npe(String message) { return new NullPointerException(message); }
     }
 }
