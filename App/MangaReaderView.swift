@@ -574,9 +574,12 @@ private struct MangaReaderChrome: View {
         let page = min(model.position.page + 1, count)
         let track: CGFloat = 420
         return HStack(spacing: 24) {
-            Capsule().fill(.white.opacity(0.25)).frame(width: track, height: 8)
-                .overlay(alignment: model.mode == .rightToLeft ? .trailing : .leading) {
-                    Capsule().fill(.white).frame(width: track * CGFloat(page) / CGFloat(count), height: 8)
+            // Fills from the left in every reading mode, as progress bars do on the TV: filled from the right for
+            // right-to-left comics, page 1 was a tick at the far end and read as the last page. The empty track stays dark
+            // so it doesn't pass for filled over a white page.
+            Capsule().fill(.black.opacity(0.35)).frame(width: track, height: 8)
+                .overlay(alignment: .leading) {
+                    Capsule().fill(.white).frame(width: max(track * CGFloat(page) / CGFloat(count), 8), height: 8)
                 }
             Text("\(page) / \(count)").font(.system(size: 26, weight: .semibold).monospacedDigit()).foregroundStyle(.white)
         }
