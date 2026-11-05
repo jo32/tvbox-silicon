@@ -420,6 +420,7 @@ public struct CatalogClient: Sendable {
     public func preparePlayback(_ episode: Episode, forDownload: Bool = false) async throws -> PlaybackPlan {
         var headers = site.raw["header"]?.object?.compactMapValues(\.string) ?? [:]
         if site.type == 4 || site.type == 3 {
+            if !forDownload { CatPawDanmaku.remember(self) }
             var params = ["play": episode.address, "flag": episode.flag]
             if site.type == 3 { params["detailID"] = episode.videoID }
             let result = try await request(params)
