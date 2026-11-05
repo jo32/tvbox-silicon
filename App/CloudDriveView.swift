@@ -99,10 +99,10 @@ struct CloudLoginView: View {
     /// Cookie text, and Quark's approved sign-in ticket when the page opened one.
     let save: (String, String?) async throws -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var webView: WKWebView = {
+    @State private var webView: PageFittingWebView = {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
-        return WKWebView(frame: .zero, configuration: configuration)
+        return PageFittingWebView(frame: .zero, configuration: configuration)
     }()
     @State private var error: String?
     @State private var loading = true
@@ -144,7 +144,9 @@ struct CloudLoginView: View {
             CloudLoginBrowser(webView: webView, provider: provider, error: $error, loading: $loading, ticket: $ticket)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 900, height: 680)
+        // The drive's page is a desktop site: the sheet opens at 900 × 680 and can be made bigger (#498).
+        .frame(minWidth: 640, idealWidth: 900, maxWidth: .infinity, minHeight: 480, idealHeight: 680, maxHeight: .infinity)
+        .background { ResizableSheet(size: CGSize(width: 900, height: 680)) }
     }
 
     /// Saves once the page has a drive cookie. Quark also waits briefly for the sign-in ticket the page
@@ -180,8 +182,55 @@ struct CloudLoginView: View {
         }
     }
 }
+/// Lets the person resize the sheet it is in. SwiftUI's sheets on the Mac keep the size they open at, even when the content
+/// could grow; this opens the window at `size` and gives it a resize edge. (SwiftUI keeps the window's minimum at zero, so
+/// the content's own minimum frame is what stops it shrinking.)
+private struct ResizableSheet: NSViewRepresentable {
+    let size: CGSize
+    func makeNSView(context: Context) -> NSView { WindowFinder(size: size) }
+    func updateNSView(_ view: NSView, context: Context) {}
+    private final class WindowFinder: NSView {
+        let size: CGSize
+        private var done = false
+        init(size: CGSize) { self.size = size; super.init(frame: .zero) }
+        required init?(coder: NSCoder) { nil }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard window != nil, !done else { return }
+            done = true
+            // After SwiftUI has set the sheet up: it sets the window's style and size as it presents it.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let window = self.window else { return }
+                window.styleMask.insert(.resizable)
+                window.setContentSize(self.size)
+            }
+        }
+    }
+}
+
+/// A web view that zooms a page out until its width fits, and back in as the view grows. UC's sign-in page is 1,260
+/// points wide with the sign-in box and its code at the right, so in the 900-point sheet the code was off screen (#498).
+final class PageFittingWebView: WKWebView {
+    /// The page's width in CSS pixels, once it turned out wider than the view; nil fits nothing.
+    var pageWidth: CGFloat? { didSet { fit() } }
+    override func layout() {
+        super.layout()
+        fit()
+    }
+    /// A new page lays out at full size and is measured again.
+    func reset() {
+        pageWidth = nil
+        if pageZoom != 1 { pageZoom = 1 }
+    }
+    private func fit() {
+        guard let pageWidth, pageWidth > 0, bounds.width > 0 else { return }
+        let zoom = max(0.5, min(1, bounds.width / pageWidth))
+        if abs(pageZoom - zoom) > 0.005 { pageZoom = zoom }
+    }
+}
+
 private struct CloudLoginBrowser: NSViewRepresentable {
-    let webView: WKWebView
+    let webView: PageFittingWebView
     let provider: CloudProvider
     @Binding var error: String?
     @Binding var loading: Bool
@@ -194,6 +243,10 @@ private struct CloudLoginBrowser: NSViewRepresentable {
             content.add(context.coordinator, name: Self.ticketMessage)
             content.addUserScript(WKUserScript(source: Self.catchTicket, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
+        let content = webView.configuration.userContentController
+        content.removeScriptMessageHandler(forName: Self.widthMessage)
+        content.add(context.coordinator, name: Self.widthMessage)
+        content.addUserScript(WKUserScript(source: Self.measureWidth, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         webView.navigationDelegate = context.coordinator
         webView.load(URLRequest(url: provider.url))
         return webView
@@ -201,6 +254,21 @@ private struct CloudLoginBrowser: NSViewRepresentable {
     func updateNSView(_ view: WKWebView, context: Context) {}
 
     static let ticketMessage = "signInTicket"
+    static let widthMessage = "pageWidth"
+
+    /// Reports how wide the page is and how wide its window is, in CSS pixels, once it has loaded and drawn.
+    static let measureWidth = """
+    (function () {
+      var tries = 0;
+      var timer = setInterval(function () {
+        if (document.readyState !== 'complete' && ++tries < 80) return;
+        clearInterval(timer);
+        setTimeout(function () {
+          window.webkit.messageHandlers.\(widthMessage).postMessage({ page: document.documentElement.scrollWidth, view: window.innerWidth });
+        }, 600);
+      }, 250);
+    })();
+    """
 
     /// Reports Quark's sign-in ticket from the sign-in frame, or from the page's request to /account/info?st=.
     static let catchTicket = """
@@ -234,11 +302,20 @@ private struct CloudLoginBrowser: NSViewRepresentable {
             decisionHandler(.allow)
         }
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+            if message.name == CloudLoginBrowser.widthMessage {
+                // Wider than its window: zoom out to the page's width (a page that fits stays as it is).
+                guard let body = message.body as? [String: Any], let web = message.webView as? PageFittingWebView,
+                      let page = (body["page"] as? NSNumber)?.doubleValue, let view = (body["view"] as? NSNumber)?.doubleValue,
+                      page > view + 1 else { return }
+                web.pageWidth = max(web.pageWidth ?? 0, page)
+                return
+            }
             guard message.name == CloudLoginBrowser.ticketMessage, let found = message.body as? String, !found.isEmpty, found != ticket else { return }
             ticket = found
             Diagnostics.shared.record(.info, "cloud.signin", "\(provider.rawValue) page passed its sign-in ticket")
         }
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { loading = true }
+        func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) { (webView as? PageFittingWebView)?.reset() }
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loading = false }
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError failure: Error) { loading = false; error = failure.localizedDescription }
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError failure: Error) { loading = false; error = failure.localizedDescription }
