@@ -291,6 +291,9 @@ enum QALaunch {
                     LivePlatformView(platform: platform, initialQuery: UserDefaults.standard.string(forKey: "qaQuery") ?? "")
                 }
             case "danmaku-list": QADanmakuList()
+            #if !os(tvOS)
+            case "danmaku-settings": QADanmakuSettings()
+            #endif
             // `-qaPage cloud-login:<quark|uc|baidu|aliyun>`; `cloud-accounts` shows the accounts page.
             case "cloud-login": CloudQRLoginView(drive: parts.dropFirst().first.flatMap(CloudDriveQRLogin.Drive.init(rawValue:)) ?? .quark) {}
             case "cloud-accounts": CloudDriveView()
@@ -330,7 +333,7 @@ enum QALaunch {
 
     static func overrides(_ section: AppSection) -> Bool {
         guard section == self.section, let page else { return false }
-        return ["site", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "cloud-login", "cloud-accounts", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add"].contains(page.split(separator: ":").first.map(String.init) ?? "")
+        return ["site", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "cloud-login", "cloud-accounts", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add"].contains(page.split(separator: ":").first.map(String.init) ?? "")
     }
 }
 
@@ -494,6 +497,20 @@ enum QASweep {
 }
 
 private extension Int { var nonZero: Int? { self == 0 ? nil : self } }
+
+#if !os(tvOS)
+/// `-qaPage danmaku-settings`: the player's Danmaku sheet over a page's player, which makes only its own views dark.
+private struct QADanmakuSettings: View {
+    @State private var model = CatalogDanmakuModel()
+    var body: some View {
+        Color.black.ignoresSafeArea()
+            .sheet(isPresented: .constant(true)) {
+                CatalogDanmakuSettingsView(model: model, channelName: "仙逆 · 第01集").playerSheet()
+            }
+            .environment(\.colorScheme, .dark)
+    }
+}
+#endif
 
 /// `-qaPage danmaku-list`: the player's 弹幕 tab with sample comments, to check the focused row.
 private struct QADanmakuList: View {
