@@ -629,6 +629,7 @@ import TVCore
                 return
             }
             guard let remuxed else {
+                self.checkingPicture = false
                 self.restorePositionIfNeeded(item)
                 self.loading = self.pendingResume != nil || self.restoringPosition
                 if self.pendingResume == nil { self.player.play() }
@@ -715,9 +716,10 @@ import TVCore
                     Task { [weak self] in
                         let refused = await Self.recordVideoFormat(item)
                         guard let self, self.generation == activeGeneration, self.item === item, self.checkingPicture else { return }
-                        self.checkingPicture = false
+                        // While it is repackaged, `checkingPicture` stays on: the once-a-second resume would otherwise
+                        // jump to the saved position and play this item's sound with no picture until then (#515).
                         if Remux.showsPicture(refused) { self.repackage(item, channel: channel, url: url, generation: activeGeneration) }
-                        else { self.restorePositionIfNeeded(item) }
+                        else { self.checkingPicture = false; self.restorePositionIfNeeded(item) }
                     }
                     self.checkSegmentedPicture(item, channel: channel, url: url, generation: activeGeneration)
                 }

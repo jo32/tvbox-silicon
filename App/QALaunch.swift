@@ -115,9 +115,11 @@ enum QALaunch {
                 store.playing = Channel(name: "Live \(room)", group: platform.name, url: url)
             }
         }
-        // `-qaPlayURL <address>` plays a media link as it is (an MKV on a local server, say).
+        // `-qaPlayURL <address>` plays a media link as it is (an MKV on a local server, say); with `-qaResume <seconds>`,
+        // from there, as a saved position resumes.
         if let address = UserDefaults.standard.string(forKey: "qaPlayURL"), let url = URL(string: address) {
-            store.playing = Channel(name: url.lastPathComponent, group: "QA", url: url)
+            let resume = UserDefaults.standard.double(forKey: "qaResume")
+            store.playing = Channel(name: url.lastPathComponent, group: "QA", url: url, resumePosition: resume > 0 ? resume : nil)
         }
         // `-qaPlay <site key>:<video id>[:<episode index>]` opens that source's video in the player.
         if let target = UserDefaults.standard.string(forKey: "qaPlay"), let config = store.subscription {
