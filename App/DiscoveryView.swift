@@ -163,6 +163,9 @@ struct GlobalSearchView: View {
                                       spacing: listed ? Layout.gridSpacing : Layout.gridRowSpacing) {
                                 resultLinks(config)
                             }.scrollTargetLayout()
+                            // A single row of results leaves nothing under the right of the rows above; as a section the
+                            // remote still moves Down onto it (#481).
+                            .tvFocusSection()
                             // Scrolling the end into view asks for the next page; while it stays in view each new page asks again.
                             if model.canLoadMore(model.selectedSource) || model.loadingMore {
                                 ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24)
@@ -295,6 +298,9 @@ struct GlobalSearchView: View {
                             }
                         }
                     }
+                    // The chips sit at the left, under the field and the summary row's far end: as a section, Down
+                    // from anywhere above lands on them (#481).
+                    .focusSection()
                     #else
                     SourceStrip(items: sourceItems.map { .init(id: $0.id, name: $0.name, count: $0.count, dot: $0.dot) }, selection: model.selectedSource ?? "") { id in
                         model.select(id.isEmpty ? nil : id)

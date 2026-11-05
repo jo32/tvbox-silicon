@@ -136,7 +136,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send({'class':categories,'list':[],'pagecount':1})
             pg=int(q.get('pg','1'))
             title=q.get('wd') or ('剧集' if q.get('t')=='series' else '测试影片')
-            videos=[{'vod_id':str((pg-1)*12+i),'vod_name':f'{title} {i:02d}', 'vod_pic':base+'/poster.png','vod_remarks':'更新至 36 集' if i%2 else '1080P'} for i in range(1,13)]
+            # Searching "few" finds two videos per source and one page: Global Search's results fit in one row.
+            few=q.get('wd','').startswith('few')
+            videos=[{'vod_id':str((pg-1)*12+i),'vod_name':f'{title} {i:02d}', 'vod_pic':base+'/poster.png','vod_remarks':'更新至 36 集' if i%2 else '1080P'} for i in range(1,3 if few else 13)]
             if path=='/index':
                 videos=[{'vod_name':'测试影片','vod_pic':base+'/poster.png','vod_remarks':'7.8'},{'vod_name':'剧集','vod_pic':base+'/poster.png'}]
             # 电影 has TVBox filters (地区, 年份, 排序), for the category filter chips.
@@ -144,7 +146,7 @@ class Handler(BaseHTTPRequestHandler):
             filters={'movies':[{'key':'area','name':'地区','value':option(['全部','中国大陆','中国香港','中国台湾','美国','日本','韩国','泰国','印度','其他'])},
                 {'key':'year','name':'年份','value':option(['全部']+[str(y) for y in range(2026,1999,-1)]+['更早'])},
                 {'key':'by','name':'排序','value':[{'n':'最新','v':'time'},{'n':'最热','v':'hits'},{'n':'评分','v':'score'}]}]}
-            return self.send({'class':categories,'filters':filters,'list':videos,'pagecount':3 if path!='/index' else 1})
+            return self.send({'class':categories,'filters':filters,'list':videos,'pagecount':3 if path!='/index' and not few else 1})
         return self.send('Not found',404,'text/plain')
 
 print(f'QA subscription: {base}/config.json',flush=True)
