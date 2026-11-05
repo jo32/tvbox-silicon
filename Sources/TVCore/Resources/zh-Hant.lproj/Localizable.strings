@@ -697,6 +697,8 @@
 // Multiple subscriptions and source health.
 "Subscriptions" = "訂閱";
 "Add Subscription" = "新增訂閱";
+"Add This Subscription?" = "加入這個訂閱？";
+"A page can only ask: Yingxia adds this subscription after you agree, never on its own." = "網頁只能提出請求：確認後映匣才會加入這個訂閱，不會自行加入。";
 "Refresh All" = "全部更新";
 "Move Up" = "上移";
 "Move Down" = "下移";

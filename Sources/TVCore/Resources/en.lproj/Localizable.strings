@@ -698,6 +698,8 @@
 // Multiple subscriptions and source health.
 "Subscriptions" = "Subscriptions";
 "Add Subscription" = "Add Subscription";
+"Add This Subscription?" = "Add This Subscription?";
+"A page can only ask: Yingxia adds this subscription after you agree, never on its own." = "A page can only ask: Yingxia adds this subscription after you agree, never on its own.";
 "Refresh All" = "Refresh All";
 "Move Up" = "Move Up";
 "Move Down" = "Move Down";

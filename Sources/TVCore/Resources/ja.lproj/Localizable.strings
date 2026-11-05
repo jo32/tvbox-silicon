@@ -697,6 +697,8 @@
 // Multiple subscriptions and source health.
 "Subscriptions" = "配信設定";
 "Add Subscription" = "配信設定を追加";
+"Add This Subscription?" = "この購読を追加しますか？";
+"A page can only ask: Yingxia adds this subscription after you agree, never on its own." = "ページは依頼しかできません。確認したときにだけ、この購読を追加します。";
 "Refresh All" = "すべて更新";
 "Move Up" = "上へ移動";
 "Move Down" = "下へ移動";
