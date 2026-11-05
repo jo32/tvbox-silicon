@@ -281,7 +281,9 @@ struct HistoryCard: View {
             Text(entry.context.videoName).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
                 .cardCaption()
             if details {
-                Text("\(entry.context.episodeName) · \(SourceLabel(entry.context.sourceName).text)")
+                // The stored name is often a netdisk line; the row says which episode it is (#522).
+                let episode = EpisodeLabels.labels(names: [entry.context.episodeName])?.first ?? entry.context.episodeName
+                Text("\(episode) · \(SourceLabel(entry.context.sourceName).text)")
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
                 Text(HistoryFormat.status(entry)).font(.caption).monospacedDigit().foregroundStyle(.tertiary).lineLimit(1)
                     .cardCaption()
