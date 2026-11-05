@@ -16,6 +16,7 @@ public struct CategoryFilter: Identifiable, Hashable, Sendable {
     public struct Option: Hashable, Sendable {
         public let name: String
         public let value: String
+        public init(name: String, value: String) { self.name = name; self.value = value }
     }
     public let key: String
     public let name: String

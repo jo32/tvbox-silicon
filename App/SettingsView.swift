@@ -409,6 +409,11 @@ struct FormSettingsView: View {
                         SubscriptionDetailView(entry: entry)
                     }
                 }
+                ForEach(MangaStore.shared.repositories, id: \.self) { url in
+                    FormLink(symbol: "books.vertical.fill", tint: .orange, title: MangaSources.title(of: url), value: L10n.text("Manga")) {
+                        MangaRepositoryView(url: url)
+                    }
+                }
                 if store.subscriptions.count > 1 {
                     FormLink(symbol: "trash.fill", tint: .red, title: L10n.text("Remove Subscriptions")) { RemoveSubscriptionsView() }
                 }
@@ -447,6 +452,18 @@ struct FormSettingsView: View {
                 #endif
             } footer: {
                 if let message = store.importError ?? store.notice { Text(message) }
+            }
+
+            if !MangaStore.shared.repositories.isEmpty {
+                Section {
+                    let sources = MangaStore.shared.sources
+                    FormLink(symbol: "books.vertical.fill", tint: .orange, title: L10n.text("Comic Sources"),
+                             value: sources.isEmpty ? nil : String(sources.count)) { MangaSourcesView() }
+                } header: {
+                    Text(L10n.text("Manga"))
+                } footer: {
+                    Text(L10n.text("Manga shows while a Venera comic source list is among your subscriptions."))
+                }
             }
 
             Section(L10n.text("Accounts")) {
@@ -1539,6 +1556,7 @@ struct TVSettingsView: View {
                 TVSettingsLink(title: L10n.text("Telegram Group")) { TelegramGroupView() }
             }
             subscriptionSection
+            if !MangaStore.shared.repositories.isEmpty { comicSection }
             TVSettingsSection(title: L10n.text("Accounts")) {
                 if store.extrasUnlocked {
                     TVSettingsLink(title: L10n.text("Bilibili"), value: bilibiliSummary) { BilibiliAccountView() }
@@ -1605,11 +1623,21 @@ struct TVSettingsView: View {
         return L10n.text("With your phone on the same network, tap the TV button in a Bilibili video and choose %@.", L10n.text("Yingxia")) + "\n" + phones
     }
 
+    private var comicSection: some View {
+        TVSettingsSection(title: L10n.text("Manga"), footer: L10n.text("Manga shows while a Venera comic source list is among your subscriptions.")) {
+            let sources = MangaStore.shared.sources
+            TVSettingsLink(title: L10n.text("Comic Sources"), value: sources.isEmpty ? nil : String(sources.count)) { MangaSourcesView() }
+        }
+    }
+
     private var subscriptionSection: some View {
         TVSettingsSection(title: L10n.text("Subscriptions"), footer: store.notice) {
             ForEach(store.subscriptions) { entry in
                 let failed = store.subscriptionErrors[entry.address] != nil
                 TVSettingsLink(title: entry.title, value: store.subscriptionValue(entry), warning: failed) { TVSubscriptionPage(entry: entry) }
+            }
+            ForEach(MangaStore.shared.repositories, id: \.self) { url in
+                TVSettingsLink(title: MangaSources.title(of: url), value: L10n.text("Manga")) { MangaRepositoryView(url: url) }
             }
             TVSettingsLink(title: L10n.text("Add Subscription")) { TVAddSubscriptionPage() }
             if store.subscriptions.count > 1 { TVSettingsLink(title: L10n.text("Remove Subscriptions")) { TVRemoveSubscriptionsPage() } }
