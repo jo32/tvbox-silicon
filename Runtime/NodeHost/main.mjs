@@ -300,6 +300,19 @@ async function call(instance, params) {
     return { result: shown ? withPage(result, shown) : result };
 }
 
+// A bundle's media proxy address from before a relisten, at the port that bundle listens on now: a stream that was
+// playing when iOS suspended the app asks again there (#485). The address as it is when no bundle had its port.
+async function relocate(address) {
+    const url = new URL(address);
+    for (const pending of bundles.values()) {
+        const instance = await pending.catch(() => null);
+        if (!instance?.ports.includes(Number(url.port))) continue;
+        url.port = String(instance.port);
+        return url.toString();
+    }
+    return address;
+}
+
 const control = http.createServer(async (req, res) => {
     const reply = body => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
     if (req.method !== 'POST' || req.url !== '/call' || req.headers['x-yingxia-token'] !== token) { res.writeHead(403); res.end(); return; }
@@ -307,6 +320,7 @@ const control = http.createServer(async (req, res) => {
         const chunks = [];
         for await (const chunk of req) chunks.push(chunk);
         const input = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        if (input.relocate) { reply({ result: await relocate(String(input.relocate)) }); return; }
         proxy = input.proxy?.host ? { host: input.proxy.host, port: Number(input.proxy.port), exceptions: input.proxy.exceptions || [] } : null;
         let instance = bundles.get(input.bundle);
         if (!instance) {

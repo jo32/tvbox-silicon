@@ -88,6 +88,10 @@ struct MusicNowPlayingScreen: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Menu {
+                if let track = music.track {
+                    FavoriteMenuButton(item: .music(track), name: track.title)
+                    Divider()
+                }
                 if music.sourceStream != nil {
                     Button { music.openInVideoPlayer() } label: { Label(L10n.text("Open in Video Player"), systemImage: "play.rectangle") }
                 } else {

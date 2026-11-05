@@ -163,6 +163,9 @@ struct GlobalSearchView: View {
                                       spacing: listed ? Layout.gridSpacing : Layout.gridRowSpacing) {
                                 resultLinks(config)
                             }.scrollTargetLayout()
+                            // A single row of results leaves nothing under the right of the rows above; as a section the
+                            // remote still moves Down onto it (#481).
+                            .tvFocusSection()
                             // Scrolling the end into view asks for the next page; while it stays in view each new page asks again.
                             if model.canLoadMore(model.selectedSource) || model.loadingMore {
                                 ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24)
@@ -295,6 +298,9 @@ struct GlobalSearchView: View {
                             }
                         }
                     }
+                    // The chips sit at the left, under the field and the summary row's far end: as a section, Down
+                    // from anywhere above lands on them (#481).
+                    .focusSection()
                     #else
                     SourceStrip(items: sourceItems.map { .init(id: $0.id, name: $0.name, count: $0.count, dot: $0.dot) }, selection: model.selectedSource ?? "") { id in
                         model.select(id.isEmpty ? nil : id)
@@ -790,7 +796,6 @@ struct RecommendationsView: View {
     #endif
     /// The source category shown instead of its recommendations; nil shows the recommendations.
     @State private var category: String?
-    @State private var categoryPage = 1
     /// The open category's filter choices (key to value), set with `category`.
     @State private var categoryFilters: [String: String] = [:]
     /// The source `category` belongs to. A source change clears it inside the load task, which is the last writer.
@@ -958,7 +963,6 @@ struct RecommendationsView: View {
     /// Leaving this source drops its open category before the new home loads.
     private func choose(_ candidate: Site) {
         category = nil
-        categoryPage = 1
         sourceKey = candidate.key
         revision = 0
         forceRefresh = false
@@ -981,7 +985,7 @@ struct RecommendationsView: View {
                     SourceStrip(items: sites.map { .init(id: $0.key, name: $0.name) }, selection: site.key) { key in
                         // Clear before the key changes. The load task opens a category-only home after it returns;
                         // an onChange that also clears would run after a cached load and wipe that category.
-                        if key != sourceKey { category = nil; categoryPage = 1 }
+                        if key != sourceKey { category = nil }
                         sourceKey = key; revision = 0; forceRefresh = false
                     } actions: { key in
                         AnyView(sites.first(where: { $0.key == key }).map { sourceActions($0) })
@@ -1008,7 +1012,7 @@ struct RecommendationsView: View {
                 categoryChips(loadedSite).tvFocusSection()
             }
             if let category, let current = model.categories.first(where: { $0.id == category }), !current.filters.isEmpty {
-                CategoryFilterBar(filters: current.filters, choices: categoryFilters) { categoryFilters = $0; categoryPage = 1 }.tvFocusSection()
+                CategoryFilterBar(filters: current.filters, choices: categoryFilters) { categoryFilters = $0 }.tvFocusSection()
             }
             if category != nil, let loadedSite = model.site {
                 categoryContent(loadedSite)
@@ -1055,19 +1059,19 @@ struct RecommendationsView: View {
             guard let site else { model.reset(); return }
             // Reset here, while this task is the last writer. A later onChange would clear the category
             // a cached home opens below: that home has no posters, so the page would say it has none.
-            if categorySite != requested { category = nil; categoryPage = 1; categorySite = requested }
+            if categorySite != requested { category = nil; categorySite = requested }
             let refresh = forceRefresh; forceRefresh = false
             await model.load(client: CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL), subscriptionDate: config.importedAt, force: refresh)
             guard !Task.isCancelled, site.key == requested else { return }
             // A source whose home names only categories (list sites) opens its first one.
             if category == nil, !model.busy, model.error == nil, model.items.isEmpty, let first = model.categories.first {
-                category = first.id; categoryPage = 1; categoryFilters = CategoryFilter.initialChoices(first.filters)
+                category = first.id; categoryFilters = CategoryFilter.initialChoices(first.filters)
             }
         }
-        .task(id: "\(requestID)|\(category ?? "")|\(categoryPage)|" + categoryFilters.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "&")) {
+        .task(id: "\(requestID)|\(category ?? "")|" + categoryFilters.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "&")) {
             // The rows load their own categories.
             guard !rails, let category, let loadedSite = model.site, loadedSite.key == site?.key else { return }
-            await browser.load(.list(category: category, query: "", page: categoryPage, filters: categoryFilters),
+            await browser.load(.list(category: category, query: "", page: 1, filters: categoryFilters),
                                client: CatalogClient(site: loadedSite, origin: config.origin, jarURL: config.spiderURL))
         }
         .onDisappear { browser.cancel() }
@@ -1220,11 +1224,11 @@ struct RecommendationsView: View {
         ChipRow {
             HStack(spacing: 8) {
                 if !model.items.isEmpty {
-                    Chip(title: L10n.text("Recommendations"), selected: category == nil) { category = nil; categoryPage = 1 }
+                    Chip(title: L10n.text("Recommendations"), selected: category == nil) { category = nil }
                 }
                 ForEach(model.categories) { item in
                     Chip(title: item.name, selected: category == item.id) {
-                        category = item.id; categoryPage = 1; categoryFilters = CategoryFilter.initialChoices(item.filters)
+                        category = item.id; categoryFilters = CategoryFilter.initialChoices(item.filters)
                     }
                 }
             }.padding(.vertical, 4)
@@ -1245,26 +1249,46 @@ struct RecommendationsView: View {
             }
             LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
                 ForEach(browser.videos) { video in
-                    if isIndex {
-                        Button { store.searchVideos(video.name) } label: { PosterCard(video: video) }.cardButton()
-                    } else {
-                        RouteLink { CatalogDestination(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
+                    Group {
+                        if isIndex {
+                            Button { store.searchVideos(video.name) } label: { PosterCard(video: video) }.cardButton()
+                        } else {
+                            RouteLink { CatalogDestination(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
+                        }
+                    }
+                    .onAppear {
+                        // The last cover coming on screen appends the next page, so scrolling never stops
+                        // at a page boundary. A failed page waits for the footer's Retry instead.
+                        guard browser.moreError == nil, video.id == browser.videos.last?.id else { return }
+                        Task { await browser.loadMore(client: client) }
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .opacity(browser.busy ? 0.55 : 1)
             .tvFocusSection()
-            if browser.pageCount > 1 {
-                HStack(spacing: 12) {
-                    Button { categoryPage -= 1 } label: { Image(systemName: "chevron.left").frame(width: 22) }
-                        .controlButton().disabled(categoryPage <= 1 || browser.busy).accessibilityLabel(L10n.text("Previous"))
-                    Text(L10n.text("Page %lld of %lld", browser.page, browser.pageCount)).font(.subheadline.weight(.medium).monospacedDigit())
-                    Button { categoryPage += 1 } label: { Image(systemName: "chevron.right").frame(width: 22) }
-                        .controlButton().disabled(categoryPage >= browser.pageCount || browser.busy).accessibilityLabel(L10n.text("Next"))
+            // A focus section, so moving down from a cover in any column reaches Load More or Try Again.
+            Group {
+                if let message = browser.moreError {
+                    VStack(spacing: 12) {
+                        Text(message).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        Button(L10n.text("Try Again")) { Task { await browser.loadMore(client: client) } }
+                            .controlButton()
+                            .accessibilityIdentifier("recommendations.loadMore.retry")
+                    }
+                    .frame(maxWidth: .infinity).padding(.vertical, 16)
+                } else if browser.loadingMore {
+                    ProgressView().controlSize(.large)
+                        .frame(maxWidth: .infinity).padding(.vertical, 24)
+                        .accessibilityLabel(L10n.text("Loading…"))
+                } else if browser.hasMore {
+                    Button(L10n.text("Load More")) { Task { await browser.loadMore(client: client) } }
+                        .controlButton()
+                        .frame(maxWidth: .infinity).padding(.vertical, 16)
+                        .accessibilityIdentifier("recommendations.loadMore")
                 }
-                .frame(maxWidth: .infinity).tvFocusSection()
             }
+            .tvFocusSection()
         }
     }
 }

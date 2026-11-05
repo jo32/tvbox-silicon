@@ -133,9 +133,11 @@ import TVCore
     /// The episode plays from a download on this device, which no server or connection holds up.
     private var savedDownload = false
     private var automatic: URL?
-    /// The live room playing (at the quality chosen), and whether it was already given a fresh address.
+    /// The live room playing (at the quality chosen), when it opens again with a fresh address (`LiveReopen`), and
+    /// when its stream last became ready.
     private var liveRoom: Channel?
-    private var liveRetried = false
+    private var liveReopen = LiveReopen()
+    private var liveReadyAt: ContinuousClock.Instant?
     private var liveRetrying = false
     /// The episode was already asked for again after its server ignored AVPlayer's byte range.
     private var rangeRetried = false
@@ -266,16 +268,18 @@ import TVCore
         sampler?.cancel(); sampler = nil
     }
 
-    /// A live room whose playlist contradicted itself (CoreMedia -12312) gets one fresh address before
-    /// the error shows: a platform's edge server can do this while it starts serving the room.
+    /// A live room that stopped asks its platform for a fresh address and plays on, instead of waiting for the viewer
+    /// to try again: one that played a while each time (Huya refuses an address about two minutes in, #488), one
+    /// that hasn't once for a playlist that contradicted itself (`LiveReopen`).
     private func retryLive(after failure: Error?) -> Bool {
         if liveRetrying { return true } // The failed item's other report of the same failure.
-        guard let room = liveRoom, !liveRetried, let failure = failure as NSError?,
-              failure.domain == "CoreMediaErrorDomain", failure.code == -12312 else { return false }
-        liveRetried = true; liveRetrying = true; loading = true
+        let played = liveReadyAt.map { ContinuousClock.now - $0 }
+        guard let room = liveRoom, liveReopen.shouldReopen(after: failure, playedFor: played) else { return false }
+        liveRetrying = true; loading = true
         detachItem(); observation = nil
         let active = generation
-        Diagnostics.shared.record(.warning, "player", "live retry room=\(room.url.absoluteString)")
+        Diagnostics.shared.record(.warning, "player", "live retry room=\(room.url.absoluteString) played=\(played.map { "\(Int($0.components.seconds))s" } ?? "-")")
+        note(L10n.text("The connection dropped. Reconnecting"))
         Task {
             do {
                 let resolved = try await LiveCatalog.resolve(room)
@@ -482,7 +486,7 @@ import TVCore
         stop(); error = nil; errorSymbol = "play.slash.fill"; loading = true; showsPicture = false; sourceDanmaku = []; qualities = []; quality = nil; switchNotice = nil
         begin(channel)
         isLive = LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live")
-        liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveRetried = false; liveRetrying = false; rangeRetried = false
+        liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false
         loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false
         ErrorReports.shared.playing(live: isLive, format: channel.url.pathExtension, source: channel.historyContext?.sourceKey,
                                     danmaku: UserDefaults.standard.object(forKey: DanmakuPreference.key) == nil || UserDefaults.standard.bool(forKey: DanmakuPreference.key),
@@ -629,6 +633,7 @@ import TVCore
                 return
             }
             guard let remuxed else {
+                self.checkingPicture = false
                 self.restorePositionIfNeeded(item)
                 self.loading = self.pendingResume != nil || self.restoringPosition
                 if self.pendingResume == nil { self.player.play() }
@@ -687,7 +692,7 @@ import TVCore
     /// Follows the episode's item (ready, failed, ended), the player's state, and the transfer, for this playback.
     private func watch(_ item: AVPlayerItem, channel: Channel, url: URL, generation activeGeneration: UUID) {
         self.item = item
-        audioChoices = []; audioChoice = nil
+        audioChoices = []; audioChoice = nil; liveReadyAt = nil
         hasTimeline = item.status == .readyToPlay && item.duration.isNumeric
         observation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             let status = item.status
@@ -701,6 +706,7 @@ import TVCore
                 guard let self, self.generation == activeGeneration else { return }
                 self.hasTimeline = timeline
                 if status == .readyToPlay {
+                    if self.isLive { self.liveReadyAt = .now }
                     if UngroupedAudio.playOne(item) { Diagnostics.shared.record(.info, "player", "ungrouped audio tracks; playing the first") }
                     Task { [weak self] in
                         let choices = await UngroupedAudio.choices(item)
@@ -715,9 +721,10 @@ import TVCore
                     Task { [weak self] in
                         let refused = await Self.recordVideoFormat(item)
                         guard let self, self.generation == activeGeneration, self.item === item, self.checkingPicture else { return }
-                        self.checkingPicture = false
+                        // While it is repackaged, `checkingPicture` stays on: the once-a-second resume would otherwise
+                        // jump to the saved position and play this item's sound with no picture until then (#515).
                         if Remux.showsPicture(refused) { self.repackage(item, channel: channel, url: url, generation: activeGeneration) }
-                        else { self.restorePositionIfNeeded(item) }
+                        else { self.checkingPicture = false; self.restorePositionIfNeeded(item) }
                     }
                     self.checkSegmentedPicture(item, channel: channel, url: url, generation: activeGeneration)
                 }
@@ -1040,7 +1047,8 @@ extension PlaybackSession {
             try Task.checkCancellation()
             // The bundle downloads each request with 10 to 16 threads of its own: reading ahead on six at once ran its
             // Node out of memory, and on one a 4K episode stalled whenever the drive slowed.
-            address = CloudStreams.register(media, parallel: 2) { nil }
+            // Its proxy moves to a new port when iOS took back the sockets of the suspended app (#485).
+            address = CloudStreams.register(media, parallel: 2) { await CatPawOpen.relocated(media) }
             prepared.url = address
             Diagnostics.shared.record(.info, "player", "catpaw stream length=\(media.length)")
         } else if EmbeddedJarHost.isPluginProxy(address) {

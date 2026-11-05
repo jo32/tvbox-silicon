@@ -61,11 +61,25 @@ struct CatalogPlaybackActions: View {
             #endif
             .accessibilityLabel(L10n.text("Playback Options"))
             .accessibilityIdentifier("player.catalogOptions")
-            .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session) }
+            .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).playerSheet() }
             .sheet(isPresented: $showsDanmaku) {
-                CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name)
+                CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet()
             }
         }
+    }
+}
+
+extension View {
+    /// A settings sheet over the player, dark like the player. A player at the top of a page makes only its own views
+    /// dark (`PlayerScheme`); before iOS 26 a sheet it opens inherits that for its text but keeps the phone's light
+    /// background, so on a phone in light mode the sheet showed white text on a white form (#533).
+    /// The Mac's sheets keep the window's appearance, as before.
+    @ViewBuilder func playerSheet() -> some View {
+        #if os(iOS)
+        preferredColorScheme(.dark)
+        #else
+        self
+        #endif
     }
 }
 #endif

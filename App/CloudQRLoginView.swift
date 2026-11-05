@@ -122,9 +122,20 @@ struct CloudQRLoginView: View {
         do {
             let login = try await CloudDriveQRLogin.start(drive)
             self.login = login
+            var dropped = 0
             while !Task.isCancelled {
                 try await Task.sleep(for: .seconds(2))
-                switch try await login.poll() {
+                let status: CloudDriveQRLogin.Status
+                do { status = try await login.poll(); dropped = 0 }
+                catch let failure as URLError where failure.code != .cancelled && dropped < Self.droppedPolls {
+                    // Scanning on this iPhone means leaving for the drive's app (115 has no sign-in page), and
+                    // iOS drops the held-open status request while Yingxia is suspended. The code is still good,
+                    // and may be approved by now: ask again rather than throw it away (#531).
+                    dropped += 1
+                    Diagnostics.shared.record(.warning, "cloud.signin", "\(drive.rawValue) code status failed (\(failure.code.rawValue)), asking again")
+                    continue
+                }
+                switch status {
                 case .waiting: continue
                 case .expired: expired = true; return
                 case .signedIn(let credentials):
@@ -146,9 +157,12 @@ struct CloudQRLoginView: View {
             }
         } catch is CancellationError {
         } catch {
+            if !Task.isCancelled { Diagnostics.shared.failure("cloud.signin", "\(drive.rawValue) code sign-in", error) }
             self.error = error.localizedDescription
         }
     }
+    /// Status requests in a row that may fail on the network before the code is given up.
+    private static let droppedPolls = 5
     private var codeSize: CGFloat {
         #if os(tvOS)
         440

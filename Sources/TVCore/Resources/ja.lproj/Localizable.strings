@@ -90,7 +90,6 @@
 "Try selecting a category or searching." = "カテゴリーを選ぶか、検索してください。";
 "Previous" = "前へ";
 "Next" = "次へ";
-"Page %lld of %lld" = "%lld / %lld ページ";
 "No playable sources were found for this video." = "この動画の再生可能なソースが見つかりませんでした。";
 "Loading details…" = "詳細を読み込み中…";
 "Resolving playback URL…" = "再生 URL を取得中…";
@@ -388,6 +387,7 @@
 "This source needs an Android feature that isn't supported yet: %@." = "このソースには未対応のAndroid機能が必要です：%@。";
 "This plugin couldn't be prepared on this device (missing %@)." = "この端末でプラグインを準備できませんでした（%@ がありません）。";
 "This plugin couldn't be prepared on this device (%@ could not be converted)." = "この端末でプラグインを準備できませんでした（%@ を変換できませんでした）。";
+"The source says: %@" = "ソースからのメッセージ：%@";
 "The source's plugin crashed. The site may have changed; try another source." = "ソースのプラグインがクラッシュしました。サイトが変更された可能性があります。別のソースをお試しください。";
 
 /* Loading status */
@@ -826,6 +826,9 @@
 "Continue Playing" = "再生を続ける";
 "Stopped at %@" = "%@ で停止";
 "%lld songs" = "%lld 曲";
+"Liked Songs" = "お気に入りの曲";
+"No Liked Songs" = "お気に入りの曲はまだありません";
+"Like a song from its menu, and it waits here, ready to play as one list." = "曲のメニューで「いいね」を選ぶと、ここに残り、1 つのリストとして再生できます。";
 "Unable to Load Songs" = "曲を読み込めません";
 "Shuffle" = "シャッフル";
 "Skipped “%@”: %@" = "「%@」をスキップしました：%@";

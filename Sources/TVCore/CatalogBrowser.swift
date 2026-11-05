@@ -16,15 +16,24 @@ import Observation
     public private(set) var query = ""
     public private(set) var page = 1
     public private(set) var pageCount = 1
+    /// Whether the shown list has another page to append. A home page is never appended.
+    public var hasMore: Bool {
+        guard case .list = request else { return false }
+        return page < pageCount
+    }
     public private(set) var busy = false
     public private(set) var loaded = false
     public private(set) var error: String?
+    /// Appending a page keeps the shown videos in place, so it has its own state instead of `busy`.
+    public private(set) var loadingMore = false
+    public private(set) var moreError: String?
     public private(set) var request: Request = .home
     private var generation = 0
     /// Shown from another page (`seed`) until the first home load answers; that load then refreshes it in place.
     private var seeded = false
     private var pending: Task<CatalogPage, Error>?
     private var pendingCategories: Task<CatalogPage, Error>?
+    private var pendingMore: Task<CatalogPage, Error>?
     public init() {}
 
     /// Release this page's work without discarding already displayed content.
@@ -32,12 +41,24 @@ import Observation
         generation += 1
         pending?.cancel(); pending = nil
         pendingCategories?.cancel(); pendingCategories = nil
+        pendingMore?.cancel(); pendingMore = nil
+        loadingMore = false; moreError = nil
         if busy { loaded = false }
         busy = false
     }
 
     public func load(_ request: Request, client: CatalogClient) async {
         await load(request, context: client.reportContext) { request in
+            switch request {
+            case .home: return try await client.home()
+            case let .list(category, query, page, filters): return try await client.list(category: category, query: query, page: page, filters: filters)
+            }
+        }
+    }
+
+    /// Appends the next page of the shown list, as scrolling to the end of it does.
+    public func loadMore(client: CatalogClient) async {
+        await loadMore(context: client.reportContext) { request in
             switch request {
             case .home: return try await client.home()
             case let .list(category, query, page, filters): return try await client.list(category: category, query: query, page: page, filters: filters)
@@ -73,12 +94,14 @@ import Observation
         guard !Task.isCancelled else { return }
         pending?.cancel()
         pendingCategories?.cancel(); pendingCategories = nil
+        pendingMore?.cancel(); pendingMore = nil
         generation += 1
         let current = generation
         let refreshing = seeded && request == .home && !videos.isEmpty
         seeded = false
         self.request = request
         busy = !refreshing; loaded = false; error = nil
+        loadingMore = false; moreError = nil
         switch request {
         case .home: category = ""; query = ""; page = 1; filters = [:]
         case let .list(category, query, page, filters):
@@ -113,6 +136,36 @@ import Observation
             guard generation == current, !Task.isCancelled else { return }
             Diagnostics.shared.failure("catalog", "\(request == .home ? "home" : "list") \(context)", error)
             if !refreshing { self.error = error.localizedDescription }
+        }
+    }
+
+    /// Appends the next page without emptying what the list shows. The footer offers Retry from `moreError`;
+    /// the page's own error state stays reserved for a first page that failed to load.
+    public func loadMore(context: String = "-", fetch: @escaping @Sendable (Request) async throws -> CatalogPage) async {
+        guard !Task.isCancelled, !busy, !loadingMore, hasMore,
+              case let .list(category, query, current, filters) = request else { return }
+        let currentGeneration = generation
+        let next = current + 1
+        loadingMore = true; moreError = nil
+        defer { if generation == currentGeneration { pendingMore = nil; loadingMore = false } }
+        let task = Task { try await fetch(.list(category: category, query: query, page: next, filters: filters)) }
+        pendingMore = task
+        do {
+            let result = try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
+            guard generation == currentGeneration, !Task.isCancelled, !task.isCancelled else { return }
+            var seen = Set(videos.map(\.id))
+            let fresh = result.videos.filter { seen.insert($0.id).inserted }
+            videos += fresh
+            page = next
+            // A source that ignores the page number answers every page with the same list. One empty answer
+            // ends the list instead of scrolling forever. A later page without `pagecount` reads as 1, so the
+            // count only grows: the first page's count still holds.
+            pageCount = fresh.isEmpty ? next : max(pageCount, result.pageCount)
+            self.request = .list(category: category, query: query, page: next, filters: filters)
+        } catch {
+            guard generation == currentGeneration, !Task.isCancelled else { return }
+            Diagnostics.shared.failure("catalog", "more \(context)", error)
+            moreError = error.localizedDescription
         }
     }
 }

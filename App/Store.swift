@@ -514,6 +514,10 @@ import TVCore
     /// every ten minutes at most. A failed fetch keeps the last copy.
     private func refreshCloudSources(force: Bool = false) {
         guard extrasUnlocked, cloudFetch == nil else { return }
+        #if DEBUG
+        // `-qaNoCloudSources 1`: only the QA subscription's sources, for UI tests that count results.
+        if UserDefaults.standard.bool(forKey: "qaNoCloudSources") { return }
+        #endif
         if !force, cloudDocument != nil, let fetched = cloudFetchedAt, Date.now.timeIntervalSince(fetched) < 600 { return }
         let http = http, persists = persistsChanges
         cloudFetch = Task { [weak self] in

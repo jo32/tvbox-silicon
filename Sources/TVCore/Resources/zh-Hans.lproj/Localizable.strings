@@ -90,7 +90,6 @@
 "Try selecting a category or searching." = "尝试选择分类或搜索。";
 "Previous" = "上一页";
 "Next" = "下一页";
-"Page %lld of %lld" = "第 %lld / %lld 页";
 "No playable sources were found for this video." = "此影片没有可识别的播放线路。";
 "Loading details…" = "正在获取详情…";
 "Resolving playback URL…" = "正在解析播放地址…";
@@ -388,6 +387,7 @@
 "This source needs an Android feature that isn't supported yet: %@." = "此源需要尚未支持的 Android 功能：%@。";
 "This plugin couldn't be prepared on this device (missing %@)." = "无法在本机准备此插件（缺少 %@）。";
 "This plugin couldn't be prepared on this device (%@ could not be converted)." = "无法在本机准备此插件（%@ 转换失败）。";
+"The source says: %@" = "来源提示：%@";
 "The source's plugin crashed. The site may have changed; try another source." = "该源的插件崩溃了，网站可能已变更。请换一个源。";
 
 /* Loading status */
@@ -826,6 +826,9 @@
 "Continue Playing" = "继续播放";
 "Stopped at %@" = "停在 %@";
 "%lld songs" = "%lld 首";
+"Liked Songs" = "我喜欢的歌曲";
+"No Liked Songs" = "还没有喜欢的歌曲";
+"Like a song from its menu, and it waits here, ready to play as one list." = "在歌曲菜单中选择“喜欢”，歌曲就会留在这里，随时可以当一张歌单播放。";
 "Unable to Load Songs" = "无法载入歌曲";
 "Shuffle" = "随机播放";
 "Skipped “%@”: %@" = "已跳过“%@”：%@";

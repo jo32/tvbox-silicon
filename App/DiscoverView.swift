@@ -798,7 +798,8 @@ private struct DiscoverNativeHeroPager: UIViewRepresentable {
         let layout = UICollectionViewFlowLayout()
         layout.scrollDirection = .horizontal
         layout.minimumLineSpacing = 0; layout.minimumInteritemSpacing = 0
-        let view = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        let view = HeroPagerCollectionView(frame: .zero, collectionViewLayout: layout)
+        view.page = { [weak coordinator = context.coordinator] in coordinator?.selectedIndex ?? 0 }
         view.backgroundColor = .clear; view.isPagingEnabled = true
         view.isDirectionalLockEnabled = true; view.decelerationRate = .fast
         view.showsHorizontalScrollIndicator = false
@@ -826,6 +827,7 @@ private struct DiscoverNativeHeroPager: UIViewRepresentable {
         var parent: DiscoverNativeHeroPager
         var needsReload = false
         init(_ parent: DiscoverNativeHeroPager) { self.parent = parent }
+        var selectedIndex: Int { parent.selection.flatMap { key in parent.items.firstIndex { $0.key == key } } ?? 0 }
         func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int { parent.items.count }
         func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize { collectionView.bounds.size }
         func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
@@ -858,6 +860,23 @@ private struct DiscoverNativeHeroPager: UIViewRepresentable {
             parent.dragging(false)
             if needsReload, let view = scrollView as? UICollectionView { needsReload = false; view.reloadData() }
         }
+    }
+}
+
+/// Each page is as wide as the pager. When the pager changes size (an iPhone turned sideways, an iPad window resized),
+/// the flow layout kept the old page size and the old offset, so the titles slid out of line (#516). A new size lays
+/// the pages out again and goes back to the selected one.
+private final class HeroPagerCollectionView: UICollectionView {
+    var page: () -> Int = { 0 }
+    private var pageSize: CGSize = .zero
+    override func layoutSubviews() {
+        guard bounds.size != pageSize, bounds.width > 0 else { return super.layoutSubviews() }
+        pageSize = bounds.size
+        collectionViewLayout.invalidateLayout()
+        super.layoutSubviews()
+        guard !isDragging, !isDecelerating else { return }
+        let x = min(CGFloat(page()) * bounds.width, max(0, contentSize.width - bounds.width))
+        if abs(contentOffset.x - x) > 0.5 { contentOffset = CGPoint(x: x, y: 0) }
     }
 }
 

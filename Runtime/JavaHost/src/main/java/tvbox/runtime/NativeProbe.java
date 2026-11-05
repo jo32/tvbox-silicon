@@ -74,6 +74,8 @@ public class NativeProbe extends AbstractJni {
         } else if (chain.stream().anyMatch(link -> link instanceof LinkageError || link instanceof UnsupportedOperationException
             || (link instanceof RuntimeException && "Stub!".equals(link.getMessage())))) {
             result.put("errorCode", "unsupported_android");
+        } else if (thrownByPlugin(cause) && pluginMessage(cause) != null) {
+            result.put("errorCode", "plugin_message").put("message", pluginMessage(cause));
         } else if (thrownByPlugin(cause)) {
             result.put("errorCode", "plugin_crash");
         }
@@ -110,6 +112,21 @@ public class NativeProbe extends AbstractJni {
         String owner = error.getStackTrace()[0].getClassName();
         return owner.startsWith("android.graphics.") || owner.startsWith("android.widget.") || owner.startsWith("android.view.")
             || owner.startsWith("android.app.AlertDialog") || owner.equals("android.app.Dialog");
+    }
+
+    private static final java.util.regex.Pattern HAN = java.util.regex.Pattern.compile("\\p{IsHan}");
+
+    /**
+     * The text of a plain {@code Exception} (or one of the plugin's own exception classes) the plugin threw
+     * to tell the viewer something, such as Wex's "还没有配置115 Cookie，请先到配置中心登录" or
+     * "123网盘账号密码未配置" for a drive with no sign-in (#408), or null. Only a short Chinese message
+     * counts: a crash's exception (a NumberFormatException quoting a title, say) names a class or a value.
+     */
+    static String pluginMessage(Throwable error) {
+        var type = error.getClass();
+        if (type != Exception.class && type != RuntimeException.class && !type.getName().startsWith("com.github.catvod.")) return null;
+        String text = error.getMessage() == null ? "" : error.getMessage().trim();
+        return !text.isEmpty() && text.length() <= 200 && HAN.matcher(text).find() ? text : null;
     }
 
     /** The first application frame decides: plugin code crashed on its own, not inside our runtime. */
