@@ -51,6 +51,11 @@ struct RootView: View {
     @State private var detailPath = NavigationPath()
     @State private var nowPlayingShown = false
     @State private var hidesToolbar = false
+    #if os(macOS)
+    @State private var columns: NavigationSplitViewVisibility = .all
+    /// What the viewer had before the reader folded the sidebar away.
+    @State private var columnsBefore: NavigationSplitViewVisibility = .all
+    #endif
     #endif
     private var tabs: [AppSection] {
         #if os(iOS)
@@ -97,7 +102,7 @@ struct RootView: View {
         @Bindable var store = store
         Group {
             #if os(macOS)
-            NavigationSplitView {
+            NavigationSplitView(columnVisibility: $columns) {
                 MacSidebar()
                     .navigationSplitViewColumnWidth(min: 190, ideal: 216, max: 260)
             } detail: {
@@ -108,6 +113,10 @@ struct RootView: View {
                     .environment(\.openRoute, RouteOpener { detailPath.append($0) })
             }
             .onChange(of: store.section) { detailPath = NavigationPath() }
+            .onChange(of: store.hidesSidebar) { _, hide in
+                if hide { columnsBefore = columns }
+                withAnimation(.smooth(duration: 0.3)) { columns = hide ? .detailOnly : columnsBefore }
+            }
             .overlay {
                 if nowPlayingShown { MusicMacNowPlaying().ignoresSafeArea().transition(.move(edge: .bottom)) }
             }

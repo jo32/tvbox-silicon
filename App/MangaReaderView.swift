@@ -103,6 +103,9 @@ struct MangaReaderView: View {
     @State private var chrome = true
     @State private var showsChapters = false
     @Environment(\.dismiss) private var dismiss
+    #if os(macOS)
+    @Environment(Store.self) private var store
+    #endif
     private let start: MangaReading
 
     init(reading: MangaReading) {
@@ -144,6 +147,8 @@ struct MangaReaderView: View {
         #if os(macOS)
         .toolbar(.hidden, for: .windowToolbar)
         .navigationBarBackButtonHidden()
+        .onAppear { store.hidesSidebar = true }
+        .onDisappear { store.hidesSidebar = false }
         #endif
         #if os(tvOS)
         .onExitCommand { if chrome { close() } else { withAnimation { chrome = true } } }

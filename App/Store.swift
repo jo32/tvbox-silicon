@@ -70,6 +70,9 @@ import TVCore
     private var episodeRequest = UUID()
     private var episodeTask: Task<Void, Never>?
     var section: AppSection = .home
+    /// The Mac sidebar folds away while the manga reader fills the window, and comes back when it closes.
+    /// macOS 26 floats the sidebar over the page, so it covered the left part of every comic page.
+    var hidesSidebar = false
     /// Every build shows the built-in services (Music, Bilibili, Douyin), the default subscription and
     /// the plugin pages only once a subscription that works has been added: one that is on and whose
     /// copy has sources or live playlists.
