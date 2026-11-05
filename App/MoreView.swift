@@ -26,9 +26,9 @@ struct PhoneTabs: Equatable {
     static func slots(horizontal: UserInterfaceSizeClass?, vertical: UserInterfaceSizeClass?) -> Int {
         horizontal == .regular && vertical == .regular ? wideBarSlots : barSlots
     }
-    static let standard = PhoneTabs(bar: [.home, .discover, .live, .search], more: [.music, .sites, .files, .history, .favorites, .downloads, .messages, .settings])
+    static let standard = PhoneTabs(bar: [.home, .discover, .live, .search], more: [.music, .manga, .sites, .files, .history, .favorites, .downloads, .messages, .settings])
     /// The iPad sidebar's order until the viewer arranges it. Messages is left out: only the phone lists it.
-    static let sidebarStandard: [AppSection] = [.home, .discover, .live, .music, .search, .sites, .files, .history, .favorites, .downloads, .settings]
+    static let sidebarStandard: [AppSection] = [.home, .discover, .live, .music, .manga, .search, .sites, .files, .history, .favorites, .downloads, .settings]
     var bar: [AppSection]
     var more: [AppSection]
 
@@ -82,6 +82,7 @@ extension AppSection {
         case .discover: Color(red: 0.43, green: 0.48, blue: 1.0)
         case .live: Color(red: 1.0, green: 0.45, blue: 0.32)
         case .music, .nowPlaying: Color(red: 1.0, green: 0.34, blue: 0.56)
+        case .manga: Color(red: 1.0, green: 0.58, blue: 0.0)
         case .search: Color(red: 0.36, green: 0.60, blue: 1.0)
         case .sites: Color(red: 0.60, green: 0.46, blue: 1.0)
         case .history: Brand.amber

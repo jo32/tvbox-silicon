@@ -16,6 +16,7 @@
 # --no-upload stops after the export (to check the archives). Output: build/testflight/<version>-<build>/.
 # Signs in iCloud key-value storage (Config/iCloud.entitlements, for iCloud sync) by default; the App IDs and the
 # App Store profiles must have the iCloud capability, or the export fails. ICLOUD=0 builds without it.
+# TF_PLATFORMS="tvOS" (or "iOS") uploads one platform, for a release of one app only.
 set -euo pipefail
 
 TESTFLIGHT_VERSION=${TESTFLIGHT_VERSION:-1.7.7}
@@ -57,7 +58,7 @@ fi
 echo "== FFmpeg"
 Scripts/build-apple-ffmpeg.sh
 
-for platform in iOS tvOS; do
+for platform in ${TF_PLATFORMS:-iOS tvOS}; do
   scheme=TVBox-$platform
   case $platform in
     iOS) bundle=com.jo32.yingxia.ios; profile="Yingxia iOS App Store"; type=ios ;;

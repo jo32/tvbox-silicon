@@ -315,6 +315,49 @@ final class TVNavigationUITests: XCTestCase {
                       "Down never reached the downloaded episodes; focus went \(trail.joined(separator: " > "))")
     }
 
+    /// Up from anywhere in Global Search's results reaches the search field beside the sidebar button. The field was
+    /// 560 points wide at the left, nothing sat above most of the results, and once a search had run the field could
+    /// not be reached to search again.
+    func testUpFromSearchResultsReachesTheSearchField() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-qaSection", "search", "-qaQuery", "hello", "-qaIsolatedData", "1",
+                               "-qaSubscription", "http://127.0.0.1:8776/config.json",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        if app.buttons["OK"].waitForExistence(timeout: 20) { remote.press(.select); sleep(2) }
+        let field = app.buttons["search.field"]
+        let results = shown("hello 01", in: app).waitForExistence(timeout: 60)
+        if !results { let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot) }
+        XCTAssertTrue(results, "The search showed no results")
+        sleep(3)
+        let focused = app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+        // Into the results, out to their right end and down a row: the posters furthest from the field.
+        // Focus may start in the tab sidebar; right moves it into the page.
+        remote.press(.right); sleep(1)
+        var down: [String] = []
+        for _ in 0..<6 where !focused.label.contains("hello") {
+            down.append("\(focused.elementType.rawValue):\(focused.identifier):\(focused.label)")
+            remote.press(.down); sleep(1)
+        }
+        let near = XCTAttachment(screenshot: app.screenshot()); near.lifetime = .keepAlways; add(near)
+        XCTAssertTrue(focused.label.contains("hello"), "Focus did not reach the results; went \(down.joined(separator: " > ")) then \(focused.debugDescription.prefix(600))")
+        for _ in 0..<8 { remote.press(.right); usleep(600_000) }
+        remote.press(.down); sleep(1)
+        if !focused.label.contains("hello") { remote.press(.up); sleep(1) }
+        let far = XCTAttachment(screenshot: app.screenshot()); far.lifetime = .keepAlways; add(far)
+        XCTAssertTrue(focused.label.contains("hello"), "Focus left the results; it is on \(focused.label)")
+        var trail: [String] = []
+        for _ in 0..<10 where !field.hasFocus {
+            trail.append(focused.exists ? focused.label : "-")
+            remote.press(.up); usleep(800_000)
+        }
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot)
+        XCTAssertTrue(field.hasFocus, "Up never reached the search field; focus went \(trail.joined(separator: " > "))")
+        remote.press(.select)
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 10), "Selecting the field did not open the keyboard")
+    }
+
     /// Poster titles are part of their card's label, so look for the text anywhere in a label.
     private func shown(_ text: String, in app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch

@@ -247,7 +247,7 @@ private struct WatchNowPhoneHero: View {
             }
             .frame(width: width * 0.8, height: 120, alignment: .bottom)
             .accessibilityAddTraits(.isHeader)
-            Text([entry.context.episodeName, SourceLabel(entry.context.sourceName).text].filter { !$0.isEmpty }.joined(separator: " · "))
+            Text([EpisodeLabels.historyLabel(entry.context.episodeName), SourceLabel(entry.context.sourceName).text].filter { !$0.isEmpty }.joined(separator: " · "))
                 .font(.system(size: 14)).lineLimit(1).padding(.top, 14)
             if entry.duration > 0 {
                 HStack(spacing: 8) {

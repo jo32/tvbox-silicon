@@ -113,8 +113,8 @@ final class ScriptSession: @unchecked Sendable {
 
     /// A runtime for a script that is not a TVBox spider: the prelude, then the bundled `module`, which
     /// reads the script and anything else it needs from `supplied` (`__host('module', key)`).
-    static func start(module: String, supplied: [String: String], profile: URL, label: String) async throws -> ScriptSession {
-        let session = ScriptSession(thread: ScriptThread(label: label), bridge: ScriptBridge(profile: profile, label: label, supplied: supplied))
+    static func start(module: String, supplied: [String: String], profile: URL, label: String, extension handler: ScriptHostExtension? = nil) async throws -> ScriptSession {
+        let session = ScriptSession(thread: ScriptThread(label: label), bridge: ScriptBridge(profile: profile, label: label, supplied: supplied, extension: handler))
         session.thread.start()
         let failure: String? = await session.thread.run {
             if let failure = session.boot() { return failure }
@@ -216,10 +216,12 @@ final class ScriptBridge: @unchecked Sendable {
     private var preferences: [String: String]
     private var preferencesFile: URL { profile.appendingPathComponent("preferences.json") }
     private let pending = PendingRequests()
+    private let handler: ScriptHostExtension?
 
     deinit { pending.cancelAll() }
 
-    init(profile: URL, label: String, supplied: [String: String] = [:]) {
+    init(profile: URL, label: String, supplied: [String: String] = [:], extension handler: ScriptHostExtension? = nil) {
+        self.handler = handler
         self.profile = profile
         self.label = label
         self.supplied = supplied
@@ -265,7 +267,9 @@ final class ScriptBridge: @unchecked Sendable {
             }
             if let data = try? JSONEncoder().encode(preferences) { try? data.write(to: preferencesFile, options: .atomic) }
             return nil
-        default: throw ScriptHostError("unsupported host operation \(operation)")
+        default:
+            if let handled = try handler?.answer(operation, argument) { return handled }
+            throw ScriptHostError("unsupported host operation \(operation)")
         }
     }
 
@@ -290,6 +294,12 @@ final class ScriptBridge: @unchecked Sendable {
         if let cached = try? String(contentsOf: file, encoding: .utf8) { return cached }
         throw ScriptHostError("cannot download module \(address) (HTTP \(answer["code"]?.int ?? 0))")
     }
+}
+
+/// More host operations for one kind of script (MangaHost): an answer, `.some(nil)` for null, or nil when
+/// the operation isn't one of its own.
+protocol ScriptHostExtension: AnyObject, Sendable {
+    func answer(_ operation: String, _ argument: String) throws -> String??
 }
 
 /// Requests started with `httpStart`, until their answers are taken.

@@ -112,6 +112,49 @@ import TVCore
         guard let site = CloudSources.site(where: matches) else { throw TVError.invalidConfiguration }
         return site
     }
+    static func manga(_ address: String, keyword: String?) async throws {
+        let started = Date()
+        func step(_ text: String) { print(String(format: "[%5.1fs] ", Date().timeIntervalSince(started)) + text) }
+        let source = address.hasPrefix("http") ? try await MangaSources.shared.install(from: URL(string: address)!)
+            : try await MangaSources.shared.install(code: String(contentsOfFile: address, encoding: .utf8), origin: nil)
+        let runtime = MangaRuntime.shared
+        let info = try await runtime.info(source.key)
+        step("installed \(info.name) \(info.key) v\(info.version) explore=\(info.explore.map { "\($0.title)(\($0.type))" }) search=\(info.canSearch) category=\(info.categoryParts.map(\.name)) settings=\(info.settings.map(\.key))")
+        var first: MangaComic?
+        if !info.explore.isEmpty {
+            do {
+                let result = try await runtime.explore(source.key, page: 0, cursor: nil)
+                step("explore: \(result.shelves.count) shelves \(result.shelves.map { "\($0.title):\($0.comics.count)" }) list=\(result.page.comics.count) next=\(String(describing: result.page.next))")
+                first = result.shelves.first?.comics.first ?? result.page.comics.first
+            } catch { step("explore FAILED: \(error.localizedDescription)") }
+        }
+        if let keyword, info.canSearch {
+            do {
+                let page = try await runtime.search(source.key, keyword: keyword, options: info.searchOptions.map { $0.defaultValue ?? $0.choices.first?.value }, cursor: nil)
+                step("search \(keyword): \(page.comics.count) next=\(String(describing: page.next)) first=\(page.comics.prefix(3).map(\.title))")
+                first = page.comics.first ?? first
+            } catch { step("search FAILED: \(error.localizedDescription)") }
+        }
+        guard let comic = first else { step("no comic to open"); return }
+        step("comic \(comic.title) id=\(comic.id) cover=\(comic.cover.prefix(90))")
+        do {
+            await MangaImages.shared.prepareCovers(source: source.key, urls: [comic.cover])
+            let cover = try await MangaImages.shared.data(source: source.key, url: comic.cover, kind: .cover)
+            step("cover \(cover.count) bytes")
+        } catch { step("cover FAILED: \(error.localizedDescription)") }
+        let details = try await runtime.details(source.key, id: comic.id)
+        step("details \(details.comic.title) tags=\(details.tags.map { "\($0.name):\($0.values.prefix(3))" }) groups=\(details.groups.map { "\($0.title):\($0.chapters.count)" }) first=\(details.chapters.prefix(2).map(\.title)) last=\(details.chapters.last?.title ?? "-")")
+        let chapter = details.chapters.first
+        let pages = try await runtime.pages(source.key, comic: comic.id, chapter: chapter?.id)
+        step("pages \(pages.count): \(pages.first?.prefix(120) ?? "")")
+        for url in pages.prefix(2) {
+            do {
+                let data = try await MangaImages.shared.data(source: source.key, url: url, kind: .page, comic: comic.id, chapter: chapter?.id)
+                let image = MangaImages.bitmap(data, width: 1200)
+                step("page \(data.count) bytes \(image.map { "\($0.width)x\($0.height)" } ?? "undecodable")")
+            } catch { step("page FAILED: \(error.localizedDescription)") }
+        }
+    }
     static func main() async throws {
         let args = CommandLine.arguments
         // Yingxia's own sources and live platforms come from its subscription.
@@ -121,6 +164,12 @@ import TVCore
         guard args.count >= 2 else {
             print("Usage: TVBoxProbe <jar path> [class descriptor] [static int method]")
             print("       TVBoxProbe --subscription-check <URL> [...]")
+            return
+        }
+        if args[1] == "--manga", args.count >= 3 {
+            // --manga <source .js URL or file> [keyword]: a Venera comic source end to end.
+            setvbuf(stdout, nil, _IONBF, 0)
+            try await manga(args[2], keyword: args.count > 3 ? args[3] : nil)
             return
         }
         if args[1] == "--download", args.count >= 4 {

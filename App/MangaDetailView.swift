@@ -1,0 +1,406 @@
+import SwiftUI
+import TVCore
+
+/// What the reader opens: a comic's chapters and where to start.
+struct MangaReading: Identifiable {
+    let comic: MangaComic
+    let chapters: [MangaChapter]
+    var chapter: Int
+    var page: Int
+    var id: String { comic.identity }
+}
+
+/// A comic's page: cover, details, tags, chapters, and the Read / Continue button.
+struct MangaDetailView: View {
+    let comic: MangaComic
+    @State private var store = MangaStore.shared
+    @State private var details: MangaDetails?
+    @State private var failure: String?
+    @State private var reading: MangaReading?
+    @State private var newestFirst = false
+    @State private var group = 0
+    @State private var expanded = false
+    @Environment(\.openRoute) private var openRoute
+
+    private var current: MangaComic { details?.comic ?? comic }
+    private var chapters: [MangaChapter] { details?.chapters ?? [] }
+    private var coverURL: String { current.cover.isEmpty ? comic.cover : current.cover }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
+                header
+                if let details {
+                    if !details.tags.isEmpty { tags(details) }
+                    chapterList(details)
+                    if !details.recommend.isEmpty {
+                        MangaShelfRow(title: L10n.text("Related"), comics: details.recommend).padding(.horizontal, -Layout.gutter)
+                    }
+                } else if let failure {
+                    EmptyResults(symbol: "exclamationmark.triangle", title: L10n.text("Unable to Load"), message: failure, action: L10n.text("Try Again")) {
+                        Task { await load(fresh: true) }
+                    }
+                } else {
+                    VStack(spacing: 14) { ProgressView(); MangaWaitNote() }.frame(maxWidth: .infinity).padding(40)
+                }
+            }
+            .padding(Layout.gutter)
+            .frame(maxWidth: Layout.maxWidth).frame(maxWidth: .infinity)
+        }
+        #if os(tvOS)
+        .background { Backdrop() }
+        #else
+        .background { MangaDetailBackdrop(source: comic.sourceKey, cover: coverURL) }
+        #endif
+        .modifier(MangaNoticeBanner())
+        .screenTitle(current.title)
+        .task { if details == nil { await load() } }
+        #if os(macOS)
+        .onChange(of: reading?.id) { _, _ in
+            if let reading { openRoute?(Route { AnyView(MangaReaderView(reading: reading)) }); self.reading = nil }
+        }
+        #else
+        .fullScreenCover(item: $reading) { MangaReaderView(reading: $0) }
+        #endif
+    }
+
+    private func load(fresh: Bool = false) async {
+        failure = nil
+        do {
+            let loaded = try await MangaRuntime.shared.details(comic.sourceKey, id: comic.id, fresh: fresh)
+            details = loaded
+            if let index = store.progress(comic).flatMap({ progress in loaded.groups.firstIndex { $0.chapters.contains { $0.id == progress.chapterID } } }) { group = index }
+            #if DEBUG
+            if UserDefaults.standard.bool(forKey: "qaMangaRead"), reading == nil { read(at: max(0, UserDefaults.standard.integer(forKey: "qaMangaChapter")), page: 0) }
+            #endif
+        } catch { failure = error.mangaMessage }
+    }
+
+    /// Read from the start, or Continue where the viewer stopped.
+    private func readOn() {
+        if let progress = store.progress(comic), let index = chapters.firstIndex(where: { $0.id == progress.chapterID }) ?? (chapters.isEmpty ? 0 : nil) {
+            read(at: index, page: progress.page)
+        } else {
+            read(at: 0, page: 0)
+        }
+    }
+
+    private func read(at index: Int, page: Int) {
+        guard let details else { return }
+        reading = MangaReading(comic: details.comic.merged(comic), chapters: details.chapters, chapter: index, page: page)
+    }
+
+    #if os(tvOS)
+    private let coverWidth: CGFloat = 300
+    #elseif os(macOS)
+    private let coverWidth: CGFloat = 180
+    #else
+    private let coverWidth: CGFloat = 128
+    #endif
+
+    private var cover: some View {
+        Color.clear.aspectRatio(3.0 / 4.0, contentMode: .fit).frame(width: coverWidth)
+            .overlay { MangaCover(source: comic.sourceKey, url: coverURL) }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .shadow(color: .black.opacity(0.25), radius: 14, y: 8)
+    }
+
+    private var sourceLine: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "puzzlepiece.extension")
+            Text(store.name(of: comic.sourceKey))
+            if let update = details?.updateTime, !update.isEmpty { Text("·"); Text(update) }
+        }
+        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+    }
+
+    // MARK: Header
+
+    #if os(tvOS)
+    private var header: some View {
+        HStack(alignment: .top, spacing: Layout.cardSpacing * 1.5) {
+            cover
+            VStack(alignment: .leading, spacing: 10) {
+                Text(current.title).font(.title2.weight(.bold)).lineLimit(3)
+                if !current.subtitle.isEmpty { Text(current.subtitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(2) }
+                sourceLine
+                if !current.description.isEmpty {
+                    Text(current.description).font(.callout).foregroundStyle(.secondary).lineLimit(4)
+                }
+                tvActions.padding(.top, 4)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .tvFocusSection()
+    }
+
+    private var tvActions: some View {
+        HStack(spacing: 12) {
+            let progress = store.progress(comic)
+            Button(action: readOn) {
+                Label(progress == nil ? L10n.text("Read") : L10n.text("Continue"), systemImage: "book.fill").lineLimit(1).padding(.horizontal, 6)
+            }
+            .controlButton(prominent: true)
+            .disabled(details == nil)
+            Button { store.toggleFavorite(current) } label: {
+                Label(store.isFavorite(comic) ? L10n.text("Saved") : L10n.text("Favorite"), systemImage: store.isFavorite(comic) ? "heart.fill" : "heart").lineLimit(1)
+            }
+            .controlButton()
+        }
+        .overlay(alignment: .bottomLeading) {
+            if let progress = store.progress(comic) {
+                Text(MangaProgressText.short(progress)).font(.caption).foregroundStyle(.secondary).lineLimit(1).offset(y: 26)
+            }
+        }
+        .padding(.bottom, store.progress(comic) == nil ? 0 : 22)
+    }
+    #else
+    /// Cover and title side by side, then Read / Continue with the heart, then the blurb.
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .bottom, spacing: 16) {
+                cover
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(current.title).font(.title3.weight(.bold)).lineLimit(4).selectable()
+                    if !current.subtitle.isEmpty { Text(current.subtitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(2) }
+                    sourceLine
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            actions
+            if !current.description.isEmpty { blurb }
+        }
+    }
+
+    private var actions: some View {
+        let progress = store.progress(comic)
+        let saved = store.isFavorite(comic)
+        return HStack(spacing: 10) {
+            Button(action: readOn) {
+                VStack(spacing: 1) {
+                    Label(progress == nil ? L10n.text("Read") : L10n.text("Continue"), systemImage: "book.fill")
+                        .font(.headline).lineLimit(1)
+                    if let progress {
+                        Text(MangaProgressText.short(progress)).font(.caption2.weight(.medium)).opacity(0.8).lineLimit(1)
+                    }
+                }
+                .foregroundStyle(Brand.onAccent)
+                .frame(maxWidth: .infinity).frame(height: 52)
+                .glassOrFill(.regular.tint(Brand.accent).interactive(), Brand.accent, in: Capsule())
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(details == nil).opacity(details == nil ? 0.55 : 1)
+            .accessibilityIdentifier("manga.read")
+            Button { withAnimation(.smooth) { store.toggleFavorite(current) } } label: {
+                Image(systemName: saved ? "heart.fill" : "heart")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(saved ? Color.pink : Color.primary)
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 52, height: 52)
+                    .glassOrFill(.regular.interactive(), Color.primary.opacity(0.07), in: Circle())
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(saved ? L10n.text("Saved") : L10n.text("Favorite"))
+            .accessibilityAddTraits(saved ? .isSelected : [])
+        }
+        .frame(maxWidth: 520)
+    }
+
+    /// Three lines, and More for the rest.
+    private var blurb: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(current.description).font(.callout).foregroundStyle(.secondary)
+                .lineLimit(expanded ? nil : 3)
+                .fixedSize(horizontal: false, vertical: true)
+            if !expanded, current.description.count > 60 {
+                Text(L10n.text("More")).font(.callout.weight(.semibold))
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { withAnimation(.smooth) { expanded.toggle() } }
+    }
+    #endif
+
+    // MARK: Tags and chapters
+
+    private func tags(_ details: MangaDetails) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(details.tags.enumerated()), id: \.offset) { _, tag in
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(tag.name).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).frame(minWidth: 44, alignment: .leading)
+                    MangaFlow(spacing: 8) {
+                        ForEach(tag.values, id: \.self) { value in
+                            RouteLink { MangaSourceResults(source: comic.sourceKey, keyword: value) } label: { Text(value).lineLimit(1) }
+                                .mangaPill()
+                        }
+                    }
+                }
+            }
+        }
+        .tvFocusSection()
+    }
+
+    #if os(tvOS)
+    private let chapterColumns = [GridItem(.adaptive(minimum: 260), spacing: 24)]
+    #elseif os(macOS)
+    private let chapterColumns = [GridItem(.adaptive(minimum: 150), spacing: 10)]
+    #else
+    private let chapterColumns = [GridItem(.adaptive(minimum: 104), spacing: 10)]
+    #endif
+
+    #if os(tvOS)
+    @ViewBuilder private func chapterList(_ details: MangaDetails) -> some View {
+        let progress = store.progress(comic)
+        VStack(alignment: .leading, spacing: Layout.headerSpacing) {
+            HStack {
+                if chapters.count > 1 {
+                    // As the episode lists: the heading turns the list around, its arrow showing the order.
+                    Button { withAnimation(.smooth) { newestFirst.toggle() } } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: newestFirst ? "arrow.down" : "arrow.up").contentTransition(.symbolEffect(.replace))
+                            Text(L10n.text("Chapters"))
+                            Text("\(chapters.count)").monospacedDigit().foregroundStyle(.secondary)
+                        }
+                    }
+                    .glassPill()
+                    .accessibilityLabel(L10n.text("Reverse Order"))
+                    .accessibilityAddTraits(newestFirst ? .isSelected : [])
+                } else {
+                    SectionHeader(title: details.isSingle ? L10n.text("Pages") : L10n.text("Chapters"))
+                }
+                Spacer()
+            }
+            if details.groups.count > 1 {
+                ChipRow {
+                    HStack(spacing: 10) {
+                        ForEach(Array(details.groups.enumerated()), id: \.offset) { index, item in
+                            Chip(title: "\(item.title) (\(item.chapters.count))", selected: index == group) { group = index }
+                        }
+                    }
+                }
+            }
+            if details.isSingle {
+                Button { read(at: 0, page: progress?.page ?? 0) } label: { Label(L10n.text("Read"), systemImage: "book") }.controlButton()
+            } else {
+                let shown = details.groups.indices.contains(group) ? details.groups[group].chapters : chapters
+                LazyVGrid(columns: chapterColumns, spacing: 8) {
+                    ForEach(newestFirst ? shown.reversed() : shown) { chapter in
+                        let last = chapter.id == progress?.chapterID
+                        Button { open(chapter, last: last) } label: {
+                            HStack(spacing: 6) {
+                                if last { Circle().fill(Brand.cyan).frame(width: 7, height: 7) }
+                                Text(chapter.title).lineLimit(1).frame(maxWidth: .infinity, alignment: last ? .leading : .center)
+                            }
+                            .font(.subheadline.weight(last ? .semibold : .regular))
+                            .frame(maxWidth: .infinity).padding(.horizontal, 8).padding(.vertical, 6)
+                        }
+                        .controlButton()
+                        .accessibilityLabel(last ? L10n.text("%@, last read", chapter.title) : chapter.title)
+                    }
+                }
+            }
+        }
+        .tvFocusSection()
+    }
+    #else
+    @ViewBuilder private func chapterList(_ details: MangaDetails) -> some View {
+        let progress = store.progress(comic)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 8) {
+                Text(details.isSingle ? L10n.text("Pages") : L10n.text("Chapters")).font(.title3.weight(.bold))
+                if !details.isSingle { Text("\(chapters.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary) }
+                if chapters.count > 1 {
+                    // As Apple TV's episode lists: an arrow, up for the first chapter first, down for the newest; it turns
+                    // over and the chapters move to their new places.
+                    Button { withAnimation(.smooth(duration: 0.4)) { newestFirst.toggle() } } label: {
+                        Image(systemName: newestFirst ? "arrow.down" : "arrow.up")
+                            .font(.subheadline.weight(.bold))
+                            .contentTransition(.symbolEffect(.replace))
+                            .frame(width: 34, height: 34)
+                            .glassOrFill(.regular.interactive(), Color.primary.opacity(0.07), in: Circle())
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.text("Reverse Order"))
+                    .accessibilityLabel(L10n.text("Reverse Order"))
+                    .accessibilityAddTraits(newestFirst ? .isSelected : [])
+                    .accessibilityIdentifier("manga.chapters.reverse")
+                }
+                Spacer(minLength: 0)
+            }
+            if details.groups.count > 1 {
+                SourceStrip(items: details.groups.indices.map { .init(id: "\($0)", name: details.groups[$0].title, count: details.groups[$0].chapters.count) },
+                            selection: "\(group)") { group = Int($0) ?? 0 }
+            }
+            if details.isSingle {
+                Button { read(at: 0, page: progress?.page ?? 0) } label: { chapterLabel(L10n.text("Read"), last: progress != nil) }
+                    .buttonStyle(.plain).frame(maxWidth: 240)
+            } else {
+                let shown = details.groups.indices.contains(group) ? details.groups[group].chapters : chapters
+                GlassGroup(spacing: 10) {
+                    LazyVGrid(columns: chapterColumns, spacing: 10) {
+                        ForEach(newestFirst ? shown.reversed() : shown) { chapter in
+                            let last = chapter.id == progress?.chapterID
+                            Button { open(chapter, last: last) } label: { chapterLabel(chapter.title, last: last) }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(last ? L10n.text("%@, last read", chapter.title) : chapter.title)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// A chapter as a glass capsule; the one last read is filled with the accent.
+    private func chapterLabel(_ title: String, last: Bool) -> some View {
+        HStack(spacing: 5) {
+            if last { Image(systemName: "book.fill").font(.caption2) }
+            Text(title).lineLimit(1).minimumScaleFactor(0.85)
+        }
+        .font(.subheadline.weight(last ? .semibold : .regular))
+        .foregroundStyle(last ? Brand.onAccent : Color.primary)
+        .padding(.horizontal, 10).frame(maxWidth: .infinity).frame(height: 42)
+        .glassOrFill(last ? .regular.tint(Brand.accent).interactive() : .regular.interactive(),
+                     last ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(Color.primary.opacity(0.07)), in: Capsule())
+        .contentShape(Capsule())
+    }
+    #endif
+
+    private func open(_ chapter: MangaChapter, last: Bool) {
+        guard let index = chapters.firstIndex(of: chapter) else { return }
+        read(at: index, page: last ? store.progress(comic)?.page ?? 0 : 0)
+    }
+}
+
+#if !os(tvOS)
+/// The cover, blurred, colours the top of the page as a book's does in Books.
+private struct MangaDetailBackdrop: View {
+    let source: String
+    let cover: String
+    var body: some View {
+        ZStack(alignment: .top) {
+            Backdrop()
+            MangaCover(source: source, url: cover)
+                .frame(height: 460).frame(maxWidth: .infinity).clipped()
+                .blur(radius: 70).opacity(0.6)
+                .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black.opacity(0.7), location: 0.5), .init(color: .clear, location: 1)],
+                                     startPoint: .top, endPoint: .bottom))
+                .allowsHitTesting(false)
+        }
+        .ignoresSafeArea()
+    }
+}
+#endif
+
+extension MangaComic {
+    /// The details' copy, keeping what the list knew when the details leave it out.
+    func merged(_ list: MangaComic) -> MangaComic {
+        var comic = self
+        if comic.title.isEmpty { comic.title = list.title }
+        if comic.cover.isEmpty { comic.cover = list.cover }
+        if comic.subtitle.isEmpty { comic.subtitle = list.subtitle }
+        return comic
+    }
+}
