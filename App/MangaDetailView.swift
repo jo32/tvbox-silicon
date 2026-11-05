@@ -127,7 +127,8 @@ struct MangaDetailView: View {
                 if !current.description.isEmpty {
                     Text(current.description).font(.callout).foregroundStyle(.secondary).lineLimit(4)
                 }
-                tvActions.padding(.top, 4)
+                // Room above and below the buttons for the focus lift, which grew Continue over the source line.
+                tvActions.padding(.top, 26)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -135,8 +136,9 @@ struct MangaDetailView: View {
     }
 
     private var tvActions: some View {
-        HStack(spacing: 12) {
-            let progress = store.progress(comic)
+        let progress = store.progress(comic)
+        return VStack(alignment: .leading, spacing: 22) {
+            HStack(spacing: 12) {
             Button(action: readOn) {
                 Label(progress == nil ? L10n.text("Read") : L10n.text("Continue"), systemImage: "book.fill").lineLimit(1).padding(.horizontal, 6)
             }
@@ -146,13 +148,13 @@ struct MangaDetailView: View {
                 Label(store.isFavorite(comic) ? L10n.text("Saved") : L10n.text("Favorite"), systemImage: store.isFavorite(comic) ? "heart.fill" : "heart").lineLimit(1)
             }
             .controlButton()
-        }
-        .overlay(alignment: .bottomLeading) {
-            if let progress = store.progress(comic) {
-                Text(MangaProgressText.short(progress)).font(.caption).foregroundStyle(.secondary).lineLimit(1).offset(y: 26)
+            }
+            // Where reading stopped, under the buttons and clear of them when Continue is focused.
+            if let progress {
+                Text(MangaProgressText.short(progress)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .padding(.leading, 8)
             }
         }
-        .padding(.bottom, store.progress(comic) == nil ? 0 : 22)
     }
     #else
     /// Cover and title side by side, then Read / Continue with the heart, then the blurb.
