@@ -73,6 +73,18 @@ private func labels(_ names: [String], language: String = "zh-Hans") -> [String]
     #expect(labels(["Show.HEVC.1080p.mkv"]) == nil)
 }
 
+@Test func episodeLabelsKeepALoneNamesLaterSeason() {
+    // History and the Watch Now header show one name: S01E05 and S02E05 must not both read 第5集.
+    #expect(EpisodeLabels.historyLabel("[1.18GB] 海市蜃楼.The.Mirage.2025.S01E05.2160p.WEB-DL.mkv", language: "zh-Hans") == "第5集")
+    #expect(EpisodeLabels.historyLabel("[1.18GB] 海市蜃楼.The.Mirage.2025.S02E05.2160p.WEB-DL.mkv", language: "zh-Hans") == "S2 第5集")
+    #expect(EpisodeLabels.historyLabel("Show.S02E05.mkv", language: "en") == "S2 Episode 5")
+    #expect(EpisodeLabels.historyLabel("HSSL.4K.01.mkv", language: "zh-Hans") == "第1集")
+    // Names it can't read, and names already short, keep their text.
+    #expect(EpisodeLabels.historyLabel("Movie.2025.2160p.WEB-DL.mkv", language: "zh-Hans") == "Movie.2025.2160p.WEB-DL.mkv")
+    #expect(EpisodeLabels.historyLabel("第2季 第1集", language: "zh-Hans") == "第2季 第1集")
+    #expect(EpisodeLabels.historyLabel("正片", language: "zh-Hans") == "正片")
+}
+
 @Test func episodeLabelsGoByLineAndEpisodeID() {
     let episodes = [Episode(id: "a1", name: "Show.4K.01.mkv", address: "1", flag: "A"),
                     Episode(id: "b1", name: "第1集", address: "2", flag: "B"),

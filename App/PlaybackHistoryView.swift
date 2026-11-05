@@ -238,11 +238,9 @@ struct HistoryCard: View {
         .cardButton()
     }
 
-    /// The short episode label when history kept a netdisk file's name (#521): the card cut a long name off after the
-    /// show's, so every episode of a series looked the same.
-    private var episodeLabel: String {
-        EpisodeLabels.labels(names: [entry.context.episodeName])?.first ?? entry.context.episodeName
-    }
+    /// The short episode label when history kept a netdisk file's name (#521, #522): the card cut a long name off after
+    /// the show's, so every episode of a series looked the same.
+    private var episodeLabel: String { EpisodeLabels.historyLabel(entry.context.episodeName) }
 
     private var cardLabel: some View {
         VStack(alignment: centredCaptions ? .center : .leading, spacing: 8) {
@@ -281,9 +279,7 @@ struct HistoryCard: View {
             Text(entry.context.videoName).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
                 .cardCaption()
             if details {
-                // The stored name is often a netdisk line; the row says which episode it is (#522).
-                let episode = EpisodeLabels.labels(names: [entry.context.episodeName])?.first ?? entry.context.episodeName
-                Text("\(episode) · \(SourceLabel(entry.context.sourceName).text)")
+                Text("\(episodeLabel) · \(SourceLabel(entry.context.sourceName).text)")
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
                 Text(HistoryFormat.status(entry)).font(.caption).monospacedDigit().foregroundStyle(.tertiary).lineLimit(1)
                     .cardCaption()

@@ -62,6 +62,22 @@ public enum EpisodeLabels {
         return Set(shown).count == shown.count ? shown : nil
     }
 
+    /// The label History and Watch Now show for one stored episode name (#521, #522), or the name itself when it gives
+    /// no number. A season past the first stays (S2 第5集): with no line around it, the label is all that tells S1E05
+    /// from S2E05. Cached, since cards and headers ask again on every redraw.
+    public static func historyLabel(_ name: String, language: String? = nil) -> String {
+        let key = ((language ?? "") + "\u{1}" + name) as NSString
+        if let cached = historyLabels.object(forKey: key) { return cached as String }
+        var label = labels(names: [name], language: language)?.first ?? name
+        if label != name, let season = marked(clean(name))?.season, season > 1 { label = "S\(season) " + label }
+        historyLabels.setObject(label as NSString, forKey: key)
+        return label
+    }
+    // NSCache is thread-safe.
+    nonisolated(unsafe) private static let historyLabels: NSCache<NSString, NSString> = {
+        let cache = NSCache<NSString, NSString>(); cache.countLimit = 500; return cache
+    }()
+
     // The numbers go in as text: formatted as numbers they would get the locale's grouping (第1,000集). `Episode %@` is the
     // short dramas' spaced 第 1 集, too wide for the small tiles once past nine.
     struct Mark: Hashable { let season: Int?; let episode: Int }

@@ -144,7 +144,7 @@ private struct WatchNowTVHero: View {
                 }
             }
             .accessibilityAddTraits(.isHeader)
-            Text([entry.context.episodeName, SourceLabel(entry.context.sourceName).text, HistoryFormat.status(entry)]
+            Text([EpisodeLabels.historyLabel(entry.context.episodeName), SourceLabel(entry.context.sourceName).text, HistoryFormat.status(entry)]
                 .filter { !$0.isEmpty }.joined(separator: " · "))
                 .font(.system(size: 24)).monospacedDigit().lineLimit(1)
             if let overview = details?.overview, !overview.isEmpty {
