@@ -80,6 +80,8 @@ import TVCore
                 #elseif os(macOS)
                 .onOpenURL { url in if let link = SubscriptionImportLink(url) { subscriptionLink = link } }
                 .sheet(item: $subscriptionLink) { SubscriptionImportView(link: $0) }
+                // Without this, every link opened a second main window, and the sheet showed in both.
+                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
                 #endif
                 // A launch that ends while active, without passing through here, crashed or was ended.
                 .onChange(of: scenePhase, initial: true) { _, phase in ErrorReports.shared.onScreen(phase == .active) }
@@ -161,6 +163,8 @@ struct SubscriptionImportView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var adding = false
     @State private var failure: String?
+    /// What the import added, shown before the sheet closes: a directory's subscriptions arrive switched off.
+    @State private var added: String?
 
     var body: some View {
         NavigationStack {
@@ -184,6 +188,10 @@ struct SubscriptionImportView: View {
                     Label(failure, systemImage: "exclamationmark.triangle.fill")
                         .font(.callout).foregroundStyle(Brand.amber)
                 }
+                if let added {
+                    Label(added, systemImage: "checkmark.circle.fill")
+                        .font(.callout).foregroundStyle(.green)
+                }
                 Spacer(minLength: 0)
             }
             .padding(24)
@@ -191,11 +199,16 @@ struct SubscriptionImportView: View {
             .background { Backdrop() }
             .navigationTitle(L10n.text("Subscription"))
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.text("Cancel")) { dismiss() }
+                if added == nil {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(L10n.text("Cancel")) { dismiss() }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    if adding { ProgressView() } else { Button(L10n.text("Add"), action: add).fontWeight(.semibold) }
+                    if added != nil { Button(L10n.text("Done")) { dismiss() }.fontWeight(.semibold) }
+                    // Settings may be importing already, and the store takes one import at a time.
+                    else if adding || store.importing { ProgressView() }
+                    else { Button(L10n.text("Add"), action: add).fontWeight(.semibold) }
                 }
             }
         }
@@ -216,8 +229,8 @@ struct SubscriptionImportView: View {
         Task {
             await store.importSubscription(address: link.address.absoluteString, name: link.name)
             adding = false
-            // Settings shows this error too; here it explains what did not arrive.
-            if let error = store.importError { failure = error } else { dismiss() }
+            // Settings shows these too; here they say what did or did not arrive.
+            if let error = store.importError { failure = error } else { added = store.notice ?? L10n.text("Done") }
         }
     }
 }

@@ -13,7 +13,8 @@ import Testing
 @Test func importLinkKeepsAQueryTheAddressCarries() throws {
     let address = "https://example.com/tv.json?token=abc&v=2"
     let encoded = try #require(address.addingPercentEncoding(withAllowedCharacters: .alphanumerics))
-    let link = try #require(SubscriptionImportLink(try #require(URL(string: "yingxia://import?url=\(encoded)"))))
+    let url = try #require(URL(string: "yingxia://import?url=\(encoded)"))
+    let link = try #require(SubscriptionImportLink(url))
     #expect(link.address.absoluteString == address)
     #expect(link.name == nil)
 }
@@ -41,4 +42,13 @@ import Testing
     let unnamed = try #require(SubscriptionImportLink(SubscriptionImportLink(address: address).url))
     #expect(unnamed.name == nil)
     #expect(SubscriptionImportLink(address: address, name: "   ").name == nil)
+}
+
+@Test func importLinkReadsAnAddressAsSettingsDoes() throws {
+    // A Chinese domain, as many TVBox addresses are, arrives in Punycode, as Settings fetches it.
+    let idn = try #require(URL(string: "yingxia://import?url=http%3A%2F%2Fwww.%E9%A5%AD%E5%A4%AA%E7%A1%AC.net%2Ftv"))
+    #expect(SubscriptionImportLink(idn)?.address.absoluteString == "http://www.xn--sss604efuw.net/tv")
+    // Settings repairs a missing slash after the scheme; a link does too.
+    let slash = try #require(URL(string: "yingxia://import?url=https%3A%2Fexample.com%2Ftv.json"))
+    #expect(SubscriptionImportLink(slash)?.address.absoluteString == "https://example.com/tv.json")
 }

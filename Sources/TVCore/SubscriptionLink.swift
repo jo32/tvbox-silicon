@@ -18,8 +18,8 @@ public struct SubscriptionImportLink: Sendable, Equatable, Identifiable {
         guard url.scheme?.lowercased() == Self.scheme, url.host()?.lowercased() == Self.action,
               let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
               let typed = items.first(where: { $0.name == "url" })?.value,
-              let address = URL(string: typed.trimmingCharacters(in: .whitespacesAndNewlines)),
-              Self.isFetchable(address) else { return nil }
+              // The same reading as an address typed in Settings: http or https with a host, IDN hosts in Punycode.
+              let address = try? WebAddress.resolve(typed) else { return nil }
         self.address = address
         name = Self.clean(items.first(where: { $0.name == "name" })?.value)
     }
@@ -38,13 +38,6 @@ public struct SubscriptionImportLink: Sendable, Equatable, Identifiable {
         components.queryItems = [URLQueryItem(name: "url", value: address.absoluteString)]
             + (name.map { [URLQueryItem(name: "name", value: $0)] } ?? [])
         return components.url!
-    }
-
-    /// What Settings itself accepts from an address: a TVBox JSON, an M3U or TXT playlist, an AList server.
-    /// A page hands over something the app downloads, never a file of its own or a script.
-    static func isFetchable(_ address: URL) -> Bool {
-        guard let scheme = address.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return false }
-        return address.host()?.isEmpty == false
     }
 
     private static func clean(_ name: String?) -> String? {
