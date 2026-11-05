@@ -256,6 +256,37 @@ struct CloudStreamsTests {
         #expect(RangeServer.requests("moved.mp4") == 1)
         await stream.clear()
     }
+
+    /// The 9280.kstore.vip bundle's drive sites put the drive link and its headers in their proxy addresses (#530).
+    @Test func aBundleProxyRevealsItsDriveLink() throws {
+        let fields = #"{"url":"https://drive.test/file.mp4?sign=a%2Bb~","headers":{"Cookie":"__puus=1","User-Agent":"quark","X-Count":2},"threads":16,"chunkKB":256,"createdAt":1}"#
+        let pst = Data(fields.utf8).base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
+        let proxy = try #require(URL(string: "http://127.0.0.1:61981/spider/huban/3/proxy/quark/c4f07934-2ea1?pst=\(pst)"))
+        let link = try #require(CatPawOpen.revealedLink(proxy))
+        #expect(link.url.absoluteString == "https://drive.test/file.mp4?sign=a%2Bb~")
+        #expect(link.headers == ["Cookie": "__puus=1", "User-Agent": "quark", "X-Count": "2"])
+        #expect(CatPawOpen.revealedLink(try #require(URL(string: "http://127.0.0.1:61981/spider/huban/3/proxy/quark/c4f07934-2ea1"))) == nil)
+        #expect(CatPawOpen.revealedLink(try #require(URL(string: "http://127.0.0.1:61981/spider/huban/3/proxy/quark/1?pst=e30"))) == nil)
+        #expect(CatPawOpen.revealedLink(try #require(URL(string: "https://example.com/spider/huban/3/proxy/quark/1?pst=\(pst)"))) == nil)
+    }
+
+    /// The app reads a drive file itself only when its link serves what the bundle's proxy does.
+    @Test func aDriveLinkStandsInForItsProxyOnlyWhenItServesTheSameFile() async throws {
+        let size = 5000
+        let (link, bytes) = try await served("direct-link.mp4", size: size)
+        let proxied = CloudStreams.Source(url: RangeServer.add("direct-proxy.mp4", bytes), headers: [:], length: size, name: "c4f07934")
+        let direct = try #require(await CatPawOpen.sameFile(proxied, at: link, headers: ["Cookie": "a"], session: RangeServer.session))
+        #expect(direct.url == link && direct.length == size && direct.headers == ["Cookie": "a"] && direct.name == "c4f07934")
+        // A link to a file under a disguise the proxy strips is longer; one the proxy changes has other bytes.
+        let disguised = RangeServer.add("direct-disguised.mp4", Data(repeating: 0x89, count: 100) + bytes)
+        #expect(await CatPawOpen.sameFile(proxied, at: disguised, headers: [:], session: RangeServer.session) == nil)
+        var changed = bytes
+        changed[3] ^= 0xff
+        #expect(await CatPawOpen.sameFile(proxied, at: RangeServer.add("direct-changed.mp4", changed), headers: [:], session: RangeServer.session) == nil)
+        // An expired link.
+        #expect(await CatPawOpen.sameFile(proxied, at: try #require(URL(string: "https://cloud.test/direct-expired.mp4")), headers: [:], session: RangeServer.session) == nil)
+    }
 }
 
 /// Serves registered bytes for https://cloud.test/<name> with HTTP Range, in memory, so these

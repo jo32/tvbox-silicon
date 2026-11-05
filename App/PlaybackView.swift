@@ -1045,12 +1045,20 @@ extension PlaybackSession {
             Diagnostics.shared.record(.info, "player", "cloud direct host=\(media.url.host() ?? "-") length=\(media.length)")
         } else if let media = await CatPawOpen.proxiedMedia(address, headers: channel.headers) {
             try Task.checkCancellation()
-            // The bundle downloads each request with 10 to 16 threads of its own: reading ahead on six at once ran its
-            // Node out of memory, and on one a 4K episode stalled whenever the drive slowed.
-            // Its proxy moves to a new port when iOS took back the sockets of the suspended app (#485).
-            address = CloudStreams.register(media, parallel: 2) { await CatPawOpen.relocated(media) }
+            if let direct = await CatPawOpen.directMedia(media) {
+                try Task.checkCancellation()
+                // A drive file whose link the bundle's proxy reveals streams straight from the drive, like the plugins'
+                // (above): through the bundle, a 4K file filled the heap of the phone's Node until it stopped (#530).
+                address = CloudStreams.register(direct) { await CatPawOpen.directMedia(media) }
+                Diagnostics.shared.record(.info, "player", "catpaw direct host=\(direct.url.host() ?? "-") length=\(direct.length)")
+            } else {
+                // The bundle downloads each request with 10 to 16 threads of its own: reading ahead on six at once ran its
+                // Node out of memory, and on one a 4K episode stalled whenever the drive slowed.
+                // Its proxy moves to a new port when iOS took back the sockets of the suspended app (#485).
+                address = CloudStreams.register(media, parallel: 2) { await CatPawOpen.relocated(media) }
+                Diagnostics.shared.record(.info, "player", "catpaw stream length=\(media.length)")
+            }
             prepared.url = address
-            Diagnostics.shared.record(.info, "player", "catpaw stream length=\(media.length)")
         } else if EmbeddedJarHost.isPluginProxy(address) {
             Diagnostics.shared.record(.warning, "player", "plugin proxy stream \(EmbeddedJarHost.proxyRoute(address))")
             prepared.pluginProxy = true
