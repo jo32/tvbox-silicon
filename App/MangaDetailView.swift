@@ -242,9 +242,7 @@ struct MangaDetailView: View {
         .tvFocusSection()
     }
 
-    #if os(tvOS)
-    private let chapterColumns = [GridItem(.adaptive(minimum: 260), spacing: 24)]
-    #elseif os(macOS)
+    #if os(macOS)
     private let chapterColumns = [GridItem(.adaptive(minimum: 150), spacing: 10)]
     #else
     private let chapterColumns = [GridItem(.adaptive(minimum: 104), spacing: 10)]
@@ -285,21 +283,18 @@ struct MangaDetailView: View {
                 Button { read(at: 0, page: progress?.page ?? 0) } label: { Label(L10n.text("Read"), systemImage: "book") }.controlButton()
             } else {
                 let shown = details.groups.indices.contains(group) ? details.groups[group].chapters : chapters
-                LazyVGrid(columns: chapterColumns, spacing: 8) {
+                // The video page's episode chips: Liquid Glass capsules that turn white under focus, the chapter last read
+                // shown selected. Names longer than a chip holds get wider columns, as episode names get rows there.
+                let longNames = (shown.map(\.title.count).max() ?? 0) > 6
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: longNames ? 320 : 170), spacing: 8)], spacing: 8) {
                     ForEach(newestFirst ? shown.reversed() : shown) { chapter in
                         let last = chapter.id == progress?.chapterID
-                        Button { open(chapter, last: last) } label: {
-                            HStack(spacing: 6) {
-                                if last { Circle().fill(Brand.cyan).frame(width: 7, height: 7) }
-                                Text(chapter.title).lineLimit(1).frame(maxWidth: .infinity, alignment: last ? .leading : .center)
-                            }
-                            .font(.subheadline.weight(last ? .semibold : .regular))
-                            .frame(maxWidth: .infinity).padding(.horizontal, 8).padding(.vertical, 6)
-                        }
-                        .controlButton()
-                        .accessibilityLabel(last ? L10n.text("%@, last read", chapter.title) : chapter.title)
+                        Chip(title: chapter.title, selected: last, fill: true) { open(chapter, last: last) }
+                            .accessibilityLabel(last ? L10n.text("%@, last read", chapter.title) : chapter.title)
                     }
                 }
+                // Room for the focused chip, which grows toward the trailing edge.
+                .padding(.trailing, 16).padding(.vertical, 6)
             }
         }
         .tvFocusSection()
