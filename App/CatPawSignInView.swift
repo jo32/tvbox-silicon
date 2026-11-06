@@ -68,6 +68,8 @@ struct CatPawSignInView: View {
                 #if os(iOS)
                 if let link = signIn?.link, !expired, error == nil {
                     // This phone can't scan its own screen: the drive's app opens the code, or scans it from Photos.
+                    // Baidu's code is a page that signs in and approves it right here.
+                    if let page = DriveAppLink.confirmPage(drive: provider, page: link.absoluteString) { ConfirmCodePageButton(page: page) }
                     let app = OpenDriveAppButton.target(drive: provider, page: link.absoluteString)
                     if let app, app.opensPage { OpenDriveAppButton(target: app) }
                     if !tvToken { SaveCodeButton(text: link.absoluteString, app: name) }
@@ -87,6 +89,9 @@ struct CatPawSignInView: View {
 
     private var instructions: String {
         #if os(iOS)
+        if DriveAppLink.confirmPage(drive: provider, page: signIn?.link?.absoluteString) != nil {
+            return L10n.text("Sign in here and confirm, or scan this code with the %@ app on another phone.", name)
+        }
         if !tvToken, OpenDriveAppButton.target(drive: provider, page: signIn?.link?.absoluteString)?.opensPage == true {
             return L10n.text("Confirm the sign-in in the %@ app: open it here, or scan the code with another phone.", name)
         }
@@ -148,9 +153,20 @@ struct CatPawSignInView: View {
             var signIn = try await CatPawSignIn.start(provider, client: client)
             started = signIn
             self.signIn = signIn
+            var failures = 0
             while true {
                 try await Task.sleep(for: .seconds(2))
-                try await signIn.poll()
+                do {
+                    try await signIn.poll(); failures = 0
+                } catch {
+                    // A check can wait on the drive: Baidu holds each one until the code is scanned, and the bundle
+                    // gives up after 15 s ("timeout of 15000ms exceeded"). The bundle's own page keeps asking, and so
+                    // does this, until the code expires; other failures end it on the third in a row.
+                    try Task.checkCancellation()
+                    failures += 1
+                    if failures < 3 || error.localizedDescription.localizedCaseInsensitiveContains("timeout") { continue }
+                    throw error
+                }
                 switch signIn.status {
                 case .waiting: continue
                 case .expired: expired = true; return

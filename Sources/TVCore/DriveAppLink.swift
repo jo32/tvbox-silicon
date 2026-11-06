@@ -40,6 +40,15 @@ public struct DriveAppLink: Sendable, Equatable {
         }
     }
 
+    /// The code's own page, when this device's browser can confirm the code itself: Baidu's code is a
+    /// wappass.baidu.com page, which signs in to Baidu (password or text message) and approves the code there. Quark's
+    /// and UC's pages only send the viewer to their apps.
+    public static func confirmPage(drive: String, page: String?) -> URL? {
+        guard drive == "baidu", let page, let url = URL(string: page), url.scheme == "https",
+              let host = url.host?.lowercased(), host == "baidu.com" || host.hasSuffix(".baidu.com") else { return nil }
+        return url
+    }
+
     /// `encodeURIComponent`, which the apps decode the page with.
     static func openURL(scheme: String, key: String, page: String) -> URL? {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.!~*'()"))

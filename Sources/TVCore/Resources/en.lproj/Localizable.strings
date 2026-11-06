@@ -1345,6 +1345,7 @@
 "You're signed in to UC, but this source plays UC accounts without premium through UC's TV app, which needs a token of its own. Get it once with the UC Browser app, or choose another line." = "You're signed in to UC, but this source plays UC accounts without premium through UC's TV app, which needs a token of its own. Get it once with the UC Browser app, or choose another line.";
 "Scan this code with the UC Browser app on your phone, signed in to the same UC account, and approve it." = "Scan this code with the UC Browser app on your phone, signed in to the same UC account, and approve it.";
 "Approve the token in the UC Browser app, signed in to the same UC account: open it here, or scan the code with UC Browser on another phone." = "Approve the token in the UC Browser app, signed in to the same UC account: open it here, or scan the code with UC Browser on another phone.";
+"Sign in here and confirm, or scan this code with the %@ app on another phone." = "Sign in here and confirm, or scan this code with the %@ app on another phone.";
 "Open in %@" = "Open in %@";
 "UC Browser" = "UC Browser";
 "Save the code to Photos first, then scan it from Photos in %@." = "Save the code to Photos first, then scan it from Photos in %@.";
