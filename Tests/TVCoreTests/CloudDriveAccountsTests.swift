@@ -55,4 +55,9 @@ private func notice(_ text: String) throws -> [String: Any] {
     #expect(!baidu.opensPage && baidu.urls.first?.scheme == "bdnetdisk")
     #expect(DriveAppLink.target(drive: "quark", page: nil, pad: false) == nil)
     #expect(DriveAppLink.target(drive: "pan115", page: "https://115.com/scan/x", pad: false) == nil)
+    // Baidu's code page signs in and approves the code in a browser on this phone; other drives' pages need their apps.
+    let wappass = "https://wappass.baidu.com/wp/?qrlogin&t=1&error=0&sign=abc&tpl=netdisk&cmd=login&lp=pc&adapter=3"
+    #expect(DriveAppLink.confirmPage(drive: "baidu", page: wappass)?.host == "wappass.baidu.com")
+    #expect(DriveAppLink.confirmPage(drive: "baidu", page: "https://evil.example/?baidu.com") == nil)
+    #expect(DriveAppLink.confirmPage(drive: "quark", page: page) == nil)
 }

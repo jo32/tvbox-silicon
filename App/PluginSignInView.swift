@@ -54,10 +54,13 @@ struct PluginSignInView: View {
                     Label(L10n.text("This code has expired."), systemImage: "clock.badge.exclamationmark").foregroundStyle(.secondary)
                 } else {
                     // Quark and UC open the code's page in their app on this phone; Baidu Netdisk's app scans it from Photos.
+                    // Baidu's code is a page that signs in and approves it right here.
+                    let page = DriveAppLink.confirmPage(drive: prompt.drive, page: prompt.content)
+                    if let page { ConfirmCodePageButton(page: page) }
                     let app = OpenDriveAppButton.target(drive: prompt.drive, page: prompt.content)
                     if let app, app.opensPage { OpenDriveAppButton(target: app) }
                     VStack(alignment: .leading, spacing: 16) {
-                        Text(app?.opensPage == true ? L10n.text("Or scan this code with the %@ app on another phone.", name)
+                        Text(app?.opensPage == true || page != nil ? L10n.text("Or scan this code with the %@ app on another phone.", name)
                              : L10n.text("Open the %@ app on your phone, scan this code, and confirm the sign-in.", name))
                             .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         code

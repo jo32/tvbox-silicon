@@ -1345,6 +1345,7 @@
 "You're signed in to UC, but this source plays UC accounts without premium through UC's TV app, which needs a token of its own. Get it once with the UC Browser app, or choose another line." = "你已登入 UC，但此片源透過 UC 網盤 TV 版播放非會員帳號，需要另外的 TV Token。用 UC 瀏覽器取得一次即可，或改選其他線路。";
 "Scan this code with the UC Browser app on your phone, signed in to the same UC account, and approve it." = "用手機上的 UC 瀏覽器（登入同一 UC 帳號）掃描此 QR 碼並確認。";
 "Approve the token in the UC Browser app, signed in to the same UC account: open it here, or scan the code with UC Browser on another phone." = "請在 UC 瀏覽器（登入同一 UC 帳號）中確認：在本機開啟，或用另一支手機的 UC 瀏覽器掃描 QR 碼。";
+"Sign in here and confirm, or scan this code with the %@ app on another phone." = "在這裡登入並確認，或用另一支手機上的%@ App 掃描此 QR 碼。";
 "Open in %@" = "在%@中開啟";
 "UC Browser" = "UC 瀏覽器";
 "Save the code to Photos first, then scan it from Photos in %@." = "請先把 QR 碼儲存到相簿，再在%@裡從相簿掃描。";

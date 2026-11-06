@@ -1,5 +1,6 @@
 #if os(iOS)
 import Photos
+import SafariServices
 import SwiftUI
 import TVCore
 import WebKit
@@ -515,6 +516,44 @@ struct OpenDriveAppButton: View {
         guard index < target.urls.count else { missing = true; return }
         missing = false
         openURL(target.urls[index]) { opened in if !opened { open(index + 1) } }
+    }
+}
+
+/// Opens a sign-in code's own page on this iPhone or iPad (`DriveAppLink.confirmPage`): Baidu's page signs in to Baidu
+/// and approves the code, so no second phone is needed. It is the source's code and Baidu's page, in Safari inside the
+/// app: the app stays in front, so the source keeps checking the code, and the sign-in closes once it has the account.
+struct ConfirmCodePageButton: View {
+    let page: URL
+    @State private var showing = false
+
+    var body: some View {
+        Button { showing = true } label: {
+            Label(L10n.text(UIDevice.current.userInterfaceIdiom == .pad ? "Sign In on This iPad" : "Sign In on This iPhone"),
+                  systemImage: "person.crop.circle.badge.checkmark")
+        }
+        .settingsButton(prominent: true)
+        .accessibilityIdentifier("signIn.codePage")
+        .sheet(isPresented: $showing) { CodePage(url: page, showing: $showing).ignoresSafeArea() }
+    }
+}
+
+private struct CodePage: UIViewControllerRepresentable {
+    let url: URL
+    @Binding var showing: Bool
+
+    func makeCoordinator() -> Coordinator { Coordinator(showing: $showing) }
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let controller = SFSafariViewController(url: url)
+        controller.dismissButtonStyle = .close
+        controller.delegate = context.coordinator
+        return controller
+    }
+    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
+
+    final class Coordinator: NSObject, SFSafariViewControllerDelegate {
+        let showing: Binding<Bool>
+        init(showing: Binding<Bool>) { self.showing = showing }
+        func safariViewControllerDidFinish(_ controller: SFSafariViewController) { showing.wrappedValue = false }
     }
 }
 #endif
