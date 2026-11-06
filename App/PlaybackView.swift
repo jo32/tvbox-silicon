@@ -476,6 +476,10 @@ import IOKit.pwr_mgt
         #endif
         self.player = player
         enhancer = VideoEnhancer(player: player)
+        // Delayed subtitles (#599) reach the screen on this clock rather than on the once-a-second sample below.
+        subtitleTimeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { [weak self] time in
+            MainActor.assumeIsolated { self?.subtitles.advance(to: time.seconds) }
+        }
         queueObservation = player.observe(\.currentItem, options: [.new]) { [weak self] _, _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -494,6 +498,8 @@ import IOKit.pwr_mgt
         }
     }
     private var styleObserver: NSObjectProtocol?
+    /// Shows delayed subtitle lines at the player's clock (`SubtitleCues.advance`).
+    @ObservationIgnored private var subtitleTimeObserver: Any?
     /// The subtitle lines the player's overlay draws (`SubtitleOverlay`).
     let subtitles = SubtitleCues()
     /// The saved subtitle style as the rule AVPlayer lays over every subtitle cue it draws itself.
@@ -999,6 +1005,7 @@ import IOKit.pwr_mgt
         if playing != nil { ErrorReports.shared.stoppedPlaying() }
         playing = nil
         catalogDanmaku.clear()
+        subtitles.follow(nil)
         historyContext = nil; pendingResume = nil; restoringPosition = false
         requestedResumePosition = nil; restoredPosition = nil
         skipScope = nil; skipSettings = EpisodeSkipSettings(); skipPass = EpisodeSkipPass()

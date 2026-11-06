@@ -11,6 +11,12 @@ import TVCore
     /// The picture's size, to place the lines on the picture rather than on the whole view.
     private(set) var pictureSize: CGSize = .zero
     private(set) var style = SubtitleStyle.load()
+    /// How late the lines show (#599). 0 keeps AVPlayer's own timing.
+    private(set) var delay = SubtitleDelay.load()
+    /// What AVPlayer handed over, waiting for its turn while `delay` is on.
+    @ObservationIgnored private var schedule = SubtitleSchedule()
+    /// The playback time `advance(to:)` saw last, to tell a seek from the clock moving on.
+    @ObservationIgnored private var lastAdvanced: Double?
     /// AVPlayer draws the subtitles itself while the picture is somewhere the app's overlay isn't: Picture in Picture.
     var native = false {
         didSet {
@@ -24,7 +30,9 @@ import TVCore
 
     override init() {
         super.init()
+        schedule.delay = delay
         NotificationCenter.default.addObserver(self, selector: #selector(styleChanged), name: SubtitleStyle.changed, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(delayChanged), name: SubtitleDelay.changed, object: nil)
     }
 
     /// Gives a new item its output; every item the queue may play needs one.
@@ -43,6 +51,8 @@ import TVCore
         self.item = item
         lines = []
         pictureSize = .zero
+        schedule.reset()
+        lastAdvanced = nil
         sizeObservation = item?.observe(\.presentationSize, options: [.initial, .new]) { [weak self] item, _ in
             let size = item.presentationSize
             Task { @MainActor [weak self] in if self?.pictureSize != size { self?.pictureSize = size } }
@@ -63,18 +73,47 @@ import TVCore
         let lines = SubtitleStyle.lines(strings.map(\.string))
         // The delegate queue is the main queue (`attach`).
         MainActor.assumeIsolated {
-            guard let item, item.outputs.contains(where: { $0 === output }), self.lines != lines else { return }
-            self.lines = lines
+            guard let item, item.outputs.contains(where: { $0 === output }) else { return }
+            if delay > 0 {
+                // Held until its turn. AVPlayer repeats a cue it is still showing; `schedule` keeps the last word.
+                schedule.enqueue(lines, at: itemTime.seconds)
+            } else if self.lines != lines {
+                self.lines = lines
+            }
         }
     }
 
+    /// Shows the lines whose delay has passed, at the player's own clock: a paused video holds them, and so does
+    /// one still buffering. Call it while `delay` is on; at 0 the lines go up as AVPlayer hands them over.
+    func advance(to time: Double) {
+        guard delay > 0, time.isFinite else { return }
+        // A step the clock can't take: a seek. What waited belongs to where the video was.
+        if let lastAdvanced, abs(time - lastAdvanced) > 2 { schedule.reset() }
+        lastAdvanced = time
+        if let next = schedule.lines(at: time), next != lines { lines = next }
+    }
+
     @objc private func styleChanged() { style = SubtitleStyle.load() }
+
+    @objc private func delayChanged() {
+        let next = SubtitleDelay.load()
+        guard next != delay else { return }
+        delay = next
+        schedule.delay = next
+        guard next == 0 else { return }
+        // Off again: what is up now is whatever the player's clock has due, not what was queued last.
+        if let lastAdvanced, let now = schedule.lines(at: lastAdvanced) { lines = now }
+        schedule.reset()
+    }
     /// Clears the lines once no subtitle is chosen. A newly chosen one sends its own lines, sometimes before this.
     @objc private func selectionChanged() {
         guard let item else { return }
         Task { [weak self, weak item] in
             guard let item, let group = try? await item.asset.loadMediaSelectionGroup(for: .legible),
-                  item.currentMediaSelection.selectedMediaOption(in: group) == nil, let self, self.item === item else { return }
+                  let self, self.item === item else { return }
+            // A track change too: the old track's lines must not wait behind the new one's.
+            self.schedule.reset()
+            guard item.currentMediaSelection.selectedMediaOption(in: group) == nil else { return }
             self.lines = []
         }
     }
