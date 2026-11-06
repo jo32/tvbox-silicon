@@ -3,14 +3,14 @@
 # The arm64 halves are build/{JavaHost,PythonHost} from Scripts/build-*-host.sh. The x86_64 halves use the same
 # JDK and CPython versions and run under Rosetta while they are assembled. Node comes from nodejs.org for both
 # architectures: Homebrew's node links to libraries in /opt/homebrew that other Macs do not have.
-#   NODE_VERSION=v25.2.1 Scripts/build-universal-hosts.sh
+#   NODE_VERSION=v26.13.0 Scripts/build-universal-hosts.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$PWD
 TOOLS="$ROOT/build/tools"
 X64="$ROOT/build/x86_64"
 OUT="$ROOT/build/universal"
-NODE_VERSION="${NODE_VERSION:-v25.2.1}"
+NODE_VERSION="${NODE_VERSION:-v26.13.0}"
 arch -x86_64 /usr/bin/true 2>/dev/null || { echo 'Rosetta is required: softwareupdate --install-rosetta' >&2; exit 1; }
 for h in JavaHost ScriptHost PythonHost; do test -d "build/$h" || { echo "missing build/$h; run Scripts/build-*-host.sh" >&2; exit 1; }; done
 mkdir -p "$TOOLS" "$X64" "$OUT"
