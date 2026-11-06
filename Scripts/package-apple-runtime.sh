@@ -46,4 +46,6 @@ cp "$BOOT/lib/security/cacerts" "$OUT/Resources/lib/lib/security/"
 cp "$BOOT/lib/tzdb.dat" "$OUT/Resources/lib/lib/"
 cp "$WORK/native-$TARGET/apple-bindings.jar" "$OUT/Resources/JavaHost/"
 Scripts/sync-apple-javahost.sh "$PLATFORM"
+# Scripts/check-apple-runtime.sh compares this with the checkout when Xcode embeds the runtime.
+cp Runtime/AppleRuntime/runtime-version "$OUT/runtime-version"
 echo "Packaged runtime: $OUT"

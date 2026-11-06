@@ -105,6 +105,14 @@ static void exitHook(jint code) {
     fprintf(stderr, "Java code called exit(%d)\n", (int)code);
     abort();
 }
+// Native code linked with the runtime can call exit() too: Unicorn did when it could not reserve its
+// translation buffer on a 3 GB iPad (issue #563), and the app vanished without a report. iOS and tvOS apps
+// never exit by themselves, so once the runtime runs, an exit() is a failure: abort() to report its stack.
+// An iPad app on a Mac does exit when quit, so it is left alone there.
+static void nativeExitHook(void) {
+    fprintf(stderr, "Native code called exit()\n");
+    abort();
+}
 
 // On a memory warning, idle plugin runtimes and sources are closed and the freed heap returned.
 static void watchMemoryPressure(const char *resourcePath) {
@@ -171,6 +179,9 @@ char *TVAppleRuntimeRequest(const char *resourcePath, const char *requestJSON) {
             // socket raises SIGPIPE (the player leaving the media proxy mid-stream); ignore both here
             // so such writes fail with an IOException as on other platforms.
             signal(SIGPIPE, SIG_IGN); signal(SIGXFSZ, SIG_IGN);
+#if TARGET_OS_IOS || TARGET_OS_TV
+            if (!NSProcessInfo.processInfo.isiOSAppOnMac) atexit(nativeExitHook);
+#endif
             jclass local=(*env)->FindClass(env,"tvbox/runtime/AppleBootstrap");
             if (local) { bootstrap=(*env)->NewGlobalRef(env,local); (*env)->DeleteLocalRef(env,local); }
             if (bootstrap) requestMethod=(*env)->GetStaticMethodID(env,bootstrap,"request","(Ljava/lang/String;)Ljava/lang/String;");

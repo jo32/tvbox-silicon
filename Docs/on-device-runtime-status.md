@@ -18,7 +18,9 @@ in-process: no server, no child process and no JIT.
 - **Native guards:** plugins' Android ARM64 libraries (FishGuard, ftyguard) are emulated by
   unidbg on Unicorn built with QEMU's TCI interpreter (pinned at
   `e3f075a62742913bb734a55a474aec65c9e5745e` in `Scripts/build-apple-interpreter.sh`), never
-  mapped as executable code.
+  mapped as executable code. Each guest's translation buffer is capped at 32 MB
+  (`Runtime/AppleRuntime/patches/unidbg-unicorn-jni.patch`): QEMU's default reserves 1 GiB per
+  guest and calls `exit(1)` when it can't, which iPads with 3 GB of memory couldn't spare (#563).
 - **The Mac** runs the same host in one long-lived desktop JVM with a JIT (`PluginProcess`,
   `tvbox.runtime.ProcessHost`), under the spider sandbox. `EmbeddedJarHost` is the Swift side
   on all three platforms.
@@ -93,6 +95,10 @@ xcodebuild -project TVBox.xcodeproj -scheme TVBox-tvOS -sdk appletvsimulator -co
 ```
 
 For devices, package with `ios` or `tvos` and build with your own signing team.
+
+Xcode links the packaged runtime as it is. When a change needs it packaged again, raise
+`Runtime/AppleRuntime/runtime-version`: `Scripts/check-apple-runtime.sh` then stops Release builds
+(and warns in Debug builds) until `Scripts/package-apple-runtime.sh` has run for that platform.
 
 The JVM spike app (`Runtime/AppleRuntime/Spike/`) checks a bare JVM, HTTPS, and optionally
 conversion of a plugin JAR passed as the second argument:

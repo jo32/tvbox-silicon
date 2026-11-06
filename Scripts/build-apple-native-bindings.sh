@@ -40,7 +40,11 @@ FLAGS=(-target "$TRIPLE" -isysroot "$(xcrun --sdk "$SDK" --show-sdk-path)" -O2 -
 JNA=(-DNO_JAWT -D_REENTRANT '-DJNA_JNI_VERSION="6.1.2"' '-DCHECKSUM="147a998f0cbc89681a1ae6c0dd121629"' -I "$WORK/jna-headers" -I "$FFI/include")
 clang "${FLAGS[@]}" "${JNA[@]}" -DJNI_OnLoad=TVJNA_OnLoad -DJNI_OnUnload=TVJNA_OnUnload -c "$WORK/jna/native/dispatch.c" -o "$OUT/dispatch.o"
 clang "${FLAGS[@]}" "${JNA[@]}" -c "$WORK/jna/native/callback.c" -o "$OUT/callback.o"
-clang "${FLAGS[@]}" -I "$WORK/unicorn-tci/unicorn-engine-sys-tci/include" -DJNI_OnLoad=TVUnicorn_OnLoad -c "$WORK/unidbg/backend/unicorn2/src/main/native/unicorn.c" -o "$OUT/unicorn-jni.o"
+# Unicorn's JNI binding, patched on a copy so the checkout stays clean: it caps each engine's translation
+# buffer, which QEMU otherwise reserves at 1 GiB (issue #563).
+UNICORN_JNI="$WORK/unidbg/backend/unicorn2/src/main/native"
+patch -s -o "$OUT/unicorn-jni.c" "$UNICORN_JNI/unicorn.c" Runtime/AppleRuntime/patches/unidbg-unicorn-jni.patch
+clang "${FLAGS[@]}" -I "$WORK/unicorn-tci/unicorn-engine-sys-tci/include" -I "$UNICORN_JNI" -DJNI_OnLoad=TVUnicorn_OnLoad -c "$OUT/unicorn-jni.c" -o "$OUT/unicorn-jni.o"
 for source in disassembler reg_mapping; do
  clang "${FLAGS[@]}" -I "$WORK/capstone/include" -c "$WORK/capstone/bindings/java/src/main/native/$source.c" -o "$OUT/$source.o"
 done
