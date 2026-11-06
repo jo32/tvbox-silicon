@@ -111,6 +111,8 @@ public enum EpisodeLabels {
     /// 2160p, 4K, 8K, 1080p: the picture's resolution, wherever it stands in a name.
     private static let resolutionDetail = regex(#"(?<![a-z0-9])(4k|8k|2160p|1080p|720p|480p)(?![a-z0-9])"#)
     private static let fileExtension = regex(#"\.(?:mkv|mp4|m4v|ts|avi|rmvb|flv|mov|wmv|iso|webm|m2ts)$"#)
+    /// The share's own tag some drive sources put after a file's extension: "E01.mp4【太阳鱼】" (#595).
+    private static let shareTag = regex(#"\s*【[^【】]*】\s*$"#)
     private static let seasonEpisode = regex(#"(?<![a-z0-9])s(\d{1,2})[ ._-]?ep?(\d{1,4})(?!\d)"#)
     private static let chineseEpisode = regex(#"第\s*([0-9]{1,4}|[零〇一二两三四五六七八九十百]+)\s*[集话話回]"#)
     /// E05 or EP05, not inside a word (HEVC, WEB-DL) and not a resolution (E1080P).
@@ -133,12 +135,12 @@ public enum EpisodeLabels {
         return (1..<match.numberOfRanges).map { Range(match.range(at: $0), in: text).map { String(text[$0]) } ?? "" }
     }
 
-    /// The name without its size tag ("[1.18GB] ") and file extension.
+    /// The name without its size tag ("[1.18GB] "), the share's tag after it ("【太阳鱼】") and file extension.
     static func clean(_ name: String) -> String {
-        replacing(fileExtension, in: replacing(sizeTag, in: name)).trimmingCharacters(in: .whitespaces)
+        replacing(fileExtension, in: replacing(shareTag, in: replacing(sizeTag, in: name))).trimmingCharacters(in: .whitespaces)
     }
     private static func isFileName(_ name: String) -> Bool {
-        groups(fileExtension, in: name) != nil || clean(name).count > 12
+        groups(fileExtension, in: replacing(shareTag, in: name)) != nil || clean(name).count > 12
     }
     private static func enough(_ count: Int, of total: Int) -> Bool { count * 10 >= total * 6 }
 
