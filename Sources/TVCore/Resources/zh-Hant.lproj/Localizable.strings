@@ -1527,6 +1527,10 @@
 "The source said: %@" = "源回傳的訊息：%@";
 
 /* Subtitle Style (#547) */
+"Subtitle Delay" = "字幕延遲";
+"Timing" = "時間";
+"In sync" = "同步";
+"Positive values show subtitles later. Applies to the video playing now." = "正值會讓字幕顯示得更晚，正在播放的影片立即生效。";
 "Subtitle Style" = "字幕樣式";
 "White" = "白色";
 "Yellow" = "黃色";

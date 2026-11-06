@@ -1527,6 +1527,10 @@
 "The source said: %@" = "ソースのメッセージ：%@";
 
 /* Subtitle Style (#547) */
+"Subtitle Delay" = "字幕の遅延";
+"Timing" = "タイミング";
+"In sync" = "同期";
+"Positive values show subtitles later. Applies to the video playing now." = "正の値で字幕が遅れて表示されます。再生中の動画にすぐ反映されます。";
 "Subtitle Style" = "字幕のスタイル";
 "White" = "白";
 "Yellow" = "黄";

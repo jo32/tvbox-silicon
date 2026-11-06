@@ -1527,6 +1527,10 @@
 "The source said: %@" = "The source said: %@";
 
 /* Subtitle Style (#547) */
+"Subtitle Delay" = "Subtitle Delay";
+"Timing" = "Timing";
+"In sync" = "In sync";
+"Positive values show subtitles later. Applies to the video playing now." = "Positive values show subtitles later. Applies to the video playing now.";
 "Subtitle Style" = "Subtitle Style";
 "White" = "White";
 "Yellow" = "Yellow";

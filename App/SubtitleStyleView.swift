@@ -12,6 +12,8 @@ import AppKit
 /// (`SubtitleStyle.changed`).
 struct SubtitleStyleView: View {
     @State private var style = SubtitleStyle.load()
+    /// How late subtitles show (#599), saved as the slider moves.
+    @State private var delay = SubtitleDelay.load()
     /// While a drag or a slider is moving, the style is saved once, when it stops.
     @State private var adjusting = false
 
@@ -19,13 +21,16 @@ struct SubtitleStyleView: View {
         page
             .onChange(of: style) { _, new in if !adjusting { new.save() } }
             .onChange(of: adjusting) { _, now in if !now { style.save() } }
+            .onChange(of: delay) { _, new in SubtitleDelay.save(new) }
+            // The player's menu steps the delay too (the Mac shows Settings beside the player).
+            .onReceive(NotificationCenter.default.publisher(for: SubtitleDelay.changed)) { _ in delay = SubtitleDelay.load() }
     }
 
     @ViewBuilder private var page: some View {
         #if os(tvOS)
-        TVSubtitleStylePage(style: $style)
+        TVSubtitleStylePage(style: $style, delay: $delay)
         #else
-        FormSubtitleStylePage(style: $style, adjusting: $adjusting)
+        FormSubtitleStylePage(style: $style, adjusting: $adjusting, delay: $delay)
         #endif
     }
 }
@@ -197,6 +202,7 @@ private struct SubtitleScene: View {
 private struct FormSubtitleStylePage: View {
     @Binding var style: SubtitleStyle
     @Binding var adjusting: Bool
+    @Binding var delay: Double
 
     var body: some View {
         Form {
@@ -271,6 +277,31 @@ private struct FormSubtitleStylePage: View {
                     Text(L10n.text("Effects"))
                 }
                 Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        LabeledContent {
+                            Text(SubtitleDelay.title(delay)).monospacedDigit().foregroundStyle(.secondary)
+                        } label: {
+                            FormLabel(symbol: "clock.arrow.circlepath", tint: .teal, title: L10n.text("Subtitle Delay"))
+                        }
+                        Slider(value: $delay, in: SubtitleDelay.range, step: SubtitleDelay.step) {
+                            Text(L10n.text("Subtitle Delay"))
+                        } minimumValueLabel: {
+                            Image(systemName: "minus").accessibilityLabel(L10n.text("Smaller"))
+                        } maximumValueLabel: {
+                            Image(systemName: "plus").accessibilityLabel(L10n.text("Larger"))
+                        }
+                        .labelsHidden()
+                    }
+                    if delay != 0 {
+                        Button(L10n.text("Reset")) { delay = 0 }
+                            .formRowButton()
+                    }
+                } header: {
+                    Text(L10n.text("Timing"))
+                } footer: {
+                    Text(L10n.text("Positive values show subtitles later. Applies to the video playing now."))
+                }
+                Section {
                     Button(L10n.text("Reset to Standard")) { style = SubtitleStyle() }
                         .formRowButton()
                         .disabled(style == SubtitleStyle())
@@ -341,6 +372,7 @@ private struct ColorSwatch: View {
 /// rows in the TV's own Settings do; Adjust Position moves the subtitle over a full-screen picture.
 private struct TVSubtitleStylePage: View {
     @Binding var style: SubtitleStyle
+    @Binding var delay: Double
     @State private var positioning = false
     private static let sizes: [Double] = [3.5, 4.25, 5, 6, 7, 8.5]
 
@@ -377,6 +409,12 @@ private struct TVSubtitleStylePage: View {
                                       footer: L10n.text("Applies to subtitles in every video, including one that is playing.")) {
                         TVSettingsAction(title: L10n.text("Shadow"), value: style.edge.title) { style.edge = Self.next(style.edge) }
                         TVSettingsAction(title: L10n.text("Background"), value: style.backdrop.title) { style.backdrop = Self.next(style.backdrop) }
+                    }
+                    TVSettingsSection(title: L10n.text("Timing"),
+                                      footer: L10n.text("Positive values show subtitles later. Applies to the video playing now.")) {
+                        TVSettingsAction(title: L10n.text("Subtitle Delay"), value: SubtitleDelay.title(delay)) {
+                            delay = delay >= SubtitleDelay.range.upperBound ? 0 : min(delay + SubtitleDelay.step, SubtitleDelay.range.upperBound)
+                        }
                     }
                     TVSettingsSection {
                         TVSettingsAction(title: L10n.text("Reset to Standard")) { style = SubtitleStyle() }
