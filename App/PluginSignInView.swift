@@ -53,11 +53,16 @@ struct PluginSignInView: View {
                 if expired {
                     Label(L10n.text("This code has expired."), systemImage: "clock.badge.exclamationmark").foregroundStyle(.secondary)
                 } else {
+                    // Quark and UC open the code's page in their app on this phone; Baidu Netdisk's app scans it from Photos.
+                    let app = OpenDriveAppButton.target(drive: prompt.drive, page: prompt.content)
+                    if let app, app.opensPage { OpenDriveAppButton(target: app) }
                     VStack(alignment: .leading, spacing: 16) {
-                        Text(L10n.text("Open the %@ app on your phone, scan this code, and confirm the sign-in.", name))
+                        Text(app?.opensPage == true ? L10n.text("Or scan this code with the %@ app on another phone.", name)
+                             : L10n.text("Open the %@ app on your phone, scan this code, and confirm the sign-in.", name))
                             .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         code
                         SaveCodeButton(text: prompt.content, image: prompt.content == nil ? prompt.image : nil, app: name)
+                        if let app, !app.opensPage { OpenDriveAppButton(target: app, prominent: false) }
                     }
                 }
                 Button(L10n.text(expired ? "Close" : "Cancel")) { PluginSignIn.shared.dismiss() }

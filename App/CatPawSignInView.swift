@@ -11,11 +11,9 @@ struct CatPawSignInView: View {
     let provider: String
     let signedIn: () -> Void
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
     @State private var signIn: CatPawSignIn?
     @State private var expired = false
     @State private var error: String?
-    @State private var withoutApp = false
     @State private var attempt = 0
 
     /// UC's TV token, approved in UC Browser; every other sign-in is a drive's, scanned in that drive's app.
@@ -68,18 +66,12 @@ struct CatPawSignInView: View {
             status
             VStack(alignment: .leading, spacing: 14) {
                 #if os(iOS)
-                if !tvToken, let link = signIn?.link, !expired, error == nil {
-                    // This phone can't scan its own screen: the drive's app scans the code from Photos.
-                    SaveCodeButton(text: link.absoluteString, app: name)
-                }
-                if tvToken, let link = signIn?.link, !expired, error == nil {
-                    Button { open(link) } label: { Label(L10n.text("Open in UC Browser"), systemImage: "arrow.up.forward.app") }
-                        .settingsButton(prominent: true)
-                        .accessibilityIdentifier("catPawSignIn.open")
-                    if withoutApp {
-                        Text(L10n.text("UC Browser isn't on this device. Get UC Browser (UC浏览器) from the App Store and sign in to it, or scan the code with another phone."))
-                            .font(.callout).foregroundStyle(Brand.amber).fixedSize(horizontal: false, vertical: true)
-                    }
+                if let link = signIn?.link, !expired, error == nil {
+                    // This phone can't scan its own screen: the drive's app opens the code, or scans it from Photos.
+                    let app = OpenDriveAppButton.target(drive: provider, page: link.absoluteString)
+                    if let app, app.opensPage { OpenDriveAppButton(target: app) }
+                    if !tvToken { SaveCodeButton(text: link.absoluteString, app: name) }
+                    if let app, !app.opensPage { OpenDriveAppButton(target: app, prominent: false) }
                 }
                 #endif
                 if expired || error != nil {
@@ -94,6 +86,11 @@ struct CatPawSignInView: View {
     }
 
     private var instructions: String {
+        #if os(iOS)
+        if !tvToken, OpenDriveAppButton.target(drive: provider, page: signIn?.link?.absoluteString)?.opensPage == true {
+            return L10n.text("Confirm the sign-in in the %@ app: open it here, or scan the code with another phone.", name)
+        }
+        #endif
         guard tvToken else { return L10n.text("Open the %@ app on your phone, scan this code, and confirm the sign-in.", name) }
         #if os(iOS)
         return L10n.text("Approve the token in the UC Browser app, signed in to the same UC account: open it here, or scan the code with UC Browser on another phone.")
@@ -144,16 +141,8 @@ struct CatPawSignInView: View {
         }
     }
 
-    #if os(iOS)
-    /// UC Browser opens an address put after its scheme.
-    private func open(_ link: URL) {
-        guard let app = URL(string: "ucbrowser://" + link.absoluteString) else { return }
-        openURL(app) { opened in withoutApp = !opened }
-    }
-    #endif
-
     private func run() async {
-        signIn = nil; expired = false; error = nil; withoutApp = false
+        signIn = nil; expired = false; error = nil
         var started: CatPawSignIn?
         do {
             var signIn = try await CatPawSignIn.start(provider, client: client)

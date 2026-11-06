@@ -39,3 +39,20 @@ private func notice(_ text: String) throws -> [String: Any] {
     #expect(accounts.take(try notice(#"{"drive":"uc","signedIn":true,"ucCookie":"__pus=uc"}"#)))
     #expect(accounts.ucCookie == "__pus=uc")
 }
+
+/// Sign-in codes open in the drive's own app on this phone: Quark and UC on the code's page, Baidu Netdisk at its start.
+@Test func signInCodesOpenTheDrivesApp() throws {
+    let page = "https://su.quark.cn/4_eMHBJ?token=a+b&client_id=532&uc_biz_str=S%3Acustom"
+    let quark = try #require(DriveAppLink.target(drive: "quark", page: page, pad: false))
+    #expect(quark.opensPage && quark.urls.count == 2)
+    #expect(quark.urls[0].absoluteString == "qklink://www.uc.cn/656bdcddd4758b39206a8181c91a7d14?src_ch=yingxia&action=open_url&url=https%3A%2F%2Fsu.quark.cn%2F4_eMHBJ%3Ftoken%3Da%2Bb%26client_id%3D532%26uc_biz_str%3DS%253Acustom")
+    #expect(quark.urls[1].scheme == "qkcloudlink")
+    #expect(DriveAppLink.target(drive: "quark", page: page, pad: true)?.urls[0].absoluteString.contains("/e7d506280d7f0140e2ee4ba5b030d82d?") == true)
+    let uc = try #require(DriveAppLink.target(drive: "ucToken", page: "https://su.uc.cn/x?token=1", pad: false))
+    #expect(uc.urls.map(\.scheme) == ["uclink", "ucbrowser"] && uc.urls[1].absoluteString == "ucbrowser://https://su.uc.cn/x?token=1")
+    // Baidu's code is an image: its app only opens.
+    let baidu = try #require(DriveAppLink.target(drive: "baidu", page: nil, pad: false))
+    #expect(!baidu.opensPage && baidu.urls.first?.scheme == "bdnetdisk")
+    #expect(DriveAppLink.target(drive: "quark", page: nil, pad: false) == nil)
+    #expect(DriveAppLink.target(drive: "pan115", page: "https://115.com/scan/x", pad: false) == nil)
+}

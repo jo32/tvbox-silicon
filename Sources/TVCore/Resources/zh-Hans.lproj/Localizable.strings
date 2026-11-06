@@ -1345,6 +1345,11 @@
 "You're signed in to UC, but this source plays UC accounts without premium through UC's TV app, which needs a token of its own. Get it once with the UC Browser app, or choose another line." = "你已登录 UC，但此片源通过 UC 网盘 TV 版播放非会员账号，需要单独的 TV Token。用 UC 浏览器获取一次即可，或换一条线路。";
 "Scan this code with the UC Browser app on your phone, signed in to the same UC account, and approve it." = "用手机上的 UC 浏览器（登录同一 UC 账号）扫描此二维码并确认。";
 "Approve the token in the UC Browser app, signed in to the same UC account: open it here, or scan the code with UC Browser on another phone." = "请在 UC 浏览器（登录同一 UC 账号）中确认：在本机打开，或用另一部手机的 UC 浏览器扫描二维码。";
+"Open in %@" = "在%@中打开";
+"UC Browser" = "UC 浏览器";
+"Save the code to Photos first, then scan it from Photos in %@." = "请先把二维码保存到相册，再在%@里从相册扫码。";
+"%@ isn't on this device. Get it from the App Store, or scan the code with another phone." = "此设备未安装%@。请从 App Store 下载，或用另一部手机扫码。";
+"Confirm the sign-in in the %@ app: open it here, or scan the code with another phone." = "在%@ App 中确认登录：可在此直接打开，或用另一部手机扫码。";
 "Open in UC Browser" = "在 UC 浏览器中打开";
 "UC Browser isn't on this device. Get UC Browser (UC浏览器) from the App Store and sign in to it, or scan the code with another phone." = "此设备未安装 UC 浏览器。请从 App Store 下载 UC 浏览器并登录，或用另一部手机扫码。";
 "Waiting for UC Browser to approve…" = "等待 UC 浏览器确认…";

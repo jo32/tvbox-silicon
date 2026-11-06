@@ -1345,6 +1345,11 @@
 "You're signed in to UC, but this source plays UC accounts without premium through UC's TV app, which needs a token of its own. Get it once with the UC Browser app, or choose another line." = "UC にはサインイン済みですが、このソースはプレミアムでない UC アカウントを UC の TV アプリ経由で再生するため、専用のトークンが必要です。UC Browser で一度取得するか、別の回線を選んでください。";
 "Scan this code with the UC Browser app on your phone, signed in to the same UC account, and approve it." = "同じ UC アカウントでサインインしたスマートフォンの UC Browser アプリでこのコードをスキャンし、承認してください。";
 "Approve the token in the UC Browser app, signed in to the same UC account: open it here, or scan the code with UC Browser on another phone." = "同じ UC アカウントでサインインした UC Browser アプリで承認してください。ここで開くか、別のスマートフォンの UC Browser でコードをスキャンします。";
+"Open in %@" = "%@で開く";
+"UC Browser" = "UCブラウザ";
+"Save the code to Photos first, then scan it from Photos in %@." = "先にコードを写真に保存し、%@で写真から読み取ってください。";
+"%@ isn't on this device. Get it from the App Store, or scan the code with another phone." = "このデバイスには%@がありません。App Storeから入手するか、別のスマートフォンでコードを読み取ってください。";
+"Confirm the sign-in in the %@ app: open it here, or scan the code with another phone." = "%@アプリでサインインを確認してください。ここから開くか、別のスマートフォンでコードを読み取ります。";
 "Open in UC Browser" = "UC Browser で開く";
 "UC Browser isn't on this device. Get UC Browser (UC浏览器) from the App Store and sign in to it, or scan the code with another phone." = "このデバイスには UC Browser がありません。App Store から UC Browser（UC浏览器）を入手してサインインするか、別のスマートフォンでコードをスキャンしてください。";
 "Waiting for UC Browser to approve…" = "UC Browser での承認を待っています…";
