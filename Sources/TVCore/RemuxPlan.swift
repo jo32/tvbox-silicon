@@ -25,6 +25,9 @@ struct RemuxPlan: Sendable, Equatable {
         var bitRate: Int64 = 0
         var language = "", title = ""
         var isDefault = false, isForced = false, isText = false
+        /// Dolby Atmos in E-AC-3 (JOC): FFmpeg's decoder names it with profile 30 (AV_PROFILE_EAC3_DDP_ATMOS) while
+        /// it probes. The track is copied as is; FFmpeg's muxer writes the JOC flag into its dec3 box itself.
+        var isAtmos: Bool { kind == .audio && codec == "eac3" && profile == 30 }
     }
     enum Mode: Int32, Sendable { case copy = 0, aac = 1, h264 = 2, hevc = 3 }
     /// How copied HEVC keeps its Dolby Vision configuration.
@@ -199,7 +202,7 @@ struct RemuxPlan: Sendable, Equatable {
             var attributes = ["TYPE=AUDIO", "GROUP-ID=\"audio\"", "NAME=\"\(quoted(unique(Self.displayName(track))))\""]
             if let language = Self.languageTag(track.stream.language) { attributes.append("LANGUAGE=\"\(language)\"") }
             attributes += ["DEFAULT=\(index == defaultAudio ? "YES" : "NO")", "AUTOSELECT=YES",
-                           "CHANNELS=\"\(track.mode == .copy ? track.stream.channels : track.channels)\"", "URI=\"\(index).m3u8\""]
+                           "CHANNELS=\"\(Self.channels(track))\"", "URI=\"\(index).m3u8\""]
             lines.append("#EXT-X-MEDIA:" + attributes.joined(separator: ","))
         }
         names.removeAll()
@@ -273,6 +276,12 @@ struct RemuxPlan: Sendable, Equatable {
     private func quoted(_ text: String) -> String { text.replacingOccurrences(of: "\"", with: "'").replacingOccurrences(of: "\n", with: " ") }
 
     /// The stream's title, or its language, or its format.
+    /// The HLS CHANNELS attribute: Apple's authoring spec names Dolby Atmos in E-AC-3 "16/JOC".
+    static func channels(_ track: Track) -> String {
+        guard track.mode == .copy else { return "\(track.channels)" }
+        return track.stream.isAtmos ? "16/JOC" : "\(track.stream.channels)"
+    }
+
     static func displayName(_ track: Track) -> String {
         let stream = track.stream
         let title = stream.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -282,7 +291,7 @@ struct RemuxPlan: Sendable, Equatable {
         let format = names[stream.codec] ?? stream.codec.uppercased()
         guard stream.kind == .audio else { return format }
         let layout = [1: "1.0", 2: "2.0", 6: "5.1", 8: "7.1"][stream.channels] ?? "\(stream.channels)ch"
-        return "\(format) \(layout)"
+        return "\(format) \(layout)" + (stream.isAtmos && track.mode == .copy ? " Atmos" : "")
     }
 
     /// The BCP 47 tag HLS wants for a Matroska (ISO 639-2) language code; nil when it names none.
