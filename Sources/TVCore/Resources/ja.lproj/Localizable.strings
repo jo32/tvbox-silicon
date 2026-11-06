@@ -1160,6 +1160,7 @@
 "Privacy" = "プライバシー";
 "Dolby Vision video can't play while the screen is mirrored or recorded. Stop mirroring or recording, then try again." = "画面のミラーリングまたは収録中は Dolby Vision のビデオを再生できません。停止してからもう一度お試しください。";
 "This device can't play this Dolby Vision video. Try another line." = "このデバイスではこの Dolby Vision のビデオを再生できません。別の回線をお試しください。";
+"This Dolby Vision video needs HDR. To keep your Apple TV in SDR and still play it, turn on Settings › Video and Audio › Match Content › Match Dynamic Range: the TV then switches to HDR only while such a video plays." = "これは Dolby Vision のビデオで、再生には HDR が必要です。Apple TV を SDR のまま使いながら再生するには、「設定 › ビデオとオーディオ › コンテンツに合わせる › ダイナミックレンジを合わせる」をオンにしてください。このようなビデオの再生中だけ HDR に切り替わります。";
 "Contributors" = "コントリビューター";
 "Ranked by commits in the last 30 days." = "過去 30 日間のコミット数順です。";
 "1 commit" = "1 件のコミット";

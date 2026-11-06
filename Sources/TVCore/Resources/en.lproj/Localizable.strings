@@ -1160,6 +1160,7 @@
 "Privacy" = "Privacy";
 "Dolby Vision video can't play while the screen is mirrored or recorded. Stop mirroring or recording, then try again." = "Dolby Vision video can't play while the screen is mirrored or recorded. Stop mirroring or recording, then try again.";
 "This device can't play this Dolby Vision video. Try another line." = "This device can't play this Dolby Vision video. Try another line.";
+"This Dolby Vision video needs HDR. To keep your Apple TV in SDR and still play it, turn on Settings › Video and Audio › Match Content › Match Dynamic Range: the TV then switches to HDR only while such a video plays." = "This Dolby Vision video needs HDR. To keep your Apple TV in SDR and still play it, turn on Settings › Video and Audio › Match Content › Match Dynamic Range: the TV then switches to HDR only while such a video plays.";
 "Contributors" = "Contributors";
 "Ranked by commits in the last 30 days." = "Ranked by commits in the last 30 days.";
 "1 commit" = "1 commit";
