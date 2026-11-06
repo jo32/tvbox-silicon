@@ -3,8 +3,8 @@ import Foundation
 
 /// CatPawOpen (猫源) bundles: one Node script, published as `index.js` beside its `index.js.md5`, that
 /// serves its sources over HTTP the way the CatVod Open apps run it. Its `/config` lists the sources and
-/// each answers at `/spider/<key>/<type>`. The Mac runs the bundle in the bundled Node host, iPhone and iPad
-/// in the embedded nodejs-mobile (`EmbeddedNodeHost`); tvOS has no Node, so it cannot import one.
+/// each answers at `/spider/<key>/<type>`. The Mac runs the bundle in the bundled Node host; iPhone, iPad and
+/// Apple TV in the embedded nodejs-mobile (`EmbeddedNodeHost`).
 public enum CatPawOpen {
     /// The bundle an added address names: its checksum file (`…/index.js.md5`) or the bundle itself.
     static func bundle(_ data: Data, at url: URL) -> URL? {
@@ -98,7 +98,7 @@ public enum CatPawOpen {
     /// A bundle's media proxy stream at the port the bundle listens on now, after iOS took back the suspended app's
     /// sockets (`EmbeddedNodeHost.relocate`, #485); nil when it hasn't moved. The Mac's Node is never suspended.
     public static func relocated(_ source: CloudStreams.Source) async -> CloudStreams.Source? {
-        #if os(iOS)
+        #if os(iOS) || os(tvOS)
         guard let url = await EmbeddedNodeHost.shared.relocate(source.url) else { return nil }
         return CloudStreams.Source(url: url, headers: source.headers, length: source.length, name: source.name)
         #else
@@ -108,7 +108,7 @@ public enum CatPawOpen {
 
     /// The bundle's video sources, each a type 3 source on the bundle with its `/spider/…` path in `catPawOpen`.
     static func subscription(bundle: URL, origin: URL, http: HTTPClient) async throws -> Subscription {
-        #if os(macOS) || os(iOS)
+        #if os(macOS) || os(iOS) || os(tvOS)
         let host = Site(key: "catpaw_config", name: "CatPawOpen", type: 3, api: bundle.absoluteString, raw: ["catPawOpen": .string("")])
         #if os(macOS)
         let config = try await LocalJarHost.shared.request(site: host, jarURL: bundle, params: ["catConfig": "1"], http: http, scriptOrigin: origin)

@@ -191,11 +191,11 @@ public struct Site: Identifiable, Codable, Hashable, Sendable {
     public var runtime: SourceRuntime {
         if native { return .api }
         guard type == 3, !missingAPI else { return .unsupported }
-        // A CatPawOpen bundle is a Node server (see CatPawOpen), which only the Mac can run.
+        // A CatPawOpen bundle is a Node server (see CatPawOpen): the Mac's Node, or nodejs-mobile in the app.
         if raw["catPawOpen"] != nil {
             #if os(macOS)
             return .javascript
-            #elseif os(iOS)
+            #elseif os(iOS) || os(tvOS)
             return EmbeddedNodeHost.available ? .javascript : .unsupported
             #else
             return .unsupported
