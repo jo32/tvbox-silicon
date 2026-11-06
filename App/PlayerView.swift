@@ -1360,9 +1360,11 @@ struct PlaybackInfoPanel: View {
         next.hardwareDecoding = picture?.codec.map(Self.decodesInHardware)
         next.dolbyVisionProfile = picture?.dolbyVisionProfile
         if let asset = item.asset as? AVURLAsset { next.droppedDolbyVisionProfile = Remux.droppedDolbyVision(asset.url) }
-        // The track's own rate; the measured one (a stream that declares none) wanders around it.
+        // The track's own rate; the measured one (a stream that declares none) wanders around it. A streamed MP4 can
+        // declare about 1 fps (a 4K drama showed "1FPS"): no video plays that slowly, so then the measured one.
         let measured = Double(video?.currentVideoFrameRate ?? 0)
-        next.frameRate = picture?.frameRate ?? (measured > 0 ? measured : nil)
+        let declaredRate = picture?.frameRate.flatMap { $0 >= 5 ? $0 : nil }
+        next.frameRate = declaredRate ?? (measured > 0 ? measured : nil)
         // Smooth Motion's in-between frames reach the screen at its grid's rate (#519).
         let enhancement = session.enhancer.status
         if enhancement.smoothing {
