@@ -605,9 +605,7 @@ public struct CatalogClient: Sendable {
 
     /// `aid_cid[_ep]` from a Bili spider's proxy address (`…/proxy?do=bili&aid=…&cid=…&ep=…`).
     static func bilibiliProxyID(_ address: String) -> String? {
-        guard isPluginProxy(address), let marker = address.range(of: "/proxy?") else { return nil }
-        var proxy = URLComponents(); proxy.percentEncodedQuery = String(address[marker.upperBound...])
-        let items = proxy.queryItems ?? []
+        let items = pluginProxyQuery(address)
         func parameter(_ name: String) -> String? { items.first(where: { $0.name == name })?.value.flatMap { UInt64($0) != nil ? $0 : nil } }
         guard items.first(where: { $0.name == "do" })?.value == "bili", let aid = parameter("aid"), let cid = parameter("cid") else { return nil }
         return [aid, cid, parameter("ep")].compactMap { $0 }.joined(separator: "_")
@@ -684,13 +682,20 @@ public struct CatalogClient: Sendable {
         }
         return false
     }
+    /// The query of a plugin proxy address, split by hand. Plugins don't always percent-encode the wrapped
+    /// address (spaces, CJK, `|` headers, a bare `%`), and `URLComponents.percentEncodedQuery` traps on those.
+    static func pluginProxyQuery(_ address: String) -> [URLQueryItem] {
+        guard isPluginProxy(address), let marker = address.range(of: "/proxy?") else { return [] }
+        func decode(_ text: Substring) -> String { String(text).removingPercentEncoding ?? String(text) }
+        return address[marker.upperBound...].split(separator: "&", omittingEmptySubsequences: false).map { pair in
+            let parts = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            return URLQueryItem(name: decode(parts[0]), value: parts.count > 1 ? decode(parts[1]) : nil)
+        }
+    }
     /// Plugins wrap HLS addresses in their own loopback proxy (`http://127.0.0.1:<port>/proxy?do=m3u8&url=...`).
     /// This app hosts no such proxy, and in `m3u8` mode the wrapped address is the real playlist.
     static func unwrapPluginProxy(_ address: String) -> String {
-        guard isPluginProxy(address), let marker = address.range(of: "/proxy?") else { return address }
-        var parts = URLComponents()
-        parts.percentEncodedQuery = String(address[marker.upperBound...])
-        let items = parts.queryItems ?? []
+        let items = pluginProxyQuery(address)
         guard items.first(where: { $0.name == "do" })?.value == "m3u8",
               let inner = items.first(where: { $0.name == "url" })?.value, !inner.isEmpty else { return address }
         return inner
