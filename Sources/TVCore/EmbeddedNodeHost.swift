@@ -1,8 +1,8 @@
-#if os(iOS)
+#if os(iOS) || os(tvOS)
 import CFNetwork
 import Foundation
 
-/// CatPawOpen (猫源) sources on iPhone and iPad. The app embeds nodejs-mobile (`Scripts/fetch-node-mobile.sh`)
+/// CatPawOpen (猫源) sources on iPhone, iPad and Apple TV. The app embeds nodejs-mobile (`Scripts/fetch-node-mobile.sh`)
 /// and starts it once, the first time such a source is used: Node can't start twice in a process. It runs
 /// `NodeHost/main.mjs`, the iOS twin of the Mac host's CatPawOpen mode, which starts each bundle once and
 /// answers on a loopback port with a per-launch token.
@@ -174,9 +174,9 @@ public actor EmbeddedNodeHost {
         try? FileManager.default.removeItem(at: file)
         // Node watches this file; it has to exist first.
         FileManager.default.createFile(atPath: relistenFile.path, contents: nil)
-        // Node 18.20 refuses RSA PKCS#1 v1.5 decryption, which bundles use to read their APIs' replies (瓜子 signs
-        // in with it). Node 22+ allows it again with OpenSSL's implicit rejection; the Mac's Node already does.
-        let arguments = ["node", "--security-revert=CVE-2023-46809", main.path, file.path, relistenFile.path]
+        // Node 26 decrypts RSA PKCS#1 v1.5 (瓜子 signs in with it) through OpenSSL's implicit rejection, so it
+        // needs no --security-revert, which it would refuse as an unknown CVE.
+        let arguments = ["node", main.path, file.path, relistenFile.path]
         let thread = Thread {
             // node_start expects its arguments in one contiguous block that lives as long as Node.
             let strings = arguments.map { Array($0.utf8CString) }
@@ -212,10 +212,15 @@ public actor EmbeddedNodeHost {
     private static let relistenFile = storageRoot.appendingPathComponent("relisten")
 
     /// Bundles download again on demand, but profiles hold their settings (sign-ins among them), so they stay
-    /// out of purgeable Caches.
+    /// out of purgeable Caches. Apple TV apps can only write to Caches.
     static let storageRoot: URL = {
         let manager = FileManager.default
-        let root = manager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("com.tvbox.yingxia/EmbeddedNode", isDirectory: true)
+        #if os(tvOS)
+        let directory = FileManager.SearchPathDirectory.cachesDirectory
+        #else
+        let directory = FileManager.SearchPathDirectory.applicationSupportDirectory
+        #endif
+        let root = manager.urls(for: directory, in: .userDomainMask)[0].appendingPathComponent("com.tvbox.yingxia/EmbeddedNode", isDirectory: true)
         try? manager.createDirectory(at: root, withIntermediateDirectories: true)
         var excluded = root
         var values = URLResourceValues()

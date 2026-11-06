@@ -737,6 +737,7 @@
 				42CF7C28FA76A27C0C01C499 /* Frameworks */,
 				539926191BD98FAA6485B217 /* Embed on-device Java runtime */,
 				E70A0A00C0021120BA15D9D3 /* Embed on-device Python runtime */,
+				EDB4FD91856531304EC8205F /* Embed on-device Node runtime */,
 			);
 			buildRules = (
 			);
@@ -1021,6 +1022,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"$SRCROOT/Scripts/embed-apple-python.sh\"";
+		};
+		EDB4FD91856531304EC8205F /* Embed on-device Node runtime */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Embed on-device Node runtime";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"$SRCROOT/Scripts/embed-node-mobile.sh\"";
 		};
 		EF945DE920B33363CF92D379 /* Embed on-device Node runtime */ = {
 			isa = PBXShellScriptBuildPhase;

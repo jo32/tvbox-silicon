@@ -1,18 +1,25 @@
 #!/bin/bash
-# Xcode build phase of the iOS app: embeds nodejs-mobile from build/NodeMobile (Scripts/fetch-node-mobile.sh)
+# Xcode build phase of the iOS and tvOS apps: embeds nodejs-mobile from build/NodeMobile (Scripts/fetch-node-mobile.sh)
 # and the CatPawOpen runner (Runtime/NodeHost), and signs the framework before Xcode signs the app. A build
 # without it still works: EmbeddedNodeHost then reports Node as missing and CatPawOpen sources stay unsupported.
 set -euo pipefail
 APP="$TARGET_BUILD_DIR/$WRAPPER_NAME"
 case "$PLATFORM_NAME" in
-  iphoneos) SLICE=ios-arm64 ;;
-  *) SLICE=ios-arm64_x86_64-simulator ;;
+  iphoneos) SLICES="ios-arm64" ;;
+  iphonesimulator) SLICES="ios-arm64-simulator ios-arm64_x86_64-simulator" ;;
+  appletvos) SLICES="tvos-arm64" ;;
+  appletvsimulator) SLICES="tvos-arm64-simulator" ;;
+  *) SLICES= ;;
 esac
-FRAMEWORK="$SRCROOT/build/NodeMobile/NodeMobile.xcframework/$SLICE/NodeMobile.framework"
+FRAMEWORK=
+for SLICE in $SLICES; do
+  CANDIDATE="$SRCROOT/build/NodeMobile/NodeMobile.xcframework/$SLICE/NodeMobile.framework"
+  if [ -d "$CANDIDATE" ]; then FRAMEWORK=$CANDIDATE; break; fi
+done
 # Signing changes the 55 MB binary, so rsync would copy it again on every build. Skip copying and signing
 # while the source, the signing and the embedded copy are unchanged.
 STAMP="${DERIVED_FILE_DIR:-$TARGET_TEMP_DIR}/embed-node-mobile.stamp"
-if [ ! -d "$FRAMEWORK" ]; then
+if [ -z "$FRAMEWORK" ]; then
   echo "warning: This build has no Node.js runtime, so CatPawOpen sources won't run. Run Scripts/fetch-node-mobile.sh first."
   rm -rf "$APP/Frameworks/NodeMobile.framework" "$APP/NodeHost" "$STAMP"
   exit 0
