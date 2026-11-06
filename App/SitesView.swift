@@ -1171,96 +1171,461 @@ struct CatalogDestination: View {
     }
 }
 
-/// A plugin setting listed among a source's titles, such as FTY's 我的云盘┃配置. Drive sign-ins live under Cloud
-/// Drive Accounts, which supplies them to plugins, so signing in leads there; clearing a drive signs it out in
-/// Yingxia and in the plugin; any other setting runs in the plugin, and the page shows what it reported.
+/// A plugin setting listed among a source's titles (aowu's 配置中心, FTY's 我的云盘┃配置). It runs in the plugin, as
+/// in TVBox; the window the plugin opens for it is drawn here (`PluginScreen`), and the viewer's taps and typing go
+/// back to the plugin's own code.
 struct PluginActionPage: View {
-    let video: Video
-    let client: CatalogClient
-    let action: String
-    var body: some View {
-        switch PluginAction(action) {
-        case .signIn: CloudDriveView()
-        case .signOut(let drive):
-            if let provider = CloudProvider(rawValue: drive) { PluginSignOutPage(video: video, client: client, action: action, provider: provider) }
-            else { PluginRunPage(video: video, client: client, action: action) }
-        case .run: PluginRunPage(video: video, client: client, action: action)
-        }
-    }
-}
-
-private struct PluginSignOutPage: View {
-    let video: Video
-    let client: CatalogClient
-    let action: String
-    let provider: CloudProvider
-    @State private var signedIn = false
-    @State private var working = false
-    @State private var done: String?
-    @State private var error: String?
-    var body: some View {
-        SettingsPage(title: video.name, symbol: provider.symbol) {
-            SettingsGroup(footer: L10n.text("Signs %@ out of Yingxia and out of this source's plugin. Every source stops using this account until you sign in again under Cloud Drive Accounts.", provider.name)) {
-                SettingsRow(symbol: provider.symbol, tint: provider.tint, title: provider.name,
-                            subtitle: L10n.text(signedIn ? "Signed In" : "Not Signed In"))
-                SettingsActionRow(title: L10n.text("Sign Out"), destructive: true) { signOut() }
-                    .disabled(working)
-            }
-            if let done { Label(done, systemImage: "checkmark.circle.fill").font(.callout).foregroundStyle(.green) }
-            if let error { Label(error, systemImage: "exclamationmark.triangle.fill").font(.callout).foregroundStyle(Brand.rose) }
-        }
-        .task { signedIn = (try? CloudDriveAccounts.load()).map(provider.isSignedIn) ?? false }
-    }
-    private func signOut() {
-        working = true; done = nil; error = nil
-        Task {
-            defer { working = false }
-            do {
-                var accounts = try CloudDriveAccounts.load()
-                provider.clear(&accounts)
-                EmbeddedJarHost.forgetPluginSignIns(provider.pluginFiles)
-                try accounts.save()
-                signedIn = false
-                // The running plugin keeps its own copy (FTY restores Quark and UC into its own storage): its
-                // setting drops that one.
-                let said = try await client.runAction(action)
-                done = said ?? L10n.text("Signed out of %@.", provider.name)
-            } catch { self.error = error.localizedDescription }
-        }
-    }
-}
-
-private struct PluginRunPage: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     let video: Video
     let client: CatalogClient
     let action: String
-    private enum Outcome { case running, reported(String?), failed(String) }
-    @State private var outcome = Outcome.running
+    private enum Phase: Equatable { case running, showing, finished(String?), failed(String) }
+    @State private var phase = Phase.running
+    @State private var screen = PluginScreen()
+    /// What the viewer typed, by field, until it goes to the plugin with the next tap.
+    @State private var typed: [Int: String] = [:]
+    @State private var sending = false
+    @State private var notice: String?
+    @State private var noticeTask: Task<Void, Never>?
+
     var body: some View {
         ScrollView {
-            switch outcome {
+            switch phase {
             case .running:
                 ProgressView().padding(.vertical, 80).frame(maxWidth: .infinity)
-            case .reported(let message):
+            case .showing:
+                if let window = screen.windows.last {
+                    PluginWindowView(window: window, typed: $typed, layers: screen.windows.count, send: send)
+                        .id(window.id)
+                        .disabled(sending)
+                }
+            case .finished(let message):
                 // Back is focusable, so the remote has somewhere to land on Apple TV.
-                EmptyResults(symbol: message == nil ? "puzzlepiece.extension" : "checkmark.circle", title: video.name,
-                             message: message ?? L10n.text("The plugin finished without a message. Settings that open the plugin's own window only work in Android TVBox."),
+                EmptyResults(symbol: message == nil ? "checkmark.circle" : "info.circle", title: video.name,
+                             message: message ?? L10n.text("The plugin finished without a message."),
                              action: L10n.text("Back"), actionSymbol: "chevron.backward") { dismiss() }
             case .failed(let message):
                 EmptyResults(symbol: "exclamationmark.triangle", title: video.name, message: message,
                              action: L10n.text("Try Again")) { Task { await run() } }
             }
         }
+        .overlay(alignment: .bottom) {
+            if let notice {
+                Text(notice)
+                    .font(.callout)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 18).padding(.vertical, 12)
+                    .glassPanel(cornerRadius: 22)
+                    .padding(.bottom, 24).padding(.horizontal, 24)
+                    .transition(.opacity)
+                    .allowsHitTesting(false)
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: notice)
+        .navigationTitle(video.name)
         .task { await run() }
+        .task(id: phase == .showing) {
+            // Plugins change their windows on their own (a QR code arriving, a sign-in confirmed): look again.
+            guard phase == .showing else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1.5))
+                guard !Task.isCancelled, !sending, let window = screen.windows.last else { continue }
+                await deliver(PluginEvent(window: window.id, kind: .poll), quietly: true)
+            }
+        }
+        .onDisappear {
+            noticeTask?.cancel()
+            guard let window = screen.windows.last else { return }
+            let client = client
+            Task { _ = try? await client.pluginWindow(PluginEvent(window: window.id, kind: .closeAll)) }
+        }
     }
+
     private func run() async {
-        outcome = .running
-        do { outcome = .reported(try await client.runAction(action)) }
+        phase = .running
+        typed = [:]
+        do { show(try await client.runAction(action), first: true) }
         catch is CancellationError { }
-        catch { outcome = .failed(error.localizedDescription) }
+        catch { phase = .failed(error.localizedDescription) }
+    }
+
+    #if DEBUG
+    private static func find(_ text: String, in node: PluginNode) -> PluginNode? {
+        if node.tappable, node.spokenText.contains(text) { return node.children.lazy.compactMap { find(text, in: $0) }.first ?? node }
+        return node.children.lazy.compactMap { find(text, in: $0) }.first
+    }
+    #endif
+
+    private func send(_ event: PluginEvent) {
+        var event = event
+        // Typed text reaches the plugin's fields before the tap runs, as on Android.
+        for (field, text) in typed where event.values[field] == nil { event.values[field] = .text(text) }
+        Task { await deliver(event, quietly: false) }
+    }
+
+    private func deliver(_ event: PluginEvent, quietly: Bool) async {
+        if !quietly { sending = true }
+        defer { if !quietly { sending = false } }
+        do { show(try await client.pluginWindow(event), first: false) }
+        catch is CancellationError { }
+        catch { if !quietly { phase = .failed(error.localizedDescription) } }
+    }
+
+    private func show(_ next: PluginScreen, first: Bool) {
+        if screen.windows.last?.id != next.windows.last?.id { typed = [:] }
+        screen = next
+        for link in next.links { openURL(link) }
+        let said = next.notices.joined(separator: "\n")
+        if next.windows.isEmpty {
+            // The setting is done: what it said stays on the page; with nothing to say the page goes.
+            let message = [first ? next.message : nil, said.isEmpty ? nil : said].compactMap { $0 }.joined(separator: "\n")
+            if message.isEmpty && !first { dismiss() } else { phase = .finished(message.isEmpty ? nil : message) }
+            return
+        }
+        phase = .showing
+        #if DEBUG
+        // `-qaPluginTap <text>` taps the first view showing that text in the plugin's first window, for screenshots.
+        if first, let wanted = UserDefaults.standard.string(forKey: "qaPluginTap"), let window = next.windows.last,
+           let target = window.root.flatMap({ Self.find(wanted, in: $0) }) {
+            Task { try? await Task.sleep(for: .seconds(1)); send(PluginEvent(window: window.id, kind: .click, view: target.id)) }
+        }
+        #endif
+        guard !said.isEmpty else { return }
+        notice = said
+        noticeTask?.cancel()
+        noticeTask = Task {
+            try? await Task.sleep(for: .seconds(4))
+            if !Task.isCancelled { notice = nil }
+        }
     }
 }
+
+/// One plugin window, drawn from the plugin's own views. When the plugin paints its window (most do: white
+/// cards), its colors are kept on that surface; a plain Android alert takes the app's look instead.
+private struct PluginWindowView: View {
+    let window: PluginWindow
+    @Binding var typed: [Int: String]
+    /// Windows open, this one included: under another one, Back returns to it.
+    let layers: Int
+    let send: (PluginEvent) -> Void
+    #if os(tvOS)
+    static let scale = 1.7
+    private let width: CGFloat = 1100
+    #else
+    static let scale = 1.0
+    private let width: CGFloat = 620
+    #endif
+
+    var body: some View {
+        let painted = window.surface.map { $0.alpha > 0.5 } ?? false
+        VStack(alignment: .leading, spacing: 14 * Self.scale) {
+            if layers > 1 {
+                Button { send(PluginEvent(window: window.id, kind: .back)) } label: {
+                    Label(L10n.text("Back"), systemImage: "chevron.backward")
+                }
+                .buttonStyle(.bordered)
+            }
+            if let title = window.title { Text(title).font(.headline) }
+            if let message = window.message { Text(message).font(.body).fixedSize(horizontal: false, vertical: true) }
+            if let header = window.header { PluginNodeView(node: header, context: context(painted)) }
+            if let root = window.root { PluginNodeView(node: root, context: context(painted)) }
+            if !window.items.isEmpty { items }
+            if let progress = window.progress { PluginNodeView(node: progress, context: context(painted)) }
+            if !window.buttons.isEmpty { buttons }
+        }
+        .padding(painted ? 0 : 20 * Self.scale)
+        .frame(maxWidth: width, alignment: .leading)
+        .background {
+            if let surface = window.surface, painted {
+                RoundedRectangle(cornerRadius: 18 * Self.scale, style: .continuous).fill(surface.color)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18 * Self.scale, style: .continuous))
+        .environment(\.colorScheme, painted ? ((window.surface?.luminance ?? 0) > 0.5 ? .light : .dark) : colorSchemeFallback)
+        .padding(20)
+        .frame(maxWidth: .infinity)
+    }
+
+    @Environment(\.colorScheme) private var colorSchemeFallback
+
+    private func context(_ painted: Bool) -> PluginNodeView.Context {
+        PluginNodeView.Context(window: window.id, painted: painted, typed: $typed, send: send)
+    }
+
+    private var items: some View {
+        VStack(spacing: 8) {
+            ForEach(Array(window.items.enumerated()), id: \.offset) { index, item in
+                Button { send(PluginEvent(window: window.id, kind: .item, index: index)) } label: {
+                    HStack {
+                        Text(item.text).frame(maxWidth: .infinity, alignment: .leading)
+                        if window.choice == .multi {
+                            Image(systemName: item.checked == true ? "checkmark.square.fill" : "square").foregroundStyle(.tint)
+                        } else if item.checked == true {
+                            Image(systemName: "checkmark").foregroundStyle(.tint)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PluginTapStyle())
+            }
+        }
+    }
+
+    private var buttons: some View {
+        HStack(spacing: 12) {
+            Spacer(minLength: 0)
+            ForEach(window.buttons.sorted { order($0.role) < order($1.role) }) { button in
+                if button.role == .positive {
+                    Button(button.text) { send(PluginEvent(window: window.id, kind: .click, view: button.id)) }
+                        .buttonStyle(.borderedProminent).disabled(!button.enabled)
+                } else {
+                    Button(button.text) { send(PluginEvent(window: window.id, kind: .click, view: button.id)) }
+                        .buttonStyle(.bordered).disabled(!button.enabled)
+                }
+            }
+        }
+    }
+
+    /// Android's order: neutral first, then negative, positive last.
+    private func order(_ role: PluginWindow.Button.Role) -> Int {
+        switch role { case .neutral: 0; case .negative: 1; case .positive: 2 }
+    }
+}
+
+private struct PluginNodeView: View {
+    struct Context {
+        let window: Int
+        /// The window has the plugin's own background, so its colors are kept.
+        let painted: Bool
+        let typed: Binding<[Int: String]>
+        let send: (PluginEvent) -> Void
+        func tap(_ node: PluginNode) { send(PluginEvent(window: window, kind: .click, view: node.id)) }
+        func change(_ node: PluginNode, _ value: PluginEvent.Value) { send(PluginEvent(window: window, kind: .change, values: [node.id: value])) }
+    }
+    let node: PluginNode
+    let context: Context
+    private var scale: Double { PluginWindowView.scale }
+
+    var body: some View {
+        content
+            .opacity(node.enabled ? (node.alpha ?? 1) : 0.45)
+    }
+
+    @ViewBuilder private var content: some View {
+        switch node.kind {
+        case .stack, .scroll, .radios: tappable(container)
+        case .text: tappable(label(node))
+        case .button:
+            Button { context.tap(node) } label: { label(node).frame(maxWidth: node.fillWidth ? .infinity : nil) }
+                .buttonStyle(.bordered).disabled(!node.enabled)
+        case .input: field
+        case .check, .switch:
+            Toggle(isOn: Binding(get: { node.checked }, set: { context.change(node, .on($0)) })) { label(node) }
+                .disabled(!node.enabled)
+        case .radio:
+            Button { if !node.checked { context.change(node, .on(true)) } } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: node.checked ? "largecircle.fill.circle" : "circle").foregroundStyle(.tint)
+                    label(node)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PluginTapStyle())
+        case .progress:
+            if node.indeterminate { ProgressView().frame(maxWidth: .infinity) }
+            else { ProgressView(value: Double(node.progress - node.minimum), total: Double(max(1, node.maximum - node.minimum))) }
+        case .slider: slider
+        case .image: tappable(picture)
+        case .view: spacer
+        }
+    }
+
+    // Containers: Android's LinearLayout and FrameLayout, each child with its share of the line.
+    @ViewBuilder private var container: some View {
+        let spacing = 8 * scale
+        switch node.axis {
+        case .h:
+            let row = HStack(alignment: .center, spacing: spacing) { children }
+            if node.kind == .scroll { ScrollView(.horizontal, showsIndicators: false) { row } }
+            else { ViewThatFits(in: .horizontal) { row; ScrollView(.horizontal, showsIndicators: false) { row } } }
+        case .z:
+            ZStack(alignment: .topLeading) { children }
+        case .v:
+            VStack(alignment: node.centered ? .center : .leading, spacing: spacing) { children }
+        }
+    }
+
+    @ViewBuilder private var children: some View {
+        ForEach(node.children) { child in
+            let view = PluginNodeView(node: child, context: context)
+            if node.axis == .h, child.weight != nil { view.frame(maxWidth: .infinity, alignment: child.trailing ? .trailing : .leading) }
+            else if node.axis == .v, child.fillWidth { view.frame(maxWidth: .infinity, alignment: child.centered ? .center : child.trailing ? .trailing : .leading) }
+            else { view }
+        }
+    }
+
+    /// A view with a listener is a button; one the plugin paints gets its color and rounded plate.
+    @ViewBuilder private func tappable(_ inner: some View) -> some View {
+        let plated = inner
+            .padding(insets)
+            .background { if let plate { RoundedRectangle(cornerRadius: 10 * scale, style: .continuous).fill(plate) } }
+        if node.tappable {
+            Button { context.tap(node) } label: { plated.contentShape(Rectangle()) }
+                .buttonStyle(PluginTapStyle())
+                .disabled(!node.enabled)
+                .accessibilityLabel(node.spokenText)
+        } else {
+            plated
+        }
+    }
+
+    /// The plugin's own padding; a painted plate without one still gets room around its content.
+    private var insets: EdgeInsets {
+        if let p = node.padding { return EdgeInsets(top: p[1] * scale, leading: p[0] * scale, bottom: p[3] * scale, trailing: p[2] * scale) }
+        let room = plate == nil ? 0 : 10 * scale
+        return EdgeInsets(top: room, leading: room, bottom: room, trailing: room)
+    }
+
+    private var plate: Color? {
+        guard let background = node.background, background.alpha > 0.05 else { return nil }
+        if context.painted { return background.color }
+        return node.selected ? Color.accentColor.opacity(0.25) : Color.secondary.opacity(0.15)
+    }
+
+    private func label(_ node: PluginNode) -> some View {
+        Text(node.text ?? "")
+            .font(.system(size: (node.size ?? 15) * scale, weight: node.bold ? .semibold : .regular))
+            .foregroundStyle(textColor(node))
+            .lineLimit(node.lines)
+            .multilineTextAlignment(node.centered ? .center : node.trailing ? .trailing : .leading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func textColor(_ node: PluginNode) -> Color {
+        guard context.painted, let color = node.color else { return node.selected ? .accentColor : .primary }
+        return color.color
+    }
+
+    @ViewBuilder private var field: some View {
+        let text = Binding(get: { context.typed.wrappedValue[node.id] ?? node.text ?? "" },
+                           set: { context.typed.wrappedValue[node.id] = $0 })
+        let prompt = Text(node.hint ?? "")
+        Group {
+            if node.secure { SecureField(node.hint ?? "", text: text, prompt: prompt) }
+            else if node.multiline { TextField(node.hint ?? "", text: text, prompt: prompt, axis: .vertical).lineLimit(3...8) }
+            else { TextField(node.hint ?? "", text: text, prompt: prompt) }
+        }
+        #if !os(tvOS)
+        .textFieldStyle(.roundedBorder)
+        #endif
+        #if os(iOS)
+        .keyboardType(node.keyboard == "number" ? .numberPad : node.keyboard == "url" ? .URL : node.keyboard == "email" ? .emailAddress : .default)
+        .textInputAutocapitalization(.never)
+        #endif
+        .autocorrectionDisabled()
+        .onSubmit { context.send(PluginEvent(window: context.window, kind: .submit, view: node.id, values: [node.id: .text(text.wrappedValue)])) }
+        .disabled(!node.enabled)
+    }
+
+    @ViewBuilder private var slider: some View {
+        #if os(tvOS)
+        HStack(spacing: 20) {
+            Button { context.change(node, .number(max(node.minimum, node.progress - node.step))) } label: { Image(systemName: "minus") }
+            Text("\(node.progress)").monospacedDigit().frame(minWidth: 80)
+            Button { context.change(node, .number(min(node.maximum, node.progress + node.step))) } label: { Image(systemName: "plus") }
+        }
+        #else
+        PluginSlider(node: node) { context.change(node, .number($0)) }
+        #endif
+    }
+
+    @ViewBuilder private var picture: some View {
+        if let data = node.image, let image = PlatformImage(data: data) {
+            let width = (node.width ?? Double(image.size.width) / 2) * scale, height = (node.height ?? Double(image.size.height) / 2) * scale
+            #if os(macOS)
+            let drawn = Image(nsImage: image)
+            #else
+            let drawn = Image(uiImage: image)
+            #endif
+            // Plugins' pictures are mostly QR codes: keep their pixels sharp.
+            drawn.resizable().interpolation(.none)
+                .aspectRatio(contentMode: node.fill ? .fill : .fit)
+                .frame(maxWidth: width, maxHeight: height)
+                .clipped()
+                .frame(maxWidth: .infinity)
+        } else {
+            spacer
+        }
+    }
+
+    /// An empty view: a gap, or a line or block when the plugin colors it.
+    @ViewBuilder private var spacer: some View {
+        if let plate, let height = node.height {
+            Rectangle().fill(plate).frame(height: CGFloat(height * scale))
+                .frame(maxWidth: node.fillWidth ? .infinity : node.width.map { CGFloat($0 * scale) } ?? .infinity)
+        } else if node.weight != nil {
+            Spacer(minLength: 0)
+        } else if let height = node.height {
+            Color.clear.frame(height: CGFloat(height * scale))
+        }
+    }
+}
+
+#if !os(tvOS)
+/// A plugin's SeekBar: the plugin hears the value once the drag ends, as Android's onStopTrackingTouch.
+private struct PluginSlider: View {
+    let node: PluginNode
+    let commit: (Int) -> Void
+    @State private var value: Double?
+    var body: some View {
+        HStack {
+            Slider(value: Binding(get: { value ?? Double(node.progress) }, set: { value = $0 }),
+                   in: Double(node.minimum)...Double(max(node.minimum + 1, node.maximum)), step: Double(node.step)) { editing in
+                if !editing, let value { commit(Int(value)); self.value = nil }
+            }
+            Text("\(Int(value ?? Double(node.progress)))").monospacedDigit().frame(minWidth: 40)
+        }
+    }
+}
+#endif
+
+/// Taps on a plugin's own rows: no extra chrome (the plugin paints them), a lift on Apple TV focus.
+private struct PluginTapStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        #if os(tvOS)
+        PluginFocusLift(label: configuration.label, pressed: configuration.isPressed)
+        #else
+        configuration.label.opacity(configuration.isPressed ? 0.6 : 1)
+        #endif
+    }
+}
+
+#if os(tvOS)
+private struct PluginFocusLift<Label: View>: View {
+    @Environment(\.isFocused) private var focused
+    let label: Label
+    let pressed: Bool
+    var body: some View {
+        label
+            .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.accentColor, lineWidth: focused ? 4 : 0) }
+            .scaleEffect(pressed ? 0.98 : focused ? 1.03 : 1)
+            .shadow(color: .black.opacity(focused ? 0.3 : 0), radius: 12, y: 6)
+            .animation(.easeOut(duration: 0.15), value: focused)
+    }
+}
+#endif
+
+private extension PluginColor {
+    var color: Color { Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha) }
+}
+
+#if os(macOS)
+private typealias PlatformImage = NSImage
+#else
+private typealias PlatformImage = UIImage
+#endif
 
 struct VideoDetailView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass

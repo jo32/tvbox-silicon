@@ -42,6 +42,7 @@ public final class PluginSession {
             stopAt.accumulateAndGet(deadline, (current, next) -> current == 0 ? next : Math.min(current, next));
         }
         String kind = params.has("spiderAction") ? "action " + params.optString("spiderAction")
+            : params.has("spiderUI") ? "window"
             : params.has("play") ? "play flag=" + params.optString("flag") : params.has("ids") ? "detail"
             : params.has("wd") ? "search" : params.has("t") ? "category" : "home";
         System.err.println("PLUGIN_REQUEST " + java.time.LocalTime.now().withNano(0) + " " + kind + " deadline=" + seconds + "s");
@@ -53,6 +54,8 @@ public final class PluginSession {
 
     private String performRequest(JSONObject params) throws Exception {
         if (params.has("spiderAction")) return action(params.getString("spiderAction"));
+        // The app sends string parameters, so the event arrives as JSON text.
+        if (params.has("spiderUI")) return window(params.get("spiderUI") instanceof JSONObject event ? event : new JSONObject(params.getString("spiderUI")));
         if (params.has("play")) {
             String required = params.optString("detailID", "");
             if (!required.isEmpty() && !required.equals(detailID) && !required.equals(detailVideoID)) {
@@ -93,19 +96,33 @@ public final class PluginSession {
      * setting, not a title. The answer is the plugin's JSON plus `notices`, the toasts it showed meanwhile;
      * on Android an action may also open a dialog of its own, which a headless host can't show.
      */
+    /**
+     * Runs one of the plugin's settings (a list item with "action", as TVBox calls Spider.action). Most
+     * open the plugin's own window on the Activity; its state comes back as "ui" (PluginWindows) with the
+     * plugin's toasts as "notices", and the viewer's input goes back as spiderUI requests.
+     */
     private String action(String name) throws Exception {
-        PluginNotices.start();
-        String result;
-        List<String> notices;
-        try {
-            result = content(() -> spider.action(name), true, false);
-            // Plugins show their toasts from the main looper; let what the action posted run first.
-            var drained = new java.util.concurrent.CountDownLatch(1);
-            if (new android.os.Handler(android.os.Looper.getMainLooper()).post(drained::countDown)) drained.await(2, java.util.concurrent.TimeUnit.SECONDS);
-        } finally { notices = PluginNotices.stop(); }
+        PluginWindows.closeAll();
+        PluginNotices.take(); // toasts from browsing are not this setting's
+        PluginWindows.activity();
+        String result = content(() -> spider.action(name), true, false);
+        // The window often follows from the plugin's own thread (reading its settings, a request).
+        PluginWindows.await(2_500);
         JSONObject answer;
         try { answer = new JSONObject(result); } catch (org.json.JSONException notAnObject) { answer = new JSONObject().put("msg", result); }
-        return answer.put("notices", new org.json.JSONArray(notices)).toString();
+        return answer.put("notices", new org.json.JSONArray(PluginNotices.take())).put("ui", PluginWindows.state()).toString();
+    }
+
+    /** The viewer's input to the plugin's window ({"kind": "poll"} only reads it again), then its new state. */
+    private String window(JSONObject event) throws Exception {
+        if ("closeAll".equals(event.optString("kind"))) PluginWindows.closeAll();
+        else PluginWindows.handle(event);
+        if (!"poll".equals(event.optString("kind"))) {
+            // What the tap started on the plugin's threads gets a moment to show (a toast, the next window).
+            PluginWindows.settle();
+            Thread.sleep(300);
+        }
+        return new JSONObject().put("notices", new org.json.JSONArray(PluginNotices.take())).put("ui", PluginWindows.state()).toString();
     }
 
     /** The category's filter choices (`filters`, JSON text) as the spider's `extend` map. */

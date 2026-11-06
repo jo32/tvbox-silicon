@@ -450,17 +450,20 @@ public struct CatalogClient: Sendable {
         guard let video = result.videos.first else { throw TVError.unsupported(L10n.text("The API did not return video details.")) }
         return video
     }
-    /// Runs a listed plugin setting (`Video.action`) with the source's JAR spider and returns what the plugin
-    /// reported: its `msg` and the toasts it showed, one per line, or nil when it said nothing.
-    public func runAction(_ action: String) async throws -> String? {
+    /// Runs a listed plugin setting (`Video.action`) with the source's JAR spider, as TVBox does with
+    /// `Spider.action`: what the plugin then shows (its own window, its toasts, the pages it opens).
+    public func runAction(_ action: String) async throws -> PluginScreen {
         guard site.type == 3, site.runtime == .jar else { throw TVError.unsupported(L10n.text("This plugin setting only works in Android TVBox.")) }
-        let result = try await request(["spiderAction": action])
+        // Settings are not browsing: they stay out of the source's health (`request`).
+        let result = try await perform(["spiderAction": action])
         if let failure = result["errMsg"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines), !failure.isEmpty {
             throw TVError.unsupported(failure)
         }
-        let lines = [result["msg"]?.string] + (result["notices"]?.array ?? []).map(\.string)
-        let said = lines.compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-        return said.isEmpty ? nil : said.joined(separator: "\n")
+        return PluginScreen(json: result)
+    }
+    /// Sends the viewer's input to the plugin window a setting opened, and returns what it shows then.
+    public func pluginWindow(_ event: PluginEvent) async throws -> PluginScreen {
+        PluginScreen(json: try await perform(["spiderUI": event.json]))
     }
     public func playback(_ episode: Episode) async throws -> Channel {
         let plan = try await preparePlayback(episode)

@@ -51,7 +51,9 @@ public class Paint {
     public void setTextSize(float value) { textSize = value; }
     public Align getTextAlign() { return align; }
     public void setTextAlign(Align value) { align = value; }
-    public void setFakeBoldText(boolean on) { }
+    public static final int FAKE_BOLD_TEXT_FLAG = 0x20;
+    public void setFakeBoldText(boolean on) { flags = on ? flags | FAKE_BOLD_TEXT_FLAG : flags & ~FAKE_BOLD_TEXT_FLAG; }
+    public boolean isFakeBoldText() { return (flags & FAKE_BOLD_TEXT_FLAG) != 0; }
     /** Typical sans-serif proportions of the text size. */
     public FontMetrics getFontMetrics() {
         FontMetrics metrics = new FontMetrics();

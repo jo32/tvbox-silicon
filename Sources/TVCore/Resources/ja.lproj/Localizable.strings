@@ -1582,6 +1582,4 @@
 "Brightness and Volume" = "明るさと音量";
 "Area" = "表示範囲";
 "This plugin setting only works in Android TVBox." = "このプラグイン設定は Android 版 TVBox でのみ使えます。";
-"Signs %@ out of Yingxia and out of this source's plugin. Every source stops using this account until you sign in again under Cloud Drive Accounts." = "映匣とこのソースのプラグインで%@からサインアウトします。「クラウドドライブのアカウント」で再度サインインするまで、すべてのソースがこのアカウントを使わなくなります。";
-"Signed out of %@." = "%@からサインアウトしました。";
-"The plugin finished without a message. Settings that open the plugin's own window only work in Android TVBox." = "プラグインはメッセージを返さずに終了しました。プラグイン独自のウインドウを開く設定は Android 版 TVBox でのみ使えます。";
+"The plugin finished without a message." = "プラグインはメッセージなしで終了しました。";

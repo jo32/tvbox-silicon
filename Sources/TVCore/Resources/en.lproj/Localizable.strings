@@ -1582,6 +1582,4 @@
 "Brightness and Volume" = "Brightness and Volume";
 "Area" = "Area";
 "This plugin setting only works in Android TVBox." = "This plugin setting only works in Android TVBox.";
-"Signs %@ out of Yingxia and out of this source's plugin. Every source stops using this account until you sign in again under Cloud Drive Accounts." = "Signs %@ out of Yingxia and out of this source's plugin. Every source stops using this account until you sign in again under Cloud Drive Accounts.";
-"Signed out of %@." = "Signed out of %@.";
-"The plugin finished without a message. Settings that open the plugin's own window only work in Android TVBox." = "The plugin finished without a message. Settings that open the plugin's own window only work in Android TVBox.";
+"The plugin finished without a message." = "The plugin finished without a message.";

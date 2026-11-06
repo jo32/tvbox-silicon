@@ -11,6 +11,8 @@
     <dependency><groupId>com.google.android</groupId><artifactId>android</artifactId><version>4.1.1.4</version></dependency>
     <dependency><groupId>com.squareup.okhttp3</groupId><artifactId>okhttp</artifactId><version>4.12.0</version></dependency>
     <dependency><groupId>com.google.code.gson</groupId><artifactId>gson</artifactId><version>2.10.1</version></dependency>
+    <!-- TVBox ships zxing, and plugins draw their sign-in QR codes with it. -->
+    <dependency><groupId>com.google.zxing</groupId><artifactId>core</artifactId><version>3.5.3</version></dependency>
     <dependency><groupId>org.bouncycastle</groupId><artifactId>bcprov-jdk18on</artifactId><version>1.78.1</version></dependency>
     <dependency><groupId>org.jsoup</groupId><artifactId>jsoup</artifactId><version>1.17.2</version></dependency>
     <!-- Runtime dependency of sardine-android (WebDAV), which Android TVBox hosts bundle for plugins.

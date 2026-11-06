@@ -19,7 +19,24 @@ public class Context {
     }
     public Context getApplicationContext() { return this; }
     /** No Android system services exist here; callers already handle an unavailable service. */
-    public Object getSystemService(String name) { return null; }
+    public Object getSystemService(String name) {
+        if ("window".equals(name)) return android.view.WindowManager.DEFAULT;
+        if ("input_method".equals(name)) return new android.view.inputmethod.InputMethodManager();
+        return null;
+    }
+    public android.content.res.Resources getResources() { return android.content.res.Resources.getSystem(); }
+    public android.content.res.Resources.Theme getTheme() { return getResources().newTheme(); }
+    public void setTheme(int resid) { }
+    public final String getString(int id) { return getResources().getString(id); }
+    public final String getString(int id, Object... args) { return getResources().getString(id, args); }
+    public final CharSequence getText(int id) { return getResources().getText(id); }
+    public final int getColor(int id) { return getResources().getColor(id); }
+    public final android.graphics.drawable.Drawable getDrawable(int id) { return getResources().getDrawable(id); }
+    public final android.content.res.ColorStateList getColorStateList(int id) { return getResources().getColorStateList(id); }
+    public android.os.Looper getMainLooper() { return android.os.Looper.getMainLooper(); }
+    /** Pages a plugin opens go to the app (tvbox.runtime.PluginWindows). */
+    public void startActivity(Intent intent) { tvbox.runtime.PluginWindows.open(intent); }
+    public void startActivity(Intent intent, android.os.Bundle options) { startActivity(intent); }
     public int checkCallingOrSelfPermission(String permission) { return 0; }
     public int checkSelfPermission(String permission) { return 0; }
     public int checkPermission(String permission, int pid, int uid) { return 0; }
