@@ -1074,6 +1074,8 @@
 "Unlike" = "取消喜欢";
 "Show on Watch Now" = "在“现在观看”中显示";
 "A section you switch off only leaves Watch Now: Playback History, Favorites, Sources and Live TV still have everything." = "关闭的栏目只是不在“现在观看”中显示，播放记录、收藏、点播源和直播里的内容都还在。";
+"Show File Size and Quality" = "显示文件大小与画质";
+"Playback History and Continue Watching show the file's size and picture quality beside the episode number, read from the file's name. A name without them shows the episode alone." = "播放历史与继续观看会在集数旁显示文件名中的文件大小与画质，如“第1集 · 5.4GB · 2160p”；文件名里没有这些信息时只显示集数。";
 "Choose what Watch Now shows in Settings." = "可在设置中选择“现在观看”显示哪些内容。";
 "Name" = "名称";
 "Name (optional)" = "名称（可选）";
