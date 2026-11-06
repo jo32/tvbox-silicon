@@ -35,6 +35,8 @@ struct MobilePlayerView: View {
     @State private var pip = PictureInPicture()
     @State private var clock = PlayerClock()
     @State private var tracks = MediaTracks()
+    @State private var importsSubtitleFile = false
+    @State private var asksSubtitleAddress = false
     @State private var nowPlaying = VideoNowPlaying()
     @State private var fillsScreen = false
     @State private var speed: Float = 1
@@ -168,6 +170,7 @@ struct MobilePlayerView: View {
         .sensoryFeedback(.impact(weight: .medium), trigger: locked)
         // A failure, or a watch page's player back from full screen, has controls to reach.
         .onChange(of: session.error != nil || inline) { _, unlock in if unlock { setLocked(false) } }
+        .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, subtitles: session.externalSubtitles)
         .playerEpisodesSheet(isPresented: $showsEpisodes, channel: channel)
         .sheet(isPresented: $showsDanmakuList) {
             DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
@@ -664,14 +667,21 @@ struct MobilePlayerView: View {
                     .pickerStyle(.inline)
                 }
             }
-            if let legible = tracks.legible, !legible.options.isEmpty {
-                Menu(L10n.text("Subtitles")) {
-                    Picker(L10n.text("Subtitles"), selection: Binding(get: { tracks.selected(in: legible) }, set: { tracks.select($0, in: legible) })) {
+            // The item's own subtitles, then subtitle files beside the video or added now (#576).
+            Menu(L10n.text("Subtitles")) {
+                if let legible = tracks.legible, !legible.options.isEmpty {
+                    Picker(L10n.text("Subtitles"), selection: Binding(get: { session.externalSubtitles.selected == nil ? tracks.selected(in: legible) : nil },
+                                                                      set: { tracks.select($0, in: legible); session.externalSubtitles.nativeChosen() })) {
                         if legible.group.allowsEmptySelection { Text(L10n.text("Off")).tag(AVMediaSelectionOption?.none) }
                         ForEach(legible.options, id: \.self) { Text($0.displayName).tag(Optional($0)) }
                     }
                     .pickerStyle(.inline)
+                } else if session.externalSubtitles.selected != nil {
+                    Button(L10n.text("Off")) { session.externalSubtitles.select(nil) }
                 }
+                ExternalSubtitleMenu(subtitles: session.externalSubtitles, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true })
+            }
+            if session.externalSubtitles.selected == nil, let legible = tracks.legible, !legible.options.isEmpty {
                 // A subtitle file that runs ahead of its picture (#599): each step holds it back half a second.
                 Menu(L10n.text("Subtitle Delay")) {
                     Text(SubtitleDelay.title(session.subtitles.delay))

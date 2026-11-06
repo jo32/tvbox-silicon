@@ -145,10 +145,13 @@ enum QALaunch {
             }
         }
         // `-qaPlayURL <address>` plays a media link as it is (an MKV on a local server, say); with `-qaResume <seconds>`,
-        // from there, as a saved position resumes.
+        // from there, as a saved position resumes. `-qaSubtitleURLs <a,b,...>` are its source's subtitle files, as a
+        // cloud-drive plugin's `subs` would be (#576).
         if let address = UserDefaults.standard.string(forKey: "qaPlayURL"), let url = URL(string: address) {
             let resume = UserDefaults.standard.double(forKey: "qaResume")
-            store.playing = Channel(name: url.lastPathComponent, group: "QA", url: url, resumePosition: resume > 0 ? resume : nil)
+            let subtitles = (UserDefaults.standard.string(forKey: "qaSubtitleURLs") ?? "").split(separator: ",").compactMap { URL(string: String($0)) }
+                .map { ExternalSubtitle(name: $0.lastPathComponent, url: $0) }
+            store.playing = Channel(name: url.lastPathComponent, group: "QA", url: url, resumePosition: resume > 0 ? resume : nil, subtitles: subtitles)
         }
         // `-qaPlay <site key>:<video id>[:<episode index>]` opens that source's video in the player.
         if let target = UserDefaults.standard.string(forKey: "qaPlay"), let config = store.subscription {

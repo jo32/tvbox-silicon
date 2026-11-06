@@ -1590,3 +1590,28 @@
 "The plugin stopped with an error: %@" = "外掛出錯停止了：%@";
 "Run Again" = "再執行一次";
 "Open Link" = "打開連結";
+
+/* Subtitle files (#576) */
+"The file is too large to be subtitles." = "檔案太大，不像是字幕。";
+"The server answered %@." = "伺服器回應了 %@。";
+"The text couldn't be read. Try another encoding." = "文字無法讀取，請換一種編碼。";
+"No subtitles were found in the file." = "檔案裡沒有找到字幕。";
+"The file couldn't be opened." = "無法打開檔案。";
+"Automatic" = "自動";
+"Simplified Chinese (GB 18030)" = "簡體中文（GB 18030）";
+"Traditional Chinese (Big5)" = "繁體中文（Big5）";
+"Japanese (Shift-JIS)" = "日文（Shift-JIS）";
+"Enter an address that starts with http:// or https://." = "請輸入以 http:// 或 https:// 開頭的網址。";
+"Subtitle Files" = "字幕檔案";
+"%@ (loading)" = "%@（載入中）";
+"%@: Try Again" = "%@：重試";
+"Add Subtitle File…" = "加入字幕檔案…";
+"Add Subtitles from Address…" = "從網址加入字幕…";
+"Add Subtitles from Address" = "從網址加入字幕";
+"ASS styling and effects show as plain text." = "ASS 樣式和特效以純文字顯示。";
+"Text Encoding" = "文字編碼";
+"Frame Rate" = "影格率";
+"As Made" = "原始";
+"%@ fps" = "%@ fps";
+"An SRT, WebVTT or ASS file, up to 8 MB." = "SRT、WebVTT 或 ASS 檔案，最大 8 MB。";
+"Subtitles Not Added" = "未能加入字幕";

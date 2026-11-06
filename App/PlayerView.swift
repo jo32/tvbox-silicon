@@ -29,6 +29,10 @@ struct PlaybackView: View {
     @State private var playbackSpeed: Float = 1
     @State private var fillsScreen = false
     #endif
+    #if os(macOS)
+    @State private var importsSubtitleFile = false
+    @State private var asksSubtitleAddress = false
+    #endif
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -58,6 +62,7 @@ struct PlaybackView: View {
                                  next: episodeAction(store.step(back: false, from: channel, session: session)), waiting: waitContent,
                                  enhancer: session.enhancer, upscale: $upscalesVideo, smooth: $smoothsVideo, info: $showsPlaybackInfo,
                                  speed: playbackSpeed, setSpeed: { playbackSpeed = $0; session.setSpeed($0) }, fills: $fillsScreen, danmakuArea: $danmakuArea,
+                                 external: session.externalSubtitles,
                                  exitWhileWaiting: session.showsPicture ? nil : { dismiss() }).ignoresSafeArea()
                     .onAppear { playbackSpeed = session.player.defaultRate }
             }
@@ -198,6 +203,7 @@ struct PlaybackView: View {
         ChromeRow { chromeTitle; chromeButtons; chromeClose }
             .padding(16)
             .frame(maxHeight: .infinity, alignment: .top)
+        .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, subtitles: session.externalSubtitles)
         .playerEpisodesSheet(isPresented: $showsEpisodes, channel: channel)
         .sheet(isPresented: $showsDanmakuList) {
             DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
@@ -256,6 +262,14 @@ struct PlaybackView: View {
                 .chromeButton()
                 .accessibilityLabel(L10n.text("Audio"))
             }
+            // Subtitle files beside the video, or added now (#576); the item's own are in AVKit's menu.
+            Menu {
+                MacSubtitleFiles(subtitles: session.externalSubtitles, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true })
+            } label: {
+                Image(systemName: session.externalSubtitles.selected == nil ? "captions.bubble" : "captions.bubble.fill").font(.headline).frame(width: 22, height: 22)
+            }
+            .chromeButton()
+            .accessibilityLabel(L10n.text("Subtitle Files"))
             // One button for danmaku: show or hide them, or open the list.
             if !session.danmaku.isEmpty {
                 Menu {
@@ -699,6 +713,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     /// Fill Screen: the picture is cropped to the whole screen rather than fitted inside it, as on iPhone.
     var fills: Binding<Bool> = .constant(false)
     var danmakuArea: Binding<DanmakuArea> = .constant(.standard)
+    /// Subtitle files beside the video (#576); the item's own are in AVKit's Subtitles menu.
+    var external: ExternalSubtitles? = nil
     private static let speeds: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
     private static func speedLabel(_ speed: Float) -> String {
         Double(speed).formatted(.number.precision(.fractionLength(0...2))) + "×"
@@ -794,6 +810,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             let options = audio.map { option in UIAction(title: option.name, state: option.id == audioChoice ? .on : .off) { _ in chooseAudio(option.id) } }
             items.append(UIMenu(title: L10n.text("Audio"), image: UIImage(systemName: "speaker.wave.2"), children: options))
         }
+        if let external, !external.entries.isEmpty { items.append(Self.subtitleFilesMenu(external)) }
         if !live {
             let setSpeed = setSpeed, speed = speed
             let options = Self.speeds.map { rate in UIAction(title: Self.speedLabel(rate), state: rate == speed ? .on : .off) { _ in setSpeed(rate) } }
@@ -828,6 +845,46 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         controller.transportBarCustomMenuItems = items
     }
     static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) { coordinator.criteria?.reset() }
+
+    /// Off and the files, then the chosen one's timing, frame rate and encoding. A file is added on the TV by the
+    /// source (a drive's folder); there is no file panel here.
+    private static func subtitleFilesMenu(_ external: ExternalSubtitles) -> UIMenu {
+        var files: [UIMenuElement] = [UIAction(title: L10n.text("Off"), state: external.selected == nil ? .on : .off) { _ in external.select(nil) }]
+        for entry in external.entries {
+            switch entry.state {
+            case .ready:
+                files.append(UIAction(title: entry.title, state: external.selected == entry.id ? .on : .off) { _ in external.select(entry.id) })
+            case .loading:
+                files.append(UIAction(title: L10n.text("%@ (loading)", entry.title), attributes: [.disabled]) { _ in })
+            case .failed(let reason):
+                files.append(UIAction(title: L10n.text("%@: Try Again", entry.title), subtitle: reason) { _ in external.retry(entry.id) })
+            }
+        }
+        var children: [UIMenuElement] = [UIMenu(options: .displayInline, children: files)]
+        if let document = external.document {
+            let timing = external.timing
+            let shift = { (seconds: Double) in external.setTiming(SubtitleTiming(delay: timing.delay + seconds, scale: timing.scale)) }
+            var delay: [UIMenuElement] = [
+                UIAction(title: String(format: "%+.1f s", -SubtitleTiming.step), attributes: timing.delay <= SubtitleTiming.delays.lowerBound ? [.disabled] : []) { _ in shift(-SubtitleTiming.step) },
+                UIAction(title: String(format: "%+.1f s", SubtitleTiming.step), attributes: timing.delay >= SubtitleTiming.delays.upperBound ? [.disabled] : []) { _ in shift(SubtitleTiming.step) },
+            ]
+            if !timing.isIdentity { delay.append(UIAction(title: L10n.text("Reset")) { _ in external.setTiming(SubtitleTiming()) }) }
+            children.append(UIMenu(title: L10n.text("Subtitle Delay") + " · " + timing.title, image: UIImage(systemName: "clock.arrow.2.circlepath"), children: delay))
+            let rates = [UIAction(title: L10n.text("As Made"), state: timing.rate == nil ? .on : .off) { _ in external.setTiming(SubtitleTiming(delay: timing.delay)) }]
+                + SubtitleTiming.rates.map { rate in
+                    UIAction(title: L10n.text("%@ fps", rate.title), state: timing.rate == rate ? .on : .off) { _ in external.setTiming(SubtitleTiming(delay: timing.delay, scale: rate.scale)) }
+                }
+            children.append(UIMenu(title: L10n.text("Frame Rate"), image: UIImage(systemName: "film"), children: rates))
+            let encodings = SubtitleEncoding.allCases.map { encoding in
+                UIAction(title: encoding.title, state: document.encoding == encoding ? .on : .off) { _ in external.read(as: encoding) }
+            }
+            children.append(UIMenu(title: L10n.text("Text Encoding"), image: UIImage(systemName: "textformat"), children: encodings))
+            if document.format.isStyled {
+                children.append(UIAction(title: L10n.text("ASS styling and effects show as plain text."), attributes: [.disabled]) { _ in })
+            }
+        }
+        return UIMenu(title: L10n.text("Subtitle Files"), image: UIImage(systemName: external.selected == nil ? "captions.bubble" : "captions.bubble.fill"), children: children)
+    }
     private var overlay: AnyView {
         AnyView(ZStack {
             if let enhancer { EnhancedVideoSurface(enhancer: enhancer, fills: fills.wrappedValue) }
@@ -984,6 +1041,8 @@ private struct DesktopPlaybackView: View {
     /// Devices with Yingxia open, for the Play On button; and the one the video was sent to.
     @State private var tvBrowser = PlayOnBrowser()
     @State private var playingOn: String?
+    @State private var importsSubtitleFile = false
+    @State private var asksSubtitleAddress = false
 
     private var showsChrome: Bool { idle.visible || session.error != nil }
     private var waitContent: PlaybackWaitContent? { .make(session, channel: channel, store: store, linesHint: true) }
@@ -1042,6 +1101,13 @@ private struct DesktopPlaybackView: View {
                 .danmakuListPresentation()
         }
         .onDisappear { idle.detach(); tvBrowser.stop() }
+        .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, subtitles: session.externalSubtitles)
+        // A subtitle file dropped on the video shows on it (#576).
+        .dropDestination(for: URL.self) { urls, _ in
+            let files = urls.filter(ExternalSubtitles.handles)
+            files.forEach { session.externalSubtitles.add(file: $0) }
+            return !files.isEmpty
+        }
     }
 
     /// Title on the left (beside the traffic lights), actions on the right, over a soft scrim.
@@ -1115,6 +1181,9 @@ private struct DesktopPlaybackView: View {
             if session.qualities.count > 1 {
                 Menu(L10n.text("Quality")) { QualityPicker(session: session) }
             }
+            Menu(L10n.text("Subtitle Files")) {
+                MacSubtitleFiles(subtitles: session.externalSubtitles, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true })
+            }
             if !session.danmaku.isEmpty {
                 Toggle(L10n.text("Show Danmaku"), isOn: $showsDanmaku)
                 Picker(L10n.text("Danmaku Area"), selection: $danmakuArea) {
@@ -1146,6 +1215,17 @@ private struct DesktopPlaybackView: View {
         for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
             window.standardWindowButton(kind)?.animator().alphaValue = visible ? 1 : 0
         }
+    }
+}
+
+/// The Mac's subtitle-file menu: AVKit's own menu has the item's subtitles, so this one has Off and the files.
+private struct MacSubtitleFiles: View {
+    let subtitles: ExternalSubtitles
+    let addFile: () -> Void
+    let addAddress: () -> Void
+    var body: some View {
+        if subtitles.selected != nil { Button(L10n.text("Off")) { subtitles.select(nil) } }
+        ExternalSubtitleMenu(subtitles: subtitles, addFile: addFile, addAddress: addAddress)
     }
 }
 

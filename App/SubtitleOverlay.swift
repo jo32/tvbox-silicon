@@ -17,6 +17,14 @@ import TVCore
     @ObservationIgnored private var schedule = SubtitleSchedule()
     /// The playback time `advance(to:)` saw last: what is due there when the delay is turned off.
     @ObservationIgnored private var lastAdvanced: Double?
+    /// A subtitle file the app shows itself (`ExternalSubtitles`, #576), at the player's clock: while there is one,
+    /// what AVPlayer hands over is ignored (its own subtitles are off then).
+    private(set) var document: SubtitleDocument?
+    @ObservationIgnored var timing = SubtitleTiming() {
+        didSet { if let lastAdvanced, document != nil { advance(to: lastAdvanced) } }
+    }
+    /// Runs when one of the item's own subtitles is chosen while a file shows: the file makes way.
+    @ObservationIgnored var nativeChosen: () -> Void = {}
     /// AVPlayer draws the subtitles itself while the picture is somewhere the app's overlay isn't: Picture in Picture.
     var native = false {
         didSet {
@@ -47,6 +55,7 @@ import TVCore
     /// The item now playing: its lines show, the last item's go.
     func follow(_ item: AVPlayerItem?) {
         guard item !== self.item else { return }
+        // A file belongs to an episode; the session shows it again on the next one's item, if it is the same episode.
         if let old = self.item { NotificationCenter.default.removeObserver(self, name: AVPlayerItem.mediaSelectionDidChangeNotification, object: old) }
         self.item = item
         lines = []
@@ -73,7 +82,7 @@ import TVCore
         let lines = SubtitleStyle.lines(strings.map(\.string))
         // The delegate queue is the main queue (`attach`).
         MainActor.assumeIsolated {
-            guard let item, item.outputs.contains(where: { $0 === output }) else { return }
+            guard let item, item.outputs.contains(where: { $0 === output }), document == nil else { return }
             if delay > 0 {
                 // Held until its turn. AVPlayer repeats a cue it is still showing; `schedule` keeps the last word.
                 schedule.enqueue(lines, at: itemTime.seconds)
@@ -86,10 +95,26 @@ import TVCore
     /// Shows the lines whose delay has passed, at the player's own clock: a paused video holds them, and so does
     /// one still buffering. Call it while `delay` is on; at 0 the lines go up as AVPlayer hands them over.
     func advance(to time: Double) {
+        if let document, time.isFinite {
+            lastAdvanced = time
+            let next = SubtitleStyle.lines(document.texts(at: timing.source(at: time)))
+            if next != lines { lines = next }
+            return
+        }
         guard delay > 0, time.isFinite else { return }
         // A seek is the schedule's to tell: it clears the line and what waited for the old place.
         lastAdvanced = time
         if let next = schedule.lines(at: time), next != lines { lines = next }
+    }
+
+    /// Shows `document` (nil: back to the item's own subtitles) from `time` on.
+    func show(_ document: SubtitleDocument?, timing: SubtitleTiming, at time: Double?) {
+        self.timing = timing
+        guard document != self.document else { return }
+        self.document = document
+        schedule.reset()
+        lines = []
+        if let time { advance(to: time) }
     }
 
     @objc private func styleChanged() { style = SubtitleStyle.load() }
@@ -112,7 +137,11 @@ import TVCore
                   let self, self.item === item else { return }
             // A track change too: the old track's lines must not wait behind the new one's.
             self.schedule.reset()
-            guard item.currentMediaSelection.selectedMediaOption(in: group) == nil else { return }
+            if let option = item.currentMediaSelection.selectedMediaOption(in: group) {
+                if self.document != nil, !option.hasMediaCharacteristic(.containsOnlyForcedSubtitles) { self.nativeChosen() }
+                return
+            }
+            guard self.document == nil else { return }
             self.lines = []
         }
     }

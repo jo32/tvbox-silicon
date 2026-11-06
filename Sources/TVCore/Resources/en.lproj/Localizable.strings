@@ -1590,3 +1590,28 @@
 "The plugin stopped with an error: %@" = "The plugin stopped with an error: %@";
 "Run Again" = "Run Again";
 "Open Link" = "Open Link";
+
+/* Subtitle files (#576) */
+"The file is too large to be subtitles." = "The file is too large to be subtitles.";
+"The server answered %@." = "The server answered %@.";
+"The text couldn't be read. Try another encoding." = "The text couldn't be read. Try another encoding.";
+"No subtitles were found in the file." = "No subtitles were found in the file.";
+"The file couldn't be opened." = "The file couldn't be opened.";
+"Automatic" = "Automatic";
+"Simplified Chinese (GB 18030)" = "Simplified Chinese (GB 18030)";
+"Traditional Chinese (Big5)" = "Traditional Chinese (Big5)";
+"Japanese (Shift-JIS)" = "Japanese (Shift-JIS)";
+"Enter an address that starts with http:// or https://." = "Enter an address that starts with http:// or https://.";
+"Subtitle Files" = "Subtitle Files";
+"%@ (loading)" = "%@ (loading)";
+"%@: Try Again" = "%@: Try Again";
+"Add Subtitle File…" = "Add Subtitle File…";
+"Add Subtitles from Address…" = "Add Subtitles from Address…";
+"Add Subtitles from Address" = "Add Subtitles from Address";
+"ASS styling and effects show as plain text." = "ASS styling and effects show as plain text.";
+"Text Encoding" = "Text Encoding";
+"Frame Rate" = "Frame Rate";
+"As Made" = "As Made";
+"%@ fps" = "%@ fps";
+"An SRT, WebVTT or ASS file, up to 8 MB." = "An SRT, WebVTT or ASS file, up to 8 MB.";
+"Subtitles Not Added" = "Subtitles Not Added";

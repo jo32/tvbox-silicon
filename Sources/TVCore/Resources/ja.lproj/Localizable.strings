@@ -1590,3 +1590,28 @@
 "The plugin stopped with an error: %@" = "プラグインがエラーで停止しました：%@";
 "Run Again" = "もう一度実行";
 "Open Link" = "リンクを開く";
+
+/* Subtitle files (#576) */
+"The file is too large to be subtitles." = "ファイルが大きすぎます。字幕ではないようです。";
+"The server answered %@." = "サーバの応答は %@ でした。";
+"The text couldn't be read. Try another encoding." = "テキストを読めません。別のエンコーディングを試してください。";
+"No subtitles were found in the file." = "ファイルに字幕が見つかりません。";
+"The file couldn't be opened." = "ファイルを開けません。";
+"Automatic" = "自動";
+"Simplified Chinese (GB 18030)" = "簡体字中国語（GB 18030）";
+"Traditional Chinese (Big5)" = "繁体字中国語（Big5）";
+"Japanese (Shift-JIS)" = "日本語（Shift-JIS）";
+"Enter an address that starts with http:// or https://." = "http:// または https:// で始まるアドレスを入力してください。";
+"Subtitle Files" = "字幕ファイル";
+"%@ (loading)" = "%@（読み込み中）";
+"%@: Try Again" = "%@：再試行";
+"Add Subtitle File…" = "字幕ファイルを追加…";
+"Add Subtitles from Address…" = "アドレスから字幕を追加…";
+"Add Subtitles from Address" = "アドレスから字幕を追加";
+"ASS styling and effects show as plain text." = "ASS のスタイルとエフェクトはプレーンテキストで表示されます。";
+"Text Encoding" = "文字エンコーディング";
+"Frame Rate" = "フレームレート";
+"As Made" = "元のまま";
+"%@ fps" = "%@ fps";
+"An SRT, WebVTT or ASS file, up to 8 MB." = "SRT、WebVTT、ASS ファイル（8 MB まで）。";
+"Subtitles Not Added" = "字幕を追加できませんでした";

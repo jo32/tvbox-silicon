@@ -34,6 +34,9 @@ final class RemuxSession: @unchecked Sendable {
     private(set) var format = ""
     /// The cues of the subtitle files added after the file's own tracks, by track.
     private var external: [Int: [RemuxPlan.Cue]] = [:]
+    /// The addresses of the subtitle files that are tracks of the stream.
+    var subtitleSources: Set<URL> { condition.withLock { addedSources } }
+    private var addedSources: Set<URL> = []
     /// The translated twins of subtitle tracks (`SubtitleTranslation`), by track.
     private var translations: [Int: Translation] = [:]
     /// Their segments, made once: translating costs more than repackaging.
@@ -97,6 +100,7 @@ final class RemuxSession: @unchecked Sendable {
         let start = startTime
         for (track, file) in zip(plan.addSubtitles(files), files) {
             external[track] = file.cues.map { RemuxPlan.Cue(start: $0.start + start, end: $0.end + start, text: $0.text) }
+            if let source = file.source { addedSources.insert(source) }
             playlists[track] = plan.mediaPlaylist(track: track)
         }
         master = plan.masterPlaylist(codecs: codecs, supplemental: initializations[0].flatMap(plan.supplementalCodec))

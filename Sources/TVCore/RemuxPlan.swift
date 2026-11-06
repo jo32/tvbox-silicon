@@ -92,11 +92,14 @@ struct RemuxPlan: Sendable, Equatable {
         return Array(first..<tracks.count)
     }
 
-    /// The cues of a subtitle file that segment `index` carries: those starting within it, as FFmpeg places
-    /// the file's own. The first and last segments take those before and after the picture too.
+    /// The cues of a subtitle file that segment `index` carries: every cue on screen at some time within it, with its
+    /// whole timing (RFC 8216 §3.5), so a seek into the middle of a long line still shows it. A cue crossing a
+    /// boundary is in both segments; AVPlayer shows it once. The first and last segments take those before and after
+    /// the picture too.
     func cues(_ cues: [Cue], segment index: Int) -> [Cue] {
         cues.filter { cue in
-            (index == 0 || cue.start >= bounds[index]) && (index == segments - 1 || cue.start < bounds[index + 1])
+            let end = max(cue.end, cue.start + 1_000)
+            return (index == 0 || end > bounds[index]) && (index == segments - 1 || cue.start < bounds[index + 1])
         }
     }
 
