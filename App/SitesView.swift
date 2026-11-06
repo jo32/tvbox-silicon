@@ -1635,11 +1635,15 @@ struct VideoDetailView: View {
 
     @ViewBuilder private var playControl: some View {
         if let detail {
-            if let first = activeEpisodes.first ?? detail.episodes.first {
+            // The episode watched last, or the next one once it is finished, so Play continues the video instead of
+            // starting the line again (#593).
+            let continuation = watchHistory?.continuation(in: detail.episodes)
+            if let first = continuation ?? activeEpisodes.first ?? detail.episodes.first {
+                let continues = first.id == continuation?.id
                 // Beside the poster on a phone there is no room for both labels: Download drops to its icon.
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 10) { playButton(first); downloadButton(iconOnly: false); videoFavoriteButton }
-                    HStack(spacing: 10) { playButton(first); downloadButton(iconOnly: true); videoFavoriteButton }
+                    HStack(spacing: 10) { playButton(first, continuation: continues); downloadButton(iconOnly: false); videoFavoriteButton }
+                    HStack(spacing: 10) { playButton(first, continuation: continues); downloadButton(iconOnly: true); videoFavoriteButton }
                 }
             } else {
                 #if os(tvOS)
@@ -1674,11 +1678,11 @@ struct VideoDetailView: View {
             .accessibilityIdentifier("detail.goBack")
     }
     #endif
-    private func playButton(_ episode: Episode) -> some View {
+    private func playButton(_ episode: Episode, continuation: Bool = false) -> some View {
         Button { startRequest { await play(episode) } } label: {
             HStack(spacing: 8) {
                 if loadingEpisode == episode.id { ProgressView().controlSize(.small) } else { Image(systemName: "play.fill") }
-                Text(L10n.text("Play"))
+                Text(L10n.text(continuation ? "Continue" : "Play"))
             }
             .font(.headline).lineLimit(1).fixedSize().padding(.horizontal, 8)
         }
@@ -1940,6 +1944,8 @@ struct VideoDetailView: View {
     }
     private func play(_ episode: Episode, skipAccountCheck: Bool = false) async {
         guard !busy else { return }
+        // Picking the episode watched last picks it up where it stopped; any other starts at 0 (#593).
+        let resume = resumePosition(for: episode)
         // A downloaded episode plays from the device: no link to fetch, and it works offline.
         if let saved = download(episode), saved.status == .completed {
             store.playing = DownloadLibrary.shared.channel(for: saved)
@@ -1965,7 +1971,7 @@ struct VideoDetailView: View {
                 let playback = store.subscription.map { client.applying($0) } ?? client
                 let resolved = try await playback.resolvePlayback(plan, choice: plan.choices[0])
                 try Task.checkCancellation()
-                store.playing = store.catalogChannel(resolved, video: currentVideo(), episode: episode, client: playback)
+                store.playing = store.catalogChannel(resolved, video: currentVideo(), episode: episode, client: playback, resumePosition: resume)
             }
         } catch { fail(episode, error) }
     }
@@ -1976,7 +1982,8 @@ struct VideoDetailView: View {
             let playback = store.subscription.map { client.applying($0) } ?? client
             let resolved = try await playback.resolvePlayback(plan, choice: choice)
             try Task.checkCancellation()
-            store.playing = store.catalogChannel(resolved, video: currentVideo(), episode: episode, client: playback)
+            store.playing = store.catalogChannel(resolved, video: currentVideo(), episode: episode, client: playback,
+                                                 resumePosition: resumePosition(for: episode))
         } catch { fail(episode, error) }
     }
     private func retryAfterSignIn() {
@@ -2015,6 +2022,10 @@ struct VideoDetailView: View {
     /// Where the viewer stopped last time, for Continue.
     private var watchHistory: PlaybackHistoryEntry? {
         store.playbackHistory.entries.first { watchScopes.contains($0.context.id) }
+    }
+    /// Where an episode stopped last time, when it is the one watched last; any other starts at 0.
+    private func resumePosition(for episode: Episode) -> Double? {
+        watchHistory?.resumePosition(for: episode)
     }
     /// The line of the episode playing, else of the one watched last, while the details still have it: the page opens
     /// on that line so the episode shows in its list, not on the first line (#362).
@@ -2146,8 +2157,12 @@ struct VideoDetailView: View {
         }
     }
 
-    /// The cover's Play: where the viewer stopped, else the line's first episode.
+    /// The cover's Play: where the viewer stopped (the next episode once that one is finished), else the line's
+    /// first episode.
     private func playWatchCover() {
+        if let watchHistory, watchHistory.completed, let next = detail.flatMap({ watchHistory.continuation(in: $0.episodes) }) {
+            startRequest { await play(next) }; return
+        }
         if let watchHistory { store.resume(watchHistory); return }
         guard let first = activeEpisodes.first ?? detail?.episodes.first else { return }
         startRequest { await play(first) }
