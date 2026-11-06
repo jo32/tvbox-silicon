@@ -70,6 +70,11 @@ struct MobilePlayerView: View {
     @State private var mountsVolume = false
     /// The screen's brightness before the first slide changed it, put back when the player closes.
     @State private var brightnessBefore: CGFloat?
+    /// Full screen, the controls and every touch on the picture can be locked, so a hand on the screen doesn't skip or
+    /// pause. A tap then shows the lock button alone for a moment.
+    @State private var locked = false
+    @State private var showsLock = false
+    @State private var lockTask: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -103,6 +108,7 @@ struct MobilePlayerView: View {
             // A tap on the picture shows or hides the controls; a tap on a control keeps them up (see `rows`).
             // Two taps on a side skip, touching and holding plays faster, and sliding sideways seeks.
             PictureGestures(tap: tapped, hold: held, swipe: swiped, levels: slidesLevels) { wider in
+                guard !locked else { return }
                 withAnimation(.easeInOut(duration: 0.25)) { fillsScreen = wider }
             }
             .playerBleed(!inline)
@@ -130,7 +136,8 @@ struct MobilePlayerView: View {
                     .opacity(chromeVisible && inline ? 0 : 1)
                     .animation(.smooth(duration: 0.25), value: chromeVisible)
             }
-            controls.opacity(chromeVisible ? 1 : 0).allowsHitTesting(chromeVisible && !settling)
+            controls.opacity(chromeVisible && !locked ? 1 : 0).allowsHitTesting(chromeVisible && !locked && !settling)
+            if !inline { lockButton }
         }
         .animation(.easeInOut(duration: 0.7), value: waiting == nil)
         .animation(.easeInOut(duration: 0.4), value: waiting?.starting)
@@ -158,6 +165,9 @@ struct MobilePlayerView: View {
             return new.locked != old.locked ? .impact(weight: .medium) : new.rate != old.rate ? .selection : nil
         }
         .task(id: clock.item.map(ObjectIdentifier.init)) { await tracks.load(clock.item) }
+        .sensoryFeedback(.impact(weight: .medium), trigger: locked)
+        // A failure, or a watch page's player back from full screen, has controls to reach.
+        .onChange(of: session.error != nil || inline) { _, unlock in if unlock { setLocked(false) } }
         .playerEpisodesSheet(isPresented: $showsEpisodes, channel: channel)
         .sheet(isPresented: $showsDanmakuList) {
             DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
@@ -191,6 +201,11 @@ struct MobilePlayerView: View {
     // MARK: Taps and slides
 
     private func tapped(_ x: CGFloat, _ width: CGFloat) {
+        // Locked, a tap shows (or hides) the lock button and nothing else: no controls, no skip, no pause.
+        if locked {
+            if showsLock { withAnimation(.easeOut(duration: 0.2)) { showsLock = false } } else { flashLock() }
+            return
+        }
         let zone = PictureTaps.zone(x: x, width: width, seekable: seekable && showsTransport && playingOn == nil && !pip.active)
         switch taps.tap(at: ProcessInfo.processInfo.systemUptime, in: zone) {
         case .toggleControls:
@@ -239,6 +254,7 @@ struct MobilePlayerView: View {
     private var screen: UIScreen? { UIApplication.shared.appWindowScene?.screen }
 
     private func swiped(_ phase: PictureGestures.Swipe) {
+        if locked, case .began = phase { return }
         switch phase {
         case .began(.seek):
             guard showsTransport, seekable, clock.duration > 0, playingOn == nil, !pip.active else { return }
@@ -357,6 +373,56 @@ struct MobilePlayerView: View {
         }
     }
 
+    // MARK: Lock
+
+    /// On the left edge, halfway down, as in Bilibili: with the controls while unlocked, alone for a moment after a tap
+    /// while locked.
+    @ViewBuilder private var lockButton: some View {
+        let visible = locked ? showsLock : chromeVisible && showsTransport
+        Button {
+            setLocked(!locked)
+        } label: {
+            Image(systemName: locked ? "lock.fill" : "lock.open.fill").font(.headline).frame(width: 22, height: 22)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .chromeButton()
+        .foregroundStyle(.white)
+        .environment(\.colorScheme, .dark)
+        .accessibilityLabel(L10n.text(locked ? "Unlock Controls" : "Lock Controls"))
+        .accessibilityIdentifier("player.lock")
+        .padding(.leading, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .opacity(visible ? 1 : 0)
+        .allowsHitTesting(visible && !settling)
+        .animation(.easeOut(duration: 0.2), value: visible)
+    }
+
+    private func setLocked(_ lock: Bool) {
+        guard lock != locked else { return }
+        lockTask?.cancel()
+        withAnimation(.easeOut(duration: 0.2)) { locked = lock }
+        if lock {
+            // The picture to itself; the lock button stays a moment to show where it is.
+            endBoost()
+            hideChrome()
+            clearLabels()
+            flashLock()
+        } else {
+            showsLock = false
+            if !chromeVisible { toggleChrome() } else { poke() }
+        }
+    }
+
+    private func flashLock() {
+        withAnimation(.easeOut(duration: 0.2)) { showsLock = true }
+        lockTask?.cancel()
+        lockTask = Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.3)) { showsLock = false }
+        }
+    }
+
     // MARK: Touch and hold
 
     /// Only while a video with a timeline plays here.
@@ -365,7 +431,7 @@ struct MobilePlayerView: View {
     private func held(_ phase: PictureGestures.Hold) {
         switch phase {
         case .began:
-            guard boosts else { return }
+            guard boosts, !locked else { return }
             // A new hold replaces a kept speed: it ends with the finger unless slid down again.
             let started = SpeedBoost(rate: holdSpeed)
             boost = started; holding = true

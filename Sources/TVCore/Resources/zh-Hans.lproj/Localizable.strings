@@ -325,6 +325,8 @@
 "Finish signing in before saving the login." = "请先完成登录，再保存登录信息。";
 "Cancel" = "取消";
 "Back" = "返回";
+"Lock Controls" = "锁定屏幕";
+"Unlock Controls" = "解锁屏幕";
 "Browse" = "浏览";
 "Library" = "资料库";
 "Episodes" = "选集";

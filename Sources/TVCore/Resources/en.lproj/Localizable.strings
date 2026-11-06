@@ -326,6 +326,8 @@
 "Finish signing in before saving the login." = "Finish signing in before saving the login.";
 "Cancel" = "Cancel";
 "Back" = "Back";
+"Lock Controls" = "Lock Controls";
+"Unlock Controls" = "Unlock Controls";
 "Browse" = "Browse";
 "Library" = "Library";
 "Episodes" = "Episodes";

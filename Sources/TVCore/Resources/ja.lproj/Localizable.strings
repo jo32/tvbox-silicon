@@ -325,6 +325,8 @@
 "Finish signing in before saving the login." = "ログインを完了してから保存してください。";
 "Cancel" = "キャンセル";
 "Back" = "戻る";
+"Lock Controls" = "画面をロック";
+"Unlock Controls" = "画面のロックを解除";
 "Browse" = "ブラウズ";
 "Library" = "ライブラリ";
 "Episodes" = "エピソード";

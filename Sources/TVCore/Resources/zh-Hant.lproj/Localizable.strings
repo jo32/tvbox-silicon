@@ -325,6 +325,8 @@
 "Finish signing in before saving the login." = "請先完成登入，再儲存登入資訊。";
 "Cancel" = "取消";
 "Back" = "返回";
+"Lock Controls" = "鎖定螢幕";
+"Unlock Controls" = "解鎖螢幕";
 "Browse" = "瀏覽";
 "Library" = "資料庫";
 "Episodes" = "選集";
