@@ -82,7 +82,7 @@ TestFlight is the easiest way: no computer needed, and new builds arrive on thei
 
 ## 🛠️ Build from source
 
-You'll need Xcode, [XcodeGen](https://github.com/yonaskolb/XcodeGen), JDK 19 with Maven, a standalone Node.js binary, and [uv](https://docs.astral.sh/uv/).
+You'll need Xcode, [XcodeGen](https://github.com/yonaskolb/XcodeGen), JDK 19 with Maven, and [uv](https://docs.astral.sh/uv/). You don't need Node.js: the scripts download prebuilt copies once per Mac, the official Mac build for the JavaScript host and, on the first iPhone, iPad or Apple TV build, our [Node.js for iOS and tvOS](https://github.com/jo32/nodejs-mobile/releases) for CatPawOpen sources.
 
 ```sh
 export JAVA_HOME="$(/usr/libexec/java_home -v 19)"

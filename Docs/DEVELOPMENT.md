@@ -11,7 +11,7 @@ Yingxia bundles a JVM, an Android ELF/JNI compatibility layer, and a DEX convert
 - Xcode with the SDKs for the platforms you want to build.
 - XcodeGen to regenerate `TVBox.xcodeproj` from `project.yml`.
 - JDK 19 and Maven to build the bundled Mac plugin runtime.
-- A standalone macOS Node.js binary and its distributed LICENSE for the JavaScript host (`NODE_BIN` and `NODE_LICENSE` can select them).
+- Network access for the first build, to download Node.js (see below). No Node.js installation is needed.
 - [uv](https://docs.astral.sh/uv/) for the Python host. It installs a relocatable python-build-standalone CPython; `PYTHON_HOME` can select another relocatable prefix.
 - Python 3 for localization checks and plugin inspection scripts.
 - Git and network access once, to fetch FFmpeg's and dav1d's sources and dav1d's build tools (Meson and Ninja, from PyPI into the FFmpeg cache) for `Scripts/build-apple-ffmpeg.sh`.
@@ -32,6 +32,8 @@ xcodegen generate
 ```
 
 `Scripts/build-apple-ffmpeg.sh` builds the small FFmpeg (LGPL, demuxers, the MP4 muxer, and the decoders the conversion path needs, with dav1d for AV1) that plays MKV, AVI, FLV, WMV and RMVB files; see [MKV playback](mkv-playback-plan.md). The first run takes about five minutes (more on a busy Mac). Builds are kept in `~/Library/Caches/tvbox-ffmpeg`, so other checkouts and worktrees of the same recipe only link `build/FFmpeg/FFmpeg.xcframework` to it; `Vendor/FFmpeg` points there. `Scripts/verify.sh` and the release scripts run it first.
+
+Node.js comes prebuilt, so contributors never build it. `Scripts/build-script-host.sh` downloads the official nodejs.org build pinned in the script (the version the Mac release ships) into `~/Library/Caches/tvbox-node`; `NODE_BIN` and `NODE_LICENSE` select another standalone binary. The iPhone, iPad and Apple TV builds run `Scripts/fetch-node-mobile.sh` themselves: it downloads the pinned release of [jo32/nodejs-mobile](https://github.com/jo32/nodejs-mobile/releases) (Node.js 26 LTS for iOS and tvOS, without a JIT), checks its SHA-256, keeps it in `~/Library/Caches/tvbox-nodejs-mobile` and links `build/NodeMobile` to it, so other checkouts and worktrees don't download it again. A Debug build that can't download it still builds, without CatPawOpen (猫源) sources; a Release build stops. To try a framework you built yourself (`docs/BUILDING.md` on that repository's `tvos-node26` branch), set `NODE_MOBILE_DIR` to a folder holding `NodeMobile.xcframework` and `LICENSE.node`. A new runtime ships as a new release there and a new pin (release tag and SHA-256s) in `Scripts/fetch-node-mobile.sh`.
 
 The runtime script uses `MAVEN_BIN` if set, otherwise the local Maven binary under `build/tools/` when available, then `mvn` from `PATH`. It writes the Mac runtime to `build/JavaHost/`, which the Mac target includes as a folder resource. This generated directory is not committed, so prepare it before building a fresh checkout.
 
