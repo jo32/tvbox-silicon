@@ -476,10 +476,6 @@ import IOKit.pwr_mgt
         #endif
         self.player = player
         enhancer = VideoEnhancer(player: player)
-        // Delayed subtitles (#599) reach the screen on this clock rather than on the once-a-second sample below.
-        subtitleTimeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { [weak self] time in
-            MainActor.assumeIsolated { self?.subtitles.advance(to: time.seconds) }
-        }
         queueObservation = player.observe(\.currentItem, options: [.new]) { [weak self] _, _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -496,10 +492,28 @@ import IOKit.pwr_mgt
                 for item in self.player.items() { item.textStyleRules = rules }
             }
         }
+        delayObserver = NotificationCenter.default.addObserver(forName: SubtitleDelay.changed, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.followSubtitleDelay() }
+        }
+        followSubtitleDelay()
     }
     private var styleObserver: NSObjectProtocol?
-    /// Shows delayed subtitle lines at the player's clock (`SubtitleCues.advance`).
+    @ObservationIgnored private var delayObserver: NSObjectProtocol?
+    /// Shows delayed subtitle lines at the player's clock (`SubtitleCues.advance`), only while a delay is set.
     @ObservationIgnored private var subtitleTimeObserver: Any?
+    /// Delayed subtitles (#599) reach the screen on a quarter-second clock rather than on the once-a-second sample.
+    /// At 0 the lines go up as AVPlayer hands them over, so no clock runs: it would only wake the main thread.
+    private func followSubtitleDelay() {
+        let delayed = SubtitleDelay.load() > 0
+        if delayed, subtitleTimeObserver == nil {
+            subtitleTimeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { [weak self] time in
+                MainActor.assumeIsolated { self?.subtitles.advance(to: time.seconds) }
+            }
+        } else if !delayed, let observer = subtitleTimeObserver {
+            player.removeTimeObserver(observer)
+            subtitleTimeObserver = nil
+        }
+    }
     /// The subtitle lines the player's overlay draws (`SubtitleOverlay`).
     let subtitles = SubtitleCues()
     /// The saved subtitle style as the rule AVPlayer lays over every subtitle cue it draws itself.

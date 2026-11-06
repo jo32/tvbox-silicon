@@ -37,6 +37,24 @@ import Testing
     #expect(schedule.pending.isEmpty)
 }
 
+@Test func aSeekDropsTheLineUpAndWhatWaitedForTheOldPlace() {
+    var schedule = SubtitleSchedule(delay: 2)
+    schedule.enqueue(["old"], at: 100)
+    #expect(schedule.lines(at: 101) == nil)
+    // Forward: AVPlayer hands over the new place's line before the clock reports the jump. The old line goes at once,
+    // and the new one still waits its delay.
+    schedule.enqueue(["new"], at: 200)
+    #expect(schedule.lines(at: 200) == [])
+    #expect(schedule.lines(at: 202) == ["new"])
+    // Back: the lines waiting ahead of the new place go too; AVPlayer hands them over again when their time comes.
+    schedule.enqueue(["later"], at: 205)
+    #expect(schedule.lines(at: 202.25) == nil)
+    #expect(schedule.lines(at: 50) == [])
+    #expect(schedule.pending.isEmpty)
+    // Playback moving on is no seek: nothing to clear.
+    #expect(schedule.lines(at: 50.25) == nil)
+}
+
 @Test func resetForgetsWhatWasWaiting() {
     var schedule = SubtitleSchedule(delay: 3)
     schedule.enqueue(["第一句"], at: 10)

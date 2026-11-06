@@ -8,6 +8,10 @@ public struct SubtitleSchedule: Sendable {
     /// What AVPlayer handed over and when, oldest first.
     public private(set) var pending: [(time: Double, lines: [String])] = []
     public var delay: Double
+    /// The playback time `lines(at:)` saw last, to tell a seek from the clock moving on.
+    private var lastTime: Double?
+    /// A step longer than this between two looks at the clock is a seek, not playback moving on.
+    static let seekStep: Double = 2
 
     public init(delay: Double = 0) {
         self.delay = delay
@@ -26,14 +30,20 @@ public struct SubtitleSchedule: Sendable {
 
     /// The lines due at `time`, or nil while the lines on screen are still the latest. Everything that has come
     /// due is dropped, so the next call only reports a later change.
+    ///
+    /// After a seek, what waited belonged to where the video was, and so does the line on screen: both go (an empty
+    /// result clears it). Lines AVPlayer already handed over for the new place stay, since they can arrive before the
+    /// clock reports the jump.
     public mutating func lines(at time: Double) -> [String]? {
         guard time.isFinite else { return nil }
+        defer { lastTime = time }
+        let seeked = lastTime.map { abs(time - $0) > Self.seekStep } ?? false
+        if seeked { pending.removeAll { $0.time > time + Self.seekStep || $0.time < time - delay - Self.seekStep } }
         let due = pending.filter { $0.time + delay <= time }
-        guard let last = due.last else { return nil }
         pending.removeAll { $0.time + delay <= time }
-        return last.lines
+        return due.last?.lines ?? (seeked ? [] : nil)
     }
 
-    /// Forgets what was waiting, after a seek or a new item: its times are no longer this playback's.
-    public mutating func reset() { pending.removeAll() }
+    /// Forgets what was waiting, for a new item or another track: its times are no longer this playback's.
+    public mutating func reset() { pending.removeAll(); lastTime = nil }
 }

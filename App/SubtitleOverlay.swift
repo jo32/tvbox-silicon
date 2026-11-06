@@ -15,7 +15,7 @@ import TVCore
     private(set) var delay = SubtitleDelay.load()
     /// What AVPlayer handed over, waiting for its turn while `delay` is on.
     @ObservationIgnored private var schedule = SubtitleSchedule()
-    /// The playback time `advance(to:)` saw last, to tell a seek from the clock moving on.
+    /// The playback time `advance(to:)` saw last: what is due there when the delay is turned off.
     @ObservationIgnored private var lastAdvanced: Double?
     /// AVPlayer draws the subtitles itself while the picture is somewhere the app's overlay isn't: Picture in Picture.
     var native = false {
@@ -87,8 +87,7 @@ import TVCore
     /// one still buffering. Call it while `delay` is on; at 0 the lines go up as AVPlayer hands them over.
     func advance(to time: Double) {
         guard delay > 0, time.isFinite else { return }
-        // A step the clock can't take: a seek. What waited belongs to where the video was.
-        if let lastAdvanced, abs(time - lastAdvanced) > 2 { schedule.reset() }
+        // A seek is the schedule's to tell: it clears the line and what waited for the old place.
         lastAdvanced = time
         if let next = schedule.lines(at: time), next != lines { lines = next }
     }

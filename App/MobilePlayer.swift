@@ -591,9 +591,11 @@ struct MobilePlayerView: View {
                     Button(String(format: "%+.1f s", -SubtitleDelay.step)) {
                         SubtitleDelay.save(session.subtitles.delay - SubtitleDelay.step)
                     }
+                    .disabled(session.subtitles.delay <= SubtitleDelay.range.lowerBound)
                     Button(String(format: "%+.1f s", SubtitleDelay.step)) {
                         SubtitleDelay.save(session.subtitles.delay + SubtitleDelay.step)
                     }
+                    .disabled(session.subtitles.delay >= SubtitleDelay.range.upperBound)
                     if session.subtitles.delay != 0 {
                         Button(L10n.text("Reset")) { SubtitleDelay.save(0) }
                     }
