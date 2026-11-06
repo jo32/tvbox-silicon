@@ -310,7 +310,8 @@ extension View {
 
 // MARK: Matched
 
-/// Who's in it: round photos with the character under each name.
+/// Who's in it: round photos with the character under each name. A person TMDB knows opens their credits, as on
+/// Discover's title page (#505).
 struct TMDBCastRow: View {
     let cast: [TMDBMatch.Person]
     var body: some View {
@@ -319,20 +320,54 @@ struct TMDBCastRow: View {
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: TMDBMetrics.spacing) {
                     ForEach(Array(cast.enumerated()), id: \.offset) { _, person in
-                        VStack(spacing: 6) {
-                            PosterImage(url: person.profile, symbol: "person.fill")
-                                .frame(width: TMDBMetrics.castPhoto, height: TMDBMetrics.castPhoto)
-                                .clipShape(Circle())
-                            Text(person.name).font(.caption.weight(.semibold)).lineLimit(1)
-                            if let role = person.role { Text(role).font(.caption2).foregroundStyle(.secondary).lineLimit(1) }
+                        if let id = person.id {
+                            RouteLink { DiscoverPersonView(id: id, name: person.name, profile: person.profile) } label: { card(person) }
+                                .castButton()
+                                .accessibilityIdentifier("tmdb.cast.\(id)")
+                        } else {
+                            card(person)
                         }
-                        .frame(width: TMDBMetrics.castPhoto + 16)
-                        .accessibilityElement(children: .combine)
                     }
                 }
+                .padding(.vertical, TMDBMetrics.focusRoom)
             }
             .scrollIndicators(.never)
+            .scrollClipDisabled()
         }
+    }
+
+    private func card(_ person: TMDBMatch.Person) -> some View {
+        VStack(spacing: 6) {
+            #if os(tvOS)
+            // As Discover's cast on Apple TV: the photo lifts on focus and the names move down with it.
+            PosterImage(url: person.profile, symbol: "person.fill")
+                .frame(width: TMDBMetrics.castPhoto, height: TMDBMetrics.castPhoto)
+                .posterClip(Circle())
+            VStack(spacing: 6) { names(person) }.cardCaption()
+            #else
+            PosterImage(url: person.profile, symbol: "person.fill")
+                .frame(width: TMDBMetrics.castPhoto, height: TMDBMetrics.castPhoto)
+                .clipShape(Circle())
+            names(person)
+            #endif
+        }
+        .frame(width: TMDBMetrics.castPhoto + 16)
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private func names(_ person: TMDBMatch.Person) -> some View {
+        Text(person.name).font(.caption.weight(.semibold)).lineLimit(1)
+        if let role = person.role { Text(role).font(.caption2).foregroundStyle(.secondary).lineLimit(1) }
+    }
+}
+
+private extension View {
+    @ViewBuilder func castButton() -> some View {
+        #if os(tvOS)
+        cardButton(.circle)
+        #else
+        buttonStyle(.plain)
+        #endif
     }
 }
 
