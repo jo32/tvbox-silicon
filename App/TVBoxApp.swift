@@ -90,7 +90,11 @@ import TVCore
                         Task { _ = await Diagnostics.shared.snapshot(); ErrorReports.shared.save() }
                         store.cloudSync?.flushPending()
                     }
-                    if phase == .active { Task { await ErrorReports.shared.sendIfDue() } }
+                    if phase == .active {
+                        Task { await ErrorReports.shared.sendIfDue() }
+                        // Another viewer may have taken over the Apple TV: ask iCloud for what changed (#584).
+                        store.cloudSync?.refresh()
+                    }
                     #if os(tvOS) || os(macOS)
                     // Phones only see the TV while the app is open.
                     if phase == .background { BilibiliCastController.shared.stop() }

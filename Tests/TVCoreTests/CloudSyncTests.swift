@@ -4,22 +4,27 @@ import Testing
 
 @MainActor private final class MemoryCloud: CloudValueStore {
     var values: [String: Data] = [:]
+    var synchronizations = 0
     func data(forKey key: String) -> Data? { values[key] }
     func set(_ data: Data?, forKey key: String) { values[key] = data }
-    func synchronize() -> Bool { true }
+    func synchronize() -> Bool { synchronizations += 1; return true }
 }
 
 /// One device holding names by id, with its own ledger folder and defaults.
 @MainActor private final class Device {
     var names: [String: String]
+    var others: [String: String]
     let defaults: UserDefaults
     let sync: CloudSync
     init(_ cloud: MemoryCloud, names: [String: String] = [:]) {
         self.names = names
+        others = [:]
         defaults = UserDefaults(suiteName: "cloudsync." + UUID().uuidString)!
         sync = CloudSync(cloud: cloud, directory: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), defaults: defaults)
         sync.register("names", current: { [unowned self] in self.names },
                       apply: { [unowned self] in self.names = Dictionary(uniqueKeysWithValues: $0.map { ($0.id, $0.value) }) })
+        sync.register("others", current: { [unowned self] in self.others },
+                      apply: { [unowned self] in self.others = Dictionary(uniqueKeysWithValues: $0.map { ($0.id, $0.value) }) })
     }
 }
 
@@ -104,6 +109,67 @@ import Testing
     phone.sync.receive(reason: NSUbiquitousKeyValueStoreAccountChange, keys: nil)
     let ledger = CloudSync.decode(CloudSyncLedger<String>.self, from: cloud.values["sync.names"] ?? Data())
     #expect(ledger?.records.isEmpty ?? true)
+}
+
+/// A TV that signs out of one account and into another shows what that account has, never what the first one
+/// left on the device (#584).
+@Test @MainActor func anotherICloudAccountShowsItsOwnItemsAndKeepsTheOldOnesOut() {
+    let cloud = MemoryCloud()
+    let tv = Device(cloud, names: ["a": "Alpha"])
+    tv.sync.flush(now: Date(timeIntervalSince1970: 1_000_000))
+    // The second account already synced a show from another device.
+    cloud.values = [:]
+    let phone = Device(cloud, names: ["b": "Beta"])
+    phone.sync.flush(now: Date(timeIntervalSince1970: 1_000_100))
+    tv.sync.receive(reason: NSUbiquitousKeyValueStoreAccountChange, keys: nil)
+    #expect(tv.names == ["b": "Beta"])
+    let ledger = CloudSync.decode(CloudSyncLedger<String>.self, from: cloud.values["sync.names"] ?? Data())
+    #expect(ledger?.records["a"] == nil)
+}
+
+/// An account that never synced starts from what the device holds, so switching to it keeps the subscriptions
+/// and favorites instead of emptying them.
+@Test @MainActor func anICloudAccountThatNeverSyncedStartsWithWhatTheDeviceHolds() {
+    let cloud = MemoryCloud()
+    let tv = Device(cloud, names: ["a": "Alpha"])
+    tv.sync.flush()
+    cloud.values = [:]
+    tv.sync.receive(reason: NSUbiquitousKeyValueStoreAccountChange, keys: nil)
+    #expect(tv.names == ["a": "Alpha"])
+    let ledger = CloudSync.decode(CloudSyncLedger<String>.self, from: cloud.values["sync.names"] ?? Data())
+    #expect(ledger?.records["a"]?.value == "Alpha")
+}
+
+/// Coming back to the front asks iCloud for what changed while the app was away; what it brings, another
+/// account's copy included, merges when the store's notification arrives (#584). Before `start()` nothing
+/// happens, so the first merge still waits for the saved subscriptions.
+@Test @MainActor func aForegroundRefreshAsksICloudAndTheNotificationMerges() {
+    let cloud = MemoryCloud()
+    let phone = Device(cloud, names: ["a": "Alpha"])
+    phone.sync.flush()
+    let tv = Device(cloud)
+    tv.sync.refresh()
+    #expect(cloud.synchronizations == 0 && tv.names.isEmpty)
+    tv.sync.start()
+    #expect(cloud.synchronizations == 1 && tv.names == ["a": "Alpha"])
+    phone.names["b"] = "Beta"
+    phone.sync.flush()
+    tv.sync.refresh()
+    #expect(cloud.synchronizations == 2 && tv.names == ["a": "Alpha"])
+    tv.sync.receive(reason: NSUbiquitousKeyValueStoreServerChange, keys: ["sync.names"])
+    #expect(tv.names == ["a": "Alpha", "b": "Beta"])
+}
+
+/// An initial sync carries the whole store, not just the keys the notification happened to name.
+@Test @MainActor func anInitialSyncMergesEveryKindNotJustTheKeysItNames() {
+    let cloud = MemoryCloud()
+    let phone = Device(cloud, names: ["a": "Alpha"])
+    phone.others = ["c": "Charlie"]
+    phone.sync.flush()
+    let tv = Device(cloud)
+    tv.sync.receive(reason: NSUbiquitousKeyValueStoreInitialSyncChange, keys: ["sync.names"])
+    #expect(tv.names == ["a": "Alpha"])
+    #expect(tv.others == ["c": "Charlie"])
 }
 
 @Test func orderedListsMergeByPlaceWithTheNewerItemFirstOnATie() {
