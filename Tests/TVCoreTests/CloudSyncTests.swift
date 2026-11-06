@@ -106,6 +106,35 @@ import Testing
     #expect(ledger?.records.isEmpty ?? true)
 }
 
+/// A TV that signs out of one account and into another shows what that account has, never what the first one
+/// left on the device (#584).
+@Test @MainActor func anotherICloudAccountShowsItsOwnItemsAndKeepsTheOldOnesOut() {
+    let cloud = MemoryCloud()
+    let tv = Device(cloud, names: ["a": "Alpha"])
+    tv.sync.flush(now: Date(timeIntervalSince1970: 1_000_000))
+    // The second account already synced a show from another device.
+    cloud.values = [:]
+    let phone = Device(cloud, names: ["b": "Beta"])
+    phone.sync.flush(now: Date(timeIntervalSince1970: 1_000_100))
+    tv.sync.receive(reason: NSUbiquitousKeyValueStoreAccountChange, keys: nil)
+    #expect(tv.names == ["b": "Beta"])
+    let ledger = CloudSync.decode(CloudSyncLedger<String>.self, from: cloud.values["sync.names"] ?? Data())
+    #expect(ledger?.records["a"] == nil)
+}
+
+/// An account that never synced starts from what the device holds, so switching to it keeps the subscriptions
+/// and favorites instead of emptying them.
+@Test @MainActor func anICloudAccountThatNeverSyncedStartsWithWhatTheDeviceHolds() {
+    let cloud = MemoryCloud()
+    let tv = Device(cloud, names: ["a": "Alpha"])
+    tv.sync.flush()
+    cloud.values = [:]
+    tv.sync.receive(reason: NSUbiquitousKeyValueStoreAccountChange, keys: nil)
+    #expect(tv.names == ["a": "Alpha"])
+    let ledger = CloudSync.decode(CloudSyncLedger<String>.self, from: cloud.values["sync.names"] ?? Data())
+    #expect(ledger?.records["a"]?.value == "Alpha")
+}
+
 @Test func orderedListsMergeByPlaceWithTheNewerItemFirstOnATie() {
     let early = Date(timeIntervalSince1970: 10), late = Date(timeIntervalSince1970: 20)
     #expect(CloudSync.ranks(["x", "y", "x"]) == ["x": 0, "y": 1])

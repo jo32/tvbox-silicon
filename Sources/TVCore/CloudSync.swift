@@ -76,7 +76,9 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
 @MainActor private protocol CloudSyncChannel: AnyObject {
     var delay: Duration { get }
     func flush(_ cloud: any CloudValueStore, now: Date)
-    func reset()
+    /// iCloud's account changed: what this device holds is the other account's, so the next flush takes the
+    /// cloud's copy as this account's whole truth instead of merging the two.
+    func adoptAccount()
 }
 
 /// One kind of data (favorites, history, …): what it holds on this device, how to take what other
@@ -89,6 +91,9 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
     let current: @MainActor () -> [String: Value]
     let apply: @MainActor ([CloudSyncItem<Value>]) -> Void
     var ledger: CloudSyncLedger<Value>
+    /// Set by `adoptAccount()`: the ledger now describes another account's past, so the next flush starts from
+    /// the new account's copy.
+    var adoptingAccount = false
 
     init(key: String, file: URL, delay: Duration, current: @escaping @MainActor () -> [String: Value],
          apply: @escaping @MainActor ([CloudSyncItem<Value>]) -> Void) {
@@ -98,6 +103,11 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
 
     func flush(_ cloud: any CloudValueStore, now: Date) {
         let cutoff = now.addingTimeInterval(-CloudSync.removalLifetime)
+        if adoptingAccount {
+            adoptingAccount = false
+            adopt(cloud, cutoff: cutoff, now: now)
+            return
+        }
         let noted = ledger.note(current(), now: now)
         var remote = cloud.data(forKey: key).flatMap { CloudSync.decode(CloudSyncLedger<Value>.self, from: $0) } ?? CloudSyncLedger()
         remote.prune(before: cutoff)
@@ -105,17 +115,40 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
         ledger.prune(before: cutoff)
         if noted || incoming { save() }
         if incoming { apply(ledger.live) }
-        guard ledger != remote, let data = CloudSync.encode(ledger) else { return }
+        guard ledger != remote else { return }
+        push(cloud)
+    }
+
+    func adoptAccount() { adoptingAccount = true }
+
+    /// Another iCloud account: its items are the ones to show, and this device's items for the old account must
+    /// not travel into it.
+    private func adopt(_ cloud: any CloudValueStore, cutoff: Date, now: Date) {
+        // A copy this build cannot read is left alone rather than overwritten with the old account's items.
+        guard let data = cloud.data(forKey: key) else {
+            // A key the new account has never had starts from what the device holds, so switching to an
+            // account that has never synced keeps the subscriptions, favorites and history instead of
+            // emptying them.
+            ledger = CloudSyncLedger()
+            guard ledger.note(current(), now: now) else { return }
+            save()
+            push(cloud)
+            return
+        }
+        guard var remote = CloudSync.decode(CloudSyncLedger<Value>.self, from: data) else { return }
+        remote.prune(before: cutoff)
+        ledger = remote
+        save()
+        apply(ledger.live)
+    }
+
+    private func push(_ cloud: any CloudValueStore) {
+        guard let data = CloudSync.encode(ledger) else { return }
         guard data.count <= CloudSync.valueLimit else {
             Diagnostics.shared.record(.warning, "icloud", "\(key) is \(data.count) bytes, over the \(CloudSync.valueLimit) byte limit; not synced")
             return
         }
         cloud.set(data, forKey: key)
-    }
-
-    func reset() {
-        ledger = CloudSyncLedger()
-        try? FileManager.default.removeItem(at: file)
     }
 
     private func save() {
@@ -222,8 +255,8 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
     func receive(reason: Int?, keys: [String]?) {
         switch reason {
         case NSUbiquitousKeyValueStoreAccountChange:
-            // Another iCloud account: its data is not this device's past, so nothing here counts as removed there.
-            for channel in channels.values { channel.reset() }
+            // Another iCloud account: its copy is the one to show, and nothing here counts as its past.
+            for channel in channels.values { channel.adoptAccount() }
             flush()
         case NSUbiquitousKeyValueStoreQuotaViolationChange:
             Diagnostics.shared.record(.warning, "icloud", "iCloud key-value storage is over its quota")
