@@ -50,3 +50,31 @@ private func code(_ text: String) -> UInt32 { text.utf8.reduce(0) { $0 << 8 | UI
         #expect(L10n.text("Download %@", "x", language: language) != "Download x")
     }
 }
+
+@Test func badgesShowDecodingFormatRangeSizeAndRate() {
+    var info = PlaybackInfo()
+    #expect(info.badges.isEmpty)
+    info.videoCodec = code("hvc1"); info.width = 1920; info.height = 1080; info.frameRate = 23.976; info.hardwareDecoding = true
+    #expect(info.badges == ["HW", "H265", "1080P", "24FPS"])
+    info.width = 3840; info.height = 1600; info.transferFunction = "SMPTE_ST_2084_PQ"
+    #expect(info.badges == ["HW", "H265", "HDR10", "4K", "24FPS"])
+    // Dolby Vision: its base layer's codec and a DV tag, never HDR10 beside it.
+    info.videoCodec = code("dvh1")
+    #expect(info.badges == ["HW", "H265", "DV", "4K", "24FPS"])
+    info.videoCodec = code("av01"); info.hardwareDecoding = false; info.transferFunction = "ITU_R_2100_HLG"
+    info.width = 1280; info.height = 720; info.frameRate = 29.97
+    #expect(info.badges == ["SW", "AV1", "HLG", "720P", "30FPS"])
+    // Smooth Motion draws 60 frames a second (#519).
+    info.smoothedFrameRate = 60
+    #expect(info.badges.last == "30→60FPS")
+    info.frameRate = 60
+    #expect(info.badges.last == "60FPS")
+    info.videoCodec = code("avc1"); info.hardwareDecoding = nil; info.transferFunction = nil
+    info.width = 2560; info.height = 1440; info.frameRate = nil
+    #expect(info.badges == ["H264", "2K"])
+    info.width = 854; info.height = 480
+    #expect(info.badges == ["H264", "480P"])
+    // No decoding tag without a video format to tell it from.
+    info.videoCodec = nil; info.hardwareDecoding = true
+    #expect(info.badges == ["480P"])
+}
