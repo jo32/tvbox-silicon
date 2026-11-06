@@ -705,6 +705,10 @@ import IOKit.pwr_mgt
                 guard let self, self.generation == active, self.item === item, item.status == .readyToPlay else { return }
                 let video = item.tracks.filter { $0.assetTrack?.mediaType == .video }
                 if video.contains(where: { $0.isEnabled && $0.currentVideoFrameRate > 0 }) { return }
+                // The rate counts frames drawn, so it reads 0 too for a picture nothing draws (a hidden or minimized
+                // window). Only HEVC is listed without being shown; any other listed picture plays, as before #585.
+                if !video.isEmpty, await !Self.mayBeHEVC(video) { return }
+                guard self.generation == active, self.item === item else { return }
                 // The first frames land a beat after sound starts; four checks without any is no picture.
                 guard self.player.timeControlStatus == .playing else { pictureless = 0; continue }
                 pictureless += 1
@@ -716,6 +720,19 @@ import IOKit.pwr_mgt
                 return
             }
         }
+    }
+
+    /// Whether a listed picture is HEVC, or its codec is not known yet.
+    private static func mayBeHEVC(_ tracks: [AVPlayerItemTrack]) async -> Bool {
+        for track in tracks {
+            guard let asset = track.assetTrack, let formats = try? await asset.load(.formatDescriptions), !formats.isEmpty else { return true }
+            let codecs = formats.map { format -> String in
+                let code = CMFormatDescriptionGetMediaSubType(format)
+                return String(decoding: [24, 16, 8, 0].map { UInt8((code >> $0) & 0xff) }, as: UTF8.self)
+            }
+            if codecs.contains(where: { ["hvc1", "hev1", "dvh1", "dvhe"].contains($0) }) { return true }
+        }
+        return false
     }
 
     private func repackageSegments(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
