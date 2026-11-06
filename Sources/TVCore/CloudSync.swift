@@ -177,6 +177,8 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
     private var order: [String] = []
     private var pending: [String: Task<Void, Never>] = [:]
     private var observer: (any NSObjectProtocol)?
+    /// `start()` ran: the saved subscriptions are loaded and the notifications are heard.
+    private var started = false
 
     public init(cloud: any CloudValueStore = NSUbiquitousKeyValueStore.default, directory: URL? = nil, defaults: UserDefaults = .standard) {
         self.cloud = cloud; self.defaults = defaults
@@ -211,18 +213,20 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
                 MainActor.assumeIsolated { self?.receive(reason: reason, keys: keys) }
             }
         }
-        guard isEnabled else { return }
-        refresh()
-    }
-
-    /// Asks iCloud for what changed since the app last looked, then merges it. The store posts an
-    /// account-change notification of its own when the account is a different one — a viewer switch on an
-    /// Apple TV included — which `receive` turns into taking that account's copy as the whole truth. Apple TV
-    /// and Mac sessions run for days, so the app does this again whenever it comes back to the front (#584).
-    public func refresh() {
+        started = true
         guard isEnabled else { return }
         cloud.synchronize()
         flush()
+    }
+
+    /// The app is back in front: asks iCloud for what changed while it was away, as Apple advises. What that
+    /// brings arrives as a notification that `receive` merges, an account change included — a viewer switch on
+    /// an Apple TV, whose sessions run for days (#584) — so nothing is merged here, and coming back costs no
+    /// merge of every kind on the main thread. Before `start()` it does nothing: the first merge waits for the
+    /// saved subscriptions to load.
+    public func refresh() {
+        guard started, isEnabled else { return }
+        cloud.synchronize()
     }
 
     /// Something changed on this device; it goes up after its kind's pause.

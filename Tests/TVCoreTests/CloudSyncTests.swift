@@ -4,9 +4,10 @@ import Testing
 
 @MainActor private final class MemoryCloud: CloudValueStore {
     var values: [String: Data] = [:]
+    var synchronizations = 0
     func data(forKey key: String) -> Data? { values[key] }
     func set(_ data: Data?, forKey key: String) { values[key] = data }
-    func synchronize() -> Bool { true }
+    func synchronize() -> Bool { synchronizations += 1; return true }
 }
 
 /// One device holding names by id, with its own ledger folder and defaults.
@@ -139,15 +140,24 @@ import Testing
     #expect(ledger?.records["a"]?.value == "Alpha")
 }
 
-/// Coming back to the front asks iCloud for what changed while the app was away; the store's own
-/// account-change notification then takes the other account's copy as the whole truth (#584).
-@Test @MainActor func aForegroundRefreshBringsInTheCloudsItems() {
+/// Coming back to the front asks iCloud for what changed while the app was away; what it brings, another
+/// account's copy included, merges when the store's notification arrives (#584). Before `start()` nothing
+/// happens, so the first merge still waits for the saved subscriptions.
+@Test @MainActor func aForegroundRefreshAsksICloudAndTheNotificationMerges() {
     let cloud = MemoryCloud()
     let phone = Device(cloud, names: ["a": "Alpha"])
     phone.sync.flush()
     let tv = Device(cloud)
     tv.sync.refresh()
-    #expect(tv.names == ["a": "Alpha"])
+    #expect(cloud.synchronizations == 0 && tv.names.isEmpty)
+    tv.sync.start()
+    #expect(cloud.synchronizations == 1 && tv.names == ["a": "Alpha"])
+    phone.names["b"] = "Beta"
+    phone.sync.flush()
+    tv.sync.refresh()
+    #expect(cloud.synchronizations == 2 && tv.names == ["a": "Alpha"])
+    tv.sync.receive(reason: NSUbiquitousKeyValueStoreServerChange, keys: ["sync.names"])
+    #expect(tv.names == ["a": "Alpha", "b": "Beta"])
 }
 
 /// An initial sync carries the whole store, not just the keys the notification happened to name.
