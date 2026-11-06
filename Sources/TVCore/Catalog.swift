@@ -354,12 +354,51 @@ public struct CatalogClient: Sendable {
         }
     }
     public func home() async throws -> CatalogPage {
-        CatalogPage(json: try await request(site.type == 4 ? ["filter": "true"] : [:]), origin: origin)
+        CatalogPage(json: try await homeJSON(), origin: origin)
+    }
+    /// The source's home answer. A CMS API (type 1) answers its plain home call like `ac=list`: names and remarks
+    /// but no `vod_pic`. As other TVBox clients do, the posters then come from one `ac=detail` call for those ids.
+    private func homeJSON() async throws -> [String: JSONValue] {
+        let json = try await request(site.type == 4 ? ["filter": "true"] : [:])
+        guard site.type == 1, let list = json["list"]?.array else { return json }
+        let ids = Self.idsMissingPosters(list)
+        guard !ids.isEmpty else { return json }
+        let details: [String: JSONValue]
+        do { details = try await request(["ac": "detail", "ids": ids.joined(separator: ",")]) }
+        catch {
+            if error is CancellationError || Task.isCancelled { throw CancellationError() }
+            Diagnostics.shared.record(.warning, "catalog", "\(reportContext) home posters: \(error.localizedDescription)")
+            return json
+        }
+        var result = json
+        result["list"] = .array(Self.fillingPosters(list, from: details["list"]?.array ?? []))
+        return result
+    }
+    static func idsMissingPosters(_ list: [JSONValue]) -> [String] {
+        list.compactMap { entry in
+            guard let fields = entry.object, (fields["vod_pic"]?.string ?? "").trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+            return fields["vod_id"]?.string
+        }
+    }
+    /// `list` with each entry's missing `vod_pic` taken from the detail entry with the same `vod_id`.
+    static func fillingPosters(_ list: [JSONValue], from details: [JSONValue]) -> [JSONValue] {
+        var posters: [String: JSONValue] = [:]
+        for entry in details {
+            guard let fields = entry.object, let id = fields["vod_id"]?.string,
+                  let pic = fields["vod_pic"], !(pic.string ?? "").isEmpty else { continue }
+            posters[id] = pic
+        }
+        return list.map { entry in
+            guard var fields = entry.object, (fields["vod_pic"]?.string ?? "").trimmingCharacters(in: .whitespaces).isEmpty,
+                  let id = fields["vod_id"]?.string, let pic = posters[id] else { return entry }
+            fields["vod_pic"] = pic
+            return .object(fields)
+        }
     }
     public func recommendations() async throws -> [Recommendation] { try await recommendationPage().items }
     /// The home answer as recommendations plus the source's categories, from one plugin call.
     public func recommendationPage() async throws -> (items: [Recommendation], categories: [Category]) {
-        let json = try await request(site.type == 4 ? ["filter": "true"] : [:])
+        let json = try await homeJSON()
         var seen = Set<String>()
         let items = (json["list"]?.array ?? []).compactMap { entry in
             entry.object.flatMap { Recommendation(json: $0, origin: origin, isIndex: (site.raw["indexs"]?.int ?? 0) == 1) }

@@ -42,6 +42,17 @@ private final class MockProtocol: URLProtocol, @unchecked Sendable {
             // Three pages of search results; the last page repeats, as some sources do.
             let page = min(3, Int(query.first(where: { $0.name == "pg" })?.value ?? "1") ?? 1)
             status = 200; body = #"{"pagecount":4,"list":[{"vod_id":"p\#(page)a","vod_name":"A"},{"vod_id":"p\#(page)b","vod_name":"B"}]}"#
+        } else if path == "/cms" {
+            // A CMS API: its home answer has no posters; `ac=detail` for those ids has them, in another order.
+            status = 200
+            if query.contains(where: { $0.name == "ac" && $0.value == "detail" }) {
+                let ids = query.first(where: { $0.name == "ids" })?.value ?? ""
+                body = ids == "7,8"
+                    ? #"{"list":[{"vod_id":8,"vod_name":"B","vod_pic":"https://img.example.com/b.jpg"},{"vod_id":7,"vod_name":"A","vod_pic":"https://img.example.com/a.jpg"}]}"#
+                    : #"{"list":[]}"#
+            } else {
+                body = #"{"class":[{"type_id":1,"type_name":"Movie"}],"list":[{"vod_id":7,"vod_name":"A","vod_remarks":"HD"},{"vod_id":8,"vod_name":"B"},{"vod_id":9,"vod_name":"C","vod_pic":"https://img.example.com/c.jpg"}]}"#
+            }
         } else if path == "/bili" {
             status = 200; body = #"{"parse":0,"url":["480P","http://127.0.0.1:-1/proxy?do=bili&aid=123&cid=456&qn=32&type=mpd"]}"#
         } else if query.contains(where: { $0.name == "play" }) {
@@ -84,6 +95,19 @@ private func client() -> HTTPClient {
     #expect(play.headers["User-Agent"] == "SiteAgent")
     let parseAPI = CatalogClient(site: sub.sites[1], origin: base, http: client())
     await #expect(throws: (any Error).self) { try await parseAPI.playback(episode) }
+}
+
+@Test func cmsHomeTakesPostersFromDetails() async throws {
+    let base = URL(string: "https://example.com/config.json")!
+    let sub = try Subscription.parse(Data(#"{"sites":[{"key":"cms","type":1,"api":"/cms"}]}"#.utf8), origin: base)
+    let api = CatalogClient(site: sub.sites[0], origin: base, http: client())
+    let home = try await api.home()
+    #expect(home.videos.map(\.id) == ["7", "8", "9"])
+    #expect(home.videos.map { $0.poster?.absoluteString } == ["https://img.example.com/a.jpg", "https://img.example.com/b.jpg", "https://img.example.com/c.jpg"])
+    #expect(home.videos.first?.remarks == "HD")
+    #expect(home.categories.first?.id == "1")
+    let recommended = try await api.recommendationPage().items
+    #expect(recommended.map { $0.poster?.url.absoluteString } == ["https://img.example.com/a.jpg", "https://img.example.com/b.jpg", "https://img.example.com/c.jpg"])
 }
 
 @Test func pluginStyleDetailMayOmitRequestedID() async throws {
