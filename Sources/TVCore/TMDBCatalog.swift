@@ -5,6 +5,8 @@ public enum TMDBCatalog {
     public enum Feed: String, Codable, CaseIterable, Sendable {
         case trending, movies, television, onTheAir, nowPlaying, upcoming, topMovies, topTelevision, animation, chinese, korean, variety
         case family, kids, netflix, disney, appleTV, hbo, warner, universal, paramount, sony
+        /// Discover's featured carousel: IMDb's popular charts mixed with Douban's hot lists, as TMDB titles (#631).
+        case featured
     }
 
     public struct Item: Codable, Hashable, Sendable, Identifiable {
