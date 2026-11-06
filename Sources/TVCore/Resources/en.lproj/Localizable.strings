@@ -751,6 +751,7 @@
 "Not set" = "Not set";
 "The source took too long to respond, so Yingxia stopped waiting. Try another line, or try again later." = "The source took too long to respond, so Yingxia stopped waiting. Try another line, or try again later.";
 "This line plays from %@, but its sign-in code couldn't be shown. Choose another line." = "This line plays from %@, but its sign-in code couldn't be shown. Choose another line.";
+"This source needs your %@ account for this line. Sign in with its code, and the episode plays." = "This source needs your %@ account for this line. Sign in with its code, and the episode plays.";
 "Baidu Netdisk" = "Baidu Netdisk";
 "Aliyun Drive" = "Aliyun Drive";
 "115 Cloud" = "115 Cloud";

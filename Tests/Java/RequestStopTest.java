@@ -69,6 +69,7 @@ public final class RequestStopTest {
         check(drive.invoke(null, "api.aliyundrive.com", "/adrive/v3/file/list") == null, "An Aliyun file listing is not a sign-in");
         signInCodes();
         ownDriveSignIn();
+        quarkSignIn();
         System.out.println("RequestStopTest passed: abandoned sleeps stop, deadlines stop polling spiders, QR sign-ins hand back, Baidu/Aliyun codes reach the app, Wex lines sign in through the plugin");
     }
 
@@ -210,12 +211,14 @@ public final class RequestStopTest {
             var written = notice.getJSONObject("wexPreferences");
             check(written.length() == 1 && "UID=115".equals(written.optString("Wex_pan115_cookie")), "The plugin's 115 sign-in was not offered to the app: " + written);
 
-            // Quark without an app sign-in: the app offers its own, which every source then gets.
+            // Quark without an app sign-in: the plugin's own code too, never the app's sign-in page.
             asked.clear(); spider.signedIn = false;
             spider.drive = "[quark](auth) 还没有配置夸克 Cookie，请先去配置中心登录夸克";
             String unsigned = session.request(new JSONObject().put("play", "x").put("flag", "quark").put("_deadline", 30).put("_folder", folder.toString()));
-            check(new JSONObject(unsigned).optString("msg").startsWith("[quark](auth)") && asked.isEmpty(), "Quark went to the plugin with no app sign-in: " + asked);
-            // With one the plugin didn't take, the plugin's own sign-in is the fallback.
+            check(new JSONObject(unsigned).optString("url").equals("https://cdn.example/v.mp4") && asked.get(0).equals("loginStart:quark"), "Quark without an app sign-in: " + asked);
+            // With an app sign-in the plugin didn't take, the same.
+            asked.clear(); spider.signedIn = false;
+            wex.edit().remove("Wex_quark_cookie").commit();
             bridge.appAccounts(new JSONObject().put("quarkCookie", "__pus=stale"), context);
             String fallback = session.request(new JSONObject().put("play", "x").put("flag", "quark").put("_deadline", 30).put("_folder", folder.toString()));
             check(new JSONObject(fallback).optString("url").equals("https://cdn.example/v.mp4") && asked.get(0).equals("loginStart:quark"), "Quark fallback: " + asked);
@@ -223,6 +226,63 @@ public final class RequestStopTest {
             var replaced = new JSONObject(java.nio.file.Files.readString(folder.resolve("login-prompt.json"))).getJSONObject("wexPreferences");
             check("__pus=plugin".equals(replaced.optString("Wex_quark_cookie")) && sha256("__pus=stale").equals(replaced.optString("yingxia.replaced.Wex_quark_cookie"))
                 && !replaced.has("Wex_pan115_cookie"), "Quark sign-in offered: " + replaced);
+        }
+    }
+
+    /**
+     * FTY's Quark sign-in: its code is shown, not the app's sign-in. Once scanned, the account the plugin
+     * fetches next (the drive cookies and Quark's mobile ticket) goes to the app, and the waiting request starts over.
+     */
+    private static void quarkSignIn() throws Exception {
+        Method creates = Class.forName("tvbox.runtime.LoginPrompt").getDeclaredMethod("creates", String.class, String.class); creates.setAccessible(true);
+        check((Boolean) creates.invoke(null, "quark", "/cas/ajax/getTokenForQrcodeLogin") && !(Boolean) creates.invoke(null, "uc", "/cas/ajax/getServiceTicketByQrcodeToken"), "Quark/UC code request");
+        var folder = java.nio.file.Files.createTempDirectory("quark-sign-in");
+        var shown = new java.util.concurrent.atomic.AtomicReference<String>();
+        var spider = new QuarkSpider(folder, shown);
+        long started = System.nanoTime();
+        Throwable thrown = null;
+        try { new PluginSession(spider).request(new JSONObject().put("play", "x").put("flag", "夸父原").put("_deadline", 30).put("_folder", folder.toString())); }
+        catch (Throwable error) { thrown = error; }
+        long waited = (System.nanoTime() - started) / 1_000_000;
+        var code = new JSONObject(shown.get());
+        check("quark".equals(code.optString("drive")) && code.optString("content").startsWith("https://su.quark.cn/4_eMHBJ?token=qr%2Btoken&client_id=386&"), "Code shown: " + code);
+        check(spider.closedAfterScan, "The code stayed up after the scan");
+        check(thrown instanceof HttpDiagnostics.SignedIn, "The waiting spider did not start over with the account: " + thrown);
+        check(waited < 5000, "Started over after " + waited + " ms");
+        var notice = new JSONObject(java.nio.file.Files.readString(folder.resolve("login-prompt.json")));
+        check(notice.optBoolean("signedIn") && "__kp=kp; __pus=pus".equals(notice.optString("quarkCookie")) && "mobile-ticket".equals(notice.optString("quarkServiceTicket")),
+            "The plugin's Quark account did not reach the app: " + notice);
+    }
+
+    /** Runs FTY's Quark QR sign-in against fixtures, then waits like its dialog-bound loop. */
+    public static final class QuarkSpider extends com.github.catvod.crawler.Spider {
+        final java.nio.file.Path folder;
+        final java.util.concurrent.atomic.AtomicReference<String> shown;
+        volatile boolean closedAfterScan;
+        QuarkSpider(java.nio.file.Path folder, java.util.concurrent.atomic.AtomicReference<String> shown) { this.folder = folder; this.shown = shown; }
+        @Override public String playerContent(String flag, String id, List<String> flags) throws Exception {
+            var client = new okhttp3.OkHttpClient.Builder().addInterceptor(chain -> {
+                String path = chain.request().url().encodedPath();
+                String body = switch (path) {
+                    case "/cas/ajax/getTokenForQrcodeLogin" -> "{\"status\":2000000,\"data\":{\"members\":{\"token\":\"qr+token\"}}}";
+                    case "/cas/ajax/getServiceTicketByQrcodeToken" -> "{\"status\":2000000,\"data\":{\"members\":{\"service_ticket\":\"st-1\"}}}";
+                    case "/account/mobileinfo" -> "{\"success\":true,\"data\":{\"serviceTicket\":\"mobile-ticket\"}}";
+                    default -> "{}";
+                };
+                var answer = new okhttp3.Response.Builder().request(chain.request()).protocol(okhttp3.Protocol.HTTP_1_1).code(200).message("OK")
+                    .body(okhttp3.ResponseBody.create(body, okhttp3.MediaType.get("application/json")));
+                if (path.equals("/account/info")) answer.addHeader("Set-Cookie", "__pus=pus; domain=.quark.cn").addHeader("Set-Cookie", "__kp=kp; domain=.quark.cn");
+                return answer.build();
+            }).build();
+            HttpDiagnostics.execute(client.newCall(new okhttp3.Request.Builder().url("https://uop.quark.cn/cas/ajax/getTokenForQrcodeLogin?client_id=386&v=1.2").build())).close();
+            shown.set(java.nio.file.Files.readString(folder.resolve("login-prompt.json")));
+            HttpDiagnostics.execute(client.newCall(new okhttp3.Request.Builder().url("https://uop.quark.cn/cas/ajax/getServiceTicketByQrcodeToken?token=qr").build())).close();
+            closedAfterScan = new JSONObject(java.nio.file.Files.readString(folder.resolve("login-prompt.json"))).optBoolean("signedIn");
+            HttpDiagnostics.execute(client.newCall(new okhttp3.Request.Builder().url("https://pan.quark.cn/account/info?st=st-1").build())).close();
+            HttpDiagnostics.execute(client.newCall(new okhttp3.Request.Builder().url("https://pan.quark.cn/account/mobileinfo?st=st-1").build())).close();
+            while (true) {
+                try { android.os.SystemClock.sleep(200); } catch (Exception ignored) { }
+            }
         }
     }
 

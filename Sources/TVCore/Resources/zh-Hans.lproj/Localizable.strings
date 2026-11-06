@@ -750,6 +750,7 @@
 "Not set" = "未设置";
 "The source took too long to respond, so Yingxia stopped waiting. Try another line, or try again later." = "这个源太久没有响应，映匣已停止等待。请换一条线路，或稍后再试。";
 "This line plays from %@, but its sign-in code couldn't be shown. Choose another line." = "这条线路来自%@，但无法显示它的登录二维码。请换一条线路。";
+"This source needs your %@ account for this line. Sign in with its code, and the episode plays." = "这个来源的这条线路需要你的%@账号。用它提供的二维码登录后，即可播放这一集。";
 "Baidu Netdisk" = "百度网盘";
 "Aliyun Drive" = "阿里云盘";
 "115 Cloud" = "115 网盘";

@@ -87,7 +87,7 @@ import Testing
 @Test func cloudLoginHandoffKeepsTheProviderWithoutDependingOnEpisodeFlags() {
     let failure: [String: JSONValue] = ["error": .string("plugin QR login"), "errorCode": .string("cloud_login_required"), "drive": .string("quark")]
     #expect(CloudDriveLoginRequired(envelope: failure) == .quark)
-    #expect(PluginFailure.message(failure, language: "en") == "Your Quark sign-in is missing or has expired. Sign in again to play this episode.")
+    #expect(PluginFailure.message(failure, language: "en") == "This line plays from Quark, but its sign-in code couldn't be shown. Choose another line.")
     #expect(!PluginFailure.inPlugin(failure))
     #expect(CloudDriveLoginRequired(envelope: ["errorCode": .string("cloud_login_required"), "drive": .string("unknown")]) == nil)
 }

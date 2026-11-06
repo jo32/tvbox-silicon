@@ -353,7 +353,6 @@ public final class CloudDriveBridge implements AutoCloseable {
         appAccounts = Map.copyOf(held);
         context = value;
     }
-    boolean hasAppAccount(String field) { return appAccounts.containsKey(field); }
     /** The digest of the app's sign-in in this field, or "" without one. */
     String appAccountDigest(String field) { return appAccounts.getOrDefault(field, ""); }
     android.content.Context context() { return context; }

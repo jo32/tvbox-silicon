@@ -129,13 +129,15 @@ public enum CatPawOpen {
     }
 }
 
-/// A sign-in that a CatPawOpen bundle's config center runs itself, with its own QR code, for an account the app has
-/// no sign-in page for. wexfnw bundles play UC for accounts without premium through UC's TV app, whose token only
-/// that code gives ("非高会需要配置 UC TV Token，请到配置中心扫码获取"), and it is approved in the UC Browser app.
+/// A drive sign-in that a CatPawOpen bundle's config center runs itself, with its own QR code. When a bundle says a
+/// drive has no sign-in ("还没有配置夸克 Cookie，请先去配置中心登录夸克"), the app runs this, the bundle's own sign-in,
+/// not the app's: the app's sign-ins from Settings already reach the bundle (Runtime/NodeHost `shareAccounts`).
+/// wexfnw bundles also play UC for accounts without premium through UC's TV app, whose token only their code gives
+/// ("非高会需要配置 UC TV Token，请到配置中心扫码获取"), and it is approved in the UC Browser app.
 public struct CatPawSignIn: Sendable {
     public enum Status: Sendable { case waiting, done, expired, failed }
     public let client: CatalogClient
-    /// The bundle's name for the sign-in (`ucToken`).
+    /// The bundle's name for the sign-in: `quark`, `ucCookie`, `ucToken`, `baidu`, `pan115`, `pan189` or `guangya`.
     public let provider: String
     public private(set) var task = ""
     public private(set) var status = Status.waiting
@@ -145,9 +147,30 @@ public struct CatPawSignIn: Sendable {
     public private(set) var image: Data?
     public private(set) var link: URL?
 
-    /// The sign-in a bundle's error asks for, or nil.
+    /// The sign-in a bundle's error asks for, or nil. Only messages that send the viewer to the config center count
+    /// ("请先去配置中心登录百度网盘"), not a drive's other failures ("百度网盘分享已失效").
     public static func provider(for message: String) -> String? {
-        message.range(of: "UC TV Token", options: .caseInsensitive) != nil ? "ucToken" : nil
+        if message.range(of: "UC TV Token", options: .caseInsensitive) != nil { return "ucToken" }
+        guard message.contains("配置中心") else { return nil }
+        let drives: [(name: String, provider: String)] = [
+            ("夸克", "quark"), ("百度", "baidu"), ("115", "pan115"), ("天翼", "pan189"), ("光鸭", "guangya"), ("UC", "ucCookie"),
+        ]
+        return drives.first { message.range(of: $0.name, options: .caseInsensitive) != nil }?.provider
+    }
+
+    /// The drive's name, for the sign-in's title.
+    public var driveName: String { Self.driveName(provider) }
+    public static func driveName(_ provider: String) -> String {
+        switch provider {
+        case "quark": L10n.text("Quark")
+        case "ucCookie": "UC"
+        case "ucToken": L10n.text("UC TV Token")
+        case "baidu": L10n.text("Baidu Netdisk")
+        case "pan115": L10n.text("115 Cloud")
+        case "pan189": L10n.text("Tianyi Cloud")
+        case "guangya": L10n.text("Guangya Cloud")
+        default: provider
+        }
     }
 
     public static func start(_ provider: String, client: CatalogClient) async throws -> CatPawSignIn {

@@ -24,3 +24,18 @@ private func notice(_ text: String) throws -> [String: Any] {
     let old = try JSONDecoder().decode(CloudDriveAccounts.self, from: Data(#"{"quarkCookie":"","ucCookie":"","ucToken":"","token":""}"#.utf8))
     #expect(old.wexPreferences == nil)
 }
+
+/// A plugin's own Quark or UC sign-in (LoginPrompt.collectedAccount) becomes the app's account, as one made in
+/// Settings would: Quark only with both its cookie and mobile ticket, which FTY needs together.
+@Test func pluginQuarkAndUCSignInsBecomeTheAppsAccounts() throws {
+    var accounts = CloudDriveAccounts()
+    accounts.quarkCookie = "__pus=old"; accounts.quarkServiceTicket = "old"
+    #expect(!accounts.take(try notice(#"{"drive":"quark","signedIn":true}"#)))
+    #expect(!accounts.take(try notice(#"{"drive":"quark","signedIn":true,"quarkCookie":"__pus=new"}"#)))
+    #expect(accounts.quarkCookie == "__pus=old")
+    #expect(accounts.take(try notice(#"{"drive":"quark","signedIn":true,"quarkCookie":"__kp=k; __pus=new","quarkServiceTicket":"mobile"}"#)))
+    #expect(accounts.quarkCookie == "__kp=k; __pus=new" && accounts.quarkServiceTicket == "mobile")
+    #expect(!accounts.take(try notice(#"{"drive":"uc","signedIn":true,"ucCookie":"ignored=1"}"#)))
+    #expect(accounts.take(try notice(#"{"drive":"uc","signedIn":true,"ucCookie":"__pus=uc"}"#)))
+    #expect(accounts.ucCookie == "__pus=uc")
+}
