@@ -107,7 +107,7 @@ import VideoToolbox
             Stream(index: 0, kind: .video, codec: "h264", width: 1920, height: 1080, frameRate: 23.976),
             Stream(index: 1, kind: .audio, codec: "aac", profile: 1, channels: 2, language: "chi", isDefault: true),
             Stream(index: 2, kind: .audio, codec: "eac3", channels: 6, language: "eng", title: "English"),
-            Stream(index: 3, kind: .audio, codec: "eac3", channels: 6, language: "eng", title: "English"),
+            Stream(index: 3, kind: .audio, codec: "eac3", profile: 30, channels: 6, language: "eng", title: "English"),
             Stream(index: 4, kind: .subtitle, codec: "ass", language: "chi", title: "简体", isForced: true, isText: true),
         ]
         let plan = try #require(RemuxPlan.make(streams: streams, keyframes: [0, 5_000_000, 10_000_000], start: 0, duration: 12_000_000, size: 9_000_000, device: .init()))
@@ -116,6 +116,10 @@ import VideoToolbox
         #expect(master.contains(#"LANGUAGE="zh",DEFAULT=YES,AUTOSELECT=YES,CHANNELS="2",URI="1.m3u8""#))
         #expect(master.contains(#"NAME="English",LANGUAGE="en",DEFAULT=NO,AUTOSELECT=YES,CHANNELS="6",URI="2.m3u8""#))
         #expect(master.contains(#"NAME="English (2)""#))
+        // Dolby Atmos (E-AC-3 JOC) is "16/JOC", as Apple's HLS authoring spec has it.
+        #expect(master.contains(#"DEFAULT=NO,AUTOSELECT=YES,CHANNELS="16/JOC",URI="3.m3u8""#))
+        #expect(RemuxPlan.displayName(.init(stream: Stream(index: 3, kind: .audio, codec: "eac3", profile: 30, channels: 6))) == "E-AC-3 5.1 Atmos")
+        #expect(RemuxPlan.displayName(.init(stream: Stream(index: 2, kind: .audio, codec: "eac3", channels: 6))) == "E-AC-3 5.1")
         #expect(master.contains(#"TYPE=SUBTITLES,GROUP-ID="subtitles",NAME="简体",LANGUAGE="zh",DEFAULT=NO,AUTOSELECT=YES,FORCED=YES,URI="4.m3u8""#))
         #expect(master.contains(#"CODECS="avc1.640028,mp4a.40.2,ec-3",RESOLUTION=1920x1080,FRAME-RATE=23.976,VIDEO-RANGE=SDR,AUDIO="audio",SUBTITLES="subtitles""#))
         #expect(master.contains("AVERAGE-BANDWIDTH=6000000"))
