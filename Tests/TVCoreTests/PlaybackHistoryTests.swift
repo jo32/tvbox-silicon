@@ -74,6 +74,24 @@ private func historyContext(video: String = "series", episode: String = "1", sou
     #expect(barely.resumePosition(for: watched) == nil)
 }
 
+@Test func continueGoesOnToTheNextEpisodeOnceOneIsFinished() {
+    let first = Episode(id: "0-0", name: "Episode 1", address: "fresh-1", flag: "line")
+    let watched = Episode(id: "0-1", name: "Episode 2", address: "fresh-2", flag: "line")
+    let next = Episode(id: "0-2", name: "Episode 3", address: "fresh-3", flag: "line")
+    let otherLine = Episode(id: "1-2", name: "Episode 3", address: "other-3", flag: "other")
+    let episodes = [first, watched, otherLine, next]
+    func entry(_ episode: String, at position: Double) -> PlaybackHistoryEntry {
+        PlaybackHistoryEntry(context: historyContext(episode: episode), position: position, duration: 327,
+                             updatedAt: Date(timeIntervalSince1970: 0))
+    }
+    // Half watched: Continue picks that episode up. Finished: the next one on its line, not the first (#593).
+    #expect(entry("2", at: 163).continuation(in: episodes) == watched)
+    #expect(entry("2", at: 327).continuation(in: episodes) == next)
+    // The line's last episode finished, or the episode gone from the details: Play starts the line instead.
+    #expect(entry("3", at: 327).continuation(in: episodes) == nil)
+    #expect(entry("2", at: 163).continuation(in: [first, next]) == nil)
+}
+
 @Test @MainActor func playbackHistoryBoundsAndRecoversItsPersistentFile() throws {
     let file = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".json")
     defer { try? FileManager.default.removeItem(at: file) }

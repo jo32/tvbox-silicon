@@ -1635,9 +1635,11 @@ struct VideoDetailView: View {
 
     @ViewBuilder private var playControl: some View {
         if let detail {
-            // The episode watched last, so Play continues it instead of starting the line again (#593).
-            if let first = resumeEpisode ?? activeEpisodes.first ?? detail.episodes.first {
-                let continues = first.id == resumeEpisode?.id
+            // The episode watched last, or the next one once it is finished, so Play continues the video instead of
+            // starting the line again (#593).
+            let continuation = watchHistory?.continuation(in: detail.episodes)
+            if let first = continuation ?? activeEpisodes.first ?? detail.episodes.first {
+                let continues = first.id == continuation?.id
                 // Beside the poster on a phone there is no room for both labels: Download drops to its icon.
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 10) { playButton(first, continuation: continues); downloadButton(iconOnly: false); videoFavoriteButton }
@@ -2021,12 +2023,6 @@ struct VideoDetailView: View {
     private var watchHistory: PlaybackHistoryEntry? {
         store.playbackHistory.entries.first { watchScopes.contains($0.context.id) }
     }
-    /// The episode the viewer stopped in, while the details still list it: what Play picks up. A finished entry
-    /// leaves Play starting the line again, as `resumePosition(for:)` does.
-    private var resumeEpisode: Episode? {
-        guard let detail, let entry = watchHistory, entry.resumePosition > 1 else { return nil }
-        return entry.context.episode(in: detail.episodes)
-    }
     /// Where an episode stopped last time, when it is the one watched last; any other starts at 0.
     private func resumePosition(for episode: Episode) -> Double? {
         watchHistory?.resumePosition(for: episode)
@@ -2161,8 +2157,12 @@ struct VideoDetailView: View {
         }
     }
 
-    /// The cover's Play: where the viewer stopped, else the line's first episode.
+    /// The cover's Play: where the viewer stopped (the next episode once that one is finished), else the line's
+    /// first episode.
     private func playWatchCover() {
+        if let watchHistory, watchHistory.completed, let next = detail.flatMap({ watchHistory.continuation(in: $0.episodes) }) {
+            startRequest { await play(next) }; return
+        }
         if let watchHistory { store.resume(watchHistory); return }
         guard let first = activeEpisodes.first ?? detail?.episodes.first else { return }
         startRequest { await play(first) }

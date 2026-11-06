@@ -62,6 +62,13 @@ public struct PlaybackHistoryEntry: Identifiable, Codable, Hashable, Sendable {
         return resumePosition
     }
 
+    /// What Continue plays on the video's page: the episode watched last, or, once that one is finished, the next
+    /// one on its line. Nil when the details no longer list it or a finished episode was the line's last, so
+    /// Play starts the line instead.
+    public func continuation(in episodes: [Episode]) -> Episode? {
+        completed ? EpisodePlaylist(episodes).next(after: context) : context.episode(in: episodes)
+    }
+
     public init(context: PlaybackHistoryContext, position: Double, duration: Double, updatedAt: Date) {
         self.context = context
         self.position = position
