@@ -1,7 +1,9 @@
 #!/bin/bash
-# Xcode build phase of the iOS and tvOS apps: embeds nodejs-mobile from build/NodeMobile (Scripts/fetch-node-mobile.sh)
-# and the CatPawOpen runner (Runtime/NodeHost), and signs the framework before Xcode signs the app. A build
-# without it still works: EmbeddedNodeHost then reports Node as missing and CatPawOpen sources stay unsupported.
+# Xcode build phase of the iOS and tvOS apps: embeds nodejs-mobile from build/NodeMobile and the CatPawOpen runner
+# (Runtime/NodeHost), and signs the framework before Xcode signs the app. build/NodeMobile is the prebuilt release
+# that Scripts/fetch-node-mobile.sh downloads (once per Mac), so contributors never build Node themselves.
+# A Debug build that can't download it (offline) still works: EmbeddedNodeHost then reports Node as missing and
+# CatPawOpen sources stay unsupported. A Release build stops instead, so no release ships without Node.
 set -euo pipefail
 APP="$TARGET_BUILD_DIR/$WRAPPER_NAME"
 case "$PLATFORM_NAME" in
@@ -11,6 +13,13 @@ case "$PLATFORM_NAME" in
   appletvsimulator) SLICES="tvos-arm64-simulator" ;;
   *) SLICES= ;;
 esac
+if [ -n "$SLICES" ] && ! "$SRCROOT/Scripts/fetch-node-mobile.sh"; then
+  if [ "${CONFIGURATION:-}" = Release ]; then
+    echo "error: Couldn't get the prebuilt Node.js runtime (Scripts/fetch-node-mobile.sh); a release needs it for CatPawOpen sources."
+    exit 1
+  fi
+  echo "warning: Couldn't download the prebuilt Node.js runtime; building without it."
+fi
 FRAMEWORK=
 for SLICE in $SLICES; do
   CANDIDATE="$SRCROOT/build/NodeMobile/NodeMobile.xcframework/$SLICE/NodeMobile.framework"
@@ -20,7 +29,7 @@ done
 # while the source, the signing and the embedded copy are unchanged.
 STAMP="${DERIVED_FILE_DIR:-$TARGET_TEMP_DIR}/embed-node-mobile.stamp"
 if [ -z "$FRAMEWORK" ]; then
-  echo "warning: This build has no Node.js runtime, so CatPawOpen sources won't run. Run Scripts/fetch-node-mobile.sh first."
+  echo "warning: This build has no Node.js runtime, so CatPawOpen sources won't run. Scripts/fetch-node-mobile.sh downloads it."
   rm -rf "$APP/Frameworks/NodeMobile.framework" "$APP/NodeHost" "$STAMP"
   exit 0
 fi
