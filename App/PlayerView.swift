@@ -1,5 +1,6 @@
 import SwiftUI
 import AVKit
+import VideoToolbox
 import TVCore
 
 struct PlaybackView: View {
@@ -1287,7 +1288,7 @@ extension Store {
 struct PlaybackInfoPanel: View {
     let session: PlaybackSession
     @State private var info = PlaybackInfo()
-    @State private var formats = PlaybackFormats()
+    @State private var sampler = PlaybackInfoSampler()
 
     private struct Row: Identifiable { let id: String; let text: String }
 
@@ -1323,29 +1324,7 @@ struct PlaybackInfoPanel: View {
     }
 
     private func refresh() async {
-        guard let item = session.player.currentItem else { info = PlaybackInfo(); return }
-        let tracks = item.tracks.filter(\.isEnabled)
-        let video = tracks.first { $0.assetTrack?.mediaType == .video }
-        let audio = tracks.first { $0.assetTrack?.mediaType == .audio }
-        let picture = await formats.describe(video?.assetTrack)
-        let sound = await formats.describe(audio?.assetTrack)
-        guard !Task.isCancelled, session.player.currentItem === item else { return }
-        var next = PlaybackInfo()
-        let size = item.presentationSize
-        next.width = Int(size.width.rounded()); next.height = Int(size.height.rounded())
-        if next.width == 0 || next.height == 0 { next.width = picture?.width ?? 0; next.height = picture?.height ?? 0 }
-        next.videoCodec = picture?.codec
-        next.transferFunction = picture?.transferFunction
-        // The track's own rate; the measured one (a stream that declares none) wanders around it.
-        let measured = Double(video?.currentVideoFrameRate ?? 0)
-        next.frameRate = picture?.frameRate ?? (measured > 0 ? measured : nil)
-        next.audioCodec = sound?.codec
-        next.sampleRate = sound?.sampleRate
-        next.channels = sound?.channels
-        // The session's measured rate (the variant's, or the decoded media's), else what the file's tracks declare.
-        let declared = (picture?.dataRate ?? 0) + (sound?.dataRate ?? 0)
-        next.bitrate = session.transfer.required.map { $0 * 8 } ?? (declared > 0 ? declared : nil)
-        next.download = session.transfer.bytesPerSecond
+        guard let next = await sampler.sample(session) else { return }
         if next != info { info = next }
     }
 
@@ -1358,11 +1337,73 @@ struct PlaybackInfoPanel: View {
     }
 }
 
+/// Reads what `PlaybackInfo` holds from the playing item: the info panel and the tags over the seek bar each keep one
+/// and ask it once a second while they show.
+@MainActor final class PlaybackInfoSampler {
+    private let formats = PlaybackFormats()
+
+    /// Nil while the item changes under the read; an empty info without an item.
+    func sample(_ session: PlaybackSession) async -> PlaybackInfo? {
+        guard let item = session.player.currentItem else { return PlaybackInfo() }
+        let tracks = item.tracks.filter(\.isEnabled)
+        let video = tracks.first { $0.assetTrack?.mediaType == .video }
+        let audio = tracks.first { $0.assetTrack?.mediaType == .audio }
+        let picture = await formats.describe(video?.assetTrack)
+        let sound = await formats.describe(audio?.assetTrack)
+        guard !Task.isCancelled, session.player.currentItem === item else { return nil }
+        var next = PlaybackInfo()
+        let size = item.presentationSize
+        next.width = Int(size.width.rounded()); next.height = Int(size.height.rounded())
+        if next.width == 0 || next.height == 0 { next.width = picture?.width ?? 0; next.height = picture?.height ?? 0 }
+        next.videoCodec = picture?.codec
+        next.transferFunction = picture?.transferFunction
+        next.hardwareDecoding = picture?.codec.map(Self.decodesInHardware)
+        next.dolbyVisionProfile = picture?.dolbyVisionProfile
+        if let asset = item.asset as? AVURLAsset { next.droppedDolbyVisionProfile = Remux.droppedDolbyVision(asset.url) }
+        // The track's own rate; the measured one (a stream that declares none) wanders around it.
+        let measured = Double(video?.currentVideoFrameRate ?? 0)
+        next.frameRate = picture?.frameRate ?? (measured > 0 ? measured : nil)
+        // Smooth Motion's in-between frames reach the screen at its grid's rate (#519).
+        let enhancement = session.enhancer.status
+        if enhancement.smoothing {
+            let source = enhancement.sourceRate > 0 ? enhancement.sourceRate : next.frameRate ?? 0
+            next.smoothedFrameRate = VideoEnhancer.outputRate(source: source, matching: false)
+        }
+        next.audioCodec = sound?.codec
+        next.sampleRate = sound?.sampleRate
+        next.channels = sound?.channels
+        // The session's measured rate (the variant's, or the decoded media's), else what the file's tracks declare.
+        let declared = (picture?.dataRate ?? 0) + (sound?.dataRate ?? 0)
+        next.bitrate = session.transfer.required.map { $0 * 8 } ?? (declared > 0 ? declared : nil)
+        next.download = session.transfer.bytesPerSecond
+        return next
+    }
+
+    private static var hardware: [UInt32: Bool] = [:]
+
+    /// Whether VideoToolbox has a hardware decoder for the format here: HEVC and H.264 on every device, AV1 from the
+    /// A17 Pro and M3 on. Dolby Vision asks for its base layer's codec.
+    static func decodesInHardware(_ code: UInt32) -> Bool {
+        if let known = hardware[code] { return known }
+        let base: CMVideoCodecType = switch code {
+        case 0x6476_6831, 0x6476_6865, 0x6865_7631: kCMVideoCodecType_HEVC   // dvh1, dvhe, hev1
+        case 0x6476_6131, 0x6476_6176, 0x6176_6333: kCMVideoCodecType_H264   // dva1, dvav, avc3
+        case 0x6461_7631: 0x6176_3031                                        // dav1: AV1 (av01)
+        default: code
+        }
+        let supported = VTIsHardwareDecodeSupported(base)
+        hardware[code] = supported
+        return supported
+    }
+}
+
 /// The formats of the tracks playing, loaded once per track: a stream's tracks change only when its variant does.
 @MainActor private final class PlaybackFormats {
     struct Format {
         var codec: UInt32?
         var transferFunction: String?
+        /// From the sample description's dvcC/dvvC/dvwC box: profile 8 rides on an hvc1 entry.
+        var dolbyVisionProfile: Int?
         var width = 0, height = 0
         var frameRate: Double?
         var sampleRate: Double?
@@ -1380,6 +1421,11 @@ struct PlaybackInfoPanel: View {
         if let description = descriptions.first {
             format.codec = CMFormatDescriptionGetMediaSubType(description)
             format.transferFunction = CMFormatDescriptionGetExtension(description, extensionKey: kCMFormatDescriptionExtension_TransferFunction) as? String
+            if let atoms = CMFormatDescriptionGetExtension(description, extensionKey: kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms) as? [String: Any] {
+                let box = ["dvcC", "dvvC", "dvwC"].lazy.compactMap { atoms[$0] }.first
+                let config = box as? Data ?? (box as? [Data])?.first
+                format.dolbyVisionProfile = config.flatMap(PlaybackInfo.dolbyVisionProfile(config:))
+            }
             if CMFormatDescriptionGetMediaType(description) == kCMMediaType_Video {
                 let dimensions = CMVideoFormatDescriptionGetDimensions(description)
                 format.width = Int(dimensions.width); format.height = Int(dimensions.height)

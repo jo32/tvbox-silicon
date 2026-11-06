@@ -1,8 +1,8 @@
 import Foundation
 
 /// What the player's info panel shows (Settings → Show Video Info, off by default): the picture, the sound and the
-/// stream's rate, one line each, from what AVFoundation reports about the playing item. Only the wording lives here;
-/// the app reads the values.
+/// stream's rate, one line each, from what AVFoundation reports about the playing item; and the short tags over the
+/// seek bar (`badges`), which show with the controls. Only the wording lives here; the app reads the values.
 public struct PlaybackInfo: Equatable, Sendable {
     public static let key = "showsPlaybackInfo"
 
@@ -21,6 +21,15 @@ public struct PlaybackInfo: Equatable, Sendable {
     public var bitrate: Double?
     /// What arrives over the network, in bytes per second.
     public var download: Double?
+    /// The Dolby Vision profile the playing picture carries (its dvcC/dvvC box: 5, 8, …), else nil.
+    public var dolbyVisionProfile: Int?
+    /// The source's Dolby Vision profile when the repackager served its picture without it: profile 7's two
+    /// layers, which Apple devices don't decode, play as their HDR10 base.
+    public var droppedDolbyVisionProfile: Int?
+    /// Whether this device decodes the video's format in hardware; nil when unknown.
+    public var hardwareDecoding: Bool?
+    /// The rate frames reach the screen when Smooth Motion adds in-between frames (60), else nil.
+    public var smoothedFrameRate: Double?
 
     public init() {}
 
@@ -29,7 +38,13 @@ public struct PlaybackInfo: Equatable, Sendable {
     /// "HEVC · 3840×2160 · 23.98 fps · HDR10"
     public var video: String? {
         var parts: [String] = []
-        let codec = videoCodec.map(Self.videoName)
+        var codec = videoCodec.map(Self.videoName)
+        // Profile 8 rides on an hvc1 entry: its HDR10 base layer plus Dolby Vision's box.
+        if let dolbyVisionProfile, let name = codec {
+            codec = name.hasPrefix("Dolby Vision")
+                ? name.replacingOccurrences(of: "Dolby Vision", with: "Dolby Vision \(dolbyVisionProfile)")
+                : "Dolby Vision \(dolbyVisionProfile) (\(name))"
+        }
         if let codec { parts.append(codec) }
         if width > 0, height > 0 { parts.append("\(width)×\(height)") }
         if let frameRate, frameRate.isFinite, frameRate > 0 { parts.append(Self.number(frameRate, digits: 2) + " fps") }
@@ -56,6 +71,76 @@ public struct PlaybackInfo: Equatable, Sendable {
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
+
+    /// The tags over the seek bar, in MiraPlay's order: how the video is decoded, its range, its format, its size,
+    /// its frame rate and its bitrate. ["HW", "DV P8", "H265", "4K", "24FPS", "25Mbps"]; with Smooth Motion
+    /// "24→60FPS" (#519); profile 7 played as its HDR10 base "DV P7→HDR10".
+    public var badges: [String] {
+        var tags: [String] = []
+        if let hardwareDecoding, videoCodec != nil { tags.append(hardwareDecoding ? "HW" : "SW") }
+        let code = videoCodec.map(Self.fourCC)
+        if let dolbyVisionProfile { tags.append("DV P\(dolbyVisionProfile)") }
+        else if let code, Self.dolbyVision.contains(code) { tags.append("DV") }
+        else if let range = transferFunction.flatMap(Self.dynamicRange) {
+            tags.append(droppedDolbyVisionProfile.map { "DV P\($0)→" + range } ?? range)
+        }
+        if let code, let short = Self.shortVideoName(code) { tags.append(short) }
+        if let size = Self.sizeName(width: width, height: height) { tags.append(size) }
+        if let frameRate, frameRate.isFinite, frameRate > 0 {
+            let source = Self.roundedRate(frameRate)
+            if let smoothedFrameRate, smoothedFrameRate.isFinite, Self.roundedRate(smoothedFrameRate) > source {
+                tags.append("\(source)→\(Self.roundedRate(smoothedFrameRate))FPS")
+            } else {
+                tags.append("\(source)FPS")
+            }
+        }
+        if let bitrate, bitrate.isFinite, bitrate > 0 { tags.append(Self.shortBits(bitrate)) }
+        return tags
+    }
+
+    /// 850Kbps, 2.5Mbps, 25Mbps.
+    static func shortBits(_ perSecond: Double) -> String {
+        if perSecond < 1_000_000 { return "\(Int((perSecond / 1000).rounded()))Kbps" }
+        return number(perSecond / 1_000_000, digits: perSecond < 10_000_000 ? 1 : 0) + "Mbps"
+    }
+
+    /// The profile in a Dolby Vision configuration box's payload (dvcC, dvvC, dvwC): 7 bits after the version.
+    public static func dolbyVisionProfile(config: Data) -> Int? {
+        let bytes = [UInt8](config)
+        guard bytes.count >= 4 else { return nil }
+        return Int(bytes[2] >> 1)
+    }
+
+    static let dolbyVision: Set<String> = ["dvh1", "dvhe", "dva1", "dvav", "dav1"]
+
+    /// The codec as players' tags write it: H264, H265, AV1. Dolby Vision is its base layer's codec, with a DV tag.
+    static func shortVideoName(_ code: String) -> String? {
+        switch code {
+        case "avc1", "avc3", "dva1", "dvav": "H264"
+        case "hvc1", "hev1", "dvh1", "dvhe": "H265"
+        case "av01", "dav1": "AV1"
+        case "vp08": "VP8"
+        case "vp09": "VP9"
+        case "mp4v": "MPEG4"
+        case "mp2v", "mpg2": "MPEG2"
+        case "apcn", "apch", "apcs", "apco", "ap4h", "ap4x": "ProRes"
+        default: code.hasPrefix("0x") ? nil : code.trimmingCharacters(in: .whitespaces).uppercased()
+        }
+    }
+
+    /// 4K, 2K, 1080P, 720P, else the height: by the longer side too, so a 3840×1600 film is 4K, not "1600P".
+    static func sizeName(width: Int, height: Int) -> String? {
+        guard width > 0, height > 0 else { return nil }
+        let long = max(width, height), short = min(width, height)
+        if long >= 3200 || short >= 2000 { return "4K" }
+        if long >= 2300 || short >= 1300 { return "2K" }
+        if long >= 1700 || short >= 1000 { return "1080P" }
+        if long >= 1100 || short >= 700 { return "720P" }
+        return "\(short)P"
+    }
+
+    /// 23.976 → 24, 29.97 → 30, 59.94 → 60.
+    static func roundedRate(_ rate: Double) -> Int { Int(rate.rounded()) }
 
     // MARK: Names
 

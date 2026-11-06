@@ -49,6 +49,8 @@ struct MobilePlayerView: View {
     @State private var holding = false
     @AppStorage(SpeedBoost.key) private var holdSpeed = SpeedBoost.standard
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
+    /// The full-screen top row's height, which the info panel keeps clear of while the controls show.
+    @State private var topRowHeight: CGFloat = 44
     /// Double taps on a side skip (YouTube); the run's total shows on that side for a moment.
     @State private var taps = PictureTaps()
     @State private var skipped: (forward: Bool, total: Double)?
@@ -118,12 +120,14 @@ struct MobilePlayerView: View {
                     if session.paused { session.togglePlayback() }
                 }
             }
-            // The controls take its corner while they show; it comes back with the bare picture.
+            // While the controls show it moves below their top row; on a watch page, too small for both, they take
+            // its corner and it comes back with the bare picture.
             if showsPlaybackInfo && session.error == nil && session.showsPicture && !pip.active && playingOn == nil {
                 PlaybackInfoPanel(session: session)
                     .padding(inline ? 8 : 16)
+                    .padding(.top, chromeVisible && !inline ? topRowHeight + 12 : 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .opacity(chromeVisible ? 0 : 1)
+                    .opacity(chromeVisible && inline ? 0 : 1)
                     .animation(.smooth(duration: 0.25), value: chromeVisible)
             }
             controls.opacity(chromeVisible ? 1 : 0).allowsHitTesting(chromeVisible && !settling)
@@ -448,7 +452,10 @@ struct MobilePlayerView: View {
             VStack(spacing: 0) {
                 topRow
                 Spacer(minLength: 0)
-                if showsTransport { bottomRow }
+                if showsTransport {
+                    if !inline { infoRow }
+                    bottomRow
+                }
             }
             .padding(inline ? 8 : 16)
             if showsTransport { centerRow }
@@ -490,6 +497,20 @@ struct MobilePlayerView: View {
             HStack(spacing: 10) { toolbar; optionsMenu }
         }
         .simultaneousGesture(TapGesture().onEnded { poke() })
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topRowHeight = $0 }
+    }
+
+    /// Over the seek bar, as in MiraPlay: the title's logo on the left and the video's tags on the right (#520).
+    private var infoRow: some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            PlayerTitleLogo(channel: channel, compact: verticalSizeClass != .compact && horizontalSizeClass == .compact)
+            Spacer(minLength: 0)
+            PlaybackBadges(session: session, active: chromeVisible) {
+                withAnimation(.smooth(duration: 0.25)) { showsPlaybackInfo.toggle() }
+                poke()
+            }
+        }
+        .padding(.bottom, 2)
     }
 
     private var toolbar: some View {
@@ -1458,6 +1479,83 @@ private struct PlayerLayerView: UIViewRepresentable {
             center.nowPlayingInfo = nil
             center.playbackState = .stopped
         }
+    }
+}
+
+/// The video's tags over the seek bar, as MiraPlay shows them: "HW  H265  HDR10  4K  24FPS" (#520, #519). Plain
+/// white type on the controls' scrim, read once a second while the controls show. A tap shows the full info panel
+/// (the bitrate, the sound and the download speed) or hides it.
+private struct PlaybackBadges: View {
+    let session: PlaybackSession
+    /// The controls show: only then is the playing item read.
+    let active: Bool
+    let action: () -> Void
+    @State private var sampler = PlaybackInfoSampler()
+    @State private var badges: [String] = []
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                ForEach(badges, id: \.self) { Text($0) }
+            }
+            .font(.system(size: 13, weight: .semibold)).monospacedDigit()
+            .shadow(color: .black.opacity(0.6), radius: 3)
+            .padding(.vertical, 6).padding(.leading, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .opacity(badges.isEmpty ? 0 : 1)
+        .animation(.smooth(duration: 0.25), value: badges)
+        .accessibilityLabel(L10n.text("Show Video Info"))
+        .accessibilityValue(badges.joined(separator: " "))
+        .accessibilityIdentifier("player.badges")
+        .task(id: active) {
+            while active && !Task.isCancelled {
+                if let info = await sampler.sample(session), info.badges != badges { badges = info.badges }
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+}
+
+/// The title's logo at the bottom left of the picture, as MiraPlay and Apple TV's player show it (#520): TMDB's, when
+/// the video's page found the title there. Only what this device already knows; nothing shows otherwise, since the
+/// title is in the top row too.
+private struct PlayerTitleLogo: View {
+    let channel: Channel
+    /// A phone held upright: a smaller logo.
+    let compact: Bool
+    @Environment(Store.self) private var store
+    @State private var tmdb = TMDBLookup()
+    @State private var aspect: CGFloat?
+
+    var body: some View {
+        let box = compact ? CGSize(width: 150, height: 40) : CGSize(width: 220, height: 56)
+        // A view even before there is a logo, so the lookup below runs.
+        ZStack(alignment: .bottomLeading) {
+            Color.clear.frame(width: 0, height: 0)
+            if let logo = tmdb.details?.logo {
+                let size = Self.fit(aspect ?? 3, in: box)
+                TMDBArtwork(url: logo, maxPixels: 800, fill: false, aspect: $aspect)
+                    .frame(width: size.width, height: size.height, alignment: .bottomLeading)
+                    .shadow(color: .black.opacity(0.45), radius: 6)
+                    .opacity(aspect == nil ? 0 : 1)
+                    .animation(.smooth(duration: 0.3), value: aspect == nil)
+                    .accessibilityHidden(true)
+            }
+        }
+        .allowsHitTesting(false)
+        .task(id: store.catalog(for: channel)?.video.id) {
+            guard let catalog = store.catalog(for: channel), TMDBLookup.applies(to: catalog.client.site) else { return }
+            _ = await tmdb.prepare(key: TMDBMatchStore.key(source: catalog.client.site.key, video: catalog.video.id))
+        }
+    }
+
+    /// Wide logos fill the width, tall ones the height.
+    static func fit(_ aspect: CGFloat, in box: CGSize) -> CGSize {
+        let aspect = max(aspect, 0.5)
+        return aspect >= box.width / box.height ? CGSize(width: box.width, height: box.width / aspect)
+            : CGSize(width: box.height * aspect, height: box.height)
     }
 }
 #endif
