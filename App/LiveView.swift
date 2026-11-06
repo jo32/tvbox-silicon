@@ -412,6 +412,15 @@ private struct TVGuideCategoryStyle: ButtonStyle {
 
 struct FavoritesView: View {
     @Environment(Store.self) private var store
+    /// The kind the chips show alone, e.g. only live channels (#480); empty shows every kind.
+    @AppStorage("favoritesFilter") private var filterKind = ""
+    /// The chosen kind while there are favorites of it; else everything, so the page is never empty.
+    private var filter: FavoriteKind? {
+        FavoriteKind(rawValue: filterKind).flatMap { store.favorites.kinds.contains($0) ? $0 : nil }
+    }
+    private func shows(_ kind: FavoriteKind) -> Bool {
+        (filter == nil || filter == kind) && !store.favorites.items(kind).isEmpty
+    }
     var body: some View {
         Group {
             if store.favorites.items.isEmpty {
@@ -424,11 +433,12 @@ struct FavoritesView: View {
                         if let error = store.favorites.persistenceError {
                             StatusNotice(text: L10n.text("Unable to save favorites: %@", error))
                         }
-                        if !store.favorites.items(.live).isEmpty { liveSection }
-                        if !store.favorites.items(.video).isEmpty { filmSection }
-                        if !store.favorites.items(.episode).isEmpty { episodeSection }
-                        if !store.favorites.items(.music).isEmpty { musicSection }
-                        if !store.favorites.items(.cloud).isEmpty { cloudSection }
+                        if store.favorites.kinds.count > 1 { filterBar }
+                        if shows(.live) { liveSection }
+                        if shows(.video) { filmSection }
+                        if shows(.episode) { episodeSection }
+                        if shows(.music) { musicSection }
+                        if shows(.cloud) { cloudSection }
                     }
                     .pageContainer()
                 }
@@ -436,6 +446,32 @@ struct FavoritesView: View {
         }
         .screenBackdrop()
         .tabTitle(L10n.text("Favorites"))
+    }
+
+    /// One chip per kind that has favorites, with the sections' own names.
+    private var filterBar: some View {
+        ChipRow {
+            GlassGroup(spacing: 8) {
+                HStack(spacing: 8) {
+                    Chip(title: L10n.text("All"), selected: filter == nil) { filterKind = "" }
+                    ForEach(store.favorites.kinds, id: \.self) { kind in
+                        Chip(title: title(kind), selected: filter == kind) { filterKind = kind.rawValue }
+                            .accessibilityIdentifier("favorites.filter.\(kind.rawValue)")
+                    }
+                }
+            }.padding(.vertical, 4)
+        }
+        .tvFocusSection()
+    }
+
+    private func title(_ kind: FavoriteKind) -> String {
+        switch kind {
+        case .live: L10n.text("Live TV")
+        case .video: L10n.text("Films")
+        case .episode: L10n.text("Saved Episodes")
+        case .music: L10n.text("Liked Songs")
+        case .cloud: L10n.text("Cloud Files")
+        }
     }
 
     private var liveSection: some View {

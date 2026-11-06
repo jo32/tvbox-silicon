@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-public enum FavoriteKind: String, Codable, Sendable {
+public enum FavoriteKind: String, Codable, Sendable, CaseIterable {
     case live, video, episode, music, cloud
 }
 
@@ -214,6 +214,12 @@ struct FavoriteDocument: Codable {
     }
 
     public func items(_ kind: FavoriteKind) -> [FavoriteItem] { items.filter { $0.kind == kind } }
+
+    /// The kinds that have favorites, in the Favorites page's section order: what its filter offers.
+    public var kinds: [FavoriteKind] {
+        let present = Set(items.map(\.kind))
+        return FavoriteKind.allCases.filter(present.contains)
+    }
 
     public var liveChannels: [Channel] {
         items.compactMap { if case .live(let channel) = $0 { channel } else { nil } }
