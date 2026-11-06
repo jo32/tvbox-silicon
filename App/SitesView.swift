@@ -1159,13 +1159,106 @@ struct CategoryFilterBar: View {
     #endif
 }
 
-/// Where a listed title opens: its details, or for a drive source's folder the folder's listing.
+/// Where a listed title opens: its details, for a drive source's folder the folder's listing, and for a plugin
+/// setting listed among titles (`Video.action`) that setting.
 struct CatalogDestination: View {
     let video: Video
     let client: CatalogClient
     var body: some View {
-        if video.isFolder { SiteView(site: client.site, origin: client.origin, jarURL: client.jarURL, folder: video) }
+        if let action = video.action { PluginActionPage(video: video, client: client, action: action) }
+        else if video.isFolder { SiteView(site: client.site, origin: client.origin, jarURL: client.jarURL, folder: video) }
         else { VideoDetailView(video: video, client: client) }
+    }
+}
+
+/// A plugin setting listed among a source's titles, such as FTY's 我的云盘┃配置. Drive sign-ins live under Cloud
+/// Drive Accounts, which supplies them to plugins, so signing in leads there; clearing a drive signs it out in
+/// Yingxia and in the plugin; any other setting runs in the plugin, and the page shows what it reported.
+struct PluginActionPage: View {
+    let video: Video
+    let client: CatalogClient
+    let action: String
+    var body: some View {
+        switch PluginAction(action) {
+        case .signIn: CloudDriveView()
+        case .signOut(let drive):
+            if let provider = CloudProvider(rawValue: drive) { PluginSignOutPage(video: video, client: client, action: action, provider: provider) }
+            else { PluginRunPage(video: video, client: client, action: action) }
+        case .run: PluginRunPage(video: video, client: client, action: action)
+        }
+    }
+}
+
+private struct PluginSignOutPage: View {
+    let video: Video
+    let client: CatalogClient
+    let action: String
+    let provider: CloudProvider
+    @State private var signedIn = false
+    @State private var working = false
+    @State private var done: String?
+    @State private var error: String?
+    var body: some View {
+        SettingsPage(title: video.name, symbol: provider.symbol) {
+            SettingsGroup(footer: L10n.text("Signs %@ out of Yingxia and out of this source's plugin. Every source stops using this account until you sign in again under Cloud Drive Accounts.", provider.name)) {
+                SettingsRow(symbol: provider.symbol, tint: provider.tint, title: provider.name,
+                            subtitle: L10n.text(signedIn ? "Signed In" : "Not Signed In"))
+                SettingsActionRow(title: L10n.text("Sign Out"), destructive: true) { signOut() }
+                    .disabled(working)
+            }
+            if let done { Label(done, systemImage: "checkmark.circle.fill").font(.callout).foregroundStyle(.green) }
+            if let error { Label(error, systemImage: "exclamationmark.triangle.fill").font(.callout).foregroundStyle(Brand.rose) }
+        }
+        .task { signedIn = (try? CloudDriveAccounts.load()).map(provider.isSignedIn) ?? false }
+    }
+    private func signOut() {
+        working = true; done = nil; error = nil
+        Task {
+            defer { working = false }
+            do {
+                var accounts = try CloudDriveAccounts.load()
+                provider.clear(&accounts)
+                EmbeddedJarHost.forgetPluginSignIns(provider.pluginFiles)
+                try accounts.save()
+                signedIn = false
+                // The running plugin keeps its own copy (FTY restores Quark and UC into its own storage): its
+                // setting drops that one.
+                let said = try await client.runAction(action)
+                done = said ?? L10n.text("Signed out of %@.", provider.name)
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+}
+
+private struct PluginRunPage: View {
+    @Environment(\.dismiss) private var dismiss
+    let video: Video
+    let client: CatalogClient
+    let action: String
+    private enum Outcome { case running, reported(String?), failed(String) }
+    @State private var outcome = Outcome.running
+    var body: some View {
+        ScrollView {
+            switch outcome {
+            case .running:
+                ProgressView().padding(.vertical, 80).frame(maxWidth: .infinity)
+            case .reported(let message):
+                // Back is focusable, so the remote has somewhere to land on Apple TV.
+                EmptyResults(symbol: message == nil ? "puzzlepiece.extension" : "checkmark.circle", title: video.name,
+                             message: message ?? L10n.text("The plugin finished without a message. Settings that open the plugin's own window only work in Android TVBox."),
+                             action: L10n.text("Back"), actionSymbol: "chevron.backward") { dismiss() }
+            case .failed(let message):
+                EmptyResults(symbol: "exclamationmark.triangle", title: video.name, message: message,
+                             action: L10n.text("Try Again")) { Task { await run() } }
+            }
+        }
+        .task { await run() }
+    }
+    private func run() async {
+        outcome = .running
+        do { outcome = .reported(try await client.runAction(action)) }
+        catch is CancellationError { }
+        catch { outcome = .failed(error.localizedDescription) }
     }
 }
 

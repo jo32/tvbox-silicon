@@ -41,7 +41,8 @@ public final class PluginSession {
             long deadline = System.currentTimeMillis() + seconds * 1000;
             stopAt.accumulateAndGet(deadline, (current, next) -> current == 0 ? next : Math.min(current, next));
         }
-        String kind = params.has("play") ? "play flag=" + params.optString("flag") : params.has("ids") ? "detail"
+        String kind = params.has("spiderAction") ? "action " + params.optString("spiderAction")
+            : params.has("play") ? "play flag=" + params.optString("flag") : params.has("ids") ? "detail"
             : params.has("wd") ? "search" : params.has("t") ? "category" : "home";
         System.err.println("PLUGIN_REQUEST " + java.time.LocalTime.now().withNano(0) + " " + kind + " deadline=" + seconds + "s");
         HttpDiagnostics.beginRequest(params.has("play"), stopAt, params.optString("_folder", null));
@@ -51,6 +52,7 @@ public final class PluginSession {
     }
 
     private String performRequest(JSONObject params) throws Exception {
+        if (params.has("spiderAction")) return action(params.getString("spiderAction"));
         if (params.has("play")) {
             String required = params.optString("detailID", "");
             if (!required.isEmpty() && !required.equals(detailID) && !required.equals(detailVideoID)) {
@@ -84,6 +86,26 @@ public final class PluginSession {
         if (videos != null && videos.length() > 0) home.put("list", videos);
         checkInitialization(home);
         return home.toString();
+    }
+
+    /**
+     * A list item's `action` (FongMi's Spider.action), such as FTY's 清除夸父Cookie: the item is a plugin
+     * setting, not a title. The answer is the plugin's JSON plus `notices`, the toasts it showed meanwhile;
+     * on Android an action may also open a dialog of its own, which a headless host can't show.
+     */
+    private String action(String name) throws Exception {
+        PluginNotices.start();
+        String result;
+        List<String> notices;
+        try {
+            result = content(() -> spider.action(name), true, false);
+            // Plugins show their toasts from the main looper; let what the action posted run first.
+            var drained = new java.util.concurrent.CountDownLatch(1);
+            if (new android.os.Handler(android.os.Looper.getMainLooper()).post(drained::countDown)) drained.await(2, java.util.concurrent.TimeUnit.SECONDS);
+        } finally { notices = PluginNotices.stop(); }
+        JSONObject answer;
+        try { answer = new JSONObject(result); } catch (org.json.JSONException notAnObject) { answer = new JSONObject().put("msg", result); }
+        return answer.put("notices", new org.json.JSONArray(notices)).toString();
     }
 
     /** The category's filter choices (`filters`, JSON text) as the spider's `extend` map. */

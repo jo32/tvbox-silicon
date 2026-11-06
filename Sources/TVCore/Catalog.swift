@@ -78,10 +78,14 @@ public struct Video: Identifiable, Hashable, Sendable, Codable {
     public let episodes: [Episode]
     /// The source's category and genre tags (type_name, vod_class, vod_tag), comma-separated; nil when it gave none.
     public let category: String?
+    /// A plugin setting listed among titles (`action`, e.g. FTY's "LoginShow" or "quarkClean"): TVBox runs
+    /// `Spider.action` for it instead of opening details, which the plugin can't answer for such an item.
+    public let action: String?
     public init(id: String, name: String, poster: URL? = nil, posterHeaders: [String: String] = [:], year: String? = nil,
-                remarks: String = "", synopsis: String = "", episodes: [Episode] = [], category: String? = nil) {
+                remarks: String = "", synopsis: String = "", episodes: [Episode] = [], category: String? = nil, action: String? = nil) {
         self.id = id; self.name = name; self.poster = poster; self.posterHeaders = posterHeaders
         self.year = year; self.remarks = remarks; self.synopsis = synopsis; self.episodes = episodes; self.category = category
+        self.action = action
     }
     /// A folder of a drive source (AList, 小雅 and other cloud-drive spiders tag it `vod_tag: "folder"`). As in
     /// TVBox it opens as a listing of its own (the category request with the folder's id), not as details.
@@ -91,7 +95,7 @@ public struct Video: Identifiable, Hashable, Sendable, Codable {
     public func keepingPoster(_ poster: URL?, headers: [String: String]? = nil) -> Video {
         guard self.poster == nil, let poster else { return self }
         return Video(id: id, name: name, poster: poster, posterHeaders: headers ?? [:], year: year,
-                     remarks: remarks, synopsis: synopsis, episodes: episodes, category: category)
+                     remarks: remarks, synopsis: synopsis, episodes: episodes, category: category, action: action)
     }
     public init?(json: [String: JSONValue], origin: URL) {
         guard let id = json["vod_id"]?.string, !id.isEmpty else { return nil }
@@ -103,6 +107,7 @@ public struct Video: Identifiable, Hashable, Sendable, Codable {
         synopsis = HTMLText.synopsis(json["vod_content"]?.string ?? "")
         let labels = ["type_name", "vod_class", "vod_tag"].compactMap { json[$0]?.string.map(HTMLText.name) }.filter { !$0.isEmpty }
         category = labels.isEmpty ? nil : labels.joined(separator: ",")
+        action = json["action"]?.string.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
         let flags = (json["vod_play_from"]?.string ?? "").components(separatedBy: "$$$")
         var groups: [[Episode]] = []
         for (groupIndex, group) in (json["vod_play_url"]?.string ?? "").components(separatedBy: "$$$").enumerated() {
@@ -444,6 +449,18 @@ public struct CatalogClient: Sendable {
         let result = CatalogPage(json: json, origin: origin)
         guard let video = result.videos.first else { throw TVError.unsupported(L10n.text("The API did not return video details.")) }
         return video
+    }
+    /// Runs a listed plugin setting (`Video.action`) with the source's JAR spider and returns what the plugin
+    /// reported: its `msg` and the toasts it showed, one per line, or nil when it said nothing.
+    public func runAction(_ action: String) async throws -> String? {
+        guard site.type == 3, site.runtime == .jar else { throw TVError.unsupported(L10n.text("This plugin setting only works in Android TVBox.")) }
+        let result = try await request(["spiderAction": action])
+        if let failure = result["errMsg"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines), !failure.isEmpty {
+            throw TVError.unsupported(failure)
+        }
+        let lines = [result["msg"]?.string] + (result["notices"]?.array ?? []).map(\.string)
+        let said = lines.compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return said.isEmpty ? nil : said.joined(separator: "\n")
     }
     public func playback(_ episode: Episode) async throws -> Channel {
         let plan = try await preparePlayback(episode)
