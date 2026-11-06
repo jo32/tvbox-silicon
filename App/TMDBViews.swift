@@ -724,11 +724,22 @@ struct EpisodeNumberArt: View {
     }
 }
 
+/// An episode's file under its name, 4K · 5.2G (#620): small and dimmed, in the name's colour (the accent's text on the
+/// episode playing).
+struct EpisodeFileDetail: View {
+    let text: String
+    var body: some View {
+        Text(text).font(.caption2).monospacedDigit().lineLimit(1).opacity(0.6)
+    }
+}
+
 /// An episode with TMDB's still: the picture, the source's name for it and TMDB's title. An episode without a still
 /// keeps the tile's shape, with its number in the picture's place.
 struct TMDBEpisodeTile: View {
     let name: String
     let info: TMDBMatch.EpisodeInfo?
+    /// The file's resolution and size (4K · 5.2G), before TMDB's episode title on the second line.
+    var detail: String? = nil
     var current = false
     var loading = false
     /// nil fills the grid cell.
@@ -756,7 +767,8 @@ struct TMDBEpisodeTile: View {
             Text(name).font(.subheadline.weight(current ? .bold : .semibold)).lineLimit(1)
                 .foregroundStyle(current ? Brand.accent : .primary).cardCaption()
             // Always a second line, so tiles in a row stay one height.
-            Text(info.map(\.name).flatMap { $0.isEmpty || $0 == name ? nil : $0 } ?? " ")
+            let caption = [detail, info.map(\.name).flatMap { $0.isEmpty || $0 == name ? nil : $0 }].compactMap { $0 }
+            Text(caption.isEmpty ? " " : caption.joined(separator: " · "))
                 .font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
         }
         .frame(width: width, alignment: .leading)

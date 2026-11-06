@@ -670,13 +670,19 @@ struct Chip: View {
     var mark = false
     /// A status dot after the title, such as a source's health.
     var dot: Color? = nil
+    /// A small line under the title, such as an episode's file (4K · 5.2G).
+    var subtitle: String? = nil
     let action: () -> Void
     @Environment(\.stripDrag) private var drag
     var body: some View {
         let button = Button { if drag?.active != true { action() } } label: {
             HStack(spacing: 5) {
                 if mark { BilibiliGlyph(size: 22).foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(BilibiliMark.blue)) }
-                Text(title).lineLimit(1)
+                if let subtitle {
+                    VStack(spacing: 0) { Text(title).lineLimit(1); EpisodeFileDetail(text: subtitle) }
+                } else {
+                    Text(title).lineLimit(1)
+                }
                 if let dot { Image(systemName: "circle.fill").font(.system(size: 12)).foregroundStyle(dot) }
             }.padding(.horizontal, 4).frame(maxWidth: fill ? .infinity : nil)
         }.accessibilityAddTraits(selected ? [.isSelected] : [])

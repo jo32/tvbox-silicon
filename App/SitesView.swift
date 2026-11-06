@@ -1771,6 +1771,8 @@ struct VideoDetailView: View {
     @State private var detail: Video?
     /// Short labels (第1集) for lines whose episode names are file names, by episode id (#318). Display only.
     @State private var episodeLabels: [Episode.ID: String] = [:]
+    /// Resolution and size read from file names (4K · 5.2G, #620), under the episodes' names.
+    @State private var episodeDetails: [Episode.ID: String] = [:]
     @State private var error: String?
     @State private var busy = false
     @State private var pendingPlan: PlaybackPlan?
@@ -2021,7 +2023,10 @@ struct VideoDetailView: View {
             try Task.checkCancellation()
             // Worked out once, off the main thread: a line can hold thousands of episodes.
             let episodes = value.episodes
-            episodeLabels = await Task.detached(priority: .userInitiated) { EpisodeLabels.labels(episodes) }.value
+            (episodeLabels, episodeDetails) = await Task.detached(priority: .userInitiated) {
+                let labels = EpisodeLabels.labels(episodes)
+                return (labels, EpisodeFileInfo.details(episodes, labels: labels))
+            }.value
             detail = value
             // Start on the line watched last (#362), else on one that can play: not one from a drive the viewer has no
             // way to sign in to.
@@ -2417,17 +2422,20 @@ struct VideoDetailView: View {
                 Group {
                     if showsStills {
                         Button { startRequest { await play(episode) } } label: {
-                            TMDBEpisodeTile(name: episodeTitle(episode), info: stills[episode.id], loading: loadingEpisode == episode.id, width: nil)
+                            TMDBEpisodeTile(name: episodeTitle(episode), info: stills[episode.id], detail: episodeDetails[episode.id],
+                                            loading: loadingEpisode == episode.id, width: nil)
                         }
                         .tmdbCardButton()
                         .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge().padding(4) } }
                         .accessibilityLabel(episode.name)
                     } else if longNames {
-                        EpisodeRow(name: episode.name, label: episodeLabels[episode.id], loading: loadingEpisode == episode.id, download: saved) {
+                        EpisodeRow(name: episode.name, label: episodeLabels[episode.id], file: episodeDetails[episode.id],
+                                   loading: loadingEpisode == episode.id, download: saved) {
                             startRequest { await play(episode) }
                         }
                     } else {
-                        Chip(title: episodeLabels[episode.id] ?? episode.name, selected: loadingEpisode == episode.id, fill: true) { startRequest { await play(episode) } }
+                        Chip(title: episodeLabels[episode.id] ?? episode.name, selected: loadingEpisode == episode.id, fill: true,
+                             subtitle: episodeDetails[episode.id]) { startRequest { await play(episode) } }
                             .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge() } }
                     }
                 }
@@ -2860,16 +2868,19 @@ struct VideoDetailView: View {
     /// are as wide as the widest name, at least 64 points: a fixed 64 cut off names of four or five characters such as
     /// 4K国语 or 第100集 (#290). Measures one name, in the same pass that checks their lengths.
     private func compactTileWidth(_ items: [Episode]) -> CGFloat? {
-        var widest = "", widestUnits = 0
+        var widest = "", widestUnits = 0, widestDetail = ""
         for item in items {
             let title = episodeTitle(item)
             guard title.count <= 5 else { return nil }
+            if let detail = episodeDetails[item.id], detail.count > widestDetail.count { widestDetail = detail }
             // Chinese and other wide characters take about twice the room of digits and Latin letters.
             let units = title.unicodeScalars.reduce(0) { $0 + ($1.isASCII ? 1 : 2) }
             if units > widestUnits { widest = title; widestUnits = units }
         }
         let font = UIFont.systemFont(ofSize: UIFont.preferredFont(forTextStyle: .subheadline).pointSize, weight: .semibold)
-        let text = (widest as NSString).size(withAttributes: [.font: font]).width
+        let small = UIFont.monospacedDigitSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .caption2).pointSize, weight: .regular)
+        let text = max((widest as NSString).size(withAttributes: [.font: font]).width,
+                       (widestDetail as NSString).size(withAttributes: [.font: small]).width)
         // 8 points of padding on each side, and a little room for the bold of the episode playing.
         return max(64, (text + 20).rounded(.up))
     }
@@ -2883,6 +2894,7 @@ struct VideoDetailView: View {
         let current = episode.id == currentEpisodeID
         let saved = download(episode)
         let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+        let detail = episodeDetails[episode.id]
         return Button {
             chosen?()
             // The episode already playing keeps playing.
@@ -2890,14 +2902,18 @@ struct VideoDetailView: View {
             startRequest { await play(episode) }
         } label: {
             if let info {
-                TMDBEpisodeTile(name: episodeTitle(episode), info: info, current: current, loading: loadingEpisode == episode.id,
+                TMDBEpisodeTile(name: episodeTitle(episode), info: info, detail: detail, current: current, loading: loadingEpisode == episode.id,
                                 width: fill ? nil : 168)
                     .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge().padding(4) } }
             } else {
             HStack(spacing: 6) {
                 if loadingEpisode == episode.id { ProgressView().controlSize(.small) }
-                Text(episodeTitle(episode)).lineLimit(compact ? 1 : 2)
-                    .multilineTextAlignment(compact ? .center : .leading)
+                VStack(alignment: compact ? .center : .leading, spacing: 1) {
+                    // With the small line under it, a long name keeps to one line so the card keeps its height.
+                    Text(episodeTitle(episode)).lineLimit(compact || detail != nil ? 1 : 2)
+                        .multilineTextAlignment(compact ? .center : .leading)
+                    if let detail { EpisodeFileDetail(text: detail) }
+                }
             }
             .font(.subheadline.weight(current ? .semibold : .regular))
             .foregroundStyle(current ? Brand.onAccent : Color.primary)
@@ -3069,6 +3085,8 @@ struct EpisodeRow: View {
     let name: String
     /// The episode's short label (第1集), shown in place of the name; the size tag stays as detail.
     var label: String? = nil
+    /// Resolution and size from the file name (4K · 5.2G), shown in place of the size tag.
+    var file: String? = nil
     let loading: Bool
     var download: DownloadItem? = nil
     let action: () -> Void
@@ -3090,7 +3108,7 @@ struct EpisodeRow: View {
     }
     private var parts: (title: String, detail: String?) {
         let parts = Self.split(name)
-        return (label ?? parts.title, parts.detail)
+        return (label ?? parts.title, file ?? parts.detail)
     }
     var body: some View {
         let parts = parts

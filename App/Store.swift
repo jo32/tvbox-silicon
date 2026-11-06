@@ -685,15 +685,19 @@ import TVCore
         }
         // The Episodes menu's short labels (#318): kept from the episode before on the same video, else worked out off the
         // main thread.
-        let kept = playbackCatalog.flatMap { $0.video == video ? $0.labels : nil }
-        playbackCatalog = PlaybackCatalog(video: video, client: client, scope: context.id, labels: kept ?? [:])
+        let kept = playbackCatalog.flatMap { $0.video == video ? $0 : nil }
+        playbackCatalog = PlaybackCatalog(video: video, client: client, scope: context.id, labels: kept?.labels ?? [:], details: kept?.details ?? [:])
         guard kept == nil else { return }
         let episodes = video.episodes
         Task { [weak self] in
-            let labels = await Task.detached(priority: .utility) { EpisodeLabels.labels(episodes) }.value
+            let (labels, details) = await Task.detached(priority: .utility) {
+                let labels = EpisodeLabels.labels(episodes)
+                return (labels, EpisodeFileInfo.details(episodes, labels: labels))
+            }.value
             // Still this video, though maybe the next episode by now.
-            guard let self, !labels.isEmpty, self.playbackCatalog?.video == video else { return }
+            guard let self, !labels.isEmpty || !details.isEmpty, self.playbackCatalog?.video == video else { return }
             self.playbackCatalog?.labels = labels
+            self.playbackCatalog?.details = details
         }
     }
 
@@ -939,6 +943,8 @@ struct PlaybackCatalog {
     let scope: String
     /// Short labels (第1集) for lines whose episode names are file names, by episode id.
     var labels: [Episode.ID: String] = [:]
+    /// Resolution and size read from file names (4K · 5.2G, #620), shown under the episodes, by episode id.
+    var details: [Episode.ID: String] = [:]
     var playlist: EpisodePlaylist { EpisodePlaylist(video.episodes) }
 }
 
