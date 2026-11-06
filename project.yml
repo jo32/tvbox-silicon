@@ -10,6 +10,12 @@ options:
 settings:
   base:
     SWIFT_VERSION: '6.0'
+    # SwiftUI sometimes builds ForEach/LazyVGrid content off the main thread (crash reports from iOS 18,
+    # 26 and 27). Swift 6's runtime isolation check then traps in those @MainActor view closures
+    # (_dispatch_assert_queue_fail in SitesView/SiteView grids). Swift 5 had no such check, and building
+    # a view there is safe, so keep the compile-time checks and drop the runtime trap.
+    # https://developer.apple.com/forums/thread/802729
+    OTHER_SWIFT_FLAGS: $(inherited) -Xfrontend -disable-dynamic-actor-isolation
     MARKETING_VERSION: '1.8.12'
     CURRENT_PROJECT_VERSION: '50'
     GENERATE_INFOPLIST_FILE: YES
