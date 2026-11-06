@@ -1,6 +1,12 @@
 import Foundation
 import Observation
 
+/// Settings → Watch Now: History and Continue Watching add the file's size and picture quality to an episode's
+/// number, read from its file name ("第1集 · 5.4GB · 2160p", #595). Off by default.
+public enum HistoryFileDetails {
+    public static let key = "showsHistoryFileDetails"
+}
+
 /// Catalog identity only: an expiring stream URL or its authorization headers must
 /// never become the address used to resume a saved episode.
 public struct PlaybackHistoryContext: Codable, Hashable, Sendable {

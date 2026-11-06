@@ -139,6 +139,7 @@ struct HistoryCard: View {
     /// Replaces resuming, for managing.
     var action: (() -> Void)? = nil
     @State private var hovering = false
+    @AppStorage(HistoryFileDetails.key) private var showsFileDetails = false
     /// Touch has no hover, so the empty heart stays available there. The remote cannot press a heart on a card (the
     /// card's menu has Like), so Apple TV shows only a saved one.
     private var heartRevealed: Bool {
@@ -239,8 +240,11 @@ struct HistoryCard: View {
     }
 
     /// The short episode label when history kept a netdisk file's name (#521, #522): the card cut a long name off after
-    /// the show's, so every episode of a series looked the same.
-    private var episodeLabel: String { EpisodeLabels.historyLabel(entry.context.episodeName) }
+    /// the show's, so every episode of a series looked the same. With file details on, its size and quality follow
+    /// the number (#595).
+    private var episodeLabel: String {
+        EpisodeLabels.historyLabel(entry.context.episodeName, showsDetails: showsFileDetails)
+    }
 
     private var cardLabel: some View {
         VStack(alignment: centredCaptions ? .center : .leading, spacing: 8) {
