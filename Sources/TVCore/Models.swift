@@ -185,6 +185,8 @@ public struct Site: Identifiable, Codable, Hashable, Sendable {
         }
         return try raw["ext"].map(resolve)
     }
+    /// A CatPawOpen bundle (see CatPawOpen), whose config center signs in to drives with its own codes (`CatPawSignIn`).
+    public var isCatPawOpen: Bool { raw["catPawOpen"] != nil }
     /// Classified like TVBox: a `.js` api runs in the JavaScript host, a `.py` api (or a legacy
     /// `py_` key whose ext is the script) in the Python host, and any other type 3 api is a JAR class,
     /// unless its download showed otherwise.

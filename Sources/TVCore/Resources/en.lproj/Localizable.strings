@@ -751,6 +751,7 @@
 "Not set" = "Not set";
 "The source took too long to respond, so Yingxia stopped waiting. Try another line, or try again later." = "The source took too long to respond, so Yingxia stopped waiting. Try another line, or try again later.";
 "This line plays from %@, but its sign-in code couldn't be shown. Choose another line." = "This line plays from %@, but its sign-in code couldn't be shown. Choose another line.";
+"This source needs your %@ account for this line. Sign in with its code, and the episode plays." = "This source needs your %@ account for this line. Sign in with its code, and the episode plays.";
 "Baidu Netdisk" = "Baidu Netdisk";
 "Aliyun Drive" = "Aliyun Drive";
 "115 Cloud" = "115 Cloud";
@@ -1344,6 +1345,11 @@
 "You're signed in to UC, but this source plays UC accounts without premium through UC's TV app, which needs a token of its own. Get it once with the UC Browser app, or choose another line." = "You're signed in to UC, but this source plays UC accounts without premium through UC's TV app, which needs a token of its own. Get it once with the UC Browser app, or choose another line.";
 "Scan this code with the UC Browser app on your phone, signed in to the same UC account, and approve it." = "Scan this code with the UC Browser app on your phone, signed in to the same UC account, and approve it.";
 "Approve the token in the UC Browser app, signed in to the same UC account: open it here, or scan the code with UC Browser on another phone." = "Approve the token in the UC Browser app, signed in to the same UC account: open it here, or scan the code with UC Browser on another phone.";
+"Open in %@" = "Open in %@";
+"UC Browser" = "UC Browser";
+"Save the code to Photos first, then scan it from Photos in %@." = "Save the code to Photos first, then scan it from Photos in %@.";
+"%@ isn't on this device. Get it from the App Store, or scan the code with another phone." = "%@ isn't on this device. Get it from the App Store, or scan the code with another phone.";
+"Confirm the sign-in in the %@ app: open it here, or scan the code with another phone." = "Confirm the sign-in in the %@ app: open it here, or scan the code with another phone.";
 "Open in UC Browser" = "Open in UC Browser";
 "UC Browser isn't on this device. Get UC Browser (UC浏览器) from the App Store and sign in to it, or scan the code with another phone." = "UC Browser isn't on this device. Get UC Browser (UC浏览器) from the App Store and sign in to it, or scan the code with another phone.";
 "Waiting for UC Browser to approve…" = "Waiting for UC Browser to approve…";

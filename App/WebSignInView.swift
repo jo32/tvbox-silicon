@@ -478,4 +478,43 @@ private struct ConfigCenterBrowser: UIViewRepresentable {
         }
     }
 }
+
+/// Opens a sign-in code in the drive's own app on this iPhone or iPad (`DriveAppLink`), which can't scan its own
+/// screen: Quark and UC open the code's page, where the sign-in is confirmed; Baidu Netdisk only opens, and its code is
+/// scanned there from Photos. The waiting source carries on once the sign-in is confirmed.
+struct OpenDriveAppButton: View {
+    let target: DriveAppLink
+    var prominent = true
+    @Environment(\.openURL) private var openURL
+    @State private var missing = false
+
+    static func target(drive: String, page: String?) -> DriveAppLink? {
+        DriveAppLink.target(drive: drive, page: page, pad: UIDevice.current.userInterfaceIdiom == .pad)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button { open(0) } label: {
+                Label(target.opensPage ? L10n.text("Open in %@", target.app) : L10n.text("Open %@", target.app), systemImage: "arrow.up.forward.app")
+            }
+            .settingsButton(prominent: prominent)
+            .accessibilityIdentifier("signIn.openApp")
+            if !target.opensPage {
+                Text(L10n.text("Save the code to Photos first, then scan it from Photos in %@.", target.app))
+                    .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            if missing {
+                Text(L10n.text("%@ isn't on this device. Get it from the App Store, or scan the code with another phone.", target.app))
+                    .font(.callout).foregroundStyle(Brand.amber).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// The main app first, then the next; the system says when no app takes an address.
+    private func open(_ index: Int) {
+        guard index < target.urls.count else { missing = true; return }
+        missing = false
+        openURL(target.urls[index]) { opened in if !opened { open(index + 1) } }
+    }
+}
 #endif

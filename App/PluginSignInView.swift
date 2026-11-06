@@ -1,24 +1,22 @@
 import SwiftUI
 import TVCore
 
-/// The QR code a source's plugin made for a drive sign-in: Baidu Netdisk or Aliyun Drive, or any drive
-/// a Wex-family plugin signs in to itself (115, Tianyi, Guangya, and Quark when the app's own sign-in
-/// didn't work there). The plugin signs in by itself once the code is scanned and confirmed, then the
-/// video it was opening plays. iPhone and iPad can't scan their own screen: for drives the app has a
-/// sign-in page for, they sign in there first, and the waiting plugin starts over with that account;
-/// the code stays for signing in with another phone.
+/// The QR code a source's plugin made for a drive sign-in: Quark, UC, Baidu Netdisk or Aliyun Drive, or any
+/// drive a Wex-family plugin signs in to itself (115, Tianyi, Guangya). It is the plugin's own sign-in, never
+/// the app's: the plugin signs in by itself once the code is scanned and confirmed, then the video it was
+/// opening plays. The app's sign-ins stay in Settings, whose accounts every plugin gets before it asks.
+/// iPhone and iPad can't scan their own screen: the code is scanned with another phone, or saved to Photos
+/// and scanned from there in the drive's app.
 struct PluginSignInView: View {
     let prompt: PluginSignIn.Prompt
     @State private var now = Date()
-    #if os(iOS)
-    @State private var signingIn = false
-    #endif
 
     private var name: String {
         switch prompt.drive {
         case "baidu": L10n.text("Baidu Netdisk")
         case "aliyun": L10n.text("Aliyun Drive")
         case "quark": L10n.text("Quark")
+        case "uc": "UC"
         case "pan115": L10n.text("115 Cloud")
         case "pan189": L10n.text("Tianyi Cloud")
         case "guangya": L10n.text("Guangya Cloud")
@@ -34,13 +32,6 @@ struct PluginSignInView: View {
         #else
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .screenBackdrop()
-        #endif
-        #if os(iOS)
-        .sheet(isPresented: $signingIn) {
-            if let service = WebSignIn(rawValue: prompt.drive) {
-                WebSignInView(service: service) { PluginSignIn.shared.signedInHere(prompt) }
-            }
-        }
         #endif
         .task {
             while !Task.isCancelled && !expired {
@@ -62,19 +53,16 @@ struct PluginSignInView: View {
                 if expired {
                     Label(L10n.text("This code has expired."), systemImage: "clock.badge.exclamationmark").foregroundStyle(.secondary)
                 } else {
-                    // 115, Tianyi and Guangya have no sign-in page in the app: their code is the only way.
-                    let page = WebSignIn(rawValue: prompt.drive) != nil
-                    if page {
-                        Button(L10n.text(UIDevice.current.userInterfaceIdiom == .pad ? "Sign In on This iPad" : "Sign In on This iPhone")) { signingIn = true }
-                            .settingsButton(prominent: true)
-                            .accessibilityIdentifier("pluginSignIn.web")
-                    }
+                    // Quark and UC open the code's page in their app on this phone; Baidu Netdisk's app scans it from Photos.
+                    let app = OpenDriveAppButton.target(drive: prompt.drive, page: prompt.content)
+                    if let app, app.opensPage { OpenDriveAppButton(target: app) }
                     VStack(alignment: .leading, spacing: 16) {
-                        Text(page ? L10n.text("Or scan this code with the %@ app on another phone.", name)
+                        Text(app?.opensPage == true ? L10n.text("Or scan this code with the %@ app on another phone.", name)
                              : L10n.text("Open the %@ app on your phone, scan this code, and confirm the sign-in.", name))
                             .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         code
                         SaveCodeButton(text: prompt.content, image: prompt.content == nil ? prompt.image : nil, app: name)
+                        if let app, !app.opensPage { OpenDriveAppButton(target: app, prominent: false) }
                     }
                 }
                 Button(L10n.text(expired ? "Close" : "Cancel")) { PluginSignIn.shared.dismiss() }
@@ -145,8 +133,7 @@ struct PluginSignInView: View {
         #if os(tvOS)
         440
         #elseif os(iOS)
-        // The second way to sign in here.
-        180
+        220
         #else
         240
         #endif

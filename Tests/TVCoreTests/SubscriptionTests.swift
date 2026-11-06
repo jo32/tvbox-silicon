@@ -201,11 +201,18 @@ import Testing
     #expect(CatPawSignIn.provider(for: "夸克授权失败，请扫码登录") == nil)
 }
 
-@Test func catPawBundlesAskForTheAppsBaiduSignIn() {
-    // #297: the bundle's config center can't be reached from another phone, so the app offers its own Baidu sign-in.
-    #expect(CloudDriveLoginRequired(bundleMessage: "插件错误：Error: The source failed (HTTP 500): 还没有配置百度网盘 Cookie，请先去配置中心登录百度网盘") == .baidu)
-    #expect(CloudDriveLoginRequired(bundleMessage: "非高会需要配置 UC TV Token，请到配置中心扫码获取") == nil)
-    #expect(CloudDriveLoginRequired(bundleMessage: "百度网盘分享已失效") == nil)
+@Test func catPawBundlesSignInToDrivesWithTheirOwnCode() {
+    // The bundle's config-center sign-in for the drive its error names, not the app's sign-in page.
+    let failed = "插件错误：Error: The source failed (HTTP 500): "
+    #expect(CatPawSignIn.provider(for: failed + "还没有配置百度网盘 Cookie，请先去配置中心登录百度网盘") == "baidu")
+    #expect(CatPawSignIn.provider(for: "还没有配置夸克 Cookie，请先去配置中心登录夸克") == "quark")
+    #expect(CatPawSignIn.provider(for: "还没有配置 UC Cookie，请先去配置中心登录 UC 网盘") == "ucCookie")
+    #expect(CatPawSignIn.provider(for: "115 Cookie 未配置或已失效，请前往配置中心配置") == "pan115")
+    #expect(CatPawSignIn.provider(for: "还没有配置光鸭 Token，请先去配置中心登录光鸭") == "guangya")
+    #expect(CatPawSignIn.provider(for: "天翼自动登录需要短信验证，请到配置中心完成登录") == "pan189")
+    // Drives the bundle signs in to with a form, not a code, and other failures.
+    #expect(CatPawSignIn.provider(for: "还没有登录迅雷，请先去配置中心使用手机号验证码登录") == nil)
+    #expect(CatPawSignIn.provider(for: "百度网盘分享已失效") == nil)
 }
 
 #if canImport(CoreImage.CIFilterBuiltins)

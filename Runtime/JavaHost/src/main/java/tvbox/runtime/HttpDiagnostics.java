@@ -20,6 +20,10 @@ public final class HttpDiagnostics {
         volatile long signedInAt;
         /** The app was shown a sign-in code for this request, so it may sign in on the drive's page instead. */
         volatile boolean prompted;
+        /** Quark or UC, once the plugin's own code was scanned: the account it then fetches is collected for the app. */
+        volatile String signingInDrive;
+        final java.util.Map<String, String> signInCookies = new java.util.concurrent.ConcurrentHashMap<>();
+        volatile String signInTicket;
     }
     private static final ThreadLocal<State> state = ThreadLocal.withInitial(State::new);
 
@@ -145,13 +149,13 @@ public final class HttpDiagnostics {
         String remote = call.request().url().host();
         String path = call.request().url().encodedPath();
         // These Android plugin flows wait for a QR dialog that cannot be shown by this host, then
-        // poll forever. Quark and UC go back to the app's own QR login. Baidu and Aliyun keep
-        // the plugin's sign-in: the app shows its code (LoginPrompt) while the plugin polls.
-        // Swift's own login uses URLSession and never passes through here.
+        // poll forever. The plugin keeps its own sign-in: the app shows its code (LoginPrompt)
+        // while the plugin polls. Only a request with no session folder, or a code the host
+        // can't read, goes back to the app. Swift's own login uses URLSession and never passes through here.
         boolean own = ownSignIn.get();
         String drive = own ? null : qrLoginDrive(remote, path);
         java.nio.file.Path folder = promptFolder();
-        boolean prompts = drive != null && (drive.equals("baidu") || drive.equals("aliyun")) && folder != null;
+        boolean prompts = drive != null && folder != null;
         if (drive != null && !prompts) throw handBack(drive, call);
         boolean creates = prompts && LoginPrompt.creates(drive, path);
         // Scanning takes a while; give the request time for it, once, when the code is made.
@@ -163,6 +167,7 @@ public final class HttpDiagnostics {
             Response response = call.execute();
             String confirming = own ? null : LoginPrompt.confirmingDrive(remote, path);
             if (confirming != null && folder != null && LoginPrompt.confirms(confirming, path, response)) signedIn(confirming, folder, response);
+            else if (!own && folder != null) collectAccount(remote, path, response, folder);
             if (creates) {
                 Response kept = LoginPrompt.capture(drive, response, folder);
                 if (kept == null) { response.close(); throw handBack(drive, call); }
@@ -203,8 +208,41 @@ public final class HttpDiagnostics {
     private static void signedIn(String drive, java.nio.file.Path folder, Response response) {
         State request = loginState();
         if (!request.active || request.signedInAt > 0) return;
+        if (LoginPrompt.collectsAccount(drive)) {
+            // Quark and UC: the code was scanned, and the plugin goes on to fetch the account itself. The code
+            // closes now; the request starts over only once that account is known (collectAccount), so a fresh
+            // spider gets it from the app. Until then the plugin carries on with its own sign-in.
+            if (request.signingInDrive != null) return;
+            request.signingInDrive = drive;
+            try { LoginPrompt.signedIn(folder, drive, java.util.Map.of()); } catch (IOException unwritable) { unwritable.printStackTrace(System.err); }
+            return;
+        }
         request.signedInAt = System.currentTimeMillis() + LoginPrompt.settleMillis(drive);
         try { LoginPrompt.signedIn(folder, drive, LoginPrompt.account(drive, response)); } catch (IOException unwritable) { unwritable.printStackTrace(System.err); }
+    }
+
+    /**
+     * After a scanned Quark or UC code, the plugin opens the drive's account page with the sign-in ticket, which
+     * sets the drive cookies, and Quark's mobile info page, which gives the mobile ticket. Once both are in (the
+     * cookie for UC), the account goes to the app like one signed in from Settings, and the request starts over.
+     */
+    private static void collectAccount(String remote, String path, Response response, java.nio.file.Path folder) {
+        State request = loginState();
+        String drive = request.signingInDrive;
+        if (drive == null || !request.active || request.signedInAt > 0 || !remote.endsWith(LoginPrompt.cookieDomain(drive))) return;
+        for (String header : response.headers("Set-Cookie")) {
+            String pair = header.split(";", 2)[0].trim();
+            int split = pair.indexOf('=');
+            if (split > 0 && split < pair.length() - 1) request.signInCookies.put(pair.substring(0, split), pair.substring(split + 1));
+        }
+        if (drive.equals("quark") && path.equals("/account/mobileinfo")) {
+            String ticket = LoginPrompt.mobileTicket(response);
+            if (ticket != null) request.signInTicket = ticket;
+        }
+        var account = LoginPrompt.collectedAccount(drive, request.signInCookies, request.signInTicket);
+        if (account.isEmpty()) return;
+        request.signedInAt = System.currentTimeMillis() + LoginPrompt.settleMillis(drive);
+        try { LoginPrompt.signedIn(folder, drive, account); } catch (IOException unwritable) { unwritable.printStackTrace(System.err); }
     }
 
     /** The running request's session folder, or null outside a request the app made. */

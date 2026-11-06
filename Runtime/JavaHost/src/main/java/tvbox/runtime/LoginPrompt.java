@@ -9,7 +9,7 @@ import okhttp3.ResponseBody;
 import org.json.JSONObject;
 
 /**
- * Baidu Netdisk and Aliyun Drive sign-ins happen inside the plugin: it fetches a QR code for an
+ * Quark, UC, Baidu Netdisk and Aliyun Drive sign-ins happen inside the plugin: it fetches a QR code for an
  * Android dialog this host cannot show, then polls until the code is scanned and saves the account
  * itself. The host reads the code from the plugin's own response and leaves it in the source's
  * session folder as {@code login-prompt.json}, where the app picks it up and shows it. The plugin's
@@ -25,10 +25,18 @@ final class LoginPrompt {
 
     /**
      * Whether this response completes the sign-in: Baidu's BDUSS login sets the BDUSS cookie;
-     * Aliyun's poll reports {@code qrCodeStatus: CONFIRMED}. The body is peeked, never consumed.
+     * Aliyun's poll reports {@code qrCodeStatus: CONFIRMED}; Quark's and UC's poll gives a service ticket.
+     * The body is peeked, never consumed.
      */
     static boolean confirms(String drive, String path, Response response) {
         if (!response.isSuccessful()) return false;
+        if (collectsAccount(drive)) {
+            try {
+                var json = new JSONObject(response.peekBody(256 * 1024).string());
+                var members = json.optJSONObject("data") == null ? null : json.getJSONObject("data").optJSONObject("members");
+                return json.optInt("status") == 2_000_000 && members != null && !members.optString("service_ticket").isBlank();
+            } catch (Exception unreadable) { return false; }
+        }
         if (drive.equals("baidu")) {
             return path.equals("/v3/login/main/qrbdusslogin") && response.headers("Set-Cookie").stream().anyMatch(cookie -> cookie.startsWith("BDUSS=") && !cookie.startsWith("BDUSS=;"));
         }
@@ -39,13 +47,43 @@ final class LoginPrompt {
 
     /** The drive whose sign-in this request may complete, or null. */
     static String confirmingDrive(String host, String path) {
+        if (path.equals("/cas/ajax/getServiceTicketByQrcodeToken")) return host.equals("uop.quark.cn") ? "quark" : host.equals("api.open.uc.cn") ? "uc" : null;
         if (host.equals("passport.baidu.com") && path.equals("/v3/login/main/qrbdusslogin")) return "baidu";
         if (host.equals("passport.aliyundrive.com") && path.endsWith("/qrcode/query.do")) return "aliyun";
         return null;
     }
 
     /** How long the plugin gets to save the account before its waiting request starts over. */
-    static long settleMillis(String drive) { return drive.equals("baidu") ? 1_500 : 4_000; }
+    static long settleMillis(String drive) { return drive.equals("baidu") || collectsAccount(drive) ? 1_500 : 4_000; }
+
+    /** Quark and UC: the scan only gives a ticket; the account comes from the pages the plugin opens next. */
+    static boolean collectsAccount(String drive) { return drive.equals("quark") || drive.equals("uc"); }
+
+    /** Where the drive's account cookies come from. */
+    static String cookieDomain(String drive) { return drive.equals("quark") ? "quark.cn" : "uc.cn"; }
+
+    /** Quark's mobile service ticket from {@code /account/mobileinfo}: {@code {"success":true,"data":{"serviceTicket":…}}}. */
+    static String mobileTicket(Response response) {
+        try {
+            var json = new JSONObject(response.peekBody(256 * 1024).string());
+            var data = json.optJSONObject("data");
+            String ticket = data == null ? "" : data.optString("serviceTicket");
+            return json.optBoolean("success") && !ticket.isBlank() ? ticket : null;
+        } catch (Exception unreadable) { return null; }
+    }
+
+    /**
+     * The account as the app keeps it, once complete: the drive's cookies with {@code __pus}, and for Quark the
+     * mobile ticket too, which FTY needs with them (CloudDriveBridge.restoreFtyQuarkAccount). Empty until then.
+     */
+    static java.util.Map<String, String> collectedAccount(String drive, java.util.Map<String, String> cookies, String ticket) {
+        if (cookies.getOrDefault("__pus", "").isBlank() || drive.equals("quark") && (ticket == null || ticket.isBlank())) return java.util.Map.of();
+        var cookie = new StringBuilder();
+        new java.util.TreeMap<>(cookies).forEach((name, value) -> cookie.append(cookie.length() == 0 ? "" : "; ").append(name).append('=').append(value));
+        return drive.equals("quark")
+            ? java.util.Map.of("quarkCookie", cookie.toString(), "quarkServiceTicket", ticket)
+            : java.util.Map.of("ucCookie", cookie.toString());
+    }
 
     /**
      * The account the confirming response carries, as the app stores it: Baidu's cookies
@@ -108,7 +146,18 @@ final class LoginPrompt {
 
     /** Whether a request for this drive and path creates the QR code (rather than polling it). */
     static boolean creates(String drive, String path) {
+        if (collectsAccount(drive)) return path.equals("/cas/ajax/getTokenForQrcodeLogin");
         return drive.equals("baidu") ? path.equals("/v2/api/getqrcode") : drive.equals("aliyun") && path.endsWith("/qrcode/generate.do");
+    }
+
+    /** The page Quark's or UC's app opens from a code for this sign-in token; the plugin draws the same one. */
+    static String scanPage(String drive, String token, String client) {
+        String encoded = java.net.URLEncoder.encode(token, StandardCharsets.UTF_8);
+        return drive.equals("quark")
+            ? "https://su.quark.cn/4_eMHBJ?token=" + encoded + "&client_id=" + (client == null || client.isBlank() ? "532" : client)
+                + "&ssb=weblogin&uc_param_str=&uc_biz_str=S%3Acustom%7COPT%3ASAREA%400%7COPT%3AIMMERSIVE%401%7COPT%3ABACK_BTN_STYLE%400"
+            : "https://su.uc.cn/1_n0ZCv?token=" + encoded + "&client_id=" + (client == null || client.isBlank() ? "381" : client)
+                + "&uc_param_str=&uc_biz_str=S%3Acustom%7CC%3Atitlebar_fix";
     }
 
     /**
@@ -126,7 +175,12 @@ final class LoginPrompt {
         if (start >= 0 && end > start) {
             try {
                 JSONObject json = new JSONObject(text.substring(start, end + 1));
-                if (drive.equals("baidu")) {
+                if (collectsAccount(drive)) {
+                    // {"status":2000000,"data":{"members":{"token":"…"}}}: the plugin draws the code from the token.
+                    JSONObject members = json.optJSONObject("data") == null ? null : json.getJSONObject("data").optJSONObject("members");
+                    String token = members == null ? "" : members.optString("token");
+                    if (!token.isBlank()) content = scanPage(drive, token, response.request().url().queryParameter("client_id"));
+                } else if (drive.equals("baidu")) {
                     // JSONP: {"imgurl":"passport.baidu.com/v2/api/qrcode?sign=…","sign":…}
                     String address = json.optString("imgurl");
                     if (!address.isBlank()) image = address.startsWith("http") ? address : "https://" + address;

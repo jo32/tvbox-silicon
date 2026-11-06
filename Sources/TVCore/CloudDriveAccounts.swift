@@ -20,7 +20,8 @@ public struct CloudDriveAccounts: Codable, Sendable {
     public var wexPreferences: [String: String]?
     public init() {}
 
-    /// Keeps a sign-in a plugin made through its own QR code (`baiduCookie`, `token`) as the app's
+    /// Keeps a sign-in a plugin made through its own QR code (`baiduCookie`, `token`, `quarkCookie` with
+    /// `quarkServiceTicket`, `ucCookie`) as the app's
     /// account for that drive, and a Wex sign-in's preferences (`wexPreferences`), so every source can
     /// use it. True when something changed.
     @discardableResult
@@ -35,6 +36,15 @@ public struct CloudDriveAccounts: Codable, Sendable {
         var changed = false
         if let cookie = offered["baiduCookie"] as? String, cookie.contains("BDUSS="), baiduCookie != cookie {
             baiduCookie = cookie; changed = true
+        }
+        // A plugin's own Quark sign-in comes with both halves FTY needs (LoginPrompt.collectedAccount); UC's is a cookie.
+        if let cookie = offered["quarkCookie"] as? String, cookie.contains("__pus="),
+           let ticket = offered["quarkServiceTicket"] as? String, !ticket.isEmpty,
+           quarkCookie != cookie || quarkServiceTicket != ticket {
+            quarkCookie = cookie; quarkServiceTicket = ticket; changed = true
+        }
+        if let cookie = offered["ucCookie"] as? String, cookie.contains("__pus="), ucCookie != cookie {
+            ucCookie = cookie; changed = true
         }
         if let token = offered["token"] as? String, token.count == 32, self.token != token {
             self.token = token; changed = true
@@ -89,9 +99,9 @@ public struct CloudDriveAccounts: Codable, Sendable {
     #endif
 }
 
-/// The plugin tried to open an Android-only QR login flow. The app presents its own login for
-/// Quark and UC. Baidu and Aliyun sign in inside the plugin (PluginSignIn shows its code); this
-/// only reaches the viewer when that code couldn't be read.
+/// The plugin tried to open an Android-only QR login flow whose code couldn't be read. Plugins sign in
+/// to Quark, UC, Baidu and Aliyun themselves (PluginSignIn shows their code); this only reaches the viewer
+/// when that didn't work.
 public enum CloudDriveLoginRequired: String, LocalizedError, Sendable {
     case quark, uc, baidu, aliyun
 
@@ -101,23 +111,15 @@ public enum CloudDriveLoginRequired: String, LocalizedError, Sendable {
         self.init(rawValue: drive)
     }
 
-    /// A CatPawOpen bundle without a Baidu sign-in sends the viewer to its config center, which runs on the device's
-    /// own address and can't be opened from another phone ("还没有配置百度网盘 Cookie，请先去配置中心登录百度网盘", #297).
-    /// The app's Baidu sign-in reaches the bundle on its next request (Runtime/NodeHost `shareAccounts`).
-    public init?(bundleMessage message: String) {
-        guard message.contains("百度网盘"), message.contains("配置中心") || message.localizedCaseInsensitiveContains("cookie") else { return nil }
-        self = .baidu
-    }
-
     public func message(language: String? = nil) -> String {
-        switch self {
-        case .quark, .uc:
-            return L10n.text("Your %@ sign-in is missing or has expired. Sign in again to play this episode.",
-                             L10n.text(self == .quark ? "Quark" : "UC", language: language), language: language)
-        case .baidu, .aliyun:
-            return L10n.text("This line plays from %@, but its sign-in code couldn't be shown. Choose another line.",
-                             L10n.text(self == .baidu ? "Baidu Netdisk" : "Aliyun Drive", language: language), language: language)
+        let name = switch self {
+        case .quark: "Quark"
+        case .uc: "UC"
+        case .baidu: "Baidu Netdisk"
+        case .aliyun: "Aliyun Drive"
         }
+        return L10n.text("This line plays from %@, but its sign-in code couldn't be shown. Choose another line.",
+                         L10n.text(name, language: language), language: language)
     }
     public var errorDescription: String? { message() }
 }

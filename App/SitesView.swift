@@ -1218,8 +1218,7 @@ struct VideoDetailView: View {
     @State private var loadingEpisode: Episode.ID?
     /// A failed or blocked playback attempt, shown as an inline banner beside the artwork.
     @State private var playbackIssue: PlaybackIssue?
-    @State private var signingIn: CloudDrive?
-    /// A sign-in the source's CatPawOpen bundle runs itself (UC's TV token).
+    /// A drive sign-in the source's CatPawOpen bundle runs itself, with its own code (`CatPawSignIn`).
     @State private var bundleSignIn: BundleSignIn?
     @State private var choosingDownloads = false
     /// How many episodes were just queued, shown briefly under the header.
@@ -1296,42 +1295,16 @@ struct VideoDetailView: View {
         #if os(iOS)
         .sheet(isPresented: $showsConfigCenter) { ConfigCenterView { await configCenterAddress() } }
         #endif
-        // Sign in where playback failed, then resume the episode that needed the account.
-        #if !os(tvOS)
-        .sheet(item: $bundleSignIn) { pending in
-            CatPawSignInView(client: client, provider: pending.provider) {
-                if let episode = playbackIssue?.episode { startRequest { await play(episode) } }
-            }
-        }
-        #endif
-        #if os(macOS)
-        .sheet(item: $signingIn) { drive in
-            if drive == .xunlei {
-                XunleiSignInView { if let episode = playbackIssue?.episode { startRequest { await play(episode) } } }
-            } else if drive == .baidu {
-                // Baidu signs in with a code to scan on a Mac, as in Settings.
-                CloudQRLoginView(drive: .baidu) { retryAfterSignIn() }
-            } else {
-                CloudLoginView(provider: drive.provider) { cookie, ticket in
-                    try await drive.provider.saveLogin(cookie, ticket: ticket)
-                    if let episode = playbackIssue?.episode { startRequest { await play(episode) } }
-                }
-            }
-        }
-        #elseif os(iOS)
-        // The drive's own sign-in page; the code is for signing in with another phone.
-        .sheet(item: $signingIn) { drive in
-            if drive == .xunlei { XunleiSignInView(signedIn: retryAfterSignIn) }
-            else {
-                WebSignInView(service: drive.webSignIn, signedIn: retryAfterSignIn) {
-                    CloudQRLoginView(drive: drive.qrDrive) { retryAfterSignIn() }
-                }
-            }
+        // The source's own sign-in where playback failed, then the episode that needed the account plays. Plugins that
+        // sign in by themselves show their code while the request runs (PluginSignIn); the app's sign-ins stay in
+        // Settings, whose accounts every source gets.
+        #if os(tvOS)
+        .fullScreenCover(item: $bundleSignIn) { pending in
+            CatPawSignInView(client: client, provider: pending.provider) { retryAfterSignIn() }
         }
         #else
-        .fullScreenCover(item: $signingIn) { drive in
-            if drive == .xunlei { XunleiSignInView(signedIn: retryAfterSignIn) }
-            else { CloudQRLoginView(drive: drive.qrDrive) { retryAfterSignIn() } }
+        .sheet(item: $bundleSignIn) { pending in
+            CatPawSignInView(client: client, provider: pending.provider) { retryAfterSignIn() }
         }
         #endif
         .downloadPicker(isPresented: $choosingDownloads) {
@@ -1401,7 +1374,7 @@ struct VideoDetailView: View {
         }
         if let issue = playbackIssue {
             HStack(alignment: .top, spacing: 14) {
-                Image(systemName: issue.drive != nil || issue.signIn != nil ? "person.crop.circle.badge.exclamationmark.fill" : "exclamationmark.triangle.fill")
+                Image(systemName: issue.signIn != nil ? "person.crop.circle.badge.exclamationmark.fill" : "exclamationmark.triangle.fill")
                     .font(.system(size: 16, weight: .semibold)).foregroundStyle(Brand.amber)
                     .frame(width: 36, height: 36)
                     .background(Brand.amber.opacity(0.15), in: Circle())
@@ -1414,20 +1387,15 @@ struct VideoDetailView: View {
                             .fixedSize(horizontal: false, vertical: true).selectable()
                     }
                     HStack(spacing: 8) {
-                        if let drive = issue.drive {
-                            Button(drive.signInTitle) { signingIn = drive }.settingsButton(prominent: true)
-                        }
-                        #if !os(tvOS)
                         if let provider = issue.signIn {
-                            Button(L10n.text("Get UC TV Token")) { bundleSignIn = BundleSignIn(provider: provider) }
-                                .settingsButton(prominent: true)
-                                .accessibilityIdentifier("playbackIssue.bundleSignIn")
+                            Button(provider == "ucToken" ? L10n.text("Get UC TV Token") : L10n.text("Sign In to %@", CatPawSignIn.driveName(provider))) {
+                                bundleSignIn = BundleSignIn(provider: provider)
+                            }
+                            .settingsButton(prominent: true)
+                            .accessibilityIdentifier("playbackIssue.bundleSignIn")
                         }
-                        #endif
-                        Button(L10n.text(issue.blockedBeforeRequest ? "Try Anyway" : "Retry")) {
-                            startRequest { await play(issue.episode, skipAccountCheck: true) }
-                        }
-                        .settingsButton(prominent: issue.drive == nil && issue.signIn == nil)
+                        Button(L10n.text("Retry")) { startRequest { await play(issue.episode) } }
+                            .settingsButton(prominent: issue.signIn == nil)
                         #if os(tvOS)
                         // A focusable action instead of the small corner close button.
                         Button(L10n.text("Dismiss")) { withAnimation(.smooth(duration: 0.2)) { playbackIssue = nil } }.settingsButton()
@@ -1942,7 +1910,7 @@ struct VideoDetailView: View {
     private func download(_ episode: Episode) -> DownloadItem? {
         DownloadLibrary.shared.item(for: DownloadSource(site: client.site, videoID: video.id, episode: episode))
     }
-    private func play(_ episode: Episode, skipAccountCheck: Bool = false) async {
+    private func play(_ episode: Episode) async {
         guard !busy else { return }
         // Picking the episode watched last picks it up where it stopped; any other starts at 0 (#593).
         let resume = resumePosition(for: episode)
@@ -1951,14 +1919,8 @@ struct VideoDetailView: View {
             store.playing = DownloadLibrary.shared.channel(for: saved)
             return
         }
-        // Cloud-drive plugins wait for an in-app login that cannot appear on this platform,
-        // which surfaces only as a 60-second timeout. Ask for the account up front instead.
-        if !skipAccountCheck, let drive = CloudDrive.missingLogin(forFlag: episode.flag) {
-            withAnimation(.smooth(duration: 0.25)) {
-                playbackIssue = PlaybackIssue(episode: episode, message: drive.loginHint, drive: drive, blockedBeforeRequest: true)
-            }
-            return
-        }
+        // A drive line goes to the plugin even without an app sign-in: the plugin asks for its account itself, with
+        // its own code, which the app shows (PluginSignIn, or the bundle's sign-in below).
         busy = true; loadingEpisode = episode.id
         withAnimation(.smooth(duration: 0.2)) { playbackIssue = nil }
         defer { busy = false; if !choosingQuality { loadingEpisode = nil } }
@@ -1991,25 +1953,23 @@ struct VideoDetailView: View {
     }
     private func fail(_ episode: Episode, _ error: Error) {
         guard !Task.isCancelled, !(error is CancellationError) else { return }
-        let login = error as? CloudDriveLoginRequired ?? CloudDriveLoginRequired(bundleMessage: error.localizedDescription)
+        // A CatPawOpen bundle without a drive's sign-in sends the viewer to its config center ("请先去配置中心登录夸克"):
+        // its own sign-in for that drive runs here instead.
+        let provider = client.site.isCatPawOpen ? CatPawSignIn.provider(for: error.localizedDescription) : nil
         // A drive that needs signing in is expected, not a failure to report.
-        if login == nil {
+        if provider == nil && !(error is CloudDriveLoginRequired) {
             Diagnostics.shared.failure("catalog", "play \(client.reportContext) flag=\(episode.flag)", error)
         }
         withAnimation(.smooth(duration: 0.25)) {
-            // Plugins report a missing or expired drive login in their own words ("夸克授权失败，请扫码登录");
-            // say what happened and offer the sign-in instead of echoing them.
-            if let login, let drive = CloudDrive(rawValue: login.rawValue) {
-                playbackIssue = PlaybackIssue(episode: episode, message: drive.expiredHint, drive: drive, blockedBeforeRequest: false)
-            } else if let provider = CatPawSignIn.provider(for: error.localizedDescription) {
-                // Signed in, but the bundle wants a token its own code gives; signing in again would change nothing.
-                playbackIssue = PlaybackIssue(episode: episode, message: L10n.text("You're signed in to UC, but this source plays UC accounts without premium through UC's TV app, which needs a token of its own. Get it once with the UC Browser app, or choose another line."),
-                                              drive: nil, blockedBeforeRequest: false, signIn: provider)
-            } else if let drive = CloudDrive(flag: episode.flag), CloudDrive.isLoginFailure(error.localizedDescription) {
-                playbackIssue = PlaybackIssue(episode: episode, message: drive.expiredHint, drive: drive, blockedBeforeRequest: false)
+            if let provider {
+                let message = provider == "ucToken"
+                    // Signed in, but the bundle wants a token its own code gives; signing in again would change nothing.
+                    ? L10n.text("You're signed in to UC, but this source plays UC accounts without premium through UC's TV app, which needs a token of its own. Get it once with the UC Browser app, or choose another line.")
+                    : L10n.text("This source needs your %@ account for this line. Sign in with its code, and the episode plays.", CatPawSignIn.driveName(provider))
+                playbackIssue = PlaybackIssue(episode: episode, message: message, signIn: provider)
             } else {
-                playbackIssue = PlaybackIssue(episode: episode, message: error.localizedDescription,
-                                              drive: CloudDrive.missingLogin(forFlag: episode.flag), blockedBeforeRequest: false)
+                // Other plugins say in their own words what their sign-in needs.
+                playbackIssue = PlaybackIssue(episode: episode, message: error.localizedDescription)
             }
         }
     }
@@ -2489,9 +2449,6 @@ extension PlaybackHistoryEntry {
 private struct PlaybackIssue {
     let episode: Episode
     let message: String
-    let drive: CloudDrive?
-    /// True when playback was not attempted because a required account is missing.
-    let blockedBeforeRequest: Bool
     /// A sign-in the source's CatPawOpen bundle runs itself (`CatPawSignIn.provider(for:)`).
     var signIn: String? = nil
 }
@@ -2501,13 +2458,11 @@ private struct BundleSignIn: Identifiable {
     var id: String { provider }
 }
 
-/// Cloud drives whose plugins need a saved login before they can return a stream.
-private enum CloudDrive: String, Identifiable {
+/// Cloud drives a line plays from, to start a video on a line that can play now.
+private enum CloudDrive {
     /// Xunlei's sign-in is only for CatPawOpen bundles, which say when it is missing; other sources play their Xunlei
-    /// lines without it, so those lines are never held back for it. Baidu comes only from a plugin's error
-    /// (`CloudDriveLoginRequired`), never from a line's name: other plugins sign in to it with their own code.
-    case quark, uc, xunlei, baidu
-    var id: String { rawValue }
+    /// lines without it, so those lines are never held back for it.
+    case quark, uc, xunlei
     /// FTY names its lines after drive nicknames: 夸父 is Quark, 优汐 is UC.
     init?(flag: String) {
         let text = flag.lowercased()
@@ -2522,7 +2477,8 @@ private enum CloudDrive: String, Identifiable {
         let text = flag.lowercased()
         return ["嘟嘟", "百度", "度盘", "baidu", "阿狸", "阿里", "aliyun"].contains { text.contains($0) }
     }
-    /// The first line that can play now: not from a drive without a sign-in, nor one whose sign-in is missing.
+    /// The first line that can play now: not from a drive without a sign-in, nor one without the app's sign-in.
+    /// Those lines still play when chosen: their plugin asks for the account with its own code.
     static func preferredFlag(_ flags: [String]) -> String? {
         let accounts = (try? CloudDriveAccounts.load()) ?? CloudDriveAccounts()
         return flags.first { flag in
@@ -2531,39 +2487,6 @@ private enum CloudDrive: String, Identifiable {
             let cookie = drive == .quark ? accounts.quarkCookie : accounts.ucCookie
             return !cookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
-    }
-    var name: String {
-        switch self {
-        case .quark: L10n.text("Quark")
-        case .uc: "UC"
-        case .xunlei: L10n.text("Xunlei")
-        case .baidu: L10n.text("Baidu Netdisk")
-        }
-    }
-    var signInTitle: String {
-        switch self {
-        case .quark: L10n.text("Sign In to Quark")
-        case .uc: L10n.text("Sign In to UC")
-        case .xunlei, .baidu: L10n.text("Sign In to %@", name)
-        }
-    }
-    #if os(macOS)
-    var provider: CloudProvider { self == .quark ? .quark : .uc }
-    #else
-    var qrDrive: CloudDriveQRLogin.Drive { self == .quark ? .quark : self == .baidu ? .baidu : .uc }
-    var webSignIn: WebSignIn { self == .quark ? .quark : self == .baidu ? .baidu : .uc }
-    #endif
-    var loginHint: String { L10n.text("This source plays from %@ and needs you to sign in first.", name) }
-    var expiredHint: String { L10n.text("Your %@ sign-in is missing or has expired. Sign in again to play this episode.", name) }
-    static func missingLogin(forFlag flag: String) -> CloudDrive? {
-        guard let drive = CloudDrive(flag: flag), drive != .xunlei else { return nil }
-        let accounts = (try? CloudDriveAccounts.load()) ?? CloudDriveAccounts()
-        let cookie = drive == .quark ? accounts.quarkCookie : accounts.ucCookie
-        return cookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? drive : nil
-    }
-    static func isLoginFailure(_ message: String) -> Bool {
-        let text = message.lowercased()
-        return ["授权", "登录", "扫码", "cookie", "login", "unauthorized"].contains { text.contains($0) }
     }
 }
 
