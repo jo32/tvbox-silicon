@@ -1,6 +1,129 @@
 {
   "releases": [
     {
+      "version": "1.8.13",
+      "build": 51,
+      "date": "2026-11-07",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "appletv",
+          "title": {
+            "en": "CatPawOpen on Apple TV",
+            "zh-Hans": "Apple TV 支持猫源",
+            "zh-Hant": "Apple TV 支援貓源",
+            "ja": "Apple TV で CatPawOpen"
+          },
+          "detail": {
+            "en": "Apple TV can now add and play CatPawOpen (猫源) subscriptions; it used to say this device can't run them. iPhone and iPad now run these sources on Node.js 26 too.",
+            "zh-Hans": "Apple TV 现在可以添加和播放 CatPawOpen（猫源）订阅，不再提示此设备无法运行猫源。iPhone 和 iPad 也改用 Node.js 26 运行这些源。",
+            "zh-Hant": "Apple TV 現在可以新增和播放 CatPawOpen（貓源）訂閱，不再提示此裝置無法執行貓源。iPhone 和 iPad 也改用 Node.js 26 執行這些來源。",
+            "ja": "Apple TV でも CatPawOpen（猫源）の配信設定を追加して再生できるようになりました。以前は「このデバイスでは実行できません」と表示されていました。iPhone と iPad もこれらのソースを Node.js 26 で動かします。"
+          },
+          "platforms": [
+            "ios",
+            "tvos"
+          ]
+        },
+        {
+          "symbol": "tag",
+          "title": {
+            "en": "Video tags in the player",
+            "zh-Hans": "播放器视频标签",
+            "zh-Hant": "播放器影片標籤",
+            "ja": "プレーヤーの映像タグ"
+          },
+          "detail": {
+            "en": "When the controls show, tags above the seek bar sum up the picture, like HW H265 HDR10 4K 24FPS (24→60FPS with Smooth Motion). Tap them for the full video info. The title's logo from TMDB sits at the bottom left.",
+            "zh-Hans": "显示控制栏时，进度条上方的标签概括画面信息，例如 HW H265 HDR10 4K 24FPS（开启智能补帧时为 24→60FPS）。轻点标签可查看完整的视频信息。左下角显示来自 TMDB 的片名标志。",
+            "zh-Hant": "顯示控制列時，進度條上方的標籤概括畫面資訊，例如 HW H265 HDR10 4K 24FPS（開啟智慧補幀時為 24→60FPS）。輕點標籤可查看完整的影片資訊。左下角顯示來自 TMDB 的片名標誌。",
+            "ja": "コントロールを表示すると、シークバーの上のタグが映像の概要を示します（例：HW H265 HDR10 4K 24FPS、なめらか補間がオンなら 24→60FPS）。タグをタップすると詳しいビデオ情報を表示します。左下には TMDB の作品ロゴが表示されます。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "text.bubble",
+          "title": {
+            "en": "Subtitle Delay",
+            "zh-Hans": "字幕延迟",
+            "zh-Hant": "字幕延遲",
+            "ja": "字幕の遅延"
+          },
+          "detail": {
+            "en": "Subtitles that show before the line is spoken can now wait. Set a delay in Settings > Subtitle Style > Timing; on iPhone you can also change it in half-second steps from the player's options while you watch.",
+            "zh-Hans": "字幕比台词早出现时，现在可以让它晚一点显示。在“设置 > 字幕样式 > 时间”里设置延迟；在 iPhone 上也可以边看边在播放器选项里以半秒为单位调整。",
+            "zh-Hant": "字幕比台詞早出現時，現在可以讓它晚一點顯示。在「設定 > 字幕樣式 > 時間」裡設定延遲；在 iPhone 上也可以邊看邊在播放器選項裡以半秒為單位調整。",
+            "ja": "セリフより先に出てしまう字幕を遅らせられるようになりました。「設定 > 字幕のスタイル > タイミング」で遅延を設定します。iPhone では視聴中にプレーヤーのオプションから 0.5 秒単位で変更することもできます。"
+          }
+        },
+        {
+          "symbol": "gearshape.2",
+          "title": {
+            "en": "Settings inside sources",
+            "zh-Hans": "源里的设置项",
+            "zh-Hant": "來源裡的設定項",
+            "ja": "ソース内の設定"
+          },
+          "detail": {
+            "en": "Items such as 配置中心 or 我的云盘┃配置 in a source's list now open the plugin's own windows: sign-in codes, cookie forms, choices and switches. A setting that needs a second tap gets Run Again, and remote-input codes open on this device.",
+            "zh-Hans": "源列表里的“配置中心”“我的云盘┃配置”等项目，现在会打开插件自己的窗口：登录二维码、Cookie 表单、选项和开关。需要再点一次的设置有“再运行一次”，远程输入的二维码也能在本机直接打开。",
+            "zh-Hant": "來源列表裡的「配置中心」「我的云盘┃配置」等項目，現在會打開外掛自己的視窗：登入 QR 碼、Cookie 表單、選項和開關。需要再點一次的設定有「再執行一次」，遠端輸入的 QR 碼也能在本機直接打開。",
+            "ja": "ソース一覧の「配置中心」「我的云盘┃配置」などの項目は、プラグイン自身のウインドウ（サインインコード、Cookie の入力欄、選択肢やスイッチ）を開くようになりました。2 回押す必要がある設定には「もう一度実行」があり、リモート入力のコードもこのデバイスで開けます。"
+          }
+        },
+        {
+          "symbol": "person.badge.key",
+          "title": {
+            "en": "Drive sign-ins from the source",
+            "zh-Hans": "源自己的网盘登录",
+            "zh-Hant": "來源自己的網盤登入",
+            "ja": "ソース自身のドライブサインイン"
+          },
+          "detail": {
+            "en": "When a source needs a drive account during playback, it shows its own sign-in code instead of the app's page; on iPhone and iPad the code opens in the drive's app. Accounts in Settings > Cloud Drive Accounts still reach every source first.",
+            "zh-Hans": "播放时源需要网盘账号，现在会显示源自己的登录码，而不是应用的登录页；在 iPhone 和 iPad 上可以直接在网盘 App 里打开。“设置 > 网盘账号”里的账号仍会先提供给每个源。",
+            "zh-Hant": "播放時來源需要網盤帳號，現在會顯示來源自己的登入碼，而不是 App 的登入頁；在 iPhone 和 iPad 上可以直接在網盤 App 裡打開。「設定 > 網盤帳號」裡的帳號仍會先提供給每個來源。",
+            "ja": "再生中にソースがドライブのアカウントを必要とすると、アプリのページではなくソース自身のサインインコードを表示します。iPhone と iPad ではドライブのアプリで開けます。「設定 > クラウドドライブのアカウント」のアカウントはこれまでどおり先に各ソースへ渡されます。"
+          }
+        },
+        {
+          "symbol": "play.circle",
+          "title": {
+            "en": "Play picks up the right episode",
+            "zh-Hans": "播放接对剧集",
+            "zh-Hant": "播放接對劇集",
+            "ja": "正しいエピソードから再生"
+          },
+          "detail": {
+            "en": "Play on a series whose last-watched episode you finished goes on to the next episode instead of starting over, and picking an episode you've started resumes it.",
+            "zh-Hans": "最后看的一集已经看完时，“播放”会接着播下一集，而不是从头开始；重新选择看过一部分的剧集会从上次的位置继续。",
+            "zh-Hant": "最後看的一集已經看完時，「播放」會接著播下一集，而不是從頭開始；重新選擇看過一部分的劇集會從上次的位置繼續。",
+            "ja": "最後に見たエピソードを見終えていれば、「再生」は最初からではなく次のエピソードを再生します。途中まで見たエピソードを選び直すと続きから再生します。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "4K HEVC live channels that played only sound now show the picture. CMS sources' home pages show posters. Plugins with guarded code load on 3 GB iPads. Episode lists read names like E01.mp4【…】 as episode numbers, and Settings > Watch Now > Show File Size and Quality adds a file's size and quality to your history. iCloud sync keeps a switched account's items apart and checks iCloud when you come back to the app. Manga pinch zoom follows your fingers on iPhone and iPad, and several crashes are fixed.",
+            "zh-Hans": "只有声音的 4K HEVC 直播频道现在能显示画面。CMS 源的首页会显示海报。带保护代码的插件在 3 GB 内存的 iPad 上也能加载。剧集列表会把 E01.mp4【…】这类名称识别为集数；开启“设置 > 现在观看 > 显示文件大小与画质”后，播放记录会显示文件大小和画质。iCloud 同步在切换账号后不会混用旧账号的内容，回到应用时也会检查 iCloud。iPhone 和 iPad 上的漫画双指缩放会跟随手指，并修复了多个闪退问题。",
+            "zh-Hant": "只有聲音的 4K HEVC 直播頻道現在能顯示畫面。CMS 來源的首頁會顯示海報。帶保護程式碼的外掛在 3 GB 記憶體的 iPad 上也能載入。劇集列表會把 E01.mp4【…】這類名稱辨識為集數；開啟「設定 > 立即觀看 > 顯示檔案大小與畫質」後，播放記錄會顯示檔案大小和畫質。iCloud 同步在切換帳號後不會混用舊帳號的內容，回到 App 時也會檢查 iCloud。iPhone 和 iPad 上的漫畫雙指縮放會跟隨手指，並修正了多個閃退問題。",
+            "ja": "音声だけだった 4K HEVC のライブチャンネルで映像が表示されるようになりました。CMS ソースのホームにポスターが表示されます。保護されたコードを持つプラグインがメモリ 3 GB の iPad でも読み込めます。E01.mp4【…】のような名前を話数として表示し、「設定 > 今すぐ観る > ファイルサイズと画質を表示」をオンにすると再生履歴にファイルサイズと画質が加わります。iCloud 同期はアカウントを切り替えても前のアカウントの項目を混ぜず、アプリに戻ったときにも iCloud を確認します。iPhone と iPad では漫画のピンチズームが指に追従し、いくつかのクラッシュも修正しました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.12",
       "build": 50,
       "date": "2026-11-06",
