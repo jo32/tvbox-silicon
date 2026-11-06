@@ -1615,3 +1615,4 @@
 "%@ fps" = "%@ fps";
 "An SRT, WebVTT or ASS file, up to 8 MB." = "SRT、WebVTT、ASS ファイル（8 MB まで）。";
 "Subtitles Not Added" = "字幕を追加できませんでした";
+"Save or Share" = "保存または共有";
