@@ -580,6 +580,15 @@ import VideoToolbox
         #expect(played.size == CGSize(width: 320, height: 180) && played.video)
     }
 
+    /// 4:2:2 HEVC in MPEG-TS decodes on a Mac but not on an iPhone; copied as it is, the iPhone would play its sound
+    /// alone (#585). It is converted to 4:2:0 Main10 (`RemuxPlan.videoTrack`), which every device decodes.
+    @Test func hevcTheDeviceCantDecodeIsConverted() async throws {
+        let master = try await HLSRemux.open(try hevcTransportStream(named: "remux-hevc-422"), headers: [:], network: RangeServer.session)
+        defer { Remux.stop(master) }
+        let text = String(decoding: try await fetch(master), as: UTF8.self)
+        #expect(text.contains("CODECS=\"hvc1.2.") && text.contains("RESOLUTION=320x180"), "\(text)")
+    }
+
     /// A live channel's HEVC in MPEG-TS (an IPTV channel in 4K, #361). The repackaged playlist stays live and follows
     /// the source's as AVPlayer reloads it: segments keep their names as the window moves, a discontinuity's
     /// initialization segment outlasts the segment it began with, and a gap in the media sequence begins one.

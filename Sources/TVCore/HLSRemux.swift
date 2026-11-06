@@ -142,8 +142,9 @@ public enum HLSRemux {
     }
 
     /// Repackages one segment's bytes: the picture (H.264 or HEVC) and the first audio, copied when Apple devices
-    /// decode it, else converted to AAC. An HDR picture is tone mapped to SDR when `device` shows no HDR. Times
-    /// stay the segment's own, so segments line up as they did.
+    /// decode it, else converted (`RemuxPlan.videoTrack`): 4:2:2 or deeper-than-10-bit HEVC is re-encoded to 4:2:0
+    /// Main10, so an iPhone that lists the track but shows no picture gets one. An HDR picture is tone mapped to SDR
+    /// when `device` shows no HDR. Times stay the segment's own, so segments line up as they did.
     static func repackage(_ data: Data, device: RemuxPlan.Device = .init()) throws -> Output {
         RemuxSession.installLog()
         let memory = MemoryMedia(data)
@@ -161,8 +162,7 @@ public enum HLSRemux {
             let codec = withUnsafeBytes(of: raw.codec) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
             if raw.kind == Int32(TVMKindVideo), video == nil, raw.width > 0, ["h264", "hevc"].contains(codec) {
                 let stream = RemuxSession.stream(raw, index: Int(index))
-                let mapped = RemuxPlan.videoTrack(stream, device: device)
-                let track = mapped.toneMap ? mapped : RemuxPlan.Track(stream: stream)
+                let track = RemuxPlan.videoTrack(stream, device: device)
                 video = TVMTrack(stream: index, mode: track.mode.rawValue, bitRate: Int32(track.bitRate), channels: 0,
                                  dolbyVision: Int32(TVMDolbyVisionDrop), toneMap: track.toneMap ? 1 : 0,
                                  width: Int32(track.width), height: Int32(track.height))
