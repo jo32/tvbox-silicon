@@ -690,21 +690,28 @@ import IOKit.pwr_mgt
     }
 
     /// HLS whose MPEG-TS segments carry HEVC plays its sound alone: AVPlayer drops that picture without an error (#292).
-    /// For the first seconds after an HLS stream is ready, an item that plays sound with no picture track opens again
-    /// repackaged (`HLSRemux`) where it was. A stream it can't repackage plays on as it is. Only the tracks tell: such a
-    /// stream can still report a presentation size (1280x720 for a 4K channel whose master names its resolution, #394).
+    /// An item that plays sound without a picture opens again repackaged (`HLSRemux`) where it was; a stream that can't
+    /// be repackaged plays on as it is. A presentation size doesn't count as a picture (1280x720 for a 4K channel whose
+    /// master names its resolution, #394), and neither does a video track that decodes no frames: an iOS that lists the
+    /// HEVC track but doesn't show it, and a 4K stream that takes longer than eight seconds to start, both play sound
+    /// alone otherwise (#585). Only frames count, watched for a minute so a slow 4K stream isn't given up on.
     private func checkSegmentedPicture(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
         guard checkingSegments != ObjectIdentifier(item), !Remux.isRemuxed(url), ["http", "https"].contains(url.scheme) else { return }
         checkingSegments = ObjectIdentifier(item)
         Task { [weak self] in
-            for _ in 0..<16 {
+            var pictureless = 0
+            for _ in 0..<120 {
                 try? await Task.sleep(for: .milliseconds(500))
                 guard let self, self.generation == active, self.item === item, item.status == .readyToPlay else { return }
-                let kinds = item.tracks.compactMap { $0.assetTrack?.mediaType }
-                if kinds.contains(.video) { return }
-                guard kinds.contains(.audio), self.player.timeControlStatus == .playing else { continue }
+                let video = item.tracks.filter { $0.assetTrack?.mediaType == .video }
+                if video.contains(where: { $0.isEnabled && $0.currentVideoFrameRate > 0 }) { return }
+                // The first frames land a beat after sound starts; four checks without any is no picture.
+                guard self.player.timeControlStatus == .playing else { pictureless = 0; continue }
+                pictureless += 1
+                guard pictureless >= 4 else { continue }
+                // Only a playlist can be repackaged; a plain file mustn't be read whole to find that out.
                 let playback = item.accessLog()?.events.last?.playbackType ?? ""
-                guard ["VOD", "LIVE"].contains(playback) || url.absoluteString.lowercased().contains("m3u8") else { return }
+                guard ["VOD", "LIVE"].contains(playback) || url.absoluteString.lowercased().contains("m3u8") else { continue }
                 self.repackageSegments(item, channel: channel, url: url, generation: active)
                 return
             }
