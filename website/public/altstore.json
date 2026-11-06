@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.13",
+          "buildVersion": "51",
+          "date": "2026-11-07",
+          "localizedDescription": "• Apple TV 支持猫源\n• 播放器视频标签\n• 字幕延迟\n• 源里的设置项\n• 源自己的网盘登录\n• 播放接对剧集\n• 其他修复\n\n• CatPawOpen on Apple TV\n• Video tags in the player\n• Subtitle Delay\n• Settings inside sources\n• Drive sign-ins from the source\n• Play picks up the right episode\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.13/Yingxia-1.8.13-ios.ipa",
+          "size": 124619585,
+          "sha256": "93fcba7f5b74bbd2cd0796b3df6f9d8d61182083d84fc7547841e46be7c3510e",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.11",
           "buildVersion": "49",
           "date": "2026-11-06",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.7/Yingxia-1.8.7-ios.ipa",
           "size": 117758042,
           "sha256": "1a34c38b43b2464687f7d9e4832fc551b0931871cfa5cee853f34a2f10030f85",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.6",
-          "buildVersion": "44",
-          "date": "2026-11-02",
-          "localizedDescription": "• 全新的“现在观看”\n• 更多 4K 视频有画面了\n• 预告片全屏播放\n• CatPawOpen 源可用百度网盘登录\n• 其他修复\n\n• A new Watch Now\n• Picture for more 4K videos\n• Trailers play full screen\n• Baidu Netdisk sign-in for CatPawOpen\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.6/Yingxia-1.8.6-ios.ipa",
-          "size": 117329114,
-          "sha256": "199d9dd2b049d84fe59f5a359322410c687d3818cf18a941920be8dafd5ffede",
           "minOSVersion": "17.0"
         }
       ],
