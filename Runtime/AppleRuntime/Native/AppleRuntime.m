@@ -109,10 +109,12 @@ static void exitHook(jint code) {
 // translation buffer on a 3 GB iPad (issue #563), and the app vanished without a report. iOS and tvOS apps
 // never exit by themselves, so once the runtime runs, an exit() is a failure: abort() to report its stack.
 // An iPad app on a Mac does exit when quit, so it is left alone there.
+#if TARGET_OS_IOS || TARGET_OS_TV
 static void nativeExitHook(void) {
     fprintf(stderr, "Native code called exit()\n");
     abort();
 }
+#endif
 
 // On a memory warning, idle plugin runtimes and sources are closed and the freed heap returned.
 static void watchMemoryPressure(const char *resourcePath) {
