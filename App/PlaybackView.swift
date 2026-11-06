@@ -492,8 +492,28 @@ import IOKit.pwr_mgt
                 for item in self.player.items() { item.textStyleRules = rules }
             }
         }
+        delayObserver = NotificationCenter.default.addObserver(forName: SubtitleDelay.changed, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.followSubtitleDelay() }
+        }
+        followSubtitleDelay()
     }
     private var styleObserver: NSObjectProtocol?
+    @ObservationIgnored private var delayObserver: NSObjectProtocol?
+    /// Shows delayed subtitle lines at the player's clock (`SubtitleCues.advance`), only while a delay is set.
+    @ObservationIgnored private var subtitleTimeObserver: Any?
+    /// Delayed subtitles (#599) reach the screen on a quarter-second clock rather than on the once-a-second sample.
+    /// At 0 the lines go up as AVPlayer hands them over, so no clock runs: it would only wake the main thread.
+    private func followSubtitleDelay() {
+        let delayed = SubtitleDelay.load() > 0
+        if delayed, subtitleTimeObserver == nil {
+            subtitleTimeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { [weak self] time in
+                MainActor.assumeIsolated { self?.subtitles.advance(to: time.seconds) }
+            }
+        } else if !delayed, let observer = subtitleTimeObserver {
+            player.removeTimeObserver(observer)
+            subtitleTimeObserver = nil
+        }
+    }
     /// The subtitle lines the player's overlay draws (`SubtitleOverlay`).
     let subtitles = SubtitleCues()
     /// The saved subtitle style as the rule AVPlayer lays over every subtitle cue it draws itself.
@@ -999,6 +1019,7 @@ import IOKit.pwr_mgt
         if playing != nil { ErrorReports.shared.stoppedPlaying() }
         playing = nil
         catalogDanmaku.clear()
+        subtitles.follow(nil)
         historyContext = nil; pendingResume = nil; restoringPosition = false
         requestedResumePosition = nil; restoredPosition = nil
         skipScope = nil; skipSettings = EpisodeSkipSettings(); skipPass = EpisodeSkipPass()

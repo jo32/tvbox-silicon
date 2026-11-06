@@ -585,6 +585,21 @@ struct MobilePlayerView: View {
                     }
                     .pickerStyle(.inline)
                 }
+                // A subtitle file that runs ahead of its picture (#599): each step holds it back half a second.
+                Menu(L10n.text("Subtitle Delay")) {
+                    Text(SubtitleDelay.title(session.subtitles.delay))
+                    Button(String(format: "%+.1f s", -SubtitleDelay.step)) {
+                        SubtitleDelay.save(session.subtitles.delay - SubtitleDelay.step)
+                    }
+                    .disabled(session.subtitles.delay <= SubtitleDelay.range.lowerBound)
+                    Button(String(format: "%+.1f s", SubtitleDelay.step)) {
+                        SubtitleDelay.save(session.subtitles.delay + SubtitleDelay.step)
+                    }
+                    .disabled(session.subtitles.delay >= SubtitleDelay.range.upperBound)
+                    if session.subtitles.delay != 0 {
+                        Button(L10n.text("Reset")) { SubtitleDelay.save(0) }
+                    }
+                }
             }
             if !session.isLive {
                 Menu(L10n.text("Playback Speed")) {
