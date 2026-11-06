@@ -7,5 +7,9 @@ public class PackageInfo {
     public int versionCode;
     public ApplicationInfo applicationInfo;
     public Signature[] signatures;
+    public String[] requestedPermissions;
+    public int[] requestedPermissionsFlags;
+    public ProviderInfo[] providers;
+    public long firstInstallTime, lastUpdateTime;
     public long getLongVersionCode() { return versionCode; }
 }

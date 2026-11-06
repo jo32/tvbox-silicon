@@ -1,5 +1,6 @@
 package tvbox.runtime;
 
+import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.json.*;
 import org.objectweb.asm.ClassReader;
@@ -49,14 +50,57 @@ public final class CloudDriveBridge implements AutoCloseable {
     private HttpServer listen(int port) throws IOException {
         HttpServer listener = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 16);
         listener.setExecutor(workers);
-        listener.createContext("/", exchange -> {
+        listener.createContext("/", this::serve);
+        listener.start();
+        ports.add(listener.getAddress().getPort());
+        return listener;
+    }
+
+    /**
+     * A plugin setting's page for another device (TVBox's "remote input": a QR code with this device's network
+     * address, where a phone types a cookie): plugins build it from {@link #getUrl()} with the Wi-Fi address in place
+     * of 127.0.0.1, and it answers through TVBox's {@code /proxy}. Served on the network only while a setting is open
+     * (TVBox serves it always), GET only, the same requests as on loopback.
+     */
+    public static synchronized void openToNetwork(boolean open) {
+        CloudDriveBridge bridge = current;
+        if (network != null && (!open || bridge == null || network.getAddress().getPort() != bridge.server.getAddress().getPort())) {
+            network.stop(0); network = null;
+        }
+        if (!open || bridge == null || network != null) return;
+        byte[] address = android.net.wifi.WifiInfo.lanAddress();
+        if (address == null || address[0] == 127) return;
+        try {
+            HttpServer listener = HttpServer.create(new InetSocketAddress(java.net.InetAddress.getByAddress(address), bridge.server.getAddress().getPort()), 16);
+            listener.setExecutor(bridge.workers);
+            listener.createContext("/", bridge::serve);
+            Thread starter = new Thread(listener::start, "tvbox-proxy-network");
+            starter.setDaemon(true); starter.start(); starter.join();
+            network = listener;
+        } catch (Exception unavailable) {
+            System.err.println("CLOUD_PROXY_NETWORK_UNAVAILABLE " + unavailable.getClass().getSimpleName());
+        }
+    }
+    private static HttpServer network;
+
+    /** An {@code Origin} the page's own requests carry: the address it was served from. */
+    private static boolean sameOrigin(HttpExchange exchange) {
+        String origin = exchange.getRequestHeaders().getFirst("Origin"), host = exchange.getRequestHeaders().getFirst("Host");
+        return origin == null || (host != null && origin.equals("http://" + host));
+    }
+
+    private void serve(HttpExchange exchange) {
             try {
                 String path = exchange.getRequestURI().getPath();
-                if (!path.startsWith("/" + capability + "/") || exchange.getRequestHeaders().containsKey("Origin")) {
+                // A setting's page answers through TVBox's /proxy path, on the port it was served from.
+                boolean settingPage = path.equals("/proxy") && PluginWindows.settingOpen();
+                if (!(settingPage || path.startsWith("/" + capability + "/")) || !sameOrigin(exchange)
+                        || (!PluginWindows.settingOpen() && exchange.getRequestHeaders().containsKey("Origin"))) {
                     exchange.sendResponseHeaders(403, -1); return;
                 }
                 String method = exchange.getRequestMethod();
                 if (!method.equals("GET") && !method.equals("HEAD")) { exchange.sendResponseHeaders(405, -1); return; }
+                if (settingPage) { relay(exchange, "media", method); return; }
                 String resource = path.substring(capability.length() + 2);
                 if (resource.equals("health")) { exchange.sendResponseHeaders(204, -1); return; }
                 if (files.containsKey(resource)) {
@@ -74,10 +118,6 @@ public final class CloudDriveBridge implements AutoCloseable {
                 System.err.println("CLOUD_PROXY_ERROR " + error.getClass().getSimpleName());
                 try { exchange.sendResponseHeaders(502, -1); } catch (IOException ignored) { }
             } finally { exchange.close(); }
-        });
-        listener.start();
-        ports.add(listener.getAddress().getPort());
-        return listener;
     }
 
     /** Apple can invalidate sockets while the app is suspended without destroying its JVM. */

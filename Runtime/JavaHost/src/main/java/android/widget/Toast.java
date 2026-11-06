@@ -9,7 +9,7 @@ public class Toast {
     public static Toast makeText(android.content.Context context, CharSequence text, int duration) {
         Toast toast = new Toast(context); toast.text = text; toast.duration = duration; return toast;
     }
-    public void show() { System.err.println("PLUGIN_NOTICE " + text); }
+    public void show() { System.err.println("PLUGIN_NOTICE " + text); tvbox.runtime.PluginNotices.add(text); }
     public void cancel() { }
     public void setText(CharSequence value) { text = value; }
     public void setDuration(int value) { duration = value; }

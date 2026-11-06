@@ -29,4 +29,10 @@ public final class Environment {
     public static String getExternalStorageState(File path) { return MEDIA_MOUNTED; }
     public static boolean isExternalStorageEmulated() { return true; }
     public static boolean isExternalStorageRemovable() { return false; }
+    /** All-files access: the profile's storage is the plugin's own. */
+    public static boolean isExternalStorageManager() { return true; }
+    public static boolean isExternalStorageManager(File path) { return true; }
+    public static boolean isExternalStorageLegacy() { return true; }
+    public static File getDataDirectory() { return getExternalStorageDirectory().getParentFile(); }
+    public static File getDownloadCacheDirectory() { File d = new File(getExternalStorageDirectory(), "cache"); d.mkdirs(); return d; }
 }

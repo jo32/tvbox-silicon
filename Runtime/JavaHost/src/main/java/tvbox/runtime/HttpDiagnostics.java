@@ -152,7 +152,7 @@ public final class HttpDiagnostics {
         // poll forever. The plugin keeps its own sign-in: the app shows its code (LoginPrompt)
         // while the plugin polls. Only a request with no session folder, or a code the host
         // can't read, goes back to the app. Swift's own login uses URLSession and never passes through here.
-        boolean own = ownSignIn.get();
+        boolean own = ownSignIn.get() || PluginWindows.settingOpen();
         String drive = own ? null : qrLoginDrive(remote, path);
         java.nio.file.Path folder = promptFolder();
         boolean prompts = drive != null && folder != null;

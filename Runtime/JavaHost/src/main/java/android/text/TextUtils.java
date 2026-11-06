@@ -1,6 +1,7 @@
 package android.text;
 import java.util.*;
 public final class TextUtils {
+    public enum TruncateAt { START, MIDDLE, END, MARQUEE, END_SMALL }
     public static boolean isEmpty(CharSequence text) { return text == null || text.length() == 0; }
     public static boolean equals(CharSequence a, CharSequence b) { return a==b || a!=null && b!=null && a.toString().contentEquals(b); }
     public static String join(CharSequence delimiter, Iterable<?> tokens) { StringJoiner join = new StringJoiner(delimiter); tokens.forEach(v -> join.add(String.valueOf(v))); return join.toString(); }

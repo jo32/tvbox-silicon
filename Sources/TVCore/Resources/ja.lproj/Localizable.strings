@@ -1581,3 +1581,9 @@
 "Gestures" = "ジェスチャ";
 "Brightness and Volume" = "明るさと音量";
 "Area" = "表示範囲";
+"This plugin setting only works in Android TVBox." = "このプラグイン設定は Android 版 TVBox でのみ使えます。";
+"The plugin finished without a message." = "プラグインはメッセージなしで終了しました。";
+"Copied to the clipboard." = "クリップボードにコピーしました。";
+"The plugin stopped with an error: %@" = "プラグインがエラーで停止しました：%@";
+"Run Again" = "もう一度実行";
+"Open Link" = "リンクを開く";

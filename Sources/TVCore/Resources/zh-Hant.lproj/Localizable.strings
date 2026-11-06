@@ -1581,3 +1581,9 @@
 "Gestures" = "手勢";
 "Brightness and Volume" = "亮度和音量";
 "Area" = "區域";
+"This plugin setting only works in Android TVBox." = "這項外掛設定只能在 Android 版 TVBox 中使用。";
+"The plugin finished without a message." = "外掛已完成，沒有回傳訊息。";
+"Copied to the clipboard." = "已複製到剪貼簿。";
+"The plugin stopped with an error: %@" = "外掛出錯停止了：%@";
+"Run Again" = "再執行一次";
+"Open Link" = "打開連結";

@@ -54,7 +54,7 @@ public final class DanglingTypes {
 
     /** Platform and host libraries are never synthesized: a gap there is a real missing feature. */
     private static boolean platform(String name) {
-        for (String prefix : new String[]{"java.", "javax.", "jdk.", "sun.", "android.", "androidx.", "dalvik.", "kotlin.", "kotlinx.", "okhttp3.", "okio.", "org.json.", "com.google.gson.", "com.github.catvod.crawler."})
+        for (String prefix : new String[]{"java.", "javax.", "jdk.", "sun.", "android.", "androidx.", "dalvik.", "kotlin.", "kotlinx.", "okhttp3.", "okio.", "org.json.", "com.google.gson.", "com.google.zxing.", "com.github.catvod.crawler."})
             if (name.startsWith(prefix)) return true;
         return false;
     }

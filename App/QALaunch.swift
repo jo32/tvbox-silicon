@@ -273,6 +273,12 @@ enum QALaunch {
                                      origin: config.origin) {
                     VideoDetailView(video: video, client: CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL))
                 }
+            // `-qaPage setting:<source key>:<action>` runs one of a plugin's listed settings (`Video.action`).
+            case "setting":
+                if parts.count == 3, let site = config.sites.first(where: { $0.key == parts[1] }),
+                   let video = Video(json: ["vod_id": .string(parts[2]), "vod_name": .string(UserDefaults.standard.string(forKey: "qaVideoName") ?? parts[2]), "action": .string(parts[2])], origin: config.origin) {
+                    PluginActionPage(video: video, client: CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL), action: parts[2])
+                }
             case "open-detail":
                 if parts.count == 3, let site = config.sites.first(where: { $0.key == parts[1] }),
                    let video = Video(json: ["vod_id": .string(parts[2]), "vod_name": .string("测试影片 \(parts[2])")], origin: config.origin) {
@@ -370,7 +376,7 @@ enum QALaunch {
 
     static func overrides(_ section: AppSection) -> Bool {
         guard section == self.section, let page else { return false }
-        return ["site", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "cloud-login", "cloud-accounts", "subtitle-style", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add"].contains(page.split(separator: ":").first.map(String.init) ?? "")
+        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "cloud-login", "cloud-accounts", "subtitle-style", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add"].contains(page.split(separator: ":").first.map(String.init) ?? "")
     }
 }
 
