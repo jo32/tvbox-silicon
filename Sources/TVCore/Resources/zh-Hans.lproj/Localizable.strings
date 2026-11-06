@@ -1615,3 +1615,4 @@
 "%@ fps" = "%@ fps";
 "An SRT, WebVTT or ASS file, up to 8 MB." = "SRT、WebVTT 或 ASS 文件，最大 8 MB。";
 "Subtitles Not Added" = "未能添加字幕";
+"Save or Share" = "保存或分享";
