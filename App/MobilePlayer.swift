@@ -37,6 +37,7 @@ struct MobilePlayerView: View {
     @State private var tracks = MediaTracks()
     @State private var importsSubtitleFile = false
     @State private var asksSubtitleAddress = false
+    @State private var searchesSubtitles = false
     @State private var nowPlaying = VideoNowPlaying()
     @State private var fillsScreen = false
     @State private var speed: Float = 1
@@ -170,7 +171,7 @@ struct MobilePlayerView: View {
         .sensoryFeedback(.impact(weight: .medium), trigger: locked)
         // A failure, or a watch page's player back from full screen, has controls to reach.
         .onChange(of: session.error != nil || inline) { _, unlock in if unlock { setLocked(false) } }
-        .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, subtitles: session.externalSubtitles)
+        .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, search: $searchesSubtitles, subtitles: session.externalSubtitles)
         .playerEpisodesSheet(isPresented: $showsEpisodes, channel: channel)
         .sheet(isPresented: $showsDanmakuList) {
             DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
@@ -679,7 +680,8 @@ struct MobilePlayerView: View {
                 } else if session.externalSubtitles.selected != nil {
                     Button(L10n.text("Off")) { session.externalSubtitles.select(nil) }
                 }
-                ExternalSubtitleMenu(subtitles: session.externalSubtitles, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true })
+                ExternalSubtitleMenu(subtitles: session.externalSubtitles, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
+                                     searchOnline: { searchesSubtitles = true })
             }
             if session.externalSubtitles.selected == nil, let legible = tracks.legible, !legible.options.isEmpty {
                 // A subtitle file that runs ahead of its picture (#599): each step holds it back half a second.
