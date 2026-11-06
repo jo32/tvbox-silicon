@@ -199,6 +199,12 @@ import TVCore
         }
         Diagnostics.shared.record(.info, "music", "listening source \(channel.historyContext?.sourceKey ?? "-") queue=\(queue.tracks.count)")
         music.play(queue, at: position, stream: channel)
+        #if os(iOS)
+        // Opened as a video opens its player (Apple TV's `play` does the same). The page the chapter was chosen on
+        // has no music strip: the iPhone watch page hides the tab bar that holds it, and an iPad shows it only on
+        // Music's pages, so the song played with its controls only in Control Center (#570).
+        music.presentsPlayer = true
+        #endif
     }
 
     /// The music player gets a source's streams from here, saves where a book is in the playback history, and hands
