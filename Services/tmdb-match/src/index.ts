@@ -12,6 +12,7 @@ import { DurableObject } from "cloudflare:workers";
 import { catalogPerson } from "./catalog-person.ts";
 import { catalogSearch, readCatalogSearch } from "./catalog-search.ts";
 import { catalog, catalogCollections, isCatalogFeed } from "./catalog.ts";
+import { featured } from "./featured.ts";
 import { modelConfig } from "./provider.ts";
 import { buildCalendar, type Calendar, calendarFor, type CalendarKind, type CalendarStore, coverSource, isRegion, servingCovers } from "./calendar.ts";
 
@@ -419,7 +420,7 @@ export default {
     if (pathname === "/v1/match" && request.method === "POST") return match(request, env, ctx);
     if (pathname === "/v1/details" && request.method === "GET") return lookup(request, env);
     if (pathname === "/v1/catalog/search" && request.method === "GET") return searchCatalog(request, env);
-    if (pathname === "/v1/catalog" && request.method === "GET") return browse(request, env);
+    if (pathname === "/v1/catalog" && request.method === "GET") return browse(request, env, ctx);
     if (pathname === "/v1/catalog/collections" && request.method === "GET") return browseCollections(request, env);
     if (pathname === "/v1/search" && request.method === "GET") return search(request, env);
     if (pathname === "/v1/sources" && request.method === "GET") return sources(request, env);
@@ -440,15 +441,36 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-async function browse(request: Request, env: Env): Promise<Response> {
+async function browse(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
   const feed = url.searchParams.get("feed") ?? "trending";
   const language = url.searchParams.get("language") ?? "zh-CN";
   const page = Number(url.searchParams.get("page") ?? "1");
-  if (!isCatalogFeed(feed) || !LANGUAGES.has(language) || !Number.isInteger(page) || page < 1 || page > 500) return new Response(null, { status: 400 });
+  if ((!isCatalogFeed(feed) && feed !== "featured") || !LANGUAGES.has(language) || !Number.isInteger(page) || page < 1 || page > 500) return new Response(null, { status: 400 });
   if (!(await env.DETAILS_LIMITER.limit({ key: request.headers.get("cf-connecting-ip") ?? "" })).success) return new Response(null, { status: 429 });
+  if (feed === "featured") return browseFeatured(env, ctx, language);
   try {
     return Response.json(await catalog(new TMDB(env.TMDB_TOKEN), feed, language, page), { headers: { "cache-control": "public, max-age=3600" } });
+  } catch (error) {
+    return Response.json({ error: (error as Error).message.slice(0, 200) }, { status: 502 });
+  }
+}
+
+// Discover's featured carousel (src/featured.ts). A build reads IMDb, Douban and about 20 TMDB lookups, so the list
+// is kept per data center: 3 hours, or 15 minutes when one of the charts didn't answer.
+async function browseFeatured(env: Env, ctx: ExecutionContext, language: string): Promise<Response> {
+  const headers = { "content-type": "application/json", "cache-control": "public, max-age=3600" };
+  const key = new Request(`https://yingxia-tmdb.getmegaportal.com/v1/catalog?feed=featured&language=${encodeURIComponent(language)}`);
+  const kept = await caches.default.match(key).catch(() => undefined);
+  if (kept) return new Response(kept.body, { headers });
+  try {
+    const { complete, ...value } = await featured(new TMDB(env.TMDB_TOKEN), language);
+    const body = JSON.stringify(value);
+    if (value.items.length > 0) {
+      const keep = new Response(body, { headers: { "content-type": "application/json", "cache-control": `max-age=${complete ? 3 * 3600 : 900}` } });
+      ctx.waitUntil(caches.default.put(key, keep).catch(() => undefined));
+    }
+    return new Response(body, { headers });
   } catch (error) {
     return Response.json({ error: (error as Error).message.slice(0, 200) }, { status: 502 });
   }

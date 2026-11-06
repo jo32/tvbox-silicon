@@ -43,6 +43,11 @@ TMDB request). Worker `yingxia-tmdb` at https://yingxia-tmdb.getmegaportal.com, 
 - `GET /v1/catalog?feed=trending&page=1&language=zh-CN` supplies Discover's catalog rails. Feed names are
   allowlisted in `src/catalog.ts`; pages are limited to 1–500. Results retain movie/series identity, artwork,
   year, genre IDs and TMDB rating. Adult results and people are excluded from title lists.
+- `GET /v1/catalog?feed=featured&language=zh-CN` supplies Discover's featured carousel (`src/featured.ts`, #631): IMDb's
+  most popular films and series (its GraphQL charts) mixed with Douban's hot films and series, Douban first for Chinese,
+  each resolved to its TMDB title (`/find` by IMDb ID; a name and year search for Douban), 10 titles with artwork.
+  TMDB trending fills the list when a chart fails. The built list is kept per data center for 3 hours (15 minutes when a
+  chart didn't answer). The app falls back to trending when this feed fails.
 - `GET /v1/catalog/collections?language=zh-CN` supplies popular people with their known works and the
   allowlisted network/studio logos. A failed individual logo lookup does not discard the other brands.
   Both catalog endpoints reuse the details rate limiter and upstream cache; neither invokes an AI model nor
