@@ -1585,3 +1585,4 @@
 "The plugin finished without a message." = "プラグインはメッセージなしで終了しました。";
 "Copied to the clipboard." = "クリップボードにコピーしました。";
 "The plugin stopped with an error: %@" = "プラグインがエラーで停止しました：%@";
+"Run Again" = "もう一度実行";

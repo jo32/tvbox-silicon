@@ -1585,3 +1585,4 @@
 "The plugin finished without a message." = "插件已完成，没有返回信息。";
 "Copied to the clipboard." = "已复制到剪贴板。";
 "The plugin stopped with an error: %@" = "插件出错停止了：%@";
+"Run Again" = "再运行一次";

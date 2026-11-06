@@ -40,6 +40,17 @@ public struct DriveAppLink: Sendable, Equatable {
         }
     }
 
+    /// The app for a page a plugin opens, when the page only works there: Bilibili's sign-in confirmation
+    /// (`account.bilibili.com/h5/account-h5/auth/scan-web`, what its app shows after scanning a code) needs the
+    /// app's signed-in account, so it opens in the app's own browser (`bilibili://browser?url=`).
+    public static func app(opening page: URL) -> DriveAppLink? {
+        guard page.host?.lowercased() == "account.bilibili.com", page.path.contains("/auth/scan-web") else { return nil }
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.!~*'()"))
+        guard let encoded = page.absoluteString.addingPercentEncoding(withAllowedCharacters: allowed),
+              let url = URL(string: "bilibili://browser?url=" + encoded) else { return nil }
+        return DriveAppLink(app: L10n.text("Bilibili"), urls: [url], opensPage: true)
+    }
+
     /// `encodeURIComponent`, which the apps decode the page with.
     static func openURL(scheme: String, key: String, page: String) -> URL? {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.!~*'()"))

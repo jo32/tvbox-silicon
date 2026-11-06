@@ -1585,3 +1585,4 @@
 "The plugin finished without a message." = "外掛已完成，沒有回傳訊息。";
 "Copied to the clipboard." = "已複製到剪貼簿。";
 "The plugin stopped with an error: %@" = "外掛出錯停止了：%@";
+"Run Again" = "再執行一次";

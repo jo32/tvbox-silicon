@@ -54,3 +54,11 @@ private let origin = URL(string: "https://one.example/fty.json")!
     let sent = try JSONSerialization.jsonObject(with: Data(event.json.utf8)) as? [String: Any]
     #expect(sent?["kind"] as? String == "touch" && sent?["x"] as? Double == 1 && sent?["y"] as? Double == 0.25)
 }
+
+/// lytvs 设置哔哩Cookie › APP授权 opens Bilibili's confirmation page, which needs the Bilibili app's account.
+@Test func bilibiliConfirmationPagesOpenInTheApp() throws {
+    let page = URL(string: "https://account.bilibili.com/h5/account-h5/auth/scan-web?navhide=1&callback=close&qrcode_key=abc&from=main-mini")!
+    let target = try #require(DriveAppLink.app(opening: page))
+    #expect(target.urls.first?.absoluteString == "bilibili://browser?url=https%3A%2F%2Faccount.bilibili.com%2Fh5%2Faccount-h5%2Fauth%2Fscan-web%3Fnavhide%3D1%26callback%3Dclose%26qrcode_key%3Dabc%26from%3Dmain-mini")
+    #expect(DriveAppLink.app(opening: URL(string: "https://www.bilibili.com/video/BV1")!) == nil)
+}

@@ -1585,3 +1585,4 @@
 "The plugin finished without a message." = "The plugin finished without a message.";
 "Copied to the clipboard." = "Copied to the clipboard.";
 "The plugin stopped with an error: %@" = "The plugin stopped with an error: %@";
+"Run Again" = "Run Again";

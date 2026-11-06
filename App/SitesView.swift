@@ -1205,6 +1205,11 @@ struct PluginActionPage: View {
                 EmptyResults(symbol: message == nil ? "checkmark.circle" : "info.circle", title: video.name,
                              message: message ?? L10n.text("The plugin finished without a message."),
                              action: L10n.text("Back"), actionSymbol: "chevron.backward") { dismiss() }
+                // Each tap runs the setting once more, as a tap on its row does in TVBox: settings that ask for a
+                // double tap to confirm (a reset) take two quick taps here. Never disabled, so the second tap counts.
+                Button { runAgain() } label: { Label(L10n.text("Run Again"), systemImage: "hand.tap").padding(.horizontal, 8) }
+                    .controlButton()
+                    .accessibilityIdentifier("pluginSetting.runAgain")
             case .failed(let message):
                 EmptyResults(symbol: "exclamationmark.triangle", title: video.name, message: message,
                              action: L10n.text("Try Again")) { Task { await run() } }
@@ -1250,6 +1255,29 @@ struct PluginActionPage: View {
         catch { phase = .failed(error.localizedDescription) }
     }
 
+    private func runAgain() {
+        Task {
+            do { show(try await client.runAction(action), first: true) }
+            catch is CancellationError { }
+            catch { phase = .failed(error.localizedDescription) }
+        }
+    }
+
+    /// A page the plugin opens. A sign-in page that only works in its service's app (Bilibili's confirmation page)
+    /// goes there when the app is on this device; anything else, or no app, opens as it is.
+    private func open(_ link: URL) {
+        #if os(iOS)
+        let tries = (DriveAppLink.app(opening: link)?.urls ?? []) + [link]
+        #else
+        let tries = [link]
+        #endif
+        func attempt(_ index: Int) {
+            guard index < tries.count else { return }
+            openURL(tries[index]) { opened in if !opened { attempt(index + 1) } }
+        }
+        attempt(0)
+    }
+
     #if DEBUG
     private static func find(_ text: String, in node: PluginNode) -> PluginNode? {
         if node.tappable, node.spokenText.contains(text) { return node.children.lazy.compactMap { find(text, in: $0) }.first ?? node }
@@ -1275,7 +1303,7 @@ struct PluginActionPage: View {
     private func show(_ next: PluginScreen, first: Bool) {
         if screen.windows.last?.id != next.windows.last?.id { typed = [:] }
         screen = next
-        for link in next.links { openURL(link) }
+        for link in next.links { open(link) }
         var said = next.notices.joined(separator: "\n")
         if let copied = next.clipboard {
             // What the plugin copied goes on the pasteboard (Apple TV has none, so it is shown instead).
