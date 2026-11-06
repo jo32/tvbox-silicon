@@ -33,17 +33,19 @@ public enum Remux {
     }
 
     /// Opens the file and returns the address of its HLS master playlist on a loopback server. `subtitles`, the
-    /// files beside it, are fetched (with `headers`) while the file opens and join its own subtitles.
+    /// files beside it, are fetched (with `headers`) while the file opens and join its own subtitles. The picture
+    /// waits for them at most `subtitleGrace` after the file is open; any later the player shows them itself
+    /// (`subtitleSources`, #576).
     public static func open(_ source: RemuxSource, subtitles: [ExternalSubtitle] = [], headers: [String: String] = [:]) async throws -> URL {
         try await open(source, subtitles: subtitles, headers: headers, session: .shared)
     }
 
     static func open(_ source: RemuxSource, subtitles: [ExternalSubtitle], headers: [String: String], session subtitleSession: URLSession,
                      translator: (any SubtitleTranslating)? = SubtitleTranslation.translator) async throws -> URL {
-        async let files = SubtitleFile.load(subtitles, headers: headers, session: subtitleSession)
+        let loading = Task { await SubtitleFile.load(subtitles, headers: headers, session: subtitleSession) }
         let session = RemuxSession(source: source)
-        try await session.open()
-        session.add(await files)
+        do { try await session.open() } catch { loading.cancel(); throw error }
+        session.add(await waiting(for: loading, atMost: subtitleGrace))
         if let translator { await session.addTranslations(translator) }
         RemuxStore.shared.add(session)
         do {
@@ -54,6 +56,29 @@ public enum Remux {
             throw error
         }
     }
+
+    /// How long an open file waits for its subtitle files once the picture is ready.
+    static let subtitleGrace: Duration = .seconds(2)
+
+    /// The files `loading` fetched, or none if it takes longer than `limit` (it is cancelled then).
+    static func waiting(for loading: Task<[SubtitleFile.Track], Never>, atMost limit: Duration) async -> [SubtitleFile.Track] {
+        await withTaskGroup(of: [SubtitleFile.Track]?.self) { group in
+            group.addTask { await loading.value }
+            group.addTask { try? await Task.sleep(for: limit); return nil }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            guard let first else {
+                loading.cancel()
+                Diagnostics.shared.record(.info, "subtitles", "files late; the player shows them")
+                return []
+            }
+            return first
+        }
+    }
+
+    /// The addresses of the subtitle files that are tracks of the stream at `url`: the player leaves these to
+    /// AVPlayer and shows the rest itself.
+    public static func subtitleSources(_ url: URL) -> Set<URL> { session(url)?.subtitleSources ?? [] }
 
     /// Whether `url` is served by the repackager: a file (`open`) or an HLS stream (`HLSRemux`).
     public static func isRemuxed(_ url: URL) -> Bool { identifier(url).map(RemuxStore.shared.contains) ?? false }

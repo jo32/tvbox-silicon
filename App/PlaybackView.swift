@@ -503,6 +503,10 @@ import IOKit.pwr_mgt
         delayObserver = NotificationCenter.default.addObserver(forName: SubtitleDelay.changed, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.followSubtitleDelay() }
         }
+        externalSubtitles.cues = subtitles
+        externalSubtitles.player = player
+        externalSubtitles.changed = { [weak self] in self?.followSubtitleDelay() }
+        subtitles.nativeChosen = { [weak self] in self?.externalSubtitles.nativeChosen() }
         followSubtitleDelay()
     }
     private var styleObserver: NSObjectProtocol?
@@ -510,18 +514,22 @@ import IOKit.pwr_mgt
     /// Shows delayed subtitle lines at the player's clock (`SubtitleCues.advance`), only while a delay is set.
     @ObservationIgnored private var subtitleTimeObserver: Any?
     /// Delayed subtitles (#599) reach the screen on a quarter-second clock rather than on the once-a-second sample.
-    /// At 0 the lines go up as AVPlayer hands them over, so no clock runs: it would only wake the main thread.
+    /// A subtitle file the app shows itself (#576) has a twentieth-of-a-second one, so its lines are on time to a
+    /// frame or so. Otherwise the lines go up as AVPlayer hands them over, so no clock runs: it would only wake the
+    /// main thread.
     private func followSubtitleDelay() {
-        let delayed = SubtitleDelay.load() > 0
-        if delayed, subtitleTimeObserver == nil {
-            subtitleTimeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { [weak self] time in
-                MainActor.assumeIsolated { self?.subtitles.advance(to: time.seconds) }
-            }
-        } else if !delayed, let observer = subtitleTimeObserver {
-            player.removeTimeObserver(observer)
-            subtitleTimeObserver = nil
+        let interval: Double? = subtitles.document != nil ? 0.05 : SubtitleDelay.load() > 0 ? 0.25 : nil
+        guard interval != subtitleClockInterval else { return }
+        if let observer = subtitleTimeObserver { player.removeTimeObserver(observer); subtitleTimeObserver = nil }
+        subtitleClockInterval = interval
+        guard let interval else { return }
+        subtitleTimeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: interval, preferredTimescale: 600), queue: .main) { [weak self] time in
+            MainActor.assumeIsolated { self?.subtitles.advance(to: time.seconds) }
         }
     }
+    @ObservationIgnored private var subtitleClockInterval: Double?
+    /// Subtitle files beside the video, or added while it plays, that the app shows itself (#576).
+    let externalSubtitles = ExternalSubtitles()
     /// The subtitle lines the player's overlay draws (`SubtitleOverlay`).
     let subtitles = SubtitleCues()
     /// The saved subtitle style as the rule AVPlayer lays over every subtitle cue it draws itself.
@@ -593,6 +601,7 @@ import IOKit.pwr_mgt
             let address = prepared.url
             self.configure(channel, url: address, generation: activeGeneration)
             self.playing = channel; self.automatic = address
+            self.externalSubtitles.begin(channel, playing: address)
             self.qualities = liveQualities.isEmpty ? DashStreams.qualities(for: address) : liveQualities
             self.quality = liveQuality
             if DanmakuSource.has(channel.url), let comments = await DanmakuSource.comments(for: channel.url),
@@ -728,6 +737,7 @@ import IOKit.pwr_mgt
             }
             self.detachItem(); self.observation = nil
             self.configure(channel, url: remuxed, generation: active)
+            self.externalSubtitles.playing(remuxed)
             self.automatic = remuxed
         }
     }
@@ -796,6 +806,7 @@ import IOKit.pwr_mgt
             self.loading = true
             self.detachItem(); self.observation = nil
             self.configure(channel, url: remuxed, generation: active)
+            self.externalSubtitles.playing(remuxed)
             self.automatic = remuxed
         }
     }
@@ -1045,6 +1056,7 @@ import IOKit.pwr_mgt
         if playing != nil { ErrorReports.shared.stoppedPlaying() }
         playing = nil
         catalogDanmaku.clear()
+        externalSubtitles.stop()
         subtitles.follow(nil)
         historyContext = nil; pendingResume = nil; restoringPosition = false
         requestedResumePosition = nil; restoredPosition = nil
@@ -1273,7 +1285,10 @@ extension PlaybackSession {
     /// The repackaged file's address, nil when FFmpeg can't read it.
     fileprivate static func remux(_ source: RemuxSource, channel: Channel) async -> URL? {
         Remux.screenCaptured = screenCaptured
-        do { return try await Remux.open(source, subtitles: channel.subtitles, headers: channel.headers) }
+        // Only the files for this episode: a drive's folder holds every episode's.
+        let video = SubtitleMatch.episode(channel.name) != nil ? channel.name : channel.url.lastPathComponent.removingPercentEncoding ?? channel.name
+        let files = Array(SubtitleMatch.candidates(channel.subtitles, video: video).prefix(8))
+        do { return try await Remux.open(source, subtitles: files, headers: channel.headers) }
         catch {
             if !Task.isCancelled { Diagnostics.shared.failure("player", "remux source=\(channel.historyContext?.sourceKey ?? "-")", error) }
             return nil
@@ -1398,6 +1413,7 @@ extension PlaybackSession {
         begin(channel)
         loading = upcoming.item.status != .readyToPlay
         playing = channel; automatic = upcoming.prepared.url
+        externalSubtitles.begin(channel, playing: upcoming.prepared.url)
         player.allowsExternalPlayback = !Remux.isRemuxed(upcoming.prepared.url)
         qualities = DashStreams.qualities(for: upcoming.prepared.url)
         watch(upcoming.item, channel: channel, url: upcoming.prepared.url, generation: activeGeneration)

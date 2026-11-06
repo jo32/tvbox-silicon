@@ -205,12 +205,18 @@ import VideoToolbox
         #expect(master.contains(#"TYPE=SUBTITLES,GROUP-ID="subtitles",NAME="末世行者.chs.srt",LANGUAGE="zh-Hans",DEFAULT=YES"#))
         #expect(master.contains(#"NAME="末世行者.英文.srt",DEFAULT=NO"#) && master.contains(#"SUBTITLES="subtitles""#))
         #expect(plan.mediaPlaylist(track: 2).contains("2-0.vtt"))
-        // Each cue goes to the segment it starts in; the first and last take what lies outside the picture.
+        // Each cue goes to every segment it shows in (3.9 s runs into the second); the first and last take what lies
+        // outside the picture.
         let cues = [cue(-2_000_000), cue(3_900_000), cue(4_000_000), cue(11_000_000), cue(20_000_000)]
         #expect(plan.segments == 3)
         #expect(plan.cues(cues, segment: 0).map(\.start) == [-2_000_000, 3_900_000])
-        #expect(plan.cues(cues, segment: 1).map(\.start) == [4_000_000])
+        #expect(plan.cues(cues, segment: 1).map(\.start) == [3_900_000, 4_000_000])
         #expect(plan.cues(cues, segment: 2).map(\.start) == [11_000_000, 20_000_000])
+        // A long line from 2 s to 13 s shows in all three, whole.
+        let long = RemuxPlan.Cue(start: 2_000_000, end: 13_000_000, text: "long")
+        #expect((0..<3).allSatisfy { plan.cues([long], segment: $0) == [long] })
+        // One ending exactly where a segment begins isn't in it.
+        #expect(plan.cues([RemuxPlan.Cue(start: 3_000_000, end: 4_000_000, text: "x")], segment: 1).isEmpty)
     }
 
     // MARK: - Playing through FFmpeg

@@ -100,6 +100,7 @@
 		4861B86C4B02394CE7FF3DC0 /* PythonHost in Resources */ = {isa = PBXBuildFile; fileRef = 0558AED26E6028C2881DD044 /* PythonHost */; };
 		49FAE12E9DA2ED063E9C4754 /* PlaybackHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 334B106CCFB47B5E27376A16 /* PlaybackHistoryView.swift */; };
 		4C65106175D517040E98330B /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D1010816125FBC3792AF838 /* Store.swift */; };
+		4EAAD9E59129B744D0008135 /* ExternalSubtitles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75B036EC33AB3F0991E78CDD /* ExternalSubtitles.swift */; };
 		4ECE8586E27A017017F26EDC /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181C983C0018A97F2A086298 /* DiscoveryView.swift */; };
 		4FDAA1091EFC2C8B0EA634C7 /* FavoriteControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8F5818C392424F43FF0C9 /* FavoriteControls.swift */; };
 		4FF55220DBC7080B2E95C5A8 /* BilibiliCastController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B1CEF969E4F3D3301A8D61 /* BilibiliCastController.swift */; };
@@ -198,6 +199,7 @@
 		930D2E53E04CBCD27E280EBD /* runtime-probe.jar in Resources */ = {isa = PBXBuildFile; fileRef = E19FE970E68D278C15E8DBF8 /* runtime-probe.jar */; };
 		95638C5F64B74B017FAB3FD7 /* Capstone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 08B7C43C763200E67A22E365 /* Capstone-LLVM.txt */; };
 		963C1AD1D27CD834FFDF0273 /* DiscoverSearchFilters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 356AA3CFC2271101141EF964 /* DiscoverSearchFilters.swift */; };
+		96FE538997506DEE3A88A64D /* ExternalSubtitles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75B036EC33AB3F0991E78CDD /* ExternalSubtitles.swift */; };
 		97DFD3224F5E543A2BE6EDE0 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CB1FA4BB4990588B428781E /* PlayerView.swift */; };
 		97EB7EDFE8BA6C35B6197AFF /* DiscoverSearchFilters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 356AA3CFC2271101141EF964 /* DiscoverSearchFilters.swift */; };
 		982EF0148420E135FF05E244 /* SubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1212366D71C455D6EAE5E4 /* SubtitleOverlay.swift */; };
@@ -233,6 +235,7 @@
 		B85FBE9366F3D7487A517779 /* MusicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 235375CC2420B76124FCEBC2 /* MusicView.swift */; };
 		BA2A29F18602E8BF1C65CCDB /* MangaDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B33761B860B18DD0F3CE7FAC /* MangaDetailView.swift */; };
 		BA97CE75C2E0DF21635E17EA /* CloudFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A0D2EAF4F07329DAB40B97D /* CloudFilesView.swift */; };
+		BB014638AF8BB6A44F1C58FA /* ExternalSubtitles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75B036EC33AB3F0991E78CDD /* ExternalSubtitles.swift */; };
 		BB4A23786D789829360C242B /* TVBoxApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A2BB58B1720E9D6D85F93F4 /* TVBoxApp.swift */; };
 		BB831CF3D63240DF89E53C9F /* releases.json in Resources */ = {isa = PBXBuildFile; fileRef = 73945256FDDE0952A22BF98C /* releases.json */; };
 		BC4E3C9C3181FF25AA7E06F9 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C911ACB6C027C8F9A096409 /* RootView.swift */; };
@@ -373,6 +376,7 @@
 		74376E0596FEAF3CE3FBE7C8 /* DiscoverTrailer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverTrailer.swift; sourceTree = "<group>"; };
 		7459A3EBEF2E7C346B508738 /* LiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveView.swift; sourceTree = "<group>"; };
 		75124CC2471CF95C1FFB168A /* SitesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SitesView.swift; sourceTree = "<group>"; };
+		75B036EC33AB3F0991E78CDD /* ExternalSubtitles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalSubtitles.swift; sourceTree = "<group>"; };
 		76143E60685F2F76994F90D7 /* DiscoverSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverSearchView.swift; sourceTree = "<group>"; };
 		77D75493765469B6134467AE /* Unicorn-LGPL2.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Unicorn-LGPL2.txt"; sourceTree = "<group>"; };
 		781912838F2DF6F1DD3963CF /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/InfoPlist.strings; sourceTree = "<group>"; };
@@ -544,6 +548,7 @@
 				B45CB8261D922949ADBDBE15 /* DownloadsView.swift */,
 				B451E5612B33CF005EEAAE08 /* EpisodeSkipSettingsView.swift */,
 				9B2D3312926C619F1DD413B8 /* ExternalDisplay.swift */,
+				75B036EC33AB3F0991E78CDD /* ExternalSubtitles.swift */,
 				9BD8F5818C392424F43FF0C9 /* FavoriteControls.swift */,
 				559683A9A4BDFA11A4A9FE67 /* FeedbackView.swift */,
 				739A64FB51780D4314D2DDF8 /* GlassKit.swift */,
@@ -1117,6 +1122,7 @@
 				2B263C305CDC1687A050CCBC /* DownloadsView.swift in Sources */,
 				5E064141ADA8E6A4E7A97D0B /* EpisodeSkipSettingsView.swift in Sources */,
 				F845C8AC22D7E526F91FB1AB /* ExternalDisplay.swift in Sources */,
+				BB014638AF8BB6A44F1C58FA /* ExternalSubtitles.swift in Sources */,
 				D4A131B02DE0A206E18B4F0A /* FavoriteControls.swift in Sources */,
 				FBE0D58826319D7544827004 /* FeedbackView.swift in Sources */,
 				1050D617A22F09CD0A01DE66 /* GlassKit.swift in Sources */,
@@ -1206,6 +1212,7 @@
 				14FA5947D5B1472F7AF31530 /* DownloadsView.swift in Sources */,
 				F792BA02C02390291EEE4838 /* EpisodeSkipSettingsView.swift in Sources */,
 				E81BB0E2AAAAB9BF2D3706D4 /* ExternalDisplay.swift in Sources */,
+				96FE538997506DEE3A88A64D /* ExternalSubtitles.swift in Sources */,
 				E0B7524BAA3500D6675442D7 /* FavoriteControls.swift in Sources */,
 				EE69AE0800A8DAB7450170D3 /* FeedbackView.swift in Sources */,
 				F3B63B43988E72A87677A7AC /* GlassKit.swift in Sources */,
@@ -1297,6 +1304,7 @@
 				B351A3B692D2C43212B5F65F /* DownloadsView.swift in Sources */,
 				51E4D236D0D94E65A7881D6C /* EpisodeSkipSettingsView.swift in Sources */,
 				DEE59E7663EDCA0AB68B164E /* ExternalDisplay.swift in Sources */,
+				4EAAD9E59129B744D0008135 /* ExternalSubtitles.swift in Sources */,
 				4FDAA1091EFC2C8B0EA634C7 /* FavoriteControls.swift in Sources */,
 				67E6A7CC3D496FB46C963AC7 /* FeedbackView.swift in Sources */,
 				338825790412D642115F2BD3 /* GlassKit.swift in Sources */,

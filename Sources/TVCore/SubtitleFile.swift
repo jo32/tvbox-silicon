@@ -32,6 +32,8 @@ enum SubtitleFile {
         var language: String
         /// Microseconds from the start of the video.
         var cues: [RemuxPlan.Cue]
+        /// The address it came from.
+        var source: URL? = nil
     }
 
     /// Larger files are not subtitles.
@@ -62,19 +64,11 @@ enum SubtitleFile {
     }
 
     private static func fetch(_ subtitle: ExternalSubtitle, headers: [String: String], session: URLSession) async -> Track? {
-        var request = URLRequest(url: subtitle.url, timeoutInterval: 8)
-        // A plugin's loopback proxy wants none; a drive's CDN wants the video's.
-        if !["127.0.0.1", "localhost"].contains(subtitle.url.host() ?? "") { headers.forEach { request.setValue($1, forHTTPHeaderField: $0) } }
         do {
-            let (data, response) = try await session.data(for: request)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            guard (200..<300).contains(status), data.count <= largest else {
-                Diagnostics.shared.record(.warning, "subtitles", "file host=\(subtitle.url.host() ?? "-") status=\(status) bytes=\(data.count)")
-                return nil
-            }
+            let data = try await download(subtitle.url, headers: headers, session: session)
             let cues = Self.cues(data, format: subtitle.format)
             Diagnostics.shared.record(.info, "subtitles", "file format=\(subtitle.format.isEmpty ? "-" : subtitle.format) bytes=\(data.count) cues=\(cues.count)")
-            return cues.isEmpty ? nil : Track(name: subtitle.name, language: subtitle.language, cues: cues)
+            return cues.isEmpty ? nil : Track(name: subtitle.name, language: subtitle.language, cues: cues, source: subtitle.url)
         } catch {
             if !(error is CancellationError), (error as? URLError)?.code != .cancelled {
                 Diagnostics.shared.record(.warning, "subtitles", "file host=\(subtitle.url.host() ?? "-") \(error.localizedDescription)")
@@ -83,27 +77,87 @@ enum SubtitleFile {
         }
     }
 
+    /// A subtitle file's bytes, counted as they arrive: one that grows past `limit` is dropped then, not once it has
+    /// all been held in memory. A Content-Length over the limit is refused before the body.
+    static func download(_ url: URL, headers: [String: String], session: URLSession = .shared, limit: Int = largest) async throws -> Data {
+        var request = URLRequest(url: url, timeoutInterval: 8)
+        // A plugin's loopback proxy wants none; a drive's CDN wants the video's.
+        if !["127.0.0.1", "localhost"].contains(url.host() ?? "") { headers.forEach { request.setValue($1, forHTTPHeaderField: $0) } }
+        let (bytes, response) = try await session.bytes(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else { bytes.task.cancel(); throw SubtitleLoadError.http(status) }
+        guard response.expectedContentLength <= Int64(limit) else { bytes.task.cancel(); throw SubtitleLoadError.tooLarge }
+        var data = Data()
+        if response.expectedContentLength > 0 { data.reserveCapacity(Int(response.expectedContentLength)) }
+        var chunk = [UInt8](); chunk.reserveCapacity(64 << 10)
+        for try await byte in bytes {
+            chunk.append(byte)
+            if chunk.count == 64 << 10 {
+                data.append(contentsOf: chunk); chunk.removeAll(keepingCapacity: true)
+                if data.count > limit { bytes.task.cancel(); throw SubtitleLoadError.tooLarge }
+            }
+        }
+        data.append(contentsOf: chunk)
+        guard data.count <= limit else { throw SubtitleLoadError.tooLarge }
+        return data
+    }
+
     /// The cues of a subtitle file, in order. The format comes from its contents; `format` (a MIME type) only
     /// breaks a tie.
     static func cues(_ data: Data, format: String = "") -> [RemuxPlan.Cue] {
         let text = Self.text(data)
-        let ass = text.contains("[Events]") || text.range(of: #"(?m)^Dialogue:"#, options: .regularExpression) != nil
-            || (format.contains("ssa") && !text.contains("-->"))
-        let cues = ass ? assCues(text) : timedCues(text, webVTT: text.hasPrefix("WEBVTT"))
+        return cues(text: text, format: Self.format(text, hint: format))
+    }
+
+    static func cues(text: String, format: SubtitleDocument.Format) -> [RemuxPlan.Cue] {
+        let cues = format.isStyled ? assCues(text) : timedCues(text, webVTT: format == .vtt)
         return cues.sorted { $0.start < $1.start }
     }
 
-    /// The file's text: by its byte order mark, else UTF-8, else GB 18030 or Big5, which Chinese subtitles often use.
+    /// The file's format by its contents; a MIME type or file name only breaks a tie.
+    static func format(_ text: String, hint: String = "", name: String = "") -> SubtitleDocument.Format {
+        let named = (hint + " " + name.lowercased())
+        let ass = text.contains("[Events]") || text.range(of: #"(?m)^Dialogue:"#, options: .regularExpression) != nil
+            || ((named.contains("ssa") || named.contains("ass")) && !text.contains("-->"))
+        if ass { return text.contains("[V4 Styles]") || named.hasSuffix(".ssa") ? .ssa : .ass }
+        return text.hasPrefix("WEBVTT") ? .vtt : .srt
+    }
+
+    /// The file's text: by its byte order mark, else UTF-8, else Shift-JIS when it reads as Japanese, else GB 18030
+    /// or Big5, which Chinese subtitles often use.
     static func text(_ data: Data) -> String {
+        text(data, encoding: .automatic) ?? String(decoding: data, as: UTF8.self)
+    }
+
+    /// The file's text in `encoding`; nil when the bytes aren't text in it.
+    static func text(_ data: Data, encoding: SubtitleEncoding) -> String? {
+        if let chosen = encoding.foundation {
+            var bytes = data
+            if chosen == .utf8, data.starts(with: [0xEF, 0xBB, 0xBF]) { bytes = data.dropFirst(3) }
+            if chosen == .utf16LittleEndian, data.starts(with: [0xFF, 0xFE]) { bytes = data.dropFirst(2) }
+            if chosen == .utf16BigEndian, data.starts(with: [0xFE, 0xFF]) { bytes = data.dropFirst(2) }
+            return String(data: bytes, encoding: chosen)
+        }
         if data.starts(with: [0xEF, 0xBB, 0xBF]) { return String(decoding: data.dropFirst(3), as: UTF8.self) }
         if data.starts(with: [0xFF, 0xFE]), let text = String(data: data.dropFirst(2), encoding: .utf16LittleEndian) { return text }
         if data.starts(with: [0xFE, 0xFF]), let text = String(data: data.dropFirst(2), encoding: .utf16BigEndian) { return text }
         if let text = String(data: data, encoding: .utf8) { return text }
-        for encoding in [CFStringEncodings.GB_18030_2000, .big5] {
-            let value = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(encoding.rawValue)))
-            if let text = String(data: data, encoding: value) { return text }
+        if let text = String(data: data, encoding: .shiftJIS), japanese(text) { return text }
+        for encoding in [SubtitleEncoding.gb18030, .big5] {
+            if let value = encoding.foundation, let text = String(data: data, encoding: value) { return text }
         }
-        return String(decoding: data, as: UTF8.self)
+        return nil
+    }
+
+    /// Japanese writes much of every sentence in kana. Chinese bytes read as Shift-JIS come out as half-width katakana
+    /// and kanji, almost never as full-width kana, so a fifth of the letters being kana tells the two apart.
+    static func japanese(_ text: String) -> Bool {
+        var letters = 0, kana = 0
+        for scalar in text.unicodeScalars where scalar.value > 0x7F {
+            letters += 1
+            if (0x3041...0x30FF).contains(scalar.value) { kana += 1 }
+        }
+        return letters > 0 && kana * 5 >= letters
     }
 
     /// SubRip and WebVTT: a timing line, then the cue's text up to a blank line. Numbers and cue names before
