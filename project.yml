@@ -129,6 +129,7 @@ targets:
           RUNTIME="$SRCROOT/build/AppleRuntime/$PLATFORM_NAME"
           test -f "$RUNTIME/lib/libTVAppleRuntime.a"
           "$SRCROOT/Scripts/check-java-host.sh" "$RUNTIME/Resources/JavaHost/host.jar"
+          "$SRCROOT/Scripts/check-apple-runtime.sh" "$RUNTIME"
           rsync -a --delete "$RUNTIME/Resources/lib/" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/lib/"
           rsync -a --delete "$RUNTIME/Resources/JavaHost/" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/JavaHost/"
         basedOnDependencyAnalysis: false
@@ -196,6 +197,7 @@ targets:
           RUNTIME="$SRCROOT/build/AppleRuntime/$PLATFORM_NAME"
           test -f "$RUNTIME/lib/libTVAppleRuntime.a"
           "$SRCROOT/Scripts/check-java-host.sh" "$RUNTIME/Resources/JavaHost/host.jar"
+          "$SRCROOT/Scripts/check-apple-runtime.sh" "$RUNTIME"
           rsync -a --delete "$RUNTIME/Resources/lib/" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/lib/"
           rsync -a --delete "$RUNTIME/Resources/JavaHost/" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/JavaHost/"
         basedOnDependencyAnalysis: false

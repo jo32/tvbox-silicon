@@ -1,0 +1,28 @@
+--- a/backend/unicorn2/src/main/native/unicorn.c
++++ b/backend/unicorn2/src/main/native/unicorn.c
+@@ -1,5 +1,9 @@
+ #include "unicorn.h"
+ 
++#ifndef TVBOX_TCG_BUFFER_SIZE
++#define TVBOX_TCG_BUFFER_SIZE (32u * 1024 * 1024)
++#endif
++
+ static JavaVM* cachedJVM;
+ 
+ static jmethodID onBlock = 0;
+@@ -51,6 +55,15 @@
+   (JNIEnv *env, jclass cls, jint arch, jint mode) {
+   uc_engine *eng = NULL;
+   uc_err err = uc_open((uc_arch)arch, (uc_mode)mode, &eng);
++  if (err == UC_ERR_OK) {
++    // Yingxia (issue #563): unless told otherwise, QEMU reserves 1 GiB of address space per engine
++    // for translated code, and calls exit(1) when it can't. iOS gives devices with 3 GB of memory or
++    // less a small address space, already shared with the Java heap, so loading a plugin's guard
++    // quit the app without a crash report. The interpreter fills a few MB per guard; a full buffer
++    // is flushed and refilled.
++    uc_err sized = uc_ctl_set_tcg_buffer_size(eng, TVBOX_TCG_BUFFER_SIZE);
++    if (sized != UC_ERR_OK) fprintf(stderr, "uc_ctl_set_tcg_buffer_size failed: err=%d\n", sized);
++  }
+   if (err != UC_ERR_OK) {
+     throwException(env, err);
+     return 0;
