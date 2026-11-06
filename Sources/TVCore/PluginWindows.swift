@@ -13,9 +13,15 @@ public struct PluginScreen: Equatable, Sendable {
     public var links: [URL]
     /// The setting's own answer (`msg`), when it ran without a window.
     public var message: String?
+    /// Text the plugin copied, for the device's pasteboard.
+    public var clipboard: String?
+    /// Why the setting showed nothing: the error that ended the plugin's thread.
+    public var error: String?
 
-    public init(windows: [PluginWindow] = [], notices: [String] = [], links: [URL] = [], message: String? = nil) {
+    public init(windows: [PluginWindow] = [], notices: [String] = [], links: [URL] = [], message: String? = nil,
+                clipboard: String? = nil, error: String? = nil) {
         self.windows = windows; self.notices = notices; self.links = links; self.message = message
+        self.clipboard = clipboard; self.error = error
     }
 
     init(json: [String: JSONValue]) {
@@ -24,6 +30,8 @@ public struct PluginScreen: Equatable, Sendable {
         links = (ui["links"]?.array ?? []).compactMap { $0.string.flatMap(URL.init(string:)) }
         notices = (json["notices"]?.array ?? []).compactMap { $0.string?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         message = json["msg"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines).pluginNonEmpty
+        clipboard = ui["clipboard"]?.string?.pluginNonEmpty
+        error = json["error"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines).pluginNonEmpty
     }
 }
 
@@ -96,6 +104,8 @@ public struct PluginNode: Equatable, Sendable, Identifiable {
     public let keyboard: String?
     public let multiline: Bool
     public let image: Data?
+    /// A picture the plugin reads touches on (a color wheel): a tap sends where it landed.
+    public let touch: Bool
     /// Fills its image frame (center-crop or stretch) rather than fitting in it.
     public let fill: Bool
     /// Size in Android dp, when the plugin set one.
@@ -133,6 +143,7 @@ public struct PluginNode: Equatable, Sendable, Identifiable {
         keyboard = json["keyboard"]?.string
         multiline = json["multiline"].flatMap(\.pluginFlag) ?? false
         image = json["image"]?.string.flatMap { Data(base64Encoded: $0) }
+        touch = json["touch"].flatMap(\.pluginFlag) ?? false
         fill = json["fill"].flatMap(\.pluginFlag) ?? false
         width = json["width"]?.double
         height = json["height"]?.double
@@ -174,6 +185,8 @@ public struct PluginColor: Equatable, Sendable {
 public struct PluginEvent: Sendable {
     public enum Kind: String, Sendable {
         case click, submit, item, change, back, close, poll
+        /// A tap at a point of a `touch` picture.
+        case touch
         /// Closes every window, when the viewer leaves the setting.
         case closeAll
     }
@@ -182,17 +195,21 @@ public struct PluginEvent: Sendable {
     public let kind: Kind
     public var view: Int?
     public var index: Int?
+    /// Where a touch landed, as fractions (0...1) of the picture's width and height.
+    public var x: Double?
+    public var y: Double?
     /// Fields' current values by view id, applied before the tap runs.
     public var values: [Int: Value]
 
-    public init(window: Int, kind: Kind, view: Int? = nil, index: Int? = nil, values: [Int: Value] = [:]) {
-        self.window = window; self.kind = kind; self.view = view; self.index = index; self.values = values
+    public init(window: Int, kind: Kind, view: Int? = nil, index: Int? = nil, x: Double? = nil, y: Double? = nil, values: [Int: Value] = [:]) {
+        self.window = window; self.kind = kind; self.view = view; self.index = index; self.x = x; self.y = y; self.values = values
     }
 
     var json: String {
         var object: [String: Any] = ["window": window, "kind": kind.rawValue]
         if let view { object["view"] = view }
         if let index { object["index"] = index }
+        if let x, let y { object["x"] = min(1, max(0, x)); object["y"] = min(1, max(0, y)) }
         if !values.isEmpty {
             object["values"] = Dictionary(uniqueKeysWithValues: values.map { key, value -> (String, Any) in
                 switch value { case .text(let text): (String(key), text); case .on(let on): (String(key), on); case .number(let n): (String(key), n) }

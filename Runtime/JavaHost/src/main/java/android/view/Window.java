@@ -53,4 +53,25 @@ public class Window {
     public void setDecorFitsSystemWindows(boolean fits) { }
     public boolean requestFeature(int feature) { return true; }
     public WindowManager getWindowManager() { return WindowManager.DEFAULT; }
+
+    private final java.util.List<Object[]> backCallbacks = new java.util.ArrayList<>();
+    private final android.window.OnBackInvokedDispatcher backDispatcher = new android.window.OnBackInvokedDispatcher() {
+        @Override public void registerOnBackInvokedCallback(int priority, android.window.OnBackInvokedCallback callback) {
+            if (callback == null || priority < 0) return;
+            unregisterOnBackInvokedCallback(callback);
+            backCallbacks.add(new Object[]{priority, callback});
+        }
+        @Override public void unregisterOnBackInvokedCallback(android.window.OnBackInvokedCallback callback) { backCallbacks.removeIf(entry -> entry[1] == callback); }
+    };
+    public android.window.OnBackInvokedDispatcher getOnBackInvokedDispatcher() { return backDispatcher; }
+    /** Back to the callback registered last at the highest priority, as Android 13 sends it; false when none is. */
+    public boolean tvboxBackCallback() {
+        Object[] chosen = null;
+        for (Object[] entry : backCallbacks) if (chosen == null || (Integer) entry[0] >= (Integer) chosen[0]) chosen = entry;
+        if (chosen == null) return false;
+        android.window.OnBackInvokedCallback callback = (android.window.OnBackInvokedCallback) chosen[1];
+        if (callback instanceof android.window.OnBackAnimationCallback animated) animated.onBackStarted(new android.window.BackEvent(0, 0, 0, android.window.BackEvent.EDGE_LEFT));
+        callback.onBackInvoked();
+        return true;
+    }
 }

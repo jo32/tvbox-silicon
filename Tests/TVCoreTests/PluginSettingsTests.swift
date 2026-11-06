@@ -43,3 +43,14 @@ private let origin = URL(string: "https://one.example/fty.json")!
     let values = sent?["values"] as? [String: Any]
     #expect(values?["40"] as? String == "SESSDATA=1" && values?["41"] as? Bool == true)
 }
+
+/// aowu 弹幕颜色 draws a color wheel the viewer touches; lytvs copies cookies; a plugin that dies says why.
+@Test func pluginScreensCarryTouchClipboardAndErrors() throws {
+    let json = ##"{"error":"NoSuchMethodError: colorToHSV","ui":{"clipboard":"__puus=1","windows":[{"id":2,"root":{"id":5,"type":"image","image":"AAEC","touch":true}}]}}"##
+    let screen = PluginScreen(json: try JSONDecoder().decode([String: JSONValue].self, from: Data(json.utf8)))
+    #expect(screen.clipboard == "__puus=1" && screen.error == "NoSuchMethodError: colorToHSV")
+    #expect(screen.windows.first?.root?.touch == true)
+    let event = PluginEvent(window: 2, kind: .touch, view: 5, x: 1.4, y: 0.25)
+    let sent = try JSONSerialization.jsonObject(with: Data(event.json.utf8)) as? [String: Any]
+    #expect(sent?["kind"] as? String == "touch" && sent?["x"] as? Double == 1 && sent?["y"] as? Double == 0.25)
+}

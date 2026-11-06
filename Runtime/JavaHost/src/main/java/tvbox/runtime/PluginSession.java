@@ -92,17 +92,16 @@ public final class PluginSession {
     }
 
     /**
-     * A list item's `action` (FongMi's Spider.action), such as FTY's 清除夸父Cookie: the item is a plugin
-     * setting, not a title. The answer is the plugin's JSON plus `notices`, the toasts it showed meanwhile;
-     * on Android an action may also open a dialog of its own, which a headless host can't show.
-     */
-    /**
      * Runs one of the plugin's settings (a list item with "action", as TVBox calls Spider.action). Most
      * open the plugin's own window on the Activity; its state comes back as "ui" (PluginWindows) with the
-     * plugin's toasts as "notices", and the viewer's input goes back as spiderUI requests.
+     * plugin's toasts as "notices", and the viewer's input goes back as spiderUI requests. When the setting
+     * shows nothing because the plugin's thread failed, "error" says why.
      */
     private String action(String name) throws Exception {
+        PluginErrors.install();
+        long started = System.currentTimeMillis();
         PluginWindows.closeAll();
+        PluginWindows.settingOpen(true);
         PluginNotices.take(); // toasts from browsing are not this setting's
         PluginWindows.activity();
         String result = content(() -> spider.action(name), true, false);
@@ -110,12 +109,17 @@ public final class PluginSession {
         PluginWindows.await(2_500);
         JSONObject answer;
         try { answer = new JSONObject(result); } catch (org.json.JSONException notAnObject) { answer = new JSONObject().put("msg", result); }
-        return answer.put("notices", new org.json.JSONArray(PluginNotices.take())).put("ui", PluginWindows.state()).toString();
+        org.json.JSONArray notices = new org.json.JSONArray(PluginNotices.take());
+        JSONObject ui = PluginWindows.state();
+        boolean silent = answer.optString("msg", "").isBlank() && notices.length() == 0 && ui.getJSONArray("windows").length() == 0 && ui.getJSONArray("links").length() == 0;
+        String error = silent ? PluginErrors.since(started) : null;
+        if (error != null) answer.put("error", error);
+        return answer.put("notices", notices).put("ui", ui).toString();
     }
 
     /** The viewer's input to the plugin's window ({"kind": "poll"} only reads it again), then its new state. */
     private String window(JSONObject event) throws Exception {
-        if ("closeAll".equals(event.optString("kind"))) PluginWindows.closeAll();
+        if ("closeAll".equals(event.optString("kind"))) { PluginWindows.closeAll(); PluginWindows.settingOpen(false); }
         else PluginWindows.handle(event);
         if (!"poll".equals(event.optString("kind"))) {
             // What the tap started on the plugin's threads gets a moment to show (a toast, the next window).

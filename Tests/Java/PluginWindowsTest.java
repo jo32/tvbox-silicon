@@ -75,7 +75,56 @@ public class PluginWindowsTest {
         // A page the plugin opens goes to the app.
         activity.startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://example.com/login")));
         check(PluginWindows.state().getJSONArray("links").getString(0).equals("https://example.com/login"), "Opened page lost");
+        choicesAndTouches(activity);
         System.out.println("PluginWindowsTest passed");
         android.os.Looper.shutdown();
+    }
+
+    /** lytvs 夸克线程: a single-choice list read back through getListView; aowu 弹幕颜色: a wheel the viewer touches. */
+    static void choicesAndTouches(Activity activity) throws Exception {
+        float[] hsv = new float[3];
+        android.graphics.Color.colorToHSV(0xFF00FF00, hsv);
+        check(Math.round(hsv[0]) == 120 && hsv[1] == 1f && hsv[2] == 1f, "HSV wrong: " + java.util.Arrays.toString(hsv));
+        check(android.graphics.Color.HSVToColor(hsv) == 0xFF00FF00, "HSV round trip lost");
+
+        AtomicReference<AlertDialog> list = new AtomicReference<>();
+        AtomicReference<float[]> touched = new AtomicReference<>();
+        activity.runOnUiThread(() -> {
+            AlertDialog dialog = new AlertDialog.Builder(activity).setTitle("线程").setSingleChoiceItems(new String[] {"4", "8", "16"}, 0, null)
+                .setPositiveButton("确定", (d, which) -> ((android.content.ClipboardManager) activity.getSystemService("clipboard"))
+                    .setPrimaryClip(android.content.ClipData.newPlainText("t", String.valueOf(((AlertDialog) d).getListView().getCheckedItemPosition()))))
+                .create();
+            dialog.show();
+            list.set(dialog);
+            android.view.View wheel = new android.view.View(activity) {
+                @Override protected void onDraw(android.graphics.Canvas canvas) { canvas.drawColor(0xFFFF0000); }
+                @Override public boolean onTouchEvent(android.view.MotionEvent event) {
+                    if (event.getAction() == android.view.MotionEvent.ACTION_UP) touched.set(new float[] {event.getX() / getWidth(), event.getY() / getHeight()});
+                    return true;
+                }
+            };
+            wheel.setLayoutParams(new android.view.ViewGroup.LayoutParams(200, 200));
+            new AlertDialog.Builder(activity).setView(wheel).show();
+        });
+        PluginWindows.await(2_000);
+        JSONArray windows = PluginWindows.state().getJSONArray("windows");
+        check(windows.length() == 2, "Windows not shown: " + windows);
+        JSONObject choice = windows.getJSONObject(0), picker = windows.getJSONObject(1);
+        check("single".equals(choice.optString("choice")), "Choice kind lost: " + choice);
+        JSONObject canvas = picker.getJSONObject("root");
+        check(canvas.optBoolean("touch") && canvas.getString("type").equals("image"), "Touchable drawing not offered: " + canvas);
+
+        PluginWindows.handle(new JSONObject().put("window", picker.getInt("id")).put("kind", "touch").put("view", canvas.getInt("id")).put("x", 0.25).put("y", 0.75));
+        float[] at = touched.get();
+        check(at != null && Math.abs(at[0] - 0.25f) < 0.02f && Math.abs(at[1] - 0.75f) < 0.02f, "Touch lost: " + java.util.Arrays.toString(at));
+        PluginWindows.handle(new JSONObject().put("window", picker.getInt("id")).put("kind", "close"));
+
+        PluginWindows.handle(new JSONObject().put("window", choice.getInt("id")).put("kind", "item").put("index", 2));
+        int positive = -1;
+        JSONArray buttons = choice.getJSONArray("buttons");
+        for (int i = 0; i < buttons.length(); i++) if ("positive".equals(buttons.getJSONObject(i).getString("role"))) positive = buttons.getJSONObject(i).getInt("id");
+        PluginWindows.handle(new JSONObject().put("window", choice.getInt("id")).put("kind", "click").put("view", positive));
+        check("2".equals(PluginWindows.state().optString("clipboard")), "Checked row or clipboard lost");
+        PluginWindows.closeAll();
     }
 }

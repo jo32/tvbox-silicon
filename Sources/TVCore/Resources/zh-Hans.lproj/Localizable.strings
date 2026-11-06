@@ -1583,3 +1583,5 @@
 "Area" = "区域";
 "This plugin setting only works in Android TVBox." = "这项插件设置只能在安卓版 TVBox 中使用。";
 "The plugin finished without a message." = "插件已完成，没有返回信息。";
+"Copied to the clipboard." = "已复制到剪贴板。";
+"The plugin stopped with an error: %@" = "插件出错停止了：%@";

@@ -96,6 +96,7 @@ public class Dialog implements DialogInterface {
             handled |= keyListener.onKey(this, KeyEvent.KEYCODE_BACK, new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK));
             if (handled) return;
         }
+        if (window.tvboxBackCallback()) return;
         if (!onKeyDown(KeyEvent.KEYCODE_BACK, new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK))) onBackPressed();
     }
     /** The viewer left the page: the window goes, as when its Activity goes. */

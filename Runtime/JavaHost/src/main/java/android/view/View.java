@@ -159,14 +159,30 @@ public class View implements Drawable.Callback {
     public boolean callOnClick() { return performClick(); }
     public boolean performLongClick() { return longClickListener != null && longClickListener.onLongClick(this); }
 
+    /** Set by a list on its rows: what tapping the row does (check it, run the item click listener). */
+    public Runnable tvboxItemTap;
+
     /** Whether a tap does anything, which the app shows as a button. */
     public boolean tvboxTappable() {
-        return clickListener != null || !(this instanceof ViewGroup) && (keyListener != null || touchListener != null);
+        return clickListener != null || tvboxItemTap != null || !(this instanceof ViewGroup) && (keyListener != null || touchListener != null);
+    }
+    /** Whether the plugin reads where on this view the viewer touches (a color wheel), so the app sends the point. */
+    public boolean tvboxTouchable() {
+        return touchListener != null || tvbox.runtime.PluginWindows.overrides(getClass(), "onTouchEvent", MotionEvent.class);
+    }
+    /** A tap at (fx, fy), fractions of the view's size: down, move and up there, as Android delivers a touch. */
+    public void tvboxTouch(float fx, float fy) {
+        float x = Math.max(0, Math.min(1, fx)) * getWidth(), y = Math.max(0, Math.min(1, fy)) * getHeight();
+        long now = System.currentTimeMillis();
+        dispatchTouchEvent(MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0));
+        dispatchTouchEvent(MotionEvent.obtain(now, now + 16, MotionEvent.ACTION_MOVE, x, y, 0));
+        dispatchTouchEvent(MotionEvent.obtain(now, now + 80, MotionEvent.ACTION_UP, x, y, 0));
     }
     /** A tap or OK press as Android delivers it: focus, then the click, or the key or touch a view listens for. */
     public void tvboxActivate() {
         if (focusable || focusListener != null) requestFocus();
         if (performClick()) return;
+        if (tvboxItemTap != null) { tvboxItemTap.run(); return; }
         if (keyListener != null) {
             boolean handled = keyListener.onKey(this, KeyEvent.KEYCODE_DPAD_CENTER, new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER));
             handled |= keyListener.onKey(this, KeyEvent.KEYCODE_DPAD_CENTER, new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER));
@@ -249,6 +265,13 @@ public class View implements Drawable.Callback {
     public void setHapticFeedbackEnabled(boolean value) { }
     public boolean performHapticFeedback(int constant) { return false; }
     public void setDrawingCacheEnabled(boolean value) { }
+    public boolean isDrawingCacheEnabled() { return false; }
+    public void buildDrawingCache() { }
+    public void buildDrawingCache(boolean autoScale) { }
+    public void destroyDrawingCache() { }
+    public Bitmap getDrawingCache() { return null; }
+    public Bitmap getDrawingCache(boolean autoScale) { return null; }
+    public void setDrawingCacheBackgroundColor(int color) { }
     public void setWillNotDraw(boolean value) { }
     public void setContentDescription(CharSequence value) { contentDescription = value; }
     public CharSequence getContentDescription() { return contentDescription; }
@@ -284,7 +307,11 @@ public class View implements Drawable.Callback {
     public boolean onKeyDown(int keyCode, KeyEvent event) { return false; }
     public boolean onKeyUp(int keyCode, KeyEvent event) { return false; }
     public boolean onTouchEvent(MotionEvent event) { return false; }
-    public boolean dispatchTouchEvent(MotionEvent event) { return touchListener != null && touchListener.onTouch(this, event); }
+    /** The touch listener first, then the view's own onTouchEvent, as Android dispatches a touch. */
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (touchListener != null && enabled && touchListener.onTouch(this, event)) return true;
+        return onTouchEvent(event);
+    }
     public int[] getDrawableState() {
         java.util.List<Integer> on = new java.util.ArrayList<>();
         if (enabled) on.add(STATE_ENABLED);
@@ -379,6 +406,7 @@ public class View implements Drawable.Callback {
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         draw(new Canvas(bitmap));
         node.put("type", "image").put("image", tvbox.runtime.PluginWindows.png(bitmap, false));
+        if (enabled && tvboxTouchable()) node.put("touch", true);
         float density = getResources().getDisplayMetrics().density;
         node.put("width", Math.round(width / density)).put("height", Math.round(height / density));
     }

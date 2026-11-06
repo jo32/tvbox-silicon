@@ -1276,10 +1276,24 @@ struct PluginActionPage: View {
         if screen.windows.last?.id != next.windows.last?.id { typed = [:] }
         screen = next
         for link in next.links { openURL(link) }
-        let said = next.notices.joined(separator: "\n")
+        var said = next.notices.joined(separator: "\n")
+        if let copied = next.clipboard {
+            // What the plugin copied goes on the pasteboard (Apple TV has none, so it is shown instead).
+            #if os(iOS)
+            UIPasteboard.general.string = copied
+            if said.isEmpty { said = L10n.text("Copied to the clipboard.") }
+            #elseif os(macOS)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(copied, forType: .string)
+            if said.isEmpty { said = L10n.text("Copied to the clipboard.") }
+            #else
+            said = said.isEmpty ? copied : said + "\n" + copied
+            #endif
+        }
         if next.windows.isEmpty {
             // The setting is done: what it said stays on the page; with nothing to say the page goes.
-            let message = [first ? next.message : nil, said.isEmpty ? nil : said].compactMap { $0 }.joined(separator: "\n")
+            let failure = next.error.map { L10n.text("The plugin stopped with an error: %@", $0) }
+            let message = [first ? next.message : nil, said.isEmpty ? nil : said, failure].compactMap { $0 }.joined(separator: "\n")
             if message.isEmpty && !first { dismiss() } else { phase = .finished(message.isEmpty ? nil : message) }
             return
         }
@@ -1552,12 +1566,31 @@ private struct PluginNodeView: View {
             // Plugins' pictures are mostly QR codes: keep their pixels sharp.
             drawn.resizable().interpolation(.none)
                 .aspectRatio(contentMode: node.fill ? .fill : .fit)
+                .overlay { touchArea }
                 .frame(maxWidth: width, maxHeight: height)
                 .clipped()
                 .frame(maxWidth: .infinity)
         } else {
             spacer
         }
+    }
+
+    /// On a picture the plugin reads touches on (a color wheel), a tap or the end of a drag sends where it landed.
+    @ViewBuilder private var touchArea: some View {
+        #if os(tvOS)
+        EmptyView()
+        #else
+        if node.touch, node.enabled {
+            GeometryReader { frame in
+                Color.clear.contentShape(Rectangle())
+                    .gesture(DragGesture(minimumDistance: 0).onEnded { drag in
+                        guard frame.size.width > 0, frame.size.height > 0 else { return }
+                        context.send(PluginEvent(window: context.window, kind: .touch, view: node.id,
+                                                 x: drag.location.x / frame.size.width, y: drag.location.y / frame.size.height))
+                    })
+            }
+        }
+        #endif
     }
 
     /// An empty view: a gap, or a line or block when the plugin colors it.

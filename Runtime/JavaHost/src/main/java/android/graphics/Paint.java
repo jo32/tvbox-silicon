@@ -62,5 +62,14 @@ public class Paint {
     }
     public float measureText(String text) { return text == null ? 0 : text.length() * textSize * 0.6f; }
 
-    int colorAt(float x, float y) { return shader instanceof LinearGradient gradient ? gradient.colorAt(x, y) : color; }
+    public void reset() {
+        flags = 0; color = 0xff000000; style = Style.FILL; cap = Cap.BUTT; join = Join.MITER; align = Align.LEFT;
+        strokeWidth = 0; textSize = 12; shader = null; typeface = null;
+    }
+    public void set(Paint other) { if (other != this) { reset(); flags = other.flags; color = other.color; style = other.style; cap = other.cap; join = other.join; align = other.align; strokeWidth = other.strokeWidth; textSize = other.textSize; shader = other.shader; typeface = other.typeface; } }
+    public boolean isFilterBitmap() { return (flags & FILTER_BITMAP_FLAG) != 0; }
+    public void setFilterBitmap(boolean on) { flags = on ? flags | FILTER_BITMAP_FLAG : flags & ~FILTER_BITMAP_FLAG; }
+    public boolean isDither() { return (flags & DITHER_FLAG) != 0; }
+
+    int colorAt(float x, float y) { return shader != null ? shader.colorAt(x, y) : color; }
 }

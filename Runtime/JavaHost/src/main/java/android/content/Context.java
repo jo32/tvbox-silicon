@@ -18,11 +18,35 @@ public class Context {
         return preferences.computeIfAbsent(name, key -> new tvbox.runtime.FilePreferences(new File(getFilesDir(), "prefs/"+safe+".json").toPath()));
     }
     public Context getApplicationContext() { return this; }
-    /** No Android system services exist here; callers already handle an unavailable service. */
+    /** The system services plugins use; others are unavailable (null), which Android also allows. */
     public Object getSystemService(String name) {
-        if ("window".equals(name)) return android.view.WindowManager.DEFAULT;
-        if ("input_method".equals(name)) return new android.view.inputmethod.InputMethodManager();
-        return null;
+        if (name == null) return null;
+        return switch (name) {
+            case "window" -> android.view.WindowManager.DEFAULT;
+            case "input_method" -> new android.view.inputmethod.InputMethodManager();
+            case "connectivity" -> new android.net.ConnectivityManager();
+            case "wifi" -> new android.net.wifi.WifiManager();
+            case "clipboard" -> new ClipboardManager();
+            case "phone" -> new android.telephony.TelephonyManager();
+            default -> null;
+        };
+    }
+    @SuppressWarnings("unchecked")
+    public final <T> T getSystemService(Class<T> type) {
+        String name = getSystemServiceName(type);
+        return name == null ? null : (T) getSystemService(name);
+    }
+    public String getSystemServiceName(Class<?> type) {
+        if (type == null) return null;
+        return switch (type.getName()) {
+            case "android.view.WindowManager" -> "window";
+            case "android.view.inputmethod.InputMethodManager" -> "input_method";
+            case "android.net.ConnectivityManager" -> "connectivity";
+            case "android.net.wifi.WifiManager" -> "wifi";
+            case "android.content.ClipboardManager" -> "clipboard";
+            case "android.telephony.TelephonyManager" -> "phone";
+            default -> null;
+        };
     }
     public android.content.res.Resources getResources() { return android.content.res.Resources.getSystem(); }
     public android.content.res.Resources.Theme getTheme() { return getResources().newTheme(); }

@@ -27,5 +27,14 @@ public class PackageManager {
         return info;
     }
     public CharSequence getApplicationLabel(ApplicationInfo info) { return info.loadLabel(this); }
+    /** Only this app is installed: there are no other apps or providers to find or open. */
+    public java.util.List<ApplicationInfo> getInstalledApplications(int flags) { return new java.util.ArrayList<>(); }
+    public java.util.List<PackageInfo> getInstalledPackages(int flags) { return new java.util.ArrayList<>(); }
+    public android.content.Intent getLaunchIntentForPackage(String packageName) { return null; }
+    public android.content.Intent getLeanbackLaunchIntentForPackage(String packageName) { return null; }
+    public ProviderInfo resolveContentProvider(String authority, int flags) { return null; }
+    public ResolveInfo resolveActivity(android.content.Intent intent, int flags) { return null; }
+    public java.util.List<ResolveInfo> queryIntentActivities(android.content.Intent intent, int flags) { return new java.util.ArrayList<>(); }
+    public int checkPermission(String permission, String packageName) { return 0; }
     public boolean hasSystemFeature(String name) { return false; }
 }

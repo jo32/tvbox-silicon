@@ -1583,3 +1583,5 @@
 "Area" = "Area";
 "This plugin setting only works in Android TVBox." = "This plugin setting only works in Android TVBox.";
 "The plugin finished without a message." = "The plugin finished without a message.";
+"Copied to the clipboard." = "Copied to the clipboard.";
+"The plugin stopped with an error: %@" = "The plugin stopped with an error: %@";

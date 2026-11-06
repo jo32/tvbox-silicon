@@ -65,6 +65,37 @@ public class AlertDialog extends Dialog {
         if (view != null && getWindow().tvboxContent() == null) setContentView(view);
     }
 
+    private android.widget.ListView listView;
+    /**
+     * The dialog's list, which plugins read the checked row from (getCheckedItemPosition) when a button is
+     * tapped; null when the dialog has no list, as on Android.
+     */
+    public android.widget.ListView getListView() {
+        if (adapter == null && items == null) return null;
+        if (listView == null) listView = new android.widget.ListView(getContext()) {
+            @Override public int getCheckedItemPosition() { return choiceMode == 1 ? checkedItem : INVALID_POSITION; }
+            @Override public boolean isItemChecked(int position) {
+                return choiceMode == 1 ? position == checkedItem : choiceMode == 2 && checkedItems != null && position >= 0 && position < checkedItems.length && checkedItems[position];
+            }
+            @Override public void setItemChecked(int position, boolean value) {
+                if (choiceMode == 1) { if (value) checkedItem = position; else if (checkedItem == position) checkedItem = -1; }
+                else if (choiceMode == 2 && checkedItems != null && position >= 0 && position < checkedItems.length) checkedItems[position] = value;
+            }
+            @Override public int getCheckedItemCount() {
+                if (choiceMode == 1) return checkedItem >= 0 ? 1 : 0;
+                int n = 0; if (choiceMode == 2 && checkedItems != null) for (boolean on : checkedItems) if (on) n++; return n;
+            }
+            @Override public int getCount() { return adapter != null ? adapter.getCount() : items == null ? 0 : items.length; }
+            @Override public Object getItemAtPosition(int position) {
+                if (adapter != null) return position >= 0 && position < adapter.getCount() ? adapter.getItem(position) : null;
+                return items != null && position >= 0 && position < items.length ? items[position] : null;
+            }
+            @Override public android.widget.ListAdapter getAdapter() { return adapter; }
+            @Override public void setSelection(int position) { }
+        };
+        return listView;
+    }
+
     /** The viewer picked list row `index`, as Android's list does. */
     public void tvboxItem(int index) {
         int count = adapter != null ? adapter.getCount() : items == null ? 0 : items.length;

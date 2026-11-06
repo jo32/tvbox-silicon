@@ -45,8 +45,24 @@ public final class PluginWindows {
         if (intent != null && intent.getChooserTarget() != null) intent = intent.getChooserTarget();
         String link = intent == null ? null : intent.getDataString();
         if (link == null && intent != null) link = intent.getStringExtra(Intent.EXTRA_TEXT);
+        if (link != null) openLink(link);
+    }
+    /** A page for the app to open (a web view's address). */
+    public static synchronized void openLink(String link) {
         if (link != null && link.matches("(?i)[a-z][a-z0-9+.-]*:.+")) links.add(link);
     }
+
+    private static volatile boolean settingOpen;
+    /**
+     * While the viewer is on one of the plugin's settings, the plugin's own sign-in runs untouched: it shows
+     * its QR code in its own window (HttpDiagnostics leaves its login requests alone).
+     */
+    public static void settingOpen(boolean open) { settingOpen = open; }
+    public static boolean settingOpen() { return settingOpen; }
+
+    private static String clipboard;
+    /** Text the plugin copied, for the app to put on the device's pasteboard. */
+    public static synchronized void copied(String text) { clipboard = text; }
 
     /** The Activity plugins find as TVBox's current one; it exists once the plugin's Application does. */
     public static Activity activity() { return ActivityThread.currentActivityThread().hostActivity(); }
@@ -101,8 +117,10 @@ public final class PluginWindows {
             return list;
         });
         JSONArray opened;
-        synchronized (PluginWindows.class) { opened = new JSONArray(links); links.clear(); }
-        return new JSONObject().put("windows", windows).put("links", opened);
+        String copied;
+        synchronized (PluginWindows.class) { opened = new JSONArray(links); links.clear(); copied = clipboard; clipboard = null; }
+        JSONObject state = new JSONObject().put("windows", windows).put("links", opened);
+        return copied == null ? state : state.put("clipboard", copied);
     }
 
     /**
@@ -137,6 +155,10 @@ public final class PluginWindows {
                     if (view != null) view.tvboxSubmit();
                 }
                 case "item" -> { if (window instanceof AlertDialog alert) alert.tvboxItem(event.optInt("index", -1)); }
+                case "touch" -> {
+                    View view = find.apply(event.optInt("view", -1));
+                    if (view != null && view.isEnabled()) view.tvboxTouch((float) event.optDouble("x", 0.5), (float) event.optDouble("y", 0.5));
+                }
                 case "back" -> {
                     if (window != null) window.tvboxBack();
                     else if (!overlayBack(overlay)) ((android.view.ViewGroup) overlay).removeAllViews();
@@ -163,6 +185,8 @@ public final class PluginWindows {
     }
     /** Back to an overlay goes to the views that listen for keys, as Android sends it to the focused one. */
     private static boolean overlayBack(View root) {
+        Activity activity = ActivityThread.currentActivityThread().hostActivity();
+        if (activity != null && activity.getWindow().tvboxBackCallback()) return true;
         View focused = root.findFocus();
         for (View target : new View[]{focused, root instanceof android.view.ViewGroup g && g.getChildCount() > 0 ? g.getChildAt(g.getChildCount() - 1) : null}) {
             if (target == null) continue;
@@ -213,9 +237,11 @@ public final class PluginWindows {
     }
 
     /** Whether a plugin view class draws itself (overrides onDraw), so the app gets its picture. */
-    public static boolean drawsItself(Class<?> type) {
+    public static boolean drawsItself(Class<?> type) { return overrides(type, "onDraw", android.graphics.Canvas.class); }
+    /** Whether a plugin class (not the host's android classes) declares this method. */
+    public static boolean overrides(Class<?> type, String name, Class<?>... parameters) {
         for (Class<?> c = type; c != null && !c.getName().startsWith("android."); c = c.getSuperclass()) {
-            try { c.getDeclaredMethod("onDraw", android.graphics.Canvas.class); return true; } catch (NoSuchMethodException none) { }
+            try { c.getDeclaredMethod(name, parameters); return true; } catch (NoSuchMethodException | NoClassDefFoundError none) { }
         }
         return false;
     }
