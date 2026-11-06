@@ -441,6 +441,57 @@ final class TVNavigationUITests: XCTestCase {
         XCTAssertEqual(presses, 1, "Back on Watch Now's sidebar (focus was \(onWatchNow)) left after \(presses) presses: \(trail) state \(app.state.rawValue)")
     }
 
+    /// 选集 in the player: the info panel (down from the transport bar) has an Episodes tab with the lines and the line's
+    /// episodes, the one playing focused; choosing another episode plays it in the same player.
+    func testPlayerEpisodesTabPlaysAnotherEpisode() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-qaSection", "sites", "-qaPage", "play-source:qa-standard", "-qaIsolatedData", "1",
+                               "-qaSubscription", "http://127.0.0.1:8776/config.json", "-autoPlayNextEpisode", "NO",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        let focused = app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+        func focus() -> String { focused.exists ? "\(focused.elementType.rawValue):\(focused.identifier):\(focused.label)" : "none" }
+        func snap(_ name: String) { let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = name; shot.lifetime = .keepAlways; add(shot) }
+        let waiting = app.descendants(matching: .any)["player.waiting"]
+        // The fixture clip starts at once: the wait may be over before it is looked for.
+        _ = waiting.waitForExistence(timeout: 15)
+        for _ in 0..<30 where waiting.exists { sleep(1) }
+        XCTAssertFalse(waiting.exists, "The picture did not start")
+        sleep(2)
+        remote.press(.select); sleep(2)
+        snap("transport bar")
+        let panel = app.descendants(matching: .any)["player.episodes.panel"]
+        var trail: [String] = []
+        for _ in 0..<4 where !panel.exists {
+            remote.press(.down); sleep(2); trail.append(focus()); snap("down \(trail.count)")
+            if !panel.exists, focused.label == "Episodes" { remote.press(.select); sleep(2); snap("selected Episodes") }
+        }
+        XCTAssertTrue(panel.exists, "No Episodes tab: \(trail)")
+        sleep(1)
+        let first = focus()
+        snap("episodes tab")
+        XCTAssertTrue(first.contains("1"), "Focus did not start on the episode playing: \(first)")
+        remote.press(.right); sleep(1)
+        let second = focus()
+        XCTAssertTrue(second.contains("2"), "Right did not reach episode 2: \(second)")
+        // Up reaches the lines; the other line's episodes show once it is chosen.
+        remote.press(.up); sleep(1)
+        remote.press(.right); sleep(1)
+        let line = focus()
+        remote.press(.select); sleep(2)
+        snap("other line")
+        XCTAssertTrue(line.contains("线路二"), "Up and Right did not reach the second line: \(line)")
+        remote.press(.down); sleep(1)
+        let alternate = focus()
+        XCTAssertTrue(alternate.contains("备用"), "Down did not reach the other line's episode: \(alternate)")
+        // Choosing it plays it: the player stays and the panel closes.
+        remote.press(.select); sleep(6)
+        snap("after choosing")
+        XCTAssertEqual(app.state, .runningForeground)
+        XCTAssertFalse(panel.exists, "The Episodes tab stayed open after choosing an episode")
+    }
+
     /// Poster titles are part of their card's label, so look for the text anywhere in a label.
     private func shown(_ text: String, in app: XCUIApplication) -> XCUIElement {
         app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch

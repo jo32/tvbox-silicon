@@ -65,7 +65,7 @@ struct PlaybackView: View {
                                  speed: playbackSpeed, setSpeed: { playbackSpeed = $0; session.setSpeed($0) }, fills: $fillsScreen, danmakuArea: $danmakuArea,
                                  external: session.externalSubtitles, skip: session.skipOffer, skipSource: { session.skipSourceSegment() },
                                  chapters: session.chapters,
-                                 exitWhileWaiting: session.showsPicture ? nil : { dismiss() }).ignoresSafeArea()
+                                 exitWhileWaiting: session.showsPicture ? nil : { dismiss() }, episodes: episodeChoices).ignoresSafeArea()
                     .onAppear { playbackSpeed = session.player.defaultRate }
             }
             // Until the picture starts, AVKit's player keeps the Back press to itself, so a stream that never
@@ -198,6 +198,22 @@ struct PlaybackView: View {
     #if os(tvOS)
     private func episodeAction(_ step: PlayerStep?) -> EpisodeAction? {
         step.map { EpisodeAction(name: $0.name, busy: $0.busy, play: $0.go) }
+    }
+
+    /// The video's lines and episodes for the player's Episodes menu and info-panel tab: nil for one episode.
+    private var episodeChoices: EpisodeChoices? {
+        guard let catalog = store.catalog(for: channel), catalog.video.episodes.count > 1 else { return nil }
+        let episodes = catalog.video.episodes
+        var seen = Set<String>()
+        let flags = episodes.map(\.flag).filter { seen.insert($0).inserted }
+        let store = store, channel = channel
+        return EpisodeChoices(
+            key: "\(catalog.video.id):\(episodes.count)",
+            lines: flags.map { flag in (flag, episodes.filter { $0.flag == flag }) },
+            labels: catalog.labels, current: channel.historyContext?.episode(in: episodes)?.id,
+            busy: store.resolvingEpisode != nil,
+            select: { store.selectEpisode($0, from: channel) },
+            panel: { AnyView(TVPlayerEpisodesPanel(channel: channel).environment(store)) })
     }
     #endif
 
@@ -691,6 +707,18 @@ struct EpisodeAction {
     let play: @MainActor () -> Void
 }
 
+/// A catalog video's episodes by line, for the transport bar's Episodes menu and the info panel's Episodes tab.
+struct EpisodeChoices {
+    /// Changes when the video or its episodes do: the info panel's tab is made again then.
+    let key: String
+    let lines: [(flag: String, episodes: [Episode])]
+    let labels: [Episode.ID: String]
+    let current: Episode.ID?
+    let busy: Bool
+    let select: @MainActor (Episode) -> Void
+    let panel: @MainActor () -> AnyView
+}
+
 /// AVPlayerViewController itself, for its transport-bar menu: the Danmaku switch lives there, next to
 /// subtitles and audio, where a remote can reach it. Comments draw in the content overlay, under the controls.
 private struct NativePlayerView: UIViewControllerRepresentable {
@@ -736,6 +764,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     /// Closes the player on Back until the picture starts. The overlay that takes focus for that loses it
     /// once the transport bar shows (an episode button takes it), and AVKit then keeps the press to itself.
     var exitWhileWaiting: (() -> Void)? = nil
+    var episodes: EpisodeChoices? = nil
     final class Coordinator: NSObject, UIGestureRecognizerDelegate, @preconcurrency AVPlayerViewControllerDelegate {
         var host: UIHostingController<AnyView>?; var listed = ""; var criteria: DisplayCriteriaKeeper?
         var exit: (() -> Void)?
@@ -789,11 +818,17 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         context.coordinator.host?.rootView = overlay
         context.coordinator.exit = exitWhileWaiting
         context.coordinator.back.isEnabled = exitWhileWaiting != nil
-        // The chapters and the comment list are tabs in the info panel (swipe down), beside the video's own info.
-        let listed = "\(revision):\(comments.count):\(chapters.map(\.start))"
+        // The episodes, the chapters and the comment list are tabs in the info panel (swipe down), beside the video's own info.
+        let listed = "\(revision):\(comments.count):\(chapters.map(\.start)):\(episodes?.key ?? "")"
         if context.coordinator.listed != listed {
             context.coordinator.listed = listed
             var tabs: [UIViewController] = []
+            if let episodes {
+                let panel = UIHostingController(rootView: episodes.panel())
+                panel.title = L10n.text("Episodes")
+                panel.preferredContentSize = CGSize(width: 0, height: episodes.lines.count > 1 ? 400 : 300)
+                tabs.append(panel)
+            }
             if !chapters.isEmpty {
                 let list = UIHostingController(rootView: PlayerChaptersView(player: player, chapters: chapters))
                 list.title = L10n.text("Chapters")
@@ -848,6 +883,27 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         if let next {
             items.insert(UIAction(title: L10n.text("Next Episode"), subtitle: next.name, image: UIImage(systemName: "forward.end.fill"),
                                   attributes: next.busy ? [.disabled] : []) { _ in next.play() }, at: previous == nil ? 0 : 1)
+        }
+        if let episodes {
+            // 选集 from the transport bar: line › episode, or the episodes alone when there is one line.
+            let select = episodes.select
+            func actions(_ list: [Episode]) -> [UIMenuElement] {
+                list.map { episode in
+                    UIAction(title: episodes.labels[episode.id] ?? EpisodeRow.title(episode.name),
+                             attributes: episodes.busy ? [.disabled] : [],
+                             state: episode.id == episodes.current ? .on : .off) { _ in
+                        if episode.id != episodes.current { select(episode) }
+                    }
+                }
+            }
+            let children: [UIMenuElement] = episodes.lines.count == 1 ? actions(episodes.lines[0].episodes)
+                : episodes.lines.map { line in
+                    let playing = line.episodes.contains { $0.id == episodes.current }
+                    return UIMenu(title: line.flag.isEmpty ? L10n.text("Play") : line.flag, subtitle: "\(line.episodes.count)",
+                                  image: playing ? UIImage(systemName: "speaker.wave.2.fill") : nil, children: actions(line.episodes))
+                }
+            let at = (previous == nil ? 0 : 1) + (next == nil ? 0 : 1)
+            items.insert(UIMenu(title: L10n.text("Episodes"), image: UIImage(systemName: "rectangle.stack"), children: children), at: at)
         }
         do {
             let upscale = upscale, smooth = smooth, fills = fills
