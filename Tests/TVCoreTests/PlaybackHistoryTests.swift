@@ -55,6 +55,25 @@ private func historyContext(video: String = "series", episode: String = "1", sou
     #expect(context.episode(in: [otherLine, next, original])?.flag == "line")
 }
 
+@Test func anEpisodePickedFromAListResumesWhereItStopped() {
+    let entry = PlaybackHistoryEntry(context: historyContext(episode: "2"), position: 163, duration: 327,
+                                     updatedAt: Date(timeIntervalSince1970: 0))
+    let watched = Episode(id: "0-1", name: "Episode 2", address: "fresh-2", flag: "line")
+    let next = Episode(id: "0-2", name: "Episode 3", address: "fresh-3", flag: "line")
+    let otherLine = Episode(id: "1-1", name: "Episode 2", address: "other-2", flag: "other")
+    // Picking the episode watched last picks it up; another episode or another line starts at 0 (#593).
+    #expect(entry.resumePosition(for: watched) == 163)
+    #expect(entry.resumePosition(for: next) == nil)
+    #expect(entry.resumePosition(for: otherLine) == nil)
+    // A finished entry and one barely started both start at 0, as `resumePosition` says.
+    let finished = PlaybackHistoryEntry(context: historyContext(episode: "2"), position: 327, duration: 327,
+                                        updatedAt: Date(timeIntervalSince1970: 0))
+    let barely = PlaybackHistoryEntry(context: historyContext(episode: "2"), position: 0.5, duration: 327,
+                                      updatedAt: Date(timeIntervalSince1970: 0))
+    #expect(finished.resumePosition(for: watched) == nil)
+    #expect(barely.resumePosition(for: watched) == nil)
+}
+
 @Test @MainActor func playbackHistoryBoundsAndRecoversItsPersistentFile() throws {
     let file = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".json")
     defer { try? FileManager.default.removeItem(at: file) }

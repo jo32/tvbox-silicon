@@ -54,6 +54,14 @@ public struct PlaybackHistoryEntry: Identifiable, Codable, Hashable, Sendable {
     public var resumePosition: Double { completed ? 0 : position }
     public var progress: Double { duration > 0 ? min(1, max(0, position / duration)) : 0 }
 
+    /// Where to start an episode again: the saved position when it is the episode this entry is about, so
+    /// picking it from a list picks up where it stopped. Any other episode starts at 0, and so does an entry
+    /// finished or barely started.
+    public func resumePosition(for episode: Episode) -> Double? {
+        guard context.episode(in: [episode]) != nil, resumePosition > 1 else { return nil }
+        return resumePosition
+    }
+
     public init(context: PlaybackHistoryContext, position: Double, duration: Double, updatedAt: Date) {
         self.context = context
         self.position = position
