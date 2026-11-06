@@ -1586,3 +1586,4 @@
 "Copied to the clipboard." = "已複製到剪貼簿。";
 "The plugin stopped with an error: %@" = "外掛出錯停止了：%@";
 "Run Again" = "再執行一次";
+"Open Link" = "打開連結";

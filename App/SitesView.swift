@@ -1,3 +1,4 @@
+import CoreImage
 import SwiftUI
 import TVCore
 
@@ -1343,6 +1344,57 @@ struct PluginActionPage: View {
     }
 }
 
+/// A QR code in a plugin window (a sign-in page, TVBox's "remote input" page) can't be scanned by the device showing
+/// it, so its link opens here. A page the plugin serves from this device (its network address) opens in the app, which
+/// has to keep running to answer it; other links open as links do. Apple TV has no browser: its codes are scanned.
+private struct PluginCodeLink: View {
+    let image: Data
+    @State private var link: URL?
+    @State private var showsPage = false
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        #if os(tvOS)
+        EmptyView()
+        #else
+        Group {
+            if let link {
+                Button { open(link) } label: { Label(L10n.text("Open Link"), systemImage: "link").padding(.horizontal, 8) }
+                    .controlButton()
+                    .accessibilityIdentifier("pluginSetting.openCode")
+            }
+        }
+        .task(id: image) { link = await Self.decode(image) }
+        #if os(iOS)
+        .sheet(isPresented: $showsPage) {
+            if let link { ConfigCenterView { ConfigCenter.local(link) ?? link } }
+        }
+        #endif
+        #endif
+    }
+
+    private func open(_ url: URL) {
+        #if os(iOS)
+        if ConfigCenter.local(url) != nil { showsPage = true } else { openURL(url) }
+        #else
+        openURL(ConfigCenter.local(url) ?? url)
+        #endif
+    }
+
+    /// The web address a QR code in the picture holds, if any.
+    nonisolated static func decode(_ data: Data) async -> URL? {
+        guard let picture = CIImage(data: data),
+              let detector = CIDetector(ofType: CIDetectorTypeQRCode, context: nil, options: [CIDetectorAccuracy: CIDetectorAccuracyHigh])
+        else { return nil }
+        for case let code as CIQRCodeFeature in detector.features(in: picture) {
+            guard let text = code.messageString?.trimmingCharacters(in: .whitespacesAndNewlines), let url = URL(string: text),
+                  ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { continue }
+            return url
+        }
+        return nil
+    }
+}
+
 /// One plugin window, drawn from the plugin's own views. When the plugin paints its window (most do: white
 /// cards), its colors are kept on that surface; a plain Android alert takes the app's look instead.
 private struct PluginWindowView: View {
@@ -1592,12 +1644,15 @@ private struct PluginNodeView: View {
             let drawn = Image(uiImage: image)
             #endif
             // Plugins' pictures are mostly QR codes: keep their pixels sharp.
-            drawn.resizable().interpolation(.none)
-                .aspectRatio(contentMode: node.fill ? .fill : .fit)
-                .overlay { touchArea }
-                .frame(maxWidth: width, maxHeight: height)
-                .clipped()
-                .frame(maxWidth: .infinity)
+            VStack(spacing: 10 * scale) {
+                drawn.resizable().interpolation(.none)
+                    .aspectRatio(contentMode: node.fill ? .fill : .fit)
+                    .overlay { touchArea }
+                    .frame(maxWidth: width, maxHeight: height)
+                    .clipped()
+                if !node.touch { PluginCodeLink(image: data) }
+            }
+            .frame(maxWidth: .infinity)
         } else {
             spacer
         }

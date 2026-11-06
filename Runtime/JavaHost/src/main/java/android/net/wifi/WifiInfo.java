@@ -14,7 +14,7 @@ public class WifiInfo {
         return (bytes[3] & 255) << 24 | (bytes[2] & 255) << 16 | (bytes[1] & 255) << 8 | (bytes[0] & 255);
     }
     /** The first private IPv4 address of an interface that is up (Wi-Fi or Ethernet), else loopback. */
-    static byte[] lanAddress() {
+    public static byte[] lanAddress() {
         try {
             byte[] fallback = null;
             for (NetworkInterface face : Collections.list(NetworkInterface.getNetworkInterfaces())) {

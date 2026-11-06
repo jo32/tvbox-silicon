@@ -57,7 +57,7 @@ public final class PluginWindows {
      * While the viewer is on one of the plugin's settings, the plugin's own sign-in runs untouched: it shows
      * its QR code in its own window (HttpDiagnostics leaves its login requests alone).
      */
-    public static void settingOpen(boolean open) { settingOpen = open; }
+    public static void settingOpen(boolean open) { settingOpen = open; CloudDriveBridge.openToNetwork(open); }
     public static boolean settingOpen() { return settingOpen; }
 
     private static String clipboard;

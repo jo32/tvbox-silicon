@@ -1586,3 +1586,4 @@
 "Copied to the clipboard." = "クリップボードにコピーしました。";
 "The plugin stopped with an error: %@" = "プラグインがエラーで停止しました：%@";
 "Run Again" = "もう一度実行";
+"Open Link" = "リンクを開く";
