@@ -126,6 +126,7 @@ private struct WatchNowTVHero: View {
     let entries: [PlaybackHistoryEntry]
     let state: WatchNowHeroState
     @FocusState private var focus: Focus?
+    @AppStorage(HistoryFileDetails.key) private var showsFileDetails = false
     private enum Focus: Hashable { case resume, details, page(Int) }
 
     private var entry: PlaybackHistoryEntry { entries.first { $0.id == state.selected } ?? entries[0] }
@@ -145,7 +146,7 @@ private struct WatchNowTVHero: View {
                 }
             }
             .accessibilityAddTraits(.isHeader)
-            Text([EpisodeLabels.historyLabel(entry.context.episodeName), SourceLabel(entry.context.sourceName).text, HistoryFormat.status(entry)]
+            Text([EpisodeLabels.historyLabel(entry.context.episodeName, showsDetails: showsFileDetails), SourceLabel(entry.context.sourceName).text, HistoryFormat.status(entry)]
                 .filter { !$0.isEmpty }.joined(separator: " · "))
                 .font(.system(size: 24)).monospacedDigit().lineLimit(1)
             if let overview = details?.overview, !overview.isEmpty {

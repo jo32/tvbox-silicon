@@ -1074,6 +1074,8 @@
 "Unlike" = "いいねを取り消す";
 "Show on Watch Now" = "「今すぐ観る」に表示";
 "A section you switch off only leaves Watch Now: Playback History, Favorites, Sources and Live TV still have everything." = "オフにした項目は「今すぐ観る」に表示されなくなるだけで、再生履歴、お気に入り、配信ソース、ライブ TV の内容はそのまま残ります。";
+"Show File Size and Quality" = "ファイルサイズと画質を表示";
+"Playback History and Continue Watching show the file's size and picture quality beside the episode number, read from the file's name. A name without them shows the episode alone." = "再生履歴と「視聴を続ける」では、エピソードの番号の横にファイル名から読み取ったファイルサイズと画質を表示します（例：第1話 · 5.4GB · 2160p）。ファイル名に含まれていない場合は番号のみ表示します。";
 "Choose what Watch Now shows in Settings." = "「今すぐ観る」に表示する内容は設定で選べます。";
 "Name" = "名前";
 "Name (optional)" = "名前（省略可）";

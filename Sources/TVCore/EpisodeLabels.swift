@@ -66,12 +66,34 @@ public enum EpisodeLabels {
     /// no number. A season past the first stays (S2 第5集): with no line around it, the label is all that tells S1E05
     /// from S2E05. Cached, since cards and headers ask again on every redraw.
     public static func historyLabel(_ name: String, language: String? = nil) -> String {
-        let key = ((language ?? "") + "\u{1}" + name) as NSString
+        historyLabel(name, showsDetails: false, language: language)
+    }
+
+    /// The same label, with the file's size and picture quality after it when the viewer asked for them (#595):
+    /// "第1集 · 5.4GB · 2160p". A name the label doesn't shorten keeps its own text, details included.
+    public static func historyLabel(_ name: String, showsDetails: Bool, language: String? = nil) -> String {
+        let key = ((language ?? "") + "\u{1}" + (showsDetails ? "1" : "0") + "\u{1}" + name) as NSString
         if let cached = historyLabels.object(forKey: key) { return cached as String }
         var label = labels(names: [name], language: language)?.first ?? name
-        if label != name, let season = marked(clean(name))?.season, season > 1 { label = "S\(season) " + label }
+        if label != name {
+            if let season = marked(clean(name))?.season, season > 1 { label = "S\(season) " + label }
+            if showsDetails, let details = fileDetails(name) { label += " · " + details }
+        }
         historyLabels.setObject(label as NSString, forKey: key)
         return label
+    }
+
+    /// The file's size and picture quality ("5.4GB · 2160p") read from its name: the size tag a netdisk puts first,
+    /// and the resolution word wherever it stands. Nil when the name carries neither.
+    static func fileDetails(_ name: String) -> String? {
+        var parts: [String] = []
+        if let size = groups(sizeTag, in: name)?.first, !size.isEmpty {
+            parts.append(size.replacingOccurrences(of: " ", with: ""))
+        }
+        if let quality = groups(resolutionDetail, in: name)?.first {
+            parts.append(quality.lowercased().hasSuffix("k") ? quality.uppercased() : quality.lowercased())
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
     // NSCache is thread-safe.
     nonisolated(unsafe) private static let historyLabels: NSCache<NSString, NSString> = {
@@ -85,8 +107,12 @@ public enum EpisodeLabels {
     private static func regex(_ pattern: String) -> NSRegularExpression {
         try! NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
     }
-    private static let sizeTag = regex(#"^\s*\[[\d.]+\s*[kmgt]?b\]\s*"#)
+    private static let sizeTag = regex(#"^\s*\[([\d.]+\s*[kmgt]?b)\]\s*"#)
+    /// 2160p, 4K, 8K, 1080p: the picture's resolution, wherever it stands in a name.
+    private static let resolutionDetail = regex(#"(?<![a-z0-9])(4k|8k|2160p|1080p|720p|480p)(?![a-z0-9])"#)
     private static let fileExtension = regex(#"\.(?:mkv|mp4|m4v|ts|avi|rmvb|flv|mov|wmv|iso|webm|m2ts)$"#)
+    /// The share's own tag some drive sources put after a file's extension: "E01.mp4【太阳鱼】" (#595).
+    private static let shareTag = regex(#"\s*【[^【】]*】\s*$"#)
     private static let seasonEpisode = regex(#"(?<![a-z0-9])s(\d{1,2})[ ._-]?ep?(\d{1,4})(?!\d)"#)
     private static let chineseEpisode = regex(#"第\s*([0-9]{1,4}|[零〇一二两三四五六七八九十百]+)\s*[集话話回]"#)
     /// E05 or EP05, not inside a word (HEVC, WEB-DL) and not a resolution (E1080P).
@@ -109,12 +135,12 @@ public enum EpisodeLabels {
         return (1..<match.numberOfRanges).map { Range(match.range(at: $0), in: text).map { String(text[$0]) } ?? "" }
     }
 
-    /// The name without its size tag ("[1.18GB] ") and file extension.
+    /// The name without its size tag ("[1.18GB] "), the share's tag after it ("【太阳鱼】") and file extension.
     static func clean(_ name: String) -> String {
-        replacing(fileExtension, in: replacing(sizeTag, in: name)).trimmingCharacters(in: .whitespaces)
+        replacing(fileExtension, in: replacing(shareTag, in: replacing(sizeTag, in: name))).trimmingCharacters(in: .whitespaces)
     }
     private static func isFileName(_ name: String) -> Bool {
-        groups(fileExtension, in: name) != nil || clean(name).count > 12
+        groups(fileExtension, in: replacing(shareTag, in: name)) != nil || clean(name).count > 12
     }
     private static func enough(_ count: Int, of total: Int) -> Bool { count * 10 >= total * 6 }
 

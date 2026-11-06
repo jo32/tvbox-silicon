@@ -609,13 +609,25 @@ enum HomeSection: String, CaseIterable, Identifiable {
     }
 }
 
-/// Settings → Watch Now: which sections the page shows.
+/// Settings → Watch Now: which sections the page shows, and whether history names a file's size and quality.
 struct WatchNowSettingsView: View {
+    @AppStorage(HistoryFileDetails.key) private var showsFileDetails = false
     var body: some View {
         SettingsPage(title: L10n.text("Watch Now"), symbol: AppSection.home.icon) {
             SettingsGroup(title: L10n.text("Show on Watch Now"),
                           footer: L10n.text("A section you switch off only leaves Watch Now: Playback History, Favorites, Sources and Live TV still have everything.")) {
                 ForEach(HomeSection.available) { HomeSectionToggle(section: $0) }
+            }
+            SettingsGroup(title: L10n.text("Playback History"),
+                          footer: L10n.text("Playback History and Continue Watching show the file's size and picture quality beside the episode number, read from the file's name. A name without them shows the episode alone.")) {
+                #if os(tvOS)
+                TVSettingsToggle(title: L10n.text("Show File Size and Quality"), isOn: $showsFileDetails)
+                #else
+                Toggle(isOn: $showsFileDetails) {
+                    FormLabel(symbol: "doc.text.fill", tint: .blue, title: L10n.text("Show File Size and Quality"))
+                }
+                .settingsSwitch()
+                #endif
             }
         }
     }

@@ -1074,6 +1074,8 @@
 "Unlike" = "Unlike";
 "Show on Watch Now" = "Show on Watch Now";
 "A section you switch off only leaves Watch Now: Playback History, Favorites, Sources and Live TV still have everything." = "A section you switch off only leaves Watch Now: Playback History, Favorites, Sources and Live TV still have everything.";
+"Show File Size and Quality" = "Show File Size and Quality";
+"Playback History and Continue Watching show the file's size and picture quality beside the episode number, read from the file's name. A name without them shows the episode alone." = "Playback History and Continue Watching show the file's size and picture quality beside the episode number, read from the file's name. A name without them shows the episode alone.";
 "Choose what Watch Now shows in Settings." = "Choose what Watch Now shows in Settings.";
 "Name" = "Name";
 "Name (optional)" = "Name (optional)";
