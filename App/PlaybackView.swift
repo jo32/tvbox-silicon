@@ -690,25 +690,49 @@ import IOKit.pwr_mgt
     }
 
     /// HLS whose MPEG-TS segments carry HEVC plays its sound alone: AVPlayer drops that picture without an error (#292).
-    /// For the first seconds after an HLS stream is ready, an item that plays sound with no picture track opens again
-    /// repackaged (`HLSRemux`) where it was. A stream it can't repackage plays on as it is. Only the tracks tell: such a
-    /// stream can still report a presentation size (1280x720 for a 4K channel whose master names its resolution, #394).
+    /// An item that plays sound without a picture opens again repackaged (`HLSRemux`) where it was; a stream that can't
+    /// be repackaged plays on as it is. A presentation size doesn't count as a picture (1280x720 for a 4K channel whose
+    /// master names its resolution, #394), and neither does a video track that decodes no frames: an iOS that lists the
+    /// HEVC track but doesn't show it, and a 4K stream that takes longer than eight seconds to start, both play sound
+    /// alone otherwise (#585). Only frames count, watched for a minute so a slow 4K stream isn't given up on.
     private func checkSegmentedPicture(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
         guard checkingSegments != ObjectIdentifier(item), !Remux.isRemuxed(url), ["http", "https"].contains(url.scheme) else { return }
         checkingSegments = ObjectIdentifier(item)
         Task { [weak self] in
-            for _ in 0..<16 {
+            var pictureless = 0
+            for _ in 0..<120 {
                 try? await Task.sleep(for: .milliseconds(500))
                 guard let self, self.generation == active, self.item === item, item.status == .readyToPlay else { return }
-                let kinds = item.tracks.compactMap { $0.assetTrack?.mediaType }
-                if kinds.contains(.video) { return }
-                guard kinds.contains(.audio), self.player.timeControlStatus == .playing else { continue }
+                let video = item.tracks.filter { $0.assetTrack?.mediaType == .video }
+                if video.contains(where: { $0.isEnabled && $0.currentVideoFrameRate > 0 }) { return }
+                // The rate counts frames drawn, so it reads 0 too for a picture nothing draws (a hidden or minimized
+                // window). Only HEVC is listed without being shown; any other listed picture plays, as before #585.
+                if !video.isEmpty, await !Self.mayBeHEVC(video) { return }
+                guard self.generation == active, self.item === item else { return }
+                // The first frames land a beat after sound starts; four checks without any is no picture.
+                guard self.player.timeControlStatus == .playing else { pictureless = 0; continue }
+                pictureless += 1
+                guard pictureless >= 4 else { continue }
+                // Only a playlist can be repackaged; a plain file mustn't be read whole to find that out.
                 let playback = item.accessLog()?.events.last?.playbackType ?? ""
-                guard ["VOD", "LIVE"].contains(playback) || url.absoluteString.lowercased().contains("m3u8") else { return }
+                guard ["VOD", "LIVE"].contains(playback) || url.absoluteString.lowercased().contains("m3u8") else { continue }
                 self.repackageSegments(item, channel: channel, url: url, generation: active)
                 return
             }
         }
+    }
+
+    /// Whether a listed picture is HEVC, or its codec is not known yet.
+    private static func mayBeHEVC(_ tracks: [AVPlayerItemTrack]) async -> Bool {
+        for track in tracks {
+            guard let asset = track.assetTrack, let formats = try? await asset.load(.formatDescriptions), !formats.isEmpty else { return true }
+            let codecs = formats.map { format -> String in
+                let code = CMFormatDescriptionGetMediaSubType(format)
+                return String(decoding: [24, 16, 8, 0].map { UInt8((code >> $0) & 0xff) }, as: UTF8.self)
+            }
+            if codecs.contains(where: { ["hvc1", "hev1", "dvh1", "dvhe"].contains($0) }) { return true }
+        }
+        return false
     }
 
     private func repackageSegments(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
