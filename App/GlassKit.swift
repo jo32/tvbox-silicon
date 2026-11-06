@@ -1048,23 +1048,25 @@ extension View {
 
 struct Shimmer: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var phase: CGFloat = 0
+    private static let period = 1.35
     func body(content: Content) -> some View {
         content.overlay {
             if !reduceMotion {
-                GeometryReader { proxy in
-                    LinearGradient(colors: [.clear, .white.opacity(0.20), .clear], startPoint: .leading, endPoint: .trailing)
-                        .frame(width: proxy.size.width * 0.6)
-                        .offset(x: -proxy.size.width * 0.6 + phase * proxy.size.width * 1.6)
-                        // Scoped to the band. `withAnimation` in `onAppear` gave the endless animation to everything
-                        // else that moved in that update: on iPadOS 18 the whole Watch Now page, laid out while
-                        // its placeholders shimmered, kept sliding up and jumping back every 1.35 s (#512).
-                        .animation(.linear(duration: 1.35).repeatForever(autoreverses: false), value: phase)
+                // The band's place comes from the clock, laid out at the placeholder's current size every frame. A
+                // repeating SwiftUI animation also repeated whatever else changed when it started: the page (#512),
+                // then the band's own size from the grid's first layout, so the glow stopped short of the card's
+                // bottom. No implicit animation is involved now, and every placeholder sweeps in step.
+                TimelineView(.animation) { timeline in
+                    let phase = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: Self.period) / Self.period
+                    GeometryReader { proxy in
+                        LinearGradient(colors: [.clear, .white.opacity(0.20), .clear], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: proxy.size.width * 0.6, height: proxy.size.height)
+                            .offset(x: -proxy.size.width * 0.6 + phase * proxy.size.width * 1.6)
+                    }
                 }
                 .allowsHitTesting(false)
             }
         }
-        .onAppear { phase = 1 }
     }
 }
 
