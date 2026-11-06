@@ -9,9 +9,11 @@
 #include <libavutil/intreadwrite.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
+#include <libavutil/time.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 #include <errno.h>
+#include <pthread.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
@@ -70,6 +72,8 @@ struct TVMInput {
     int descriptor;
     /// The H.264 stream x264 encoded with intra refresh, -1 when none.
     int intraRefresh;
+    /// Tone-mapped video too slow for its frame rate is made at half the rate (every other frame) from then on.
+    int halveVideo;
 };
 
 static int input_read(void *opaque, uint8_t *buffer, int size) {
@@ -350,6 +354,15 @@ typedef struct Track {
     AVBufferRef *hwDevice, *hwFrames;
     VTPixelTransferSessionRef transfer;
     AVFrame *uploaded, *downloaded;
+    /// The picture shrunk in its own colors before the tone mapping, which costs by the pixel: 4K mapped at once ran
+    /// at ~15 ms a frame on an A15, too slow for 50 fps.
+    VTPixelTransferSessionRef shrink;
+    CVPixelBufferPoolRef shrinkPool;
+    /// A tone-mapped picture over 30 fps that converts slower than it plays is made at half its rate (every other
+    /// frame) from the next segment on (`TVMInput.halveVideo`): the SDR stand-in only has to keep up.
+    int halve, parity;
+    /// Tone mapping on worker threads while the next pictures decode (`Mapper`).
+    struct Mapper *mapper;
     /// Audio: the next sample's time (output clock, before the offset); AV_NOPTS_VALUE after a reset.
     int64_t nextSample;
     /// Audio conversion just restarted: the encoder's priming before the segment's start is dropped.
@@ -380,6 +393,9 @@ typedef struct Track {
     int windowCount, reorder, decoded;
     int64_t frameDuration;
     int started, ended;
+    /// Where a converted video segment's time went (microseconds), for the log.
+    int64_t usDecode, usMap, usEncode;
+    int frames, hwDecoded;
 } Track;
 
 struct TVMCursor {
@@ -401,6 +417,7 @@ struct TVMCursor {
     void *context;
     TVMWriteFunction write;
     TVMCueFunction cue;
+    int64_t usRead;
 };
 
 static int header_box(const uint8_t *type) { return !memcmp(type, "ftyp", 4) || !memcmp(type, "moov", 4); }
@@ -565,19 +582,160 @@ static int hardware_frames(Track *track, int width, int height) {
     return 0;
 }
 
-/// Shrinks a decoded HDR picture and maps it to SDR BT.709 (VideoToolbox's own tone mapping) into `out`.
-static int transfer_picture(Track *track, const AVFrame *frame, AVFrame *out) {
-    if (!track->transfer) {
-        if (VTPixelTransferSessionCreate(kCFAllocatorDefault, &track->transfer) != noErr) { track->transfer = NULL; return AVERROR_EXTERNAL; }
-        VTSessionSetProperty(track->transfer, kVTPixelTransferPropertyKey_DestinationColorPrimaries, kCVImageBufferColorPrimaries_ITU_R_709_2);
-        VTSessionSetProperty(track->transfer, kVTPixelTransferPropertyKey_DestinationTransferFunction, kCVImageBufferTransferFunction_ITU_R_709_2);
-        VTSessionSetProperty(track->transfer, kVTPixelTransferPropertyKey_DestinationYCbCrMatrix, kCVImageBufferYCbCrMatrix_ITU_R_709_2);
+static VTPixelTransferSessionRef tone_map_session(void) {
+    VTPixelTransferSessionRef session = NULL;
+    if (VTPixelTransferSessionCreate(kCFAllocatorDefault, &session) != noErr) return NULL;
+    VTSessionSetProperty(session, kVTPixelTransferPropertyKey_DestinationColorPrimaries, kCVImageBufferColorPrimaries_ITU_R_709_2);
+    VTSessionSetProperty(session, kVTPixelTransferPropertyKey_DestinationTransferFunction, kCVImageBufferTransferFunction_ITU_R_709_2);
+    VTSessionSetProperty(session, kVTPixelTransferPropertyKey_DestinationYCbCrMatrix, kCVImageBufferYCbCrMatrix_ITU_R_709_2);
+    return session;
+}
+
+/// A pool of pictures at the encoder's size in the source's own pixel format, for shrinking before the mapping.
+static CVPixelBufferPoolRef shrink_pool(CVPixelBufferRef source, size_t width, size_t height) {
+    CVPixelBufferPoolRef pool = NULL;
+    CFNumberRef w = CFNumberCreate(NULL, kCFNumberSInt64Type, &(int64_t){(int64_t)width});
+    CFNumberRef h = CFNumberCreate(NULL, kCFNumberSInt64Type, &(int64_t){(int64_t)height});
+    CFNumberRef f = CFNumberCreate(NULL, kCFNumberSInt32Type, &(int32_t){(int32_t)CVPixelBufferGetPixelFormatType(source)});
+    CFDictionaryRef surface = CFDictionaryCreate(NULL, NULL, NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    const void *keys[] = {kCVPixelBufferWidthKey, kCVPixelBufferHeightKey, kCVPixelBufferPixelFormatTypeKey, kCVPixelBufferIOSurfacePropertiesKey};
+    const void *values[] = {w, h, f, surface};
+    CFDictionaryRef attributes = CFDictionaryCreate(NULL, keys, values, 4, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    if (CVPixelBufferPoolCreate(NULL, NULL, attributes, &pool) != kCVReturnSuccess) pool = NULL;
+    CFRelease(attributes); CFRelease(surface); CFRelease(w); CFRelease(h); CFRelease(f);
+    return pool;
+}
+
+/// Shrinks `source` in its own colors when `pool` is given (no destination color keys), then maps it to SDR BT.709 at
+/// the smaller size: the mapping costs by the pixel. The sessions are made on first use.
+static int map_picture(VTPixelTransferSessionRef *transfer, VTPixelTransferSessionRef *shrink, CVPixelBufferPoolRef pool,
+                       CVPixelBufferRef source, CVPixelBufferRef target) {
+    if (!*transfer && !(*transfer = tone_map_session())) return AVERROR_EXTERNAL;
+    CVPixelBufferRef shrunk = NULL;
+    if (pool && (CVPixelBufferGetWidth(source) != CVPixelBufferGetWidth(target) || CVPixelBufferGetHeight(source) != CVPixelBufferGetHeight(target))) {
+        if (!*shrink && VTPixelTransferSessionCreate(kCFAllocatorDefault, shrink) != noErr) *shrink = NULL;
+        if (*shrink && CVPixelBufferPoolCreatePixelBuffer(NULL, pool, &shrunk) == kCVReturnSuccess) {
+            if (VTPixelTransferSessionTransferImage(*shrink, source, shrunk) == noErr) {
+                CVBufferPropagateAttachments(source, shrunk);
+                source = shrunk;
+            } else { CVPixelBufferRelease(shrunk); shrunk = NULL; }
+        }
     }
-    CVPixelBufferRef source = (CVPixelBufferRef)frame->data[3], target = (CVPixelBufferRef)out->data[3];
-    if (av_vt_pixbuf_set_attachments(NULL, source, frame) < 0 || av_vt_pixbuf_set_attachments(NULL, target, out) < 0) return AVERROR_EXTERNAL;
-    OSStatus result = VTPixelTransferSessionTransferImage(track->transfer, source, target);
+    OSStatus result = VTPixelTransferSessionTransferImage(*transfer, source, target);
+    if (shrunk) CVPixelBufferRelease(shrunk);
     if (result != noErr) av_log(NULL, AV_LOG_WARNING, "pixel transfer failed: %d\n", (int)result);
     return result == noErr ? 0 : AVERROR_EXTERNAL;
+}
+
+// MARK: Tone mapping on worker threads
+
+/// Decoding a 4K picture and mapping it to SDR take about as long each (~7 and ~11 ms on an A15); one after the other
+/// they fell short of 60 fps. Workers map pictures while the reader decodes the next ones, and the encoder takes them
+/// back in order.
+#define MAP_DEPTH 4
+#define MAP_WORKERS 2
+enum { JOB_EMPTY, JOB_QUEUED, JOB_WORKING, JOB_DONE, JOB_FAILED };
+typedef struct MapJob { AVFrame *source, *target; int state; } MapJob;
+typedef struct Mapper Mapper;
+typedef struct MapWorker { Mapper *mapper; int index; } MapWorker;
+struct Mapper {
+    pthread_mutex_t lock;
+    pthread_cond_t changed;
+    pthread_t threads[MAP_WORKERS];
+    MapWorker workers[MAP_WORKERS];
+    int running, stop;
+    MapJob jobs[MAP_DEPTH];
+    int head, count;
+    CVPixelBufferPoolRef pool;
+    /// Time the workers spent mapping this segment, microseconds.
+    int64_t usBusy;
+};
+
+static void *map_worker(void *opaque) {
+    Mapper *mapper = ((MapWorker *)opaque)->mapper;
+    VTPixelTransferSessionRef transfer = NULL, shrink = NULL;
+    pthread_mutex_lock(&mapper->lock);
+    for (;;) {
+        MapJob *job = NULL;
+        for (int i = 0; i < mapper->count && !job; i++) {
+            MapJob *candidate = &mapper->jobs[(mapper->head + i) % MAP_DEPTH];
+            if (candidate->state == JOB_QUEUED) job = candidate;
+        }
+        if (!job) {
+            if (mapper->stop) break;
+            pthread_cond_wait(&mapper->changed, &mapper->lock);
+            continue;
+        }
+        job->state = JOB_WORKING;
+        CVPixelBufferPoolRef pool = mapper->pool;
+        pthread_mutex_unlock(&mapper->lock);
+        int64_t began = av_gettime_relative();
+        int status = map_picture(&transfer, &shrink, pool, (CVPixelBufferRef)job->source->data[3], (CVPixelBufferRef)job->target->data[3]);
+        int64_t spent = av_gettime_relative() - began;
+        pthread_mutex_lock(&mapper->lock);
+        job->state = status < 0 ? JOB_FAILED : JOB_DONE;
+        mapper->usBusy += spent;
+        pthread_cond_broadcast(&mapper->changed);
+    }
+    pthread_mutex_unlock(&mapper->lock);
+    if (transfer) { VTPixelTransferSessionInvalidate(transfer); CFRelease(transfer); }
+    if (shrink) { VTPixelTransferSessionInvalidate(shrink); CFRelease(shrink); }
+    return NULL;
+}
+
+static Mapper *mapper_start(void) {
+    Mapper *mapper = av_mallocz(sizeof(Mapper));
+    if (!mapper) return NULL;
+    pthread_mutex_init(&mapper->lock, NULL);
+    pthread_cond_init(&mapper->changed, NULL);
+    for (int i = 0; i < MAP_WORKERS; i++) {
+        mapper->workers[i] = (MapWorker){mapper, i};
+        if (pthread_create(&mapper->threads[i], NULL, map_worker, &mapper->workers[i]) != 0) break;
+        mapper->running++;
+    }
+    return mapper;
+}
+
+/// Waits for the jobs being mapped and drops every job: the pictures they were for won't be encoded.
+static void mapper_discard(Mapper *mapper) {
+    if (!mapper) return;
+    pthread_mutex_lock(&mapper->lock);
+    for (;;) {
+        int working = 0;
+        for (int i = 0; i < MAP_DEPTH; i++) working |= mapper->jobs[i].state == JOB_WORKING;
+        if (!working) break;
+        pthread_cond_wait(&mapper->changed, &mapper->lock);
+    }
+    for (int i = 0; i < MAP_DEPTH; i++) {
+        av_frame_free(&mapper->jobs[i].source);
+        av_frame_free(&mapper->jobs[i].target);
+        mapper->jobs[i].state = JOB_EMPTY;
+    }
+    mapper->head = mapper->count = 0;
+    pthread_mutex_unlock(&mapper->lock);
+}
+
+static void mapper_free(Mapper **pointer) {
+    Mapper *mapper = *pointer;
+    if (!mapper) return;
+    mapper_discard(mapper);
+    pthread_mutex_lock(&mapper->lock);
+    mapper->stop = 1;
+    pthread_cond_broadcast(&mapper->changed);
+    pthread_mutex_unlock(&mapper->lock);
+    for (int i = 0; i < mapper->running; i++) pthread_join(mapper->threads[i], NULL);
+    if (mapper->pool) CVPixelBufferPoolRelease(mapper->pool);
+    pthread_cond_destroy(&mapper->changed);
+    pthread_mutex_destroy(&mapper->lock);
+    av_freep(pointer);
+}
+
+/// Shrinks a decoded HDR picture and maps it to SDR BT.709 (VideoToolbox's own tone mapping) into `out`.
+static int transfer_picture(Track *track, const AVFrame *frame, AVFrame *out) {
+    CVPixelBufferRef source = (CVPixelBufferRef)frame->data[3], target = (CVPixelBufferRef)out->data[3];
+    if (av_vt_pixbuf_set_attachments(NULL, source, frame) < 0 || av_vt_pixbuf_set_attachments(NULL, target, out) < 0) return AVERROR_EXTERNAL;
+    if (!track->shrinkPool) track->shrinkPool = shrink_pool(source, CVPixelBufferGetWidth(target), CVPixelBufferGetHeight(target));
+    return map_picture(&track->transfer, &track->shrink, track->shrinkPool, source, target);
 }
 
 static int open_decoder(Track *track) {
@@ -619,6 +777,8 @@ static int open_video_encoder(Track *track, AVCodecContext **out) {
     encoder->pix_fmt = deep ? AV_PIX_FMT_P010LE : par->format == AV_PIX_FMT_YUV420P ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_NV12;
     encoder->time_base = track->outBase;
     AVRational rate = track->in->avg_frame_rate.num && track->in->avg_frame_rate.den ? track->in->avg_frame_rate : track->in->r_frame_rate;
+    track->halve = track->spec.toneMap && track->owner->input->halveVideo && rate.num && rate.den && av_q2d(rate) > 31;
+    if (track->halve) rate = av_mul_q(rate, (AVRational){1, 2});
     if (rate.num && rate.den) encoder->framerate = rate;
     encoder->gop_size = rate.num && rate.den ? (int)(2 * av_q2d(rate) + 0.5) : 48;
     encoder->max_b_frames = 0;
@@ -695,6 +855,7 @@ static int hold(Track *track, const AVFrame *frame) {
 static void reset_track(Track *track) {
     track->started = track->ended = 0;
     if (track->decoder) avcodec_flush_buffers(track->decoder);
+    mapper_discard(track->mapper);
     if (track->type == AVMEDIA_TYPE_AUDIO) avcodec_free_context(&track->encoder);
     swr_free(&track->resampler);
     if (track->fifo) { av_audio_fifo_free(track->fifo); track->fifo = NULL; }
@@ -807,6 +968,9 @@ void tvm_cursor_free(TVMCursor *cursor) {
         av_frame_free(&track->uploaded);
         av_frame_free(&track->downloaded);
         if (track->transfer) { VTPixelTransferSessionInvalidate(track->transfer); CFRelease(track->transfer); }
+        if (track->shrink) { VTPixelTransferSessionInvalidate(track->shrink); CFRelease(track->shrink); }
+        if (track->shrinkPool) CVPixelBufferPoolRelease(track->shrinkPool);
+        mapper_free(&track->mapper);
         av_buffer_unref(&track->hwFrames);
         av_buffer_unref(&track->hwDevice);
         drop_held(track);
@@ -1028,6 +1192,102 @@ static int tone_map_software(Track *track, const AVFrame *frame, enum AVPixelFor
     return 0;
 }
 
+/// HDR to SDR without the media engine, into the VideoToolbox picture `target`: a pixel transfer that failed.
+static int map_software(Track *track, const AVFrame *frame, AVFrame *target) {
+    int status;
+    const AVFrame *source = frame;
+    if (frame->format == AV_PIX_FMT_VIDEOTOOLBOX) {
+        if (!track->downloaded && !(track->downloaded = av_frame_alloc())) return AVERROR(ENOMEM);
+        av_frame_unref(track->downloaded);
+        if ((status = av_hwframe_transfer_data(track->downloaded, frame, 0)) < 0) return status;
+        if ((status = av_frame_copy_props(track->downloaded, frame)) < 0) return status;
+        source = track->downloaded;
+    }
+    if ((status = tone_map_software(track, source, AV_PIX_FMT_NV12, target->width, target->height)) < 0) return status;
+    return av_hwframe_transfer_data(target, track->scaled, 0);
+}
+
+/// Hands the workers' mapped pictures to the encoder in order: those finished at the head of the queue, or, with `all`,
+/// every one, waiting for them. Also waits when the queue is full.
+static int mapper_drain(TVMCursor *cursor, Track *track, int all) {
+    Mapper *mapper = track->mapper;
+    if (!mapper) return 0;
+    int status = 0;
+    pthread_mutex_lock(&mapper->lock);
+    while (mapper->count > 0) {
+        MapJob *job = &mapper->jobs[mapper->head];
+        if (job->state == JOB_QUEUED || job->state == JOB_WORKING) {
+            if (!all && mapper->count < MAP_DEPTH) break;
+            int64_t began = av_gettime_relative();
+            pthread_cond_wait(&mapper->changed, &mapper->lock);
+            track->usMap += av_gettime_relative() - began;
+            continue;
+        }
+        AVFrame *source = job->source, *target = job->target;
+        int failed = job->state == JOB_FAILED;
+        job->source = job->target = NULL;
+        job->state = JOB_EMPTY;
+        mapper->head = (mapper->head + 1) % MAP_DEPTH;
+        mapper->count--;
+        pthread_mutex_unlock(&mapper->lock);
+        if (status >= 0 && failed) status = map_software(track, source, target);
+        if (status >= 0 && track->encoder) {
+            int64_t began = av_gettime_relative();
+            status = avcodec_send_frame(track->encoder, target);
+            if (status >= 0) status = receive_video(cursor, track);
+            track->usEncode += av_gettime_relative() - began;
+        }
+        av_frame_free(&source);
+        av_frame_free(&target);
+        pthread_mutex_lock(&mapper->lock);
+    }
+    pthread_mutex_unlock(&mapper->lock);
+    return status;
+}
+
+/// Queues a decoded VideoToolbox picture for the workers to map into a picture of the encoder's pool. Returns
+/// AVERROR(ENOSYS) when there are no workers, and the picture is mapped at once instead.
+static int mapper_queue(TVMCursor *cursor, Track *track, const AVFrame *frame, int64_t pts, int64_t duration, enum AVPictureType type) {
+    if (!track->mapper && !(track->mapper = mapper_start())) return AVERROR(ENOSYS);
+    Mapper *mapper = track->mapper;
+    if (!mapper->running) return AVERROR(ENOSYS);
+    int status;
+    AVFrame *source = av_frame_clone(frame), *target = av_frame_alloc();
+    if (!source || !target) { av_frame_free(&source); av_frame_free(&target); return AVERROR(ENOMEM); }
+    if ((status = av_hwframe_get_buffer(track->hwFrames, target, 0)) < 0) { av_frame_free(&source); av_frame_free(&target); return status; }
+    target->color_range = AVCOL_RANGE_MPEG;
+    target->color_primaries = AVCOL_PRI_BT709;
+    target->color_trc = AVCOL_TRC_BT709;
+    target->colorspace = AVCOL_SPC_BT709;
+    target->sample_aspect_ratio = frame->sample_aspect_ratio;
+    target->pts = pts;
+    target->duration = duration;
+    target->pict_type = type;
+    CVPixelBufferRef in = (CVPixelBufferRef)source->data[3], out = (CVPixelBufferRef)target->data[3];
+    if (av_vt_pixbuf_set_attachments(NULL, in, frame) < 0 || av_vt_pixbuf_set_attachments(NULL, out, target) < 0) {
+        av_frame_free(&source); av_frame_free(&target); return AVERROR_EXTERNAL;
+    }
+    pthread_mutex_lock(&mapper->lock);
+    int needsPool = !mapper->pool;
+    pthread_mutex_unlock(&mapper->lock);
+    if (needsPool) {
+        // Made before the first job: the workers read it without making it.
+        CVPixelBufferPoolRef pool = shrink_pool(in, CVPixelBufferGetWidth(out), CVPixelBufferGetHeight(out));
+        pthread_mutex_lock(&mapper->lock);
+        if (!mapper->pool) mapper->pool = pool; else if (pool) CVPixelBufferPoolRelease(pool);
+        pthread_mutex_unlock(&mapper->lock);
+    }
+    // Room in the queue: the finished pictures at its head go to the encoder (waiting for the head when it is full).
+    if ((status = mapper_drain(cursor, track, 0)) < 0) { av_frame_free(&source); av_frame_free(&target); return status; }
+    pthread_mutex_lock(&mapper->lock);
+    MapJob *job = &mapper->jobs[(mapper->head + mapper->count) % MAP_DEPTH];
+    job->source = source; job->target = target; job->state = JOB_QUEUED;
+    mapper->count++;
+    pthread_cond_broadcast(&mapper->changed);
+    pthread_mutex_unlock(&mapper->lock);
+    return 0;
+}
+
 static int encode_video(TVMCursor *cursor, Track *track, AVFrame *frame) {
     int status;
     if (!track->encoder) {
@@ -1037,6 +1297,25 @@ static int encode_video(TVMCursor *cursor, Track *track, AVFrame *frame) {
     }
     AVCodecContext *encoder = track->encoder;
     AVFrame *input = frame;
+    // Every other frame of a fast picture; a segment opens with its first.
+    if (track->halve) {
+        track->parity = track->firstFrame ? 0 : !track->parity;
+        if (track->parity) return 0;
+    }
+    int64_t began = av_gettime_relative();
+    track->frames++;
+    if (frame->format == AV_PIX_FMT_VIDEOTOOLBOX) track->hwDecoded++;
+    if (track->spec.toneMap && track->hwFrames && frame->format == AV_PIX_FMT_VIDEOTOOLBOX) {
+        int64_t pts = av_rescale_q(frame->best_effort_timestamp, track->in->time_base, encoder->time_base);
+        if (track->lastFramePts != AV_NOPTS_VALUE && pts <= track->lastFramePts) pts = track->lastFramePts + 1;
+        int64_t duration = frame->duration > 0 ? av_rescale_q(frame->duration, track->in->time_base, encoder->time_base) * (track->halve ? 2 : 1) : 0;
+        // Every segment opens with a keyframe of its own.
+        status = mapper_queue(cursor, track, frame, pts, duration, track->firstFrame ? AV_PICTURE_TYPE_I : AV_PICTURE_TYPE_NONE);
+        if (status != AVERROR(ENOSYS)) {
+            if (status >= 0) { track->lastFramePts = pts; track->firstFrame = 0; }
+            return status;
+        }
+    }
     if (track->spec.toneMap) {
         if (track->hwFrames) {
             av_frame_unref(track->uploaded);
@@ -1083,12 +1362,16 @@ static int encode_video(TVMCursor *cursor, Track *track, AVFrame *frame) {
     if (track->lastFramePts != AV_NOPTS_VALUE && pts <= track->lastFramePts) pts = track->lastFramePts + 1;
     track->lastFramePts = pts;
     input->pts = pts;
-    input->duration = frame->duration > 0 ? av_rescale_q(frame->duration, track->in->time_base, encoder->time_base) : 0;
+    input->duration = frame->duration > 0 ? av_rescale_q(frame->duration, track->in->time_base, encoder->time_base) * (track->halve ? 2 : 1) : 0;
     // Every segment opens with a keyframe of its own.
     input->pict_type = track->firstFrame ? AV_PICTURE_TYPE_I : AV_PICTURE_TYPE_NONE;
     track->firstFrame = 0;
+    int64_t mapped = av_gettime_relative();
+    track->usMap += mapped - began;
     if ((status = avcodec_send_frame(encoder, input)) < 0) return status;
-    return receive_video(cursor, track);
+    status = receive_video(cursor, track);
+    track->usEncode += av_gettime_relative() - mapped;
+    return status;
 }
 
 static int take_frame(TVMCursor *cursor, Track *track, AVFrame *frame) {
@@ -1105,9 +1388,12 @@ static int take_frame(TVMCursor *cursor, Track *track, AVFrame *frame) {
 static int convert_video(TVMCursor *cursor, Track *track, AVPacket *packet) {
     int status;
     if (!track->decoder && (status = open_decoder(track)) < 0) return status;
+    int64_t began = av_gettime_relative();
     status = avcodec_send_packet(track->decoder, packet);
+    track->usDecode += av_gettime_relative() - began;
     if (status < 0 && status != AVERROR(EAGAIN) && status != AVERROR_EOF) return 0;
-    while ((status = avcodec_receive_frame(track->decoder, cursor->frame)) >= 0) {
+    while (began = av_gettime_relative(), (status = avcodec_receive_frame(track->decoder, cursor->frame)) >= 0) {
+        track->usDecode += av_gettime_relative() - began;
         status = take_frame(cursor, track, cursor->frame);
         av_frame_unref(cursor->frame);
         if (status < 0) return status;
@@ -1117,7 +1403,9 @@ static int convert_video(TVMCursor *cursor, Track *track, AVPacket *packet) {
 
 static int finish_video(TVMCursor *cursor, Track *track) {
     if (!track->encoder) return 0;
-    int status = avcodec_send_frame(track->encoder, NULL);
+    int status = mapper_drain(cursor, track, 1);
+    if (status < 0) { mapper_discard(track->mapper); return status; }
+    status = avcodec_send_frame(track->encoder, NULL);
     if (status >= 0) status = receive_video(cursor, track);
     avcodec_free_context(&track->encoder);
     return status;
@@ -1369,6 +1657,14 @@ int tvm_cursor_segment(TVMCursor *cursor, int64_t start, int64_t end, const uint
         }
     }
     cursor->untouched = 0;
+    cursor->usRead = 0;
+    int64_t segmentBegan = av_gettime_relative();
+    for (int i = 0; i < cursor->count; i++) {
+        Track *track = &cursor->tracks[i];
+        track->usDecode = track->usMap = track->usEncode = 0;
+        track->frames = track->hwDecoded = 0;
+        if (track->mapper) { pthread_mutex_lock(&track->mapper->lock); track->mapper->usBusy = 0; pthread_mutex_unlock(&track->mapper->lock); }
+    }
     for (int i = 0; i < cursor->count; i++) {
         Track *track = &cursor->tracks[i];
         if (!active[i] || (track->type != AVMEDIA_TYPE_VIDEO && track->type != AVMEDIA_TYPE_AUDIO)) continue;
@@ -1413,7 +1709,9 @@ int tvm_cursor_segment(TVMCursor *cursor, int64_t start, int64_t end, const uint
         AVPacket *queued = replay > 0 ? (replay--, pop_pending(cursor)) : NULL;
         if (!queued) {
             if (cursor->eof) break;
+            int64_t began = av_gettime_relative();
             status = av_read_frame(cursor->input->format, cursor->packet);
+            cursor->usRead += av_gettime_relative() - began;
             if (status == AVERROR_EOF) { cursor->eof = 1; status = 0; break; }
             if (status < 0) { fail(error, errorSize, status, "read"); goto done; }
         }
@@ -1438,6 +1736,26 @@ int tvm_cursor_segment(TVMCursor *cursor, int64_t start, int64_t end, const uint
     for (int i = 0; i < cursor->count; i++) {
         if ((status = close_mux(&cursor->tracks[i])) < 0) { fail(error, errorSize, status, "finish"); goto done; }
     }
+    for (int i = 0; i < cursor->count; i++) {
+        Track *track = &cursor->tracks[i];
+        if (!active[i] || track->type != AVMEDIA_TYPE_VIDEO || track->spec.mode == TVMModeCopy) continue;
+        const AVCodecParameters *par = track->in->codecpar;
+        double fps = av_q2d(track->in->avg_frame_rate.den ? track->in->avg_frame_rate : track->in->r_frame_rate);
+        int64_t busy = 0;
+        if (track->mapper) { pthread_mutex_lock(&track->mapper->lock); busy = track->mapper->usBusy; pthread_mutex_unlock(&track->mapper->lock); }
+        // Seconds of picture against seconds of work (the download's waits left out).
+        double made = fps > 0 ? track->frames * (track->halve ? 2 : 1) / fps : 0;
+        double spent = (av_gettime_relative() - segmentBegan - cursor->usRead) / 1e6;
+        av_log(NULL, AV_LOG_WARNING, "convert frames=%d hw=%d read=%lld decode=%lld wait=%lld busy=%lld encode=%lld ms in=%dx%d %s fps=%.2f halve=%d speed=%.2f toneMap=%d out=%dx%d\n",
+               track->frames, track->hwDecoded, (long long)(cursor->usRead / 1000), (long long)(track->usDecode / 1000),
+               (long long)(track->usMap / 1000), (long long)(busy / 1000), (long long)(track->usEncode / 1000), par->width, par->height,
+               av_get_pix_fmt_name(par->format) ?: "-", fps, track->halve, spent > 0 ? made / spent : 0, track->spec.toneMap, track->spec.width, track->spec.height);
+        // Too slow to keep up at full rate: half the rate from the next segment on, for this file.
+        if (track->spec.toneMap && !track->halve && fps > 31 && made > 1 && made < spent * 1.15) {
+            cursor->input->halveVideo = 1;
+            av_log(NULL, AV_LOG_WARNING, "convert too slow for %.0f fps; half the rate from now on\n", fps);
+        }
+    }
     cursor->nextStart = end >= 0 && !(cursor->eof && !cursor->pendingCount) ? end : INT64_MIN;
     cursor->write = NULL; cursor->cue = NULL; cursor->context = NULL;
     return 0;
@@ -1445,6 +1763,7 @@ done:
     for (int i = 0; i < cursor->count; i++) {
         Track *track = &cursor->tracks[i];
         free_mux(&track->mux);
+        mapper_discard(track->mapper);
         if (track->type == AVMEDIA_TYPE_VIDEO) avcodec_free_context(&track->encoder);
     }
     cursor->nextStart = INT64_MIN;

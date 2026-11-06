@@ -374,6 +374,11 @@ import IOKit.pwr_mgt
         return nil
     }
 
+    #if os(tvOS)
+    /// Whether Match Dynamic Range was on when AVPlayer refused HDR (`Remux.refusesHDR`).
+    private static var refusedMatching = false
+    #endif
+
     /// An Apple TV can report HDR playback and still refuse a repackaged HDR10 file (-11868 with Core Media
     /// -17223, "cannot be played on this device"). The file opens again with its picture converted to SDR,
     /// and so do the files opened after it. A mirrored or recorded screen refuses HDR the same way, but only
@@ -385,6 +390,9 @@ import IOKit.pwr_mgt
         let captured = Self.screenCaptured
         guard captured ? !Remux.screenCaptured : !Remux.refusesHDR else { return false }
         if captured { Remux.screenCaptured = true } else { Remux.refusesHDR = true }
+        #if os(tvOS)
+        Self.refusedMatching = HDRDisplay.matching
+        #endif
         detachItem(); observation = nil
         Diagnostics.shared.record(.warning, "player", "hdr refused captured=\(captured); converting to sdr \(failure.map(Self.describe) ?? "-")")
         Remux.stop(url)
@@ -601,6 +609,21 @@ import IOKit.pwr_mgt
         if !url.isFileURL {
             note(L10n.text("Connecting to %@", Self.server(CloudStreams.transfer(for: url)?.host ?? Remux.transfer(for: url)?.host ?? url.host())))
         }
+        #if os(tvOS)
+        // In SDR mode AVPlayer refuses a repackaged HDR stream before it loads, so before AVKit could ask for HDR.
+        if let picture = Remux.hdrPicture(url), HDRDisplay.needsSwitch(to: picture) {
+            Task { [weak self] in
+                await HDRDisplay.switchTo(picture)
+                guard let self, self.generation == activeGeneration, !Task.isCancelled else { return }
+                self.attach(channel, url: url, generation: activeGeneration)
+            }
+            return
+        }
+        #endif
+        attach(channel, url: url, generation: activeGeneration)
+    }
+
+    private func attach(_ channel: Channel, url: URL, generation activeGeneration: UUID) {
         let item = makeItem(channel, url: url)
         watch(item, channel: channel, url: url, generation: activeGeneration)
         // A repackaged file is served on this device's loopback, which an AirPlay receiver can't reach.
@@ -1016,6 +1039,9 @@ import IOKit.pwr_mgt
         upcomingEpisode = nil; onAdvance = nil; playsOn = { false }; clearBoost()
         if let url = playing?.url { HongguoStreams.stop(url) }
         if let automatic { CloudStreams.stop(automatic); Remux.stop(automatic) }
+        #if os(tvOS)
+        HDRDisplay.reset()
+        #endif
         if playing != nil { ErrorReports.shared.stoppedPlaying() }
         playing = nil
         catalogDanmaku.clear()
@@ -1113,6 +1139,10 @@ extension PlaybackSession {
     }
 
     fileprivate func prepare(_ channel: Channel) async throws -> Prepared {
+        #if os(tvOS)
+        // An HDR refusal while the TV stayed in SDR says nothing once Match Dynamic Range is switched (and back).
+        if Remux.refusesHDR, Self.refusedMatching != HDRDisplay.matching { Remux.refusesHDR = false }
+        #endif
         var address = channel.url
         do { address = try await EmbeddedJarHost.shared.recoverProxy(address) }
         catch {
@@ -1221,7 +1251,13 @@ extension PlaybackSession {
 
     /// Why a Dolby Vision 5 file was refused: while the screen is mirrored or recorded iOS plays no HDR stream.
     private static var dolbyVisionRefused: String {
-        screenCaptured ? L10n.text("Dolby Vision video can't play while the screen is mirrored or recorded. Stop mirroring or recording, then try again.")
+        #if os(tvOS)
+        // Dolby Vision 5 has no HDR10 picture to convert to SDR: only an HDR display mode shows it.
+        if !HDRDisplay.matching {
+            return L10n.text("This Dolby Vision video needs HDR. To keep your Apple TV in SDR and still play it, turn on Settings › Video and Audio › Match Content › Match Dynamic Range: the TV then switches to HDR only while such a video plays.")
+        }
+        #endif
+        return screenCaptured ? L10n.text("Dolby Vision video can't play while the screen is mirrored or recorded. Stop mirroring or recording, then try again.")
             : L10n.text("This device can't play this Dolby Vision video. Try another line.")
     }
 
@@ -1553,5 +1589,66 @@ final class DisplayAwake {
     }
 
     deinit { if let assertion { IOPMAssertionRelease(assertion) } }
+}
+#endif
+
+#if os(tvOS)
+/// With Match Dynamic Range on, an Apple TV kept in SDR switches to HDR for an HDR video. AVKit asks for the switch
+/// once the item has loaded, but AVPlayer refuses the HDR variant of a repackaged HLS stream (-11868/-17223) while the
+/// display is still in SDR, before it loads. So the player asks for the switch itself first, and waits for it.
+@MainActor enum HDRDisplay {
+    /// The picture the display was last asked to show, until the player stops.
+    private(set) static var requested: Remux.HDRPicture?
+
+    private static var manager: AVDisplayManager? {
+        UIApplication.shared.connectedScenes.compactMap { scene -> UIWindow? in
+            guard let scene = scene as? UIWindowScene else { return nil }
+            return scene.keyWindow ?? scene.windows.first
+        }.first?.avDisplayManager
+    }
+
+    /// Settings › Video and Audio › Match Content › Match Dynamic Range.
+    static var matching: Bool { manager?.isDisplayCriteriaMatchingEnabled ?? false }
+
+    /// Only with Match Dynamic Range on: otherwise tvOS keeps the mode, and waiting for a switch only costs a second.
+    static func needsSwitch(to picture: Remux.HDRPicture) -> Bool { matching && requested != picture }
+
+    /// Asks for `picture`'s dynamic range (and frame rate, with Match Frame Rate on) and returns once the TV has
+    /// switched, or when it doesn't begin to (already in that mode).
+    static func switchTo(_ picture: Remux.HDRPicture) async {
+        guard let manager, manager.isDisplayCriteriaMatchingEnabled, let format = format(picture) else { return }
+        requested = picture
+        manager.preferredDisplayCriteria = AVDisplayCriteria(refreshRate: Float(picture.frameRate), formatDescription: format)
+        let start = Date()
+        var began = false
+        while Date().timeIntervalSince(start) < 10 {
+            if manager.isDisplayModeSwitchInProgress { began = true }
+            else if began || Date().timeIntervalSince(start) > 1 { break }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        Diagnostics.shared.record(.info, "player", "display hdr matching=\(manager.isDisplayCriteriaMatchingEnabled) transfer=\(picture.transfer) dv=\(picture.dolbyVision) rate=\(picture.frameRate) switched=\(began) ms=\(Int(Date().timeIntervalSince(start) * 1000))")
+    }
+
+    /// Back to the mode chosen in Settings.
+    static func reset() {
+        guard requested != nil else { return }
+        requested = nil
+        manager?.preferredDisplayCriteria = nil
+    }
+
+    private static func format(_ picture: Remux.HDRPicture) -> CMFormatDescription? {
+        let extensions: [CFString: Any] = [
+            kCMFormatDescriptionExtension_ColorPrimaries: kCMFormatDescriptionColorPrimaries_ITU_R_2020,
+            kCMFormatDescriptionExtension_TransferFunction: picture.transfer == 18
+                ? kCMFormatDescriptionTransferFunction_ITU_R_2100_HLG : kCMFormatDescriptionTransferFunction_SMPTE_ST_2084_PQ,
+            kCMFormatDescriptionExtension_YCbCrMatrix: kCMFormatDescriptionYCbCrMatrix_ITU_R_2020,
+        ]
+        var format: CMFormatDescription?
+        CMVideoFormatDescriptionCreate(allocator: kCFAllocatorDefault,
+                                       codecType: picture.dolbyVision ? kCMVideoCodecType_DolbyVisionHEVC : kCMVideoCodecType_HEVC,
+                                       width: Int32(max(picture.width, 1)), height: Int32(max(picture.height, 1)),
+                                       extensions: extensions as CFDictionary, formatDescriptionOut: &format)
+        return format
+    }
 }
 #endif

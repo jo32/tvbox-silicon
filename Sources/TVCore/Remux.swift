@@ -72,6 +72,23 @@ public enum Remux {
     /// convert to SDR, so a device that refuses it refuses it again.
     public static func isDolbyVision(_ url: URL) -> Bool { session(url)?.plan.isDolbyVision ?? false }
 
+    /// An HDR or Dolby Vision picture served as it is: what an Apple TV switches its display to before AVPlayer
+    /// opens it (in SDR mode AVPlayer refuses an HDR variant of an HLS stream).
+    public struct HDRPicture: Sendable, Equatable {
+        public let width: Int, height: Int
+        public let frameRate: Double
+        /// FFmpeg's AVColorTransferCharacteristic: 16 is PQ, 18 is HLG.
+        public let transfer: Int
+        public let dolbyVision: Bool
+    }
+
+    /// The picture behind `url` when it is served as HDR, not converted to SDR; nil otherwise.
+    public static func hdrPicture(_ url: URL) -> HDRPicture? {
+        guard let plan = session(url)?.plan, let video = plan.tracks.first, video.kind == .video, plan.videoRange != "SDR" else { return nil }
+        return HDRPicture(width: video.stream.width, height: video.stream.height, frameRate: video.stream.frameRate,
+                          transfer: plan.videoRange == "HLG" ? 18 : 16, dolbyVision: plan.isDolbyVision)
+    }
+
     /// The source's Dolby Vision profile when the picture behind `url` is served without it (profile 7, say).
     public static func droppedDolbyVision(_ url: URL) -> Int? {
         guard let track = session(url)?.plan.tracks.first, track.kind == .video, track.dolbyVision == .drop,

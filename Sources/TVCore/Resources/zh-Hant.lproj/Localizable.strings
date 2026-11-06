@@ -1160,6 +1160,7 @@
 "Privacy" = "隱私";
 "Dolby Vision video can't play while the screen is mirrored or recorded. Stop mirroring or recording, then try again." = "螢幕正在鏡像輸出或錄製，杜比視界影片無法播放。請停止鏡像輸出或錄影後再試一次。";
 "This device can't play this Dolby Vision video. Try another line." = "此裝置無法播放這部杜比視界影片，請嘗試其他線路。";
+"This Dolby Vision video needs HDR. To keep your Apple TV in SDR and still play it, turn on Settings › Video and Audio › Match Content › Match Dynamic Range: the TV then switches to HDR only while such a video plays." = "這是杜比視界影片，需要 HDR 才能播放。若想讓 Apple TV 維持 SDR 又能播放，請開啟「設定 › 影片與音訊 › 符合內容 › 符合動態範圍」：電視只在播放這類影片時切換到 HDR。";
 "Contributors" = "貢獻者";
 "Ranked by commits in the last 30 days." = "依最近 30 天的提交次數排序。";
 "1 commit" = "1 次提交";

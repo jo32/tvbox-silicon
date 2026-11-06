@@ -262,6 +262,8 @@ private protocol EnhancementEngine: AnyObject, Sendable {
         applying = Task { [weak self] in
             var criteria = wanted
             if let asset { criteria = try? await asset.load(.preferredDisplayCriteria) }
+            // The HDR mode the player switched to before the item opened (`HDRDisplay`) stays until it stops.
+            if criteria == nil, HDRDisplay.requested != nil { return }
             // The controller joins its window a moment after it is made.
             for _ in 0..<20 {
                 guard !Task.isCancelled, let self else { return }
