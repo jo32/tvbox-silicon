@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import TVCore
 
@@ -57,13 +58,23 @@ private func code(_ text: String) -> UInt32 { text.utf8.reduce(0) { $0 << 8 | UI
     info.videoCodec = code("hvc1"); info.width = 1920; info.height = 1080; info.frameRate = 23.976; info.hardwareDecoding = true
     #expect(info.badges == ["HW", "H265", "1080P", "24FPS"])
     info.width = 3840; info.height = 1600; info.transferFunction = "SMPTE_ST_2084_PQ"
-    #expect(info.badges == ["HW", "H265", "HDR10", "4K", "24FPS"])
-    // Dolby Vision: its base layer's codec and a DV tag, never HDR10 beside it.
+    #expect(info.badges == ["HW", "HDR10", "H265", "4K", "24FPS"])
+    // Dolby Vision: a DV tag before its base layer's codec, never HDR10 beside it.
     info.videoCodec = code("dvh1")
-    #expect(info.badges == ["HW", "H265", "DV", "4K", "24FPS"])
+    #expect(info.badges == ["HW", "DV", "H265", "4K", "24FPS"])
+    // Profile 8 rides on hvc1 with Dolby Vision's box; MiraPlay's "HW DV P8 H265 4K 24FPS 25Mbps".
+    info.videoCodec = code("hvc1"); info.dolbyVisionProfile = 8; info.bitrate = 25_200_000
+    #expect(info.badges == ["HW", "DV P8", "H265", "4K", "24FPS", "25Mbps"])
+    #expect(info.video == "Dolby Vision 8 (HEVC) · 3840×1600 · 23.98 fps")
+    // Profile 7 served as its HDR10 base.
+    info.dolbyVisionProfile = nil; info.droppedDolbyVisionProfile = 7; info.bitrate = 2_460_000
+    #expect(info.badges == ["HW", "DV P7→HDR10", "H265", "4K", "24FPS", "2.5Mbps"])
+    info.droppedDolbyVisionProfile = nil; info.bitrate = 850_000
+    #expect(info.badges.last == "850Kbps")
+    info.bitrate = nil
     info.videoCodec = code("av01"); info.hardwareDecoding = false; info.transferFunction = "ITU_R_2100_HLG"
     info.width = 1280; info.height = 720; info.frameRate = 29.97
-    #expect(info.badges == ["SW", "AV1", "HLG", "720P", "30FPS"])
+    #expect(info.badges == ["SW", "HLG", "AV1", "720P", "30FPS"])
     // Smooth Motion draws 60 frames a second (#519).
     info.smoothedFrameRate = 60
     #expect(info.badges.last == "30→60FPS")
@@ -77,4 +88,12 @@ private func code(_ text: String) -> UInt32 { text.utf8.reduce(0) { $0 << 8 | UI
     // No decoding tag without a video format to tell it from.
     info.videoCodec = nil; info.hardwareDecoding = true
     #expect(info.badges == ["480P"])
+}
+
+@Test func dolbyVisionProfileComesFromItsConfigBox() {
+    // dvcC payload: version 1.0, then profile (7 bits) and level (6 bits): profile 8, level 6.
+    #expect(PlaybackInfo.dolbyVisionProfile(config: Data([1, 0, 0x10, 0x35, 0x10])) == 8)
+    #expect(PlaybackInfo.dolbyVisionProfile(config: Data([1, 0, 0x0A, 0x35, 0x10])) == 5)
+    #expect(PlaybackInfo.dolbyVisionProfile(config: Data([1, 0, 0x0E, 0x35, 0x10])) == 7)
+    #expect(PlaybackInfo.dolbyVisionProfile(config: Data([1, 0])) == nil)
 }

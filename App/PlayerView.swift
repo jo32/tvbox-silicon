@@ -1358,6 +1358,8 @@ struct PlaybackInfoPanel: View {
         next.videoCodec = picture?.codec
         next.transferFunction = picture?.transferFunction
         next.hardwareDecoding = picture?.codec.map(Self.decodesInHardware)
+        next.dolbyVisionProfile = picture?.dolbyVisionProfile
+        if let asset = item.asset as? AVURLAsset { next.droppedDolbyVisionProfile = Remux.droppedDolbyVision(asset.url) }
         // The track's own rate; the measured one (a stream that declares none) wanders around it.
         let measured = Double(video?.currentVideoFrameRate ?? 0)
         next.frameRate = picture?.frameRate ?? (measured > 0 ? measured : nil)
@@ -1400,6 +1402,8 @@ struct PlaybackInfoPanel: View {
     struct Format {
         var codec: UInt32?
         var transferFunction: String?
+        /// From the sample description's dvcC/dvvC/dvwC box: profile 8 rides on an hvc1 entry.
+        var dolbyVisionProfile: Int?
         var width = 0, height = 0
         var frameRate: Double?
         var sampleRate: Double?
@@ -1417,6 +1421,11 @@ struct PlaybackInfoPanel: View {
         if let description = descriptions.first {
             format.codec = CMFormatDescriptionGetMediaSubType(description)
             format.transferFunction = CMFormatDescriptionGetExtension(description, extensionKey: kCMFormatDescriptionExtension_TransferFunction) as? String
+            if let atoms = CMFormatDescriptionGetExtension(description, extensionKey: kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms) as? [String: Any] {
+                let box = ["dvcC", "dvvC", "dvwC"].lazy.compactMap { atoms[$0] }.first
+                let config = box as? Data ?? (box as? [Data])?.first
+                format.dolbyVisionProfile = config.flatMap(PlaybackInfo.dolbyVisionProfile(config:))
+            }
             if CMFormatDescriptionGetMediaType(description) == kCMMediaType_Video {
                 let dimensions = CMVideoFormatDescriptionGetDimensions(description)
                 format.width = Int(dimensions.width); format.height = Int(dimensions.height)

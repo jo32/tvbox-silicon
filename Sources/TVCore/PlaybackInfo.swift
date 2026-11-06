@@ -21,6 +21,11 @@ public struct PlaybackInfo: Equatable, Sendable {
     public var bitrate: Double?
     /// What arrives over the network, in bytes per second.
     public var download: Double?
+    /// The Dolby Vision profile the playing picture carries (its dvcC/dvvC box: 5, 8, …), else nil.
+    public var dolbyVisionProfile: Int?
+    /// The source's Dolby Vision profile when the repackager served its picture without it: profile 7's two
+    /// layers, which Apple devices don't decode, play as their HDR10 base.
+    public var droppedDolbyVisionProfile: Int?
     /// Whether this device decodes the video's format in hardware; nil when unknown.
     public var hardwareDecoding: Bool?
     /// The rate frames reach the screen when Smooth Motion adds in-between frames (60), else nil.
@@ -33,7 +38,13 @@ public struct PlaybackInfo: Equatable, Sendable {
     /// "HEVC · 3840×2160 · 23.98 fps · HDR10"
     public var video: String? {
         var parts: [String] = []
-        let codec = videoCodec.map(Self.videoName)
+        var codec = videoCodec.map(Self.videoName)
+        // Profile 8 rides on an hvc1 entry: its HDR10 base layer plus Dolby Vision's box.
+        if let dolbyVisionProfile, let name = codec {
+            codec = name.hasPrefix("Dolby Vision")
+                ? name.replacingOccurrences(of: "Dolby Vision", with: "Dolby Vision \(dolbyVisionProfile)")
+                : "Dolby Vision \(dolbyVisionProfile) (\(name))"
+        }
         if let codec { parts.append(codec) }
         if width > 0, height > 0 { parts.append("\(width)×\(height)") }
         if let frameRate, frameRate.isFinite, frameRate > 0 { parts.append(Self.number(frameRate, digits: 2) + " fps") }
@@ -61,19 +72,19 @@ public struct PlaybackInfo: Equatable, Sendable {
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
-    /// The tags over the seek bar, as MiraPlay and Infuse show them: how the video is decoded, its format, its range,
-    /// its size and its frame rate. ["HW", "H265", "HDR10", "4K", "24FPS"]; with Smooth Motion "24→60FPS" (#519).
+    /// The tags over the seek bar, in MiraPlay's order: how the video is decoded, its range, its format, its size,
+    /// its frame rate and its bitrate. ["HW", "DV P8", "H265", "4K", "24FPS", "25Mbps"]; with Smooth Motion
+    /// "24→60FPS" (#519); profile 7 played as its HDR10 base "DV P7→HDR10".
     public var badges: [String] {
         var tags: [String] = []
         if let hardwareDecoding, videoCodec != nil { tags.append(hardwareDecoding ? "HW" : "SW") }
-        if let videoCodec {
-            let code = Self.fourCC(videoCodec)
-            if let short = Self.shortVideoName(code) { tags.append(short) }
-            if Self.dolbyVision.contains(code) { tags.append("DV") }
-            else if let range = transferFunction.flatMap(Self.dynamicRange) { tags.append(range) }
-        } else if let range = transferFunction.flatMap(Self.dynamicRange) {
-            tags.append(range)
+        let code = videoCodec.map(Self.fourCC)
+        if let dolbyVisionProfile { tags.append("DV P\(dolbyVisionProfile)") }
+        else if let code, Self.dolbyVision.contains(code) { tags.append("DV") }
+        else if let range = transferFunction.flatMap(Self.dynamicRange) {
+            tags.append(droppedDolbyVisionProfile.map { "DV P\($0)→" + range } ?? range)
         }
+        if let code, let short = Self.shortVideoName(code) { tags.append(short) }
         if let size = Self.sizeName(width: width, height: height) { tags.append(size) }
         if let frameRate, frameRate.isFinite, frameRate > 0 {
             let source = Self.roundedRate(frameRate)
@@ -83,7 +94,21 @@ public struct PlaybackInfo: Equatable, Sendable {
                 tags.append("\(source)FPS")
             }
         }
+        if let bitrate, bitrate.isFinite, bitrate > 0 { tags.append(Self.shortBits(bitrate)) }
         return tags
+    }
+
+    /// 850Kbps, 2.5Mbps, 25Mbps.
+    static func shortBits(_ perSecond: Double) -> String {
+        if perSecond < 1_000_000 { return "\(Int((perSecond / 1000).rounded()))Kbps" }
+        return number(perSecond / 1_000_000, digits: perSecond < 10_000_000 ? 1 : 0) + "Mbps"
+    }
+
+    /// The profile in a Dolby Vision configuration box's payload (dvcC, dvvC, dvwC): 7 bits after the version.
+    public static func dolbyVisionProfile(config: Data) -> Int? {
+        let bytes = [UInt8](config)
+        guard bytes.count >= 4 else { return nil }
+        return Int(bytes[2] >> 1)
     }
 
     static let dolbyVision: Set<String> = ["dvh1", "dvhe", "dva1", "dvav", "dav1"]

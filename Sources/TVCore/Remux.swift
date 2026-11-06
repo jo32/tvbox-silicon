@@ -72,6 +72,13 @@ public enum Remux {
     /// convert to SDR, so a device that refuses it refuses it again.
     public static func isDolbyVision(_ url: URL) -> Bool { session(url)?.plan.isDolbyVision ?? false }
 
+    /// The source's Dolby Vision profile when the picture behind `url` is served without it (profile 7, say).
+    public static func droppedDolbyVision(_ url: URL) -> Int? {
+        guard let track = session(url)?.plan.tracks.first, track.kind == .video, track.dolbyVision == .drop,
+              track.stream.doviProfile > 0 else { return nil }
+        return track.stream.doviProfile
+    }
+
     /// Set once AVPlayer refused an HDR stream although the device reported HDR playback (an Apple TV can):
     /// files opened after that convert HDR pictures to SDR, as for a display that shows no HDR.
     public static var refusesHDR: Bool {
