@@ -212,6 +212,15 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
             }
         }
         guard isEnabled else { return }
+        refresh()
+    }
+
+    /// Asks iCloud for what changed since the app last looked, then merges it. The store posts an
+    /// account-change notification of its own when the account is a different one — a viewer switch on an
+    /// Apple TV included — which `receive` turns into taking that account's copy as the whole truth. Apple TV
+    /// and Mac sessions run for days, so the app does this again whenever it comes back to the front (#584).
+    public func refresh() {
+        guard isEnabled else { return }
         cloud.synchronize()
         flush()
     }
@@ -261,7 +270,8 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
         case NSUbiquitousKeyValueStoreQuotaViolationChange:
             Diagnostics.shared.record(.warning, "icloud", "iCloud key-value storage is over its quota")
         default:
-            flush(keys.map(Set.init))
+            // The initial sync brings a whole account's store, so it is not limited to the keys it named.
+            flush(reason == NSUbiquitousKeyValueStoreInitialSyncChange ? nil : keys.map(Set.init))
         }
     }
 

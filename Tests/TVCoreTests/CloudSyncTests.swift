@@ -12,14 +12,18 @@ import Testing
 /// One device holding names by id, with its own ledger folder and defaults.
 @MainActor private final class Device {
     var names: [String: String]
+    var others: [String: String]
     let defaults: UserDefaults
     let sync: CloudSync
     init(_ cloud: MemoryCloud, names: [String: String] = [:]) {
         self.names = names
+        others = [:]
         defaults = UserDefaults(suiteName: "cloudsync." + UUID().uuidString)!
         sync = CloudSync(cloud: cloud, directory: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), defaults: defaults)
         sync.register("names", current: { [unowned self] in self.names },
                       apply: { [unowned self] in self.names = Dictionary(uniqueKeysWithValues: $0.map { ($0.id, $0.value) }) })
+        sync.register("others", current: { [unowned self] in self.others },
+                      apply: { [unowned self] in self.others = Dictionary(uniqueKeysWithValues: $0.map { ($0.id, $0.value) }) })
     }
 }
 
@@ -133,6 +137,29 @@ import Testing
     #expect(tv.names == ["a": "Alpha"])
     let ledger = CloudSync.decode(CloudSyncLedger<String>.self, from: cloud.values["sync.names"] ?? Data())
     #expect(ledger?.records["a"]?.value == "Alpha")
+}
+
+/// Coming back to the front asks iCloud for what changed while the app was away; the store's own
+/// account-change notification then takes the other account's copy as the whole truth (#584).
+@Test @MainActor func aForegroundRefreshBringsInTheCloudsItems() {
+    let cloud = MemoryCloud()
+    let phone = Device(cloud, names: ["a": "Alpha"])
+    phone.sync.flush()
+    let tv = Device(cloud)
+    tv.sync.refresh()
+    #expect(tv.names == ["a": "Alpha"])
+}
+
+/// An initial sync carries the whole store, not just the keys the notification happened to name.
+@Test @MainActor func anInitialSyncMergesEveryKindNotJustTheKeysItNames() {
+    let cloud = MemoryCloud()
+    let phone = Device(cloud, names: ["a": "Alpha"])
+    phone.others = ["c": "Charlie"]
+    phone.sync.flush()
+    let tv = Device(cloud)
+    tv.sync.receive(reason: NSUbiquitousKeyValueStoreInitialSyncChange, keys: ["sync.names"])
+    #expect(tv.names == ["a": "Alpha"])
+    #expect(tv.others == ["c": "Charlie"])
 }
 
 @Test func orderedListsMergeByPlaceWithTheNewerItemFirstOnATie() {
