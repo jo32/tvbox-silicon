@@ -3947,6 +3947,14 @@ struct MacHeroBackdrop: View {
     var picture: CGImage? = nil
     var art: CGImage? = nil
     @State private var image: CGImage?
+
+    /// The picture shown sharp in the corner: the art handed in, else a portrait poster, which the blur alone would hide
+    /// (a title without TMDB's backdrop has only the source's poster).
+    private var shownArt: CGImage? {
+        if let art { return art }
+        guard let poster = picture ?? image, CGFloat(poster.width) / CGFloat(max(1, poster.height)) < 1.3 else { return nil }
+        return poster
+    }
     var body: some View {
         ZStack {
             Color.black
@@ -3958,7 +3966,7 @@ struct MacHeroBackdrop: View {
                     .saturation(landscape ? 1 : 1.25)
                     .transition(.opacity)
             }
-            if let art {
+            if let art = shownArt {
                 // Sharp, at about its own size from the top trailing corner, its leading edge and foot fading into the blur.
                 GeometryReader { proxy in
                     Image(decorative: art, scale: 1).resizable().aspectRatio(contentMode: .fit)
