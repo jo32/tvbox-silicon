@@ -22,7 +22,7 @@ public struct CloudFile: Identifiable, Hashable, Codable, Sendable {
     public static func kind(of name: String) -> Kind {
         switch (name as NSString).pathExtension.lowercased() {
         case "mp4", "m4v", "mov", "mkv", "ts", "m2ts", "mts", "avi", "flv", "f4v", "wmv", "webm", "rmvb", "rm",
-             "mpg", "mpeg", "3gp", "vob", "m3u8": .video
+             "mpg", "mpeg", "3gp", "vob", "m3u8", "iso": .video
         case "mp3", "m4a", "aac", "flac", "wav", "aif", "aiff", "ape", "ogg", "opus", "wma": .audio
         case "jpg", "jpeg", "png", "gif", "webp", "heic", "bmp": .image
         case "srt", "ass", "ssa", "vtt", "sub": .subtitle
@@ -30,7 +30,7 @@ public struct CloudFile: Identifiable, Hashable, Codable, Sendable {
         }
     }
     /// Containers that play as the drive stores them: those AVPlayer opens, and those `Remux` repackages for it.
-    static func playsOriginal(_ name: String) -> Bool { playsNatively(name) || Remux.handles(name: name) }
+    static func playsOriginal(_ name: String) -> Bool { playsNatively(name) || Remux.handles(name: name) || DiscImage.handles(name: name) }
 
     /// Containers Apple devices open as they are.
     static func playsNatively(_ name: String) -> Bool {
