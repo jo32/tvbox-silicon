@@ -45,6 +45,8 @@ struct RootView: View {
     @State private var moreSection: AppSection = .settings
     #if os(iOS)
     @AppStorage(PhoneTabs.storageKey) private var storedTabs = ""
+    /// The size classes the tab set is built for, a moment behind the window's: see `followsSizeClasses`.
+    @State private var tabSizeClasses: TabSizeClasses?
     #endif
     #if os(macOS)
     /// Pushed pages in the detail column. Cleared on section change: the stack keeps them when its root is replaced.
@@ -172,10 +174,28 @@ struct RootView: View {
     /// The phone's tab bar: the tabs the viewer arranged in Settings, then More with the rest. Which screens use
     /// it, and why: `PhoneTabs.inUse`.
     @AppStorage(PhoneTabs.labelsKey) private var showsTabLabels = true
-    private var phoneTabs: Bool { PhoneTabs.inUse(horizontal: sizeClass) }
+    private var phoneTabs: Bool { PhoneTabs.inUse(horizontal: tabSizes.horizontal) }
     /// Sections a phone reaches through More, as arranged in the tab bar editor.
     private var inMore: [AppSection] { PhoneTabs(stored: storedTabs).arranged(slots: barSlots, hiding: store.hiddenSections).more }
-    private var barSlots: Int { PhoneTabs.slots(horizontal: sizeClass, vertical: verticalSizeClass) }
+    private var barSlots: Int { PhoneTabs.slots(horizontal: tabSizes.horizontal, vertical: tabSizes.vertical) }
+    private var tabSizes: TabSizeClasses { tabSizeClasses ?? TabSizeClasses(horizontal: sizeClass, vertical: verticalSizeClass) }
+    struct TabSizeClasses: Equatable {
+        var horizontal: UserInterfaceSizeClass?
+        var vertical: UserInterfaceSizeClass?
+    }
+
+    /// The tab set changes with the size class: the iPad's sidebar sections become the phone bar and More, and
+    /// iPhone Duo's bar gains or loses places. Changed in the same update as the size class, it stopped the app
+    /// on iOS 27.0 and 27.1 ("-[__NSArrayM insertObject:atIndex:]: object cannot be nil" in
+    /// `-[UITabBarController _tabs_rebuildTabBarItemsAnimated:]`, TestFlight 47-51): SwiftUI let go of the leaving
+    /// tabs' view controllers, then UIKit rebuilt the bar for the new size class from the old tabs, and a leaving
+    /// tab among its first places had no item. On an iPad with Music in the sidebar, every resize to a narrow
+    /// window did it. The tab set now follows on the next turn of the main actor, so UIKit lays out the new size
+    /// class with the tabs it has, then gets the new ones.
+    private func followsSizeClasses(_ now: TabSizeClasses) {
+        guard tabSizeClasses != nil else { tabSizeClasses = now; return }
+        Task { @MainActor in tabSizeClasses = now }
+    }
     #endif
     private var platformTabs: some View {
         rootTabs
@@ -197,6 +217,9 @@ struct RootView: View {
             #endif
             #if os(iOS)
             .minimizesTabBarOnScroll()
+            .onChange(of: TabSizeClasses(horizontal: sizeClass, vertical: verticalSizeClass), initial: true) { _, now in
+                followsSizeClasses(now)
+            }
             .musicAccessory(enabled: store.music.showsStrip(videoPlaying: store.playing != nil) && phoneTabs)
             // Opened from the mini player; swiping down closes it, as in Music.
             .sheet(isPresented: Binding(get: { store.music.presentsPlayer }, set: { store.music.presentsPlayer = $0 })) { MusicNowPlayingScreen() }
