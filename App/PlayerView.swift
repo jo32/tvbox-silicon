@@ -826,7 +826,9 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             if let episodes {
                 let panel = UIHostingController(rootView: episodes.panel())
                 panel.title = L10n.text("Episodes")
-                panel.preferredContentSize = CGSize(width: 0, height: episodes.lines.count > 1 ? 470 : 450)
+                // As tall as its content (one row of tiles, with or without the lines beside the title): a set height left
+                // a band of empty panel under them.
+                panel.sizingOptions = .preferredContentSize
                 tabs.append(panel)
             }
             if !chapters.isEmpty {

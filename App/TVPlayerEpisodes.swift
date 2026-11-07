@@ -103,7 +103,7 @@ struct TVPlayerEpisodesPanel: View {
                             .accessibilityAddTraits(isCurrent ? .isSelected : [])
                         }
                     }
-                    .padding(.horizontal, 48).padding(.vertical, 12)
+                    .padding(.horizontal, 48).padding(.top, 12).padding(.bottom, 2)
                 }
                 .scrollClipDisabled()
                 .focusSection()
@@ -113,8 +113,9 @@ struct TVPlayerEpisodesPanel: View {
                 }
             }
         }
-        .padding(.vertical, 22)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.top, 22).padding(.bottom, 6)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .fixedSize(horizontal: false, vertical: true)
         .defaultFocus($focus, current.map { .episode($0.id) })
         .accessibilityIdentifier("player.episodes.panel")
     }
