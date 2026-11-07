@@ -36,6 +36,7 @@ struct MusicView: View {
                 #if !os(macOS)
                 if !search.query.isEmpty { kinds(search) }
                 #endif
+                if !search.query.isEmpty { filters(search) }
                 content(search)
             }
             .glassRowInsets()
@@ -115,6 +116,12 @@ struct MusicView: View {
             if query.isEmpty, !search.query.isEmpty { query = search.query }
             if let kind = Self.searchKind, search.kind != kind { search.search(search.query, kind: kind) }
             #if DEBUG
+            // `-qaMusicDecade 2000 -qaMusicGenre pop -qaMusicLanguage mandarin` turns search filters on first.
+            let qaFilter = MusicSearchFilter(
+                decade: UserDefaults.standard.string(forKey: "qaMusicDecade").flatMap { Int($0) }.flatMap(MusicDecade.init(rawValue:)),
+                genre: UserDefaults.standard.string(forKey: "qaMusicGenre").flatMap(MusicGenre.init(rawValue:)),
+                language: UserDefaults.standard.string(forKey: "qaMusicLanguage").flatMap(MusicLanguage.init(rawValue:)))
+            if !qaFilter.isEmpty { search.setFilter(qaFilter) }
             // `-qaSection music -qaQuery <text> [-qaMusicKind albums] [-qaMusicPlay 1]` searches, and plays the direct hit.
             if query.isEmpty, let text = UserDefaults.standard.string(forKey: "qaQuery") {
                 if UserDefaults.standard.bool(forKey: "qaMusicPlay") { autoPlayQuery = text }
@@ -171,6 +178,15 @@ struct MusicView: View {
         .tvFocusSection()
     }
 
+    /// The filters get a row of their own, so one that is on stays in sight.
+    @ViewBuilder private func filters(_ search: MusicSearchModel) -> some View {
+        if !MusicSearchFilter.facets(for: search.kind).isEmpty {
+            ChipRow { HStack(spacing: 8) { MusicFilterMenus(search: search) }.padding(.vertical, 4) }
+                .padding(.bottom, 8)
+                .tvFocusSection()
+        }
+    }
+
     @ViewBuilder private func content(_ search: MusicSearchModel) -> some View {
         if search.query.isEmpty {
             MusicHome { showsSettings = true }
@@ -180,6 +196,15 @@ struct MusicView: View {
             ErrorStateCard(title: L10n.text("Unable to Search Music"), message: L10n.text("Check your network connection and try again."),
                            details: failureDetails(search), retry: { search.search(query, immediately: true) }, busy: search.busy)
                 .padding(.vertical, 24).tvFocusSection()
+        } else if search.filteredOut {
+            ContentUnavailableView {
+                Label(L10n.text("No Matches"), systemImage: "line.3.horizontal.decrease.circle")
+            } description: {
+                Text(L10n.text("No results match these filters. Only songs QQ Music lists have a year, genre and language."))
+            } actions: {
+                Button(L10n.text("Reset Filters")) { search.setFilter(MusicSearchFilter()) }
+            }
+            .frame(maxWidth: .infinity).padding(.vertical, 60).tvFocusSection()
         } else if search.empty {
             ContentUnavailableView(L10n.text("No Matching Songs"), systemImage: "music.note",
                                    description: Text(L10n.text("Try the song's full name, or add the artist.")))
@@ -210,6 +235,66 @@ struct MusicView: View {
 
     private func failureDetails(_ search: MusicSearchModel) -> String {
         search.failures.map { "\($0.key.name): \($0.value.localizedDescription) (\($0.value.detail))" }.sorted().joined(separator: "\n")
+    }
+}
+
+/// Year, genre and language menus after the kind chips (#649), as many as the kind's results can be narrowed by.
+/// A menu names its choice once one is made; the cross clears them all.
+private struct MusicFilterMenus: View {
+    let search: MusicSearchModel
+
+    var body: some View {
+        let filter = search.filter
+        ForEach(MusicSearchFilter.facets(for: search.kind), id: \.self) { facet in
+            switch facet {
+            case .decade: menu("decade", L10n.text("Year"), filter.decade, MusicDecade.allCases, \.name) { $0.decade = $1 }
+            case .genre: menu("genre", L10n.text("Genre"), filter.genre, MusicGenre.allCases, \.name) { $0.genre = $1 }
+            case .language: menu("language", L10n.text("Language"), filter.language, MusicLanguage.allCases, \.name) { $0.language = $1 }
+            }
+        }
+        if !filter.isEmpty, !MusicSearchFilter.facets(for: search.kind).isEmpty {
+            Button { search.setFilter(MusicSearchFilter()) } label: {
+                #if os(tvOS)
+                Label(L10n.text("Reset Filters"), systemImage: "xmark")
+                #elseif os(macOS)
+                Image(systemName: "xmark").font(.system(size: 11, weight: .semibold)).frame(width: 30, height: 30)
+                    .background(.primary.opacity(0.07), in: Circle()).contentShape(Circle())
+                #else
+                Image(systemName: "xmark").frame(width: 38, height: 38).glassSurface(.regular, in: Circle())
+                #endif
+            }
+            #if os(tvOS)
+            .buttonStyle(DiscoverTVChipStyle(active: false))
+            #else
+            .buttonStyle(.plain)
+            #endif
+            .accessibilityLabel(L10n.text("Reset Filters")).accessibilityIdentifier("music.filter.reset")
+        }
+    }
+
+    private func menu<Value: Hashable>(_ id: String, _ title: String, _ current: Value?, _ values: [Value], _ name: @escaping (Value) -> String,
+                                       set: @escaping (inout MusicSearchFilter, Value?) -> Void) -> some View {
+        let choose = { (value: Value?) in var next = search.filter; set(&next, value); search.setFilter(next) }
+        return Menu {
+            Button { choose(nil) } label: { checked(L10n.text("Any"), current == nil) }
+            ForEach(values, id: \.self) { value in Button { choose(value) } label: { checked(name(value), current == value) } }
+        } label: {
+            #if os(tvOS)
+            Text(current.map(name) ?? title)
+            #else
+            FilterChipLabel(title: current.map(name) ?? title, open: current != nil)
+            #endif
+        }
+        #if os(tvOS)
+        .menuStyle(.button).buttonStyle(DiscoverTVChipStyle(active: current != nil))
+        #else
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        #endif
+        .accessibilityIdentifier("music.filter." + id)
+    }
+
+    @ViewBuilder private func checked(_ text: String, _ on: Bool) -> some View {
+        if on { Label(text, systemImage: "checkmark") } else { Text(text) }
     }
 }
 

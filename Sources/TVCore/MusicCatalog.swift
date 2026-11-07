@@ -44,9 +44,14 @@ public struct QQMusicCatalog: MusicCatalogSource {
               let title = (song["title"]?.string ?? song["name"]?.string).map(MusicText.plain), !title.isEmpty else { return nil }
         let artists = (song["singer"]?.array ?? []).compactMap { $0["name"]?.string }
         let albumMid = song[path: "album", "mid"]?.string ?? ""
-        return MusicTrack(platform: .qq, songID: mid, title: title, artists: artists,
-                          album: song[path: "album", "name"]?.string, duration: song["interval"]?.double,
-                          artwork: albumMid.isEmpty ? nil : URL(string: "https://y.gtimg.cn/music/photo_new/T002R300x300M000\(albumMid).jpg"))
+        var track = MusicTrack(platform: .qq, songID: mid, title: title, artists: artists,
+                               album: song[path: "album", "name"]?.string, duration: song["interval"]?.double,
+                               artwork: albumMid.isEmpty ? nil : URL(string: "https://y.gtimg.cn/music/photo_new/T002R300x300M000\(albumMid).jpg"))
+        // "2005-11-01"; empty for some live recordings.
+        track.year = song["time_public"]?.string.flatMap { Int($0.prefix(4)) }.flatMap { $0 > 1900 ? $0 : nil }
+        track.genre = song["genre"]?.int.flatMap(MusicGenre.init(qqCode:))
+        track.language = song["language"]?.int.flatMap(MusicLanguage.init(qqCode:))
+        return track
     }
 }
 

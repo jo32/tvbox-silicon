@@ -85,6 +85,9 @@ public enum MusicMatching {
                     merged[index].duration = merged[index].duration ?? track.duration
                     merged[index].artwork = merged[index].artwork ?? track.artwork
                     merged[index].album = merged[index].album ?? track.album
+                    merged[index].year = merged[index].year ?? track.year
+                    merged[index].genre = merged[index].genre ?? track.genre
+                    merged[index].language = merged[index].language ?? track.language
                     merged[index].evidence = evidence
                 } else {
                     merged.append(track)

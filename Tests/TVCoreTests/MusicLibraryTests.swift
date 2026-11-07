@@ -192,6 +192,59 @@ private struct FakeSongs: MusicCatalogSource {
     #expect(MusicMatching.byArtist([qing], query: " ").isEmpty)
 }
 
+/// One page of songs per call, by page number.
+private struct PagedSongs: MusicCatalogSource {
+    let platform: MusicPlatform
+    let pages: [[MusicTrack]]
+    func search(_ query: String, page: Int) async throws -> [MusicTrack] { page <= pages.count ? pages[page - 1] : [] }
+}
+
+@MainActor @Test func searchFiltersNarrowByYearGenreAndLanguage() async throws {
+    func track(_ id: String, _ title: String, _ year: Int?, _ genre: MusicGenre?, _ language: MusicLanguage?) -> MusicTrack {
+        var track = song(title, id); track.year = year; track.genre = genre; track.language = language; return track
+    }
+    let qing = track("1", "晴天", 2003, .pop, .mandarin), fukua = track("2", "浮夸", 2005, .pop, .cantonese)
+    let unlabelled = track("3", "无名", nil, nil, nil), shape = track("4", "Shape of You", 2017, .pop, .english)
+    let model = MusicSearchModel(catalogs: [PagedSongs(platform: .qq, pages: [[qing, fukua, unlabelled], [shape]])], health: MusicHealth(file: nil))
+    model.search("歌", kind: .songs, immediately: true)
+    try await settle(model)
+    #expect(model.results == [qing, fukua, unlabelled])
+    // The first filter searches again with a second page; a song with no year is hidden.
+    model.setFilter(MusicSearchFilter(decade: .d2000))
+    try await settle(model)
+    #expect(model.results == [qing, fukua] && model.filter.decade == .d2000)
+    // Changing it only refilters what was found.
+    model.setFilter(MusicSearchFilter(decade: .d2010))
+    #expect(model.results == [shape] && !model.busy)
+    model.setFilter(MusicSearchFilter(language: .cantonese))
+    #expect(model.results == [fukua])
+    model.setFilter(MusicSearchFilter(genre: .rock))
+    #expect(model.results.isEmpty && model.filteredOut && !model.empty)
+    model.setFilter(MusicSearchFilter())
+    #expect(model.results == [qing, fukua, unlabelled, shape] && !model.filteredOut)
+    // The filter stays for the next query.
+    model.setFilter(MusicSearchFilter(genre: .pop, language: .english))
+    model.search("歌曲", immediately: true)
+    try await settle(model)
+    #expect(model.results == [shape])
+
+    // Albums by their year; playlists have none to filter by.
+    let album = MusicCollection(kind: .album, platform: .qq, collectionID: "1", title: "叶惠美", year: "2003")
+    let undated = MusicCollection(kind: .album, platform: .qq, collectionID: "2", title: "无名")
+    let list = MusicCollection(kind: .playlist, platform: .qq, collectionID: "3", title: "歌单")
+    let noughties = MusicSearchFilter(decade: .d2000, genre: .rock)
+    #expect(noughties.admits(album) && !noughties.admits(undated) && noughties.admits(list))
+    #expect(!MusicSearchFilter(decade: .d2010).admits(album))
+    #expect(MusicSearchFilter.facets(for: .albums) == [.decade] && MusicSearchFilter.facets(for: .playlists).isEmpty)
+    #expect(MusicSearchFilter.facets(for: .artists) == [.decade, .genre, .language])
+    #expect(MusicDecade.earlier.contains(1974) && MusicDecade.d1980.contains(1989) && !MusicDecade.d1980.contains(1990))
+
+    // Another catalog's copy of a song takes QQ's labels when the two merge.
+    var copy = song("晴天", "9"); copy.ids = [.netease: "9"]; copy.id = "netease:9"
+    let merged = MusicMatching.merge([[copy], [qing]])
+    #expect(merged.count == 1 && merged[0].year == 2003 && merged[0].genre == .pop && merged[0].language == .mandarin)
+}
+
 @Test func queueTakesSongsNextAndLast() {
     let a = song("A", "a"), b = song("B", "b"), c = song("C", "c"), d = song("D", "d")
     var queue = MusicQueue(tracks: [a, b], start: 0)

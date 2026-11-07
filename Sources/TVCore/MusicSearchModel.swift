@@ -7,14 +7,22 @@ import Observation
 @MainActor @Observable public final class MusicSearchModel {
     public private(set) var query = ""
     public private(set) var kind: MusicSearchKind = .songs
+    /// Narrows what shows, and stays on for the next query until changed (#649).
+    public private(set) var filter = MusicSearchFilter()
+    /// What shows: the catalogs' answers that pass the filter.
     public private(set) var results: [MusicTrack] = []
     public private(set) var collections: [MusicCollection] = []
+    /// Everything the catalogs answered, before the filter.
+    @ObservationIgnored private var allResults: [MusicTrack] = [] { didSet { results = allResults.filter(filter.admits) } }
+    @ObservationIgnored private var allCollections: [MusicCollection] = [] { didSet { collections = allCollections.filter(filter.admits) } }
     public private(set) var busy = false
     /// Why a catalog failed this time, by catalog. One failing catalog is not a failed search.
     public private(set) var failures: [MusicPlatform: MusicProviderError] = [:]
     /// Set once every catalog answered a song search: the one track the query clearly means, if any.
     public private(set) var directHit: MusicTrack?
-    private var nothingFound: Bool { results.isEmpty && collections.isEmpty }
+    private var nothingFound: Bool { allResults.isEmpty && allCollections.isEmpty }
+    /// The catalogs found something, and the filter hides all of it.
+    public var filteredOut: Bool { !query.isEmpty && !nothingFound && results.isEmpty && collections.isEmpty }
     /// The search finished and no catalog found anything.
     public var empty: Bool { !busy && !query.isEmpty && nothingFound && failures.count < catalogs.count }
     /// Every catalog failed: the search itself could not run.
@@ -69,19 +77,21 @@ import Observation
         task?.cancel()
         let run = UUID(); generation = run
         query = trimmed; self.kind = kind; directHit = nil; failures = [:]
-        guard !trimmed.isEmpty else { results = []; collections = []; busy = false; return }
+        guard !trimmed.isEmpty else { allResults = []; allCollections = []; busy = false; return }
+        let deep = Self.searchesDeep(kind, filter)
         let key = kind.rawValue + "|" + MusicMatching.normalize(trimmed) + "|" + MusicMatching.tags(inQuery: trimmed).map(\.rawValue).sorted().joined()
+            + (deep ? "|deep" : "")
         // An artist's songs are a list to choose from, not one song the query means.
         let findsSongs = kind == .songs || kind == .top
         if let cached = cache[key], Date().timeIntervalSince(cached.created) < Self.cacheLifetime {
-            results = cached.results; collections = cached.collections; busy = false
-            directHit = findsSongs ? MusicMatching.directHit(cached.results, query: trimmed) : nil
+            allResults = cached.results; allCollections = cached.collections; busy = false
+            directHit = findsSongs ? MusicMatching.directHit(results, query: trimmed) : nil
             return
         }
         // What the new search won't replace goes now; the rest stays until its answers arrive.
         switch kind {
-        case .songs, .artists: collections = []
-        case .albums, .playlists: results = []; collections = collections.filter { $0.kind == kind.collectionKind }
+        case .songs, .artists: allCollections = []
+        case .albums, .playlists: allResults = []; allCollections = allCollections.filter { $0.kind == kind.collectionKind }
         case .top: break
         }
         busy = true
@@ -93,32 +103,52 @@ import Observation
             if let collectionKind = kind.collectionKind {
                 await self.searchCollections(trimmed, kind: collectionKind, run: run)
             } else if kind == .top {
-                async let songs: Void = self.searchSongs(trimmed, byArtist: false, run: run)
+                async let songs: Void = self.searchSongs(trimmed, byArtist: false, deep: deep, run: run)
                 async let albums: Void = self.searchCollections(trimmed, kind: .album, run: run)
                 async let playlists: Void = self.searchCollections(trimmed, kind: .playlist, run: run)
                 _ = await (songs, albums, playlists)
             } else {
-                await self.searchSongs(trimmed, byArtist: kind == .artists, run: run)
+                await self.searchSongs(trimmed, byArtist: kind == .artists, deep: deep, run: run)
             }
             guard self.generation == run, !Task.isCancelled else { return }
             self.busy = false
             // With a catalog missing, the clearest result may only look clear: the viewer chooses.
             self.directHit = findsSongs && self.failures.isEmpty ? MusicMatching.directHit(self.results, query: trimmed) : nil
-            if self.failures.isEmpty { self.cache[key] = Cached(results: self.results, collections: self.collections, created: Date()) }
+            if self.failures.isEmpty { self.cache[key] = Cached(results: self.allResults, collections: self.allCollections, created: Date()) }
         }
     }
 
     public func clear() { search("") }
 
-    private func searchSongs(_ query: String, byArtist: Bool, run: UUID) async {
+    /// Shows the answers that pass `newFilter` at once. The first filter on songs also searches again for a
+    /// second page from each catalog, since a filter keeps only part of one.
+    public func setFilter(_ newFilter: MusicSearchFilter) {
+        guard newFilter != filter else { return }
+        let wasDeep = Self.searchesDeep(kind, filter)
+        filter = newFilter
+        results = allResults.filter(filter.admits); collections = allCollections.filter(filter.admits)
+        if !query.isEmpty, !wasDeep, Self.searchesDeep(kind, filter) { search(query, immediately: true) }
+        else if kind == .songs || kind == .top { directHit = busy || !failures.isEmpty ? nil : MusicMatching.directHit(results, query: query) }
+    }
+
+    /// Songs come two pages per catalog for an artist, and while a filter narrows them.
+    nonisolated static func searchesDeep(_ kind: MusicSearchKind, _ filter: MusicSearchFilter) -> Bool {
+        switch kind {
+        case .artists: true
+        case .songs, .top: !filter.isEmpty
+        case .albums, .playlists: false
+        }
+    }
+
+    private func searchSongs(_ query: String, byArtist: Bool, deep: Bool, run: UUID) async {
         var lists: [MusicPlatform: [MusicTrack]] = [:]
         await withTaskGroup(of: (MusicPlatform, Result<[MusicTrack], MusicProviderError>).self) { group in
             for catalog in catalogs {
                 group.addTask {
                     do {
                         let first = try await catalog.search(query, page: 1)
-                        // An artist's songs fill more than one page: the second comes too, when there is one.
-                        guard byArtist, !first.isEmpty, let second = try? await catalog.search(query, page: 2) else { return (catalog.platform, .success(first)) }
+                        // An artist's songs, or songs a filter narrows, fill more than one page: the second comes too, when there is one.
+                        guard deep, !first.isEmpty, let second = try? await catalog.search(query, page: 2) else { return (catalog.platform, .success(first)) }
                         return (catalog.platform, .success(first + second))
                     }
                     catch { return (catalog.platform, .failure(MusicProviderError(error))) }
@@ -131,7 +161,7 @@ import Observation
                 guard generation == run else { group.cancelAll(); return }
                 // In MusicPlatform's order: QQ's entries carry durations and covers the others join.
                 let merged = Self.withoutEchoes(MusicMatching.merge(MusicPlatform.allCases.compactMap { lists[$0] }))
-                results = byArtist ? MusicMatching.byArtist(merged, query: query) : MusicMatching.rank(merged, query: query)
+                allResults = byArtist ? MusicMatching.byArtist(merged, query: query) : MusicMatching.rank(merged, query: query)
             }
         }
     }
@@ -152,7 +182,7 @@ import Observation
                 lists[platform] = found
                 guard generation == run else { group.cancelAll(); return }
                 // Top results search albums and playlists side by side: each replaces only its own kind.
-                collections = collections.filter { $0.kind != kind }
+                allCollections = allCollections.filter { $0.kind != kind }
                     + MusicCollections.rank(MusicPlatform.allCases.flatMap { lists[$0] ?? [] }, query: query)
             }
         }
