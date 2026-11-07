@@ -251,15 +251,20 @@ async function start({ bundle, api, profile }) {
     return { server, port, ports: [port], started: new Set() };
 }
 // The app's cloud-drive sign-ins, for bundles that keep their own and sign in through a config center the app can't
-// show. Bundles of the wexfnw family take a drive's cookie at PUT /website/api/credential/<drive>/cookie, and the
-// Xunlei sign-in (its device and tokens) as their whole Xunlei config. Each sign-in passes on once per change in the
-// app, so the bundle's own refreshes of it stay. Keep in step with host.mjs.
+// show. Bundles of the wexfnw family take a drive's cookie at PUT /website/api/credential/<drive>/cookie as {value}, and
+// the Xunlei sign-in (its device and tokens) as their whole Xunlei config. The catpaw.douer.me bundle (豆儿) takes the
+// cookie at PUT /website/<drive>/cookie as {cookie} (#651). Each sign-in passes on once per change in the app, so the
+// bundle's own refreshes of it stay. Keep in step with host.mjs.
 const sharedDrives = { quark: 'quarkCookie', uc: 'ucCookie', baidu: 'baiduCookie' };
-function sharedSignIns(accounts) {
+const cookieRoutes = [
+    { route: drive => `/website/api/credential/${drive}/cookie`, body: value => ({ value }), thunder: true },
+    { route: drive => `/website/${drive}/cookie`, body: value => ({ cookie: value }) },
+];
+function sharedSignIns(accounts, layout) {
     const shares = Object.entries(sharedDrives)
-        .map(([drive, key]) => ({ drive, route: `/website/api/credential/${drive}/cookie`, value: String(accounts[key] || '').trim() }));
+        .map(([drive, key]) => ({ drive, route: layout.route(drive), value: String(accounts[key] || '').trim(), body: layout.body }));
     // A bundle from before Xunlei sign-ins lacks this address; the other drives still pass.
-    shares.push({ drive: 'thunder', route: '/website/api/thunder/config', value: accounts.xunlei ? JSON.stringify(accounts.xunlei) : '', optional: true });
+    if (layout.thunder) shares.push({ drive: 'thunder', route: '/website/api/thunder/config', value: accounts.xunlei ? JSON.stringify(accounts.xunlei) : '', body: value => ({ value }), optional: true });
     return shares;
 }
 async function shareAccounts(instance, accountsFile, profile) {
@@ -274,15 +279,26 @@ async function shareAccounts(instance, accountsFile, profile) {
     try { given = JSON.parse(fs.readFileSync(givenFile, 'utf8')); } catch { }
     const digest = text => crypto.createHash('sha256').update(text).digest('hex');
     let changed = false;
-    for (const { drive, route, value, optional } of sharedSignIns(accounts)) {
-        if (!value || given[drive] === digest(value)) continue;
-        const { status, text } = await request(`http://127.0.0.1:${instance.port}${route}`,
-            { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ value }) });
-        // The config center answers {code: 0}; anything else is a bundle without one.
-        let saved = false;
-        try { saved = status >= 200 && status < 300 && JSON.parse(text).code === 0; } catch { }
-        if (!saved) { if (optional) continue; instance.takesAccounts = false; break; }
-        given[drive] = digest(value); changed = true; log('CATPAW_ACCOUNT', drive);
+    // The bundle's layout is the first that takes a cookie; until then each is tried in turn.
+    for (const layout of instance.cookieLayout ? [instance.cookieLayout] : cookieRoutes) {
+        let missing = false;
+        for (const { drive, route, value, body, optional } of sharedSignIns(accounts, layout)) {
+            if (!value || given[drive] === digest(value)) continue;
+            const { status, text } = await request(`http://127.0.0.1:${instance.port}${route}`,
+                { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body(value)) });
+            // The config center answers {code: 0}. Its refusal ({code: -1, message}) leaves the other drives to pass; any
+            // other answer is a bundle without a config center at this address.
+            let answer;
+            try { answer = JSON.parse(text); } catch { }
+            if (!(status >= 200 && status < 300 && answer?.code === 0)) {
+                if (optional || (status !== 404 && answer?.code !== undefined)) continue;
+                missing = true; break;
+            }
+            instance.cookieLayout = layout;
+            given[drive] = digest(value); changed = true; log('CATPAW_ACCOUNT', drive);
+        }
+        if (!missing) break;
+        if (instance.cookieLayout || layout === cookieRoutes.at(-1)) { instance.takesAccounts = false; break; }
     }
     if (changed) fs.writeFileSync(givenFile, JSON.stringify(given));
 }

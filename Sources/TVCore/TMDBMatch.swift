@@ -423,6 +423,9 @@ public actor TMDBMatchStore {
         return now.timeIntervalSince(entry.saved) < keep ? entry.answer : nil
     }
 
+    /// The last answer kept for the video, however old: a downloaded video shows its match offline too (#653).
+    public func kept(for key: String) -> TMDBMatch.Answer? { loadEntries()[key]?.answer }
+
     public func save(_ answer: TMDBMatch.Answer, for key: String, now: Date = Date()) {
         var entries = loadEntries()
         entries[key] = Entry(answer: answer, saved: now)

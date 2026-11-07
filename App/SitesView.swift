@@ -2067,7 +2067,18 @@ struct VideoDetailView: View {
             Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)
         }
         #else
-        Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)
+        // Apple TV and the Mac don't open a config center (#651): the app's drive sign-ins reach the source instead.
+        if ConfigCenter.page(of: detail, site: client.site) != nil {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(L10n.text("This source's settings page can't open on this device. Sign in to your drives in Cloud Drive Accounts, and the source uses those sign-ins."))
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                RouteLink { CloudDriveView() } label: { Text(L10n.text("Cloud Drive Accounts")) }
+                    .controlButton(prominent: true)
+                    .accessibilityIdentifier("detail.cloudDriveAccounts")
+            }
+        } else {
+            Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)
+        }
         #endif
     }
     #if os(iOS)

@@ -516,6 +516,7 @@
 "No Downloads" = "ダウンロードはありません";
 "Choose Download on a video's page to save episodes for watching offline." = "動画のページで「ダウンロード」を選ぶと、エピソードを保存してオフラインで視聴できます。";
 "Downloaded" = "ダウンロード済み";
+"Date Downloaded" = "ダウンロード日";
 "Delete all downloaded episodes of %@?" = "「%@」のダウンロード済みエピソードをすべて削除しますか？";
 "Delete Downloads" = "ダウンロードを削除";
 "Delete Download" = "ダウンロードを削除";
@@ -1676,3 +1677,4 @@
 "This Blu-ray disc image is still encrypted (AACS). Only decrypted disc images play." = "この Blu-ray ディスクイメージは AACS で暗号化されたままです。復号済みのディスクイメージのみ再生できます。";
 "This disc image's file system can't be read." = "このディスクイメージのファイルシステムを読み取れません。";
 "Artists" = "アーティスト";
+"This source's settings page can't open on this device. Sign in to your drives in Cloud Drive Accounts, and the source uses those sign-ins." = "このソースの設定ページはこのデバイスでは開けません。「クラウドドライブのアカウント」でドライブにサインインすると、ソースはそのサインインを使います。";

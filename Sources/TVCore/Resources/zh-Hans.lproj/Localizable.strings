@@ -516,6 +516,7 @@
 "No Downloads" = "没有下载";
 "Choose Download on a video's page to save episodes for watching offline." = "在视频页面选择“下载”，即可保存剧集离线观看。";
 "Downloaded" = "已下载";
+"Date Downloaded" = "下载时间";
 "Delete all downloaded episodes of %@?" = "删除《%@》的所有已下载剧集？";
 "Delete Downloads" = "删除下载";
 "Delete Download" = "删除下载";
@@ -1676,3 +1677,4 @@
 "This Blu-ray disc image is still encrypted (AACS). Only decrypted disc images play." = "这个蓝光镜像仍有 AACS 加密，只能播放已解密的原盘镜像。";
 "This disc image's file system can't be read." = "无法读取这个光盘镜像的文件系统。";
 "Artists" = "歌手";
+"This source's settings page can't open on this device. Sign in to your drives in Cloud Drive Accounts, and the source uses those sign-ins." = "此片源的设置页面无法在此设备上打开。请在“网盘账号”中登录网盘，片源会使用这些登录。";

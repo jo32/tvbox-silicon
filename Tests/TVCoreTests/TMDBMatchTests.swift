@@ -52,6 +52,9 @@ struct TMDBMatchTests {
         await store.save(answer, for: "a|1", now: now)
         #expect(await store.answer(for: "a|1", now: now.addingTimeInterval(3600)) == answer)
         #expect(await store.answer(for: "a|1", now: now.addingTimeInterval(2 * 86400)) == nil)
+        // Downloads still show what was found, however old.
+        #expect(await store.kept(for: "a|1") == answer)
+        #expect(await store.kept(for: "z|1") == nil)
         // Newer details for a match replace the old ones but keep when the match was saved.
         let matched = TMDBMatch.Answer(status: .matched, match: nil, season: 2, numbering: .season, unmatched: "", candidates: [],
                                        details: try details(season: 2, episodes: 8, seasons: [(2, 10)]))
