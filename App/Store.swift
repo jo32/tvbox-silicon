@@ -680,7 +680,8 @@ import TVCore
         let context = PlaybackHistoryContext(origin: client.origin, site: client.site, video: video, episode: episode)
         return Channel(name: "\(video.name) · \(episode.name)", group: resolved.group, url: resolved.url,
                        logo: resolved.logo, headers: resolved.headers, skipScope: context.id,
-                       historyContext: context, resumePosition: resumePosition, subtitles: resolved.subtitles)
+                       historyContext: context, resumePosition: resumePosition, subtitles: resolved.subtitles, skips: resolved.skips,
+                       bilibiliPart: client.site.isBilibili ? BilibiliAPI.Part(address: episode.address) : nil)
     }
 
     /// The video and its episode list, for the player's episode buttons and the next episode.

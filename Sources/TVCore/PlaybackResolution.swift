@@ -30,8 +30,11 @@ public struct PlaybackPlan: Sendable {
     public let webPlayURL: String
     /// The play result's subtitle files (`subs`).
     public let subtitles: [ExternalSubtitle]
+    /// The play result's opening and ending credits (`skips`).
+    public let skips: [PlaybackSkip]
     public init(choices: [PlaybackChoice], headers: [String: String], group: String, requiresWebDetection: Bool, click: String = "", webPlayURL: String = "",
-                subtitles: [ExternalSubtitle] = []) {
+                subtitles: [ExternalSubtitle] = [], skips: [PlaybackSkip] = []) {
+        self.skips = skips
         self.choices = choices
         self.headers = headers
         self.group = group

@@ -110,7 +110,7 @@ enum SubtitleFile {
     }
 
     static func cues(text: String, format: SubtitleDocument.Format) -> [RemuxPlan.Cue] {
-        let cues = format.isStyled ? assCues(text) : timedCues(text, webVTT: format == .vtt)
+        let cues = bccCues(text) ?? (format.isStyled ? assCues(text) : timedCues(text, webVTT: format == .vtt))
         return cues.sorted { $0.start < $1.start }
     }
 
@@ -158,6 +158,20 @@ enum SubtitleFile {
             if (0x3041...0x30FF).contains(scalar.value) { kana += 1 }
         }
         return letters > 0 && kana * 5 >= letters
+    }
+
+    /// Bilibili's subtitles (BCC): JSON whose `body` holds `{from, to, content}` in seconds. Nil for any other text.
+    static func bccCues(_ text: String) -> [RemuxPlan.Cue]? {
+        guard text.first(where: { !$0.isWhitespace }) == "{", text.contains("\"body\""),
+              let json = try? JSONDecoder().decode([String: JSONValue].self, from: Data(text.utf8)),
+              let body = json["body"]?.array else { return nil }
+        return body.compactMap { item in
+            guard let line = item.object, let from = line["from"]?.double, let to = line["to"]?.double,
+                  let content = line["content"]?.string, !content.isEmpty else { return nil }
+            // Cue text is WebVTT's: its markup characters are escaped.
+            let escaped = content.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
+            return RemuxPlan.Cue(start: Int64(from * 1_000_000), end: Int64(max(from, to) * 1_000_000), text: escaped)
+        }
     }
 
     /// SubRip and WebVTT: a timing line, then the cue's text up to a blank line. Numbers and cue names before

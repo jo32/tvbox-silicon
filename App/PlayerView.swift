@@ -63,7 +63,7 @@ struct PlaybackView: View {
                                  next: episodeAction(store.step(back: false, from: channel, session: session)), waiting: waitContent,
                                  enhancer: session.enhancer, upscale: $upscalesVideo, smooth: $smoothsVideo, info: $showsPlaybackInfo,
                                  speed: playbackSpeed, setSpeed: { playbackSpeed = $0; session.setSpeed($0) }, fills: $fillsScreen, danmakuArea: $danmakuArea,
-                                 external: session.externalSubtitles,
+                                 external: session.externalSubtitles, skip: session.skipOffer, skipSource: { session.skipSourceSegment() },
                                  exitWhileWaiting: session.showsPicture ? nil : { dismiss() }).ignoresSafeArea()
                     .onAppear { playbackSpeed = session.player.defaultRate }
             }
@@ -89,6 +89,9 @@ struct PlaybackView: View {
             chrome.opacity(chromeVisible ? 1 : 0).allowsHitTesting(chromeVisible)
             #endif
             status
+            #if !os(tvOS)
+            SourceSkipButton(session: session)
+            #endif
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "qaPlaybackProbe") {
                 VStack {
@@ -717,6 +720,9 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     var danmakuArea: Binding<DanmakuArea> = .constant(.standard)
     /// Subtitle files beside the video (#576); the item's own are in AVKit's Subtitles menu.
     var external: ExternalSubtitles? = nil
+    /// The source's opening or ending credits playing now, offered as AVKit's Skip button (#256).
+    var skip: PlaybackSkip? = nil
+    var skipSource: @MainActor () -> Void = {}
     private static let speeds: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
     private static func speedLabel(_ speed: Float) -> String {
         Double(speed).formatted(.number.precision(.fractionLength(0...2))) + "×"
@@ -813,6 +819,9 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             items.append(UIMenu(title: L10n.text("Audio"), image: UIImage(systemName: "speaker.wave.2"), children: options))
         }
         if let external, !external.entries.isEmpty || external.hasSources { items.append(Self.subtitleFilesMenu(external)) }
+        let skipSource = skipSource
+        let skips = skip.map { [UIAction(title: $0.kind == .intro ? L10n.text("Skip Intro") : L10n.text("Skip Outro"), image: UIImage(systemName: "forward.fill")) { _ in skipSource() }] } ?? []
+        if controller.contextualActions.map(\.title) != skips.map(\.title) { controller.contextualActions = skips }
         if !live {
             let setSpeed = setSpeed, speed = speed
             let options = Self.speeds.map { rate in UIAction(title: Self.speedLabel(rate), state: rate == speed ? .on : .off) { _ in setSpeed(rate) } }
@@ -1091,6 +1100,7 @@ private struct DesktopPlaybackView: View {
                     .id(bare)
                 if showsDanmaku && !session.danmaku.isEmpty { DanmakuOverlay(player: session.player, comments: session.danmaku, opacity: session.danmakuOpacity, revision: session.danmakuRevision).ignoresSafeArea() }
                 SubtitleOverlay(cues: session.subtitles, fills: fillsFrame).ignoresSafeArea()
+                SourceSkipButton(session: session)
                 // Under the title bar's buttons, so it stays put while they come and go.
                 if showsPlaybackInfo && session.error == nil && session.showsPicture && playingOn == nil {
                     PlaybackInfoPanel(session: session)

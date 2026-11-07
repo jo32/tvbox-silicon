@@ -89,8 +89,26 @@ import UniformTypeIdentifiers
         guard !wanted.isEmpty else { return }
         entries = wanted.map { Entry(id: $0.url.absoluteString, name: $0.name, imported: false, state: .loading, subtitle: $0) }
         Diagnostics.shared.record(.info, "subtitles", "external files=\(wanted.count) of=\(channel.subtitles.count) in-stream=\(included.count)")
+        fetch(Array(wanted))
+    }
+
+    /// Files the source names after the picture started (a Bilibili part's subtitles), joining those of `begin`.
+    /// `automatic` false keeps them off until chosen (Bilibili's machine-made ones).
+    func offer(_ subtitles: [ExternalSubtitle], automatic: Bool) {
+        let known = Set(entries.map(\.id))
+        let wanted = subtitles.filter { !known.contains($0.url.absoluteString) }.prefix(max(0, Self.limit - entries.count))
+        guard !wanted.isEmpty else { return }
+        if !automatic, selected == nil { self.automatic = false }
+        entries += wanted.map { Entry(id: $0.url.absoluteString, name: $0.name, imported: false, state: .loading, subtitle: $0) }
+        Diagnostics.shared.record(.info, "subtitles", "offered files=\(wanted.count)")
+        fetch(Array(wanted))
+    }
+
+    private func fetch(_ wanted: [ExternalSubtitle]) {
         let active = generation, headers = headers
+        let earlier = loading
         loading = Task { [weak self] in
+            await earlier?.value
             await withTaskGroup(of: (String, Result<SubtitleDocument, Error>).self) { group in
                 var queued = wanted.makeIterator(), running = 0
                 func next() {
