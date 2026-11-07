@@ -134,6 +134,18 @@ private func episode(_ id: String, flag: String, name: String, episodeID: String
     #expect(favorites.items(.live).isEmpty)
 }
 
+@Test @MainActor func filterKindsAreThoseSavedInSectionOrder() {
+    let favorites = Favorites(defaults: UserDefaults(suiteName: "favorites." + UUID().uuidString)!)
+    #expect(favorites.kinds.isEmpty)
+    favorites.toggle(.music(MusicTrack(platform: .qq, songID: "9", title: "Song", artists: ["A"])))
+    favorites.toggle(.video(video("show", origin: origin)))
+    favorites.toggle(.live(channel("News")))
+    favorites.toggle(.video(video("other", origin: origin)))
+    #expect(favorites.kinds == [.live, .video, .music])
+    favorites.toggle(.live(channel("News")))
+    #expect(favorites.kinds == [.video, .music])
+}
+
 @Test func listingVideoKeepsPosterTransportHeaders() throws {
     let poster = URL(string: "https://img.example/art/@2x.jpg")!
     let headers = ["Referer": "https://cdn.example/", "User-Agent": "Example Agent", "Cookie": "id=1"]
