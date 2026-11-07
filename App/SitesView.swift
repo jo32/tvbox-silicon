@@ -2622,7 +2622,9 @@ struct VideoDetailView: View {
         // The status bar's strip above the player is the player's black.
         .background(alignment: .top) { Color.black.frame(height: playerHeight).ignoresSafeArea(edges: .top) }
         .background { if fullScreen { Color.black.ignoresSafeArea() } }
-        .statusBarHidden(true)
+        // The clock and battery stay above the player, light on its black as iOS picks in either appearance;
+        // only Full Screen hides them (#514).
+        .statusBarHidden(fullScreen)
         .toolbar(.hidden, for: .navigationBar)
         .background { EdgeSwipeBack(enabled: !fullScreen) }
         .toolbar(.hidden, for: .tabBar)
