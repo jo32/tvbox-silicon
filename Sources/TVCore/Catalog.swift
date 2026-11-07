@@ -67,6 +67,47 @@ public struct Episode: Identifiable, Hashable, Sendable, Codable {
         self.id = id; self.name = name; self.address = address; self.flag = flag; self.videoID = videoID
     }
 }
+/// A person a source credits for a video (`vod_director`, `vod_actor`). A TVBox credit link
+/// (`[a=cr:{"id":"…","name":"…"}/]name[/a]`, FongMi's markup) also names a category of the source that lists their
+/// works; the page opens it as a listing, as it opens a drive's folder.
+public struct VideoCredit: Hashable, Sendable, Codable {
+    public enum Role: String, Hashable, Sendable, Codable { case director, actor }
+    public let name: String
+    public let role: Role
+    /// The category the link opens; nil for a plain name.
+    public let category: String?
+    public init(name: String, role: Role, category: String? = nil) { self.name = name; self.role = role; self.category = category }
+
+    /// The names in a credit field, in order. Plain names are separated by commas, slashes or 、; a field of Chinese
+    /// names may separate them with spaces only.
+    static func parse(_ field: String, role: Role) -> [VideoCredit] {
+        var credits: [VideoCredit] = [], seen = Set<String>()
+        func add(_ name: String, _ category: String?) {
+            let name = HTMLText.name(name)
+            guard !name.isEmpty, seen.insert(name).inserted else { return }
+            credits.append(VideoCredit(name: name, role: role, category: category))
+        }
+        func plain(_ text: Substring) {
+            let text = HTMLText.plain(String(text))
+            for part in text.split(whereSeparator: { ",，/、|｜;；\n".contains($0) }) {
+                let words = part.split(separator: " ")
+                // "张三 李四" lists two people; "Tom Hanks" is one.
+                if words.count > 1, !part.contains(where: { $0.isASCII && $0.isLetter }) { words.forEach { add(String($0), nil) } } else { add(String(part), nil) }
+            }
+        }
+        var rest = field[...]
+        while let match = rest.firstMatch(of: /\[a=cr:(\{.*?\})\/\](.*?)\[\/a\]/) {
+            plain(rest[..<match.range.lowerBound])
+            let fields = (try? JSONDecoder().decode([String: JSONValue].self, from: Data(match.1.utf8))) ?? [:]
+            let name = String(match.2).isEmpty ? fields["name"]?.string ?? "" : String(match.2)
+            add(name, fields["id"]?.string.flatMap { $0.isEmpty ? nil : $0 })
+            rest = rest[match.range.upperBound...]
+        }
+        plain(rest)
+        return credits
+    }
+}
+
 public struct Video: Identifiable, Hashable, Sendable, Codable {
     public let id: String
     public let name: String
@@ -81,11 +122,14 @@ public struct Video: Identifiable, Hashable, Sendable, Codable {
     /// A plugin setting listed among titles (`action`, e.g. FTY's "LoginShow" or "quarkClean"): TVBox runs
     /// `Spider.action` for it instead of opening details, which the plugin can't answer for such an item.
     public let action: String?
+    /// Directors, then actors, as the source credits them; nil when it gave none.
+    public let credits: [VideoCredit]?
     public init(id: String, name: String, poster: URL? = nil, posterHeaders: [String: String] = [:], year: String? = nil,
-                remarks: String = "", synopsis: String = "", episodes: [Episode] = [], category: String? = nil, action: String? = nil) {
+                remarks: String = "", synopsis: String = "", episodes: [Episode] = [], category: String? = nil, action: String? = nil,
+                credits: [VideoCredit]? = nil) {
         self.id = id; self.name = name; self.poster = poster; self.posterHeaders = posterHeaders
         self.year = year; self.remarks = remarks; self.synopsis = synopsis; self.episodes = episodes; self.category = category
-        self.action = action
+        self.action = action; self.credits = credits
     }
     /// A folder of a drive source (AList, 小雅 and other cloud-drive spiders tag it `vod_tag: "folder"`). As in
     /// TVBox it opens as a listing of its own (the category request with the folder's id), not as details.
@@ -95,7 +139,7 @@ public struct Video: Identifiable, Hashable, Sendable, Codable {
     public func keepingPoster(_ poster: URL?, headers: [String: String]? = nil) -> Video {
         guard self.poster == nil, let poster else { return self }
         return Video(id: id, name: name, poster: poster, posterHeaders: headers ?? [:], year: year,
-                     remarks: remarks, synopsis: synopsis, episodes: episodes, category: category, action: action)
+                     remarks: remarks, synopsis: synopsis, episodes: episodes, category: category, action: action, credits: credits)
     }
     public init?(json: [String: JSONValue], origin: URL) {
         guard let id = json["vod_id"]?.string, !id.isEmpty else { return nil }
@@ -108,6 +152,8 @@ public struct Video: Identifiable, Hashable, Sendable, Codable {
         let labels = ["type_name", "vod_class", "vod_tag"].compactMap { json[$0]?.string.map(HTMLText.name) }.filter { !$0.isEmpty }
         category = labels.isEmpty ? nil : labels.joined(separator: ",")
         action = json["action"]?.string.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
+        let credited = VideoCredit.parse(json["vod_director"]?.string ?? "", role: .director) + VideoCredit.parse(json["vod_actor"]?.string ?? "", role: .actor)
+        credits = credited.isEmpty ? nil : credited
         let flags = (json["vod_play_from"]?.string ?? "").components(separatedBy: "$$$")
         var groups: [[Episode]] = []
         for (groupIndex, group) in (json["vod_play_url"]?.string ?? "").components(separatedBy: "$$$").enumerated() {
@@ -506,7 +552,8 @@ public struct CatalogClient: Sendable {
                         throw TVError.unsupported(L10n.text("The API did not return a single playback URL."))
                     }
                     return PlaybackPlan(choices: [PlaybackChoice(id: 0, name: episode.name, address: master.absoluteString)], headers: headers,
-                                        group: episode.flag, requiresWebDetection: false, subtitles: ExternalSubtitle.parse(result["subs"]))
+                                        group: episode.flag, requiresWebDetection: false, subtitles: ExternalSubtitle.parse(result["subs"]),
+                                        skips: PlaybackSkip.parse(result["skips"]))
                 } catch {
                     if error is CancellationError || Task.isCancelled { throw CancellationError() }
                     throw error
@@ -534,7 +581,7 @@ public struct CatalogClient: Sendable {
             }
             return PlaybackPlan(choices: choices, headers: headers, group: episode.flag,
                                 requiresWebDetection: (result["parse"]?.int ?? 0) != 0 || (result["jx"]?.int ?? 0) != 0 || !prefix.isEmpty, click: click, webPlayURL: "",
-                                subtitles: ExternalSubtitle.parse(result["subs"]))
+                                subtitles: ExternalSubtitle.parse(result["subs"]), skips: PlaybackSkip.parse(result["skips"]))
         }
         let prefix = site.raw["playUrl"]?.string ?? ""
         let click = Self.playbackClick(site: site, result: nil)
@@ -560,7 +607,8 @@ public struct CatalogClient: Sendable {
     public func resolvePlayback(_ plan: PlaybackPlan, choice: PlaybackChoice) async throws -> Channel {
         // Addresses the app made itself from the play result: a keyed MP4 or DASH described as HLS.
         if let url = URL(string: choice.address), url.scheme == HongguoStreams.scheme || url.scheme == DashStreams.scheme {
-            return Channel(name: choice.name, group: plan.group, url: url, headers: url.scheme == DashStreams.scheme ? plan.headers : [:])
+            return Channel(name: choice.name, group: plan.group, url: url, headers: url.scheme == DashStreams.scheme ? plan.headers : [:],
+                           subtitles: plan.subtitles, skips: plan.skips)
         }
         // A drive in Cloud Files hands over its stream, which carries the CDN's headers itself.
         if site.isCloudFiles, let url = URL(string: choice.address), url.scheme == CloudStreams.scheme {
@@ -616,11 +664,11 @@ public struct CatalogClient: Sendable {
             if let id = Self.bilibiliProxyID(address), let bilibili = CloudSources.site(where: \.isBilibili) {
                 let channel = try await CatalogClient(site: bilibili, origin: CloudSources.address, http: http)
                     .playback(Episode(id: id, name: choice.name, address: id, flag: plan.group))
-                return Channel(name: choice.name, group: plan.group, url: channel.url, headers: channel.headers, subtitles: channel.subtitles)
+                return Channel(name: choice.name, group: plan.group, url: channel.url, headers: channel.headers, subtitles: channel.subtitles, skips: plan.skips)
             }
             throw TVError.unsupported(L10n.text("This source needs a playback proxy that is not supported yet."))
         }
-        return Channel(name: choice.name, group: plan.group, url: try WebAddress.resolve(address), headers: plan.headers, subtitles: plan.subtitles)
+        return Channel(name: choice.name, group: plan.group, url: try WebAddress.resolve(address), headers: plan.headers, subtitles: plan.subtitles, skips: plan.skips)
     }
 
     /// `aid_cid[_ep]` from a Bili spider's proxy address (`…/proxy?do=bili&aid=…&cid=…&ep=…`).

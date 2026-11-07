@@ -907,10 +907,24 @@ struct SiteView: View {
                         }
                         #endif
                         if site.isBilibili && !BilibiliAccount.load().signedIn { BilibiliSignInBanner() }
+                        // An UP主's space (#256): who they are, Follow, and their uploads by order or their collections.
+                        if site.isBilibili, let folder, let mid = BilibiliAPI.creator(category: folder.id) {
+                            BilibiliSpaceHeader(mid: mid, name: folder.name, client: client,
+                                                category: browser.category.isEmpty ? folder.id : browser.category) { id in
+                                startRequest { await browser.load(.list(category: id, query: "", page: 1), client: client) }
+                            }
+                        }
                         if !browser.categories.isEmpty { categoryBar } else if initialLoading && folder == nil { ChipSkeletonRow() }
                         if browser.query.isEmpty, let current = browser.categories.first(where: { $0.id == browser.category }), !current.filters.isEmpty {
                             CategoryFilterBar(filters: current.filters, choices: browser.filters) { choices in
                                 startRequest { await browser.load(.list(category: current.id, query: "", page: 1, filters: choices), client: client) }
+                            }
+                        }
+                        // The Bilibili source's home (#256): rows of the account's lists, live rooms and popular videos above
+                        // the recommendations.
+                        if site.isBilibili, folder == nil, browser.query.isEmpty, browser.category.isEmpty {
+                            BilibiliShelves(client: client, ready: browser.loaded && !browser.videos.isEmpty) { id in
+                                startRequest { await browser.load(.list(category: id, query: "", page: 1), client: client) }
                             }
                         }
                         if isIndex && !browser.videos.isEmpty {
@@ -1907,7 +1921,9 @@ struct VideoDetailView: View {
             VStack(alignment: .leading, spacing: 22) {
                 header
                 if detail != nil {
+                    sourceExtras
                     episodePanel
+                    sourceRelated
                     tmdbExtras
                 } else if let error {
                     errorCard(error).padding(.top, 12)
@@ -2081,7 +2097,35 @@ struct VideoDetailView: View {
     /// TMDB's story when it has one, else the source's synopsis.
     private func synopsisText(_ detail: Video) -> String {
         if let story = tmdb.details?.story, !story.isEmpty { return story }
+        // The Bilibili source adds a video's hot comments to its synopsis; the page lists its comments itself.
+        if client.site.isBilibili, BilibiliAPI.isVideo(detail.id), let range = detail.synopsis.range(of: "—— 热门评论 ——") {
+            return String(detail.synopsis[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         return detail.synopsis
+    }
+    /// The Bilibili source's UP主: the director it links to their space (`up_<mid>`).
+    private var bilibiliCreator: (mid: Int, name: String)? {
+        guard client.site.isBilibili, let credits = detail?.credits else { return nil }
+        for credit in credits { if let mid = credit.category.flatMap(BilibiliAPI.creator(category:)) { return (mid, credit.name) } }
+        return nil
+    }
+    /// Under the title: on Bilibili the UP主, Follow, and the account's like, coins and favourite (#256); on other
+    /// sources the people they credit, when they link any to a listing of their works.
+    @ViewBuilder private var sourceExtras: some View {
+        if let detail {
+            if client.site.isBilibili {
+                VStack(alignment: .leading, spacing: 14) {
+                    if let creator = bilibiliCreator { BilibiliCreatorRow(mid: creator.mid, name: creator.name, client: client) }
+                    if BilibiliAPI.isVideo(detail.id) { BilibiliActionBar(bvid: detail.id) }
+                }
+            } else if let credits = detail.credits, credits.contains(where: { $0.category != nil }) {
+                SourceCreditsRow(credits: credits, client: client)
+            }
+        }
+    }
+    /// Bilibili's related videos, after the episodes.
+    @ViewBuilder private var sourceRelated: some View {
+        if client.site.isBilibili, let detail, BilibiliAPI.isVideo(detail.id) { BilibiliRelatedRow(bvid: detail.id, client: client) }
     }
     /// The lookup's progress or its question, then TMDB's cast, facts and notice, under the page's own content.
     @ViewBuilder private var tmdbStatus: some View {
@@ -2772,6 +2816,7 @@ struct VideoDetailView: View {
                     Text(meta.joined(separator: " · ")).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                 }
             }
+            sourceExtras
             if detail?.episodes.isEmpty == false {
                 HStack(spacing: 10) { downloadButton(iconOnly: false); videoFavoriteButton }
             }
@@ -2780,6 +2825,7 @@ struct VideoDetailView: View {
             if let detail { synopsis(detail) }
             if detail != nil {
                 watchEpisodes
+                sourceRelated
                 tmdbExtras.padding(.top, 6)
             } else if let error {
                 errorCard(error)
