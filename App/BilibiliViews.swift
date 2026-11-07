@@ -144,7 +144,7 @@ struct BilibiliCreatorRow: View {
     private var followButton: some View {
         Button { Task { await model.toggleFollow(mid) } } label: {
             HStack(spacing: 6) {
-                if model.busy { ProgressView().controlSize(.small) } else { Image(systemName: model.following ? "checkmark" : "plus") }
+                if model.busy { ProgressView().appControlSize(.small) } else { Image(systemName: model.following ? "checkmark" : "plus") }
                 Text(model.following ? L10n.text("Followed") : L10n.text("Follow"))
             }
             .font(.subheadline.weight(.semibold)).lineLimit(1).fixedSize()
@@ -210,7 +210,7 @@ struct BilibiliCreatorRow: View {
     /// A small capsule: filled with `tint` for the one thing to do, quiet glass otherwise.
     private func capsule(_ title: String, symbol: String, filled: Bool, tint: Color, busy: Bool = false) -> some View {
         HStack(spacing: 4) {
-            if busy { ProgressView().controlSize(.mini).tint(filled ? .white : nil) } else { Image(systemName: symbol).font(.caption.weight(.bold)) }
+            if busy { ProgressView().appControlSize(.mini).tint(filled ? .white : nil) } else { Image(systemName: symbol).font(.caption.weight(.bold)) }
             Text(title)
         }
         .font(.subheadline.weight(.semibold)).lineLimit(1).fixedSize()
