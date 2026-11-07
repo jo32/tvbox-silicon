@@ -625,7 +625,7 @@ private struct QADanmakuList: View {
 }
 #endif
 
-#if os(tvOS)
+#if DEBUG && os(tvOS)
 private struct QABilibiliChapters: View {
     let part: BilibiliAPI.Part?
     @State private var chapters: [PlaybackChapter] = []
