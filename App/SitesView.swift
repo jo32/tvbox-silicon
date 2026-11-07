@@ -1852,12 +1852,12 @@ struct VideoDetailView: View {
             #if os(iOS)
             if watchLayout { watchBody } else { pageBody }
             #elseif os(tvOS)
-            if showsBilibiliTVPage { bilibiliTVPage } else { pageBody }
+            if showsBilibiliTVPage { bilibiliTVPage } else if showsTVLoadingHero { tvLoadingHero } else { pageBody }
             #else
             pageBody
             #endif
         }
-        .safeAreaInset(edge: .bottom) { if !isWatchPage { loadingCard } }
+        .safeAreaInset(edge: .bottom) { if !isWatchPage && !showsTVLoadingHero { loadingCard } }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
         #if os(macOS)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1866,7 +1866,7 @@ struct VideoDetailView: View {
         .screenBackdrop()
         #endif
         // Apple TV's Bilibili video page sets its title in its hero; a bar over it only repeated it.
-        .screenTitle(video.name, shown: !showsBilibiliTVPage).task {
+        .screenTitle(video.name, shown: !showsBilibiliTVPage && !showsTVLoadingHero).task {
             store.searchModel.suspend()
             #if os(iOS)
             // From Continue Watching the watch page resumes at once, resolving its own details.
@@ -1942,6 +1942,91 @@ struct VideoDetailView: View {
             .pageContainer()
         }
     }
+
+    /// Apple TV until the details are in (loading, or they failed): the cover across the screen with the title, as the
+    /// Bilibili page's hero.
+    private var showsTVLoadingHero: Bool {
+        #if os(tvOS)
+        detail == nil && !showsBilibiliTVPage
+        #else
+        false
+        #endif
+    }
+
+    #if os(tvOS)
+    /// The Bilibili page's hero while the details load: the title, then skeletons where the facts, Play, the four
+    /// actions and the synopsis will be; if they fail, what went wrong with Try Again where Play would be.
+    private var tvLoadingHero: some View {
+        let subtitle = video.remarks.isEmpty ? video.year ?? "" : video.remarks
+        return ZStack(alignment: .bottomLeading) {
+            TVCoverBackdrop(url: video.poster, headers: video.posterHeaders)
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(video.name).font(.system(size: 64, weight: .bold)).lineLimit(2).minimumScaleFactor(0.7)
+                        .frame(maxWidth: 1300, alignment: .leading)
+                        .shadow(color: .black.opacity(0.45), radius: 12)
+                    if !subtitle.isEmpty {
+                        Text(subtitle).font(.system(size: 28, weight: .medium)).lineLimit(1).opacity(0.7)
+                    } else if error == nil || busy {
+                        SkeletonBlock(cornerRadius: 8).frame(width: 420, height: 30)
+                    }
+                }
+                if let error, !busy {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(L10n.text("Unable to load video details")).font(.system(size: 30, weight: .semibold))
+                        Text(error).font(.system(size: 24)).lineLimit(2).opacity(0.6).frame(maxWidth: 1100, alignment: .leading)
+                    }
+                    .padding(.top, 8)
+                    HStack(spacing: 18) {
+                        Button { startRequest { await loadDetail() } } label: { Label(L10n.text("Try Again"), systemImage: "arrow.clockwise") }
+                            .buttonStyle(DiscoverTVActionStyle(height: 82, font: 28))
+                            .focused($playFocused)
+                            .accessibilityIdentifier("detail.retry")
+                        Button { dismiss() } label: { Label(L10n.text("Go back"), systemImage: "chevron.backward") }
+                            .buttonStyle(DiscoverTVActionStyle(height: 82, font: 28))
+                            .accessibilityIdentifier("detail.goBack")
+                    }
+                    .padding(.top, 16)
+                    .focusSection()
+                    // The error can arrive before the page has finished appearing, too early for the focus request in
+                    // loadDetail: Try Again takes it once it is on screen.
+                    .task(id: error) { try? await Task.sleep(for: .milliseconds(400)); playFocused = true }
+                } else {
+                    HStack(alignment: .top, spacing: 72) {
+                        VStack(alignment: .leading, spacing: 22) {
+                            // Holds focus while it loads, so Back leaves the page.
+                            SkeletonBlock(cornerRadius: 41).frame(height: 82)
+                                .loadingFocus(takeFocus: true) { dismiss() }
+                                .accessibilityIdentifier("detail.loading")
+                            HStack(alignment: .top, spacing: 16) {
+                                ForEach(0..<4, id: \.self) { _ in
+                                    VStack(spacing: 12) {
+                                        SkeletonBlock(cornerRadius: 24).frame(height: 76)
+                                        SkeletonBlock(cornerRadius: 6).frame(width: 64, height: 20)
+                                    }
+                                }
+                            }
+                        }
+                        .frame(width: 540)
+                        VStack(alignment: .leading, spacing: 16) {
+                            SkeletonBlock(cornerRadius: 8).frame(height: 28)
+                            SkeletonBlock(cornerRadius: 8).frame(height: 28)
+                            SkeletonBlock(cornerRadius: 8).frame(width: 560, height: 28)
+                        }
+                        .frame(maxWidth: 1000, alignment: .leading)
+                        .padding(.top, 8)
+                    }
+                    .padding(.top, 16)
+                }
+            }
+            .padding(.horizontal, 96).padding(.bottom, 140)
+        }
+        .ignoresSafeArea()
+        .foregroundStyle(.white).preferredColorScheme(.dark)
+        .transition(.opacity)
+        .animation(.smooth(duration: 0.3), value: error)
+    }
+    #endif
 
     /// A Bilibili video on Apple TV gets its own page (BilibiliTVVideoPage).
     private var showsBilibiliTVPage: Bool {
@@ -2051,6 +2136,11 @@ struct VideoDetailView: View {
         busy = true; error = nil
         defer { busy = false }
         do {
+            #if DEBUG
+            // `-qaDetailDelay <seconds>`: holds the details back, to see the page while they load.
+            let delay = UserDefaults.standard.double(forKey: "qaDetailDelay")
+            if delay > 0 { try await Task.sleep(for: .seconds(delay)) }
+            #endif
             let value = try await client.detail(video.id, cached: client.site.type == 3 || client.site.type == 4)
             try Task.checkCancellation()
             // Worked out once, off the main thread: a line can hold thousands of episodes.
@@ -3364,5 +3454,35 @@ extension SiteView {
 #else
 extension SiteView {
     var bilibiliTVSpace: some View { EmptyView() }
+}
+#endif
+
+#if os(tvOS)
+/// The cover behind Apple TV's loading page, as the Bilibili page's: a landscape cover across the screen, sharp; a
+/// poster, which would crop to a few enlarged pixels, as a soft blur of its colours. Darker toward the text.
+private struct TVCoverBackdrop: View {
+    let url: URL?
+    let headers: [String: String]
+    @State private var image: CGImage?
+    var body: some View {
+        ZStack {
+            Color.black
+            if let image {
+                let landscape = CGFloat(image.width) / CGFloat(max(1, image.height)) >= 1.3
+                Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipped()
+                    .blur(radius: landscape ? 0 : 60, opaque: true)
+                    .saturation(landscape ? 1 : 1.25)
+                    .transition(.opacity)
+            }
+            LinearGradient(stops: [.init(color: .black.opacity(0.85), location: 0), .init(color: .black.opacity(0.55), location: 0.5),
+                                   .init(color: .clear, location: 0.85)], startPoint: .leading, endPoint: .trailing)
+            LinearGradient(stops: [.init(color: .clear, location: 0.2), .init(color: .black.opacity(0.92), location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+        }
+        .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.4), value: image != nil)
+        .task(id: url) { if let url { image = await TMDBArtwork.load(url, maxPixels: 1600, headers: headers) } }
+    }
 }
 #endif
