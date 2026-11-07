@@ -1,5 +1,4 @@
 import SwiftUI
-import ImageIO
 import TVCore
 
 // Bilibili's own parts of the source's pages (#256): the UP主 under a video's title, with Follow, and their space;
@@ -643,6 +642,8 @@ private enum BilibiliTVMetrics {
     static let gutter: CGFloat = 96
     /// Play and the four action plates under it.
     static let actionsWidth: CGFloat = 540
+    /// Play, the UP主, Follow and Live: one height, so the hero's first row lines up.
+    static let rowHeight: CGFloat = 82
     static func clock(_ seconds: Int) -> String {
         seconds >= 3600 ? String(format: "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
             : String(format: "%d:%02d", seconds / 60, seconds % 60)
@@ -681,15 +682,24 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
     @State private var scrolled = false
     @State private var showsComments = false
     @State private var showsDescription = false
-    /// Frames from the video for the backdrop's wall, cut while the page is already up.
-    @State private var frames: [CGImage] = []
-    @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// What has focus in the hero: while anything there has it, the hero is scrolled fully into view.
+    @FocusState private var heroFocus: HeroItem?
+    private enum HeroItem: Hashable { case play, like, coin, favorite, more, creator, live, follow, summary }
 
     var body: some View {
+        // Coming back up from the rows, the remote's scroll stops once the focused button shows, which left the title
+        // under the top edge (and the system's tab pill hidden): the whole hero comes back instead.
+        ScrollViewReader { proxy in
+            page.onChange(of: heroFocus != nil) { _, inHero in
+                if inHero { withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo("hero", anchor: .top) } }
+            }
+        }
+    }
+
+    private var page: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 60) {
-                hero
+                hero.id("hero")
                 if hasParts { parts.padding(.horizontal, BilibiliTVMetrics.gutter).focusSection() }
                 if !hotComments.isEmpty { commentsRow }
                 if !related.isEmpty { relatedRow }
@@ -698,10 +708,7 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
         }
         .scrollClipDisabled()
         .modifier(DiscoverTVScrolled(scrolled: $scrolled))
-        .background {
-            BilibiliTVBackdrop(cover: cover, headers: coverHeaders, frames: frames, frosted: scrolled,
-                               drifts: !scrolled && scenePhase == .active && !reduceMotion && !showsComments && !showsDescription)
-        }
+        .background { BilibiliTVBackdrop(cover: cover, headers: coverHeaders, frosted: scrolled) }
         .ignoresSafeArea()
         .foregroundStyle(.white).preferredColorScheme(.dark)
         .animation(.smooth(duration: 0.35), value: actions.state)
@@ -713,7 +720,6 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
             }
             related = (try? await suggested) ?? []
         }
-        .task(id: bvid) { frames = await BilibiliFrames.load(bvid: bvid, count: 28) }
         .task(id: creator?.mid) { if let mid = creator?.mid { await maker.load(mid) } }
         .fullScreenCover(isPresented: $showsComments) {
             if let state = actions.state { BilibiliCommentsView(aid: state.aid, total: state.replies) }
@@ -765,15 +771,15 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
     private var videoActions: some View {
         let state = actions.state
         return VStack(alignment: .leading, spacing: 22) {
-            play
+            play.focused($heroFocus, equals: .play)
             HStack(alignment: .top, spacing: 16) {
-                plate("hand.thumbsup", on: state?.liked == true, count: state?.likes, title: L10n.text("Like"), id: "bilibili.like") {
+                plate("hand.thumbsup", on: state?.liked == true, count: state?.likes, title: L10n.text("Like"), id: "bilibili.like", focus: .like) {
                     Task { await actions.like() }
                 }
                 .disabled(state == nil)
                 // A menu, not a dialog: a confirmation dialog on a pushed page hangs tvOS 27 (#272).
                 plateMenu("bitcoinsign.circle", on: (state?.coined ?? 0) > 0, caption: caption(state?.coins, L10n.text("Coin")),
-                          title: L10n.text("Coin"), id: "bilibili.coin") {
+                          title: L10n.text("Coin"), id: "bilibili.coin", focus: .coin) {
                     Section(L10n.text("Coins also like the video.")) {
                         ForEach(Array(1...max(1, actions.coinsLeft)), id: \.self) { count in
                             Button(count == 1 ? L10n.text("1 Coin") : L10n.text("%lld Coins", count)) { Task { await actions.coin(count) } }
@@ -781,11 +787,11 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
                     }
                 }
                 .disabled(state == nil)
-                plate("star", on: state?.favorited == true, count: state?.favorites, title: L10n.text("Favorite"), id: "bilibili.favorite") {
+                plate("star", on: state?.favorited == true, count: state?.favorites, title: L10n.text("Favorite"), id: "bilibili.favorite", focus: .favorite) {
                     Task { await actions.favorite() }
                 }
                 .disabled(state == nil)
-                plateMenu("ellipsis", on: false, caption: L10n.text("More"), title: L10n.text("More"), id: "bilibili.more") {
+                plateMenu("ellipsis", on: false, caption: L10n.text("More"), title: L10n.text("More"), id: "bilibili.more", focus: .more) {
                     Button { Task { await actions.watchLater() } } label: { Label(L10n.text("Watch Later"), systemImage: "clock") }
                     Button { Task { await actions.triple() } } label: { Label(L10n.text("Like, Coin and Favorite"), systemImage: "sparkles") }
                     Divider()
@@ -810,20 +816,23 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func plate(_ symbol: String, on: Bool, count: Int?, title: String, id: String, action: @escaping () -> Void) -> some View {
+    private func plate(_ symbol: String, on: Bool, count: Int?, title: String, id: String, focus: HeroItem,
+                       action: @escaping () -> Void) -> some View {
         VStack(spacing: 12) {
             Button(action: action) { glyph(symbol, on: on) }
                 .buttonStyle(DiscoverTVActionStyle(height: 76, font: 30, corner: 24))
+                .focused($heroFocus, equals: focus)
                 .accessibilityLabel(title).accessibilityIdentifier(id)
             plateCaption(caption(count, title))
         }
     }
 
-    private func plateMenu<Content: View>(_ symbol: String, on: Bool, caption: String, title: String, id: String,
+    private func plateMenu<Content: View>(_ symbol: String, on: Bool, caption: String, title: String, id: String, focus: HeroItem,
                                           @ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 12) {
             Menu(content: content) { glyph(symbol, on: on) }
                 .menuStyle(.button).buttonStyle(DiscoverTVActionStyle(height: 76, font: 30, corner: 24))
+                .focused($heroFocus, equals: focus)
                 .accessibilityLabel(title).accessibilityIdentifier(id)
             plateCaption(caption)
         }
@@ -835,28 +844,30 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
 
     /// Who made it, with Follow, and what they wrote, which opens in full.
     private var about: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 22) {
             if let creator {
                 let name = maker.creator?.name ?? creator.name
                 HStack(spacing: 18) {
                     RouteLink { bilibiliSpace(mid: creator.mid, name: name, client: client) } label: {
                         HStack(spacing: 18) {
-                            Color.clear.frame(width: 64, height: 64)
+                            Color.clear.frame(width: 56, height: 56)
                                 .overlay { PosterImage(url: maker.creator?.face, headers: Bilibili.imageHeaders, symbol: "person.fill") }
                                 .clipShape(Circle())
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(name).font(.system(size: 28, weight: .semibold))
-                                Text(maker.stats).font(.system(size: 22)).opacity(0.65)
+                                Text(name).font(.system(size: 26, weight: .semibold))
+                                Text(maker.stats).font(.system(size: 20)).opacity(0.65)
                             }
                             Image(systemName: "chevron.forward").font(.system(size: 22, weight: .semibold)).opacity(0.45)
                         }
                         .padding(.leading, -2).padding(.trailing, 8)
                     }
-                    .buttonStyle(DiscoverTVActionStyle(height: 96, font: 28))
+                    .buttonStyle(DiscoverTVActionStyle(height: BilibiliTVMetrics.rowHeight, font: 26))
+                    .focused($heroFocus, equals: .creator)
                     .accessibilityIdentifier("bilibili.creator")
                     if let room = maker.creator?.liveRoom, let channel = bilibiliLiveChannel(room: room, host: name) {
                         Button { store.playing = channel } label: { Label(L10n.text("Watch Live"), systemImage: "dot.radiowaves.left.and.right") }
-                            .buttonStyle(DiscoverTVActionStyle(height: 76, font: 26))
+                            .buttonStyle(DiscoverTVActionStyle(height: BilibiliTVMetrics.rowHeight, font: 26))
+                            .focused($heroFocus, equals: .live)
                             .accessibilityIdentifier("bilibili.live")
                     }
                     Button { Task { await maker.toggleFollow(creator.mid) } } label: {
@@ -865,7 +876,8 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
                             Text(maker.following ? L10n.text("Followed") : L10n.text("Follow"))
                         }
                     }
-                    .buttonStyle(DiscoverTVActionStyle(height: 76, font: 26))
+                    .buttonStyle(DiscoverTVActionStyle(height: BilibiliTVMetrics.rowHeight, font: 26))
+                    .focused($heroFocus, equals: .follow)
                     .accessibilityIdentifier("bilibili.follow")
                 }
                 BilibiliNotice(message: Binding(get: { maker.message }, set: { maker.message = $0 })).font(.system(size: 24))
@@ -876,6 +888,7 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
                         .frame(maxWidth: 1000, alignment: .leading)
                 }
                 .buttonStyle(BilibiliTVPlateStyle())
+                .focused($heroFocus, equals: .summary)
                 // The plate's padding outside the column, so the text lines up with the UP主 above it.
                 .padding(.leading, -BilibiliTVPlateStyle.inset)
                 .accessibilityIdentifier("bilibili.description")
@@ -921,7 +934,7 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
     /// The whole description, over the frosted cover: the hero shows three lines of it.
     private var descriptionScreen: some View {
         ZStack(alignment: .bottomLeading) {
-            BilibiliTVBackdrop(cover: cover, headers: coverHeaders, frames: frames, frosted: true, drifts: false)
+            BilibiliTVBackdrop(cover: cover, headers: coverHeaders, frosted: true)
             VStack(alignment: .leading, spacing: 24) {
                 Text(title).font(.system(size: 52, weight: .bold)).lineLimit(2)
                 if !facts.isEmpty { Text(facts).font(.system(size: 26)).opacity(0.6) }
@@ -936,42 +949,21 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
     }
 }
 
-/// The video page's backdrop: the cover at the top trailing corner, at about the size Bilibili sends it, fading into a
-/// wall of the video's own frames (a blur of the cover until they're in, or when Bilibili has none); darker toward the
-/// text; frosted once the page scrolls past its hero.
+/// The video page's backdrop: the cover across the whole screen, as Discover's title page shows a backdrop, darker
+/// toward the text; frosted once the page scrolls past its hero.
 private struct BilibiliTVBackdrop: View {
     let cover: URL?
     let headers: [String: String]
-    let frames: [CGImage]
     let frosted: Bool
-    /// The wall drifts: the hero is in view and nothing covers it.
-    let drifts: Bool
     var body: some View {
-        GeometryReader { proxy in
-            let width = proxy.size.width * 0.7
-            ZStack(alignment: .topTrailing) {
-                Color.black
-                if let cover {
-                    TMDBArtwork(url: cover, maxPixels: 1600, headers: headers)
-                        .blur(radius: 70).scaleEffect(1.25).opacity(0.55)
-                }
-                if !frames.isEmpty {
-                    BilibiliFrameWall(frames: frames, active: drifts).opacity(0.32)
-                }
-                if let cover {
-                    TMDBArtwork(url: cover, maxPixels: 1600, headers: headers)
-                        .frame(width: width, height: width * 9 / 16).clipped()
-                        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.3)],
-                                             startPoint: .leading, endPoint: .trailing))
-                        .mask(LinearGradient(stops: [.init(color: .black, location: 0.5), .init(color: .clear, location: 1)],
-                                             startPoint: .top, endPoint: .bottom))
-                }
-                LinearGradient(stops: [.init(color: .black.opacity(0.85), location: 0), .init(color: .black.opacity(0.45), location: 0.45),
-                                       .init(color: .clear, location: 0.75)], startPoint: .leading, endPoint: .trailing)
-                LinearGradient(stops: [.init(color: .clear, location: 0.25), .init(color: .black.opacity(0.9), location: 1)],
-                               startPoint: .top, endPoint: .bottom)
-                Rectangle().fill(.regularMaterial).opacity(frosted ? 1 : 0)
-            }
+        ZStack {
+            Color.black
+            if let cover { TMDBArtwork(url: cover, maxPixels: 2400, headers: headers) }
+            LinearGradient(stops: [.init(color: .black.opacity(0.85), location: 0), .init(color: .black.opacity(0.55), location: 0.5),
+                                   .init(color: .clear, location: 0.85)], startPoint: .leading, endPoint: .trailing)
+            LinearGradient(stops: [.init(color: .clear, location: 0.2), .init(color: .black.opacity(0.92), location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+            Rectangle().fill(.regularMaterial).opacity(frosted ? 1 : 0)
         }
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.35), value: frosted)
@@ -1025,141 +1017,4 @@ private struct BilibiliTVPlateStyle: ButtonStyle {
     }
 }
 
-/// Frames from a video for its page's wall: about `count` of them, evenly through it, cut from Bilibili's preview sheets
-/// off the main thread. Each is copied out of its sheet, so the sheet (a 4800 × 2700 picture) isn't kept.
-enum BilibiliFrames {
-    static func load(bvid: String, count wanted: Int) async -> [CGImage] {
-        guard let shot = try? await BilibiliAPI.videoshot(bvid: bvid), shot.count > 2 else { return [] }
-        // The first frame is often a fade from black.
-        let usable = shot.count - 1, taken = min(wanted, usable)
-        let picks = (0..<taken).map { 1 + $0 * usable / taken }
-        let perSheet = shot.columns * shot.rows
-        var frames: [CGImage] = []
-        for (number, sheet) in shot.sheets.enumerated() {
-            let cells = picks.filter { $0 / perSheet == number }.map { $0 % perSheet }
-            guard !cells.isEmpty, !Task.isCancelled, let (data, _) = try? await URLSession.shared.data(from: sheet) else { continue }
-            let columns = shot.columns, rows = shot.rows
-            frames += await Task.detached(priority: .utility) { cut(data, cells: cells, columns: columns, rows: rows) }.value
-        }
-        return frames
-    }
-
-    private static func cut(_ data: Data, cells: [Int], columns: Int, rows: Int) -> [CGImage] {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let sheet = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return [] }
-        let width = sheet.width / columns, height = sheet.height / rows
-        guard width > 0, height > 0 else { return [] }
-        return cells.compactMap { cell in
-            let rect = CGRect(x: cell % columns * width, y: cell / columns * height, width: width, height: height)
-            guard let frame = sheet.cropping(to: rect),
-                  let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
-                                          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
-            else { return nil }
-            context.draw(frame, in: CGRect(x: 0, y: 0, width: width, height: height))
-            return context.makeImage()
-        }
-    }
-}
-
-/// The video's frames as a wall behind its cover: straight columns of them, every other one set half a frame lower,
-/// drifting slowly upward as the person page's wall does (untilted here). Each frame fades in as it's placed.
-private struct BilibiliFrameWall: UIViewRepresentable {
-    let frames: [CGImage]
-    let active: Bool
-    func makeUIView(context: Context) -> BilibiliFrameWallView { BilibiliFrameWallView() }
-    func updateUIView(_ view: BilibiliFrameWallView, context: Context) { view.update(frames: frames, active: active) }
-    static func dismantleUIView(_ view: BilibiliFrameWallView, coordinator: ()) { view.stop() }
-}
-
-private final class BilibiliFrameWallView: UIView {
-    private static let tile = CGSize(width: 320, height: 180), gap: CGFloat = 12
-    /// The pattern repeats every four rows, so drifting by four rows loops seamlessly.
-    private static let rows = 9, period = 4
-    private let canvas = CALayer()
-    private var tiles: [CALayer] = []
-    private var frames: [CGImage] = []
-    private var columns = 0
-    private var active = false
-    private var cycle: CGFloat = 0
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        isUserInteractionEnabled = false
-        layer.masksToBounds = true
-        layer.addSublayer(canvas)
-    }
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    func update(frames: [CGImage], active: Bool) {
-        self.active = active
-        let changed = frames.count != self.frames.count || zip(frames, self.frames).contains { $0 !== $1 }
-        if changed {
-            self.frames = frames
-            place(fading: true)
-        }
-        animate()
-    }
-
-    func stop() { canvas.removeAnimation(forKey: "drift") }
-
-    /// Neighbours across differ by one frame, and down by a row's worth, so no frame repeats near itself.
-    private func frame(at index: Int) -> CGImage? {
-        guard !frames.isEmpty, columns > 0 else { return nil }
-        let column = index / Self.rows, row = index % Self.rows
-        return frames[(column + (row % Self.period) * columns) % frames.count]
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        let size = bounds.size
-        guard size.width > 0 else { return }
-        CATransaction.begin(); CATransaction.setDisableActions(true)
-        defer { CATransaction.commit() }
-        let tile = Self.tile, step = tile.height + Self.gap
-        let wanted = Int(size.width / (tile.width + Self.gap)) + 2
-        let relayout = wanted != columns
-        columns = wanted
-        while tiles.count < columns * Self.rows {
-            let layer = CALayer()
-            layer.contentsGravity = .resizeAspectFill; layer.masksToBounds = true; layer.cornerRadius = 12; layer.cornerCurve = .continuous
-            layer.backgroundColor = CGColor(gray: 1, alpha: 0.04)
-            canvas.addSublayer(layer); tiles.append(layer)
-        }
-        let width = CGFloat(columns) * (tile.width + Self.gap) - Self.gap
-        canvas.frame = CGRect(x: (size.width - width) / 2, y: -step, width: width, height: CGFloat(Self.rows) * step)
-        for (index, layer) in tiles.enumerated() {
-            let column = index / Self.rows, row = index % Self.rows
-            layer.isHidden = column >= columns
-            layer.frame = CGRect(x: CGFloat(column) * (tile.width + Self.gap),
-                                 y: CGFloat(row) * step + (column % 2 == 1 ? step / 2 : 0), width: tile.width, height: tile.height)
-        }
-        if relayout { place(fading: false) }
-        if cycle != step * CGFloat(Self.period) { cycle = step * CGFloat(Self.period); canvas.removeAnimation(forKey: "drift") }
-        animate()
-    }
-
-    /// Puts each tile's frame on it; fresh frames fade in one after another across the wall.
-    private func place(fading: Bool) {
-        let now = CACurrentMediaTime()
-        for (index, layer) in tiles.enumerated() where !layer.isHidden {
-            layer.contents = frame(at: index)
-            guard fading, layer.contents != nil else { continue }
-            let fade = CABasicAnimation(keyPath: "opacity")
-            fade.fromValue = 0; fade.toValue = 1; fade.duration = 0.6
-            fade.beginTime = now + Double(index % Self.rows + index / Self.rows) * 0.06
-            fade.fillMode = .backwards
-            layer.add(fade, forKey: "fade")
-        }
-    }
-
-    private func animate() {
-        guard active, !frames.isEmpty, cycle > 0 else { canvas.removeAnimation(forKey: "drift"); return }
-        guard canvas.animation(forKey: "drift") == nil else { return }
-        let drift = CABasicAnimation(keyPath: "transform.translation.y")
-        drift.fromValue = 0; drift.toValue = -cycle
-        drift.duration = 120; drift.repeatCount = .infinity
-        drift.timingFunction = CAMediaTimingFunction(name: .linear)
-        canvas.add(drift, forKey: "drift")
-    }
-}
 #endif

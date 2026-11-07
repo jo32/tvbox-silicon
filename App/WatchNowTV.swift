@@ -182,12 +182,11 @@ private struct WatchNowTVHero: View {
         .multilineTextAlignment(.leading)
         .padding(.horizontal, DiscoverLayout.gutter).padding(.bottom, 40)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        .background(alignment: .trailing) {
+        .background {
             // No TMDB backdrop: the page is tinted by the title's own cover, blurred, so show that cover itself too.
             if state.paints[entry.id] != nil, details?.backdrop == nil, let poster = entry.context.poster {
-                WatchNowTVHeroCover(url: poster, headers: entry.context.posterHeaders ?? [:])
+                WatchNowTVHeroArt(url: poster, headers: entry.context.posterHeaders ?? [:])
                     .id(entry.id).transition(.opacity)
-                    .padding(.trailing, DiscoverLayout.gutter)
             }
         }
         .focusSection()
@@ -230,7 +229,39 @@ private struct WatchNowTVHero: View {
     }
 }
 
-/// A title's own cover, whole and sharp, on the right of the hero: portrait or landscape, it keeps its shape.
+/// A title's own cover in the hero when TMDB has no backdrop. A landscape one (Bilibili's, a drive's still) fills the
+/// hero as a backdrop does, dark toward the text and fading into the page; a portrait one stands whole on the right,
+/// where filling the hero would crop most of it away.
+private struct WatchNowTVHeroArt: View {
+    let url: URL
+    let headers: [String: String]
+    @State private var image: CGImage?
+    var body: some View {
+        // A clear base, so the loading task runs before there is anything to show.
+        ZStack {
+            Color.clear
+            if let image, image.width * 10 >= image.height * 13 {
+                // From the top: covers put their titles there, and the foot fades into the page anyway.
+                Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipped()
+                    .overlay {
+                        LinearGradient(stops: [.init(color: .black.opacity(0.75), location: 0), .init(color: .black.opacity(0.3), location: 0.45),
+                                               .init(color: .clear, location: 0.7)], startPoint: .leading, endPoint: .trailing)
+                    }
+                    .mask(LinearGradient(stops: [.init(color: .black, location: 0.55), .init(color: .clear, location: 1)],
+                                         startPoint: .top, endPoint: .bottom))
+            } else if image != nil {
+                WatchNowTVHeroCover(url: url, headers: headers).padding(.trailing, DiscoverLayout.gutter)
+            }
+        }
+        .animation(.easeOut(duration: 0.3), value: image == nil)
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+        .task(id: url) { image = await TMDBArtwork.load(url, maxPixels: 2400, headers: headers) }
+    }
+}
+
+/// A title's own cover, whole and sharp, on the right of the hero: a portrait one keeps its shape.
 private struct WatchNowTVHeroCover: View {
     let url: URL
     let headers: [String: String]

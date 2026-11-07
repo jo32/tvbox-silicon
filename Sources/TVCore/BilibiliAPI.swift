@@ -243,27 +243,6 @@ public enum BilibiliAPI {
         }
     }
 
-    /// Frames sampled through a video: Bilibili's scrubbing previews (视频快照), sheets of `columns` × `rows` frames
-    /// each, `count` frames in all, in the video's order.
-    public struct Videoshot: Sendable {
-        public let sheets: [URL]
-        public let columns: Int
-        public let rows: Int
-        public let count: Int
-    }
-
-    /// The video's preview frames; nil when Bilibili has none for it.
-    public static func videoshot(bvid: String) async throws -> Videoshot? {
-        let data = try await get("https://api.bilibili.com/x/player/videoshot?index=1&bvid=" + bvid)["data"]?.object ?? [:]
-        let sheets = (data["image"]?.array ?? []).compactMap { picture($0) }
-        let columns = data["img_x_len"]?.int ?? 0, rows = data["img_y_len"]?.int ?? 0
-        guard !sheets.isEmpty, columns > 0, rows > 0 else { return nil }
-        // `index` holds each frame's time after a leading 0; the sheets' remaining cells are black.
-        let times = data["index"]?.array?.count ?? 0
-        let count = min(times > 1 ? times - 1 : columns * rows * sheets.count, columns * rows * sheets.count)
-        return Videoshot(sheets: sheets, columns: columns, rows: rows, count: count)
-    }
-
     // MARK: Comments
 
     public struct Comment: Identifiable, Hashable, Sendable {
