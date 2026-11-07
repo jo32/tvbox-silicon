@@ -66,6 +66,8 @@ enum SubtitleFile {
     private static func fetch(_ subtitle: ExternalSubtitle, headers: [String: String], session: URLSession) async -> Track? {
         do {
             let data = try await download(subtitle.url, headers: headers, session: session)
+            // An archive's files are the player's to list and choose from (`ExternalSubtitles`), not one track here.
+            if SubtitleArchive.isArchive(data) { return nil }
             let cues = Self.cues(data, format: subtitle.format)
             Diagnostics.shared.record(.info, "subtitles", "file format=\(subtitle.format.isEmpty ? "-" : subtitle.format) bytes=\(data.count) cues=\(cues.count)")
             return cues.isEmpty ? nil : Track(name: subtitle.name, language: subtitle.language, cues: cues, source: subtitle.url)
@@ -80,9 +82,20 @@ enum SubtitleFile {
     /// A subtitle file's bytes, counted as they arrive: one that grows past `limit` is dropped then, not once it has
     /// all been held in memory. A Content-Length over the limit is refused before the body.
     static func download(_ url: URL, headers: [String: String], session: URLSession = .shared, limit: Int = largest) async throws -> Data {
+        // A file beside the video in Cloud Files: fetched from the drive with the drive's own headers.
+        if CloudFiles.isFile(url) {
+            let source = try await CloudFiles.source(url)
+            guard source.length <= limit else { throw SubtitleLoadError.tooLarge }
+            return try await download(source.url, headers: source.headers, session: session, limit: limit, loopbackHeaders: true)
+        }
+        return try await download(url, headers: headers, session: session, limit: limit, loopbackHeaders: false)
+    }
+
+    private static func download(_ url: URL, headers: [String: String], session: URLSession, limit: Int, loopbackHeaders: Bool) async throws -> Data {
         var request = URLRequest(url: url, timeoutInterval: 8)
-        // A plugin's loopback proxy wants none; a drive's CDN wants the video's.
-        if !["127.0.0.1", "localhost"].contains(url.host() ?? "") { headers.forEach { request.setValue($1, forHTTPHeaderField: $0) } }
+        // A plugin's loopback proxy wants none; a drive's CDN wants the video's. A drive's own link (a WebDAV share on
+        // this machine) wants its own.
+        if loopbackHeaders || !["127.0.0.1", "localhost"].contains(url.host() ?? "") { headers.forEach { request.setValue($1, forHTTPHeaderField: $0) } }
         let (bytes, response) = try await session.bytes(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else { bytes.task.cancel(); throw SubtitleLoadError.http(status) }

@@ -63,6 +63,7 @@
 		2D5C517BA45AA3ACE1C53D73 /* DiscoverArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E644254088B8C9E61B8363D /* DiscoverArtwork.swift */; };
 		2EF2744DCA81AD6098398028 /* Keystone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 3A398E8AF0C7E4C94787F4B3 /* Keystone-LLVM.txt */; };
 		2EF5CCF1BA71B68F4DCF2F71 /* DanmakuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A5737402EC96F0FBF79243E /* DanmakuView.swift */; };
+		2F46BE251F004B53430FD516 /* DateComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9644627CBD3EF1CE6A06E228 /* DateComparison.swift */; };
 		2F58769982B29FDB6BE2304C /* DiscoverTrailer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74376E0596FEAF3CE3FBE7C8 /* DiscoverTrailer.swift */; };
 		2F95C18CB44C1D8FFD03583F /* BilibiliMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A2914C1B5B5ABA5F4B25A7 /* BilibiliMark.swift */; };
 		300BD932FDBD4DD407F37374 /* LiveRoomsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675EA4CF000337C94DF5B1D3 /* LiveRoomsView.swift */; };
@@ -109,6 +110,7 @@
 		51E4D236D0D94E65A7881D6C /* EpisodeSkipSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B451E5612B33CF005EEAAE08 /* EpisodeSkipSettingsView.swift */; };
 		522603702A50B36D66B9470E /* Keystone-GPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 084C8344E2997DB3ED8FE974 /* Keystone-GPL2.txt */; };
 		525911655642125513C947A1 /* DiscoverCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6941C03B313E9FC30883FFE /* DiscoverCalendarView.swift */; };
+		5389383E76A0D20F8A86317A /* DateComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9644627CBD3EF1CE6A06E228 /* DateComparison.swift */; };
 		53F697A2DD9E8D5443E43646 /* SitesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75124CC2471CF95C1FFB168A /* SitesView.swift */; };
 		545262EEE6798D31D5522FF5 /* MangaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FF91FA9A33437C335253F10 /* MangaView.swift */; };
 		545F29F3323EB776FED1A94E /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31D1816B8ED53D49478FD843 /* MoreView.swift */; };
@@ -301,6 +303,7 @@
 		E5D5A7C6283C6370DF14ECC2 /* SubtitleTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13947E20489465F172C8B5B7 /* SubtitleTranslator.swift */; };
 		E64F015590BDBE0DFC8A216E /* LiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7459A3EBEF2E7C346B508738 /* LiveView.swift */; };
 		E691C693ADA5C3F13E48A0B5 /* MusicNowPlayingPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D10D9BAFE11E31196C70422 /* MusicNowPlayingPanels.swift */; };
+		E7D008DE20C7450D031909C1 /* DateComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9644627CBD3EF1CE6A06E228 /* DateComparison.swift */; };
 		E81BB0E2AAAAB9BF2D3706D4 /* ExternalDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B2D3312926C619F1DD413B8 /* ExternalDisplay.swift */; };
 		E8A225058F954A38DDAE052A /* MusicMacBrowse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D442D4FB2D2EB656FBBCB2C /* MusicMacBrowse.swift */; };
 		E8E7D31FA6802352FA66EB56 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 335A7E05458DD9DA9AA04125 /* InfoPlist.strings */; };
@@ -405,6 +408,7 @@
 		8C5AB58ECA34E84E70A20906 /* PluginSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginSignInView.swift; sourceTree = "<group>"; };
 		8CB1FA4BB4990588B428781E /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
 		90D706229ED242AE96AE52F8 /* Updates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Updates.swift; sourceTree = "<group>"; };
+		9644627CBD3EF1CE6A06E228 /* DateComparison.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateComparison.swift; sourceTree = "<group>"; };
 		995F5F0DB35FE66B4F90B4FF /* unidbg.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = unidbg.txt; sourceTree = "<group>"; };
 		9B2D3312926C619F1DD413B8 /* ExternalDisplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalDisplay.swift; sourceTree = "<group>"; };
 		9B7E929CDDC1F085C6B55693 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -549,6 +553,7 @@
 				4A0D2EAF4F07329DAB40B97D /* CloudFilesView.swift */,
 				E78573DE76BCF27CABBB20F3 /* CloudQRLoginView.swift */,
 				7A5737402EC96F0FBF79243E /* DanmakuView.swift */,
+				9644627CBD3EF1CE6A06E228 /* DateComparison.swift */,
 				A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */,
 				1E644254088B8C9E61B8363D /* DiscoverArtwork.swift */,
 				846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */,
@@ -1127,6 +1132,7 @@
 				8EB254B55B70CF8A923D1CD0 /* CloudFilesView.swift in Sources */,
 				91C07692EFFEE27619AA9FF3 /* CloudQRLoginView.swift in Sources */,
 				ED3BFF07859A99C455624644 /* DanmakuView.swift in Sources */,
+				2F46BE251F004B53430FD516 /* DateComparison.swift in Sources */,
 				6F182F91BDACFBFC8E6B3B0E /* DetailAurora.swift in Sources */,
 				61A44E1F889577D84A761385 /* DiscoverArtwork.swift in Sources */,
 				1331896EA47189E426A4DE6C /* DiscoverBrowseView.swift in Sources */,
@@ -1221,6 +1227,7 @@
 				1D82C5470FDA73053EAD6398 /* CloudFilesView.swift in Sources */,
 				277D741E2A86C06612A8034A /* CloudQRLoginView.swift in Sources */,
 				2EF5CCF1BA71B68F4DCF2F71 /* DanmakuView.swift in Sources */,
+				5389383E76A0D20F8A86317A /* DateComparison.swift in Sources */,
 				7DCDDEB6A7774CAF5C85D539 /* DetailAurora.swift in Sources */,
 				2D5C517BA45AA3ACE1C53D73 /* DiscoverArtwork.swift in Sources */,
 				A75BCD1DBB7A45ED27CEBA63 /* DiscoverBrowseView.swift in Sources */,
@@ -1317,6 +1324,7 @@
 				BA97CE75C2E0DF21635E17EA /* CloudFilesView.swift in Sources */,
 				31D893FEF33876FD07BB58BA /* CloudQRLoginView.swift in Sources */,
 				C10EEC4D7AED0BE564BF2246 /* DanmakuView.swift in Sources */,
+				E7D008DE20C7450D031909C1 /* DateComparison.swift in Sources */,
 				EBDFAB717675C3CBCA05B75F /* DetailAurora.swift in Sources */,
 				90EE7DA8213C0720E113C6F1 /* DiscoverArtwork.swift in Sources */,
 				A02125568B4CAB3B33994198 /* DiscoverBrowseView.swift in Sources */,

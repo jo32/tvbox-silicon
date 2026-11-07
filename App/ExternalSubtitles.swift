@@ -51,6 +51,14 @@ import UniformTypeIdentifiers
     private(set) var sourceNames: [(id: String, name: String)] = []
     @ObservationIgnored private var searching: Task<Void, Never>?
     @ObservationIgnored private var sources: [SubtitleSearchSource] = []
+    /// The playing file's OpenSubtitles hash, worked out once a subtitle source is on (#576 M2).
+    @ObservationIgnored private var hashing: Task<Void, Never>?
+    @ObservationIgnored private var fileHash: SubtitleFileHash?
+    @ObservationIgnored private var hashTarget: (url: URL, headers: [String: String])?
+    /// The catalog's TMDB match for a channel, as the video's page keeps it (`TMDBMatchStore`); set by the player.
+    @ObservationIgnored var tmdbKey: ((Channel) -> String?)?
+    /// The playing video's file name or title, for picking an archive's files and a drive folder's.
+    @ObservationIgnored private var video: String?
 
     /// The player shows what is chosen; set by the session.
     @ObservationIgnored var cues: SubtitleCues?
@@ -70,12 +78,18 @@ import UniformTypeIdentifiers
     /// A new episode: its source's files, after the picture.
     func begin(_ channel: Channel, playing url: URL) {
         stop()
-        hint = Self.hint(for: channel)
-        let current = generation
+        let plain = Self.hint(for: channel)
+        hint = plain
+        hashTarget = (url, channel.headers)
+        let current = generation, key = tmdbKey?(channel)
         Task { [weak self] in
             let any = await SubtitleSourceLibrary.shared.hasEnabledSources()
             guard let self, self.generation == current else { return }
             self.hasSources = any
+            if any { self.startHashing() }
+            // The catalog's TMDB match names the video for the sources better than its title (#576 M2).
+            guard let key, let match = await TMDBMatchStore.shared.kept(for: key)?.match, self.generation == current, self.hint == plain else { return }
+            self.hint = plain.matched(match)
         }
         headers = channel.headers
         scope = channel.historyContext?.id ?? channel.skipScope
@@ -85,6 +99,16 @@ import UniformTypeIdentifiers
         // The title names the episode ("第02集", "S01E02") more often than a drive's address does.
         let file = channel.url.lastPathComponent.removingPercentEncoding ?? channel.url.lastPathComponent
         let video = SubtitleMatch.episode(channel.name) != nil || file.isEmpty ? channel.name : file
+        self.video = video
+        // A Cloud Files video started without its folder's listing (Continue Watching, a favorite): its subtitle
+        // files are looked for now.
+        if channel.subtitles.isEmpty, channel.historyContext?.sourceKey == CloudFiles.sourceKey {
+            Task { [weak self] in
+                let found = await CloudFiles.subtitles(beside: channel)
+                guard let self, self.generation == current, !found.isEmpty else { return }
+                self.offer(SubtitleMatch.candidates(found, video: video), automatic: true)
+            }
+        }
         let wanted = SubtitleMatch.candidates(channel.subtitles, video: video).filter { !included.contains($0.url) }.prefix(Self.limit)
         guard !wanted.isEmpty else { return }
         entries = wanted.map { Entry(id: $0.url.absoluteString, name: $0.name, imported: false, state: .loading, subtitle: $0) }
@@ -105,16 +129,16 @@ import UniformTypeIdentifiers
     }
 
     private func fetch(_ wanted: [ExternalSubtitle]) {
-        let active = generation, headers = headers
+        let active = generation, headers = headers, video = video
         let earlier = loading
         loading = Task { [weak self] in
             await earlier?.value
-            await withTaskGroup(of: (String, Result<SubtitleDocument, Error>).self) { group in
+            await withTaskGroup(of: (String, Result<[SubtitleDocument], Error>).self) { group in
                 var queued = wanted.makeIterator(), running = 0
                 func next() {
                     guard let subtitle = queued.next() else { return }
                     running += 1
-                    group.addTask { (subtitle.url.absoluteString, await Self.fetch(subtitle, headers: headers)) }
+                    group.addTask { (subtitle.url.absoluteString, await Self.fetch(subtitle, headers: headers, video: video)) }
                 }
                 for _ in 0..<Self.concurrent { next() }
                 while running > 0, let (id, result) = await group.next() {
@@ -147,6 +171,7 @@ import UniformTypeIdentifiers
         retries.values.forEach { $0.cancel() }; retries = [:]
         entries = []; automatic = true; importFailure = nil
         searching?.cancel(); searching = nil
+        hashing?.cancel(); hashing = nil; fileHash = nil; hashTarget = nil; video = nil
         online = SubtitleSearchProgress(); onlineState = .idle; sources = []
         if selected != nil { selected = nil; show() }
     }
@@ -171,10 +196,10 @@ import UniformTypeIdentifiers
         if let candidate = entries.first(where: { $0.id == id })?.candidate { download(candidate); return }
         guard let index = entries.firstIndex(where: { $0.id == id }), let subtitle = entries[index].subtitle else { return }
         entries[index].state = .loading
-        let active = generation, headers = headers
+        let active = generation, headers = headers, video = video
         retries[id]?.cancel()
         retries[id] = Task { [weak self] in
-            let result = await Self.fetch(subtitle, headers: headers)
+            let result = await Self.fetch(subtitle, headers: headers, video: video)
             guard let self, self.generation == active, !Task.isCancelled else { return }
             self.retries[id] = nil
             self.finish(id, result, chosen: true)
@@ -202,7 +227,7 @@ import UniformTypeIdentifiers
 
     /// A file picked on this device or dropped on the player; it comes on.
     func add(file url: URL) {
-        do { add(try SubtitleDocument.load(file: url)) }
+        do { add(try SubtitleDocument.loadAll(file: url, video: video)) }
         catch { fail(url.lastPathComponent, error) }
     }
 
@@ -213,12 +238,12 @@ import UniformTypeIdentifiers
             importFailure = L10n.text("Enter an address that starts with http:// or https://.")
             return
         }
-        let id = url.absoluteString, active = generation
+        let id = url.absoluteString, active = generation, video = video
         if !entries.contains(where: { $0.id == id }) {
             entries.append(Entry(id: id, name: url.lastPathComponent, imported: true, state: .loading))
         }
         retries[id] = Task { [weak self] in
-            let result = await Self.fetch(address: url)
+            let result = await Self.fetch(address: url, video: video)
             guard let self, self.generation == active, !Task.isCancelled else { return }
             self.retries[id] = nil
             if case .failure(let error) = result { self.fail(url.lastPathComponent, error) }
@@ -238,11 +263,20 @@ import UniformTypeIdentifiers
             let sources = await SubtitleSourceLibrary.shared.searchSources()
             guard let self, self.generation == active, !Task.isCancelled else { return }
             self.sources = sources
+            // The file's hash, when it is on its way: a moment's wait, never the search's whole budget.
+            if !sources.isEmpty {
+                self.startHashing()
+                for _ in 0..<15 where self.fileHash == nil && self.hashing != nil {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+            }
+            guard self.generation == active, !Task.isCancelled else { return }
+            let asked = hint.hashed(self.fileHash)
             self.sourceNames = sources.map { ($0.provider.manifest.id, $0.provider.manifest.name) }
             self.hasSources = !sources.isEmpty
             guard !sources.isEmpty else { self.onlineState = .noSources; return }
-            Diagnostics.shared.record(.info, "subtitles", "online search sources=\(sources.count) episode=\(hint.episode != nil)")
-            for await progress in SubtitleSearch.shared.search(hint, sources: sources) {
+            Diagnostics.shared.record(.info, "subtitles", "online search sources=\(sources.count) episode=\(asked.episode != nil) hash=\(asked.movieHash != nil) tmdb=\(asked.tmdbID != nil)")
+            for await progress in SubtitleSearch.shared.search(asked, sources: sources) {
                 guard self.generation == active, !Task.isCancelled else { return }
                 self.online = progress
             }
@@ -279,21 +313,44 @@ import UniformTypeIdentifiers
         return SubtitleHint(video: context?.videoName ?? name, episodeName: context?.episodeName ?? name, year: context?.year, fileName: file)
     }
 
-    private func add(_ document: SubtitleDocument) {
-        entries.removeAll { $0.id == document.id }
-        entries.append(Entry(id: document.id, name: document.name, imported: true, state: .ready(document)))
-        Diagnostics.shared.record(.info, "subtitles", "imported format=\(document.format.rawValue) cues=\(document.cues.count)")
-        select(document.id)
+    private func add(_ documents: [SubtitleDocument]) {
+        guard let first = documents.first else { return }
+        for document in documents {
+            entries.removeAll { $0.id == document.id }
+            entries.append(Entry(id: document.id, name: document.name, imported: true, state: .ready(document)))
+        }
+        Diagnostics.shared.record(.info, "subtitles", "imported format=\(first.format.rawValue) cues=\(first.cues.count) files=\(documents.count)")
+        select(first.id)
+    }
+
+    /// Works out the playing file's hash once, in the background (two 64 KiB reads).
+    private func startHashing() {
+        guard hashing == nil, fileHash == nil, let target = hashTarget else { return }
+        let active = generation
+        hashing = Task { [weak self] in
+            let found = await Task.detached(priority: .utility) { await SubtitleFileHash.compute(target.url, headers: target.headers) }.value
+            guard let self, self.generation == active else { return }
+            self.fileHash = found
+            self.hashing = nil
+        }
     }
 
     private func fail(_ name: String, _ error: Error) {
         importFailure = "\(name): \(error.localizedDescription)"
     }
 
-    private func finish(_ id: String, _ result: Result<SubtitleDocument, Error>, chosen: Bool = false) {
+    private func finish(_ id: String, _ result: Result<[SubtitleDocument], Error>, chosen: Bool = false) {
         guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
         switch result {
-        case .success(let document):
+        case .success(let documents) where documents.count > 1:
+            // A ZIP archive's files for this video take its place in the list, best first: the list is the picker.
+            let archive = entries[index]
+            let known = Set(entries.map(\.id))
+            let files = documents.filter { !known.contains($0.id) }.map { Entry(id: $0.id, name: $0.name, imported: archive.imported, state: .ready($0)) }
+            entries.replaceSubrange(index...index, with: files)
+            if chosen, let first = files.first { select(first.id) }
+        case .success(let documents):
+            guard let document = documents.first else { return }
             entries[index].state = .ready(document)
             if chosen { select(id) }
             if selected == id { show() }
@@ -335,21 +392,21 @@ import UniformTypeIdentifiers
         item.select(nil, in: group)
     }
 
-    nonisolated private static func fetch(_ subtitle: ExternalSubtitle, headers: [String: String]) async -> Result<SubtitleDocument, Error> {
-        do { return .success(try await SubtitleDocument.load(subtitle, headers: headers)) } catch { return .failure(error) }
+    nonisolated private static func fetch(_ subtitle: ExternalSubtitle, headers: [String: String], video: String?) async -> Result<[SubtitleDocument], Error> {
+        do { return .success(try await SubtitleDocument.loadAll(subtitle, headers: headers, video: video)) } catch { return .failure(error) }
     }
 
-    nonisolated private static func fetch(_ candidate: SubtitleCandidate, from source: SubtitleSearchSource) async -> Result<SubtitleDocument, Error> {
-        do { return .success(try await SubtitleSearch.shared.download(candidate, from: source)) } catch { return .failure(error) }
+    nonisolated private static func fetch(_ candidate: SubtitleCandidate, from source: SubtitleSearchSource) async -> Result<[SubtitleDocument], Error> {
+        do { return .success([try await SubtitleSearch.shared.download(candidate, from: source)]) } catch { return .failure(error) }
     }
 
-    nonisolated private static func fetch(address url: URL) async -> Result<SubtitleDocument, Error> {
-        do { return .success(try await SubtitleDocument.load(address: url)) } catch { return .failure(error) }
+    nonisolated private static func fetch(address url: URL, video: String?) async -> Result<[SubtitleDocument], Error> {
+        do { return .success(try await SubtitleDocument.loadAll(address: url, video: video)) } catch { return .failure(error) }
     }
 
-    /// The kinds of file the import panels offer.
-    static let types: [UTType] = ["srt", "vtt", "ass", "ssa"].compactMap { UTType(filenameExtension: $0) } + [.plainText]
-    static func handles(_ url: URL) -> Bool { ["srt", "vtt", "ass", "ssa"].contains(url.pathExtension.lowercased()) }
+    /// The kinds of file the import panels offer: subtitle files and ZIP archives of them.
+    static let types: [UTType] = ["srt", "vtt", "ass", "ssa"].compactMap { UTType(filenameExtension: $0) } + [.zip, .plainText]
+    static func handles(_ url: URL) -> Bool { ["srt", "vtt", "ass", "ssa", "zip"].contains(url.pathExtension.lowercased()) }
 }
 
 
@@ -446,7 +503,7 @@ struct SubtitleAddressPrompt: ViewModifier {
                 Button(L10n.text("Cancel"), role: .cancel) { address = "" }
                 Button(L10n.text("Add")) { subtitles.add(address: address); address = "" }
             } message: {
-                Text(L10n.text("An SRT, WebVTT or ASS file, up to 8 MB."))
+                Text(L10n.text("An SRT, WebVTT or ASS file, or a ZIP archive of them, up to 8 MB."))
             }
             .alert(L10n.text("Subtitles Not Added"), isPresented: Binding(get: { subtitles.importFailure != nil }, set: { if !$0 { subtitles.importFailure = nil } })) {
                 Button(L10n.text("OK"), role: .cancel) { subtitles.importFailure = nil }

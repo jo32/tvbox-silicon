@@ -58,6 +58,16 @@ final class RemuxSession: @unchecked Sendable {
     var bitmapSubtitles: [BitmapSubtitleTrack] { condition.withLock { bitmaps.sorted { $0.key < $1.key }.map(\.value) } }
     /// All of a file's fonts together are kept up to this size.
     static let fontBudget = 64 << 20
+    /// Every cue of the file's own subtitles read so far, by track (#576). FFmpeg hands a cue to the segment it starts
+    /// in; one that runs on into the next is carried there too, so a seek into its middle still shows it.
+    private var embedded: [Int: [RemuxPlan.Cue]] = [:]
+    /// Segments whose subtitle packets have been read.
+    private var scanned: Set<Int> = []
+    /// When AVPlayer last asked for a segment of the file's own subtitles: they are on.
+    private var subtitlesAsked: Date?
+    /// How far before a segment reached by a seek its subtitles are looked for: a line still on screen at the
+    /// segment's start began at most this long before it.
+    static let lookBack: Int64 = 6_000_000
 
     private let condition = NSCondition()
     private var segments: [Key: RemuxSegment] = [:]
@@ -162,6 +172,7 @@ final class RemuxSession: @unchecked Sendable {
         else { segment = RemuxSegment(); segments[key] = segment }
         segment.join()
         if plan.tracks[track].kind == .audio { asked[track] = Date() }
+        if plan.tracks[track].kind == .subtitle { subtitlesAsked = Date() }
         latest = index
         // A segment no one waits for gives way to this one, unless this one is made already: AVPlayer catching up
         // with the segments made ahead doesn't throw away the one being made.
@@ -416,6 +427,12 @@ final class RemuxSession: @unchecked Sendable {
     private func produce(_ job: Job) {
         let index = job.segment
         let start = plan.bounds[index], end = index + 1 == plan.segments ? -1 : plan.bounds[index + 1]
+        let subtitles = job.active.indices.filter { job.active[$0] == 1 && plan.tracks[$0].kind == .subtitle }
+        // A segment reached by a seek, with subtitles on: the lines that began just before it are read first.
+        let looksBack = condition.withLock {
+            index > 0 && !subtitles.isEmpty && !scanned.contains(index - 1) && subtitlesAsked.map { Date().timeIntervalSince($0) < 300 } == true
+        }
+        if looksBack { lookBack(before: index, tracks: subtitles) }
         cues = [:]
         var error = [CChar](repeating: 0, count: 256)
         let began = Date()
@@ -430,8 +447,12 @@ final class RemuxSession: @unchecked Sendable {
             let key = Key(track: track, segment: index)
             if status >= 0 {
                 if plan.tracks[track].kind == .subtitle {
-                    segment.append(Data(RemuxPlan.webVTT(cues[track] ?? [], offset: Self.offset).utf8))
-                    if translations.values.contains(where: { $0.source == track }) { sourceCues[key] = cues[track] ?? [] }
+                    // The segment's own lines and those of earlier segments still on screen in it, each with its whole timing.
+                    let known = RemuxPlan.merged(embedded[track] ?? [], cues[track] ?? [])
+                    embedded[track] = known
+                    let carried = plan.cues(known, segment: index)
+                    segment.append(Data(RemuxPlan.webVTT(carried, offset: Self.offset).utf8))
+                    if translations.values.contains(where: { $0.source == track }) { sourceCues[key] = carried }
                 }
                 segment.finish()
             } else if gaveWay {
@@ -443,6 +464,7 @@ final class RemuxSession: @unchecked Sendable {
             }
         }
         writing = [:]
+        if status >= 0, !subtitles.isEmpty { scanned.insert(index) }
         // A segment that fails is not tried again until AVPlayer asks for it again.
         if !gaveWay { produced = index }
         evict()
@@ -452,6 +474,26 @@ final class RemuxSession: @unchecked Sendable {
         } else if status >= 0 {
             Diagnostics.shared.record(.debug, "remux", "segment=\(index) tracks=\(job.active.enumerated().filter { $0.element == 1 }.map(\.offset)) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
         }
+    }
+
+    /// Reads the subtitle packets of the stretch before segment `index` (at most `lookBack` long), and nothing else:
+    /// the other tracks' packets are passed over unread. The cursor then goes on into the segment itself.
+    private func lookBack(before index: Int, tracks: [Int]) {
+        var active = [UInt8](repeating: 0, count: plan.tracks.count)
+        for track in tracks { active[track] = 1 }
+        let end = plan.bounds[index], start = max(plan.bounds[0], end - Self.lookBack)
+        let held = writing
+        writing = [:]; cues = [:]
+        var error = [CChar](repeating: 0, count: 256)
+        let began = Date()
+        let status = active.withUnsafeBufferPointer { active in
+            tvm_cursor_segment(cursor, start, end, active.baseAddress, context, remuxWrite, remuxCue, &error, Int32(error.count))
+        }
+        let found = cues
+        cues = [:]; writing = held
+        guard status >= 0 else { return }
+        condition.withLock { for (track, list) in found { embedded[track] = RemuxPlan.merged(embedded[track] ?? [], list) } }
+        Diagnostics.shared.record(.debug, "subtitles", "looked back segment=\(index) cues=\(found.values.map(\.count).reduce(0, +)) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
     }
 
     /// Keeps the segments near where AVPlayer reads within the memory budget; read ones go first.

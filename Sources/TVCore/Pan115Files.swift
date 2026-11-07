@@ -69,7 +69,7 @@ actor Pan115Files {
     }
 
     /// The file's download link, through the app API the 115 browser uses; its request and answer are m115-encoded.
-    private func link(_ pickCode: String, name: String) async throws -> CloudStreams.Source {
+    func link(_ pickCode: String, name: String) async throws -> CloudStreams.Source {
         let key = M115.key()
         let request = try JSONSerialization.data(withJSONObject: ["pickcode": pickCode])
         let answer = try await call(URL(string: "https://proapi.115.com/app/chrome/downurl?t=\(Int(Date().timeIntervalSince1970))")!,

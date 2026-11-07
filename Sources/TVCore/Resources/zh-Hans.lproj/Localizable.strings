@@ -1614,7 +1614,7 @@
 "Frame Rate" = "帧率";
 "As Made" = "原始";
 "%@ fps" = "%@ fps";
-"An SRT, WebVTT or ASS file, up to 8 MB." = "SRT、WebVTT 或 ASS 文件，最大 8 MB。";
+"An SRT, WebVTT or ASS file, or a ZIP archive of them, up to 8 MB." = "SRT、WebVTT 或 ASS 文件，或它们的 ZIP 压缩包，最大 8 MB。";
 "Subtitles Not Added" = "未能添加字幕";
 "Save or Share" = "保存或分享";
 
@@ -1641,7 +1641,7 @@
 "Its manifest can't be read." = "无法读取它的清单。";
 "The source answered something unexpected." = "此来源返回了无法识别的内容。";
 "The source gave no file." = "此来源没有给出文件。";
-"It is an archive; only SRT, WebVTT and ASS files can be shown." = "这是压缩包，只能显示 SRT、WebVTT 和 ASS 文件。";
+"It is a RAR or 7z archive; only ZIP archives and SRT, WebVTT and ASS files can be shown." = "这是 RAR 或 7z 压缩包，只能显示 ZIP 压缩包和 SRT、WebVTT、ASS 文件。";
 "The script didn't download: %@" = "脚本未能下载：%@";
 "It has the same name as a source that comes with Yingxia." = "它与影匣自带的来源同名。";
 "The source's script is missing." = "找不到此来源的脚本。";
@@ -1744,3 +1744,14 @@
 "Chapter %lld" = "第 %lld 章";
 "All Comments" = "全部评论";
 "Start Over" = "从头开始";
+
+/* Subtitle archives (#576 M1b) */
+"The archive is damaged." = "压缩包已损坏。";
+"The archive unpacks to more than subtitles need." = "压缩包解压后远超字幕所需的大小。";
+"The archive holds too many files." = "压缩包里的文件太多。";
+"The archive has a file outside its own folder." = "压缩包里有指向其文件夹之外的文件。";
+"The archive holds only other archives." = "压缩包里只有其他压缩包。";
+"The archive is protected by a password." = "压缩包有密码保护。";
+"The archive uses a kind of ZIP that isn't supported." = "不支持这种 ZIP 压缩方式。";
+"The archive holds no SRT, WebVTT or ASS files." = "压缩包里没有 SRT、WebVTT 或 ASS 文件。";
+"None of the archive's files is for this episode." = "压缩包里没有这一集的文件。";

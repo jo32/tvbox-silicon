@@ -902,16 +902,19 @@ struct CloudFilesFolder {
     let id: String
     let name: String
     let files: [CloudFile]
+    /// The folder's subtitle files and archives (#576), offered beside each of its videos.
+    var subtitles: [ExternalSubtitle] = []
 }
 
 extension Store {
     /// Plays a file from Cloud Files, where it was left if it was being watched; the folder's other
     /// files follow it.
     func playFile(_ file: CloudFile, in folder: CloudFilesFolder) {
-        let channel = CloudFiles.channel(file, in: folder.drive, folder: folder.id, folderName: folder.name)
+        let channel = CloudFiles.channel(file, in: folder.drive, folder: folder.id, folderName: folder.name, subtitles: folder.subtitles)
         let saved = playbackHistory.entries.first { $0.id == channel.historyContext?.id && $0.context.episodeID == file.id && !$0.completed }
         filesFolder = folder
-        playing = saved.map { CloudFiles.channel(file, in: folder.drive, folder: folder.id, folderName: folder.name, resumePosition: $0.resumePosition) } ?? channel
+        playing = saved.map { CloudFiles.channel(file, in: folder.drive, folder: folder.id, folderName: folder.name, resumePosition: $0.resumePosition,
+                                                 subtitles: folder.subtitles) } ?? channel
     }
 
     func nextFile(after channel: Channel) -> Channel? { file(1, from: channel) }
@@ -923,7 +926,7 @@ extension Store {
               folder.drive.key == context.episodeFlag, folder.id == context.videoID,
               let index = folder.files.firstIndex(where: { $0.id == context.episodeID }),
               folder.files.indices.contains(index + offset) else { return nil }
-        return CloudFiles.channel(folder.files[index + offset], in: folder.drive, folder: folder.id, folderName: folder.name)
+        return CloudFiles.channel(folder.files[index + offset], in: folder.drive, folder: folder.id, folderName: folder.name, subtitles: folder.subtitles)
     }
 
     /// Continue Watching on a Cloud Files folder: the file plays at once, and the folder is listed
@@ -941,7 +944,8 @@ extension Store {
             guard let files = try? await CloudFiles.list(drive, folder: context.videoID), let self, self.playing == channel else { return }
             let kind = CloudFile.kind(of: context.episodeName)
             self.filesFolder = CloudFilesFolder(drive: drive, id: context.videoID, name: context.videoName,
-                                                files: files.filter { $0.kind == kind && drive.plays($0) })
+                                                files: files.filter { $0.kind == kind && drive.plays($0) },
+                                                subtitles: CloudFiles.subtitles(files, in: drive))
         }
     }
 }
