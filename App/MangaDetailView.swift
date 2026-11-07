@@ -420,22 +420,15 @@ struct MangaDetailView: View {
 
     private func macHero(height: CGFloat, width: CGFloat) -> some View {
         let blurb = current.description.trimmingCharacters(in: .whitespacesAndNewlines)
-        return MacVideoHero(height: height, width: width, backdrop: nil, backdropImage: heroCover) {
-            HStack(alignment: .bottom, spacing: 24) {
-                Color.clear.frame(width: 150, height: 200)
-                    .overlay { MangaCover(source: comic.sourceKey, url: coverURL) }
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.white.opacity(0.12)) }
-                    .shadow(color: .black.opacity(0.45), radius: 18, y: 10)
-                VStack(alignment: .leading, spacing: 8) {
+        return MacVideoHero(height: height, width: width, backdrop: nil, backdropImage: heroCover, art: heroCover) {
+            VStack(alignment: .leading, spacing: 8) {
                     Text(current.title).font(.system(size: 36, weight: .bold)).lineLimit(2).minimumScaleFactor(0.6)
                         .frame(maxWidth: 760, alignment: .leading).textSelection(.enabled)
                         .shadow(color: .black.opacity(0.4), radius: 10)
                     if !current.subtitle.isEmpty {
                         Text(current.subtitle).font(.system(size: 16, weight: .medium)).lineLimit(1).opacity(0.85)
                     }
-                    Text(macFacts).font(.system(size: 14, weight: .medium)).lineLimit(1).opacity(0.75)
-                }
+                Text(macFacts).font(.system(size: 14, weight: .medium)).lineLimit(1).opacity(0.75)
             }
         } actions: {
             macActions
@@ -498,14 +491,12 @@ struct MangaDetailView: View {
         }
     }
 
+    /// The cover at the size the hero shows it (larger than the 480 px thumbnails the cover cache keeps).
     private func loadHeroCover() async {
-        let key = comic.sourceKey + "\n" + coverURL
-        if let cached = MangaCoverCache.shared.image(key) { heroCover = cached; return }
         guard !coverURL.isEmpty,
               let data = try? await MangaImages.shared.data(source: comic.sourceKey, url: coverURL, kind: .cover) else { return }
-        let decoded = await Task.detached(priority: .userInitiated) { MangaImages.bitmap(data, width: 480) }.value
+        let decoded = await Task.detached(priority: .userInitiated) { MangaImages.bitmap(data, width: 1100) }.value
         guard !Task.isCancelled, let decoded else { return }
-        MangaCoverCache.shared.store(decoded, key)
         withAnimation(.easeInOut(duration: 0.4)) { heroCover = decoded }
     }
     #endif
