@@ -2408,12 +2408,11 @@ struct VideoDetailView: View {
         let longNames = (items.map { (episodeLabels[$0.id] ?? $0.name).count }.max() ?? 0) > 6
         // Under a full-width banner, long names fill columns rather than one stretched list.
         let rowColumns = isWide ? [GridItem(.adaptive(minimum: 320), spacing: 8)] : [GridItem(.flexible())]
-        // TMDB's stills, when its season lines up with most of the episodes and has pictures for them; without
-        // pictures the small chips read better than empty tiles. While TMDB is still looking, tiles with the episode
-        // numbers, so its stills fade into the same tiles instead of chips turning into tiles.
+        // TMDB's stills, when its season lines up with most of the episodes and it has pictures (`episodeTiles`);
+        // without pictures the small chips read better than empty tiles. While TMDB is still looking, tiles with the
+        // episode numbers, so its stills fade into the same tiles instead of chips turning into tiles.
         let stills = tmdb.episodes(items)
-        let showsStills = items.count > 1
-            && (stills.values.filter { $0.still != nil }.count * 2 >= items.count || (tmdbPending && items.count <= 60))
+        let showsStills = items.count > 1 && (!tmdb.episodeTiles(items).isEmpty || (tmdbPending && items.count <= 60))
         let columns = showsStills ? [GridItem(.adaptive(minimum: TMDBMetrics.episodeTile), spacing: TMDBMetrics.spacing, alignment: .top)]
             : longNames ? rowColumns : [GridItem(.adaptive(minimum: episodeMin), spacing: 8)]
         return LazyVGrid(columns: columns, spacing: showsStills ? TMDBMetrics.spacing : longNames ? 4 : 8) {
@@ -2423,7 +2422,7 @@ struct VideoDetailView: View {
                     if showsStills {
                         Button { startRequest { await play(episode) } } label: {
                             TMDBEpisodeTile(name: episodeTitle(episode), info: stills[episode.id], detail: episodeDetails[episode.id],
-                                            loading: loadingEpisode == episode.id, width: nil)
+                                            loading: loadingEpisode == episode.id, width: nil, backdrops: tmdb.episodeBackdrops)
                         }
                         .tmdbCardButton()
                         .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge().padding(4) } }
@@ -2857,11 +2856,10 @@ struct VideoDetailView: View {
         }
     }
 
-    /// TMDB's stills for the line's episodes, when its season lines up with most of them and has pictures for them;
-    /// otherwise none, and the episodes keep their small cards.
+    /// TMDB's episodes for picture tiles (`TMDBLookup.episodeTiles`); otherwise none, and the episodes keep their small
+    /// cards.
     private func watchStills(_ items: [Episode]) -> [Episode.ID: TMDBMatch.EpisodeInfo] {
-        let stills = tmdb.episodes(items)
-        return items.count > 1 && stills.values.filter { $0.still != nil }.count * 2 >= items.count ? stills : [:]
+        tmdb.episodeTiles(items)
     }
 
     /// The width of the small tiles when every name is short (第1集, 01, 4K国语), or nil for two-line cards. The tiles
@@ -2903,7 +2901,7 @@ struct VideoDetailView: View {
         } label: {
             if let info {
                 TMDBEpisodeTile(name: episodeTitle(episode), info: info, detail: detail, current: current, loading: loadingEpisode == episode.id,
-                                width: fill ? nil : 168)
+                                width: fill ? nil : 168, backdrops: tmdb.episodeBackdrops)
                     .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge().padding(4) } }
             } else {
             HStack(spacing: 6) {

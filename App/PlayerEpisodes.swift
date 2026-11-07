@@ -138,9 +138,9 @@ struct PlayerEpisodesSheet: View {
     }
 
     private func grid(_ items: [Episode], labels: [Episode.ID: String], details: [Episode.ID: String], current: Episode.ID?) -> some View {
-        // TMDB's stills when its season lines up with most of the episodes and has pictures for them, as on the page.
+        // TMDB's stills when its season lines up with most of the episodes and it has pictures, as on the page.
         let stills = tmdb.episodes(items)
-        let showsStills = items.count > 1 && stills.values.filter { $0.still != nil }.count * 2 >= items.count
+        let showsStills = !tmdb.episodeTiles(items).isEmpty
         let titles = Dictionary(items.map { ($0.id, labels[$0.id] ?? EpisodeRow.title($0.name)) }, uniquingKeysWith: { first, _ in first })
         // 第1集, 01, 4K国语: small tiles. File names and long titles: two-line cards.
         let short = (titles.values.map(\.count).max() ?? 0) <= 6
@@ -159,7 +159,8 @@ struct PlayerEpisodesSheet: View {
                     store.selectEpisode(episode, from: playing)
                 } label: {
                     if showsStills {
-                        TMDBEpisodeTile(name: title, info: stills[episode.id], detail: details[episode.id], current: isCurrent, loading: loading, width: nil)
+                        TMDBEpisodeTile(name: title, info: stills[episode.id], detail: details[episode.id], current: isCurrent, loading: loading, width: nil,
+                                        backdrops: tmdb.episodeBackdrops)
                     } else {
                         EpisodeCell(title: title, detail: details[episode.id], current: isCurrent, loading: loading, compact: short)
                     }
