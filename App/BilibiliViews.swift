@@ -47,6 +47,8 @@ private struct BilibiliNotice: View {
     private(set) var following = false
     private(set) var busy = false
     var message: String?
+    /// Follow needs the account: Apple TV opens the sign-in screen rather than saying so.
+    var needsSignIn = false
 
     func load(_ mid: Int) async {
         guard let found = try? await BilibiliAPI.creator(mid) else { return }
@@ -62,7 +64,7 @@ private struct BilibiliNotice: View {
     }
 
     func toggleFollow(_ mid: Int) async {
-        guard BilibiliAPI.signedIn else { message = L10n.text("Sign in to Bilibili in Settings first."); return }
+        guard BilibiliAPI.signedIn else { message = L10n.text("Sign in to Bilibili in Settings first."); needsSignIn = true; return }
         guard !busy else { return }
         busy = true
         defer { busy = false }
@@ -151,7 +153,9 @@ struct BilibiliSpaceHeader: View {
     let client: CatalogClient
     let category: String
     let open: (String) -> Void
-    private var tabs: [(id: String, title: String)] {
+    private var tabs: [(id: String, title: String)] { Self.tabs(mid) }
+    /// The space's listings: uploads by newest, most played or most favourited, and collections.
+    static func tabs(_ mid: Int) -> [(id: String, title: String)] {
         [("up_\(mid)", L10n.text("Newest")), ("up_\(mid)_click", L10n.text("Most Played")),
          ("up_\(mid)_stow", L10n.text("Most Favorited")), ("up_\(mid)_lists", L10n.text("Collections"))]
     }
@@ -180,6 +184,8 @@ struct BilibiliSpaceHeader: View {
     private(set) var state: BilibiliAPI.VideoState?
     private var busy = false
     var message: String?
+    /// An action that needs the account: Apple TV opens the sign-in screen rather than saying so.
+    var needsSignIn = false
 
     func load(_ bvid: String) async { state = try? await BilibiliAPI.state(bvid: bvid) }
 
@@ -189,6 +195,7 @@ struct BilibiliSpaceHeader: View {
     func signedIn() -> Bool {
         if BilibiliAPI.signedIn { return true }
         message = L10n.text("Sign in to Bilibili in Settings first.")
+        needsSignIn = true
         return false
     }
 
@@ -329,6 +336,9 @@ struct BilibiliCommentsView: View {
     @Environment(\.dismiss) private var dismiss
     let aid: Int
     let total: Int
+    /// Apple TV: the video's cover, frosted behind the list.
+    var cover: URL? = nil
+    var coverHeaders: [String: String] = [:]
     @State private var newest = false
     @State private var comments: [BilibiliAPI.Comment] = []
     @State private var next: String?
@@ -338,6 +348,12 @@ struct BilibiliCommentsView: View {
     @State private var replies: [Int: (list: [BilibiliAPI.Comment], page: Int, more: Bool)] = [:]
 
     var body: some View {
+        #if os(tvOS)
+        tvBody.task(id: newest) {
+            comments = []; next = nil; ended = false; replies = [:]; error = nil
+            await load()
+        }
+        #else
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
@@ -364,7 +380,7 @@ struct BilibiliCommentsView: View {
                 .frame(maxWidth: 900)
                 .frame(maxWidth: .infinity)
             }
-            .navigationTitle(total > 0 ? L10n.text("Comments (%@)", BilibiliAPI.count(total)) : L10n.text("Comments"))
+            .navigationTitle(title)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -381,7 +397,96 @@ struct BilibiliCommentsView: View {
             comments = []; next = nil; ended = false; replies = [:]; error = nil
             await load()
         }
+        #endif
     }
+
+    private var title: String { total > 0 ? L10n.text("Comments (%@)", BilibiliAPI.count(total)) : L10n.text("Comments") }
+
+    #if os(tvOS)
+    /// Apple TV: a full-screen list over the frosted cover, as Bilibili's TV clients show comments. Every comment and
+    /// reply is a row of its own the remote moves through; replies sit indented under theirs, and a row loads more.
+    private var tvBody: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 4) {
+                // One line: the count, then the order.
+                HStack(alignment: .center, spacing: 28) {
+                    Text(title).font(.system(size: 34, weight: .bold))
+                    HStack(spacing: 8) {
+                        ForEach([false, true], id: \.self) { order in
+                            Button(order ? L10n.text("Newest") : L10n.text("Hot")) { newest = order }
+                                .buttonStyle(BilibiliTVTabStyle(selected: newest == order, compact: true))
+                        }
+                    }
+                    .focusSection()
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 24).padding(.bottom, 10)
+                ForEach(comments) { comment in
+                    tvThread(comment)
+                        .onAppear { if comment.id == comments.last?.id { Task { await load() } } }
+                }
+                if loading { ProgressView().frame(maxWidth: .infinity).padding(40) }
+                if let error {
+                    VStack(spacing: 18) {
+                        Text(error).font(.system(size: 26)).opacity(0.6)
+                        Button(L10n.text("Try Again")) { Task { await load() } }
+                            .buttonStyle(DiscoverTVActionStyle(height: 72, font: 26))
+                    }
+                    .frame(maxWidth: .infinity).padding(40)
+                } else if ended, comments.isEmpty {
+                    Text(L10n.text("No comments yet.")).font(.system(size: 28)).opacity(0.6).frame(maxWidth: .infinity).padding(60)
+                }
+            }
+            .padding(.horizontal, 110).padding(.top, 36).padding(.bottom, 60)
+        }
+        .scrollClipDisabled()
+        .background { BilibiliTVBackdrop(cover: cover, headers: coverHeaders, frosted: true) }
+        .foregroundStyle(.white).preferredColorScheme(.dark)
+    }
+
+    @ViewBuilder private func tvThread(_ comment: BilibiliAPI.Comment) -> some View {
+        let loaded = replies[comment.id]
+        let shown = loaded?.list ?? comment.replies
+        let more = loaded == nil ? comment.replyCount > shown.count : loaded?.more == true
+        // Pressing a comment shows its replies, as its replies row does.
+        Button { if more { Task { await loadReplies(comment) } } } label: { tvLine(comment, small: false) }
+            .buttonStyle(BilibiliTVRowStyle())
+            .accessibilityIdentifier("bilibili.comments.row")
+        ForEach(shown) { reply in
+            Button {} label: { tvLine(reply, small: true) }
+                .buttonStyle(BilibiliTVRowStyle()).padding(.leading, 76)
+        }
+        if more {
+            Button { Task { await loadReplies(comment) } } label: {
+                Label(loaded == nil ? L10n.text("%@ replies", BilibiliAPI.count(comment.replyCount)) : L10n.text("More Replies"),
+                      systemImage: "chevron.down")
+                    .font(.system(size: 22, weight: .semibold)).opacity(0.7)
+            }
+            .buttonStyle(BilibiliTVRowStyle(compact: true)).padding(.leading, 76)
+        }
+    }
+
+    private func tvLine(_ comment: BilibiliAPI.Comment, small: Bool) -> some View {
+        let size: CGFloat = small ? 44 : 56
+        return HStack(alignment: .top, spacing: 20) {
+            Color.clear.frame(width: size, height: size)
+                .overlay { PosterImage(url: comment.face, headers: Bilibili.imageHeaders, symbol: "person.fill") }
+                .clipShape(Circle())
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 18) {
+                    Text(comment.name).font(.system(size: 24, weight: .semibold)).lineLimit(1).opacity(0.8)
+                    Text(comment.date, format: .relative(presentation: .named)).font(.system(size: 22)).opacity(0.45)
+                    if comment.likes > 0 {
+                        Label(BilibiliAPI.count(comment.likes), systemImage: "hand.thumbsup").font(.system(size: 22)).monospacedDigit().opacity(0.5)
+                    }
+                }
+                Text(comment.text).font(.system(size: small ? 26 : 28)).lineSpacing(5)
+                    .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+    #endif
 
     private func load() async {
         guard !loading, !ended else { return }
@@ -682,6 +787,7 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
     @State private var scrolled = false
     @State private var showsComments = false
     @State private var showsDescription = false
+    @State private var showsSignIn = false
     /// What has focus in the hero: while anything there has it, the hero is scrolled fully into view.
     @FocusState private var heroFocus: HeroItem?
     private enum HeroItem: Hashable { case play, like, coin, favorite, more, creator, live, follow, summary }
@@ -722,9 +828,21 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
         }
         .task(id: creator?.mid) { if let mid = creator?.mid { await maker.load(mid) } }
         .fullScreenCover(isPresented: $showsComments) {
-            if let state = actions.state { BilibiliCommentsView(aid: state.aid, total: state.replies) }
+            if let state = actions.state { BilibiliCommentsView(aid: state.aid, total: state.replies, cover: cover, coverHeaders: coverHeaders) }
         }
         .fullScreenCover(isPresented: $showsDescription) { descriptionScreen }
+        // Signed out, Like, Coin, Favorite and Follow open the sign-in screen; other notes float in at the top.
+        .overlay(alignment: .top) {
+            BilibiliTVToast(message: Binding(get: { actions.message ?? maker.message }, set: { actions.message = $0; maker.message = $0 }))
+        }
+        .onChange(of: actions.needsSignIn || maker.needsSignIn) { _, needed in
+            guard needed else { return }
+            actions.needsSignIn = false; maker.needsSignIn = false; actions.message = nil; maker.message = nil
+            showsSignIn = true
+        }
+        .fullScreenCover(isPresented: $showsSignIn, onDismiss: {
+            Task { await actions.load(bvid); if let mid = creator?.mid { await maker.load(mid) } }
+        }) { BilibiliAccountView() }
     }
 
     /// Bilibili's description, else the source's synopsis; Bilibili's "-" stands for none.
@@ -802,8 +920,6 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
                     }
                 }
             }
-            BilibiliNotice(message: Binding(get: { actions.message }, set: { actions.message = $0 }))
-                .font(.system(size: 24))
         }
     }
 
@@ -880,7 +996,6 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
                     .focused($heroFocus, equals: .follow)
                     .accessibilityIdentifier("bilibili.follow")
                 }
-                BilibiliNotice(message: Binding(get: { maker.message }, set: { maker.message = $0 })).font(.system(size: 24))
             }
             if !summary.isEmpty {
                 Button { showsDescription = true } label: {
@@ -898,9 +1013,21 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
 
     // MARK: The rows
 
-    private func row(_ title: String, spacing: CGFloat, @ViewBuilder content: () -> some View) -> some View {
+    private func row(_ title: String, spacing: CGFloat, open: (() -> Void)? = nil, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.system(size: 34, weight: .medium)).opacity(0.6).padding(.horizontal, BilibiliTVMetrics.gutter)
+            HStack(spacing: 18) {
+                Text(title).font(.system(size: 34, weight: .medium)).opacity(0.6)
+                if let open {
+                    // "Comments ›": a glass arrow opens the whole list, as the cards also do.
+                    Button(action: open) {
+                        Image(systemName: "chevron.forward").font(.system(size: 22, weight: .bold)).frame(width: 16)
+                    }
+                    .buttonStyle(DiscoverTVActionStyle(height: 52, font: 22))
+                    .accessibilityLabel(L10n.text("All Comments"))
+                    .accessibilityIdentifier("bilibili.comments.all")
+                }
+            }
+            .padding(.horizontal, BilibiliTVMetrics.gutter)
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: spacing) { content() }
                     .padding(.horizontal, BilibiliTVMetrics.gutter).padding(.vertical, 24)
@@ -913,7 +1040,8 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
 
     private var commentsRow: some View {
         let total = actions.state?.replies ?? 0
-        return row(total > 0 ? L10n.text("Comments (%@)", BilibiliAPI.count(total)) : L10n.text("Comments"), spacing: 32) {
+        return row(total > 0 ? L10n.text("Comments (%@)", BilibiliAPI.count(total)) : L10n.text("Comments"), spacing: 32,
+                   open: { showsComments = true }) {
             ForEach(hotComments) { comment in
                 Button { showsComments = true } label: { BilibiliTVCommentCard(comment: comment) }
                     .buttonStyle(BilibiliTVPlateStyle(resting: true))
@@ -946,6 +1074,199 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
             .focusable()
         }
         .ignoresSafeArea().foregroundStyle(.white).preferredColorScheme(.dark)
+    }
+}
+
+// MARK: Apple TV's UP主 space
+
+/// Apple TV's page for an UP主's space (#256), in the video page's language: their newest upload's cover across the
+/// screen behind who they are (a large picture, their name, followers and uploads, their sign) with Follow and, while
+/// they are live, Watch Live; then tabs for their uploads by order or their collections, and those as Bilibili's 16:9
+/// tiles. No search field: the source's search covers all of Bilibili, not this UP主.
+struct BilibiliTVSpacePage<Grid: View>: View {
+    @Environment(Store.self) private var store
+    let mid: Int
+    let name: String
+    let tabs: [(id: String, title: String)]
+    /// The listing showing.
+    let category: String
+    /// The first upload listed: its cover is the backdrop, kept once there so changing tabs doesn't swap it.
+    let latest: Video?
+    let open: (String) -> Void
+    @ViewBuilder let grid: Grid
+    @State private var maker = BilibiliCreatorModel()
+    @State private var backdrop: Video?
+    @State private var scrolled = false
+    @State private var showsSignIn = false
+    @FocusState private var heroFocus: HeroItem?
+    private enum HeroItem: Hashable { case follow, live, tab(String) }
+
+    /// Four 16:9 tiles across.
+    static var columns: [GridItem] { Array(repeating: GridItem(.fixed(BilibiliMetrics.tile), spacing: 48, alignment: .top), count: 4) }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            page.onChange(of: heroFocus != nil) { _, inHero in
+                if inHero { withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo("hero", anchor: .top) } }
+            }
+        }
+    }
+
+    private var page: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 48) {
+                hero.id("hero")
+                VStack(alignment: .leading, spacing: 56) { grid }
+                    .padding(.horizontal, BilibiliTVMetrics.gutter)
+                    .focusSection()
+            }
+            .padding(.bottom, 90)
+        }
+        .scrollClipDisabled()
+        .modifier(DiscoverTVScrolled(scrolled: $scrolled))
+        .background {
+            ZStack {
+                BilibiliTVBackdrop(cover: backdrop?.poster, headers: backdrop?.posterHeaders ?? [:], frosted: scrolled)
+                // The tiles start halfway down: darker there than the video page, whose text runs to the foot.
+                LinearGradient(stops: [.init(color: .clear, location: 0.3), .init(color: .black.opacity(0.75), location: 0.62)],
+                               startPoint: .top, endPoint: .bottom)
+                    .ignoresSafeArea()
+            }
+        }
+        .ignoresSafeArea()
+        .foregroundStyle(.white).preferredColorScheme(.dark)
+        .task(id: mid) { await maker.load(mid) }
+        .onChange(of: latest?.id, initial: true) { if backdrop == nil, latest?.poster != nil { backdrop = latest } }
+        .overlay(alignment: .top) { BilibiliTVToast(message: Binding(get: { maker.message }, set: { maker.message = $0 })) }
+        .onChange(of: maker.needsSignIn) { _, needed in
+            guard needed else { return }
+            maker.needsSignIn = false; maker.message = nil; showsSignIn = true
+        }
+        .fullScreenCover(isPresented: $showsSignIn, onDismiss: { Task { await maker.load(mid) } }) { BilibiliAccountView() }
+        .animation(.smooth(duration: 0.3), value: maker.creator)
+    }
+
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 44) {
+            HStack(alignment: .center, spacing: 40) {
+                Color.clear.frame(width: 168, height: 168)
+                    .overlay { PosterImage(url: maker.creator?.face, headers: Bilibili.imageHeaders, symbol: "person.fill") }
+                    .clipShape(Circle())
+                    .overlay { Circle().strokeBorder(.white.opacity(0.18), lineWidth: 2) }
+                    .shadow(color: .black.opacity(0.4), radius: 16, y: 8)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(maker.creator?.name ?? name).font(.system(size: 64, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
+                        .shadow(color: .black.opacity(0.45), radius: 12)
+                    Text(maker.stats).font(.system(size: 28, weight: .medium)).lineLimit(1).opacity(0.7)
+                    if let sign = maker.creator?.sign.trimmingCharacters(in: .whitespacesAndNewlines), !sign.isEmpty {
+                        Text(sign).font(.system(size: 24)).lineSpacing(3).lineLimit(2).opacity(0.6)
+                            .frame(maxWidth: 1000, alignment: .leading)
+                    }
+                }
+                Spacer(minLength: 40)
+                VStack(alignment: .trailing, spacing: 12) {
+                    HStack(spacing: 18) {
+                        if let room = maker.creator?.liveRoom, let channel = bilibiliLiveChannel(room: room, host: maker.creator?.name ?? name) {
+                            Button { store.playing = channel } label: { Label(L10n.text("Watch Live"), systemImage: "dot.radiowaves.left.and.right") }
+                                .buttonStyle(DiscoverTVActionStyle(height: BilibiliTVMetrics.rowHeight, font: 26))
+                                .focused($heroFocus, equals: .live)
+                                .accessibilityIdentifier("bilibili.live")
+                        }
+                        Button { Task { await maker.toggleFollow(mid) } } label: {
+                            HStack(spacing: 10) {
+                                if maker.busy { ProgressView() } else { Image(systemName: maker.following ? "checkmark" : "plus") }
+                                Text(maker.following ? L10n.text("Followed") : L10n.text("Follow"))
+                            }
+                        }
+                        .buttonStyle(DiscoverTVActionStyle(height: BilibiliTVMetrics.rowHeight, font: 26))
+                        .focused($heroFocus, equals: .follow)
+                        .accessibilityIdentifier("bilibili.follow")
+                    }
+                }
+            }
+            HStack(spacing: 14) {
+                ForEach(tabs, id: \.id) { tab in
+                    Button { if category != tab.id { open(tab.id) } } label: { Text(tab.title) }
+                        .buttonStyle(BilibiliTVTabStyle(selected: category == tab.id))
+                        .focused($heroFocus, equals: .tab(tab.id))
+                        .accessibilityIdentifier("bilibili.space.\(tab.id)")
+                }
+            }
+            .focusSection()
+            .defaultFocus($heroFocus, .tab(category))
+        }
+        .padding(.horizontal, BilibiliTVMetrics.gutter)
+        .frame(maxWidth: .infinity, minHeight: 620, alignment: .bottomLeading)
+    }
+}
+
+/// A note over Apple TV's Bilibili pages ("Added to Watch Later.", a refused like): a glass capsule that drops in at
+/// the top of the screen and leaves after a few seconds, so the page under it never moves.
+private struct BilibiliTVToast: View {
+    @Binding var message: String?
+    var body: some View {
+        ZStack {
+            if let message {
+                Text(message).font(.system(size: 26, weight: .medium)).lineLimit(2).multilineTextAlignment(.center)
+                    .padding(.horizontal, 34).padding(.vertical, 18)
+                    .glassSurface(.regular, in: Capsule())
+                    .frame(maxWidth: 1100)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .task(id: message) {
+                        try? await Task.sleep(for: .seconds(3.5))
+                        withAnimation(.smooth(duration: 0.35)) { self.message = nil }
+                    }
+            }
+        }
+        .padding(.top, 54)
+        .animation(.smooth(duration: 0.35), value: message)
+        .allowsHitTesting(false)
+    }
+}
+
+/// A row of the comments list: the whole width, bare until focused, then on a soft plate.
+private struct BilibiliTVRowStyle: ButtonStyle {
+    var compact = false
+    func makeBody(configuration: Configuration) -> some View { Row(configuration: configuration, compact: compact) }
+    private struct Row: View {
+        let configuration: ButtonStyleConfiguration
+        let compact: Bool
+        @Environment(\.isFocused) private var focused
+        var body: some View {
+            configuration.label
+                .padding(.horizontal, 24).padding(.vertical, compact ? 12 : 18)
+                .frame(maxWidth: compact ? nil : .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.white.opacity(focused ? 0.15 : 0)))
+                .scaleEffect(configuration.isPressed ? 0.99 : 1)
+                .animation(.easeOut(duration: 0.15), value: focused)
+        }
+    }
+}
+
+/// A tab (the UP主's listings, the comments' order): a glass capsule, tinted for the one showing; focused, white glass
+/// with dark text.
+private struct BilibiliTVTabStyle: ButtonStyle {
+    let selected: Bool
+    /// Smaller, beside a heading.
+    var compact = false
+    func makeBody(configuration: Configuration) -> some View { Tab(configuration: configuration, selected: selected, compact: compact) }
+    private struct Tab: View {
+        let configuration: ButtonStyleConfiguration
+        let selected: Bool
+        let compact: Bool
+        @Environment(\.isFocused) private var focused
+        var body: some View {
+            configuration.label
+                .font(.system(size: compact ? 24 : 28, weight: selected || focused ? .semibold : .medium)).lineLimit(1)
+                .foregroundStyle(focused ? Color.black : Color.white.opacity(selected ? 1 : 0.6))
+                .padding(.horizontal, compact ? 22 : 30).frame(height: compact ? 50 : 66)
+                // Liquid Glass, as the page's other buttons: tinted for the one showing, white under focus.
+                .glassSurface(focused ? .regular.tint(.white.opacity(0.9)).interactive()
+                              : selected ? .regular.tint(.white.opacity(0.28)).interactive() : .regular.interactive(), in: Capsule())
+                .scaleEffect(configuration.isPressed ? 0.97 : focused ? 1.06 : 1)
+                .shadow(color: .black.opacity(focused ? 0.35 : 0), radius: 14, y: 8)
+                .animation(.easeOut(duration: 0.18), value: focused)
+        }
     }
 }
 

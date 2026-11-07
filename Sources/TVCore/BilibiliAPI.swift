@@ -308,9 +308,16 @@ public enum BilibiliAPI {
         var parameters = ["aid": String(part.aid), "cid": String(part.cid)]
         if let episode = part.episode { parameters["ep_id"] = String(episode) }
         let data = try await get("https://api.bilibili.com/x/player/wbi/v2", signed: parameters)["data"]?.object ?? [:]
-        let chapters = (data["view_points"]?.array ?? []).compactMap(\.object).compactMap { point -> PlaybackChapter? in
-            guard let from = point["from"]?.double, let to = point["to"]?.double, to > from else { return nil }
-            return PlaybackChapter(start: from, end: to, title: point["content"]?.string ?? "")
+        let points = (data["view_points"]?.array ?? []).compactMap(\.object).compactMap { point -> PlaybackChapter? in
+            guard let from = point["from"]?.double, let to = point["to"]?.double else { return nil }
+            return PlaybackChapter(start: from, end: to, title: point["content"]?.string ?? "", image: picture(point["imgUrl"]))
+        }.sorted { $0.start < $1.start }
+        // Chapters (type 2) are spans; key moments (type 1, a match's kills) start and end at once, so each runs to
+        // the next.
+        let chapters = points.enumerated().map { index, point in
+            point.end > point.start ? point
+                : PlaybackChapter(start: point.start, end: index + 1 < points.count ? max(points[index + 1].start, point.start + 1) : point.start + 1,
+                                  title: point.title, image: point.image)
         }
         let files = (data["subtitle"]?.object?["subtitles"]?.array ?? []).compactMap(\.object)
         let machine = { (item: [String: JSONValue]) in item["lan"]?.string?.hasPrefix("ai-") == true }
@@ -338,7 +345,11 @@ public enum BilibiliAPI {
 public struct PlaybackChapter: Hashable, Sendable {
     public let start: Double, end: Double
     public let title: String
-    public init(start: Double, end: Double, title: String) { self.start = start; self.end = end; self.title = title }
+    /// A frame from it, when the source has one (Bilibili's `imgUrl`): Apple TV's Chapters tab shows it.
+    public let image: URL?
+    public init(start: Double, end: Double, title: String, image: URL? = nil) {
+        self.start = start; self.end = end; self.title = title; self.image = image
+    }
 }
 
 /// A stretch a source marks as skippable: the opening or ending credits (the play result's `skips`).

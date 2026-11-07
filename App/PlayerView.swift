@@ -64,6 +64,7 @@ struct PlaybackView: View {
                                  enhancer: session.enhancer, upscale: $upscalesVideo, smooth: $smoothsVideo, info: $showsPlaybackInfo,
                                  speed: playbackSpeed, setSpeed: { playbackSpeed = $0; session.setSpeed($0) }, fills: $fillsScreen, danmakuArea: $danmakuArea,
                                  external: session.externalSubtitles, skip: session.skipOffer, skipSource: { session.skipSourceSegment() },
+                                 chapters: session.chapters,
                                  exitWhileWaiting: session.showsPicture ? nil : { dismiss() }).ignoresSafeArea()
                     .onAppear { playbackSpeed = session.player.defaultRate }
             }
@@ -726,6 +727,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     /// The source's opening or ending credits playing now, offered as AVKit's Skip button (#256).
     var skip: PlaybackSkip? = nil
     var skipSource: @MainActor () -> Void = {}
+    /// The part's chapters (Bilibili's 分段章节): a Chapters tab in the info panel, beside Danmaku.
+    var chapters: [PlaybackChapter] = []
     private static let speeds: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
     private static func speedLabel(_ speed: Float) -> String {
         Double(speed).formatted(.number.precision(.fractionLength(0...2))) + "×"
@@ -786,16 +789,24 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         context.coordinator.host?.rootView = overlay
         context.coordinator.exit = exitWhileWaiting
         context.coordinator.back.isEnabled = exitWhileWaiting != nil
-        // The comment list is a tab in the info panel (swipe down), beside the video's own info.
-        if context.coordinator.listed != "\(revision):\(comments.count)" {
-            context.coordinator.listed = "\(revision):\(comments.count)"
-            if comments.isEmpty { controller.customInfoViewControllers = [] }
-            else {
+        // The chapters and the comment list are tabs in the info panel (swipe down), beside the video's own info.
+        let listed = "\(revision):\(comments.count):\(chapters.map(\.start))"
+        if context.coordinator.listed != listed {
+            context.coordinator.listed = listed
+            var tabs: [UIViewController] = []
+            if !chapters.isEmpty {
+                let list = UIHostingController(rootView: PlayerChaptersView(player: player, chapters: chapters))
+                list.title = L10n.text("Chapters")
+                list.preferredContentSize = CGSize(width: 0, height: 330)
+                tabs.append(list)
+            }
+            if !comments.isEmpty {
                 let list = UIHostingController(rootView: DanmakuListView(player: player, comments: comments))
                 list.title = L10n.text("Danmaku")
                 list.preferredContentSize = CGSize(width: 0, height: 480)
-                controller.customInfoViewControllers = [list]
+                tabs.append(list)
             }
+            controller.customInfoViewControllers = tabs
         }
         let binding = $showsDanmaku
         var items: [UIMenuElement] = []
@@ -1572,3 +1583,74 @@ struct PlaybackInfoPanel: View {
         return format
     }
 }
+
+#if os(tvOS)
+/// Apple TV's Chapters tab in the player's info panel (swipe down): the part's chapters as a row of frames with their
+/// start and title, as Bilibili's TV clients list parts; the one playing is marked. Choosing one plays from its start.
+struct PlayerChaptersView: View {
+    let player: AVPlayer
+    let chapters: [PlaybackChapter]
+    @State private var now: Double = 0
+    @FocusState private var focused: Int?
+
+    private var playing: Int? { chapters.lastIndex { $0.start <= now + 0.5 } }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: 36) {
+                    ForEach(Array(chapters.enumerated()), id: \.offset) { index, chapter in
+                        Button {
+                            player.seek(to: CMTime(seconds: chapter.start, preferredTimescale: 600))
+                            player.play()
+                        } label: { tile(chapter, number: index + 1, current: index == playing) }
+                            .buttonStyle(.borderless)
+                            .focused($focused, equals: index)
+                            .id(index)
+                            .accessibilityIdentifier("player.chapter")
+                    }
+                }
+                .padding(.horizontal, 80).padding(.vertical, 28)
+            }
+            .scrollClipDisabled()
+            .defaultFocus($focused, playing ?? 0)
+            .task {
+                now = player.currentTime().seconds.isFinite ? player.currentTime().seconds : 0
+                if let playing { proxy.scrollTo(playing, anchor: .center) }
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(1))
+                    let time = player.currentTime().seconds
+                    if time.isFinite { now = time }
+                }
+            }
+        }
+    }
+
+    private func tile(_ chapter: PlaybackChapter, number: Int, current: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Color.white.opacity(0.08).aspectRatio(16.0 / 9.0, contentMode: .fit)
+                .overlay {
+                    if let image = chapter.image {
+                        PosterImage(url: image, headers: Bilibili.imageHeaders)
+                    } else {
+                        Text("\(number)").font(.system(size: 54, weight: .bold)).foregroundStyle(.white.opacity(0.35))
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(alignment: .bottomTrailing) {
+                    Text(EpisodeSkipSettings.formatTime(chapter.start)).font(.system(size: 20, weight: .semibold)).monospacedDigit()
+                        .foregroundStyle(.white).padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 6, style: .continuous)).padding(8)
+                }
+                .hoverEffect(.highlight)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                if current { Image(systemName: "play.fill").font(.system(size: 18)).foregroundStyle(BilibiliMark.pink) }
+                Text(chapter.title.isEmpty ? L10n.text("Chapter %lld", number) : chapter.title)
+                    .font(.system(size: 24, weight: current ? .semibold : .regular)).lineLimit(2)
+                    .foregroundStyle(current ? BilibiliMark.pink : .white)
+            }
+        }
+        .frame(width: 320)
+    }
+}
+#endif

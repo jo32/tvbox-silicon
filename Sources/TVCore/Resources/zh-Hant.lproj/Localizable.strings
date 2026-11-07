@@ -1741,3 +1741,5 @@
 "%@ danmaku" = "%@ 條彈幕";
 "Add to Yingxia Favorites" = "加入映匣收藏";
 "Remove from Yingxia Favorites" = "移出映匣收藏";
+"Chapter %lld" = "第 %lld 章";
+"All Comments" = "全部評論";

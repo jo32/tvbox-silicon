@@ -894,6 +894,8 @@ struct SiteView: View {
                 .focusable()
                 .onExitCommand { dismiss() }
                 #endif
+            } else if showsBilibiliTVSpace {
+                bilibiliTVSpace
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 20) {
@@ -982,11 +984,13 @@ struct SiteView: View {
         .toolbar {
             // Handed the store: UIKit can size a bar item before SwiftUI gives it the page's environment, and these
             // buttons read Store first thing (a TestFlight crash on iPhone).
-            Group {
-                PinSourceButton(site: site, origin: origin)
-                HideSourceButton(site: site, origin: origin)
+            if !showsBilibiliTVSpace {
+                Group {
+                    PinSourceButton(site: site, origin: origin)
+                    HideSourceButton(site: site, origin: origin)
+                }
+                .environment(store)
             }
-            .environment(store)
         }
         .screenBackdrop()
         .onAppear {
@@ -994,7 +998,7 @@ struct SiteView: View {
             let login = BilibiliAccount.load().cookie
             if login != bilibiliLogin { bilibiliLogin = login; query = ""; startRequest { await home(); await browser.loadCategories(client: client) } }
         }
-        .screenTitle(folder?.name ?? site.name).task {
+        .screenTitle(folder?.name ?? site.name, shown: !showsBilibiliTVSpace).task {
             store.searchModel.suspend()
             if let preview, folder == nil, initialQuery.isEmpty { browser.seed(videos: preview.videos, categories: preview.categories) }
             if canLoad && !browser.loaded {
@@ -3296,5 +3300,69 @@ extension VideoDetailView {
             playControl
         }
     }
+}
+#endif
+
+extension SiteView {
+    /// An UP主's space on Apple TV: its own page (`BilibiliTVSpacePage`), without the source's search field and banner.
+    var showsBilibiliTVSpace: Bool {
+        #if os(tvOS)
+        site.isBilibili && folder.flatMap { BilibiliAPI.creator(category: $0.id) } != nil
+        #else
+        false
+        #endif
+    }
+}
+
+#if os(tvOS)
+extension SiteView {
+    @ViewBuilder var bilibiliTVSpace: some View {
+        if let folder, let mid = BilibiliAPI.creator(category: folder.id) {
+            BilibiliTVSpacePage(mid: mid, name: folder.name, tabs: BilibiliSpaceHeader.tabs(mid),
+                                category: browser.category.isEmpty ? folder.id : browser.category, latest: browser.videos.first,
+                                open: { id in startRequest { await browser.load(.list(category: id, query: "", page: 1), client: client) } }) {
+                spaceGrid
+            }
+        }
+    }
+
+    /// The space's listing as Bilibili's 16:9 tiles, four across, with the page's loading, error and Load More states.
+    @ViewBuilder private var spaceGrid: some View {
+        if let error = browser.error {
+            ErrorStateCard(
+                title: L10n.text("Unable to load this source"),
+                message: L10n.text("Try again, or choose another source to keep watching."),
+                details: error,
+                retry: { startRequest { await browser.load(browser.request, client: client) } },
+                goBack: { dismiss() },
+                busy: browser.busy
+            )
+        } else if browser.videos.isEmpty && browser.loaded && !browser.busy {
+            EmptyResults(symbol: "film", title: L10n.text("No Videos"))
+        }
+        LazyVGrid(columns: BilibiliTVSpacePage<EmptyView>.columns, alignment: .leading, spacing: 56) {
+            if browser.videos.isEmpty && browser.error == nil && (browser.busy || !browser.loaded) {
+                ForEach(0..<8, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.white.opacity(0.08)).aspectRatio(16.0 / 9.0, contentMode: .fit)
+                }
+            }
+            ForEach(browser.videos) { video in
+                RouteLink { CatalogDestination(video: video, client: client) } label: { BilibiliVideoTile(video: video) }
+                    .cardButton()
+                    .onAppear {
+                        guard browser.moreError == nil, video.id == browser.videos.last?.id else { return }
+                        Task { await loadMore() }
+                    }
+            }
+        }
+        .opacity(browser.busy && !browser.videos.isEmpty ? 0.55 : 1).animation(.smooth, value: browser.busy)
+        if !browser.videos.isEmpty && (browser.hasMore || browser.loadingMore || browser.moreError != nil) {
+            loadMoreFooter.tvFocusSection()
+        }
+    }
+}
+#else
+extension SiteView {
+    var bilibiliTVSpace: some View { EmptyView() }
 }
 #endif

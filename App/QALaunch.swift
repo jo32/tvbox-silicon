@@ -304,6 +304,23 @@ enum QALaunch {
                     }
                     .accessibilityIdentifier("qa.open-detail")
                 }
+            // `-qaPage up:<source key>:<mid>` opens a Bilibili UP主's space; `-qaPage comments:<aid>:<total>` a video's comments.
+            case "up":
+                if parts.count == 3, let site = config.sites.first(where: { $0.key == parts[1] }), let mid = Int(parts[2]) {
+                    bilibiliSpace(mid: mid, name: UserDefaults.standard.string(forKey: "qaVideoName") ?? "UP主",
+                                  client: CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL))
+                }
+            case "comments":
+                if parts.count == 3, let aid = Int(parts[1]) {
+                    BilibiliCommentsView(aid: aid, total: Int(parts[2]) ?? 0,
+                                         cover: UserDefaults.standard.string(forKey: "qaVideoPoster").flatMap(URL.init(string:)),
+                                         coverHeaders: Bilibili.imageHeaders)
+                }
+            #if os(tvOS)
+            // `-qaPage chapters:<aid>_<cid>` shows a Bilibili part's Chapters tab as the player's info panel does.
+            case "chapters":
+                QABilibiliChapters(part: parts.dropFirst().first.flatMap(BilibiliAPI.Part.init(address:)))
+            #endif
             case "channels":
                 if let index = Int(parts.dropFirst().first ?? ""), config.lives.indices.contains(index) {
                     ChannelListView(source: config.lives[index])
@@ -393,7 +410,7 @@ enum QALaunch {
 
     static func overrides(_ section: AppSection) -> Bool {
         guard section == self.section, let page else { return false }
-        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "cloud-login", "cloud-accounts", "subtitle-style", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add"].contains(page.split(separator: ":").first.map(String.init) ?? "")
+        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "cloud-login", "cloud-accounts", "subtitle-style", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add", "up", "comments", "chapters"].contains(page.split(separator: ":").first.map(String.init) ?? "")
     }
 }
 
@@ -604,6 +621,26 @@ private struct QADanmakuList: View {
             .ignoresSafeArea()
             .sheet(isPresented: .constant(true)) { DanmakuListView(player: player, comments: comments).danmakuListPresentation() }
         #endif
+    }
+}
+#endif
+
+#if os(tvOS)
+private struct QABilibiliChapters: View {
+    let part: BilibiliAPI.Part?
+    @State private var chapters: [PlaybackChapter] = []
+    @State private var failure: String?
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            Color.black.ignoresSafeArea()
+            if !chapters.isEmpty { PlayerChaptersView(player: AVPlayer(), chapters: chapters).frame(height: 330).background(.thinMaterial) }
+        }
+        .overlay { if let failure { Text(failure).foregroundStyle(.white) } }
+        .task {
+            guard let part else { failure = "no part"; return }
+            do { chapters = try await BilibiliAPI.playerInfo(part).chapters; if chapters.isEmpty { failure = "no chapters" } }
+            catch { failure = "\(error)" }
+        }
     }
 }
 #endif

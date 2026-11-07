@@ -1741,3 +1741,5 @@
 "%@ danmaku" = "弾幕 %@ 件";
 "Add to Yingxia Favorites" = "映匣のお気に入りに追加";
 "Remove from Yingxia Favorites" = "映匣のお気に入りから削除";
+"Chapter %lld" = "チャプター %lld";
+"All Comments" = "すべてのコメント";
