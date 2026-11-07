@@ -1675,3 +1675,4 @@
 "This disc image holds no Blu-ray or DVD video." = "This disc image holds no Blu-ray or DVD video.";
 "This Blu-ray disc image is still encrypted (AACS). Only decrypted disc images play." = "This Blu-ray disc image is still encrypted (AACS). Only decrypted disc images play.";
 "This disc image's file system can't be read." = "This disc image's file system can't be read.";
+"This source's settings page can't open on this device. Sign in to your drives in Cloud Drive Accounts, and the source uses those sign-ins." = "This source's settings page can't open on this device. Sign in to your drives in Cloud Drive Accounts, and the source uses those sign-ins.";
