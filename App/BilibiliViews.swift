@@ -1314,7 +1314,7 @@ private struct BilibiliTVCommentCard: View {
 
 /// Text that opens more of itself (the description, a comment): bare, or on a faint plate, until focused; then a
 /// lifted white plate with dark text, as Discover's actions turn.
-private struct BilibiliTVPlateStyle: ButtonStyle {
+struct BilibiliTVPlateStyle: ButtonStyle {
     static let inset: CGFloat = 24
     /// A faint plate while unfocused, for cards in a row.
     var resting = false

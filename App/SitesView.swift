@@ -1802,6 +1802,12 @@ struct VideoDetailView: View {
     @AppStorage("episodesReversed") private var reversesEpisodes = false
     /// Play takes over focus from the loading placeholder; otherwise nothing is focused once details load.
     @FocusState private var playFocused: Bool
+    #if os(tvOS)
+    /// Apple TV's page: scrolled past the hero (the backdrop frosts), the hero's other buttons, the full synopsis.
+    @State private var tvScrolled = false
+    @FocusState private var tvHeroFocus: TVHeroItem?
+    @State private var showsTVSynopsis = false
+    #endif
     @State private var containerWidth: CGFloat = 0
     /// The cover's width over height once it loads; landscape covers are common (Bilibili, short dramas).
     @State private var artAspect: CGFloat?
@@ -1852,7 +1858,7 @@ struct VideoDetailView: View {
             #if os(iOS)
             if watchLayout { watchBody } else { pageBody }
             #elseif os(tvOS)
-            if showsBilibiliTVPage { bilibiliTVPage } else if showsTVLoadingHero { tvLoadingHero } else { pageBody }
+            if showsBilibiliTVPage { bilibiliTVPage } else if showsTVLoadingHero { tvLoadingHero } else { tvDetailPage }
             #else
             pageBody
             #endif
@@ -1866,7 +1872,8 @@ struct VideoDetailView: View {
         .screenBackdrop()
         #endif
         // Apple TV's Bilibili video page sets its title in its hero; a bar over it only repeated it.
-        .screenTitle(video.name, shown: !showsBilibiliTVPage && !showsTVLoadingHero).task {
+        // Apple TV's pages set their title in their hero; a bar over it only repeated it.
+        .screenTitle(video.name, shown: false).task {
             store.searchModel.suspend()
             #if os(iOS)
             // From Continue Watching the watch page resumes at once, resolving its own details.
@@ -1959,7 +1966,7 @@ struct VideoDetailView: View {
     private var tvLoadingHero: some View {
         let subtitle = video.remarks.isEmpty ? video.year ?? "" : video.remarks
         return ZStack(alignment: .bottomLeading) {
-            TVCoverBackdrop(url: video.poster, headers: video.posterHeaders)
+            TVCoverBackdrop(url: video.poster, headers: video.posterHeaders, frosted: false)
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(video.name).font(.system(size: 64, weight: .bold)).lineLimit(2).minimumScaleFactor(0.7)
@@ -3369,6 +3376,134 @@ extension VideoDetailView {
         }
     }
 
+    /// Apple TV's page for every other video, in the Bilibili page's language (Discover's title page): TMDB's backdrop, or
+    /// the cover, across the whole screen; over it the logo or title, the facts, Play with Download and Favorite under it
+    /// and the synopsis beside them; then the episodes, the people, facts and related titles over the frosted picture.
+    var tvDetailPage: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 60) {
+                    tvDetailHero.id("hero")
+                    VStack(alignment: .leading, spacing: 44) {
+                        sourceExtras
+                        episodePanel
+                        sourceRelated
+                        tmdbExtras
+                    }
+                    .padding(.horizontal, TVDetailMetrics.gutter)
+                }
+                .padding(.bottom, 90)
+            }
+            .scrollClipDisabled()
+            .modifier(DiscoverTVScrolled(scrolled: $tvScrolled))
+            .background {
+                if let backdrop = tmdb.details?.backdrop {
+                    TVCoverBackdrop(url: backdrop, headers: [:], frosted: tvScrolled)
+                } else {
+                    TVCoverBackdrop(url: video.poster, headers: video.posterHeaders, frosted: tvScrolled)
+                }
+            }
+            .ignoresSafeArea()
+            .foregroundStyle(.white).preferredColorScheme(.dark)
+            .animation(.smooth(duration: 0.45), value: tmdb.details)
+            .animation(.smooth(duration: 0.3), value: tmdb.phase)
+            // Coming back up from the rows, the hero comes back whole, not just as far as the focused button.
+            .onChange(of: playFocused || tvHeroFocus != nil) { _, inHero in
+                if inHero { withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo("hero", anchor: .top) } }
+            }
+            .fullScreenCover(isPresented: $showsTVSynopsis) { tvSynopsisScreen }
+        }
+    }
+
+    /// TMDB's facts (2026 · Drama · ★ 7.0), else the source's note, year and name.
+    private var tvFacts: String {
+        if let facts = tmdb.details?.facts, !facts.isEmpty { return facts }
+        let current = currentVideo()
+        return [current.remarks, current.year ?? "", client.site.name].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    private var tvDetailHero: some View {
+        let text = detail.map(synopsisText)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 12) {
+                playbackBanner
+                tmdbStatus
+            }
+            .frame(maxWidth: 1200, alignment: .leading)
+            VStack(alignment: .leading, spacing: 12) {
+                TVTitleArt(logo: tmdb.details?.logo, name: tmdb.details?.name ?? currentVideo().name)
+                Text(tvFacts.isEmpty ? " " : tvFacts).font(.system(size: 28, weight: .medium)).lineLimit(1).opacity(0.7)
+                if let tagline = tmdb.details?.tagline, !tagline.isEmpty {
+                    Text(tagline).font(.system(size: 26).italic()).lineLimit(1).opacity(0.6)
+                }
+            }
+            HStack(alignment: .top, spacing: 72) {
+                VStack(alignment: .leading, spacing: 22) {
+                    bilibiliTVPlay
+                    HStack(alignment: .top, spacing: 16) {
+                        tvPlate("arrow.down.circle", caption: L10n.text("Download"), id: "detail.download", focus: .download) {
+                            choosingDownloads = true
+                        }
+                        let saved = store.favorites.contains(videoFavorite())
+                        tvPlate(saved ? "heart.fill" : "heart", tint: saved ? Brand.rose : nil, caption: L10n.text(saved ? "Saved" : "Favorite"),
+                                id: "detail.favorite", focus: .favorite) {
+                            store.favorites.toggle(videoFavorite())
+                        }
+                    }
+                    .disabled(detail?.episodes.isEmpty ?? true)
+                }
+                .frame(width: TVDetailMetrics.actionsWidth)
+                .focusSection()
+                if !text.isEmpty {
+                    Button { showsTVSynopsis = true } label: {
+                        Text(text).font(.system(size: 26)).lineSpacing(4).lineLimit(4).multilineTextAlignment(.leading)
+                            .frame(maxWidth: 1000, alignment: .leading)
+                    }
+                    .buttonStyle(BilibiliTVPlateStyle())
+                    .focused($tvHeroFocus, equals: .synopsis)
+                    // The plate's padding outside the column, so the text lines up with Play's top.
+                    .padding(.leading, -BilibiliTVPlateStyle.inset).padding(.top, -BilibiliTVPlateStyle.inset)
+                    .accessibilityIdentifier("detail.synopsis")
+                    .focusSection()
+                }
+            }
+            .padding(.top, 16)
+        }
+        .padding(.horizontal, TVDetailMetrics.gutter)
+        .frame(maxWidth: .infinity, minHeight: 940, alignment: .bottomLeading)
+    }
+
+    /// One of the hero's square glass plates under Play, with its caption under it.
+    private func tvPlate(_ symbol: String, tint: Color? = nil, caption: String, id: String, focus: TVHeroItem,
+                         action: @escaping () -> Void) -> some View {
+        VStack(spacing: 12) {
+            Button(action: action) { Image(systemName: symbol).foregroundStyle(tint ?? .primary).frame(maxWidth: .infinity) }
+                .buttonStyle(DiscoverTVActionStyle(height: 76, font: 30, corner: 24))
+                .focused($tvHeroFocus, equals: focus)
+                .accessibilityLabel(caption).accessibilityIdentifier(id)
+            Text(caption).font(.system(size: 22, weight: .medium)).lineLimit(1).opacity(0.6)
+        }
+        .frame(width: TVDetailMetrics.plateWidth)
+    }
+
+    /// The whole synopsis over the frosted picture: the hero shows four lines of it.
+    private var tvSynopsisScreen: some View {
+        ZStack(alignment: .bottomLeading) {
+            TVCoverBackdrop(url: tmdb.details?.backdrop ?? video.poster, headers: tmdb.details?.backdrop == nil ? video.posterHeaders : [:],
+                            frosted: true)
+            VStack(alignment: .leading, spacing: 24) {
+                Text(tmdb.details?.name ?? currentVideo().name).font(.system(size: 52, weight: .bold)).lineLimit(2)
+                if !tvFacts.isEmpty { Text(tvFacts).font(.system(size: 26)).opacity(0.6) }
+                Text(detail.map(synopsisText) ?? "").font(.system(size: 30)).lineSpacing(6).lineLimit(16)
+            }
+            .frame(maxWidth: 1300, alignment: .leading)
+            .padding(TVDetailMetrics.gutter)
+            // Something must hold focus for Menu to close the page.
+            .focusable()
+        }
+        .ignoresSafeArea().foregroundStyle(.white).preferredColorScheme(.dark)
+    }
+
     /// Play, or Continue the part watched last, as wide as the actions under it.
     @ViewBuilder private var bilibiliTVPlay: some View {
         let continuation = detail.flatMap { watchHistory?.continuation(in: $0.episodes) }
@@ -3460,9 +3595,46 @@ extension SiteView {
 #if os(tvOS)
 /// The cover behind Apple TV's loading page, as the Bilibili page's: a landscape cover across the screen, sharp; a
 /// poster, which would crop to a few enlarged pixels, as a soft blur of its colours. Darker toward the text.
+enum TVHeroItem: Hashable { case download, favorite, synopsis }
+
+private enum TVDetailMetrics {
+    static let gutter: CGFloat = 96
+    /// Play, and the plates under it.
+    static let actionsWidth: CGFloat = 540
+    static let plateWidth: CGFloat = 123
+}
+
+/// The title as TMDB's logo when it has one (the name until the logo is in, and instead of one that fails), else the name.
+private struct TVTitleArt: View {
+    let logo: URL?
+    let name: String
+    @State private var aspect: CGFloat?
+    private var nameText: some View {
+        Text(name).font(.system(size: 64, weight: .bold)).lineLimit(2).minimumScaleFactor(0.7)
+            .frame(maxWidth: 1300, alignment: .leading)
+            .shadow(color: .black.opacity(0.45), radius: 12)
+    }
+    var body: some View {
+        if let logo {
+            // Wide logos get a width limit, tall ones a height limit.
+            let ratio = max(aspect ?? 3, 0.5)
+            let width = min(720, 170 * ratio)
+            TMDBArtwork(url: logo, maxPixels: 1000, fill: false, aspect: $aspect)
+                .frame(width: aspect == nil ? nil : width, height: aspect == nil ? nil : width / ratio, alignment: .leading)
+                .shadow(color: .black.opacity(0.35), radius: 16)
+                .overlay(alignment: .leading) { if aspect == nil { nameText } }
+                .accessibilityLabel(name)
+        } else {
+            nameText
+        }
+    }
+}
+
 private struct TVCoverBackdrop: View {
     let url: URL?
     let headers: [String: String]
+    /// Past the hero: frosted, so the rows read over it.
+    var frosted = false
     @State private var image: CGImage?
     var body: some View {
         ZStack {
@@ -3479,8 +3651,10 @@ private struct TVCoverBackdrop: View {
                                    .init(color: .clear, location: 0.85)], startPoint: .leading, endPoint: .trailing)
             LinearGradient(stops: [.init(color: .clear, location: 0.2), .init(color: .black.opacity(0.92), location: 1)],
                            startPoint: .top, endPoint: .bottom)
+            Rectangle().fill(.regularMaterial).opacity(frosted ? 1 : 0)
         }
         .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.35), value: frosted)
         .animation(.easeInOut(duration: 0.4), value: image != nil)
         .task(id: url) { if let url { image = await TMDBArtwork.load(url, maxPixels: 1600, headers: headers) } }
     }
