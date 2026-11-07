@@ -1847,6 +1847,8 @@ struct VideoDetailView: View {
         Group {
             #if os(iOS)
             if watchLayout { watchBody } else { pageBody }
+            #elseif os(tvOS)
+            if showsBilibiliTVPage { bilibiliTVPage } else { pageBody }
             #else
             pageBody
             #endif
@@ -1859,7 +1861,8 @@ struct VideoDetailView: View {
         #else
         .screenBackdrop()
         #endif
-        .screenTitle(video.name).task {
+        // Apple TV's Bilibili video page sets its title in its hero; a bar over it only repeated it.
+        .screenTitle(video.name, shown: !showsBilibiliTVPage).task {
             store.searchModel.suspend()
             #if os(iOS)
             // From Continue Watching the watch page resumes at once, resolving its own details.
@@ -1934,6 +1937,15 @@ struct VideoDetailView: View {
             }
             .pageContainer()
         }
+    }
+
+    /// A Bilibili video on Apple TV gets its own page (BilibiliTVVideoPage).
+    private var showsBilibiliTVPage: Bool {
+        #if os(tvOS)
+        client.site.isBilibili && BilibiliAPI.isVideo(video.id)
+        #else
+        false
+        #endif
     }
 
     private var isWatchPage: Bool {
@@ -3232,3 +3244,57 @@ private struct MinHeightLayout: SwiftUI.Layout {
         subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
+
+extension View {
+    /// The page's title bar, or none where the page sets its title itself.
+    @ViewBuilder func screenTitle(_ title: String, shown: Bool) -> some View {
+        #if os(tvOS)
+        if shown { screenTitle(title) } else { toolbar(.hidden, for: .navigationBar) }
+        #else
+        screenTitle(title)
+        #endif
+    }
+}
+
+#if os(tvOS)
+extension VideoDetailView {
+    /// Apple TV's page for a Bilibili video (#256): the page's own Play, parts and notices inside BilibiliTVVideoPage.
+    var bilibiliTVPage: some View {
+        let current = currentVideo()
+        return BilibiliTVVideoPage(
+            bvid: video.id, title: detail?.name ?? video.name, cover: current.poster, coverHeaders: current.posterHeaders,
+            synopsis: detail.map(synopsisText) ?? "", creator: bilibiliCreator, client: client,
+            saved: store.favorites.contains(videoFavorite()), toggleSaved: { store.favorites.toggle(videoFavorite()) },
+            download: { choosingDownloads = true }, hasParts: activeEpisodes.count > 1
+        ) {
+            bilibiliTVPlay
+        } parts: {
+            episodePanel
+        } status: {
+            playbackBanner
+        }
+    }
+
+    /// Play, or Continue the part watched last, as wide as the actions under it.
+    @ViewBuilder private var bilibiliTVPlay: some View {
+        let continuation = detail.flatMap { watchHistory?.continuation(in: $0.episodes) }
+        if let detail, let first = continuation ?? activeEpisodes.first ?? detail.episodes.first {
+            Button { startRequest { await play(first) } } label: {
+                HStack(spacing: 12) {
+                    if loadingEpisode == first.id { ProgressView() } else { Image(systemName: "play.fill") }
+                    Text(L10n.text(first.id == continuation?.id ? "Continue" : "Play"))
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(DiscoverTVActionStyle(height: 82, font: 30))
+            .focused($playFocused)
+            .accessibilityIdentifier("detail.play")
+        } else if detail == nil, error == nil {
+            // Holds focus while the details load, so Back leaves the page.
+            SkeletonBlock(cornerRadius: 41).frame(height: 82).loadingFocus(takeFocus: true) { dismiss() }
+        } else {
+            playControl
+        }
+    }
+}
+#endif

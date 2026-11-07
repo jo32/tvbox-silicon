@@ -842,7 +842,8 @@ extension DiscoverDetailView {
     }
 }
 
-private struct DiscoverTVScrolled: ViewModifier {
+/// Whether a page has scrolled past its hero, which frosts the backdrop (Discover's title page, Bilibili's video page).
+struct DiscoverTVScrolled: ViewModifier {
     @Binding var scrolled: Bool
     @ViewBuilder func body(content: Content) -> some View {
         if #available(tvOS 18, *) {

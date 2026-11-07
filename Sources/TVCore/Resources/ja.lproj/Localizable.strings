@@ -1737,3 +1737,7 @@
 "No Vocals" = "ボーカルなし";
 "No Matches" = "一致する結果はありません";
 "No results match these filters. Only songs QQ Music lists have a year, genre and language." = "この絞り込みに一致する結果はありません。年、ジャンル、言語の情報があるのは QQ Music の曲だけです。";
+"%@ views" = "%@ 回再生";
+"%@ danmaku" = "弾幕 %@ 件";
+"Add to Yingxia Favorites" = "映匣のお気に入りに追加";
+"Remove from Yingxia Favorites" = "映匣のお気に入りから削除";

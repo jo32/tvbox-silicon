@@ -1737,3 +1737,7 @@
 "No Vocals" = "純音樂";
 "No Matches" = "沒有相符的結果";
 "No results match these filters. Only songs QQ Music lists have a year, genre and language." = "沒有符合這些篩選條件的結果。只有 QQ 音樂收錄的歌曲帶有年份、曲風和語言資訊。";
+"%@ views" = "%@ 次播放";
+"%@ danmaku" = "%@ 條彈幕";
+"Add to Yingxia Favorites" = "加入映匣收藏";
+"Remove from Yingxia Favorites" = "移出映匣收藏";

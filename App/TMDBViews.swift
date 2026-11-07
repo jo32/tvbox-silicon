@@ -950,6 +950,8 @@ struct TMDBArtwork: View {
     /// Fills its frame (a backdrop) or fits in it (a logo).
     var fill = true
     var aspect: Binding<CGFloat?>? = nil
+    /// Request headers for hosts that want them (Bilibili's covers, shown large on Apple TV's video page).
+    var headers: [String: String] = [:]
     @State private var image: CGImage?
     private static let cache: NSCache<NSURL, Box> = { let cache = NSCache<NSURL, Box>(); cache.countLimit = 24; return cache }()
     final class Box { let image: CGImage; init(_ image: CGImage) { self.image = image } }
@@ -964,15 +966,17 @@ struct TMDBArtwork: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: url) {
             if let cached = Self.cache.object(forKey: url as NSURL) { show(cached.image); return }
-            guard let decoded = await Self.load(url, maxPixels: maxPixels), !Task.isCancelled else { return }
+            guard let decoded = await Self.load(url, maxPixels: maxPixels, headers: headers), !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: 0.3)) { show(decoded) }
         }
     }
 
     /// Downloads and decodes `url` into the shared cache; nil when it doesn't load.
-    static func load(_ url: URL, maxPixels: Int) async -> CGImage? {
+    static func load(_ url: URL, maxPixels: Int, headers: [String: String] = [:]) async -> CGImage? {
         if let cached = cache.object(forKey: url as NSURL) { return cached.image }
-        guard let (data, _) = try? await URLSession.shared.data(from: url),
+        var request = URLRequest(url: url)
+        for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
+        guard let (data, _) = try? await URLSession.shared.data(for: request),
               let source = CGImageSourceCreateWithData(data as CFData, nil),
               let decoded = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                 kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,

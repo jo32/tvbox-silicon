@@ -172,6 +172,10 @@ public enum BilibiliAPI {
         public var favorited = false
         /// Coins the video takes from one account: 1 for a reprint, 2 for an original.
         public var maxCoins = 2
+        /// Its length in seconds, when it was published, and its description (Bilibili's "-" for none is left out).
+        public var duration = 0
+        public var published: Date?
+        public var summary = ""
     }
 
     public static func state(bvid: String) async throws -> VideoState {
@@ -183,6 +187,10 @@ public enum BilibiliAPI {
                                coins: stat["coin"]?.int ?? 0, favorites: stat["favorite"]?.int ?? 0, replies: stat["reply"]?.int ?? 0,
                                danmaku: stat["danmaku"]?.int ?? 0)
         state.maxCoins = data["copyright"]?.int == 2 ? 1 : 2
+        state.duration = data["duration"]?.int ?? 0
+        state.published = data["pubdate"]?.int.flatMap { $0 > 0 ? Date(timeIntervalSince1970: TimeInterval($0)) : nil }
+        let summary = (data["desc"]?.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        state.summary = summary == "-" ? "" : summary
         if signedIn, let relation = try? await get("https://api.bilibili.com/x/web-interface/archive/relation?aid=\(aid)")["data"]?.object {
             state.liked = relation["like"] == .bool(true)
             state.coined = relation["coin"]?.int ?? 0
@@ -233,6 +241,27 @@ public enum BilibiliAPI {
             return Video(id: id, name: HTMLText.name(item["title"]?.string ?? id), poster: picture(item["pic"]),
                          posterHeaders: Bilibili.mediaHeaders, remarks: remarks)
         }
+    }
+
+    /// Frames sampled through a video: Bilibili's scrubbing previews (视频快照), sheets of `columns` × `rows` frames
+    /// each, `count` frames in all, in the video's order.
+    public struct Videoshot: Sendable {
+        public let sheets: [URL]
+        public let columns: Int
+        public let rows: Int
+        public let count: Int
+    }
+
+    /// The video's preview frames; nil when Bilibili has none for it.
+    public static func videoshot(bvid: String) async throws -> Videoshot? {
+        let data = try await get("https://api.bilibili.com/x/player/videoshot?index=1&bvid=" + bvid)["data"]?.object ?? [:]
+        let sheets = (data["image"]?.array ?? []).compactMap { picture($0) }
+        let columns = data["img_x_len"]?.int ?? 0, rows = data["img_y_len"]?.int ?? 0
+        guard !sheets.isEmpty, columns > 0, rows > 0 else { return nil }
+        // `index` holds each frame's time after a leading 0; the sheets' remaining cells are black.
+        let times = data["index"]?.array?.count ?? 0
+        let count = min(times > 1 ? times - 1 : columns * rows * sheets.count, columns * rows * sheets.count)
+        return Videoshot(sheets: sheets, columns: columns, rows: rows, count: count)
     }
 
     // MARK: Comments
