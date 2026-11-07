@@ -119,6 +119,9 @@ struct PlaybackView: View {
         .background(ExternalDisplaySceneRegistrar().allowsHitTesting(false))
         // On a watch page the rest of the page keeps its own appearance.
         .modifier(PlayerScheme(ownsScreen: watch == nil))
+        // The home indicator fades with the controls while the picture fills the screen (#650); a swipe up
+        // brings it back first, as in other video apps. A watch page's player leaves it to the page.
+        .persistentSystemOverlays(playerLayout != .inline && !chromeVisible ? .hidden : .automatic)
         #else
         .preferredColorScheme(.dark)
         #endif
