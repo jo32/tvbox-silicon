@@ -3,6 +3,7 @@ import TVCore
 
 struct HomeView: View {
     @Environment(Store.self) private var store
+    private var openSection = SectionOpener()
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
@@ -131,10 +132,10 @@ struct HomeView: View {
     private func placeholders(_ config: Subscription) -> some View {
         VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
             if showsContinueWatching, !store.playbackHistory.entries.isEmpty {
-                loadingSection(HomeSection.continueWatching.title, action: { store.section = .history }) { cardRow }
+                loadingSection(HomeSection.continueWatching.title, action: { openSection(.history) }) { cardRow }
             }
             if showsPinnedSources, !store.pinnedSources.isEmpty {
-                loadingSection(HomeSection.pinnedSources.title, action: { store.section = .sites }) { cardRow }
+                loadingSection(HomeSection.pinnedSources.title, action: { openSection(.sites) }) { cardRow }
             }
             if showsRecommendations {
                 VStack(alignment: .leading, spacing: 16) {
@@ -145,10 +146,10 @@ struct HomeView: View {
                 .accessibilityLabel(L10n.text("Loading…"))
             }
             if showsFavorites, !store.favorites.items.isEmpty {
-                loadingSection(HomeSection.favorites.title, action: { store.section = .favorites }) { cardRow }
+                loadingSection(HomeSection.favorites.title, action: { openSection(.favorites) }) { cardRow }
             }
             if showsLiveTV, !config.lives.isEmpty {
-                loadingSection(HomeSection.liveTV.title, action: { store.section = .live }) { ChannelSkeletonGrid(count: 3) }
+                loadingSection(HomeSection.liveTV.title, action: { openSection(.live) }) { ChannelSkeletonGrid(count: 3) }
             }
         }
     }
@@ -284,7 +285,7 @@ struct HomeView: View {
 
     private func pinnedSources(_ config: Subscription) -> some View {
         VStack(alignment: .leading, spacing: Layout.headerSpacing) {
-            SectionHeader(title: L10n.text("Pinned Sources")) { store.section = .sites }
+            SectionHeader(title: L10n.text("Pinned Sources")) { openSection(.sites) }
             LazyVGrid(columns: Layout.cardColumns, spacing: Layout.cardSpacing) {
                 ForEach(store.orderedSites(config).filter { store.pinnedSources.contains($0, origin: config.origin) }) { site in
                     RouteLink { SiteView(site: site, origin: config.origin, jarURL: config.spiderURL) } label: { SiteCard(site: site, marksPinned: false) }
@@ -297,7 +298,7 @@ struct HomeView: View {
 
     private var continueWatching: some View {
         VStack(alignment: .leading, spacing: Layout.headerSpacing) {
-            SectionHeader(title: L10n.text("Continue Watching")) { store.section = .history }
+            SectionHeader(title: L10n.text("Continue Watching")) { openSection(.history) }
             ChipRow {
                 HStack(spacing: Layout.cardSpacing) {
                     ForEach(store.playbackHistory.entries.prefix(12)) { HistoryCard(entry: $0) }
@@ -308,7 +309,7 @@ struct HomeView: View {
 
     private var favorites: some View {
         VStack(alignment: .leading, spacing: Layout.headerSpacing) {
-            SectionHeader(title: L10n.text("Favorites")) { store.section = .favorites }
+            SectionHeader(title: L10n.text("Favorites")) { openSection(.favorites) }
             ChipRow {
                 HStack(spacing: Layout.cardSpacing) {
                     ForEach(Array(store.favorites.items.prefix(12))) { item in
@@ -321,7 +322,7 @@ struct HomeView: View {
 
     private func playlists(_ config: Subscription) -> some View {
         VStack(alignment: .leading, spacing: Layout.headerSpacing) {
-            SectionHeader(title: L10n.text("Live TV")) { store.section = .live }
+            SectionHeader(title: L10n.text("Live TV")) { openSection(.live) }
             // Every platform, then one row of playlists.
             LiveSourceGrid(sources: config.lives.filter(\.isBuiltIn) + config.lives.filter { !$0.isBuiltIn }.prefix(3), titled: false)
         }

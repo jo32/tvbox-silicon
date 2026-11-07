@@ -4,18 +4,44 @@ import CoreImage
 import TVCore
 
 extension View {
-    @ViewBuilder func catalogSearchable(text: Binding<String>, prompt: String) -> some View {
+    /// `endsWhenIdle`: on iPhone and iPad, search mode ends when the page is scrolled or the keyboard goes away with nothing
+    /// typed, as after Cancel. For a pushed page: in search mode the bar has no title or back button and swiping back is off.
+    @ViewBuilder func catalogSearchable(text: Binding<String>, prompt: String, endsWhenIdle: Bool = false) -> some View {
         #if os(tvOS)
         // The system search, as in the TV app and Global Search: a large search line over the keyboard row.
         // A text field of our own sat in a corner the remote could not reach from the content below.
         searchable(text: text, prompt: Text(prompt))
         #elseif os(iOS)
-        searchable(text: text, placement: .navigationBarDrawer(displayMode: .always), prompt: Text(prompt))
+        if endsWhenIdle {
+            modifier(IdleEndingSearch(text: text, prompt: prompt))
+        } else {
+            searchable(text: text, placement: .navigationBarDrawer(displayMode: .always), prompt: Text(prompt))
+        }
         #else
         searchable(text: text, prompt: Text(prompt))
         #endif
     }
 }
+
+#if os(iOS)
+/// The system search field, whose search mode ends when the page is scrolled or the keyboard hides with the field empty.
+/// Left alone, tapping the field and then scrolling kept the page in search mode until Cancel: no title, no back button,
+/// no swipe back, and a page that dropped frames while scrolling (#699). Applied to the page's scroll view.
+private struct IdleEndingSearch: ViewModifier {
+    @Binding var text: String
+    let prompt: String
+    @State private var presented = false
+    func body(content: Content) -> some View {
+        content
+            .searchable(text: $text, isPresented: $presented, placement: .navigationBarDrawer(displayMode: .always), prompt: Text(prompt))
+            .onScrollByHand { endIfIdle() }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in endIfIdle() }
+    }
+    private func endIfIdle() {
+        if presented && text.isEmpty { presented = false }
+    }
+}
+#endif
 
 /// A Liquid Glass recipe. On macOS 26, iOS 26 and tvOS 26 it is real glass; on macOS 15, iOS 17–18 and tvOS 17–18,
 /// which have no glass, `glassSurface` draws a material with the same tint instead.

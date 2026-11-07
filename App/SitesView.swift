@@ -979,7 +979,7 @@ struct SiteView: View {
                 .catalogSearchable(text: Binding(get: { query }, set: { value in
                     query = value
                     if value.isEmpty && !browser.query.isEmpty { startRequest { await home() } }
-                }), prompt: L10n.text("Search videos"))
+                }), prompt: L10n.text("Search videos"), endsWhenIdle: true)
                 .onSubmit(of: .search) { startRequest { await search() } }
             }
         }
