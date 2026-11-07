@@ -179,11 +179,11 @@ import TVCore
         }
     }
 
-    /// Draws the item's chosen subtitle with libass when it is an ASS track of a repackaged Matroska file, and stops
-    /// when another (or none) is chosen.
+    /// Draws the item's chosen subtitle itself when it is one AVPlayer can't style or show: an ASS track (libass) or a
+    /// bitmap track (PGS, VobSub) of a repackaged file. Stops when another (or none) is chosen.
     private func lookForStyledTrack() {
-        guard let item, document == nil, ASSRenderer.isAvailable, let url = (item.asset as? AVURLAsset)?.url else { return }
-        let tracks = Remux.styledSubtitles(url)
+        guard let item, document == nil, let url = (item.asset as? AVURLAsset)?.url else { return }
+        let tracks = Self.styledTracks(url)
         guard !tracks.isEmpty || styled.trackName != nil else { return }
         Task { [weak self, weak item] in
             guard let item, let group = try? await item.asset.loadMediaSelectionGroup(for: .legible),
@@ -191,11 +191,11 @@ import TVCore
             let option = item.currentMediaSelection.selectedMediaOption(in: group)
             let track = option.flatMap { Self.track(tracks, for: $0, in: group) }
             guard track?.name != self.styled.trackName else { return }
-            if let track, let renderer = ASSRenderer(track: track) {
+            if let track, let renderer = track.make() {
                 self.styled.show(renderer, track: track.name)
                 self.lines = []
                 self.schedule.reset()
-                Diagnostics.shared.record(.info, "subtitles", "styled track fonts=\(track.fonts.count) events=\(track.count)")
+                Diagnostics.shared.record(.info, "subtitles", "styled track \(track.detail)")
             } else {
                 self.styled.show(nil)
             }
@@ -204,9 +204,27 @@ import TVCore
         }
     }
 
-    /// The ASS track an option of the item's subtitles is: by its NAME in the master playlist (the option's title;
+    /// A subtitle track of a repackaged file that the app draws itself.
+    private struct StyledTrack {
+        let name: String
+        let position: Int
+        let detail: String
+        let make: () -> (any StyledSubtitleSource)?
+    }
+
+    private static func styledTracks(_ url: URL) -> [StyledTrack] {
+        let ass = ASSRenderer.isAvailable ? Remux.styledSubtitles(url).map { track in
+            StyledTrack(name: track.name, position: track.position, detail: "ass fonts=\(track.fonts.count) events=\(track.count)") { ASSRenderer(track: track) }
+        } : []
+        let bitmaps = Remux.bitmapSubtitles(url).map { track in
+            StyledTrack(name: track.name, position: track.position, detail: "bitmap cues=\(track.count)") { BitmapSubtitleRenderer(track: track) }
+        }
+        return ass + bitmaps
+    }
+
+    /// The track an option of the item's subtitles is: by its NAME in the master playlist (the option's title;
     /// its `displayName` is the language's name when it has one), else by its place among the subtitle renditions.
-    private static func track(_ tracks: [StyledSubtitleEvents], for option: AVMediaSelectionOption, in group: AVMediaSelectionGroup) -> StyledSubtitleEvents? {
+    private static func track(_ tracks: [StyledTrack], for option: AVMediaSelectionOption, in group: AVMediaSelectionGroup) -> StyledTrack? {
         let title = AVMetadataItem.metadataItems(from: option.commonMetadata, filteredByIdentifier: .commonIdentifierTitle).first?.stringValue
         if let title, let track = tracks.first(where: { $0.name == title }) { return track }
         guard let position = group.options.firstIndex(of: option) else { return nil }

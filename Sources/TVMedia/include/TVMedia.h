@@ -97,6 +97,35 @@ int tvm_stream(const TVMInput *input, int index, TVMStream *stream);
 /// A metadata tag of a stream, such as an attachment's "filename" or "mimetype", into `out`. Returns its length, -1
 /// when the stream has none.
 int tvm_stream_tag(const TVMInput *input, int index, const char *key, char *out, int size);
+
+// MARK: Bitmap subtitles (#576 M3)
+
+/// A decoder of a bitmap subtitle stream (Blu-ray PGS, DVD VobSub) of an input.
+typedef struct TVMBitmapDecoder TVMBitmapDecoder;
+/// One picture of a bitmap subtitle at (x, y) of its canvas: premultiplied BGRA, `width * 4` bytes a row.
+typedef struct {
+    int x, y, width, height;
+    uint8_t *pixels;
+} TVMBitmapRect;
+/// What one packet shows from `start` to `end` (microseconds of the file's clock; `end` -1 when the next one
+/// ends it), on a `canvasWidth` × `canvasHeight` frame (0 when the stream doesn't say). No rects clears the screen.
+typedef struct {
+    int64_t start, end;
+    int canvasWidth, canvasHeight;
+    int count;
+    TVMBitmapRect rects[8];
+} TVMBitmapSubtitle;
+
+/// Whether FFmpeg here decodes the bitmap subtitle codec FFmpeg names `codec`.
+int tvm_bitmap_available(const char *codec);
+/// A decoder for stream `index` of `input`; NULL when it isn't a bitmap subtitle FFmpeg here decodes.
+TVMBitmapDecoder *tvm_bitmap_open(const TVMInput *input, int index);
+/// Decodes one packet whose time is `time` (and length `duration`, or -1) in microseconds. Returns 1 when `out`
+/// holds a subtitle (free it with `tvm_bitmap_clear`), 0 when the packet showed nothing, negative on error.
+int tvm_bitmap_decode(TVMBitmapDecoder *decoder, const uint8_t *data, int size, int64_t time, int64_t duration,
+                      TVMBitmapSubtitle *out);
+void tvm_bitmap_clear(TVMBitmapSubtitle *subtitle);
+void tvm_bitmap_close(TVMBitmapDecoder *decoder);
 /// The stream's keyframes known from the file's index (Matroska Cues, AVI idx1, ...), ascending, in microseconds.
 /// Returns how many there are, which may be more than `capacity`.
 int tvm_keyframes(const TVMInput *input, int index, int64_t *times, int capacity);

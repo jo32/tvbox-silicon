@@ -51,6 +51,11 @@ final class RemuxSession: @unchecked Sendable {
     /// the file's fonts, kept as segments are made. Set before the stream is served.
     private var styled: [Int: StyledSubtitleEvents] = [:]
     var styledSubtitles: [StyledSubtitleEvents] { condition.withLock { styled.sorted { $0.key < $1.key }.map(\.value) } }
+    /// The bitmap subtitle tracks (PGS, VobSub) the player draws itself, by track, with their decoders, which only
+    /// the FFmpeg thread uses.
+    private var bitmaps: [Int: BitmapSubtitleTrack] = [:]
+    private var bitmapDecoders: [Int: OpaquePointer] = [:]
+    var bitmapSubtitles: [BitmapSubtitleTrack] { condition.withLock { bitmaps.sorted { $0.key < $1.key }.map(\.value) } }
     /// All of a file's fonts together are kept up to this size.
     static let fontBudget = 64 << 20
 
@@ -245,6 +250,8 @@ final class RemuxSession: @unchecked Sendable {
 
     private func finishRun() {
         if let cursor { tvm_cursor_free(cursor) }
+        for decoder in bitmapDecoders.values { tvm_bitmap_close(decoder) }
+        bitmapDecoders = [:]
         if let input { tvm_close(input) }
         cursor = nil; input = nil
         condition.lock()
@@ -309,6 +316,18 @@ final class RemuxSession: @unchecked Sendable {
         }
         if !assTracks.isEmpty {
             Diagnostics.shared.record(.info, "subtitles", "styled tracks=\(assTracks.count) fonts=\(fonts.count) bytes=\(fontBytes)")
+        }
+        let bitmapTracks = plan.tracks.indices.filter { plan.tracks[$0].kind == .subtitle && RemuxPlan.bitmapCodecs.contains(plan.tracks[$0].stream.codec) }
+        let videoSize = plan.tracks.first.map { CGSize(width: $0.stream.width, height: $0.stream.height) } ?? .zero
+        for track in bitmapTracks {
+            guard let decoder = tvm_bitmap_open(input, Int32(plan.tracks[track].stream.index)) else { continue }
+            bitmapDecoders[track] = decoder
+            let position = plan.tracks.indices.filter { plan.tracks[$0].kind == .subtitle }.firstIndex(of: track) ?? 0
+            let bitmap = BitmapSubtitleTrack(name: names[track] ?? "", position: position, videoSize: videoSize)
+            condition.withLock { bitmaps[track] = bitmap }
+        }
+        if !bitmapTracks.isEmpty {
+            Diagnostics.shared.record(.info, "subtitles", "bitmap tracks=\(bitmapTracks.map { plan.tracks[$0].stream.codec }) decoders=\(bitmapDecoders.count)")
         }
         var tracks = plan.tracks.map { track in
             TVMTrack(stream: Int32(track.stream.index), mode: track.mode.rawValue, bitRate: Int32(track.bitRate),
@@ -477,6 +496,19 @@ final class RemuxSession: @unchecked Sendable {
     }
 
     fileprivate func cue(track: Int, start: Int64, end: Int64, text: Data) {
+        // A bitmap subtitle: decoded now, in the order the file holds it (PGS builds on what came before), and
+        // drawn by the player. Its WebVTT rendition stays empty.
+        if let decoder = bitmapDecoders[track] {
+            var subtitle = TVMBitmapSubtitle()
+            let decoded = text.withUnsafeBytes { raw in
+                tvm_bitmap_decode(decoder, raw.bindMemory(to: UInt8.self).baseAddress, Int32(raw.count), start, end > start ? end - start : -1, &subtitle)
+            }
+            if decoded == 1 {
+                bitmaps[track]?.add(subtitle, offset: startTime)
+                tvm_bitmap_clear(&subtitle)
+            }
+            return
+        }
         // The raw event for libass, on the item's clock (which starts where the file's does).
         if let events = styled[track] {
             let ends = end > start ? end : start + 4_000_000
@@ -507,6 +539,7 @@ final class RemuxSession: @unchecked Sendable {
                                       av1: VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1),
                                       hevcEncoder: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
                                       hdr: AVPlayer.eligibleForHDRPlayback && !Remux.refusesHDR && !Remux.screenCaptured)
+        device.bitmapSubtitles = tvm_bitmap_available("hdmv_pgs_subtitle") != 0
         #if !os(macOS)
         // An Apple TV or iPhone tone maps a 4K picture too slowly to keep up; one that shows no HDR gets 1080p.
         device.toneMapWidth = 1920
