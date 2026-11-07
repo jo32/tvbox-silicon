@@ -265,6 +265,31 @@ import VideoToolbox
         #expect(played.status == .readyToPlay && abs(played.duration - 8) < 0.2)
     }
 
+    /// A line of the file's own subtitles that runs from one segment into the next (0.5 s to 6 s here) shows after a
+    /// seek straight into the second: the segment carries it with its whole timing (#576).
+    @Test func embeddedLinesCrossingSegmentsSurviveASeek() async throws {
+        let url = try await Remux.open(try Remux.fileSource(fixture("remux-crossing.mkv")))
+        defer { Remux.stop(url) }
+        let folder = url.deletingLastPathComponent()
+        // The second segment first, as a seek asks for it: the first was never made.
+        let later = String(decoding: try await fetch(folder.appending(path: "3-1.vtt")), as: UTF8.self)
+        #expect(later.contains("00:00:00.500 --> 00:00:06.000\n<i>Hello</i> &amp; welcome"), "\(later)")
+        #expect(later.contains("Second"))
+        let first = String(decoding: try await fetch(folder.appending(path: "3-0.vtt")), as: UTF8.self)
+        #expect(first.contains("00:00:00.500 --> 00:00:06.000") && !first.contains("Second"))
+        // The picture is untouched by the look back.
+        for file in ["0-1.m4s", "0-0.m4s"] {
+            let segment = try await fetch(folder.appending(path: file))
+            #expect(segment.count > 500 && segment.subdata(in: 4..<8) == Data("moof".utf8), "\(file)")
+        }
+    }
+
+    @Test func cuesReadTwiceCountOnce() {
+        let a = RemuxPlan.Cue(start: 1, end: 2, text: "a"), b = RemuxPlan.Cue(start: 3, end: 9, text: "b")
+        #expect(RemuxPlan.merged([b], [a, b]) == [a, b])
+        #expect(RemuxPlan.merged([a], []) == [a])
+    }
+
     /// iOS and tvOS take back a suspended app's listening sockets, and the address AVPlayer holds then refuses.
     @Test func aServerThatStoppedListeningListensAgain() async throws {
         let url = try await Remux.open(try Remux.fileSource(fixture("remux-copy.mkv")))

@@ -1614,7 +1614,7 @@
 "Frame Rate" = "Frame Rate";
 "As Made" = "As Made";
 "%@ fps" = "%@ fps";
-"An SRT, WebVTT or ASS file, up to 8 MB." = "An SRT, WebVTT or ASS file, up to 8 MB.";
+"An SRT, WebVTT or ASS file, or a ZIP archive of them, up to 8 MB." = "An SRT, WebVTT or ASS file, or a ZIP archive of them, up to 8 MB.";
 "Subtitles Not Added" = "Subtitles Not Added";
 "Save or Share" = "Save or Share";
 
@@ -1641,7 +1641,7 @@
 "Its manifest can't be read." = "Its manifest can't be read.";
 "The source answered something unexpected." = "The source answered something unexpected.";
 "The source gave no file." = "The source gave no file.";
-"It is an archive; only SRT, WebVTT and ASS files can be shown." = "It is an archive; only SRT, WebVTT and ASS files can be shown.";
+"It is a RAR or 7z archive; only ZIP archives and SRT, WebVTT and ASS files can be shown." = "It is a RAR or 7z archive; only ZIP archives and SRT, WebVTT and ASS files can be shown.";
 "The script didn't download: %@" = "The script didn't download: %@";
 "It has the same name as a source that comes with Yingxia." = "It has the same name as a source that comes with Yingxia.";
 "The source's script is missing." = "The source's script is missing.";
@@ -1744,3 +1744,14 @@
 "Chapter %lld" = "Chapter %lld";
 "All Comments" = "All Comments";
 "Start Over" = "Start Over";
+
+/* Subtitle archives (#576 M1b) */
+"The archive is damaged." = "The archive is damaged.";
+"The archive unpacks to more than subtitles need." = "The archive unpacks to more than subtitles need.";
+"The archive holds too many files." = "The archive holds too many files.";
+"The archive has a file outside its own folder." = "The archive has a file outside its own folder.";
+"The archive holds only other archives." = "The archive holds only other archives.";
+"The archive is protected by a password." = "The archive is protected by a password.";
+"The archive uses a kind of ZIP that isn't supported." = "The archive uses a kind of ZIP that isn't supported.";
+"The archive holds no SRT, WebVTT or ASS files." = "The archive holds no SRT, WebVTT or ASS files.";
+"None of the archive's files is for this episode." = "None of the archive's files is for this episode.";

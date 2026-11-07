@@ -872,7 +872,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             let options = audio.map { option in UIAction(title: option.name, state: option.id == audioChoice ? .on : .off) { _ in chooseAudio(option.id) } }
             items.append(UIMenu(title: L10n.text("Audio"), image: UIImage(systemName: "speaker.wave.2"), children: options))
         }
-        if let external, !external.entries.isEmpty || external.hasSources { items.append(Self.subtitleFilesMenu(external)) }
+        // Always there (but for live): adding a file by its address starts here (#576).
+        if let external, !live { items.append(Self.subtitleFilesMenu(external, presenter: controller)) }
         let skipSource = skipSource
         let skips = skip.map { [UIAction(title: $0.kind == .intro ? L10n.text("Skip Intro") : L10n.text("Skip Outro"), image: UIImage(systemName: "forward.fill")) { _ in skipSource() }] } ?? []
         if controller.contextualActions.map(\.title) != skips.map(\.title) { controller.contextualActions = skips }
@@ -932,9 +933,9 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     }
     static func dismantleUIViewController(_ controller: AVPlayerViewController, coordinator: Coordinator) { coordinator.criteria?.reset() }
 
-    /// Off and the files, then the chosen one's timing, frame rate and encoding. A file is added on the TV by the
-    /// source (a drive's folder); there is no file panel here.
-    private static func subtitleFilesMenu(_ external: ExternalSubtitles) -> UIMenu {
+    /// Off and the files, then the chosen one's timing, frame rate and encoding. A file comes from the source (a drive's
+    /// folder), a subtitle source, or an address typed with the remote or an iPhone's keyboard; there is no file panel here.
+    private static func subtitleFilesMenu(_ external: ExternalSubtitles, presenter: UIViewController) -> UIMenu {
         var files: [UIMenuElement] = [UIAction(title: L10n.text("Off"), state: external.selected == nil ? .on : .off) { _ in external.select(nil) }]
         for entry in external.entries {
             switch entry.state {
@@ -948,6 +949,9 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         }
         var children: [UIMenuElement] = [UIMenu(options: .displayInline, children: files)]
         if external.hasSources || external.onlineState != .idle { children.append(onlineMenu(external)) }
+        children.append(UIAction(title: L10n.text("Add Subtitles from Address…"), image: UIImage(systemName: "link")) { [weak presenter] _ in
+            if let presenter { askAddress(external, from: presenter) }
+        })
         if let document = external.document {
             let timing = external.timing
             let shift = { (seconds: Double) in external.setTiming(SubtitleTiming(delay: timing.delay + seconds, scale: timing.scale)) }
@@ -971,6 +975,47 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             }
         }
         return UIMenu(title: L10n.text("Subtitle Files"), image: UIImage(systemName: external.selected == nil ? "captions.bubble" : "captions.bubble.fill"), children: children)
+    }
+
+    /// Asks for a subtitle file's address (an SRT, WebVTT or ASS file, or a ZIP archive). The text field takes the
+    /// remote's keyboard, dictation, or a nearby iPhone's keyboard, which the system offers by itself.
+    private static func askAddress(_ external: ExternalSubtitles, from controller: UIViewController) {
+        let alert = UIAlertController(title: L10n.text("Add Subtitles from Address"),
+                                      message: L10n.text("An SRT, WebVTT or ASS file, or a ZIP archive of them, up to 8 MB."), preferredStyle: .alert)
+        alert.addTextField { field in
+            field.placeholder = "https://…"
+            field.keyboardType = .URL
+            field.autocapitalizationType = .none
+            field.autocorrectionType = .no
+            field.accessibilityIdentifier = "subtitles.address"
+        }
+        alert.addAction(UIAlertAction(title: L10n.text("Cancel"), style: .cancel))
+        alert.addAction(UIAlertAction(title: L10n.text("Add"), style: .default) { [weak alert, weak controller] _ in
+            external.add(address: alert?.textFields?.first?.text ?? "")
+            // An address that isn't one is said at once; a download that fails says why in the menu.
+            guard let failure = external.importFailure, let controller else { return }
+            external.importFailure = nil
+            let notice = UIAlertController(title: L10n.text("Subtitles Not Added"), message: failure, preferredStyle: .alert)
+            notice.addAction(UIAlertAction(title: L10n.text("OK"), style: .cancel))
+            present(notice, over: controller)
+        })
+        present(alert, over: controller)
+    }
+
+    /// Presents `alert` over the player once nothing else is on top of it. A transport-bar menu is still presented
+    /// while the action chosen in it runs (and an alert while its button's handler runs), and UIKit refuses a second
+    /// presentation then ("already presenting"), so this waits for it to go, up to three seconds.
+    private static func present(_ alert: UIViewController, over controller: UIViewController, tries: Int = 12) {
+        var top = controller.view.window?.rootViewController ?? controller
+        while let next = top.presentedViewController { top = next }
+        if controller.view.isDescendant(of: top.view) || tries == 0 {
+            top.present(alert, animated: true)
+            return
+        }
+        Task { @MainActor [weak controller] in
+            try? await Task.sleep(for: .milliseconds(250))
+            if let controller { present(alert, over: controller, tries: tries - 1) }
+        }
     }
 
     /// Subtitle sources (#576 M2): Search Online, then the results best first as they come in. The search uses the
@@ -1457,6 +1502,10 @@ extension Store {
 /// Shared setup leaves the native AVKit controls and Bilibili resolution intact.
 @MainActor private func startCatalogPlayback(_ session: PlaybackSession, channel: Channel, store: Store) {
     session.history = store.playbackHistory
+    // The video page's TMDB match names the video for subtitle sources (#576 M2).
+    session.externalSubtitles.tmdbKey = { [weak store] channel in
+        store?.catalog(for: channel).map { TMDBMatchStore.key(source: $0.client.site.key, video: $0.video.id) }
+    }
     session.skipDefaults = store.playbackDefaults
     session.catalogDanmaku.enabled = UserDefaults.standard.object(forKey: DanmakuPreference.key) == nil
         || UserDefaults.standard.bool(forKey: DanmakuPreference.key)

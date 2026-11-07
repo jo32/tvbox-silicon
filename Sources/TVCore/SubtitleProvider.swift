@@ -105,11 +105,38 @@ public struct SubtitleHint: Codable, Hashable, Sendable {
     public var fileName: String?
     /// The viewer's languages, most wanted first (BCP-47: `zh-Hans`, `en`).
     public var languages: [String]
+    /// OpenSubtitles' hash of the playing file (`SubtitleFileHash`), 16 hex digits, and the file's size in bytes.
+    public var movieHash: String?
+    public var fileSize: Int64?
 
     public init(title: String, year: Int? = nil, season: Int? = nil, episode: Int? = nil, imdbID: String? = nil, tmdbID: Int? = nil,
-                fileName: String? = nil, languages: [String] = SubtitleHint.preferredLanguages()) {
+                fileName: String? = nil, languages: [String] = SubtitleHint.preferredLanguages(), movieHash: String? = nil, fileSize: Int64? = nil) {
         self.title = title; self.year = year; self.season = season; self.episode = episode; self.imdbID = imdbID; self.tmdbID = tmdbID
-        self.fileName = fileName; self.languages = languages
+        self.fileName = fileName; self.languages = languages; self.movieHash = movieHash; self.fileSize = fileSize
+    }
+
+    /// The hint with the catalog's TMDB match (#576 M2): its id, and for a series the season (and episode offset)
+    /// TMDB numbers the episode by. A match TMDB numbers across seasons (`absolute`) keeps the source's numbers.
+    public func matched(_ match: TMDBMatch.Match) -> SubtitleHint {
+        var hint = self
+        hint.tmdbID = match.id
+        switch match.mediaType {
+        case .movie:
+            hint.season = nil; hint.episode = nil
+        case .tv:
+            guard match.numbering == .season, let season = match.season, season > 0 else { break }
+            hint.season = season
+            if let episode = hint.episode, let offset = match.offset { hint.episode = episode + offset }
+        }
+        return hint
+    }
+
+    /// The hint with the playing file's hash.
+    public func hashed(_ file: SubtitleFileHash?) -> SubtitleHint {
+        guard let file else { return self }
+        var hint = self
+        hint.movieHash = file.hash; hint.fileSize = file.size
+        return hint
     }
 
     /// A hint from what the catalog calls a video and its episode (`庆余年 第二季`, `第05集`).

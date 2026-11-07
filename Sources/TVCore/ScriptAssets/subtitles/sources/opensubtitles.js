@@ -69,6 +69,8 @@ const subtitleSource = {
         else query.query = String(hint.title || '').toLowerCase();
         if (episode) { query.episode_number = hint.episode; query.season_number = hint.season ?? 1; }
         else if (hint.year) query.year = hint.year;
+        // The playing file's hash: results made for this exact release come back with moviehash_match.
+        if (hint.movieHash && /^[0-9a-f]{16}$/.test(hint.movieHash)) query.moviehash = hint.movieHash;
         const session = await signIn(context);
         const response = await $http.get((session?.base || api) + '/subtitles', { query: sorted(query), headers: headers(context, session?.token) });
         if (response.status === 401 && session) { account = null; throw new SubtitleError('authExpired', 'OpenSubtitles signed out'); }

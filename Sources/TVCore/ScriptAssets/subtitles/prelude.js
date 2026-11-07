@@ -9,7 +9,7 @@
 //         async resolve(candidate, context) { return { url, headers, name, format, expires } or { text, name, format } },
 //     };
 //
-// `hint` is { title, year, season, episode, imdbID, tmdbID, fileName, languages }; `context` is { credentials, languages }.
+// `hint` is { title, year, season, episode, imdbID, tmdbID, fileName, languages, movieHash, fileSize }; `context` is { credentials, languages }.
 // Requests go through `$http` and reach only the manifest's domains. Failures are `throw new SubtitleError(kind, message)`
 // with kind one of the `kinds` below. Docs/subtitles.md has the whole contract.
 const host = globalThis.__host;

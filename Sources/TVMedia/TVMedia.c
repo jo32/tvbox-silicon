@@ -1449,9 +1449,11 @@ static int route(TVMCursor *cursor, AVPacket *packet) {
     int status = 0;
     if (!cursor->active[index] || track->type == AVMEDIA_TYPE_SUBTITLE) {
         if (past) return push_pending(cursor, packet);
-        if (cursor->active[index] && time != AV_NOPTS_VALUE && time >= cursor->start - TOLERANCE && cursor->cue) {
+        if (cursor->active[index] && time != AV_NOPTS_VALUE && cursor->cue) {
             int64_t length = packet->duration > 0 ? av_rescale_q(packet->duration, track->in->time_base, AV_TIME_BASE_Q) : -1;
-            cursor->cue(cursor->context, index, time, length >= 0 ? time + length : -1, packet->data, packet->size);
+            // A line read before the segment's start that is still on screen at it belongs to this segment too (#576).
+            if (time >= cursor->start - TOLERANCE || (length > 0 && time + length > cursor->start))
+                cursor->cue(cursor->context, index, time, length >= 0 ? time + length : -1, packet->data, packet->size);
         }
         // An inactive converted video track restarts at a keyframe when it is wanted again.
         if (!cursor->active[index]) track->started = 0;

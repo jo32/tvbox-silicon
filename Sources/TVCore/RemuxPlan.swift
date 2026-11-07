@@ -103,6 +103,17 @@ struct RemuxPlan: Sendable, Equatable {
         }
     }
 
+    /// Cues read so far joined by more: the same packet read twice (a segment made again, a look back before a seek)
+    /// counts once. In order of start.
+    static func merged(_ known: [Cue], _ more: [Cue]) -> [Cue] {
+        guard !more.isEmpty else { return known }
+        struct Key: Hashable { let start: Int64, text: String }
+        var seen = Set(known.map { Key(start: $0.start, text: $0.text) })
+        var all = known
+        for cue in more where seen.insert(Key(start: cue.start, text: cue.text)).inserted { all.append(cue) }
+        return all.sorted { $0.start < $1.start }
+    }
+
     static func make(streams: [Stream], keyframes: [Int64], start: Int64, duration: Int64, size: Int64, device: Device) -> RemuxPlan? {
         guard duration > 0, let video = streams.first(where: { $0.kind == .video && $0.width > 0 && $0.height > 0 }) else { return nil }
         var tracks = [videoTrack(video, device: device)]
