@@ -256,6 +256,19 @@ public class NativeProbe extends AbstractJni {
         return createStandardSession(runtime, input, bridge, accounts);
     }
 
+    /**
+     * What FongMi's new spider SDK gives every spider before init (JarLoader.newSpider): its network owner,
+     * with the web view's cookies, and its local store. Classic spiders don't use them.
+     */
+    public static void attachSdk(com.github.catvod.crawler.Spider spider) {
+        if (spider.siteKey == null || spider.siteKey.isEmpty()) return;
+        spider.net = new com.github.catvod.net.Net(new com.github.catvod.net.Net.Cookies() {
+            @Override public String getCookie(String url) { return android.webkit.CookieManager.getInstance().getCookie(url); }
+            @Override public boolean setCookie(String url, String cookie) { android.webkit.CookieManager.getInstance().setCookie(url, cookie); return true; }
+        }, spider.siteKey);
+        spider.local = new com.github.catvod.utils.Local(spider.siteKey);
+    }
+
     /** Loader, context and Init state that Android shares between every spider of one archive. */
     public record StandardRuntime(PluginClassLoader loader, android.app.Application context, Throwable initializationWarning) {}
 
@@ -264,6 +277,13 @@ public class NativeProbe extends AbstractJni {
         AndroidNativeRuntime.configure(loader, jar, cache);
         var context = new android.app.Application(profile, loader);
         com.github.catvod.spider.Init.application = context;
+        // FongMi's new spider SDK reaches the app through com.github.catvod.Runtime.
+        com.github.catvod.Runtime.set(context);
+        com.github.catvod.Runtime.setToast(PluginNotices::add);
+        com.github.catvod.Runtime.setActivity(PluginWindows::activity);
+        // FongMi's JSON dialogs (Spider.dialog) have no counterpart in the app yet.
+        com.github.catvod.Runtime.setDialog((options, callback) -> com.github.catvod.utils.Task.failedFuture(
+            new UnsupportedOperationException("This app can't show the plugin's own dialogs yet. Sign in to the drive in the app's settings instead.")));
         Throwable initializationWarning = null;
         try {
             Class<?> init = loader.loadClass("com.github.catvod.spider.Init");
@@ -286,13 +306,17 @@ public class NativeProbe extends AbstractJni {
         if (!api.startsWith("csp_")) throw new IllegalArgumentException("Expected a csp_ plugin class");
         CloudDriveBridge.seedDriveCookies(accounts, context.getFilesDir().toPath());
         CloudDriveBridge.seedWexCookies(accounts, context);
+        CloudDriveBridge.seedFongMiPanCookies(accounts, context);
         CloudDriveBridge.useWexJavaThreads(context);
         bridge.appAccounts(accounts, context);
         var spider = (com.github.catvod.crawler.Spider)loader.loadClass("com.github.catvod.spider." + api.substring(4)).getDeclaredConstructor().newInstance();
         spider.siteKey = input.optString("key");
+        attachSdk(spider);
         spider.init(context, bridge.cloudExtension(input.optString("ext"), accounts, spider.getClass()));
         bridge.setDriveProxy(loader);
         bridge.setProxy(params -> {
+            // FongMi's new SDK: Spider.proxyUrl() addresses the source's own proxy with do=jar.
+            if ("jar".equals(params.get("do"))) return spider.proxy(params);
             try { return (Object[])loader.loadClass("com.github.catvod.spider.Proxy").getMethod("proxy", java.util.Map.class).invoke(null, params); }
             catch (ClassNotFoundException | NoSuchMethodException absent) { return spider.proxy(params); }
         });

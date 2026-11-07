@@ -118,7 +118,10 @@ public final class Dex2jar {
                             parentsOfType1.add(type1);
                         }
 
-                        // Then we see whether type2 or any of its parents match
+                        // Then we see whether type2 or any of its parents match. type2 itself first: it is
+                        // the answer when it is an ancestor of type1 (upstream skipped it and merged a class
+                        // with its superclass to Object, which the verifier then rejected).
+                        if (parentsOfType1.contains(type2)) return type2;
                         while (parentsByName.containsKey(type2)) {
                             type2 = parentsByName.get(type2);
                             if (parentsOfType1.contains(type2)) return type2;

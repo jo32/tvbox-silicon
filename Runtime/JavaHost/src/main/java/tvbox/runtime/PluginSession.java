@@ -144,12 +144,12 @@ public final class PluginSession {
 
     /** Releases this source only; a shared plugin runtime and its native guard stay loaded. */
     public void closeSource() throws Exception {
-        try { spider.destroy(); }
+        try { spider.destroy(); spider.closeHostResources(); }
         finally { if (bridge != null) bridge.close(); }
     }
 
     public void close() throws Exception {
-        try { spider.destroy(); }
+        try { spider.destroy(); spider.closeHostResources(); }
         finally {
             android.os.Looper.shutdown();
             if (bridge != null) bridge.close();
