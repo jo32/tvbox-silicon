@@ -290,9 +290,11 @@ struct TMDBBadge: View {
 enum TMDBMetrics {
     #if os(tvOS)
     static let candidate: CGFloat = 200, castPhoto: CGFloat = 110, spacing: CGFloat = 28, badge: CGFloat = 20, focusRoom: CGFloat = 24
+    static let chipSpacing: CGFloat = 20
     static let episodeTile: CGFloat = 340
     #else
     static let candidate: CGFloat = 92, castPhoto: CGFloat = 64, spacing: CGFloat = 12, badge: CGFloat = 12, focusRoom: CGFloat = 0
+    static let chipSpacing: CGFloat = 8
     static let episodeTile: CGFloat = 200
     #endif
 }
@@ -310,20 +312,21 @@ extension View {
 
 // MARK: Matched
 
-/// Who's in it: round photos with the character under each name. A person TMDB knows opens their credits, as on
-/// Discover's title page (#505).
-struct TMDBCastRow: View {
-    let cast: [TMDBMatch.Person]
+/// Who's in it, or who made it: round photos with the character or job under each name. A person TMDB knows opens
+/// their credits, as on Discover's title page (#505).
+struct TMDBPeopleRow: View {
+    let title: String
+    let people: [TMDBMatch.Person]
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(L10n.text("Cast")).font(.headline)
+            Text(title).font(.headline)
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: TMDBMetrics.spacing) {
-                    ForEach(Array(cast.enumerated()), id: \.offset) { _, person in
+                    ForEach(Array(people.enumerated()), id: \.offset) { _, person in
                         if let id = person.id {
                             RouteLink { DiscoverPersonView(id: id, name: person.name, profile: person.profile) } label: { card(person) }
                                 .castButton()
-                                .accessibilityIdentifier("tmdb.cast.\(id)")
+                                .accessibilityIdentifier("tmdb.person.\(id)")
                         } else {
                             card(person)
                         }
@@ -371,6 +374,93 @@ private extension View {
     }
 }
 
+/// The work's genres; each opens Discover's list of that genre, as on Discover's title page.
+struct TMDBGenreRow: View {
+    let details: TMDBMatch.Details
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(L10n.text("Genres")).font(.headline)
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: TMDBMetrics.chipSpacing) {
+                    if let genres = details.genreItems, !genres.isEmpty {
+                        ForEach(genres) { genre in
+                            RouteLink { DiscoverBrowseView(title: genre.name, filter: .genre(genre.id, type: details.mediaType)) } label: { chip(genre.name) }
+                                #if os(tvOS)
+                                .buttonStyle(DiscoverTVChipStyle(active: false))
+                                #else
+                                .buttonStyle(.plain)
+                                #endif
+                                .accessibilityIdentifier("tmdb.genre.\(genre.id)")
+                        }
+                    } else {
+                        // Details saved before genres had ids: names only.
+                        ForEach(details.genres, id: \.self) { name in
+                            #if os(tvOS)
+                            Text(name).font(.system(size: 26, weight: .medium)).padding(.horizontal, 30).frame(height: 62)
+                                .background(.white.opacity(0.14), in: Capsule())
+                            #else
+                            chip(name)
+                            #endif
+                        }
+                    }
+                }
+                .padding(.vertical, TMDBMetrics.focusRoom)
+            }
+            .scrollIndicators(.never)
+            .scrollClipDisabled()
+        }
+    }
+
+    @ViewBuilder private func chip(_ name: String) -> some View {
+        #if os(tvOS)
+        Text(name)
+        #else
+        Text(name).font(.subheadline.weight(.medium)).padding(.horizontal, 16).padding(.vertical, 8)
+            .background(.primary.opacity(0.08), in: Capsule())
+        #endif
+    }
+}
+
+#if !os(tvOS)
+/// Who made or aired it; each opens Discover's list of that studio's or network's titles, as on Discover's title page.
+struct TMDBStudioRow: View {
+    let studios: [TMDBMatch.Studio]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(L10n.text("Studios & Networks")).font(.headline)
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: TMDBMetrics.spacing) {
+                    ForEach(Array(studios.enumerated()), id: \.offset) { _, studio in
+                        if let id = studio.id {
+                            RouteLink {
+                                DiscoverBrowseView(title: studio.name, filter: .studio(id, type: studio.kind == "network" ? .tv : .movie), logo: studio.logo)
+                            } label: { card(studio) }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("tmdb.studio.\(id)")
+                        } else {
+                            card(studio)
+                        }
+                    }
+                }
+            }
+            .scrollIndicators(.never)
+        }
+    }
+
+    private func card(_ studio: TMDBMatch.Studio) -> some View {
+        VStack(spacing: 8) {
+            AsyncImage(url: studio.logo) { phase in
+                if let image = phase.image { image.resizable().scaledToFit() } else { Image(systemName: "film.stack").foregroundStyle(.secondary) }
+            }.frame(width: 88, height: 36)
+            Text(studio.name).font(.caption2).lineLimit(1)
+        }
+        .padding(12).frame(width: 124)
+        .background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+}
+#endif
+
 /// TMDB's "you may like". A title here isn't from any source, so choosing one searches the viewer's sources for
 /// it, as an index source's titles do.
 struct TMDBRelatedRow: View {
@@ -397,12 +487,14 @@ struct TMDBRelatedRow: View {
 /// The facts that don't fit in a line: who made it, where, when, its original name.
 struct TMDBInfoGrid: View {
     let details: TMDBMatch.Details
+    /// The studios row above already names them.
+    var studiosShown = false
     private var rows: [(String, String)] {
         var rows: [(String, String)] = []
         if !details.originalName.isEmpty, details.originalName != details.name { rows.append((L10n.text("Original Title"), details.originalName)) }
         let makers = details.crew.map(\.name).joined(separator: "、")
         if !makers.isEmpty { rows.append((L10n.text(details.mediaType == .tv ? "Created By" : "Directed By"), makers)) }
-        if !details.networks.isEmpty { rows.append((L10n.text(details.mediaType == .tv ? "Network" : "Studio"), details.networks.joined(separator: "、"))) }
+        if !studiosShown, !details.networks.isEmpty { rows.append((L10n.text(details.mediaType == .tv ? "Network" : "Studio"), details.networks.joined(separator: "、"))) }
         if let date = details.date { rows.append((L10n.text(details.mediaType == .tv ? "First Aired" : "Released"), date)) }
         let countries = details.countries.compactMap { Locale.current.localizedString(forRegionCode: $0) }
         if !countries.isEmpty { rows.append((L10n.text("Country or Region"), countries.joined(separator: "、"))) }
