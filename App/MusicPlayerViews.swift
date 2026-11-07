@@ -46,7 +46,7 @@ struct MusicActivityMark: View {
     @Environment(Store.self) private var store
     var body: some View {
         Group {
-            if store.music.busy { ProgressView().controlSize(.small) }
+            if store.music.busy { ProgressView().appControlSize(.small) }
             else if store.music.phase == .playing { Image(systemName: "waveform").foregroundStyle(Brand.accent).symbolEffect(.variableColor.iterative) }
             else if store.music.failure != nil { Image(systemName: "exclamationmark.circle").foregroundStyle(Brand.amber) }
             else { Image(systemName: "speaker.wave.2.fill").foregroundStyle(.secondary) }
@@ -754,7 +754,7 @@ struct MusicLXSourcesSection: View {
                     .textInputAutocapitalization(.never).keyboardType(.URL)
                     #endif
                     .onSubmit(add)
-                if model.busy { ProgressView().controlSize(.small) }
+                if model.busy { ProgressView().appControlSize(.small) }
                 else { Button(L10n.text("Add"), action: add).disabled(address.trimmingCharacters(in: .whitespaces).isEmpty) }
             }
             Button(L10n.text("Add from File…")) { importing = true }.disabled(model.busy)
@@ -904,7 +904,7 @@ struct MusicExtensionsSection: View {
                     .textInputAutocapitalization(.never).keyboardType(.URL)
                     #endif
                     .onSubmit(add)
-                if model.busy { ProgressView().controlSize(.small) }
+                if model.busy { ProgressView().appControlSize(.small) }
                 else { Button(L10n.text("Add"), action: add).disabled(address.trimmingCharacters(in: .whitespaces).isEmpty) }
             }
             Button(L10n.text("Add from File…")) { importing = true }.disabled(model.busy)

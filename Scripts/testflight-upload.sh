@@ -89,6 +89,8 @@ for platform in ${TF_PLATFORMS:-iOS tvOS}; do
   # project.yml keeps them. No grep -q: with pipefail, nm would die of SIGPIPE when grep quit early.
   nm -gU "$archive/Products/Applications/$scheme.app/$scheme" | grep ' _JIMAGE_Open$' >/dev/null ||
     { echo "$scheme does not export JIMAGE_Open: its global symbols were stripped" >&2; exit 1; }
+  # tvOS 17 Apple TVs quit at launch when a required SwiftUI symbol is missing (#634).
+  if [ "$platform" = tvOS ]; then Scripts/check-tvos17-symbols.sh "$archive/Products/Applications/$scheme.app/$scheme"; fi
 
   echo "== $platform: export"
   cat >"$OUT/$platform-export.plist" <<EOF

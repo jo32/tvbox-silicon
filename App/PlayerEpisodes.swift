@@ -205,7 +205,7 @@ private struct EpisodeCell: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
         HStack(spacing: 6) {
-            if loading { ProgressView().controlSize(.small) }
+            if loading { ProgressView().appControlSize(.small) }
             VStack(alignment: compact ? .center : .leading, spacing: 1) {
                 Text(title).lineLimit(compact || detail != nil ? 1 : 2).multilineTextAlignment(compact ? .center : .leading)
                 if let detail { EpisodeFileDetail(text: detail) }

@@ -121,7 +121,7 @@ struct CloudLoginView: View {
                     Text(provider.url.host ?? "").font(.caption).foregroundStyle(.secondary)
                 }
                 if loading {
-                    ProgressView().controlSize(.small).padding(.leading, 4)
+                    ProgressView().appControlSize(.small).padding(.leading, 4)
                     ElapsedTime().font(.caption)
                 }
                 Spacer()

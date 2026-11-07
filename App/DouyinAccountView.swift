@@ -187,7 +187,7 @@ struct DouyinLoginView: View {
                     Text(L10n.text("Sign In to Douyin")).font(.headline)
                     Text(L10n.text("Use Douyin's Log In button on the page.")).font(.caption).foregroundStyle(.secondary)
                 }
-                if loading { ProgressView().controlSize(.small).padding(.leading, 4) }
+                if loading { ProgressView().appControlSize(.small).padding(.leading, 4) }
                 Spacer()
                 Button { error = nil; loading = true; webView.load(URLRequest(url: Self.page)) } label: { Image(systemName: "arrow.clockwise") }
                     .settingsButton().accessibilityLabel(L10n.text("Retry"))

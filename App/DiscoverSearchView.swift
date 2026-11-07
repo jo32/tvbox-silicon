@@ -508,7 +508,7 @@ struct DiscoverMacSearchView: View {
                 }
                 if all, group.hasMore {
                     Button { Task { await model.more(kind, request: request) } } label: {
-                        Group { if group.loadingMore { ProgressView().controlSize(.small) } else { Text(L10n.text(group.failedMore ? "Try Again" : "Load More")) } }
+                        Group { if group.loadingMore { ProgressView().appControlSize(.small) } else { Text(L10n.text(group.failedMore ? "Try Again" : "Load More")) } }
                             .frame(maxWidth: .infinity).frame(height: 36)
                     }.disabled(group.loadingMore).accessibilityIdentifier("discover.search.more.\(kind.rawValue)")
                 }

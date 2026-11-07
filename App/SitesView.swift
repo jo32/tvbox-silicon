@@ -1027,7 +1027,7 @@ struct SiteView: View {
             }
             .frame(maxWidth: .infinity).padding(.vertical, 16)
         } else if browser.loadingMore {
-            ProgressView().controlSize(.large)
+            ProgressView().appControlSize(.large)
                 .frame(maxWidth: .infinity).padding(.vertical, 24)
                 .accessibilityLabel(L10n.text("Loading…"))
         } else if browser.hasMore {
@@ -2218,7 +2218,7 @@ struct VideoDetailView: View {
             // so the hero offers them too; they hold focus, and Back leaves the page again.
             HStack(spacing: 10) {
                 Button { startRequest { await loadDetail() } } label: { Label(L10n.text("Retry"), systemImage: "arrow.clockwise") }
-                    .controlButton(prominent: true).tint(Brand.accent).controlSize(.large)
+                    .controlButton(prominent: true).tint(Brand.accent).appControlSize(.large)
                     .disabled(busy)
                     .focused($playFocused)
                     .accessibilityIdentifier("detail.retry")
@@ -2230,19 +2230,19 @@ struct VideoDetailView: View {
     #if os(tvOS)
     private func goBackButton(prominent: Bool) -> some View {
         Button { dismiss() } label: { Label(L10n.text("Go back"), systemImage: "chevron.backward") }
-            .controlButton(prominent: prominent).controlSize(.large)
+            .controlButton(prominent: prominent).appControlSize(.large)
             .accessibilityIdentifier("detail.goBack")
     }
     #endif
     private func playButton(_ episode: Episode, continuation: Bool = false) -> some View {
         Button { startRequest { await play(episode) } } label: {
             HStack(spacing: 8) {
-                if loadingEpisode == episode.id { ProgressView().controlSize(.small) } else { Image(systemName: "play.fill") }
+                if loadingEpisode == episode.id { ProgressView().appControlSize(.small) } else { Image(systemName: "play.fill") }
                 Text(L10n.text(continuation ? "Continue" : "Play"))
             }
             .font(.headline).lineLimit(1).fixedSize().padding(.horizontal, 8)
         }
-        .controlButton(prominent: true).tint(Brand.accent).controlSize(.large)
+        .controlButton(prominent: true).tint(Brand.accent).appControlSize(.large)
         .focused($playFocused)
     }
     private func downloadButton(iconOnly: Bool) -> some View {
@@ -2251,7 +2251,7 @@ struct VideoDetailView: View {
                 .labelStyle(DownloadLabelStyle(iconOnly: iconOnly))
                 .font(.headline).lineLimit(1).fixedSize()
         }
-        .controlButton().controlSize(.large).accessibilityLabel(L10n.text("Download"))
+        .controlButton().appControlSize(.large).accessibilityLabel(L10n.text("Download"))
     }
     /// Icon-only, beside Play and Download. An empty heart keeps the control color; a saved one is rose.
     /// Set as text in their font, so the button is as tall as theirs: a bare image made a smaller one on Apple TV.
@@ -2268,7 +2268,7 @@ struct VideoDetailView: View {
             }
             .font(.headline).lineLimit(1).fixedSize()
         }
-        .controlButton().controlSize(.large)
+        .controlButton().appControlSize(.large)
         .accessibilityLabel(title).help(title)
         .accessibilityIdentifier("detail.favorite")
     }
@@ -2914,7 +2914,7 @@ struct VideoDetailView: View {
                     .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge().padding(4) } }
             } else {
             HStack(spacing: 6) {
-                if loadingEpisode == episode.id { ProgressView().controlSize(.small) }
+                if loadingEpisode == episode.id { ProgressView().appControlSize(.small) }
                 VStack(alignment: compact ? .center : .leading, spacing: 1) {
                     // With the small line under it, a long name keeps to one line so the card keeps its height.
                     Text(episodeTitle(episode)).lineLimit(compact || detail != nil ? 1 : 2)
@@ -3122,7 +3122,7 @@ struct EpisodeRow: View {
         let button = Button(action: action) {
             HStack(spacing: 10) {
                 ZStack {
-                    if loading { ProgressView().controlSize(.mini) }
+                    if loading { ProgressView().appControlSize(.mini) }
                     else { Image(systemName: "play.fill").font(.system(size: Self.metrics.icon)).foregroundStyle(hovering ? .primary : .tertiary) }
                 }
                 .frame(width: Self.metrics.icon + 6)

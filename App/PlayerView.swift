@@ -394,7 +394,7 @@ struct PlaybackView: View {
                     Button { startCatalogPlayback(session, channel: channel, store: store) } label: {
                         Label(L10n.text("Try Again"), systemImage: "arrow.clockwise")
                     }
-                    .controlButton(prominent: true).tint(Brand.accent).controlSize(.small).padding(.top, 2)
+                    .controlButton(prominent: true).tint(Brand.accent).appControlSize(.small).padding(.top, 2)
                 }
                 .foregroundStyle(.white).padding(.horizontal, 24).padding(.top, 36)
                 .environment(\.colorScheme, .dark)
@@ -421,7 +421,7 @@ struct PlaybackView: View {
                             Button { exit() } label: { Label(L10n.text("Close"), systemImage: "xmark") }.controlButton()
                         }
                     }
-                    .controlSize(.large).padding(.top, 30)
+                    .appControlSize(.large).padding(.top, 30)
                 }
                 .foregroundStyle(.white)
                 .padding(32)
@@ -436,7 +436,7 @@ struct PlaybackView: View {
                         Button(L10n.text("Retry")) { startCatalogPlayback(session, channel: channel, store: store) }.controlButton(prominent: true).tint(Brand.accent)
                         Button(L10n.text("Close")) { dismiss() }.controlButton()
                     }
-                }.controlSize(.large)
+                }.appControlSize(.large)
             }
             .padding(30).glassPanel(cornerRadius: 30).padding(30)
             #endif
