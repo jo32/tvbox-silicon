@@ -897,6 +897,8 @@ struct TMDBEpisodeTile: View {
     /// The show's pictures (`TMDBLookup.episodeBackdrops`), for an episode without a still: taken in turn by episode
     /// number, so a show with several doesn't repeat one picture down the row.
     var backdrops: [URL] = []
+    /// One line under the picture, the name then TMDB's title: the player's compact Episodes tab.
+    var oneLine = false
     private var backdrop: URL? {
         guard !backdrops.isEmpty else { return nil }
         let number = max(info?.number ?? TMDBMatch.episodeNumber(name) ?? 1, 1)
@@ -925,12 +927,19 @@ struct TMDBEpisodeTile: View {
                 }
                 .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .coverOverlay { if current { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Brand.accent, lineWidth: 2) } }
-            Text(name).font(.subheadline.weight(current ? .bold : .semibold)).lineLimit(1)
-                .foregroundStyle(current ? Brand.accent : .primary).cardCaption()
-            // Always a second line, so tiles in a row stay one height.
-            let caption = [detail, info.map(\.name).flatMap { $0.isEmpty || $0 == name || Self.isPlaceholder($0) ? nil : $0 }].compactMap { $0 }
-            Text(caption.isEmpty ? " " : caption.joined(separator: " · "))
-                .font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
+            let episodeTitle = info.map(\.name).flatMap { $0.isEmpty || $0 == name || Self.isPlaceholder($0) ? nil : $0 }
+            if oneLine {
+                Text(([name] + [episodeTitle].compactMap { $0 }).joined(separator: " · "))
+                    .font(.caption.weight(current ? .bold : .medium)).lineLimit(1)
+                    .foregroundStyle(current ? Brand.accent : .primary).cardCaption()
+            } else {
+                Text(name).font(.subheadline.weight(current ? .bold : .semibold)).lineLimit(1)
+                    .foregroundStyle(current ? Brand.accent : .primary).cardCaption()
+                // Always a second line, so tiles in a row stay one height.
+                let caption = [detail, episodeTitle].compactMap { $0 }
+                Text(caption.isEmpty ? " " : caption.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
+            }
         }
         .frame(width: width, alignment: .leading)
         .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)

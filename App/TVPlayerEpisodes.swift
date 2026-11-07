@@ -29,7 +29,9 @@ struct TVPlayerEpisodesPanel: View {
                 }
             } else { Color.clear }
         }
-        .background(.black.opacity(0.55))
+        // A Liquid Glass strip over the picture, as other players show their 选集.
+        .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+        // The row scrolls under the glass's edges, not past them.
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
     }
 
@@ -45,7 +47,8 @@ struct TVPlayerEpisodesPanel: View {
         let stills = tmdb.episodes(items)
         let backdrops = tmdb.episodeBackdrops.isEmpty ? [catalog.video.poster].compactMap { $0 } : tmdb.episodeBackdrops
         return VStack(alignment: .leading, spacing: 14) {
-            // The title, then the lines (线路) beside it: AVKit keeps the panel too short for a row of its own.
+            // The lines (线路), when there are several, beside the title: the tab is a compact strip, as in other players.
+            if flags.count > 1 || store.episodeError != nil {
             HStack(alignment: .center, spacing: 28) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text(catalog.video.name).font(.headline).lineLimit(1)
@@ -80,10 +83,11 @@ struct TVPlayerEpisodesPanel: View {
                     }
                 }
             }
-            .padding(.leading, 48)
+            .padding(.leading, 40)
+            }
             ScrollViewReader { proxy in
                 ScrollView(.horizontal) {
-                    LazyHStack(alignment: .top, spacing: 40) {
+                    LazyHStack(alignment: .top, spacing: 30) {
                         ForEach(items) { episode in
                             let isCurrent = episode.id == current?.id
                             Button {
@@ -91,8 +95,8 @@ struct TVPlayerEpisodesPanel: View {
                                 store.selectEpisode(episode, from: playing)
                             } label: {
                                 TMDBEpisodeTile(name: titles[episode.id] ?? episode.name, info: stills[episode.id], detail: catalog.details[episode.id],
-                                                current: isCurrent, loading: store.resolvingEpisode?.id == episode.id, width: 260,
-                                                backdrops: backdrops)
+                                                current: isCurrent, loading: store.resolvingEpisode?.id == episode.id, width: 250,
+                                                backdrops: backdrops, oneLine: true)
                                     // Its whole 16:9 picture: the panel's height otherwise squeezed it to a stamp.
                                     .fixedSize(horizontal: false, vertical: true)
                             }
@@ -103,7 +107,7 @@ struct TVPlayerEpisodesPanel: View {
                             .accessibilityAddTraits(isCurrent ? .isSelected : [])
                         }
                     }
-                    .padding(.horizontal, 48).padding(.top, 12).padding(.bottom, 2)
+                    .padding(.horizontal, 40).padding(.top, 10).padding(.bottom, 2)
                 }
                 .scrollClipDisabled()
                 .focusSection()
@@ -113,7 +117,7 @@ struct TVPlayerEpisodesPanel: View {
                 }
             }
         }
-        .padding(.top, 22).padding(.bottom, 6)
+        .padding(.top, 16).padding(.bottom, 8)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .fixedSize(horizontal: false, vertical: true)
         .defaultFocus($focus, current.map { .episode($0.id) })
