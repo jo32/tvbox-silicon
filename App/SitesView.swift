@@ -894,6 +894,8 @@ struct SiteView: View {
                 .focusable()
                 .onExitCommand { dismiss() }
                 #endif
+            } else if showsBilibiliTVSpace {
+                bilibiliTVSpace
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 20) {
@@ -906,11 +908,25 @@ struct SiteView: View {
                                 .accessibilityIdentifier("site.search.submit")
                         }
                         #endif
-                        if site.isBilibili && !BilibiliAccount.load().signedIn { BilibiliSignInBanner() }
+                        if site.isBilibili && !isBilibiliSpace && !BilibiliAccount.load().signedIn { BilibiliSignInBanner() }
+                        // An UP主's space (#256): who they are, Follow, and their uploads by order or their collections.
+                        if site.isBilibili, let folder, let mid = BilibiliAPI.creator(category: folder.id) {
+                            BilibiliSpaceHeader(mid: mid, name: folder.name, client: client,
+                                                category: browser.category.isEmpty ? folder.id : browser.category) { id in
+                                startRequest { await browser.load(.list(category: id, query: "", page: 1), client: client) }
+                            }
+                        }
                         if !browser.categories.isEmpty { categoryBar } else if initialLoading && folder == nil { ChipSkeletonRow() }
                         if browser.query.isEmpty, let current = browser.categories.first(where: { $0.id == browser.category }), !current.filters.isEmpty {
                             CategoryFilterBar(filters: current.filters, choices: browser.filters) { choices in
                                 startRequest { await browser.load(.list(category: current.id, query: "", page: 1, filters: choices), client: client) }
+                            }
+                        }
+                        // The Bilibili source's home (#256): rows of the account's lists, live rooms and popular videos above
+                        // the recommendations.
+                        if site.isBilibili, folder == nil, browser.query.isEmpty, browser.category.isEmpty {
+                            BilibiliShelves(client: client, ready: browser.loaded && !browser.videos.isEmpty) { id in
+                                startRequest { await browser.load(.list(category: id, query: "", page: 1), client: client) }
                             }
                         }
                         if isIndex && !browser.videos.isEmpty {
@@ -932,12 +948,15 @@ struct SiteView: View {
                             .padding(.vertical, browser.videos.isEmpty ? 24 : 8)
                         }
                         if browser.videos.isEmpty && browser.loaded && !browser.busy && browser.error == nil { EmptyResults(symbol: "film", title: L10n.text("No Videos"), message: L10n.text("Try selecting a category or searching.")) }
-                        LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
+                        let landscape = showsBilibiliTiles
+                        LazyVGrid(columns: landscape ? Self.bilibiliColumns : Layout.posterColumns, spacing: Layout.gridRowSpacing) {
                             ForEach(browser.videos) { video in
                                 Group {
                                     // An index source (a ranking or list site) names titles; other sources play them.
                                     if isIndex {
                                         Button { store.searchVideos(video.name) } label: { PosterCard(video: video) }.cardButton()
+                                    } else if landscape {
+                                        RouteLink { CatalogDestination(video: video, client: client) } label: { BilibiliVideoTile(video: video, width: nil) }.cardButton()
                                     } else {
                                         RouteLink { CatalogDestination(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
                                     }
@@ -968,11 +987,13 @@ struct SiteView: View {
         .toolbar {
             // Handed the store: UIKit can size a bar item before SwiftUI gives it the page's environment, and these
             // buttons read Store first thing (a TestFlight crash on iPhone).
-            Group {
-                PinSourceButton(site: site, origin: origin)
-                HideSourceButton(site: site, origin: origin)
+            if !showsBilibiliTVSpace {
+                Group {
+                    PinSourceButton(site: site, origin: origin)
+                    HideSourceButton(site: site, origin: origin)
+                }
+                .environment(store)
             }
-            .environment(store)
         }
         .screenBackdrop()
         .onAppear {
@@ -980,7 +1001,8 @@ struct SiteView: View {
             let login = BilibiliAccount.load().cookie
             if login != bilibiliLogin { bilibiliLogin = login; query = ""; startRequest { await home(); await browser.loadCategories(client: client) } }
         }
-        .screenTitle(folder?.name ?? site.name).task {
+        // An UP主's space names them in its hero; a title over it only repeated it.
+        .screenTitle(isBilibiliSpace ? "" : folder?.name ?? site.name, shown: !showsBilibiliTVSpace).task {
             store.searchModel.suspend()
             if let preview, folder == nil, initialQuery.isEmpty { browser.seed(videos: preview.videos, categories: preview.categories) }
             if canLoad && !browser.loaded {
@@ -1784,6 +1806,12 @@ struct VideoDetailView: View {
     @AppStorage("episodesReversed") private var reversesEpisodes = false
     /// Play takes over focus from the loading placeholder; otherwise nothing is focused once details load.
     @FocusState private var playFocused: Bool
+    #if os(tvOS)
+    /// Apple TV's page: scrolled past the hero (the backdrop frosts), the hero's other buttons, the full synopsis.
+    @State private var tvScrolled = false
+    @FocusState private var tvHeroFocus: TVHeroItem?
+    @State private var showsTVSynopsis = false
+    #endif
     @State private var containerWidth: CGFloat = 0
     /// The cover's width over height once it loads; landscape covers are common (Bilibili, short dramas).
     @State private var artAspect: CGFloat?
@@ -1833,11 +1861,13 @@ struct VideoDetailView: View {
         Group {
             #if os(iOS)
             if watchLayout { watchBody } else { pageBody }
+            #elseif os(tvOS)
+            if showsBilibiliTVPage { bilibiliTVPage } else if showsTVLoadingHero { tvLoadingHero } else { tvDetailPage }
             #else
             pageBody
             #endif
         }
-        .safeAreaInset(edge: .bottom) { if !isWatchPage { loadingCard } }
+        .safeAreaInset(edge: .bottom) { if !isWatchPage && !showsTVLoadingHero { loadingCard } }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
         #if os(macOS)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1845,7 +1875,9 @@ struct VideoDetailView: View {
         #else
         .screenBackdrop()
         #endif
-        .screenTitle(video.name).task {
+        // Apple TV's Bilibili video page sets its title in its hero; a bar over it only repeated it.
+        // Apple TV's pages set their title in their hero; a bar over it only repeated it.
+        .screenTitle(video.name, shown: false).task {
             store.searchModel.suspend()
             #if os(iOS)
             // From Continue Watching the watch page resumes at once, resolving its own details.
@@ -1907,7 +1939,9 @@ struct VideoDetailView: View {
             VStack(alignment: .leading, spacing: 22) {
                 header
                 if detail != nil {
+                    sourceExtras
                     episodePanel
+                    sourceRelated
                     tmdbExtras
                 } else if let error {
                     errorCard(error).padding(.top, 12)
@@ -1918,6 +1952,101 @@ struct VideoDetailView: View {
             }
             .pageContainer()
         }
+    }
+
+    /// Apple TV until the details are in (loading, or they failed): the cover across the screen with the title, as the
+    /// Bilibili page's hero.
+    private var showsTVLoadingHero: Bool {
+        #if os(tvOS)
+        detail == nil && !showsBilibiliTVPage
+        #else
+        false
+        #endif
+    }
+
+    #if os(tvOS)
+    /// The Bilibili page's hero while the details load: the title, then skeletons where the facts, Play, the four
+    /// actions and the synopsis will be; if they fail, what went wrong with Try Again where Play would be.
+    private var tvLoadingHero: some View {
+        let subtitle = video.remarks.isEmpty ? video.year ?? "" : video.remarks
+        return ZStack(alignment: .bottomLeading) {
+            TVCoverBackdrop(url: video.poster, headers: video.posterHeaders, frosted: false)
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(video.name).font(.system(size: 64, weight: .bold)).lineLimit(2).minimumScaleFactor(0.7)
+                        .frame(maxWidth: 1300, alignment: .leading)
+                        .shadow(color: .black.opacity(0.45), radius: 12)
+                    if !subtitle.isEmpty {
+                        Text(subtitle).font(.system(size: 28, weight: .medium)).lineLimit(1).opacity(0.7)
+                    } else if error == nil || busy {
+                        SkeletonBlock(cornerRadius: 8).frame(width: 420, height: 30)
+                    }
+                }
+                if let error, !busy {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(L10n.text("Unable to load video details")).font(.system(size: 30, weight: .semibold))
+                        Text(error).font(.system(size: 24)).lineLimit(2).opacity(0.6).frame(maxWidth: 1100, alignment: .leading)
+                    }
+                    .padding(.top, 8)
+                    HStack(spacing: 18) {
+                        Button { startRequest { await loadDetail() } } label: { Label(L10n.text("Try Again"), systemImage: "arrow.clockwise") }
+                            .buttonStyle(DiscoverTVActionStyle(height: 82, font: 28))
+                            .focused($playFocused)
+                            .accessibilityIdentifier("detail.retry")
+                        Button { dismiss() } label: { Label(L10n.text("Go back"), systemImage: "chevron.backward") }
+                            .buttonStyle(DiscoverTVActionStyle(height: 82, font: 28))
+                            .accessibilityIdentifier("detail.goBack")
+                    }
+                    .padding(.top, 16)
+                    .focusSection()
+                    // The error can arrive before the page has finished appearing, too early for the focus request in
+                    // loadDetail: Try Again takes it once it is on screen.
+                    .task(id: error) { try? await Task.sleep(for: .milliseconds(400)); playFocused = true }
+                } else {
+                    HStack(alignment: .top, spacing: 72) {
+                        VStack(alignment: .leading, spacing: 22) {
+                            // Holds focus while it loads, so Back leaves the page.
+                            SkeletonBlock(cornerRadius: 41).frame(height: 82)
+                                .loadingFocus(takeFocus: true) { dismiss() }
+                                .accessibilityLabel(L10n.text("Loading video details…"))
+                                .accessibilityIdentifier("detail.loading")
+                            HStack(alignment: .top, spacing: 16) {
+                                ForEach(0..<4, id: \.self) { _ in
+                                    VStack(spacing: 12) {
+                                        SkeletonBlock(cornerRadius: 24).frame(height: 76)
+                                        SkeletonBlock(cornerRadius: 6).frame(width: 64, height: 20)
+                                    }
+                                }
+                            }
+                        }
+                        .frame(width: 540)
+                        VStack(alignment: .leading, spacing: 16) {
+                            SkeletonBlock(cornerRadius: 8).frame(height: 28)
+                            SkeletonBlock(cornerRadius: 8).frame(height: 28)
+                            SkeletonBlock(cornerRadius: 8).frame(width: 560, height: 28)
+                        }
+                        .frame(maxWidth: 1000, alignment: .leading)
+                        .padding(.top, 8)
+                    }
+                    .padding(.top, 16)
+                }
+            }
+            .padding(.horizontal, 96).padding(.bottom, 140)
+        }
+        .ignoresSafeArea()
+        .foregroundStyle(.white).preferredColorScheme(.dark)
+        .transition(.opacity)
+        .animation(.smooth(duration: 0.3), value: error)
+    }
+    #endif
+
+    /// A Bilibili video on Apple TV gets its own page (BilibiliTVVideoPage).
+    private var showsBilibiliTVPage: Bool {
+        #if os(tvOS)
+        client.site.isBilibili && BilibiliAPI.isVideo(video.id)
+        #else
+        false
+        #endif
     }
 
     private var isWatchPage: Bool {
@@ -2019,6 +2148,11 @@ struct VideoDetailView: View {
         busy = true; error = nil
         defer { busy = false }
         do {
+            #if DEBUG
+            // `-qaDetailDelay <seconds>`: holds the details back, to see the page while they load.
+            let delay = UserDefaults.standard.double(forKey: "qaDetailDelay")
+            if delay > 0 { try await Task.sleep(for: .seconds(delay)) }
+            #endif
             let value = try await client.detail(video.id, cached: client.site.type == 3 || client.site.type == 4)
             try Task.checkCancellation()
             // Worked out once, off the main thread: a line can hold thousands of episodes.
@@ -2092,7 +2226,35 @@ struct VideoDetailView: View {
     /// TMDB's story when it has one, else the source's synopsis.
     private func synopsisText(_ detail: Video) -> String {
         if let story = tmdb.details?.story, !story.isEmpty { return story }
+        // The Bilibili source adds a video's hot comments to its synopsis; the page lists its comments itself.
+        if client.site.isBilibili, BilibiliAPI.isVideo(detail.id), let range = detail.synopsis.range(of: "—— 热门评论 ——") {
+            return String(detail.synopsis[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         return detail.synopsis
+    }
+    /// The Bilibili source's UP主: the director it links to their space (`up_<mid>`).
+    private var bilibiliCreator: (mid: Int, name: String)? {
+        guard client.site.isBilibili, let credits = detail?.credits else { return nil }
+        for credit in credits { if let mid = credit.category.flatMap(BilibiliAPI.creator(category:)) { return (mid, credit.name) } }
+        return nil
+    }
+    /// Under the title: on Bilibili the UP主, Follow, and the account's like, coins and favourite (#256); on other
+    /// sources the people they credit, when they link any to a listing of their works.
+    @ViewBuilder private var sourceExtras: some View {
+        if let detail {
+            if client.site.isBilibili {
+                VStack(alignment: .leading, spacing: 14) {
+                    if let creator = bilibiliCreator { BilibiliCreatorRow(mid: creator.mid, name: creator.name, client: client) }
+                    if BilibiliAPI.isVideo(detail.id) { BilibiliActionBar(bvid: detail.id) }
+                }
+            } else if let credits = detail.credits, credits.contains(where: { $0.category != nil }) {
+                SourceCreditsRow(credits: credits, client: client)
+            }
+        }
+    }
+    /// Bilibili's related videos, after the episodes.
+    @ViewBuilder private var sourceRelated: some View {
+        if client.site.isBilibili, let detail, BilibiliAPI.isVideo(detail.id) { BilibiliRelatedRow(bvid: detail.id, client: client) }
     }
     /// The lookup's progress or its question, then TMDB's cast, facts and notice, under the page's own content.
     @ViewBuilder private var tmdbStatus: some View {
@@ -2624,6 +2786,9 @@ struct VideoDetailView: View {
                     Color.clear.frame(height: playerHeight)
                     ScrollView { watchDetails.padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 24) }
                         .scrollIndicators(.never)
+                        #if DEBUG
+                        .modifier(QAScrollToFoot())
+                        #endif
                 }
             }
             watchPlayer
@@ -2773,31 +2938,42 @@ struct VideoDetailView: View {
             .environment(\.colorScheme, .dark)
     }
 
+    /// Under the player, as the Apple TV page: the title once and one quiet line of facts, the actions as a row of glass
+    /// plates, the synopsis, then the episodes and TMDB's rows. A Bilibili video has its own page in the same manner,
+    /// with the UP主, the account's actions, comments and related videos.
     private var watchDetails: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(currentVideo().name).font(.title3.weight(.bold)).fixedSize(horizontal: false, vertical: true)
-                if let facts = tmdb.details?.facts, !facts.isEmpty {
-                    Text(facts).font(.subheadline.weight(.medium)).lineLimit(2).transition(.opacity)
+        VStack(alignment: .leading, spacing: 20) {
+            if client.site.isBilibili, BilibiliAPI.isVideo(video.id) {
+                let saved = store.favorites.contains(videoFavorite())
+                BilibiliPhoneVideoPage(bvid: video.id, title: currentVideo().name, synopsis: detail.map(synopsisText) ?? "",
+                                       creator: bilibiliCreator, client: client, saved: saved,
+                                       toggleSaved: { store.favorites.toggle(videoFavorite()) },
+                                       download: detail?.episodes.isEmpty == false ? { choosingDownloads = true } : nil) {
+                    playbackBanner
+                    if detail == nil, let error { errorCard(error) }
+                } parts: {
+                    watchEpisodes
                 }
-                let meta = [currentVideo().remarks, currentVideo().year ?? "", SourceLabel(client.site.name).text].filter { !$0.isEmpty }
-                if !meta.isEmpty {
-                    Text(meta.joined(separator: " · ")).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
-                }
-            }
-            if detail?.episodes.isEmpty == false {
-                HStack(spacing: 10) { downloadButton(iconOnly: false); videoFavoriteButton }
-            }
-            playbackBanner
-            tmdbStatus
-            if let detail { synopsis(detail) }
-            if detail != nil {
-                watchEpisodes
-                tmdbExtras.padding(.top, 6)
-            } else if let error {
-                errorCard(error)
             } else {
-                DetailSkeleton()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(currentVideo().name).font(.title3.weight(.bold)).fixedSize(horizontal: false, vertical: true)
+                    if !watchFacts.isEmpty {
+                        Text(watchFacts).font(.footnote).foregroundStyle(.secondary).lineLimit(2).contentTransition(.opacity)
+                    }
+                }
+                sourceExtras
+                if detail?.episodes.isEmpty == false { watchPlates }
+                playbackBanner
+                tmdbStatus
+                if let detail { watchSynopsis(detail) }
+                if detail != nil {
+                    watchEpisodes
+                    tmdbExtras.padding(.top, 6)
+                } else if let error {
+                    errorCard(error)
+                } else {
+                    DetailSkeleton()
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -2805,6 +2981,61 @@ struct VideoDetailView: View {
         .environment(\.glassControls, true)
         .animation(.smooth(duration: 0.45), value: tmdb.details)
         .animation(.smooth(duration: 0.3), value: tmdb.phase)
+    }
+
+    #if DEBUG
+    /// `-qaScrollAnchor bottom`: the page opens scrolled to its foot, for screenshots. Only then: any default anchor,
+    /// even `.top`, made the page follow its growing content down.
+    private struct QAScrollToFoot: ViewModifier {
+        func body(content: Content) -> some View {
+            if UserDefaults.standard.string(forKey: "qaScrollAnchor") == "bottom" { content.defaultScrollAnchor(.bottom) } else { content }
+        }
+    }
+    #endif
+
+    /// TMDB's facts (2026 · Drama · ★ 7.0) once they are in, else the source's remarks and year; then the source.
+    private var watchFacts: String {
+        let video = currentVideo()
+        let facts = tmdb.details?.facts ?? ""
+        let lead = facts.isEmpty ? [video.remarks, video.year ?? ""] : [facts]
+        return (lead + [SourceLabel(client.site.name).text]).filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// Three lines of the synopsis, as the Bilibili page's description: a tap shows the rest.
+    @ViewBuilder private func watchSynopsis(_ detail: Video) -> some View {
+        let text = synopsisText(detail)
+        if !text.isEmpty {
+            Button { withAnimation(.smooth(duration: 0.3)) { synopsisExpanded.toggle() } } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(text).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                        .lineLimit(synopsisExpanded ? nil : 3).fixedSize(horizontal: false, vertical: true)
+                        .contentTransition(.opacity)
+                    if text.count > 60 {
+                        Text(L10n.text(synopsisExpanded ? "Show Less" : "More")).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("detail.synopsis")
+        }
+    }
+
+    /// Download and the heart, as glass plates with their words under them.
+    private var watchPlates: some View {
+        let saved = store.favorites.contains(videoFavorite())
+        let title = saved ? L10n.text("Remove %@ from favorites", currentVideo().name) : L10n.text("Add %@ to favorites", currentVideo().name)
+        return HStack(alignment: .top, spacing: 14) {
+            Button { choosingDownloads = true } label: { WatchPlateLabel(symbol: "arrow.down.circle", caption: L10n.text("Download")) }
+                .accessibilityLabel(L10n.text("Download")).accessibilityIdentifier("detail.download")
+            Button { store.favorites.toggle(videoFavorite()) } label: {
+                WatchPlateLabel(symbol: "heart", caption: saved ? L10n.text("Saved") : L10n.text("Favorite"), on: saved)
+            }
+            .accessibilityLabel(title).accessibilityIdentifier("detail.favorite")
+        }
+        .buttonStyle(.plain)
+        .padding(.leading, -7)
     }
 
     /// As in Bilibili's 选集: one row of episodes that scrolls sideways to the one playing, and All for the full list.
@@ -3186,3 +3417,339 @@ private struct MinHeightLayout: SwiftUI.Layout {
         subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
+
+extension View {
+    /// The page's title bar, or none where the page sets its title itself.
+    @ViewBuilder func screenTitle(_ title: String, shown: Bool) -> some View {
+        #if os(tvOS)
+        if shown { screenTitle(title) } else { toolbar(.hidden, for: .navigationBar) }
+        #else
+        screenTitle(title)
+        #endif
+    }
+}
+
+#if os(tvOS)
+extension VideoDetailView {
+    /// Apple TV's page for a Bilibili video (#256): the page's own Play, parts and notices inside BilibiliTVVideoPage.
+    var bilibiliTVPage: some View {
+        let current = currentVideo()
+        return BilibiliTVVideoPage(
+            bvid: video.id, title: detail?.name ?? video.name, cover: current.poster, coverHeaders: current.posterHeaders,
+            synopsis: detail.map(synopsisText) ?? "", creator: bilibiliCreator, client: client,
+            saved: store.favorites.contains(videoFavorite()), toggleSaved: { store.favorites.toggle(videoFavorite()) },
+            download: { choosingDownloads = true }, hasParts: activeEpisodes.count > 1
+        ) {
+            bilibiliTVPlay
+        } parts: {
+            episodePanel
+        } status: {
+            playbackBanner
+        }
+    }
+
+    /// Apple TV's page for every other video, in the Bilibili page's language (Discover's title page): TMDB's backdrop, or
+    /// the cover, across the whole screen; over it the logo or title, the facts, Play with Download and Favorite under it
+    /// and the synopsis beside them; then the episodes, the people, facts and related titles over the frosted picture.
+    var tvDetailPage: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 60) {
+                    tvDetailHero.id("hero")
+                    VStack(alignment: .leading, spacing: 44) {
+                        sourceExtras
+                        episodePanel
+                        sourceRelated
+                        tmdbExtras
+                    }
+                    .padding(.horizontal, TVDetailMetrics.gutter)
+                }
+                .padding(.bottom, 90)
+            }
+            .scrollClipDisabled()
+            .modifier(DiscoverTVScrolled(scrolled: $tvScrolled))
+            .background {
+                if let backdrop = tmdb.details?.backdrop {
+                    TVCoverBackdrop(url: backdrop, headers: [:], frosted: tvScrolled)
+                } else {
+                    TVCoverBackdrop(url: video.poster, headers: video.posterHeaders, frosted: tvScrolled)
+                }
+            }
+            .ignoresSafeArea()
+            .foregroundStyle(.white).preferredColorScheme(.dark)
+            .animation(.smooth(duration: 0.45), value: tmdb.details)
+            .animation(.smooth(duration: 0.3), value: tmdb.phase)
+            // Coming back up from the rows, the hero comes back whole, not just as far as the focused button.
+            .onChange(of: playFocused || tvHeroFocus != nil) { _, inHero in
+                if inHero { withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo("hero", anchor: .top) } }
+            }
+            .fullScreenCover(isPresented: $showsTVSynopsis) { tvSynopsisScreen }
+        }
+    }
+
+    /// TMDB's facts (2026 · Drama · ★ 7.0), else the source's note, year and name.
+    private var tvFacts: String {
+        if let facts = tmdb.details?.facts, !facts.isEmpty { return facts }
+        let current = currentVideo()
+        return [current.remarks, current.year ?? "", client.site.name].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    private var tvDetailHero: some View {
+        let text = detail.map(synopsisText)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 12) {
+                playbackBanner
+                tmdbStatus
+            }
+            .frame(maxWidth: 1200, alignment: .leading)
+            VStack(alignment: .leading, spacing: 12) {
+                TVTitleArt(logo: tmdb.details?.logo, name: tmdb.details?.name ?? currentVideo().name)
+                Text(tvFacts.isEmpty ? " " : tvFacts).font(.system(size: 28, weight: .medium)).lineLimit(1).opacity(0.7)
+                if let tagline = tmdb.details?.tagline, !tagline.isEmpty {
+                    Text(tagline).font(.system(size: 26).italic()).lineLimit(1).opacity(0.6)
+                }
+            }
+            HStack(alignment: .top, spacing: 72) {
+                VStack(alignment: .leading, spacing: 22) {
+                    bilibiliTVPlay
+                    HStack(alignment: .top, spacing: 16) {
+                        tvPlate("arrow.down.circle", caption: L10n.text("Download"), id: "detail.download", focus: .download) {
+                            choosingDownloads = true
+                        }
+                        let saved = store.favorites.contains(videoFavorite())
+                        tvPlate(saved ? "heart.fill" : "heart", tint: saved ? Brand.rose : nil, caption: L10n.text(saved ? "Saved" : "Favorite"),
+                                id: "detail.favorite", focus: .favorite) {
+                            store.favorites.toggle(videoFavorite())
+                        }
+                    }
+                    .disabled(detail?.episodes.isEmpty ?? true)
+                }
+                .frame(width: TVDetailMetrics.actionsWidth)
+                .focusSection()
+                if !text.isEmpty {
+                    Button { showsTVSynopsis = true } label: {
+                        Text(text).font(.system(size: 26)).lineSpacing(4).lineLimit(4).multilineTextAlignment(.leading)
+                            .frame(maxWidth: 1000, alignment: .leading)
+                    }
+                    .buttonStyle(BilibiliTVPlateStyle())
+                    .focused($tvHeroFocus, equals: .synopsis)
+                    // The plate's padding outside the column, so the text lines up with Play's top.
+                    .padding(.leading, -BilibiliTVPlateStyle.inset).padding(.top, -BilibiliTVPlateStyle.inset)
+                    .accessibilityIdentifier("detail.synopsis")
+                    .focusSection()
+                }
+            }
+            .padding(.top, 16)
+        }
+        .padding(.horizontal, TVDetailMetrics.gutter)
+        .frame(maxWidth: .infinity, minHeight: 940, alignment: .bottomLeading)
+    }
+
+    /// One of the hero's square glass plates under Play, with its caption under it.
+    private func tvPlate(_ symbol: String, tint: Color? = nil, caption: String, id: String, focus: TVHeroItem,
+                         action: @escaping () -> Void) -> some View {
+        VStack(spacing: 12) {
+            Button(action: action) { Image(systemName: symbol).foregroundStyle(tint ?? .primary).frame(maxWidth: .infinity) }
+                .buttonStyle(DiscoverTVActionStyle(height: 76, font: 30, corner: 24))
+                .focused($tvHeroFocus, equals: focus)
+                .accessibilityLabel(caption).accessibilityIdentifier(id)
+            Text(caption).font(.system(size: 22, weight: .medium)).lineLimit(1).opacity(0.6)
+        }
+        .frame(width: TVDetailMetrics.plateWidth)
+    }
+
+    /// The whole synopsis over the frosted picture: the hero shows four lines of it.
+    private var tvSynopsisScreen: some View {
+        ZStack(alignment: .bottomLeading) {
+            TVCoverBackdrop(url: tmdb.details?.backdrop ?? video.poster, headers: tmdb.details?.backdrop == nil ? video.posterHeaders : [:],
+                            frosted: true)
+            VStack(alignment: .leading, spacing: 24) {
+                Text(tmdb.details?.name ?? currentVideo().name).font(.system(size: 52, weight: .bold)).lineLimit(2)
+                if !tvFacts.isEmpty { Text(tvFacts).font(.system(size: 26)).opacity(0.6) }
+                Text(detail.map(synopsisText) ?? "").font(.system(size: 30)).lineSpacing(6).lineLimit(16)
+            }
+            .frame(maxWidth: 1300, alignment: .leading)
+            .padding(TVDetailMetrics.gutter)
+            // Something must hold focus for Menu to close the page.
+            .focusable()
+        }
+        .ignoresSafeArea().foregroundStyle(.white).preferredColorScheme(.dark)
+    }
+
+    /// Play, or Continue the part watched last, as wide as the actions under it.
+    @ViewBuilder private var bilibiliTVPlay: some View {
+        let continuation = detail.flatMap { watchHistory?.continuation(in: $0.episodes) }
+        if let detail, let first = continuation ?? activeEpisodes.first ?? detail.episodes.first {
+            Button { startRequest { await play(first) } } label: {
+                HStack(spacing: 12) {
+                    if loadingEpisode == first.id { ProgressView() } else { Image(systemName: "play.fill") }
+                    Text(L10n.text(first.id == continuation?.id ? "Continue" : "Play"))
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(DiscoverTVActionStyle(height: 82, font: 30))
+            .focused($playFocused)
+            .accessibilityIdentifier("detail.play")
+        } else if detail == nil, error == nil {
+            // Holds focus while the details load, so Back leaves the page.
+            SkeletonBlock(cornerRadius: 41).frame(height: 82).loadingFocus(takeFocus: true) { dismiss() }
+        } else {
+            playControl
+        }
+    }
+}
+#endif
+
+extension SiteView {
+    /// An UP主's space (`up_<mid>` and its other listings).
+    var isBilibiliSpace: Bool { site.isBilibili && folder.flatMap { BilibiliAPI.creator(category: $0.id) } != nil }
+
+    /// Bilibili's videos as its own apps show them on iPhone, iPad and the Mac: 16:9 covers, two or more across, rather
+    /// than cropped into posters. Anime and films (whose covers are posters) keep the posters.
+    var showsBilibiliTiles: Bool {
+        #if os(tvOS)
+        false
+        #else
+        site.isBilibili && browser.videos.first.map { BilibiliAPI.isVideo($0.id) } == true
+        #endif
+    }
+
+    static var bilibiliColumns: [GridItem] {
+        #if os(macOS)
+        [GridItem(.adaptive(minimum: 220), spacing: 18, alignment: .top)]
+        #else
+        [GridItem(.adaptive(minimum: 160), spacing: DiscoverLayout.spacing, alignment: .top)]
+        #endif
+    }
+
+    /// An UP主's space on Apple TV: its own page (`BilibiliTVSpacePage`), without the source's search field and banner.
+    var showsBilibiliTVSpace: Bool {
+        #if os(tvOS)
+        site.isBilibili && folder.flatMap { BilibiliAPI.creator(category: $0.id) } != nil
+        #else
+        false
+        #endif
+    }
+}
+
+#if os(tvOS)
+extension SiteView {
+    @ViewBuilder var bilibiliTVSpace: some View {
+        if let folder, let mid = BilibiliAPI.creator(category: folder.id) {
+            BilibiliTVSpacePage(mid: mid, name: folder.name, tabs: BilibiliSpaceHeader.tabs(mid),
+                                category: browser.category.isEmpty ? folder.id : browser.category, latest: browser.videos.first,
+                                open: { id in startRequest { await browser.load(.list(category: id, query: "", page: 1), client: client) } }) {
+                spaceGrid
+            }
+        }
+    }
+
+    /// The space's listing as Bilibili's 16:9 tiles, four across, with the page's loading, error and Load More states.
+    @ViewBuilder private var spaceGrid: some View {
+        if let error = browser.error {
+            ErrorStateCard(
+                title: L10n.text("Unable to load this source"),
+                message: L10n.text("Try again, or choose another source to keep watching."),
+                details: error,
+                retry: { startRequest { await browser.load(browser.request, client: client) } },
+                goBack: { dismiss() },
+                busy: browser.busy
+            )
+        } else if browser.videos.isEmpty && browser.loaded && !browser.busy {
+            EmptyResults(symbol: "film", title: L10n.text("No Videos"))
+        }
+        LazyVGrid(columns: BilibiliTVSpacePage<EmptyView>.columns, alignment: .leading, spacing: 56) {
+            if browser.videos.isEmpty && browser.error == nil && (browser.busy || !browser.loaded) {
+                ForEach(0..<8, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.white.opacity(0.08)).aspectRatio(16.0 / 9.0, contentMode: .fit)
+                }
+            }
+            ForEach(browser.videos) { video in
+                RouteLink { CatalogDestination(video: video, client: client) } label: { BilibiliVideoTile(video: video) }
+                    .cardButton()
+                    .onAppear {
+                        guard browser.moreError == nil, video.id == browser.videos.last?.id else { return }
+                        Task { await loadMore() }
+                    }
+            }
+        }
+        .opacity(browser.busy && !browser.videos.isEmpty ? 0.55 : 1).animation(.smooth, value: browser.busy)
+        if !browser.videos.isEmpty && (browser.hasMore || browser.loadingMore || browser.moreError != nil) {
+            loadMoreFooter.tvFocusSection()
+        }
+    }
+}
+#else
+extension SiteView {
+    var bilibiliTVSpace: some View { EmptyView() }
+}
+#endif
+
+#if os(tvOS)
+/// The cover behind Apple TV's loading page, as the Bilibili page's: a landscape cover across the screen, sharp; a
+/// poster, which would crop to a few enlarged pixels, as a soft blur of its colours. Darker toward the text.
+enum TVHeroItem: Hashable { case download, favorite, synopsis }
+
+private enum TVDetailMetrics {
+    static let gutter: CGFloat = 96
+    /// Play, and the plates under it.
+    static let actionsWidth: CGFloat = 540
+    static let plateWidth: CGFloat = 123
+}
+
+/// The title as TMDB's logo when it has one (the name until the logo is in, and instead of one that fails), else the name.
+private struct TVTitleArt: View {
+    let logo: URL?
+    let name: String
+    @State private var aspect: CGFloat?
+    private var nameText: some View {
+        Text(name).font(.system(size: 64, weight: .bold)).lineLimit(2).minimumScaleFactor(0.7)
+            .frame(maxWidth: 1300, alignment: .leading)
+            .shadow(color: .black.opacity(0.45), radius: 12)
+    }
+    var body: some View {
+        if let logo {
+            // Wide logos get a width limit, tall ones a height limit.
+            let ratio = max(aspect ?? 3, 0.5)
+            let width = min(720, 170 * ratio)
+            TMDBArtwork(url: logo, maxPixels: 1000, fill: false, aspect: $aspect)
+                .frame(width: aspect == nil ? nil : width, height: aspect == nil ? nil : width / ratio, alignment: .leading)
+                .shadow(color: .black.opacity(0.35), radius: 16)
+                .overlay(alignment: .leading) { if aspect == nil { nameText } }
+                .accessibilityLabel(name)
+        } else {
+            nameText
+        }
+    }
+}
+
+private struct TVCoverBackdrop: View {
+    let url: URL?
+    let headers: [String: String]
+    /// Past the hero: frosted, so the rows read over it.
+    var frosted = false
+    @State private var image: CGImage?
+    var body: some View {
+        ZStack {
+            Color.black
+            if let image {
+                let landscape = CGFloat(image.width) / CGFloat(max(1, image.height)) >= 1.3
+                Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipped()
+                    .blur(radius: landscape ? 0 : 60, opaque: true)
+                    .saturation(landscape ? 1 : 1.25)
+                    .transition(.opacity)
+            }
+            LinearGradient(stops: [.init(color: .black.opacity(0.85), location: 0), .init(color: .black.opacity(0.55), location: 0.5),
+                                   .init(color: .clear, location: 0.85)], startPoint: .leading, endPoint: .trailing)
+            LinearGradient(stops: [.init(color: .clear, location: 0.2), .init(color: .black.opacity(0.92), location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+            Rectangle().fill(.regularMaterial).opacity(frosted ? 1 : 0)
+        }
+        .ignoresSafeArea()
+        .animation(.easeInOut(duration: 0.35), value: frosted)
+        .animation(.easeInOut(duration: 0.4), value: image != nil)
+        .task(id: url) { if let url { image = await TMDBArtwork.load(url, maxPixels: 1600, headers: headers) } }
+    }
+}
+#endif

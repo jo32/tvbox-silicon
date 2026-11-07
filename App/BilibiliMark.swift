@@ -5,6 +5,8 @@ import SwiftUI
 /// so it stays sharp from a chip to a TV card.
 struct BilibiliMark: View {
     static let blue = Color(red: 0, green: 0.682, blue: 0.925)
+    /// Bilibili's pink (#FB7299), for what the account has done: liked, coined, followed.
+    static let pink = Color(red: 0.984, green: 0.447, blue: 0.6)
     var size: CGFloat = 44
 
     var body: some View {

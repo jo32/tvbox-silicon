@@ -316,12 +316,18 @@ public struct Channel: Identifiable, Codable, Hashable, Sendable {
     public let resumePosition: Double?
     /// Subtitle files the source offers beside the video. Not saved: a plugin's addresses last one session.
     public var subtitles: [ExternalSubtitle] = []
+    /// Stretches the source marks as opening or ending credits. Not saved either.
+    public var skips: [PlaybackSkip] = []
+    /// The Bilibili part playing, for its chapters, subtitles and the account's watch progress. Not saved.
+    public var bilibiliPart: BilibiliAPI.Part? = nil
     public var displayGroup: String { group.isEmpty ? L10n.text("Ungrouped") : group }
     public var id: String { group + "|" + name + "|" + url.absoluteString }
     public init(name: String, group: String = "", url: URL, logo: URL? = nil, headers: [String: String] = [:], skipScope: String? = nil,
-                historyContext: PlaybackHistoryContext? = nil, resumePosition: Double? = nil, subtitles: [ExternalSubtitle] = []) {
+                historyContext: PlaybackHistoryContext? = nil, resumePosition: Double? = nil, subtitles: [ExternalSubtitle] = [],
+                skips: [PlaybackSkip] = [], bilibiliPart: BilibiliAPI.Part? = nil) {
         self.name = name; self.group = group; self.url = url; self.logo = logo; self.headers = headers; self.skipScope = skipScope
         self.historyContext = historyContext; self.resumePosition = resumePosition; self.subtitles = subtitles
+        self.skips = skips; self.bilibiliPart = bilibiliPart
     }
     private enum CodingKeys: String, CodingKey { case name, group, url, logo, headers, skipScope, historyContext, resumePosition }
 }

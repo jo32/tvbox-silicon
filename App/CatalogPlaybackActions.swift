@@ -27,6 +27,16 @@ struct CatalogPlaybackActions: View {
                     }))
                 Button(L10n.text("Skip intro / outro")) { showsSkip = true }
                     .accessibilityIdentifier("player.skip")
+                if !session.chapters.isEmpty {
+                    Menu {
+                        ForEach(Array(session.chapters.enumerated()), id: \.offset) { _, chapter in
+                            Button { session.jump(to: chapter.start) } label: {
+                                Text(EpisodeSkipSettings.formatTime(chapter.start) + "  " + chapter.title)
+                            }
+                        }
+                    } label: { Label(L10n.text("Chapters"), systemImage: "list.bullet") }
+                    .accessibilityIdentifier("player.chapters")
+                }
                 if channel.historyContext?.sourceKey != Bilibili.siteKey {
                     Button(L10n.text("Danmaku")) { showsDanmaku = true }
                         .accessibilityIdentifier("player.danmaku")
@@ -56,6 +66,26 @@ struct CatalogPlaybackActions: View {
             .sheet(isPresented: $showsDanmaku) {
                 CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet()
             }
+        }
+    }
+}
+
+/// The source's opening or ending credits playing now (#256): one tap skips them, as Bilibili's own player offers.
+struct SourceSkipButton: View {
+    let session: PlaybackSession
+    var body: some View {
+        if let skip = session.skipOffer {
+            Button { session.skipSourceSegment() } label: {
+                Label(skip.kind == .intro ? L10n.text("Skip Intro") : L10n.text("Skip Outro"), systemImage: "forward.fill")
+                    .font(.subheadline.weight(.semibold)).padding(.horizontal, 14).padding(.vertical, 9)
+                    .glassSurface(.regular.interactive(), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .padding(.trailing, 20).padding(.bottom, 96)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .transition(.opacity)
+            .accessibilityIdentifier("player.skipSource")
         }
     }
 }

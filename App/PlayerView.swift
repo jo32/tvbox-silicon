@@ -63,8 +63,9 @@ struct PlaybackView: View {
                                  next: episodeAction(store.step(back: false, from: channel, session: session)), waiting: waitContent,
                                  enhancer: session.enhancer, upscale: $upscalesVideo, smooth: $smoothsVideo, info: $showsPlaybackInfo,
                                  speed: playbackSpeed, setSpeed: { playbackSpeed = $0; session.setSpeed($0) }, fills: $fillsScreen, danmakuArea: $danmakuArea,
-                                 external: session.externalSubtitles,
-                                 exitWhileWaiting: session.showsPicture ? nil : { dismiss() }).ignoresSafeArea()
+                                 external: session.externalSubtitles, skip: session.skipOffer, skipSource: { session.skipSourceSegment() },
+                                 chapters: session.chapters,
+                                 exitWhileWaiting: session.showsPicture ? nil : { dismiss() }, episodes: episodeChoices).ignoresSafeArea()
                     .onAppear { playbackSpeed = session.player.defaultRate }
             }
             // Until the picture starts, AVKit's player keeps the Back press to itself, so a stream that never
@@ -89,6 +90,9 @@ struct PlaybackView: View {
             chrome.opacity(chromeVisible ? 1 : 0).allowsHitTesting(chromeVisible)
             #endif
             status
+            #if !os(tvOS)
+            SourceSkipButton(session: session)
+            #endif
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "qaPlaybackProbe") {
                 VStack {
@@ -194,6 +198,22 @@ struct PlaybackView: View {
     #if os(tvOS)
     private func episodeAction(_ step: PlayerStep?) -> EpisodeAction? {
         step.map { EpisodeAction(name: $0.name, busy: $0.busy, play: $0.go) }
+    }
+
+    /// The video's lines and episodes for the player's Episodes menu and info-panel tab: nil for one episode.
+    private var episodeChoices: EpisodeChoices? {
+        guard let catalog = store.catalog(for: channel), catalog.video.episodes.count > 1 else { return nil }
+        let episodes = catalog.video.episodes
+        var seen = Set<String>()
+        let flags = episodes.map(\.flag).filter { seen.insert($0).inserted }
+        let store = store, channel = channel
+        return EpisodeChoices(
+            key: "\(catalog.video.id):\(episodes.count)",
+            lines: flags.map { flag in (flag, episodes.filter { $0.flag == flag }) },
+            labels: catalog.labels, current: channel.historyContext?.episode(in: episodes)?.id,
+            busy: store.resolvingEpisode != nil,
+            select: { store.selectEpisode($0, from: channel) },
+            panel: { AnyView(TVPlayerEpisodesPanel(channel: channel).environment(store)) })
     }
     #endif
 
@@ -687,6 +707,18 @@ struct EpisodeAction {
     let play: @MainActor () -> Void
 }
 
+/// A catalog video's episodes by line, for the transport bar's Episodes menu and the info panel's Episodes tab.
+struct EpisodeChoices {
+    /// Changes when the video or its episodes do: the info panel's tab is made again then.
+    let key: String
+    let lines: [(flag: String, episodes: [Episode])]
+    let labels: [Episode.ID: String]
+    let current: Episode.ID?
+    let busy: Bool
+    let select: @MainActor (Episode) -> Void
+    let panel: @MainActor () -> AnyView
+}
+
 /// AVPlayerViewController itself, for its transport-bar menu: the Danmaku switch lives there, next to
 /// subtitles and audio, where a remote can reach it. Comments draw in the content overlay, under the controls.
 private struct NativePlayerView: UIViewControllerRepresentable {
@@ -720,6 +752,11 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     var danmakuArea: Binding<DanmakuArea> = .constant(.standard)
     /// Subtitle files beside the video (#576); the item's own are in AVKit's Subtitles menu.
     var external: ExternalSubtitles? = nil
+    /// The source's opening or ending credits playing now, offered as AVKit's Skip button (#256).
+    var skip: PlaybackSkip? = nil
+    var skipSource: @MainActor () -> Void = {}
+    /// The part's chapters (Bilibili's 分段章节): a Chapters tab in the info panel, beside Danmaku.
+    var chapters: [PlaybackChapter] = []
     private static let speeds: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
     private static func speedLabel(_ speed: Float) -> String {
         Double(speed).formatted(.number.precision(.fractionLength(0...2))) + "×"
@@ -727,6 +764,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     /// Closes the player on Back until the picture starts. The overlay that takes focus for that loses it
     /// once the transport bar shows (an episode button takes it), and AVKit then keeps the press to itself.
     var exitWhileWaiting: (() -> Void)? = nil
+    var episodes: EpisodeChoices? = nil
     final class Coordinator: NSObject, UIGestureRecognizerDelegate, @preconcurrency AVPlayerViewControllerDelegate {
         var host: UIHostingController<AnyView>?; var listed = ""; var criteria: DisplayCriteriaKeeper?
         var exit: (() -> Void)?
@@ -780,16 +818,32 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         context.coordinator.host?.rootView = overlay
         context.coordinator.exit = exitWhileWaiting
         context.coordinator.back.isEnabled = exitWhileWaiting != nil
-        // The comment list is a tab in the info panel (swipe down), beside the video's own info.
-        if context.coordinator.listed != "\(revision):\(comments.count)" {
-            context.coordinator.listed = "\(revision):\(comments.count)"
-            if comments.isEmpty { controller.customInfoViewControllers = [] }
-            else {
+        // The episodes, the chapters and the comment list are tabs in the info panel (swipe down), beside the video's own info.
+        let listed = "\(revision):\(comments.count):\(chapters.map(\.start)):\(episodes?.key ?? "")"
+        if context.coordinator.listed != listed {
+            context.coordinator.listed = listed
+            var tabs: [UIViewController] = []
+            if let episodes {
+                let panel = UIHostingController(rootView: episodes.panel())
+                panel.title = L10n.text("Episodes")
+                // As tall as its content (one row of tiles, with or without the lines beside the title): a set height left
+                // a band of empty panel under them.
+                panel.sizingOptions = .preferredContentSize
+                tabs.append(panel)
+            }
+            if !chapters.isEmpty {
+                let list = UIHostingController(rootView: PlayerChaptersView(player: player, chapters: chapters))
+                list.title = L10n.text("Chapters")
+                list.preferredContentSize = CGSize(width: 0, height: 330)
+                tabs.append(list)
+            }
+            if !comments.isEmpty {
                 let list = UIHostingController(rootView: DanmakuListView(player: player, comments: comments))
                 list.title = L10n.text("Danmaku")
                 list.preferredContentSize = CGSize(width: 0, height: 480)
-                controller.customInfoViewControllers = [list]
+                tabs.append(list)
             }
+            controller.customInfoViewControllers = tabs
         }
         let binding = $showsDanmaku
         var items: [UIMenuElement] = []
@@ -816,6 +870,9 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             items.append(UIMenu(title: L10n.text("Audio"), image: UIImage(systemName: "speaker.wave.2"), children: options))
         }
         if let external, !external.entries.isEmpty || external.hasSources { items.append(Self.subtitleFilesMenu(external)) }
+        let skipSource = skipSource
+        let skips = skip.map { [UIAction(title: $0.kind == .intro ? L10n.text("Skip Intro") : L10n.text("Skip Outro"), image: UIImage(systemName: "forward.fill")) { _ in skipSource() }] } ?? []
+        if controller.contextualActions.map(\.title) != skips.map(\.title) { controller.contextualActions = skips }
         if !live {
             let setSpeed = setSpeed, speed = speed
             let options = Self.speeds.map { rate in UIAction(title: Self.speedLabel(rate), state: rate == speed ? .on : .off) { _ in setSpeed(rate) } }
@@ -828,6 +885,27 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         if let next {
             items.insert(UIAction(title: L10n.text("Next Episode"), subtitle: next.name, image: UIImage(systemName: "forward.end.fill"),
                                   attributes: next.busy ? [.disabled] : []) { _ in next.play() }, at: previous == nil ? 0 : 1)
+        }
+        if let episodes {
+            // 选集 from the transport bar: line › episode, or the episodes alone when there is one line.
+            let select = episodes.select
+            func actions(_ list: [Episode]) -> [UIMenuElement] {
+                list.map { episode in
+                    UIAction(title: episodes.labels[episode.id] ?? EpisodeRow.title(episode.name),
+                             attributes: episodes.busy ? [.disabled] : [],
+                             state: episode.id == episodes.current ? .on : .off) { _ in
+                        if episode.id != episodes.current { select(episode) }
+                    }
+                }
+            }
+            let children: [UIMenuElement] = episodes.lines.count == 1 ? actions(episodes.lines[0].episodes)
+                : episodes.lines.map { line in
+                    let playing = line.episodes.contains { $0.id == episodes.current }
+                    return UIMenu(title: line.flag.isEmpty ? L10n.text("Play") : line.flag, subtitle: "\(line.episodes.count)",
+                                  image: playing ? UIImage(systemName: "speaker.wave.2.fill") : nil, children: actions(line.episodes))
+                }
+            let at = (previous == nil ? 0 : 1) + (next == nil ? 0 : 1)
+            items.insert(UIMenu(title: L10n.text("Episodes"), image: UIImage(systemName: "rectangle.stack"), children: children), at: at)
         }
         do {
             let upscale = upscale, smooth = smooth, fills = fills
@@ -1094,6 +1172,7 @@ private struct DesktopPlaybackView: View {
                     .id(bare)
                 if showsDanmaku && !session.danmaku.isEmpty { DanmakuOverlay(player: session.player, comments: session.danmaku, opacity: session.danmakuOpacity, revision: session.danmakuRevision).ignoresSafeArea() }
                 SubtitleOverlay(cues: session.subtitles, fills: fillsFrame).ignoresSafeArea()
+                SourceSkipButton(session: session)
                 // Under the title bar's buttons, so it stays put while they come and go.
                 if showsPlaybackInfo && session.error == nil && session.showsPicture && playingOn == nil {
                     PlaybackInfoPanel(session: session)
@@ -1562,3 +1641,74 @@ struct PlaybackInfoPanel: View {
         return format
     }
 }
+
+#if os(tvOS)
+/// Apple TV's Chapters tab in the player's info panel (swipe down): the part's chapters as a row of frames with their
+/// start and title, as Bilibili's TV clients list parts; the one playing is marked. Choosing one plays from its start.
+struct PlayerChaptersView: View {
+    let player: AVPlayer
+    let chapters: [PlaybackChapter]
+    @State private var now: Double = 0
+    @FocusState private var focused: Int?
+
+    private var playing: Int? { chapters.lastIndex { $0.start <= now + 0.5 } }
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: 36) {
+                    ForEach(Array(chapters.enumerated()), id: \.offset) { index, chapter in
+                        Button {
+                            player.seek(to: CMTime(seconds: chapter.start, preferredTimescale: 600))
+                            player.play()
+                        } label: { tile(chapter, number: index + 1, current: index == playing) }
+                            .buttonStyle(.borderless)
+                            .focused($focused, equals: index)
+                            .id(index)
+                            .accessibilityIdentifier("player.chapter")
+                    }
+                }
+                .padding(.horizontal, 80).padding(.vertical, 28)
+            }
+            .scrollClipDisabled()
+            .defaultFocus($focused, playing ?? 0)
+            .task {
+                now = player.currentTime().seconds.isFinite ? player.currentTime().seconds : 0
+                if let playing { proxy.scrollTo(playing, anchor: .center) }
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(1))
+                    let time = player.currentTime().seconds
+                    if time.isFinite { now = time }
+                }
+            }
+        }
+    }
+
+    private func tile(_ chapter: PlaybackChapter, number: Int, current: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Color.white.opacity(0.08).aspectRatio(16.0 / 9.0, contentMode: .fit)
+                .overlay {
+                    if let image = chapter.image {
+                        PosterImage(url: image, headers: Bilibili.imageHeaders)
+                    } else {
+                        Text("\(number)").font(.system(size: 54, weight: .bold)).foregroundStyle(.white.opacity(0.35))
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(alignment: .bottomTrailing) {
+                    Text(EpisodeSkipSettings.formatTime(chapter.start)).font(.system(size: 20, weight: .semibold)).monospacedDigit()
+                        .foregroundStyle(.white).padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 6, style: .continuous)).padding(8)
+                }
+                .hoverEffect(.highlight)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                if current { Image(systemName: "play.fill").font(.system(size: 18)).foregroundStyle(BilibiliMark.pink) }
+                Text(chapter.title.isEmpty ? L10n.text("Chapter %lld", number) : chapter.title)
+                    .font(.system(size: 24, weight: current ? .semibold : .regular)).lineLimit(2)
+                    .foregroundStyle(current ? BilibiliMark.pink : .white)
+            }
+        }
+        .frame(width: 320)
+    }
+}
+#endif

@@ -30,6 +30,70 @@ import IOKit.pwr_mgt
     private var editingSkip = false
     private var resumeAfterEditing = false
     private var seekingSegment = false
+    /// The source's opening and ending credits for this episode (the play result's `skips`), and the one playing now,
+    /// which the player offers to skip.
+    private(set) var sourceSkips: [PlaybackSkip] = []
+    private(set) var skipOffer: PlaybackSkip?
+    private var skippedSource = Set<PlaybackSkip>()
+    /// The episode's chapters (Bilibili's 分段章节), for the player's Chapters menu and Apple TV's chapter markers.
+    private(set) var chapters: [PlaybackChapter] = []
+    /// The Bilibili part playing, whose progress goes back to the signed-in account.
+    private var bilibiliPart: BilibiliAPI.Part?
+
+    /// Skips the source's credits playing now: to their end, or for ending credits that run out the video, to the end.
+    func skipSourceSegment() {
+        guard let skip = skipOffer, let item, item.status == .readyToPlay else { return }
+        skippedSource.insert(skip)
+        skipOffer = nil
+        let length = item.duration.seconds
+        let target = length.isFinite && skip.end >= length - 1 ? max(0, length - 0.05) : skip.end
+        Diagnostics.shared.record(.info, "player", "skip source \(skip.kind.rawValue) to=\(Int(target))")
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    /// Plays from `seconds`, as a chapter in the Chapters menu does.
+    func jump(to seconds: Double) {
+        guard seconds.isFinite, seconds >= 0 else { return }
+        player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    /// The source's credits: skipped by themselves when the viewer has intros and outros skipped and set no times of
+    /// their own for this video; otherwise offered while they play.
+    private func updateSourceSkip(time: Double) {
+        let current = PlaybackSkip.current(sourceSkips, at: time).flatMap { skippedSource.contains($0) ? nil : $0 }
+        if current != skipOffer { skipOffer = current }
+        guard current != nil, player.rate > 0, skipSettings.enabled, skipSettings.introEnd == 0, skipSettings.outroLength == 0 else { return }
+        skipSourceSegment()
+    }
+
+    /// A Bilibili part's chapters and subtitle files, asked for once its picture is on its way so its start never waits.
+    private func loadPartExtras(_ channel: Channel, generation activeGeneration: UUID) {
+        guard let part = channel.bilibiliPart else { return }
+        Task { [weak self] in
+            guard let info = try? await BilibiliAPI.playerInfo(part), let self, self.generation == activeGeneration else { return }
+            self.chapters = info.chapters
+            #if os(tvOS)
+            if let item = self.item { Self.mark(info.chapters, on: item) }
+            #endif
+            if !info.subtitles.isEmpty { self.externalSubtitles.offer(info.subtitles, automatic: info.uploaded) }
+        }
+    }
+
+    #if os(tvOS)
+    /// Chapters as AVKit's own chapter markers, which the Apple TV's scrubber shows and steps through.
+    private static func mark(_ chapters: [PlaybackChapter], on item: AVPlayerItem) {
+        guard !chapters.isEmpty else { return }
+        let markers = chapters.map { chapter in
+            let title = AVMutableMetadataItem()
+            title.identifier = .commonIdentifierTitle
+            title.value = chapter.title as NSString
+            title.extendedLanguageTag = "und"
+            return AVTimedMetadataGroup(items: [title], timeRange: CMTimeRange(start: CMTime(seconds: chapter.start, preferredTimescale: 600),
+                                                                                  end: CMTime(seconds: chapter.end, preferredTimescale: 600)))
+        }
+        item.navigationMarkerGroups = [AVNavigationMarkersGroup(title: nil, timedNavigationMarkers: markers)]
+    }
+    #endif
 
     func beginEditingSkip() {
         editingSkip = true
@@ -57,6 +121,7 @@ import IOKit.pwr_mgt
         duration = length.isFinite ? max(0, length) : 0
         guard skipScope != nil, !editingSkip, !seekingSegment, pendingResume == nil, !restoringPosition,
               item.status == .readyToPlay else { return }
+        updateSourceSkip(time: time)
         var pass = skipPass
         guard let target = pass.target(time: time, duration: length, playing: player.rate > 0, settings: skipSettings) else {
             skipPass = pass
@@ -601,6 +666,7 @@ import IOKit.pwr_mgt
             self.configure(channel, url: address, generation: activeGeneration)
             self.playing = channel; self.automatic = address
             self.externalSubtitles.begin(channel, playing: address)
+            self.loadPartExtras(channel, generation: activeGeneration)
             self.qualities = liveQualities.isEmpty ? DashStreams.qualities(for: address) : liveQualities
             self.quality = liveQuality
             if DanmakuSource.has(channel.url), let comments = await DanmakuSource.comments(for: channel.url),
@@ -1043,6 +1109,10 @@ import IOKit.pwr_mgt
         #if os(macOS)
         displayAwake.hold(false)
         #endif
+        if let part = bilibiliPart, let item, item.status == .readyToPlay {
+            let seconds = item.currentTime().seconds
+            Task { await BilibiliHeartbeat.shared.report(part, seconds: seconds, final: true) }
+        }
         saveHistory()
         discardUpcoming()
         upcomingAttempted = false; skipsToUpcoming = false; advanced = nil
@@ -1061,6 +1131,7 @@ import IOKit.pwr_mgt
         requestedResumePosition = nil; restoredPosition = nil
         skipScope = nil; skipSettings = EpisodeSkipSettings(); skipPass = EpisodeSkipPass()
         position = 0; duration = 0; editingSkip = false; resumeAfterEditing = false; seekingSegment = false
+        sourceSkips = []; skipOffer = nil; skippedSource = []; chapters = []; bilibiliPart = nil
         onPlaybackEnded = nil; onUnplayableFile = nil
         if player.currentItem != nil {
             let seconds = player.currentTime().seconds
@@ -1091,6 +1162,7 @@ import IOKit.pwr_mgt
         let length = item.duration.seconds
         let time = completed && length.isFinite ? length : item.currentTime().seconds
         history.record(context, position: time, duration: length.isFinite ? length : 0)
+        if let part = bilibiliPart { Task { await BilibiliHeartbeat.shared.report(part, seconds: time, final: completed) } }
     }
 
     /// Per-episode state: where its history goes, where it resumes, the intro and outro to skip, its danmaku.
@@ -1102,6 +1174,8 @@ import IOKit.pwr_mgt
         skipScope = channel.skipScope
         skipSettings = skipScope.map { EpisodeSkipSettings.load(scope: $0, defaults: skipDefaults) } ?? EpisodeSkipSettings()
         skipPass = EpisodeSkipPass(); seekingSegment = false
+        sourceSkips = channel.skips; skipOffer = nil; skippedSource = []; chapters = []
+        bilibiliPart = channel.bilibiliPart
         position = 0; duration = 0
         upcomingAttempted = false
         // A drive's folder and file names don't name a show to find comments for.
@@ -1418,6 +1492,7 @@ extension PlaybackSession {
         loading = upcoming.item.status != .readyToPlay
         playing = channel; automatic = upcoming.prepared.url
         externalSubtitles.begin(channel, playing: upcoming.prepared.url)
+        loadPartExtras(channel, generation: activeGeneration)
         player.allowsExternalPlayback = !Remux.isRemuxed(upcoming.prepared.url)
         qualities = DashStreams.qualities(for: upcoming.prepared.url)
         watch(upcoming.item, channel: channel, url: upcoming.prepared.url, generation: activeGeneration)

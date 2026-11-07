@@ -17,7 +17,8 @@ final class TVNavigationUITests: XCTestCase {
         let open = app.buttons["qa.open-detail"]
         XCTAssertTrue(open.waitForExistence(timeout: 60), "The QA page did not appear")
         // Focus starts in the tab sidebar on the left; move right into the page until Select opens the video.
-        let loading = app.staticTexts["Loading video details…"]
+        // The page's skeleton: the placeholder where Play will be holds focus while the details load.
+        let loading = app.descendants(matching: .any)["detail.loading"]
         for _ in 0..<4 where !loading.exists {
             remote.press(.right); sleep(1)
             remote.press(.select)
@@ -144,14 +145,17 @@ final class TVNavigationUITests: XCTestCase {
         }
         XCTAssertTrue(second.exists, "The video page did not open")
         sleep(2)
-        // Play takes focus once the details load; Right passes Download and enters the rail.
+        // Play takes focus once the details load; Download is under it, as on the Bilibili page, and the episodes are
+        // under the hero.
         XCTAssertTrue(app.buttons["Play"].hasFocus, "Play did not take focus when the details loaded")
         let file = app.buttons["[18.35GB] 玩-居-宗 01.mkv"]
-        remote.press(.right); sleep(1)
-        XCTAssertTrue(app.buttons["Download"].hasFocus, "Right from Play did not reach Download")
-        remote.press(.right); sleep(1)
-        XCTAssertTrue(file.hasFocus || chips.contains { $0.hasFocus }, "Right from Download did not reach the episode rail")
-        if file.hasFocus { remote.press(.up); sleep(1) }
+        remote.press(.down); sleep(1)
+        XCTAssertTrue(app.buttons["detail.download"].hasFocus || app.buttons["detail.favorite"].hasFocus, "Down from Play did not reach Download or Favorite")
+        // The rows under the hero are lazy: the file's row exists only once it is on screen.
+        func inRail() -> Bool { (file.exists && file.hasFocus) || chips.contains { $0.exists && $0.hasFocus } }
+        for _ in 0..<4 where !inRail() { remote.press(.down); sleep(1) }
+        XCTAssertTrue(inRail(), "Down from Download did not reach the episode rail")
+        if file.exists && file.hasFocus { remote.press(.up); sleep(1) }
         XCTAssertTrue(chips.contains { $0.hasFocus }, "Up from the file did not reach the source chips")
         for _ in 0..<3 where !second.hasFocus {
             remote.press(chips[0].hasFocus ? .right : .left); sleep(1)
@@ -162,6 +166,37 @@ final class TVNavigationUITests: XCTestCase {
         for _ in 0..<3 where chips.contains(where: { $0.hasFocus }) { remote.press(.left); sleep(1) }
         XCTAssertFalse(chips.contains { $0.hasFocus } || file.hasFocus, "Left did not leave the episode rail")
     }
+    /// The Bilibili source's home rows are Discover's: Left from a row's first cover opens See All, which lists the row
+    /// (the home's rows give way to it).
+    func testBilibiliRowSeeAllOpensFromTheLeft() throws {
+        let app = XCUIApplication()
+        // A version no release is newer than: the What's New screen would cover the page.
+        app.launchArguments = ["-qaSection", "sites", "-qaPage", "site:builtin.bilibili", "-qaIsolatedData", "1", "-qaVersion", "99",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        func snap(_ name: String) { let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = name; shot.lifetime = .keepAlways; add(shot) }
+        // See All is a hidden sliver until Left reveals it: wait for the rows.
+        let mores = app.buttons.matching(identifier: "watchnow.more")
+        let popular = app.staticTexts["Popular"]
+        XCTAssertTrue(popular.waitForExistence(timeout: 90), "The home has no Popular row")
+        sleep(3)
+        let focused = app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+        // Focus starts in the tab sidebar: Right into the page, then Down past the search keyboard, the sign-in card and
+        // the chips to a cover, taller than any control.
+        remote.press(.right); sleep(2)
+        for _ in 0..<8 where !(focused.exists && focused.frame.height > 150) { remote.press(.down); sleep(1) }
+        XCTAssertTrue(focused.frame.height > 150, "Down did not reach a row of covers: \(focused.identifier) \(focused.frame)")
+        snap("cover")
+        let seeAll = mores.matching(NSPredicate(format: "hasFocus == true")).firstMatch
+        for _ in 0..<4 where !seeAll.exists { remote.press(.left); sleep(1) }
+        snap("see all")
+        XCTAssertTrue(seeAll.exists, "Left from the row's first cover did not reach See All")
+        remote.press(.select); sleep(5)
+        snap("listed")
+        XCTAssertFalse(popular.exists, "See All did not open the row's list")
+    }
+
     /// The address row on Add Subscription opens its alert and the app keeps answering the remote. On tvOS 27 any
     /// alert or sheet over a page pushed in a tab froze the app: `openRoute` was a new closure on every update, so
     /// the stack never settled (#272).
@@ -439,6 +474,57 @@ final class TVNavigationUITests: XCTestCase {
             if app.state == .runningForeground { trail.append(focus()); snap("after \(presses)") }
         }
         XCTAssertEqual(presses, 1, "Back on Watch Now's sidebar (focus was \(onWatchNow)) left after \(presses) presses: \(trail) state \(app.state.rawValue)")
+    }
+
+    /// 选集 in the player: the info panel (down from the transport bar) has an Episodes tab with the lines and the line's
+    /// episodes, the one playing focused; choosing another episode plays it in the same player.
+    func testPlayerEpisodesTabPlaysAnotherEpisode() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-qaSection", "sites", "-qaPage", "play-source:qa-standard", "-qaIsolatedData", "1",
+                               "-qaSubscription", "http://127.0.0.1:8776/config.json", "-autoPlayNextEpisode", "NO",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        let focused = app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+        func focus() -> String { focused.exists ? "\(focused.elementType.rawValue):\(focused.identifier):\(focused.label)" : "none" }
+        func snap(_ name: String) { let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = name; shot.lifetime = .keepAlways; add(shot) }
+        let waiting = app.descendants(matching: .any)["player.waiting"]
+        // The fixture clip starts at once: the wait may be over before it is looked for.
+        _ = waiting.waitForExistence(timeout: 15)
+        for _ in 0..<30 where waiting.exists { sleep(1) }
+        XCTAssertFalse(waiting.exists, "The picture did not start")
+        sleep(2)
+        remote.press(.select); sleep(2)
+        snap("transport bar")
+        let panel = app.descendants(matching: .any)["player.episodes.panel"]
+        var trail: [String] = []
+        for _ in 0..<4 where !panel.exists {
+            remote.press(.down); sleep(2); trail.append(focus()); snap("down \(trail.count)")
+            if !panel.exists, focused.label == "Episodes" { remote.press(.select); sleep(2); snap("selected Episodes") }
+        }
+        XCTAssertTrue(panel.exists, "No Episodes tab: \(trail)")
+        sleep(1)
+        let first = focus()
+        snap("episodes tab")
+        XCTAssertTrue(first.contains("1"), "Focus did not start on the episode playing: \(first)")
+        remote.press(.right); sleep(1)
+        let second = focus()
+        XCTAssertTrue(second.contains("2"), "Right did not reach episode 2: \(second)")
+        // Up reaches the lines; the other line's episodes show once it is chosen.
+        remote.press(.up); sleep(1)
+        remote.press(.right); sleep(1)
+        let line = focus()
+        remote.press(.select); sleep(2)
+        snap("other line")
+        XCTAssertTrue(line.contains("线路二"), "Up and Right did not reach the second line: \(line)")
+        remote.press(.down); sleep(1)
+        let alternate = focus()
+        XCTAssertTrue(alternate.contains("备用"), "Down did not reach the other line's episode: \(alternate)")
+        // Choosing it plays it: the player stays and the panel closes.
+        remote.press(.select); sleep(6)
+        snap("after choosing")
+        XCTAssertEqual(app.state, .runningForeground)
+        XCTAssertFalse(panel.exists, "The Episodes tab stayed open after choosing an episode")
     }
 
     /// Poster titles are part of their card's label, so look for the text anywhere in a label.
