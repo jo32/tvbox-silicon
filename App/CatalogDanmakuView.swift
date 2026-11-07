@@ -175,87 +175,106 @@ struct CatalogDanmakuSettingsView: View {
     var body: some View {
         @Bindable var model = model
         NavigationStack {
-            Form {
-                Section {
-                    Toggle(L10n.text("Show Danmaku"), isOn: $model.enabled).settingsSwitch().accessibilityIdentifier("danmaku.enabled")
-                    Toggle(L10n.text("Automatically match the current episode"), isOn: $model.automatic)
-                        .settingsSwitch()
-                        .accessibilityIdentifier("danmaku.automatic")
-                    Text(L10n.text("Matching comments appear automatically. If none match or the service is unavailable, the video stays clear."))
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text(status).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("danmaku.status")
-                    Button(L10n.text("Retry automatic matching")) { model.retryAutomatic() }.disabled(model.context == nil)
-                    if !model.track.isEmpty {
-                        Text(model.track).font(.subheadline)
-                        Text(model.source + (model.fromCache ? " · " + L10n.text("From local cache") : "")).font(.caption).foregroundStyle(.secondary)
-                        Text(L10n.text("Loaded %lld comments", model.comments.count)).foregroundStyle(.secondary)
-                        HStack {
-                            Text(L10n.text("Opacity"))
-                            Slider(value: $model.opacity, in: 0.2...1)
-                        }
-                        HStack {
-                            Text(L10n.text("Text Size"))
-                            Slider(value: $model.fontSize, in: 16...36, step: 2)
-                        }
-                        Stepper(value: $model.offset, in: -300...300, step: 0.5) {
-                            Text(L10n.text("Time Offset: %@ s", String(format: "%+.1f", model.offset)))
-                        }
-                        Text(L10n.text("A positive offset shows comments later. Playback controls stay available."))
+            ScrollViewReader { proxy in
+                Form {
+                    Section {
+                        Toggle(L10n.text("Show Danmaku"), isOn: $model.enabled).settingsSwitch().accessibilityIdentifier("danmaku.enabled")
+                        Toggle(L10n.text("Automatically match the current episode"), isOn: $model.automatic)
+                            .settingsSwitch()
+                            .accessibilityIdentifier("danmaku.automatic")
+                        Text(L10n.text("Matching comments appear automatically. If none match or the service is unavailable, the video stays clear."))
                             .font(.caption).foregroundStyle(.secondary)
-                        Button(L10n.text("Clear Danmaku"), role: .destructive) { work?.cancel(); busy = false; model.clear(keepingContext: true) }
+                        Text(status).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("danmaku.status")
+                        Button(L10n.text("Retry automatic matching")) { model.retryAutomatic() }.disabled(model.context == nil)
+                        if !model.track.isEmpty {
+                            Text(model.track).font(.subheadline)
+                            Text(model.source + (model.fromCache ? " · " + L10n.text("From local cache") : "")).font(.caption).foregroundStyle(.secondary)
+                            Text(L10n.text("Loaded %lld comments", model.comments.count)).foregroundStyle(.secondary)
+                            HStack {
+                                Text(L10n.text("Opacity"))
+                                Slider(value: $model.opacity, in: 0.2...1)
+                            }
+                            HStack {
+                                Text(L10n.text("Text Size"))
+                                Slider(value: $model.fontSize, in: 16...36, step: 2)
+                            }
+                            Stepper(value: $model.offset, in: -300...300, step: 0.5) {
+                                Text(L10n.text("Time Offset: %@ s", String(format: "%+.1f", model.offset)))
+                            }
+                            Text(L10n.text("A positive offset shows comments later. Playback controls stay available."))
+                                .font(.caption).foregroundStyle(.secondary)
+                            Button(L10n.text("Clear Danmaku"), role: .destructive) { work?.cancel(); busy = false; model.clear(keepingContext: true) }
+                        }
                     }
+                    Section {
+                        Toggle(L10n.text("Find official episodes for dmku"), isOn: $officialLookup).settingsSwitch()
+                        Text(L10n.text("Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent."))
+                            .font(.caption).foregroundStyle(.secondary)
+                        HStack {
+                            TextField(L10n.text("Video title"), text: $keyword).onSubmit { search() }.accessibilityIdentifier("danmaku.keyword")
+                            Button(L10n.text("Search")) { search() }.disabled(busy || keyword.trimmingCharacters(in: .whitespaces).isEmpty).accessibilityIdentifier("danmaku.search")
+                        }
+                        if busy { ProgressView(L10n.text("Loading…")) }
+                        if let error { Text(error).foregroundStyle(.red).font(.callout) }
+                        if let anime = selectedAnime {
+                            Button(L10n.text("Back to search results")) { work?.cancel(); busy = false; selectedAnime = nil; episodes = []; error = nil }
+                            Text(anime.title).font(.headline)
+                            ForEach(episodes) { episode in
+                                Button(episode.title) { load(episode, anime: anime) }.disabled(busy).accessibilityIdentifier("danmaku.episode." + episode.id)
+                            }
+                        } else {
+                            ForEach(animes) { anime in
+                                Button { select(anime) } label: {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(anime.title)
+                                        if !anime.type.isEmpty { Text(anime.type).font(.caption).foregroundStyle(.secondary) }
+                                    }
+                                }.disabled(busy).accessibilityIdentifier("danmaku.anime." + anime.id)
+                            }
+                            if searched && animes.isEmpty && !busy && error == nil {
+                                Text(L10n.text("No danmaku found. Try another title or server.")).foregroundStyle(.secondary)
+                            }
+                        }
+                    } header: { Text(L10n.text("Find Danmaku")) }
+                      footer: { Text(L10n.text("Search sends only the title to the selected danmaku service. Choose the correct season and episode; some videos have no comments.")) }
+                    Section {
+                        Button(L10n.text("Import Danmaku File")) { showsImporter = true }.disabled(busy)
+                    } footer: { Text(L10n.text("Import Bilibili XML or Dandanplay JSON from Files. Imported comments do not require a network connection.")) }
+                    Section {
+                        TextField(L10n.text("Danmaku server URL"), text: $server)
+                            #if os(iOS)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                            #endif
+                            .onChange(of: server) { _, _ in
+                                work?.cancel(); busy = false; animes = []; episodes = []; selectedAnime = nil; searched = false; error = nil
+                            }
+                        Button(L10n.text("Use Default URL")) { server = CatalogDanmakuClient.defaultServer }
+                    } header: { Text(L10n.text("Danmaku Service")) }
+                      footer: { Text(L10n.text("Uses the official Dandanplay service. You can also enter your own compatible server.")) }
                 }
-                Section {
-                    Toggle(L10n.text("Find official episodes for dmku"), isOn: $officialLookup).settingsSwitch()
-                    Text(L10n.text("Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent."))
-                        .font(.caption).foregroundStyle(.secondary)
-                    HStack {
-                        TextField(L10n.text("Video title"), text: $keyword).onSubmit { search() }.accessibilityIdentifier("danmaku.keyword")
-                        Button(L10n.text("Search")) { search() }.disabled(busy || keyword.trimmingCharacters(in: .whitespaces).isEmpty).accessibilityIdentifier("danmaku.search")
-                    }
-                    if busy { ProgressView(L10n.text("Loading…")) }
-                    if let error { Text(error).foregroundStyle(.red).font(.callout) }
-                    if let anime = selectedAnime {
-                        Button(L10n.text("Back to search results")) { work?.cancel(); busy = false; selectedAnime = nil; episodes = []; error = nil }
-                        Text(anime.title).font(.headline)
-                        ForEach(episodes) { episode in
-                            Button(episode.title) { load(episode, anime: anime) }.disabled(busy).accessibilityIdentifier("danmaku.episode." + episode.id)
-                        }
-                    } else {
-                        ForEach(animes) { anime in
-                            Button { select(anime) } label: {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(anime.title)
-                                    if !anime.type.isEmpty { Text(anime.type).font(.caption).foregroundStyle(.secondary) }
-                                }
-                            }.disabled(busy).accessibilityIdentifier("danmaku.anime." + anime.id)
-                        }
-                        if searched && animes.isEmpty && !busy && error == nil {
-                            Text(L10n.text("No danmaku found. Try another title or server.")).foregroundStyle(.secondary)
-                        }
-                    }
-                } header: { Text(L10n.text("Find Danmaku")) }
-                  footer: { Text(L10n.text("Search sends only the title to the selected danmaku service. Choose the correct season and episode; some videos have no comments.")) }
-                Section {
-                    Button(L10n.text("Import Danmaku File")) { showsImporter = true }.disabled(busy)
-                } footer: { Text(L10n.text("Import Bilibili XML or Dandanplay JSON from Files. Imported comments do not require a network connection.")) }
-                Section {
-                    TextField(L10n.text("Danmaku server URL"), text: $server)
-                        #if os(iOS)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                        #endif
-                        .onChange(of: server) { _, _ in
-                            work?.cancel(); busy = false; animes = []; episodes = []; selectedAnime = nil; searched = false; error = nil
-                        }
-                    Button(L10n.text("Use Default URL")) { server = CatalogDanmakuClient.defaultServer }
-                } header: { Text(L10n.text("Danmaku Service")) }
-                  footer: { Text(L10n.text("Uses the official Dandanplay service. You can also enter your own compatible server.")) }
+                // The Mac's default form style lays the rows out in columns without a scroll view, so a show with many
+                // episodes grew the sheet past the bottom of the screen and nothing scrolled (#671). Grouped scrolls.
+                .formStyle(.grouped)
+                .navigationTitle(L10n.text("Danmaku"))
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { dismiss() } } }
+                #if DEBUG
+                // `-qaDanmakuSearch <n>` searches the title, opens the n-th result's episodes (1 is the first) and scrolls to
+                // the last of them, for checking a long episode list (#671).
+                .task {
+                    let pick = UserDefaults.standard.integer(forKey: "qaDanmakuSearch")
+                    guard pick > 0 else { return }
+                    try? await Task.sleep(for: .milliseconds(300))
+                    search(); await work?.value
+                    guard animes.indices.contains(pick - 1) else { return }
+                    select(animes[pick - 1]); await work?.value
+                    try? await Task.sleep(for: .seconds(1))
+                    if let last = episodes.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
+                }
+                #endif
             }
-            .navigationTitle(L10n.text("Danmaku"))
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { dismiss() } } }
         }
         #if os(macOS)
-        .frame(minWidth: 520, idealWidth: 560, minHeight: 500)
+        .frame(minWidth: 520, idealWidth: 560, minHeight: 500, idealHeight: 640)
         #endif
         .onAppear {
             if server.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/")) == CatalogDanmakuClient.legacyDefaultServer { server = CatalogDanmakuClient.defaultServer }

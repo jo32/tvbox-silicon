@@ -33,7 +33,9 @@ struct SitesView: View {
     var body: some View {
         Group {
             if let config = store.subscription {
-                let groups = store.sourceGroups(includeHidden: false).filtered(by: query).limited(to: pick == nil ? nil : Set(pickable.map(\.key)))
+                let all = store.sourceGroups(includeHidden: false)
+                let hiddenCount = all.first { $0.kind == .hidden }?.sites.count ?? 0
+                let groups = all.filtered(by: query).limited(to: pick == nil ? nil : Set(pickable.map(\.key)))
                 let sites = store.orderedSites(config)
                 ScrollViewReader { proxy in
                 ScrollView {
@@ -41,7 +43,7 @@ struct SitesView: View {
                         if pick == nil, query.isEmpty && sites.count > 1 {
                             VStack(alignment: .leading, spacing: Layout.cardSpacing) {
                                 SourceOrderCard(sites: sites) { arranging = true }
-                                HideSourcesCard(hidden: groups.first { $0.kind == .hidden }?.sites.count ?? 0) { choosingHidden = true }
+                                HideSourcesCard(hidden: hiddenCount) { choosingHidden = true }
                             }.tvFocusSection()
                         }
                         ForEach(groups) { group in
@@ -68,6 +70,13 @@ struct SitesView: View {
                                 .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: -16)), removal: .opacity))
                             }
                         }
+                        // Picking leaves hidden sources out; the way to show them again is at the end, where the
+                        // list runs out (#704). Not on Apple TV, where a sheet over a pushed page never settles (#272).
+                        #if !os(tvOS)
+                        if pick != nil, query.isEmpty, hiddenCount > 0 {
+                            HideSourcesCard(hidden: hiddenCount) { choosingHidden = true }
+                        }
+                        #endif
                     }.pageContainer()
                 }
                 // Picking opens on the current choice rather than the top of a long page.
@@ -91,6 +100,17 @@ struct SitesView: View {
         .screenBackdrop()
         .catalogSearchable(text: $query, prompt: L10n.text("Find a source"))
         .modifier(SitesTitle(picking: pick != nil))
+        #if !os(tvOS)
+        .toolbar {
+            // Edit, where people look first to remove a source that stopped working or to bring back one they hid
+            // (#669, #704). It opens the same list as the Hide or Show Sources card.
+            if pick == nil, store.subscription != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(L10n.text("Edit")) { choosingHidden = true }.accessibilityIdentifier("sources.edit")
+                }
+            }
+        }
+        #endif
         .task(id: store.section) {
             if store.section == .sites && !prepared {
                 applyDefaultFold()
@@ -385,6 +405,46 @@ struct HideSourceButton: View {
         Button { store.hiddenSources.toggle(site, origin: origin) } label: {
             Label(L10n.text(hidden ? "Unhide Source" : "Hide Source"), systemImage: hidden ? "eye" : "eye.slash")
         }.accessibilityIdentifier("source.hide." + site.key)
+    }
+}
+
+/// Over a hidden source's own page: it says so, and Unhide Source brings it back. Hiding is a single tap in the page's
+/// toolbar or a source's menu, so a mistaken one is undone where it happened rather than on another page (#704).
+struct HiddenSourceBanner: View {
+    @Environment(Store.self) private var store
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    let site: Site
+    let origin: URL
+    var body: some View {
+        let text = VStack(alignment: .leading, spacing: 4) {
+            Text(L10n.text("This Source Is Hidden")).font(.headline)
+            Text(L10n.text("It stays out of Watch Now and search. Hidden sources are listed at the end of the Sources page."))
+                .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        let button = Button { withAnimation(.smooth) { store.hiddenSources.toggle(site, origin: origin) } } label: { Text(L10n.text("Unhide Source")) }
+            .controlButton(prominent: true)
+            .accessibilityIdentifier("source.unhide." + site.key)
+        Group {
+            if sizeClass == .compact {
+                // An iPhone's width: the button under the words, which beside it wrapped to five short lines.
+                VStack(alignment: .trailing, spacing: 12) {
+                    HStack(alignment: .top, spacing: 14) {
+                        IconTile(symbol: "eye.slash", tint: Brand.teal, size: 44)
+                        text.frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    button
+                }
+            } else {
+                HStack(spacing: 16) {
+                    IconTile(symbol: "eye.slash", tint: Brand.teal, size: 44)
+                    text
+                    Spacer(minLength: 12)
+                    button
+                }
+            }
+        }
+        .padding(16)
+        .contentPanel()
     }
 }
 
@@ -716,9 +776,20 @@ struct HiddenSourcesEditor: View {
         store.hiddenSources.setHidden(sites, origin: config.origin, hidden: hidden)
     }
 
+    /// Shown sources whose last answers, at least two in a row, were failures (`SourceHealth`): the dead ones a
+    /// subscription still lists. A subscription's sources can't be deleted one by one, only hidden (#669).
+    private func notWorking(_ groups: [SourceGroup]) -> [Site] {
+        guard let config = store.subscription else { return [] }
+        var seen = Set<Site.ID>()
+        return groups.flatMap(\.sites).filter { site in
+            seen.insert(site.id).inserted && !isHidden(site) && SourceHealth.shared.failedRepeatedly(site, origin: config.origin)
+        }
+    }
+
     var body: some View {
         let groups = store.sourceGroups(includeHidden: true)
         let hiddenCount = groups.flatMap(\.sites).filter(isHidden).count
+        let failing = notWorking(groups)
         #if os(tvOS)
         NavigationStack {
             ScrollView {
@@ -727,6 +798,10 @@ struct HiddenSourcesEditor: View {
                         .font(.system(size: 24)).foregroundStyle(.secondary).padding(.bottom, 12)
                     if hiddenCount > 0 {
                         TVSettingsAction(title: L10n.text("Show All Sources")) { setHidden(groups.flatMap(\.sites), false) }
+                            .padding(.bottom, failing.isEmpty ? 16 : 0)
+                    }
+                    if !failing.isEmpty {
+                        TVSettingsAction(title: L10n.text("Hide Sources That Aren't Working (%lld)", failing.count)) { setHidden(failing, true) }
                             .padding(.bottom, 16)
                     }
                     ForEach(groups) { group in
@@ -768,6 +843,17 @@ struct HiddenSourcesEditor: View {
                         #if os(iOS)
                         .listRowBackground(Surface())
                         #endif
+                    if !failing.isEmpty {
+                        Button { withAnimation(.smooth) { setHidden(failing, true) } } label: {
+                            Label(L10n.text("Hide Sources That Aren't Working (%lld)", failing.count), systemImage: "eye.slash")
+                        }
+                        .accessibilityIdentifier("sources.hidden.failing")
+                        #if os(iOS)
+                        .listRowBackground(Surface())
+                        #endif
+                    }
+                } footer: {
+                    Text(L10n.text("Sources come from your subscriptions, so a source is hidden rather than deleted. To delete a whole subscription, open it in Settings."))
                 }
                 ForEach(groups) { group in
                     let hidden = group.sites.filter(isHidden)
@@ -824,8 +910,10 @@ struct HiddenSourcesEditor: View {
 }
 
 #if !os(tvOS)
-/// One source in `HiddenSourcesEditor`: a tick while it is shown, its icon and name.
+/// One source in `HiddenSourcesEditor`: a tick while it is shown, its icon and name, and the health dot the
+/// source cards show, so the ones that stopped working stand out.
 private struct HiddenSourceRow: View {
+    @Environment(Store.self) private var store
     let site: Site
     let shown: Bool
     var body: some View {
@@ -836,6 +924,7 @@ private struct HiddenSourceRow: View {
             SourceIcon(site: site, label: label, size: 32).opacity(shown ? 1 : 0.45)
             Text(label.parts[0]).font(.body.weight(.medium)).lineLimit(1)
                 .foregroundStyle(shown ? Color.primary : Color.secondary)
+            SourceHealthDot(status: store.health(of: site))
             Spacer(minLength: 8)
             if !shown { Text(L10n.text("Hidden")).font(.caption).foregroundStyle(.secondary) }
         }
@@ -909,6 +998,7 @@ struct SiteView: View {
                         }
                         #endif
                         if site.isBilibili && !isBilibiliSpace && !BilibiliAccount.load().signedIn { BilibiliSignInBanner() }
+                        if folder == nil, store.hiddenSources.contains(site, origin: origin) { HiddenSourceBanner(site: site, origin: origin) }
                         // An UP主's space (#256): who they are, Follow, and their uploads by order or their collections.
                         if site.isBilibili, let folder, let mid = BilibiliAPI.creator(category: folder.id) {
                             BilibiliSpaceHeader(mid: mid, name: folder.name, client: client,

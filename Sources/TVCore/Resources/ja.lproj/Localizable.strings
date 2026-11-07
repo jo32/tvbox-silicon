@@ -1744,3 +1744,7 @@
 "Chapter %lld" = "チャプター %lld";
 "All Comments" = "すべてのコメント";
 "Start Over" = "最初から";
+"Hide Sources That Aren't Working (%lld)" = "動作していないソースを隠す（%lld）";
+"Sources come from your subscriptions, so a source is hidden rather than deleted. To delete a whole subscription, open it in Settings." = "ソースは配信設定から読み込まれるため、1つずつ削除はできず、非表示にします。配信設定ごと削除するには「設定」で開いてください。";
+"This Source Is Hidden" = "このソースは非表示です";
+"It stays out of Watch Now and search. Hidden sources are listed at the end of the Sources page." = "「今すぐ観る」と検索に表示されません。非表示のソースは「配信ソース」ページの最後に並びます。";
