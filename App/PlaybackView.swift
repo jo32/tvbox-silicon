@@ -160,7 +160,7 @@ import IOKit.pwr_mgt
     /// A live stream is being moved to its live edge (`catchUpLive`).
     private var catchingUpLive = false
     /// A live room's chat, whose comments join `danmaku` as they are sent.
-    private var chat: BilibiliLiveChat?
+    private var chat: (any LiveChat)?
     /// Download state while connecting or buffering, sampled once a second from AVFoundation's logs.
     struct Transfer {
         var received: Int64 = 0
@@ -220,8 +220,7 @@ import IOKit.pwr_mgt
     }
 
     /// Shows a live room's chat as danmaku: each comment enters as it arrives.
-    private func listen(room: Int, generation active: UUID) {
-        let chat = BilibiliLiveChat(room: room)
+    private func listen(_ chat: any LiveChat, generation active: UUID) {
         self.chat = chat
         chat.start { text, color, position in
             Task { @MainActor [weak self] in
@@ -564,7 +563,7 @@ import IOKit.pwr_mgt
             // A live room becomes its current stream address now; the address expires.
             var channel = channel
             var liveQualities: [StreamQuality] = [], liveQuality: Int?
-            if let (platform, id) = LiveCatalog.room(channel.url), platform.chat == "bilibili", let room = Int(id) { self.listen(room: room, generation: activeGeneration) }
+            if let (platform, id) = LiveCatalog.room(channel.url), let chat = LiveChats.make(platform.chat, room: id) { self.listen(chat, generation: activeGeneration) }
             if LiveCatalog.isRoom(channel.url) {
                 self.note(L10n.text("Finding the live stream"))
                 do { (channel, liveQualities, liveQuality) = try await LiveCatalog.resolve(channel) }

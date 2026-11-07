@@ -201,6 +201,14 @@ import TVCore
             chat.stop()
             return
         }
+        if args[1] == "--live-chat", args.count >= 4, let chat = LiveChats.make(args[2], room: args[3]) {
+            // --live-chat <bilibili|douyu|huya> <room> [seconds]: prints a live room's comments as they arrive.
+            setvbuf(stdout, nil, _IONBF, 0)
+            chat.start { text, color, position in print("danmaku \(String(format: "%06x", color)) \(position) \(text)") }
+            try await Task.sleep(for: .seconds(args.count > 4 ? Double(args[4]) ?? 20 : 20))
+            chat.stop()
+            return
+        }
         if args[1] == "--douyin-handoff" {
             // --douyin-handoff: a TV-side receiver and an iPhone-side send over the LAN address, plus a
             // forged send (wrong key) that must be refused.
