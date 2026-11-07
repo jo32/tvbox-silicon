@@ -517,6 +517,7 @@
 "No Downloads" = "No Downloads";
 "Choose Download on a video's page to save episodes for watching offline." = "Choose Download on a video's page to save episodes for watching offline.";
 "Downloaded" = "Downloaded";
+"Date Downloaded" = "Date Downloaded";
 "Delete all downloaded episodes of %@?" = "Delete all downloaded episodes of %@?";
 "Delete Downloads" = "Delete Downloads";
 "Delete Download" = "Delete Download";

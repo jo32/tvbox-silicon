@@ -516,6 +516,7 @@
 "No Downloads" = "ダウンロードはありません";
 "Choose Download on a video's page to save episodes for watching offline." = "動画のページで「ダウンロード」を選ぶと、エピソードを保存してオフラインで視聴できます。";
 "Downloaded" = "ダウンロード済み";
+"Date Downloaded" = "ダウンロード日";
 "Delete all downloaded episodes of %@?" = "「%@」のダウンロード済みエピソードをすべて削除しますか？";
 "Delete Downloads" = "ダウンロードを削除";
 "Delete Download" = "ダウンロードを削除";

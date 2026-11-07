@@ -516,6 +516,7 @@
 "No Downloads" = "沒有下載";
 "Choose Download on a video's page to save episodes for watching offline." = "在影片頁面選擇「下載」，即可儲存劇集離線觀看。";
 "Downloaded" = "已下載";
+"Date Downloaded" = "下載時間";
 "Delete all downloaded episodes of %@?" = "刪除《%@》的所有已下載劇集？";
 "Delete Downloads" = "刪除下載";
 "Delete Download" = "刪除下載";

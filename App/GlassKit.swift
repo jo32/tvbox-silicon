@@ -633,8 +633,9 @@ private struct TVChipStyle: ButtonStyle {
 
 extension View {
     /// A Liquid Glass capsule that turns white on focus, like the chips.
-    /// `lift` is how much it grows on focus; 1 keeps a wide pill (the search field) its own size.
-    func glassPill(lift: CGFloat = 1.06) -> some View { buttonStyle(TVChipStyle(selected: false, lift: lift)) }
+    /// `lift` is how much it grows on focus; 1 keeps a wide pill (the search field) its own size. `selected` gives it the
+    /// chosen chip's lighter glass, for a button that stays on (倒序).
+    func glassPill(lift: CGFloat = 1.06, selected: Bool = false) -> some View { buttonStyle(TVChipStyle(selected: selected, lift: lift)) }
 }
 
 /// The query as a glass pill after a magnifying glass, as in the TV app's search. The remote's
