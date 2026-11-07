@@ -142,7 +142,7 @@ struct PlayOnIncoming: View {
             HStack(spacing: Self.spacing) {
                 ProgressView()
                     #if os(macOS)
-                    .controlSize(.small)
+                    .appControlSize(.small)
                     #endif
                 VStack(alignment: .leading, spacing: 4) {
                     Text(incoming.title).font(.headline).lineLimit(1)
@@ -199,7 +199,7 @@ struct PlayOnButton: View {
             #if os(macOS)
             // As the Mac player's other buttons (DesktopPlaybackView's options menu).
             Group {
-                if sending != nil { ProgressView().controlSize(.small) }
+                if sending != nil { ProgressView().appControlSize(.small) }
                 else { Image(systemName: symbol).font(.system(size: 14, weight: .medium)) }
             }
             .frame(width: 34, height: 34).contentShape(Circle())

@@ -877,7 +877,7 @@ struct WaitSpinner: View {
     @State private var started = Date()
     var body: some View {
         ZStack {
-            ProgressView().controlSize(.large).tint(.white)
+            ProgressView().appControlSize(.large).tint(.white)
             if let status {
                 TimelineView(.periodic(from: .now, by: 0.5)) { timeline in
                     let elapsed = max(0, timeline.date.timeIntervalSince(started))

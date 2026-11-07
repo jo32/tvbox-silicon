@@ -41,7 +41,7 @@ struct RuntimeView: View {
                 SettingsLinkRow(symbol: "doc.text.magnifyingglass", tint: .gray, title: L10n.text("Diagnostic Logs")) { DiagnosticsView() }
             }
             if busy {
-                HStack(spacing: 8) { ProgressView().controlSize(.small); Text(L10n.text("Working…")).foregroundStyle(.secondary); ElapsedTime() }
+                HStack(spacing: 8) { ProgressView().appControlSize(.small); Text(L10n.text("Working…")).foregroundStyle(.secondary); ElapsedTime() }
             }
             if let error { Label(error, systemImage: "exclamationmark.triangle.fill").font(.callout).foregroundStyle(Brand.amber) }
         }

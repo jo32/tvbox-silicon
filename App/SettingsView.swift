@@ -438,7 +438,7 @@ struct FormSettingsView: View {
                     Text(L10n.text("Subscriptions"))
                     Spacer()
                     if store.importing {
-                        ProgressView().controlSize(.small)
+                        ProgressView().appControlSize(.small)
                     } else if !store.subscriptions.isEmpty {
                         // Quiet, in the header's own grey: a page of settings has no one blue action.
                         Button { Task { await store.refreshSubscriptions() } } label: {
@@ -643,7 +643,7 @@ struct FormSettingsView: View {
                 if updates.available.isEmpty, Updates.channel != .none {
                     LabeledContent {
                         Button { Task { await updates.check(manual: true) } } label: {
-                            if updates.checking { ProgressView().controlSize(.small) } else { Text(L10n.text("Check Now")) }
+                            if updates.checking { ProgressView().appControlSize(.small) } else { Text(L10n.text("Check Now")) }
                         }
                         .disabled(updates.checking)
                     } label: {
@@ -781,7 +781,7 @@ struct FormSettingsView: View {
                 Button(L10n.text("Refresh All")) { Task { await store.refreshSubscriptions() } }.disabled(store.importing)
             }
             Spacer()
-            if store.importing { ProgressView().controlSize(.small); ElapsedTime() }
+            if store.importing { ProgressView().appControlSize(.small); ElapsedTime() }
             Button(L10n.text("Use a Demo URL")) { store.subscriptionAddress = Store.defaultURL }
             Button(L10n.text("Add from File…")) { choosesFile = true }.disabled(store.importing)
                 .help(L10n.text("A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider."))
@@ -1268,7 +1268,7 @@ struct DiagnosticsView: View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 8) { actionButtons }
             VStack(alignment: .leading, spacing: 8) { actionButtons }
-        }.controlSize(.regular)
+        }.appControlSize(.regular)
     }
     @ViewBuilder private var actionButtons: some View {
             Button { live.toggle() } label: {

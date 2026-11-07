@@ -325,7 +325,7 @@ private struct MusicPendingActions: View {
         .controlButton()
         #else
         .font(.subheadline.weight(.semibold))
-        .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small)
+        .buttonStyle(.bordered).buttonBorderShape(.capsule).appControlSize(.small)
         #endif
         .fixedSize()
     }

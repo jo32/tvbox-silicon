@@ -142,7 +142,7 @@ struct MusicNowPlayingScreen: View {
                 if music.failure != nil {
                     control("arrow.clockwise", size: 36, label: "Retry") { music.retry() }
                 } else if music.busy && !music.isPlaying {
-                    ProgressView().controlSize(.large).frame(width: 72, height: 72)
+                    ProgressView().appControlSize(.large).frame(width: 72, height: 72)
                 } else {
                     control(music.isPlaying ? "pause.fill" : "play.fill", size: 44, label: music.isPlaying ? "Pause" : "Play") { music.toggle() }
                         .contentTransition(.symbolEffect(.replace))

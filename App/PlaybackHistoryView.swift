@@ -274,7 +274,7 @@ struct HistoryCard: View {
                     if store.resumingHistoryID == entry.id {
                         ZStack {
                             Color.black.opacity(0.5)
-                            ProgressView().controlSize(.large).tint(.white)
+                            ProgressView().appControlSize(.large).tint(.white)
                         }
                     }
                 }

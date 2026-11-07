@@ -235,7 +235,7 @@ struct HomeView: View {
                 }
                 #endif
             }
-            .controlSize(.large)
+            .appControlSize(.large)
             if store.importing {
                 LoadingCard { .server(URL(string: store.subscriptionAddress)?.host(), title: L10n.text("Importing…")) }
                     .frame(maxWidth: heroTitle * 9)

@@ -201,7 +201,7 @@ struct TMDBLookupStatus: View {
         switch lookup.phase {
         case .looking:
             HStack(spacing: 12) {
-                ProgressView().controlSize(.small)
+                ProgressView().appControlSize(.small)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.text("Finding this title on TMDB")).font(.subheadline.weight(.semibold))
                     Text(lookup.step.text).font(.caption).foregroundStyle(.secondary).lineLimit(1)
