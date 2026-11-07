@@ -1812,6 +1812,10 @@ struct VideoDetailView: View {
     @FocusState private var tvHeroFocus: TVHeroItem?
     @State private var showsTVSynopsis = false
     #endif
+    #if os(macOS)
+    /// Scrolled past the hero, so the toolbar shows the title the hero showed.
+    @State private var macPastHero = false
+    #endif
     @State private var containerWidth: CGFloat = 0
     /// The cover's width over height once it loads; landscape covers are common (Bilibili, short dramas).
     @State private var artAspect: CGFloat?
@@ -1864,7 +1868,7 @@ struct VideoDetailView: View {
             #elseif os(tvOS)
             if showsBilibiliTVPage { bilibiliTVPage } else if showsTVLoadingHero { tvLoadingHero } else { tvDetailPage }
             #else
-            pageBody
+            macPage
             #endif
         }
         .safeAreaInset(edge: .bottom) { if !isWatchPage && !showsTVLoadingHero { loadingCard } }
@@ -1872,6 +1876,8 @@ struct VideoDetailView: View {
         #if os(macOS)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background { DetailAurora(poster: video.poster, headers: video.posterHeaders) }
+        // As Apple TV's page: the picture behind the title reads best, and the same, on a dark page.
+        .environment(\.colorScheme, .dark)
         #else
         .screenBackdrop()
         #endif
@@ -3423,6 +3429,9 @@ extension View {
     @ViewBuilder func screenTitle(_ title: String, shown: Bool) -> some View {
         #if os(tvOS)
         if shown { screenTitle(title) } else { toolbar(.hidden, for: .navigationBar) }
+        #elseif os(macOS)
+        // The Mac's pages that set their own title name the window themselves (the video page once past its hero).
+        if shown { screenTitle(title) } else { self }
         #else
         screenTitle(title)
         #endif
@@ -3487,13 +3496,6 @@ extension VideoDetailView {
         }
     }
 
-    /// TMDB's facts (2026 · Drama · ★ 7.0), else the source's note, year and name.
-    private var tvFacts: String {
-        if let facts = tmdb.details?.facts, !facts.isEmpty { return facts }
-        let current = currentVideo()
-        return [current.remarks, current.year ?? "", client.site.name].filter { !$0.isEmpty }.joined(separator: " · ")
-    }
-
     private var tvDetailHero: some View {
         let text = detail.map(synopsisText)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return VStack(alignment: .leading, spacing: 24) {
@@ -3503,8 +3505,8 @@ extension VideoDetailView {
             }
             .frame(maxWidth: 1200, alignment: .leading)
             VStack(alignment: .leading, spacing: 12) {
-                TVTitleArt(logo: tmdb.details?.logo, name: tmdb.details?.name ?? currentVideo().name)
-                Text(tvFacts.isEmpty ? " " : tvFacts).font(.system(size: 28, weight: .medium)).lineLimit(1).opacity(0.7)
+                HeroTitleArt(logo: tmdb.details?.logo, name: tmdb.details?.name ?? currentVideo().name)
+                Text(heroFacts.isEmpty ? " " : heroFacts).font(.system(size: 28, weight: .medium)).lineLimit(1).opacity(0.7)
                 if let tagline = tmdb.details?.tagline, !tagline.isEmpty {
                     Text(tagline).font(.system(size: 26).italic()).lineLimit(1).opacity(0.6)
                 }
@@ -3565,7 +3567,7 @@ extension VideoDetailView {
                             frosted: true)
             VStack(alignment: .leading, spacing: 24) {
                 Text(tmdb.details?.name ?? currentVideo().name).font(.system(size: 52, weight: .bold)).lineLimit(2)
-                if !tvFacts.isEmpty { Text(tvFacts).font(.system(size: 26)).opacity(0.6) }
+                if !heroFacts.isEmpty { Text(heroFacts).font(.system(size: 26)).opacity(0.6) }
                 Text(detail.map(synopsisText) ?? "").font(.system(size: 30)).lineSpacing(6).lineLimit(16)
             }
             .frame(maxWidth: 1300, alignment: .leading)
@@ -3685,6 +3687,39 @@ extension SiteView {
 }
 #endif
 
+#if os(tvOS) || os(macOS)
+/// The title as TMDB's logo when it has one (the name until the logo is in, and instead of one that fails), else the
+/// name. Apple TV's size by default; the Mac's hero passes its own.
+struct HeroTitleArt: View {
+    let logo: URL?
+    let name: String
+    var fontSize: CGFloat = 64
+    var logoHeight: CGFloat = 170
+    var logoMaxWidth: CGFloat = 720
+    var textMaxWidth: CGFloat = 1300
+    @State private var aspect: CGFloat?
+    private var nameText: some View {
+        Text(name).font(.system(size: fontSize, weight: .bold)).lineLimit(2).minimumScaleFactor(0.7)
+            .frame(maxWidth: textMaxWidth, alignment: .leading)
+            .shadow(color: .black.opacity(0.45), radius: fontSize / 5)
+    }
+    var body: some View {
+        if let logo {
+            // Wide logos get a width limit, tall ones a height limit.
+            let ratio = max(aspect ?? 3, 0.5)
+            let width = min(logoMaxWidth, logoHeight * ratio)
+            TMDBArtwork(url: logo, maxPixels: 1000, fill: false, aspect: $aspect)
+                .frame(width: aspect == nil ? nil : width, height: aspect == nil ? nil : width / ratio, alignment: .leading)
+                .shadow(color: .black.opacity(0.35), radius: 16)
+                .overlay(alignment: .leading) { if aspect == nil { nameText } }
+                .accessibilityLabel(name)
+        } else {
+            nameText
+        }
+    }
+}
+#endif
+
 #if os(tvOS)
 /// The cover behind Apple TV's loading page, as the Bilibili page's: a landscape cover across the screen, sharp; a
 /// poster, which would crop to a few enlarged pixels, as a soft blur of its colours. Darker toward the text.
@@ -3695,32 +3730,6 @@ private enum TVDetailMetrics {
     /// Play, and the plates under it.
     static let actionsWidth: CGFloat = 540
     static let plateWidth: CGFloat = 123
-}
-
-/// The title as TMDB's logo when it has one (the name until the logo is in, and instead of one that fails), else the name.
-private struct TVTitleArt: View {
-    let logo: URL?
-    let name: String
-    @State private var aspect: CGFloat?
-    private var nameText: some View {
-        Text(name).font(.system(size: 64, weight: .bold)).lineLimit(2).minimumScaleFactor(0.7)
-            .frame(maxWidth: 1300, alignment: .leading)
-            .shadow(color: .black.opacity(0.45), radius: 12)
-    }
-    var body: some View {
-        if let logo {
-            // Wide logos get a width limit, tall ones a height limit.
-            let ratio = max(aspect ?? 3, 0.5)
-            let width = min(720, 170 * ratio)
-            TMDBArtwork(url: logo, maxPixels: 1000, fill: false, aspect: $aspect)
-                .frame(width: aspect == nil ? nil : width, height: aspect == nil ? nil : width / ratio, alignment: .leading)
-                .shadow(color: .black.opacity(0.35), radius: 16)
-                .overlay(alignment: .leading) { if aspect == nil { nameText } }
-                .accessibilityLabel(name)
-        } else {
-            nameText
-        }
-    }
 }
 
 private struct TVCoverBackdrop: View {
@@ -3750,6 +3759,276 @@ private struct TVCoverBackdrop: View {
         .animation(.easeInOut(duration: 0.35), value: frosted)
         .animation(.easeInOut(duration: 0.4), value: image != nil)
         .task(id: url) { if let url { image = await TMDBArtwork.load(url, maxPixels: 1600, headers: headers) } }
+    }
+}
+#endif
+
+extension VideoDetailView {
+    /// TMDB's facts (2026 · Drama · ★ 7.0), else the source's note, year and name: the line under the hero's title.
+    private var heroFacts: String {
+        if let facts = tmdb.details?.facts, !facts.isEmpty { return facts }
+        let current = currentVideo()
+        return [current.remarks, current.year ?? "", client.site.name].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+}
+
+#if os(macOS)
+// MARK: The Mac's video page
+
+/// The Mac's video page in Apple TV's language: the backdrop across the window, under the toolbar and the sidebar; over
+/// its foot the title once, one line of facts, Play with the actions as glass plates under it, and the synopsis (for
+/// Bilibili, the UP主 and the description) beside them; then the episodes and the rest on the page. The toolbar takes
+/// the title once the hero has scrolled away.
+extension VideoDetailView {
+    var macPage: some View {
+        Group {
+            if client.site.isBilibili && BilibiliAPI.isVideo(video.id) { bilibiliMacPage } else { macDetailPage }
+        }
+        .navigationTitle(macPastHero ? (detail?.name ?? video.name) : "")
+        .artUnderToolbar()
+    }
+
+    private var bilibiliMacPage: some View {
+        let current = currentVideo()
+        return BilibiliMacVideoPage(
+            bvid: video.id, title: detail?.name ?? video.name, cover: current.poster, coverHeaders: current.posterHeaders,
+            synopsis: detail.map(synopsisText) ?? "", creator: bilibiliCreator, client: client,
+            saved: store.favorites.contains(videoFavorite()), toggleSaved: { store.favorites.toggle(videoFavorite()) },
+            download: { choosingDownloads = true }, hasParts: activeEpisodes.count > 1, pastHero: $macPastHero
+        ) {
+            macPlay
+        } parts: {
+            episodePanel
+        } status: {
+            playbackBanner
+            if detail == nil, let error { errorCard(error) }
+        }
+    }
+
+    private var macDetailPage: some View {
+        GeometryReader { geometry in
+            let height = MacHeroMetrics.height(for: geometry.size)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 30) {
+                    macHero(height: height, width: geometry.size.width)
+                    VStack(alignment: .leading, spacing: 26) {
+                        playbackBanner
+                        tmdbStatus
+                        if detail != nil {
+                            sourceExtras
+                            episodePanel
+                            sourceRelated
+                            tmdbExtras
+                        } else if let error {
+                            errorCard(error)
+                        }
+                    }
+                    .padding(.horizontal, MacHeroMetrics.gutter)
+                }
+                .padding(.bottom, 40)
+            }
+            // From the window's top edge: the picture runs on under the toolbar, as Discover's title page.
+            .ignoresSafeArea(edges: .top)
+            .macHeroScroll(heroHeight: height, past: $macPastHero)
+        }
+        .animation(.smooth(duration: 0.45), value: tmdb.details)
+        .animation(.smooth(duration: 0.3), value: tmdb.phase)
+    }
+
+    private func macHero(height: CGFloat, width: CGFloat) -> some View {
+        let text = detail.map(synopsisText)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let backdrop = tmdb.details?.backdrop
+        return MacVideoHero(height: height, width: width, backdrop: backdrop ?? video.poster,
+                            backdropHeaders: backdrop == nil ? video.posterHeaders : [:]) {
+            VStack(alignment: .leading, spacing: 8) {
+                HeroTitleArt(logo: tmdb.details?.logo, name: tmdb.details?.name ?? currentVideo().name,
+                             fontSize: 40, logoHeight: 96, logoMaxWidth: 420, textMaxWidth: 760)
+                // A line kept while the facts load, so the hero doesn't move when they come in.
+                Text(heroFacts.isEmpty ? " " : heroFacts).font(.system(size: 14, weight: .medium)).lineLimit(1).opacity(0.75)
+                if let tagline = tmdb.details?.tagline, !tagline.isEmpty {
+                    Text(tagline).font(.system(size: 14).italic()).lineLimit(1).opacity(0.6)
+                }
+            }
+        } actions: {
+            VStack(alignment: .leading, spacing: 18) {
+                macPlay
+                HStack(alignment: .top, spacing: 6) {
+                    MacPlate(symbol: "arrow.down.circle", caption: L10n.text("Download"), id: "detail.download") { choosingDownloads = true }
+                    let saved = store.favorites.contains(videoFavorite())
+                    MacPlate(symbol: "heart", caption: L10n.text(saved ? "Saved" : "Favorite"), on: saved, id: "detail.favorite") {
+                        store.favorites.toggle(videoFavorite())
+                    }
+                }
+                .disabled(detail?.episodes.isEmpty ?? true)
+            }
+        } side: {
+            if !text.isEmpty { MacHeroSynopsis(text: text) }
+        }
+    }
+
+    /// Play, or Continue the episode watched last, as wide as the plates under it; Retry when the details failed.
+    @ViewBuilder private var macPlay: some View {
+        let continuation = detail.flatMap { watchHistory?.continuation(in: $0.episodes) }
+        if let detail, let first = continuation ?? activeEpisodes.first ?? detail.episodes.first {
+            Button { startRequest { await play(first) } } label: {
+                HStack(spacing: 8) {
+                    if loadingEpisode == first.id { ProgressView().appControlSize(.small) } else { Image(systemName: "play.fill") }
+                    Text(L10n.text(first.id == continuation?.id ? "Continue" : "Play"))
+                }
+                .font(.headline).lineLimit(1).frame(maxWidth: .infinity)
+            }
+            .controlButton(prominent: true).tint(Brand.accent).appControlSize(.large)
+            .accessibilityIdentifier("detail.play")
+        } else if detail == nil, error == nil {
+            SkeletonBlock(cornerRadius: 20).frame(height: 40)
+        } else if detail == nil {
+            Button { startRequest { await loadDetail() } } label: {
+                Label(L10n.text("Retry"), systemImage: "arrow.clockwise").font(.headline).frame(maxWidth: .infinity)
+            }
+            .controlButton(prominent: true).tint(Brand.accent).appControlSize(.large)
+            .disabled(busy)
+            .accessibilityIdentifier("detail.retry")
+        }
+    }
+}
+
+enum MacHeroMetrics {
+    static let gutter: CGFloat = 40
+    /// Play, and the plates under it: room for five.
+    static let actionsWidth: CGFloat = 344
+    /// Below this width the synopsis goes under the actions.
+    static let compactWidth: CGFloat = 820
+    /// Most of the window, as Apple TV's hero fills the screen, with the first row peeking in under it.
+    static func height(for size: CGSize) -> CGFloat { max(420, min(size.height * 0.8, size.width * 0.6, 760)) }
+}
+
+/// The hero of the Mac's video pages: the backdrop behind it all, and at its foot the heading, then the actions with the
+/// side column (the synopsis, the UP主) beside them, or under them in a narrow window.
+struct MacVideoHero<Heading: View, Actions: View, Side: View>: View {
+    let height: CGFloat
+    let width: CGFloat
+    let backdrop: URL?
+    var backdropHeaders: [String: String] = [:]
+    @ViewBuilder let heading: Heading
+    @ViewBuilder let actions: Actions
+    @ViewBuilder let side: Side
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            heading
+            if width < MacHeroMetrics.compactWidth {
+                VStack(alignment: .leading, spacing: 22) {
+                    actions.frame(width: MacHeroMetrics.actionsWidth, alignment: .leading)
+                    side.frame(maxWidth: 560, alignment: .leading)
+                }
+            } else {
+                HStack(alignment: .top, spacing: 48) {
+                    actions.frame(width: MacHeroMetrics.actionsWidth, alignment: .leading)
+                    side.frame(maxWidth: 560, alignment: .leading)
+                }
+            }
+        }
+        .padding(.horizontal, MacHeroMetrics.gutter).padding(.bottom, 44)
+        .frame(maxWidth: .infinity, minHeight: height, alignment: .bottomLeading)
+        .background { MacHeroBackdrop(url: backdrop, headers: backdropHeaders).discoverFullBleed() }
+        .foregroundStyle(.white)
+    }
+}
+
+/// The picture behind the Mac's hero, as Apple TV's: a landscape cover sharp across it; a poster, which would crop to a
+/// few enlarged pixels, as a soft blur of its colours. Darker toward the text, and its foot fades into the page.
+struct MacHeroBackdrop: View {
+    let url: URL?
+    let headers: [String: String]
+    @State private var image: CGImage?
+    var body: some View {
+        ZStack {
+            Color.black
+            if let image {
+                let landscape = CGFloat(image.width) / CGFloat(max(1, image.height)) >= 1.3
+                Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipped()
+                    .blur(radius: landscape ? 0 : 50, opaque: true)
+                    .saturation(landscape ? 1 : 1.25)
+                    .transition(.opacity)
+            }
+            LinearGradient(stops: [.init(color: .black.opacity(0.8), location: 0), .init(color: .black.opacity(0.45), location: 0.45),
+                                   .init(color: .clear, location: 0.8)], startPoint: .leading, endPoint: .trailing)
+            LinearGradient(stops: [.init(color: .clear, location: 0.3), .init(color: .black.opacity(0.85), location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+        }
+        .mask {
+            LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.93), .init(color: .clear, location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+        }
+        .accessibilityHidden(true)
+        .animation(.easeInOut(duration: 0.4), value: image != nil)
+        // A new picture (TMDB's backdrop after the cover) replaces the old one once it is in.
+        .task(id: url) { if let url, let loaded = await TMDBArtwork.load(url, maxPixels: 2000, headers: headers) { image = loaded } }
+    }
+}
+
+/// One of the hero's round glass plates with its word or count under it.
+struct MacPlate: View {
+    let symbol: String
+    let caption: String
+    var on = false
+    var tint: Color = Brand.rose
+    let id: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) { WatchPlateLabel(symbol: symbol, caption: caption, on: on, tint: tint) }
+            .buttonStyle(.plain)
+            .accessibilityLabel(caption).accessibilityIdentifier(id).help(caption)
+    }
+}
+
+/// A plate that opens a menu (Bilibili's coins, More).
+struct MacPlateMenu<Content: View>: View {
+    let symbol: String
+    let caption: String
+    var on = false
+    var tint: Color = Brand.rose
+    let title: String
+    let id: String
+    @ViewBuilder let content: Content
+    var body: some View {
+        Menu { content } label: { WatchPlateLabel(symbol: symbol, caption: caption, on: on, tint: tint) }
+            .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+            .accessibilityLabel(title).accessibilityIdentifier(id).help(title)
+    }
+}
+
+/// A few lines of the synopsis beside the actions; a click shows all of it.
+struct MacHeroSynopsis: View {
+    let text: String
+    var lines = 4
+    @State private var shown = false
+    var body: some View {
+        Button { shown = true } label: {
+            Text(text).font(.system(size: 14)).lineSpacing(3).lineLimit(lines).multilineTextAlignment(.leading)
+                .opacity(0.85).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("detail.synopsis")
+        .popover(isPresented: $shown, arrowEdge: .top) {
+            let full = Text(text).font(.body).lineSpacing(3).textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading).padding(20)
+            if text.count > 500 {
+                ScrollView { full }.frame(width: 460, height: 440)
+            } else {
+                full.frame(width: 460)
+            }
+        }
+    }
+}
+
+extension View {
+    /// Tells the page when its hero has scrolled away, so the toolbar can take the title.
+    func macHeroScroll(heroHeight: CGFloat, past: Binding<Bool>) -> some View {
+        onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > heroHeight - 140 } action: { _, value in
+            past.wrappedValue = value
+        }
     }
 }
 #endif
