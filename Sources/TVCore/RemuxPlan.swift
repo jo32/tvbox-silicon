@@ -52,6 +52,8 @@ struct RemuxPlan: Sendable, Equatable {
         var hdr = true
         /// The largest picture tone mapping makes, which costs the CPU by the pixel; 0 for no limit.
         var toneMapWidth = 0, toneMapHeight = 0
+        /// Whether the player draws bitmap subtitles (PGS, VobSub) itself, so they are offered as (empty) renditions.
+        var bitmapSubtitles = false
     }
 
     /// The video track first, then the audio, then the text subtitles.
@@ -62,6 +64,8 @@ struct RemuxPlan: Sendable, Equatable {
     var size: Int64 = 0
     var segments: Int { bounds.count - 1 }
 
+    /// Bitmap subtitles the player draws itself (#576 M3): Blu-ray PGS and DVD VobSub, by FFmpeg's names.
+    static let bitmapCodecs: Set<String> = ["hdmv_pgs_subtitle", "dvd_subtitle"]
     /// Copied audio: what every Apple device decodes inside fragmented MP4. MP3 and Opus are not among them.
     static let copiedAudio: Set<String> = ["aac", "ac3", "eac3", "flac", "alac"]
     /// AAC profiles AVPlayer decodes (LC, HE, HE v2; FFmpeg's numbers), and unknown.
@@ -107,7 +111,8 @@ struct RemuxPlan: Sendable, Equatable {
         guard duration > 0, let video = streams.first(where: { $0.kind == .video && $0.width > 0 && $0.height > 0 }) else { return nil }
         var tracks = [videoTrack(video, device: device)]
         tracks += streams.filter { $0.kind == .audio && $0.channels > 0 }.prefix(8).map(audioTrack)
-        tracks += streams.filter { $0.kind == .subtitle && $0.isText }.prefix(16).map { Track(stream: $0) }
+        tracks += streams.filter { $0.kind == .subtitle && ($0.isText || device.bitmapSubtitles && bitmapCodecs.contains($0.codec)) }
+            .prefix(16).map { Track(stream: $0) }
         let bounds = segmentBounds(keyframes: keyframes, start: start, duration: duration, copied: tracks[0].mode == .copy)
         return RemuxPlan(tracks: tracks, bounds: bounds, size: size)
     }

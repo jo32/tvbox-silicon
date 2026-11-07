@@ -251,6 +251,7 @@ rotations, `\move`, `\fad`, karaoke and vector drawings, wherever the script put
 | ASS/SSA file (overlay) | libass | Not shown (as for every file) | Not shown on the receiver |
 | MKV ASS track → repackaged HLS | libass, with the file's fonts | AVPlayer's plain WebVTT lines | Repackaged streams don't AirPlay |
 | ASS inside MP4/HLS from a server | Unchanged: AVPlayer's own lines | AVPlayer | AVPlayer |
+| MKV PGS / VobSub track → repackaged HLS | Drawn bitmaps (new; before, these tracks weren't offered at all) | Nothing | Repackaged streams don't AirPlay |
 
 ### Known limits
 
@@ -261,7 +262,7 @@ rotations, `\move`, `\fad`, karaoke and vector drawings, wherever the script put
   `TV.601` on HD video may look slightly off in colour.
 - Each change redraws the whole bounding box. A full-screen karaoke effect at 4K redraws a large area every frame.
   That is fine on Apple TV 4K in the simulator; it has not been profiled on an A10 Apple TV HD.
-- Bitmap subtitles (PGS, VobSub) are a separate change; see below when it lands.
+- Bitmap subtitles: see the next section.
 
 ### Tests (M3)
 
@@ -279,3 +280,41 @@ rotations, `\move`, `\fad`, karaoke and vector drawings, wherever the script put
 - Checked by hand on an iOS 27.2 simulator, a tvOS 27.2 simulator and the Mac, using generated test media:
   - an external ASS file
   - an MKV whose ASS track uses a font only its attachment has (Luminari, which iOS doesn't have)
+
+### Bitmap subtitles (PGS, VobSub)
+
+Blu-ray PGS and DVD VobSub tracks of a repackaged file used to be left out of the stream: AVPlayer has no way to show
+them. Now the player draws them over the video like ASS.
+
+- **FFmpeg.** The recipe adds the `pgssub` and `dvdsub` decoders and the `dvdsub` parser (for MPEG-PS files). That
+  is a few hundred KB, all LGPL.
+- **Offered as renditions.** With `RemuxPlan.Device.bitmapSubtitles` (set when the decoders are there), each
+  such track is a SUBTITLES rendition whose WebVTT segments are empty. It can be chosen in AVKit's menu and ours,
+  and its NAME and position tell the player which track it is.
+- **Decoded as read.** The repackager's cue callback hands each packet to a `TVMBitmapDecoder` (`tvm_bitmap_*`,
+  `avcodec_decode_subtitle2`) on the FFmpeg thread, in file order, because PGS display sets build on earlier
+  ones. Palette pictures become premultiplied BGRA `CGImage`s in a `BitmapSubtitleTrack`. Cues are deduped by
+  start time, because a segment made again repeats them. Up to 96 MB of pictures are kept; the earliest are let
+  go first and come back when their segment is made again.
+- **Timing.** VobSub cues carry their own end. A PGS cue lasts until the next display set, which is usually
+  the one that clears it, and at most 10 s when no next one is known yet.
+- **Drawing.** `BitmapSubtitleRenderer` composites the pictures on screen at a moment onto the stream's canvas
+  (PGS presentation size, VobSub frame size, else the video's) and returns a new image only when the set of
+  cues changes. The overlay stretches that canvas over the video's rect, so it follows resizing without
+  redrawing.
+- **Limits.**
+  - Standalone `.sup`/`.idx`+`.sub` files are not read; only tracks inside a file the repackager opens.
+  - DVB subtitles (`dvb_subtitle`) are not included.
+  - After a seek far ahead, PGS pictures appear once that segment is made. A PGS epoch that continues from
+    before the seek point can miss objects it would have reused; such streams normally repeat an acquisition
+    point at every cue.
+  - The canvas is mapped onto the whole video rect. A PGS stream made for 1920×1080 on a video cropped to
+    1920×800 is squeezed vertically rather than centred. That is uncommon in remuxes, which keep the original
+    size.
+- **Tests.** `BitmapSubtitleTests`:
+  - the plan offers bitmap tracks only when the player draws them
+  - translation twins come only from text tracks
+  - cue timing, and dedupe by start time
+  - a fixture MKV (`Fixtures/remux-bitmap.mkv`, a PGS track and a VobSub track made from it) through the
+    repackager: empty WebVTT, decoded pictures in the right places, a gap, and the second line
+
