@@ -54,7 +54,7 @@ public enum CloudStreams {
         return (stream.counter.value, stream.host)
     }
 
-    /// Whether the file is one AVFoundation can't open but `Remux` can (MKV, AVI, FLV, ...), judged from its
+    /// Whether the file is one AVFoundation can't open but `Remux` can (MKV, AVI, FLV, disc images, ...), judged from its
     /// first bytes. False when they can't be read: the player reports network failures itself.
     public static func needsRemux(_ url: URL) async -> Bool {
         guard let stream = CloudStreamStore.shared.stream(url), let head = await stream.head() else { return false }
@@ -229,7 +229,7 @@ actor CloudByteStream {
         return value
     }
 
-    func head() async -> Data? { try? await chunk(0).prefix(16) }
+    func head() async -> Data? { try? await chunk(0).prefix(DiscImage.headLength) }
 
     /// From now on the bytes stay as stored; chunks already retagged are fetched again.
     func keepSampleEntries() {

@@ -117,7 +117,7 @@ struct CloudFolderView: View {
                     }
                 }
             } else {
-                ProgressView().controlSize(.large).frame(maxWidth: .infinity, maxHeight: .infinity)
+                ProgressView().appControlSize(.large).frame(maxWidth: .infinity, maxHeight: .infinity)
                     #if os(tvOS)
                     .focusable()
                     #endif

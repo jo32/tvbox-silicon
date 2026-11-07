@@ -7,6 +7,7 @@ import Network
 public enum Remux {
     /// Whether a file starting with these bytes is one the repackager opens and AVPlayer doesn't.
     public static func handles(_ head: Data) -> Bool {
+        if DiscImage.handles(head) { return true }
         let bytes = [UInt8](head.prefix(16))
         guard bytes.count >= 4 else { return false }
         func text(_ range: Range<Int>) -> String { String(decoding: bytes[range], as: UTF8.self) }
@@ -40,8 +41,12 @@ public enum Remux {
         try await open(source, subtitles: subtitles, headers: headers, session: .shared)
     }
 
-    static func open(_ source: RemuxSource, subtitles: [ExternalSubtitle], headers: [String: String], session subtitleSession: URLSession,
+    static func open(_ original: RemuxSource, subtitles: [ExternalSubtitle], headers: [String: String], session subtitleSession: URLSession,
                      translator: (any SubtitleTranslating)? = SubtitleTranslation.translator) async throws -> URL {
+        // A Blu-ray or DVD image plays its main title.
+        let source: RemuxSource
+        do { source = try await DiscImage.title(original) ?? original }
+        catch { await original.close(); throw error }
         let loading = Task { await SubtitleFile.load(subtitles, headers: headers, session: subtitleSession) }
         let session = RemuxSession(source: source)
         do { try await session.open() } catch { loading.cancel(); throw error }

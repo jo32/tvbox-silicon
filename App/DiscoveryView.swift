@@ -325,7 +325,7 @@ struct GlobalSearchView: View {
         // A spinner has no text baseline, so it centers on the row; only the two labels share a baseline.
         HStack(alignment: .center, spacing: 12) {
             #if !os(iOS)
-            if model.busy { ProgressView().controlSize(.small) }
+            if model.busy { ProgressView().appControlSize(.small) }
             #endif
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(L10n.text("%lld results", model.videoCount)).font(.headline)
@@ -879,7 +879,7 @@ struct RecommendationsView: View {
                 Button { forceRefresh = true; revision += 1 } label: {
                     ZStack {
                         if model.busy {
-                            ProgressView().controlSize(.small)
+                            ProgressView().appControlSize(.small)
                         } else {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 15, weight: .medium))
@@ -1278,7 +1278,7 @@ struct RecommendationsView: View {
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 16)
                 } else if browser.loadingMore {
-                    ProgressView().controlSize(.large)
+                    ProgressView().appControlSize(.large)
                         .frame(maxWidth: .infinity).padding(.vertical, 24)
                         .accessibilityLabel(L10n.text("Loading…"))
                 } else if browser.hasMore {

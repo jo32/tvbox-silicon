@@ -251,7 +251,7 @@ struct MusicMacPlayButton: View {
         if music.failure != nil {
             MusicMacButton(symbol: "arrow.clockwise", label: "Retry", size: size * 0.8, prominent: true, frame: frame) { music.retry() }
         } else if music.busy && !music.isPlaying {
-            ProgressView().controlSize(frame > 40 ? .regular : .small).frame(width: frame, height: frame)
+            ProgressView().appControlSize(frame > 40 ? .regular : .small).frame(width: frame, height: frame)
         } else {
             MusicMacButton(symbol: music.isPlaying ? "pause.fill" : "play.fill", label: music.isPlaying ? "Pause" : "Play",
                            size: size, prominent: true, frame: frame) { music.toggle() }
@@ -307,7 +307,7 @@ struct MusicMacVolume: View {
         @Bindable var music = store.music
         HStack(spacing: 8) {
             Image(systemName: "speaker.fill").font(.caption).foregroundStyle(.secondary)
-            Slider(value: $music.volume, in: 0...1).controlSize(.small)
+            Slider(value: $music.volume, in: 0...1).appControlSize(.small)
             Image(systemName: "speaker.wave.3.fill").font(.caption).foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .contain)

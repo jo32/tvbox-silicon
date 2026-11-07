@@ -377,7 +377,7 @@ private struct FeedbackPage: View {
                     Text(progress.formatted(.percent.precision(.fractionLength(0))))
                         .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 } else if sending {
-                    ProgressView().controlSize(.small)
+                    ProgressView().appControlSize(.small)
                 }
                 #if os(macOS)
                 Text(verbatim: "⌘↩").font(.callout).foregroundStyle(.tertiary)
@@ -415,7 +415,7 @@ private struct FeedbackPage: View {
                     }
                 }
                 ForEach(0..<adding, id: \.self) { _ in
-                    ProgressView().controlSize(.small).frame(width: tileSide, height: tileSide)
+                    ProgressView().appControlSize(.small).frame(width: tileSide, height: tileSide)
                         .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
             }
@@ -506,7 +506,7 @@ private struct FeedbackPage: View {
                     .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
             }
             #if os(macOS)
-            .toggleStyle(.switch).controlSize(.small)
+            .toggleStyle(.switch).appControlSize(.small)
             #endif
             .settingsSwitch()
             .padding(.top, 6)
@@ -721,7 +721,7 @@ private struct FeedbackHistory: View {
                 Label(L10n.text("Your Feedback"), systemImage: "tray.full")
                     .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
                 Spacer()
-                if checking { ProgressView().controlSize(.small) }
+                if checking { ProgressView().appControlSize(.small) }
             }
             .padding(.horizontal, 4)
             VStack(spacing: 0) {
@@ -805,9 +805,9 @@ private extension View {
     /// The page's buttons: capsules on iPhone and iPad, like the app's other buttons there.
     @ViewBuilder func feedbackButton(_ size: ControlSize) -> some View {
         #if os(iOS)
-        controlSize(size).buttonBorderShape(.capsule)
+        appControlSize(size).buttonBorderShape(.capsule)
         #else
-        controlSize(size)
+        appControlSize(size)
         #endif
     }
 }

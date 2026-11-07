@@ -122,6 +122,9 @@ struct PlaybackView: View {
         .background(ExternalDisplaySceneRegistrar().allowsHitTesting(false))
         // On a watch page the rest of the page keeps its own appearance.
         .modifier(PlayerScheme(ownsScreen: watch == nil))
+        // The home indicator fades with the controls while the picture fills the screen (#650); a swipe up
+        // brings it back first, as in other video apps. A watch page's player leaves it to the page.
+        .persistentSystemOverlays(playerLayout != .inline && !chromeVisible ? .hidden : .automatic)
         #else
         .preferredColorScheme(.dark)
         #endif
@@ -397,7 +400,7 @@ struct PlaybackView: View {
                     Button { startCatalogPlayback(session, channel: channel, store: store) } label: {
                         Label(L10n.text("Try Again"), systemImage: "arrow.clockwise")
                     }
-                    .controlButton(prominent: true).tint(Brand.accent).controlSize(.small).padding(.top, 2)
+                    .controlButton(prominent: true).tint(Brand.accent).appControlSize(.small).padding(.top, 2)
                 }
                 .foregroundStyle(.white).padding(.horizontal, 24).padding(.top, 36)
                 .environment(\.colorScheme, .dark)
@@ -424,7 +427,7 @@ struct PlaybackView: View {
                             Button { exit() } label: { Label(L10n.text("Close"), systemImage: "xmark") }.controlButton()
                         }
                     }
-                    .controlSize(.large).padding(.top, 30)
+                    .appControlSize(.large).padding(.top, 30)
                 }
                 .foregroundStyle(.white)
                 .padding(32)
@@ -439,7 +442,7 @@ struct PlaybackView: View {
                         Button(L10n.text("Retry")) { startCatalogPlayback(session, channel: channel, store: store) }.controlButton(prominent: true).tint(Brand.accent)
                         Button(L10n.text("Close")) { dismiss() }.controlButton()
                     }
-                }.controlSize(.large)
+                }.appControlSize(.large)
             }
             .padding(30).glassPanel(cornerRadius: 30).padding(30)
             #endif

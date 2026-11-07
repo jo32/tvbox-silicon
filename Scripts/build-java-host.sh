@@ -4,6 +4,8 @@ cd "$(dirname "$0")/.."
 JDK="${JAVA_HOME:-$(/usr/libexec/java_home -v 19)}"
 MAVEN="${MAVEN_BIN:-$PWD/build/tools/apache-maven-3.9.9/bin/mvn}"
 if [ ! -x "$MAVEN" ]; then MAVEN="$(command -v mvn)"; fi
+# copy-dependencies only adds jars; start empty so a dependency upgrade leaves no old version behind.
+rm -rf Runtime/JavaHost/target/lib
 "$MAVEN" -q -f Runtime/JavaHost/pom.xml package dependency:copy-dependencies -DoutputDirectory=target/lib
 # sardine-android (WebDAV) is published only as an Android AAR. Its classes are plain JVM
 # bytecode, so pin the archive and add its classes.jar to the host libraries.
@@ -22,6 +24,10 @@ mkdir -p "$DEST/lib"
 cp Runtime/JavaHost/target/local-jar-host-0.1.0.jar "$DEST/host.jar.$$.tmp"
 mv -f "$DEST/host.jar.$$.tmp" "$DEST/host.jar"
 cp Runtime/sandbox/spider.sb "$DEST/"
+# lib/* puts every jar here on the class path: drop a Gson the host no longer ships (2.10.1 before #500).
+for stale in "$DEST"/lib/gson-*.jar; do
+  [ -e "$stale" ] && [ ! -e "Runtime/JavaHost/target/lib/$(basename "$stale")" ] && rm -f "$stale"
+done
 for library in Runtime/JavaHost/target/lib/*.jar; do
   target="$DEST/lib/$(basename "$library")"
   cp "$library" "$target.$$.tmp"

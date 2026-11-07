@@ -215,6 +215,15 @@ import Testing
     #expect(CatPawSignIn.provider(for: "百度网盘分享已失效") == nil)
 }
 
+@Test func catPawBundlesWithoutTheirOwnSignInTakeTheApps() {
+    // The catpaw.douer.me bundle (#651): no config center in its words, and no sign-in route of its own.
+    #expect(CatPawSignIn.provider(for: "插件错误：Error: The source failed (HTTP 401): 夸克登录状态失效，请重新配置 Cookie") == "quark")
+    #expect(CatPawSignIn.provider(for: "夸克分享凭据已失效") == nil)
+    #expect(CatPawSignIn.provider(for: "该视频为多段 MP4，当前播放器无法无损拼接，建议配置 Cookie 获取 DASH 地址") == nil)
+    #expect(CatPawSignIn.lacksOwnSignIn(TVError.unsupported("Error: The source failed (HTTP 404): Route POST:/website/api/login/start not found")))
+    #expect(!CatPawSignIn.lacksOwnSignIn(TVError.unsupported("Error: The source failed (HTTP 500): socket hang up")))
+}
+
 #if canImport(CoreImage.CIFilterBuiltins)
 @Test func catPawSignInReadsTheLinkInItsCode() throws {
     let link = "https://su.uc.cn/9_iCI3h?uc_param_str=&token=sta326333a3maasaq80nd5xub2ws0ib1"

@@ -131,7 +131,7 @@ struct MangaReaderView: View {
                 .foregroundStyle(.white).padding()
             } else {
                 VStack(spacing: 16) {
-                    ProgressView().tint(.white).controlSize(.large)
+                    ProgressView().tint(.white).appControlSize(.large)
                     MangaWaitNote().padding(.horizontal, 32)
                 }
             }

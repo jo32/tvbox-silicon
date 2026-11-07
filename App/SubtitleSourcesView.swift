@@ -56,7 +56,7 @@ struct SubtitleSourcesView: View {
                 Button { add() } label: {
                     HStack {
                         Text(L10n.text("Add"))
-                        if adding { Spacer(); ProgressView().controlSize(.small) }
+                        if adding { Spacer(); ProgressView().appControlSize(.small) }
                     }
                 }
                 .disabled(address.trimmingCharacters(in: .whitespaces).isEmpty || adding)
@@ -322,7 +322,7 @@ struct SubtitleSearchSheet: View {
 
     @ViewBuilder private func status(_ status: SubtitleSearchProgress.Status?) -> some View {
         switch status {
-        case .searching?, nil: ProgressView().controlSize(.small)
+        case .searching?, nil: ProgressView().appControlSize(.small)
         case .found(let count)?: Text(count == 0 ? L10n.text("None") : L10n.text("%@ found", String(count))).foregroundStyle(.secondary)
         case .failed(let error)?: Text(error.localizedDescription).foregroundStyle(Brand.amber).multilineTextAlignment(.trailing).lineLimit(3)
         }

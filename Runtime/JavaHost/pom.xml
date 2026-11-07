@@ -10,7 +10,7 @@
     <dependency><groupId>de.femtopedia.dex2jar</groupId><artifactId>dex-translator</artifactId><version>2.4.37</version></dependency>
     <dependency><groupId>com.google.android</groupId><artifactId>android</artifactId><version>4.1.1.4</version></dependency>
     <dependency><groupId>com.squareup.okhttp3</groupId><artifactId>okhttp</artifactId><version>4.12.0</version></dependency>
-    <dependency><groupId>com.google.code.gson</groupId><artifactId>gson</artifactId><version>2.10.1</version></dependency>
+    <dependency><groupId>com.google.code.gson</groupId><artifactId>gson</artifactId><version>2.14.0</version></dependency>
     <!-- TVBox ships zxing, and plugins draw their sign-in QR codes with it. -->
     <dependency><groupId>com.google.zxing</groupId><artifactId>core</artifactId><version>3.5.3</version></dependency>
     <dependency><groupId>org.bouncycastle</groupId><artifactId>bcprov-jdk18on</artifactId><version>1.78.1</version></dependency>
@@ -24,6 +24,9 @@
         <exclusion><groupId>stax</groupId><artifactId>stax</artifactId></exclusion>
       </exclusions>
     </dependency>
+    <!-- FongMi bundles smbj (SMB shares) for plugins. Its new-SDK JARs merge SMB code into shared classes, which
+         the JVM verifier rejects whole when smbj is missing (#500). -->
+    <dependency><groupId>com.hierynomus</groupId><artifactId>smbj</artifactId><version>0.15.0</version></dependency>
     <dependency><groupId>com.vaadin.external.google</groupId><artifactId>android-json</artifactId><version>0.0.20131108.vaadin1</version></dependency>
   </dependencies>
   <build><plugins>

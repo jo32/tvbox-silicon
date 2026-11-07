@@ -877,7 +877,7 @@ struct WaitSpinner: View {
     @State private var started = Date()
     var body: some View {
         ZStack {
-            ProgressView().controlSize(.large).tint(.white)
+            ProgressView().appControlSize(.large).tint(.white)
             if let status {
                 TimelineView(.periodic(from: .now, by: 0.5)) { timeline in
                     let elapsed = max(0, timeline.date.timeIntervalSince(started))
@@ -934,9 +934,11 @@ struct PlayerScheme: ViewModifier {
 
 extension View {
     /// Under the status bar and the home indicator on a screen of its own; inside its frame at the top of a page,
-    /// where reaching into the safe area would run the picture under the status bar.
-    @ViewBuilder func playerBleed(_ bleeds: Bool, edges: Edge.Set = .all) -> some View {
-        if bleeds { ignoresSafeArea(edges: edges) } else { self }
+    /// where reaching into the safe area would run the picture under the status bar. One view either way: a branch
+    /// for each made a watch page going full screen build the picture's layer anew, and Picture in Picture stayed
+    /// with the old one, off screen, so it couldn't start (#652).
+    func playerBleed(_ bleeds: Bool, edges: Edge.Set = .all) -> some View {
+        ignoresSafeArea(edges: bleeds ? edges : [])
     }
 }
 
@@ -1286,7 +1288,14 @@ private struct PlayerLayerView: UIViewRepresentable {
     @ObservationIgnored private var observation: NSKeyValueObservation?
 
     func attach(_ layer: AVPlayerLayer) {
-        guard supported, controller == nil else { return }
+        guard supported else { return }
+        if let controller {
+            // A new layer for the same player: Picture in Picture follows the one on screen.
+            if controller.contentSource?.playerLayer !== layer, !controller.isPictureInPictureActive {
+                controller.contentSource = .init(playerLayer: layer)
+            }
+            return
+        }
         let controller = AVPictureInPictureController(contentSource: .init(playerLayer: layer))
         controller.delegate = self
         // Leaving the app while a video plays carries on in Picture in Picture, as AVKit's own player did.

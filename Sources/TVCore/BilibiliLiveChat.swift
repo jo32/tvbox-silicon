@@ -6,8 +6,8 @@ import Foundation
 /// The client authenticates (operation 7) with a token from getDanmuInfo and sends a heartbeat
 /// (operation 2) every 30 seconds; messages (operation 5) arrive zlib-compressed (version 2), several
 /// packets to one, and comments are their `DANMU_MSG` commands.
-public final class BilibiliLiveChat: @unchecked Sendable {
-    public typealias Handler = @Sendable (_ text: String, _ color: UInt32, _ position: Danmaku.Position) -> Void
+public final class BilibiliLiveChat: LiveChat, @unchecked Sendable {
+    public typealias Handler = LiveChatHandler
     private let room: Int
     private let session = URLSession(configuration: .default)
     private var socket: URLSessionWebSocketTask?

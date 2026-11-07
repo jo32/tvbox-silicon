@@ -258,15 +258,15 @@ private struct WatchNowPhoneHero: View {
                 }
                 .padding(.top, 8)
             }
+            // The detail page's Continue button, in Liquid Glass as it sits on the cover: tinted white over a dark cover,
+            // black over a light one (a flat plate before OS 26).
             Button { resume(entry) } label: {
                 Label(L10n.text("Resume"), systemImage: store.resumingHistoryID == entry.id ? "hourglass" : "play.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .padding(.horizontal, 28).frame(height: 44)
-                    .foregroundStyle(dark ? Color.black : Color.white)
-                    .background(dark ? Color.white : Color.black, in: Capsule())
-                    .contentShape(Capsule())
+                    .font(.headline).lineLimit(1).fixedSize().padding(.horizontal, 8)
             }
-            .buttonStyle(.plain)
+            .controlButton(prominent: true).tint(Brand.accent).appControlSize(.large)
+            .environment(\.colorScheme, dark ? .dark : .light)
+            .environment(\.glassControls, true)
             .padding(.top, 18)
             .accessibilityIdentifier("home.upNext.resume")
         }

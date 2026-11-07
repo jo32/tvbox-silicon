@@ -13,12 +13,15 @@ struct DownloadsView: View {
     @State private var deleting: DownloadShow?
     /// Videos or songs, once there are songs; videos first unless only songs are saved.
     @State private var kind = Kind.videos
+    /// How the downloaded shows are listed, and 倒序 (#653): the other way round.
+    @AppStorage("downloads.sort") private var sort = DownloadSort.date
+    @AppStorage("downloads.reversed") private var reversed = false
     private var library: DownloadLibrary { .shared }
     enum Kind: Hashable { case videos, music }
 
     var body: some View {
         let pending = library.items.filter(\.isPending)
-        let shows = DownloadShow.group(library.items.filter { $0.status == .completed })
+        let shows = DownloadShow.group(library.items.filter { $0.status == .completed }, by: sort, reversed: reversed)
         Group {
             if hasMusic && kind == .music {
                 MusicDownloadsView(embedded: true)
@@ -81,17 +84,73 @@ struct DownloadsView: View {
                 if !pending.isEmpty { queue(pending) }
                 if !shows.isEmpty {
                     VStack(alignment: .leading, spacing: Layout.headerSpacing) {
-                        SectionHeader(title: L10n.text("Downloaded"))
+                        downloadedHeader(count: shows.count)
                         // Not lazy: the remote only moves focus to views that exist, and below a download queue
-                        // as tall as the screen a lazy stack had built none, so Down stopped at the queue.
-                        VStack(spacing: Layout.cardSpacing) {
-                            ForEach(shows) { show in
-                                ShowPanel(show: show) { store.playing = library.channel(for: $0) } delete: { deleting = show }
-                            }
+                        // as tall as the screen a lazy grid had built none, so Down stopped at the queue.
+                        EpisodeGrid(minimum: DownloadMetrics.cardMin, spacing: Layout.gridSpacing, rowSpacing: Layout.gridRowSpacing).callAsFunction {
+                            ForEach(shows) { show in card(show) }
                         }
                     }.tvFocusSection()
                 }
             }.pageContainer()
+        }
+        // TMDB's art for the shows this device hasn't matched yet, one at a time while the page is open.
+        .task(id: shows.map(\.id)) { await DownloadArtwork.shared.load(shows) }
+    }
+
+    /// A show with several episodes opens its page; a film (one download) plays at once.
+    @ViewBuilder private func card(_ show: DownloadShow) -> some View {
+        let label = DownloadShowCard(show: show, details: DownloadArtwork.shared.details(for: show))
+        Group {
+            if show.items.count == 1, let item = show.items.first {
+                Button { store.playing = library.channel(for: item) } label: { label }
+                    .accessibilityLabel(L10n.text("Play %@", show.title))
+            } else {
+                RouteLink { DownloadShowPage(id: show.id) } label: { label }
+            }
+        }
+        .downloadCardButton()
+        .contextMenu {
+            Button(L10n.text("Delete Downloads"), systemImage: "trash", role: .destructive) { deleting = show }
+        }
+    }
+
+    /// "Downloaded", how many shows, then how they are sorted and 倒序, as glass controls.
+    private func downloadedHeader(count: Int) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            SectionHeader(title: L10n.text("Downloaded")).fixedSize().layoutPriority(1)
+            Text("\(count)").font(.headline).monospacedDigit().foregroundStyle(.secondary)
+            Spacer(minLength: 12)
+            #if os(macOS)
+            Menu {
+                Picker(L10n.text("Sort By"), selection: $sort) {
+                    ForEach(DownloadSort.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.inline).labelsHidden()
+            } label: {
+                Text(sort.title)
+            }
+            .menuStyle(.button).buttonStyle(.borderless).fixedSize()
+            .help(L10n.text("Sort By"))
+            ReverseOrderButton(reversed: $reversed).accessibilityIdentifier("downloads.reverse")
+            #else
+            GlassGroup(spacing: 8) {
+                HStack(spacing: 8) {
+                    Menu {
+                        Picker(L10n.text("Sort By"), selection: $sort) {
+                            ForEach(DownloadSort.allCases, id: \.self) { Text($0.title).tag($0) }
+                        }
+                    } label: {
+                        FittingLabel(title: sort.title, symbol: "line.3.horizontal.decrease")
+                    }
+                    .controlButton()
+                    .accessibilityLabel(L10n.text("Sort By"))
+                    // Filled while the list runs the other way round.
+                    ReverseOrderButton(reversed: $reversed).accessibilityIdentifier("downloads.reverse")
+                }
+            }
+            .environment(\.glassControls, true)
+            #endif
         }
     }
 
@@ -137,7 +196,7 @@ struct DownloadsView: View {
         let paused = pending.filter { $0.status == .paused || $0.status == .failed }
         return VStack(alignment: .leading, spacing: Layout.headerSpacing) {
             HStack(alignment: .center, spacing: 12) {
-                SectionHeader(title: L10n.text("Downloading"))
+                SectionHeader(title: L10n.text("Downloading")).fixedSize().layoutPriority(1)
                 Text("\(pending.count)").font(.headline).monospacedDigit().foregroundStyle(.secondary)
                 Spacer(minLength: 12)
                 Menu {
@@ -145,14 +204,13 @@ struct DownloadsView: View {
                         ForEach(1...4, id: \.self) { Text(L10n.text("%lld at a time", $0)).tag($0) }
                     }
                 } label: {
-                    Label(L10n.text("%lld at a time", library.simultaneous), systemImage: "square.stack.3d.down.right")
-                        .lineLimit(1).fixedSize()
+                    FittingLabel(title: L10n.text("%lld at a time", library.simultaneous), symbol: "square.stack.3d.down.right")
                 }
                 .controlButton()
                 if paused.count == pending.count {
-                    Button { library.resumeAll() } label: { Label(L10n.text("Resume All"), systemImage: "play.fill").lineLimit(1).fixedSize() }.controlButton()
+                    Button { library.resumeAll() } label: { FittingLabel(title: L10n.text("Resume All"), symbol: "play.fill") }.controlButton()
                 } else {
-                    Button { library.pauseAll() } label: { Label(L10n.text("Pause All"), systemImage: "pause.fill").lineLimit(1).fixedSize() }.controlButton()
+                    Button { library.pauseAll() } label: { FittingLabel(title: L10n.text("Pause All"), symbol: "pause.fill") }.controlButton()
                 }
             }
             VStack(spacing: DownloadMetrics.rowSpacing) {
@@ -160,7 +218,10 @@ struct DownloadsView: View {
                     QueueRow(item: item, rate: library.rates[item.id], position: queuePosition(item, in: pending))
                 }
             }
-        }.tvFocusSection()
+        }
+        // Liquid Glass controls over the glass rows, as on the watch page.
+        .environment(\.glassControls, true)
+        .tvFocusSection()
     }
     #endif
 
@@ -223,12 +284,32 @@ private struct DownloadKindBar: ViewModifier {
 
 enum DownloadMetrics {
     #if os(tvOS)
-    static let thumb: CGFloat = 96, showPoster: CGFloat = 170, episodeMin: CGFloat = 440, rowSpacing: CGFloat = 20
+    static let thumb: CGFloat = 96, rowSpacing: CGFloat = 20
+    /// The shows' cards, a show page's banner and its episode tiles.
+    static let cardMin: CGFloat = 500, cardCorner: CGFloat = 20, banner: CGFloat = 520, episodeTile: CGFloat = 360
     #elseif os(macOS)
-    static let thumb: CGFloat = 44, showPoster: CGFloat = 96, episodeMin: CGFloat = 260, rowSpacing: CGFloat = 10
+    static let thumb: CGFloat = 44, rowSpacing: CGFloat = 10
+    static let cardMin: CGFloat = 280, cardCorner: CGFloat = 14, banner: CGFloat = 360, episodeTile: CGFloat = 200
     #else
-    static let thumb: CGFloat = 46, showPoster: CGFloat = 84, episodeMin: CGFloat = 220, rowSpacing: CGFloat = 10
+    static let thumb: CGFloat = 46, rowSpacing: CGFloat = 10
+    static let cardMin: CGFloat = 300, cardCorner: CGFloat = 16, banner: CGFloat = 280, episodeTile: CGFloat = 150
     #endif
+}
+
+/// How the downloaded shows are listed (#653).
+enum DownloadSort: String, CaseIterable {
+    /// Most recently finished first.
+    case date
+    case name
+    /// Largest first.
+    case size
+    var title: String {
+        switch self {
+        case .date: L10n.text("Date Downloaded")
+        case .name: L10n.text("Name")
+        case .size: L10n.text("Size")
+        }
+    }
 }
 
 /// Finished episodes of one video from one source.
@@ -237,19 +318,39 @@ struct DownloadShow: Identifiable {
     let title: String
     let poster: URL?
     let posterHeaders: [String: String]
+    let siteKey: String
+    let videoID: String
     let sourceName: String
     let items: [DownloadItem]
     var size: Int64 { items.reduce(0) { $0 + $1.size } }
-    /// Most recently finished first; episodes in the order the source lists them.
-    static func group(_ items: [DownloadItem]) -> [DownloadShow] {
-        let groups = Dictionary(grouping: items) { $0.source.siteKey + "\u{1F}" + $0.source.videoID }
-        return groups.map { key, items in
+    /// When its last episode finished.
+    var latest: Date { items.compactMap(\.finished).max() ?? .distantPast }
+    /// The show a download belongs to: its video on its source.
+    static func key(for item: DownloadItem) -> String { item.source.siteKey + "\u{1F}" + item.source.videoID }
+    /// The video's key in `TMDBMatchStore`, as its page has it.
+    var tmdbKey: String { TMDBMatchStore.key(source: siteKey, video: videoID) }
+    /// Episodes in the order the source lists them; the shows by `sort` (most recently finished first by default), or
+    /// the other way round.
+    static func group(_ items: [DownloadItem], by sort: DownloadSort = .date, reversed: Bool = false) -> [DownloadShow] {
+        let groups = Dictionary(grouping: items, by: key(for:))
+        let shows = groups.map { key, items in
             let first = items[0]
             return DownloadShow(id: key, title: first.title, poster: first.poster, posterHeaders: first.posterHeaders,
-                                sourceName: first.source.siteName,
+                                siteKey: first.source.siteKey, videoID: first.source.videoID, sourceName: first.source.siteName,
                                 items: items.sorted { $0.episode.localizedStandardCompare($1.episode) == .orderedAscending })
         }
-        .sorted { ($0.items.compactMap(\.finished).max() ?? .distantPast) > ($1.items.compactMap(\.finished).max() ?? .distantPast) }
+        // The id breaks ties, so shows of one name or size keep their places between updates.
+        let sorted = shows.sorted { a, b in
+            switch sort {
+            case .date: if a.latest != b.latest { return a.latest > b.latest }
+            case .name:
+                let order = a.title.localizedStandardCompare(b.title)
+                if order != .orderedSame { return order == .orderedAscending }
+            case .size: if a.size != b.size { return a.size > b.size }
+            }
+            return a.id < b.id
+        }
+        return reversed ? sorted.reversed() : sorted
     }
 }
 
@@ -329,8 +430,7 @@ private struct StorageCard: View {
         }
         .padding(DownloadMetrics.thumb > 60 ? 28 : 18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Color.primary.opacity(0.06)) }
+        .contentPanel(cornerRadius: 22)
         .accessibilityElement(children: .combine)
         #if os(tvOS)
         // Focusable so the remote can scroll back up to it.
@@ -457,7 +557,7 @@ private struct QueueRow: View {
             }
         }
         .padding(DownloadMetrics.thumb > 60 ? 18 : 12)
-        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contentPanel(cornerRadius: 18)
     }
 
     private func status(compact: Bool) -> String {
@@ -492,58 +592,340 @@ private struct QueueRow: View {
     }
 }
 
-/// One video's downloaded episodes.
-private struct ShowPanel: View {
-    let show: DownloadShow
-    let play: (DownloadItem) -> Void
-    let delete: () -> Void
-    private var library: DownloadLibrary { .shared }
+/// A control's title and symbol, or the symbol alone where the row has no room for both (a phone held upright).
+private struct FittingLabel: View {
+    let title: String
+    let symbol: String
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit).frame(width: DownloadMetrics.showPoster)
-                .overlay { PosterImage(url: show.poster, headers: show.posterHeaders) }
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            VStack(alignment: .leading, spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(show.title).font(.headline).lineLimit(2)
-                    Text([SourceLabel(show.sourceName).text, show.items.count == 1 ? L10n.text("1 episode") : L10n.text("%lld episodes", show.items.count), DownloadFormat.size(show.size)].joined(separator: " · "))
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
-                EpisodeGrid(minimum: DownloadMetrics.episodeMin, spacing: 8, rowSpacing: DownloadMetrics.thumb > 60 ? 12 : 4).callAsFunction {
-                    ForEach(show.items) { item in episode(item) }
-                }
-                .tvFocusSection()
-                Button(role: .destructive, action: delete) {
-                    Label(L10n.text("Delete Downloads"), systemImage: "trash").font(.subheadline)
-                }
-                .controlButton()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        ViewThatFits(in: .horizontal) {
+            Label(title, systemImage: symbol).lineLimit(1).fixedSize()
+            Label(title, systemImage: symbol).labelStyle(.iconOnly)
         }
-        .padding(DownloadMetrics.thumb > 60 ? 22 : 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+/// 倒序 (#653): turns a list of downloads the other way round. Filled while it is (white, as a chosen chip, on Apple TV).
+struct ReverseOrderButton: View {
+    @Binding var reversed: Bool
+    var body: some View {
+        Button { reversed.toggle() } label: {
+            Image(systemName: "arrow.up.arrow.down")
+                #if os(macOS)
+                .foregroundStyle(reversed ? Brand.accent : Color.secondary)
+                .frame(minWidth: 24, minHeight: 24).contentShape(Rectangle())
+                #endif
+        }
+        #if os(macOS)
+        .buttonStyle(.borderless)
+        #elseif os(tvOS)
+        .glassPill(selected: reversed)
+        #else
+        .controlButton(prominent: reversed)
+        #endif
+        .help(L10n.text("Reverse Order"))
+        .accessibilityLabel(L10n.text("Reverse Order"))
+        .accessibilityAddTraits(reversed ? .isSelected : [])
+    }
+}
+
+extension View {
+    /// A show's card: on Apple TV the whole card lifts with a glass rim, elsewhere it presses like other cards.
+    @ViewBuilder fileprivate func downloadCardButton() -> some View {
+        #if os(tvOS)
+        panelCardButton(cornerRadius: DownloadMetrics.cardCorner)
+        #else
+        cardButton()
+        #endif
+    }
+}
+
+/// TMDB's pictures and facts for the downloaded shows (#653). First the match the video's page found, kept on this
+/// device however old it is, so it shows offline too; or the work the viewer picked on that page. A show never looked
+/// up is looked up once with what its download knows, one show at a time while the page is open. Shows TMDB doesn't
+/// have, and sources it doesn't cover (short dramas, Bilibili), keep the source's cover.
+@MainActor @Observable final class DownloadArtwork {
+    static let shared = DownloadArtwork()
+    struct Entry {
+        let details: TMDBMatch.Details
+        let numbering: TMDBMatch.Numbering
+        let offset: Int
+    }
+    private(set) var entries: [String: Entry] = [:]
+    /// Shows looked at in this run of the app, found or not.
+    @ObservationIgnored private var tried: Set<String> = []
+
+    func details(for show: DownloadShow) -> TMDBMatch.Details? { entries[show.tmdbKey]?.details }
+
+    /// TMDB's episode for each of the show's downloads (by download id), where its season lines up.
+    func episodes(of show: DownloadShow) -> [String: TMDBMatch.EpisodeInfo] {
+        guard let entry = entries[show.tmdbKey], entry.details.season != nil else { return [:] }
+        let mapped = entry.details.episodes(for: show.items.map(\.episode), numbering: entry.numbering, offset: entry.offset)
+        var result: [String: TMDBMatch.EpisodeInfo] = [:]
+        for (item, info) in zip(show.items, mapped) { result[item.id] = info }
+        return result
     }
 
-    private func episode(_ item: DownloadItem) -> some View {
-        Button { play(item) } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "play.fill").font(.system(size: DownloadMetrics.thumb > 60 ? 18 : 10)).foregroundStyle(.secondary)
-                Text(item.episode).lineLimit(1)
-                Spacer(minLength: 8)
-                if let quality = item.quality { Text(quality).font(.caption.weight(.semibold)).foregroundStyle(.secondary) }
-                Text(DownloadFormat.size(item.size)).font(.caption).monospacedDigit().foregroundStyle(.secondary)
+    /// The show's own pictures, for the episodes TMDB has no still for.
+    func backdrops(for show: DownloadShow) -> [URL] {
+        guard let details = details(for: show) else { return [] }
+        if let stills = details.stills, !stills.isEmpty { return stills }
+        return details.backdrop.map { [$0] } ?? []
+    }
+
+    func load(_ shows: [DownloadShow]) async {
+        guard TMDBMatch.enabled else { return }
+        for show in shows where !tried.contains(show.tmdbKey) {
+            guard !Task.isCancelled else { return }
+            let key = show.tmdbKey
+            tried.insert(key)
+            if let entry = await Self.resolve(show) {
+                withAnimation(.smooth(duration: 0.35)) { entries[key] = entry }
+            } else if Task.isCancelled {
+                // The page closed during the lookup: try again when it opens.
+                tried.remove(key)
             }
-            #if !os(tvOS)
-            .padding(.horizontal, 10).frame(minHeight: 34)
-            #endif
-            .frame(maxWidth: .infinity, alignment: .leading)
-            #if !os(tvOS)
-            .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            #endif
-            .contentShape(Rectangle())
         }
-        .glassRow()
+    }
+
+    private static func resolve(_ show: DownloadShow) async -> Entry? {
+        guard !TMDBMatch.skipsSource(key: show.siteKey, api: "") else { return nil }
+        let store = TMDBMatchStore.shared, key = show.tmdbKey
+        // Answers the download's own lookup found, kept apart from the page's: the page asks with the source's
+        // details (year, synopsis, every episode), and its answer wins once it has one.
+        let own = "download|" + key
+        let kept = await store.kept(for: key)
+        if let choice = await store.choice(for: key) {
+            guard case .work(let type, let id, let season) = choice,
+                  let details = try? await TMDBMatch.details(type, id: id, season: season) else { return nil }
+            return Entry(details: details, numbering: kept?.match?.numbering ?? kept?.numbering ?? .season, offset: 0)
+        }
+        if let entry = entry(kept) { return entry }
+        // The page asked lately and TMDB has no single match for it: neither would this.
+        if await store.answer(for: key) != nil { return nil }
+        if let entry = entry(await store.kept(for: own)) { return entry }
+        if await store.answer(for: own) != nil { return nil }
+        var request = TMDBMatch.Request(video: Video(id: show.videoID, name: show.title),
+                                        source: TMDBMatch.SourceRef(key: show.siteKey, name: show.sourceName))
+        request.episodes = show.items.prefix(400).map { String($0.episode.prefix(60)) }
+        guard !TMDBMatch.labeledNotOnTMDB(request) else { return nil }
+        do {
+            let answer = try await TMDBMatch.lookup(request) { _ in }
+            await store.save(answer, for: own)
+            return entry(answer)
+        } catch {
+            if !Task.isCancelled { Diagnostics.shared.record(.warning, "tmdb", "download lookup failed: \(error.localizedDescription)") }
+            return nil
+        }
+    }
+
+    private static func entry(_ answer: TMDBMatch.Answer?) -> Entry? {
+        guard let answer, answer.status == .matched, let details = answer.details else { return nil }
+        return Entry(details: details, numbering: answer.match?.numbering ?? answer.numbering,
+                     offset: answer.match.flatMap { $0.id == details.id ? $0.offset : nil } ?? 0)
+    }
+}
+
+/// A downloaded show on the Downloads page: its picture with TMDB's logo over it, then the name and what is saved.
+private struct DownloadShowCard: View {
+    let show: DownloadShow
+    let details: TMDBMatch.Details?
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: DownloadMetrics.cardCorner, style: .continuous)
+        VStack(alignment: .leading, spacing: 8) {
+            Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
+                .overlay { DownloadShowArt(show: show, details: details) }
+                .overlay(alignment: .topTrailing) { if show.items.count > 1 { badge } }
+                .clipShape(shape)
+                .overlay { shape.strokeBorder(Color.white.opacity(0.12)) }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(details?.name ?? show.title).font(.headline).lineLimit(1)
+                Text(caption).font(.caption).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
+            }
+            .padding(.horizontal, 4)
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    /// "2024 · 剧情 · 玩偶 · 4.2 GB": TMDB's year and genre, then the source and the space it takes.
+    private var caption: String {
+        let facts = details.map { [$0.year.map(String.init), $0.genres.first].compactMap { $0 } } ?? []
+        return (facts + [SourceLabel(show.sourceName).text, DownloadFormat.size(show.size)]).joined(separator: " · ")
+    }
+
+    private var badge: some View {
+        Text(L10n.text("%lld episodes", show.items.count))
+            .font(.caption.weight(.semibold)).monospacedDigit()
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            #if os(tvOS)
+            .background(.black.opacity(0.55), in: Capsule())
+            #else
+            .glassSurface(.regular, in: Capsule())
+            #endif
+            .foregroundStyle(.white).environment(\.colorScheme, .dark)
+            .padding(DownloadMetrics.cardCorner * 0.5)
+    }
+}
+
+/// A show's picture: TMDB's backdrop with its logo, else the source's cover centred on a blur of itself, which also
+/// stands under the backdrop until it is in (or when it can't load, offline).
+private struct DownloadShowArt: View {
+    let show: DownloadShow
+    let details: TMDBMatch.Details?
+    @State private var logoAspect: CGFloat?
+    var body: some View {
+        GeometryReader { proxy in
+            let size = proxy.size
+            ZStack(alignment: .bottomLeading) {
+                Color(white: 0.12)
+                PosterImage(url: show.poster, headers: show.posterHeaders)
+                    .frame(width: size.width, height: size.height).clipped()
+                    .blur(radius: 30).scaleEffect(1.3)
+                    .overlay(Color.black.opacity(0.3))
+                if let backdrop = details?.backdrop {
+                    TMDBArtwork(url: backdrop, maxPixels: 1280).frame(width: size.width, height: size.height).clipped()
+                } else {
+                    let height = size.height * 0.84
+                    PosterImage(url: show.poster, headers: show.posterHeaders)
+                        .frame(width: height * 2 / 3, height: height)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
+                        .frame(width: size.width, height: size.height)
+                }
+                if let logo = details?.logo {
+                    LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
+                    // Wide logos get a width limit, tall ones a height limit.
+                    let aspect = max(logoAspect ?? 3, 0.5)
+                    let width = min(size.width * 0.5, size.height * 0.3 * aspect)
+                    TMDBArtwork(url: logo, maxPixels: 600, fill: false, aspect: $logoAspect)
+                        .frame(width: width, height: width / aspect)
+                        .opacity(logoAspect == nil ? 0 : 1)
+                        .shadow(color: .black.opacity(0.4), radius: 8)
+                        .padding(size.width * 0.045)
+                }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// One downloaded show (#653): TMDB's banner (one made from the cover when TMDB doesn't have it), its story, and the
+/// saved episodes as tiles with TMDB's stills and titles, in the source's order or, with 倒序, the other way round.
+struct DownloadShowPage: View {
+    let id: String
+    @Environment(Store.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("downloads.episodesReversed") private var reversed = false
+    @State private var deleting = false
+    @State private var coverAspect: CGFloat?
+    private var library: DownloadLibrary { .shared }
+    private var artwork: DownloadArtwork { .shared }
+
+    var body: some View {
+        let show = DownloadShow.group(library.items.filter { $0.status == .completed && DownloadShow.key(for: $0) == id }).first
+        Group {
+            if let show { content(show) } else { Color.clear }
+        }
+        .screenBackdrop()
+        .screenTitle(show.map { artwork.details(for: $0)?.name ?? $0.title } ?? "")
+        // Its last episode deleted: back to Downloads.
+        .onChange(of: show == nil) { _, gone in if gone { dismiss() } }
+        .task { if let show { await artwork.load([show]) } }
+        .confirmationDialog(L10n.text("Delete all downloaded episodes of %@?", show?.title ?? ""), isPresented: $deleting, titleVisibility: .visible) {
+            Button(L10n.text("Delete Downloads"), role: .destructive) {
+                if let show { library.remove(show.items.map(\.id)) }
+            }
+        }
+    }
+
+    private func content(_ show: DownloadShow) -> some View {
+        let details = artwork.details(for: show)
+        return ScrollView {
+            VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
+                VStack(alignment: .leading, spacing: Layout.headerSpacing) {
+                    banner(show, details)
+                    // Under TMDB's banner: what is saved, then the story.
+                    if let details {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(summary(show)).font(.subheadline.weight(.semibold)).monospacedDigit()
+                            if !details.story.isEmpty {
+                                Text(details.story).font(.callout).foregroundStyle(.secondary).lineLimit(4)
+                            }
+                        }
+                        .frame(maxWidth: TMDBBannerMetrics.textWidth, alignment: .leading)
+                    }
+                }
+                .tvFocusSection()
+                episodes(show, details)
+            }
+            .pageContainer()
+        }
+    }
+
+    /// "玩偶 · 4 集 · 1.2 GB": the source, how many episodes are saved and the space they take.
+    private func summary(_ show: DownloadShow) -> String {
+        let count = show.items.count == 1 ? L10n.text("1 episode") : L10n.text("%lld episodes", show.items.count)
+        return [SourceLabel(show.sourceName).text, count, DownloadFormat.size(show.size)].joined(separator: " · ")
+    }
+
+    @ViewBuilder private func banner(_ show: DownloadShow, _ details: TMDBMatch.Details?) -> some View {
+        Group {
+            if let details, let backdrop = details.backdrop {
+                TMDBBanner(details: details, backdrop: backdrop, unmatched: "") { actions(show) }
+            } else {
+                PosterBanner(poster: show.poster, headers: show.posterHeaders, title: show.title, subtitle: summary(show), aspect: $coverAspect) {
+                    actions(show)
+                }
+            }
+        }
+        .frame(height: DownloadMetrics.banner)
+    }
+
+    /// Play from the first episode, or delete them all: Liquid Glass over the banner.
+    private func actions(_ show: DownloadShow) -> some View {
+        HStack(spacing: 10) {
+            if let first = show.items.first {
+                Button { store.playing = library.channel(for: first) } label: {
+                    Label(L10n.text("Play"), systemImage: "play.fill").lineLimit(1).fixedSize()
+                }
+                .controlButton(prominent: true)
+            }
+            Button(role: .destructive) { deleting = true } label: {
+                Label(L10n.text("Delete Downloads"), systemImage: "trash").lineLimit(1).fixedSize()
+            }
+            .controlButton()
+        }
+        .environment(\.glassControls, true)
+    }
+
+    private func episodes(_ show: DownloadShow, _ details: TMDBMatch.Details?) -> some View {
+        let infos = artwork.episodes(of: show), backdrops = artwork.backdrops(for: show)
+        let items = reversed ? Array(show.items.reversed()) : show.items
+        return VStack(alignment: .leading, spacing: Layout.headerSpacing) {
+            HStack(alignment: .center, spacing: 10) {
+                SectionHeader(title: L10n.text("Episodes"))
+                Text("\(show.items.count)").font(.headline).monospacedDigit().foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                if details != nil { TMDBBadge() }
+                ReverseOrderButton(reversed: $reversed)
+                    .environment(\.glassControls, true)
+                    .accessibilityIdentifier("downloads.episodes.reverse")
+            }
+            .tvFocusSection()
+            // Not lazy, as on the Downloads page: the remote only moves to tiles that exist.
+            EpisodeGrid(minimum: DownloadMetrics.episodeTile, spacing: Layout.gridSpacing, rowSpacing: Layout.gridRowSpacing).callAsFunction {
+                ForEach(items) { item in tile(item, info: infos[item.id], backdrops: backdrops) }
+            }
+            .tvFocusSection()
+        }
+    }
+
+    private func tile(_ item: DownloadItem, info: TMDBMatch.EpisodeInfo?, backdrops: [URL]) -> some View {
+        let detail = [item.quality, DownloadFormat.size(item.size)].compactMap { $0 }.joined(separator: " · ")
+        return Button { store.playing = library.channel(for: item) } label: {
+            TMDBEpisodeTile(name: EpisodeRow.title(item.episode), info: info, detail: detail, width: nil, backdrops: backdrops)
+        }
+        .cardButton()
         .accessibilityLabel(L10n.text("Play %@", item.episode))
         .contextMenu {
             #if os(macOS)

@@ -141,6 +141,17 @@ extension View {
     }
     #endif
 
+    /// `controlSize(_:)`, which tvOS 17 can load. SwiftUI's is `@inlinable`: a Release build inlines its key path to
+    /// `EnvironmentValues.controlSize`, and the tvOS 26 and later SDKs name that property as moved to SwiftUICore
+    /// (its `@_originallyDefinedIn` leaves out tvOS), a symbol only tvOS 18 and later export. dyld then stopped the
+    /// app at launch on every tvOS 17 Apple TV (#634). Left unoptimized, this calls SwiftUI's exported function.
+    #if os(tvOS)
+    @inline(never) @_optimize(none)
+    func appControlSize(_ size: ControlSize) -> some View { controlSize(size) }
+    #else
+    func appControlSize(_ size: ControlSize) -> some View { controlSize(size) }
+    #endif
+
     /// The breathing symbol effect; iOS 17 and tvOS 17 have no breathe, so the symbol pulses instead.
     @ViewBuilder func breathingSymbol() -> some View {
         if #available(iOS 18, tvOS 18, *) {
@@ -622,8 +633,9 @@ private struct TVChipStyle: ButtonStyle {
 
 extension View {
     /// A Liquid Glass capsule that turns white on focus, like the chips.
-    /// `lift` is how much it grows on focus; 1 keeps a wide pill (the search field) its own size.
-    func glassPill(lift: CGFloat = 1.06) -> some View { buttonStyle(TVChipStyle(selected: false, lift: lift)) }
+    /// `lift` is how much it grows on focus; 1 keeps a wide pill (the search field) its own size. `selected` gives it the
+    /// chosen chip's lighter glass, for a button that stays on (倒序).
+    func glassPill(lift: CGFloat = 1.06, selected: Bool = false) -> some View { buttonStyle(TVChipStyle(selected: selected, lift: lift)) }
 }
 
 /// The query as a glass pill after a magnifying glass, as in the TV app's search. The remote's
@@ -727,7 +739,7 @@ struct EmptyPage<Footer: View>: View {
             }
             .frame(maxWidth: width)
             Button(action: perform) { Label(action, systemImage: actionSymbol).padding(.horizontal, 8) }
-                .controlButton(prominent: true).controlSize(.large)
+                .controlButton(prominent: true).appControlSize(.large)
             footer.font(.system(size: text * 0.8)).monospacedDigit().foregroundStyle(.tertiary)
         }
         .padding(Layout.gutter)
@@ -1257,7 +1269,7 @@ struct LoadingCard: View {
         let explains = Double(elapsed) >= Self.patience && state.reason != nil
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 14) {
-                ProgressView().controlSize(.small)
+                ProgressView().appControlSize(.small)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(state.title).font(.callout.weight(.semibold)).lineLimit(1)
                     if let detail = state.detail {
@@ -1317,7 +1329,7 @@ struct ErrorStateCard: View {
                 HStack(spacing: 12) { actions }
                 VStack(spacing: 12) { actions }
             }
-            .controlSize(.large)
+            .appControlSize(.large)
             VStack(spacing: 14) {
                 Divider().overlay(Color.primary.opacity(0.04))
                 Button {
@@ -1441,7 +1453,7 @@ extension View {
         #if os(iOS)
         buttonStyle(ChromeButtonStyle())
         #else
-        controlButton().buttonBorderShape(.circle).controlSize(.large)
+        controlButton().buttonBorderShape(.circle).appControlSize(.large)
         #endif
     }
 

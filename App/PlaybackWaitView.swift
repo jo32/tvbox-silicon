@@ -200,7 +200,7 @@ struct PlaybackWaitView: View {
             let stack = VStack(spacing: 10) {
                 if let wait {
                     HStack(spacing: 10) {
-                        ProgressView().controlSize(.small).tint(.white)
+                        ProgressView().appControlSize(.small).tint(.white)
                         // A new message replaces the old with a soft blur rather than two lines crossing.
                         line(wait, inline: layout.inlineCaption).lineLimit(1)
                             .id("\(wait.message)|\(wait.caption ?? "")|\(wait.suggestsLines)").transition(.blurReplace)

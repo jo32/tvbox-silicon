@@ -225,7 +225,7 @@ import IOKit.pwr_mgt
     /// A live stream is being moved to its live edge (`catchUpLive`).
     private var catchingUpLive = false
     /// A live room's chat, whose comments join `danmaku` as they are sent.
-    private var chat: BilibiliLiveChat?
+    private var chat: (any LiveChat)?
     /// Download state while connecting or buffering, sampled once a second from AVFoundation's logs.
     struct Transfer {
         var received: Int64 = 0
@@ -285,8 +285,7 @@ import IOKit.pwr_mgt
     }
 
     /// Shows a live room's chat as danmaku: each comment enters as it arrives.
-    private func listen(room: Int, generation active: UUID) {
-        let chat = BilibiliLiveChat(room: room)
+    private func listen(_ chat: any LiveChat, generation active: UUID) {
         self.chat = chat
         chat.start { text, color, position in
             Task { @MainActor [weak self] in
@@ -629,7 +628,7 @@ import IOKit.pwr_mgt
             // A live room becomes its current stream address now; the address expires.
             var channel = channel
             var liveQualities: [StreamQuality] = [], liveQuality: Int?
-            if let (platform, id) = LiveCatalog.room(channel.url), platform.chat == "bilibili", let room = Int(id) { self.listen(room: room, generation: activeGeneration) }
+            if let (platform, id) = LiveCatalog.room(channel.url), let chat = LiveChats.make(platform.chat, room: id) { self.listen(chat, generation: activeGeneration) }
             if LiveCatalog.isRoom(channel.url) {
                 self.note(L10n.text("Finding the live stream"))
                 do { (channel, liveQualities, liveQuality) = try await LiveCatalog.resolve(channel) }
@@ -789,7 +788,7 @@ import IOKit.pwr_mgt
                 }
             }
             var remuxed: URL?
-            if let source { remuxed = await Self.remux(source, channel: channel) }
+            if let source { remuxed = try? await Self.remux(source, channel: channel) }
             guard let self, self.generation == active, !Task.isCancelled, self.item === item else {
                 if let remuxed { Remux.stop(remuxed) }
                 return
@@ -1278,7 +1277,7 @@ extension PlaybackSession {
         if address.scheme == CloudStreams.scheme, await CloudStreams.needsRemux(address) {
             try Task.checkCancellation()
             note(L10n.text("Repackaging the video for this device"))
-            if let source = await CloudStreams.remuxSource(for: address), let url = await Self.remux(source, channel: channel) {
+            if let source = await CloudStreams.remuxSource(for: address), let url = try await Self.remux(source, channel: channel) {
                 prepared.url = url
                 return prepared
             }
@@ -1302,9 +1301,10 @@ extension PlaybackSession {
             }
             prepared.url = address
         }
-        // A link or saved file whose name says MKV and the like is repackaged too; when that fails AVPlayer
-        // tries it as it is.
-        if Remux.handles(name: address.lastPathComponent), ["http", "https", "file"].contains(address.scheme) {
+        // A link or saved file whose name says MKV, a disc image and the like is repackaged too; when that fails
+        // AVPlayer tries it as it is.
+        if Remux.handles(name: address.lastPathComponent) || DiscImage.handles(name: address.lastPathComponent),
+           ["http", "https", "file"].contains(address.scheme) {
             note(L10n.text("Repackaging the video for this device"))
             let source: RemuxSource?
             if address.isFileURL { source = try? Remux.fileSource(address) }
@@ -1316,7 +1316,7 @@ extension PlaybackSession {
                 }
             }
             try Task.checkCancellation()
-            if let source, let url = await Self.remux(source, channel: channel) {
+            if let source, let url = try await Self.remux(source, channel: channel) {
                 prepared.url = url
                 return prepared
             }
@@ -1356,14 +1356,18 @@ extension PlaybackSession {
         #endif
     }
 
-    /// The repackaged file's address, nil when FFmpeg can't read it.
-    fileprivate static func remux(_ source: RemuxSource, channel: Channel) async -> URL? {
+    /// The repackaged file's address, nil when FFmpeg can't read it. A disc image that can't play says why:
+    /// AVPlayer can't open it either.
+    fileprivate static func remux(_ source: RemuxSource, channel: Channel) async throws -> URL? {
         Remux.screenCaptured = screenCaptured
         // Only the files for this episode: a drive's folder holds every episode's.
         let video = SubtitleMatch.episode(channel.name) != nil ? channel.name : channel.url.lastPathComponent.removingPercentEncoding ?? channel.name
         let files = Array(SubtitleMatch.candidates(channel.subtitles, video: video).prefix(8))
         do { return try await Remux.open(source, subtitles: files, headers: channel.headers) }
-        catch {
+        catch let error as DiscImage.Failure {
+            Diagnostics.shared.record(.warning, "player", "disc image \(error)")
+            throw error
+        } catch {
             if !Task.isCancelled { Diagnostics.shared.failure("player", "remux source=\(channel.historyContext?.sourceKey ?? "-")", error) }
             return nil
         }
