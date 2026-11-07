@@ -34,7 +34,8 @@ import TVCore
     }
     var body: some Scene {
         WindowGroup {
-            RootView().environment(store).environment(updates).environment(announcements)
+            // Store, Updates and Announcements go in last, below: sheets attached here show outside RootView.
+            RootView()
                 #if !os(tvOS)
                 // tvOS draws plain buttons and section links in the tint, so it keeps the neutral default.
                 .tint(Brand.accent)
@@ -118,6 +119,9 @@ import TVCore
                 #if os(macOS)
                 .frame(minWidth: 920, minHeight: 640)
                 #endif
+                // Outside every modifier above, so the import and Douyin sheets get them too: on RootView alone, a
+                // yingxia://import link stopped the app ("No Observable object of type Store found", TestFlight 49-51).
+                .environment(store).environment(updates).environment(announcements)
         }
         #if os(macOS)
         .defaultSize(width: 1240, height: 820)
