@@ -22,6 +22,27 @@ import Testing
     #expect(page.categories[1].id == "2" && page.categories[1].filters.isEmpty)
 }
 
+/// 玩偶|4K (CatPaw) lists only real values and no `init`: its 臻彩视界 opened filtered to 喜剧 + 中国大陆 + 2026 and was empty.
+@Test func filtersWithoutAnAllChoiceOpenUnfiltered() throws {
+    let json = try JSONDecoder().decode([String: JSONValue].self, from: Data(#"""
+    {"class": [{"type_id": "44", "type_name": "臻彩视界"}],
+     "filters": {"44": [
+        {"key": "class", "name": "全部剧情", "value": [{"n": "喜剧", "v": "4喜剧"}, {"n": "爱情", "v": "4爱情"}]},
+        {"key": "year", "name": "全部时间", "value": [{"n": "2026", "v": "2026"}, {"n": "2025", "v": "2025"}]},
+        {"key": "sort", "name": "排序", "init": "4hits", "value": [{"n": "时间", "v": "4time"}, {"n": "人气", "v": "4hits"}]}
+     ]}}
+    """#.utf8))
+    let page = CatalogPage(json: json, origin: URL(string: "https://example.com")!)
+    let filters = try #require(page.categories.first?.filters)
+    #expect(filters[0].options.map(\.name) == ["全部剧情", "喜剧", "爱情"])
+    #expect(filters[0].options.first?.value == "")
+    // A filter with its own `init` keeps it and gets no extra choice.
+    #expect(filters[2].options.map(\.value) == ["4time", "4hits"])
+    let choices = CategoryFilter.initialChoices(filters)
+    #expect(choices == ["class": "", "year": "", "sort": "4hits"])
+    #expect(CatalogClient.filterParameters(choices, siteType: 3) == ["filters": #"{"sort":"4hits"}"#])
+}
+
 @Test func homeFiltersSentAsTextAreRead() {
     let filters = #"{"5": [{"key": "area", "name": "地区", "value": [{"n": "全部", "v": ""}, {"n": "美国", "v": "美国"}]}]}"#
     let page = CatalogPage(json: ["class": .array([.object(["type_id": .string("5"), "type_name": .string("综艺")])]), "filters": .string(filters)],
