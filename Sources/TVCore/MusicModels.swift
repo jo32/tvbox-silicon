@@ -55,6 +55,10 @@ public struct MusicTrack: Identifiable, Hashable, Codable, Sendable {
     public var evidence: [String]
     /// Set for an episode of a TVBox source (an audiobook's chapter, #289): it plays from the source, not a catalog.
     public var source: MusicSourceEpisode?
+    /// The release year, genre and language, for search filters (#649). Only QQ Music's entries carry them.
+    public var year: Int?
+    public var genre: MusicGenre?
+    public var language: MusicLanguage?
 
     public init(platform: MusicPlatform, songID: String, title: String, artists: [String], album: String? = nil,
                 duration: Double? = nil, artwork: URL? = nil) {

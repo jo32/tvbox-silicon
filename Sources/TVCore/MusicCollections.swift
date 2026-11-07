@@ -3,21 +3,22 @@ import Foundation
 /// What a music search looks for.
 public enum MusicSearchKind: String, Codable, Sendable, CaseIterable, Hashable {
     /// `top` is songs, albums and playlists at once, for results in rows, as Music on the Mac and
-    /// Spotify on Apple TV show them.
-    case songs, albums, playlists, top
+    /// Spotify on Apple TV show them. `artists` is the songs of the artist the query names (#649).
+    case songs, albums, playlists, top, artists
     /// One kind each; `top` is all of them.
-    public static let filters: [MusicSearchKind] = [.songs, .albums, .playlists]
+    public static let filters: [MusicSearchKind] = [.songs, .artists, .albums, .playlists]
     public var name: String {
         switch self {
         case .top: L10n.text("All")
         case .songs: L10n.text("Songs")
+        case .artists: L10n.text("Artists")
         case .albums: L10n.text("Albums")
         case .playlists: L10n.text("Playlists")
         }
     }
     public var collectionKind: MusicCollection.Kind? {
         switch self {
-        case .songs, .top: nil
+        case .songs, .top, .artists: nil
         case .albums: .album
         case .playlists: .playlist
         }

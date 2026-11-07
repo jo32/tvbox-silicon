@@ -187,8 +187,9 @@ private func resolver(_ providers: [any MusicStreamProvider], health: MusicHealt
     let qq = try JSONDecoder().decode(JSONValue.self, from: Data("""
     {"code":0,"req":{"code":0,"data":{"body":{"item_song":[
       {"mid":"004Z8Ihr0JIu5s","name":"七里香","title":"七里香","singer":[{"name":"周杰伦","mid":"0025NhlN2yWrP4"}],
-       "album":{"mid":"003DFRzD192KKD","name":"七里香"},"interval":299},
-      {"mid":"002ZKnKQ34rbZu","name":"七里香","title":"七里香 (Live)","singer":[{"name":"周杰伦"}],"album":{"mid":"","name":"无与伦比"},"interval":302},
+       "album":{"mid":"003DFRzD192KKD","name":"七里香"},"interval":299,"time_public":"2004-08-03","genre":1,"language":0},
+      {"mid":"002ZKnKQ34rbZu","name":"七里香","title":"七里香 (Live)","singer":[{"name":"周杰伦"}],"album":{"mid":"","name":"无与伦比"},"interval":302,
+       "time_public":"","genre":66,"language":7},
       {"name":"no mid"}]}}}}
     """.utf8))
     let tracks = try QQMusicCatalog.parse(qq)
@@ -196,6 +197,9 @@ private func resolver(_ providers: [any MusicStreamProvider], health: MusicHealt
     #expect(tracks[0].id == "qq:004Z8Ihr0JIu5s" && tracks[0].duration == 299 && tracks[0].artists == ["周杰伦"])
     #expect(tracks[0].artwork?.absoluteString == "https://y.gtimg.cn/music/photo_new/T002R300x300M000003DFRzD192KKD.jpg")
     #expect(tracks[1].tags == [.live] && tracks[1].artwork == nil)
+    // Year, genre and language for the search filters (#649); codes QQ doesn't name are left out.
+    #expect(tracks[0].year == 2004 && tracks[0].genre == .pop && tracks[0].language == .mandarin)
+    #expect(tracks[1].year == nil && tracks[1].genre == nil && tracks[1].language == nil)
     #expect(throws: MusicProviderError.self) { try QQMusicCatalog.parse(try JSONDecoder().decode(JSONValue.self, from: Data(#"{"code":0,"req":{"code":2001}}"#.utf8))) }
 
     let gd = try JSONDecoder().decode(JSONValue.self, from: Data(#"[{"id":"108914","name":"江南","artist":["林俊杰"],"album":"第二天堂"},{"id":108779,"name":"江南 (Live)","artist":["林俊杰"],"album":""}]"#.utf8))
