@@ -908,7 +908,7 @@ struct SiteView: View {
                                 .accessibilityIdentifier("site.search.submit")
                         }
                         #endif
-                        if site.isBilibili && !BilibiliAccount.load().signedIn { BilibiliSignInBanner() }
+                        if site.isBilibili && !isBilibiliSpace && !BilibiliAccount.load().signedIn { BilibiliSignInBanner() }
                         // An UP主's space (#256): who they are, Follow, and their uploads by order or their collections.
                         if site.isBilibili, let folder, let mid = BilibiliAPI.creator(category: folder.id) {
                             BilibiliSpaceHeader(mid: mid, name: folder.name, client: client,
@@ -948,12 +948,15 @@ struct SiteView: View {
                             .padding(.vertical, browser.videos.isEmpty ? 24 : 8)
                         }
                         if browser.videos.isEmpty && browser.loaded && !browser.busy && browser.error == nil { EmptyResults(symbol: "film", title: L10n.text("No Videos"), message: L10n.text("Try selecting a category or searching.")) }
-                        LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
+                        let landscape = showsBilibiliTiles
+                        LazyVGrid(columns: landscape ? Self.bilibiliColumns : Layout.posterColumns, spacing: Layout.gridRowSpacing) {
                             ForEach(browser.videos) { video in
                                 Group {
                                     // An index source (a ranking or list site) names titles; other sources play them.
                                     if isIndex {
                                         Button { store.searchVideos(video.name) } label: { PosterCard(video: video) }.cardButton()
+                                    } else if landscape {
+                                        RouteLink { CatalogDestination(video: video, client: client) } label: { BilibiliVideoTile(video: video, width: nil) }.cardButton()
                                     } else {
                                         RouteLink { CatalogDestination(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
                                     }
@@ -998,7 +1001,8 @@ struct SiteView: View {
             let login = BilibiliAccount.load().cookie
             if login != bilibiliLogin { bilibiliLogin = login; query = ""; startRequest { await home(); await browser.loadCategories(client: client) } }
         }
-        .screenTitle(folder?.name ?? site.name, shown: !showsBilibiliTVSpace).task {
+        // An UP主's space names them in its hero; a title over it only repeated it.
+        .screenTitle(isBilibiliSpace ? "" : folder?.name ?? site.name, shown: !showsBilibiliTVSpace).task {
             store.searchModel.suspend()
             if let preview, folder == nil, initialQuery.isEmpty { browser.seed(videos: preview.videos, categories: preview.categories) }
             if canLoad && !browser.loaded {
@@ -2782,6 +2786,9 @@ struct VideoDetailView: View {
                     Color.clear.frame(height: playerHeight)
                     ScrollView { watchDetails.padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 24) }
                         .scrollIndicators(.never)
+                        #if DEBUG
+                        .modifier(QAScrollToFoot())
+                        #endif
                 }
             }
             watchPlayer
@@ -2931,33 +2938,42 @@ struct VideoDetailView: View {
             .environment(\.colorScheme, .dark)
     }
 
+    /// Under the player, as the Apple TV page: the title once and one quiet line of facts, the actions as a row of glass
+    /// plates, the synopsis, then the episodes and TMDB's rows. A Bilibili video has its own page in the same manner,
+    /// with the UP主, the account's actions, comments and related videos.
     private var watchDetails: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(currentVideo().name).font(.title3.weight(.bold)).fixedSize(horizontal: false, vertical: true)
-                if let facts = tmdb.details?.facts, !facts.isEmpty {
-                    Text(facts).font(.subheadline.weight(.medium)).lineLimit(2).transition(.opacity)
+        VStack(alignment: .leading, spacing: 20) {
+            if client.site.isBilibili, BilibiliAPI.isVideo(video.id) {
+                let saved = store.favorites.contains(videoFavorite())
+                BilibiliPhoneVideoPage(bvid: video.id, title: currentVideo().name, synopsis: detail.map(synopsisText) ?? "",
+                                       creator: bilibiliCreator, client: client, saved: saved,
+                                       toggleSaved: { store.favorites.toggle(videoFavorite()) },
+                                       download: detail?.episodes.isEmpty == false ? { choosingDownloads = true } : nil) {
+                    playbackBanner
+                    if detail == nil, let error { errorCard(error) }
+                } parts: {
+                    watchEpisodes
                 }
-                let meta = [currentVideo().remarks, currentVideo().year ?? "", SourceLabel(client.site.name).text].filter { !$0.isEmpty }
-                if !meta.isEmpty {
-                    Text(meta.joined(separator: " · ")).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
-                }
-            }
-            sourceExtras
-            if detail?.episodes.isEmpty == false {
-                HStack(spacing: 10) { downloadButton(iconOnly: false); videoFavoriteButton }
-            }
-            playbackBanner
-            tmdbStatus
-            if let detail { synopsis(detail) }
-            if detail != nil {
-                watchEpisodes
-                sourceRelated
-                tmdbExtras.padding(.top, 6)
-            } else if let error {
-                errorCard(error)
             } else {
-                DetailSkeleton()
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(currentVideo().name).font(.title3.weight(.bold)).fixedSize(horizontal: false, vertical: true)
+                    if !watchFacts.isEmpty {
+                        Text(watchFacts).font(.footnote).foregroundStyle(.secondary).lineLimit(2).contentTransition(.opacity)
+                    }
+                }
+                sourceExtras
+                if detail?.episodes.isEmpty == false { watchPlates }
+                playbackBanner
+                tmdbStatus
+                if let detail { watchSynopsis(detail) }
+                if detail != nil {
+                    watchEpisodes
+                    tmdbExtras.padding(.top, 6)
+                } else if let error {
+                    errorCard(error)
+                } else {
+                    DetailSkeleton()
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -2965,6 +2981,61 @@ struct VideoDetailView: View {
         .environment(\.glassControls, true)
         .animation(.smooth(duration: 0.45), value: tmdb.details)
         .animation(.smooth(duration: 0.3), value: tmdb.phase)
+    }
+
+    #if DEBUG
+    /// `-qaScrollAnchor bottom`: the page opens scrolled to its foot, for screenshots. Only then: any default anchor,
+    /// even `.top`, made the page follow its growing content down.
+    private struct QAScrollToFoot: ViewModifier {
+        func body(content: Content) -> some View {
+            if UserDefaults.standard.string(forKey: "qaScrollAnchor") == "bottom" { content.defaultScrollAnchor(.bottom) } else { content }
+        }
+    }
+    #endif
+
+    /// TMDB's facts (2026 · Drama · ★ 7.0) once they are in, else the source's remarks and year; then the source.
+    private var watchFacts: String {
+        let video = currentVideo()
+        let facts = tmdb.details?.facts ?? ""
+        let lead = facts.isEmpty ? [video.remarks, video.year ?? ""] : [facts]
+        return (lead + [SourceLabel(client.site.name).text]).filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// Three lines of the synopsis, as the Bilibili page's description: a tap shows the rest.
+    @ViewBuilder private func watchSynopsis(_ detail: Video) -> some View {
+        let text = synopsisText(detail)
+        if !text.isEmpty {
+            Button { withAnimation(.smooth(duration: 0.3)) { synopsisExpanded.toggle() } } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(text).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                        .lineLimit(synopsisExpanded ? nil : 3).fixedSize(horizontal: false, vertical: true)
+                        .contentTransition(.opacity)
+                    if text.count > 60 {
+                        Text(L10n.text(synopsisExpanded ? "Show Less" : "More")).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("detail.synopsis")
+        }
+    }
+
+    /// Download and the heart, as glass plates with their words under them.
+    private var watchPlates: some View {
+        let saved = store.favorites.contains(videoFavorite())
+        let title = saved ? L10n.text("Remove %@ from favorites", currentVideo().name) : L10n.text("Add %@ to favorites", currentVideo().name)
+        return HStack(alignment: .top, spacing: 14) {
+            Button { choosingDownloads = true } label: { WatchPlateLabel(symbol: "arrow.down.circle", caption: L10n.text("Download")) }
+                .accessibilityLabel(L10n.text("Download")).accessibilityIdentifier("detail.download")
+            Button { store.favorites.toggle(videoFavorite()) } label: {
+                WatchPlateLabel(symbol: "heart", caption: saved ? L10n.text("Saved") : L10n.text("Favorite"), on: saved)
+            }
+            .accessibilityLabel(title).accessibilityIdentifier("detail.favorite")
+        }
+        .buttonStyle(.plain)
+        .padding(.leading, -7)
     }
 
     /// As in Bilibili's 选集: one row of episodes that scrolls sideways to the one playing, and All for the full list.
@@ -3530,6 +3601,27 @@ extension VideoDetailView {
 #endif
 
 extension SiteView {
+    /// An UP主's space (`up_<mid>` and its other listings).
+    var isBilibiliSpace: Bool { site.isBilibili && folder.flatMap { BilibiliAPI.creator(category: $0.id) } != nil }
+
+    /// Bilibili's videos as its own apps show them on iPhone, iPad and the Mac: 16:9 covers, two or more across, rather
+    /// than cropped into posters. Anime and films (whose covers are posters) keep the posters.
+    var showsBilibiliTiles: Bool {
+        #if os(tvOS)
+        false
+        #else
+        site.isBilibili && browser.videos.first.map { BilibiliAPI.isVideo($0.id) } == true
+        #endif
+    }
+
+    static var bilibiliColumns: [GridItem] {
+        #if os(macOS)
+        [GridItem(.adaptive(minimum: 220), spacing: 18, alignment: .top)]
+        #else
+        [GridItem(.adaptive(minimum: 160), spacing: DiscoverLayout.spacing, alignment: .top)]
+        #endif
+    }
+
     /// An UP主's space on Apple TV: its own page (`BilibiliTVSpacePage`), without the source's search field and banner.
     var showsBilibiliTVSpace: Bool {
         #if os(tvOS)

@@ -20,6 +20,8 @@ func bilibiliLiveChannel(room: Int, host: String) -> Channel? {
 private enum BilibiliMetrics {
     #if os(tvOS)
     static let avatar: CGFloat = 76, largeAvatar: CGFloat = 132, tile: CGFloat = 380
+    #elseif os(iOS)
+    static let avatar: CGFloat = 40, largeAvatar: CGFloat = 88, tile: CGFloat = DiscoverLayout.landscapeWidth
     #else
     static let avatar: CGFloat = 44, largeAvatar: CGFloat = 76, tile: CGFloat = 220
     #endif
@@ -89,6 +91,14 @@ struct BilibiliCreatorRow: View {
     @State private var model = BilibiliCreatorModel()
 
     var body: some View {
+        #if os(iOS)
+        phoneBody
+        #else
+        standardBody
+        #endif
+    }
+
+    private var standardBody: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 14) {
                 if large {
@@ -143,6 +153,94 @@ struct BilibiliCreatorRow: View {
         .disabled(model.busy)
         .accessibilityIdentifier("bilibili.follow")
     }
+
+    #if os(iOS)
+    /// Under a video: one slim row, their picture, name and followers (which open their space), then Follow as a small
+    /// pink capsule. At the head of their space: a centred portrait of them, as the Apple TV space page's hero.
+    private var phoneBody: some View {
+        let shownName = model.creator?.name ?? name
+        return Group {
+            if large {
+                VStack(spacing: 6) {
+                    avatar(BilibiliMetrics.largeAvatar).padding(.bottom, 6)
+                    Text(shownName).font(.title2.weight(.bold)).lineLimit(1)
+                    Text(model.stats).font(.subheadline).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
+                    if let sign = model.creator?.sign, !sign.isEmpty {
+                        Text(sign).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center).lineLimit(3)
+                            .padding(.horizontal, 12).padding(.top, 2).selectable()
+                    }
+                    HStack(spacing: 10) { liveCapsule(shownName); followCapsule }.padding(.top, 10)
+                    BilibiliNotice(message: Binding(get: { model.message }, set: { model.message = $0 }))
+                }
+                .frame(maxWidth: .infinity)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 10) {
+                        RouteLink { bilibiliSpace(mid: mid, name: shownName, client: client) } label: {
+                            HStack(spacing: 10) {
+                                avatar(BilibiliMetrics.avatar)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(shownName).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
+                                    Text(model.stats).font(.caption).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("bilibili.creator")
+                        liveCapsule(shownName)
+                        followCapsule
+                    }
+                    BilibiliNotice(message: Binding(get: { model.message }, set: { model.message = $0 }))
+                }
+            }
+        }
+        .animation(.smooth(duration: 0.25), value: model.creator)
+        .task(id: mid) { await model.load(mid) }
+    }
+
+    private func avatar(_ size: CGFloat) -> some View {
+        Color.clear.frame(width: size, height: size)
+            .overlay { PosterImage(url: model.creator?.face, headers: Bilibili.imageHeaders, symbol: "person.fill") }
+            .clipShape(Circle())
+            .overlay { Circle().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5) }
+    }
+
+    /// A small capsule: filled with `tint` for the one thing to do, quiet glass otherwise.
+    private func capsule(_ title: String, symbol: String, filled: Bool, tint: Color, busy: Bool = false) -> some View {
+        HStack(spacing: 4) {
+            if busy { ProgressView().controlSize(.mini).tint(filled ? .white : nil) } else { Image(systemName: symbol).font(.caption.weight(.bold)) }
+            Text(title)
+        }
+        .font(.subheadline.weight(.semibold)).lineLimit(1).fixedSize()
+        .foregroundStyle(filled ? AnyShapeStyle(Color.white) : AnyShapeStyle(.secondary))
+        .padding(.horizontal, 14).frame(height: 34)
+        .glassOrFill(filled ? GlassStyle.regular.tint(tint).interactive() : .regular.interactive(),
+                     filled ? AnyShapeStyle(tint) : AnyShapeStyle(Color.primary.opacity(0.08)), in: Capsule())
+        .contentShape(Capsule())
+    }
+
+    @ViewBuilder private func liveCapsule(_ host: String) -> some View {
+        if let room = model.creator?.liveRoom, let channel = bilibiliLiveChannel(room: room, host: host) {
+            Button { store.playing = channel } label: {
+                capsule(L10n.text("Watch Live"), symbol: "dot.radiowaves.left.and.right", filled: true, tint: Brand.rose)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("bilibili.live")
+        }
+    }
+
+    private var followCapsule: some View {
+        Button { Task { await model.toggleFollow(mid) } } label: {
+            capsule(model.following ? L10n.text("Followed") : L10n.text("Follow"), symbol: model.following ? "checkmark" : "plus",
+                    filled: !model.following, tint: BilibiliMark.pink, busy: model.busy)
+        }
+        .buttonStyle(.plain)
+        .disabled(model.busy)
+        .accessibilityIdentifier("bilibili.follow")
+    }
+    #endif
 }
 
 /// The head of an UP主's space: who they are, then their uploads by newest, most played or most favourited, or their
@@ -533,7 +631,11 @@ struct BilibiliCommentsView: View {
                 .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .padding(.leading, 44)
             }
+            #if os(iOS)
+            Color.clear.frame(height: 4)
+            #else
             Divider()
+            #endif
         }
     }
 }
@@ -542,6 +644,38 @@ private struct BilibiliCommentRow: View {
     let comment: BilibiliAPI.Comment
     var small = false
     var body: some View {
+        #if os(iOS)
+        phone
+        #else
+        standard
+        #endif
+    }
+
+    #if os(iOS)
+    private var phone: some View {
+        HStack(alignment: .top, spacing: 10) {
+            if !small {
+                Color.clear.frame(width: 34, height: 34)
+                    .overlay { PosterImage(url: comment.face, headers: Bilibili.imageHeaders, symbol: "person.fill") }
+                    .clipShape(Circle())
+            }
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    Text(comment.name).font(.footnote.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
+                    Text(comment.date, format: .dateTime.year().month().day()).font(.caption).foregroundStyle(.tertiary)
+                }
+                Text(comment.text).font(small ? .subheadline : .body).fixedSize(horizontal: false, vertical: true).selectable()
+                if comment.likes > 0 {
+                    Label(BilibiliAPI.count(comment.likes), systemImage: "hand.thumbsup").font(.caption).monospacedDigit()
+                        .foregroundStyle(.secondary).labelStyle(.titleAndIcon)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+    #endif
+
+    private var standard: some View {
         HStack(alignment: .top, spacing: 10) {
             if !small {
                 Color.clear.frame(width: 34, height: 34)
@@ -577,7 +711,7 @@ struct BilibiliRelatedRow: View {
             if !videos.isEmpty {
                 Text(L10n.text("Related Videos")).font(.headline)
                 ScrollView(.horizontal) {
-                    LazyHStack(alignment: .top, spacing: 16) {
+                    LazyHStack(alignment: .top, spacing: railSpacing) {
                         ForEach(videos) { video in
                             RouteLink { CatalogDestination(video: video, client: client) } label: { BilibiliVideoTile(video: video) }
                                 .cardButton()
@@ -587,10 +721,23 @@ struct BilibiliRelatedRow: View {
                 }
                 .scrollIndicators(.never)
                 .scrollClipDisabled()
+                #if os(iOS)
+                // Edge to edge, as the episodes above: the covers start at the page's margin and run off the screen.
+                .contentMargins(.horizontal, 16, for: .scrollContent)
+                .padding(.horizontal, -16)
+                #endif
                 .tvFocusSection()
             }
         }
         .task(id: bvid) { videos = (try? await BilibiliAPI.related(bvid: bvid)) ?? [] }
+    }
+
+    private var railSpacing: CGFloat {
+        #if os(iOS)
+        DiscoverLayout.spacing
+        #else
+        16
+        #endif
     }
 }
 
@@ -599,7 +746,42 @@ struct BilibiliVideoTile: View {
     let video: Video
     /// A live room: marked as live on its cover.
     var live = false
+    /// Its width in a row; nil in a grid, whose column sets it.
+    var width: CGFloat? = BilibiliMetrics.tile
     var body: some View {
+        #if os(iOS)
+        // Discover's landscape card: the cover with a hairline edge, two lines of title and a quiet line under them.
+        VStack(alignment: .leading, spacing: 7) {
+            cover(corner: 12)
+                .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.primary.opacity(0.1), lineWidth: 0.5) }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(video.name).font(.system(size: DiscoverLayout.caption, weight: .medium)).foregroundStyle(.primary)
+                    .lineLimit(2, reservesSpace: true).multilineTextAlignment(.leading)
+                Text(video.remarks.isEmpty ? " " : video.remarks).font(.system(size: DiscoverLayout.secondary, design: .rounded))
+                    .foregroundStyle(.primary.opacity(0.56)).lineLimit(1)
+            }
+        }
+        .frame(width: width)
+        .accessibilityElement(children: .combine)
+        #else
+        standard
+        #endif
+    }
+
+    private func cover(corner: CGFloat) -> some View {
+        Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
+            .overlay { PosterImage(url: video.poster, headers: video.posterHeaders) }
+            .posterClip(RoundedRectangle(cornerRadius: corner, style: .continuous))
+            .overlay(alignment: .topLeading) {
+                if live {
+                    Text(L10n.text("LIVE")).font(.caption2.weight(.bold)).foregroundStyle(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(BilibiliMark.pink, in: Capsule()).padding(8)
+                }
+            }
+    }
+
+    private var standard: some View {
         VStack(alignment: .leading, spacing: 8) {
             Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
                 .overlay { PosterImage(url: video.poster, headers: video.posterHeaders) }
@@ -617,7 +799,7 @@ struct BilibiliVideoTile: View {
                 Text(video.remarks).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
         }
-        .frame(width: BilibiliMetrics.tile)
+        .frame(width: width)
     }
 }
 
@@ -675,9 +857,11 @@ struct BilibiliShelves: View {
         #if os(tvOS)
         tvBody
         #else
-        VStack(alignment: .leading, spacing: 22) {
+        // Watch Now's and Discover's rows: a heading that opens the whole list, then landscape covers running off the
+        // screen. The rows reach into the page's margin by Discover's gutter, so their headings line up with the page.
+        VStack(alignment: .leading, spacing: 26) {
             if !live.isEmpty {
-                shelf(title: L10n.text("Live Now"), more: nil) {
+                WatchNowPhoneShelf(title: L10n.text("Live Now")) {
                     ForEach(live) { room in
                         Button { if let channel = bilibiliLiveChannel(room: room.room, host: room.host) { store.playing = channel } } label: {
                             BilibiliVideoTile(video: Video(id: "live_\(room.room)", name: room.title, poster: room.cover,
@@ -689,18 +873,20 @@ struct BilibiliShelves: View {
             }
             ForEach(shelves) { item in
                 if !item.videos.isEmpty {
-                    shelf(title: item.title, more: item.id) {
+                    WatchNowPhoneShelf(title: item.title, action: { open(item.id) }) {
                         ForEach(item.videos) { video in
                             RouteLink { CatalogDestination(video: video, client: client) } label: { BilibiliVideoTile(video: video) }
                                 .cardButton()
                         }
                     }
+                    .accessibilityIdentifier("bilibili.shelf." + item.id)
                 }
             }
             if !shelves.filter({ !$0.videos.isEmpty }).isEmpty || !live.isEmpty {
-                Text(L10n.text("Recommendations")).font(.title3.weight(.bold))
+                WatchNowPhoneHeading(title: L10n.text("Recommendations"))
             }
         }
+        .padding(.horizontal, -DiscoverLayout.gutter)
         .task(id: ready) { if ready { await load() } }
         #endif
     }
@@ -743,29 +929,6 @@ struct BilibiliShelves: View {
     }
     #endif
 
-    private func shelf<Content: View>(title: String, more: String?, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title).font(.title3.weight(.bold))
-                Spacer(minLength: 8)
-                if let more {
-                    Button(L10n.text("See All")) { open(more) }
-                        #if os(tvOS)
-                        .controlButton()
-                        #else
-                        .buttonStyle(.plain).font(.subheadline.weight(.semibold)).foregroundStyle(BilibiliMark.blue)
-                        #endif
-                }
-            }
-            ScrollView(.horizontal) {
-                LazyHStack(alignment: .top, spacing: 16, content: content).padding(.vertical, 12)
-            }
-            .scrollIndicators(.never)
-            .scrollClipDisabled()
-        }
-        .tvFocusSection()
-    }
-
     private func load() async {
         guard shelves.isEmpty else { return }
         let signedIn = BilibiliAPI.signedIn
@@ -781,6 +944,212 @@ struct BilibiliShelves: View {
         }
     }
 }
+
+#if os(iOS)
+// MARK: iPhone's video page
+
+/// A Bilibili video's page under the iPhone's player, in the Apple TV page's order and manner: the title once, one quiet
+/// line of facts, the UP主 with Follow, the account's actions as one row of glass plates, the description, then the
+/// parts, the comments as a card that opens them over the page (the video stays in view above), and related videos.
+struct BilibiliPhoneVideoPage<Parts: View, Status: View>: View {
+    let bvid: String
+    let title: String
+    /// The source's synopsis, until Bilibili's own description is in.
+    let synopsis: String
+    let creator: (mid: Int, name: String)?
+    let client: CatalogClient
+    /// In Yingxia's own favourites (the heart elsewhere in the app), not Bilibili's.
+    let saved: Bool
+    let toggleSaved: () -> Void
+    let download: (() -> Void)?
+    /// The page's notices: a playback that failed, details that didn't load.
+    @ViewBuilder let status: Status
+    @ViewBuilder let parts: Parts
+    @State private var actions = BilibiliVideoActions()
+    @State private var hotComments: [BilibiliAPI.Comment] = []
+    @State private var choosingCoins = false
+    @State private var showsComments = false
+    @State private var showsSignIn = false
+    @State private var showsMore = false
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(.title3.weight(.bold)).fixedSize(horizontal: false, vertical: true)
+                // A line kept while the facts load, so the page doesn't move when they come in.
+                Text(facts.isEmpty ? " " : facts).font(.footnote).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
+            }
+            if let creator { BilibiliCreatorRow(mid: creator.mid, name: creator.name, client: client) }
+            VStack(alignment: .leading, spacing: 8) {
+                plates
+                BilibiliNotice(message: Binding(get: { actions.message }, set: { actions.message = $0 }))
+            }
+            description
+            status
+            parts
+            if let state = actions.state, !hotComments.isEmpty { commentsCard(total: state.replies) }
+            BilibiliRelatedRow(bvid: bvid, client: client)
+        }
+        .animation(.smooth(duration: 0.3), value: actions.state)
+        .task(id: bvid) {
+            await actions.load(bvid)
+            if let aid = actions.state?.aid, let page = try? await BilibiliAPI.comments(aid: aid, newest: false, cursor: nil) {
+                hotComments = Array(page.comments.prefix(3))
+            }
+            #if DEBUG
+            // `-qaOpenComments 1` opens the comments over the page once they are in, for screenshots.
+            if UserDefaults.standard.bool(forKey: "qaOpenComments"), !hotComments.isEmpty { showsComments = true }
+            #endif
+        }
+        .confirmationDialog(L10n.text("Coin"), isPresented: $choosingCoins, titleVisibility: .visible) {
+            ForEach(Array(1...max(1, actions.coinsLeft)), id: \.self) { count in
+                Button(count == 1 ? L10n.text("1 Coin") : L10n.text("%lld Coins", count)) { Task { await actions.coin(count) } }
+            }
+        } message: {
+            Text(L10n.text("Coins also like the video."))
+        }
+        // Over the page at half height, so the video keeps playing in view above them; up to full height to read on.
+        .sheet(isPresented: $showsComments) {
+            if let state = actions.state {
+                BilibiliCommentsView(aid: state.aid, total: state.replies)
+                    .presentationDetents([.medium, .large])
+                    .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+            }
+        }
+        // Signed out, Like, Coin and Favorite open the account's sign-in, then the counts load again.
+        .onChange(of: actions.needsSignIn) { _, needed in
+            guard needed else { return }
+            actions.needsSignIn = false
+            showsSignIn = true
+        }
+        .sheet(isPresented: $showsSignIn, onDismiss: { Task { await actions.load(bvid) } }) {
+            NavigationStack { BilibiliAccountView() }
+        }
+    }
+
+    /// 57:46 · 1065.6万 views · 2.3万 danmaku · 2026/11/1
+    private var facts: String {
+        guard let state = actions.state else { return "" }
+        var parts: [String] = []
+        if state.duration > 0 { parts.append(Self.clock(state.duration)) }
+        if state.views > 0 { parts.append(L10n.text("%@ views", BilibiliAPI.count(state.views))) }
+        if state.danmaku > 0 { parts.append(L10n.text("%@ danmaku", BilibiliAPI.count(state.danmaku))) }
+        if let date = state.published { parts.append(date.formatted(.dateTime.year().month().day())) }
+        return parts.joined(separator: " · ")
+    }
+
+    static func clock(_ seconds: Int) -> String {
+        seconds >= 3600 ? String(format: "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
+            : String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+
+    /// Bilibili's description, else the source's synopsis; Bilibili's "-" stands for none.
+    private var summary: String {
+        if let text = actions.state?.summary, !text.isEmpty { return text }
+        let text = synopsis.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text == "-" ? "" : text
+    }
+
+    private func caption(_ count: Int?, _ title: String) -> String { count.map { $0 > 0 ? BilibiliAPI.count($0) : title } ?? title }
+
+    /// Like, Coin and Favorite with their counts, Download, and More for the rest: one row of plates across the page.
+    private var plates: some View {
+        let state = actions.state
+        return HStack(alignment: .top, spacing: 0) {
+            Button { Task { await actions.like() } } label: {
+                WatchPlateLabel(symbol: "hand.thumbsup", caption: caption(state?.likes, L10n.text("Like")), on: state?.liked == true, tint: BilibiliMark.pink)
+            }
+            .contextMenu {
+                Button { Task { await actions.triple() } } label: { Label(L10n.text("Like, Coin and Favorite"), systemImage: "sparkles") }
+            }
+            .accessibilityLabel(L10n.text("Like")).accessibilityIdentifier("bilibili.like")
+            .frame(maxWidth: .infinity)
+            Button { if actions.signedIn() { choosingCoins = true } } label: {
+                WatchPlateLabel(symbol: "bitcoinsign.circle", caption: caption(state?.coins, L10n.text("Coin")), on: (state?.coined ?? 0) > 0, tint: BilibiliMark.pink)
+            }
+            .accessibilityLabel(L10n.text("Coin")).accessibilityIdentifier("bilibili.coin")
+            .frame(maxWidth: .infinity)
+            Button { Task { await actions.favorite() } } label: {
+                WatchPlateLabel(symbol: "star", caption: caption(state?.favorites, L10n.text("Favorite")), on: state?.favorited == true, tint: BilibiliMark.pink)
+            }
+            .accessibilityLabel(L10n.text("Favorite")).accessibilityIdentifier("bilibili.favorite")
+            .frame(maxWidth: .infinity)
+            if let download {
+                Button(action: download) { WatchPlateLabel(symbol: "arrow.down.circle", caption: L10n.text("Download")) }
+                    .accessibilityLabel(L10n.text("Download")).accessibilityIdentifier("detail.download")
+                    .frame(maxWidth: .infinity)
+            }
+            // A sheet of choices rather than a menu: iOS draws a menu's own glass around its label, a second, larger plate.
+            Button { showsMore = true } label: {
+                WatchPlateLabel(symbol: saved ? "heart" : "ellipsis", caption: saved ? L10n.text("Saved") : L10n.text("More"), on: saved)
+            }
+            .accessibilityLabel(L10n.text("More")).accessibilityIdentifier("bilibili.more")
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+        .disabled(state == nil)
+        .confirmationDialog(title, isPresented: $showsMore, titleVisibility: .hidden) {
+            Button(L10n.text("Watch Later")) { Task { await actions.watchLater() } }
+            Button(L10n.text("Like, Coin and Favorite")) { Task { await actions.triple() } }
+            Button(saved ? L10n.text("Remove from Yingxia Favorites") : L10n.text("Add to Yingxia Favorites"), action: toggleSaved)
+        }
+        // The row spans the page, its first and last plates a little inside its edges.
+        .padding(.horizontal, -6)
+    }
+
+    /// Three lines of the description; a tap shows the rest.
+    @ViewBuilder private var description: some View {
+        let text = summary
+        if !text.isEmpty {
+            Button { withAnimation(.smooth(duration: 0.3)) { expanded.toggle() } } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(text).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                        .lineLimit(expanded ? nil : 3).fixedSize(horizontal: false, vertical: true)
+                    if text.count > 60 {
+                        Text(L10n.text(expanded ? "Show Less" : "More")).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("bilibili.description")
+        }
+    }
+
+    /// The comments as one card, as YouTube's page has: their count and the most liked one; a tap opens them all.
+    private func commentsCard(total: Int) -> some View {
+        Button { showsComments = true } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(L10n.text("Comments")).font(.headline).foregroundStyle(.primary)
+                    if total > 0 { Text(BilibiliAPI.count(total)).font(.subheadline).monospacedDigit().foregroundStyle(.secondary) }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.forward").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                }
+                if let first = hotComments.first {
+                    HStack(alignment: .top, spacing: 10) {
+                        Color.clear.frame(width: 26, height: 26)
+                            .overlay { PosterImage(url: first.face, headers: Bilibili.imageHeaders, symbol: "person.fill") }
+                            .clipShape(Circle())
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(first.name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            Text(first.text).font(.subheadline).foregroundStyle(.primary).lineLimit(2).multilineTextAlignment(.leading)
+                        }
+                    }
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassOrFill(.regular.interactive(), Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("bilibili.comments")
+    }
+}
+#endif
 
 #if os(tvOS)
 // MARK: Apple TV's video page

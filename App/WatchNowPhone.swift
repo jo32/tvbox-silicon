@@ -525,4 +525,25 @@ struct WatchNowPhoneCategoryRail: View {
         .task(id: key) { WatchNowRows.shared.load(category: category, client: client) }
     }
 }
+
+/// An action on a title's page as a round glass plate with a word or count under it, as the Apple TV page's plates:
+/// one quiet row instead of buttons of every size. `on` fills the symbol in `tint` (liked, favorited, saved).
+struct WatchPlateLabel: View {
+    let symbol: String
+    let caption: String
+    var on = false
+    var tint: Color = Brand.rose
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: on ? symbol + ".fill" : symbol)
+                .font(.system(size: 19, weight: .medium))
+                .foregroundStyle(on ? AnyShapeStyle(tint) : AnyShapeStyle(.primary))
+                .frame(width: 48, height: 48)
+                .glassOrFill(.regular.interactive(), Color.primary.opacity(0.07), in: Circle())
+            Text(caption).font(.caption).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
+        }
+        .frame(minWidth: 62)
+        .contentShape(Rectangle())
+    }
+}
 #endif
