@@ -1615,6 +1615,7 @@
 "%@ fps" = "%@ fps";
 "An SRT, WebVTT or ASS file, up to 8 MB." = "An SRT, WebVTT or ASS file, up to 8 MB.";
 "Subtitles Not Added" = "Subtitles Not Added";
+"Save or Share" = "Save or Share";
 
 /* Subtitle sources (#576 M2) */
 "It uses manifest format %@." = "It uses manifest format %@.";

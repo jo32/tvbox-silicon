@@ -319,7 +319,7 @@ public struct MusicDownloadedCollection: Codable, Identifiable, Hashable, Sendab
     // MARK: Persistence
 
     /// Song IDs hold ":"; the folder name keeps only letters and digits plain.
-    private func folder(_ id: String) -> URL { root.appending(path: id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? id) }
+    func folder(_ id: String) -> URL { root.appending(path: id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? id) }
     private var index: URL { root.appending(path: "music-downloads.json") }
     private var collectionIndex: URL { root.appending(path: "music-collections.json") }
     private func hasMedia(_ item: MusicDownload) -> Bool {

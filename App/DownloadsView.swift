@@ -550,6 +550,12 @@ private struct ShowPanel: View {
             if let file = library.file(for: item) {
                 Button(L10n.text("Show in Finder"), systemImage: "folder") { NSWorkspace.shared.activateFileViewerSelecting([file]) }
             }
+            #elseif os(iOS)
+            if let file = library.exportableFile(for: item) {
+                Button(L10n.text("Save or Share"), systemImage: "square.and.arrow.up") {
+                    DownloadSharing.share(file, named: DownloadLibrary.exportName(for: item))
+                }
+            }
             #endif
             Button(L10n.text("Delete Download"), systemImage: "trash", role: .destructive) { library.remove([item.id]) }
         }
@@ -1073,6 +1079,37 @@ extension View {
             return item.episode.isEmpty ? item.title : "\(item.title) · \(item.episode)"
         }
         return (songs.first(where: \.isActive) ?? songs.first(where: { $0.status == .queued }))?.track.title
+    }
+}
+#endif
+
+#if os(iOS)
+/// Saves a finished download to Files or Photos, or sends it with AirDrop, through the share sheet. It hands over a
+/// renamed copy (`DownloadExport`), so deleting the saved file elsewhere leaves the download in the app.
+@MainActor enum DownloadSharing {
+    static func share(_ file: URL, named name: String) {
+        Task {
+            let copy = await Task.detached { () -> Result<URL, any Error> in Result { try DownloadExport.copy(file, named: name) } }.value
+            guard case .success(let copy) = copy else {
+                if case .failure(let error) = copy { Diagnostics.shared.failure("download", "share copy", error) }
+                // Deleted outside the app: stop listing it.
+                DownloadLibrary.shared.forgetMissing()
+                MusicDownloadLibrary.shared.forgetMissing()
+                return
+            }
+            guard let scene = UIApplication.shared.appWindowScene, let window = scene.keyWindow ?? scene.windows.first else { return }
+            var controller = window.rootViewController
+            while let next = controller?.presentedViewController, !next.isBeingDismissed { controller = next }
+            let sheet = UIActivityViewController(activityItems: [copy], applicationActivities: nil)
+            sheet.completionWithItemsHandler = { @Sendable _, _, _, _ in DownloadExport.clear() }
+            if let popover = sheet.popoverPresentationController {
+                // iPad: a sheet in the middle of the window, as the menu that opened it is gone.
+                popover.sourceView = window
+                popover.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
+                popover.permittedArrowDirections = []
+            }
+            controller?.present(sheet, animated: true)
+        }
     }
 }
 #endif

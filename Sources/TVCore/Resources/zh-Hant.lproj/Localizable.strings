@@ -1615,6 +1615,7 @@
 "%@ fps" = "%@ fps";
 "An SRT, WebVTT or ASS file, up to 8 MB." = "SRT、WebVTT 或 ASS 檔案，最大 8 MB。";
 "Subtitles Not Added" = "未能加入字幕";
+"Save or Share" = "儲存或分享";
 
 /* Subtitle sources (#576 M2) */
 "It uses manifest format %@." = "它使用的清單格式為 %@。";
