@@ -3931,11 +3931,11 @@
   ],
   "testflight": {
     "ios": {
-      "build": 51,
+      "build": 52,
       "link": "https://testflight.apple.com/join/dU6UNbzp"
     },
     "tvos": {
-      "build": 51,
+      "build": 52,
       "link": "https://testflight.apple.com/join/SSgWEwSr"
     }
   }
