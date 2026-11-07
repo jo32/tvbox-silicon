@@ -311,6 +311,14 @@ int tvm_stream(const TVMInput *input, int index, TVMStream *out) {
     return 0;
 }
 
+int tvm_stream_tag(const TVMInput *input, int index, const char *key, char *out, int size) {
+    if (index < 0 || index >= (int)input->format->nb_streams || !key) return -1;
+    const AVDictionaryEntry *entry = av_dict_get(input->format->streams[index]->metadata, key, NULL, 0);
+    if (!entry) return -1;
+    if (out && size > 0) snprintf(out, size, "%s", entry->value);
+    return (int)strlen(entry->value);
+}
+
 int tvm_keyframes(const TVMInput *input, int index, int64_t *times, int capacity) {
     if (index < 0 || index >= (int)input->format->nb_streams) return 0;
     AVStream *st = input->format->streams[index];
@@ -1953,4 +1961,100 @@ done:
     av_free(outOf); av_free(lastDts); av_free(line);
     tvm_close(reader);
     return status < 0 ? status : 0;
+}
+
+// MARK: - Bitmap subtitles
+
+struct TVMBitmapDecoder {
+    AVCodecContext *codec;
+    AVPacket *packet;
+};
+
+static int bitmap_codec(enum AVCodecID id) { return id == AV_CODEC_ID_HDMV_PGS_SUBTITLE || id == AV_CODEC_ID_DVD_SUBTITLE; }
+
+int tvm_bitmap_available(const char *codec) {
+    const AVCodecDescriptor *descriptor = codec ? avcodec_descriptor_get_by_name(codec) : NULL;
+    return descriptor && bitmap_codec(descriptor->id) && avcodec_find_decoder(descriptor->id) != NULL;
+}
+
+TVMBitmapDecoder *tvm_bitmap_open(const TVMInput *input, int index) {
+    if (!input || index < 0 || index >= (int)input->format->nb_streams) return NULL;
+    const AVCodecParameters *parameters = input->format->streams[index]->codecpar;
+    if (parameters->codec_type != AVMEDIA_TYPE_SUBTITLE || !bitmap_codec(parameters->codec_id)) return NULL;
+    const AVCodec *codec = avcodec_find_decoder(parameters->codec_id);
+    if (!codec) return NULL;
+    TVMBitmapDecoder *decoder = av_mallocz(sizeof *decoder);
+    if (!decoder) return NULL;
+    decoder->codec = avcodec_alloc_context3(codec);
+    decoder->packet = av_packet_alloc();
+    if (!decoder->codec || !decoder->packet || avcodec_parameters_to_context(decoder->codec, parameters) < 0) {
+        tvm_bitmap_close(decoder);
+        return NULL;
+    }
+    decoder->codec->pkt_timebase = AV_TIME_BASE_Q;
+    if (avcodec_open2(decoder->codec, codec, NULL) < 0) { tvm_bitmap_close(decoder); return NULL; }
+    return decoder;
+}
+
+int tvm_bitmap_decode(TVMBitmapDecoder *decoder, const uint8_t *data, int size, int64_t time, int64_t duration,
+                      TVMBitmapSubtitle *out) {
+    memset(out, 0, sizeof *out);
+    if (!decoder || !data || size <= 0) return -1;
+    // The decoder reads the packet and keeps nothing of it; `data` stays the caller's.
+    AVPacket *packet = decoder->packet;
+    av_packet_unref(packet);
+    packet->data = (uint8_t *)data;
+    packet->size = size;
+    packet->pts = packet->dts = time;
+    packet->duration = duration > 0 ? duration : 0;
+    AVSubtitle subtitle;
+    int got = 0;
+    int status = avcodec_decode_subtitle2(decoder->codec, &subtitle, &got, packet);
+    packet->data = NULL; packet->size = 0;
+    if (status < 0) return status;
+    if (!got) return 0;
+    int64_t base = subtitle.pts != AV_NOPTS_VALUE ? subtitle.pts : time;
+    out->start = base + (int64_t)subtitle.start_display_time * 1000;
+    // PGS leaves the end to the next display set (end_display_time 0 or UINT32_MAX); VobSub usually says.
+    uint32_t end = subtitle.end_display_time;
+    out->end = end > subtitle.start_display_time && end != UINT32_MAX ? base + (int64_t)end * 1000
+             : duration > 0 ? time + duration : -1;
+    out->canvasWidth = decoder->codec->width;
+    out->canvasHeight = decoder->codec->height;
+    for (unsigned i = 0; i < subtitle.num_rects && out->count < (int)(sizeof out->rects / sizeof out->rects[0]); i++) {
+        const AVSubtitleRect *rect = subtitle.rects[i];
+        if (rect->type != SUBTITLE_BITMAP || rect->w <= 0 || rect->h <= 0 || !rect->data[0] || !rect->data[1]) continue;
+        uint8_t *pixels = av_malloc((size_t)rect->w * rect->h * 4);
+        if (!pixels) break;
+        const uint32_t *palette = (const uint32_t *)rect->data[1];
+        for (int y = 0; y < rect->h; y++) {
+            const uint8_t *source = rect->data[0] + (size_t)y * rect->linesize[0];
+            uint8_t *target = pixels + (size_t)y * rect->w * 4;
+            for (int x = 0; x < rect->w; x++) {
+                // The palette is 0xAARRGGBB; the picture premultiplied BGRA.
+                uint32_t color = source[x] < rect->nb_colors ? palette[source[x]] : 0;
+                uint32_t alpha = color >> 24;
+                target[4 * x + 0] = (uint8_t)(((color & 0xFF) * alpha + 127) / 255);
+                target[4 * x + 1] = (uint8_t)((((color >> 8) & 0xFF) * alpha + 127) / 255);
+                target[4 * x + 2] = (uint8_t)((((color >> 16) & 0xFF) * alpha + 127) / 255);
+                target[4 * x + 3] = (uint8_t)alpha;
+            }
+        }
+        out->rects[out->count++] = (TVMBitmapRect){ rect->x, rect->y, rect->w, rect->h, pixels };
+    }
+    avsubtitle_free(&subtitle);
+    return 1;
+}
+
+void tvm_bitmap_clear(TVMBitmapSubtitle *subtitle) {
+    if (!subtitle) return;
+    for (int i = 0; i < subtitle->count; i++) av_freep(&subtitle->rects[i].pixels);
+    subtitle->count = 0;
+}
+
+void tvm_bitmap_close(TVMBitmapDecoder *decoder) {
+    if (!decoder) return;
+    avcodec_free_context(&decoder->codec);
+    av_packet_free(&decoder->packet);
+    av_free(decoder);
 }

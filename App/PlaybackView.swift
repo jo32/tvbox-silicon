@@ -571,6 +571,7 @@ import IOKit.pwr_mgt
         externalSubtitles.player = player
         externalSubtitles.changed = { [weak self] in self?.followSubtitleDelay() }
         subtitles.nativeChosen = { [weak self] in self?.externalSubtitles.nativeChosen() }
+        subtitles.clockChanged = { [weak self] in self?.followSubtitleDelay() }
         followSubtitleDelay()
     }
     private var styleObserver: NSObjectProtocol?
@@ -582,7 +583,7 @@ import IOKit.pwr_mgt
     /// frame or so. Otherwise the lines go up as AVPlayer hands them over, so no clock runs: it would only wake the
     /// main thread.
     private func followSubtitleDelay() {
-        let interval: Double? = subtitles.document != nil ? 0.05 : SubtitleDelay.load() > 0 ? 0.25 : nil
+        let interval: Double? = subtitles.needsClock ? 0.05 : SubtitleDelay.load() > 0 ? 0.25 : nil
         guard interval != subtitleClockInterval else { return }
         if let observer = subtitleTimeObserver { player.removeTimeObserver(observer); subtitleTimeObserver = nil }
         subtitleClockInterval = interval

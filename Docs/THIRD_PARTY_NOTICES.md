@@ -48,6 +48,12 @@ How Unicorn's and Keystone's GPL-2.0 terms apply to apps that embed this runtime
 
 [dav1d](https://code.videolan.org/videolan/dav1d) 1.5.4 (BSD-2-Clause, `Vendor/FFmpeg/LICENSE.dav1d`) decodes AV1 for that library on devices without an AV1 hardware decoder. The same script builds it from unmodified upstream sources into the static library.
 
+## Styled subtitles
+
+[libass](https://github.com/libass/libass) 0.17.5 (ISC) draws ASS/SSA subtitles with their fonts, positions and effects. It uses [FreeType](https://freetype.org) 2.15.0, under the FreeType License (FTL; FreeType is dual-licensed, and this app takes it under the FTL rather than GPLv2), [HarfBuzz](https://harfbuzz.github.io) 15.1.0 (Old MIT; its Universal Shaping Engine tables are MIT, © Microsoft Corporation) and [FriBidi](https://github.com/fribidi/fribidi) 1.0.18 (LGPL-2.1-or-later). `Scripts/build-apple-libass.sh` builds all four from unmodified upstream sources and links them statically; `Vendor/LibASS/` keeps their licenses and an upstream record (`UPSTREAM.md`). As with FFmpeg, the complete source of the app, including that script, is available under the GPL, so FriBidi can be rebuilt and relinked.
+
+Portions of this software are copyright © 1996-2026 The FreeType Project (https://freetype.org). All rights reserved.
+
 ## Reference implementation
 
 The built-in Hongguo source uses the catalog and player response formats from

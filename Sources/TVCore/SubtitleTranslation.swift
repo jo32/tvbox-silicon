@@ -35,7 +35,7 @@ public enum SubtitleTranslation {
     /// what `detected` found its words to be in.
     static func sources(_ tracks: [RemuxPlan.Track], detected: [Int: Locale.Language], target: Locale.Language) -> [(track: Int, language: Locale.Language)] {
         var chosen: [(track: Int, language: Locale.Language)] = []
-        let subtitles = tracks.indices.filter { tracks[$0].kind == .subtitle && tracks[$0].stream.codec != codec && !tracks[$0].stream.isForced }
+        let subtitles = tracks.indices.filter { tracks[$0].kind == .subtitle && tracks[$0].stream.isText && tracks[$0].stream.codec != codec && !tracks[$0].stream.isForced }
         for index in subtitles.sorted(by: { (tracks[$0].stream.isDefault ? 0 : 1, $0) < (tracks[$1].stream.isDefault ? 0 : 1, $1) }) {
             guard let language = RemuxPlan.languageTag(tracks[index].stream.language).map(Locale.Language.init(identifier:)) ?? detected[index],
                   let code = language.languageCode, code != target.languageCode,

@@ -61,7 +61,9 @@ fi
 DEMUXERS=matroska,avi,flv,asf,rm,mpegts,mpegps,mov,ogg
 VIDEO_DECODERS=h264,hevc,mpeg1video,mpeg2video,mpeg4,msmpeg4v1,msmpeg4v2,msmpeg4v3,h263,flv,vc1,wmv1,wmv2,wmv3,rv10,rv20,rv30,rv40,vp6,vp6a,vp6f,vp8,vp9,theora,mjpeg,libdav1d
 AUDIO_DECODERS=aac,aac_latm,ac3,eac3,dca,truehd,mlp,mp1,mp2,mp3,vorbis,opus,flac,alac,pcm_s16le,pcm_s16be,pcm_s24le,pcm_s24be,pcm_s32le,pcm_f32le,pcm_u8,pcm_bluray,pcm_dvd,wmav1,wmav2,wmapro,wmalossless,cook,sipr,atrac3,ra_144,ra_288,amrnb,amrwb,adpcm_ima_wav,adpcm_ms
-PARSERS=h264,hevc,aac,aac_latm,ac3,mpegaudio,dca,mlp,flac,vorbis,opus,mpeg4video,mpegvideo,vc1,vp8,vp9,av1,h263,rv34,cook
+# Bitmap subtitles (Blu-ray PGS, DVD VobSub), which the app draws over the picture itself (#576 M3).
+SUBTITLE_DECODERS=pgssub,dvdsub
+PARSERS=h264,hevc,aac,aac_latm,ac3,mpegaudio,dca,mlp,flac,vorbis,opus,mpeg4video,mpegvideo,vc1,vp8,vp9,av1,h263,rv34,cook,dvdsub
 BSFS=aac_adtstoasc,extract_extradata,vp9_superframe
 ENCODERS=aac_at,h264_videotoolbox,hevc_videotoolbox
 # VideoToolbox decoding, for the picture that is converted (HDR to SDR) on the media engine, not the CPU.
@@ -111,7 +113,7 @@ CROSS
       --enable-libdav1d --pkg-config-flags=--static \
       --disable-everything --disable-network --disable-avdevice --disable-avfilter \
       --enable-demuxer="$DEMUXERS" --enable-muxer=mp4 \
-      --enable-decoder="$VIDEO_DECODERS,$AUDIO_DECODERS" --enable-encoder="$ENCODERS" \
+      --enable-decoder="$VIDEO_DECODERS,$AUDIO_DECODERS,$SUBTITLE_DECODERS" --enable-encoder="$ENCODERS" \
       --enable-parser="$PARSERS" --enable-bsf="$BSFS" --enable-hwaccel="$HWACCELS" \
       ${extra[@]+"${extra[@]}"} > configure.log 2>&1 || { tail -30 configure.log; exit 1; }
     make -j "${JOBS:-$(sysctl -n hw.ncpu)}" > make.log 2>&1 || { tail -40 make.log; exit 1; }

@@ -317,3 +317,120 @@ const subtitleSource = {
   - per-account caches
   - the download cache with re-resolve of expired addresses
   - the LRU limit
+
+## M3: styled ASS/SSA through libass
+
+ASS and SSA used to show as plain lines. Now libass draws them with their fonts, positions, outlines, shadows,
+rotations, `\move`, `\fad`, karaoke and vector drawings, wherever the script puts them on the picture.
+
+### Decisions
+
+- **libass, built here.** `Scripts/build-apple-libass.sh` builds libass 0.17.5 with FreeType, HarfBuzz and
+  FriBidi from pinned tags and commits into one static `LibASS.xcframework` per recipe. It covers macOS
+  arm64 + x86_64, iOS, tvOS and their simulators. It uses the same pattern as FFmpeg: a cache in
+  `~/Library/Caches/tvbox-libass`, a link in `build/LibASS`, and no committed binaries. Fonts come from the
+  system through libass's CoreText provider (no fontconfig), plus the file's own (below). About 4.2 MB of static
+  library per slice goes into the link; only what is used ends up in the app. Licences: `Docs/THIRD_PARTY_NOTICES.md`.
+- **Apple's HVF fonts.** On iOS 27, PingFang (the system's Chinese font) is a Hierarchical Variable Font, which
+  FreeType reads only with Apple's `libhvf`. Without it, Chinese text fell back to boxes. FreeType is built with
+  `-Dhvf=enabled` and the app links `libhvf`. It is new in iOS/tvOS 18.4 and macOS 15.4, so it is weak-linked
+  and FreeType asks for it only when a font has an `hvgl` table. Older systems have no such fonts.
+- **Where the events come from.**
+  - A subtitle **file** (ASS/SSA, from a source or added by the viewer) is read whole into libass
+    (`ASSRenderer(script:)`).
+  - A **Matroska ASS track** still becomes a WebVTT rendition of the repackaged stream. AVPlayer lists it,
+    selects it and shows it in Picture in Picture. As the repackager makes each segment, it also hands the raw
+    events to a `StyledSubtitleEvents` store per track (TVMedia's cue callback). The store dedupes by ReadOrder,
+    because a segment made again repeats its events, and is capped at 24 MB per track. The codec private header
+    ([Script Info] and styles) comes from the stream's extradata. Font attachments (by codec, file extension or
+    MIME type) are capped at 64 MB per file and handed to libass with `ass_add_font`.
+  - The selected AVPlayer option is matched to its track by the rendition's NAME, read from the option's title
+    metadata. Its `displayName` is the language name, so it can't be used. As a fallback the match uses the
+    option's place among the subtitle renditions.
+- **One renderer, two clocks.** `StyledSubtitles` (App) asks a `StyledSubtitleSource` for a frame. A file goes
+  through `SubtitleTiming` (`display = source × scale + delay`). An embedded track uses AVPlayer's time less the
+  subtitle delay. The player's 50 ms clock runs only while styled subtitles show (`needsClock`).
+- **Drawn only on change, and only the part that changed.** Rendering runs on a serial queue, one frame at a
+  time, coalescing requests. libass's change detection skips identical frames. A changed frame is blended into a
+  premultiplied BGRA buffer covering only the bounding box of libass's images, then becomes one `CGImage` on a
+  `CALayer` (no SwiftUI redraw per frame).
+- **In the picture's rect.** The canvas is the video's rect inside the player: aspect fit (letterboxed) or aspect
+  fill, tracked through resize and rotation. It is in pixels (points × display scale). The storage size is the
+  video's own size, so the script's border and shadow sizes scale with the picture as libass expects.
+- **Fallback.** If libass doesn't start (`ASSRenderer.isAvailable == false`) or a script has no events, the plain
+  lines show as before. The "ASS styling and effects show as plain text" note appears only then.
+
+### Support matrix (M3)
+
+| Path | On screen | PiP | AirPlay |
+|---|---|---|---|
+| ASS/SSA file (overlay) | libass | Not shown (as for every file) | Not shown on the receiver |
+| MKV ASS track → repackaged HLS | libass, with the file's fonts | AVPlayer's plain WebVTT lines | Repackaged streams don't AirPlay |
+| ASS inside MP4/HLS from a server | Unchanged: AVPlayer's own lines | AVPlayer | AVPlayer |
+| MKV PGS / VobSub track → repackaged HLS | Drawn bitmaps (new; before, these tracks weren't offered at all) | Nothing | Repackaged streams don't AirPlay |
+
+### Known limits
+
+- An embedded track's events arrive as segments are made, so the renderer knows only what has been read so far.
+  That is enough for playback, since a segment is made before it plays. A seek far ahead shows that part's events
+  once its segment is made.
+- The `YCbCr Matrix` header is not applied to colours (libass leaves that to the player). Scripts that set
+  `TV.601` on HD video may look slightly off in colour.
+- Each change redraws the whole bounding box. A full-screen karaoke effect at 4K redraws a large area every frame.
+  That is fine on Apple TV 4K in the simulator; it has not been profiled on an A10 Apple TV HD.
+- Bitmap subtitles: see the next section.
+
+### Tests (M3)
+
+- `StyledSubtitleTests` covers:
+  - libass starting
+  - placement, colour, `\pos`, resizing and clearing
+  - Chinese and Japanese in system fonts, and fades
+  - a Matroska track taking events as they come, with ReadOrder dedupe
+  - refusing non-ASS input
+  - documents keeping their script
+  - font attachment detection
+  - rendition names matching the master playlist
+  - a fixture MKV (`Fixtures/remux-ass.mkv`) through the repackager: simultaneous events reach libass, and the
+    plain WebVTT lines still go to AVPlayer
+- Checked by hand on an iOS 27.2 simulator, a tvOS 27.2 simulator and the Mac, using generated test media:
+  - an external ASS file
+  - an MKV whose ASS track uses a font only its attachment has (Luminari, which iOS doesn't have)
+
+### Bitmap subtitles (PGS, VobSub)
+
+Blu-ray PGS and DVD VobSub tracks of a repackaged file used to be left out of the stream: AVPlayer has no way to show
+them. Now the player draws them over the video like ASS.
+
+- **FFmpeg.** The recipe adds the `pgssub` and `dvdsub` decoders and the `dvdsub` parser (for MPEG-PS files). That
+  is a few hundred KB, all LGPL.
+- **Offered as renditions.** With `RemuxPlan.Device.bitmapSubtitles` (set when the decoders are there), each
+  such track is a SUBTITLES rendition whose WebVTT segments are empty. It can be chosen in AVKit's menu and ours,
+  and its NAME and position tell the player which track it is.
+- **Decoded as read.** The repackager's cue callback hands each packet to a `TVMBitmapDecoder` (`tvm_bitmap_*`,
+  `avcodec_decode_subtitle2`) on the FFmpeg thread, in file order, because PGS display sets build on earlier
+  ones. Palette pictures become premultiplied BGRA `CGImage`s in a `BitmapSubtitleTrack`. Cues are deduped by
+  start time, because a segment made again repeats them. Up to 96 MB of pictures are kept; the earliest are let
+  go first and come back when their segment is made again.
+- **Timing.** VobSub cues carry their own end. A PGS cue lasts until the next display set, which is usually
+  the one that clears it, and at most 10 s when no next one is known yet.
+- **Drawing.** `BitmapSubtitleRenderer` composites the pictures on screen at a moment onto the stream's canvas
+  (PGS presentation size, VobSub frame size, else the video's) and returns a new image only when the set of
+  cues changes. The overlay stretches that canvas over the video's rect, so it follows resizing without
+  redrawing.
+- **Limits.**
+  - Standalone `.sup`/`.idx`+`.sub` files are not read; only tracks inside a file the repackager opens.
+  - DVB subtitles (`dvb_subtitle`) are not included.
+  - After a seek far ahead, PGS pictures appear once that segment is made. A PGS epoch that continues from
+    before the seek point can miss objects it would have reused; such streams normally repeat an acquisition
+    point at every cue.
+  - The canvas is mapped onto the whole video rect. A PGS stream made for 1920×1080 on a video cropped to
+    1920×800 is squeezed vertically rather than centred. That is uncommon in remuxes, which keep the original
+    size.
+- **Tests.** `BitmapSubtitleTests`:
+  - the plan offers bitmap tracks only when the player draws them
+  - translation twins come only from text tracks
+  - cue timing, and dedupe by start time
+  - a fixture MKV (`Fixtures/remux-bitmap.mkv`, a PGS track and a VobSub track made from it) through the
+    repackager: empty WebVTT, decoded pictures in the right places, a gap, and the second line
+

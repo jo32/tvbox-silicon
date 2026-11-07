@@ -55,8 +55,9 @@ if ! { Scripts/build-java-host.sh && Scripts/sync-apple-javahost.sh iphoneos app
   exit 1
 fi
 
-echo "== FFmpeg"
+echo "== FFmpeg and libass"
 Scripts/build-apple-ffmpeg.sh
+Scripts/build-apple-libass.sh
 
 for platform in ${TF_PLATFORMS:-iOS tvOS}; do
   scheme=TVBox-$platform

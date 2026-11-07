@@ -444,7 +444,7 @@ struct ExternalSubtitleMenu: View {
         }
         if let document = subtitles.document {
             Section {
-                if document.format.isStyled {
+                if document.format.isStyled && !ASSRenderer.isAvailable {
                     Text(L10n.text("ASS styling and effects show as plain text."))
                 }
                 Menu(L10n.text("Text Encoding")) {
