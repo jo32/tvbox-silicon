@@ -123,6 +123,15 @@ public enum MusicMatching {
         return order.map { tracks[$0] }
     }
 
+    /// An artist search's songs: those by the artist the query names, in the catalogs' order, which is by popularity
+    /// (#649). Part of a name ("Taylor" for "Taylor Swift") counts only when no artist is the whole query.
+    public static func byArtist(_ tracks: [MusicTrack], query: String) -> [MusicTrack] {
+        let name = normalize(query)
+        guard !name.isEmpty else { return [] }
+        let whole = tracks.filter { $0.artists.contains { normalize($0) == name } }
+        return whole.isEmpty ? tracks.filter { $0.artists.contains { normalize($0).contains(name) } } : whole
+    }
+
     /// The one track a query clearly means, to play without asking: it names that title (and the
     /// artist, when other artists have a song of that title) and no other recording fits as well.
     /// Otherwise nil, and the viewer chooses.

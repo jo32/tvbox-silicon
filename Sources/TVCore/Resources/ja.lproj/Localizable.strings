@@ -1675,3 +1675,4 @@
 "This disc image holds no Blu-ray or DVD video." = "このディスクイメージには Blu-ray または DVD のビデオがありません。";
 "This Blu-ray disc image is still encrypted (AACS). Only decrypted disc images play." = "この Blu-ray ディスクイメージは AACS で暗号化されたままです。復号済みのディスクイメージのみ再生できます。";
 "This disc image's file system can't be read." = "このディスクイメージのファイルシステムを読み取れません。";
+"Artists" = "アーティスト";

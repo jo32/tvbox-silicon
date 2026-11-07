@@ -1675,3 +1675,4 @@
 "This disc image holds no Blu-ray or DVD video." = "这个光盘镜像里没有蓝光或 DVD 视频。";
 "This Blu-ray disc image is still encrypted (AACS). Only decrypted disc images play." = "这个蓝光镜像仍有 AACS 加密，只能播放已解密的原盘镜像。";
 "This disc image's file system can't be read." = "无法读取这个光盘镜像的文件系统。";
+"Artists" = "歌手";

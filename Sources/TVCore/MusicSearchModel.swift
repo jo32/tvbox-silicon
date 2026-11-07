@@ -71,6 +71,7 @@ import Observation
         query = trimmed; self.kind = kind; directHit = nil; failures = [:]
         guard !trimmed.isEmpty else { results = []; collections = []; busy = false; return }
         let key = kind.rawValue + "|" + MusicMatching.normalize(trimmed) + "|" + MusicMatching.tags(inQuery: trimmed).map(\.rawValue).sorted().joined()
+        // An artist's songs are a list to choose from, not one song the query means.
         let findsSongs = kind == .songs || kind == .top
         if let cached = cache[key], Date().timeIntervalSince(cached.created) < Self.cacheLifetime {
             results = cached.results; collections = cached.collections; busy = false
@@ -79,7 +80,7 @@ import Observation
         }
         // What the new search won't replace goes now; the rest stays until its answers arrive.
         switch kind {
-        case .songs: collections = []
+        case .songs, .artists: collections = []
         case .albums, .playlists: results = []; collections = collections.filter { $0.kind == kind.collectionKind }
         case .top: break
         }
@@ -92,12 +93,12 @@ import Observation
             if let collectionKind = kind.collectionKind {
                 await self.searchCollections(trimmed, kind: collectionKind, run: run)
             } else if kind == .top {
-                async let songs: Void = self.searchSongs(trimmed, run: run)
+                async let songs: Void = self.searchSongs(trimmed, byArtist: false, run: run)
                 async let albums: Void = self.searchCollections(trimmed, kind: .album, run: run)
                 async let playlists: Void = self.searchCollections(trimmed, kind: .playlist, run: run)
                 _ = await (songs, albums, playlists)
             } else {
-                await self.searchSongs(trimmed, run: run)
+                await self.searchSongs(trimmed, byArtist: kind == .artists, run: run)
             }
             guard self.generation == run, !Task.isCancelled else { return }
             self.busy = false
@@ -109,12 +110,17 @@ import Observation
 
     public func clear() { search("") }
 
-    private func searchSongs(_ query: String, run: UUID) async {
+    private func searchSongs(_ query: String, byArtist: Bool, run: UUID) async {
         var lists: [MusicPlatform: [MusicTrack]] = [:]
         await withTaskGroup(of: (MusicPlatform, Result<[MusicTrack], MusicProviderError>).self) { group in
             for catalog in catalogs {
                 group.addTask {
-                    do { return (catalog.platform, .success(try await catalog.search(query, page: 1))) }
+                    do {
+                        let first = try await catalog.search(query, page: 1)
+                        // An artist's songs fill more than one page: the second comes too, when there is one.
+                        guard byArtist, !first.isEmpty, let second = try? await catalog.search(query, page: 2) else { return (catalog.platform, .success(first)) }
+                        return (catalog.platform, .success(first + second))
+                    }
                     catch { return (catalog.platform, .failure(MusicProviderError(error))) }
                 }
             }
@@ -124,7 +130,8 @@ import Observation
                 lists[platform] = tracks
                 guard generation == run else { group.cancelAll(); return }
                 // In MusicPlatform's order: QQ's entries carry durations and covers the others join.
-                results = MusicMatching.rank(Self.withoutEchoes(MusicMatching.merge(MusicPlatform.allCases.compactMap { lists[$0] })), query: query)
+                let merged = Self.withoutEchoes(MusicMatching.merge(MusicPlatform.allCases.compactMap { lists[$0] }))
+                results = byArtist ? MusicMatching.byArtist(merged, query: query) : MusicMatching.rank(merged, query: query)
             }
         }
     }

@@ -193,7 +193,7 @@ struct MusicView: View {
                 #if os(macOS) || os(tvOS)
                 MusicTopResults(search: search) { playResults(from: $0) }
                 #endif
-            } else if search.kind == .songs {
+            } else if search.kind == .songs || search.kind == .artists {
                 ForEach(search.results) { track in MusicTrackRow(track: track) { playResults(from: track) } }
             } else {
                 ForEach(search.collections) { collection in MusicCollectionRow(collection: collection) }

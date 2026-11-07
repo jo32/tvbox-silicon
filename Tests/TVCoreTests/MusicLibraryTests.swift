@@ -169,6 +169,29 @@ private struct FakeCollections: MusicCatalogSource, MusicCollectionSource {
     #expect(!MusicSearchKind.filters.contains(.top))
 }
 
+private struct FakeSongs: MusicCatalogSource {
+    let platform: MusicPlatform
+    let found: [MusicTrack]
+    func search(_ query: String, page: Int) async throws -> [MusicTrack] { found }
+}
+
+@MainActor @Test func artistSearchKeepsTheArtistsSongs() async throws {
+    func track(_ id: String, _ title: String, _ artists: [String]) -> MusicTrack {
+        var track = song(title, id); track.artists = artists; return track
+    }
+    // A song named after the artist, by someone else, is no song of theirs; a duet is.
+    let qing = track("1", "晴天", ["周杰伦"]), duet = track("2", "千里之外", ["周杰伦", "费玉清"])
+    let tribute = track("3", "周杰伦", ["其他人"]), cover = track("4", "晴天（翻唱）", ["周杰伦的粉丝"])
+    let model = MusicSearchModel(catalogs: [FakeSongs(platform: .qq, found: [tribute, qing, cover, duet])], health: MusicHealth(file: nil))
+    model.search("周杰伦", kind: .artists, immediately: true)
+    try await settle(model)
+    #expect(model.kind == .artists && model.results == [qing, duet] && model.directHit == nil)
+    #expect(MusicSearchKind.filters == [.songs, .artists, .albums, .playlists])
+    // Part of a name, when no artist is the whole of it.
+    #expect(MusicMatching.byArtist([tribute, qing, cover], query: "杰伦") == [qing, cover])
+    #expect(MusicMatching.byArtist([qing], query: " ").isEmpty)
+}
+
 @Test func queueTakesSongsNextAndLast() {
     let a = song("A", "a"), b = song("B", "b"), c = song("C", "c"), d = song("D", "d")
     var queue = MusicQueue(tracks: [a, b], start: 0)
