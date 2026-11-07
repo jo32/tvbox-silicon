@@ -1676,3 +1676,4 @@
 "This disc image holds no Blu-ray or DVD video." = "這個光碟映像裡沒有藍光或 DVD 影片。";
 "This Blu-ray disc image is still encrypted (AACS). Only decrypted disc images play." = "這個藍光映像仍有 AACS 加密，只能播放已解密的原盤映像。";
 "This disc image's file system can't be read." = "無法讀取這個光碟映像的檔案系統。";
+"This source's settings page can't open on this device. Sign in to your drives in Cloud Drive Accounts, and the source uses those sign-ins." = "此片源的設定頁面無法在此裝置上打開。請在「網盤帳號」中登入網盤，片源會使用這些登入。";

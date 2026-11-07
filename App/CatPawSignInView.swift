@@ -15,6 +15,9 @@ struct CatPawSignInView: View {
     @State private var expired = false
     @State private var error: String?
     @State private var attempt = 0
+    /// The app's own sign-in for the drive, for a bundle without one of its own (`CatPawSignIn.lacksOwnSignIn`): the
+    /// bundle gets the saved account on its next request.
+    @State private var ownSignIn: CloudProvider?
 
     /// UC's TV token, approved in UC Browser; every other sign-in is a drive's, scanned in that drive's app.
     private var tvToken: Bool { provider == "ucToken" }
@@ -22,6 +25,18 @@ struct CatPawSignInView: View {
     private var title: String { tvToken ? L10n.text("UC TV Token") : L10n.text("Sign In to %@", name) }
 
     var body: some View {
+        if let ownSignIn {
+            #if os(iOS)
+            WebSignInView(service: ownSignIn.webSignIn, signedIn: signedIn) { CloudQRLoginView(drive: ownSignIn.qrDrive, signedIn: signedIn) }
+            #else
+            CloudQRLoginView(drive: ownSignIn.qrDrive, signedIn: signedIn)
+            #endif
+        } else {
+            bundleCode
+        }
+    }
+
+    @ViewBuilder private var bundleCode: some View {
         #if os(tvOS)
         // Side by side, as the other sign-in codes on a TV; Menu closes it.
         HStack(alignment: .center, spacing: 80) { code; details }
@@ -166,7 +181,20 @@ struct CatPawSignInView: View {
             // Closed or restarted: the bundle drops the code.
             if let started { Task { await started.cancel() } }
         } catch {
+            if CatPawSignIn.lacksOwnSignIn(error), let drive = CloudProvider(bundleDrive: provider) { ownSignIn = drive; return }
             self.error = error.localizedDescription
+        }
+    }
+}
+
+private extension CloudProvider {
+    /// The app's sign-in for a bundle's drive (`CatPawSignIn.provider`), for the drives the app passes on to bundles.
+    init?(bundleDrive: String) {
+        switch bundleDrive {
+        case "quark": self = .quark
+        case "ucCookie": self = .uc
+        case "baidu": self = .baidu
+        default: return nil
         }
     }
 }

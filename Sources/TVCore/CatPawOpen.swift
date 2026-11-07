@@ -148,14 +148,22 @@ public struct CatPawSignIn: Sendable {
     public private(set) var link: URL?
 
     /// The sign-in a bundle's error asks for, or nil. Only messages that send the viewer to the config center count
-    /// ("请先去配置中心登录百度网盘"), not a drive's other failures ("百度网盘分享已失效").
+    /// ("请先去配置中心登录百度网盘"), or that ask for the drive's cookie again (the catpaw.douer.me bundle's "夸克登录状态失效，
+    /// 请重新配置 Cookie", #651), not a drive's other failures ("百度网盘分享已失效").
     public static func provider(for message: String) -> String? {
         if message.range(of: "UC TV Token", options: .caseInsensitive) != nil { return "ucToken" }
-        guard message.contains("配置中心") else { return nil }
+        guard message.contains("配置中心")
+                || message.range(of: #"配置\s*\S{0,4}\s*cookie"#, options: [.regularExpression, .caseInsensitive]) != nil else { return nil }
         let drives: [(name: String, provider: String)] = [
             ("夸克", "quark"), ("百度", "baidu"), ("115", "pan115"), ("天翼", "pan189"), ("光鸭", "guangya"), ("UC", "ucCookie"),
         ]
         return drives.first { message.range(of: $0.name, options: .caseInsensitive) != nil }?.provider
+    }
+
+    /// The bundle has no sign-in of its own: the catpaw.douer.me bundle answers its address with HTTP 404 and takes the
+    /// app's sign-ins instead (Runtime/NodeHost `shareAccounts`), so the app's own sign-in for the drive runs (#651).
+    public static func lacksOwnSignIn(_ error: Error) -> Bool {
+        error.localizedDescription.contains("(HTTP 404)")
     }
 
     /// The drive's name, for the sign-in's title.
