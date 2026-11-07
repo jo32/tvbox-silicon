@@ -1,6 +1,128 @@
 {
   "releases": [
     {
+      "version": "1.8.14",
+      "build": 52,
+      "date": "2026-11-08",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "play.rectangle.on.rectangle",
+          "title": {
+            "en": "Bilibili, rebuilt",
+            "zh-Hans": "全新哔哩哔哩",
+            "zh-Hant": "全新嗶哩嗶哩",
+            "ja": "生まれ変わった Bilibili"
+          },
+          "detail": {
+            "en": "Open an UP主's space from search or any video and follow them. Signed in, you can like, give coins, favorite and save videos for later. Videos now have comments, chapters, Skip Intro and Skip Outro for anime and films, CC and AI subtitles, and related videos. The home page adds Live Now, Following, Watch Later, Popular and Rankings rows. The video pages on Apple TV and iPhone are redesigned.",
+            "zh-Hans": "可以从搜索或任意视频进入 UP 主空间并关注。登录后可以点赞、投币、收藏和稍后再看。视频新增评论、分段章节、番剧和影视的跳过片头片尾、CC 和 AI 字幕以及相关视频。首页新增正在直播、关注、稍后再看、热门和排行榜。Apple TV 和 iPhone 上的视频页全新设计。",
+            "zh-Hant": "可以從搜尋或任一影片進入 UP 主空間並關注。登入後可以按讚、投幣、收藏和稍後再看。影片新增留言、分段章節、番劇和影視的跳過片頭片尾、CC 和 AI 字幕以及相關影片。首頁新增正在直播、關注、稍後再看、熱門和排行榜。Apple TV 和 iPhone 上的影片頁全新設計。",
+            "ja": "検索やどの動画からでも UP主 のスペースを開いてフォローできます。サインイン中は いいね、コイン、お気に入り、後で見る が使えます。動画にはコメント、チャプター、アニメと映画のオープニング／エンディングのスキップ、CC と AI 字幕、関連動画が加わりました。ホームには ライブ配信中、フォロー中、後で見る、人気、ランキング の列が並びます。Apple TV と iPhone の動画ページはデザインを一新しました。"
+          }
+        },
+        {
+          "symbol": "captions.bubble",
+          "title": {
+            "en": "Subtitle files and online subtitles",
+            "zh-Hans": "字幕文件和在线字幕",
+            "zh-Hant": "字幕檔案與線上字幕",
+            "ja": "字幕ファイルとオンライン字幕"
+          },
+          "detail": {
+            "en": "Add a subtitle file or address to any video (on the Mac, drop the file on the player), with delay, frame rate and encoding. While watching, search OpenSubtitles or Assrt and pick a result. On Apple TV, the subtitle menu offers the source's files and an Online section. Keys go in Settings › Subtitle Sources.",
+            "zh-Hans": "可以为任意视频添加字幕文件或字幕地址（Mac 上把文件拖到播放器即可），并可调整延迟、帧率和编码。观看时可以在 OpenSubtitles 或 Assrt 搜索字幕并选择结果。Apple TV 的字幕菜单提供片源自带的字幕和“在线”搜索。密钥在“设置 › 字幕来源”中填写。",
+            "zh-Hant": "可以為任一影片加入字幕檔案或字幕網址（Mac 上把檔案拖到播放器即可），並可調整延遲、影格率和編碼。觀看時可以在 OpenSubtitles 或 Assrt 搜尋字幕並選擇結果。Apple TV 的字幕選單提供來源附帶的字幕和「線上」搜尋。金鑰在「設定 › 字幕來源」中填寫。",
+            "ja": "どの動画にも字幕ファイルや字幕のアドレスを追加でき（Mac ではプレーヤーにファイルをドロップ）、遅延、フレームレート、文字コードも調整できます。視聴中に OpenSubtitles や Assrt を検索して結果を選べます。Apple TV の字幕メニューには、ソースの字幕と「オンライン」の項目があります。キーは「設定 › 字幕ソース」で入力します。"
+          }
+        },
+        {
+          "symbol": "appletv",
+          "title": {
+            "en": "Apple TV: episodes while watching",
+            "zh-Hans": "Apple TV：边看边选集",
+            "zh-Hant": "Apple TV：邊看邊選集",
+            "ja": "Apple TV：視聴中にエピソードを選択"
+          },
+          "detail": {
+            "en": "Swipe down while watching to switch episodes or lines in a compact strip with episode pictures. Video pages open with the picture across the screen, the title and Play. 4K 60 fps HDR plays smoothly when the TV is set to SDR, and the app opens on tvOS 17 again.",
+            "zh-Hans": "观看时向下轻扫，即可在带剧照的紧凑选集条中切换剧集或线路。视频页以铺满屏幕的画面、片名和播放按钮呈现。电视设为 SDR 时，4K 60 帧 HDR 也能流畅播放；tvOS 17 上又可以打开应用了。",
+            "zh-Hant": "觀看時向下滑動，即可在帶劇照的精簡選集列中切換劇集或線路。影片頁以鋪滿螢幕的畫面、片名和播放按鈕呈現。電視設為 SDR 時，4K 60 幀 HDR 也能流暢播放；tvOS 17 上又可以開啟 App 了。",
+            "ja": "視聴中に下へスワイプすると、場面写真付きのコンパクトな列でエピソードや回線を切り替えられます。動画ページは画面いっぱいの画像、タイトル、再生ボタンで始まります。テレビを SDR に設定していても 4K 60fps HDR が滑らかに再生され、tvOS 17 でも再び起動できます。"
+          },
+          "platforms": [
+            "tvos"
+          ]
+        },
+        {
+          "symbol": "iphone",
+          "title": {
+            "en": "iPhone player and video page",
+            "zh-Hans": "iPhone 播放器与视频页",
+            "zh-Hant": "iPhone 播放器與影片頁",
+            "ja": "iPhone のプレーヤーと動画ページ"
+          },
+          "detail": {
+            "en": "A screen lock stops stray taps from skipping. Full-screen video hides the home indicator, Picture in Picture starts after you turn the phone sideways, and the clock and battery show above the player again. The page under the player is redesigned. Music and audiobook sources open Now Playing.",
+            "zh-Hans": "新增锁屏，避免误触快进。全屏播放时隐藏主屏幕指示条；横过手机后也能开启画中画；播放器上方重新显示时间和电量。播放器下方的页面全新设计。音乐和有声书类片源会打开“正在播放”。",
+            "zh-Hant": "新增鎖定畫面，避免誤觸快轉。全螢幕播放時隱藏主畫面指示條；橫放手機後也能開啟子母畫面；播放器上方重新顯示時間和電量。播放器下方的頁面全新設計。音樂和有聲書類來源會開啟「正在播放」。",
+            "ja": "画面ロックで誤タップによるスキップを防げます。全画面再生中はホームインジケータを隠し、横向きにした後もピクチャ・イン・ピクチャが始まります。プレーヤーの上に時刻とバッテリーが再び表示されます。プレーヤーの下のページはデザインを一新しました。音楽やオーディオブックのソースは「再生中」を開きます。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "arrow.down.circle",
+          "title": {
+            "en": "Downloads, redesigned",
+            "zh-Hans": "下载页全新设计",
+            "zh-Hant": "下載頁全新設計",
+            "ja": "ダウンロードを一新"
+          },
+          "detail": {
+            "en": "Each downloaded show is a card with its TMDB artwork and opens its own page, with episode pictures, sorting and reverse order. On iPhone and iPad, save a finished episode or song to Files or Photos, or send it with AirDrop.",
+            "zh-Hans": "每部已下载的剧都是一张带 TMDB 配图的卡片，可进入单独的页面，显示剧照，并支持排序和倒序。在 iPhone 和 iPad 上，可以把下载好的剧集或歌曲存到“文件”或“照片”，也可以用隔空投送发送。",
+            "zh-Hant": "每部已下載的劇都是一張帶 TMDB 配圖的卡片，可進入獨立的頁面，顯示劇照，並支援排序和倒序。在 iPhone 和 iPad 上，可以把下載好的劇集或歌曲儲存到「檔案」或「照片」，也可以用 AirDrop 傳送。",
+            "ja": "ダウンロードした番組は TMDB のアートワーク付きのカードになり、場面写真、並べ替え、逆順に対応した専用ページを開けます。iPhone と iPad では、ダウンロード済みのエピソードや曲を「ファイル」や「写真」に保存したり、AirDrop で送ったりできます。"
+          }
+        },
+        {
+          "symbol": "sparkles",
+          "title": {
+            "en": "Discover, episodes and more",
+            "zh-Hans": "发现、选集及其他",
+            "zh-Hant": "發現、選集及其他",
+            "ja": "見つける、エピソードなど"
+          },
+          "detail": {
+            "en": "Discover's top carousel shows today's IMDb and Douban charts. On a video's page, tap a cast photo to see their other work. Every episode gets a picture even when TMDB has stills for only some, and episodes named after files show their resolution and size. Favorites can show one kind at a time, music search finds artists, and Douyu and Huya rooms show their chat as danmaku.",
+            "zh-Hans": "发现页顶部轮播改为当天的 IMDb 和豆瓣榜单。在视频页轻点演员照片即可查看其他作品。即使 TMDB 只有部分剧照，每一集也会显示图片；以文件名命名的剧集会显示分辨率和大小。收藏可以按类别显示，音乐搜索可以搜歌手，斗鱼和虎牙直播间的聊天会显示为弹幕。",
+            "zh-Hant": "探索頁頂部輪播改為當天的 IMDb 和豆瓣榜單。在影片頁輕點演員照片即可查看其他作品。即使 TMDB 只有部分劇照，每一集也會顯示圖片；以檔名命名的劇集會顯示解析度和大小。收藏可以按類別顯示，音樂搜尋可以搜歌手，鬥魚和虎牙直播間的聊天會顯示為彈幕。",
+            "ja": "「見つける」上部のカルーセルにはその日の IMDb と Douban のランキングが並びます。動画ページで出演者の写真をタップすると他の出演作を見られます。TMDB に一部の場面写真しかなくても全エピソードに画像が付き、ファイル名のエピソードには解像度とサイズが表示されます。お気に入りは種類ごとに表示でき、音楽検索でアーティストを探せ、斗魚と虎牙のライブではチャットが弾幕として流れます。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "Blu-ray and DVD disc images (.iso) play. Sources built on FongMi's new spider SDK work. Drive sign-ins reach the 豆儿 CatPawOpen subscription. Fixed a Smooth Motion crash on iOS 27.0. Watch Now's Resume button matches the rest of the app.",
+            "zh-Hans": "可以播放蓝光和 DVD 光盘镜像（.iso）。基于 FongMi 新版爬虫 SDK 的片源可以使用了。网盘登录现在对豆儿 CatPawOpen 订阅生效。修复 iOS 27.0 上智能补帧的闪退。“现在观看”页的“继续”按钮与应用其他地方一致。",
+            "zh-Hant": "可以播放藍光和 DVD 光碟映像檔（.iso）。基於 FongMi 新版爬蟲 SDK 的來源可以使用了。雲端硬碟登入現在對豆兒 CatPawOpen 訂閱生效。修正 iOS 27.0 上智慧補幀的當機。「立即觀看」頁的「繼續」按鈕與 App 其他地方一致。",
+            "ja": "Blu-ray と DVD のディスクイメージ（.iso）を再生できます。FongMi の新しい spider SDK で作られたソースが動きます。豆儿の CatPawOpen 配信設定でもクラウドドライブのサインインが使われます。iOS 27.0 でのなめらか補間のクラッシュを修正。「今すぐ観る」の「再開」ボタンを他の画面と揃えました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.13",
       "build": 51,
       "date": "2026-11-07",

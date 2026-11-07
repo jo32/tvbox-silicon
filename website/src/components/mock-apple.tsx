@@ -44,7 +44,7 @@ export function MacWatchNow() {
             ))}
           </div>
         ))}
-        <p className="mac-ver">{m("Version 1.8.13")}</p>
+        <p className="mac-ver">{m("Version 1.8.14")}</p>
       </aside>
       <div className="mac-main">
         <p className="mac-title">{m("Watch Now")}</p>
