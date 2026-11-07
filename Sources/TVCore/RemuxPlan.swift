@@ -52,6 +52,8 @@ struct RemuxPlan: Sendable, Equatable {
         var hdr = true
         /// The largest picture tone mapping makes, which costs the CPU by the pixel; 0 for no limit.
         var toneMapWidth = 0, toneMapHeight = 0
+        /// Whether the player draws bitmap subtitles (PGS, VobSub) itself, so they are offered as (empty) renditions.
+        var bitmapSubtitles = false
     }
 
     /// The video track first, then the audio, then the text subtitles.
@@ -62,6 +64,8 @@ struct RemuxPlan: Sendable, Equatable {
     var size: Int64 = 0
     var segments: Int { bounds.count - 1 }
 
+    /// Bitmap subtitles the player draws itself (#576 M3): Blu-ray PGS and DVD VobSub, by FFmpeg's names.
+    static let bitmapCodecs: Set<String> = ["hdmv_pgs_subtitle", "dvd_subtitle"]
     /// Copied audio: what every Apple device decodes inside fragmented MP4. MP3 and Opus are not among them.
     static let copiedAudio: Set<String> = ["aac", "ac3", "eac3", "flac", "alac"]
     /// AAC profiles AVPlayer decodes (LC, HE, HE v2; FFmpeg's numbers), and unknown.
@@ -103,11 +107,23 @@ struct RemuxPlan: Sendable, Equatable {
         }
     }
 
+    /// Cues read so far joined by more: the same packet read twice (a segment made again, a look back before a seek)
+    /// counts once. In order of start.
+    static func merged(_ known: [Cue], _ more: [Cue]) -> [Cue] {
+        guard !more.isEmpty else { return known }
+        struct Key: Hashable { let start: Int64, text: String }
+        var seen = Set(known.map { Key(start: $0.start, text: $0.text) })
+        var all = known
+        for cue in more where seen.insert(Key(start: cue.start, text: cue.text)).inserted { all.append(cue) }
+        return all.sorted { $0.start < $1.start }
+    }
+
     static func make(streams: [Stream], keyframes: [Int64], start: Int64, duration: Int64, size: Int64, device: Device) -> RemuxPlan? {
         guard duration > 0, let video = streams.first(where: { $0.kind == .video && $0.width > 0 && $0.height > 0 }) else { return nil }
         var tracks = [videoTrack(video, device: device)]
         tracks += streams.filter { $0.kind == .audio && $0.channels > 0 }.prefix(8).map(audioTrack)
-        tracks += streams.filter { $0.kind == .subtitle && $0.isText }.prefix(16).map { Track(stream: $0) }
+        tracks += streams.filter { $0.kind == .subtitle && ($0.isText || device.bitmapSubtitles && bitmapCodecs.contains($0.codec)) }
+            .prefix(16).map { Track(stream: $0) }
         let bounds = segmentBounds(keyframes: keyframes, start: start, duration: duration, copied: tracks[0].mode == .copy)
         return RemuxPlan(tracks: tracks, bounds: bounds, size: size)
     }
@@ -237,6 +253,20 @@ struct RemuxPlan: Sendable, Equatable {
         lines.append("#EXT-X-STREAM-INF:" + attributes.joined(separator: ","))
         lines.append("0.m3u8")
         return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// The NAME each subtitle track has in the master playlist, by track: what AVPlayer's option for it shows as its
+    /// `displayName`. Named as `masterPlaylist` names them.
+    func subtitleNames() -> [Int: String] {
+        var names = Set<String>(), result: [Int: String] = [:]
+        for index in tracks.indices where tracks[index].kind == .subtitle {
+            let name = Self.displayName(tracks[index])
+            var value = name, number = 2
+            while names.contains(value) { value = "\(name) (\(number))"; number += 1 }
+            names.insert(value)
+            result[index] = quoted(value)
+        }
+        return result
     }
 
     /// A track's media playlist: fragmented MP4 after its initialization segment, or WebVTT for subtitles.

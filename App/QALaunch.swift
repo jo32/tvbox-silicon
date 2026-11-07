@@ -52,6 +52,11 @@ enum QALaunch {
         if let address = UserDefaults.standard.string(forKey: "qaAListServer"), let url = try? WebAddress.resolve(address) {
             if let server = await AList.probe(url) { _ = try? AListServers.add([server]) }
         }
+        // `-qaWebDAVServer <address>` adds that WebDAV share, as the Add form would (a local share for Cloud Files QA).
+        if let address = UserDefaults.standard.string(forKey: "qaWebDAVServer"), let url = URL(string: address),
+           let server = try? await WebDAV.shared.probe(url) {
+            _ = try? AListServers.add([server])
+        }
         guard section != nil || page != nil || UserDefaults.standard.string(forKey: "qaPlay") != nil
                 || UserDefaults.standard.string(forKey: "qaDownload") != nil
                 || UserDefaults.standard.string(forKey: "qaPlayLive") != nil
@@ -239,7 +244,8 @@ enum QALaunch {
                     let wanted = UserDefaults.standard.string(forKey: "qaFileName")
                     guard let file = files.first(where: { drive.plays($0) && (wanted == nil || $0.name.contains(wanted!)) }) else { throw QASweep.Failure(message: "No file") }
                     store.playFile(file, in: CloudFilesFolder(drive: drive, id: parts[2], name: folderName(parts[2], drive),
-                                                              files: files.filter { $0.kind == file.kind && drive.plays($0) }))
+                                                              files: files.filter { $0.kind == file.kind && drive.plays($0) },
+                                                              subtitles: CloudFiles.subtitles(files, in: drive)))
                 } catch { store.error = error.localizedDescription }
             }
         }

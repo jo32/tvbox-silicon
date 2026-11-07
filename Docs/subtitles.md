@@ -65,8 +65,8 @@ the receiver shows no file subtitles.
 - **Adding a file.**
   - iPhone, iPad and Mac: a file panel, or an http(s) address.
   - Mac: drop a file on the player window.
-  - Apple TV: the source's files only, picked in the transport bar's Subtitle Files menu. There is no file panel
-    on tvOS.
+  - Apple TV: the source's files, picked in the transport bar's Subtitle Files menu, or an address typed there
+    (M1b, below). There is no file panel on tvOS.
 - **WebVTT segments** (`RemuxPlan.cues(_:segment:)`). Each segment now carries every cue that shows during it, with
   its full timing, per RFC 8216 §3.5. A seek into the middle of a long line used to lose it.
 
@@ -100,7 +100,7 @@ const subtitleSource = {
 };
 ```
 
-- `hint` is `{ title, year, season, episode, imdbID, tmdbID, fileName, languages }`. The languages are BCP-47,
+- `hint` is `{ title, year, season, episode, imdbID, tmdbID, fileName, languages, movieHash, fileSize }`. The languages are BCP-47,
   most wanted first.
 - `context` is `{ credentials, languages }`.
 - `candidate` is the result as the app keeps it. `key` is the source's `id`, and `token` is whatever the source
@@ -157,18 +157,126 @@ const subtitleSource = {
 - Apple TV: the Subtitle Files menu has an Online section. It has Search Online, the top 12 results as they come in,
   each source's failure, and Search Again. There is no editing the search with the remote.
 
+## M1b: the M1 and M2 leftovers
+
+### ZIP archives (`SubtitleArchive`)
+
+- A ZIP is accepted wherever a subtitle file is: the file panel and a dropped file (iPhone, iPad, Mac), an address
+  (every platform), a source's `subs`, a Cloud Files folder, and a subtitle source's download (Assrt's season uploads).
+- It is read in memory only, never unpacked to disk. Apple's Compression framework inflates it (raw DEFLATE, ZIP
+  method 8; stored files too). No third-party code was added.
+- The whole directory is checked before anything is inflated. Any of these refuses the archive:
+  - the archive over 8 MiB; more than 500 entries; ZIP64
+  - a path that is absolute, has a drive letter, a `..` part or a NUL
+  - a subtitle file declaring more than 8 MiB, the subtitle files together more than 32 MiB, or a file over 64 KiB
+    that claims more than 100 times its compressed size (a bomb; subtitles deflate 3 to 10 times)
+- Each file then inflates on its own and stops the moment it passes the size its entry declared, so a directory that
+  lies about sizes can't make it grow. The result must match the entry's CRC-32.
+- Passed over: folders, `__MACOSX/` and `._` resource forks, files that aren't SRT, WebVTT, ASS or SSA, archives
+  inside the archive (never opened), and password-protected files. An archive with nothing else left says why
+  ("holds only other archives", "protected by a password", "no SRT, WebVTT or ASS files").
+- Names without ZIP's UTF-8 flag are read as UTF-8, then GB 18030 (archives made on Chinese Windows), then Latin-1.
+  Text inside goes through the usual encoding detection and the menu's override.
+- Picking: the files that belong to the playing video (`SubtitleMatch`: other episodes left out, closest name first),
+  at most 8. One file shows by itself. Several take the archive's place in the Subtitle Files list, and the list is
+  the picker; the best one comes on as any file would. A season archive with no file for this episode says so.
+- A subtitle source's archive shows the file for the result's season and episode.
+- The repackager (MKV) leaves archives to the player's list rather than making one track of them.
+- RAR and 7z are still refused, with a message saying only ZIP is read.
+
+### Apple TV: adding by address
+
+- The transport bar's Subtitle Files menu is always there now (except for live streams), with **Add Subtitles from
+  Address…**. It opens a text field for an http(s) address of a subtitle file or a ZIP archive.
+- The field takes the Siri Remote's keyboard and dictation, and tvOS offers a nearby iPhone's keyboard by itself
+  (the "Apple TV keyboard" notification): that is the "send from iPhone" path, with no companion code of our own.
+- An address that isn't one is said at once in an alert. A download that fails shows its reason in the menu.
+- The field is a UIKit alert on the player controller, not a SwiftUI `.alert` (the tvOS 27 hang of #272 is in
+  SwiftUI alerts on pushed pages).
+- The transport bar's menu is still presented while its action runs, and UIKit refuses a second presentation then
+  ("already presenting AVUnifiedPlayerContextMenuContainerViewController"; nothing showed). The alert, and the
+  "Subtitles Not Added" notice after it, wait until nothing is over the player (`present(_:over:)`, up to 3 s).
+- Leaving the keyboard with Menu drops what was typed (the UIKit alert's field); its **done** button keeps it.
+
+### Cloud Files: the folder's subtitles
+
+- Playing a video from Cloud Files (Quark, UC, 115, AList, WebDAV) offers the folder's SRT, WebVTT, ASS and SSA files
+  and ZIP archives, as a drive plugin's `subs` are. `SubtitleMatch` leaves out other episodes' files and puts the
+  closest name first; it comes on by itself unless the video shows its own subtitles.
+- They are `tvbox-files:` addresses. `SubtitleFile.download` asks the drive for the file's link
+  (`CloudFiles.source`) and fetches it with the drive's own headers, under the same 8 MiB cap.
+- Continue Watching and favorites start a file before its folder is listed: the player lists the folder itself then
+  and offers what it finds.
+- `.sub`/`.idx` (VobSub) are not offered: they are pictures (M3).
+
+### Embedded subtitles across segments
+
+- Before: FFmpeg hands each subtitle packet to the segment it starts in, so a line from 3.5 s to 6 s was only in
+  the segment before 4 s. A seek to 5 s showed nothing until the next line.
+- Now the session keeps every embedded cue it has read, by track, and each subtitle segment carries all known cues on
+  screen during it (`RemuxPlan.cues`, the same rule as files). Playing through, that is enough: the segment before
+  is always read first.
+- A seek lands in a segment whose predecessor was never read. With subtitles on (AVPlayer asked for a subtitle
+  segment in the last 5 minutes), the session first reads the subtitle packets of the 6 s before the segment
+  (`RemuxSession.lookBack`): the other tracks' packets are passed over unread and the cursor goes straight on into
+  the segment, so there is no second seek. Its cost is the bytes of those 6 s; nothing is decoded.
+- The C side also hands over a packet read before the segment's start that is still on screen at it.
+- Lines longer than 6 s that began before an unread segment are still missed after a seek.
+
+### The search hint
+
+- **moviehash.** The playing file's OpenSubtitles hash (`SubtitleFileHash`: size plus the 64-bit words of the
+  first and last 64 KiB). It is worked out once a subtitle source is on, in the background:
+  - a download: read from disk
+  - a repackaged file (MKV): through the repackager's own source
+  - a cloud drive stream: two range requests to the drive's link, with its headers
+  - a plain HTTP file: two range requests; a server that answers 200 instead of 206 is left at once
+  - HLS and DASH: none
+
+  A search waits at most 1.5 s for it. OpenSubtitles sends it as `moviehash`; results that match come back with
+  `moviehash_match`, which ranks them first (`fileMatch`, +100).
+- **TMDB.** The player is handed the video page's key in `TMDBMatchStore`. When the page kept a match, the hint gets
+  its TMDB id, and for a series the season TMDB numbers it in (plus its episode offset). A film's hint drops season
+  and episode. A series TMDB numbers across seasons (`absolute`) keeps the source's numbers. OpenSubtitles then
+  searches by `tmdb_id` / `parent_tmdb_id`. A viewer's edit of the search is never overwritten.
+- **IMDb.** Not filled: the TMDB Worker's answer has no IMDb id. Adding `external_ids` to the Worker would.
+
+### Support matrix additions
+
+| Path | ZIP | Folder siblings | Added on Apple TV | Seek into a long embedded line |
+|---|---|---|---|---|
+| Direct MP4 / MOV, remote HLS | Overlay, list as picker | n/a | Address | n/a (no embedded text) |
+| MKV/AVI/FLV → repackaged HLS | Overlay (not a stream track) | Plugin `subs`, Cloud Files | Address | Yes, up to 6 s before the segment |
+| Cloud Files video | Overlay | Yes | Address | Yes for MKV |
+| Subtitle source result | Its episode's file | n/a | Search Online | n/a |
+
+### QA (simulators)
+
+- `-qaWebDAVServer <address>` adds that WebDAV share before launch, so `-qaPage play-file:alist:<folder>` plays a
+  video from it as Cloud Files does. A local share for this is any server that answers PROPFIND and ranged GET.
+- Run 2026-11-08 on throwaway simulators (iPhone 17 Pro and Apple TV 4K, iOS/tvOS 27.2) against a local share holding
+  generated files only:
+  - iPhone, `-qaPlayURL …/Pack.S01E02.mp4 -qaSubtitleURLs …/Pack.S01.zip` (a ZIP of E01, `Season 1/` E02 chs and
+    eng, a `__MACOSX` fork and a readme): the Subtitles menu lists the two E02 files, Chinese chosen and showing.
+  - iPhone, Cloud Files folder `Show/` (`Show.S01E02.mp4`, `Show.S01E02.chs.srt`, `Show.S01E01.chs.srt`): the E02
+    file comes on by itself; only it was downloaded.
+  - Apple TV, Siri Remote driven by an XCUITest: Subtitle Files › Add Subtitles from Address…, typed the ZIP's
+    address, Add: the menu then lists the two E02 files and the line shows. An address without a scheme shows
+    "Subtitles Not Added".
+
+### Not verified
+
+- OpenSubtitles and Assrt with real keys, so `moviehash` matching and TMDB-id searches against the live API, and an
+  Assrt season ZIP from the live service. No keys are available; the request shapes are unit-tested.
+- A real Quark, UC or 115 folder: the sibling listing was run against a local WebDAV share only.
+- An iPhone's keyboard typing into the Apple TV field (needs a real Apple TV and iPhone).
+
 ## Left for later (plan milestones)
 
-- M1 leftovers:
-  - ZIP archives.
-  - A URL or remote-input path for adding files on tvOS.
-  - Listing sibling files in the in-app Cloud Files browser. Plugin `subs` already cover drive folders.
-  - Seek-proof cross-segment cues for a file's own embedded subtitles. FFmpeg still places those by start time.
-- M2 leftovers:
-  - Hashing the video file for OpenSubtitles' `moviehash` (needs the first and last 64 KiB, which a stream doesn't
-    give cheaply). Results already carry `fileMatch` for when it is added.
-  - TMDB/IMDb ids in the search hint. The catalog's TMDB match isn't passed to the player yet.
-  - Archives from a source (Assrt uploads that are only a ZIP or RAR).
+- M1 and M2 leftovers still open:
+  - RAR and 7z archives.
+  - Embedded lines longer than the 6 s look-back, after a seek.
+  - IMDb ids in the hint (the TMDB Worker doesn't return them).
   - Verifying the two built-in sources with real keys. Both endpoints answered as documented without one (403
     "You cannot consume this service" and status 20001 "invalid token"), nothing more.
 - M3: libass and bitmap (PGS/VobSub) rendering.
@@ -187,6 +295,14 @@ const subtitleSource = {
   - episode parsing and matching
   - the streaming size cap and HTTP errors
 - `RemuxTests.subtitleFilesJoinThePlan` covers cues crossing segment boundaries.
+- `RemuxTests.embeddedLinesCrossingSegmentsSurviveASeek` (M1b) asks for the second segment first, as a seek does, and
+  finds a 0.5–6 s embedded line in it (`remux-crossing.mkv` is `remux-copy.mkv` with that line's BlockDuration
+  raised to 5.5 s). It fails with the look-back turned off.
+- `SubtitleArchiveTests` (M1b) writes its archives in the test, hostile ones included: single and season archives,
+  GB 18030 names, size, total, ratio and lying-directory bombs, entry count, path traversal (`..`, absolute, drive
+  letters, backslashes), nested and encrypted entries, CRC and truncation, and a source's season ZIP.
+- `SubtitleHintTests` (M1b) covers the hash (known sums, wrap-around, disk vs repackager source vs two range
+  requests, streams), the TMDB match in the hint, and a Cloud Files folder's subtitle files.
 - `SubtitleProviderTests` (M2) covers:
   - manifest validation and domain matching
   - hints from catalog names and languages
@@ -201,3 +317,120 @@ const subtitleSource = {
   - per-account caches
   - the download cache with re-resolve of expired addresses
   - the LRU limit
+
+## M3: styled ASS/SSA through libass
+
+ASS and SSA used to show as plain lines. Now libass draws them with their fonts, positions, outlines, shadows,
+rotations, `\move`, `\fad`, karaoke and vector drawings, wherever the script puts them on the picture.
+
+### Decisions
+
+- **libass, built here.** `Scripts/build-apple-libass.sh` builds libass 0.17.5 with FreeType, HarfBuzz and
+  FriBidi from pinned tags and commits into one static `LibASS.xcframework` per recipe. It covers macOS
+  arm64 + x86_64, iOS, tvOS and their simulators. It uses the same pattern as FFmpeg: a cache in
+  `~/Library/Caches/tvbox-libass`, a link in `build/LibASS`, and no committed binaries. Fonts come from the
+  system through libass's CoreText provider (no fontconfig), plus the file's own (below). About 4.2 MB of static
+  library per slice goes into the link; only what is used ends up in the app. Licences: `Docs/THIRD_PARTY_NOTICES.md`.
+- **Apple's HVF fonts.** On iOS 27, PingFang (the system's Chinese font) is a Hierarchical Variable Font, which
+  FreeType reads only with Apple's `libhvf`. Without it, Chinese text fell back to boxes. FreeType is built with
+  `-Dhvf=enabled` and the app links `libhvf`. It is new in iOS/tvOS 18.4 and macOS 15.4, so it is weak-linked
+  and FreeType asks for it only when a font has an `hvgl` table. Older systems have no such fonts.
+- **Where the events come from.**
+  - A subtitle **file** (ASS/SSA, from a source or added by the viewer) is read whole into libass
+    (`ASSRenderer(script:)`).
+  - A **Matroska ASS track** still becomes a WebVTT rendition of the repackaged stream. AVPlayer lists it,
+    selects it and shows it in Picture in Picture. As the repackager makes each segment, it also hands the raw
+    events to a `StyledSubtitleEvents` store per track (TVMedia's cue callback). The store dedupes by ReadOrder,
+    because a segment made again repeats its events, and is capped at 24 MB per track. The codec private header
+    ([Script Info] and styles) comes from the stream's extradata. Font attachments (by codec, file extension or
+    MIME type) are capped at 64 MB per file and handed to libass with `ass_add_font`.
+  - The selected AVPlayer option is matched to its track by the rendition's NAME, read from the option's title
+    metadata. Its `displayName` is the language name, so it can't be used. As a fallback the match uses the
+    option's place among the subtitle renditions.
+- **One renderer, two clocks.** `StyledSubtitles` (App) asks a `StyledSubtitleSource` for a frame. A file goes
+  through `SubtitleTiming` (`display = source × scale + delay`). An embedded track uses AVPlayer's time less the
+  subtitle delay. The player's 50 ms clock runs only while styled subtitles show (`needsClock`).
+- **Drawn only on change, and only the part that changed.** Rendering runs on a serial queue, one frame at a
+  time, coalescing requests. libass's change detection skips identical frames. A changed frame is blended into a
+  premultiplied BGRA buffer covering only the bounding box of libass's images, then becomes one `CGImage` on a
+  `CALayer` (no SwiftUI redraw per frame).
+- **In the picture's rect.** The canvas is the video's rect inside the player: aspect fit (letterboxed) or aspect
+  fill, tracked through resize and rotation. It is in pixels (points × display scale). The storage size is the
+  video's own size, so the script's border and shadow sizes scale with the picture as libass expects.
+- **Fallback.** If libass doesn't start (`ASSRenderer.isAvailable == false`) or a script has no events, the plain
+  lines show as before. The "ASS styling and effects show as plain text" note appears only then.
+
+### Support matrix (M3)
+
+| Path | On screen | PiP | AirPlay |
+|---|---|---|---|
+| ASS/SSA file (overlay) | libass | Not shown (as for every file) | Not shown on the receiver |
+| MKV ASS track → repackaged HLS | libass, with the file's fonts | AVPlayer's plain WebVTT lines | Repackaged streams don't AirPlay |
+| ASS inside MP4/HLS from a server | Unchanged: AVPlayer's own lines | AVPlayer | AVPlayer |
+| MKV PGS / VobSub track → repackaged HLS | Drawn bitmaps (new; before, these tracks weren't offered at all) | Nothing | Repackaged streams don't AirPlay |
+
+### Known limits
+
+- An embedded track's events arrive as segments are made, so the renderer knows only what has been read so far.
+  That is enough for playback, since a segment is made before it plays. A seek far ahead shows that part's events
+  once its segment is made.
+- The `YCbCr Matrix` header is not applied to colours (libass leaves that to the player). Scripts that set
+  `TV.601` on HD video may look slightly off in colour.
+- Each change redraws the whole bounding box. A full-screen karaoke effect at 4K redraws a large area every frame.
+  That is fine on Apple TV 4K in the simulator; it has not been profiled on an A10 Apple TV HD.
+- Bitmap subtitles: see the next section.
+
+### Tests (M3)
+
+- `StyledSubtitleTests` covers:
+  - libass starting
+  - placement, colour, `\pos`, resizing and clearing
+  - Chinese and Japanese in system fonts, and fades
+  - a Matroska track taking events as they come, with ReadOrder dedupe
+  - refusing non-ASS input
+  - documents keeping their script
+  - font attachment detection
+  - rendition names matching the master playlist
+  - a fixture MKV (`Fixtures/remux-ass.mkv`) through the repackager: simultaneous events reach libass, and the
+    plain WebVTT lines still go to AVPlayer
+- Checked by hand on an iOS 27.2 simulator, a tvOS 27.2 simulator and the Mac, using generated test media:
+  - an external ASS file
+  - an MKV whose ASS track uses a font only its attachment has (Luminari, which iOS doesn't have)
+
+### Bitmap subtitles (PGS, VobSub)
+
+Blu-ray PGS and DVD VobSub tracks of a repackaged file used to be left out of the stream: AVPlayer has no way to show
+them. Now the player draws them over the video like ASS.
+
+- **FFmpeg.** The recipe adds the `pgssub` and `dvdsub` decoders and the `dvdsub` parser (for MPEG-PS files). That
+  is a few hundred KB, all LGPL.
+- **Offered as renditions.** With `RemuxPlan.Device.bitmapSubtitles` (set when the decoders are there), each
+  such track is a SUBTITLES rendition whose WebVTT segments are empty. It can be chosen in AVKit's menu and ours,
+  and its NAME and position tell the player which track it is.
+- **Decoded as read.** The repackager's cue callback hands each packet to a `TVMBitmapDecoder` (`tvm_bitmap_*`,
+  `avcodec_decode_subtitle2`) on the FFmpeg thread, in file order, because PGS display sets build on earlier
+  ones. Palette pictures become premultiplied BGRA `CGImage`s in a `BitmapSubtitleTrack`. Cues are deduped by
+  start time, because a segment made again repeats them. Up to 96 MB of pictures are kept; the earliest are let
+  go first and come back when their segment is made again.
+- **Timing.** VobSub cues carry their own end. A PGS cue lasts until the next display set, which is usually
+  the one that clears it, and at most 10 s when no next one is known yet.
+- **Drawing.** `BitmapSubtitleRenderer` composites the pictures on screen at a moment onto the stream's canvas
+  (PGS presentation size, VobSub frame size, else the video's) and returns a new image only when the set of
+  cues changes. The overlay stretches that canvas over the video's rect, so it follows resizing without
+  redrawing.
+- **Limits.**
+  - Standalone `.sup`/`.idx`+`.sub` files are not read; only tracks inside a file the repackager opens.
+  - DVB subtitles (`dvb_subtitle`) are not included.
+  - After a seek far ahead, PGS pictures appear once that segment is made. A PGS epoch that continues from
+    before the seek point can miss objects it would have reused; such streams normally repeat an acquisition
+    point at every cue.
+  - The canvas is mapped onto the whole video rect. A PGS stream made for 1920×1080 on a video cropped to
+    1920×800 is squeezed vertically rather than centred. That is uncommon in remuxes, which keep the original
+    size.
+- **Tests.** `BitmapSubtitleTests`:
+  - the plan offers bitmap tracks only when the player draws them
+  - translation twins come only from text tracks
+  - cue timing, and dedupe by start time
+  - a fixture MKV (`Fixtures/remux-bitmap.mkv`, a PGS track and a VobSub track made from it) through the
+    repackager: empty WebVTT, decoded pictures in the right places, a gap, and the second line
+

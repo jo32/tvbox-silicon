@@ -1614,7 +1614,7 @@
 "Frame Rate" = "影格率";
 "As Made" = "原始";
 "%@ fps" = "%@ fps";
-"An SRT, WebVTT or ASS file, up to 8 MB." = "SRT、WebVTT 或 ASS 檔案，最大 8 MB。";
+"An SRT, WebVTT or ASS file, or a ZIP archive of them, up to 8 MB." = "SRT、WebVTT 或 ASS 檔案，或它們的 ZIP 壓縮檔，最大 8 MB。";
 "Subtitles Not Added" = "未能加入字幕";
 "Save or Share" = "儲存或分享";
 
@@ -1641,7 +1641,7 @@
 "Its manifest can't be read." = "無法讀取它的清單。";
 "The source answered something unexpected." = "此來源回傳了無法辨識的內容。";
 "The source gave no file." = "此來源沒有提供檔案。";
-"It is an archive; only SRT, WebVTT and ASS files can be shown." = "這是壓縮檔，只能顯示 SRT、WebVTT 和 ASS 檔案。";
+"It is a RAR or 7z archive; only ZIP archives and SRT, WebVTT and ASS files can be shown." = "這是 RAR 或 7z 壓縮檔，只能顯示 ZIP 壓縮檔和 SRT、WebVTT、ASS 檔案。";
 "The script didn't download: %@" = "腳本未能下載：%@";
 "It has the same name as a source that comes with Yingxia." = "它與影匣內建的來源同名。";
 "The source's script is missing." = "找不到此來源的腳本。";
@@ -1748,3 +1748,14 @@
 "Sources come from your subscriptions, so a source is hidden rather than deleted. To delete a whole subscription, open it in Settings." = "來源來自你的訂閱，所以單一來源只能隱藏，不能刪除。若要刪除整個訂閱，請在「設定」中打開它。";
 "This Source Is Hidden" = "此來源已隱藏";
 "It stays out of Watch Now and search. Hidden sources are listed at the end of the Sources page." = "它不會出現在「立即觀看」和搜尋中。已隱藏的來源列在「隨選來源」頁面的最後。";
+
+/* Subtitle archives (#576 M1b) */
+"The archive is damaged." = "壓縮檔已損壞。";
+"The archive unpacks to more than subtitles need." = "壓縮檔解壓後遠超字幕所需的大小。";
+"The archive holds too many files." = "壓縮檔裡的檔案太多。";
+"The archive has a file outside its own folder." = "壓縮檔裡有指向其資料夾之外的檔案。";
+"The archive holds only other archives." = "壓縮檔裡只有其他壓縮檔。";
+"The archive is protected by a password." = "壓縮檔有密碼保護。";
+"The archive uses a kind of ZIP that isn't supported." = "不支援這種 ZIP 壓縮方式。";
+"The archive holds no SRT, WebVTT or ASS files." = "壓縮檔裡沒有 SRT、WebVTT 或 ASS 檔案。";
+"None of the archive's files is for this episode." = "壓縮檔裡沒有這一集的檔案。";

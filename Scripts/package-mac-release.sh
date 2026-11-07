@@ -45,11 +45,14 @@ if [ "$BUILD" = 1 ]; then
   for h in JavaHost ScriptHost PythonHost; do test -d "build/$h" || { echo "missing build/$h; run Scripts/build-*-host.sh" >&2; exit 1; }; done
   Scripts/build-universal-hosts.sh
   Scripts/build-apple-ffmpeg.sh
+  Scripts/build-apple-libass.sh
   xcodegen generate >/dev/null
   xcodebuild -project TVBox.xcodeproj -scheme TVBox-macOS -configuration Release -derivedDataPath "$DERIVED" \
     ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM= build | tail -3
 fi
 
+# Early macOS 27.2 betas crash at launch on back-deployed Foundation symbols (TestFlight 51/52 on iOS).
+Scripts/check-weak-imports.sh "$APP_BUILT/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$APP_BUILT/Contents/Info.plist")"
 VERSION=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP_BUILT/Contents/Info.plist")
 OUT="build/release-mac/$VERSION"
 rm -rf "$OUT"; mkdir -p "$OUT"

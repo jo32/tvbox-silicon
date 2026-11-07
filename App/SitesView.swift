@@ -1101,9 +1101,10 @@ struct SiteView: View {
                 } else if initialQuery.isEmpty {
                     await home()
                     #if DEBUG
-                    // `-qaCategory <type id>` opens that category, for screenshots.
+                    // `-qaCategory <type id>` opens that category with its opening filters, as a tap does, for screenshots.
                     if let category = UserDefaults.standard.string(forKey: "qaCategory") {
-                        await browser.load(.list(category: category, query: "", page: 1), client: client)
+                        let filters = CategoryFilter.initialChoices(browser.categories.first { $0.id == category }?.filters ?? [])
+                        await browser.load(.list(category: category, query: "", page: 1, filters: filters), client: client)
                     }
                     // `-qaSearchDraft <text>` types a query without running it, for the remote's Search button.
                     if let draft = UserDefaults.standard.string(forKey: "qaSearchDraft") { query = draft }
@@ -1175,7 +1176,8 @@ struct CategoryFilterBar: View {
     private func title(_ filter: CategoryFilter) -> String {
         let current = value(filter)
         let choice = filter.options.first { $0.value == current }?.name ?? current
-        return filter.name.isEmpty ? choice : filter.name + "：" + choice
+        // The "all" choice a source names after the filter itself reads once, not 全部剧情：全部剧情.
+        return filter.name.isEmpty || choice == filter.name ? choice : filter.name + "：" + choice
     }
     private func pick(_ filter: CategoryFilter, _ option: String) {
         guard value(filter) != option else { return }

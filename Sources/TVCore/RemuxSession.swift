@@ -47,6 +47,27 @@ final class RemuxSession: @unchecked Sendable {
     private struct Translation { var source: Int, language: Locale.Language, translator: any SubtitleTranslating }
     private var codecs: [Int: String] = [:]
     private var startTime: Int64 = 0
+    /// The ASS/SSA tracks the player draws itself through libass (#576 M3), by track: their raw events, header and
+    /// the file's fonts, kept as segments are made. Set before the stream is served.
+    private var styled: [Int: StyledSubtitleEvents] = [:]
+    var styledSubtitles: [StyledSubtitleEvents] { condition.withLock { styled.sorted { $0.key < $1.key }.map(\.value) } }
+    /// The bitmap subtitle tracks (PGS, VobSub) the player draws itself, by track, with their decoders, which only
+    /// the FFmpeg thread uses.
+    private var bitmaps: [Int: BitmapSubtitleTrack] = [:]
+    private var bitmapDecoders: [Int: OpaquePointer] = [:]
+    var bitmapSubtitles: [BitmapSubtitleTrack] { condition.withLock { bitmaps.sorted { $0.key < $1.key }.map(\.value) } }
+    /// All of a file's fonts together are kept up to this size.
+    static let fontBudget = 64 << 20
+    /// Every cue of the file's own subtitles read so far, by track (#576). FFmpeg hands a cue to the segment it starts
+    /// in; one that runs on into the next is carried there too, so a seek into its middle still shows it.
+    private var embedded: [Int: [RemuxPlan.Cue]] = [:]
+    /// Segments whose subtitle packets have been read.
+    private var scanned: Set<Int> = []
+    /// When AVPlayer last asked for a segment of the file's own subtitles: they are on.
+    private var subtitlesAsked: Date?
+    /// How far before a segment reached by a seek its subtitles are looked for: a line still on screen at the
+    /// segment's start began at most this long before it.
+    static let lookBack: Int64 = 6_000_000
 
     private let condition = NSCondition()
     private var segments: [Key: RemuxSegment] = [:]
@@ -151,6 +172,7 @@ final class RemuxSession: @unchecked Sendable {
         else { segment = RemuxSegment(); segments[key] = segment }
         segment.join()
         if plan.tracks[track].kind == .audio { asked[track] = Date() }
+        if plan.tracks[track].kind == .subtitle { subtitlesAsked = Date() }
         latest = index
         // A segment no one waits for gives way to this one, unless this one is made already: AVPlayer catching up
         // with the segments made ahead doesn't throw away the one being made.
@@ -239,6 +261,8 @@ final class RemuxSession: @unchecked Sendable {
 
     private func finishRun() {
         if let cursor { tvm_cursor_free(cursor) }
+        for decoder in bitmapDecoders.values { tvm_bitmap_close(decoder) }
+        bitmapDecoders = [:]
         if let input { tvm_close(input) }
         cursor = nil; input = nil
         condition.lock()
@@ -261,12 +285,23 @@ final class RemuxSession: @unchecked Sendable {
         format = String(cString: tvm_format(input))
         var streams: [RemuxPlan.Stream] = []
         var video: Int32 = -1
+        // ASS headers by stream, and the attachments that are fonts: copied while the input holds them.
+        var headers: [Int: Data] = [:], fonts: [StyledSubtitleFont] = [], fontBytes = 0
         for index in 0..<tvm_stream_count(input) {
             var raw = TVMStream()
             guard tvm_stream(input, index, &raw) == 0 else { continue }
             let stream = Self.stream(raw, index: Int(index))
             if stream.kind == .video, video < 0, stream.width > 0 { video = index }
             streams.append(stream)
+            if stream.kind == .subtitle, ["ass", "ssa"].contains(stream.codec), let bytes = raw.extradata, raw.extradataSize > 0 {
+                headers[Int(index)] = Data(bytes: bytes, count: Int(raw.extradataSize))
+            } else if stream.kind == .other, let bytes = raw.extradata, raw.extradataSize > 0, fontBytes + Int(raw.extradataSize) <= Self.fontBudget {
+                let name = Self.tag(input, index, "filename"), mime = Self.tag(input, index, "mimetype")
+                if StyledSubtitleFont.isFont(codec: stream.codec, name: name, mime: mime) {
+                    fonts.append(StyledSubtitleFont(name: name, data: Data(bytes: bytes, count: Int(raw.extradataSize))))
+                    fontBytes += Int(raw.extradataSize)
+                }
+            }
         }
         var keyframes: [Int64] = []
         if video >= 0 {
@@ -282,6 +317,29 @@ final class RemuxSession: @unchecked Sendable {
             throw TVError.unsupported(L10n.text("This media cannot be played. Try another channel or source."))
         }
         self.plan = plan
+        let names = plan.subtitleNames()
+        let assTracks = plan.tracks.indices.filter { plan.tracks[$0].kind == .subtitle && ["ass", "ssa"].contains(plan.tracks[$0].stream.codec) }
+        condition.withLock {
+            for track in assTracks {
+                let position = plan.tracks.indices.filter { plan.tracks[$0].kind == .subtitle }.firstIndex(of: track) ?? 0
+                styled[track] = StyledSubtitleEvents(name: names[track] ?? "", position: position, header: headers[plan.tracks[track].stream.index] ?? Data(), fonts: fonts)
+            }
+        }
+        if !assTracks.isEmpty {
+            Diagnostics.shared.record(.info, "subtitles", "styled tracks=\(assTracks.count) fonts=\(fonts.count) bytes=\(fontBytes)")
+        }
+        let bitmapTracks = plan.tracks.indices.filter { plan.tracks[$0].kind == .subtitle && RemuxPlan.bitmapCodecs.contains(plan.tracks[$0].stream.codec) }
+        let videoSize = plan.tracks.first.map { CGSize(width: $0.stream.width, height: $0.stream.height) } ?? .zero
+        for track in bitmapTracks {
+            guard let decoder = tvm_bitmap_open(input, Int32(plan.tracks[track].stream.index)) else { continue }
+            bitmapDecoders[track] = decoder
+            let position = plan.tracks.indices.filter { plan.tracks[$0].kind == .subtitle }.firstIndex(of: track) ?? 0
+            let bitmap = BitmapSubtitleTrack(name: names[track] ?? "", position: position, videoSize: videoSize)
+            condition.withLock { bitmaps[track] = bitmap }
+        }
+        if !bitmapTracks.isEmpty {
+            Diagnostics.shared.record(.info, "subtitles", "bitmap tracks=\(bitmapTracks.map { plan.tracks[$0].stream.codec }) decoders=\(bitmapDecoders.count)")
+        }
         var tracks = plan.tracks.map { track in
             TVMTrack(stream: Int32(track.stream.index), mode: track.mode.rawValue, bitRate: Int32(track.bitRate),
                      channels: Int32(track.channels), dolbyVision: track.dolbyVision.rawValue, toneMap: track.toneMap ? 1 : 0,
@@ -369,6 +427,12 @@ final class RemuxSession: @unchecked Sendable {
     private func produce(_ job: Job) {
         let index = job.segment
         let start = plan.bounds[index], end = index + 1 == plan.segments ? -1 : plan.bounds[index + 1]
+        let subtitles = job.active.indices.filter { job.active[$0] == 1 && plan.tracks[$0].kind == .subtitle }
+        // A segment reached by a seek, with subtitles on: the lines that began just before it are read first.
+        let looksBack = condition.withLock {
+            index > 0 && !subtitles.isEmpty && !scanned.contains(index - 1) && subtitlesAsked.map { Date().timeIntervalSince($0) < 300 } == true
+        }
+        if looksBack { lookBack(before: index, tracks: subtitles) }
         cues = [:]
         var error = [CChar](repeating: 0, count: 256)
         let began = Date()
@@ -383,8 +447,12 @@ final class RemuxSession: @unchecked Sendable {
             let key = Key(track: track, segment: index)
             if status >= 0 {
                 if plan.tracks[track].kind == .subtitle {
-                    segment.append(Data(RemuxPlan.webVTT(cues[track] ?? [], offset: Self.offset).utf8))
-                    if translations.values.contains(where: { $0.source == track }) { sourceCues[key] = cues[track] ?? [] }
+                    // The segment's own lines and those of earlier segments still on screen in it, each with its whole timing.
+                    let known = RemuxPlan.merged(embedded[track] ?? [], cues[track] ?? [])
+                    embedded[track] = known
+                    let carried = plan.cues(known, segment: index)
+                    segment.append(Data(RemuxPlan.webVTT(carried, offset: Self.offset).utf8))
+                    if translations.values.contains(where: { $0.source == track }) { sourceCues[key] = carried }
                 }
                 segment.finish()
             } else if gaveWay {
@@ -396,6 +464,7 @@ final class RemuxSession: @unchecked Sendable {
             }
         }
         writing = [:]
+        if status >= 0, !subtitles.isEmpty { scanned.insert(index) }
         // A segment that fails is not tried again until AVPlayer asks for it again.
         if !gaveWay { produced = index }
         evict()
@@ -405,6 +474,26 @@ final class RemuxSession: @unchecked Sendable {
         } else if status >= 0 {
             Diagnostics.shared.record(.debug, "remux", "segment=\(index) tracks=\(job.active.enumerated().filter { $0.element == 1 }.map(\.offset)) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
         }
+    }
+
+    /// Reads the subtitle packets of the stretch before segment `index` (at most `lookBack` long), and nothing else:
+    /// the other tracks' packets are passed over unread. The cursor then goes on into the segment itself.
+    private func lookBack(before index: Int, tracks: [Int]) {
+        var active = [UInt8](repeating: 0, count: plan.tracks.count)
+        for track in tracks { active[track] = 1 }
+        let end = plan.bounds[index], start = max(plan.bounds[0], end - Self.lookBack)
+        let held = writing
+        writing = [:]; cues = [:]
+        var error = [CChar](repeating: 0, count: 256)
+        let began = Date()
+        let status = active.withUnsafeBufferPointer { active in
+            tvm_cursor_segment(cursor, start, end, active.baseAddress, context, remuxWrite, remuxCue, &error, Int32(error.count))
+        }
+        let found = cues
+        cues = [:]; writing = held
+        guard status >= 0 else { return }
+        condition.withLock { for (track, list) in found { embedded[track] = RemuxPlan.merged(embedded[track] ?? [], list) } }
+        Diagnostics.shared.record(.debug, "subtitles", "looked back segment=\(index) cues=\(found.values.map(\.count).reduce(0, +)) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
     }
 
     /// Keeps the segments near where AVPlayer reads within the memory budget; read ones go first.
@@ -449,6 +538,24 @@ final class RemuxSession: @unchecked Sendable {
     }
 
     fileprivate func cue(track: Int, start: Int64, end: Int64, text: Data) {
+        // A bitmap subtitle: decoded now, in the order the file holds it (PGS builds on what came before), and
+        // drawn by the player. Its WebVTT rendition stays empty.
+        if let decoder = bitmapDecoders[track] {
+            var subtitle = TVMBitmapSubtitle()
+            let decoded = text.withUnsafeBytes { raw in
+                tvm_bitmap_decode(decoder, raw.bindMemory(to: UInt8.self).baseAddress, Int32(raw.count), start, end > start ? end - start : -1, &subtitle)
+            }
+            if decoded == 1 {
+                bitmaps[track]?.add(subtitle, offset: startTime)
+                tvm_bitmap_clear(&subtitle)
+            }
+            return
+        }
+        // The raw event for libass, on the item's clock (which starts where the file's does).
+        if let events = styled[track] {
+            let ends = end > start ? end : start + 4_000_000
+            events.add(text, start: start - startTime, end: ends - startTime)
+        }
         guard let value = RemuxPlan.cueText(text, codec: plan.tracks[track].stream.codec) else { return }
         cues[track, default: []].append(RemuxPlan.Cue(start: start, end: end > start ? end : start + 4_000_000, text: value))
     }
@@ -456,6 +563,12 @@ final class RemuxSession: @unchecked Sendable {
     fileprivate var isInterrupted: Bool { interrupted }
 
     // MARK: -
+
+    private static func tag(_ input: OpaquePointer, _ index: Int32, _ key: String) -> String {
+        var value = [CChar](repeating: 0, count: 256)
+        guard tvm_stream_tag(input, index, key, &value, Int32(value.count)) >= 0 else { return "" }
+        return message(value)
+    }
 
     private static func message(_ error: [CChar]) -> String {
         String(decoding: error.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
@@ -468,6 +581,7 @@ final class RemuxSession: @unchecked Sendable {
                                       av1: VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1),
                                       hevcEncoder: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
                                       hdr: AVPlayer.eligibleForHDRPlayback && !Remux.refusesHDR && !Remux.screenCaptured)
+        device.bitmapSubtitles = tvm_bitmap_available("hdmv_pgs_subtitle") != 0
         #if !os(macOS)
         // An Apple TV or iPhone tone maps a 4K picture too slowly to keep up; one that shows no HDR gets 1080p.
         device.toneMapWidth = 1920

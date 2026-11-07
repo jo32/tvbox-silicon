@@ -39,7 +39,17 @@ public struct CategoryFilter: Identifiable, Hashable, Sendable {
             return seen.insert(value).inserted ? Option(name: name.isEmpty ? value : name, value: value) : nil
         }
         guard options.count > 1 else { return nil }
-        self.init(key: key, name: json["name"]?.string.map(HTMLText.name) ?? key, options: options, initial: json["init"]?.string)
+        let name = json["name"]?.string.map(HTMLText.name) ?? key
+        let initial = json["init"]?.string
+        // Some sources (CatPaw's 玩偶) list only real values and let the filter's own name (全部剧情, 全部地区) stand for
+        // "all". Opening on the first value then narrowed every page to 喜剧 + 中国大陆 + 2026 + A and showed nothing. As
+        // in other TVBox clients, a filter without `init` sends nothing until the viewer picks; the empty choice is
+        // offered under the filter's name.
+        if initial == nil, !options.contains(where: { $0.value.isEmpty }) {
+            self.init(key: key, name: name, options: [Option(name: name, value: "")] + options, initial: "")
+        } else {
+            self.init(key: key, name: name, options: options, initial: initial)
+        }
     }
 
     /// A home answer's `filters`: an object of category id to filter list, sometimes sent as JSON text.

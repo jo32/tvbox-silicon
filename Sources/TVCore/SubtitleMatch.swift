@@ -7,16 +7,21 @@ import Foundation
 public enum SubtitleMatch {
     /// The files for the video named `video` (its file name, else its title), best first.
     public static func candidates(_ subtitles: [ExternalSubtitle], video: String) -> [ExternalSubtitle] {
+        order(subtitles.map(\.name), video: video).map { subtitles[$0] }
+    }
+
+    /// The indices of the subtitle file names that belong to `video`, best first.
+    static func order(_ names: [String], video: String) -> [Int] {
         let wanted = episode(video)
         let stem = normalized(video)
-        let kept = subtitles.enumerated().filter { _, subtitle in
-            guard let wanted, let theirs = episode(subtitle.name) else { return true }
+        let kept = names.enumerated().filter { _, name in
+            guard let wanted, let theirs = episode(name) else { return true }
             return theirs == wanted
         }
         return kept.sorted { left, right in
-            let (a, b) = (score(left.element.name, stem: stem), score(right.element.name, stem: stem))
+            let (a, b) = (score(left.element, stem: stem), score(right.element, stem: stem))
             return a != b ? a > b : left.offset < right.offset
-        }.map(\.element)
+        }.map(\.offset)
     }
 
     /// Season and episode a file or title names: `S01E02`, `1x02`, `EP02`, `第2集`, `[02]` or ` - 02 `.
@@ -72,7 +77,7 @@ public enum SubtitleMatch {
     }
 
     private static func stripExtension(_ name: String) -> String {
-        let known = ["srt", "ass", "ssa", "vtt", "mkv", "mp4", "m4v", "mov", "avi", "ts", "flv", "rmvb", "webm", "m3u8"]
+        let known = ["srt", "ass", "ssa", "vtt", "zip", "mkv", "mp4", "m4v", "mov", "avi", "ts", "flv", "rmvb", "webm", "m3u8"]
         var text = name
         while let dot = text.lastIndex(of: "."), known.contains(text[text.index(after: dot)...].lowercased()) { text = String(text[..<dot]) }
         return text
@@ -82,24 +87,39 @@ public enum SubtitleMatch {
 extension SubtitleDocument {
     /// A source's subtitle file, fetched with the video's request headers (none to a loopback proxy).
     public static func load(_ subtitle: ExternalSubtitle, headers: [String: String], session: URLSession = .shared) async throws -> SubtitleDocument {
+        try await loadAll(subtitle, headers: headers, session: session)[0]
+    }
+
+    /// A source's subtitle file, or the files of a ZIP archive that belong to `video`, best first.
+    public static func loadAll(_ subtitle: ExternalSubtitle, headers: [String: String], video: String? = nil,
+                               session: URLSession = .shared) async throws -> [SubtitleDocument] {
         let data = try await SubtitleFile.download(subtitle.url, headers: headers, session: session)
-        return try SubtitleDocument(id: subtitle.url.absoluteString, name: subtitle.name, language: subtitle.language, data: data, format: subtitle.format)
+        return try documents(id: subtitle.url.absoluteString, name: subtitle.name, language: subtitle.language, data: data,
+                             format: subtitle.format, video: video)
     }
 
     /// A file the viewer picked on this device, or one dropped on the player.
-    public static func load(file url: URL) throws -> SubtitleDocument {
+    public static func load(file url: URL) throws -> SubtitleDocument { try loadAll(file: url)[0] }
+
+    /// A file the viewer picked or dropped: a subtitle file, or a ZIP archive of them.
+    public static func loadAll(file url: URL, video: String? = nil) throws -> [SubtitleDocument] {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
         guard size <= SubtitleFile.largest else { throw SubtitleLoadError.tooLarge }
         guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { throw SubtitleLoadError.unreadable }
-        return try SubtitleDocument(id: SubtitleMatch.identity(name: url.lastPathComponent, data: data), name: url.lastPathComponent, data: data)
+        return try documents(id: SubtitleMatch.identity(name: url.lastPathComponent, data: data), name: url.lastPathComponent, data: data, video: video)
     }
 
     /// A file at an address the viewer typed.
     public static func load(address url: URL, session: URLSession = .shared) async throws -> SubtitleDocument {
+        try await loadAll(address: url, session: session)[0]
+    }
+
+    /// A file at an address the viewer typed: a subtitle file, or a ZIP archive of them.
+    public static func loadAll(address url: URL, video: String? = nil, session: URLSession = .shared) async throws -> [SubtitleDocument] {
         let data = try await SubtitleFile.download(url, headers: [:], session: session)
         let name = url.lastPathComponent.isEmpty ? (url.host() ?? "subtitles") : url.lastPathComponent
-        return try SubtitleDocument(id: url.absoluteString, name: name, data: data)
+        return try documents(id: url.absoluteString, name: name, data: data, video: video)
     }
 }

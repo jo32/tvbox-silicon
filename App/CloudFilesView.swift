@@ -171,7 +171,8 @@ struct CloudFolderView: View {
     }
 
     private func play(_ file: CloudFile, in files: [CloudFile]) {
-        store.playFile(file, in: CloudFilesFolder(drive: drive, id: folder, name: name, files: files.filter { $0.kind == file.kind && drive.plays($0) }))
+        store.playFile(file, in: CloudFilesFolder(drive: drive, id: folder, name: name, files: files.filter { $0.kind == file.kind && drive.plays($0) },
+                                                  subtitles: file.kind == .video ? CloudFiles.subtitles(files, in: drive) : []))
     }
 
     private func load(password: String? = nil) async {

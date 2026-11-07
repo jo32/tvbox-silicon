@@ -1614,7 +1614,7 @@
 "Frame Rate" = "フレームレート";
 "As Made" = "元のまま";
 "%@ fps" = "%@ fps";
-"An SRT, WebVTT or ASS file, up to 8 MB." = "SRT、WebVTT、ASS ファイル（8 MB まで）。";
+"An SRT, WebVTT or ASS file, or a ZIP archive of them, up to 8 MB." = "SRT、WebVTT、ASS ファイル、またはそれらの ZIP アーカイブ（8 MB まで）。";
 "Subtitles Not Added" = "字幕を追加できませんでした";
 "Save or Share" = "保存または共有";
 
@@ -1641,7 +1641,7 @@
 "Its manifest can't be read." = "マニフェストを読めません。";
 "The source answered something unexpected." = "ソースから予期しない応答がありました。";
 "The source gave no file." = "ソースがファイルを返しませんでした。";
-"It is an archive; only SRT, WebVTT and ASS files can be shown." = "アーカイブです。表示できるのは SRT、WebVTT、ASS ファイルだけです。";
+"It is a RAR or 7z archive; only ZIP archives and SRT, WebVTT and ASS files can be shown." = "RAR または 7z アーカイブです。表示できるのは ZIP アーカイブと SRT、WebVTT、ASS ファイルだけです。";
 "The script didn't download: %@" = "スクリプトをダウンロードできませんでした：%@";
 "It has the same name as a source that comes with Yingxia." = "影匣に含まれるソースと同じ名前です。";
 "The source's script is missing." = "ソースのスクリプトが見つかりません。";
@@ -1748,3 +1748,14 @@
 "Sources come from your subscriptions, so a source is hidden rather than deleted. To delete a whole subscription, open it in Settings." = "ソースは配信設定から読み込まれるため、1つずつ削除はできず、非表示にします。配信設定ごと削除するには「設定」で開いてください。";
 "This Source Is Hidden" = "このソースは非表示です";
 "It stays out of Watch Now and search. Hidden sources are listed at the end of the Sources page." = "「今すぐ観る」と検索に表示されません。非表示のソースは「配信ソース」ページの最後に並びます。";
+
+/* Subtitle archives (#576 M1b) */
+"The archive is damaged." = "アーカイブが壊れています。";
+"The archive unpacks to more than subtitles need." = "アーカイブを展開すると字幕としては大きすぎます。";
+"The archive holds too many files." = "アーカイブ内のファイルが多すぎます。";
+"The archive has a file outside its own folder." = "アーカイブに自身のフォルダ外を指すファイルがあります。";
+"The archive holds only other archives." = "アーカイブには別のアーカイブしか入っていません。";
+"The archive is protected by a password." = "アーカイブはパスワードで保護されています。";
+"The archive uses a kind of ZIP that isn't supported." = "このアーカイブの ZIP 形式には対応していません。";
+"The archive holds no SRT, WebVTT or ASS files." = "アーカイブに SRT、WebVTT、ASS ファイルがありません。";
+"None of the archive's files is for this episode." = "アーカイブにこのエピソードのファイルがありません。";

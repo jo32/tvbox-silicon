@@ -72,9 +72,63 @@ actor DiscoverTrailerResolver {
     private struct Format: Decodable { let url: String; let mimeType: String; let displayName: Name }
 }
 
+/// The trailer's picture: its pixel size and the black bars baked into it. Trailers for scope films are often a
+/// 16:9 file with letterbox bars, which a fill of the hero left as a black band across its top edge.
+struct DiscoverTrailerFraming: Equatable {
+    var size: CGSize
+    /// The share of the height each bar takes, top and bottom alike.
+    var bars: CGFloat
+
+    /// Where the whole frame goes so its picture, without the bars, fills `rect`.
+    func frame(filling rect: CGRect) -> CGRect {
+        guard size.width > 0, size.height > 0 else { return rect }
+        let active = size.height * (1 - 2 * bars)
+        let scale = max(rect.width / size.width, rect.height / max(active, 1))
+        let width = size.width * scale, height = size.height * scale
+        return CGRect(x: rect.midX - width / 2, y: rect.midY - height / 2, width: width, height: height)
+    }
+
+    /// Rows of black at the top and bottom of a frame, as a share of its height. Nil for a frame that is dark all
+    /// over (a fade), which says nothing about bars.
+    static func bars(in buffer: CVPixelBuffer) -> CGFloat? {
+        guard CVPixelBufferGetPixelFormatType(buffer) == kCVPixelFormatType_32BGRA,
+              CVPixelBufferLockBaseAddress(buffer, .readOnly) == kCVReturnSuccess else { return nil }
+        defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(buffer) else { return nil }
+        let width = CVPixelBufferGetWidth(buffer), height = CVPixelBufferGetHeight(buffer)
+        let stride = CVPixelBufferGetBytesPerRow(buffer)
+        guard width > 16, height > 16 else { return nil }
+        let pixels = base.assumingMemoryBound(to: UInt8.self)
+        func dark(_ row: Int) -> Bool {
+            let line = pixels + row * stride
+            var x = 0
+            while x < width {
+                let pixel = line + x * 4
+                if max(pixel[0], pixel[1], pixel[2]) > 30 { return false }
+                x += 4
+            }
+            return true
+        }
+        var top = 0
+        while top < height / 2, dark(top) { top += 1 }
+        var bottom = 0
+        while bottom < height / 2, dark(height - 1 - bottom) { bottom += 1 }
+        guard top + bottom < height * 7 / 10 else { return nil }
+        let share = CGFloat(min(top, bottom)) / CGFloat(height)
+        return share < 0.01 ? 0 : min(share, 0.3)
+    }
+}
+
 @MainActor @Observable private final class DiscoverTrailerPlayback {
     let player = AVQueuePlayer()
     var ready = false
+    /// Nil until a frame has been looked at.
+    var framing: DiscoverTrailerFraming?
+    /// Bars known, or given up on after a few seconds of frames that couldn't be read: the video may show.
+    var framed = false
+    @ObservationIgnored private var ticks = 0
+    @ObservationIgnored private var output: AVPlayerItemVideoOutput?
+    @ObservationIgnored private var samples = 0
     private var looper: AVPlayerLooper?
     private var observer: Any?
     private var generation = 0
@@ -99,6 +153,9 @@ actor DiscoverTrailerResolver {
             Task { @MainActor [weak self] in
                 guard let self, self.generation == requestGeneration else { return }
                 if time.seconds > 0.05, self.player.currentItem?.status == .readyToPlay {
+                    self.measure()
+                    self.ticks += 1
+                    if !self.framed, self.framing != nil || self.ticks >= 6 { self.framed = true }
                     self.ready = true
                     self.report("playing:\(String(format: "%.1f", time.seconds))", trailer)
                 }
@@ -106,9 +163,34 @@ actor DiscoverTrailerResolver {
         }
         player.play()
     }
+    /// Looks at a frame every half second for the first few seconds, keeping the thinnest bars seen: a dark scene
+    /// can make a bar look taller than it is, never shorter.
+    private func measure() {
+        guard samples < 12, let item = player.currentItem else { return }
+        if output == nil || !item.outputs.contains(where: { $0 === output }) {
+            let output = AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
+            item.add(output)
+            self.output = output
+            return
+        }
+        guard let output else { return }
+        let time = output.itemTime(forHostTime: CACurrentMediaTime())
+        guard let buffer = output.copyPixelBuffer(forItemTime: time, itemTimeForDisplay: nil) else { return }
+        samples += 1
+        guard let bars = DiscoverTrailerFraming.bars(in: buffer) else { return }
+        let size = CGSize(width: CVPixelBufferGetWidth(buffer), height: CVPixelBufferGetHeight(buffer))
+        let next = DiscoverTrailerFraming(size: size, bars: min(bars, framing?.bars ?? bars))
+        if next != framing { framing = next }
+    }
     func stop() {
         generation += 1
         ready = false
+        framing = nil
+        framed = false
+        samples = 0
+        ticks = 0
+        if let output, let item = player.currentItem, item.outputs.contains(where: { $0 === output }) { item.remove(output) }
+        output = nil
         player.pause()
         if let observer { player.removeTimeObserver(observer); self.observer = nil }
         looper?.disableLooping(); looper = nil
@@ -131,11 +213,12 @@ struct DiscoverTrailer: View {
     var readyChanged: (Bool) -> Void = { _ in }
     @State private var playback = DiscoverTrailerPlayback()
     var body: some View {
-        DiscoverTrailerLayer(player: playback.player, mirrorWidth: mirrorWidth)
-            .opacity(playback.ready ? 1 : 0)
-            .animation(.easeOut(duration: 0.4), value: playback.ready)
+        DiscoverTrailerLayer(player: playback.player, mirrorWidth: mirrorWidth, framing: playback.framing)
+            // Shown once its bars are known, so a letterboxed trailer doesn't first appear with a black band.
+            .opacity(playback.ready && playback.framed ? 1 : 0)
+            .animation(.easeOut(duration: 0.4), value: playback.ready && playback.framed)
             .accessibilityHidden(true)
-            .onChange(of: playback.ready) { _, ready in readyChanged(ready) }
+            .onChange(of: playback.ready && playback.framed) { _, ready in readyChanged(ready) }
             .task(id: trailer) { await playback.load(trailer) }
             .onDisappear { playback.stop() }
     }
@@ -145,6 +228,7 @@ struct DiscoverTrailer: View {
 private struct DiscoverTrailerLayer: NSViewRepresentable {
     let player: AVPlayer
     let mirrorWidth: CGFloat
+    let framing: DiscoverTrailerFraming?
     final class Host: NSView {
         let video = AVPlayerLayer()
         /// The same player again, flipped about the content's leading edge and blurred, under the sidebar.
@@ -152,6 +236,15 @@ private struct DiscoverTrailerLayer: NSViewRepresentable {
         private let videoClip = CALayer()
         private let mirrorClip = CALayer()
         var mirrorWidth: CGFloat = 0 { didSet { if mirrorWidth != oldValue { needsLayout = true } } }
+        var framing: DiscoverTrailerFraming? {
+            didSet {
+                guard framing != oldValue else { return }
+                // Placed by hand once the bars are known, so the layer must not fill again inside that frame.
+                let gravity: AVLayerVideoGravity = framing == nil ? .resizeAspectFill : .resize
+                video.videoGravity = gravity; mirror.videoGravity = gravity
+                needsLayout = true
+            }
+        }
         let fade = CAGradientLayer()
         /// AppKit owns a layer-backed view's own layer and drops a mask set on it, so the video and its fade sit in
         /// a sublayer. The view is flipped to match UIKit, so the fade runs to the bottom as on iOS.
@@ -176,7 +269,8 @@ private struct DiscoverTrailerLayer: NSViewRepresentable {
             let edge = min(max(mirrorWidth, 0), bounds.width)
             let content = CGRect(x: edge, y: 0, width: bounds.width - edge, height: bounds.height)
             videoClip.frame = content
-            let picture = CGRect(origin: .zero, size: content.size).insetBy(dx: -content.width * 0.1, dy: -content.height * 0.1)
+            var picture = CGRect(origin: .zero, size: content.size).insetBy(dx: -content.width * 0.1, dy: -content.height * 0.1)
+            if let framing { picture = framing.frame(filling: picture) }
             video.frame = picture
             mirrorClip.frame = CGRect(x: 0, y: 0, width: edge, height: bounds.height)
             mirrorClip.isHidden = edge <= 0
@@ -187,10 +281,11 @@ private struct DiscoverTrailerLayer: NSViewRepresentable {
         }
     }
     func makeNSView(context: Context) -> Host {
-        let view = Host(); view.video.player = player; view.mirror.player = player; view.mirrorWidth = mirrorWidth; return view
+        let view = Host(); view.video.player = player; view.mirror.player = player; view.mirrorWidth = mirrorWidth; view.framing = framing
+        return view
     }
     func updateNSView(_ view: Host, context: Context) {
-        view.video.player = player; view.mirror.player = player; view.mirrorWidth = mirrorWidth
+        view.video.player = player; view.mirror.player = player; view.mirrorWidth = mirrorWidth; view.framing = framing
     }
     static func dismantleNSView(_ view: Host, coordinator: ()) { view.video.player = nil; view.mirror.player = nil }
 }
@@ -198,9 +293,17 @@ private struct DiscoverTrailerLayer: NSViewRepresentable {
 private struct DiscoverTrailerLayer: UIViewRepresentable {
     let player: AVPlayer
     var mirrorWidth: CGFloat = 0
+    var framing: DiscoverTrailerFraming?
     final class Host: UIView {
         let video = AVPlayerLayer()
         let fade = CAGradientLayer()
+        var framing: DiscoverTrailerFraming? {
+            didSet {
+                guard framing != oldValue else { return }
+                video.videoGravity = framing == nil ? .resizeAspectFill : .resize
+                setNeedsLayout()
+            }
+        }
         override init(frame: CGRect) {
             super.init(frame: frame); layer.addSublayer(video); video.videoGravity = .resizeAspectFill
             fade.startPoint = CGPoint(x: 0.5, y: 0); fade.endPoint = CGPoint(x: 0.5, y: 1)
@@ -210,12 +313,13 @@ private struct DiscoverTrailerLayer: UIViewRepresentable {
         required init?(coder: NSCoder) { nil }
         override func layoutSubviews() {
             super.layoutSubviews(); CATransaction.begin(); CATransaction.setDisableActions(true)
-            video.frame = bounds.insetBy(dx: -bounds.width * 0.1, dy: -bounds.height * 0.1); fade.frame = bounds
+            let picture = bounds.insetBy(dx: -bounds.width * 0.1, dy: -bounds.height * 0.1)
+            video.frame = framing?.frame(filling: picture) ?? picture; fade.frame = bounds
             CATransaction.commit()
         }
     }
-    func makeUIView(context: Context) -> Host { let view = Host(); view.video.player = player; return view }
-    func updateUIView(_ view: Host, context: Context) { view.video.player = player }
+    func makeUIView(context: Context) -> Host { let view = Host(); view.video.player = player; view.framing = framing; return view }
+    func updateUIView(_ view: Host, context: Context) { view.video.player = player; view.framing = framing }
     static func dismantleUIView(_ view: Host, coordinator: ()) { view.video.player = nil }
 }
 #endif
