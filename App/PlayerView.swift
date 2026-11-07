@@ -829,6 +829,9 @@ private struct NativePlayerView: UIViewControllerRepresentable {
                 // As tall as its content (one row of tiles, with or without the lines beside the title): a set height left
                 // a band of empty panel under them.
                 panel.sizingOptions = .preferredContentSize
+                // No safe-area inset of its own: on an Apple TV the TV's inset pushed the strip down, leaving a gap
+                // under the tabs and cutting off the episode titles at its foot.
+                panel.safeAreaRegions = []
                 tabs.append(panel)
             }
             if !chapters.isEmpty {
