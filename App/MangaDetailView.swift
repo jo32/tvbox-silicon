@@ -28,7 +28,9 @@ struct MangaDetailView: View {
 
     #if os(macOS)
     @State private var macPastHero = false
-    /// The cover, loaded once for the hero's backdrop.
+    #endif
+    #if !os(tvOS)
+    /// The cover, loaded once for the hero.
     @State private var heroCover: CGImage?
     #endif
 
@@ -47,6 +49,8 @@ struct MangaDetailView: View {
 
     #if os(macOS)
     private var page: some View { macPage }
+    #elseif os(iOS)
+    private var page: some View { phonePage }
     #else
     private var page: some View {
         ScrollView {
@@ -69,11 +73,7 @@ struct MangaDetailView: View {
             .padding(Layout.gutter)
             .frame(maxWidth: Layout.maxWidth).frame(maxWidth: .infinity)
         }
-        #if os(tvOS)
         .background { Backdrop() }
-        #else
-        .background { MangaDetailBackdrop(source: comic.sourceKey, cover: coverURL) }
-        #endif
         .screenTitle(current.title)
     }
     #endif
@@ -170,60 +170,7 @@ struct MangaDetailView: View {
             }
         }
     }
-    #else
-    /// Cover and title side by side, then Read / Continue with the heart, then the blurb.
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .bottom, spacing: 16) {
-                cover
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(current.title).font(.title3.weight(.bold)).lineLimit(4).selectable()
-                    if !current.subtitle.isEmpty { Text(current.subtitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(2) }
-                    sourceLine
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            actions
-            if !current.description.isEmpty { blurb }
-        }
-    }
-
-    private var actions: some View {
-        let progress = store.progress(comic)
-        let saved = store.isFavorite(comic)
-        return HStack(spacing: 10) {
-            Button(action: readOn) {
-                VStack(spacing: 1) {
-                    Label(progress == nil ? L10n.text("Read") : L10n.text("Continue"), systemImage: "book.fill")
-                        .font(.headline).lineLimit(1)
-                    if let progress {
-                        Text(MangaProgressText.short(progress)).font(.caption2.weight(.medium)).opacity(0.8).lineLimit(1)
-                    }
-                }
-                .foregroundStyle(Brand.onAccent)
-                .frame(maxWidth: .infinity).frame(height: 52)
-                .glassOrFill(.regular.tint(Brand.accent).interactive(), Brand.accent, in: Capsule())
-                .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .disabled(details == nil).opacity(details == nil ? 0.55 : 1)
-            .accessibilityIdentifier("manga.read")
-            Button { withAnimation(.smooth) { store.toggleFavorite(current) } } label: {
-                Image(systemName: saved ? "heart.fill" : "heart")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(saved ? Color.pink : Color.primary)
-                    .contentTransition(.symbolEffect(.replace))
-                    .frame(width: 52, height: 52)
-                    .glassOrFill(.regular.interactive(), Color.primary.opacity(0.07), in: Circle())
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(saved ? L10n.text("Saved") : L10n.text("Favorite"))
-            .accessibilityAddTraits(saved ? .isSelected : [])
-        }
-        .frame(maxWidth: 520)
-    }
-
+    #elseif os(iOS)
     /// Three lines, and More for the rest.
     private var blurb: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -379,6 +326,112 @@ struct MangaDetailView: View {
     }
     #endif
 
+    #if os(iOS)
+    // MARK: The iPhone's page
+
+    /// The iPhone and iPad, as Discover's title page: the cover from the screen's top edge, and over its foot the title, one
+    /// line of facts, a wide Read or Continue with round plates beside it, and the blurb. Tags, chapters and related comics
+    /// follow on a dark page tinted by the cover.
+    private var phonePage: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let fills = width < 600
+            let height = fills ? width * 1.3 : min(640, width * 0.62)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 26) {
+                    phoneHero(height: height, fills: fills)
+                    Group {
+                        if let details {
+                            if !details.tags.isEmpty { tags(details) }
+                            chapterList(details)
+                        } else if let failure {
+                            EmptyResults(symbol: "exclamationmark.triangle", title: L10n.text("Unable to Load"), message: failure,
+                                         action: L10n.text("Try Again")) { Task { await load(fresh: true) } }
+                        } else {
+                            VStack(spacing: 14) { ProgressView(); MangaWaitNote() }.frame(maxWidth: .infinity).padding(40)
+                        }
+                    }
+                    .padding(.horizontal, DiscoverLayout.gutter)
+                    .frame(maxWidth: Layout.maxWidth, alignment: .leading)
+                    if let details, !details.recommend.isEmpty {
+                        MangaShelfRow(title: L10n.text("Related"), comics: details.recommend)
+                    }
+                }
+                .padding(.bottom, 40)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .background { MangaPageBackground(image: heroCover) }
+        .environment(\.colorScheme, .dark)
+        .ignoresSafeArea(edges: .top)
+        .navigationTitle("")
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .animation(.smooth(duration: 0.3), value: details != nil)
+        .task(id: coverURL) { await loadHeroCover() }
+    }
+
+    private func phoneHero(height: CGFloat, fills: Bool) -> some View {
+        let progress = store.progress(comic)
+        let saved = store.isFavorite(comic)
+        return VStack(spacing: 14) {
+            Text(current.title).font(.system(size: 28, weight: .bold)).multilineTextAlignment(.center)
+                .lineLimit(3).minimumScaleFactor(0.7).shadow(color: .black.opacity(0.4), radius: 10)
+            Text(phoneFacts).font(.system(size: 13)).multilineTextAlignment(.center).lineLimit(2).opacity(0.85)
+            HStack(spacing: 12) {
+                Button(action: readOn) {
+                    HStack(spacing: 7) {
+                        Image(systemName: "book.fill")
+                        Text(progress == nil ? L10n.text("Read") : L10n.text("Continue"))
+                        if let progress { Text(MangaProgressText.short(progress)).fontWeight(.medium).opacity(0.55) }
+                    }
+                    .font(.system(size: 17, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 16).frame(maxWidth: .infinity).frame(height: 54)
+                    .background(Capsule().fill(.white))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(details == nil).opacity(details == nil ? 0.6 : 1)
+                .accessibilityIdentifier("manga.read")
+                Button { withAnimation(.smooth) { store.toggleFavorite(current) } } label: {
+                    Image(systemName: saved ? "heart.fill" : "heart").font(.system(size: 21))
+                        .foregroundStyle(saved ? AnyShapeStyle(Brand.rose) : AnyShapeStyle(.white))
+                        .contentTransition(.symbolEffect(.replace))
+                        .frame(width: 54, height: 54).glassSurface(.regular, in: Circle()).contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(saved ? L10n.text("Saved") : L10n.text("Favorite"))
+                .accessibilityAddTraits(saved ? .isSelected : [])
+                .accessibilityIdentifier("manga.favorite")
+                if progress != nil, !chapters.isEmpty {
+                    Button { read(at: 0, page: 0) } label: {
+                        Image(systemName: "arrow.counterclockwise").font(.system(size: 19, weight: .medium)).foregroundStyle(.white)
+                            .frame(width: 54, height: 54).glassSurface(.regular, in: Circle()).contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.text("Start Over"))
+                    .accessibilityIdentifier("manga.startOver")
+                }
+            }
+            .frame(maxWidth: 520)
+            if !current.description.isEmpty { blurb.frame(maxWidth: 560) }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity, minHeight: height, alignment: .bottom)
+        .background(alignment: .top) { MangaPhoneCover(image: heroCover, height: height, fills: fills) }
+    }
+
+    /// The source, when it last updated and how many chapters.
+    private var phoneFacts: String {
+        var facts = [store.name(of: comic.sourceKey)]
+        if let update = details?.updateTime, !update.isEmpty { facts.append(L10n.text("Updated %@", update)) }
+        if let details, !details.isSingle, !chapters.isEmpty { facts.append("\(L10n.text("Chapters")) \(chapters.count)") }
+        return facts.joined(separator: " · ")
+    }
+    #endif
+
     #if os(macOS)
     // MARK: The Mac's page
 
@@ -410,7 +463,7 @@ struct MangaDetailView: View {
             .ignoresSafeArea(edges: .top)
             .macHeroScroll(heroHeight: height, past: $macPastHero)
         }
-        .background { MangaMacPageBackground(image: heroCover) }
+        .background { MangaPageBackground(image: heroCover) }
         .environment(\.colorScheme, .dark)
         .navigationTitle(macPastHero ? current.title : "")
         .artUnderToolbar()
@@ -491,6 +544,9 @@ struct MangaDetailView: View {
         }
     }
 
+    #endif
+
+    #if !os(tvOS)
     /// The cover at the size the hero shows it (larger than the 480 px thumbnails the cover cache keeps).
     private func loadHeroCover() async {
         guard !coverURL.isEmpty,
@@ -507,9 +563,9 @@ struct MangaDetailView: View {
     }
 }
 
-#if os(macOS)
-/// Under the Mac's comic page: near black, tinted by a blur of the cover.
-private struct MangaMacPageBackground: View {
+#if !os(tvOS)
+/// Under the comic page on the Mac, iPhone and iPad: near black, tinted by a blur of the cover.
+private struct MangaPageBackground: View {
     let image: CGImage?
     var body: some View {
         ZStack {
@@ -527,22 +583,50 @@ private struct MangaMacPageBackground: View {
 }
 #endif
 
-#if !os(tvOS)
-/// The cover, blurred, colours the top of the page as a book's does in Books.
-private struct MangaDetailBackdrop: View {
-    let source: String
-    let cover: String
+#if os(iOS)
+/// The picture at the top of the iPhone's comic page, as Discover's title page: the cover across the screen from its top
+/// edge, darker toward the title over its foot, which fades into the page. On an iPad, too wide to fill with a portrait
+/// cover, the cover stands whole over a blur of itself.
+private struct MangaPhoneCover: View {
+    let image: CGImage?
+    let height: CGFloat
+    let fills: Bool
     var body: some View {
-        ZStack(alignment: .top) {
-            Backdrop()
-            MangaCover(source: source, url: cover)
-                .frame(height: 460).frame(maxWidth: .infinity).clipped()
-                .blur(radius: 70).opacity(0.6)
-                .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black.opacity(0.7), location: 0.5), .init(color: .clear, location: 1)],
-                                     startPoint: .top, endPoint: .bottom))
-                .allowsHitTesting(false)
-        }
-        .ignoresSafeArea()
+        Color.clear.frame(height: height)
+            .overlay(alignment: .top) {
+                if let image {
+                    if fills {
+                        Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
+                            .frame(height: height, alignment: .top)
+                    } else {
+                        ZStack {
+                            Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
+                                .blur(radius: 60, opaque: true).saturation(1.2).opacity(0.7)
+                            Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fit)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .shadow(color: .black.opacity(0.5), radius: 24, y: 12)
+                                .padding(.top, 90).padding(.bottom, height * 0.36)
+                        }
+                        .frame(height: height)
+                    }
+                }
+            }
+            .overlay {
+                ZStack {
+                    // The status bar and Back stay readable over a light cover.
+                    LinearGradient(stops: [.init(color: .black.opacity(0.35), location: 0), .init(color: .clear, location: 0.2)],
+                                   startPoint: .top, endPoint: .bottom)
+                    LinearGradient(stops: [.init(color: .clear, location: 0.4), .init(color: .black.opacity(0.55), location: 0.7),
+                                           .init(color: .black.opacity(0.85), location: 1)], startPoint: .top, endPoint: .bottom)
+                }
+            }
+            .clipped()
+            .mask {
+                LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.9), .init(color: .clear, location: 1)],
+                               startPoint: .top, endPoint: .bottom)
+            }
+            .animation(.easeInOut(duration: 0.4), value: image != nil)
+            .accessibilityHidden(true)
     }
 }
 #endif
