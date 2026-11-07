@@ -82,7 +82,7 @@ actor QuarkFiles {
         return CloudStreams.register(copy.source) { [self] in try? await transcoded(id, name: name).source }
     }
 
-    private func original(_ id: String, name: String) async throws -> CloudStreams.Source {
+    func original(_ id: String, name: String) async throws -> CloudStreams.Source {
         let answer = try await call("/file/download?\(query)", body: ["fids": [id]])
         guard let item = (answer["data"] as? [[String: Any]])?.first, let address = item["download_url"] as? String,
               let url = URL(string: address), let size = (item["size"] as? NSNumber)?.intValue, size > 0 else {

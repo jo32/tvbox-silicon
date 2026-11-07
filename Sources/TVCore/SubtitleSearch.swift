@@ -155,7 +155,7 @@ public actor SubtitleSearch {
         let key = source.partition + "/" + Self.digest(Data(candidate.id.utf8))
         if let cached = await files.data(for: key) {
             digests[candidate.id] = cached.digest
-            return try SubtitleDocument(id: candidate.id, name: cached.name, language: candidate.language, data: cached.data, format: cached.format ?? "")
+            return try Self.document(candidate, name: cached.name, data: cached.data, format: cached.format)
         }
         let seconds = policy.download
         var resource = try await Self.race(seconds: seconds) { try await source.provider.resolve(candidate, credentials: source.credentials, within: seconds) }
@@ -166,17 +166,25 @@ public actor SubtitleSearch {
             resource = try await Self.race(seconds: seconds) { try await source.provider.resolve(candidate, credentials: source.credentials, within: seconds) }
             data = try await fetch(resource, source: source, again: true)
         }
-        if data.starts(with: [0x50, 0x4B, 0x03, 0x04]) || data.starts(with: [0x52, 0x61, 0x72, 0x21]) {
-            throw SubtitleProviderError.downloadFailed(L10n.text("It is an archive; only SRT, WebVTT and ASS files can be shown."))
+        if data.starts(with: [0x52, 0x61, 0x72, 0x21]) || data.starts(with: [0x37, 0x7A, 0xBC, 0xAF]) {
+            throw SubtitleProviderError.downloadFailed(L10n.text("It is a RAR or 7z archive; only ZIP archives and SRT, WebVTT and ASS files can be shown."))
         }
         let name = resource.name ?? candidate.title
         let format = resource.format ?? candidate.format
         let document: SubtitleDocument
-        do { document = try SubtitleDocument(id: candidate.id, name: name, language: candidate.language, data: data, format: format ?? "") }
+        do { document = try Self.document(candidate, name: name, data: data, format: format) }
         catch { throw SubtitleProviderError.downloadFailed(error.localizedDescription) }
         let digest = await files.store(data, key: key, name: name, format: format)
         digests[candidate.id] = digest
         return document
+    }
+
+    /// A downloaded result as a document. A ZIP archive (a season's upload) shows its file for the result's episode,
+    /// the best-named first (#576).
+    static func document(_ candidate: SubtitleCandidate, name: String, data: Data, format: String?) throws -> SubtitleDocument {
+        let episode = candidate.episode.map { "S\(candidate.season ?? 1)E\($0)" }
+        return try SubtitleDocument.documents(id: candidate.id, name: name, language: candidate.language, data: data, format: format ?? "",
+                                              video: episode, limit: 1)[0]
     }
 
     /// The resource's bytes. A refusal that a fresh address may cure becomes `authExpired` the first time.
