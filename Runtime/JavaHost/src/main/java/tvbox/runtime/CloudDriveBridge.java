@@ -517,6 +517,36 @@ public final class CloudDriveBridge implements AutoCloseable {
         if (changed && !editor.commit()) System.err.println("CLOUD_ACCOUNT_SEED_FAILED " + WEX_PREFERENCES);
     }
 
+    /**
+     * FongMi's new-SDK pan spiders (the 前瞻版 subscription, #500) keep drive sign-ins in the Local store
+     * {@code com.github.catvod.pan.accounts.v1}: SharedPreferences {@code spider_local_<sha256 of that name>}, with
+     * {@code {"cookie": …}} under {@code quark}, {@code baidu} and {@code 115}. Without one they refuse to play
+     * and point at their own QR sign-in, which needs FongMi's dialogs. Each app sign-in goes there once (a digest
+     * in the host's own preferences marks what was given), so the plugin's own cookie refreshes stay.
+     */
+    static final String FONGMI_PAN_ACCOUNTS = "com.github.catvod.pan.accounts.v1";
+    static final Map<String, String> FONGMI_PAN_KEYS = Map.of("quark", "quarkCookie", "baidu", "baiduCookie", "115", "pan115Cookie");
+
+    public static void seedFongMiPanCookies(JSONObject accounts, android.content.Context context) {
+        if (accounts == null) return;
+        var preferences = context.getSharedPreferences("spider_local_" + digest(FONGMI_PAN_ACCOUNTS), 0);
+        var given = context.getSharedPreferences("yingxia_fongmi_pan_accounts", 0);
+        var editor = preferences.edit();
+        var marks = given.edit();
+        boolean changed = false;
+        for (var entry : new java.util.TreeMap<>(FONGMI_PAN_KEYS).entrySet()) {
+            String cookie = accounts.optString(entry.getValue()).trim();
+            if (cookie.isEmpty()) continue;
+            String digest = digest(cookie);
+            if (digest.equals(given.getString(entry.getKey(), ""))) continue;
+            try { editor.putString(entry.getKey(), new JSONObject().put("cookie", cookie).toString()); }
+            catch (JSONException impossible) { continue; }
+            marks.putString(entry.getKey(), digest);
+            changed = true;
+        }
+        if (changed && !(editor.commit() && marks.commit())) System.err.println("CLOUD_ACCOUNT_SEED_FAILED " + FONGMI_PAN_ACCOUNTS);
+    }
+
     /** In {@link #WEX_PREFERENCES}: how Wex drive lines fetch in parallel, {@code go} (the plugin's default) or {@code java}. */
     static final String WEX_THREAD_PROXY_MODE = "pan.thread_proxy_mode";
 
