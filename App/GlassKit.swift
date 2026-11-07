@@ -95,6 +95,19 @@ extension View {
             toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         }
     }
+
+    /// A page whose hero runs up to the window's top edge, as in the TV app: while the hero is under the toolbar the
+    /// toolbar draws nothing over it, neither a backing nor the scroll edge's blur. Once the page scrolls past the hero
+    /// the soft edge comes back, so rows don't run sharp under the toolbar's buttons.
+    @ViewBuilder func heroUnderToolbar(_ underHero: Bool) -> some View {
+        if #available(macOS 26, *) {
+            toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+                .scrollEdgeEffectStyle(.soft, for: .top)
+                .scrollEdgeEffectHidden(underHero, for: .top)
+        } else {
+            toolbarBackgroundVisibility(underHero ? .hidden : .automatic, for: .windowToolbar)
+        }
+    }
     #endif
 
     #if os(iOS)

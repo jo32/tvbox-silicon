@@ -538,7 +538,9 @@ extension View {
     @ViewBuilder func discoverFullBleed() -> some View {
         #if os(macOS)
         if #available(macOS 26, *) {
-            backgroundExtensionEffect().ignoresSafeArea(edges: .top)
+            // The art itself from the window's top edge; only the sidebar's side gets the mirrored copy. Extending
+            // first laid the art out below the toolbar and filled the toolbar with a blurred copy of it.
+            ignoresSafeArea(edges: .top).backgroundExtensionEffect()
         } else {
             ignoresSafeArea(edges: .top)
         }

@@ -80,6 +80,8 @@ struct DiscoverView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var editing = false
     @State private var searchShown = false
+    /// Scrolled past the hero's foot: on the Mac the toolbar's scroll edge comes back.
+    @State private var pastHero = false
     @Environment(\.openRoute) private var openRoute
     #if os(tvOS)
     @FocusState private var tvFocus: DiscoverTVFocus?
@@ -164,7 +166,12 @@ struct DiscoverView: View {
                     }
                 }
                 .coordinateSpace(name: "discoverScroll")
-                .modifier(DiscoverScrollObserver(offset: Binding(get: { heroState.scrollY }, set: { heroState.scrollY = $0 })))
+                .modifier(DiscoverScrollObserver(offset: Binding(get: { heroState.scrollY }, set: { value in
+                    heroState.scrollY = value
+                    // Only crossing the hero's foot changes the toolbar, so scrolling doesn't evaluate the page again.
+                    let past = value > heroHeight - 140
+                    if pastHero != past { pastHero = past }
+                })))
                 .scrollIndicators(.hidden)
                 .refreshable {
                     if doubanShown {
@@ -174,6 +181,11 @@ struct DiscoverView: View {
                     } else { await model.load(refresh: true) }
                 }
             }
+            #if os(macOS)
+            // The reader's own frame ignoring the safe area isn't enough on the Mac: what it holds still starts below the
+            // window toolbar, leaving a band over the hero.
+            .ignoresSafeArea(edges: heroShown ? .top : [])
+            #endif
         }
         .modifier(DiscoverHeroTheme(state: heroState, hero: heroShown))
         .navigationTitle("")
@@ -219,6 +231,9 @@ struct DiscoverView: View {
         #else
         // Only the hero runs under the status and navigation bars; without it the first shelf starts below them.
         .ignoresSafeArea(edges: heroShown ? .top : [])
+        #endif
+        #if os(macOS)
+        .heroUnderToolbar(heroShown && !pastHero)
         #endif
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }

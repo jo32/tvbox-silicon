@@ -49,6 +49,10 @@ struct WatchNowPhonePage: View {
                 })))
                 .scrollIndicators(.hidden)
             }
+            #if os(macOS)
+            // As Discover: the hero from the window's top edge, not from below the toolbar.
+            .ignoresSafeArea(edges: entries.isEmpty ? [] : .top)
+            #endif
             .task(id: entries.map(\.id)) { await hero.load(entries) }
         }
         // Over the hero the page has no title, as Discover; without one it keeps its name.
@@ -60,6 +64,9 @@ struct WatchNowPhonePage: View {
         .toolbarColorScheme(entries.isEmpty || pastHero || hero.paint == nil ? nil : hero.paint?.isDark == false ? .light : .dark, for: .navigationBar)
         #endif
         .ignoresSafeArea(edges: entries.isEmpty ? [] : .top)
+        #if os(macOS)
+        .heroUnderToolbar(!entries.isEmpty && !pastHero)
+        #endif
     }
 
     @ViewBuilder private var rows: some View {
