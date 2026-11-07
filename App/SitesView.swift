@@ -2090,8 +2090,17 @@ struct VideoDetailView: View {
     @ViewBuilder private var tmdbExtras: some View {
         if let details = tmdb.details {
             VStack(alignment: .leading, spacing: 22) {
-                if !details.cast.isEmpty { TMDBCastRow(cast: details.cast) }
-                TMDBInfoGrid(details: details)
+                // As Discover's title page (#505): people, studios and genres open their own pages.
+                if !details.cast.isEmpty { TMDBPeopleRow(title: L10n.text("Cast"), people: details.cast) }
+                if details.crew.contains(where: { $0.profile != nil }) { TMDBPeopleRow(title: L10n.text("Crew"), people: details.crew) }
+                #if os(tvOS)
+                let studiosShown = false
+                #else
+                let studiosShown = details.studios?.isEmpty == false
+                if studiosShown, let studios = details.studios { TMDBStudioRow(studios: studios) }
+                #endif
+                if !details.genres.isEmpty { TMDBGenreRow(details: details) }
+                TMDBInfoGrid(details: details, studiosShown: studiosShown)
                 if let related = details.recommendations, !related.isEmpty {
                     TMDBRelatedRow(titles: related) { store.searchVideos($0) }
                 }
