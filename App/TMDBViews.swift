@@ -137,6 +137,22 @@ import TVCore
         for (episode, info) in zip(items, mapped) { result[episode.id] = info }
         return result
     }
+
+    /// TMDB's episodes for picture tiles: when its season lines up with most of the line's episodes and TMDB has a
+    /// picture to show. An episode without its own still (TMDB is often days behind on a show still airing, and many
+    /// shows have none) shows the show's backdrop with its number, as other players do. Empty for the small chips.
+    func episodeTiles(_ items: [Episode]) -> [Episode.ID: TMDBMatch.EpisodeInfo] {
+        let mapped = episodes(items)
+        guard items.count > 1, mapped.count * 2 >= items.count,
+              mapped.values.contains(where: { $0.still != nil }) || !episodeBackdrops.isEmpty else { return [:] }
+        return mapped
+    }
+
+    /// The show's own pictures, for the episodes TMDB has no still for.
+    var episodeBackdrops: [URL] {
+        if let stills = details?.stills, !stills.isEmpty { return stills }
+        return details?.backdrop.map { [$0] } ?? []
+    }
 }
 
 extension TMDBMatch.Step {
@@ -707,15 +723,22 @@ struct PosterBanner<Actions: View>: View {
 /// so the tile keeps its shape and the row still reads at a glance.
 struct EpisodeNumberArt: View {
     let name: String
+    /// Over the show's backdrop: white, on a shade that keeps it readable, at the leading edge clear of the runtime.
+    var onImage = false
     var body: some View {
         GeometryReader { proxy in
             let number = TMDBMatch.episodeNumber(name)
             let height = proxy.size.height
-            ZStack(alignment: .bottomTrailing) {
-                LinearGradient(colors: [Color.primary.opacity(0.05), Color.primary.opacity(0.13)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            ZStack(alignment: onImage ? .bottomLeading : .bottomTrailing) {
+                if onImage {
+                    LinearGradient(colors: [.black.opacity(0.1), .black.opacity(0.6)], startPoint: .topTrailing, endPoint: .bottomLeading)
+                } else {
+                    LinearGradient(colors: [Color.primary.opacity(0.05), Color.primary.opacity(0.13)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                }
                 Text(number.map { String(format: "%02d", $0) } ?? name)
                     .font(.system(size: height * (number == nil ? 0.3 : 0.62), weight: .heavy).italic())
-                    .foregroundStyle(Color.primary.opacity(0.78))
+                    .foregroundStyle(onImage ? Color.white.opacity(0.92) : Color.primary.opacity(0.78))
+                    .shadow(color: .black.opacity(onImage ? 0.3 : 0), radius: 6)
                     .lineLimit(1).minimumScaleFactor(0.3)
                     .padding(.horizontal, height * 0.12).padding(.bottom, height * (number == nil ? 0.12 : 0.02))
             }
@@ -734,7 +757,7 @@ struct EpisodeFileDetail: View {
 }
 
 /// An episode with TMDB's still: the picture, the source's name for it and TMDB's title. An episode without a still
-/// keeps the tile's shape, with its number in the picture's place.
+/// keeps the tile's shape, with its number over the show's backdrop, or alone when there is none.
 struct TMDBEpisodeTile: View {
     let name: String
     let info: TMDBMatch.EpisodeInfo?
@@ -744,12 +767,23 @@ struct TMDBEpisodeTile: View {
     var loading = false
     /// nil fills the grid cell.
     var width: CGFloat? = TMDBMetrics.episodeTile
+    /// The show's pictures (`TMDBLookup.episodeBackdrops`), for an episode without a still: taken in turn by episode
+    /// number, so a show with several doesn't repeat one picture down the row.
+    var backdrops: [URL] = []
+    private var backdrop: URL? {
+        guard !backdrops.isEmpty else { return nil }
+        let number = max(info?.number ?? TMDBMatch.episodeNumber(name) ?? 1, 1)
+        return backdrops[(number - 1) % backdrops.count]
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
                 .overlay {
                     if let still = info?.still {
                         PosterImage(url: still, symbol: "play.rectangle")
+                    } else if let backdrop {
+                        // Written first, so on Apple TV it's painted under the other overlays, into the lifted cover.
+                        PosterImage(url: backdrop, symbol: "play.rectangle").coverOverlay { EpisodeNumberArt(name: name, onImage: true) }
                     } else {
                         EpisodeNumberArt(name: name).overlay { CoverOverlayStack() }
                     }
@@ -767,13 +801,18 @@ struct TMDBEpisodeTile: View {
             Text(name).font(.subheadline.weight(current ? .bold : .semibold)).lineLimit(1)
                 .foregroundStyle(current ? Brand.accent : .primary).cardCaption()
             // Always a second line, so tiles in a row stay one height.
-            let caption = [detail, info.map(\.name).flatMap { $0.isEmpty || $0 == name ? nil : $0 }].compactMap { $0 }
+            let caption = [detail, info.map(\.name).flatMap { $0.isEmpty || $0 == name || Self.isPlaceholder($0) ? nil : $0 }].compactMap { $0 }
             Text(caption.isEmpty ? " " : caption.joined(separator: " · "))
                 .font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
         }
         .frame(width: width, alignment: .leading)
         .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
         .contentShape(Rectangle())
+    }
+
+    /// TMDB's stand-in for an episode it has no title for yet (第08集, Episode 8), which only repeats the number.
+    static func isPlaceholder(_ name: String) -> Bool {
+        name.wholeMatch(of: /(?:第\s*\d+\s*[集话話]|[Ee]pisode\s*\d+|[Ee][Pp]\.?\s*\d+)/) != nil
     }
 }
 
