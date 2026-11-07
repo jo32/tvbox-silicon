@@ -3909,6 +3909,8 @@ struct MacVideoHero<Heading: View, Actions: View, Side: View>: View {
     let width: CGFloat
     let backdrop: URL?
     var backdropHeaders: [String: String] = [:]
+    /// A picture already loaded (a comic's cover, which its source fetches), in place of `backdrop`.
+    var backdropImage: CGImage? = nil
     @ViewBuilder let heading: Heading
     @ViewBuilder let actions: Actions
     @ViewBuilder let side: Side
@@ -3930,7 +3932,7 @@ struct MacVideoHero<Heading: View, Actions: View, Side: View>: View {
         }
         .padding(.horizontal, MacHeroMetrics.gutter).padding(.bottom, 44)
         .frame(maxWidth: .infinity, minHeight: height, alignment: .bottomLeading)
-        .background { MacHeroBackdrop(url: backdrop, headers: backdropHeaders).discoverFullBleed() }
+        .background { MacHeroBackdrop(url: backdrop, headers: backdropHeaders, picture: backdropImage).discoverFullBleed() }
         .foregroundStyle(.white)
     }
 }
@@ -3940,11 +3942,12 @@ struct MacVideoHero<Heading: View, Actions: View, Side: View>: View {
 struct MacHeroBackdrop: View {
     let url: URL?
     let headers: [String: String]
+    var picture: CGImage? = nil
     @State private var image: CGImage?
     var body: some View {
         ZStack {
             Color.black
-            if let image {
+            if let image = picture ?? image {
                 let landscape = CGFloat(image.width) / CGFloat(max(1, image.height)) >= 1.3
                 Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipped()
@@ -3962,7 +3965,7 @@ struct MacHeroBackdrop: View {
                            startPoint: .top, endPoint: .bottom)
         }
         .accessibilityHidden(true)
-        .animation(.easeInOut(duration: 0.4), value: image != nil)
+        .animation(.easeInOut(duration: 0.4), value: (picture ?? image) != nil)
         // A new picture (TMDB's backdrop after the cover) replaces the old one once it is in.
         .task(id: url) { if let url, let loaded = await TMDBArtwork.load(url, maxPixels: 2000, headers: headers) { image = loaded } }
     }

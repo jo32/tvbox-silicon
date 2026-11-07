@@ -26,7 +26,29 @@ struct MangaDetailView: View {
     private var chapters: [MangaChapter] { details?.chapters ?? [] }
     private var coverURL: String { current.cover.isEmpty ? comic.cover : current.cover }
 
+    #if os(macOS)
+    @State private var macPastHero = false
+    /// The cover, loaded once for the hero's backdrop.
+    @State private var heroCover: CGImage?
+    #endif
+
     var body: some View {
+        page
+            .modifier(MangaNoticeBanner())
+            .task { if details == nil { await load() } }
+            #if os(macOS)
+            .onChange(of: reading?.id) { _, _ in
+                if let reading { openRoute?(Route { AnyView(MangaReaderView(reading: reading)) }); self.reading = nil }
+            }
+            #else
+            .fullScreenCover(item: $reading) { MangaReaderView(reading: $0) }
+            #endif
+    }
+
+    #if os(macOS)
+    private var page: some View { macPage }
+    #else
+    private var page: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
                 header
@@ -52,17 +74,9 @@ struct MangaDetailView: View {
         #else
         .background { MangaDetailBackdrop(source: comic.sourceKey, cover: coverURL) }
         #endif
-        .modifier(MangaNoticeBanner())
         .screenTitle(current.title)
-        .task { if details == nil { await load() } }
-        #if os(macOS)
-        .onChange(of: reading?.id) { _, _ in
-            if let reading { openRoute?(Route { AnyView(MangaReaderView(reading: reading)) }); self.reading = nil }
-        }
-        #else
-        .fullScreenCover(item: $reading) { MangaReaderView(reading: $0) }
-        #endif
     }
+    #endif
 
     private func load(fresh: Bool = false) async {
         failure = nil
@@ -365,11 +379,162 @@ struct MangaDetailView: View {
     }
     #endif
 
+    #if os(macOS)
+    // MARK: The Mac's page
+
+    /// The Mac, as its video pages: the cover's colours from the window's top edge under the toolbar; at the hero's foot
+    /// the cover with the title beside it, Read or Continue with round plates under it, and the blurb and tags beside
+    /// them. The chapters and related comics follow on a dark page.
+    private var macPage: some View {
+        GeometryReader { geometry in
+            let height = MacHeroMetrics.height(for: geometry.size)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 30) {
+                    macHero(height: height, width: geometry.size.width)
+                    Group {
+                        if let details {
+                            chapterList(details)
+                        } else if let failure {
+                            EmptyResults(symbol: "exclamationmark.triangle", title: L10n.text("Unable to Load"), message: failure,
+                                         action: L10n.text("Try Again")) { Task { await load(fresh: true) } }
+                        } else {
+                            VStack(spacing: 14) { ProgressView(); MangaWaitNote() }.frame(maxWidth: .infinity).padding(40)
+                        }
+                    }
+                    .padding(.horizontal, MacHeroMetrics.gutter)
+                    if let details, !details.recommend.isEmpty { macRelated(details.recommend) }
+                }
+                .padding(.bottom, 40)
+            }
+            // From the window's top edge: the picture runs on under the toolbar, as the video page's.
+            .ignoresSafeArea(edges: .top)
+            .macHeroScroll(heroHeight: height, past: $macPastHero)
+        }
+        .background { MangaMacPageBackground(image: heroCover) }
+        .environment(\.colorScheme, .dark)
+        .navigationTitle(macPastHero ? current.title : "")
+        .artUnderToolbar()
+        .animation(.smooth(duration: 0.3), value: details != nil)
+        .task(id: coverURL) { await loadHeroCover() }
+    }
+
+    private func macHero(height: CGFloat, width: CGFloat) -> some View {
+        let blurb = current.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        return MacVideoHero(height: height, width: width, backdrop: nil, backdropImage: heroCover) {
+            HStack(alignment: .bottom, spacing: 24) {
+                Color.clear.frame(width: 150, height: 200)
+                    .overlay { MangaCover(source: comic.sourceKey, url: coverURL) }
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.white.opacity(0.12)) }
+                    .shadow(color: .black.opacity(0.45), radius: 18, y: 10)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(current.title).font(.system(size: 36, weight: .bold)).lineLimit(2).minimumScaleFactor(0.6)
+                        .frame(maxWidth: 760, alignment: .leading).textSelection(.enabled)
+                        .shadow(color: .black.opacity(0.4), radius: 10)
+                    if !current.subtitle.isEmpty {
+                        Text(current.subtitle).font(.system(size: 16, weight: .medium)).lineLimit(1).opacity(0.85)
+                    }
+                    Text(macFacts).font(.system(size: 14, weight: .medium)).lineLimit(1).opacity(0.75)
+                }
+            }
+        } actions: {
+            macActions
+        } side: {
+            VStack(alignment: .leading, spacing: 16) {
+                if !blurb.isEmpty { MacHeroSynopsis(text: blurb, lines: 4) }
+                if let details, !details.tags.isEmpty { tags(details) }
+            }
+        }
+    }
+
+    /// The source, when it last updated and how many chapters, in one line.
+    private var macFacts: String {
+        var facts = [store.name(of: comic.sourceKey)]
+        if let update = details?.updateTime, !update.isEmpty { facts.append(L10n.text("Updated %@", update)) }
+        if let details, !details.isSingle, !chapters.isEmpty { facts.append("\(L10n.text("Chapters")) \(chapters.count)") }
+        return facts.joined(separator: " · ")
+    }
+
+    /// Read, or Continue where reading stopped (and where that is), as wide as the plates under it.
+    private var macActions: some View {
+        let progress = store.progress(comic)
+        let saved = store.isFavorite(comic)
+        return VStack(alignment: .leading, spacing: 18) {
+            Button(action: readOn) {
+                HStack(spacing: 8) {
+                    Image(systemName: "book.fill")
+                    Text(progress == nil ? L10n.text("Read") : L10n.text("Continue"))
+                    if let progress { Text(MangaProgressText.short(progress)).fontWeight(.medium).opacity(0.7) }
+                }
+                .font(.headline).lineLimit(1).frame(maxWidth: .infinity)
+            }
+            .controlButton(prominent: true).tint(Brand.accent).appControlSize(.large)
+            .disabled(details == nil)
+            .accessibilityIdentifier("manga.read")
+            HStack(alignment: .top, spacing: 6) {
+                MacPlate(symbol: "heart", caption: saved ? L10n.text("Saved") : L10n.text("Favorite"), on: saved, id: "manga.favorite") {
+                    withAnimation(.smooth) { store.toggleFavorite(current) }
+                }
+                if progress != nil, !chapters.isEmpty {
+                    MacPlate(symbol: "arrow.counterclockwise", caption: L10n.text("Start Over"), id: "manga.startOver") {
+                        read(at: 0, page: 0)
+                    }
+                }
+            }
+        }
+    }
+
+    private func macRelated(_ comics: [MangaComic]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(L10n.text("Related")).font(.headline).padding(.horizontal, MacHeroMetrics.gutter)
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: 16) {
+                    ForEach(comics) { MangaComicLink(comic: $0).frame(width: MangaLayout.cardWidth) }
+                }
+                .padding(.horizontal, MacHeroMetrics.gutter)
+            }
+            .scrollIndicators(.never)
+            .scrollClipDisabled()
+        }
+    }
+
+    private func loadHeroCover() async {
+        let key = comic.sourceKey + "\n" + coverURL
+        if let cached = MangaCoverCache.shared.image(key) { heroCover = cached; return }
+        guard !coverURL.isEmpty,
+              let data = try? await MangaImages.shared.data(source: comic.sourceKey, url: coverURL, kind: .cover) else { return }
+        let decoded = await Task.detached(priority: .userInitiated) { MangaImages.bitmap(data, width: 480) }.value
+        guard !Task.isCancelled, let decoded else { return }
+        MangaCoverCache.shared.store(decoded, key)
+        withAnimation(.easeInOut(duration: 0.4)) { heroCover = decoded }
+    }
+    #endif
+
     private func open(_ chapter: MangaChapter, last: Bool) {
         guard let index = chapters.firstIndex(of: chapter) else { return }
         read(at: index, page: last ? store.progress(comic)?.page ?? 0 : 0)
     }
 }
+
+#if os(macOS)
+/// Under the Mac's comic page: near black, tinted by a blur of the cover.
+private struct MangaMacPageBackground: View {
+    let image: CGImage?
+    var body: some View {
+        ZStack {
+            Color(white: 0.05)
+            if let image {
+                Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
+                    .blur(radius: 90, opaque: true).saturation(1.2).opacity(0.28)
+                    .transition(.opacity)
+            }
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+}
+#endif
 
 #if !os(tvOS)
 /// The cover, blurred, colours the top of the page as a book's does in Books.
