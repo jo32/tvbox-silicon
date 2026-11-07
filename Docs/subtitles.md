@@ -201,3 +201,81 @@ const subtitleSource = {
   - per-account caches
   - the download cache with re-resolve of expired addresses
   - the LRU limit
+
+## M3: styled ASS/SSA through libass
+
+ASS and SSA used to show as plain lines. Now libass draws them with their fonts, positions, outlines, shadows,
+rotations, `\move`, `\fad`, karaoke and vector drawings, wherever the script puts them on the picture.
+
+### Decisions
+
+- **libass, built here.** `Scripts/build-apple-libass.sh` builds libass 0.17.5 with FreeType, HarfBuzz and
+  FriBidi from pinned tags and commits into one static `LibASS.xcframework` per recipe. It covers macOS
+  arm64 + x86_64, iOS, tvOS and their simulators. It uses the same pattern as FFmpeg: a cache in
+  `~/Library/Caches/tvbox-libass`, a link in `build/LibASS`, and no committed binaries. Fonts come from the
+  system through libass's CoreText provider (no fontconfig), plus the file's own (below). About 4.2 MB of static
+  library per slice goes into the link; only what is used ends up in the app. Licences: `Docs/THIRD_PARTY_NOTICES.md`.
+- **Apple's HVF fonts.** On iOS 27, PingFang (the system's Chinese font) is a Hierarchical Variable Font, which
+  FreeType reads only with Apple's `libhvf`. Without it, Chinese text fell back to boxes. FreeType is built with
+  `-Dhvf=enabled` and the app links `libhvf`. It is new in iOS/tvOS 18.4 and macOS 15.4, so it is weak-linked
+  and FreeType asks for it only when a font has an `hvgl` table. Older systems have no such fonts.
+- **Where the events come from.**
+  - A subtitle **file** (ASS/SSA, from a source or added by the viewer) is read whole into libass
+    (`ASSRenderer(script:)`).
+  - A **Matroska ASS track** still becomes a WebVTT rendition of the repackaged stream. AVPlayer lists it,
+    selects it and shows it in Picture in Picture. As the repackager makes each segment, it also hands the raw
+    events to a `StyledSubtitleEvents` store per track (TVMedia's cue callback). The store dedupes by ReadOrder,
+    because a segment made again repeats its events, and is capped at 24 MB per track. The codec private header
+    ([Script Info] and styles) comes from the stream's extradata. Font attachments (by codec, file extension or
+    MIME type) are capped at 64 MB per file and handed to libass with `ass_add_font`.
+  - The selected AVPlayer option is matched to its track by the rendition's NAME, read from the option's title
+    metadata. Its `displayName` is the language name, so it can't be used. As a fallback the match uses the
+    option's place among the subtitle renditions.
+- **One renderer, two clocks.** `StyledSubtitles` (App) asks a `StyledSubtitleSource` for a frame. A file goes
+  through `SubtitleTiming` (`display = source × scale + delay`). An embedded track uses AVPlayer's time less the
+  subtitle delay. The player's 50 ms clock runs only while styled subtitles show (`needsClock`).
+- **Drawn only on change, and only the part that changed.** Rendering runs on a serial queue, one frame at a
+  time, coalescing requests. libass's change detection skips identical frames. A changed frame is blended into a
+  premultiplied BGRA buffer covering only the bounding box of libass's images, then becomes one `CGImage` on a
+  `CALayer` (no SwiftUI redraw per frame).
+- **In the picture's rect.** The canvas is the video's rect inside the player: aspect fit (letterboxed) or aspect
+  fill, tracked through resize and rotation. It is in pixels (points × display scale). The storage size is the
+  video's own size, so the script's border and shadow sizes scale with the picture as libass expects.
+- **Fallback.** If libass doesn't start (`ASSRenderer.isAvailable == false`) or a script has no events, the plain
+  lines show as before. The "ASS styling and effects show as plain text" note appears only then.
+
+### Support matrix (M3)
+
+| Path | On screen | PiP | AirPlay |
+|---|---|---|---|
+| ASS/SSA file (overlay) | libass | Not shown (as for every file) | Not shown on the receiver |
+| MKV ASS track → repackaged HLS | libass, with the file's fonts | AVPlayer's plain WebVTT lines | Repackaged streams don't AirPlay |
+| ASS inside MP4/HLS from a server | Unchanged: AVPlayer's own lines | AVPlayer | AVPlayer |
+
+### Known limits
+
+- An embedded track's events arrive as segments are made, so the renderer knows only what has been read so far.
+  That is enough for playback, since a segment is made before it plays. A seek far ahead shows that part's events
+  once its segment is made.
+- The `YCbCr Matrix` header is not applied to colours (libass leaves that to the player). Scripts that set
+  `TV.601` on HD video may look slightly off in colour.
+- Each change redraws the whole bounding box. A full-screen karaoke effect at 4K redraws a large area every frame.
+  That is fine on Apple TV 4K in the simulator; it has not been profiled on an A10 Apple TV HD.
+- Bitmap subtitles (PGS, VobSub) are a separate change; see below when it lands.
+
+### Tests (M3)
+
+- `StyledSubtitleTests` covers:
+  - libass starting
+  - placement, colour, `\pos`, resizing and clearing
+  - Chinese and Japanese in system fonts, and fades
+  - a Matroska track taking events as they come, with ReadOrder dedupe
+  - refusing non-ASS input
+  - documents keeping their script
+  - font attachment detection
+  - rendition names matching the master playlist
+  - a fixture MKV (`Fixtures/remux-ass.mkv`) through the repackager: simultaneous events reach libass, and the
+    plain WebVTT lines still go to AVPlayer
+- Checked by hand on an iOS 27.2 simulator, a tvOS 27.2 simulator and the Mac, using generated test media:
+  - an external ASS file
+  - an MKV whose ASS track uses a font only its attachment has (Luminari, which iOS doesn't have)

@@ -966,7 +966,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
                 UIAction(title: encoding.title, state: document.encoding == encoding ? .on : .off) { _ in external.read(as: encoding) }
             }
             children.append(UIMenu(title: L10n.text("Text Encoding"), image: UIImage(systemName: "textformat"), children: encodings))
-            if document.format.isStyled {
+            if document.format.isStyled && !ASSRenderer.isAvailable {
                 children.append(UIAction(title: L10n.text("ASS styling and effects show as plain text."), attributes: [.disabled]) { _ in })
             }
         }

@@ -2,6 +2,8 @@
 #define TVMEDIA_H
 
 #include <stdint.h>
+// The module's umbrella header: the styled subtitle renderer (libass) is part of it.
+#include "TVSubtitles.h"
 
 /// Repackages a media file AVPlayer can't open (MKV, AVI, FLV, WMV, RMVB, ...) into fragmented MP4, one HLS
 /// segment at a time, with FFmpeg. Video and audio that Apple devices decode are copied as they are; only what
@@ -92,6 +94,9 @@ int64_t tvm_duration(const TVMInput *input);
 int64_t tvm_start_time(const TVMInput *input);
 int tvm_stream_count(const TVMInput *input);
 int tvm_stream(const TVMInput *input, int index, TVMStream *stream);
+/// A metadata tag of a stream, such as an attachment's "filename" or "mimetype", into `out`. Returns its length, -1
+/// when the stream has none.
+int tvm_stream_tag(const TVMInput *input, int index, const char *key, char *out, int size);
 /// The stream's keyframes known from the file's index (Matroska Cues, AVI idx1, ...), ascending, in microseconds.
 /// Returns how many there are, which may be more than `capacity`.
 int tvm_keyframes(const TVMInput *input, int index, int64_t *times, int capacity);

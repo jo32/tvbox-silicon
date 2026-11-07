@@ -311,6 +311,14 @@ int tvm_stream(const TVMInput *input, int index, TVMStream *out) {
     return 0;
 }
 
+int tvm_stream_tag(const TVMInput *input, int index, const char *key, char *out, int size) {
+    if (index < 0 || index >= (int)input->format->nb_streams || !key) return -1;
+    const AVDictionaryEntry *entry = av_dict_get(input->format->streams[index]->metadata, key, NULL, 0);
+    if (!entry) return -1;
+    if (out && size > 0) snprintf(out, size, "%s", entry->value);
+    return (int)strlen(entry->value);
+}
+
 int tvm_keyframes(const TVMInput *input, int index, int64_t *times, int capacity) {
     if (index < 0 || index >= (int)input->format->nb_streams) return 0;
     AVStream *st = input->format->streams[index];

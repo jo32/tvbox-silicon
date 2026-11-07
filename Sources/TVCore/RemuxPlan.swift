@@ -239,6 +239,20 @@ struct RemuxPlan: Sendable, Equatable {
         return lines.joined(separator: "\n") + "\n"
     }
 
+    /// The NAME each subtitle track has in the master playlist, by track: what AVPlayer's option for it shows as its
+    /// `displayName`. Named as `masterPlaylist` names them.
+    func subtitleNames() -> [Int: String] {
+        var names = Set<String>(), result: [Int: String] = [:]
+        for index in tracks.indices where tracks[index].kind == .subtitle {
+            let name = Self.displayName(tracks[index])
+            var value = name, number = 2
+            while names.contains(value) { value = "\(name) (\(number))"; number += 1 }
+            names.insert(value)
+            result[index] = quoted(value)
+        }
+        return result
+    }
+
     /// A track's media playlist: fragmented MP4 after its initialization segment, or WebVTT for subtitles.
     func mediaPlaylist(track index: Int) -> String {
         let durations = (0..<segments).map { Double(bounds[$0 + 1] - bounds[$0]) / 1_000_000 }
