@@ -434,7 +434,7 @@ struct BilibiliCommentsView: View {
     @Environment(\.dismiss) private var dismiss
     let aid: Int
     let total: Int
-    /// Apple TV: the video's cover, frosted behind the list.
+    /// Apple TV and the Mac: the video's cover, blurred behind the list.
     var cover: URL? = nil
     var coverHeaders: [String: String] = [:]
     @State private var newest = false
@@ -448,6 +448,11 @@ struct BilibiliCommentsView: View {
     var body: some View {
         #if os(tvOS)
         tvBody.task(id: newest) {
+            comments = []; next = nil; ended = false; replies = [:]; error = nil
+            await load()
+        }
+        #elseif os(macOS)
+        macBody.task(id: newest) {
             comments = []; next = nil; ended = false; replies = [:]; error = nil
             await load()
         }
@@ -582,6 +587,123 @@ struct BilibiliCommentsView: View {
                     .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
+        }
+    }
+    #endif
+
+    #if os(macOS)
+    /// The Mac: a dark sheet over a blur of the video's cover, as the video page. The count and the order stay at the
+    /// top; each comment is its own block with its replies on a glass plate under it, and the list loads on as it ends.
+    private var macBody: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 18) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.text("Comments")).font(.system(size: 26, weight: .bold))
+                    if total > 0 {
+                        Text(BilibiliAPI.count(total)).font(.system(size: 13, weight: .medium)).monospacedDigit().opacity(0.6)
+                    }
+                }
+                Spacer(minLength: 0)
+                HStack(spacing: 2) {
+                    ForEach([false, true], id: \.self) { order in
+                        Button { newest = order } label: {
+                            Text(order ? L10n.text("Newest") : L10n.text("Hot"))
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(newest == order ? Color.black : Color.white.opacity(0.75))
+                                .padding(.horizontal, 14).frame(height: 28)
+                                .background(Capsule().fill(Color.white.opacity(newest == order ? 0.92 : 0)))
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(newest == order ? .isSelected : [])
+                    }
+                }
+                .padding(3)
+                .glassOrFill(.regular, Color.white.opacity(0.1), in: Capsule())
+                .animation(.smooth(duration: 0.2), value: newest)
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).frame(width: 34, height: 34).contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .glassOrFill(.regular.interactive(), Color.white.opacity(0.1), in: Circle())
+                .keyboardShortcut(.cancelAction)
+                .accessibilityLabel(L10n.text("Done"))
+            }
+            .padding(.horizontal, 28).padding(.top, 24).padding(.bottom, 16)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 26) {
+                    ForEach(comments) { comment in
+                        macThread(comment)
+                            .onAppear { if comment.id == comments.last?.id { Task { await load() } } }
+                    }
+                    if loading { ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(24) }
+                    if let error {
+                        VStack(spacing: 12) {
+                            Text(error).font(.subheadline).opacity(0.6).multilineTextAlignment(.center)
+                            Button(L10n.text("Try Again")) { Task { await load() } }.controlButton()
+                        }
+                        .frame(maxWidth: .infinity).padding(24)
+                    } else if ended, comments.isEmpty {
+                        Text(L10n.text("No comments yet.")).opacity(0.6).frame(maxWidth: .infinity).padding(40)
+                    }
+                }
+                .padding(.horizontal, 28).padding(.top, 6).padding(.bottom, 28)
+            }
+            .scrollIndicators(.automatic)
+        }
+        .foregroundStyle(.white)
+        .environment(\.colorScheme, .dark)
+        .frame(minWidth: 520, idealWidth: 680, minHeight: 560, idealHeight: 760)
+        .presentationBackground { BilibiliMacSheetBackdrop(cover: cover, headers: coverHeaders) }
+    }
+
+    @ViewBuilder private func macThread(_ comment: BilibiliAPI.Comment) -> some View {
+        let loaded = replies[comment.id]
+        let shown = loaded?.list ?? comment.replies
+        let more = loaded == nil ? comment.replyCount > shown.count : loaded?.more == true
+        VStack(alignment: .leading, spacing: 12) {
+            macLine(comment, avatar: 40, text: 15)
+            if !shown.isEmpty || more {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(shown) { macLine($0, avatar: 24, text: 13.5) }
+                    if more {
+                        Button { Task { await loadReplies(comment) } } label: {
+                            HStack(spacing: 5) {
+                                Text(loaded == nil ? L10n.text("%@ replies", BilibiliAPI.count(comment.replyCount)) : L10n.text("More Replies"))
+                                Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold))
+                            }
+                            .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(BilibiliMark.pink)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassOrFill(.regular, Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .padding(.leading, 52)
+            }
+        }
+    }
+
+    private func macLine(_ comment: BilibiliAPI.Comment, avatar: CGFloat, text: CGFloat) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Color.clear.frame(width: avatar, height: avatar)
+                .overlay { PosterImage(url: comment.face, headers: Bilibili.imageHeaders, symbol: "person.fill") }
+                .clipShape(Circle())
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(comment.name).font(.system(size: text - 2, weight: .semibold)).lineLimit(1).opacity(0.7)
+                    Text(comment.date, format: .relative(presentation: .named)).font(.system(size: text - 3)).lineLimit(1).opacity(0.45)
+                    Spacer(minLength: 8)
+                    if comment.likes > 0 {
+                        Label(BilibiliAPI.count(comment.likes), systemImage: "hand.thumbsup")
+                            .font(.system(size: text - 3)).monospacedDigit().opacity(0.55)
+                    }
+                }
+                Text(comment.text).font(.system(size: text)).lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true).selectable()
+            }
         }
     }
     #endif
@@ -1223,11 +1345,13 @@ struct BilibiliMacVideoPage<Play: View, Parts: View, Status: View>: View {
             if let aid = actions.state?.aid, let page = try? await BilibiliAPI.comments(aid: aid, newest: false, cursor: nil) {
                 hotComments = Array(page.comments.prefix(12))
             }
+            // `-qaOpenComments 1` opens the comments over the page once they are in, for screenshots.
+            if UserDefaults.standard.bool(forKey: "qaOpenComments"), !hotComments.isEmpty { showsComments = true }
         }
         .task(id: creator?.mid) { if let mid = creator?.mid { await maker.load(mid) } }
         .sheet(isPresented: $showsComments) {
             if let state = actions.state {
-                BilibiliCommentsView(aid: state.aid, total: state.replies).discoverSheetSize(width: 640, height: 720)
+                BilibiliCommentsView(aid: state.aid, total: state.replies, cover: cover, coverHeaders: coverHeaders)
             }
         }
         // Signed out, Like, Coin, Favorite and Follow open the account's sign-in, then the counts load again.
@@ -1380,6 +1504,24 @@ struct BilibiliMacVideoPage<Play: View, Parts: View, Status: View>: View {
             .scrollIndicators(.never)
             .scrollClipDisabled()
         }
+    }
+}
+
+/// Behind the Mac's comments: the video's cover blurred to its colours and darkened, so the sheet reads as the page.
+private struct BilibiliMacSheetBackdrop: View {
+    let cover: URL?
+    let headers: [String: String]
+    var body: some View {
+        ZStack {
+            Color(white: 0.07)
+            if let cover {
+                TMDBArtwork(url: cover, maxPixels: 600, headers: headers)
+                    .blur(radius: 60, opaque: true).saturation(1.3).opacity(0.6)
+            }
+            LinearGradient(colors: [.black.opacity(0.35), .black.opacity(0.7)], startPoint: .top, endPoint: .bottom)
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
     }
 }
 
