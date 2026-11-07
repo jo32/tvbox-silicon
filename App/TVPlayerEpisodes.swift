@@ -10,6 +10,8 @@ struct TVPlayerEpisodesPanel: View {
     @Environment(Store.self) private var store
     @State private var selectedFlag: String?
     @FocusState private var focus: Focus?
+    /// The show's TMDB match, as the details page kept it: the episodes' stills.
+    @State private var tmdb = TMDBLookup()
 
     private enum Focus: Hashable { case line(String), episode(Episode.ID) }
 
@@ -20,7 +22,12 @@ struct TVPlayerEpisodesPanel: View {
 
     var body: some View {
         Group {
-            if let catalog = store.catalog(for: playing) { content(catalog) } else { Color.clear }
+            if let catalog = store.catalog(for: playing) {
+                content(catalog).task(id: catalog.video.id) {
+                    guard TMDBLookup.applies(to: catalog.client.site) else { return }
+                    _ = await tmdb.prepare(key: TMDBMatchStore.key(source: catalog.client.site.key, video: catalog.video.id))
+                }
+            } else { Color.clear }
         }
         .background(.black.opacity(0.55))
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
@@ -34,62 +41,69 @@ struct TVPlayerEpisodesPanel: View {
         let flag = selectedFlag.flatMap { flags.contains($0) ? $0 : nil } ?? current?.flag ?? flags.first ?? ""
         let items = episodes.filter { $0.flag == flag }
         let titles = Dictionary(items.map { ($0.id, catalog.labels[$0.id] ?? EpisodeRow.title($0.name)) }, uniquingKeysWith: { first, _ in first })
-        // 第1集, 01: small tiles. File names and long titles: wide two-line cards.
-        let short = (titles.values.map(\.count).max() ?? 0) <= 6
-        return VStack(alignment: .leading, spacing: 18) {
-            if flags.count > 1 {
-                Text(L10n.text("Lines")).font(.headline).foregroundStyle(.secondary).padding(.horizontal, 48)
-                ScrollViewReader { proxy in
-                    ScrollView(.horizontal) {
-                        LazyHStack(spacing: 14) {
-                            ForEach(flags, id: \.self) { line in
-                                Button { selectedFlag = line } label: {
-                                    HStack(spacing: 8) {
-                                        if line == current?.flag { Image(systemName: "speaker.wave.2.fill").font(.caption) }
-                                        Text(line.isEmpty ? L10n.text("Play") : line).lineLimit(1)
-                                    }
-                                }
-                                .buttonStyle(TVEpisodePlateStyle(selected: line == flag, capsule: true))
-                                .focused($focus, equals: .line(line))
-                                .id(line)
-                            }
-                        }
-                        .padding(.horizontal, 48).padding(.vertical, 8)
+        // Pictures, as on the details page: TMDB's stills, else the show's backdrops (or the cover) with the number.
+        let stills = tmdb.episodes(items)
+        let backdrops = tmdb.episodeBackdrops.isEmpty ? [catalog.video.poster].compactMap { $0 } : tmdb.episodeBackdrops
+        return VStack(alignment: .leading, spacing: 14) {
+            // The title, then the lines (线路) beside it: AVKit keeps the panel too short for a row of its own.
+            HStack(alignment: .center, spacing: 28) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(catalog.video.name).font(.headline).lineLimit(1)
+                    Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
+                    if let error = store.episodeError {
+                        Label(error, systemImage: "exclamationmark.triangle.fill").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                     }
-                    .scrollClipDisabled()
-                    // Up and Down move between the rows from anywhere, not only to a button straight above or below.
-                    .focusSection()
-                    .onAppear { proxy.scrollTo(flag, anchor: .center) }
+                }
+                .fixedSize()
+                if flags.count > 1 {
+                    ScrollViewReader { proxy in
+                        ScrollView(.horizontal) {
+                            LazyHStack(spacing: 14) {
+                                ForEach(flags, id: \.self) { line in
+                                    Button { selectedFlag = line } label: {
+                                        HStack(spacing: 8) {
+                                            if line == current?.flag { Image(systemName: "speaker.wave.2.fill").font(.caption) }
+                                            Text(line.isEmpty ? L10n.text("Play") : line).lineLimit(1)
+                                        }
+                                    }
+                                    .buttonStyle(TVEpisodePlateStyle(selected: line == flag, capsule: true))
+                                    .focused($focus, equals: .line(line))
+                                    .id(line)
+                                }
+                            }
+                            .padding(.trailing, 48).padding(.vertical, 8)
+                        }
+                        .scrollClipDisabled()
+                        // Up and Down move between the rows from anywhere, not only to a button straight above or below.
+                        .focusSection()
+                        .onAppear { proxy.scrollTo(flag, anchor: .center) }
+                    }
                 }
             }
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(catalog.video.name).font(.headline).lineLimit(1)
-                Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
-                if let error = store.episodeError {
-                    Label(error, systemImage: "exclamationmark.triangle.fill").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                }
-            }
-            .padding(.horizontal, 48)
+            .padding(.leading, 48)
             ScrollViewReader { proxy in
                 ScrollView(.horizontal) {
-                    LazyHStack(spacing: 14) {
+                    LazyHStack(alignment: .top, spacing: 40) {
                         ForEach(items) { episode in
                             let isCurrent = episode.id == current?.id
                             Button {
                                 guard !isCurrent else { return }
                                 store.selectEpisode(episode, from: playing)
                             } label: {
-                                tile(titles[episode.id] ?? episode.name, current: isCurrent,
-                                     loading: store.resolvingEpisode?.id == episode.id, short: short)
+                                TMDBEpisodeTile(name: titles[episode.id] ?? episode.name, info: stills[episode.id], detail: catalog.details[episode.id],
+                                                current: isCurrent, loading: store.resolvingEpisode?.id == episode.id, width: 260,
+                                                backdrops: backdrops)
+                                    // Its whole 16:9 picture: the panel's height otherwise squeezed it to a stamp.
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
-                            .buttonStyle(TVEpisodePlateStyle(selected: isCurrent, capsule: false))
+                            .tmdbCardButton()
                             .focused($focus, equals: .episode(episode.id))
                             .id(episode.id)
                             .accessibilityLabel(episode.name)
                             .accessibilityAddTraits(isCurrent ? .isSelected : [])
                         }
                     }
-                    .padding(.horizontal, 48).padding(.vertical, 8)
+                    .padding(.horizontal, 48).padding(.vertical, 12)
                 }
                 .scrollClipDisabled()
                 .focusSection()
@@ -99,25 +113,10 @@ struct TVPlayerEpisodesPanel: View {
                 }
             }
         }
-        .padding(.vertical, 32)
+        .padding(.vertical, 22)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .defaultFocus($focus, current.map { .episode($0.id) })
         .accessibilityIdentifier("player.episodes.panel")
-    }
-
-    private func tile(_ title: String, current: Bool, loading: Bool, short: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                if loading { ProgressView().controlSize(.small) }
-                else if current { Image(systemName: "speaker.wave.2.fill").font(.caption) }
-                Text(title).lineLimit(short ? 1 : 2).multilineTextAlignment(.leading)
-            }
-            if current && !short {
-                Text(L10n.text("Now Playing")).font(.caption).opacity(0.7)
-            }
-        }
-        .font(.system(size: 26, weight: current ? .semibold : .medium))
-        .frame(width: short ? 150 : 360, height: short ? 76 : 108, alignment: short ? .center : .leading)
     }
 }
 
