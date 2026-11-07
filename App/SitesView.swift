@@ -2004,6 +2004,7 @@ struct VideoDetailView: View {
                             // Holds focus while it loads, so Back leaves the page.
                             SkeletonBlock(cornerRadius: 41).frame(height: 82)
                                 .loadingFocus(takeFocus: true) { dismiss() }
+                                .accessibilityLabel(L10n.text("Loading video details…"))
                                 .accessibilityIdentifier("detail.loading")
                             HStack(alignment: .top, spacing: 16) {
                                 ForEach(0..<4, id: \.self) { _ in

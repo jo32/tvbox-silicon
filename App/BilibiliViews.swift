@@ -672,6 +672,9 @@ struct BilibiliShelves: View {
     @State private var live: [BilibiliAPI.LiveNow] = []
 
     var body: some View {
+        #if os(tvOS)
+        tvBody
+        #else
         VStack(alignment: .leading, spacing: 22) {
             if !live.isEmpty {
                 shelf(title: L10n.text("Live Now"), more: nil) {
@@ -699,7 +702,46 @@ struct BilibiliShelves: View {
             }
         }
         .task(id: ready) { if ready { await load() } }
+        #endif
     }
+
+    #if os(tvOS)
+    /// Watch Now's and Discover's rows: their covers (16:9 here), captions that move with the lift, and See All waiting
+    /// to the left of the first cover. The rows reach into the page's margin by Discover's gutter, so their covers line
+    /// up with the page and See All's sliver sits inside the row, where focus can reach it.
+    private var tvBody: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !live.isEmpty {
+                WatchNowTVRail(title: L10n.text("Live Now")) {
+                    ForEach(live) { room in
+                        Button { if let channel = bilibiliLiveChannel(room: room.room, host: room.host) { store.playing = channel } } label: {
+                            WatchNowTVCover(title: room.title, detail: room.host, poster: room.cover, headers: Bilibili.imageHeaders,
+                                            landscape: true, badge: (L10n.text("LIVE"), BilibiliMark.pink))
+                        }
+                        .cardButton()
+                    }
+                }
+            }
+            ForEach(shelves) { item in
+                if !item.videos.isEmpty {
+                    WatchNowTVRail(title: item.title, seeAll: WatchNowTVSeeAll(height: WatchNowTVCover.landscapeHeight) { open(item.id) }) {
+                        ForEach(item.videos) { video in
+                            RouteLink { CatalogDestination(video: video, client: client) } label: {
+                                WatchNowTVCover(title: video.name, detail: video.remarks, poster: video.poster, headers: video.posterHeaders, landscape: true)
+                            }
+                            .cardButton()
+                        }
+                    }
+                }
+            }
+            if !shelves.filter({ !$0.videos.isEmpty }).isEmpty || !live.isEmpty {
+                WatchNowTVHeading(title: L10n.text("Recommendations"))
+            }
+        }
+        .padding(.horizontal, -DiscoverLayout.gutter)
+        .task(id: ready) { if ready { await load() } }
+    }
+    #endif
 
     private func shelf<Content: View>(title: String, more: String?, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {

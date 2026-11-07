@@ -354,23 +354,38 @@ struct WatchNowTVRow<Content: View>: View {
 }
 
 /// A title as Discover shows one on the TV: the cover, lifted by the system under focus, over centred captions.
+/// Landscape for videos whose covers are 16:9 (Bilibili's), at Discover's landscape width.
 struct WatchNowTVCover: View {
     static let width = DiscoverLayout.posterWidth
     static let height = DiscoverLayout.posterWidth * 1.5
+    static let landscapeWidth = DiscoverLayout.landscapeWidth
+    static let landscapeHeight = DiscoverLayout.landscapeWidth * 9 / 16
     let title: String
     let detail: String
     let poster: URL?
     var headers: [String: String] = [:]
+    var landscape = false
+    /// A word on the cover's corner (LIVE), painted into it so it lifts with the picture.
+    var badge: (text: String, color: Color)? = nil
+    private var width: CGFloat { landscape ? Self.landscapeWidth : Self.width }
+    private var height: CGFloat { landscape ? Self.landscapeHeight : Self.height }
     var body: some View {
         VStack(spacing: 5) {
-            PosterImage(url: poster, headers: headers).frame(width: Self.width, height: Self.height)
+            PosterImage(url: poster, headers: headers).frame(width: width, height: height)
+                .coverOverlay(alignment: .topLeading) {
+                    if let badge {
+                        Text(badge.text).font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
+                            .padding(.horizontal, 10).padding(.vertical, 4)
+                            .background(badge.color, in: Capsule()).padding(12)
+                    }
+                }
             VStack(spacing: 0) {
                 Text(title).font(.system(size: 26))
                 Text(detail.isEmpty ? " " : detail).font(.system(size: 22, weight: .medium)).foregroundStyle(.white.opacity(0.5))
             }
             .lineLimit(1).cardCaption()
         }
-        .frame(width: Self.width)
+        .frame(width: width)
     }
 }
 
