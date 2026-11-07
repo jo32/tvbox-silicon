@@ -3909,6 +3909,10 @@ struct MacVideoHero<Heading: View, Actions: View, Side: View>: View {
     let width: CGFloat
     let backdrop: URL?
     var backdropHeaders: [String: String] = [:]
+    /// A picture already loaded (a comic's cover, which its source fetches), in place of `backdrop`.
+    var backdropImage: CGImage? = nil
+    /// A portrait cover shown large in the top trailing corner over the blur (a comic's), as Apple TV's Bilibili page.
+    var art: CGImage? = nil
     @ViewBuilder let heading: Heading
     @ViewBuilder let actions: Actions
     @ViewBuilder let side: Side
@@ -3930,7 +3934,7 @@ struct MacVideoHero<Heading: View, Actions: View, Side: View>: View {
         }
         .padding(.horizontal, MacHeroMetrics.gutter).padding(.bottom, 44)
         .frame(maxWidth: .infinity, minHeight: height, alignment: .bottomLeading)
-        .background { MacHeroBackdrop(url: backdrop, headers: backdropHeaders).discoverFullBleed() }
+        .background { MacHeroBackdrop(url: backdrop, headers: backdropHeaders, picture: backdropImage, art: art).discoverFullBleed() }
         .foregroundStyle(.white)
     }
 }
@@ -3940,17 +3944,44 @@ struct MacVideoHero<Heading: View, Actions: View, Side: View>: View {
 struct MacHeroBackdrop: View {
     let url: URL?
     let headers: [String: String]
+    var picture: CGImage? = nil
+    var art: CGImage? = nil
     @State private var image: CGImage?
+
+    /// The picture shown sharp in the corner: the art handed in, else a portrait poster, which the blur alone would hide
+    /// (a title without TMDB's backdrop has only the source's poster).
+    private var shownArt: CGImage? {
+        if let art { return art }
+        guard let poster = picture ?? image, CGFloat(poster.width) / CGFloat(max(1, poster.height)) < 1.3 else { return nil }
+        return poster
+    }
     var body: some View {
         ZStack {
             Color.black
-            if let image {
+            if let image = picture ?? image {
                 let landscape = CGFloat(image.width) / CGFloat(max(1, image.height)) >= 1.3
                 Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).clipped()
                     .blur(radius: landscape ? 0 : 50, opaque: true)
                     .saturation(landscape ? 1 : 1.25)
                     .transition(.opacity)
+            }
+            if let art = shownArt {
+                // Sharp, at about its own size from the top trailing corner, its leading edge and foot fading into the blur.
+                GeometryReader { proxy in
+                    Image(decorative: art, scale: 1).resizable().aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: proxy.size.width * 0.55, maxHeight: proxy.size.height * 0.86)
+                        .mask {
+                            LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.4)],
+                                           startPoint: .leading, endPoint: .trailing)
+                        }
+                        .mask {
+                            LinearGradient(stops: [.init(color: .black, location: 0.55), .init(color: .clear, location: 1)],
+                                           startPoint: .top, endPoint: .bottom)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                }
+                .transition(.opacity)
             }
             LinearGradient(stops: [.init(color: .black.opacity(0.8), location: 0), .init(color: .black.opacity(0.45), location: 0.45),
                                    .init(color: .clear, location: 0.8)], startPoint: .leading, endPoint: .trailing)
@@ -3962,7 +3993,7 @@ struct MacHeroBackdrop: View {
                            startPoint: .top, endPoint: .bottom)
         }
         .accessibilityHidden(true)
-        .animation(.easeInOut(duration: 0.4), value: image != nil)
+        .animation(.easeInOut(duration: 0.4), value: (picture ?? image) != nil)
         // A new picture (TMDB's backdrop after the cover) replaces the old one once it is in.
         .task(id: url) { if let url, let loaded = await TMDBArtwork.load(url, maxPixels: 2000, headers: headers) { image = loaded } }
     }
