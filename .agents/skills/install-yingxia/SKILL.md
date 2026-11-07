@@ -42,8 +42,8 @@ curl.exe -LO https://download.getmegaportal.com/yingxia/<version>/Yingxia-<versi
 
 | Device | Requirement | File | Bundle ID |
 | --- | --- | --- | --- |
-| Mac | macOS 15+, Apple silicon | `…-macos-arm64.dmg` | `com.jo32.yingxia.mac` |
-| Intel Mac | macOS 15+, Intel processor (1.7.3 and later) | `…-macos-x86_64.dmg` | `com.jo32.yingxia.mac` |
+| Mac | macOS 15+, Apple silicon | `…-macos-arm64.dmg` | `com.jo32.yingxia.macos` (1.7.7–1.8.13: `com.jo32.yingxia.mac`) |
+| Intel Mac | macOS 15+, Intel processor (1.7.3 and later) | `…-macos-x86_64.dmg` | `com.jo32.yingxia.macos` (1.7.7–1.8.13: `com.jo32.yingxia.mac`) |
 | iPhone / iPad | iOS / iPadOS 17+ | `…-ios.ipa` | `com.jo32.yingxia.ios` |
 | Apple TV | tvOS 17+ (Apple TV HD or 4K) | `…-tvos.ipa` | `com.jo32.yingxia.tv` |
 

@@ -110,7 +110,7 @@ targets:
         SUVerifyUpdateBeforeExtraction: true
         SURequireSignedFeed: true
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: com.jo32.yingxia.mac
+      PRODUCT_BUNDLE_IDENTIFIER: com.jo32.yingxia.macos
       CODE_SIGN_ENTITLEMENTS: $(ICLOUD_ENTITLEMENTS)
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   TVBox-iOS:

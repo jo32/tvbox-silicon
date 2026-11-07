@@ -2,10 +2,12 @@
 # Build, sign, notarize and package the macOS app.
 #   Scripts/package-mac-release.sh [--identity "Developer ID Application: …"] [--notary-profile <name>] [--skip-build]
 #   Scripts/package-mac-release.sh ... --notary-key <AuthKey_ID.p8> --notary-key-id <ID> --notary-issuer <issuer UUID>
-#   Scripts/package-mac-release.sh ... --profile <Developer ID .provisionprofile>
+#   Scripts/package-mac-release.sh ... [--profile <Developer ID .provisionprofile> | --no-profile]
 # --profile turns on iCloud sync (Sources/TVCore/CloudSync.swift): it embeds the profile and gives the app the key-value
 # store of Config/iCloud.entitlements, the one the iPhone, iPad and Apple TV apps use. The profile must be a Developer
-# ID profile for com.jo32.yingxia.mac with iCloud. Without it the app has no entitlements and sync stays on this Mac.
+# ID profile for com.jo32.yingxia.macos with iCloud. Without it the app has no entitlements and sync stays on this Mac.
+# Without --profile it uses ~/.config/yingxia/mac-developer-id.provisionprofile when that file exists (the release
+# machine keeps it there); --no-profile signs without iCloud.
 # Without a notary profile or key the app is signed but not notarized (local testing only). A keychain
 # profile only works while the screen is unlocked (data-protection keychain); an App Store Connect API
 # key is a file, so it also works with the screen locked.
@@ -21,6 +23,8 @@ IDENTITY="Developer ID Application"
 NOTARY=()
 BUILD=1
 PROFILE=
+DEFAULT_PROFILE="$HOME/.config/yingxia/mac-developer-id.provisionprofile"
+[ -f "$DEFAULT_PROFILE" ] && PROFILE="$DEFAULT_PROFILE"
 while [ $# -gt 0 ]; do
   case "$1" in
     --identity) IDENTITY="$2"; shift 2 ;;
@@ -29,6 +33,7 @@ while [ $# -gt 0 ]; do
     --notary-key-id) NOTARY+=(--key-id "$2"); shift 2 ;;
     --notary-issuer) NOTARY+=(--issuer "$2"); shift 2 ;;
     --profile) PROFILE="$2"; shift 2 ;;
+    --no-profile) PROFILE=; shift ;;
     --skip-build) BUILD=0; shift ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac

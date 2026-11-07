@@ -1488,7 +1488,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.jo32.yingxia.mac;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jo32.yingxia.macos;
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -1663,7 +1663,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.jo32.yingxia.mac;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jo32.yingxia.macos;
 				SDKROOT = macosx;
 			};
 			name = Debug;
