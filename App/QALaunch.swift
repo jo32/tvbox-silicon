@@ -144,6 +144,20 @@ enum QALaunch {
                 store.playing = Channel(name: "Live \(room)", group: platform.name, url: url)
             }
         }
+        // `-qaSubtitleSource <address>` adds that subtitle-source script (#576 M2) before anything plays, and
+        // `-qaSubtitleSourceKeys '{apiKey=value;}'` gives it its keys (a property-list dictionary: the argument domain
+        // drops a JSON object it can't read).
+        if let address = UserDefaults.standard.string(forKey: "qaSubtitleSource"), let url = URL(string: address) {
+            do {
+                let item = try await SubtitleSourceLibrary.shared.add(address: url)
+                let keys = UserDefaults.standard.dictionary(forKey: "qaSubtitleSourceKeys") as? [String: String]
+                if let keys { await SubtitleSourceLibrary.shared.setValues(keys, for: item.id) }
+                let stored = await SubtitleSourceLibrary.shared.values(for: item.id).count
+                Diagnostics.shared.record(.info, "qa", "subtitle source \(item.id) keys given=\(keys?.count ?? -1) stored=\(stored)")
+            } catch {
+                Diagnostics.shared.record(.warning, "qa", "subtitle source not added: \(error.localizedDescription)")
+            }
+        }
         // `-qaPlayURL <address>` plays a media link as it is (an MKV on a local server, say); with `-qaResume <seconds>`,
         // from there, as a saved position resumes. `-qaSubtitleURLs <a,b,...>` are its source's subtitle files, as a
         // cloud-drive plugin's `subs` would be (#576).

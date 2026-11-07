@@ -536,6 +536,7 @@ struct FormSettingsView: View {
                 }
                 .settingsSwitch()
                 FormLink(symbol: "captions.bubble.fill", tint: .orange, title: L10n.text("Subtitle Style")) { SubtitleStyleView() }
+                FormLink(symbol: "text.magnifyingglass", tint: .orange, title: L10n.text("Subtitle Sources")) { SubtitleSourcesView() }
                 FormLink(symbol: "play.fill", tint: Brand.indigo, title: L10n.text("Play a URL")) { PlayURLView() }
             } header: {
                 Text(L10n.text("Playback"))
@@ -875,6 +876,7 @@ struct PlaybackSettingsView: View {
             }
             SettingsGroup(footer: SettingsNote.playbackInfo) {
                 FormLink(symbol: "captions.bubble.fill", tint: .orange, title: L10n.text("Subtitle Style")) { SubtitleStyleView() }
+                FormLink(symbol: "text.magnifyingglass", tint: .orange, title: L10n.text("Subtitle Sources")) { SubtitleSourcesView() }
                 Toggle(isOn: $showsPlaybackInfo) {
                     FormLabel(symbol: "info.circle.fill", tint: .blue, title: L10n.text("Show Video Info"))
                 }
@@ -1592,6 +1594,7 @@ struct TVSettingsView: View {
             }
             TVSettingsSection(footer: L10n.text("Shows the video's format, resolution, frame rate and bitrate in a corner of the player.")) {
                 TVSettingsLink(title: L10n.text("Subtitle Style")) { SubtitleStyleView() }
+                TVSettingsLink(title: L10n.text("Subtitle Sources")) { SubtitleSourcesView() }
                 TVSettingsToggle(title: L10n.text("Show Video Info"), isOn: $showsPlaybackInfo)
             }
             if VideoEnhancement.canUpscale || VideoEnhancement.canSmooth {
@@ -1822,18 +1825,24 @@ struct TVSettingsField: View {
     @Binding var text: String
     /// Words rather than an address: the usual keyboard, with capitals and corrections.
     var prose = false
+    /// A key or password: dots in the row, a secure field to type it.
+    var secret = false
     @State private var editing = false
     @State private var draft = ""
     @State private var cancelled = false
     var body: some View {
         Button { draft = text; cancelled = false; editing = true } label: {
-            TVSettingsRowLabel(title: title, value: text.isEmpty ? L10n.text("Not set") : text)
+            TVSettingsRowLabel(title: title, value: text.isEmpty ? L10n.text("Not set") : secret ? String(repeating: "•", count: 8) : text)
         }
         .glassRow()
         .alert(title, isPresented: $editing) {
-            TextField(title, text: $draft)
-                .autocorrectionDisabled(!prose)
-                .textInputAutocapitalization(prose ? .sentences : .never).keyboardType(prose ? .default : .URL)
+            if secret {
+                SecureField(title, text: $draft)
+            } else {
+                TextField(title, text: $draft)
+                    .autocorrectionDisabled(!prose)
+                    .textInputAutocapitalization(prose ? .sentences : .never).keyboardType(prose ? .default : .URL)
+            }
             Button(L10n.text("Done")) {}
             Button(L10n.text("Cancel"), role: .cancel) { cancelled = true }
         }

@@ -19,10 +19,14 @@ import UniformTypeIdentifiers
         var state: State
         /// What to fetch again.
         var subtitle: ExternalSubtitle?
+        /// A subtitle source's result (#576 M2), downloaded again on Try Again.
+        var candidate: SubtitleCandidate?
+
+        var canRetry: Bool { subtitle != nil || candidate != nil }
 
         var document: SubtitleDocument? { if case .ready(let document) = state { document } else { nil } }
         var title: String {
-            let language = document?.language ?? subtitle.map { $0.language.isEmpty ? SubtitleMatch.language($0.name) : $0.language } ?? ""
+            let language = document?.language ?? subtitle.map { $0.language.isEmpty ? SubtitleMatch.language($0.name) : $0.language } ?? candidate?.language ?? ""
             guard !language.isEmpty, let named = Locale.current.localizedString(forIdentifier: language) else { return name }
             return "\(named) · \(name)"
         }
@@ -34,6 +38,19 @@ import UniformTypeIdentifiers
     /// A file or address the viewer added that couldn't be read, for an alert.
     var importFailure: String?
     var document: SubtitleDocument? { entries.first { $0.id == selected }?.document }
+
+    /// Searching the viewer's subtitle sources (#576 M2).
+    enum OnlineState: Equatable { case idle, noSources, searching, done }
+    private(set) var online = SubtitleSearchProgress()
+    private(set) var onlineState = OnlineState.idle
+    /// What the search asks for: the playing video, as the catalog names it, until the viewer edits it.
+    private(set) var hint: SubtitleHint?
+    /// Whether any subtitle source is on, for showing the search at all.
+    private(set) var hasSources = false
+    /// The sources' names by id, in their order, for the search's status lines.
+    private(set) var sourceNames: [(id: String, name: String)] = []
+    @ObservationIgnored private var searching: Task<Void, Never>?
+    @ObservationIgnored private var sources: [SubtitleSearchSource] = []
 
     /// The player shows what is chosen; set by the session.
     @ObservationIgnored var cues: SubtitleCues?
@@ -53,6 +70,13 @@ import UniformTypeIdentifiers
     /// A new episode: its source's files, after the picture.
     func begin(_ channel: Channel, playing url: URL) {
         stop()
+        hint = Self.hint(for: channel)
+        let current = generation
+        Task { [weak self] in
+            let any = await SubtitleSourceLibrary.shared.hasEnabledSources()
+            guard let self, self.generation == current else { return }
+            self.hasSources = any
+        }
         headers = channel.headers
         scope = channel.historyContext?.id ?? channel.skipScope
         timing = SubtitleTimingStore.load(scope: scope)
@@ -104,6 +128,8 @@ import UniformTypeIdentifiers
         loading?.cancel(); loading = nil
         retries.values.forEach { $0.cancel() }; retries = [:]
         entries = []; automatic = true; importFailure = nil
+        searching?.cancel(); searching = nil
+        online = SubtitleSearchProgress(); onlineState = .idle; sources = []
         if selected != nil { selected = nil; show() }
     }
 
@@ -124,6 +150,7 @@ import UniformTypeIdentifiers
     }
 
     func retry(_ id: String) {
+        if let candidate = entries.first(where: { $0.id == id })?.candidate { download(candidate); return }
         guard let index = entries.firstIndex(where: { $0.id == id }), let subtitle = entries[index].subtitle else { return }
         entries[index].state = .loading
         let active = generation, headers = headers
@@ -179,6 +206,59 @@ import UniformTypeIdentifiers
             if case .failure(let error) = result { self.fail(url.lastPathComponent, error) }
             self.finish(id, result, chosen: true)
         }
+    }
+
+    /// Asks the enabled sources; results come in as each answers. `hint` is the viewer's edit of the video's.
+    func search(_ edited: SubtitleHint? = nil) {
+        searching?.cancel()
+        let hint = edited ?? self.hint ?? SubtitleHint(title: "")
+        self.hint = hint
+        online = SubtitleSearchProgress()
+        onlineState = .searching
+        let active = generation
+        searching = Task { [weak self] in
+            let sources = await SubtitleSourceLibrary.shared.searchSources()
+            guard let self, self.generation == active, !Task.isCancelled else { return }
+            self.sources = sources
+            self.sourceNames = sources.map { ($0.provider.manifest.id, $0.provider.manifest.name) }
+            self.hasSources = !sources.isEmpty
+            guard !sources.isEmpty else { self.onlineState = .noSources; return }
+            Diagnostics.shared.record(.info, "subtitles", "online search sources=\(sources.count) episode=\(hint.episode != nil)")
+            for await progress in SubtitleSearch.shared.search(hint, sources: sources) {
+                guard self.generation == active, !Task.isCancelled else { return }
+                self.online = progress
+            }
+            if self.generation == active, !Task.isCancelled { self.onlineState = .done }
+        }
+    }
+
+    /// A search result: downloaded (or taken from the cache) and shown.
+    func download(_ candidate: SubtitleCandidate) {
+        let id = candidate.id
+        if entries.contains(where: { $0.id == id && $0.document != nil }) { select(id); return }
+        guard let source = sources.first(where: { $0.provider.manifest.id == candidate.provider }) else { return }
+        if let index = entries.firstIndex(where: { $0.id == id }) { entries[index].state = .loading }
+        else { entries.append(Entry(id: id, name: candidate.title, imported: true, state: .loading, candidate: candidate)) }
+        let active = generation
+        retries[id]?.cancel()
+        retries[id] = Task { [weak self] in
+            let result = await Self.fetch(candidate, from: source)
+            guard let self, self.generation == active, !Task.isCancelled else { return }
+            self.retries[id] = nil
+            self.finish(id, result, chosen: true)
+        }
+    }
+
+    /// The playing video as a search: the catalog's names, and the file's when the address has one.
+    static func hint(for channel: Channel) -> SubtitleHint {
+        let context = channel.historyContext
+        let last = channel.url.lastPathComponent.removingPercentEncoding ?? channel.url.lastPathComponent
+        let videos: Set<String> = ["mkv", "mp4", "m4v", "avi", "mov", "ts", "m2ts", "wmv", "flv", "webm", "rmvb"]
+        let file = videos.contains((last as NSString).pathExtension.lowercased()) ? last : nil
+        // A link played as it is is named after its file: the title is the name without the extension.
+        let ext = (channel.name as NSString).pathExtension.lowercased()
+        let name = videos.contains(ext) ? (channel.name as NSString).deletingPathExtension : channel.name
+        return SubtitleHint(video: context?.videoName ?? name, episodeName: context?.episodeName ?? name, year: context?.year, fileName: file)
     }
 
     private func add(_ document: SubtitleDocument) {
@@ -241,6 +321,10 @@ import UniformTypeIdentifiers
         do { return .success(try await SubtitleDocument.load(subtitle, headers: headers)) } catch { return .failure(error) }
     }
 
+    nonisolated private static func fetch(_ candidate: SubtitleCandidate, from source: SubtitleSearchSource) async -> Result<SubtitleDocument, Error> {
+        do { return .success(try await SubtitleSearch.shared.download(candidate, from: source)) } catch { return .failure(error) }
+    }
+
     nonisolated private static func fetch(address url: URL) async -> Result<SubtitleDocument, Error> {
         do { return .success(try await SubtitleDocument.load(address: url)) } catch { return .failure(error) }
     }
@@ -258,6 +342,7 @@ struct ExternalSubtitleMenu: View {
     let subtitles: ExternalSubtitles
     let addFile: () -> Void
     let addAddress: () -> Void
+    let searchOnline: () -> Void
 
     var body: some View {
         if !subtitles.entries.isEmpty {
@@ -269,7 +354,7 @@ struct ExternalSubtitleMenu: View {
                     case .loading:
                         Text(L10n.text("%@ (loading)", entry.title))
                     case .failed(let reason):
-                        if entry.subtitle != nil {
+                        if entry.canRetry {
                             Button(L10n.text("%@: Try Again", entry.title)) { subtitles.retry(entry.id) }
                         }
                         Text(reason)
@@ -278,6 +363,7 @@ struct ExternalSubtitleMenu: View {
             }
         }
         Section {
+            Button(L10n.text("Search Online…"), action: searchOnline)
             Button(L10n.text("Add Subtitle File…"), action: addFile)
             Button(L10n.text("Add Subtitles from Address…"), action: addAddress)
         }
@@ -354,11 +440,12 @@ struct SubtitleAddressPrompt: ViewModifier {
 
 extension View {
     /// The file panel and address prompt that add subtitles to the playing video.
-    func subtitleImport(files: Binding<Bool>, address: Binding<Bool>, subtitles: ExternalSubtitles) -> some View {
+    func subtitleImport(files: Binding<Bool>, address: Binding<Bool>, search: Binding<Bool>, subtitles: ExternalSubtitles) -> some View {
         fileImporter(isPresented: files, allowedContentTypes: ExternalSubtitles.types) { result in
             if case .success(let url) = result { subtitles.add(file: url) }
         }
         .modifier(SubtitleAddressPrompt(isPresented: address, subtitles: subtitles))
+        .sheet(isPresented: search) { SubtitleSearchSheet(subtitles: subtitles) }
     }
 }
 #endif

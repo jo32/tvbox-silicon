@@ -155,6 +155,7 @@
 		6F182F91BDACFBFC8E6B3B0E /* DetailAurora.swift in Sources */ = {isa = PBXBuildFile; fileRef = A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */; };
 		6F3F7DE9D8CB73FC2C1592D9 /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181C983C0018A97F2A086298 /* DiscoveryView.swift */; };
 		6FB75A9CED5DEEB931AD0C9A /* MusicRemoteControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E59EDBC7BE62078557E781 /* MusicRemoteControl.swift */; };
+		708C9C339893A13DE74FE7F8 /* SubtitleSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30744245D01C4D31B1F3ABD8 /* SubtitleSourcesView.swift */; };
 		7142A1BCD94E8F10E0C623B5 /* PlayerEpisodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6411E1972F52DCE8C5E117F7 /* PlayerEpisodes.swift */; };
 		722A5C4D2DC5223EB611AC0A /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5938F1806109304A4FB816CF /* Sparkle */; };
 		72448F6E6FFCC74EE5950C1A /* Keystone-GPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 084C8344E2997DB3ED8FE974 /* Keystone-GPL2.txt */; };
@@ -215,6 +216,7 @@
 		A02125568B4CAB3B33994198 /* DiscoverBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */; };
 		A125C19021DB4DC7DFADCBDA /* MangaSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E5BAF6D854E7CE5DA362D0 /* MangaSourcesView.swift */; };
 		A149AE9D183C5FB64D411761 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ADB3063A14E368A71892DCEE /* Assets.xcassets */; };
+		A1DE1070F1A8B76CC5EE65C0 /* SubtitleSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30744245D01C4D31B1F3ABD8 /* SubtitleSourcesView.swift */; };
 		A6A01A74BB02107B9B37DF21 /* MangaQA.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0894F8B5758D4C02A76BCD8E /* MangaQA.swift */; };
 		A6CF37D3E8E26FD498A15CD1 /* JavaHost in Resources */ = {isa = PBXBuildFile; fileRef = F1B927CC6ECB2F8BDFB22287 /* JavaHost */; };
 		A75BCD1DBB7A45ED27CEBA63 /* DiscoverBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */; };
@@ -273,6 +275,7 @@
 		D54D6BFE675267FF2D16FC49 /* Announcements.swift in Sources */ = {isa = PBXBuildFile; fileRef = F43A8E3DBB135075D0CF9D44 /* Announcements.swift */; };
 		D5E6CDAD56F3272FD731DBDE /* Announcements.swift in Sources */ = {isa = PBXBuildFile; fileRef = F43A8E3DBB135075D0CF9D44 /* Announcements.swift */; };
 		D6CA2441FEC9F02492410BFB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A0E8559808CF7D11225EB30B /* Assets.xcassets */; };
+		D7033713FFFA9C4778DDEB3D /* SubtitleSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30744245D01C4D31B1F3ABD8 /* SubtitleSourcesView.swift */; };
 		D7ABE3CCA68742E00CE3AB6D /* MangaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C05256E7BDC34745BDE22193 /* MangaStore.swift */; };
 		D7E748CE00CE922BAA68C022 /* DiscoverTVLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDA3D261D268813DF5C90B82 /* DiscoverTVLayout.swift */; };
 		D7EE47673EE419672D2347C5 /* MusicPlayerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2CD4FD12F4DD3AAE1F8592A /* MusicPlayerViews.swift */; };
@@ -346,6 +349,7 @@
 		2ACBC18014BA7190EBA2EDD7 /* MacUpdater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacUpdater.swift; sourceTree = "<group>"; };
 		2B0131105AAF88C36366936A /* MusicNowPlayingScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicNowPlayingScreen.swift; sourceTree = "<group>"; };
 		2D1010816125FBC3792AF838 /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
+		30744245D01C4D31B1F3ABD8 /* SubtitleSourcesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleSourcesView.swift; sourceTree = "<group>"; };
 		31D1816B8ED53D49478FD843 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		334B106CCFB47B5E27376A16 /* PlaybackHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackHistoryView.swift; sourceTree = "<group>"; };
 		356AA3CFC2271101141EF964 /* DiscoverSearchFilters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverSearchFilters.swift; sourceTree = "<group>"; };
@@ -592,6 +596,7 @@
 				75124CC2471CF95C1FFB168A /* SitesView.swift */,
 				2D1010816125FBC3792AF838 /* Store.swift */,
 				FE1212366D71C455D6EAE5E4 /* SubtitleOverlay.swift */,
+				30744245D01C4D31B1F3ABD8 /* SubtitleSourcesView.swift */,
 				D091093D028D2FD9AB72B79C /* SubtitleStyleView.swift */,
 				13947E20489465F172C8B5B7 /* SubtitleTranslator.swift */,
 				F714C204B589F33E2806EDF8 /* TMDBViews.swift */,
@@ -1166,6 +1171,7 @@
 				53F697A2DD9E8D5443E43646 /* SitesView.swift in Sources */,
 				1FAC6965CB4F8B33135C85C5 /* Store.swift in Sources */,
 				982EF0148420E135FF05E244 /* SubtitleOverlay.swift in Sources */,
+				708C9C339893A13DE74FE7F8 /* SubtitleSourcesView.swift in Sources */,
 				6448A88D8C564A2130BC0E1C /* SubtitleStyleView.swift in Sources */,
 				E5D5A7C6283C6370DF14ECC2 /* SubtitleTranslator.swift in Sources */,
 				515742AFC2C7655B651B744A /* TMDBViews.swift in Sources */,
@@ -1256,6 +1262,7 @@
 				B0AA965C1DB5AA7CF03E9415 /* SitesView.swift in Sources */,
 				4C65106175D517040E98330B /* Store.swift in Sources */,
 				68DA47E6E8C42E446AC17E45 /* SubtitleOverlay.swift in Sources */,
+				A1DE1070F1A8B76CC5EE65C0 /* SubtitleSourcesView.swift in Sources */,
 				9FD7B6E48A98DE1D6DDBC3E3 /* SubtitleStyleView.swift in Sources */,
 				FBD490433241B703DEC0B46B /* SubtitleTranslator.swift in Sources */,
 				7FBF6A9CDB139D618BC92504 /* TMDBViews.swift in Sources */,
@@ -1348,6 +1355,7 @@
 				F8EB061662C5CB6EB47B41F2 /* SitesView.swift in Sources */,
 				BF897F1F4B399DAA732ED4ED /* Store.swift in Sources */,
 				5CB8BD265BA21805A9BF8CD9 /* SubtitleOverlay.swift in Sources */,
+				D7033713FFFA9C4778DDEB3D /* SubtitleSourcesView.swift in Sources */,
 				1DB2172EFCE0D3B8FE7DE93F /* SubtitleStyleView.swift in Sources */,
 				9DFF07E1B415DEBA91C79373 /* SubtitleTranslator.swift in Sources */,
 				CAA8462079A5E90B5AF54480 /* TMDBViews.swift in Sources */,

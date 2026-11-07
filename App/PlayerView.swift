@@ -32,6 +32,7 @@ struct PlaybackView: View {
     #if os(macOS)
     @State private var importsSubtitleFile = false
     @State private var asksSubtitleAddress = false
+    @State private var searchesSubtitles = false
     #endif
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -203,7 +204,7 @@ struct PlaybackView: View {
         ChromeRow { chromeTitle; chromeButtons; chromeClose }
             .padding(16)
             .frame(maxHeight: .infinity, alignment: .top)
-        .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, subtitles: session.externalSubtitles)
+        .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, search: $searchesSubtitles, subtitles: session.externalSubtitles)
         .playerEpisodesSheet(isPresented: $showsEpisodes, channel: channel)
         .sheet(isPresented: $showsDanmakuList) {
             DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
@@ -264,7 +265,8 @@ struct PlaybackView: View {
             }
             // Subtitle files beside the video, or added now (#576); the item's own are in AVKit's menu.
             Menu {
-                MacSubtitleFiles(subtitles: session.externalSubtitles, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true })
+                MacSubtitleFiles(subtitles: session.externalSubtitles, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
+                                 searchOnline: { searchesSubtitles = true })
             } label: {
                 Image(systemName: session.externalSubtitles.selected == nil ? "captions.bubble" : "captions.bubble.fill").font(.headline).frame(width: 22, height: 22)
             }
@@ -810,7 +812,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             let options = audio.map { option in UIAction(title: option.name, state: option.id == audioChoice ? .on : .off) { _ in chooseAudio(option.id) } }
             items.append(UIMenu(title: L10n.text("Audio"), image: UIImage(systemName: "speaker.wave.2"), children: options))
         }
-        if let external, !external.entries.isEmpty { items.append(Self.subtitleFilesMenu(external)) }
+        if let external, !external.entries.isEmpty || external.hasSources { items.append(Self.subtitleFilesMenu(external)) }
         if !live {
             let setSpeed = setSpeed, speed = speed
             let options = Self.speeds.map { rate in UIAction(title: Self.speedLabel(rate), state: rate == speed ? .on : .off) { _ in setSpeed(rate) } }
@@ -861,6 +863,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             }
         }
         var children: [UIMenuElement] = [UIMenu(options: .displayInline, children: files)]
+        if external.hasSources || external.onlineState != .idle { children.append(onlineMenu(external)) }
         if let document = external.document {
             let timing = external.timing
             let shift = { (seconds: Double) in external.setTiming(SubtitleTiming(delay: timing.delay + seconds, scale: timing.scale)) }
@@ -884,6 +887,35 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             }
         }
         return UIMenu(title: L10n.text("Subtitle Files"), image: UIImage(systemName: external.selected == nil ? "captions.bubble" : "captions.bubble.fill"), children: children)
+    }
+
+    /// Subtitle sources (#576 M2): Search Online, then the results best first as they come in. The search uses the
+    /// video's names as the catalog gives them; there is no editing them with the remote.
+    private static func onlineMenu(_ external: ExternalSubtitles) -> UIMenu {
+        var items: [UIMenuElement] = []
+        switch external.onlineState {
+        case .idle:
+            items.append(UIAction(title: L10n.text("Search Online"), image: UIImage(systemName: "magnifyingglass")) { _ in external.search() })
+        case .noSources:
+            items.append(UIAction(title: L10n.text("No subtitle sources are on."), subtitle: L10n.text("Settings › Subtitle Sources"), attributes: [.disabled]) { _ in })
+        case .searching, .done:
+            for candidate in external.online.candidates.prefix(12) {
+                let subtitle = ([candidate.detail] + candidate.tags).joined(separator: " · ")
+                items.append(UIAction(title: candidate.title, subtitle: subtitle, state: external.selected == candidate.id ? .on : .off) { _ in external.download(candidate) })
+            }
+            if external.onlineState == .searching {
+                items.append(UIAction(title: L10n.text("Searching…"), attributes: [.disabled]) { _ in })
+            } else {
+                if external.online.candidates.isEmpty { items.append(UIAction(title: L10n.text("No subtitles found."), attributes: [.disabled]) { _ in }) }
+                for source in external.sourceNames {
+                    if case .failed(let error)? = external.online.statuses[source.id] {
+                        items.append(UIAction(title: source.name, subtitle: error.localizedDescription, attributes: [.disabled]) { _ in })
+                    }
+                }
+                items.append(UIAction(title: L10n.text("Search Again"), image: UIImage(systemName: "arrow.clockwise")) { _ in external.search() })
+            }
+        }
+        return UIMenu(title: L10n.text("Online"), options: .displayInline, children: items)
     }
     private var overlay: AnyView {
         AnyView(ZStack {
@@ -1043,6 +1075,7 @@ private struct DesktopPlaybackView: View {
     @State private var playingOn: String?
     @State private var importsSubtitleFile = false
     @State private var asksSubtitleAddress = false
+    @State private var searchesSubtitles = false
 
     private var showsChrome: Bool { idle.visible || session.error != nil }
     private var waitContent: PlaybackWaitContent? { .make(session, channel: channel, store: store, linesHint: true) }
@@ -1101,7 +1134,7 @@ private struct DesktopPlaybackView: View {
                 .danmakuListPresentation()
         }
         .onDisappear { idle.detach(); tvBrowser.stop() }
-        .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, subtitles: session.externalSubtitles)
+        .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, search: $searchesSubtitles, subtitles: session.externalSubtitles)
         // A subtitle file dropped on the video shows on it (#576).
         .dropDestination(for: URL.self) { urls, _ in
             let files = urls.filter(ExternalSubtitles.handles)
@@ -1182,7 +1215,8 @@ private struct DesktopPlaybackView: View {
                 Menu(L10n.text("Quality")) { QualityPicker(session: session) }
             }
             Menu(L10n.text("Subtitle Files")) {
-                MacSubtitleFiles(subtitles: session.externalSubtitles, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true })
+                MacSubtitleFiles(subtitles: session.externalSubtitles, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
+                                 searchOnline: { searchesSubtitles = true })
             }
             if !session.danmaku.isEmpty {
                 Toggle(L10n.text("Show Danmaku"), isOn: $showsDanmaku)
@@ -1223,9 +1257,10 @@ private struct MacSubtitleFiles: View {
     let subtitles: ExternalSubtitles
     let addFile: () -> Void
     let addAddress: () -> Void
+    let searchOnline: () -> Void
     var body: some View {
         if subtitles.selected != nil { Button(L10n.text("Off")) { subtitles.select(nil) } }
-        ExternalSubtitleMenu(subtitles: subtitles, addFile: addFile, addAddress: addAddress)
+        ExternalSubtitleMenu(subtitles: subtitles, addFile: addFile, addAddress: addAddress, searchOnline: searchOnline)
     }
 }
 

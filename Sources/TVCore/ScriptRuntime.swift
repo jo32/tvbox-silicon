@@ -276,6 +276,8 @@ final class ScriptBridge: @unchecked Sendable {
     /// Module sources: bundled assets, or downloads kept for five minutes and reused when offline.
     private func module(_ address: String) throws -> String {
         if let source = supplied[address] { return source }
+        // A sandboxed script (a subtitle source) runs the app's modules and its own, nothing fetched or read.
+        if handler?.allowsRemoteModules == false, !address.hasPrefix("assets://") { throw ScriptHostError("this script can't load \(address)") }
         if let url = URL(string: address), let data = try ImportedFiles.data(at: url) { return String(decoding: data, as: UTF8.self) }
         if address.hasPrefix("assets://") {
             guard let source = ScriptAssets.bundled(address) else { throw ScriptHostError("no bundled module \(address)") }
@@ -300,6 +302,12 @@ final class ScriptBridge: @unchecked Sendable {
 /// the operation isn't one of its own.
 protocol ScriptHostExtension: AnyObject, Sendable {
     func answer(_ operation: String, _ argument: String) throws -> String??
+    /// Whether the script may load modules from the network or the device's files.
+    var allowsRemoteModules: Bool { get }
+}
+
+extension ScriptHostExtension {
+    var allowsRemoteModules: Bool { true }
 }
 
 /// Requests started with `httpStart`, until their answers are taken.
