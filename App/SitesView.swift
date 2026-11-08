@@ -2279,8 +2279,12 @@ struct VideoDetailView: View {
     /// What this device knows shows at once; otherwise the lookup starts once the source's details are in (their
     /// synopsis and episodes help tell works of the same name apart).
     private func startTMDB() async {
-        guard TMDBLookup.applies(to: client.site) else { return }
         let key = TMDBMatchStore.key(source: client.site.key, video: video.id)
+        // Not looked up by itself, but a title the viewer matched by hand shows its TMDB details.
+        guard TMDBLookup.applies(to: client.site) else {
+            if TMDBLookup.allowsManual(client.site) { _ = await tmdb.prepare(key: key) }
+            return
+        }
         guard let detail else { _ = await tmdb.prepare(key: key); return }
         let request = TMDBMatch.Request(video: detail.keepingPoster(video.poster), listVideo: video,
                                         source: TMDBMatch.SourceRef(key: client.site.key, name: client.site.name))
@@ -2356,7 +2360,7 @@ struct VideoDetailView: View {
     }
     /// The lookup's progress or its question, then TMDB's cast, facts and notice, under the page's own content.
     @ViewBuilder private var tmdbStatus: some View {
-        TMDBLookupStatus(lookup: tmdb)
+        TMDBLookupStatus(manualTitle: TMDBLookup.allowsManual(client.site) ? video.name : nil, lookup: tmdb)
     }
     @ViewBuilder private var tmdbExtras: some View {
         if let details = tmdb.details {

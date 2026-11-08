@@ -28,6 +28,13 @@ import TVCore
         TMDBMatch.enabled && !TMDBMatch.skipsSource(key: site.key, api: site.api)
     }
 
+    /// A source the app doesn't look up by itself (Bilibili's uploads, short dramas) can still be matched by hand: the
+    /// viewer picks the TMDB title, and its poster and details replace the source's, on the page and in Watch Now (#713).
+    /// Not music, which has nothing on TMDB.
+    static func allowsManual(_ site: Site) -> Bool {
+        TMDBMatch.enabled && TMDBMatch.skipsSource(key: site.key, api: site.api) && !site.api.localizedCaseInsensitiveContains("music")
+    }
+
     /// What this device knows for the video: the viewer's pick, else a recent answer. False when the Worker must be asked.
     func prepare(key: String) async -> Bool {
         guard self.key != key else { return phase != .idle }
@@ -196,6 +203,8 @@ extension TMDBMatch.Details {
 
 /// While the lookup runs: what it is doing. When it found several works: which one it is. Otherwise nothing.
 struct TMDBLookupStatus: View {
+    /// The video title when it may be matched by hand (TMDBLookup.allowsManual).
+    var manualTitle: String? = nil
     let lookup: TMDBLookup
     var body: some View {
         switch lookup.phase {
@@ -218,9 +227,32 @@ struct TMDBLookupStatus: View {
             .accessibilityElement(children: .combine)
         case .ambiguous:
             TMDBChoices(lookup: lookup)
+        case .idle, .notFound:
+            if let manualTitle { TMDBManualMatch(lookup: lookup, title: manualTitle) }
         default:
             EmptyView()
         }
+    }
+}
+
+/// "Match with TMDB" on a video of a source the app doesn't look up itself (#713): the same picker as "Not This Title?".
+struct TMDBManualMatch: View {
+    let lookup: TMDBLookup
+    let title: String
+    @State private var choosing = false
+    var body: some View {
+        Button { choosing = true } label: { Label(L10n.text("Match with TMDB"), systemImage: "film.stack") }
+            #if os(tvOS)
+            .controlButton()
+            #else
+            .buttonStyle(.plain).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+            #endif
+            .accessibilityIdentifier("detail.tmdbMatch")
+            #if os(tvOS)
+            .fullScreenCover(isPresented: $choosing) { TMDBTVPicker(lookup: lookup, title: title) }
+            #else
+            .sheet(isPresented: $choosing) { TMDBPicker(lookup: lookup, title: title) }
+            #endif
     }
 }
 
