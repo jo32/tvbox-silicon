@@ -907,6 +907,7 @@ struct PlaybackSettingsView: View {
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
+    @AppStorage(AdSkip.key) private var skipsAds = true
     var body: some View {
         SettingsPage(title: L10n.text("Playback"), symbol: "slider.horizontal.below.rectangle") {
             // Few groups with short rows: one card per switch, each with its own long note, read as a stack of
@@ -933,6 +934,10 @@ struct PlaybackSettingsView: View {
                 FormLink(symbol: "text.magnifyingglass", tint: .orange, title: L10n.text("Subtitle Sources")) { SubtitleSourcesView() }
                 Toggle(isOn: $showsPlaybackInfo) {
                     FormLabel(symbol: "info.circle.fill", tint: .blue, title: L10n.text("Show Video Info"))
+                }
+                .settingsSwitch()
+                Toggle(isOn: $skipsAds) {
+                    FormLabel(symbol: "forward.end.fill", tint: .red, title: L10n.text("Skip Ad Segments"))
                 }
                 .settingsSwitch()
             }

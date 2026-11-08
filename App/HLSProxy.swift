@@ -114,7 +114,12 @@ actor HLSProxy {
             var mime = response.mimeType ?? "application/octet-stream"
             if let playlist = String(data: raw, encoding: .utf8), playlist.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("#EXTM3U") {
                 mime = "application/vnd.apple.mpegurl"
-                data = Data(rewrite(playlist, origin: response.url ?? url).utf8)
+                var text = playlist
+                if AdSkip.enabled, let cleaned = AdSkip.clean(playlist, origin: response.url ?? url) {
+                    Diagnostics.shared.record(.info, "player", "ads removed runs=\(cleaned.runs) seconds=\(Int(cleaned.seconds)) host=\(cleaned.host)")
+                    text = cleaned.text
+                }
+                data = Data(rewrite(text, origin: response.url ?? url).utf8)
             } else { data = MediaPayload.transportStream(raw); if data.count != raw.count { mime = "video/mp2t" } }
             var extra = ""
             var code = 200

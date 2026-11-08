@@ -1339,6 +1339,13 @@ extension PlaybackSession {
             }
             prepared.adapter = adapter
         }
+        #else
+        // A video whose playlist carries spliced-in ads opens through the loader that cuts them (#567); any other plays as it is.
+        if prepared.url == address, address.pathExtension.lowercased() == "m3u8", ["http", "https"].contains(address.scheme),
+           channel.url.scheme != DownloadLibrary.scheme,
+           let routed = await AdSkip.route(address, headers: channel.headers.merging(CloudStreams.playlistHeaders(for: address) ?? [:]) { $1 }) {
+            prepared.url = routed
+        }
         #endif
         return prepared
     }

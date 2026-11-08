@@ -11,14 +11,16 @@ import AVFoundation
 /// here: their segment addresses are made absolute and load from the CDN directly.
 public enum LiveRepair {
     public static let scheme = "tvbox-live-repair"
+    /// The same loader for a video's playlist whose ad segments are cut (`AdSkip`).
+    public static let adScheme = "tvbox-ad-skip"
     nonisolated(unsafe) private static var hostHeaders: [String: [String: String]] = [:]
     private static let lock = NSLock()
 
     /// The address AVPlayer opens for one of these playlists; the server's playlists are asked for with `headers`.
-    static func address(_ url: URL, headers: [String: String]? = nil) -> URL {
+    static func address(_ url: URL, headers: [String: String]? = nil, skipsAds: Bool = false) -> URL {
         if let headers, let host = url.host()?.lowercased() { lock.withLock { hostHeaders[host] = headers } }
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        components?.scheme = scheme
+        components?.scheme = skipsAds ? adScheme : scheme
         return components?.url ?? url
     }
 
@@ -29,14 +31,14 @@ public enum LiveRepair {
 
     /// The playlist on the server behind an address from `address`.
     static func upstream(_ url: URL) -> URL? {
-        guard url.scheme == scheme, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        guard url.scheme == scheme || url.scheme == adScheme, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
         components.scheme = "https"
         return components.url
     }
 
     /// An asset for an address from `address`, or nil for any other address.
     public static func asset(for url: URL) -> AVURLAsset? {
-        guard url.scheme == scheme else { return nil }
+        guard url.scheme == scheme || url.scheme == adScheme else { return nil }
         let asset = AVURLAsset(url: url)
         asset.resourceLoader.setDelegate(RepairedPlaylistLoader.shared, queue: RepairedPlaylistLoader.shared.queue)
         return asset
@@ -44,11 +46,16 @@ public enum LiveRepair {
 
     /// A playlist with absolute addresses (other playlists back through this scheme, segments and keys
     /// to the CDN) and without a discontinuity before the stream's first segment.
-    static func rewrite(_ text: String, origin: URL) -> String {
+    static func rewrite(_ text: String, origin: URL, skipsAds: Bool = false) -> String {
         let master = text.contains("#EXT-X-STREAM-INF")
+        var text = text
+        if skipsAds, !master, let cleaned = AdSkip.clean(text, origin: origin) {
+            Diagnostics.shared.record(.info, "player", "ads removed runs=\(cleaned.runs) seconds=\(Int(cleaned.seconds)) host=\(cleaned.host)")
+            text = cleaned.text
+        }
         func resolve(_ value: String) -> String {
             guard let url = URL(string: value, relativeTo: origin)?.absoluteURL else { return value }
-            return (master ? address(url) : url).absoluteString
+            return (master ? address(url, skipsAds: skipsAds) : url).absoluteString
         }
         let lines = text.components(separatedBy: .newlines)
         let firstSegment = lines.firstIndex { $0.hasPrefix("#EXTINF") } ?? lines.endIndex
@@ -84,7 +91,7 @@ private final class RepairedPlaylistLoader: NSObject, AVAssetResourceLoaderDeleg
                 let (data, response) = try await URLSession.shared.data(for: fetch)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 guard (200..<300).contains(status) else { throw TVError.http(status) }
-                result = .success(Data(LiveRepair.rewrite(String(decoding: data, as: UTF8.self), origin: response.url ?? upstream).utf8))
+                result = .success(Data(LiveRepair.rewrite(String(decoding: data, as: UTF8.self), origin: response.url ?? upstream, skipsAds: url.scheme == LiveRepair.adScheme).utf8))
             } catch {
                 if !(error is CancellationError) { Diagnostics.shared.record(.warning, "live", "repaired playlist host=\(upstream.host() ?? "-") \(error.localizedDescription)") }
                 result = .failure(error)
