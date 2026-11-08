@@ -725,6 +725,10 @@ import IOKit.pwr_mgt
         let asset = CloudStreams.asset(for: url) ?? HongguoStreams.asset(for: url) ?? DashStreams.asset(for: url) ?? LiveRepair.asset(for: url)
             ?? AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": channel.headers])
         let item = AVPlayerItem(asset: asset)
+        if url.scheme == CloudStreams.scheme {
+            // The duration sets how far ahead the file is read, on this device and for this bitrate (#702).
+            Task { if let seconds = try? await asset.load(.duration).seconds { CloudStreams.setDuration(seconds, for: url) } }
+        }
         if url.scheme == HongguoStreams.scheme { item.preferredForwardBufferDuration = HongguoStreams.forwardBufferDuration }
         item.textStyleRules = Self.subtitleRules()
         subtitles.attach(item)
