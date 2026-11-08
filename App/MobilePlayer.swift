@@ -386,10 +386,15 @@ struct MobilePlayerView: View {
         Button {
             setLocked(!locked)
         } label: {
-            Image(systemName: locked ? "lock.fill" : "lock.open.fill").font(.headline).frame(width: 22, height: 22)
-                .contentTransition(.symbolEffect(.replace))
+            // Locked, the button says what it undoes: with every control hidden, a bare padlock left people stuck
+            // in a player that seemed frozen (#729, #731).
+            HStack(spacing: 8) {
+                Image(systemName: locked ? "lock.fill" : "lock.open.fill").font(.headline).frame(width: 22, height: 22)
+                    .contentTransition(.symbolEffect(.replace))
+                if locked { Text(L10n.text("Unlock Controls")).font(.subheadline.weight(.semibold)).fixedSize() }
+            }
         }
-        .chromeButton()
+        .modifier(LockButtonStyle(locked: locked))
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
         .accessibilityLabel(L10n.text(locked ? "Unlock Controls" : "Lock Controls"))
@@ -421,7 +426,7 @@ struct MobilePlayerView: View {
         withAnimation(.easeOut(duration: 0.2)) { showsLock = true }
         lockTask?.cancel()
         lockTask = Task {
-            try? await Task.sleep(for: .seconds(2.5))
+            try? await Task.sleep(for: .seconds(4))
             guard !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: 0.3)) { showsLock = false }
         }
@@ -1643,6 +1648,21 @@ private struct PlayerTitleLogo: View {
         let aspect = max(aspect, 0.5)
         return aspect >= box.width / box.height ? CGSize(width: box.width, height: box.width / aspect)
             : CGSize(width: box.height * aspect, height: box.height)
+    }
+}
+
+/// The lock button: the round chrome button while the controls show, a capsule with its words once locked.
+private struct LockButtonStyle: ViewModifier {
+    let locked: Bool
+    @ViewBuilder func body(content: Content) -> some View {
+        if locked {
+            content.buttonStyle(.plain)
+                .padding(.horizontal, 14).frame(height: 44)
+                .glassSurface(.regular.interactive(), in: Capsule())
+                .contentShape(Capsule())
+        } else {
+            content.chromeButton()
+        }
     }
 }
 #endif
