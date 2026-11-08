@@ -6,6 +6,7 @@ import TVCore
 /// own cover, which tints the page, and every section below is a row of covers under a heading that opens all of it.
 struct WatchNowPhonePage: View {
     @Environment(Store.self) private var store
+    private var openSection = SectionOpener()
     let config: Subscription
     let sections: Set<HomeSection>
     @State private var hero = WatchNowHeroState()
@@ -71,7 +72,7 @@ struct WatchNowPhonePage: View {
 
     @ViewBuilder private var rows: some View {
         if sections.contains(.continueWatching), !store.playbackHistory.entries.isEmpty {
-            WatchNowPhoneShelf(title: L10n.text("Continue Watching"), action: { store.section = .history }) {
+            WatchNowPhoneShelf(title: L10n.text("Continue Watching"), action: { openSection(.history) }) {
                 ForEach(store.playbackHistory.entries.prefix(12)) { HistoryCard(entry: $0) }
             }
             .accessibilityIdentifier("home.continueWatching")
@@ -80,7 +81,7 @@ struct WatchNowPhonePage: View {
             let pinned = store.orderedSites(config).filter { store.pinnedSources.contains($0, origin: config.origin) }
             if !pinned.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    WatchNowPhoneHeading(title: L10n.text("Pinned Sources"), action: { store.section = .sites })
+                    WatchNowPhoneHeading(title: L10n.text("Pinned Sources"), action: { openSection(.sites) })
                     LazyVGrid(columns: Layout.cardColumns, spacing: Layout.cardSpacing) {
                         ForEach(pinned) { site in
                             RouteLink { SiteView(site: site, origin: config.origin, jarURL: config.spiderURL) } label: { SiteCard(site: site, marksPinned: false) }
@@ -95,13 +96,13 @@ struct WatchNowPhonePage: View {
         }
         if sections.contains(.recommendations) { RecommendationsView(config: config, rails: true) }
         if sections.contains(.favorites), !store.favorites.items.isEmpty {
-            WatchNowPhoneShelf(title: L10n.text("Favorites"), action: { store.section = .favorites }) {
+            WatchNowPhoneShelf(title: L10n.text("Favorites"), action: { openSection(.favorites) }) {
                 ForEach(Array(store.favorites.items.prefix(20))) { WatchNowPhoneFavorite(item: $0) }
             }
         }
         if sections.contains(.liveTV), !config.lives.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                WatchNowPhoneHeading(title: L10n.text("Live TV"), action: { store.section = .live })
+                WatchNowPhoneHeading(title: L10n.text("Live TV"), action: { openSection(.live) })
                 // Every platform, then one row of playlists.
                 LiveSourceGrid(sources: config.lives.filter(\.isBuiltIn) + config.lives.filter { !$0.isBuiltIn }.prefix(3), titled: false)
                     .padding(.horizontal, DiscoverLayout.gutter)

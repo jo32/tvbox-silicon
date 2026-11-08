@@ -220,6 +220,7 @@ struct RootView: View {
             .onChange(of: TabSizeClasses(horizontal: sizeClass, vertical: verticalSizeClass), initial: true) { _, now in
                 followsSizeClasses(now)
             }
+            .environment(\.sectionsInMore, phoneTabs ? inMore : [])
             .musicAccessory(enabled: store.music.showsStrip(videoPlaying: store.playing != nil) && phoneTabs)
             // Opened from the mini player; swiping down closes it, as in Music.
             .sheet(isPresented: Binding(get: { store.music.presentsPlayer }, set: { store.music.presentsPlayer = $0 })) { MusicNowPlayingScreen() }
@@ -336,6 +337,25 @@ struct RootView: View {
     }
 
     @ViewBuilder private func sectionRoot(_ section: AppSection) -> some View {
+        if section == .more {
+            // Only the phone's tab bar and tvOS 17's have a More tab.
+            #if os(iOS)
+            MoreView()
+            #elseif os(tvOS)
+            TVMoreView(sections: tvMore)
+            #else
+            EmptyView()
+            #endif
+        } else {
+            SectionPage(section: section)
+        }
+    }
+}
+
+/// A section's own page, as its tab shows it, More pushes it, or a heading on another page opens it (`SectionOpener`).
+struct SectionPage: View {
+    let section: AppSection
+    var body: some View {
         switch section {
         case .home: HomeView()
         case .discover: DiscoverView()
@@ -350,16 +370,28 @@ struct RootView: View {
         case .history: PlaybackHistoryView()
         case .settings: SettingsView()
         case .messages: MessagesView()
-        case .nowPlaying: EmptyView()
-        case .more:
-            // Only the phone's tab bar and tvOS 17's have a More tab.
-            #if os(iOS)
-            MoreView()
-            #elseif os(tvOS)
-            TVMoreView(sections: tvMore)
-            #else
-            EmptyView()
-            #endif
+        case .nowPlaying, .more: EmptyView()
+        }
+    }
+}
+
+extension EnvironmentValues {
+    /// The sections the phone's tab bar leaves to More. Empty where every section has a tab or a sidebar row.
+    @Entry var sectionsInMore: [AppSection] = []
+}
+
+/// Opens a section from a heading on a page, such as Watch Now's "Continue Watching ›". A section with a tab of its own is
+/// selected. One the phone keeps in More is pushed onto the page's own stack, so Back returns to the page: selecting it
+/// moved the app to the More tab with the section on top, and Back from there landed on More's list (#700).
+@MainActor struct SectionOpener: DynamicProperty {
+    @Environment(Store.self) private var store
+    @Environment(\.openRoute) private var openRoute
+    @Environment(\.sectionsInMore) private var inMore
+    func callAsFunction(_ section: AppSection) {
+        if inMore.contains(section), let openRoute {
+            openRoute(Route { AnyView(SectionPage(section: section).tvDefaultControls()) })
+        } else {
+            store.section = section
         }
     }
 }
