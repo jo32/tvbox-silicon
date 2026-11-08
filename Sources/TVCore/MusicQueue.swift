@@ -134,8 +134,10 @@ public struct MusicHistoryEntry: Codable, Equatable, Identifiable, Sendable {
         scheduleSave()
     }
 
+    /// Clears what the Music page lists as recent: the played entries and the Continue Playing card above them (#718).
     public func clearHistory() {
         history = []
+        resumePoint = nil
         scheduleSave()
     }
 

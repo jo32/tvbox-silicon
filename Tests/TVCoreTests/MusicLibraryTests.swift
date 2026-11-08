@@ -128,7 +128,10 @@ private struct FakeLyrics: MusicLyricsSource {
     for index in 0..<(MusicLibrary.historyLimit + 5) { reopened.recordPlay(song("S\(index)", "s\(index)")) }
     #expect(reopened.history.count == MusicLibrary.historyLimit)
     reopened.clearHistory()
-    #expect(reopened.history.isEmpty && reopened.resumePoint == point)
+    // Clear empties the whole Recently Played area, including the Continue Playing card (#718).
+    #expect(reopened.history.isEmpty && reopened.resumePoint == nil)
+    reopened.flush()
+    #expect(MusicLibrary(file: file).resumePoint == nil)
 }
 
 private struct FakeCollections: MusicCatalogSource, MusicCollectionSource {
