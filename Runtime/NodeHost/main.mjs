@@ -1,101 +1,21 @@
 // CatPawOpen (猫源) bundles on iPhone and iPad. EmbeddedNodeHost starts this once in the app's nodejs-mobile
 // and calls it over loopback: POST /call {bundle, api, profile, cloudAccounts, proxy, params} with the token it writes beside
 // its port. It mirrors the CatPawOpen mode of Runtime/ScriptHost/host.mjs (the Mac's sandboxed host); keep them in step.
+// Each bundle runs in a worker thread of its own (worker.mjs); this thread answers the app and passes calls on.
 import http from 'node:http';
-import https from 'node:https';
-import net from 'node:net';
-import tls from 'node:tls';
 import fs from 'node:fs';
+import os from 'node:os';
 import crypto from 'node:crypto';
-import { createRequire } from 'node:module';
-
-// Node 18 (nodejs-mobile) defaults to a new connection for every request; desktop Node 19+ keeps them
-// alive. Bundles using axios's default agents can make several requests to one site in quick succession
-// (address probes, searches with fallback paths, challenge cookies). Reuse those connections on iOS too:
-// repeatedly opening TLS connections made the 9280.kstore.vip sites reset the handshake before answering.
-// Bundles' own agents and their TLS verification settings remain theirs.
-http.globalAgent.keepAlive = true;
-https.globalAgent.keepAlive = true;
+import { Worker } from 'node:worker_threads';
+import { request, setProxy } from './agents.mjs';
 
 const [controlFile, relistenFile] = process.argv.slice(2);
 const token = crypto.randomBytes(16).toString('hex');
 function log(...values) { process.stderr.write(values.map(v => typeof v === 'string' ? v : JSON.stringify(v)).join(' ') + '\n'); }
-process.env.NODE_ENV = 'development'; // Fastify then skips its per-request logger
+process.env.NODE_ENV = 'development';
 Object.assign(console, { log, info: log, warn: log, error: log, debug: log });
-// Some bundles' handlers answer a request twice; the CatVod apps keep serving, so this does too.
 process.on('uncaughtException', error => log('CATPAW_UNCAUGHT', error?.stack || String(error)));
 process.on('unhandledRejection', error => log('CATPAW_UNHANDLED', error?.stack || String(error)));
-// Where bundles send their messages to the app (`messages`).
-globalThis.catDartServerPort = () => messages?.address()?.port || 0;
-
-// The app reaches the internet through the system's HTTP proxy when one is set (Settings > Wi-Fi > Configure
-// Proxy), but Node's sockets don't, so every agent's connections tunnel through it with CONNECT. A VPN-style
-// proxy needs nothing: iOS routes Node's sockets through it like the app's own.
-let proxy = null; // {host, port, exceptions} from EmbeddedNodeHost, updated on every call
-function direct(host) {
-    host = String(host || '').replace(/^\[|\]$/g, '').toLowerCase();
-    if (!proxy || host === 'localhost' || host.endsWith('.local') || /^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|::1$|fe80:)/.test(host)) return true;
-    return proxy.exceptions.some(rule => {
-        rule = rule.toLowerCase();
-        return rule.startsWith('*.') ? host.endsWith(rule.slice(1)) : host === rule;
-    });
-}
-function tunnel(options, secure, callback) {
-    const host = options.host || options.hostname || 'localhost';
-    const port = options.port || (secure ? 443 : 80);
-    const socket = net.connect(proxy.port, proxy.host);
-    const fail = error => { socket.destroy(); callback(error); };
-    socket.once('error', fail);
-    socket.once('connect', () => socket.write(`CONNECT ${host}:${port} HTTP/1.1\r\nHost: ${host}:${port}\r\n\r\n`));
-    let head = Buffer.alloc(0);
-    socket.on('data', function answer(chunk) {
-        head = Buffer.concat([head, chunk]);
-        const end = head.indexOf('\r\n\r\n');
-        if (end < 0) return;
-        socket.off('data', answer);
-        socket.off('error', fail);
-        const status = Number(head.toString('latin1', 0, end).split(' ')[1]);
-        if (status !== 200) return fail(new Error(`The proxy ${proxy.host}:${proxy.port} refused ${host}:${port} (HTTP ${status})`));
-        if (end + 4 < head.length) socket.unshift(head.subarray(end + 4));
-        callback(null, secure ? tls.connect({ ...options, socket, servername: options.servername ?? (net.isIP(host) ? undefined : host) }) : socket);
-    });
-}
-for (const [Agent, secure] of [[http.Agent, false], [https.Agent, true]]) {
-    const connect = Agent.prototype.createConnection;
-    Agent.prototype.createConnection = function (options, callback) {
-        if (direct(options.host || options.hostname)) return connect.call(this, options, callback);
-        tunnel(options, secure, callback);
-    };
-}
-// Kept-alive sockets are pooled by name, so a changed proxy doesn't reuse sockets made without it.
-// https.Agent's getName builds on this one.
-const getName = http.Agent.prototype.getName;
-http.Agent.prototype.getName = function (options = {}) {
-    const name = getName.call(this, options);
-    return direct(options.host || options.hostname) ? name : `${name}:via:${proxy.host}:${proxy.port}`;
-};
-
-// nodejs-mobile's V8 runs without a JIT, so it has no WebAssembly, and Node 18's fetch (undici) needs it.
-function request(url, { method = 'GET', headers = {}, body, timeout = 60_000 } = {}, redirects = 5) {
-    return new Promise((resolve, reject) => {
-        const target = new URL(url);
-        if (body !== undefined) headers = { ...headers, 'content-length': Buffer.byteLength(body) };
-        const req = (target.protocol === 'https:' ? https : http).request(target, { method, headers, timeout }, res => {
-            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects > 0) {
-                res.resume();
-                resolve(request(new URL(res.headers.location, target).href, { method, headers, body, timeout }, redirects - 1));
-                return;
-            }
-            const chunks = [];
-            res.on('data', chunk => chunks.push(chunk));
-            res.on('end', () => resolve({ status: res.statusCode, text: Buffer.concat(chunks).toString('utf8') }));
-            res.on('error', reject);
-        });
-        req.on('timeout', () => req.destroy(new Error(`${target.host} did not answer in time`)));
-        req.on('error', reject);
-        req.end(body);
-    });
-}
 
 // Bundles ask the app for things by POSTing {action, opt} to http://127.0.0.1:<catDartServerPort()>/msg, as the CatVod
 // Open apps take them. The host's `messages` server answers that address (`answerMessage`). The one request kept is a
@@ -211,44 +131,81 @@ function playable(text) {
     try { return (JSON.parse(text)?.list ?? []).some(video => video?.vod_play_url); } catch { return true; }
 }
 
-// A bundle's `start(config)` builds a Fastify app on the server `catServerFactory` makes, then lists its
-// sources at GET /config and serves each at POST /spider/<key>/<type>/{init,home,category,detail,play,search}.
-const bundles = new Map(); // bundle file -> Promise<{server, port, ports, started}>
+// Each bundle runs in a worker thread with a heap of its own (worker.mjs). V8 aborts the whole process when an isolate
+// runs out of memory, and Node runs inside the app, so a bundle that kept growing in the host's own isolate took the app
+// with it (NodeMobile V8 OOM, the top crash). A worker that runs out ends alone: its calls fail with a message, and the
+// bundle starts again on its next call. Each worker's heap gets an eighth of the device's memory, 256-768 MB.
+const heapLimit = Number(process.env.YINGXIA_NODE_HEAP_MB) || Math.round(Math.min(768, Math.max(256, os.totalmem() / 2 ** 20 / 8)));
+const bundles = new Map(); // bundle file -> Promise<{worker, port, ports, started, ended, exited, failure}>
 let starting = Promise.resolve();
 async function start({ bundle, api, profile }) {
-    let server;
-    globalThis.catServerFactory = handler => {
-        server = http.createServer(handler);
-        const listen = server.listen.bind(server);
-        server.listen = (...args) => listen(0, '127.0.0.1', args.find(arg => typeof arg === 'function'));
-        return server;
-    };
     fs.mkdirSync(profile, { recursive: true });
-    process.env.NODE_PATH = profile; // where the bundle keeps its settings database
-    const require = createRequire(bundle);
     // The bundle's settings sit beside it (index.js -> index.config.js); without them it starts with none.
-    let config = {};
+    let configFile;
     try {
         const response = await request(api.replace(/\.js(?=$|[?#])/, '.config.js'), { timeout: 20_000 });
         const text = response.status === 200 ? response.text : '';
         if (text) {
-            const file = bundle.replace(/\.js$/, '.config.js');
-            fs.writeFileSync(file, text);
-            delete require.cache[file];
-            const module = require(file);
-            config = module?.default ?? module ?? {};
+            configFile = bundle.replace(/\.js$/, '.config.js');
+            fs.writeFileSync(configFile, text);
         }
     } catch (error) { log('CATPAW_CONFIG', error.message); }
-    const exports = require(bundle);
-    if (typeof exports.start !== 'function') throw new Error('The script is not a CatPawOpen bundle');
-    await exports.start(config);
-    const deadline = Date.now() + 20_000;
-    while (!server?.listening) {
-        if (Date.now() > deadline) throw new Error('The CatPawOpen server did not start');
-        await new Promise(resolve => setTimeout(resolve, 50));
+    const worker = new Worker(new URL('./worker.mjs', import.meta.url), {
+        workerData: { bundle, configFile, messagesPort: messages.address()?.port || 0, proxy },
+        // Where the bundle keeps its settings database. Each worker has its own copy of the environment.
+        env: { ...process.env, NODE_PATH: profile },
+        resourceLimits: { maxOldGenerationSizeMb: heapLimit },
+    });
+    const instance = { worker, port: 0, ports: [], started: new Set(), exited: false, failure: null };
+    worker.on('error', error => { instance.failure = error; log('CATPAW_WORKER', bundle, error?.code || '', error?.stack || String(error)); });
+    instance.ended = new Promise(resolve => worker.once('exit', code => { instance.exited = true; log('CATPAW_WORKER_EXIT', bundle, code); resolve(); }));
+    try {
+        instance.port = await alive(instance, new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('The CatPawOpen server did not start')), 25_000);
+            timer.unref();
+            worker.on('message', function ready(reply) {
+                if (!('ready' in reply)) return;
+                clearTimeout(timer);
+                worker.off('message', ready);
+                reply.ready ? resolve(reply.port) : reject(new Error(reply.error));
+            });
+        }));
+    } catch (error) {
+        await worker.terminate();
+        throw error;
     }
-    const port = server.address().port;
-    return { server, port, ports: [port], started: new Set() };
+    instance.ports.push(instance.port);
+    return instance;
+}
+// A call to a bundle, or the bundle's worker ending first: then the call fails at once instead of waiting. A worker that
+// runs out of memory drops its connections a moment before it ends, so a failed call waits briefly to tell which it was.
+function alive(instance, promise) {
+    const ended = instance.ended.then(() => { throw stopped(instance); });
+    ended.catch(() => { });
+    const answered = promise.catch(async error => {
+        await Promise.race([instance.ended, new Promise(resolve => setTimeout(resolve, 500).unref())]);
+        throw instance.exited ? stopped(instance) : error;
+    });
+    answered.catch(() => { });
+    return Promise.race([answered, ended]);
+}
+function stopped(instance) {
+    const reason = instance.failure?.code === 'ERR_WORKER_OUT_OF_MEMORY' ? 'ran out of memory' : 'stopped';
+    return new Error(`The source ${reason} and was closed. Try again to start it again.`);
+}
+// Sends something every running bundle needs to know: a changed proxy, the messages server's new port.
+function tell(message) {
+    for (const pending of bundles.values()) pending.then(instance => { if (!instance.exited) instance.worker.postMessage(message); }, () => { });
+}
+let proxy = null, proxyKey = 'null';
+function useProxy(value) {
+    const next = value?.host ? { host: value.host, port: Number(value.port), exceptions: value.exceptions || [] } : null;
+    const key = JSON.stringify(next);
+    if (key === proxyKey) return;
+    proxy = next;
+    proxyKey = key;
+    setProxy(next);
+    tell({ proxy: next });
 }
 // The app's cloud-drive sign-ins, for bundles that keep their own and sign in through a config center the app can't
 // show. Bundles of the wexfnw family take a drive's cookie at PUT /website/api/credential/<drive>/cookie as {value}, and
@@ -318,10 +275,11 @@ async function sendFresh(send, route, body) {
 async function call(instance, params) {
     const send = async (route, body) => {
         const init = body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) };
-        const ask = () => request(`http://127.0.0.1:${instance.port}${route}`, init);
-        // A refused connection means iOS took the bundle's socket back while the app was suspended.
+        const ask = () => alive(instance, request(`http://127.0.0.1:${instance.port}${route}`, init));
+        // A refused connection means iOS took the bundle's socket back while the app was suspended, unless its worker ended.
         const { status, text } = await ask().catch(async error => {
             if (error.code !== 'ECONNREFUSED') throw error;
+            if (instance.exited) throw stopped(instance);
             await relisten();
             return ask();
         });
@@ -390,13 +348,14 @@ const control = http.createServer(async (req, res) => {
         for await (const chunk of req) chunks.push(chunk);
         const input = JSON.parse(Buffer.concat(chunks).toString('utf8'));
         if (input.relocate) { reply({ result: await relocate(String(input.relocate)) }); return; }
-        proxy = input.proxy?.host ? { host: input.proxy.host, port: Number(input.proxy.port), exceptions: input.proxy.exceptions || [] } : null;
+        useProxy(input.proxy);
         let instance = bundles.get(input.bundle);
         if (!instance) {
-            // Bundles read the factory and NODE_PATH while they start, so starts take turns.
-            instance = starting = starting.catch(() => { }).then(() => start(input));
-            bundles.set(input.bundle, instance);
-            instance.catch(() => bundles.delete(input.bundle));
+            // Starts take turns, so a phone short of memory never loads two bundles at once.
+            const pending = instance = starting = starting.catch(() => { }).then(() => start(input));
+            bundles.set(input.bundle, pending);
+            const forget = () => { if (bundles.get(input.bundle) === pending) bundles.delete(input.bundle); };
+            pending.then(started => started.ended.then(forget), forget);
         }
         instance = await instance;
         await shareAccounts(instance, input.cloudAccounts, input.profile).catch(error => log('CATPAW_ACCOUNT', error?.stack || String(error)));
@@ -419,17 +378,31 @@ function relisten() {
         const listen = server => new Promise(resolve => { server.close(); server.listen(0, '127.0.0.1', resolve); });
         for (const pending of bundles.values()) {
             const instance = await pending.catch(() => null);
-            if (!instance) continue;
-            await listen(instance.server);
-            instance.port = instance.server.address().port;
-            instance.ports.push(instance.port);
+            if (!instance || instance.exited) continue;
+            const port = await relistenWorker(instance).catch(error => log('CATPAW_RELISTEN', error.message));
+            if (!port) continue;
+            instance.port = port;
+            instance.ports.push(port);
         }
         await listen(messages);
+        tell({ messagesPort: messages.address().port });
         await listen(control);
         announce();
         log('CATPAW_RELISTEN', control.address().port);
     })().finally(() => { relistening = null; });
     return relistening;
+}
+let asked = 0;
+function relistenWorker(instance) {
+    const id = ++asked;
+    return alive(instance, new Promise((resolve, reject) => {
+        instance.worker.on('message', function answer(reply) {
+            if (reply.relistened !== id) return;
+            instance.worker.off('message', answer);
+            reply.error ? reject(new Error(reply.error)) : resolve(reply.port);
+        });
+        instance.worker.postMessage({ relisten: id });
+    }));
 }
 fs.watch(relistenFile, () => relisten().catch(error => log('CATPAW_RELISTEN', error?.stack || String(error))));
 control.on('error', error => log('CATPAW_CONTROL', error?.stack || String(error)));
