@@ -4056,11 +4056,11 @@
   ],
   "testflight": {
     "ios": {
-      "build": 52,
+      "build": 53,
       "link": "https://testflight.apple.com/join/dU6UNbzp"
     },
     "tvos": {
-      "build": 52,
+      "build": 53,
       "link": "https://testflight.apple.com/join/SSgWEwSr"
     }
   }
