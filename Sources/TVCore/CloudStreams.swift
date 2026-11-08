@@ -203,6 +203,10 @@ actor CloudByteStream {
     /// The most connections this stream may grow to, from `mostConnections`, when it falls behind playback.
     private let ceiling: Int
     private var growth: (since: Date, bytes: Int) = (Date(), 0)
+    /// The speed before the last connection was added, and the count it had: the next sample says whether it helped.
+    private var trial: (speed: Double, from: Int)?
+    /// Another connection brought nothing: the drive or the network is the limit, and no more are tried.
+    private var settled = false
     private var type: String?
     static let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
@@ -386,7 +390,7 @@ actor CloudByteStream {
     private func refused(_ index: Int, status: Int, body: Data) {
         connections = max(1, min(connections - 1, inflight.count - 1))
         sinceRefusal = 0
-        refusedEver = true
+        refusedEver = true; trial = nil
         let text = String(decoding: body.prefix(120), as: UTF8.self).replacingOccurrences(of: "\n", with: " ")
         Diagnostics.shared.record(.debug, "cloud.stream", "chunk=\(index) refused status=\(status) body=\(text) connections=\(connections); again")
     }
@@ -408,8 +412,20 @@ actor CloudByteStream {
         guard elapsed >= 4 else { return }
         let received = growth.bytes
         growth = (Date(), 0)
-        guard let bytesPerSecond, !refusedEver, connections == mostConnections, mostConnections < ceiling,
-              inflight.count >= connections, Double(received) / elapsed < 2 * bytesPerSecond else { return }
+        let speed = Double(received) / elapsed
+        if let earlier = trial {
+            trial = nil
+            // Under 15% more with the extra connection (a drive that caps the whole account, a slow network): keep the
+            // old count. A thinner stream is kinder to the drive and to the battery.
+            if speed < earlier.speed * 1.15 {
+                connections = earlier.from; mostConnections = earlier.from; settled = true
+                Diagnostics.shared.record(.debug, "cloud.stream", "more connections did not help (\(Int(earlier.speed)) to \(Int(speed)) B/s): back to \(earlier.from)")
+                return
+            }
+        }
+        guard let bytesPerSecond, !settled, !refusedEver, connections == mostConnections, mostConnections < ceiling,
+              inflight.count >= connections, speed < 2 * bytesPerSecond else { return }
+        trial = (speed, connections)
         connections += 1; mostConnections += 1
         Diagnostics.shared.record(.debug, "cloud.stream", "behind playback (\(Int(Double(received) / elapsed)) B/s of \(Int(bytesPerSecond)) needed): connections=\(connections)")
     }

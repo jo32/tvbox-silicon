@@ -199,6 +199,7 @@ struct CloudRemuxSource: RemuxSource {
     }
     func read(at offset: Int64, count: Int) async throws -> Data { try await stream.read(at: Int(offset), count: count) }
     var transfer: (received: Int64, host: String?)? { (stream.counter.value, stream.host) }
+    func learned(duration seconds: Double) async { await stream.setDuration(seconds) }
     func close() async { await stream.clear() }
 }
 
