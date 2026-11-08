@@ -11,12 +11,30 @@ import TVCore
     private(set) var phase: Phase = .idle
     /// The latest step worth showing: "thinking" between steps keeps the one before.
     private(set) var step: TMDBMatch.Step = .starting
-    private(set) var details: TMDBMatch.Details?
+    private(set) var details: TMDBMatch.Details? { didSet { refreshDouban() } }
+    /// Douban's score for the matched work, when Wikidata links it to one (#505).
+    private(set) var douban: DoubanRating.Score?
+    private var doubanFor: String?
     private(set) var answer: TMDBMatch.Answer?
     /// The viewer chose the work (or "none of these") for this video.
     private(set) var chosen = false
     private var key: String?
     private var request: TMDBMatch.Request?
+
+    /// TMDB's facts line with Douban's score after TMDB's.
+    var facts: String { details?.facts(douban: douban) ?? "" }
+
+    private func refreshDouban() {
+        guard let details else { douban = nil; doubanFor = nil; return }
+        let tag = "\(details.mediaType.rawValue)-\(details.id)"
+        guard tag != doubanFor else { return }
+        doubanFor = tag; douban = nil
+        let (id, type) = (details.id, details.mediaType)
+        Task {
+            let score = await DoubanRating.score(tmdbID: id, mediaType: type)
+            if doubanFor == tag { withAnimation(.smooth(duration: 0.3)) { douban = score } }
+        }
+    }
 
     var numbering: TMDBMatch.Numbering { answer?.match?.numbering ?? answer?.numbering ?? .season }
     /// The agent's offset counts only for the work it matched, not one the viewer picked instead.
@@ -173,7 +191,9 @@ extension TMDBMatch.Step {
 
 extension TMDBMatch.Details {
     /// "2024 · 剧情 / 古装 · 2 季 · ★ 8.1": what kind of work it is, in a line.
-    var facts: String {
+    var facts: String { facts(douban: nil) }
+
+    func facts(douban: DoubanRating.Score?) -> String {
         var parts: [String] = []
         if let year { parts.append(String(year)) }
         if !genres.isEmpty { parts.append(genres.prefix(3).joined(separator: " / ")) }
@@ -185,6 +205,7 @@ extension TMDBMatch.Details {
             parts.append(minutes >= 60 ? L10n.text("%lldh %lldm", minutes / 60, minutes % 60) : L10n.text("%lld min", minutes))
         }
         if let rating, voteCount >= 10 { parts.append("★ " + String(format: "%.1f", rating)) }
+        if let douban { parts.append(L10n.text("Douban") + " " + String(format: "%.1f", douban.value)) }
         return parts.joined(separator: " · ")
     }
 

@@ -2571,7 +2571,7 @@ struct VideoDetailView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(video.name).font(.title3.weight(.bold)).fixedSize(horizontal: false, vertical: true)
                             if !video.remarks.isEmpty { Text(video.remarks).font(.subheadline).foregroundStyle(.secondary) }
-                            if let facts = tmdb.details?.facts, !facts.isEmpty {
+                            if case let facts = tmdb.facts, !facts.isEmpty {
                                 Text(facts).font(.subheadline).foregroundStyle(.secondary).transition(.opacity)
                             }
                             Spacer(minLength: 0)
@@ -3094,7 +3094,7 @@ struct VideoDetailView: View {
     /// TMDB's facts (2026 · Drama · ★ 7.0) once they are in, else the source's remarks and year; then the source.
     private var watchFacts: String {
         let video = currentVideo()
-        let facts = tmdb.details?.facts ?? ""
+        let facts = tmdb.facts
         let lead = facts.isEmpty ? [video.remarks, video.year ?? ""] : [facts]
         return (lead + [SourceLabel(client.site.name).text]).filter { !$0.isEmpty }.joined(separator: " · ")
     }
@@ -3858,7 +3858,7 @@ private struct TVCoverBackdrop: View {
 extension VideoDetailView {
     /// TMDB's facts (2026 · Drama · ★ 7.0), else the source's note, year and name: the line under the hero's title.
     private var heroFacts: String {
-        if let facts = tmdb.details?.facts, !facts.isEmpty { return facts }
+        if !tmdb.facts.isEmpty { return tmdb.facts }
         let current = currentVideo()
         return [current.remarks, current.year ?? "", client.site.name].filter { !$0.isEmpty }.joined(separator: " · ")
     }
