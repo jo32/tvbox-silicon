@@ -37,6 +37,15 @@ private func fixture(_ name: String, _ ext: String) throws -> Data {
         #expect(throws: (any Error).self) { try WebAddress.resolve(value) }
     }
 }
+@Test func typedAddressesForgiveMissingSchemeAndFullWidthPunctuation() throws {
+    #expect(try WebAddress.resolve(typed: "example.com/config.json").absoluteString == "http://example.com/config.json")
+    #expect(try WebAddress.resolve(typed: " 192.168.1.5:8080/a?x=1 \n").absoluteString == "http://192.168.1.5:8080/a?x=1")
+    #expect(try WebAddress.resolve(typed: "https：／／example.com／a.json").absoluteString == "https://example.com/a.json")
+    #expect(try WebAddress.resolve(typed: "https://example.com/a").absoluteString == "https://example.com/a")
+    for value in ["", "file:///etc/passwd", "javascript:alert(1)", "ftp://example.com/a", "not a url", "example", "example.com /a"] {
+        #expect(throws: (any Error).self) { try WebAddress.resolve(typed: value) }
+    }
+}
 @Test func m3uGroupsHeadersAndCommas() throws {
     let text = """
     #EXTM3U

@@ -317,7 +317,7 @@ import TVCore
         defer { importing = false }
         let typed = (address ?? subscriptionAddress).trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            let url = try WebAddress.resolve(typed)
+            let url = try WebAddress.resolve(typed: typed)
             switch try await http.subscriptionImport(url) {
             case .subscription(let value):
                 let title = (address == nil ? subscriptionName : (name ?? "")).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -347,7 +347,7 @@ import TVCore
             saveSubscriptionList()
             rebuildSubscription()
         } catch {
-            Diagnostics.shared.failure("subscription", "import host=\((try? WebAddress.resolve(typed))?.host() ?? "-")", error)
+            Diagnostics.shared.failure("subscription", "import host=\((try? WebAddress.resolve(typed: typed))?.host() ?? "-")", error)
             importError = L10n.text("Import failed: %@", error.localizedDescription)
         }
     }
