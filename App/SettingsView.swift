@@ -421,6 +421,13 @@ struct FormSettingsView: View {
                     // press or a right click on the Mac. Not a swipe: these rows wear the app's own fill, which a
                     // swipe leaves behind as a square slab while the row slides out of its rounded card.
                     .contextMenu {
+                        // On or off without opening the subscription (#730).
+                        Button {
+                            Task { await store.setSubscription(entry, enabled: !entry.enabled) }
+                        } label: {
+                            Label(L10n.text(entry.enabled ? "Turn Off" : "Turn On"), systemImage: entry.enabled ? "pause.circle" : "play.circle")
+                        }
+                        .disabled(store.importing)
                         // Red, icon too: the form's accent would draw the trash in blue beside a red title.
                         Button(role: .destructive) { removingSubscription = entry } label: { Label(L10n.text("Remove"), systemImage: "trash") }
                             .tint(.red)
