@@ -398,7 +398,7 @@ actor CloudByteStream {
         let plan = CloudBufferPlan.make(length: source.length, duration: seconds, budget: CloudDevice.cacheBudget, chunkSize: Self.chunkSize)
         readAheadChunks = plan.readAhead; cacheLimit = plan.cacheChunks
         growth = (Date(), 0)
-        Diagnostics.shared.record(.info, "cloud.stream", "plan bitrate=\(Int(bytesPerSecond ?? 0) * 8 / 1000)kbps readAhead=\(plan.readAhead) chunks (~\(Int(plan.seconds)) s) cache=\(plan.cacheChunks) chunks connections=\(connections)...\(ceiling)")
+        Diagnostics.shared.record(.info, "cloud.stream", "plan bitrate=\(Int(bytesPerSecond ?? 0) * 8 / 1000)kbps readAhead=\(plan.readAhead) chunks (~\(Int(plan.seconds)) s) cache=\(plan.cacheChunks) chunks connections=\(connections)...\(ceiling) device=\(CloudDevice.current.label)")
     }
 
     /// Every few seconds: if reading flat out on all the connections still brings in less than twice what playback eats,

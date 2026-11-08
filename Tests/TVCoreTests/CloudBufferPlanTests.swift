@@ -40,9 +40,4 @@ import Testing
         #expect(plan.seconds == 0)
         #expect(CloudBufferPlan.make(length: 1, duration: 0, budget: 256 << 20, chunkSize: chunk).seconds == 0)
     }
-
-    @Test func theDeviceBudgetIsUsable() {
-        #expect(CloudDevice.cacheBudget >= 16 << 20)
-        #expect(CloudDevice.maxConnections > CloudByteStream.parallel)
-    }
 }

@@ -1,7 +1,4 @@
 import Foundation
-#if os(iOS) || os(tvOS) || os(visionOS)
-import os
-#endif
 
 /// How far ahead of the player a cloud file is read, and how many chunks are kept: worked out from the
 /// device's memory and the video's bitrate, not fixed numbers (#702). A 4K file at 10 MB/s was read 1.6
@@ -34,33 +31,5 @@ struct CloudBufferPlan: Equatable {
         let wanted = Int((bytesPerSecond * targetSeconds / Double(chunkSize)).rounded(.up))
         let ahead = min(max(wanted, fewestAhead), room)
         return CloudBufferPlan(readAhead: ahead, cacheChunks: cached, seconds: Double(ahead * chunkSize) / bytesPerSecond)
-    }
-}
-
-/// What this device can spare for streaming.
-enum CloudDevice {
-    /// Bytes of memory for the chunk cache: a share of what the system lets the app use, less when the device is
-    /// saving power or hot.
-    static var cacheBudget: Int {
-        let info = ProcessInfo.processInfo
-        #if os(macOS)
-        var bytes = min(512 << 20, Int(info.physicalMemory / 32))
-        #elseif os(tvOS)
-        // Apple TV decodes 4K in the same memory.
-        var bytes = min(192 << 20, max(48 << 20, Int(os_proc_available_memory()) / 10))
-        #else
-        var bytes = min(256 << 20, max(48 << 20, Int(os_proc_available_memory()) / 6))
-        #endif
-        if info.isLowPowerModeEnabled || info.thermalState.rawValue >= ProcessInfo.ThermalState.serious.rawValue { bytes /= 2 }
-        return bytes
-    }
-
-    /// The most connections a stream may grow to when the link can't keep up; it starts on fewer.
-    static var maxConnections: Int {
-        #if os(macOS)
-        10
-        #else
-        8
-        #endif
     }
 }
