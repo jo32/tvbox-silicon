@@ -903,6 +903,7 @@ struct PlaybackSettingsView: View {
     @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @AppStorage(SpeedBoost.key) private var holdSpeed = SpeedBoost.standard
     @AppStorage(PictureLevel.key) private var slidesLevels = true
+    @AppStorage(PictureDoubleTap.key) private var doubleTapSkips = true
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
@@ -911,12 +912,17 @@ struct PlaybackSettingsView: View {
             // Few groups with short rows: one card per switch, each with its own long note, read as a stack of
             // fragments, and a long title pushed the switch's row to two lines.
             SettingsGroup(title: L10n.text("Gestures"), footer: L10n.text("Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go.")
-                          + " " + L10n.text("Slide up or down on the left of the video to change the brightness, or on the right to change the volume.")) {
+                          + " " + L10n.text("Slide up or down on the left of the video to change the brightness, or on the right to change the volume.")
+                          + " " + L10n.text("Double-tap the left or right of the video to skip 10 seconds. Turn this off and a double tap plays or pauses instead.")) {
                 Picker(selection: $holdSpeed) {
                     ForEach(SpeedBoost.startRates, id: \.self) { Text($0.formatted(.number.precision(.fractionLength(0...2))) + "×").tag($0) }
                 } label: {
                     FormLabel(symbol: "forward.fill", tint: .orange, title: L10n.text("Touch and Hold Speed"))
                 }
+                Toggle(isOn: $doubleTapSkips) {
+                    FormLabel(symbol: "goforward.10", tint: .green, title: L10n.text("Double-Tap to Skip"))
+                }
+                .settingsSwitch()
                 Toggle(isOn: $slidesLevels) {
                     FormLabel(symbol: "sun.max.fill", tint: .yellow, title: L10n.text("Brightness and Volume"))
                 }

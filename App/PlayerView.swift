@@ -1110,6 +1110,27 @@ private struct NativePlayerView: UIViewControllerRepresentable {
 @MainActor final class PlaybackWindow: NSWindow {
     weak var session: PlaybackSession?
 
+    /// The wheel over the picture sets the volume, as in other players; AVKit's own handling scrubbed the video.
+    /// Over the episode list and other panels it still scrolls them.
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .scrollWheel, event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+           let session, let hit = contentView?.hitTest(event.locationInWindow), Self.isPicture(hit) {
+            let delta = event.scrollingDeltaY * (event.hasPreciseScrollingDeltas ? 0.003 : 0.02)
+            if delta != 0 {
+                session.player.isMuted = false
+                session.player.volume = min(1, max(0, session.player.volume + Float(event.isDirectionInvertedFromDevice ? -delta : delta)))
+            }
+            return
+        }
+        super.sendEvent(event)
+    }
+
+    private static func isPicture(_ view: NSView) -> Bool {
+        var current: NSView? = view
+        while let v = current { if v is AVPlayerView { return true }; current = v.superview }
+        return false
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         // Preserve system commands and text/slider editing inside native controls.
         guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
