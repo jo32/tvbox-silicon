@@ -69,10 +69,24 @@ exports.start = async () => {
   server.listen();
 };
 ''')
+    (job / 'grow').mkdir()
+    (job / 'grow' / 'index.js').write_text('''
+exports.start = async () => {
+  const server = globalThis.catServerFactory(async (req, res) => {
+    for await (const ignored of req) {}
+    if (req.url.endsWith('/init')) { res.end('{}'); return; }
+    if (req.url.includes('/grow/')) { const kept = []; for (;;) kept.push(new Array(100000).fill(kept.length)); }
+    res.writeHead(200, {'content-type': 'application/json'});
+    res.end(JSON.stringify({list: [{vod_id: 'ok', vod_name: 'Alive'}]}));
+  });
+  server.listen();
+};
+''')
     control = job / 'control.json'
     with (job / 'host.log').open('w') as log:
         process = subprocess.Popen([node, str(job / 'runner.mjs'), str(root / 'Runtime/NodeHost/main.mjs'),
-                                    str(control), str(job / 'relisten')], stdout=log, stderr=log)
+                                    str(control), str(job / 'relisten')], stdout=log, stderr=log,
+                                   env={**os.environ, 'YINGXIA_NODE_HEAP_MB': '64'})
         try:
             deadline = time.monotonic() + 10
             while not control.exists():
@@ -80,17 +94,29 @@ exports.start = async () => {
                     raise AssertionError((job / 'host.log').read_text())
                 time.sleep(.02)
             config = json.loads(control.read_text())
-            for scheme in ('http', 'https'):
-                data = dict(bundle=str(job / 'index.js'), api='http://127.0.0.1:1/index.js',
-                            profile=str(job / 'profile'), params={'catPawOpen':f'/spider/{scheme}/3', 'wd':'test'})
+            def call(bundle, api):
+                data = dict(bundle=str(bundle), api='http://127.0.0.1:1/index.js',
+                            profile=str(job / 'profile'), params={'catPawOpen': api, 'wd': 'test'})
                 req = urllib.request.Request(f'http://127.0.0.1:{config["port"]}/call',
                                              data=json.dumps(data).encode(),
                                              headers={'x-yingxia-token': config['token'], 'content-type':'application/json'})
-                envelope = json.load(urllib.request.urlopen(req, timeout=10))
+                return json.load(urllib.request.urlopen(req, timeout=60))
+            for scheme in ('http', 'https'):
+                envelope = call(job / 'index.js', f'/spider/{scheme}/3')
                 assert 'error' not in envelope, envelope
                 result = json.loads(envelope['result'])
                 assert result['list'] == [{'vod_id':scheme, 'vod_name':'Found'}], result
+            # A bundle that runs out of memory fails its call and ends alone: the host and the other bundle carry on,
+            # and the bundle answers again on its next call.
+            envelope = call(job / 'grow' / 'index.js', '/spider/grow/3')
+            assert 'ran out of memory' in envelope.get('error', ''), envelope
+            assert process.poll() is None, (job / 'host.log').read_text()
+            envelope = call(job / 'index.js', '/spider/http/3')
+            assert 'error' not in envelope, envelope
+            envelope = call(job / 'grow' / 'index.js', '/spider/ok/3')
+            assert json.loads(envelope.get('result', '{}')).get('list') == [{'vod_id': 'ok', 'vod_name': 'Alive'}], envelope
         finally:
             process.terminate()
             process.wait(timeout=5)
-print('Embedded Node host checks passed: HTTP and HTTPS source requests reuse upstream connections.')
+print('Embedded Node host checks passed: HTTP and HTTPS source requests reuse upstream connections; '
+      'a bundle that runs out of memory ends alone and starts again.')
