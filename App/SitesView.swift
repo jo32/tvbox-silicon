@@ -1006,6 +1006,12 @@ struct SiteView: View {
                                 startRequest { await browser.load(.list(category: id, query: "", page: 1), client: client) }
                             }
                         }
+                        #if os(tvOS)
+                        // The source's name sits with its categories instead of in a bar pinned over the search field.
+                        if folder == nil, !isBilibiliSpace {
+                            Text(site.name).font(.system(size: 30, weight: .semibold)).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        #endif
                         if !browser.categories.isEmpty { categoryBar } else if initialLoading && folder == nil { ChipSkeletonRow() }
                         if browser.query.isEmpty, let current = browser.categories.first(where: { $0.id == browser.category }), !current.filters.isEmpty {
                             CategoryFilterBar(filters: current.filters, choices: browser.filters) { choices in
@@ -1092,7 +1098,7 @@ struct SiteView: View {
             if login != bilibiliLogin { bilibiliLogin = login; query = ""; startRequest { await home(); await browser.loadCategories(client: client) } }
         }
         // An UP主's space names them in its hero; a title over it only repeated it.
-        .screenTitle(isBilibiliSpace ? "" : folder?.name ?? site.name, shown: !showsBilibiliTVSpace).task {
+        .screenTitle(isBilibiliSpace ? "" : folder?.name ?? site.name, shown: showsTopTitle).task {
             store.searchModel.suspend()
             if let preview, folder == nil, initialQuery.isEmpty { browser.seed(videos: preview.videos, categories: preview.categories) }
             if canLoad && !browser.loaded {
@@ -1113,6 +1119,13 @@ struct SiteView: View {
                 else { query = initialQuery; await search(); await browser.loadCategories(client: client) }
             }
         }
+    }
+    private var showsTopTitle: Bool {
+        #if os(tvOS)
+        false
+        #else
+        !showsBilibiliTVSpace
+        #endif
     }
     private var categoryBar: some View {
         ChipRow {

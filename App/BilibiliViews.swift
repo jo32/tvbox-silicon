@@ -915,11 +915,15 @@ struct BilibiliVideoTile: View {
                             .background(BilibiliMark.pink, in: Capsule()).padding(8)
                     }
                 }
-            Text(video.name).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-                .lineLimit(2, reservesSpace: true).multilineTextAlignment(.leading)
-            if !video.remarks.isEmpty {
-                Text(video.remarks).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            // Moves down with the cover's lift, as Discover's captions do.
+            VStack(alignment: .leading, spacing: 8) {
+                Text(video.name).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                    .lineLimit(2, reservesSpace: true).multilineTextAlignment(.leading)
+                if !video.remarks.isEmpty {
+                    Text(video.remarks).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
+            .cardCaption()
         }
         .frame(width: width)
     }
