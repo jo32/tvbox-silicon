@@ -43,7 +43,11 @@ struct GlobalSearchView: View {
         let shown = model.matches.filter { model.selectedSource == nil || $0.id == model.selectedSource }
         let sites = Dictionary(shown.map { ($0.id, $0.site) }) { first, _ in first }
         var seen = Set<String>()
-        let first = shown.flatMap { result in (result.page?.videos ?? []).map { SearchPoster(site: result.site, video: $0) } }
+        // The titles that are what was searched for lead (#374); the rest follow, none hidden. Later pages still only
+        // add at the end, so the grid doesn't move under a scrolling thumb.
+        let first = TitleMatch.ordered(
+            shown.flatMap { result in (result.page?.videos ?? []).map { SearchPoster(site: result.site, video: $0) } },
+            keyword: model.keyword, title: { $0.video.name })
         let later = model.batches.flatMap { batch in sites[batch.source].map { site in batch.videos.map { SearchPoster(site: site, video: $0) } } ?? [] }
         return (first + later).filter { seen.insert($0.id).inserted }
     }
