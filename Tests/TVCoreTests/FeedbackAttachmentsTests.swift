@@ -57,6 +57,34 @@ private func properties(_ file: URL) throws -> [CFString: Any] {
     #expect(try properties(small.file)[kCGImagePropertyPixelWidth] as? Int == Feedback.pictureSide)
 }
 
+@Test func feedbackScreenshotsFitWhatIssueReadersTake() async throws {
+    // A full-size iPhone screenshot too busy for PNG ran to 6 MB (#759): it goes up as a JPEG within the budget.
+    let width = 1179, height = 2556
+    var seed: UInt64 = 759
+    var bytes = [UInt8](repeating: 255, count: width * height * 4)
+    for index in bytes.indices where index % 4 != 3 {
+        seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+        bytes[index] = UInt8(truncatingIfNeeded: seed >> 56)
+    }
+    let file = try scratch("busy.png")
+    let image = bytes.withUnsafeMutableBytes { buffer in
+        CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage()
+    }
+    let destination = try #require(CGImageDestinationCreateWithURL(file as CFURL, UTType.png.identifier as CFString, 1, nil))
+    CGImageDestinationAddImage(destination, try #require(image), nil)
+    #expect(CGImageDestinationFinalize(destination))
+    #expect(try file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0 > Feedback.pictureBudget)
+
+    let busy = try await Feedback.attachment(from: file)
+    defer { Feedback.discard([busy]) }
+    #expect(busy.type == "image/jpeg" && busy.file.pathExtension == "jpg")
+    #expect(busy.size <= Int64(Feedback.pictureBudget))
+    let kept = try properties(busy.file)
+    let longer = max(kept[kCGImagePropertyPixelWidth] as? Int ?? .max, kept[kCGImagePropertyPixelHeight] as? Int ?? .max)
+    #expect(longer <= Feedback.pictureSide)
+}
+
 @Test func feedbackTakesOnlyPicturesAndVideos() async throws {
     let text = try scratch("notes.txt")
     try Data("hello".utf8).write(to: text)

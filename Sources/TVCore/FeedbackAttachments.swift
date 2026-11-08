@@ -47,8 +47,12 @@ extension Feedback {
         }
     }
 
-    /// Pictures are made no larger than this on their longer side.
-    static let pictureSide = 4096
+    /// Pictures are made no larger than this on their longer side, nor than `pictureBudget` in bytes. The issue
+    /// shows them, and the agents that triage issues read them: Claude takes a picture up to 5 MB and, in a
+    /// request with many, 2000 pixels a side. A full-size iPhone screenshot of posters ran to 6 MB as PNG (#759),
+    /// and every read of that issue failed.
+    static let pictureSide = 2000
+    static let pictureBudget = 2 << 20
     static let thumbnailSide = 240
 
     /// Where the copies are kept until they are sent.
@@ -86,20 +90,28 @@ extension Feedback {
             try FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: file.path)
             return try Attachment(kind: .image, file: file, type: "image/gif", thumbnail: thumbnail)
         }
-        // Screenshots stay sharp as PNG; photos (HEIC and the rest) become JPEG, which every browser shows.
-        // Drawn again from the pixels, so none of the original's metadata goes with them.
-        let png = type.conforms(to: .png)
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: pictureSide, kCGImageSourceShouldCacheImmediately: true,
-        ]
-        guard let pixels = CGImageSourceCreateThumbnailAtIndex(image, 0, options as CFDictionary) else { throw Failure.unsupportedAttachment }
-        let file = folder.appending(path: UUID().uuidString + (png ? ".png" : ".jpg"))
-        guard let destination = CGImageDestinationCreateWithURL(file as CFURL, (png ? UTType.png : .jpeg).identifier as CFString, 1, nil)
-        else { throw Failure.unsupportedAttachment }
-        CGImageDestinationAddImage(destination, pixels, png ? nil : [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
-        guard CGImageDestinationFinalize(destination) else { throw Failure.unsupportedAttachment }
-        return try Attachment(kind: .image, file: file, type: png ? "image/png" : "image/jpeg", thumbnail: thumbnail)
+        // Screenshots stay sharp as PNG while they fit the budget; photos (HEIC and the rest), and screenshots
+        // too busy for PNG, become JPEG, which every browser shows. A picture that fits at no quality is made
+        // smaller. Drawn again from the pixels, so none of the original's metadata goes with them.
+        var side = pictureSide
+        while true {
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: side, kCGImageSourceShouldCacheImmediately: true,
+            ]
+            guard let pixels = CGImageSourceCreateThumbnailAtIndex(image, 0, options as CFDictionary) else { throw Failure.unsupportedAttachment }
+            var candidates: [(type: UTType, quality: Double?)] = [0.85, 0.7, 0.55, 0.4].map { (UTType.jpeg, Optional($0)) }
+            if type.conforms(to: .png) { candidates.insert((.png, nil), at: 0) }
+            for candidate in candidates {
+                guard let data = encoded(pixels, as: candidate.type, quality: candidate.quality), data.count <= pictureBudget else { continue }
+                let png = candidate.type == .png
+                let file = folder.appending(path: UUID().uuidString + (png ? ".png" : ".jpg"))
+                try data.write(to: file)
+                return try Attachment(kind: .image, file: file, type: png ? "image/png" : "image/jpeg", thumbnail: thumbnail)
+            }
+            side = max(pixels.width, pixels.height) * 3 / 4
+            guard side >= 256 else { throw Failure.attachmentTooLarge(.image) }
+        }
     }
 
     static func video(_ source: URL) async throws -> Attachment {
@@ -132,10 +144,13 @@ extension Feedback {
         return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary).flatMap(jpeg)
     }
 
-    static func jpeg(_ image: CGImage) -> Data? {
+    static func jpeg(_ image: CGImage) -> Data? { encoded(image, as: .jpeg, quality: 0.7) }
+
+    /// `image` as a PNG or JPEG file's bytes, without metadata.
+    static func encoded(_ image: CGImage, as type: UTType, quality: Double? = nil) -> Data? {
         let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
-        CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: 0.7] as CFDictionary)
+        guard let destination = CGImageDestinationCreateWithData(data, type.identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(destination, image, quality.map { [kCGImageDestinationLossyCompressionQuality: $0] as CFDictionary })
         return CGImageDestinationFinalize(destination) ? data as Data : nil
     }
 
