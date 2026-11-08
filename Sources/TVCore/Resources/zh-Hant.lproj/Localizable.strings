@@ -1744,6 +1744,10 @@
 "Chapter %lld" = "第 %lld 章";
 "All Comments" = "全部評論";
 "Start Over" = "從頭開始";
+"Hide Sources That Aren't Working (%lld)" = "隱藏失效的來源（%lld）";
+"Sources come from your subscriptions, so a source is hidden rather than deleted. To delete a whole subscription, open it in Settings." = "來源來自你的訂閱，所以單一來源只能隱藏，不能刪除。若要刪除整個訂閱，請在「設定」中打開它。";
+"This Source Is Hidden" = "此來源已隱藏";
+"It stays out of Watch Now and search. Hidden sources are listed at the end of the Sources page." = "它不會出現在「立即觀看」和搜尋中。已隱藏的來源列在「隨選來源」頁面的最後。";
 
 /* Subtitle archives (#576 M1b) */
 "The archive is damaged." = "壓縮檔已損壞。";

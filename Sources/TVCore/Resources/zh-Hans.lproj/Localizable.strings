@@ -1744,6 +1744,10 @@
 "Chapter %lld" = "第 %lld 章";
 "All Comments" = "全部评论";
 "Start Over" = "从头开始";
+"Hide Sources That Aren't Working (%lld)" = "隐藏失效的源（%lld）";
+"Sources come from your subscriptions, so a source is hidden rather than deleted. To delete a whole subscription, open it in Settings." = "源来自你的订阅，所以单个源只能隐藏，不能删除。要删除整个订阅，请在“设置”中打开它。";
+"This Source Is Hidden" = "此源已隐藏";
+"It stays out of Watch Now and search. Hidden sources are listed at the end of the Sources page." = "它不会出现在“现在观看”和搜索中。已隐藏的源列在“点播源”页面的最后。";
 
 /* Subtitle archives (#576 M1b) */
 "The archive is damaged." = "压缩包已损坏。";

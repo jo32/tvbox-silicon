@@ -1744,6 +1744,10 @@
 "Chapter %lld" = "Chapter %lld";
 "All Comments" = "All Comments";
 "Start Over" = "Start Over";
+"Hide Sources That Aren't Working (%lld)" = "Hide Sources That Aren't Working (%lld)";
+"Sources come from your subscriptions, so a source is hidden rather than deleted. To delete a whole subscription, open it in Settings." = "Sources come from your subscriptions, so a source is hidden rather than deleted. To delete a whole subscription, open it in Settings.";
+"This Source Is Hidden" = "This Source Is Hidden";
+"It stays out of Watch Now and search. Hidden sources are listed at the end of the Sources page." = "It stays out of Watch Now and search. Hidden sources are listed at the end of the Sources page.";
 
 /* Subtitle archives (#576 M1b) */
 "The archive is damaged." = "The archive is damaged.";

@@ -362,6 +362,13 @@ struct FormSettingsView: View {
     @AppStorage(PlayOnController.key) private var receivesPlayOn = true
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     #endif
+    /// `HiddenSourcesEditor`, opened from the subscriptions.
+    @State private var editingSources = false
+    /// A subscription a swipe or its menu asked to remove, waiting for the confirmation.
+    @State private var removingSubscription: SubscriptionEntry?
+    private var hiddenSourceCount: Int {
+        store.sourceGroups(includeHidden: false).first { $0.kind == .hidden }?.sites.count ?? 0
+    }
     private var version: String? {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String).flatMap { $0.isEmpty ? nil : L10n.text("Version %@", $0) }
     }
@@ -408,11 +415,43 @@ struct FormSettingsView: View {
                              title: entry.title, value: store.subscriptionValue(entry), warning: failure != nil) {
                         SubscriptionDetailView(entry: entry)
                     }
+                    // Removing one no longer means finding Remove at the bottom of its page (#669): swipe it, or
+                    // its menu (a long press, a right click on the Mac).
+                    .swipeActions(edge: .trailing) {
+                        // Red, not the settings' accent the form gives every button.
+                        Button(role: .destructive) { removingSubscription = entry } label: { Label(L10n.text("Remove"), systemImage: "trash") }
+                            .tint(.red)
+                    }
+                    .contextMenu {
+                        Button(role: .destructive) { removingSubscription = entry } label: { Label(L10n.text("Remove"), systemImage: "trash") }
+                    }
                 }
                 ForEach(MangaStore.shared.repositories, id: \.self) { url in
                     FormLink(symbol: "books.vertical.fill", tint: .orange, title: MangaSources.title(of: url), value: L10n.text("Manga")) {
                         MangaRepositoryView(url: url)
                     }
+                }
+                // Next to the subscriptions they come from: hiding a source that stopped working, and showing again
+                // one hidden by mistake (#669, #704). The same list as the Sources page's Edit.
+                if store.subscription != nil {
+                    Button { editingSources = true } label: {
+                        HStack(spacing: 8) {
+                            FormLabel(symbol: "eye.slash.fill", tint: .teal, title: L10n.text("Hide or Show Sources")).lineLimit(1).layoutPriority(1)
+                                .foregroundStyle(.primary)
+                            Spacer(minLength: 0)
+                            if hiddenSourceCount > 0 {
+                                Text(L10n.text("%lld hidden", hiddenSourceCount)).lineLimit(1).foregroundStyle(.secondary)
+                            }
+                            #if os(iOS)
+                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                            #endif
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .formRowButton()
+                    // A row like the subscriptions above it, not the accent the form gives a button.
+                    .tint(.primary)
+                    .accessibilityIdentifier("settings.hiddenSources")
                 }
                 if store.subscriptions.count > 1 {
                     FormLink(symbol: "trash.fill", tint: .red, title: L10n.text("Remove Subscriptions")) { RemoveSubscriptionsView() }
@@ -685,6 +724,15 @@ struct FormSettingsView: View {
         #endif
         }
         .settingsForm(L10n.text("Settings"))
+        .sheet(isPresented: $editingSources) { HiddenSourcesEditor() }
+        // An alert rather than a dialog: a dialog on the row never appeared after a swipe, and on the page it pointed
+        // at the top of Settings.
+        .alert(L10n.text("Remove “%@”", removingSubscription?.title ?? ""),
+               isPresented: Binding(get: { removingSubscription != nil }, set: { if !$0 { removingSubscription = nil } }),
+               presenting: removingSubscription) { entry in
+            Button(L10n.text("Remove"), role: .destructive) { store.removeSubscription(entry) }
+            Button(L10n.text("Cancel"), role: .cancel) {}
+        }
         #if os(iOS)
         .sheet(isPresented: $addingSubscription) { AddSubscriptionSheet() }
         .navigationDestination(isPresented: $showsFeedback) { FeedbackView() }
