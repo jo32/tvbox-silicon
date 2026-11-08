@@ -51,6 +51,11 @@ public struct PictureTaps: Sendable {
     }
 }
 
+/// Whether two taps on a side skip (the default) or, with this off, play or pause as two taps in the middle do.
+public enum PictureDoubleTap {
+    public static let key = "player.doubleTapSkips"
+}
+
 /// Sliding sideways across the picture moves through the video (Bilibili, Tencent Video): the picture's width is up
 /// to three minutes, or the whole video when it is shorter.
 public enum PictureSeek {

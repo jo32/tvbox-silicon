@@ -65,6 +65,8 @@ struct MobilePlayerView: View {
     @State private var swipeStart: Double?
     /// Sliding up or down: the brightness on the left, the volume on the right, from where the slide began.
     @AppStorage(PictureLevel.key) private var slidesLevels = true
+    /// Off: two taps anywhere play or pause, and the sides don't skip.
+    @AppStorage(PictureDoubleTap.key) private var doubleTapSkips = true
     @State private var level: (volume: Bool, start: Double, value: Double)?
     @State private var leveling = false
     @State private var levelTask: Task<Void, Never>?
@@ -210,7 +212,7 @@ struct MobilePlayerView: View {
             if showsLock { withAnimation(.easeOut(duration: 0.2)) { showsLock = false } } else { flashLock() }
             return
         }
-        let zone = PictureTaps.zone(x: x, width: width, seekable: seekable && showsTransport && playingOn == nil && !pip.active)
+        let zone = PictureTaps.zone(x: x, width: width, seekable: doubleTapSkips && seekable && showsTransport && playingOn == nil && !pip.active)
         switch taps.tap(at: ProcessInfo.processInfo.systemUptime, in: zone) {
         case .toggleControls:
             let showing = !chromeVisible
@@ -1011,7 +1013,7 @@ private struct SeekBar<Accessory: View>: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .gesture(DragGesture(minimumDistance: 0)
                 .onChanged { changed($0, value: value, duration: duration) }
-                .onEnded { _ in ended() })
+                .onEnded { ended($0) })
             .animation(.spring(duration: 0.3, bounce: 0.3), value: held)
         }
         // The frame at the finger, above the time, centred on the handle and kept on screen.
@@ -1043,11 +1045,11 @@ private struct SeekBar<Accessory: View>: View {
     private func changed(_ gesture: DragGesture.Value, value: Double, duration: Double) {
         guard duration > 0, width > 0 else { return }
         if drag == nil {
-            let handle = width * value / duration
-            let start = abs(gesture.startLocation.x - handle) <= 30 ? value : duration * Double(min(max(0, gesture.startLocation.x / width), 1))
-            drag = (start, gesture.startLocation)
+            // From where the video is, wherever the finger lands (YouTube, Telegram): a touch away from the handle used
+            // to jump there first, and the picture lurched. A tap that doesn't slide still jumps (see `ended`).
+            drag = (value, gesture.startLocation)
             hold(true)
-            clock.scrub(to: start)
+            clock.scrub(to: value)
         }
         guard let begin = drag else { return }
         let away = abs(gesture.location.y - begin.location.y)
@@ -1062,8 +1064,12 @@ private struct SeekBar<Accessory: View>: View {
         clock.scrub(to: min(max(0, begin.position + moved), duration))
     }
 
-    private func ended() {
+    private func ended(_ gesture: DragGesture.Value) {
         guard drag != nil else { return }
+        // A tap on the bar, with no slide, goes to that point.
+        if hypot(gesture.translation.width, gesture.translation.height) < 6, width > 0, clock.duration > 0 {
+            clock.scrub(to: clock.duration * Double(min(max(0, gesture.startLocation.x / width), 1)))
+        }
         drag = nil
         fineness = 1
         hold(false)

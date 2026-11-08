@@ -1760,3 +1760,5 @@
 "The archive uses a kind of ZIP that isn't supported." = "不支持这种 ZIP 压缩方式。";
 "The archive holds no SRT, WebVTT or ASS files." = "压缩包里没有 SRT、WebVTT 或 ASS 文件。";
 "None of the archive's files is for this episode." = "压缩包里没有这一集的文件。";
+"Double-Tap to Skip" = "双击快进快退";
+"Double-tap the left or right of the video to skip 10 seconds. Turn this off and a double tap plays or pauses instead." = "双击视频左侧或右侧可快进或快退 10 秒。关闭后，双击将改为播放或暂停。";
