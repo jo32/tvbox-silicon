@@ -363,6 +363,8 @@ struct FormSettingsView: View {
     @AppStorage(BilibiliCastController.key) private var receivesCasts = true
     @AppStorage(PlayOnController.key) private var receivesPlayOn = true
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
+    /// The language picked here, "" for the system's.
+    @State private var language = MacLanguage.launched
     #endif
     /// `HiddenSourcesEditor`, opened from the subscriptions.
     @State private var editingSources = false
@@ -546,6 +548,24 @@ struct FormSettingsView: View {
             #else
             Section {
                 FormLink(symbol: AppSection.home.icon, tint: Brand.cyan, title: L10n.text("Watch Now")) { WatchNowSettingsView() }
+                // iPhone and iPad list the app's language in the Settings app; on the Mac it is hidden deep in System
+                // Settings, so it is picked here.
+                Picker(selection: $language) {
+                    Text(L10n.text("System Language")).tag("")
+                    ForEach(MacLanguage.choices, id: \.code) { Text($0.name).tag($0.code) }
+                } label: {
+                    FormLabel(symbol: "globe", tint: .blue, title: L10n.text("Language"))
+                }
+                .onChange(of: language) { _, code in MacLanguage.choose(code) }
+                .accessibilityIdentifier("settings.language")
+                .id("settings.language")
+                if language != MacLanguage.launched {
+                    HStack {
+                        Text(L10n.text("Restart Yingxia to use the new language.")).foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Button(L10n.text("Restart Now")) { MacLanguage.relaunch() }
+                    }
+                }
             }
             #endif
 
@@ -722,11 +742,16 @@ struct FormSettingsView: View {
             #endif
         }.settingsRows() }
         #if DEBUG
-        // `-qaScrollBottom 1` opens Settings at its end for screenshots.
+        // `-qaScrollBottom 1` opens Settings at its end for screenshots; `-qaScrollTo <id>` at a group with that id.
         .task {
-            guard UserDefaults.standard.bool(forKey: "qaScrollBottom") else { return }
-            try? await Task.sleep(for: .seconds(1))
-            proxy.scrollTo("settings.end", anchor: .bottom)
+            let defaults = UserDefaults.standard
+            guard let target = defaults.string(forKey: "qaScrollTo") ?? (defaults.bool(forKey: "qaScrollBottom") ? "settings.end" : nil)
+            else { return }
+            // Twice: the first lands by estimated row heights, the second once the rows on the way are laid out.
+            for _ in 0..<2 {
+                try? await Task.sleep(for: .seconds(1))
+                proxy.scrollTo(target, anchor: target == "settings.end" ? .bottom : .center)
+            }
         }
         #endif
         }
@@ -2167,6 +2192,42 @@ struct ContributorsSection: View {
                 Text(L10n.text("Ranked by commits in the last 30 days."))
             }
         }
+    }
+}
+#endif
+
+#if os(macOS)
+/// The app's own language on the Mac. macOS keeps it under System Settings › General › Language & Region ›
+/// Applications, where few look; Settings writes the same setting (AppleLanguages in the app's own defaults), so
+/// the two agree. Text is read in that language at launch, so a change shows after a restart.
+enum MacLanguage {
+    static let key = "AppleLanguages"
+    /// The languages the app is translated into (L10n.supportedLanguages), each named in itself.
+    static let choices: [(code: String, name: String)] = [("en", "English"), ("zh-Hans", "简体中文"), ("zh-Hant", "繁體中文"), ("ja", "日本語")]
+
+    /// The language chosen for the app, or "" while it follows the system's.
+    static var chosen: String {
+        guard let domain = Bundle.main.bundleIdentifier,
+              let languages = UserDefaults.standard.persistentDomain(forName: domain)?[key] as? [String],
+              let first = languages.first else { return "" }
+        return L10n.resolvedLanguage(first)
+    }
+
+    /// The choice the app was opened with, which its text is in.
+    static let launched = chosen
+
+    static func choose(_ code: String) {
+        if code.isEmpty { UserDefaults.standard.removeObject(forKey: key) } else { UserDefaults.standard.set([code], forKey: key) }
+    }
+
+    /// Quits, and opens the app again once this copy has gone, so the two never run at once.
+    @MainActor static func relaunch() {
+        let reopen = Process()
+        reopen.executableURL = URL(fileURLWithPath: "/bin/sh")
+        reopen.arguments = ["-c", "while /bin/kill -0 \"$1\" 2>/dev/null; do /bin/sleep 0.2; done; /usr/bin/open \"$0\"",
+                            Bundle.main.bundlePath, String(ProcessInfo.processInfo.processIdentifier)]
+        try? reopen.run()
+        NSApp.terminate(nil)
     }
 }
 #endif
