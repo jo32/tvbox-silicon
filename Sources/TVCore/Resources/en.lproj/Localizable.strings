@@ -52,7 +52,7 @@
 "Remove %@ from favorites" = "Remove %@ from favorites";
 "Add %@ to favorites" = "Add %@ to favorites";
 "Connect a Live Subscription" = "Connect a Live Subscription";
-"Import a TVBox configuration containing live playlists in Settings first." = "Import a TVBox configuration containing live playlists in Settings first.";
+"In Settings, add a TVBox subscription with live playlists, or an M3U or TXT live playlist by its address or from a file." = "In Settings, add a TVBox subscription with live playlists, or an M3U or TXT live playlist by its address or from a file.";
 "All" = "All";
 "Group" = "Group";
 "Channels: %lld" = "Channels: %lld";
@@ -748,6 +748,7 @@
 "On" = "On";
 "Off" = "Off";
 "%lld sources" = "%lld sources";
+"%lld live playlists" = "%lld live playlists";
 "Couldn't refresh" = "Couldn't refresh";
 "Use This Subscription" = "Use This Subscription";
 "Order" = "Order";
@@ -1389,7 +1390,7 @@
 "New Albums" = "New Albums";
 "More Charts" = "More Charts";
 "Add from File…" = "Add from File…";
-"A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider." = "A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider.";
+"A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider." = "A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider.";
 "This file is no longer on this device. Add it again." = "This file is no longer on this device. Add it again.";
 "LX Music Sources" = "LX Music Sources";
 "LX Music Source" = "LX Music Source";

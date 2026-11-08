@@ -159,6 +159,8 @@ extension Store {
         if subscriptionErrors[entry.address] != nil { return L10n.text("Couldn't refresh") }
         if !entry.enabled { return L10n.text("Off") }
         guard let copy = documents[entry.address] else { return L10n.text("Not loaded yet") }
+        // A lone M3U / TXT playlist has no sources of its own; count what it brings instead.
+        if copy.sites.isEmpty, !copy.lives.isEmpty { return L10n.text("%lld live playlists", copy.lives.count) }
         return L10n.text("%lld sources", copy.sites.count)
     }
 }
@@ -830,7 +832,7 @@ struct FormSettingsView: View {
             if store.importing { ProgressView().appControlSize(.small); ElapsedTime() }
             Button(L10n.text("Use a Demo URL")) { store.subscriptionAddress = Store.defaultURL }
             Button(L10n.text("Add from File…")) { choosesFile = true }.disabled(store.importing)
-                .help(L10n.text("A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider."))
+                .help(L10n.text("A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider."))
             Button(store.importing ? L10n.text("Importing…") : L10n.text("Add Subscription")) { add() }
                 .buttonStyle(.borderedProminent).disabled(!canAdd)
         }
@@ -1027,7 +1029,7 @@ private struct AddSubscriptionSheet: View {
                             .foregroundStyle(.primary)
                     }
                     .disabled(store.importing)
-                } footer: { Text(L10n.text("A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider.")) }
+                } footer: { Text(L10n.text("A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider.")) }
             }.settingsRows() }
             .settingsForm(L10n.text("Add Subscription"))
             .toolbar {
@@ -1061,9 +1063,9 @@ private struct AddSubscriptionSheet: View {
 }
 #endif
 
-/// What Add from File offers: a subscription, or one spider script.
+/// What Add from File offers: a subscription, an M3U / TXT live playlist, or one spider script.
 enum SubscriptionFile {
-    static let types: [UTType] = [.json, .pythonScript, .javaScript]
+    static let types: [UTType] = [.json, .pythonScript, .javaScript, .m3uPlaylist, .plainText]
 }
 
 /// One subscription: switch it on or off, move it (earlier subscriptions win duplicate sources), or remove it.

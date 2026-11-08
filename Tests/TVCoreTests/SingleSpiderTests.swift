@@ -65,3 +65,24 @@ import Testing
     #expect(throws: (any Error).self) { try ImportedFiles.data(at: URL(string: "https://files.yingxia.invalid/a/b.py")!) }
     #expect(try ImportedFiles.data(at: URL(string: "https://example.com/a.py")!) == nil)
 }
+
+/// #725: an M3U or TXT live playlist picked from Files imports as one live playlist, and its channels
+/// load from the app's copy.
+@Test func importedLivePlaylistFilesLoadTheirChannels() async throws {
+    let playlists = [
+        "m3u": "#EXTM3U\n#EXTINF:-1 group-title=\"央视\",CCTV-1\nhttps://example.com/cctv1.m3u8\n",
+        "txt": "央视,#genre#\nCCTV-1,https://example.com/cctv1.m3u8\n",
+    ]
+    for (ext, text) in playlists {
+        let picked = FileManager.default.temporaryDirectory.appending(path: "live-\(UUID().uuidString).\(ext)")
+        try Data(text.utf8).write(to: picked)
+        defer { try? FileManager.default.removeItem(at: picked) }
+        let address = try ImportedFiles.add(picked)
+        defer { ImportedFiles.remove(address.absoluteString) }
+        guard case .subscription(let config) = try await HTTPClient().subscriptionImport(address) else { Issue.record("not a subscription"); continue }
+        #expect(config.sites.isEmpty && config.lives.count == 1)
+        let live = try #require(config.lives.first)
+        let channels = try await HTTPClient().channels(live)
+        #expect(channels.map(\.name) == ["CCTV-1"] && channels.first?.group == "央视", "\(ext)")
+    }
+}

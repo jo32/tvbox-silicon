@@ -52,7 +52,7 @@
 "Remove %@ from favorites" = "%@ をお気に入りから削除";
 "Add %@ to favorites" = "%@ をお気に入りに追加";
 "Connect a Live Subscription" = "ライブ配信設定を追加";
-"Import a TVBox configuration containing live playlists in Settings first." = "まず設定で、ライブ再生リスト（lives）を含む TVBox 設定を読み込んでください。";
+"In Settings, add a TVBox subscription with live playlists, or an M3U or TXT live playlist by its address or from a file." = "設定で、ライブ再生リストを含む TVBox 配信設定を追加するか、M3U / TXT ライブ再生リストをアドレスまたはファイルから追加してください。";
 "All" = "すべて";
 "Group" = "グループ";
 "Channels: %lld" = "チャンネル数：%lld";
@@ -747,6 +747,7 @@
 "On" = "オン";
 "Off" = "オフ";
 "%lld sources" = "%lld 件のソース";
+"%lld live playlists" = "ライブ再生リスト %lld 件";
 "Couldn't refresh" = "更新できません";
 "Use This Subscription" = "この購読を使用";
 "Order" = "順序";
@@ -1389,7 +1390,7 @@
 "New Albums" = "ニューアルバム";
 "More Charts" = "その他のランキング";
 "Add from File…" = "ファイルから追加…";
-"A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider." = "TVBox JSON 配信設定、または単体の Python（.py）/ JavaScript（.js）スパイダー。";
+"A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider." = "TVBox JSON 配信設定、M3U / TXT ライブ再生リスト、または Python（.py）か JavaScript（.js）のスパイダー 1 つ。";
 "This file is no longer on this device. Add it again." = "このファイルはこのデバイスにありません。もう一度追加してください。";
 "LX Music Sources" = "LX Music カスタムソース";
 "LX Music Source" = "LX Music ソース";
