@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.15",
+          "buildVersion": "53",
+          "date": "2026-11-08",
+          "localizedDescription": "• 云盘播放自动适配设备\n• 字幕：ASS 样式与图片字幕\n• 播放与播放器控制\n• 搜索、评分与片源\n• Mac：视频页与漫画页\n• 其他修复\n\n• Cloud drives that adapt to your device\n• Subtitles: ASS styling and picture subtitles\n• Playback and player controls\n• Search, ratings and sources\n• Mac: video and comic pages\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.15/Yingxia-1.8.15-ios.ipa",
+          "size": 127927291,
+          "sha256": "547065673f43e092a95c787069582157acf48a1d1d0a0edbb14e82eaad316bbd",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.14",
           "buildVersion": "52",
           "date": "2026-11-08",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.9/Yingxia-1.8.9-ios.ipa",
           "size": 118106652,
           "sha256": "f751de0653dcf5363b032954728345f0da4d14403f11b1e43f35c2fa5dbc3fe4",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.8",
-          "buildVersion": "46",
-          "date": "2026-11-04",
-          "localizedDescription": "• 在外接显示器上播放\n• 字幕翻译\n• 分类筛选\n• 批量隐藏或显示源\n• “发现”里有豆瓣热门了\n• 内置源改为在线更新\n• 其他修复\n\n• Play on an external display\n• Translated subtitles\n• Category filters\n• Hide or show many sources at once\n• Douban hot lists in Discover\n• Built-in sources from the cloud\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.8/Yingxia-1.8.8-ios.ipa",
-          "size": 117877153,
-          "sha256": "417c45e513e36d62eace1bfeeb9cbf56a16fa2ebc38fadc5229808d33fd7b91b",
           "minOSVersion": "17.0"
         }
       ],
