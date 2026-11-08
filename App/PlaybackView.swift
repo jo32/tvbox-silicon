@@ -1187,8 +1187,15 @@ import IOKit.pwr_mgt
     }
 
     private func restorePositionIfNeeded(_ item: AVPlayerItem) {
-        guard let requested = pendingResume, !restoringPosition, !checkingPicture, item.status == .readyToPlay,
-              let target = PlaybackHistoryEntry.resumeTarget(requested, duration: item.duration.seconds) else { return }
+        guard let requested = pendingResume, !restoringPosition, !checkingPicture, item.status == .readyToPlay else { return }
+        // A live stream (a sports line a source lists as an episode) has no duration, so there is no place to
+        // return to. Waiting for one left "loading" on and the player paused for good (#683, #717): play it from its live edge.
+        if item.duration.isIndefinite {
+            pendingResume = nil; loading = false
+            if !editingSkip { player.play() }
+            return
+        }
+        guard let target = PlaybackHistoryEntry.resumeTarget(requested, duration: item.duration.seconds) else { return }
         restoringPosition = true
         let pattern: Duration.TimeFormatStyle.Pattern = target >= 3600 ? .hourMinuteSecond : .minuteSecond
         note(L10n.text("Jumping to %@", Duration.seconds(Int(target)).formatted(.time(pattern: pattern))))
