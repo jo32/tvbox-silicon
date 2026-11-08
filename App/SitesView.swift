@@ -1023,7 +1023,8 @@ struct SiteView: View {
                             Text(L10n.text("Choose a title to find it across your sources.")).font(.subheadline).foregroundStyle(.secondary)
                         }
                         if browser.busy {
-                            LoadingCard { .source(site, origin: origin, title: L10n.text("Loading source content…")) }
+                            // Under the skeleton the page already says it is loading: the card speaks only when the wait drags on (#694).
+                            LoadingCard(appearAfter: initialLoading ? LoadingCard.patience - LoadingCard.quiet : 0) { .source(site, origin: origin, title: L10n.text("Loading source content…")) }
                         }
                         if initialLoading { PosterSkeletonGrid().loadingFocus { dismiss() } }
                         if let error = browser.error {
@@ -2158,7 +2159,8 @@ struct VideoDetailView: View {
     @ViewBuilder private var loadingCard: some View {
         if busy {
             // Keyed by the step, so the timer restarts when details turn into resolving a link.
-            LoadingCard { .source(client.site, origin: client.origin, title: busyTitle) }
+            // While the skeleton shows, only a long wait gets the card (#694); resolving a link, with the page in place, keeps it.
+            LoadingCard(appearAfter: detail == nil ? LoadingCard.patience - LoadingCard.quiet : 0) { .source(client.site, origin: client.origin, title: busyTitle) }
                 .id(busyTitle)
                 .frame(maxWidth: .infinity).padding(.horizontal, Layout.gutter).padding(.bottom, 24)
         }

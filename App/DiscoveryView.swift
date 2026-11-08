@@ -1005,7 +1005,7 @@ struct RecommendationsView: View {
             }
             #endif
             if model.busy, let site {
-                LoadingCard { .source(site, origin: config.origin, title: L10n.text("Loading recommendations…")) }
+                LoadingCard(appearAfter: model.items.isEmpty ? LoadingCard.patience - LoadingCard.quiet : 0) { .source(site, origin: config.origin, title: L10n.text("Loading recommendations…")) }
             }
             if model.busy && model.items.isEmpty { PosterSkeletonGrid() }
             if let error = model.error {
