@@ -364,7 +364,7 @@ struct FormSettingsView: View {
     #endif
     /// `HiddenSourcesEditor`, opened from the subscriptions.
     @State private var editingSources = false
-    /// A subscription a swipe or its menu asked to remove, waiting for the confirmation.
+    /// A subscription its menu asked to remove, waiting for the confirmation.
     @State private var removingSubscription: SubscriptionEntry?
     private var hiddenSourceCount: Int {
         store.sourceGroups(includeHidden: false).first { $0.kind == .hidden }?.sites.count ?? 0
@@ -415,15 +415,13 @@ struct FormSettingsView: View {
                              title: entry.title, value: store.subscriptionValue(entry), warning: failure != nil) {
                         SubscriptionDetailView(entry: entry)
                     }
-                    // Removing one no longer means finding Remove at the bottom of its page (#669): swipe it, or
-                    // its menu (a long press, a right click on the Mac).
-                    .swipeActions(edge: .trailing) {
-                        // Red, not the settings' accent the form gives every button.
+                    // Removing one no longer means finding Remove at the bottom of its page (#669): its menu, a long
+                    // press or a right click on the Mac. Not a swipe: these rows wear the app's own fill, which a
+                    // swipe leaves behind as a square slab while the row slides out of its rounded card.
+                    .contextMenu {
+                        // Red, icon too: the form's accent would draw the trash in blue beside a red title.
                         Button(role: .destructive) { removingSubscription = entry } label: { Label(L10n.text("Remove"), systemImage: "trash") }
                             .tint(.red)
-                    }
-                    .contextMenu {
-                        Button(role: .destructive) { removingSubscription = entry } label: { Label(L10n.text("Remove"), systemImage: "trash") }
                     }
                 }
                 ForEach(MangaStore.shared.repositories, id: \.self) { url in
