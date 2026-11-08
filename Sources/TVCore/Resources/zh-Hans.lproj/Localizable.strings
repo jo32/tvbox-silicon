@@ -52,7 +52,7 @@
 "Remove %@ from favorites" = "取消收藏 %@";
 "Add %@ to favorites" = "收藏 %@";
 "Connect a Live Subscription" = "连接直播订阅";
-"Import a TVBox configuration containing live playlists in Settings first." = "先在设置中导入包含 lives 的 TVBox 配置。";
+"In Settings, add a TVBox subscription with live playlists, or an M3U or TXT live playlist by its address or from a file." = "在设置中添加包含直播列表的 TVBox 订阅，或通过地址或文件添加 M3U / TXT 直播列表。";
 "All" = "全部";
 "Group" = "分组";
 "Channels: %lld" = "频道数：%lld";
@@ -747,6 +747,7 @@
 "On" = "开";
 "Off" = "关";
 "%lld sources" = "%lld 个来源";
+"%lld live playlists" = "%lld 个直播列表";
 "Couldn't refresh" = "无法刷新";
 "Use This Subscription" = "使用此订阅";
 "Order" = "顺序";
@@ -1389,7 +1390,7 @@
 "New Albums" = "新碟上架";
 "More Charts" = "更多榜单";
 "Add from File…" = "从文件添加…";
-"A TVBox JSON subscription, or one Python (.py) or JavaScript (.js) spider." = "TVBox JSON 订阅，或单个 Python（.py）或 JavaScript（.js）爬虫。";
+"A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider." = "TVBox JSON 订阅、M3U / TXT 直播列表，或单个 Python（.py）或 JavaScript（.js）爬虫。";
 "This file is no longer on this device. Add it again." = "此文件已不在本设备上，请重新添加。";
 "LX Music Sources" = "洛雪音乐自定义源";
 "LX Music Source" = "洛雪音源";

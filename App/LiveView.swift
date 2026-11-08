@@ -24,7 +24,7 @@ struct LiveView: View {
                 #endif
             } else {
                 EmptyPage(symbol: AppSection.live.icon, title: L10n.text("Connect a Live Subscription"),
-                          message: L10n.text("Import a TVBox configuration containing live playlists in Settings first."),
+                          message: L10n.text("In Settings, add a TVBox subscription with live playlists, or an M3U or TXT live playlist by its address or from a file."),
                           action: AppSection.settings.title, actionSymbol: AppSection.settings.icon, perform: { store.section = .settings })
             }
         }
