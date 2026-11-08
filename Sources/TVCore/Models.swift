@@ -116,6 +116,17 @@ public enum JSONValue: Codable, Equatable, Sendable {
 }
 
 public enum WebAddress {
+    /// An address a person typed or pasted: full-width `：／` become ASCII, and a bare host such as
+    /// `example.com/config.json` or `192.168.1.5:8080/a` gets `http://` (as browsers do). Text with a
+    /// space, another scheme, or no dot in the host is left for `resolve` to reject.
+    public static func resolve(typed text: String) throws -> URL {
+        var value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "：", with: ":").replacingOccurrences(of: "／", with: "/")
+        if value.range(of: "^[^\\s/?#:]+\\.[^\\s/?#:]+(:[0-9]+)?([/?#]\\S*)?$", options: .regularExpression) != nil {
+            value = "http://" + value
+        }
+        return try resolve(value)
+    }
     public static func resolve(_ text: String, relativeTo base: URL? = nil) throws -> URL {
         var value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         // As browsers do (WHATWG URL), an absolute http(s) address ignores missing or extra slashes:
