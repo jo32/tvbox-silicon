@@ -1,6 +1,129 @@
 {
   "releases": [
     {
+      "version": "1.8.15",
+      "build": 53,
+      "date": "2026-11-08",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "icloud.and.arrow.down",
+          "title": {
+            "en": "Cloud drives that adapt to your device",
+            "zh-Hans": "云盘播放自动适配设备",
+            "zh-Hant": "雲端硬碟播放自動適配裝置",
+            "ja": "端末に合わせるクラウド再生"
+          },
+          "detail": {
+            "en": "Cloud-drive videos now size their read-ahead and connections to your device and to the video, and stop opening connections that do not help. Large MKV files start faster and stall less.",
+            "zh-Hans": "云盘视频会根据设备和视频大小调整预读和连接数，并不再增加没有帮助的连接。大体积 MKV 文件起播更快，卡顿更少。",
+            "zh-Hant": "雲端硬碟影片會依裝置與影片大小調整預讀和連線數，並不再增加沒有幫助的連線。大型 MKV 檔案起播更快，卡頓更少。",
+            "ja": "クラウドの動画は、端末と動画に合わせて先読みと接続数を決め、効果のない接続は増やしません。大きな MKV でも再生が早く始まり、止まりにくくなりました。"
+          }
+        },
+        {
+          "symbol": "captions.bubble",
+          "title": {
+            "en": "Subtitles: ASS styling and picture subtitles",
+            "zh-Hans": "字幕：ASS 样式与图片字幕",
+            "zh-Hant": "字幕：ASS 樣式與圖片字幕",
+            "ja": "字幕：ASS スタイルと画像字幕"
+          },
+          "detail": {
+            "en": "ASS/SSA subtitles are drawn with their own fonts, colors and positions, and PGS and VobSub picture subtitles now show. Subtitle ZIP archives, an Apple TV address for subtitle files and subtitles next to Cloud Files videos are supported too.",
+            "zh-Hans": "ASS/SSA 字幕按原有的字体、颜色和位置显示，PGS 和 VobSub 图片字幕也能显示了。同时支持字幕 ZIP 压缩包、Apple TV 上的字幕地址以及云盘文件旁的字幕。",
+            "zh-Hant": "ASS/SSA 字幕依原有的字體、顏色和位置顯示，PGS 和 VobSub 圖片字幕也能顯示了。同時支援字幕 ZIP 壓縮檔、Apple TV 上的字幕網址以及雲端檔案旁的字幕。",
+            "ja": "ASS/SSA 字幕は元のフォント、色、位置で表示され、PGS と VobSub の画像字幕も表示されます。字幕の ZIP、Apple TV での字幕アドレス、クラウドファイルの隣にある字幕にも対応しました。"
+          }
+        },
+        {
+          "symbol": "play.circle",
+          "title": {
+            "en": "Playback and player controls",
+            "zh-Hans": "播放与播放器控制",
+            "zh-Hant": "播放與播放器控制",
+            "ja": "再生とプレーヤー操作"
+          },
+          "detail": {
+            "en": "Ad segments spliced into a video's HLS playlist are cut. A live stream with a saved position plays from its live edge instead of loading forever. Seeking starts from the current position, double-tap has a setting, and the iPhone lock says Unlock Controls. On the Mac the window fits the video and keeps its aspect ratio, and the scroll wheel sets the volume.",
+            "zh-Hans": "视频 HLS 播放列表中插入的广告片段会被剪掉。有保存进度的直播会从直播最新位置开始播放，不再一直加载。快进快退从当前位置开始，双击手势可以设置，iPhone 的锁定提示改为“解锁控制”。Mac 上窗口会贴合视频并保持比例，滚轮可以调节音量。",
+            "zh-Hant": "影片 HLS 播放清單中插入的廣告片段會被剪掉。有儲存進度的直播會從直播最新位置開始播放，不再一直載入。快轉倒轉從目前位置開始，雙擊手勢可以設定，iPhone 的鎖定提示改為「解鎖控制」。Mac 上視窗會貼合影片並保持比例，滾輪可以調整音量。",
+            "ja": "動画の HLS プレイリストに挟まれた広告部分をカットします。位置を保存したライブは、読み込み続けず最新位置から再生します。シークは現在位置から始まり、ダブルタップは設定できるようになり、iPhone のロック表示は「コントロールのロック解除」になりました。Mac ではウィンドウが動画に合わせて縦横比を保ち、ホイールで音量を変えられます。"
+          }
+        },
+        {
+          "symbol": "magnifyingglass",
+          "title": {
+            "en": "Search, ratings and sources",
+            "zh-Hans": "搜索、评分与片源",
+            "zh-Hant": "搜尋、評分與片源",
+            "ja": "検索、評価、ソース"
+          },
+          "detail": {
+            "en": "Search puts titles that match your keyword first. Source video pages show the Douban score after TMDB's. Turn a subscription on or off from the list in Settings. Import accepts addresses typed without http:// or with full-width punctuation, and Add from File takes M3U and TXT live playlists. You can undo a mistaken hide, hide dead sources and remove subscriptions.",
+            "zh-Hans": "搜索结果中标题与关键词匹配的排在前面。片源视频页在 TMDB 评分之后显示豆瓣评分。可以在设置的列表中直接开关订阅。导入地址可以不带 http://，也接受全角标点，“从文件添加”支持 M3U 和 TXT 直播列表。可以撤销误隐藏、隐藏失效片源和移除订阅。",
+            "zh-Hant": "搜尋結果中標題與關鍵字相符的排在前面。來源影片頁在 TMDB 評分之後顯示豆瓣評分。可以在設定的列表中直接開關訂閱。匯入網址可以不帶 http://，也接受全形標點，「從檔案加入」支援 M3U 和 TXT 直播清單。可以復原誤隱藏、隱藏失效來源和移除訂閱。",
+            "ja": "キーワードに合うタイトルが検索結果の先頭に並びます。ソースの動画ページでは TMDB の次に豆瓣の評価を表示します。設定のリストから購読をオン／オフできます。アドレスは http:// なしや全角記号でも取り込め、「ファイルから追加」は M3U と TXT のライブ一覧に対応しました。誤って隠したソースを元に戻す、使えないソースを隠す、購読を削除することもできます。"
+          }
+        },
+        {
+          "symbol": "macwindow",
+          "title": {
+            "en": "Mac: video and comic pages",
+            "zh-Hans": "Mac：视频页与漫画页",
+            "zh-Hant": "Mac：影片頁與漫畫頁",
+            "ja": "Mac：動画ページとマンガページ"
+          },
+          "detail": {
+            "en": "Video pages on the Mac take the Apple TV pages' design, with a portrait poster, the Bilibili comments sheet and a hero that runs to the window's top edge. Comic pages follow the Discover title page's design on the Mac, iPhone and iPad.",
+            "zh-Hans": "Mac 上的视频页采用 Apple TV 页面的设计，包含竖版海报、哔哩哔哩评论面板，顶部大图延伸到窗口上边缘。Mac、iPhone 和 iPad 上的漫画页采用“发现”标题页的设计。",
+            "zh-Hant": "Mac 上的影片頁採用 Apple TV 頁面的設計，包含直式海報、嗶哩嗶哩留言面板，頂部大圖延伸到視窗上邊緣。Mac、iPhone 和 iPad 上的漫畫頁採用「發現」標題頁的設計。",
+            "ja": "Mac の動画ページは Apple TV のページのデザインになり、縦長ポスター、Bilibili のコメントシート、ウィンドウ上端まで広がるヒーロー画像が加わります。Mac、iPhone、iPad のマンガページは「見つける」のタイトルページのデザインになりました。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "appletv",
+          "title": {
+            "en": "Apple TV: tidier pages",
+            "zh-Hans": "Apple TV：更整洁的页面",
+            "zh-Hant": "Apple TV：更整齊的頁面",
+            "ja": "Apple TV：すっきりしたページ"
+          },
+          "detail": {
+            "en": "A source's name now sits above its category chips instead of in a bar over the search field. Bilibili tile captions move with the cover when focused, and there is no gap above the Episodes strip in the player. What's New uses compact rows.",
+            "zh-Hans": "片源名称现在显示在分类标签上方，不再占用搜索框上方的横条。哔哩哔哩卡片的文字会随封面一起移动，播放器中选集栏上方不再有空隙。“新功能”改为紧凑的行。",
+            "zh-Hant": "來源名稱現在顯示在分類標籤上方，不再佔用搜尋欄上方的橫條。嗶哩嗶哩卡片的文字會隨封面一起移動，播放器中選集列上方不再有空隙。「新功能」改為精簡的列。",
+            "ja": "ソース名は、検索欄の上のバーではなくカテゴリのチップの上に表示されます。Bilibili のカードの文字はフォーカス時にカバーと一緒に動き、プレーヤーのエピソード列の上の隙間もなくなりました。「新機能」はコンパクトな行になりました。"
+          },
+          "platforms": [
+            "tvos"
+          ]
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "Fixes a launch crash on early iOS 27.2 betas and a tab bar crash on iPad. Clearing Recently Played in Music also clears Continue Playing. Source filters without an All choice open unfiltered. Watch Now headings stay in Watch Now, and source search ends when idle.",
+            "zh-Hans": "修复早期 iOS 27.2 测试版上的启动崩溃和 iPad 上的标签栏崩溃。清除音乐的“最近播放”时会一并清除“继续播放”。没有“全部”选项的片源筛选会默认不筛选。“正在观看”的标题留在“正在观看”内，片源搜索空闲时会自动结束。",
+            "zh-Hant": "修正早期 iOS 27.2 測試版上的啟動當機和 iPad 上的標籤列當機。清除音樂的「最近播放」時會一併清除「繼續播放」。沒有「全部」選項的來源篩選會預設不篩選。「現在觀看」的標題留在「現在觀看」內，來源搜尋閒置時會自動結束。",
+            "ja": "iOS 27.2 の初期ベータでの起動時クラッシュと、iPad のタブバーのクラッシュを修正しました。ミュージックの「最近再生した項目」を消すと「続きを再生」も消えます。「すべて」のないソースのフィルタは絞り込みなしで開きます。「今すぐ見る」の見出しは「今すぐ見る」内にとどまり、ソース検索はアイドル時に終了します。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.14",
       "build": 52,
       "date": "2026-11-08",
