@@ -238,7 +238,7 @@ struct ReleaseNotesView: View {
                 hero
                 if sizeClass == .compact { featureList } else { shelf }
             }
-            .padding(.top, sizeClass == .compact ? Size.top * 2 : Size.top).padding(.bottom, 24)
+            .padding(.top, Size.top).padding(.bottom, 24)
         }
         .scrollIndicators(.hidden)
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -254,7 +254,7 @@ struct ReleaseNotesView: View {
                 if !testFlight, let link = update?.link() { scanCode(link).padding(.trailing, Size.margin) }
                 #endif
             }
-            shelf
+            grid
             #if os(tvOS)
             Spacer(minLength: 0)
             #endif
@@ -302,6 +302,47 @@ struct ReleaseNotesView: View {
         return "\(name) · \(update == nil ? L10n.text("What's New") : testFlight ? L10n.text("In TestFlight") : L10n.text("Now Available"))"
     }
 
+    /// One feature: a small icon tile with the title and description beside it.
+    private func featureRow(_ index: Int, _ feature: ReleaseFeed.Feature) -> some View {
+        HStack(alignment: .top, spacing: Size.tileGap) {
+            ReleaseArt(symbol: feature.symbol, index: index, tile: Size.tile)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(feature.title.text()).font(.system(size: Size.cardTitle, weight: .semibold)).lineLimit(1)
+                Text(feature.detail.text()).font(.system(size: Size.cardDetail)).foregroundStyle(.white.opacity(0.62))
+                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    #if !os(iOS)
+    /// Two columns of rows instead of a strip of tall artwork cards, so every feature is visible at once.
+    /// Apple TV rows are focusable plates so the remote can scroll a long list; on the Mac a long list scrolls.
+    @ViewBuilder private var grid: some View {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: Size.cardGap, alignment: .top), count: 2)
+        let rows = LazyVGrid(columns: columns, alignment: .leading, spacing: Size.cardGap) {
+            ForEach(Array(features.enumerated()), id: \.element) { index, feature in
+                #if os(tvOS)
+                Button {} label: { featureRow(index, feature).padding(24).frame(maxWidth: .infinity, alignment: .leading) }
+                    .buttonStyle(.card)
+                #else
+                featureRow(index, feature).padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                #endif
+            }
+        }
+        .padding(.horizontal, Size.margin)
+        #if os(tvOS)
+        ScrollView { rows.padding(.vertical, 20) }.scrollIndicators(.hidden).scrollClipDisabled()
+        #else
+        // A sheet sizes to its content, so a long list gets a fixed window (about four rows) and scrolls.
+        let height = min(CGFloat((features.count + 1) / 2) * 96, 400)
+        ScrollView { rows }.scrollIndicators(.automatic).frame(height: height)
+        #endif
+    }
+    #endif
+
     /// One artwork card per feature, title and description underneath, as in an Apple TV shelf.
     @ViewBuilder private var shelf: some View {
         #if os(tvOS)
@@ -337,19 +378,22 @@ struct ReleaseNotesView: View {
     }
 
     #if os(iOS)
-    /// On a phone each feature is a card as wide as the screen, artwork on top and the words under
-    /// it, like the shelf cards elsewhere; artwork beside the text squeezed both.
+    /// On a phone each feature is one compact row: a small icon tile and the words beside it, so a release's
+    /// whole story fits in a screen or two instead of one tall artwork card per feature.
     private var featureList: some View {
-        VStack(alignment: .leading, spacing: 30) {
+        VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(features.enumerated()), id: \.element) { index, feature in
-                VStack(alignment: .leading, spacing: Size.captionGap) {
-                    ReleaseArt(symbol: feature.symbol, index: index)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(feature.title.text()).font(.system(size: Size.cardTitle + 1, weight: .semibold))
+                if index > 0 { Divider().overlay(.white.opacity(0.1)).padding(.leading, Size.tile + Size.tileGap) }
+                HStack(alignment: .top, spacing: Size.tileGap) {
+                    ReleaseArt(symbol: feature.symbol, index: index, tile: Size.tile)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(feature.title.text()).font(.system(size: Size.cardTitle, weight: .semibold))
                         Text(feature.detail.text()).font(.system(size: Size.cardDetail)).foregroundStyle(.white.opacity(0.62))
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    Spacer(minLength: 0)
                 }
+                .padding(.vertical, 14)
                 .accessibilityElement(children: .combine)
             }
         }
@@ -421,17 +465,20 @@ struct ReleaseNotesView: View {
         static let margin: CGFloat = 90, top: CGFloat = 70, backdrop: CGFloat = 760, sectionGap: CGFloat = 56, buttonGap: CGFloat = 36
         static let mark: CGFloat = 44, markGap: CGFloat = 14, eyebrow: CGFloat = 24, title: CGFloat = 80, subtitle: CGFloat = 32
         static let heroSpacing: CGFloat = 16, textWidth: CGFloat = 1000
-        static let card: CGFloat = 480, cardGap: CGFloat = 48, captionGap: CGFloat = 22, cardTitle: CGFloat = 29, cardDetail: CGFloat = 23
+        static let card: CGFloat = 480, cardGap: CGFloat = 40, captionGap: CGFloat = 22, cardTitle: CGFloat = 29, cardDetail: CGFloat = 23
+        static let tile: CGFloat = 96, tileGap: CGFloat = 24
         #elseif os(macOS)
         static let margin: CGFloat = 44, top: CGFloat = 44, backdrop: CGFloat = 420, sectionGap: CGFloat = 34, buttonGap: CGFloat = 24
         static let mark: CGFloat = 26, markGap: CGFloat = 9, eyebrow: CGFloat = 12, title: CGFloat = 44, subtitle: CGFloat = 16
         static let heroSpacing: CGFloat = 10, textWidth: CGFloat = 520
-        static let card: CGFloat = 250, cardGap: CGFloat = 18, captionGap: CGFloat = 12, cardTitle: CGFloat = 14, cardDetail: CGFloat = 12
+        static let tile: CGFloat = 44, tileGap: CGFloat = 12
+        static let card: CGFloat = 250, cardGap: CGFloat = 14, captionGap: CGFloat = 12, cardTitle: CGFloat = 14, cardDetail: CGFloat = 12
         #else
         static let margin: CGFloat = 24, top: CGFloat = 56, backdrop: CGFloat = 520, sectionGap: CGFloat = 36, buttonGap: CGFloat = 24
         static let mark: CGFloat = 26, markGap: CGFloat = 9, eyebrow: CGFloat = 12, title: CGFloat = 40, subtitle: CGFloat = 17
         static let heroSpacing: CGFloat = 12, textWidth: CGFloat = 520
         static let card: CGFloat = 260, cardGap: CGFloat = 14, captionGap: CGFloat = 12, cardTitle: CGFloat = 16, cardDetail: CGFloat = 14
+        static let tile: CGFloat = 50, tileGap: CGFloat = 14
         #endif
     }
 }
@@ -440,6 +487,8 @@ struct ReleaseNotesView: View {
 private struct ReleaseArt: View {
     let symbol: String
     let index: Int
+    /// A side length makes a small square icon tile; nil is the 16:9 card artwork.
+    var tile: CGFloat? = nil
     static let palettes: [[Color]] = [
         [Color(red: 1.0, green: 0.60, blue: 0.28), Color(red: 0.78, green: 0.20, blue: 0.28)],
         [Color(red: 0.52, green: 0.42, blue: 1.0), Color(red: 0.16, green: 0.14, blue: 0.50)],
@@ -454,14 +503,15 @@ private struct ReleaseArt: View {
                 LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
                 RadialGradient(colors: [.white.opacity(0.32), .clear], center: .topLeading, startRadius: 0, endRadius: geometry.size.width * 0.9)
                 Image(systemName: symbol)
-                    .font(.system(size: geometry.size.height * 0.38, weight: .semibold))
+                    .font(.system(size: geometry.size.height * (tile == nil ? 0.38 : 0.46), weight: .semibold))
                     .symbolRenderingMode(.hierarchical).foregroundStyle(.white)
                     .shadow(color: .black.opacity(0.28), radius: geometry.size.height * 0.08, y: geometry.size.height * 0.03)
             }
         }
-        .aspectRatio(16 / 9, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: Self.radius, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: Self.radius, style: .continuous).strokeBorder(.white.opacity(0.12)) }
+        .aspectRatio(tile == nil ? 16 / 9 : 1, contentMode: .fit)
+        .frame(width: tile, height: tile)
+        .clipShape(RoundedRectangle(cornerRadius: tile.map { $0 * 0.24 } ?? Self.radius, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: tile.map { $0 * 0.24 } ?? Self.radius, style: .continuous).strokeBorder(.white.opacity(0.12)) }
         .accessibilityHidden(true)
     }
     static var radius: CGFloat {
