@@ -1131,6 +1131,36 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         return false
     }
 
+    /// Sizes the window to the picture and keeps its shape while it is resized (#689), so there are no black bars to
+    /// drag away. A video of the shape the window already has leaves the size the viewer chose alone; full screen and
+    /// a zoomed window are left as they are.
+    func fit(toVideo video: NSSize) {
+        guard video.width > 0, video.height > 0, video.width.isFinite, video.height.isFinite else { return }
+        contentAspectRatio = video
+        guard !styleMask.contains(.fullScreen), !isZoomed, let contentView else { return }
+        let current = contentView.bounds.size
+        guard current.width > 0, current.height > 0 else { return }
+        let ratio = video.width / video.height
+        if abs(current.width / current.height - ratio) / ratio < 0.01 { return }
+        let visible = (screen ?? NSScreen.main)?.visibleFrame ?? frame
+        // Keep the width the viewer has, as far as the screen allows, and give it the picture's height.
+        let chrome = frame.height - current.height
+        var width = min(current.width, visible.width * 0.9)
+        var height = width / ratio
+        let room = visible.height * 0.9 - chrome
+        if height > room { height = room; width = height * ratio }
+        let minimum = contentMinSize
+        if width < minimum.width || height < minimum.height {
+            let up = max(minimum.width / width, minimum.height / height)
+            width *= up; height *= up
+        }
+        var target = frameRect(forContentRect: NSRect(origin: .zero, size: NSSize(width: width.rounded(), height: height.rounded())))
+        target.origin = NSPoint(x: frame.midX - target.width / 2, y: frame.midY - target.height / 2)
+        target.origin.x = min(max(visible.minX, target.origin.x), max(visible.minX, visible.maxX - target.width))
+        target.origin.y = min(max(visible.minY, target.origin.y), max(visible.minY, visible.maxY - target.height))
+        setFrame(target, display: true, animate: true)
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         // Preserve system commands and text/slider editing inside native controls.
         guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
@@ -1275,6 +1305,18 @@ private struct DesktopPlaybackView: View {
         .onChange(of: showsDanmaku) { _, value in session.catalogDanmaku.enabled = value }
         .onChange(of: session.catalogDanmaku.enabled) { _, value in showsDanmaku = value }
         .onChange(of: floats) { _, value in window.level = value ? .floating : .normal }
+        // Each picture that appears (the next episode too) shapes the window; the size arrives a moment after it.
+        .task(id: session.showsPicture) {
+            guard session.showsPicture else { return }
+            for _ in 0..<30 {
+                if let size = session.player.currentItem?.presentationSize, size.width > 0, size.height > 0 {
+                    window.fit(toVideo: size)
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(100))
+                if Task.isCancelled { return }
+            }
+        }
         .onChange(of: showsChrome) { _, value in setTrafficLights(visible: value) }
         .onAppear { floats = window.level == .floating; idle.attach(window); tvBrowser.start() }
         // Played here again (Space, say): the other device no longer has it to itself.
