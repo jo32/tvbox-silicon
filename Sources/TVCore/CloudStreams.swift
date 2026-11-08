@@ -74,6 +74,12 @@ public enum CloudStreams {
         return await stream.currentSource
     }
 
+    /// The video's length in seconds, once the player knows it: sizes the read-ahead to the video's bitrate.
+    public static func setDuration(_ seconds: Double, for url: URL) {
+        guard let stream = CloudStreamStore.shared.stream(url) else { return }
+        Task { await stream.setDuration(seconds) }
+    }
+
     public static func stop(_ url: URL) {
         CloudPlaylists.shared.remove(url)
         CloudResourceLoader.shared.cancel(url)
@@ -187,10 +193,24 @@ actor CloudByteStream {
     /// How many reads wait on each chunk; a seek never cancels a chunk someone still needs.
     private var waiting: [Int: Int] = [:]
     private var rate: (since: Date, bytes: Int) = (Date(), 0)
+    /// How far ahead to read and how much to keep: the old fixed numbers until the video's bitrate is known (#702).
+    private var readAheadChunks = CloudBufferPlan.fallback.readAhead
+    private var cacheLimit = CloudBufferPlan.fallback.cacheChunks
+    /// What playback consumes, once the player has told the duration.
+    private var bytesPerSecond: Double?
+    /// The drive has refused a connection on this stream: it is not asked for more than it gave.
+    private var refusedEver = false
+    /// The most connections this stream may grow to, from `mostConnections`, when it falls behind playback.
+    private let ceiling: Int
+    private var growth: (since: Date, bytes: Int) = (Date(), 0)
+    /// The speed before the last connection was added, and the count it had: the next sample says whether it helped.
+    private var trial: (speed: Double, from: Int)?
+    /// Another connection brought nothing: the drive or the network is the limit, and no more are tried.
+    private var settled = false
     private var type: String?
     static let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.httpMaximumConnectionsPerHost = parallel + 2
+        configuration.httpMaximumConnectionsPerHost = max(parallel, CloudDevice.maxConnections) + 2
         configuration.timeoutIntervalForRequest = 20
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.urlCache = nil
@@ -200,7 +220,7 @@ actor CloudByteStream {
     private let session: URLSession
     /// Connections reading ahead at once: `parallel` unless the source needs fewer, or the drive refused more.
     private var connections: Int
-    private let mostConnections: Int
+    private var mostConnections: Int
     /// Whether the current address has sent bytes. A refusal after that is the drive capping connections, not a dead link.
     private var served = false
     private var sinceRefusal = 0
@@ -212,6 +232,7 @@ actor CloudByteStream {
         self.source = source; self.session = session; self.refresh = refresh; host = source.url.host()
         connections = max(1, parallel)
         mostConnections = connections
+        ceiling = connections > 1 ? max(connections, CloudDevice.maxConnections) : 1
         self.rewritesSampleEntries = rewritesSampleEntries
         sourceLength = source.length
     }
@@ -225,6 +246,10 @@ actor CloudByteStream {
         if let type { return type }
         let value = try CloudStreams.contentType(try await chunk(0), name: source.name)
         type = value
+        // An MP4's index is often at the end: ask for that chunk now, not when the player gets there.
+        if chunks > 3, ["mp4", "m4v", "mov"].contains((source.name as NSString).pathExtension.lowercased()), cache[chunks - 1] == nil, inflight[chunks - 1] == nil {
+            _ = start(chunks - 1)
+        }
         Diagnostics.shared.record(.info, "cloud.stream", "open host=\(host ?? "-") length=\(source.length) type=\(value)")
         return value
     }
@@ -242,7 +267,8 @@ actor CloudByteStream {
     func read(at offset: Int, count: Int) async throws -> Data {
         guard offset >= 0, offset < source.length, count > 0 else { throw TVError.unsupported("Invalid range") }
         let index = offset / Self.chunkSize
-        let near = { (reader: Int) in index >= reader - Self.readAhead && index <= reader + Self.readAhead + 1 }
+        let ahead = readAheadChunks
+        let near = { (reader: Int) in index >= reader - ahead && index <= reader + ahead + 1 }
         if let current = readers.firstIndex(where: near) { readers[current] = max(readers[current], index) }
         else {
             if !readers.isEmpty { Diagnostics.shared.record(.debug, "cloud.stream", "reader at=\(index) others=\(readers)") }
@@ -250,7 +276,7 @@ actor CloudByteStream {
             // Keep the two most recent positions (video and audio); a third means the user seeked.
             if readers.count > 2 {
                 readers.removeFirst(readers.count - 2)
-                let windows = readers.map { $0 - Self.readAhead...$0 + Self.readAhead }
+                let windows = readers.map { $0 - ahead...$0 + ahead }
                 for (key, task) in inflight where waiting[key, default: 0] == 0 && !windows.contains(where: { $0.contains(key) }) {
                     task.cancel(); inflight[key] = nil
                 }
@@ -274,7 +300,7 @@ actor CloudByteStream {
     }
 
     private func prefetch(after index: Int) {
-        let last = min(chunks - 1, index + Self.readAhead)
+        let last = min(chunks - 1, index + readAheadChunks)
         guard index < last else { return }
         for next in index + 1...last where cache[next] == nil && inflight[next] == nil {
             guard inflight.count < connections else { break }
@@ -332,6 +358,7 @@ actor CloudByteStream {
                 rate.bytes += data.count
                 received.append(data)
                 served = true
+                growth.bytes += data.count
                 // A drive that sends part of the range at a time: ask for the rest.
                 if end < last { attempt = 0; continue }
                 if Date().timeIntervalSince(rate.since) >= 10 {
@@ -339,6 +366,7 @@ actor CloudByteStream {
                     Diagnostics.shared.record(.debug, "cloud.stream", "rate bytesPerSecond=\(Int(Double(rate.bytes) / seconds)) readers=\(readers) inflight=\(inflight.count)")
                     rate = (Date(), 0)
                 }
+                considerMoreConnections()
                 if connections < mostConnections {
                     sinceRefusal += 1
                     if sinceRefusal >= Self.probeAfter { connections += 1; sinceRefusal = 0 }
@@ -346,7 +374,7 @@ actor CloudByteStream {
                 let playable = rewritesSampleEntries ? CloudStreams.playableSampleEntries(received) : received
                 cache[index] = playable
                 recent.removeAll { $0 == index }; recent.append(index)
-                while recent.count > Self.cacheChunks { cache[recent.removeFirst()] = nil }
+                while recent.count > cacheLimit { cache[recent.removeFirst()] = nil }
                 return playable
             } catch let error as URLError where error.code != .cancelled && attempt < 3 {
                 // A loopback proxy (a CatPawOpen bundle's) refuses once iOS took back the suspended app's sockets, and
@@ -362,8 +390,44 @@ actor CloudByteStream {
     private func refused(_ index: Int, status: Int, body: Data) {
         connections = max(1, min(connections - 1, inflight.count - 1))
         sinceRefusal = 0
+        refusedEver = true; trial = nil
         let text = String(decoding: body.prefix(120), as: UTF8.self).replacingOccurrences(of: "\n", with: " ")
         Diagnostics.shared.record(.debug, "cloud.stream", "chunk=\(index) refused status=\(status) body=\(text) connections=\(connections); again")
+    }
+
+    /// The player knows how long the video is: the bytes it consumes each second decide how far ahead to read and keep.
+    func setDuration(_ seconds: Double) {
+        guard seconds.isFinite, seconds > 1, source.length > 0 else { return }
+        bytesPerSecond = Double(source.length) / seconds
+        let plan = CloudBufferPlan.make(length: source.length, duration: seconds, budget: CloudDevice.cacheBudget, chunkSize: Self.chunkSize)
+        readAheadChunks = plan.readAhead; cacheLimit = plan.cacheChunks
+        growth = (Date(), 0)
+        Diagnostics.shared.record(.info, "cloud.stream", "plan bitrate=\(Int(bytesPerSecond ?? 0) * 8 / 1000)kbps readAhead=\(plan.readAhead) chunks (~\(Int(plan.seconds)) s) cache=\(plan.cacheChunks) chunks connections=\(connections)...\(ceiling) device=\(CloudDevice.current.label)")
+    }
+
+    /// Every few seconds: if reading flat out on all the connections still brings in less than twice what playback eats,
+    /// and the drive has not objected to the number so far, try one more.
+    private func considerMoreConnections() {
+        let elapsed = Date().timeIntervalSince(growth.since)
+        guard elapsed >= 4 else { return }
+        let received = growth.bytes
+        growth = (Date(), 0)
+        let speed = Double(received) / elapsed
+        if let earlier = trial {
+            trial = nil
+            // Under 15% more with the extra connection (a drive that caps the whole account, a slow network): keep the
+            // old count. A thinner stream is kinder to the drive and to the battery.
+            if speed < earlier.speed * 1.15 {
+                connections = earlier.from; mostConnections = earlier.from; settled = true
+                Diagnostics.shared.record(.debug, "cloud.stream", "more connections did not help (\(Int(earlier.speed)) to \(Int(speed)) B/s): back to \(earlier.from)")
+                return
+            }
+        }
+        guard let bytesPerSecond, !settled, !refusedEver, connections == mostConnections, mostConnections < ceiling,
+              inflight.count >= connections, speed < 2 * bytesPerSecond else { return }
+        trial = (speed, connections)
+        connections += 1; mostConnections += 1
+        Diagnostics.shared.record(.debug, "cloud.stream", "behind playback (\(Int(Double(received) / elapsed)) B/s of \(Int(bytesPerSecond)) needed): connections=\(connections)")
     }
 
     private func renew() async -> Bool {

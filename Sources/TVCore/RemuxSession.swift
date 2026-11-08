@@ -10,7 +10,13 @@ public protocol RemuxSource: Sendable {
     func read(at offset: Int64, count: Int) async throws -> Data
     /// Bytes received so far and from where, for the player's speed readout; nil for a local file.
     var transfer: (received: Int64, host: String?)? { get }
+    /// The file's length in seconds, once the repackager has read its header (#702): a cloud file sizes its read-ahead from it.
+    func learned(duration seconds: Double) async
     func close() async
+}
+
+extension RemuxSource {
+    public func learned(duration seconds: Double) async {}
 }
 
 /// One file played through the repackager. FFmpeg runs on a thread of its own, which reads through `source`,
@@ -317,6 +323,8 @@ final class RemuxSession: @unchecked Sendable {
             throw TVError.unsupported(L10n.text("This media cannot be played. Try another channel or source."))
         }
         self.plan = plan
+        let known = source, seconds = Double(tvm_duration(input)) / 1_000_000
+        if seconds > 1 { Task { await known.learned(duration: seconds) } }
         let names = plan.subtitleNames()
         let assTracks = plan.tracks.indices.filter { plan.tracks[$0].kind == .subtitle && ["ass", "ssa"].contains(plan.tracks[$0].stream.codec) }
         condition.withLock {
