@@ -1315,6 +1315,19 @@ extension PlaybackSession {
             }
             prepared.url = address
         }
+        // A plugin's own loopback server names no file (`/chunk?…`), so its first bytes say whether it is an MKV
+        // or the like to repackage (#776); anything else goes to AVPlayer as before.
+        if !prepared.pluginProxy, channel.url.scheme == "http", Remux.hidesName(address),
+           let source = await Remux.sniffedSource(address, headers: channel.headers) {
+            if Task.isCancelled { await source.close(); throw CancellationError() }
+            note(L10n.text("Repackaging the video for this device"))
+            Diagnostics.shared.record(.info, "player", "plugin server sends a file to repackage")
+            if let url = try await Self.remux(source, channel: channel) {
+                prepared.url = url
+                return prepared
+            }
+            try Task.checkCancellation()
+        }
         // A link or saved file whose name says MKV, a disc image and the like is repackaged too; when that fails
         // AVPlayer tries it as it is.
         if Remux.handles(name: address.lastPathComponent) || DiscImage.handles(name: address.lastPathComponent),

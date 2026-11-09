@@ -440,6 +440,31 @@ import VideoToolbox
         #expect(Remux.handles(head))
     }
 
+    @Test func aPluginServerThatNamesNoFileIsRepackagedByItsFirstBytes() async throws {
+        #expect(Remux.hidesName(URL(string: "http://127.0.0.1:19981/chunk?id=139f76bf")!))
+        #expect(!Remux.hidesName(URL(string: "http://127.0.0.1:19981/film.mkv")!))
+        #expect(!Remux.hidesName(URL(string: "http://127.0.0.1:19981/live/index.m3u8?id=1")!))
+        #expect(!Remux.hidesName(URL(string: "https://example.com/chunk?id=1")!))
+        let matroska = try Data(contentsOf: fixture("remux-copy.mkv"))
+        // One that sends the bytes asked for, and one that sends the rest of the file whatever is asked.
+        let exact = RangeServer.add("chunk-\(UUID().uuidString)", matroska)
+        #expect(await Remux.sniffedSource(exact, headers: [:], chunks: RangeServer.session, configuration: RangeServer.configuration) is CloudRemuxSource)
+        let rest = RangeServer.add("chunk-\(UUID().uuidString)", matroska, restOfFile: true)
+        let source = try #require(await Remux.sniffedSource(rest, headers: [:], chunks: RangeServer.session, configuration: RangeServer.configuration))
+        #expect(source is StreamingRemuxSource && source.length == Int64(matroska.count))
+        let master = try await Remux.open(source)
+        defer { Remux.stop(master) }
+        let played = await ready(master)
+        #expect(played.status == .readyToPlay && abs(played.duration - 8) < 0.2)
+        // An MP4, a playlist or a server without byte ranges is left to AVPlayer.
+        let mp4 = RangeServer.add("chunk-\(UUID().uuidString)", Data([0, 0, 0, 0x20]) + Data("ftypisom".utf8) + Data(count: 64))
+        #expect(await Remux.sniffedSource(mp4, headers: [:], chunks: RangeServer.session, configuration: RangeServer.configuration) == nil)
+        let playlist = RangeServer.add("chunk-\(UUID().uuidString)", Data("#EXTM3U\n".utf8))
+        #expect(await Remux.sniffedSource(playlist, headers: [:], chunks: RangeServer.session, configuration: RangeServer.configuration) == nil)
+        let missing = URL(string: "https://cloud.test/chunk-\(UUID().uuidString)")!
+        #expect(await Remux.sniffedSource(missing, headers: [:], chunks: RangeServer.session, configuration: RangeServer.configuration) == nil)
+    }
+
     @Test func matroskaFromAPluginProxyPlays() async throws {
         let url = RangeServer.add("proxy-\(UUID().uuidString).mkv", try Data(contentsOf: fixture("remux-copy.mkv")), restOfFile: true)
         let source = try await Remux.httpSource(url, headers: [:], chunks: RangeServer.session, configuration: RangeServer.configuration)
