@@ -8,6 +8,7 @@ import zlib from 'node:zlib';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { Worker, MessageChannel, receiveMessageOnPort } from 'node:worker_threads';
+import { inspect } from 'node:util';
 
 const serving = process.argv[2] === '--serve';
 const input = JSON.parse(fs.readFileSync(process.argv[serving ? 3 : 2], 'utf8'));
@@ -24,7 +25,20 @@ function writeJSON(file, object) {
     fs.writeFileSync(file + '.tmp', JSON.stringify(object));
     fs.renameSync(file + '.tmp', file);
 }
-function log(...values) { process.stderr.write(values.map(v => typeof v === 'string' ? v : JSON.stringify(v)).join(' ') + '\n'); }
+// Bundles log anything through console, also from their own uncaughtException listeners, and Node ends the process
+// (exit code 7; in the app, the app itself) when an uncaughtException listener throws. So logging never throws: what JSON
+// can't write (a circular object, a BigInt) is written as Node's own console writes it, and a failed write is dropped.
+function logText(value) {
+    if (typeof value === 'string') return value;
+    try { return JSON.stringify(value); } catch { return inspect(value); }
+}
+function log(...values) {
+    try { process.stderr.write(values.map(logText).join(' ') + '\n'); } catch { }
+}
+// A thrown value need not be an Error: one without a prototype has no string form.
+function thrownText(error) {
+    try { return error?.stack || String(error); } catch { return error; }
+}
 function envelope(error) {
     log(error.stack || error.message || error);
     // A spider that parses a failed response (an HTML error page, an empty body) throws a SyntaxError.
@@ -450,7 +464,7 @@ async function startCatPaw() {
     // Bundles log with console.log; stdout carries the one-shot answer, so their logs join the host's on stderr.
     Object.assign(console, { log, info: log, warn: log, error: log, debug: log });
     // Some bundles' handlers answer a request twice; the CatVod apps keep serving, so this does too.
-    process.on('uncaughtException', error => log('CATPAW_UNCAUGHT', error?.stack || String(error)));
+    process.on('uncaughtException', error => log('CATPAW_UNCAUGHT', thrownText(error)));
     await new Promise(resolve => messages.listen(0, '127.0.0.1', resolve));
     globalThis.catDartServerPort = () => messages.address()?.port || 0;
     globalThis.catServerFactory = handler => {
