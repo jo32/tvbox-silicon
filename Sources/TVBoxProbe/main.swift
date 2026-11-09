@@ -264,6 +264,31 @@ import TVCore
             for event in item.errorLog()?.events ?? [] { print("errorlog \(event.errorStatusCode) \(event.errorComment ?? "-")") }
             return
         }
+        if args[1] == "--flv-live", args.count > 2 {
+            // --flv-live <url> [Name: value ...]: plays a live FLV stream through FLVLive for 20 s.
+            setvbuf(stdout, nil, _IONBF, 0)
+            var headers: [String: String] = [:]
+            for field in args.dropFirst(3) {
+                let parts = field.split(separator: ":", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+                if parts.count == 2 { headers[parts[0]] = parts[1] }
+            }
+            let began = Date()
+            let address = try await FLVLive.open(URL(string: args[2])!, headers: headers)
+            print("open ms=\(Int(Date().timeIntervalSince(began) * 1000)) \(address)")
+            let master = try await URLSession.shared.data(from: address).0
+            print(String(decoding: master, as: UTF8.self))
+            let media = try await URLSession.shared.data(from: address.deletingLastPathComponent().appending(path: "0.m3u8")).0
+            print(String(decoding: media, as: UTF8.self))
+            let item = AVPlayerItem(url: address)
+            let player = AVPlayer(playerItem: item); player.isMuted = true; player.play()
+            for second in 1...20 {
+                try await Task.sleep(for: .seconds(1))
+                print("t=\(second) status=\(item.status.rawValue) time=\(String(format: "%.1f", player.currentTime().seconds)) rate=\(player.rate) size=\(Int(item.presentationSize.width))x\(Int(item.presentationSize.height)) error=\(item.error.map { "\($0)" } ?? "-")")
+            }
+            for event in item.errorLog()?.events ?? [] { print("errorlog \(event.errorStatusCode) \(event.errorComment ?? "-")") }
+            for event in (item.accessLog()?.events ?? []).suffix(1) { print("access stalls=\(event.numberOfStalls) dropped=\(event.numberOfDroppedVideoFrames) indicated=\(Int(event.indicatedBitrate))") }
+            return
+        }
         if args[1] == "--cast-listen" {
             // --cast-listen [seconds]: runs the Bilibili cast receiver and prints what phones send.
             setvbuf(stdout, nil, _IONBF, 0)

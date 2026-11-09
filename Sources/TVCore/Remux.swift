@@ -89,11 +89,11 @@ public enum Remux {
     public static func isRemuxed(_ url: URL) -> Bool { identifier(url).map(RemuxStore.shared.contains) ?? false }
 
     /// Whether `url` is an HLS stream the repackager serves (`HLSRemux`).
-    public static func isSegmented(_ url: URL) -> Bool { identifier(url).flatMap(RemuxStore.shared.segmented) != nil }
+    public static func isSegmented(_ url: URL) -> Bool { identifier(url).flatMap(RemuxStore.shared.stream) != nil }
 
     /// Whether the picture behind `url` is served as HDR (PQ or HLG), not converted to SDR.
     public static func isHDR(_ url: URL) -> Bool {
-        if let stream = identifier(url).flatMap(RemuxStore.shared.segmented) { return stream.copiesHDR }
+        if let stream = identifier(url).flatMap(RemuxStore.shared.stream) { return stream.copiesHDR }
         guard let plan = session(url)?.plan, plan.tracks.first?.kind == .video else { return false }
         return plan.videoRange != "SDR"
     }
@@ -495,6 +495,18 @@ protocol RemuxStored: AnyObject, Sendable {
 
 extension RemuxSession: RemuxStored {}
 
+/// A stream served as HLS whose segments are made on the way (`HLSRemuxSession`, `FLVLiveSession`): a master
+/// playlist, a media playlist per track (0 video, 1 audio), and `<track>-<segment>.mp4` initialization segments for
+/// the discontinuity beginning at that segment and `<track>-<segment>.m4s` segments.
+protocol SegmentedStream: RemuxStored {
+    var master: String { get }
+    /// The picture is HDR, copied as it is.
+    var copiesHDR: Bool { get }
+    func playlist(_ track: Int) async -> String?
+    func initialization(track: Int, index: Int) async throws -> Data
+    func segment(track: Int, index: Int) async throws -> Data
+}
+
 /// The open files and streams; the oldest is closed when a fourth opens (an episode queued behind another holds two).
 final class RemuxStore: @unchecked Sendable {
     static let shared = RemuxStore()
@@ -513,6 +525,7 @@ final class RemuxStore: @unchecked Sendable {
     }
     func session(_ id: String) -> RemuxSession? { lock.withLock { sessions[id] as? RemuxSession } }
     func segmented(_ id: String) -> HLSRemuxSession? { lock.withLock { sessions[id] as? HLSRemuxSession } }
+    func stream(_ id: String) -> (any SegmentedStream)? { lock.withLock { sessions[id] as? any SegmentedStream } }
     func contains(_ id: String) -> Bool { lock.withLock { sessions[id] != nil } }
     func remove(_ id: String) -> (any RemuxStored)? {
         lock.withLock {
@@ -598,7 +611,7 @@ actor RemuxServer {
         let head = fields[0] == "HEAD"
         let parts = String(fields[1]).components(separatedBy: "?")[0].split(separator: "/").map(String.init)
         guard parts.count == 3, parts[0] == token else { return send(connection, status: 404) }
-        if let stream = RemuxStore.shared.segmented(parts[1]) { return serve(connection, file: parts[2], head: head, of: stream) }
+        if let stream = RemuxStore.shared.stream(parts[1]) { return serve(connection, file: parts[2], head: head, of: stream) }
         guard let session = RemuxStore.shared.session(parts[1]) else { return send(connection, status: 404) }
         let file = parts[2], name = (file as NSString).deletingPathExtension
         switch (file as NSString).pathExtension {
@@ -620,9 +633,9 @@ actor RemuxServer {
         }
     }
 
-    /// An HLS stream's playlists, and its segments once repackaged (`HLSRemuxSession`): `<track>-<segment>.mp4` is the
+    /// An HLS stream's playlists, and its segments once repackaged (`SegmentedStream`): `<track>-<segment>.mp4` is the
     /// initialization segment of the discontinuity beginning there, `<track>-<segment>.m4s` the segment.
-    private nonisolated static func serve(_ connection: NWConnection, file: String, head: Bool, of stream: HLSRemuxSession) {
+    private nonisolated static func serve(_ connection: NWConnection, file: String, head: Bool, of stream: any SegmentedStream) {
         let name = (file as NSString).deletingPathExtension
         switch (file as NSString).pathExtension {
         case "m3u8":
