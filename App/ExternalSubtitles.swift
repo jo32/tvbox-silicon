@@ -176,7 +176,15 @@ import UniformTypeIdentifiers
         if selected != nil { selected = nil; show() }
     }
 
+    /// The viewer picked a subtitle file: the track picked in an earlier episode is no longer the wish (#779).
+    @ObservationIgnored var fileChosen: (() -> Void)?
+
     func select(_ id: String?) {
+        if id != nil { fileChosen?() }
+        choose(id)
+    }
+
+    private func choose(_ id: String?) {
         automatic = false
         guard id != selected else { return }
         selected = id
@@ -370,7 +378,7 @@ import UniformTypeIdentifiers
         let active = generation
         Task {
             guard await self.nativeShowing() != true, self.generation == active, self.selected == nil else { return }
-            self.select(best.id)
+            self.choose(best.id)
         }
     }
 

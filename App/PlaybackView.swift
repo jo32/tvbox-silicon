@@ -570,6 +570,7 @@ import IOKit.pwr_mgt
         externalSubtitles.cues = subtitles
         externalSubtitles.player = player
         externalSubtitles.changed = { [weak self] in self?.followSubtitleDelay() }
+        externalSubtitles.fileChosen = { [weak self] in self?.subtitleChoice = nil }
         subtitles.nativeChosen = { [weak self] in self?.externalSubtitles.nativeChosen() }
         subtitles.clockChanged = { [weak self] in self?.followSubtitleDelay() }
         followSubtitleDelay()
@@ -593,6 +594,30 @@ import IOKit.pwr_mgt
         }
     }
     @ObservationIgnored private var subtitleClockInterval: Double?
+    /// The subtitle track picked in the player's menu, for the next episodes of the same title (#779).
+    @ObservationIgnored private var subtitleChoice: SubtitleChoice?
+    /// The title the playing item belongs to (`Channel.skipScope`).
+    @ObservationIgnored private var subtitleScope: String?
+
+    /// The viewer picked one of the item's own subtitle tracks, or Off (nil), in the player's menu.
+    func choseSubtitle(_ option: AVMediaSelectionOption?) {
+        subtitleChoice = option.flatMap { option in
+            subtitleScope.map { SubtitleChoice(scope: $0, name: option.displayName, language: option.extendedLanguageTag) }
+        }
+    }
+
+    /// Picks the remembered track in an item that is ready, once the system has made its own choice.
+    /// Returns whether it found the track there.
+    @discardableResult
+    private func restoreSubtitleChoice(_ item: AVPlayerItem, channel: Channel) async -> Bool {
+        guard let choice = subtitleChoice, choice.scope == channel.skipScope,
+              let group = try? await item.asset.loadMediaSelectionGroup(for: .legible), subtitleChoice == choice else { return false }
+        let options = group.options.filter { !$0.hasMediaCharacteristic(.containsOnlyForcedSubtitles) }
+        guard let index = choice.index(among: options.map { ($0.displayName, $0.extendedLanguageTag) }) else { return false }
+        if item.currentMediaSelection.selectedMediaOption(in: group) != options[index] { item.select(options[index], in: group) }
+        return true
+    }
+
     /// Subtitle files beside the video, or added while it plays, that the app shows itself (#576).
     let externalSubtitles = ExternalSubtitles()
     /// The subtitle lines the player's overlay draws (`SubtitleOverlay`).
@@ -885,6 +910,7 @@ import IOKit.pwr_mgt
     private func watch(_ item: AVPlayerItem, channel: Channel, url: URL, generation activeGeneration: UUID) {
         self.item = item
         audioChoices = []; audioChoice = nil; liveReadyAt = nil
+        subtitleScope = channel.skipScope
         hasTimeline = item.status == .readyToPlay && item.duration.isNumeric
         observation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
             let status = item.status
@@ -905,6 +931,12 @@ import IOKit.pwr_mgt
                         guard let self, self.generation == activeGeneration, self.item === item else { return }
                         self.audioChoices = choices
                         self.audioChoice = choices.isEmpty ? nil : UngroupedAudio.playing(item)
+                    }
+                    Task { [weak self] in
+                        // The track picked in the last episode, in place of a subtitle file that came on by itself.
+                        guard let self, await self.restoreSubtitleChoice(item, channel: channel),
+                              self.generation == activeGeneration, self.item === item else { return }
+                        self.externalSubtitles.nativeChosen()
                     }
                     self.checkingPicture = Self.repackagable(url)
                     self.restorePositionIfNeeded(item)
@@ -1448,6 +1480,7 @@ extension PlaybackSession {
                     } else if status == .readyToPlay {
                         // Before it plays, so a file with ungrouped dubs starts with one of them.
                         UngroupedAudio.playOne(queued)
+                        Task { [weak self] in await self?.restoreSubtitleChoice(queued, channel: next) }
                         if let intro, intro.enabled, intro.introEnd > 0,
                            intro.validationError(duration: queued.duration.seconds) == nil, queued.currentTime().seconds < intro.introEnd {
                             queued.seek(to: CMTime(seconds: intro.introEnd, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero, completionHandler: nil)
