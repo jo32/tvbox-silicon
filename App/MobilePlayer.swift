@@ -117,6 +117,10 @@ struct MobilePlayerView: View {
                 withAnimation(.easeInOut(duration: 0.25)) { fillsScreen = wider }
             }
             .playerBleed(!inline)
+            // Moved to its new frame at once, not animated with a watch page going full screen: on iOS 26 the animated
+            // move left the UIKit view's host with a shifted bounds origin, and no tap reached the recognizers after
+            // it, so the controls never came back and there was no way out but leaving the app (#729, #766, #767).
+            .transaction { $0.animation = nil }
             .accessibilityHidden(true)
             if mountsVolume {
                 MusicVolumeSlider.HiddenVolumeView(system: systemVolume).frame(width: 1, height: 1).opacity(0.01).allowsHitTesting(false)
