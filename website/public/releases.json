@@ -1,6 +1,134 @@
 {
   "releases": [
     {
+      "version": "1.8.16",
+      "build": 54,
+      "date": "2026-11-10",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "hand.tap",
+          "title": {
+            "en": "Full screen on iPhone answers taps again",
+            "zh-Hans": "iPhone 全屏后点击恢复正常",
+            "zh-Hant": "iPhone 全螢幕後點按恢復正常",
+            "ja": "iPhone の全画面でタップが効くように"
+          },
+          "detail": {
+            "en": "On iOS 26, after a watch page's player went full screen, taps no longer brought the controls back, so you couldn't seek, change the volume or leave full screen. Taps, holds and slides work again.",
+            "zh-Hans": "在 iOS 26 上，观看页的播放器全屏后，点击屏幕不再唤出控制条，无法拖动进度、调节音量或退出全屏。现在点按、长按和滑动都恢复正常。",
+            "zh-Hant": "在 iOS 26 上，觀看頁的播放器全螢幕後，點按畫面不再叫出控制列，無法拖曳進度、調整音量或退出全螢幕。現在點按、長按和滑動都恢復正常。",
+            "ja": "iOS 26 で、視聴ページのプレーヤーを全画面にするとタップしても操作パネルが出ず、シークや音量変更、全画面の終了ができませんでした。タップ、長押し、スライドが再び使えます。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "arrow.up.left.and.arrow.down.right",
+          "title": {
+            "en": "Mac full screen keeps subtitles and arrow keys",
+            "zh-Hans": "Mac 全屏保留字幕和方向键",
+            "zh-Hant": "Mac 全螢幕保留字幕和方向鍵",
+            "ja": "Mac の全画面で字幕と矢印キーが有効に"
+          },
+          "detail": {
+            "en": "The full-screen button in the Mac player's control bar now takes the whole player full screen, so subtitles, danmaku and Left/Right seeking stay, as with the button at the top right.",
+            "zh-Hans": "Mac 播放器控制条上的全屏按钮现在会让整个播放器全屏，字幕、弹幕和左右方向键快进快退都会保留，与右上角的按钮一致。",
+            "zh-Hant": "Mac 播放器控制列上的全螢幕按鈕現在會讓整個播放器全螢幕，字幕、彈幕和左右方向鍵快轉倒轉都會保留，與右上角的按鈕一致。",
+            "ja": "Mac プレーヤーの操作バーにある全画面ボタンが、プレーヤー全体を全画面にするようになりました。右上のボタンと同じく、字幕、弾幕コメント、左右キーでのシークがそのまま使えます。"
+          },
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "symbol": "globe",
+          "title": {
+            "en": "Choose the app's language on the Mac",
+            "zh-Hans": "在 Mac 上选择 App 语言",
+            "zh-Hant": "在 Mac 上選擇 App 語言",
+            "ja": "Mac でアプリの言語を選択"
+          },
+          "detail": {
+            "en": "Settings has a Language row: System Language, English, Simplified Chinese, Traditional Chinese or Japanese. Restart Now applies it.",
+            "zh-Hans": "设置中新增“语言”一栏：系统语言、English、简体中文、繁體中文或日本語。点“立即重新启动”即可生效。",
+            "zh-Hant": "設定中新增「語言」一欄：系統語言、English、简体中文、繁體中文或日本語。點「立即重新啟動」即可生效。",
+            "ja": "設定に「言語」の項目を追加しました。システムの言語、English、简体中文、繁體中文、日本語から選べ、「今すぐ再起動」で反映されます。"
+          },
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "symbol": "appletv",
+          "title": {
+            "en": "Title logo and video tags on Apple TV",
+            "zh-Hans": "Apple TV 显示片名标志和视频标签",
+            "zh-Hant": "Apple TV 顯示片名標誌和影片標籤",
+            "ja": "Apple TV にタイトルロゴと動画タグ"
+          },
+          "detail": {
+            "en": "While the transport bar shows, the player shows the title's logo at the bottom left and the video's tags (such as H265, HDR10, 4K) at the right, as on iPhone.",
+            "zh-Hans": "显示播放控制条时，播放器会在左下角显示片名标志，在右侧显示视频标签（如 H265、HDR10、4K），与 iPhone 一致。",
+            "zh-Hant": "顯示播放控制列時，播放器會在左下角顯示片名標誌，在右側顯示影片標籤（如 H265、HDR10、4K），與 iPhone 一致。",
+            "ja": "再生バーの表示中、左下にタイトルロゴ、右側に動画のタグ（H265、HDR10、4K など）を iPhone と同じように表示します。"
+          },
+          "platforms": [
+            "tvos"
+          ]
+        },
+        {
+          "symbol": "text.bubble",
+          "title": {
+            "en": "Huya danmaku keeps flowing",
+            "zh-Hans": "虎牙弹幕不再中断",
+            "zh-Hant": "虎牙彈幕不再中斷",
+            "ja": "虎牙の弾幕コメントが途切れなく"
+          },
+          "detail": {
+            "en": "Huya live rooms used to show a few lines of danmaku and then stop. The chat connection now stays open, so you see the full chat.",
+            "zh-Hans": "虎牙直播间以前只显示几条弹幕就停了。现在弹幕连接会一直保持，可以看到完整的弹幕。",
+            "zh-Hant": "虎牙直播間以前只顯示幾條彈幕就停了。現在彈幕連線會一直保持，可以看到完整的彈幕。",
+            "ja": "虎牙の配信では、弾幕コメントが数行で止まっていました。コメントの接続が維持されるようになり、すべてのコメントが表示されます。"
+          }
+        },
+        {
+          "symbol": "checkmark.shield",
+          "title": {
+            "en": "CatPawOpen sources no longer close the app",
+            "zh-Hans": "猫源不再导致 App 退出",
+            "zh-Hant": "貓源不再導致 App 退出",
+            "ja": "CatPawOpen ソースでアプリが終了しなく"
+          },
+          "detail": {
+            "en": "A CatPawOpen source that runs out of memory or hits an error of its own now stops on its own, with a message, instead of closing Yingxia. Other sources keep working, and trying again starts it again.",
+            "zh-Hans": "猫源在内存不足或自身出错时，现在只会关闭自己并给出提示，不再导致映匣退出。其他片源照常使用，重试即可重新启动它。",
+            "zh-Hant": "貓源在記憶體不足或自身出錯時，現在只會關閉自己並給出提示，不再導致映匣退出。其他片源照常使用，重試即可重新啟動它。",
+            "ja": "CatPawOpen のソースがメモリ不足や自身のエラーになっても、映匣を終了させず、そのソースだけがメッセージ付きで止まります。ほかのソースはそのまま使え、もう一度試すと再起動します。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "そのほかの修正"
+          },
+          "detail": {
+            "en": "Screenshots attached to feedback are smaller and send faster. Playback failure reports say more about the video, which helps us fix Dolby Vision files that won't play.",
+            "zh-Hans": "反馈附带的截图更小，发送更快。播放失败报告会包含更多视频信息，帮助我们修复无法播放的杜比视界文件。",
+            "zh-Hant": "意見回饋附帶的截圖更小，傳送更快。播放失敗報告會包含更多影片資訊，幫助我們修正無法播放的杜比視界檔案。",
+            "ja": "フィードバックに添付するスクリーンショットが小さくなり、送信が速くなりました。再生失敗のレポートに動画の情報が増え、再生できない Dolby Vision ファイルの修正に役立ちます。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.15",
       "build": 53,
       "date": "2026-11-08",
