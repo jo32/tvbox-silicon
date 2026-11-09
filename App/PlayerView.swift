@@ -28,6 +28,7 @@ struct PlaybackView: View {
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     @State private var playbackSpeed: Float = 1
     @State private var fillsScreen = false
+    @State private var transportBar = TransportBarVisibility()
     #endif
     #if os(macOS)
     @State private var importsSubtitleFile = false
@@ -65,7 +66,8 @@ struct PlaybackView: View {
                                  speed: playbackSpeed, setSpeed: { playbackSpeed = $0; session.setSpeed($0) }, fills: $fillsScreen, danmakuArea: $danmakuArea,
                                  external: session.externalSubtitles, skip: session.skipOffer, skipSource: { session.skipSourceSegment() },
                                  chapters: session.chapters,
-                                 exitWhileWaiting: session.showsPicture ? nil : { dismiss() }, episodes: episodeChoices).ignoresSafeArea()
+                                 exitWhileWaiting: session.showsPicture ? nil : { dismiss() }, episodes: episodeChoices, transportBar: transportBar,
+                                 titleRow: AnyView(TVPlayerTitleRow(channel: channel, session: session, transportBar: transportBar).environment(store))).ignoresSafeArea()
                     .onAppear { playbackSpeed = session.player.defaultRate }
             }
             // Until the picture starts, AVKit's player keeps the Back press to itself, so a stream that never
@@ -765,10 +767,19 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     /// once the transport bar shows (an episode button takes it), and AVKit then keeps the press to itself.
     var exitWhileWaiting: (() -> Void)? = nil
     var episodes: EpisodeChoices? = nil
+    /// Told when AVKit shows or hides the transport bar, for `titleRow`.
+    var transportBar: TransportBarVisibility? = nil
+    /// The title's logo and the video's tags, over the transport bar while it shows (#758).
+    var titleRow: AnyView? = nil
     final class Coordinator: NSObject, UIGestureRecognizerDelegate, @preconcurrency AVPlayerViewControllerDelegate {
         var host: UIHostingController<AnyView>?; var listed = ""; var criteria: DisplayCriteriaKeeper?
         var exit: (() -> Void)?
         var subtitles: SubtitleCues?
+        var transportBar: TransportBarVisibility?
+        func playerViewController(_ controller: AVPlayerViewController, willTransitionToVisibilityOfTransportBar visible: Bool,
+                                  with coordinator: AVPlayerViewControllerAnimationCoordinator) {
+            transportBar?.visible = visible
+        }
         // Picture in Picture shows only the player's own picture, so AVPlayer draws the subtitles there.
         func playerViewControllerWillStartPictureInPicture(_ controller: AVPlayerViewController) { subtitles?.native = true }
         func playerViewControllerDidStopPictureInPicture(_ controller: AVPlayerViewController) { subtitles?.native = false }
@@ -790,6 +801,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         controller.player = player
         controller.delegate = context.coordinator
         context.coordinator.subtitles = subtitles
+        context.coordinator.transportBar = transportBar
         let host = UIHostingController(rootView: overlay)
         host.view.backgroundColor = .clear
         host.view.isUserInteractionEnabled = false
@@ -1051,6 +1063,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             if let enhancer { EnhancedVideoSurface(enhancer: enhancer, fills: fills.wrappedValue) }
             if showsDanmaku && !comments.isEmpty { DanmakuOverlay(player: player, comments: comments, opacity: opacity, revision: revision).ignoresSafeArea() }
             if let subtitles { SubtitleOverlay(cues: subtitles, fills: fills.wrappedValue) }
+            if let titleRow { titleRow }
             if let waiting { waiting.view.transition(.opacity) }
         }
         .animation(.easeInOut(duration: 0.7), value: waiting == nil))
@@ -1651,6 +1664,146 @@ struct PlaybackInfoPanel: View {
         #endif
     }
 }
+
+#if !os(macOS)
+/// The video's tags over the seek bar, as MiraPlay shows them: "HW  H265  HDR10  4K  24FPS" (#520, #519). Plain
+/// white type on the controls' scrim, read once a second while the controls show. On iPhone a tap shows the full info
+/// panel (the bitrate, the sound and the download speed) or hides it; on Apple TV they only show (#758).
+struct PlaybackBadges: View {
+    let session: PlaybackSession
+    /// The controls show: only then is the playing item read.
+    let active: Bool
+    var action: (() -> Void)? = nil
+    @State private var sampler = PlaybackInfoSampler()
+    @State private var badges: [String] = []
+
+    var body: some View {
+        content
+            .opacity(badges.isEmpty ? 0 : 1)
+            .animation(.smooth(duration: 0.25), value: badges)
+            .task(id: active) {
+                while active && !Task.isCancelled {
+                    if let info = await sampler.sample(session), info.badges != badges { badges = info.badges }
+                    try? await Task.sleep(for: .seconds(1))
+                }
+            }
+    }
+
+    @ViewBuilder private var content: some View {
+        if let action {
+            Button(action: action) {
+                tags.padding(.vertical, 6).padding(.leading, 6).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.text("Show Video Info"))
+            .accessibilityValue(badges.joined(separator: " "))
+            .accessibilityIdentifier("player.badges")
+        } else {
+            tags.allowsHitTesting(false)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("player.badges")
+        }
+    }
+
+    private var tags: some View {
+        HStack(spacing: Metrics.spacing) { ForEach(badges, id: \.self) { Text($0) } }
+            .font(.system(size: Metrics.font, weight: .semibold)).monospacedDigit()
+            .shadow(color: .black.opacity(0.6), radius: 3)
+    }
+
+    private enum Metrics {
+        #if os(tvOS)
+        static let font: CGFloat = 24, spacing: CGFloat = 22
+        #else
+        static let font: CGFloat = 13, spacing: CGFloat = 12
+        #endif
+    }
+}
+
+/// The title's logo at the bottom left of the picture, as MiraPlay and Apple TV's player show it (#520, #758): TMDB's,
+/// when the video's page found the title there. Only what this device already knows; nothing shows otherwise, since the
+/// title is in the top row too.
+struct PlayerTitleLogo: View {
+    let channel: Channel
+    /// A phone held upright: a smaller logo.
+    var compact = false
+    @Environment(Store.self) private var store
+    @State private var tmdb = TMDBLookup()
+    @State private var aspect: CGFloat?
+
+    var body: some View {
+        #if os(tvOS)
+        let box = CGSize(width: 440, height: 120)
+        #else
+        let box = compact ? CGSize(width: 150, height: 40) : CGSize(width: 220, height: 56)
+        #endif
+        // A view even before there is a logo, so the lookup below runs.
+        ZStack(alignment: .bottomLeading) {
+            Color.clear.frame(width: 0, height: 0)
+            if let logo = tmdb.details?.logo {
+                let size = Self.fit(aspect ?? 3, in: box)
+                TMDBArtwork(url: logo, maxPixels: 800, fill: false, aspect: $aspect)
+                    .frame(width: size.width, height: size.height, alignment: .bottomLeading)
+                    .shadow(color: .black.opacity(0.45), radius: 6)
+                    .opacity(aspect == nil ? 0 : 1)
+                    .animation(.smooth(duration: 0.3), value: aspect == nil)
+                    .accessibilityHidden(true)
+            }
+        }
+        .allowsHitTesting(false)
+        .task(id: store.catalog(for: channel)?.video.id) {
+            guard let catalog = store.catalog(for: channel), TMDBLookup.applies(to: catalog.client.site) else { return }
+            _ = await tmdb.prepare(key: TMDBMatchStore.key(source: catalog.client.site.key, video: catalog.video.id))
+        }
+    }
+
+    /// Wide logos fill the width, tall ones the height.
+    static func fit(_ aspect: CGFloat, in box: CGSize) -> CGSize {
+        let aspect = max(aspect, 0.5)
+        return aspect >= box.width / box.height ? CGSize(width: box.width, height: box.width / aspect)
+            : CGSize(width: box.height * aspect, height: box.height)
+    }
+}
+#endif
+
+#if os(tvOS)
+/// Whether AVKit's transport bar shows, as its delegate is told: the title row over it shows only then.
+@MainActor @Observable final class TransportBarVisibility {
+    var visible = false
+}
+
+/// Over the transport bar while it shows, as on iPhone (#758, #520): the title's logo on the left, beside the scrubber's
+/// buttons, and the video's tags on the right, over those buttons. It draws in the content overlay, under AVKit's
+/// controls and menus, and takes no focus.
+struct TVPlayerTitleRow: View {
+    let channel: Channel
+    let session: PlaybackSession
+    let transportBar: TransportBarVisibility
+
+    var body: some View {
+        let shows = transportBar.visible && session.showsPicture && session.error == nil
+        ZStack {
+            PlayerTitleLogo(channel: channel)
+                .padding(.bottom, Metrics.logoBottom)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            PlaybackBadges(session: session, active: shows)
+                .padding(.bottom, Metrics.tagsBottom)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 80)
+        .opacity(shows ? 1 : 0)
+        .animation(.easeInOut(duration: 0.3), value: shows)
+        .allowsHitTesting(false)
+    }
+
+    /// From the screen's foot (the overlay ignores the safe area): AVKit's button row over the scrubber spans about
+    /// 215 to 280 points up, inside the 80-point title-safe sides.
+    private enum Metrics {
+        static let logoBottom: CGFloat = 230, tagsBottom: CGFloat = 296
+    }
+}
+#endif
 
 /// Reads what `PlaybackInfo` holds from the playing item: the info panel and the tags over the seek bar each keep one
 /// and ask it once a second while they show.
