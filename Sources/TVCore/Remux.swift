@@ -183,6 +183,33 @@ public enum Remux {
         return CloudRemuxSource(stream: CloudByteStream(source: source, session: chunks, rewritesSampleEntries: false, refresh: { nil }))
     }
 
+    /// Whether an address is a server inside this app that doesn't name the file it sends: a plugin's own
+    /// loopback proxy (`http://127.0.0.1:19981/chunk?…`, #776). Only its first bytes say what it holds.
+    public static func hidesName(_ url: URL) -> Bool {
+        url.scheme == "http" && ["127.0.0.1", "localhost"].contains(url.host() ?? "") && url.pathExtension.isEmpty && !isRemuxed(url)
+    }
+
+    /// The file behind a link when its first bytes are a container the repackager opens and AVPlayer doesn't
+    /// (`handles`); nil for anything else, and for a link that answers no byte ranges.
+    public static func sniffedSource(_ url: URL, headers: [String: String]) async -> RemuxSource? {
+        await sniffedSource(url, headers: headers, chunks: CloudByteStream.session, configuration: RangeConnection.configuration)
+    }
+
+    static func sniffedSource(_ url: URL, headers: [String: String], chunks: URLSession, configuration: URLSessionConfiguration) async -> RemuxSource? {
+        let counter = CloudCounter()
+        guard let probe = try? await RangeConnection.open(url, headers: headers, from: 0, through: 15, configuration: configuration, counter: counter) else { return nil }
+        var head = Data()
+        while head.count < 16, let data = try? await probe.read(at: Int64(head.count), count: 16 - head.count, readThrough: 0), !data.isEmpty { head.append(data) }
+        guard handles(head) else { probe.close(); return nil }
+        if probe.last > 15 {
+            Diagnostics.shared.record(.info, "remux", "link sends the rest of the file host=\(url.host() ?? "-") length=\(probe.length)")
+            return StreamingRemuxSource(url: url, headers: headers, configuration: configuration, counter: counter, first: probe)
+        }
+        probe.close()
+        let source = CloudStreams.Source(url: url, headers: headers, length: Int(probe.length), name: url.lastPathComponent)
+        return CloudRemuxSource(stream: CloudByteStream(source: source, session: chunks, rewritesSampleEntries: false, refresh: { nil }))
+    }
+
     /// A file on this device.
     public static func fileSource(_ url: URL) throws -> RemuxSource { try FileRemuxSource(url) }
 
