@@ -3,18 +3,32 @@
 import http from 'node:http';
 import { createRequire } from 'node:module';
 import { parentPort, workerData } from 'node:worker_threads';
+import { inspect } from 'node:util';
 import { setProxy } from './agents.mjs';
 
 const { bundle, configFile } = workerData;
 let messagesPort = workerData.messagesPort;
 setProxy(workerData.proxy);
 
-function log(...values) { process.stderr.write(values.map(v => typeof v === 'string' ? v : JSON.stringify(v)).join(' ') + '\n'); }
+// Bundles log anything through console, also from their own uncaughtException listeners, and Node ends the process
+// (exit code 7; in the app, the app itself) when an uncaughtException listener throws. So logging never throws: what JSON
+// can't write (a circular object, a BigInt) is written as Node's own console writes it, and a failed write is dropped.
+function logText(value) {
+    if (typeof value === 'string') return value;
+    try { return JSON.stringify(value); } catch { return inspect(value); }
+}
+function log(...values) {
+    try { process.stderr.write(values.map(logText).join(' ') + '\n'); } catch { }
+}
+// A thrown value need not be an Error: one without a prototype has no string form.
+function thrownText(error) {
+    try { return error?.stack || String(error); } catch { return error; }
+}
 process.env.NODE_ENV = 'development'; // Fastify then skips its per-request logger
 Object.assign(console, { log, info: log, warn: log, error: log, debug: log });
 // Some bundles' handlers answer a request twice; the CatVod apps keep serving, so this does too.
-process.on('uncaughtException', error => log('CATPAW_UNCAUGHT', error?.stack || String(error)));
-process.on('unhandledRejection', error => log('CATPAW_UNHANDLED', error?.stack || String(error)));
+process.on('uncaughtException', error => log('CATPAW_UNCAUGHT', thrownText(error)));
+process.on('unhandledRejection', error => log('CATPAW_UNHANDLED', thrownText(error)));
 // Where bundles send their messages to the app: the host's `messages` server.
 globalThis.catDartServerPort = () => messagesPort;
 

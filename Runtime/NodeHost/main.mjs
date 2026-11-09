@@ -7,15 +7,29 @@ import fs from 'node:fs';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { Worker } from 'node:worker_threads';
+import { inspect } from 'node:util';
 import { request, setProxy } from './agents.mjs';
 
 const [controlFile, relistenFile] = process.argv.slice(2);
 const token = crypto.randomBytes(16).toString('hex');
-function log(...values) { process.stderr.write(values.map(v => typeof v === 'string' ? v : JSON.stringify(v)).join(' ') + '\n'); }
+// Bundles log anything through console, also from their own uncaughtException listeners, and Node ends the process
+// (exit code 7; in the app, the app itself) when an uncaughtException listener throws. So logging never throws: what JSON
+// can't write (a circular object, a BigInt) is written as Node's own console writes it, and a failed write is dropped.
+function logText(value) {
+    if (typeof value === 'string') return value;
+    try { return JSON.stringify(value); } catch { return inspect(value); }
+}
+function log(...values) {
+    try { process.stderr.write(values.map(logText).join(' ') + '\n'); } catch { }
+}
+// A thrown value need not be an Error: one without a prototype has no string form.
+function thrownText(error) {
+    try { return error?.stack || String(error); } catch { return error; }
+}
 process.env.NODE_ENV = 'development';
 Object.assign(console, { log, info: log, warn: log, error: log, debug: log });
-process.on('uncaughtException', error => log('CATPAW_UNCAUGHT', error?.stack || String(error)));
-process.on('unhandledRejection', error => log('CATPAW_UNHANDLED', error?.stack || String(error)));
+process.on('uncaughtException', error => log('CATPAW_UNCAUGHT', thrownText(error)));
+process.on('unhandledRejection', error => log('CATPAW_UNHANDLED', thrownText(error)));
 
 // Bundles ask the app for things by POSTing {action, opt} to http://127.0.0.1:<catDartServerPort()>/msg, as the CatVod
 // Open apps take them. The host's `messages` server answers that address (`answerMessage`). The one request kept is a

@@ -82,6 +82,28 @@ exports.start = async () => {
   server.listen();
 };
 ''')
+    # A bundle that logs what JSON can't write and throws a value its own uncaughtException listener logs, as the
+    # xptv bundles' listener does. Node ends the bundle's worker (in nodejs-mobile 18 builds before workers, the app)
+    # when a listener throws, so the bundle must still hold its count on the next call.
+    (job / 'noisy').mkdir()
+    (job / 'noisy' / 'index.js').write_text('''
+process.on('uncaughtException', e => console.log('[uncaughtException]', e && e.message ? e.message : e));
+let calls = 0;
+exports.start = async () => {
+  const server = globalThis.catServerFactory(async (req, res) => {
+    for await (const ignored of req) {}
+    if (req.url.endsWith('/init')) { res.end('{}'); return; }
+    const circular = {big: 10n}; circular.self = circular;
+    console.log('noisy', circular, 10n);
+    calls += 1;
+    res.writeHead(200, {'content-type': 'application/json'});
+    res.end(JSON.stringify({list: [{vod_id: String(calls), vod_name: 'Noisy'}]}));
+    setTimeout(() => { throw circular; });
+    setTimeout(() => { throw Object.create(null); });
+  });
+  server.listen();
+};
+''')
     control = job / 'control.json'
     with (job / 'host.log').open('w') as log:
         process = subprocess.Popen([node, str(job / 'runner.mjs'), str(root / 'Runtime/NodeHost/main.mjs'),
@@ -115,8 +137,15 @@ exports.start = async () => {
             assert 'error' not in envelope, envelope
             envelope = call(job / 'grow' / 'index.js', '/spider/ok/3')
             assert json.loads(envelope.get('result', '{}')).get('list') == [{'vod_id': 'ok', 'vod_name': 'Alive'}], envelope
+            for count in ('1', '2'):
+                envelope = call(job / 'noisy' / 'index.js', '/spider/noisy/3')
+                assert 'error' not in envelope, envelope
+                assert json.loads(envelope['result'])['list'] == [{'vod_id': count, 'vod_name': 'Noisy'}], envelope
+                time.sleep(.3)
+            assert process.poll() is None, (job / 'host.log').read_text()
+            assert f"CATPAW_WORKER_EXIT {job / 'noisy' / 'index.js'}" not in (job / 'host.log').read_text(), (job / 'host.log').read_text()
         finally:
             process.terminate()
             process.wait(timeout=5)
 print('Embedded Node host checks passed: HTTP and HTTPS source requests reuse upstream connections; '
-      'a bundle that runs out of memory ends alone and starts again.')
+      'a bundle that runs out of memory ends alone and starts again; logging never ends a bundle.')
