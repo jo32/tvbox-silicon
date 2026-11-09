@@ -180,6 +180,14 @@ struct LivePluginOfferSection: View {
     @State private var revision = 0
 
     var body: some View {
+        content
+            #if DEBUG
+            // `-qaInstallAll 1` with `-qaPage live-plugins -qaQuery <key>` installs the source's plugins without a tap.
+            .task { if UserDefaults.standard.bool(forKey: "qaInstallAll") { install(entries.filter { state($0) != .installed }) } }
+            #endif
+    }
+
+    @ViewBuilder private var content: some View {
         let missing = entries.filter { state($0) != .installed }
         #if os(tvOS)
         TVSettingsSection(title: title, footer: failures.values.first) {
@@ -205,7 +213,7 @@ struct LivePluginOfferSection: View {
             }
             ForEach(entries) { entry in
                 HStack(spacing: 12) {
-                    LivePluginRow(name: entry.name, icon: nil, detail: failures[entry.pluginId] ?? (entry.summary.isEmpty ? entry.version : entry.summary),
+                    LivePluginRow(name: entry.name, icon: LivePlugins.shared.installed(entry.pluginId).flatMap(LivePlugins.shared.iconFile), detail: failures[entry.pluginId] ?? (entry.summary.isEmpty ? entry.version : entry.summary),
                                   needsSignIn: entry.requiresLogin, highlighted: failures[entry.pluginId] != nil, placeholder: entry.name)
                     Spacer(minLength: 8)
                     if busy.contains(entry.pluginId) { ProgressView().appControlSize(.small) }
@@ -328,6 +336,7 @@ struct LivePluginPage: View {
     @ViewBuilder private var content: some View {
         #if os(tvOS)
         TVSettingsSubpage(symbol: "puzzlepiece.extension", title: plugin.name, subtitle: details) {
+            LivePluginAccountSection(plugin: plugin)
             TVSettingsSection(footer: failure) {
                 if let update {
                     TVSettingsAction(title: L10n.text("Update to %@", update.version), busy: busy) { install(update) }
@@ -342,6 +351,7 @@ struct LivePluginPage: View {
                 LabeledContent(L10n.text("Version"), value: plugin.version)
                 if let host = plugin.source?.host() { LabeledContent(L10n.text("Source"), value: host) }
             }
+            LivePluginAccountSection(plugin: plugin)
             Section {
                 if let update {
                     Button { install(update) } label: {
@@ -392,7 +402,8 @@ struct LivePluginRow: View {
             PluginIconView(file: icon, fallback: placeholder ?? name, size: large ? 52 : 34)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(name).lineLimit(1)
+                    // A short name next to the tag shrank to nothing (快手) without the priority.
+                    Text(name).lineLimit(1).layoutPriority(1)
                     if needsSignIn {
                         Text(L10n.text("Sign-In Needed"))
                             .font(.caption2.weight(.semibold)).foregroundStyle(.orange)
@@ -405,6 +416,7 @@ struct LivePluginRow: View {
                     Text(detail).font(.caption).foregroundStyle(highlighted ? AnyShapeStyle(Brand.amber) : AnyShapeStyle(.secondary)).lineLimit(2)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

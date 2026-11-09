@@ -367,6 +367,15 @@ enum QALaunch {
                 if let platform = parts.dropFirst().first.flatMap(LivePlatform.init(rawValue:)) {
                     LivePlatformView(platform: platform, initialQuery: UserDefaults.standard.string(forKey: "qaQuery") ?? "")
                 }
+            // `-qaPage live-plugins` (`-qaQuery <source key>` adds that source), `-qaPage live-plugin:<pluginId>`.
+            case "live-plugins": LivePluginsView(initialSource: UserDefaults.standard.string(forKey: "qaQuery"))
+            case "live-plugin":
+                if let plugin = parts.dropFirst().first.flatMap({ LivePlugins.shared.installed($0) }) { LivePluginPage(plugin: plugin) }
+            #if !os(tvOS)
+            // `-qaPage live-plugin-sign-in:<pluginId>`: the plugin's web sign-in sheet.
+            case "live-plugin-sign-in":
+                if let plugin = parts.dropFirst().first.flatMap({ LivePlugins.shared.installed($0) }) { QALivePluginSignIn(plugin: plugin) }
+            #endif
             case "danmaku-list": QADanmakuList()
             #if !os(tvOS)
             case "danmaku-settings": QADanmakuSettings()
@@ -416,7 +425,7 @@ enum QALaunch {
 
     static func overrides(_ section: AppSection) -> Bool {
         guard section == self.section, let page else { return false }
-        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "cloud-login", "cloud-accounts", "subtitle-style", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add", "up", "comments", "chapters"].contains(page.split(separator: ":").first.map(String.init) ?? "")
+        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "cloud-login", "cloud-accounts", "subtitle-style", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add", "up", "comments", "chapters", "live-plugins", "live-plugin", "live-plugin-sign-in"].contains(page.split(separator: ":").first.map(String.init) ?? "")
     }
 }
 
@@ -647,6 +656,19 @@ private struct QABilibiliChapters: View {
             do { chapters = try await BilibiliAPI.playerInfo(part).chapters; if chapters.isEmpty { failure = "no chapters" } }
             catch { failure = "\(error)" }
         }
+    }
+}
+#endif
+
+#if !os(tvOS)
+/// A live plugin's web sign-in sheet, once its manifest is read.
+private struct QALivePluginSignIn: View {
+    let plugin: LivePlugins.Installed
+    @State private var flow: LivePluginLoginFlow?
+    var body: some View {
+        Color.clear
+            .task { flow = await LivePlugins.shared.loginFlow(plugin.pluginId) }
+            .sheet(isPresented: .constant(flow != nil)) { if let flow { LivePluginWebSignIn(plugin: plugin, flow: flow) } }
     }
 }
 #endif

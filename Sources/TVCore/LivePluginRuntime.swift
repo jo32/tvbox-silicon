@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import Security
 import JavaScriptCore
 import zlib
 
@@ -509,10 +510,102 @@ final class LivePluginRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
 }
 
 /// The sign-in cookies plugins send for their platform (`authMode: "platform_cookie"`, `Host.session`).
+/// The platforms' sign-in cookies, in the Keychain, one item per plugin. Plugins never see them unless they ask
+/// with `Host.session.getCookieHeader` or a `platform_cookie` request to the platform's own sites.
 public enum LivePluginAccounts {
-    static func key(_ id: String) -> String { "livePluginCookie." + id }
-    public static func cookie(_ id: String) -> String { UserDefaults.standard.string(forKey: key(id)) ?? "" }
+    public static let changed = Notification.Name("LivePluginAccounts.changed")
+    static let service = "com.tvbox.yingxia.live-plugin-cookies"
+    nonisolated(unsafe) private static var cache: [String: String] = [:]
+    private static let lock = NSLock()
+
+    public static func cookie(_ id: String) -> String {
+        if let cached = lock.withLock({ cache[id] }) { return cached }
+        var query = base(id)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        let value = status == errSecSuccess ? (result as? Data).map { String(decoding: $0, as: UTF8.self) } ?? "" : ""
+        lock.withLock { cache[id] = value }
+        return value
+    }
+
+    public static func isSignedIn(_ id: String) -> Bool { !cookie(id).isEmpty }
+
     public static func setCookie(_ id: String, _ cookie: String?) {
-        if let cookie, !cookie.isEmpty { UserDefaults.standard.set(cookie, forKey: key(id)) } else { UserDefaults.standard.removeObject(forKey: key(id)) }
+        let value = cookie?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        SecItemDelete(base(id) as CFDictionary)
+        if !value.isEmpty {
+            var item = base(id)
+            item[kSecValueData as String] = Data(value.utf8)
+            item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            let status = SecItemAdd(item as CFDictionary, nil)
+            if status != errSecSuccess { Diagnostics.shared.record(.warning, "plugins", "keychain save failed status=\(status)") }
+        }
+        lock.withLock { cache[id] = value }
+        NotificationCenter.default.post(name: changed, object: id)
+    }
+
+    private static func base(_ id: String) -> [String: Any] {
+        // On the Mac this is the login keychain: the data-protection one needs an entitlement Debug builds lack.
+        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: id]
+    }
+}
+
+/// How a plugin signs in on its platform's web page (`loginFlow` in its manifest, kind `webview`).
+public struct LivePluginLoginFlow: Sendable {
+    public let page: URL
+    public let userAgent: String?
+    /// Sites whose cookies make up the sign-in.
+    public let domains: [String]
+    /// Cookies that appear once signed in.
+    public let signals: [String]
+    /// What a pasted cookie must hold, in the plugin's words.
+    public let hint: String?
+
+    init?(_ json: [String: JSONValue]) {
+        guard let page = json["loginURL"]?.string.flatMap(URL.init(string:)) else { return nil }
+        self.page = page
+        userAgent = json["userAgent"]?.string
+        var domains = (json["cookieDomains"]?.array ?? []).compactMap { $0.string?.lowercased() }
+        if let host = page.host()?.lowercased() { domains.append(host) }
+        self.domains = domains.map { $0.hasPrefix(".") ? String($0.dropFirst()) : $0 }
+        signals = (json["authSignalCookies"]?.array ?? []).compactMap(\.string)
+        hint = json["requiredCookieHint"]?.string
+    }
+
+    /// The `Cookie` header of the platform's cookies, once they show a sign-in.
+    public func header(from cookies: [HTTPCookie]) -> String? {
+        let own = cookies.filter { cookie in
+            let domain = cookie.domain.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            return domains.contains { domain == $0 || domain.hasSuffix("." + $0) || $0.hasSuffix("." + domain) }
+        }
+        guard signals.isEmpty ? !own.isEmpty : own.contains(where: { signals.contains($0.name) && !$0.value.isEmpty }) else { return nil }
+        var seen = Set<String>()
+        return own.filter { seen.insert($0.name).inserted }.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
+    }
+}
+
+extension LivePlugins {
+    /// The plugin's web sign-in, when it has one.
+    public func loginFlow(_ id: String) async -> LivePluginLoginFlow? {
+        guard let folder = try? await files(id), let data = try? Data(contentsOf: folder.appending(path: "manifest.json")),
+              let manifest = try? JSONDecoder().decode(JSONValue.self, from: data).object,
+              let flow = manifest["loginFlow"]?.object else { return nil }
+        return LivePluginLoginFlow(flow)
+    }
+
+    /// Asks the plugin whether the saved cookie still signs in (`validateCredential`); nil when it can't tell.
+    public func checkSignIn(_ id: String) async -> Bool? {
+        guard LivePluginAccounts.isSignedIn(id), await LivePluginRuntime.shared.has(id, "validateCredential") else { return nil }
+        do {
+            let reply = try await LivePluginRuntime.shared.call(id, "validateCredential", ["credentialAvailable": .bool(true)], timeout: 20)
+            let object = reply.object ?? [:]
+            for key in ["valid", "isValid", "ok", "loggedIn", "isLoggedIn"] { if case .bool(let flag)? = object[key] { return flag } }
+            if let status = object["status"]?.string?.lowercased() { return ["valid", "ok", "logged_in", "active"].contains(status) }
+            return nil
+        } catch let error as LivePluginError where error.code == "AUTH_REQUIRED" || error.code == "AUTH_EXPIRED" {
+            return false
+        } catch { return nil }
     }
 }

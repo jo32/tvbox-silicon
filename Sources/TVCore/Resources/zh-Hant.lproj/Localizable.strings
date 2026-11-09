@@ -1803,3 +1803,9 @@
 "This video is encrypted, and Yingxia can't play it yet." = "此影片已加密，映匣暫時無法播放。";
 "Update All (%lld)" = "全部更新（%lld）";
 "Update to %@" = "更新到 %@";
+"Cookie" = "Cookie";
+"In a browser signed in to the platform, copy the Cookie header of one of its requests and paste it here." = "在已登入該平台的瀏覽器中，複製任一請求的 Cookie 標頭，貼到這裡。";
+"Paste a Cookie" = "貼上 Cookie";
+"Sign In Again" = "重新登入";
+"Sign-In Expired" = "登入已過期";
+"Some platforms show more, or better quality, once you sign in. The sign-in stays on this device." = "部分平台登入後可看到更多內容或更高畫質。登入資訊只保存在本裝置上。";

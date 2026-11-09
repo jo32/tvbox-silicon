@@ -1803,3 +1803,9 @@
 "This video is encrypted, and Yingxia can't play it yet." = "この動画は暗号化されているため、映匣ではまだ再生できません。";
 "Update All (%lld)" = "すべてアップデート（%lld）";
 "Update to %@" = "%@ にアップデート";
+"Cookie" = "Cookie";
+"In a browser signed in to the platform, copy the Cookie header of one of its requests and paste it here." = "サービスにサインイン済みのブラウザで、リクエストの Cookie ヘッダーをコピーしてここに貼り付けてください。";
+"Paste a Cookie" = "Cookie を貼り付け";
+"Sign In Again" = "もう一度サインイン";
+"Sign-In Expired" = "サインインの期限切れ";
+"Some platforms show more, or better quality, once you sign in. The sign-in stays on this device." = "サインインすると、より多くの配信や高画質を見られるサービスもあります。サインイン情報はこのデバイスにだけ保存されます。";
