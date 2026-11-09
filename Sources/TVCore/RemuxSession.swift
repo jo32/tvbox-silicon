@@ -35,6 +35,8 @@ final class RemuxSession: @unchecked Sendable {
     let source: RemuxSource
     private(set) var plan: RemuxPlan!
     private(set) var master = ""
+    /// The master playlist's picture attributes (`RemuxPlan.variantSummary`), for a failure report.
+    var variant: String? { condition.withLock { RemuxPlan.variantSummary(master) } }
     private(set) var playlists: [Int: String] = [:]
     private(set) var initializations: [Int: Data] = [:]
     private(set) var format = ""
