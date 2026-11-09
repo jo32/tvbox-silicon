@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.16",
+          "buildVersion": "54",
+          "date": "2026-11-10",
+          "localizedDescription": "• iPhone 全屏后点击恢复正常\n• 虎牙弹幕不再中断\n• 猫源不再导致 App 退出\n• 其他修复\n\n• Full screen on iPhone answers taps again\n• Huya danmaku keeps flowing\n• CatPawOpen sources no longer close the app\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.16/Yingxia-1.8.16-ios.ipa",
+          "size": 127939079,
+          "sha256": "cebee1c21ad03527f097a52295b41e2a299d6610f30248ec50ac410ab3da0232",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.15",
           "buildVersion": "53",
           "date": "2026-11-08",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.11/Yingxia-1.8.11-ios.ipa",
           "size": 119203076,
           "sha256": "9039e98597546e388071b50ad5b0dee8c84d6c7b93d39ac4f2d399d5f05b873f",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.9",
-          "buildVersion": "47",
-          "date": "2026-11-05",
-          "localizedDescription": "• 发现页新增今日播出\n• 全局搜索可以用列表显示\n• 网盘视频播放更顺畅\n• 可以选择音乐音质\n• 更清爽的筛选和 Mac 下载\n• 横过手机即可全屏\n• 其他修复\n\n• Airing Today in Discover\n• Global Search as a list\n• Smoother cloud-drive playback\n• Choose your music quality\n• Tidier filters and Mac downloads\n• Turn sideways for Full Screen\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.9/Yingxia-1.8.9-ios.ipa",
-          "size": 118106652,
-          "sha256": "f751de0653dcf5363b032954728345f0da4d14403f11b1e43f35c2fa5dbc3fe4",
           "minOSVersion": "17.0"
         }
       ],
