@@ -102,6 +102,10 @@ public enum Remux {
     /// convert to SDR, so a device that refuses it refuses it again.
     public static func isDolbyVision(_ url: URL) -> Bool { session(url)?.plan.isDolbyVision ?? false }
 
+    /// What the master playlist of the stream at `url` tells AVPlayer about its picture (codecs, size, frame
+    /// rate, range), for a failure report; nil when the repackager doesn't serve it.
+    public static func variant(_ url: URL) -> String? { session(url)?.variant }
+
     /// An HDR or Dolby Vision picture served as it is: what an Apple TV switches its display to before AVPlayer
     /// opens it (in SDR mode AVPlayer refuses an HDR variant of an HLS stream).
     public struct HDRPicture: Sendable, Equatable {

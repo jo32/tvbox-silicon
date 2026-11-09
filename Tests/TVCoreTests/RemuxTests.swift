@@ -123,6 +123,11 @@ import VideoToolbox
         #expect(master.contains(#"TYPE=SUBTITLES,GROUP-ID="subtitles",NAME="简体",LANGUAGE="zh",DEFAULT=NO,AUTOSELECT=YES,FORCED=YES,URI="4.m3u8""#))
         #expect(master.contains(#"CODECS="avc1.640028,mp4a.40.2,ec-3",RESOLUTION=1920x1080,FRAME-RATE=23.976,VIDEO-RANGE=SDR,AUDIO="audio",SUBTITLES="subtitles""#))
         #expect(master.contains("AVERAGE-BANDWIDTH=6000000"))
+        // A failure report carries the picture's attributes, and only those (#769).
+        #expect(RemuxPlan.variantSummary(master) == #"CODECS="avc1.640028,mp4a.40.2,ec-3",RESOLUTION=1920x1080,FRAME-RATE=23.976,VIDEO-RANGE=SDR"#)
+        #expect(RemuxPlan.variantSummary("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1,CODECS=\"dvh1.05.09,ec-3\",FRAME-RATE=59.940,VIDEO-RANGE=PQ\n0.m3u8\n")
+                == #"CODECS="dvh1.05.09,ec-3",FRAME-RATE=59.940,VIDEO-RANGE=PQ"#)
+        #expect(RemuxPlan.variantSummary("#EXTM3U\n") == nil)
         #expect(master.hasSuffix("\n0.m3u8\n"))
         let video = plan.mediaPlaylist(track: 0)
         #expect(video.contains("#EXT-X-TARGETDURATION:5\n") && video.contains(#"#EXT-X-MAP:URI="0.mp4""#))

@@ -255,6 +255,31 @@ struct RemuxPlan: Sendable, Equatable {
         return lines.joined(separator: "\n") + "\n"
     }
 
+    /// What a master playlist tells AVPlayer about the picture: its CODECS, SUPPLEMENTAL-CODECS, RESOLUTION,
+    /// FRAME-RATE and VIDEO-RANGE, as written. AVPlayer can refuse a stream on these alone, before it loads a
+    /// segment (CoreMedia -4 on Dolby Vision 4K 60 fps files, #769), so a failure report carries them.
+    static func variantSummary(_ master: String) -> String? {
+        let tag = "#EXT-X-STREAM-INF:"
+        guard let line = master.split(separator: "\n").first(where: { $0.hasPrefix(tag) }) else { return nil }
+        let kept: Set<Substring> = ["CODECS", "SUPPLEMENTAL-CODECS", "RESOLUTION", "FRAME-RATE", "VIDEO-RANGE"]
+        var parts: [String] = []
+        var rest = line.dropFirst(tag.count)
+        while let equals = rest.firstIndex(of: "=") {
+            let name = rest[..<equals]
+            rest = rest[rest.index(after: equals)...]
+            let value: Substring
+            if rest.first == "\"", let close = rest.dropFirst().firstIndex(of: "\"") {
+                value = rest[...close]; rest = rest[rest.index(after: close)...]
+            } else {
+                let end = rest.firstIndex(of: ",") ?? rest.endIndex
+                value = rest[..<end]; rest = rest[end...]
+            }
+            if rest.first == "," { rest = rest.dropFirst() }
+            if kept.contains(name) { parts.append("\(name)=\(value)") }
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: ",")
+    }
+
     /// The NAME each subtitle track has in the master playlist, by track: what AVPlayer's option for it shows as its
     /// `displayName`. Named as `masterPlaylist` names them.
     func subtitleNames() -> [Int: String] {

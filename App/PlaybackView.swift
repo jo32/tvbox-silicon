@@ -1105,6 +1105,8 @@ import IOKit.pwr_mgt
         let via = ["http", "https"].contains(scheme) ? (["127.0.0.1", "localhost"].contains(url.host() ?? "") ? "local-proxy" : "direct") : scheme
         let format = channel.url.pathExtension.isEmpty ? "-" : String(channel.url.pathExtension.lowercased().prefix(5))
         var text = "source=\(channel.historyContext?.sourceKey ?? "-") live=\(isLive) via=\(via) format=\(format)"
+        // A repackaged file: what its playlist told AVPlayer, which may refuse it on that alone (#769).
+        if let variant = Remux.variant(url) { text += " variant=\(variant)" }
         if let event = item?.errorLog()?.events.last {
             text += " log=\(event.errorStatusCode) \(event.errorDomain) \(event.errorComment ?? "-")"
         }
