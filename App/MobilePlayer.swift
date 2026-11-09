@@ -683,7 +683,7 @@ struct MobilePlayerView: View {
             Menu(L10n.text("Subtitles")) {
                 if let legible = tracks.legible, !legible.options.isEmpty {
                     Picker(L10n.text("Subtitles"), selection: Binding(get: { session.externalSubtitles.selected == nil ? tracks.selected(in: legible) : nil },
-                                                                      set: { tracks.select($0, in: legible); session.externalSubtitles.nativeChosen() })) {
+                                                                      set: { tracks.select($0, in: legible); session.choseSubtitle($0); session.externalSubtitles.nativeChosen() })) {
                         if legible.group.allowsEmptySelection { Text(L10n.text("Off")).tag(AVMediaSelectionOption?.none) }
                         ForEach(legible.options, id: \.self) { Text($0.displayName).tag(Optional($0)) }
                     }
