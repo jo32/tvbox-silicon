@@ -21,11 +21,8 @@ public final class HuyaLiveChat: LiveChat, @unchecked Sendable {
                 Diagnostics.shared.record(.warning, "live.chat", "huya room=\(room) no chat ids")
                 return
             }
-            var request = URLRequest(url: URL(string: "wss://cdnws.api.huya.com/")!)
-            request.setValue(LiveHTTP.desktopAgent, forHTTPHeaderField: "User-Agent")
-            request.setValue("https://www.huya.com", forHTTPHeaderField: "Origin")
             Diagnostics.shared.record(.info, "live.chat", "huya room=\(room) connecting")
-            await link.open(request, greeting: [Self.register(yyid: ids.yyid, channel: ids.channel, subchannel: ids.subchannel)],
+            await link.open(Self.request, greeting: [Self.register(yyid: ids.yyid, channel: ids.channel, subchannel: ids.subchannel)],
                             heartbeat: Self.heartbeat, every: .seconds(60)) { [weak self] in self?.read($0) }
         }
     }
@@ -33,6 +30,17 @@ public final class HuyaLiveChat: LiveChat, @unchecked Sendable {
     public func stop() {
         lock.withLock { handler = nil }
         link.close()
+    }
+
+    /// The chat socket's request. It offers no compression: URLSession offers permessage-deflate unless told
+    /// otherwise, Huya's server takes it and deflates its larger messages, and URLSession then drops the socket
+    /// after a few of them ("Protocol error", POSIX 100), so a busy room showed a few comments and then none (#722).
+    static var request: URLRequest {
+        var request = URLRequest(url: URL(string: "wss://cdnws.api.huya.com/")!)
+        request.setValue(LiveHTTP.desktopAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("https://www.huya.com", forHTTPHeaderField: "Origin")
+        request.setValue("", forHTTPHeaderField: "Sec-WebSocket-Extensions")
+        return request
     }
 
     /// The streamer's yyid and the room's channel ids, from the room's profile.

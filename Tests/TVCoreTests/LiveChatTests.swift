@@ -54,6 +54,9 @@ import Testing
     #expect(user?[4]?.int == 2_272_316_519)
     #expect(user?[5]?.int == 2_272_316_519)
     #expect(user?[7]?.int == 0)
+    // No compression: URLSession drops the socket on Huya's deflated messages (#722).
+    #expect(HuyaLiveChat.request.value(forHTTPHeaderField: "Sec-WebSocket-Extensions") == "")
+    #expect(HuyaLiveChat.request.value(forHTTPHeaderField: "Origin") == "https://www.huya.com")
     // The fixed heartbeat reads as a command too.
     var heartbeat = TarsReader(HuyaLiveChat.heartbeat)
     #expect(heartbeat.fields() != nil)

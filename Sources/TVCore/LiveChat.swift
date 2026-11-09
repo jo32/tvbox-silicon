@@ -47,7 +47,14 @@ final class LiveChatLink: @unchecked Sendable {
             }
         }
         while !lock.withLock({ closed }) {
-            guard let message = try? await socket.receive() else { break }
+            let message: URLSessionWebSocketTask.Message
+            do { message = try await socket.receive() } catch {
+                // The chat stops here; say why unless it was closed on purpose.
+                if !lock.withLock({ closed }) {
+                    Diagnostics.shared.record(.warning, "live.chat", "socket ended host=\(request.url?.host() ?? "-") error=\(error.localizedDescription)")
+                }
+                break
+            }
             if case .data(let data) = message { read(data) }
         }
         beat.cancel()
