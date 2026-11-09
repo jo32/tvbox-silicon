@@ -1496,7 +1496,10 @@ private struct DesktopNativePlayer: NSViewRepresentable {
         }
         view.controlsStyle = live ? .none : .floating
         view.player = player
-        view.showsFullScreenToggleButton = true
+        // No full-screen button of AVKit's own: it took only this view full screen, in a window of AVKit's, without
+        // the subtitles and danmaku drawn over it, the controls above it or the arrow keys' 10 s seek (#750). The
+        // window's full screen (the bar's button, F, the green button) keeps them all.
+        view.showsFullScreenToggleButton = false
         view.allowsPictureInPicturePlayback = true
         context.coordinator.subtitles = subtitles
         view.pictureInPictureDelegate = context.coordinator
