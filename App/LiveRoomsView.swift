@@ -416,7 +416,7 @@ struct LivePlatformCard: View {
                             .labelStyle(.titleAndIcon).lineLimit(1).layoutPriority(1)
                     }
                 } else {
-                    Text(L10n.text("Built-in"))
+                    Text(platform.plugin != nil ? L10n.text("Plugin") : L10n.text("Built-in"))
                 }
             }
             .font(detailFont).foregroundStyle(.white.opacity(0.8))
@@ -434,7 +434,7 @@ struct LivePlatformCard: View {
     }
 }
 
-/// A built-in platform's icon: Bilibili's own mark; the others as their initial on the platform's colour.
+/// A live platform's icon: Bilibili's own mark, a plugin's own icon, the others as their initial on the platform's colour.
 struct LivePlatformMark: View {
     let platform: LivePlatform
     var size: CGFloat = 44
@@ -444,6 +444,7 @@ struct LivePlatformMark: View {
         let size = size >= 44 ? max(size, 56) : size
         #endif
         if platform.mark == "bilibili" { BilibiliMark(size: size) }
+        else if platform.plugin != nil { PluginIconView(file: platform.icon, fallback: platform.name, size: size) }
         // A split glyph has cyan and red offsets, like Douyin's.
         else { tile(platform.glyph, platform.color, size: size, split: platform.split) }
     }

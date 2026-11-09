@@ -45,3 +45,18 @@ public struct SubscriptionImportLink: Sendable, Equatable, Identifiable {
         return name
     }
 }
+
+/// `yingxia://install-source?source=<key or address>`: a live plugin source to add (Settings › Live Plugins),
+/// as plugin sites write `angellive://install-source` links.
+public struct LivePluginSourceLink: Sendable, Equatable, Identifiable {
+    public let source: String
+    public var id: String { source }
+
+    public init?(_ url: URL) {
+        guard url.scheme?.lowercased() == SubscriptionImportLink.scheme, url.host()?.lowercased() == "install-source",
+              let value = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "source" })?.value,
+              case let source = value.trimmingCharacters(in: .whitespacesAndNewlines), !source.isEmpty,
+              LivePlugins.sourceAddress(source) != nil else { return nil }
+        self.source = source
+    }
+}

@@ -401,12 +401,12 @@ final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @
         master = lines.joined(separator: "\n") + "\n"
     }
 
-    /// A track's live playlist: the newest segments. The first answer waits for a few, so playback starts with
-    /// room to spare instead of stalling at once.
+    /// A track's live playlist: the newest segments. The first answer waits for three, or ten seconds' worth when
+    /// keyframes are far apart (NetEase CC's 8 s), so playback starts with room to spare instead of stalling at once.
     func playlist(_ track: Int) async -> String? {
         lock.withLock { asked = Date() }
         let deadline = Date().addingTimeInterval(12)
-        while lock.withLock({ segments.count < 3 && !finished }), Date() < deadline { await wait(seconds: 1) }
+        while lock.withLock({ segments.count < 3 && segments.reduce(0, { $0 + $1.duration }) < 10 && !finished }), Date() < deadline { await wait(seconds: 1) }
         return lock.withLock { () -> String? in
             guard tracks.contains(track), !segments.isEmpty else { return nil }
             let shown = Array(segments.suffix(Self.listed))

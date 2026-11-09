@@ -7,13 +7,13 @@ struct LiveView: View {
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     var body: some View {
         Group {
-            if let config = store.subscription, !config.lives.isEmpty {
+            if case let sources = store.liveSources, !sources.isEmpty {
                 ScrollView {
                     Group {
                         if trimmed.isEmpty {
-                            LiveSourceGrid(sources: config.lives)
+                            LiveSourceGrid(sources: sources)
                         } else {
-                            LiveSearchResults(query: trimmed, sources: config.lives)
+                            LiveSearchResults(query: trimmed, sources: sources)
                         }
                     }.pageContainer()
                 }
@@ -24,7 +24,7 @@ struct LiveView: View {
                 #endif
             } else {
                 EmptyPage(symbol: AppSection.live.icon, title: L10n.text("Connect a Live Subscription"),
-                          message: L10n.text("In Settings, add a TVBox subscription with live playlists, or an M3U or TXT live playlist by its address or from a file."),
+                          message: L10n.text("In Settings, add a TVBox subscription with live playlists, an M3U or TXT live playlist, or live plugins."),
                           action: AppSection.settings.title, actionSymbol: AppSection.settings.icon, perform: { store.section = .settings })
             }
         }

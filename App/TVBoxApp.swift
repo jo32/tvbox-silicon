@@ -18,6 +18,8 @@ import TVCore
     #if os(iOS) || os(macOS)
     /// A link that asks to add a subscription, waiting for the viewer to agree (#167). Apple TV opens no links.
     @State private var subscriptionLink: SubscriptionImportLink?
+    /// A live plugin source link (`yingxia://install-source`), opened in Live Plugins.
+    @State private var pluginSourceLink: LivePluginSourceLink?
     #endif
     init() {
         #if os(macOS)
@@ -75,11 +77,17 @@ import TVCore
                 .onOpenURL { url in
                     if let link = DouyinHandoff.Link(url) { douyinHandoff = link }
                     else if let link = SubscriptionImportLink(url) { subscriptionLink = link }
+                    else if let link = LivePluginSourceLink(url), store.extrasUnlocked { pluginSourceLink = link }
                 }
+                .sheet(item: $pluginSourceLink) { link in LivePluginSourceSheet(link: link).environment(store) }
                 .sheet(item: $douyinHandoff) { DouyinHandoffView(link: $0) }
                 .sheet(item: $subscriptionLink) { SubscriptionImportView(link: $0) }
                 #elseif os(macOS)
-                .onOpenURL { url in if let link = SubscriptionImportLink(url) { subscriptionLink = link } }
+                .onOpenURL { url in
+                    if let link = SubscriptionImportLink(url) { subscriptionLink = link }
+                    else if let link = LivePluginSourceLink(url), store.extrasUnlocked { pluginSourceLink = link }
+                }
+                .sheet(item: $pluginSourceLink) { link in LivePluginSourceSheet(link: link).environment(store) }
                 .sheet(item: $subscriptionLink) { SubscriptionImportView(link: $0) }
                 // Without this, every link opened a second main window, and the sheet showed in both.
                 .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
@@ -165,6 +173,23 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 #if !os(tvOS)
 /// What a `yingxia://import?url=` link opens: the subscription it names, and the viewer's agreement. A page
 /// can point at a subscription, but nothing is downloaded before Add (#167).
+#if os(iOS) || os(macOS)
+/// Live Plugins in a sheet, adding the linked source.
+struct LivePluginSourceSheet: View {
+    let link: LivePluginSourceLink
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            LivePluginsView(initialSource: link.source)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { dismiss() } } }
+        }
+        #if os(macOS)
+        .frame(minWidth: 520, minHeight: 560)
+        #endif
+    }
+}
+#endif
+
 struct SubscriptionImportView: View {
     let link: SubscriptionImportLink
     @Environment(Store.self) private var store

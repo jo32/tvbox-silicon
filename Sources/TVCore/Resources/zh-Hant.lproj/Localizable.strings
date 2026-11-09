@@ -1769,3 +1769,37 @@
 "System Language" = "系統語言";
 "Restart Now" = "立即重新啟動";
 "Restart Yingxia to use the new language." = "重新啟動映匣後即可使用新語言。";
+
+/* Live plugins */
+"%@ couldn't be downloaded." = "無法下載 %@。";
+"%@ didn't match its checksum, so it wasn't installed." = "%@ 的校驗值不符，未安裝。";
+"%@ wasn't updated. %@" = "%@ 未更新。%@";
+"A plugin's scripts run inside Yingxia and reach only the internet. Add sources you trust." = "外掛的腳本在映匣內執行，只能存取網路。請只加入你信任的外掛來源。";
+"In Settings, add a TVBox subscription with live playlists, an M3U or TXT live playlist, or live plugins." = "請在設定中加入含直播源的 TVBox 訂閱、M3U 或 TXT 直播清單，或直播外掛。";
+"Install All (%lld)" = "全部安裝（%lld）";
+"Live Plugins" = "直播外掛";
+"Live platforms added as AngelLive plugins show in Live TV." = "以 AngelLive 外掛加入的直播平台會顯示在「直播」中。";
+"Live plugins add platforms to Live TV, such as Huya, Douyu, Twitch and YouTube. They use the AngelLive plugin format: add a source by its address, its install link, or its short key." = "直播外掛可為「直播」加入虎牙、鬥魚、Twitch、YouTube 等平台，採用 AngelLive 外掛格式：輸入外掛來源的網址、安裝連結或短碼即可加入。";
+"Plugin" = "外掛";
+"Remove Plugin" = "移除外掛";
+"Removing the source also removes the plugins installed from it." = "移除外掛來源會一併移除從它安裝的外掛。";
+"Sign in to this platform to see this." = "登入此平台後才能查看。";
+"Sign-In Needed" = "需登入";
+"Source" = "外掛來源";
+"Source Address or Key" = "外掛來源網址或短碼";
+"The download isn't the plugin %@." = "下載的檔案不是外掛 %@。";
+"The live stream ended." = "直播已結束。";
+"The live stream sent no picture." = "直播串流沒有畫面。";
+"The platform took too long to answer." = "平台回應逾時。";
+"The plugin %@ defines no LiveParsePlugin." = "外掛 %@ 沒有定義 LiveParsePlugin。";
+"The plugin %@ is missing its script %@." = "外掛 %@ 缺少腳本 %@。";
+"The plugin %@ isn't installed." = "外掛 %@ 未安裝。";
+"The plugin %@ needs a newer version of Yingxia." = "外掛 %@ 需要更新版本的映匣。";
+"The plugin has no manifest.json." = "外掛缺少 manifest.json。";
+"The streamer isn't live now." = "主播目前未開播。";
+"This address isn't a live plugin source." = "此網址不是直播外掛來源。";
+"This live stream isn't FLV." = "此直播串流不是 FLV 格式。";
+"This platform's plugin can't do this." = "此平台的外掛不支援此操作。";
+"This video is encrypted, and Yingxia can't play it yet." = "此影片已加密，映匣暫時無法播放。";
+"Update All (%lld)" = "全部更新（%lld）";
+"Update to %@" = "更新到 %@";

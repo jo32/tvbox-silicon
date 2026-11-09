@@ -1769,3 +1769,37 @@
 "System Language" = "システム言語";
 "Restart Now" = "今すぐ再起動";
 "Restart Yingxia to use the new language." = "新しい言語は映匣を再起動すると反映されます。";
+
+/* Live plugins */
+"%@ couldn't be downloaded." = "%@ をダウンロードできませんでした。";
+"%@ didn't match its checksum, so it wasn't installed." = "%@ はチェックサムが一致しないため、インストールしませんでした。";
+"%@ wasn't updated. %@" = "%@ は更新されませんでした。%@";
+"A plugin's scripts run inside Yingxia and reach only the internet. Add sources you trust." = "プラグインのスクリプトは映匣の中で動き、インターネットにだけアクセスします。信頼できるソースだけを追加してください。";
+"In Settings, add a TVBox subscription with live playlists, an M3U or TXT live playlist, or live plugins." = "設定で、ライブ再生リストを含む TVBox サブスクリプション、M3U・TXT のライブ再生リスト、またはライブプラグインを追加してください。";
+"Install All (%lld)" = "すべてインストール（%lld）";
+"Live Plugins" = "ライブプラグイン";
+"Live platforms added as AngelLive plugins show in Live TV." = "AngelLive プラグインとして追加したライブ配信サービスは「ライブ TV」に表示されます。";
+"Live plugins add platforms to Live TV, such as Huya, Douyu, Twitch and YouTube. They use the AngelLive plugin format: add a source by its address, its install link, or its short key." = "ライブプラグインは Huya、Douyu、Twitch、YouTube などを「ライブ TV」に追加します。AngelLive プラグイン形式で、ソースはアドレス、インストールリンク、短いキーのいずれかで追加できます。";
+"Plugin" = "プラグイン";
+"Remove Plugin" = "プラグインを削除";
+"Removing the source also removes the plugins installed from it." = "ソースを削除すると、そこからインストールしたプラグインも削除されます。";
+"Sign in to this platform to see this." = "表示するにはこのサービスにサインインしてください。";
+"Sign-In Needed" = "サインインが必要";
+"Source" = "ソース";
+"Source Address or Key" = "ソースのアドレスまたはキー";
+"The download isn't the plugin %@." = "ダウンロードしたファイルはプラグイン %@ ではありません。";
+"The live stream ended." = "ライブ配信は終了しました。";
+"The live stream sent no picture." = "ライブ配信から映像が届きませんでした。";
+"The platform took too long to answer." = "サービスの応答に時間がかかりすぎました。";
+"The plugin %@ defines no LiveParsePlugin." = "プラグイン %@ には LiveParsePlugin がありません。";
+"The plugin %@ is missing its script %@." = "プラグイン %@ にスクリプト %@ がありません。";
+"The plugin %@ isn't installed." = "プラグイン %@ はインストールされていません。";
+"The plugin %@ needs a newer version of Yingxia." = "プラグイン %@ には新しいバージョンの映匣が必要です。";
+"The plugin has no manifest.json." = "プラグインに manifest.json がありません。";
+"The streamer isn't live now." = "配信者は現在配信していません。";
+"This address isn't a live plugin source." = "このアドレスはライブプラグインのソースではありません。";
+"This live stream isn't FLV." = "このライブ配信は FLV ではありません。";
+"This platform's plugin can't do this." = "このサービスのプラグインではこの操作はできません。";
+"This video is encrypted, and Yingxia can't play it yet." = "この動画は暗号化されているため、映匣ではまだ再生できません。";
+"Update All (%lld)" = "すべてアップデート（%lld）";
+"Update to %@" = "%@ にアップデート";

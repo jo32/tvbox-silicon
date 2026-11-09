@@ -264,6 +264,38 @@ import TVCore
             for event in item.errorLog()?.events ?? [] { print("errorlog \(event.errorStatusCode) \(event.errorComment ?? "-")") }
             return
         }
+        if args[1] == "--plugin-call", args.count > 3 {
+            // --plugin-call <pluginId> <method> [JSON payload]: one call into an installed live plugin, its reply as JSON.
+            setvbuf(stdout, nil, _IONBF, 0)
+            let payload = args.count > 4 ? try JSONDecoder().decode([String: JSONValue].self, from: Data(args[4].utf8)) : [:]
+            do {
+                let reply = try await LivePluginRuntime.shared.call(args[2], args[3], payload)
+                let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+                print(String(decoding: try encoder.encode(reply), as: UTF8.self))
+            } catch { print("error \(error)") }
+            return
+        }
+        if args[1] == "--plugin-install", args.count > 2 {
+            // --plugin-install <source address, angellive:// link or key> [pluginId ...]: installs live plugins
+            // (all of the source's without ids); then `--live plugin.<id> [keyword|room:<id>]` tries one.
+            setvbuf(stdout, nil, _IONBF, 0)
+            guard let address = LivePlugins.sourceAddress(args[2]) else { throw LivePlugins.Failure.notASource }
+            let (name, entries) = try await LivePlugins.shared.index(address)
+            print("source \(name): \(entries.map { "\($0.pluginId) \($0.version)" }.joined(separator: ", "))")
+            LivePlugins.shared.addSource(address, name: name)
+            let wanted = Set(args.dropFirst(3))
+            for entry in entries where wanted.isEmpty || wanted.contains(entry.pluginId) {
+                do {
+                    try await LivePlugins.shared.install(entry, from: address)
+                    let record = LivePlugins.shared.installed(entry.pluginId)
+                    print("installed \(entry.pluginId) \(record?.version ?? "-") tint=\(record?.tint ?? "-")")
+                } catch {
+                    print("failed \(entry.pluginId): \(error.localizedDescription)")
+                }
+            }
+            print("platforms \(LivePlugins.shared.platforms.map { "\($0.id) \($0.scheme)" })")
+            return
+        }
         if args[1] == "--flv-live", args.count > 2 {
             // --flv-live <url> [Name: value ...]: plays a live FLV stream through FLVLive for 20 s.
             setvbuf(stdout, nil, _IONBF, 0)

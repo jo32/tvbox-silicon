@@ -1769,3 +1769,37 @@
 "System Language" = "系统语言";
 "Restart Now" = "立即重新启动";
 "Restart Yingxia to use the new language." = "重新启动映匣后即可使用新语言。";
+
+/* Live plugins */
+"%@ couldn't be downloaded." = "无法下载 %@。";
+"%@ didn't match its checksum, so it wasn't installed." = "%@ 的校验值不符，未安装。";
+"%@ wasn't updated. %@" = "%@ 未更新。%@";
+"A plugin's scripts run inside Yingxia and reach only the internet. Add sources you trust." = "插件的脚本在映匣内运行，只能访问网络。请只添加你信任的插件源。";
+"In Settings, add a TVBox subscription with live playlists, an M3U or TXT live playlist, or live plugins." = "请在设置中添加带直播源的 TVBox 订阅、M3U 或 TXT 直播列表，或直播插件。";
+"Install All (%lld)" = "全部安装（%lld）";
+"Live Plugins" = "直播插件";
+"Live platforms added as AngelLive plugins show in Live TV." = "以 AngelLive 插件添加的直播平台会显示在“直播”中。";
+"Live plugins add platforms to Live TV, such as Huya, Douyu, Twitch and YouTube. They use the AngelLive plugin format: add a source by its address, its install link, or its short key." = "直播插件可为“直播”添加虎牙、斗鱼、Twitch、YouTube 等平台，采用 AngelLive 插件格式：输入插件源的地址、安装链接或短码即可添加。";
+"Plugin" = "插件";
+"Remove Plugin" = "移除插件";
+"Removing the source also removes the plugins installed from it." = "移除插件源会同时移除从它安装的插件。";
+"Sign in to this platform to see this." = "登录此平台后才能查看。";
+"Sign-In Needed" = "需登录";
+"Source" = "插件源";
+"Source Address or Key" = "插件源地址或短码";
+"The download isn't the plugin %@." = "下载的文件不是插件 %@。";
+"The live stream ended." = "直播已结束。";
+"The live stream sent no picture." = "直播流没有画面。";
+"The platform took too long to answer." = "平台响应超时。";
+"The plugin %@ defines no LiveParsePlugin." = "插件 %@ 没有定义 LiveParsePlugin。";
+"The plugin %@ is missing its script %@." = "插件 %@ 缺少脚本 %@。";
+"The plugin %@ isn't installed." = "插件 %@ 未安装。";
+"The plugin %@ needs a newer version of Yingxia." = "插件 %@ 需要更新版本的映匣。";
+"The plugin has no manifest.json." = "插件缺少 manifest.json。";
+"The streamer isn't live now." = "主播当前未开播。";
+"This address isn't a live plugin source." = "此地址不是直播插件源。";
+"This live stream isn't FLV." = "此直播流不是 FLV 格式。";
+"This platform's plugin can't do this." = "此平台的插件不支持该操作。";
+"This video is encrypted, and Yingxia can't play it yet." = "此视频已加密，映匣暂时无法播放。";
+"Update All (%lld)" = "全部更新（%lld）";
+"Update to %@" = "更新到 %@";
