@@ -665,7 +665,7 @@ private struct QABilibiliChapters: View {
 }
 #endif
 
-#if !os(tvOS)
+#if DEBUG && !os(tvOS)
 /// A live plugin's web sign-in sheet, once its manifest is read.
 private struct QALivePluginSignIn: View {
     let plugin: LivePlugins.Installed
@@ -677,6 +677,8 @@ private struct QALivePluginSignIn: View {
     }
 }
 #endif
+
+#if DEBUG
 
 /// A live plugin's QR sign-in, once its manifest is read.
 private struct QALivePluginQR: View {
@@ -694,3 +696,4 @@ private struct QALivePluginQR: View {
         }
     }
 }
+#endif
