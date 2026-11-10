@@ -1,6 +1,92 @@
 {
   "releases": [
     {
+      "version": "1.8.17",
+      "build": 55,
+      "date": "2026-11-11",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "puzzlepiece.extension",
+          "title": {
+            "en": "Add live platforms as plugins",
+            "zh-Hans": "用插件添加直播平台",
+            "zh-Hant": "用外掛加入直播平台",
+            "ja": "プラグインでライブ配信サービスを追加"
+          },
+          "detail": {
+            "en": "Settings › Live Plugins installs live platforms from a plugin source you add. Each one shows up in Live TV with its home page, categories, search and live chat as danmaku. Platforms that need an account let you sign in with a QR code or a device code; the sign-in stays on your device.",
+            "zh-Hans": "在“设置 › 直播插件”中添加插件源，即可安装更多直播平台。每个平台都会出现在“直播”里，带有首页、分类、搜索，聊天内容以弹幕显示。需要账号的平台可以扫码或用设备码登录，登录信息只保存在你的设备上。",
+            "zh-Hant": "在「設定 › 直播外掛」中加入外掛來源，即可安裝更多直播平台。每個平台都會出現在「直播」裡，帶有首頁、分類、搜尋，聊天內容以彈幕顯示。需要帳號的平台可以掃碼或用裝置碼登入，登入資訊只儲存在你的裝置上。",
+            "ja": "「設定 › ライブプラグイン」でプラグインソースを追加すると、ライブ配信サービスをインストールできます。各サービスは「ライブ TV」に表示され、ホーム、カテゴリ、検索が使え、チャットは弾幕コメントとして流れます。アカウントが必要なサービスには QR コードまたはデバイスコードでサインインでき、サインイン情報はデバイス内にのみ保存されます。"
+          }
+        },
+        {
+          "symbol": "qrcode.viewfinder",
+          "title": {
+            "en": "Sign in to Hongguo",
+            "zh-Hans": "登录红果短剧",
+            "zh-Hant": "登入紅果短劇",
+            "ja": "Hongguo にサインイン"
+          },
+          "detail": {
+            "en": "Settings › Hongguo signs you in by scanning a code with the Hongguo app, so episodes play as your account. Hongguo also plays in 1080p again: for a while only the first episode after opening the app did.",
+            "zh-Hans": "在“设置 › 红果短剧”中用红果 App 扫码登录，之后剧集会以你的账号播放。红果短剧也恢复了 1080p：此前有一段时间只有打开 App 后的第一集是 1080p。",
+            "zh-Hant": "在「設定 › 紅果短劇」中用紅果 App 掃碼登入，之後劇集會以你的帳號播放。紅果短劇也恢復了 1080p：此前有一段時間只有打開 App 後的第一集是 1080p。",
+            "ja": "「設定 › Hongguo」で Hongguo アプリからコードを読み取ってサインインすると、自分のアカウントでエピソードを再生します。Hongguo の 1080p 再生も元に戻りました。しばらくの間、アプリを開いて最初の 1 話だけが 1080p でした。"
+          }
+        },
+        {
+          "symbol": "sparkles",
+          "title": {
+            "en": "A cleaner look for empty and error pages",
+            "zh-Hans": "空白页和出错页焕然一新",
+            "zh-Hant": "空白頁和錯誤頁煥然一新",
+            "ja": "空のページとエラーページを一新"
+          },
+          "detail": {
+            "en": "Pages with nothing to show, and pages that failed to load, share one Liquid Glass design with a clear message and a retry button. Buttons across the app are glass too, and Playback History moves Manage and Clear into the toolbar.",
+            "zh-Hans": "没有内容的页面和加载失败的页面采用统一的液态玻璃设计，提示更清楚，并带有重试按钮。App 各处的按钮也改为玻璃样式，“播放历史”的管理和清空移到了工具栏。",
+            "zh-Hant": "沒有內容的頁面和載入失敗的頁面採用統一的液態玻璃設計，提示更清楚，並帶有重試按鈕。App 各處的按鈕也改為玻璃樣式，「播放記錄」的管理和清除移到了工具列。",
+            "ja": "表示するものがないページと読み込みに失敗したページを、Liquid Glass の共通デザインにしました。わかりやすいメッセージと再試行ボタンが付きます。アプリ全体のボタンもガラス調になり、「再生履歴」の管理と消去はツールバーに移りました。"
+          }
+        },
+        {
+          "symbol": "captions.bubble",
+          "title": {
+            "en": "Your subtitle choice carries to the next episode",
+            "zh-Hans": "所选字幕延续到下一集",
+            "zh-Hant": "所選字幕延續到下一集",
+            "ja": "選んだ字幕を次のエピソードでも使用"
+          },
+          "detail": {
+            "en": "The subtitle track you pick in one episode now stays on when the next episode starts, instead of going back to the default.",
+            "zh-Hans": "在某一集选好的字幕轨，下一集开始时会继续使用，不再回到默认设置。",
+            "zh-Hant": "在某一集選好的字幕軌，下一集開始時會繼續使用，不再回到預設設定。",
+            "ja": "あるエピソードで選んだ字幕トラックが、次のエピソードでもそのまま使われます。デフォルトには戻りません。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "そのほかの修正"
+          },
+          "detail": {
+            "en": "Live streams that only answer a browser now play on iPhone, iPad and Apple TV, as they did on the Mac. MKV files served by a source's own local server play. Watch Now loads its recommendations again after a reset. On the Mac, the loading card no longer pushes the window taller. Built-in sources pick up updates sooner.",
+            "zh-Hans": "只接受浏览器访问的直播流现在也能在 iPhone、iPad 和 Apple TV 上播放，与 Mac 一致。片源通过自带本地服务提供的 MKV 文件可以播放。“现在观看”在重置后会重新载入推荐。在 Mac 上，加载提示不再把窗口撑高。内置片源能更快获得更新。",
+            "zh-Hant": "只接受瀏覽器存取的直播串流現在也能在 iPhone、iPad 和 Apple TV 上播放，與 Mac 一致。片源透過自帶本機服務提供的 MKV 檔案可以播放。「立即觀看」在重置後會重新載入推薦。在 Mac 上，載入提示不再把視窗撐高。內建片源能更快取得更新。",
+            "ja": "ブラウザからのアクセスだけを受け付けるライブ配信が、Mac と同じく iPhone、iPad、Apple TV でも再生できます。ソース自身のローカルサーバーが配信する MKV ファイルを再生できます。「今すぐ観る」はリセット後におすすめを読み込み直します。Mac では読み込み中のカードがウインドウを縦に押し広げなくなりました。内蔵ソースの更新がより早く届きます。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.16",
       "build": 54,
       "date": "2026-11-10",
