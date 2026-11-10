@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.17",
+          "buildVersion": "55",
+          "date": "2026-11-11",
+          "localizedDescription": "• 用插件添加直播平台\n• 登录红果短剧\n• 空白页和出错页焕然一新\n• 所选字幕延续到下一集\n• 其他修复\n\n• Add live platforms as plugins\n• Sign in to Hongguo\n• A cleaner look for empty and error pages\n• Your subtitle choice carries to the next episode\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.17/Yingxia-1.8.17-ios.ipa",
+          "size": 128559563,
+          "sha256": "933a65a3dfe7d39b8297b8220a45ab08f62799f09f8d797ad90b85b57c4f3b38",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.16",
           "buildVersion": "54",
           "date": "2026-11-10",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.13/Yingxia-1.8.13-ios.ipa",
           "size": 124619585,
           "sha256": "93fcba7f5b74bbd2cd0796b3df6f9d8d61182083d84fc7547841e46be7c3510e",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.11",
-          "buildVersion": "49",
-          "date": "2026-11-06",
-          "localizedDescription": "• 阅读漫画\n• 字幕样式\n• 播放器里的选集\n• CatPawOpen 源播放更稳\n• 其他修复\n\n• Read manga\n• Subtitle Style\n• Episodes in the player\n• CatPawOpen sources play better\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.11/Yingxia-1.8.11-ios.ipa",
-          "size": 119203076,
-          "sha256": "9039e98597546e388071b50ad5b0dee8c84d6c7b93d39ac4f2d399d5f05b873f",
           "minOSVersion": "17.0"
         }
       ],
