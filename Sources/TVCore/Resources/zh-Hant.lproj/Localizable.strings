@@ -1815,3 +1815,7 @@
 "The platform sent no sign-in code." = "平台沒有回傳登入 QR 碼。";
 "The platform confirmed the sign-in but sent no cookies." = "平台已確認登入，但沒有回傳登入資訊。";
 "The platform didn't accept this sign-in. Try again." = "平台沒有接受這次登入，請再試一次。";
+"Scan the code, or open %@ on a phone or computer, and enter this code there." = "掃描 QR 碼，或在手機、電腦上打開 %@，並輸入下方代碼。";
+"Waiting for you to approve the sign-in…" = "等待你核准登入…";
+"Open the Sign-In Page" = "打開登入頁面";
+"The sign-in was declined." = "登入已被拒絕。";

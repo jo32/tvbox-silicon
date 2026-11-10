@@ -312,6 +312,23 @@ import TVCore
             print("signed in: \(LivePluginAccounts.isSignedIn(args[2]))")
             return
         }
+        // --plugin-device <plugin> [seconds]: a device-code sign-in up to the code and a few polls.
+        if args[1] == "--plugin-device", args.count > 2 {
+            guard await LivePlugins.shared.signsInByDeviceCode(args[2]) else { print("no device-code sign-in"); return }
+            let session = LivePluginDeviceSession(plugin: args[2])
+            let code = try await session.start()
+            print("code length=\(code.code.count) page=\(code.page.host() ?? "-")\(code.page.path()) carriesCode=\(code.page.query()?.contains(code.code) ?? false) expires=\(Int(code.expires.timeIntervalSinceNow))s interval=\(code.interval)s")
+            let end = Date().addingTimeInterval(args.count > 3 ? Double(args[3]) ?? 12 : 12)
+            while Date() < end {
+                try await Task.sleep(for: .seconds(code.interval))
+                let state = try await session.poll()
+                print("state \(state)")
+                if state != .waiting { break }
+            }
+            await session.cancel()
+            print("signed in: \(LivePluginAccounts.isSignedIn(args[2]))")
+            return
+        }
         if args[1] == "--plugin-danmaku", args.count > 2 {
             // --plugin-danmaku <pluginId> [roomId [userId]] [seconds]: listens to a room's chat through the plugin's danmaku
             // driver and prints each comment; without a room, the first room of the plugin's first area.

@@ -53,7 +53,7 @@ struct LivePluginQRSignIn: View {
             if let challenge, !expired, error == nil { SaveCodeButton(text: challenge.content, app: plugin.name).id(challenge.content) }
             #endif
         }
-        .frame(maxWidth: 560, alignment: .leading)
+        .frame(idealWidth: 340, maxWidth: 560, alignment: .leading)
     }
 
     @ViewBuilder private func verify(_ message: String) -> some View {
@@ -210,6 +210,136 @@ struct LivePluginQRPage: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("Cancel")) { dismiss() } } }
+        }
+        #if os(macOS)
+        .frame(minWidth: 560, idealWidth: 680, minHeight: 380, idealHeight: 420)
+        #endif
+        #endif
+    }
+}
+
+/// Signing in with a code typed on the platform's own page (`LivePluginDeviceSession`): the page's address
+/// as a QR code, the code in large type, and on iPhone, iPad and Mac a button that opens the page.
+struct LivePluginDeviceSignIn: View {
+    let plugin: LivePlugins.Installed
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    @State private var session: LivePluginDeviceSession?
+    @State private var code: LivePluginDeviceCode?
+    @State private var ended: String?
+    @State private var attempt = 0
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: spacing) { picture; details }
+            VStack(alignment: .leading, spacing: spacing) { picture; details }
+        }
+        #if os(tvOS)
+        .frame(maxWidth: .infinity)
+        #else
+        .padding(.vertical, 10)
+        #endif
+        .task(id: attempt) { await run() }
+        .onDisappear { if let session { Task { await session.cancel() } } }
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text(L10n.text("Scan the code, or open %@ on a phone or computer, and enter this code there.", code.map { ($0.page.host() ?? "") + $0.page.path() } ?? plugin.name))
+                .font(.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if let code, ended == nil {
+                Text(code.code).font(.system(size: codeSize / 6, weight: .bold, design: .monospaced)).tracking(4)
+                    #if !os(tvOS)
+                    .textSelection(.enabled)
+                    #endif
+                HStack(spacing: 12) {
+                    ProgressView()
+                    Text(L10n.text("Waiting for you to approve the sign-in…")).foregroundStyle(.secondary)
+                }
+                #if !os(tvOS)
+                Button(L10n.text("Open the Sign-In Page")) { openURL(code.page) }.settingsButton(prominent: true)
+                #endif
+            }
+            if let ended {
+                Label(ended, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Brand.amber).fixedSize(horizontal: false, vertical: true)
+                Button(L10n.text("Get New Code")) { attempt += 1 }.settingsButton(prominent: true)
+            }
+        }
+        .frame(idealWidth: 340, maxWidth: 560, alignment: .leading)
+    }
+
+    @ViewBuilder private var picture: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.white)
+            if let code, let image = QRCode.image(code.page.absoluteString) {
+                Image(image, scale: 1, label: Text(L10n.text("Sign-in code"))).interpolation(.none).resizable().scaledToFit()
+                    .padding(codeSize / 12).opacity(ended != nil ? 0.15 : 1)
+            } else if ended == nil {
+                ProgressView().tint(.black)
+            }
+        }
+        .frame(width: codeSize, height: codeSize)
+        .loadingFocus(takeFocus: true) { dismiss() }
+    }
+
+    private func run() async {
+        code = nil; ended = nil
+        let session = LivePluginDeviceSession(plugin: plugin.pluginId)
+        self.session = session
+        do {
+            let code = try await session.start()
+            self.code = code
+            while !Task.isCancelled {
+                try await Task.sleep(for: .seconds(code.interval))
+                switch try await session.poll() {
+                case .waiting: if Date() > code.expires { ended = L10n.text("This code has expired."); return }
+                case .authorized: dismiss(); return
+                case .denied: ended = L10n.text("The sign-in was declined."); return
+                case .expired: ended = L10n.text("This code has expired."); return
+                case .failed: ended = L10n.text("The platform didn't accept this sign-in. Try again."); return
+                }
+            }
+        } catch is CancellationError {
+        } catch {
+            ended = error.localizedDescription
+        }
+    }
+
+    private var codeSize: CGFloat {
+        #if os(tvOS)
+        320
+        #else
+        220
+        #endif
+    }
+    private var spacing: CGFloat {
+        #if os(tvOS)
+        72
+        #else
+        28
+        #endif
+    }
+}
+
+/// The device-code sign-in as a page (Apple TV) or a sheet's content (iPhone, iPad, Mac).
+struct LivePluginDevicePage: View {
+    let plugin: LivePlugins.Installed
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        #if os(tvOS)
+        TVSettingsSubpage(symbol: "person.badge.key", title: L10n.text("Sign In to %@", plugin.name)) {
+            LivePluginDeviceSignIn(plugin: plugin)
+        }
+        #else
+        NavigationStack {
+            ScrollView { LivePluginDeviceSignIn(plugin: plugin).padding(24) }
+                .screenBackdrop()
+                .navigationTitle(L10n.text("Sign In to %@", plugin.name))
+                #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+                #endif
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("Cancel")) { dismiss() } } }
         }
         #if os(macOS)
         .frame(minWidth: 560, idealWidth: 680, minHeight: 380, idealHeight: 420)
