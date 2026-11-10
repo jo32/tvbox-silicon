@@ -253,11 +253,27 @@ import TVCore
             let live = try await LiveCatalog.resolve(Channel(name: "", url: address))
             print("resolved \(live.channel.name) \(live.channel.url.absoluteString.prefix(110))")
             print("qualities \(live.qualities.map { "\($0.id) \($0.label)" }) current \(live.current ?? -1)")
-            let item = AVPlayerItem(asset: LiveRepair.asset(for: live.channel.url)
+            if let folder = ProcessInfo.processInfo.environment["LIVE_DUMP"], live.channel.url.lastPathComponent == "master.m3u8" {
+                // The local HLS files as the player gets them.
+                let base = live.channel.url.deletingLastPathComponent()
+                for name in ["master.m3u8", "0.m3u8", "0-0.mp4", "0-0.m4s", "0-1.m4s"] {
+                    let (data, _) = try await URLSession.shared.data(from: base.appending(path: name))
+                    try data.write(to: URL(fileURLWithPath: folder).appending(path: name))
+                    print("dumped \(name) \(data.count)")
+                }
+            }
+            let item = AVPlayerItem(asset: HongguoStreams.asset(for: live.channel.url) ?? LiveRepair.asset(for: live.channel.url)
                 ?? AVURLAsset(url: live.channel.url, options: ["AVURLAssetHTTPHeaderFieldsKey": live.channel.headers]))
+            // As a player layer would: a video-only HLS item without any video output never starts.
+            item.add(AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]))
             let player = AVPlayer(playerItem: item); player.isMuted = true; player.play()
-            for second in 1...10 {
+            for second in 1...(Int(ProcessInfo.processInfo.environment["LIVE_SECONDS"] ?? "") ?? 10) {
                 try await Task.sleep(for: .seconds(1))
+                HongguoStreams.updatePosition(for: live.channel.url, seconds: player.currentTime().seconds)
+                if ProcessInfo.processInfo.environment["LIVE_DUMP"] != nil {
+                    let buffered = item.loadedTimeRanges.map { String(format: "%.1f+%.1f", $0.timeRangeValue.start.seconds, $0.timeRangeValue.duration.seconds) }
+                    print("  rate=\(player.rate) waiting=\(player.reasonForWaitingToPlay?.rawValue ?? "-") buffered=\(buffered) errors=\(item.errorLog()?.events.map { "\($0.errorStatusCode) \($0.errorComment ?? "")" } ?? [])")
+                }
                 print("t=\(second) status=\(item.status.rawValue) time=\(String(format: "%.1f", player.currentTime().seconds)) size=\(Int(item.presentationSize.width))x\(Int(item.presentationSize.height)) error=\(item.error.map { "\($0)" } ?? "-")")
             }
             // Recoverable problems too, such as a playlist contradicting an earlier reload (-12312).

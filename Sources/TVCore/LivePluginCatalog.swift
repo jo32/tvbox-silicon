@@ -126,10 +126,16 @@ enum LivePluginCatalog {
         if chosen.refreshes, chosen.id != options.first(where: { $0.url != nil })?.id || chosen.url == nil {
             chosen = try await refreshed(chosen, plugin: plugin, payload: payload)
         }
-        if chosen.encrypted { throw TVError.unsupported(L10n.text("This video is encrypted, and Yingxia can't play it yet.")) }
+        if chosen.encrypted && chosen.key == nil { throw TVError.unsupported(L10n.text("This video is encrypted, and Yingxia can't play it yet.")) }
         guard let url = chosen.url else { throw TVError.unsupported(L10n.text("This live room has no stream this device can play.")) }
-        Diagnostics.shared.record(.info, "plugins", "\(plugin) play room=\(room) option=\(chosen.label) flv=\(chosen.flv) host=\(url.host() ?? "-")")
-        let address = chosen.flv ? try await FLVLive.open(url, headers: chosen.headers) : url
+        Diagnostics.shared.record(.info, "plugins", "\(plugin) play room=\(room) option=\(chosen.label) flv=\(chosen.flv) cenc=\(chosen.key != nil) host=\(url.host() ?? "-")")
+        let address: URL
+        if let key = chosen.key {
+            // A CENC MP4 with its key (Hongguo's episodes): decrypted as it plays, as Yingxia's own Hongguo source does.
+            address = try await HongguoStreams.open(url: url, key: key, headers: chosen.headers, http: HTTPClient())
+        } else {
+            address = chosen.flv ? try await FLVLive.open(url, headers: chosen.headers) : url
+        }
         let qualities = options.compactMap { option -> StreamQuality? in
             var parts = URLComponents(url: channel.url, resolvingAgainstBaseURL: false)
             parts?.queryItems = (user.isEmpty ? [] : [URLQueryItem(name: "u", value: user)]) + [URLQueryItem(name: "q", value: String(option.id))]
@@ -137,7 +143,7 @@ enum LivePluginCatalog {
         }
         let name = channel.name.isEmpty ? platform.name : channel.name
         return (Channel(name: name, group: channel.group.isEmpty ? platform.name : channel.group, url: address, logo: channel.logo,
-                        headers: chosen.flv ? [:] : chosen.headers), qualities, chosen.id)
+                        headers: chosen.flv || chosen.key != nil ? [:] : chosen.headers), qualities, chosen.id)
     }
 
     /// One quality of one line from `getPlayback`, as the quality menu lists it.
@@ -150,6 +156,8 @@ enum LivePluginCatalog {
         /// Its address comes from `refreshPlayback` (or `getPlayback` again) once picked.
         let refreshes: Bool
         var encrypted: Bool
+        /// The AES key (32 hex digits) of a CENC-encrypted MP4.
+        var key: String? = nil
         let line: [String: JSONValue]
         let quality: [String: JSONValue]
     }
@@ -194,7 +202,7 @@ enum LivePluginCatalog {
         let match = again.first { text($0.quality["qn"]) == text(option.quality["qn"]) && text($0.line["cdn"]) == text(option.line["cdn"]) && $0.url != nil }
             ?? again.first { $0.id == option.id && $0.url != nil }
         guard let match else { throw TVError.unsupported(L10n.text("This live room has no stream this device can play.")) }
-        option.url = match.url; option.headers = match.headers; option.flv = match.flv; option.encrypted = match.encrypted
+        option.url = match.url; option.headers = match.headers; option.flv = match.flv; option.encrypted = match.encrypted; option.key = match.key
         return option
     }
 
@@ -235,6 +243,10 @@ extension LivePluginCatalog.Option {
         let path = self.url?.path().lowercased() ?? ""
         let file = path.hasSuffix(".mp4") || path.hasSuffix(".m3u8") || path.contains("media-video")
         flv = self.url.map(FLVLive.names) ?? false || (format == "flv" && !file)
-        encrypted = quality["decryption"]?.object != nil
+        let decryption = quality["decryption"]?.object
+        encrypted = decryption != nil
+        let method = C.text(decryption?["method"]).lowercased(), key = C.text(decryption?["key"]).lowercased()
+        self.key = (method.isEmpty || method == "cenc") && key.count == 32 && key.allSatisfy(\.isHexDigit) ? key : nil
+        if self.key != nil { flv = false }
     }
 }
