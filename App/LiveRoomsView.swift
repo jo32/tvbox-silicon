@@ -25,6 +25,8 @@ struct LivePlatformView: View {
     #endif
     @State private var qrPlan: LivePluginQRPlan?
     @State private var qrSignIn = false
+    /// The home page of a plugin platform, while its "Recommended" area is selected.
+    @State private var feed: LivePluginCatalog.HomeFeed?
     @State private var deviceCode = false
     @State private var deviceSignIn = false
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -117,7 +119,11 @@ struct LivePlatformView: View {
             }
             #endif
         }
-        LiveRoomGrid(rooms: rooms) { room in if room.id == rooms.last?.id { more() } }
+        if let feed, let area, LiveCatalog.isHome(area), feed.sections.count > 1 || !feed.banners.isEmpty {
+            LiveHomeFeedView(feed: feed, areas: areas) { select($0) }
+        } else {
+            LiveRoomGrid(rooms: rooms) { room in if room.id == rooms.last?.id { more() } }
+        }
         if loader != nil && rooms.isEmpty { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 60) }
         if loader == nil && error == nil && page > 0 && rooms.isEmpty {
             EmptyResults(symbol: "dot.radiowaves.left.and.right", title: L10n.text("No Live Rooms"))
@@ -144,7 +150,7 @@ struct LivePlatformView: View {
 
     private func reload() {
         loader?.cancel()
-        areas = []; rooms = []; page = 0; exhausted = false; error = nil; needsSignIn = false
+        areas = []; rooms = []; page = 0; exhausted = false; error = nil; needsSignIn = false; feed = nil
         loader = Task {
             do {
                 let found = try await LiveCatalog.areas(platform)
@@ -169,7 +175,7 @@ struct LivePlatformView: View {
     private func select(_ value: LiveArea) {
         guard value != area else { return }
         loader?.cancel(); loader = nil
-        area = value; rooms = []; page = 0; exhausted = false; error = nil
+        area = value; rooms = []; page = 0; exhausted = false; error = nil; feed = nil
         more()
     }
 
@@ -179,7 +185,17 @@ struct LivePlatformView: View {
         let next = page + 1
         loader = Task {
             do {
-                let found = try await LiveCatalog.rooms(platform, area: area, page: next)
+                var found: [LiveRoom]
+                if LiveCatalog.isHome(area) {
+                    // One page: the feed's sections, also flattened for when it has a single one.
+                    let home = next == 1 ? try await LiveCatalog.homeFeed(platform) : LivePluginCatalog.HomeFeed()
+                    guard !Task.isCancelled else { return }
+                    if next == 1 { feed = home }
+                    var seen = Set<String>()
+                    found = home.sections.flatMap(\.rooms).filter { seen.insert($0.id).inserted }
+                } else {
+                    found = try await LiveCatalog.rooms(platform, area: area, page: next)
+                }
                 guard !Task.isCancelled else { return }
                 var seen = Set(rooms.map(\.id))
                 let fresh = found.filter { seen.insert($0.id).inserted }
@@ -193,6 +209,92 @@ struct LivePlatformView: View {
             }
             loader = nil
         }
+    }
+}
+
+/// A plugin platform's home page: its banners in a row that scrolls sideways, then each section under its
+/// title. A section whose category is among the platform's areas opens it from the title.
+private struct LiveHomeFeedView: View {
+    let feed: LivePluginCatalog.HomeFeed
+    let areas: [LiveArea]
+    let open: (LiveArea) -> Void
+
+    var body: some View {
+        if !feed.banners.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: Layout.cardSpacing) {
+                    ForEach(feed.banners) { banner in LiveBannerCard(banner: banner) }
+                }
+                .padding(.vertical, Self.bleed)
+            }
+            .scrollClipDisabled()
+            .tvFocusSection()
+        }
+        ForEach(feed.sections) { section in
+            let target = section.more.flatMap { more in areas.first { $0.id == more.id } }
+            VStack(alignment: .leading, spacing: 14) {
+                SectionHeader(title: section.title, action: target.map { area in { open(area) } })
+                // The category has the rest: two rows' worth here.
+                LiveRoomGrid(rooms: target == nil ? section.rooms : Array(section.rooms.prefix(Self.preview)))
+            }
+            .tvFocusSection()
+        }
+    }
+
+    private static var bleed: CGFloat {
+        #if os(tvOS)
+        24
+        #else
+        4
+        #endif
+    }
+    private static var preview: Int {
+        #if os(tvOS)
+        8
+        #else
+        8
+        #endif
+    }
+}
+
+/// One banner of a platform's home page: its picture, wide, with the title over its foot. Opens the room.
+private struct LiveBannerCard: View {
+    @Environment(Store.self) private var store
+    let banner: LivePluginCatalog.HomeFeed.Banner
+    /// Set once the banner's own picture has loaded; until then, and when it never does, the room's cover shows.
+    @State private var loaded: CGFloat?
+
+    var body: some View {
+        Button { if let room = banner.room { store.playing = room.channel } } label: {
+            Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
+                .overlay { PosterImage(url: banner.room?.cover, headers: [:]) }
+                .overlay { PosterImage(url: banner.image, headers: [:], aspect: $loaded).opacity(loaded == nil ? 0 : 1) }
+                .overlay(alignment: .bottomLeading) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(banner.title.isEmpty ? banner.room?.title ?? "" : banner.title).font(.headline).lineLimit(1)
+                        let caption = banner.subtitle.isEmpty ? banner.room?.host ?? "" : banner.subtitle
+                        if !caption.isEmpty { Text(caption).font(.caption).opacity(0.8).lineLimit(1) }
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom))
+                }
+                .posterClip(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .frame(width: Self.width)
+        }
+        .cardButton()
+        .accessibilityLabel(banner.title)
+    }
+
+    private static var width: CGFloat {
+        #if os(tvOS)
+        760
+        #elseif os(macOS)
+        440
+        #else
+        300
+        #endif
     }
 }
 

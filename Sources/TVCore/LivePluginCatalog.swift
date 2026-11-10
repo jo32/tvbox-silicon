@@ -4,7 +4,7 @@ import Foundation
 /// in the shapes `LiveCatalog` gives the app. Rooms are `{roomId, userId, roomTitle, userName, roomCover,
 /// userHeadImg, liveWatchedCount, liveState}`; streams are lines `[{cdn, qualitys: [{title, qn, url,
 /// liveCodeType, userAgent, headers, playbackHints}]}]`. FLV streams play through `FLVLive`.
-enum LivePluginCatalog {
+public enum LivePluginCatalog {
     /// The area that lists the plugin's home feed (`getHomeFeed`).
     static let homeArea = "\u{1}home"
 
@@ -53,6 +53,19 @@ enum LivePluginCatalog {
 
     static func search(_ platform: LivePlatform, keyword: String, page: Int) async throws -> [LiveRoom] {
         guard let plugin = platform.plugin else { return [] }
+        // A pasted share link or text (`resolveShare`) is that one room; a bare room number leads the results.
+        var shared: LiveRoom?
+        let link = keyword.contains("://") || keyword.contains("/") || keyword.range(of: #"[a-z0-9-]+\.[a-z]{2,}"#, options: [.regularExpression, .caseInsensitive]) != nil
+        let number = keyword.count >= 3 && keyword.allSatisfy(\.isNumber)
+        if page == 1, link || number, await LivePluginRuntime.shared.has(plugin, "resolveShare"),
+           let reply = try? await LivePluginRuntime.shared.call(plugin, "resolveShare", ["shareCode": .string(keyword)], timeout: 20).object {
+            shared = room(platform, reply, area: "")
+        }
+        if link, let shared { return [shared] }
+        if let shared {
+            let found = (try? await LivePluginRuntime.shared.call(plugin, "search", ["keyword": .string(keyword), "page": .number(1)])).map { rooms(platform, $0, area: "") } ?? []
+            return ([shared] + found).uniqued()
+        }
         let reply = try await LivePluginRuntime.shared.call(plugin, "search", ["keyword": .string(keyword), "page": .number(Double(page))])
         return rooms(platform, reply, area: "")
     }
@@ -70,17 +83,23 @@ enum LivePluginCatalog {
             public let id: String
             public let title: String
             public let rooms: [LiveRoom]
+            /// The category with the rest of this section's rooms (`seeAllTarget`).
+            public let more: LiveArea?
         }
         public var banners: [Banner] = []
         public var sections: [Section] = []
+        public init() {}
     }
 
     static func homeFeed(_ platform: LivePlatform) async throws -> HomeFeed {
         guard let plugin = platform.plugin else { return HomeFeed() }
-        let reply = try await LivePluginRuntime.shared.call(plugin, "getHomeFeed", [:]).object ?? [:]
+        let locale = Locale.preferredLanguages.first.map { $0.hasPrefix("zh-Hant") ? "zh-Hant" : $0.hasPrefix("zh") ? "zh-Hans" : String($0.prefix(2)) } ?? "zh-Hans"
+        let reply = try await LivePluginRuntime.shared.call(plugin, "getHomeFeed", ["schemaVersion": .number(1), "locale": .string(locale)]).object ?? [:]
         var feed = HomeFeed()
         for (index, banner) in (reply["banners"]?.array ?? []).compactMap(\.object).enumerated() {
             let room = banner["target"]?.object?["room"]?.object.flatMap { self.room(platform, $0, area: "") }
+            // A banner that opens nothing here, or whose picture isn't HTTPS, is left out.
+            guard room != nil, text(banner["imageURL"]).lowercased().hasPrefix("https://") else { continue }
             feed.banners.append(.init(id: text(banner["id"]).isEmpty ? "\(index)" : text(banner["id"]), image: LiveText.imageURL(text(banner["imageURL"])),
                                       title: LiveText.plain(text(banner["title"])), subtitle: LiveText.plain(text(banner["subtitle"])), room: room))
         }
@@ -90,7 +109,11 @@ enum LivePluginCatalog {
                 guard let item = item.object else { return nil }
                 return (item["room"]?.object ?? item).flatMap { self.room(platform, $0, area: title) }
             }
-            if !rooms.isEmpty { feed.sections.append(.init(id: text(section["id"]).isEmpty ? "\(index)" : text(section["id"]), title: title, rooms: rooms)) }
+            let target = section["seeAllTarget"]?.object
+            let more = target?["type"]?.string == "category" ? target?["category"]?.object.flatMap { area($0, parent: "") } : nil
+            if !rooms.isEmpty {
+                feed.sections.append(.init(id: text(section["id"]).isEmpty ? "\(index)" : text(section["id"]), title: title, rooms: rooms.uniqued(), more: more))
+            }
         }
         return feed
     }
@@ -103,7 +126,7 @@ enum LivePluginCatalog {
     static func room(_ platform: LivePlatform, _ json: [String: JSONValue], area: String) -> LiveRoom? {
         let id = text(json["roomId"])
         guard !id.isEmpty, !id.contains("/") else { return nil }
-        var room = LiveRoom(platform: platform, roomID: id, title: text(json["roomTitle"]), host: text(json["userName"]),
+        var room = LiveRoom(platform: platform, roomID: id, title: LiveText.plain(text(json["roomTitle"])), host: LiveText.plain(text(json["userName"])),
                             cover: text(json["roomCover"]), online: count(json["liveWatchedCount"]), area: area)
         room.userID = text(json["userId"])
         return room
