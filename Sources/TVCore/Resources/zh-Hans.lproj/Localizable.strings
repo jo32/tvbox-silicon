@@ -1810,3 +1810,8 @@
 "Sign-In Expired" = "登录已过期";
 "Some platforms show more, or better quality, once you sign in. The sign-in stays on this device." = "部分平台登录后可看到更多内容或更高画质。登录信息只保存在本设备上。";
 "%@ shows its live rooms once you sign in. The sign-in stays on this device." = "登录后才能看到%@的直播间。登录信息只保存在这台设备上。";
+"Sign In by QR Code" = "扫码登录";
+"Use the Web Page Instead" = "改用网页登录";
+"The platform sent no sign-in code." = "平台没有返回登录二维码。";
+"The platform confirmed the sign-in but sent no cookies." = "平台已确认登录，但没有返回登录信息。";
+"The platform didn't accept this sign-in. Try again." = "平台没有接受这次登录，请重试。";

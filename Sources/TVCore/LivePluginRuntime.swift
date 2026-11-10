@@ -275,6 +275,17 @@ final class LoadedLivePlugin: @unchecked Sendable {
             // Only the plugin's own platform.
             let asked = string(0)
             return encode(.string(asked.isEmpty || asked == id ? cookie() : ""))
+        case "seedCookies":
+            // [transaction, {name: value}, {domain}]
+            guard args.count > 1, let values = args[1].object else { return encode(.object(["ok": .bool(false)])) }
+            let domain = args.count > 2 ? args[2].object?["domain"]?.string ?? "" : ""
+            let ok = LivePluginLoginJars.shared.seed(string(0), plugin: id, values: values.compactMapValues(\.string), domain: domain)
+            return encode(.object(["ok": .bool(ok)]))
+        case "transactionCookies":
+            // [transaction, host or URL]
+            guard LivePluginLoginJars.shared.isOpen(string(0), plugin: id) else { return encode(.string("")) }
+            let host = URL(string: string(1))?.host() ?? string(1)
+            return encode(.string(LivePluginLoginJars.shared.header(string(0), host: host, over: "")))
         case "inflate":
             // [base64, "zlib" | "gzip" | "raw"] -> base64
             guard let data = Data(base64Encoded: Self.padded(string(0))), let out = Self.inflate(data, format: string(1)) else { return "null" }
@@ -312,6 +323,15 @@ final class LoadedLivePlugin: @unchecked Sendable {
         var headers: [String: String] = [:]
         for (key, value) in options["headers"]?.object ?? [:] { if let text = value.string ?? value.double.map({ String(format: "%g", $0) }) { headers[key] = text } }
         let signedIn = Self.usesAccount(options)
+        // A QR sign-in in progress: its own cookie jar, sent to and filled from the sites it talks to.
+        var transaction: String?
+        if options["authMode"]?.string == "login_transaction" {
+            guard let name = options["transactionId"]?.string, LivePluginLoginJars.shared.isOpen(name, plugin: id),
+                  url.scheme?.lowercased() == "https" else {
+                throw LivePluginError(code: "INVALID_ARGS", message: "login transaction")
+            }
+            transaction = name
+        }
         if signedIn {
             // The app's cookie, and only to the platform's own sites over HTTPS.
             headers = headers.filter { !["cookie", "authorization"].contains($0.key.lowercased()) }
@@ -333,14 +353,41 @@ final class LoadedLivePlugin: @unchecked Sendable {
             default: request.httpBody = try JSONEncoder().encode(body)
             }
         }
-        if options["followRedirects"].map({ if case .bool(false) = $0 { true } else { false } }) == true
-            || options["redirect"]?.string == "manual" {
-            LivePluginRedirects.shared.refuse(request)
+        let manual = options["followRedirects"].map({ if case .bool(false) = $0 { true } else { false } }) == true
+            || options["redirect"]?.string == "manual"
+        if manual, transaction == nil { LivePluginRedirects.shared.refuse(request) }
+        var data = Data(), response = URLResponse()
+        var hops = 0
+        while true {
+            if let transaction {
+                // The plugin's own Cookie header, with the jar's cookies over it.
+                let key = request.allHTTPHeaderFields?.keys.first { $0.lowercased() == "cookie" }
+                let merged = LivePluginLoginJars.shared.header(transaction, host: request.url?.host() ?? "", over: key.flatMap { request.value(forHTTPHeaderField: $0) } ?? "")
+                request.setValue(merged.isEmpty ? nil : merged, forHTTPHeaderField: "Cookie")
+            }
+            do {
+                // Redirects are walked here, so each hop's cookies reach the jar.
+                (data, response) = try await transaction == nil ? network.data(for: request) : network.data(for: request, delegate: LivePluginStay.shared)
+            }
+            catch let error as URLError where error.code == .timedOut { throw LivePluginError(code: "TIMEOUT", message: error.localizedDescription) }
+            catch { throw LivePluginError(code: "NETWORK", message: error.localizedDescription) }
+            guard let transaction, let reply = response as? HTTPURLResponse, let from = request.url else { break }
+            let fields = reply.allHeaderFields.reduce(into: [String: String]()) { if let key = $1.key as? String, let value = $1.value as? String { $0[key] = value } }
+            LivePluginLoginJars.shared.store(transaction, HTTPCookie.cookies(withResponseHeaderFields: fields, for: from))
+            guard !manual, [301, 302, 303, 307, 308].contains(reply.statusCode), hops < 8,
+                  let next = reply.value(forHTTPHeaderField: "Location").flatMap({ URL(string: $0, relativeTo: from)?.absoluteURL }),
+                  next.scheme?.lowercased() == "https" else { break }
+            hops += 1
+            var following = URLRequest(url: next)
+            following.timeoutInterval = request.timeoutInterval
+            let keeps = reply.statusCode == 307 || reply.statusCode == 308
+            following.httpMethod = keeps ? request.httpMethod : "GET"
+            if keeps { following.httpBody = request.httpBody }
+            for (name, value) in request.allHTTPHeaderFields ?? [:] where keeps || !["content-type", "content-length"].contains(name.lowercased()) {
+                following.setValue(value, forHTTPHeaderField: name)
+            }
+            request = following
         }
-        let data: Data, response: URLResponse
-        do { (data, response) = try await network.data(for: request) }
-        catch let error as URLError where error.code == .timedOut { throw LivePluginError(code: "TIMEOUT", message: error.localizedDescription) }
-        catch { throw LivePluginError(code: "NETWORK", message: error.localizedDescription) }
         guard let http = response as? HTTPURLResponse else { throw LivePluginError(code: "INVALID_RESPONSE", message: "no HTTP response") }
         var fields: [String: JSONValue] = [:]
         var cookies: [JSONValue] = []
@@ -451,7 +498,7 @@ final class LoadedLivePlugin: @unchecked Sendable {
       g.Host = {
         apiVersion: 1,
         platform: 'yingxia',
-        capabilities: { mediaTransform: 0, dualStream: false, loginTransaction: false, loginChallengeProtocol: 0, loginChallengePush: false,
+        capabilities: { mediaTransform: 0, dualStream: false, loginTransaction: true, loginChallengeProtocol: 2, loginChallengePush: false,
                         loginChallengeBootstrap: false, credentialExposure: true, webSocketPlatformCookie: false },
         makeError,
         raise(code, message, context) { throw makeError(code, message, context); },
@@ -468,8 +515,8 @@ final class LoadedLivePlugin: @unchecked Sendable {
         storage: { get: (k) => sync('storageGet', String(k)), set: (k, v) => sync('storageSet', String(k), v === undefined || v === null ? null : String(v)), remove: (k) => sync('storageSet', String(k), null) },
         session: {
           getCookieHeader: (id) => sync('cookieHeader', id === undefined || id === null ? '' : String(id)),
-          getTransactionCookieHeader: () => Promise.reject(makeError('UNSUPPORTED', 'transaction cookies')),
-          seedTransactionCookies: () => Promise.resolve({ ok: true }),
+          getTransactionCookieHeader: (tx, scope) => Promise.resolve(sync('transactionCookies', String(tx || ''), scope == null ? '' : typeof scope === 'string' ? scope : String(scope.url || scope.domain || scope.host || ''))),
+          seedTransactionCookies: (tx, cookies, options) => Promise.resolve(sync('seedCookies', String(tx || ''), cookies || {}, options || {})),
         },
         runtime: {
           inflateZlib: (b64) => sync('inflate', String(b64), 'zlib'),
@@ -507,6 +554,68 @@ final class LivePluginRedirects: NSObject, URLSessionTaskDelegate, @unchecked Se
         let stop = task.originalRequest?.url.map { url in lock.withLock { refused.remove(url) != nil } } ?? false
         completionHandler(stop ? nil : request)
     }
+}
+
+/// Leaves a redirect unfollowed, for requests whose redirects the runtime walks itself.
+final class LivePluginStay: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    static let shared = LivePluginStay()
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(nil)
+    }
+}
+
+/// The cookies of QR sign-ins in progress (`authMode: "login_transaction"`), one jar per sign-in, in memory only.
+/// Only the app opens a jar; a plugin reaches only its own.
+final class LivePluginLoginJars: @unchecked Sendable {
+    static let shared = LivePluginLoginJars()
+    struct Cookie { let name: String; var value: String; let domain: String }
+    private let lock = NSLock()
+    private var jars: [String: (plugin: String, cookies: [Cookie])] = [:]
+
+    func open(_ id: String, plugin: String) { lock.withLock { jars[id] = (plugin, []) } }
+    func close(_ id: String) { lock.withLock { jars[id] = nil } }
+    func isOpen(_ id: String, plugin: String) -> Bool { lock.withLock { jars[id]?.plugin == plugin } }
+    func cookies(_ id: String) -> [Cookie] { lock.withLock { jars[id]?.cookies ?? [] } }
+
+    private func put(_ id: String, _ cookie: Cookie) {
+        guard var jar = jars[id] else { return }
+        jar.cookies.removeAll { $0.name == cookie.name && $0.domain == cookie.domain }
+        if !cookie.value.isEmpty { jar.cookies.append(cookie) }
+        jars[id] = jar
+    }
+
+    func store(_ id: String, _ cookies: [HTTPCookie]) {
+        lock.withLock {
+            for cookie in cookies {
+                let gone = cookie.expiresDate.map { $0 < Date() } ?? false
+                put(id, Cookie(name: cookie.name, value: gone ? "" : cookie.value, domain: Self.bare(cookie.domain)))
+            }
+        }
+    }
+
+    func seed(_ id: String, plugin: String, values: [String: String], domain: String) -> Bool {
+        lock.withLock {
+            guard jars[id]?.plugin == plugin, !Self.bare(domain).isEmpty else { return false }
+            for (name, value) in values { put(id, Cookie(name: name, value: value, domain: Self.bare(domain))) }
+            return true
+        }
+    }
+
+    /// The `Cookie` header for `host`: `base` (a header the plugin set) with the jar's cookies over it.
+    func header(_ id: String, host: String, over base: String) -> String {
+        let host = host.lowercased()
+        var names: [String] = [], values: [String: String] = [:]
+        func set(_ name: String, _ value: String) { if values.updateValue(value, forKey: name) == nil { names.append(name) } }
+        for pair in base.split(separator: ";") {
+            let parts = pair.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            if parts.count == 2, !parts[0].isEmpty { set(parts[0], parts[1]) }
+        }
+        for cookie in cookies(id) where host.isEmpty || host == cookie.domain || host.hasSuffix("." + cookie.domain) { set(cookie.name, cookie.value) }
+        return names.map { "\($0)=\(values[$0] ?? "")" }.joined(separator: "; ")
+    }
+
+    static func bare(_ domain: String) -> String { domain.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".")) }
 }
 
 /// The sign-in cookies plugins send for their platform (`authMode: "platform_cookie"`, `Host.session`).
@@ -602,6 +711,11 @@ extension LivePlugins {
             let reply = try await LivePluginRuntime.shared.call(id, "validateCredential", ["credentialAvailable": .bool(true)], timeout: 20)
             let object = reply.object ?? [:]
             for key in ["valid", "isValid", "ok", "loggedIn", "isLoggedIn"] { if case .bool(let flag)? = object[key] { return flag } }
+            switch object["state"]?.string?.lowercased() {
+            case "valid": return true
+            case "expired", "invalid", "missing": return false
+            default: break
+            }
             if let status = object["status"]?.string?.lowercased() { return ["valid", "ok", "logged_in", "active"].contains(status) }
             return nil
         } catch let error as LivePluginError where error.code == "AUTH_REQUIRED" || error.code == "AUTH_EXPIRED" {

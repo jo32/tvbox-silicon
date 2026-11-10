@@ -1810,3 +1810,8 @@
 "Sign-In Expired" = "Sign-In Expired";
 "Some platforms show more, or better quality, once you sign in. The sign-in stays on this device." = "Some platforms show more, or better quality, once you sign in. The sign-in stays on this device.";
 "%@ shows its live rooms once you sign in. The sign-in stays on this device." = "%@ shows its live rooms once you sign in. The sign-in stays on this device.";
+"Sign In by QR Code" = "Sign In by QR Code";
+"Use the Web Page Instead" = "Use the Web Page Instead";
+"The platform sent no sign-in code." = "The platform sent no sign-in code.";
+"The platform confirmed the sign-in but sent no cookies." = "The platform confirmed the sign-in but sent no cookies.";
+"The platform didn't accept this sign-in. Try again." = "The platform didn't accept this sign-in. Try again.";

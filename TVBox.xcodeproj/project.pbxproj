@@ -21,6 +21,7 @@
 		0C95000B36C5B15AF33D6C8C /* Capstone.txt in Resources */ = {isa = PBXBuildFile; fileRef = E84A48E8E87E4B3CC3DCDA8C /* Capstone.txt */; };
 		1050D617A22F09CD0A01DE66 /* GlassKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 739A64FB51780D4314D2DDF8 /* GlassKit.swift */; };
 		1236A790753CA813B297575D /* DiscoverPersonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */; };
+		12758A07284A42E827217426 /* LivePluginQRSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3FBB140165AC6F0A60866F5 /* LivePluginQRSignIn.swift */; };
 		1331896EA47189E426A4DE6C /* DiscoverBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */; };
 		13A266A0565733CC2C7A66E6 /* Updates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D706229ED242AE96AE52F8 /* Updates.swift */; };
 		13AB1C878E7990BF8FB16849 /* HLSProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B44CBA0E5BBD1D129D5D64E3 /* HLSProxy.swift */; };
@@ -107,6 +108,7 @@
 		4C65106175D517040E98330B /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D1010816125FBC3792AF838 /* Store.swift */; };
 		4EAAD9E59129B744D0008135 /* ExternalSubtitles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75B036EC33AB3F0991E78CDD /* ExternalSubtitles.swift */; };
 		4ECE8586E27A017017F26EDC /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181C983C0018A97F2A086298 /* DiscoveryView.swift */; };
+		4F9DABA09098C4A53467C128 /* LivePluginQRSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3FBB140165AC6F0A60866F5 /* LivePluginQRSignIn.swift */; };
 		4FDAA1091EFC2C8B0EA634C7 /* FavoriteControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8F5818C392424F43FF0C9 /* FavoriteControls.swift */; };
 		4FF55220DBC7080B2E95C5A8 /* BilibiliCastController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B1CEF969E4F3D3301A8D61 /* BilibiliCastController.swift */; };
 		515742AFC2C7655B651B744A /* TMDBViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F714C204B589F33E2806EDF8 /* TMDBViews.swift */; };
@@ -306,6 +308,7 @@
 		E0832AB8995164BECCE1DEDA /* CatPawSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688641B892E4732AFEB875A3 /* CatPawSignInView.swift */; };
 		E0B7524BAA3500D6675442D7 /* FavoriteControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8F5818C392424F43FF0C9 /* FavoriteControls.swift */; };
 		E0E5700C59932DA281F7A5CE /* DiscoverSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76143E60685F2F76994F90D7 /* DiscoverSearchView.swift */; };
+		E325A2E05D1FC8E659899AF6 /* LivePluginQRSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3FBB140165AC6F0A60866F5 /* LivePluginQRSignIn.swift */; };
 		E56EBB8E41D7FDB1702F20F2 /* DiscoverCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6941C03B313E9FC30883FFE /* DiscoverCalendarView.swift */; };
 		E5D5A7C6283C6370DF14ECC2 /* SubtitleTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13947E20489465F172C8B5B7 /* SubtitleTranslator.swift */; };
 		E64F015590BDBE0DFC8A216E /* LiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7459A3EBEF2E7C346B508738 /* LiveView.swift */; };
@@ -450,6 +453,7 @@
 		BF5733BA144503E76421BCFD /* MusicTVPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicTVPlayer.swift; sourceTree = "<group>"; };
 		C05256E7BDC34745BDE22193 /* MangaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaStore.swift; sourceTree = "<group>"; };
 		C093554D3863FDB5D2E832B5 /* CatalogDanmakuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogDanmakuView.swift; sourceTree = "<group>"; };
+		C3FBB140165AC6F0A60866F5 /* LivePluginQRSignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePluginQRSignIn.swift; sourceTree = "<group>"; };
 		CEE19E104EAA6C4F620B8E53 /* CloudDriveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudDriveView.swift; sourceTree = "<group>"; };
 		D091093D028D2FD9AB72B79C /* SubtitleStyleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleStyleView.swift; sourceTree = "<group>"; };
 		D7B1CEF969E4F3D3301A8D61 /* BilibiliCastController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BilibiliCastController.swift; sourceTree = "<group>"; };
@@ -588,6 +592,7 @@
 				739A64FB51780D4314D2DDF8 /* GlassKit.swift */,
 				B44CBA0E5BBD1D129D5D64E3 /* HLSProxy.swift */,
 				9B7E929CDDC1F085C6B55693 /* HomeView.swift */,
+				C3FBB140165AC6F0A60866F5 /* LivePluginQRSignIn.swift */,
 				79ABEF8CC3883B021CEF3CEE /* LivePluginSignIn.swift */,
 				901EDEF85B9BA1B92932FEC1 /* LivePluginsView.swift */,
 				675EA4CF000337C94DF5B1D3 /* LiveRoomsView.swift */,
@@ -1170,6 +1175,7 @@
 				1050D617A22F09CD0A01DE66 /* GlassKit.swift in Sources */,
 				34349D95E4EC0176C10862E2 /* HLSProxy.swift in Sources */,
 				1B6DFFAF679C5BAD70F09875 /* HomeView.swift in Sources */,
+				12758A07284A42E827217426 /* LivePluginQRSignIn.swift in Sources */,
 				2780772DC63EC57AB830CAD0 /* LivePluginSignIn.swift in Sources */,
 				A9198AFD0F283D907F485E7F /* LivePluginsView.swift in Sources */,
 				300BD932FDBD4DD407F37374 /* LiveRoomsView.swift in Sources */,
@@ -1268,6 +1274,7 @@
 				F3B63B43988E72A87677A7AC /* GlassKit.swift in Sources */,
 				13AB1C878E7990BF8FB16849 /* HLSProxy.swift in Sources */,
 				14E05DC952FB2705E645EAE6 /* HomeView.swift in Sources */,
+				E325A2E05D1FC8E659899AF6 /* LivePluginQRSignIn.swift in Sources */,
 				696980CEC13F77DBF7E8B7E8 /* LivePluginSignIn.swift in Sources */,
 				EC7C67386A7AD9F977E42224 /* LivePluginsView.swift in Sources */,
 				7283989DBA1B1F0E96A2C383 /* LiveRoomsView.swift in Sources */,
@@ -1368,6 +1375,7 @@
 				338825790412D642115F2BD3 /* GlassKit.swift in Sources */,
 				D1BC31CCC2FCC4A6AB834BD5 /* HLSProxy.swift in Sources */,
 				6012B7CF185E20A26CC68CD0 /* HomeView.swift in Sources */,
+				4F9DABA09098C4A53467C128 /* LivePluginQRSignIn.swift in Sources */,
 				4BAF0943739F85C530148F50 /* LivePluginSignIn.swift in Sources */,
 				ADC01607279358ADDDA89A78 /* LivePluginsView.swift in Sources */,
 				03EDA66F1A059D8515CE0C80 /* LiveRoomsView.swift in Sources */,
