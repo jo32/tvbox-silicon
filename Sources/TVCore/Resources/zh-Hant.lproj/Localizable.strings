@@ -1809,3 +1809,9 @@
 "Sign In Again" = "重新登入";
 "Sign-In Expired" = "登入已過期";
 "Some platforms show more, or better quality, once you sign in. The sign-in stays on this device." = "部分平台登入後可看到更多內容或更高畫質。登入資訊只保存在本裝置上。";
+"Hongguo Account" = "紅果短劇帳號";
+"Hongguo episodes play as this account. Sign-in details stay on this device." = "紅果短劇以此帳號播放。登入資訊只保存在本機。";
+"Sign In to Hongguo" = "登入紅果短劇";
+"Hongguo often won't play for devices that aren't signed in. Open the Hongguo app on your phone, scan this code, and confirm the sign-in." = "紅果常常不為未登入的裝置播放。請在手機上打開紅果短劇 App，掃描此碼並確認登入。";
+"Hongguo didn't answer. Try again." = "紅果沒有回應，請重試。";
+"Sign-in was approved, but Hongguo didn't return a login. Try again." = "已確認登入，但紅果沒有回傳登入資訊，請重試。";

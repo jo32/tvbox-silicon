@@ -1809,3 +1809,9 @@
 "Sign In Again" = "もう一度サインイン";
 "Sign-In Expired" = "サインインの期限切れ";
 "Some platforms show more, or better quality, once you sign in. The sign-in stays on this device." = "サインインすると、より多くの配信や高画質を見られるサービスもあります。サインイン情報はこのデバイスにだけ保存されます。";
+"Hongguo Account" = "Hongguo アカウント";
+"Hongguo episodes play as this account. Sign-in details stay on this device." = "Hongguo のエピソードはこのアカウントで再生します。サインイン情報はこのデバイスにのみ保存されます。";
+"Sign In to Hongguo" = "Hongguo にサインイン";
+"Hongguo often won't play for devices that aren't signed in. Open the Hongguo app on your phone, scan this code, and confirm the sign-in." = "Hongguo はサインインしていないデバイスでは再生しないことがよくあります。スマートフォンで Hongguo アプリを開き、このコードをスキャンしてサインインを確認してください。";
+"Hongguo didn't answer. Try again." = "Hongguo から応答がありません。もう一度お試しください。";
+"Sign-in was approved, but Hongguo didn't return a login. Try again." = "サインインは承認されましたが、Hongguo からログイン情報が返ってきませんでした。もう一度お試しください。";
