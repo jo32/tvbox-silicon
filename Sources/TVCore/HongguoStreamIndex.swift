@@ -15,7 +15,9 @@ struct HongguoStreamIndex: Sendable {
     let movie: Data
     let samples: [Sample]
     let duration: Double
-    private typealias MP4 = HongguoMP4
+    /// Set for fragmented files, where each entry of `samples` is a whole moof/mdat fragment.
+    let fragmented: Fragmented?
+    typealias MP4 = HongguoMP4
 
     init(movie original: Data, at offset: Int, length: Int, media: [Range<Int>]) throws {
         var metadata = original
@@ -73,6 +75,7 @@ struct HongguoStreamIndex: Sendable {
         self.length = length; movieRange = offset..<offset + metadata.count
         movie = metadata; self.samples = samples
         duration = samples.map(\.endTime).max() ?? 0
+        fragmented = nil
     }
 
     private static func trackSamples(_ data: Data, entries: [MP4.Box], timescale: Int, ivSize: Int?, media: [Range<Int>]) throws -> [Sample] {

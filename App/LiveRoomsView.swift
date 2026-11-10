@@ -17,6 +17,18 @@ struct LivePlatformView: View {
     @State private var query = ""
     /// Read again on appearing: Douyin becomes searchable once signed in.
     @State private var searchable = true
+    /// The plugin said it shows nothing until the viewer signs in (Kuaishou, Xiaohongshu).
+    @State private var needsSignIn = false
+    #if !os(tvOS)
+    @State private var signInFlow: LivePluginLoginFlow?
+    @State private var signingIn = false
+    #endif
+    @State private var qrPlan: LivePluginQRPlan?
+    @State private var qrSignIn = false
+    /// The home page of a plugin platform, while its "Recommended" area is selected.
+    @State private var feed: LivePluginCatalog.HomeFeed?
+    @State private var deviceCode = false
+    @State private var deviceSignIn = false
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
@@ -37,6 +49,31 @@ struct LivePlatformView: View {
             if areas.isEmpty { reload() }
         }
         .onDisappear { loader?.cancel(); loader = nil }
+        #if !os(tvOS)
+        .sheet(isPresented: $signingIn) {
+            if let plugin = platform.plugin.flatMap(LivePlugins.shared.installed), let signInFlow { LivePluginWebSignIn(plugin: plugin, flow: signInFlow) }
+        }
+        .sheet(isPresented: $qrSignIn) {
+            if let plugin = platform.plugin.flatMap(LivePlugins.shared.installed), let qrPlan {
+                LivePluginQRPage(plugin: plugin, plan: qrPlan, useWebPage: signInFlow == nil ? nil : { signingIn = true })
+            }
+        }
+        .sheet(isPresented: $deviceSignIn) {
+            if let plugin = platform.plugin.flatMap(LivePlugins.shared.installed) { LivePluginDevicePage(plugin: plugin) }
+        }
+        #else
+        .navigationDestination(isPresented: $deviceSignIn) {
+            if let plugin = platform.plugin.flatMap(LivePlugins.shared.installed) { LivePluginDevicePage(plugin: plugin) }
+        }
+        // A page, not a sheet: sheets over a pushed page hang on tvOS 27.
+        .navigationDestination(isPresented: $qrSignIn) {
+            if let plugin = platform.plugin.flatMap(LivePlugins.shared.installed), let qrPlan { LivePluginQRPage(plugin: plugin, plan: qrPlan) }
+        }
+        #endif
+        // Signed in (here or in Settings): show the rooms.
+        .onReceive(NotificationCenter.default.publisher(for: LivePluginAccounts.changed).receive(on: RunLoop.main)) { note in
+            if needsSignIn, note.object as? String == platform.plugin { reload() }
+        }
     }
 
     @ViewBuilder private var browse: some View {
@@ -53,20 +90,67 @@ struct LivePlatformView: View {
             }
         } else if areas.isEmpty && loader != nil { ChipSkeletonRow() }
         if let error {
-            ErrorState(title: L10n.text("Unable to Load Channels"), message: L10n.text("Try again, or choose another source to keep watching."),
-                           details: error, retry: { reload() }, goBack: { dismiss() }, busy: loader != nil)
-                .padding(.vertical, 24).tvFocusSection()
+            #if !os(tvOS)
+            if needsSignIn, signInFlow != nil || qrPlan != nil || deviceCode {
+                // The Mac has no camera app to hand: the code first. A phone can't scan its own screen: the page first.
+                EmptyPage(symbol: "person.crop.circle.badge.exclamationmark", title: L10n.text("Sign In to %@", platform.name),
+                          message: L10n.text("%@ shows its live rooms once you sign in. The sign-in stays on this device.", platform.name),
+                          action: L10n.text("Sign In"), actionSymbol: "person.crop.circle", perform: {
+                              if deviceCode { deviceSignIn = true; return }
+                              #if os(macOS)
+                              if qrPlan != nil { qrSignIn = true } else { signingIn = true }
+                              #else
+                              if signInFlow != nil { signingIn = true } else { qrSignIn = true }
+                              #endif
+                          }) { EmptyView() }
+                    .padding(.vertical, 24)
+            } else {
+                failure(error)
+            }
+            #else
+            if needsSignIn, qrPlan != nil || deviceCode {
+                EmptyPage(symbol: "person.crop.circle.badge.exclamationmark", title: L10n.text("Sign In to %@", platform.name),
+                          message: L10n.text("%@ shows its live rooms once you sign in. The sign-in stays on this device.", platform.name),
+                          action: deviceCode ? L10n.text("Sign In") : L10n.text("Sign In by QR Code"), actionSymbol: "qrcode",
+                          perform: { if deviceCode { deviceSignIn = true } else { qrSignIn = true } }) { EmptyView() }
+                    .padding(.vertical, 24).tvFocusSection()
+            } else {
+                failure(error)
+            }
+            #endif
         }
-        LiveRoomGrid(rooms: rooms) { room in if room.id == rooms.last?.id { more() } }
+        if let feed, let area, LiveCatalog.isHome(area), feed.sections.count > 1 || !feed.banners.isEmpty {
+            LiveHomeFeedView(feed: feed, areas: areas) { select($0) }
+        } else {
+            LiveRoomGrid(rooms: rooms) { room in if room.id == rooms.last?.id { more() } }
+        }
         if loader != nil && rooms.isEmpty { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 60) }
         if loader == nil && error == nil && page > 0 && rooms.isEmpty {
             EmptyResults(symbol: "dot.radiowaves.left.and.right", title: L10n.text("No Live Rooms"))
         }
     }
 
+    private func failure(_ error: String) -> some View {
+        ErrorState(title: L10n.text("Unable to Load Channels"), message: L10n.text("Try again, or choose another source to keep watching."),
+                   details: error, retry: { reload() }, goBack: { dismiss() }, busy: loader != nil)
+            .padding(.vertical, 24).tvFocusSection()
+    }
+
+    /// Shows `error`, and whether signing in to the plugin's platform would help.
+    private func show(_ error: Error) async {
+        let code = (error as? LivePluginError)?.code
+        needsSignIn = platform.plugin != nil && (code == "AUTH_REQUIRED" || code == "AUTH_EXPIRED")
+        #if !os(tvOS)
+        if needsSignIn, signInFlow == nil, let id = platform.plugin { signInFlow = await LivePlugins.shared.loginFlow(id) }
+        #endif
+        if needsSignIn, qrPlan == nil, let id = platform.plugin { qrPlan = await LivePlugins.shared.qrLogin(id) }
+        if needsSignIn, !deviceCode, let id = platform.plugin { deviceCode = await LivePlugins.shared.signsInByDeviceCode(id) }
+        self.error = error.localizedDescription
+    }
+
     private func reload() {
         loader?.cancel()
-        areas = []; rooms = []; page = 0; exhausted = false; error = nil
+        areas = []; rooms = []; page = 0; exhausted = false; error = nil; needsSignIn = false; feed = nil
         loader = Task {
             do {
                 let found = try await LiveCatalog.areas(platform)
@@ -83,7 +167,7 @@ struct LivePlatformView: View {
             } catch {
                 guard !Task.isCancelled else { return }
                 Diagnostics.shared.failure("live", "\(platform.id) areas", error)
-                self.error = error.localizedDescription; loader = nil
+                await show(error); loader = nil
             }
         }
     }
@@ -91,7 +175,7 @@ struct LivePlatformView: View {
     private func select(_ value: LiveArea) {
         guard value != area else { return }
         loader?.cancel(); loader = nil
-        area = value; rooms = []; page = 0; exhausted = false; error = nil
+        area = value; rooms = []; page = 0; exhausted = false; error = nil; feed = nil
         more()
     }
 
@@ -101,7 +185,17 @@ struct LivePlatformView: View {
         let next = page + 1
         loader = Task {
             do {
-                let found = try await LiveCatalog.rooms(platform, area: area, page: next)
+                var found: [LiveRoom]
+                if LiveCatalog.isHome(area) {
+                    // One page: the feed's sections, also flattened for when it has a single one.
+                    let home = next == 1 ? try await LiveCatalog.homeFeed(platform) : LivePluginCatalog.HomeFeed()
+                    guard !Task.isCancelled else { return }
+                    if next == 1 { feed = home }
+                    var seen = Set<String>()
+                    found = home.sections.flatMap(\.rooms).filter { seen.insert($0.id).inserted }
+                } else {
+                    found = try await LiveCatalog.rooms(platform, area: area, page: next)
+                }
                 guard !Task.isCancelled else { return }
                 var seen = Set(rooms.map(\.id))
                 let fresh = found.filter { seen.insert($0.id).inserted }
@@ -111,10 +205,96 @@ struct LivePlatformView: View {
             } catch {
                 guard !Task.isCancelled else { return }
                 Diagnostics.shared.failure("live", "\(platform.id) rooms page=\(next)", error)
-                if rooms.isEmpty { self.error = error.localizedDescription } else { exhausted = true }
+                if rooms.isEmpty { await show(error) } else { exhausted = true }
             }
             loader = nil
         }
+    }
+}
+
+/// A plugin platform's home page: its banners in a row that scrolls sideways, then each section under its
+/// title. A section whose category is among the platform's areas opens it from the title.
+private struct LiveHomeFeedView: View {
+    let feed: LivePluginCatalog.HomeFeed
+    let areas: [LiveArea]
+    let open: (LiveArea) -> Void
+
+    var body: some View {
+        if !feed.banners.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: Layout.cardSpacing) {
+                    ForEach(feed.banners) { banner in LiveBannerCard(banner: banner) }
+                }
+                .padding(.vertical, Self.bleed)
+            }
+            .scrollClipDisabled()
+            .tvFocusSection()
+        }
+        ForEach(feed.sections) { section in
+            let target = section.more.flatMap { more in areas.first { $0.id == more.id } }
+            VStack(alignment: .leading, spacing: 14) {
+                SectionHeader(title: section.title, action: target.map { area in { open(area) } })
+                // The category has the rest: two rows' worth here.
+                LiveRoomGrid(rooms: target == nil ? section.rooms : Array(section.rooms.prefix(Self.preview)))
+            }
+            .tvFocusSection()
+        }
+    }
+
+    private static var bleed: CGFloat {
+        #if os(tvOS)
+        24
+        #else
+        4
+        #endif
+    }
+    private static var preview: Int {
+        #if os(tvOS)
+        8
+        #else
+        8
+        #endif
+    }
+}
+
+/// One banner of a platform's home page: its picture, wide, with the title over its foot. Opens the room.
+private struct LiveBannerCard: View {
+    @Environment(Store.self) private var store
+    let banner: LivePluginCatalog.HomeFeed.Banner
+    /// Set once the banner's own picture has loaded; until then, and when it never does, the room's cover shows.
+    @State private var loaded: CGFloat?
+
+    var body: some View {
+        Button { if let room = banner.room { store.playing = room.channel } } label: {
+            Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
+                .overlay { PosterImage(url: banner.room?.cover, headers: [:]) }
+                .overlay { PosterImage(url: banner.image, headers: [:], aspect: $loaded).opacity(loaded == nil ? 0 : 1) }
+                .overlay(alignment: .bottomLeading) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(banner.title.isEmpty ? banner.room?.title ?? "" : banner.title).font(.headline).lineLimit(1)
+                        let caption = banner.subtitle.isEmpty ? banner.room?.host ?? "" : banner.subtitle
+                        if !caption.isEmpty { Text(caption).font(.caption).opacity(0.8).lineLimit(1) }
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14).padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom))
+                }
+                .posterClip(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .frame(width: Self.width)
+        }
+        .cardButton()
+        .accessibilityLabel(banner.title)
+    }
+
+    private static var width: CGFloat {
+        #if os(tvOS)
+        760
+        #elseif os(macOS)
+        440
+        #else
+        300
+        #endif
     }
 }
 
@@ -366,12 +546,15 @@ struct LivePlatformCard: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
-            .background { backdrop }
+            // A cover fills the card and runs past it (Hongguo's are portrait); clipping hides that but still lets it
+            // take clicks, so on the Mac the card above a portrait cover (PandaTV over Hongguo) didn't open.
+            .background { backdrop.allowsHitTesting(false) }
             // Shade under the caption so white text reads on any cover.
             .overlay { LinearGradient(stops: [.init(color: .black.opacity(0.15), location: 0), .init(color: .clear, location: 0.3), .init(color: .black.opacity(0.85), location: 1)], startPoint: .top, endPoint: .bottom) }
             .overlay(alignment: .topTrailing) { if room != nil { badge.padding(padding) } }
             .overlay(alignment: .bottomLeading) { caption.padding(padding) }
             .clipShape(shape)
+            .contentShape(shape)
             .overlay { shape.strokeBorder(.white.opacity(focused ? 0.95 : 0.1), lineWidth: focused ? 4 : 1) }
             .animation(.easeOut(duration: 0.3), value: room)
             .onAppear { LivePreviews.shared.load(platform) }

@@ -44,6 +44,52 @@ public enum LiveRepair {
         return asset
     }
 
+    nonisolated(unsafe) private static var segmentNames: [String: [Int: String]] = [:]
+    private static let hostsKey = "liveRepairHosts"
+
+    /// Remembers that the playlists of `url`'s server contradicted themselves between reloads, so that its
+    /// streams open through the loader from now on (`contradicts`).
+    public static func noteContradiction(_ url: URL?) {
+        guard let url, url.scheme == "https", let host = url.host()?.lowercased() else { return }
+        var hosts = UserDefaults.standard.stringArray(forKey: hostsKey) ?? []
+        guard !hosts.contains(host) else { return }
+        hosts.append(host)
+        UserDefaults.standard.set(Array(hosts.suffix(32)), forKey: hostsKey)
+    }
+
+    /// Whether a playlist of `url`'s server has contradicted itself before.
+    static func contradicts(_ url: URL) -> Bool {
+        guard url.scheme == "https", let host = url.host()?.lowercased() else { return false }
+        return UserDefaults.standard.stringArray(forKey: hostsKey)?.contains(host) ?? false
+    }
+
+    /// A live media playlist whose segments keep the address they first had. Some relays sign every segment
+    /// address anew in each reload of the playlist; AVPlayer takes a changed address for the same
+    /// MEDIA-SEQUENCE as a contradiction and stops (-12312, "Media Entry URL not match previous playlist").
+    /// `playlist` names the playlist across its reloads.
+    static func steady(_ text: String, playlist: String) -> String {
+        guard !text.contains("#EXT-X-STREAM-INF"), !text.contains("#EXT-X-ENDLIST") else { return text }
+        var lines = text.components(separatedBy: "\n")
+        let sequenceTag = "#EXT-X-MEDIA-SEQUENCE:"
+        let first = lines.first { $0.hasPrefix(sequenceTag) }.flatMap { Int($0.dropFirst(sequenceTag.count).trimmingCharacters(in: .whitespaces)) } ?? 0
+        return lock.withLock {
+            if segmentNames[playlist] == nil, segmentNames.count >= 16 { segmentNames.removeAll() }
+            var names = segmentNames[playlist] ?? [:]
+            // A stream that started over counts from a low number again: its old addresses are another stream's.
+            if let lowest = names.keys.min(), first < lowest { names.removeAll() }
+            names = names.filter { $0.key >= first }
+            var number = first
+            for index in lines.indices {
+                let value = lines[index].trimmingCharacters(in: .whitespaces)
+                guard !value.isEmpty, !value.hasPrefix("#") else { continue }
+                if let known = names[number] { lines[index] = known } else { names[number] = value }
+                number += 1
+            }
+            segmentNames[playlist] = names
+            return lines.joined(separator: "\n")
+        }
+    }
+
     /// A playlist with absolute addresses (other playlists back through this scheme, segments and keys
     /// to the CDN) and without a discontinuity before the stream's first segment.
     static func rewrite(_ text: String, origin: URL, skipsAds: Bool = false) -> String {
@@ -91,7 +137,8 @@ private final class RepairedPlaylistLoader: NSObject, AVAssetResourceLoaderDeleg
                 let (data, response) = try await URLSession.shared.data(for: fetch)
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 guard (200..<300).contains(status) else { throw TVError.http(status) }
-                result = .success(Data(LiveRepair.rewrite(String(decoding: data, as: UTF8.self), origin: response.url ?? upstream, skipsAds: url.scheme == LiveRepair.adScheme).utf8))
+                let playlist = LiveRepair.rewrite(String(decoding: data, as: UTF8.self), origin: response.url ?? upstream, skipsAds: url.scheme == LiveRepair.adScheme)
+                result = .success(Data((url.scheme == LiveRepair.scheme ? LiveRepair.steady(playlist, playlist: url.absoluteString) : playlist).utf8))
             } catch {
                 if !(error is CancellationError) { Diagnostics.shared.record(.warning, "live", "repaired playlist host=\(upstream.host() ?? "-") \(error.localizedDescription)") }
                 result = .failure(error)

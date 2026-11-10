@@ -53,4 +53,22 @@ struct LiveRepairTests {
         let playlist = "#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:3\n#EXT-X-KEY:METHOD=AES-128,URI=\"key.bin?k=1\"\n#EXTINF:2.0,\na_3.ts\n"
         #expect(LiveRepair.rewrite(playlist, origin: origin).contains("URI=\"https://edge.example.com/openhls/live/key.bin?k=1\""))
     }
+
+    /// A relay that signs each segment address anew in every reload: a segment keeps the address it first had.
+    @Test func segmentsKeepTheirFirstAddressAcrossReloads() {
+        func playlist(_ sequence: Int, _ names: [String]) -> String {
+            "#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:\(sequence)\n" + names.map { "#EXTINF:2.0,\nhttps://relay.example.com/segment?\($0)" }.joined(separator: "\n")
+        }
+        let key = "steady-test-\(UUID().uuidString)"
+        let first = LiveRepair.steady(playlist(5, ["n=5&sig=a", "n=6&sig=a"]), playlist: key)
+        #expect(first == playlist(5, ["n=5&sig=a", "n=6&sig=a"]))
+        let second = LiveRepair.steady(playlist(6, ["n=6&sig=b", "n=7&sig=b"]), playlist: key)
+        #expect(second == playlist(6, ["n=6&sig=a", "n=7&sig=b"]))
+        // The stream started over: nothing of the old one is kept.
+        let restarted = LiveRepair.steady(playlist(0, ["n=0&sig=c"]), playlist: key)
+        #expect(restarted == playlist(0, ["n=0&sig=c"]))
+        // A finished playlist and a master are left alone.
+        let ended = playlist(6, ["n=6&sig=z"]) + "\n#EXT-X-ENDLIST"
+        #expect(LiveRepair.steady(ended, playlist: key) == ended)
+    }
 }

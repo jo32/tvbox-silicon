@@ -4,7 +4,7 @@ import Foundation
 /// in the shapes `LiveCatalog` gives the app. Rooms are `{roomId, userId, roomTitle, userName, roomCover,
 /// userHeadImg, liveWatchedCount, liveState}`; streams are lines `[{cdn, qualitys: [{title, qn, url,
 /// liveCodeType, userAgent, headers, playbackHints}]}]`. FLV streams play through `FLVLive`.
-enum LivePluginCatalog {
+public enum LivePluginCatalog {
     /// The area that lists the plugin's home feed (`getHomeFeed`).
     static let homeArea = "\u{1}home"
 
@@ -53,6 +53,19 @@ enum LivePluginCatalog {
 
     static func search(_ platform: LivePlatform, keyword: String, page: Int) async throws -> [LiveRoom] {
         guard let plugin = platform.plugin else { return [] }
+        // A pasted share link or text (`resolveShare`) is that one room; a bare room number leads the results.
+        var shared: LiveRoom?
+        let link = keyword.contains("://") || keyword.contains("/") || keyword.range(of: #"[a-z0-9-]+\.[a-z]{2,}"#, options: [.regularExpression, .caseInsensitive]) != nil
+        let number = keyword.count >= 3 && keyword.allSatisfy(\.isNumber)
+        if page == 1, link || number, await LivePluginRuntime.shared.has(plugin, "resolveShare"),
+           let reply = try? await LivePluginRuntime.shared.call(plugin, "resolveShare", ["shareCode": .string(keyword)], timeout: 20).object {
+            shared = room(platform, reply, area: "")
+        }
+        if link, let shared { return [shared] }
+        if let shared {
+            let found = (try? await LivePluginRuntime.shared.call(plugin, "search", ["keyword": .string(keyword), "page": .number(1)])).map { rooms(platform, $0, area: "") } ?? []
+            return ([shared] + found).uniqued()
+        }
         let reply = try await LivePluginRuntime.shared.call(plugin, "search", ["keyword": .string(keyword), "page": .number(Double(page))])
         return rooms(platform, reply, area: "")
     }
@@ -70,17 +83,23 @@ enum LivePluginCatalog {
             public let id: String
             public let title: String
             public let rooms: [LiveRoom]
+            /// The category with the rest of this section's rooms (`seeAllTarget`).
+            public let more: LiveArea?
         }
         public var banners: [Banner] = []
         public var sections: [Section] = []
+        public init() {}
     }
 
     static func homeFeed(_ platform: LivePlatform) async throws -> HomeFeed {
         guard let plugin = platform.plugin else { return HomeFeed() }
-        let reply = try await LivePluginRuntime.shared.call(plugin, "getHomeFeed", [:]).object ?? [:]
+        let locale = Locale.preferredLanguages.first.map { $0.hasPrefix("zh-Hant") ? "zh-Hant" : $0.hasPrefix("zh") ? "zh-Hans" : String($0.prefix(2)) } ?? "zh-Hans"
+        let reply = try await LivePluginRuntime.shared.call(plugin, "getHomeFeed", ["schemaVersion": .number(1), "locale": .string(locale)]).object ?? [:]
         var feed = HomeFeed()
         for (index, banner) in (reply["banners"]?.array ?? []).compactMap(\.object).enumerated() {
             let room = banner["target"]?.object?["room"]?.object.flatMap { self.room(platform, $0, area: "") }
+            // A banner that opens nothing here, or whose picture isn't HTTPS, is left out.
+            guard room != nil, text(banner["imageURL"]).lowercased().hasPrefix("https://") else { continue }
             feed.banners.append(.init(id: text(banner["id"]).isEmpty ? "\(index)" : text(banner["id"]), image: LiveText.imageURL(text(banner["imageURL"])),
                                       title: LiveText.plain(text(banner["title"])), subtitle: LiveText.plain(text(banner["subtitle"])), room: room))
         }
@@ -90,7 +109,11 @@ enum LivePluginCatalog {
                 guard let item = item.object else { return nil }
                 return (item["room"]?.object ?? item).flatMap { self.room(platform, $0, area: title) }
             }
-            if !rooms.isEmpty { feed.sections.append(.init(id: text(section["id"]).isEmpty ? "\(index)" : text(section["id"]), title: title, rooms: rooms)) }
+            let target = section["seeAllTarget"]?.object
+            let more = target?["type"]?.string == "category" ? target?["category"]?.object.flatMap { area($0, parent: "") } : nil
+            if !rooms.isEmpty {
+                feed.sections.append(.init(id: text(section["id"]).isEmpty ? "\(index)" : text(section["id"]), title: title, rooms: rooms.uniqued(), more: more))
+            }
         }
         return feed
     }
@@ -103,7 +126,7 @@ enum LivePluginCatalog {
     static func room(_ platform: LivePlatform, _ json: [String: JSONValue], area: String) -> LiveRoom? {
         let id = text(json["roomId"])
         guard !id.isEmpty, !id.contains("/") else { return nil }
-        var room = LiveRoom(platform: platform, roomID: id, title: text(json["roomTitle"]), host: text(json["userName"]),
+        var room = LiveRoom(platform: platform, roomID: id, title: LiveText.plain(text(json["roomTitle"])), host: LiveText.plain(text(json["userName"])),
                             cover: text(json["roomCover"]), online: count(json["liveWatchedCount"]), area: area)
         room.userID = text(json["userId"])
         return room
@@ -126,10 +149,18 @@ enum LivePluginCatalog {
         if chosen.refreshes, chosen.id != options.first(where: { $0.url != nil })?.id || chosen.url == nil {
             chosen = try await refreshed(chosen, plugin: plugin, payload: payload)
         }
-        if chosen.encrypted { throw TVError.unsupported(L10n.text("This video is encrypted, and Yingxia can't play it yet.")) }
+        if chosen.encrypted && chosen.key == nil { throw TVError.unsupported(L10n.text("This video is encrypted, and Yingxia can't play it yet.")) }
         guard let url = chosen.url else { throw TVError.unsupported(L10n.text("This live room has no stream this device can play.")) }
-        Diagnostics.shared.record(.info, "plugins", "\(plugin) play room=\(room) option=\(chosen.label) flv=\(chosen.flv) host=\(url.host() ?? "-")")
-        let address = chosen.flv ? try await FLVLive.open(url, headers: chosen.headers) : url
+        Diagnostics.shared.record(.info, "plugins", "\(plugin) play room=\(room) option=\(chosen.label) flv=\(chosen.flv) cenc=\(chosen.key != nil) host=\(url.host() ?? "-")")
+        let address: URL
+        if let key = chosen.key {
+            // A CENC MP4 with its key (Hongguo's episodes): decrypted as it plays, as Yingxia's own Hongguo source does.
+            address = try await HongguoStreams.open(url: url, key: key, headers: chosen.headers, http: HTTPClient())
+        } else {
+            // A server whose playlists contradicted themselves before is read through the loader that steadies them.
+            address = chosen.flv ? try await FLVLive.open(url, headers: chosen.headers)
+                : LiveRepair.contradicts(url) ? LiveRepair.address(url, headers: chosen.headers) : url
+        }
         let qualities = options.compactMap { option -> StreamQuality? in
             var parts = URLComponents(url: channel.url, resolvingAgainstBaseURL: false)
             parts?.queryItems = (user.isEmpty ? [] : [URLQueryItem(name: "u", value: user)]) + [URLQueryItem(name: "q", value: String(option.id))]
@@ -137,7 +168,7 @@ enum LivePluginCatalog {
         }
         let name = channel.name.isEmpty ? platform.name : channel.name
         return (Channel(name: name, group: channel.group.isEmpty ? platform.name : channel.group, url: address, logo: channel.logo,
-                        headers: chosen.flv ? [:] : chosen.headers), qualities, chosen.id)
+                        headers: chosen.flv || chosen.key != nil ? [:] : chosen.headers), qualities, chosen.id)
     }
 
     /// One quality of one line from `getPlayback`, as the quality menu lists it.
@@ -150,6 +181,8 @@ enum LivePluginCatalog {
         /// Its address comes from `refreshPlayback` (or `getPlayback` again) once picked.
         let refreshes: Bool
         var encrypted: Bool
+        /// The AES key (32 hex digits) of a CENC-encrypted MP4.
+        var key: String? = nil
         let line: [String: JSONValue]
         let quality: [String: JSONValue]
     }
@@ -194,7 +227,7 @@ enum LivePluginCatalog {
         let match = again.first { text($0.quality["qn"]) == text(option.quality["qn"]) && text($0.line["cdn"]) == text(option.line["cdn"]) && $0.url != nil }
             ?? again.first { $0.id == option.id && $0.url != nil }
         guard let match else { throw TVError.unsupported(L10n.text("This live room has no stream this device can play.")) }
-        option.url = match.url; option.headers = match.headers; option.flv = match.flv; option.encrypted = match.encrypted
+        option.url = match.url; option.headers = match.headers; option.flv = match.flv; option.encrypted = match.encrypted; option.key = match.key
         return option
     }
 
@@ -235,6 +268,10 @@ extension LivePluginCatalog.Option {
         let path = self.url?.path().lowercased() ?? ""
         let file = path.hasSuffix(".mp4") || path.hasSuffix(".m3u8") || path.contains("media-video")
         flv = self.url.map(FLVLive.names) ?? false || (format == "flv" && !file)
-        encrypted = quality["decryption"]?.object != nil
+        let decryption = quality["decryption"]?.object
+        encrypted = decryption != nil
+        let method = C.text(decryption?["method"]).lowercased(), key = C.text(decryption?["key"]).lowercased()
+        self.key = (method.isEmpty || method == "cenc") && key.count == 32 && key.allSatisfy(\.isHexDigit) ? key : nil
+        if self.key != nil { flv = false }
     }
 }

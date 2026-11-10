@@ -253,15 +253,33 @@ import TVCore
             let live = try await LiveCatalog.resolve(Channel(name: "", url: address))
             print("resolved \(live.channel.name) \(live.channel.url.absoluteString.prefix(110))")
             print("qualities \(live.qualities.map { "\($0.id) \($0.label)" }) current \(live.current ?? -1)")
-            let item = AVPlayerItem(asset: LiveRepair.asset(for: live.channel.url)
+            if let folder = ProcessInfo.processInfo.environment["LIVE_DUMP"], live.channel.url.lastPathComponent == "master.m3u8" {
+                // The local HLS files as the player gets them.
+                let base = live.channel.url.deletingLastPathComponent()
+                for name in ["master.m3u8", "0.m3u8", "0-0.mp4", "0-0.m4s", "0-1.m4s"] {
+                    let (data, _) = try await URLSession.shared.data(from: base.appending(path: name))
+                    try data.write(to: URL(fileURLWithPath: folder).appending(path: name))
+                    print("dumped \(name) \(data.count)")
+                }
+            }
+            let item = AVPlayerItem(asset: HongguoStreams.asset(for: live.channel.url) ?? LiveRepair.asset(for: live.channel.url)
                 ?? AVURLAsset(url: live.channel.url, options: ["AVURLAssetHTTPHeaderFieldsKey": live.channel.headers]))
+            // As a player layer would: a video-only HLS item without any video output never starts.
+            item.add(AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]))
             let player = AVPlayer(playerItem: item); player.isMuted = true; player.play()
-            for second in 1...10 {
+            for second in 1...(Int(ProcessInfo.processInfo.environment["LIVE_SECONDS"] ?? "") ?? 10) {
                 try await Task.sleep(for: .seconds(1))
+                HongguoStreams.updatePosition(for: live.channel.url, seconds: player.currentTime().seconds)
+                if ProcessInfo.processInfo.environment["LIVE_DUMP"] != nil {
+                    let buffered = item.loadedTimeRanges.map { String(format: "%.1f+%.1f", $0.timeRangeValue.start.seconds, $0.timeRangeValue.duration.seconds) }
+                    print("  rate=\(player.rate) waiting=\(player.reasonForWaitingToPlay?.rawValue ?? "-") buffered=\(buffered) errors=\(item.errorLog()?.events.map { "\($0.errorStatusCode) \($0.errorComment ?? "")" } ?? [])")
+                }
                 print("t=\(second) status=\(item.status.rawValue) time=\(String(format: "%.1f", player.currentTime().seconds)) size=\(Int(item.presentationSize.width))x\(Int(item.presentationSize.height)) error=\(item.error.map { "\($0)" } ?? "-")")
             }
             // Recoverable problems too, such as a playlist contradicting an earlier reload (-12312).
             for event in item.errorLog()?.events ?? [] { print("errorlog \(event.errorStatusCode) \(event.errorComment ?? "-")") }
+            // As the player does before it opens the room again: the next run reads this server through the loader.
+            if (item.error as NSError?)?.code == -12312 { LiveRepair.noteContradiction(live.channel.url); print("noted contradiction") }
             return
         }
         if args[1] == "--plugin-call", args.count > 3 {
@@ -273,6 +291,66 @@ import TVCore
                 let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
                 print(String(decoding: try encoder.encode(reply), as: UTF8.self))
             } catch { print("error \(error)") }
+            return
+        }
+        // --plugin-qr <plugin> [seconds]: a QR sign-in up to the code and a few polls (scan it to go all the way).
+        if args[1] == "--plugin-qr", args.count > 2 {
+            guard let plan = await LivePlugins.shared.qrLogin(args[2]) else { print("no QR sign-in"); return }
+            print("plan poll=\(plan.pollInterval)s timeout=\(plan.timeout)s refreshes=\(plan.maxRefreshes) verifies=\(plan.verifies) hint=\(plan.hint)")
+            let session = LivePluginQRSession(plugin: args[2], plan: plan)
+            let challenge = try await session.start()
+            print("code \(challenge.content.prefix(70))… (\(challenge.content.count) chars) expires=\(challenge.expires.map { Int($0.timeIntervalSinceNow) } ?? -1)s poll=\(challenge.pollInterval)s")
+            if let folder = ProcessInfo.processInfo.environment["QR_SAVE"] { try challenge.content.write(toFile: folder + "/qr.txt", atomically: true, encoding: .utf8) }
+            let end = Date().addingTimeInterval(args.count > 3 ? Double(args[3]) ?? 8 : 8)
+            try await Task.sleep(for: .seconds(challenge.firstPollDelay))
+            while Date() < end {
+                try await Task.sleep(for: .seconds(challenge.pollInterval))
+                let state = try await session.poll()
+                print("state \(state)")
+                if state == .confirmed || state == .expired { break }
+                if case .failed = state { break }
+            }
+            await session.cancel()
+            print("signed in: \(LivePluginAccounts.isSignedIn(args[2]))")
+            return
+        }
+        // --plugin-device <plugin> [seconds]: a device-code sign-in up to the code and a few polls.
+        if args[1] == "--plugin-device", args.count > 2 {
+            guard await LivePlugins.shared.signsInByDeviceCode(args[2]) else { print("no device-code sign-in"); return }
+            let session = LivePluginDeviceSession(plugin: args[2])
+            let code = try await session.start()
+            print("code length=\(code.code.count) page=\(code.page.host() ?? "-")\(code.page.path()) carriesCode=\(code.page.query()?.contains(code.code) ?? false) expires=\(Int(code.expires.timeIntervalSinceNow))s interval=\(code.interval)s")
+            let end = Date().addingTimeInterval(args.count > 3 ? Double(args[3]) ?? 12 : 12)
+            while Date() < end {
+                try await Task.sleep(for: .seconds(code.interval))
+                let state = try await session.poll()
+                print("state \(state)")
+                if state != .waiting { break }
+            }
+            await session.cancel()
+            print("signed in: \(LivePluginAccounts.isSignedIn(args[2]))")
+            return
+        }
+        if args[1] == "--plugin-danmaku", args.count > 2 {
+            // --plugin-danmaku <pluginId> [roomId [userId]] [seconds]: listens to a room's chat through the plugin's danmaku
+            // driver and prints each comment; without a room, the first room of the plugin's first area.
+            setvbuf(stdout, nil, _IONBF, 0)
+            guard let platform = LivePlatform(rawValue: "plugin." + args[2]) else { print("plugin \(args[2]) isn't installed"); return }
+            var room = args.count > 3 ? args[3] : "", user = args.count > 4 ? args[4] : ""
+            if room.isEmpty {
+                guard let area = try await LiveCatalog.areas(platform).first else { print("no areas"); return }
+                let first = try await LiveCatalog.rooms(platform, area: area, page: 1).first
+                room = first?.roomID ?? ""; user = first?.userID ?? ""
+                print("room \(room) user \(user) \(first?.host ?? "") \(first?.title ?? "")")
+            }
+            let seconds = args.count > 5 ? Int(args[5]) ?? 30 : 30
+            let chat = LivePluginChat(plugin: args[2], room: room, user: user)
+            let count = ManagedAtomicCounter()
+            chat.start { text, color, _ in print(String(format: "  #%06X %@", color, text)); count.add() }
+            try await Task.sleep(for: .seconds(seconds))
+            chat.stop()
+            print("comments \(count.value) in \(seconds) s")
+            try await Task.sleep(for: .seconds(1))
             return
         }
         if args[1] == "--plugin-install", args.count > 2 {
@@ -852,4 +930,13 @@ import TVCore
         print(String(decoding: json, as: UTF8.self))
         if report.status != 0 { exit(1) }
     }
+}
+
+
+/// A counter the chat's handler bumps from any thread.
+final class ManagedAtomicCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    func add() { lock.withLock { count += 1 } }
+    var value: Int { lock.withLock { count } }
 }

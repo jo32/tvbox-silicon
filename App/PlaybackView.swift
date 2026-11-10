@@ -347,6 +347,9 @@ import IOKit.pwr_mgt
         let played = liveReadyAt.map { ContinuousClock.now - $0 }
         guard let room = liveRoom, liveReopen.shouldReopen(after: failure, playedFor: played) else { return false }
         liveRetrying = true; loading = true
+        if failure.map({ ($0 as NSError).domain == "CoreMediaErrorDomain" && ($0 as NSError).code == -12312 }) == true {
+            LiveRepair.noteContradiction((player.currentItem?.asset as? AVURLAsset)?.url)
+        }
         detachItem(); observation = nil
         let active = generation
         Diagnostics.shared.record(.warning, "player", "live retry room=\(room.url.absoluteString) played=\(played.map { "\(Int($0.components.seconds))s" } ?? "-")")
@@ -654,7 +657,7 @@ import IOKit.pwr_mgt
             // A live room becomes its current stream address now; the address expires.
             var channel = channel
             var liveQualities: [StreamQuality] = [], liveQuality: Int?
-            if let (platform, id) = LiveCatalog.room(channel.url), let chat = LiveChats.make(platform.chat, room: id) { self.listen(chat, generation: activeGeneration) }
+            if let (platform, id) = LiveCatalog.room(channel.url), let chat = LiveChats.make(platform, room: id, address: channel.url) { self.listen(chat, generation: activeGeneration) }
             if LiveCatalog.isRoom(channel.url) {
                 self.note(L10n.text("Finding the live stream"))
                 do { (channel, liveQualities, liveQuality) = try await LiveCatalog.resolve(channel) }

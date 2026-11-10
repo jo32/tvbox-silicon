@@ -1809,6 +1809,16 @@
 "Sign In Again" = "重新登入";
 "Sign-In Expired" = "登入已過期";
 "Some platforms show more, or better quality, once you sign in. The sign-in stays on this device." = "部分平台登入後可看到更多內容或更高畫質。登入資訊只保存在本裝置上。";
+"%@ shows its live rooms once you sign in. The sign-in stays on this device." = "登入後才能看到%@的直播間。登入資訊只儲存在這台裝置上。";
+"Sign In by QR Code" = "掃碼登入";
+"Use the Web Page Instead" = "改用網頁登入";
+"The platform sent no sign-in code." = "平台沒有回傳登入 QR 碼。";
+"The platform confirmed the sign-in but sent no cookies." = "平台已確認登入，但沒有回傳登入資訊。";
+"The platform didn't accept this sign-in. Try again." = "平台沒有接受這次登入，請再試一次。";
+"Scan the code, or open %@ on a phone or computer, and enter this code there." = "掃描 QR 碼，或在手機、電腦上打開 %@，並輸入下方代碼。";
+"Waiting for you to approve the sign-in…" = "等待你核准登入…";
+"Open the Sign-In Page" = "打開登入頁面";
+"The sign-in was declined." = "登入已被拒絕。";
 "Hongguo Account" = "紅果短劇帳號";
 "Hongguo episodes play as this account. Sign-in details stay on this device." = "紅果短劇以此帳號播放。登入資訊只保存在本機。";
 "Sign In to Hongguo" = "登入紅果短劇";
