@@ -694,8 +694,9 @@ struct SearchQueryButton: View {
 /// Set by `ScrollStrip` while the user drags it, so the chip under the pointer ignores the mouse-up.
 @MainActor final class StripDrag { var active = false }
 extension EnvironmentValues { @Entry var stripDrag: StripDrag? = nil }
-/// Draws `controlButton()` and the source chips as Liquid Glass, on the iPhone watch page (#293).
-extension EnvironmentValues { @Entry var glassControls = false }
+/// Draws `controlButton()` and the source chips as Liquid Glass where the system has it. On by default; a page turns it
+/// off for controls that sit on a surface of their own, where a flat fill reads better than glass on glass.
+extension EnvironmentValues { @Entry var glassControls = true }
 
 /// A horizontal chip row: a `ScrollStrip` (drag and arrows on Mac), or a plain focus-driven
 /// scroll view on tvOS.
@@ -742,92 +743,6 @@ struct Chip: View {
         #else
         button.buttonStyle(FilterChipStyle(selected: selected))
         #endif
-    }
-}
-
-/// A page with nothing in it yet: a symbol, what the page is for, and one way forward. The button is
-/// also the remote's focus target; a tvOS page with nothing to focus strands it.
-struct EmptyPage<Footer: View>: View {
-    let symbol: String
-    let title: String
-    let message: String
-    let action: String
-    let actionSymbol: String
-    let perform: () -> Void
-    @ViewBuilder var footer: Footer
-    #if os(tvOS)
-    private let icon: CGFloat = 132, titleSize: CGFloat = 46, text: CGFloat = 28, spacing: CGFloat = 30, width: CGFloat = 960
-    #else
-    private let icon: CGFloat = 84, titleSize: CGFloat = 24, text: CGFloat = 15, spacing: CGFloat = 18, width: CGFloat = 420
-    #endif
-    var body: some View {
-        VStack(spacing: spacing) {
-            Image(systemName: symbol)
-                .font(.system(size: icon * 0.42, weight: .bold))
-                .foregroundStyle(Brand.accent)
-                .frame(width: icon, height: icon)
-                .background(Brand.accent.opacity(0.14), in: Circle())
-                .accessibilityHidden(true)
-            VStack(spacing: spacing * 0.4) {
-                Text(title).font(.system(size: titleSize, weight: .bold))
-                // No vertical fixedSize: on the Mac it made the page's minimum height that of the
-                // message wrapped at zero width, which stretched the split view past the window.
-                Text(message)
-                    .font(.system(size: text)).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: width)
-            Button(action: perform) { Label(action, systemImage: actionSymbol).padding(.horizontal, 8) }
-                .controlButton(prominent: true).appControlSize(.large)
-            footer.font(.system(size: text * 0.8)).monospacedDigit().foregroundStyle(.tertiary)
-        }
-        .padding(Layout.gutter)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-extension EmptyPage where Footer == EmptyView {
-    init(symbol: String, title: String, message: String, action: String, actionSymbol: String, perform: @escaping () -> Void) {
-        self.init(symbol: symbol, title: title, message: message, action: action, actionSymbol: actionSymbol, perform: perform) { EmptyView() }
-    }
-}
-
-/// Nothing to list under a page's header or filters, centred in the width below them and sized for the screen,
-/// with an optional way out. A bare ContentUnavailableView hugged the leading edge of leading stacks, and on
-/// tvOS left the remote nothing to focus under the filters.
-struct EmptyResults: View {
-    let symbol: String
-    let title: String
-    var message: String?
-    var action: String?
-    var actionSymbol = "arrow.clockwise"
-    var perform: (() -> Void)?
-    #if os(tvOS)
-    private let icon: CGFloat = 60, titleSize: CGFloat = 38, text: CGFloat = 26, spacing: CGFloat = 22, width: CGFloat = 900, inset: CGFloat = 60
-    #else
-    private let icon: CGFloat = 36, titleSize: CGFloat = 20, text: CGFloat = 15, spacing: CGFloat = 12, width: CGFloat = 420, inset: CGFloat = 48
-    #endif
-    var body: some View {
-        VStack(spacing: spacing) {
-            Image(systemName: symbol).font(.system(size: icon, weight: .light)).foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            VStack(spacing: spacing * 0.4) {
-                Text(title).font(.system(size: titleSize, weight: .semibold))
-                if let message {
-                    Text(message).font(.system(size: text)).foregroundStyle(.secondary)
-                }
-            }
-            .multilineTextAlignment(.center).frame(maxWidth: width)
-            if let action, let perform {
-                Button(action: perform) { Label(action, systemImage: actionSymbol).padding(.horizontal, 8) }
-                    .controlButton().padding(.top, spacing * 0.4)
-            }
-        }
-        .padding(.vertical, inset).padding(.horizontal, Layout.gutter)
-        .frame(maxWidth: .infinity)
-        // Down from filters at the leading edge reaches the centred button.
-        .tvFocusSection()
-        .accessibilityElement(children: .contain)
     }
 }
 
@@ -1335,101 +1250,6 @@ struct LoadingCard: View {
         .accessibilityElement(children: .combine)
         .animation(.smooth(duration: 0.25), value: state.title)
         .animation(.smooth(duration: 0.25), value: explains)
-    }
-}
-
-/// Keeps recovery actions prominent while preserving diagnostics on demand.
-struct ErrorStateCard: View {
-    let title: String
-    let message: String
-    let details: String
-    var retry: (() -> Void)?
-    var goBack: (() -> Void)?
-    var busy = false
-    var backTitle = L10n.text("Back to sources")
-    @State private var showsDetails = false
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "rectangle.slash")
-                .font(.system(size: 30, weight: .light))
-                .foregroundStyle(Brand.accent)
-                .frame(width: 76, height: 76)
-                .background(Brand.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 25))
-                .overlay { RoundedRectangle(cornerRadius: 25).strokeBorder(Brand.accent.opacity(0.18)) }
-                .accessibilityHidden(true)
-            VStack(spacing: 10) {
-                Text(title).font(.title2.weight(.semibold)).foregroundStyle(.primary)
-                Text(message).font(.body).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .multilineTextAlignment(.center)
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) { actions }
-                VStack(spacing: 12) { actions }
-            }
-            .appControlSize(.large)
-            VStack(spacing: 14) {
-                Divider().overlay(Color.primary.opacity(0.04))
-                Button {
-                    showsDetails.toggle()
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(L10n.text(showsDetails ? "Hide details" : "Show details"))
-                        Image(systemName: showsDetails ? "chevron.up" : "chevron.down").font(.caption2.weight(.semibold))
-                    }
-                    .font(.callout).foregroundStyle(.secondary)
-                    .padding(.vertical, 6).contentShape(Rectangle())
-                }
-                #if os(tvOS)
-                .controlButton()
-                #else
-                .buttonStyle(.plain)
-                #endif
-                if showsDetails {
-                    ScrollView {
-                        Text(details).font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
-                            .fixedSize(horizontal: false, vertical: true).selectable().padding(14)
-                    }
-                    .frame(height: detailsHeight)
-                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
-                }
-            }
-        }
-        .padding(28)
-        .frame(maxWidth: recoveryWidth)
-        .contentPanel(cornerRadius: 28)
-        .frame(maxWidth: .infinity)
-        .onChange(of: details) { showsDetails = false }
-    }
-
-    private var recoveryWidth: CGFloat {
-        #if os(tvOS)
-        900
-        #else
-        560
-        #endif
-    }
-    private var detailsHeight: CGFloat {
-        #if os(tvOS)
-        240
-        #else
-        180
-        #endif
-    }
-
-    @ViewBuilder private var actions: some View {
-        if let retry {
-            Button(action: retry) {
-                Label(L10n.text("Retry"), systemImage: "arrow.clockwise").padding(.horizontal, 12)
-            }
-            .controlButton(prominent: true).tint(Brand.accent).disabled(busy)
-        }
-        if let goBack {
-            Button(action: goBack) { Text(backTitle).padding(.horizontal, 8) }
-                .controlButton().tint(.secondary)
-        }
     }
 }
 

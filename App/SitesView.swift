@@ -95,7 +95,7 @@ struct SitesView: View {
                     arranging = true
                 }
                 #endif
-            } else { ContentUnavailableView(L10n.text("No Sources Yet"), systemImage: "square.grid.2x2", description: Text(L10n.text("Add a TVBox subscription in Settings."))) }
+            } else { EmptyResults(symbol: "square.grid.2x2", title: L10n.text("No Sources Yet"), message: L10n.text("Add a TVBox subscription in Settings."), fills: true) }
         }
         .screenBackdrop()
         .catalogSearchable(text: $query, prompt: L10n.text("Find a source"))
@@ -967,18 +967,12 @@ struct SiteView: View {
     var body: some View {
         Group {
             if !canLoad {
-                ContentUnavailableView {
-                    Label(site.compatibility, systemImage: "puzzlepiece.extension")
-                } description: {
-                    if site.type != 3 {
-                        Text(L10n.text("This source format is not supported. Choose another source."))
-                    } else {
-                        Text(site.runtime == .jar ? L10n.text("This source uses a plugin that requires Android DEX and native libraries. This platform does not yet have the required compatibility layer.\n\n%@", site.api)
-                             : site.runtime == .python ? L10n.text("This source requires a Python runtime, which is not available on this platform.")
-                             : L10n.text("This source requires a JavaScript engine, which is not supported yet."))
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                EmptyResults(symbol: "puzzlepiece.extension", title: site.compatibility,
+                             message: site.type != 3 ? L10n.text("This source format is not supported. Choose another source.")
+                                : site.runtime == .jar ? L10n.text("This source uses a plugin that requires Android DEX and native libraries. This platform does not yet have the required compatibility layer.\n\n%@", site.api)
+                                : site.runtime == .python ? L10n.text("This source requires a Python runtime, which is not available on this platform.")
+                                : L10n.text("This source requires a JavaScript engine, which is not supported yet."),
+                             fills: true)
                 #if os(tvOS)
                 .focusable()
                 .onExitCommand { dismiss() }
@@ -1033,7 +1027,7 @@ struct SiteView: View {
                         }
                         if initialLoading { PosterSkeletonGrid().loadingFocus { dismiss() } }
                         if let error = browser.error {
-                            ErrorStateCard(
+                            ErrorState(
                                 title: L10n.text("Unable to load this source"),
                                 message: L10n.text("Try again, or choose another source to keep watching."),
                                 details: error,
@@ -2237,7 +2231,7 @@ struct VideoDetailView: View {
         }
     }
     private func errorCard(_ error: String) -> some View {
-                    ErrorStateCard(
+                    ErrorState(
                         title: detail == nil ? L10n.text("Unable to load video details") : L10n.text("Unable to start playback"),
                         message: detail == nil
                             ? L10n.text("Try again, or go back and choose another video.")
@@ -3754,7 +3748,7 @@ extension SiteView {
     /// The space's listing as Bilibili's 16:9 tiles, four across, with the page's loading, error and Load More states.
     @ViewBuilder private var spaceGrid: some View {
         if let error = browser.error {
-            ErrorStateCard(
+            ErrorState(
                 title: L10n.text("Unable to load this source"),
                 message: L10n.text("Try again, or choose another source to keep watching."),
                 details: error,

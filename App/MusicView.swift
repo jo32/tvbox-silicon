@@ -193,22 +193,15 @@ struct MusicView: View {
         } else if search.results.isEmpty && search.collections.isEmpty && search.busy {
             ProgressView().frame(maxWidth: .infinity).padding(.vertical, 80)
         } else if search.failed {
-            ErrorStateCard(title: L10n.text("Unable to Search Music"), message: L10n.text("Check your network connection and try again."),
+            ErrorState(title: L10n.text("Unable to Search Music"), message: L10n.text("Check your network connection and try again."),
                            details: failureDetails(search), retry: { search.search(query, immediately: true) }, busy: search.busy)
                 .padding(.vertical, 24).tvFocusSection()
         } else if search.filteredOut {
-            ContentUnavailableView {
-                Label(L10n.text("No Matches"), systemImage: "line.3.horizontal.decrease.circle")
-            } description: {
-                Text(L10n.text("No results match these filters. Only songs QQ Music lists have a year, genre and language."))
-            } actions: {
-                Button(L10n.text("Reset Filters")) { search.setFilter(MusicSearchFilter()) }
-            }
-            .frame(maxWidth: .infinity).padding(.vertical, 60).tvFocusSection()
+            EmptyResults(symbol: "line.3.horizontal.decrease", title: L10n.text("No Matches"),
+                         message: L10n.text("No results match these filters. Only songs QQ Music lists have a year, genre and language."),
+                         action: L10n.text("Reset Filters"), actionSymbol: "arrow.counterclockwise") { search.setFilter(MusicSearchFilter()) }
         } else if search.empty {
-            ContentUnavailableView(L10n.text("No Matching Songs"), systemImage: "music.note",
-                                   description: Text(L10n.text("Try the song's full name, or add the artist.")))
-                .frame(maxWidth: .infinity).padding(.vertical, 60)
+            EmptyResults(symbol: "music.note", title: L10n.text("No Matching Songs"), message: L10n.text("Try the song's full name, or add the artist."))
         } else {
             ForEach(search.failures.keys.sorted { $0.rawValue < $1.rawValue }, id: \.self) { platform in
                 StatusNotice(text: L10n.text("%@ didn't answer, so these results are from the other catalog.", platform.name))
@@ -505,7 +498,7 @@ struct MusicCollectionView: View {
                 #endif
                 if loading && tracks.isEmpty { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 60) }
                 if let error {
-                    ErrorStateCard(title: L10n.text("Unable to Load Songs"), message: L10n.text("Check your network connection and try again."),
+                    ErrorState(title: L10n.text("Unable to Load Songs"), message: L10n.text("Check your network connection and try again."),
                                    details: error, retry: { Task { await load() } }, busy: loading)
                         .padding(.vertical, 24).tvFocusSection()
                 }
@@ -627,9 +620,8 @@ struct MusicLikedView: View {
             LazyVStack(alignment: .leading, spacing: MusicLayout.rowSpacing) {
                 header(tracks).padding(.bottom, 20)
                 if tracks.isEmpty {
-                    ContentUnavailableView(L10n.text("No Liked Songs"), systemImage: "heart",
-                                           description: Text(L10n.text("Like a song from its menu, and it waits here, ready to play as one list.")))
-                        .frame(maxWidth: .infinity).padding(.vertical, 60)
+                    EmptyResults(symbol: "heart", title: L10n.text("No Liked Songs"),
+                                 message: L10n.text("Like a song from its menu, and it waits here, ready to play as one list."))
                 }
                 ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                     HStack(spacing: 10) {

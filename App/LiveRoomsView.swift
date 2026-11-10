@@ -53,15 +53,14 @@ struct LivePlatformView: View {
             }
         } else if areas.isEmpty && loader != nil { ChipSkeletonRow() }
         if let error {
-            ErrorStateCard(title: L10n.text("Unable to Load Channels"), message: L10n.text("Try again, or choose another source to keep watching."),
+            ErrorState(title: L10n.text("Unable to Load Channels"), message: L10n.text("Try again, or choose another source to keep watching."),
                            details: error, retry: { reload() }, goBack: { dismiss() }, busy: loader != nil)
                 .padding(.vertical, 24).tvFocusSection()
         }
         LiveRoomGrid(rooms: rooms) { room in if room.id == rooms.last?.id { more() } }
         if loader != nil && rooms.isEmpty { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 60) }
         if loader == nil && error == nil && page > 0 && rooms.isEmpty {
-            ContentUnavailableView(L10n.text("No Live Rooms"), systemImage: "dot.radiowaves.left.and.right")
-                .frame(maxWidth: .infinity)
+            EmptyResults(symbol: "dot.radiowaves.left.and.right", title: L10n.text("No Live Rooms"))
         }
     }
 
@@ -130,11 +129,12 @@ private struct LiveRoomSearch: View {
     var body: some View {
         Group {
             if let error {
-                ContentUnavailableView(L10n.text("Search Failed"), systemImage: "exclamationmark.magnifyingglass", description: Text(error))
-                    .frame(maxWidth: .infinity)
+                ErrorState(title: L10n.text("Search Failed"), message: L10n.text("Check your network connection and try again."),
+                           details: error, symbol: "exclamationmark.magnifyingglass")
+                    .padding(.vertical, 24)
             } else if rooms.isEmpty {
                 if searching { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 60) }
-                else { ContentUnavailableView.search(text: query).frame(maxWidth: .infinity) }
+                else { EmptyResults.search(query) }
             } else {
                 LiveRoomGrid(rooms: rooms)
             }
@@ -201,7 +201,7 @@ struct LiveSearchResults: View {
                 }
             }
             if finished && channels.isEmpty && platforms.allSatisfy({ found[$0]?.isEmpty != false }) {
-                ContentUnavailableView.search(text: query).frame(maxWidth: .infinity)
+                EmptyResults.search(query)
             }
         }
         .task(id: query) {

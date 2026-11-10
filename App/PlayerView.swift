@@ -453,17 +453,10 @@ struct PlaybackView: View {
                 .environment(\.colorScheme, .dark)
             }
             #else
-            VStack(spacing: 18) {
-                Image(systemName: "exclamationmark.triangle.fill").font(.largeTitle).foregroundStyle(Brand.amber)
-                Text(error).multilineTextAlignment(.center).frame(maxWidth: 420)
-                GlassGroup(spacing: 10) {
-                    HStack(spacing: 10) {
-                        Button(L10n.text("Retry")) { startCatalogPlayback(session, channel: channel, store: store) }.controlButton(prominent: true).tint(Brand.accent)
-                        Button(L10n.text("Close")) { dismiss() }.controlButton()
-                    }
-                }.appControlSize(.large)
-            }
-            .padding(30).glassPanel(cornerRadius: 30).padding(30)
+            ErrorState(title: L10n.text("Can't play this right now"), message: error, details: "", symbol: session.errorSymbol,
+                       retry: { startCatalogPlayback(session, channel: channel, store: store) }, goBack: { dismiss() }, backTitle: L10n.text("Close"))
+                .padding(30).frame(maxWidth: 480)
+                .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 30, style: .continuous)).padding(30)
             #endif
         } else if session.loading || session.buffering {
             #if os(macOS)
@@ -1293,13 +1286,11 @@ private struct DesktopPlaybackView: View {
                         .transition(.opacity)
                 }
                 if let error = session.error {
-                    VStack(spacing: 16) {
-                        Image(systemName: "exclamationmark.triangle").font(.largeTitle)
-                        Text(error).multilineTextAlignment(.center).textSelection(.enabled)
-                        Button(L10n.text("Retry")) { startCatalogPlayback(session, channel: channel, store: store) }.buttonStyle(.borderedProminent)
-                    }
-                    .padding(24).frame(maxWidth: 440)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18)).padding()
+                    ErrorState(title: L10n.text("Can't play this right now"), message: error, details: "", symbol: session.errorSymbol,
+                               retry: { startCatalogPlayback(session, channel: channel, store: store) })
+                        .padding(28).frame(maxWidth: 460)
+                        .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 28, style: .continuous)).padding()
+                        .environment(\.colorScheme, .dark)
                 }
                 if let playingOn {
                     Color.black

@@ -38,6 +38,7 @@
 		1B07B20D202CF846C1709988 /* MusicTVScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66DF697EACE4307031398E5A /* MusicTVScreen.swift */; };
 		1B37488D192798EC135198F8 /* Unicorn-GPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = B61DBAA2E8637B976A160D47 /* Unicorn-GPL2.txt */; };
 		1B6DFFAF679C5BAD70F09875 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B7E929CDDC1F085C6B55693 /* HomeView.swift */; };
+		1CAC69ACFB8224802F9BFF18 /* StateViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB900D01D10F44A858FB96D1 /* StateViews.swift */; };
 		1D206EDCE9B6412346BCC150 /* DouyinAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB7347843C885A97DFE397DD /* DouyinAccountView.swift */; };
 		1D82C5470FDA73053EAD6398 /* CloudFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A0D2EAF4F07329DAB40B97D /* CloudFilesView.swift */; };
 		1D9F55E8F4446D174D346871 /* DiscoverPersonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */; };
@@ -203,6 +204,7 @@
 		91C07692EFFEE27619AA9FF3 /* CloudQRLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E78573DE76BCF27CABBB20F3 /* CloudQRLoginView.swift */; };
 		923AFC544321F7D6A3FFB87E /* Capstone.txt in Resources */ = {isa = PBXBuildFile; fileRef = E84A48E8E87E4B3CC3DCDA8C /* Capstone.txt */; };
 		930D2E53E04CBCD27E280EBD /* runtime-probe.jar in Resources */ = {isa = PBXBuildFile; fileRef = E19FE970E68D278C15E8DBF8 /* runtime-probe.jar */; };
+		94BDD59683DA9F1DA27A1E9B /* StateViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB900D01D10F44A858FB96D1 /* StateViews.swift */; };
 		95638C5F64B74B017FAB3FD7 /* Capstone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 08B7C43C763200E67A22E365 /* Capstone-LLVM.txt */; };
 		95DBEFF5A38344018BDA9B97 /* TVPlayerEpisodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B482395E1DB3E0C2FF8CDC6 /* TVPlayerEpisodes.swift */; };
 		963C1AD1D27CD834FFDF0273 /* DiscoverSearchFilters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 356AA3CFC2271101141EF964 /* DiscoverSearchFilters.swift */; };
@@ -321,6 +323,7 @@
 		F2F68C26F3FB2279B102CF52 /* BilibiliAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B684AAD2C1CD8AC3699FB446 /* BilibiliAccountView.swift */; };
 		F3B63B43988E72A87677A7AC /* GlassKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 739A64FB51780D4314D2DDF8 /* GlassKit.swift */; };
 		F418F8B8793AF0B489F83AB9 /* PlaybackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6876ACF1E9D9F80BBC4F22C4 /* PlaybackView.swift */; };
+		F5C1BA900848240FECE2EDAB /* StateViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB900D01D10F44A858FB96D1 /* StateViews.swift */; };
 		F5F92EF7AFCA773D9FF85A8A /* OpenJDK-assembly-exception.txt in Resources */ = {isa = PBXBuildFile; fileRef = 4EF42E1957EFE569C0D2CF7D /* OpenJDK-assembly-exception.txt */; };
 		F792BA02C02390291EEE4838 /* EpisodeSkipSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B451E5612B33CF005EEAAE08 /* EpisodeSkipSettingsView.swift */; };
 		F845C8AC22D7E526F91FB1AB /* ExternalDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B2D3312926C619F1DD413B8 /* ExternalDisplay.swift */; };
@@ -443,6 +446,7 @@
 		D091093D028D2FD9AB72B79C /* SubtitleStyleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleStyleView.swift; sourceTree = "<group>"; };
 		D7B1CEF969E4F3D3301A8D61 /* BilibiliCastController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BilibiliCastController.swift; sourceTree = "<group>"; };
 		D7F15799E2A2FB8B88DCF8E4 /* MusicPlaybackSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlaybackSession.swift; sourceTree = "<group>"; };
+		DB900D01D10F44A858FB96D1 /* StateViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StateViews.swift; sourceTree = "<group>"; };
 		DF5CB8DD12A92056BFD50444 /* MusicMacMiniPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicMacMiniPlayer.swift; sourceTree = "<group>"; };
 		E0A2914C1B5B5ABA5F4B25A7 /* BilibiliMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BilibiliMark.swift; sourceTree = "<group>"; };
 		E19FE970E68D278C15E8DBF8 /* runtime-probe.jar */ = {isa = PBXFileReference; lastKnownFileType = archive.jar; path = "runtime-probe.jar"; sourceTree = "<group>"; };
@@ -612,6 +616,7 @@
 				2075419FEF0E1C161A31A9F0 /* RuntimeView.swift */,
 				B442C75C212445F3786397ED /* SettingsView.swift */,
 				75124CC2471CF95C1FFB168A /* SitesView.swift */,
+				DB900D01D10F44A858FB96D1 /* StateViews.swift */,
 				2D1010816125FBC3792AF838 /* Store.swift */,
 				61C44303B4662294C11176AB /* StyledSubtitleOverlay.swift */,
 				FE1212366D71C455D6EAE5E4 /* SubtitleOverlay.swift */,
@@ -1191,6 +1196,7 @@
 				3F2E64D0FAA75B78026F115A /* RuntimeView.swift in Sources */,
 				90F4C8847D5EE49C3388A326 /* SettingsView.swift in Sources */,
 				53F697A2DD9E8D5443E43646 /* SitesView.swift in Sources */,
+				F5C1BA900848240FECE2EDAB /* StateViews.swift in Sources */,
 				1FAC6965CB4F8B33135C85C5 /* Store.swift in Sources */,
 				8B6CF3203B7299225DC7E190 /* StyledSubtitleOverlay.swift in Sources */,
 				982EF0148420E135FF05E244 /* SubtitleOverlay.swift in Sources */,
@@ -1286,6 +1292,7 @@
 				B5DCC83D47D5AEB70A55028D /* RuntimeView.swift in Sources */,
 				3DB703B04E4659AB8623A1A7 /* SettingsView.swift in Sources */,
 				B0AA965C1DB5AA7CF03E9415 /* SitesView.swift in Sources */,
+				94BDD59683DA9F1DA27A1E9B /* StateViews.swift in Sources */,
 				4C65106175D517040E98330B /* Store.swift in Sources */,
 				38BF027CC7866E805A20DDD1 /* StyledSubtitleOverlay.swift in Sources */,
 				68DA47E6E8C42E446AC17E45 /* SubtitleOverlay.swift in Sources */,
@@ -1383,6 +1390,7 @@
 				D5140B80F4BA053665F4D30A /* RuntimeView.swift in Sources */,
 				26A1C218652FCEEE9FC60E0F /* SettingsView.swift in Sources */,
 				F8EB061662C5CB6EB47B41F2 /* SitesView.swift in Sources */,
+				1CAC69ACFB8224802F9BFF18 /* StateViews.swift in Sources */,
 				BF897F1F4B399DAA732ED4ED /* Store.swift in Sources */,
 				B016FE71931AD22C08C3CB2C /* StyledSubtitleOverlay.swift in Sources */,
 				5CB8BD265BA21805A9BF8CD9 /* SubtitleOverlay.swift in Sources */,

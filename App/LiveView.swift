@@ -149,7 +149,7 @@ struct ChannelListView: View {
                     ChannelSkeletonGrid()
                 }
                 if let error {
-                    ErrorStateCard(
+                    ErrorState(
                         title: L10n.text("Unable to Load Channels"),
                         message: L10n.text("Try again, or choose another source to keep watching."),
                         details: error,
@@ -159,7 +159,7 @@ struct ChannelListView: View {
                     ).padding(.vertical, 24).tvFocusSection()
                 }
                 if !waiting && error == nil && filtered.isEmpty {
-                    ContentUnavailableView(L10n.text("No Matching Channels"), systemImage: "magnifyingglass").frame(maxWidth: .infinity)
+                    EmptyResults(symbol: "magnifyingglass", title: L10n.text("No Matching Channels"))
                 }
                 if !filtered.isEmpty {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.cardMin), spacing: 12)], spacing: 12) {
@@ -273,13 +273,12 @@ private struct TVChannelGuide: View {
                 LoadingCard(maxWidth: LoadingCard.compact) { .server(source.url.host(), title: L10n.text("Loading channels…")) }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error {
-                ErrorStateCard(title: L10n.text("Unable to Load Channels"),
+                ErrorState(title: L10n.text("Unable to Load Channels"),
                                message: L10n.text("Try again, or choose another source to keep watching."),
                                details: error, retry: reload, goBack: { dismiss() }, busy: refreshing)
                 Spacer()
             } else if filtered.isEmpty {
-                ContentUnavailableView(L10n.text("No Matching Channels"), systemImage: "magnifyingglass")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                EmptyResults(symbol: "magnifyingglass", title: L10n.text("No Matching Channels"), fills: true)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
