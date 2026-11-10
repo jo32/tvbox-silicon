@@ -451,6 +451,16 @@ import TVCore
             }
             guard let id = args.count > 2 ? args[2] : defaultID else { throw TVError.emptyPlaylist }
             let video = try await client.detail(id)
+            if args.count > 4 {
+                // Several episodes in one process, as the app asks for them: resolve only.
+                for number in args[3...].compactMap({ Int($0) }) where video.episodes.indices.contains(number - 1) {
+                    do {
+                        let channel = try await client.playback(video.episodes[number - 1])
+                        print("episode \(number) streaming=\(channel.url.scheme == HongguoStreams.scheme) host=\(channel.url.host ?? "-")")
+                    } catch { print("episode \(number) failed: \(error)") }
+                }
+                return
+            }
             let index = args.count > 3 ? (Int(args[3]) ?? 4) - 1 : 3
             guard video.episodes.indices.contains(index) else { throw TVError.emptyPlaylist }
             print("detail episodes=\(video.episodes.count) selected=\(index + 1)")

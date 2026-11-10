@@ -746,12 +746,21 @@ import IOKit.pwr_mgt
         #endif
     }
 
+    /// Request headers for an asset. iPhone, iPad and Apple TV ignore a `User-Agent` among the header
+    /// fields and send their own, which hosts that expect a browser refuse (HTTP 403); the user-agent key
+    /// is honoured everywhere.
+    static func assetOptions(headers: [String: String]) -> [String: Any] {
+        var options: [String: Any] = ["AVURLAssetHTTPHeaderFieldsKey": headers]
+        if let agent = headers.first(where: { $0.key.lowercased() == "user-agent" })?.value, !agent.isEmpty { options[AVURLAssetHTTPUserAgentKey] = agent }
+        return options
+    }
+
     /// The item for a prepared stream, with the request headers and buffer its source needs.
     private func makeItem(_ channel: Channel, url: URL) -> AVPlayerItem {
         // Some providers require request headers. AVURLAsset's HTTP-header option is
         // best-effort and is not a guarantee for every redirected HLS segment.
         let asset = CloudStreams.asset(for: url) ?? HongguoStreams.asset(for: url) ?? DashStreams.asset(for: url) ?? LiveRepair.asset(for: url)
-            ?? AVURLAsset(url: url, options: ["AVURLAssetHTTPHeaderFieldsKey": channel.headers])
+            ?? AVURLAsset(url: url, options: Self.assetOptions(headers: channel.headers))
         let item = AVPlayerItem(asset: asset)
         if url.scheme == CloudStreams.scheme {
             // The duration sets how far ahead the file is read, on this device and for this bitrate (#702).
