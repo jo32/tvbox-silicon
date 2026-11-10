@@ -366,12 +366,15 @@ struct LivePlatformCard: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
-            .background { backdrop }
+            // A cover fills the card and runs past it (Hongguo's are portrait); clipping hides that but still lets it
+            // take clicks, so on the Mac the card above a portrait cover (PandaTV over Hongguo) didn't open.
+            .background { backdrop.allowsHitTesting(false) }
             // Shade under the caption so white text reads on any cover.
             .overlay { LinearGradient(stops: [.init(color: .black.opacity(0.15), location: 0), .init(color: .clear, location: 0.3), .init(color: .black.opacity(0.85), location: 1)], startPoint: .top, endPoint: .bottom) }
             .overlay(alignment: .topTrailing) { if room != nil { badge.padding(padding) } }
             .overlay(alignment: .bottomLeading) { caption.padding(padding) }
             .clipShape(shape)
+            .contentShape(shape)
             .overlay { shape.strokeBorder(.white.opacity(focused ? 0.95 : 0.1), lineWidth: focused ? 4 : 1) }
             .animation(.easeOut(duration: 0.3), value: room)
             .onAppear { LivePreviews.shared.load(platform) }
