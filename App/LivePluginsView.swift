@@ -178,9 +178,14 @@ struct LivePluginOfferSection: View {
     @State private var busy: Set<String> = []
     @State private var failures: [String: String] = [:]
     @State private var revision = 0
+    /// Icons of the plugins not installed yet, read from their ZIPs.
+    @State private var previews: [String: URL] = [:]
 
     var body: some View {
         content
+            #if !os(tvOS)
+            .task(id: entries) { await loadPreviews() }
+            #endif
             #if DEBUG
             // `-qaInstallAll 1` with `-qaPage live-plugins -qaQuery <key>` installs the source's plugins without a tap.
             .task { if UserDefaults.standard.bool(forKey: "qaInstallAll") { install(entries.filter { state($0) != .installed }) } }
@@ -213,7 +218,7 @@ struct LivePluginOfferSection: View {
             }
             ForEach(entries) { entry in
                 HStack(spacing: 12) {
-                    LivePluginRow(name: entry.name, icon: LivePlugins.shared.installed(entry.pluginId).flatMap(LivePlugins.shared.iconFile), detail: failures[entry.pluginId] ?? (entry.summary.isEmpty ? entry.version : entry.summary),
+                    LivePluginRow(name: entry.name, icon: installedIcon(entry) ?? previews[entry.pluginId], detail: failures[entry.pluginId] ?? (entry.summary.isEmpty ? entry.version : entry.summary),
                                   needsSignIn: entry.requiresLogin, highlighted: failures[entry.pluginId] != nil, placeholder: entry.name)
                     Spacer(minLength: 8)
                     if busy.contains(entry.pluginId) { ProgressView().appControlSize(.small) }
@@ -229,6 +234,19 @@ struct LivePluginOfferSection: View {
         }
         .id(revision)
         #endif
+    }
+
+    /// The installed plugin's icon, while its file is there.
+    private func installedIcon(_ entry: LivePlugins.Entry) -> URL? {
+        LivePlugins.shared.installed(entry.pluginId).flatMap(LivePlugins.shared.iconFile).flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0 : nil }
+    }
+
+    private func loadPreviews() async {
+        let wanted = entries.filter { installedIcon($0) == nil && previews[$0.pluginId] == nil }
+        await withTaskGroup(of: (String, URL?).self) { group in
+            for entry in wanted { group.addTask { (entry.pluginId, await LivePlugins.shared.previewIcon(entry)) } }
+            for await (id, file) in group { if let file { previews[id] = file } }
+        }
     }
 
     private enum State { case available, update, installed }
@@ -433,7 +451,8 @@ struct PluginIconView: View {
             if let image = file.flatMap(PluginIcons.image) {
                 Image(decorative: image, scale: 1).resizable().interpolation(.high).scaledToFit().padding(size * 0.12)
             } else {
-                Text(String(fallback.prefix(1))).font(.system(size: size * 0.5, weight: .heavy, design: .rounded)).foregroundStyle(.secondary)
+                // The tile is white in dark mode too, so not `.secondary` (light grey there: the tile looked empty).
+                Text(String(fallback.prefix(1))).font(.system(size: size * 0.5, weight: .heavy, design: .rounded)).foregroundStyle(.black.opacity(0.45))
             }
         }
         .frame(width: size, height: size)

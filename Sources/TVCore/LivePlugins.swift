@@ -86,6 +86,8 @@ public final class LivePlugins: @unchecked Sendable {
 
     private static let key = "livePlugins.v1"
     private let lock = NSLock()
+    /// Writes the preferences in order, never while `lock` is held (see `update`).
+    private let saving = DispatchQueue(label: "LivePlugins.save")
     private let defaults: UserDefaults
     let folder: URL
     private var saved: Saved
@@ -300,11 +302,15 @@ public final class LivePlugins: @unchecked Sendable {
     }
 
     private func update(_ change: (inout Saved) -> Void) {
-        lock.withLock {
+        let data = lock.withLock {
             change(&saved)
             cachedPlatforms = nil
-            if let data = try? JSONEncoder().encode(saved) { defaults.set(data, forKey: Self.key) }
+            return try? JSONEncoder().encode(saved)
         }
+        // Not under `lock`, and not on this thread: setting a preference calls SwiftUI's @AppStorage observers at
+        // once, and they wait for the view graph, which the main thread may hold while a row reads `installed(_:)`.
+        // Writing under the lock froze the app while installing a plugin.
+        if let data { saving.async { [defaults] in defaults.set(data, forKey: Self.key) } }
         NotificationCenter.default.post(name: Self.changed, object: nil)
     }
 }
@@ -314,6 +320,37 @@ extension LivePlugins {
     public func iconFile(_ plugin: Installed) -> URL? {
         guard let icon = plugin.icon, SubtitleArchive.safe(icon) else { return nil }
         return directory(plugin.pluginId).appending(path: icon)
+    }
+
+    /// A plugin's icon before it is installed. Indexes name the icon by its path inside the ZIP, so the ZIP
+    /// (tens of KB) is downloaded once and the icon kept in Caches, by version.
+    public func previewIcon(_ entry: Entry, http: HTTPClient = HTTPClient()) async -> URL? {
+        guard let icon = entry.icon, SubtitleArchive.safe(icon) else { return nil }
+        let name = "\(entry.pluginId)-\(entry.version)" + (entry.sha256.isEmpty ? "" : "-\(entry.sha256.prefix(12))")
+        let file = Self.previewFolder.appending(path: name).appendingPathExtension((icon as NSString).pathExtension)
+        if FileManager.default.fileExists(atPath: file.path) { return file }
+        do {
+            let data = try await download(entry.zipURLs, sha256: entry.sha256, name: entry.name, http: http)
+            var limits = SubtitleArchive.Limits()
+            limits.archive = Self.largestZip; limits.entry = 2 << 20; limits.entries = 400; limits.anyFile = true
+            // The path is the plugin's own; some ZIPs hold one folder with the plugin inside.
+            guard let found = try SubtitleArchive.entries(data, limits: limits)
+                .filter({ $0.path == icon || $0.path.hasSuffix("/" + icon) }).min(by: { $0.path.count < $1.path.count }) else {
+                Diagnostics.shared.record(.info, "plugins", "\(entry.pluginId)'s ZIP has no \(icon)")
+                return nil
+            }
+            let bytes = try SubtitleArchive.extract(found, from: data, limits: limits)
+            try FileManager.default.createDirectory(at: Self.previewFolder, withIntermediateDirectories: true)
+            try bytes.write(to: file, options: .atomic)
+            return file
+        } catch {
+            Diagnostics.shared.record(.info, "plugins", "no icon for \(entry.pluginId): \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    static var previewFolder: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("com.tvbox.yingxia/LivePluginIcons", isDirectory: true)
     }
 }
 
