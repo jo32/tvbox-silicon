@@ -275,6 +275,28 @@ import TVCore
             } catch { print("error \(error)") }
             return
         }
+        if args[1] == "--plugin-danmaku", args.count > 2 {
+            // --plugin-danmaku <pluginId> [roomId [userId]] [seconds]: listens to a room's chat through the plugin's danmaku
+            // driver and prints each comment; without a room, the first room of the plugin's first area.
+            setvbuf(stdout, nil, _IONBF, 0)
+            guard let platform = LivePlatform(rawValue: "plugin." + args[2]) else { print("plugin \(args[2]) isn't installed"); return }
+            var room = args.count > 3 ? args[3] : "", user = args.count > 4 ? args[4] : ""
+            if room.isEmpty {
+                guard let area = try await LiveCatalog.areas(platform).first else { print("no areas"); return }
+                let first = try await LiveCatalog.rooms(platform, area: area, page: 1).first
+                room = first?.roomID ?? ""; user = first?.userID ?? ""
+                print("room \(room) user \(user) \(first?.host ?? "") \(first?.title ?? "")")
+            }
+            let seconds = args.count > 5 ? Int(args[5]) ?? 30 : 30
+            let chat = LivePluginChat(plugin: args[2], room: room, user: user)
+            let count = ManagedAtomicCounter()
+            chat.start { text, color, _ in print(String(format: "  #%06X %@", color, text)); count.add() }
+            try await Task.sleep(for: .seconds(seconds))
+            chat.stop()
+            print("comments \(count.value) in \(seconds) s")
+            try await Task.sleep(for: .seconds(1))
+            return
+        }
         if args[1] == "--plugin-install", args.count > 2 {
             // --plugin-install <source address, angellive:// link or key> [pluginId ...]: installs live plugins
             // (all of the source's without ids); then `--live plugin.<id> [keyword|room:<id>]` tries one.
@@ -852,4 +874,13 @@ import TVCore
         print(String(decoding: json, as: UTF8.self))
         if report.status != 0 { exit(1) }
     }
+}
+
+
+/// A counter the chat's handler bumps from any thread.
+final class ManagedAtomicCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    func add() { lock.withLock { count += 1 } }
+    var value: Int { lock.withLock { count } }
 }
