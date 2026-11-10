@@ -17,6 +17,12 @@ struct LivePlatformView: View {
     @State private var query = ""
     /// Read again on appearing: Douyin becomes searchable once signed in.
     @State private var searchable = true
+    /// The plugin said it shows nothing until the viewer signs in (Kuaishou, Xiaohongshu).
+    @State private var needsSignIn = false
+    #if !os(tvOS)
+    @State private var signInFlow: LivePluginLoginFlow?
+    @State private var signingIn = false
+    #endif
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
@@ -37,6 +43,15 @@ struct LivePlatformView: View {
             if areas.isEmpty { reload() }
         }
         .onDisappear { loader?.cancel(); loader = nil }
+        #if !os(tvOS)
+        .sheet(isPresented: $signingIn) {
+            if let plugin = platform.plugin.flatMap(LivePlugins.shared.installed), let signInFlow { LivePluginWebSignIn(plugin: plugin, flow: signInFlow) }
+        }
+        #endif
+        // Signed in (here or in Settings): show the rooms.
+        .onReceive(NotificationCenter.default.publisher(for: LivePluginAccounts.changed).receive(on: RunLoop.main)) { note in
+            if needsSignIn, note.object as? String == platform.plugin { reload() }
+        }
     }
 
     @ViewBuilder private var browse: some View {
@@ -53,9 +68,18 @@ struct LivePlatformView: View {
             }
         } else if areas.isEmpty && loader != nil { ChipSkeletonRow() }
         if let error {
-            ErrorState(title: L10n.text("Unable to Load Channels"), message: L10n.text("Try again, or choose another source to keep watching."),
-                           details: error, retry: { reload() }, goBack: { dismiss() }, busy: loader != nil)
-                .padding(.vertical, 24).tvFocusSection()
+            #if !os(tvOS)
+            if needsSignIn, signInFlow != nil {
+                EmptyPage(symbol: "person.crop.circle.badge.exclamationmark", title: L10n.text("Sign In to %@", platform.name),
+                          message: L10n.text("%@ shows its live rooms once you sign in. The sign-in stays on this device.", platform.name),
+                          action: L10n.text("Sign In"), actionSymbol: "person.crop.circle", perform: { signingIn = true }) { EmptyView() }
+                    .padding(.vertical, 24)
+            } else {
+                failure(error)
+            }
+            #else
+            failure(error)
+            #endif
         }
         LiveRoomGrid(rooms: rooms) { room in if room.id == rooms.last?.id { more() } }
         if loader != nil && rooms.isEmpty { ProgressView().frame(maxWidth: .infinity).padding(.vertical, 60) }
@@ -64,9 +88,25 @@ struct LivePlatformView: View {
         }
     }
 
+    private func failure(_ error: String) -> some View {
+        ErrorState(title: L10n.text("Unable to Load Channels"), message: L10n.text("Try again, or choose another source to keep watching."),
+                   details: error, retry: { reload() }, goBack: { dismiss() }, busy: loader != nil)
+            .padding(.vertical, 24).tvFocusSection()
+    }
+
+    /// Shows `error`, and whether signing in to the plugin's platform would help.
+    private func show(_ error: Error) async {
+        let code = (error as? LivePluginError)?.code
+        needsSignIn = platform.plugin != nil && (code == "AUTH_REQUIRED" || code == "AUTH_EXPIRED")
+        #if !os(tvOS)
+        if needsSignIn, signInFlow == nil, let id = platform.plugin { signInFlow = await LivePlugins.shared.loginFlow(id) }
+        #endif
+        self.error = error.localizedDescription
+    }
+
     private func reload() {
         loader?.cancel()
-        areas = []; rooms = []; page = 0; exhausted = false; error = nil
+        areas = []; rooms = []; page = 0; exhausted = false; error = nil; needsSignIn = false
         loader = Task {
             do {
                 let found = try await LiveCatalog.areas(platform)
@@ -83,7 +123,7 @@ struct LivePlatformView: View {
             } catch {
                 guard !Task.isCancelled else { return }
                 Diagnostics.shared.failure("live", "\(platform.id) areas", error)
-                self.error = error.localizedDescription; loader = nil
+                await show(error); loader = nil
             }
         }
     }
@@ -111,7 +151,7 @@ struct LivePlatformView: View {
             } catch {
                 guard !Task.isCancelled else { return }
                 Diagnostics.shared.failure("live", "\(platform.id) rooms page=\(next)", error)
-                if rooms.isEmpty { self.error = error.localizedDescription } else { exhausted = true }
+                if rooms.isEmpty { await show(error) } else { exhausted = true }
             }
             loader = nil
         }

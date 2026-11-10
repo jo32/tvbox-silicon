@@ -1809,3 +1809,4 @@
 "Sign In Again" = "重新登入";
 "Sign-In Expired" = "登入已過期";
 "Some platforms show more, or better quality, once you sign in. The sign-in stays on this device." = "部分平台登入後可看到更多內容或更高畫質。登入資訊只保存在本裝置上。";
+"%@ shows its live rooms once you sign in. The sign-in stays on this device." = "登入後才能看到%@的直播間。登入資訊只儲存在這台裝置上。";

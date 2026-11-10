@@ -1809,3 +1809,4 @@
 "Sign In Again" = "もう一度サインイン";
 "Sign-In Expired" = "サインインの期限切れ";
 "Some platforms show more, or better quality, once you sign in. The sign-in stays on this device." = "サインインすると、より多くの配信や高画質を見られるサービスもあります。サインイン情報はこのデバイスにだけ保存されます。";
+"%@ shows its live rooms once you sign in. The sign-in stays on this device." = "%@のライブ配信はサインインすると表示されます。サインイン情報はこのデバイスにのみ保存されます。";
