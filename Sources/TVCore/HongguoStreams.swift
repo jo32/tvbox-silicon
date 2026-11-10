@@ -27,6 +27,18 @@ public enum HongguoStreams {
         return HongguoStreamStore.shared.add(HongguoByteStream(urls: [url] + backups, key: Data(bytes), headers: headers, http: http))
     }
 
+    /// `register`, except that a fragmented file (the web player's episodes) becomes a local HLS stream. As a
+    /// virtual file AVPlayer would read every fragment's moof before it plays; as HLS it fetches what it plays.
+    static func open(url: URL, backups: [URL] = [], key: String, headers: [String: String], http: HTTPClient) async throws -> URL {
+        let address = try register(url: url, backups: backups, key: key, headers: headers, http: http)
+        guard let stream = HongguoStreamStore.shared.stream(address) else { return address }
+        let index = try await stream.metadata()
+        guard index.fragmented != nil else { return address }
+        let session = HongguoFragmentSession(stream: stream, index: index)
+        RemuxStore.shared.add(session)
+        return try await RemuxServer.shared.base().appending(path: "\(session.id)/master.m3u8")
+    }
+
     public static func asset(for url: URL) -> AVURLAsset? {
         guard HongguoStreamStore.shared.stream(url) != nil else { return nil }
         let asset = AVURLAsset(url: url)
@@ -212,7 +224,7 @@ actor HongguoByteStream {
         prefix = first.data
         let length = first.length
         Diagnostics.shared.record(.debug, "hongguo.stream", "prefix bytes=\(prefix.count) total=\(length) signature=\(prefix.prefix(16).map { String(format: "%02x", $0) }.joined())")
-        var at = 0, count = 0, movie: (Data, Int)?, media: [Range<Int>] = []
+        var at = 0, count = 0, movie: (Data, Int)?, media: [Range<Int>] = [], segmentIndex: (Data, Int)?
         while at < length {
             try Task.checkCancellation()
             count += 1
@@ -227,7 +239,17 @@ actor HongguoByteStream {
             guard size >= headerSize, size <= length - at else { throw HongguoMP4.Failure.invalid }
             let type = String(decoding: header[4..<8], as: UTF8.self)
             Diagnostics.shared.record(.debug, "hongguo.stream", "box type=\(type) at=\(at) size=\(size)")
-            if type == "moof" { throw HongguoMP4.Failure.invalid }
+            if type == "moof" {
+                // Fragmented: the sidx before the first fragment locates the rest, so the walk ends here.
+                guard let movie, let segmentIndex else { throw HongguoMP4.Failure.invalid }
+                Diagnostics.shared.record(.debug, "hongguo.stream", "parse fragmented index movie=\(movie.0.count) sidx=\(segmentIndex.0.count)")
+                return try HongguoStreamIndex(fragmentedMovie: movie.0, at: movie.1, length: length, segmentIndex: segmentIndex.0, at: segmentIndex.1)
+            }
+            if type == "sidx", segmentIndex == nil {
+                guard size <= 1 << 20 else { throw HongguoMP4.Failure.invalid }
+                let data = at + size <= prefix.count ? Data(prefix[at..<at + size]) : try await remote(at..<at + size).data
+                segmentIndex = (data, at)
+            }
             if type == "moov" {
                 guard movie == nil, size <= 16 << 20 else { throw HongguoMP4.Failure.invalid }
                 let data = at + size <= prefix.count ? Data(prefix[at..<at + size]) : try await remote(at..<at + size).data
@@ -267,6 +289,8 @@ actor HongguoByteStream {
         if offset >= index.movieRange.lowerBound, offset < index.movieRange.upperBound {
             return Data(index.movie[offset - index.movieRange.lowerBound..<min(end, index.movieRange.upperBound) - index.movieRange.lowerBound])
         }
+        // Fragmented files play as HLS (`HongguoStreams.open`), never as byte ranges.
+        guard index.fragmented == nil else { throw HongguoMP4.Failure.invalid }
         var requested = offset..<end
         if offset < index.movieRange.lowerBound { requested = offset..<min(end, index.movieRange.lowerBound) }
         let covered = index.samples(in: requested)
@@ -299,6 +323,33 @@ actor HongguoByteStream {
         lastDeliveredOffset = requested.upperBound
         prune()
         return Data(decrypted[requested.lowerBound - expanded.lowerBound..<requested.upperBound - expanded.lowerBound])
+    }
+
+    /// A fragmented file's HLS initialization segment: its ftyp and the clear moov.
+    func initialization() async throws -> Data {
+        let index = try await metadata()
+        guard index.fragmented != nil, index.movieRange.lowerBound <= prefix.count else { throw HongguoMP4.Failure.invalid }
+        return Data(prefix[0..<index.movieRange.lowerBound]) + index.movie
+    }
+
+    /// One whole fragment of a fragmented file, decrypted, with its moof's encryption boxes hidden.
+    func fragment(_ i: Int) async throws -> Data {
+        let index = try await metadata()
+        guard let tracks = index.fragmented, index.samples.indices.contains(i) else { throw HongguoMP4.Failure.invalid }
+        let range = index.samples[i].bytes
+        var data: Data
+        if range.upperBound <= prefix.count { data = Data(prefix[range]) }
+        else {
+            let reply = try await remote(range)
+            guard reply.length == index.length else { throw HongguoMP4.Failure.invalid }
+            data = reply.data
+        }
+        let size = try HongguoMP4.integer(data, 0)
+        guard size >= 8, size < data.count else { throw HongguoMP4.Failure.invalid }
+        let part = try HongguoStreamIndex.parseFragment(Data(data.prefix(size)), fragment: range, tracks: tracks)
+        data.replaceSubrange(0..<size, with: part.moof)
+        try HongguoStreamIndex.decrypt(&data, at: range.lowerBound, part: part, key: key)
+        return data
     }
 
     private func prune() {
