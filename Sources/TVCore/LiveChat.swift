@@ -10,6 +10,14 @@ public protocol LiveChat: AnyObject, Sendable {
 }
 
 public enum LiveChats {
+    /// The chat of the room at `address` on `platform`: the plugin's own for a plugin platform
+    /// (`<id>-plugin-live://room/<room>?u=<user>`), else the app's for the platform's protocol.
+    public static func make(_ platform: LivePlatform, room id: String, address: URL) -> (any LiveChat)? {
+        guard let plugin = platform.plugin else { return make(platform.chat, room: id) }
+        let user = URLComponents(url: address, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "u" }?.value ?? ""
+        return LivePluginChat(plugin: plugin, room: id, user: user)
+    }
+
     /// The chat of room `id` on a platform whose rooms speak `kind` (`LivePlatform.chat`), or nil when
     /// the app doesn't know that protocol or the id isn't one it accepts.
     public static func make(_ kind: String?, room id: String) -> (any LiveChat)? {

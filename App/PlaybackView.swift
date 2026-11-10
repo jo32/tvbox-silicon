@@ -654,7 +654,7 @@ import IOKit.pwr_mgt
             // A live room becomes its current stream address now; the address expires.
             var channel = channel
             var liveQualities: [StreamQuality] = [], liveQuality: Int?
-            if let (platform, id) = LiveCatalog.room(channel.url), let chat = LiveChats.make(platform.chat, room: id) { self.listen(chat, generation: activeGeneration) }
+            if let (platform, id) = LiveCatalog.room(channel.url), let chat = LiveChats.make(platform, room: id, address: channel.url) { self.listen(chat, generation: activeGeneration) }
             if LiveCatalog.isRoom(channel.url) {
                 self.note(L10n.text("Finding the live stream"))
                 do { (channel, liveQualities, liveQuality) = try await LiveCatalog.resolve(channel) }
