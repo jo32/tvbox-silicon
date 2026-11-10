@@ -1819,3 +1819,9 @@
 "Waiting for you to approve the sign-in…" = "Waiting for you to approve the sign-in…";
 "Open the Sign-In Page" = "Open the Sign-In Page";
 "The sign-in was declined." = "The sign-in was declined.";
+"Hongguo Account" = "Hongguo Account";
+"Hongguo episodes play as this account. Sign-in details stay on this device." = "Hongguo episodes play as this account. Sign-in details stay on this device.";
+"Sign In to Hongguo" = "Sign In to Hongguo";
+"Hongguo often won't play for devices that aren't signed in. Open the Hongguo app on your phone, scan this code, and confirm the sign-in." = "Hongguo often won't play for devices that aren't signed in. Open the Hongguo app on your phone, scan this code, and confirm the sign-in.";
+"Hongguo didn't answer. Try again." = "Hongguo didn't answer. Try again.";
+"Sign-in was approved, but Hongguo didn't return a login. Try again." = "Sign-in was approved, but Hongguo didn't return a login. Try again.";

@@ -1819,3 +1819,9 @@
 "Waiting for you to approve the sign-in…" = "等待你批准登录…";
 "Open the Sign-In Page" = "打开登录页面";
 "The sign-in was declined." = "登录已被拒绝。";
+"Hongguo Account" = "红果短剧账号";
+"Hongguo episodes play as this account. Sign-in details stay on this device." = "红果短剧以此账号播放。登录信息只保存在本机。";
+"Sign In to Hongguo" = "登录红果短剧";
+"Hongguo often won't play for devices that aren't signed in. Open the Hongguo app on your phone, scan this code, and confirm the sign-in." = "红果常常不为未登录的设备播放。请在手机上打开红果短剧 App，扫描此码并确认登录。";
+"Hongguo didn't answer. Try again." = "红果没有响应，请重试。";
+"Sign-in was approved, but Hongguo didn't return a login. Try again." = "已确认登录，但红果没有返回登录信息，请重试。";
