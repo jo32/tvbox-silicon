@@ -31,7 +31,9 @@ public enum CloudSources {
 
     /// Fetches the subscription; it is only used in a shape this app reads.
     public static func fetch(http: HTTPClient) async throws -> Subscription {
-        let (data, finalURL) = try await http.get(address, headers: ["User-Agent": HTTPClient.subscriptionUserAgent])
+        // Never from the HTTP cache: the Worker lets a copy live ten minutes, and the app already asks at most that
+        // often, so a cached copy doubled the wait for a fixed script and made Refresh do nothing.
+        let (data, finalURL) = try await http.get(address, headers: ["User-Agent": HTTPClient.subscriptionUserAgent], fresh: true)
         let document = try Subscription.parse(data, origin: finalURL)
         guard accepts(document) else { throw TVError.unsupported(L10n.text("Update Yingxia to use its built-in sources.")) }
         return document
