@@ -157,7 +157,9 @@ public enum LivePluginCatalog {
             // A CENC MP4 with its key (Hongguo's episodes): decrypted as it plays, as Yingxia's own Hongguo source does.
             address = try await HongguoStreams.open(url: url, key: key, headers: chosen.headers, http: HTTPClient())
         } else {
-            address = chosen.flv ? try await FLVLive.open(url, headers: chosen.headers) : url
+            // A server whose playlists contradicted themselves before is read through the loader that steadies them.
+            address = chosen.flv ? try await FLVLive.open(url, headers: chosen.headers)
+                : LiveRepair.contradicts(url) ? LiveRepair.address(url, headers: chosen.headers) : url
         }
         let qualities = options.compactMap { option -> StreamQuality? in
             var parts = URLComponents(url: channel.url, resolvingAgainstBaseURL: false)
