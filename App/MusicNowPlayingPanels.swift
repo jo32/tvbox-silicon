@@ -56,8 +56,7 @@ struct MusicNowPlayingLyrics: View {
         } else if music.lyricsLoading || music.busy {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            ContentUnavailableView(L10n.text("No Lyrics"), systemImage: "quote.bubble",
-                                   description: Text(L10n.text("None of the catalogs has lyrics for this song.")))
+            EmptyResults(symbol: "quote.bubble", title: L10n.text("No Lyrics"), message: L10n.text("None of the catalogs has lyrics for this song."), fills: true)
         }
     }
 }
@@ -71,8 +70,8 @@ struct MusicUpNext: View {
         let queue = music.queue
         let upcoming = queue.map { queue in Array(queue.tracks.enumerated()).filter { $0.offset > queue.index } } ?? []
         if upcoming.isEmpty {
-            ContentUnavailableView(L10n.text("Nothing Up Next"), systemImage: "list.bullet",
-                                   description: Text(L10n.text("Play a song from search results, an album or a playlist, and the songs after it play next.")))
+            EmptyResults(symbol: "list.bullet", title: L10n.text("Nothing Up Next"),
+                         message: L10n.text("Play a song from search results, an album or a playlist, and the songs after it play next."), fills: true)
         } else {
             ScrollView(showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 2) {

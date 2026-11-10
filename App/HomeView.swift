@@ -273,14 +273,9 @@ struct HomeView: View {
 
     /// Every section switched off in Settings: say so, rather than leave a blank page.
     private var allHidden: some View {
-        ContentUnavailableView {
-            Label(L10n.text("Watch Now"), systemImage: AppSection.home.icon)
-        } description: {
-            Text(L10n.text("Choose what Watch Now shows in Settings."))
-        } actions: {
-            Button(L10n.text("Settings")) { store.section = .settings }.controlButton()
-        }
-        .frame(maxWidth: .infinity).padding(.top, 60)
+        EmptyResults(symbol: AppSection.home.icon, title: L10n.text("Watch Now"), message: L10n.text("Choose what Watch Now shows in Settings."),
+                     action: L10n.text("Settings"), actionSymbol: AppSection.settings.icon) { store.section = .settings }
+            .padding(.top, 20)
     }
 
     private func pinnedSources(_ config: Subscription) -> some View {

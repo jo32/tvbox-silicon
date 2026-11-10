@@ -194,20 +194,17 @@ struct GlobalSearchView: View {
     /// Separates "nothing matched" from "most sources never answered" so the empty state does not blame the keyword.
     private func emptyResults(_ config: Subscription) -> some View {
         let mostlyFailed = model.failures.count * 2 > model.completed
-        return ContentUnavailableView {
-            Label(L10n.text(mostlyFailed ? "Most Sources Unavailable" : "No Videos"),
-                  systemImage: mostlyFailed ? "wifi.exclamationmark" : "magnifyingglass")
-        } description: {
-            Text(mostlyFailed
-                 ? L10n.text("%lld of %lld sources didn't respond, so results may be incomplete.", model.failures.count, model.total)
-                 : L10n.text("Try another keyword."))
-        } actions: {
-            if !model.failures.isEmpty || !model.paused.isEmpty {
-                HStack(spacing: 16) {
-                    Button(L10n.text("Retry failed sources")) { model.resume(config: config, retryFailures: true) }
-                        .controlButton(prominent: true)
-                    Button(L10n.text("Show Details")) { showFailures = true }.controlButton()
-                }
+        let canRetry = !model.failures.isEmpty || !model.paused.isEmpty
+        return EmptyResults(symbol: mostlyFailed ? "wifi.exclamationmark" : "magnifyingglass",
+                            title: L10n.text(mostlyFailed ? "Most Sources Unavailable" : "No Videos"),
+                            message: mostlyFailed
+                                ? L10n.text("%lld of %lld sources didn't respond, so results may be incomplete.", model.failures.count, model.total)
+                                : L10n.text("Try another keyword."),
+                            hasActions: canRetry) {
+            if canRetry {
+                Button(L10n.text("Retry failed sources")) { model.resume(config: config, retryFailures: true) }
+                    .controlButton(prominent: true)
+                Button(L10n.text("Show Details")) { showFailures = true }.controlButton()
             }
         }
         .frame(maxWidth: .infinity, minHeight: 420)
@@ -759,8 +756,10 @@ private struct QuietPillStyle: ButtonStyle {
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(.primary)
             .padding(.horizontal, 12).frame(height: SourceStrip.controlSize - 2)
-            .background(Color.primary.opacity(configuration.isPressed ? 0.14 : 0.07), in: Capsule())
+            // Liquid Glass where the system draws it, as the source chips under them.
+            .glassOrFill(.regular.interactive(), Color.primary.opacity(configuration.isPressed ? 0.14 : 0.07), in: Capsule())
             .contentShape(Capsule())
+            .opacity(configuration.isPressed ? 0.72 : 1)
     }
 }
 #endif

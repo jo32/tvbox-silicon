@@ -418,14 +418,7 @@ private struct FilesMessage<Actions: View>: View {
     var message: String? = nil
     @ViewBuilder var actions: Actions
     var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: symbol).font(.system(size: 44, weight: .semibold)).foregroundStyle(.secondary)
-            Text(title).font(.title3.weight(.semibold))
-            if let message { Text(message).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 520) }
-            HStack(spacing: 14) { actions }.padding(.top, 6)
-        }
-        .padding(Layout.gutter)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyResults(symbol: symbol, title: title, message: message, fills: true, hasActions: Actions.self != EmptyView.self) { actions }
     }
 }
 

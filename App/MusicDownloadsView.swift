@@ -59,9 +59,8 @@ struct MusicDownloadsView: View {
             LazyVStack(alignment: .leading, spacing: MusicLayout.rowSpacing) {
                 header(tracks).padding(.bottom, 20)
                 if library.items.isEmpty {
-                    ContentUnavailableView(L10n.text("No Downloaded Songs"), systemImage: "arrow.down.circle",
-                                           description: Text(L10n.text("Download a song, album or playlist from its menu to listen without a connection.")))
-                        .frame(maxWidth: .infinity).padding(.vertical, 60)
+                    EmptyResults(symbol: "arrow.down.circle", title: L10n.text("No Downloaded Songs"),
+                                 message: L10n.text("Download a song, album or playlist from its menu to listen without a connection."))
                 }
                 if !pending.isEmpty {
                     // Its own stack: a song that finishes moves to the list below under the same ID,
@@ -218,7 +217,7 @@ struct MusicDownloadedCollectionView: View {
                 Button(L10n.text("Remove Download"), role: .destructive) { library.remove(collection: id); dismiss() }
             }
         } else {
-            ContentUnavailableView(L10n.text("No Downloaded Songs"), systemImage: "arrow.down.circle").screenBackdrop()
+            EmptyResults(symbol: "arrow.down.circle", title: L10n.text("No Downloaded Songs"), fills: true).screenBackdrop()
         }
     }
 

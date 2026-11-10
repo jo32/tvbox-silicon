@@ -1472,11 +1472,8 @@ struct DiagnosticsView: View {
                 }
                 .overlay {
                     if visible.isEmpty {
-                        ContentUnavailableView {
-                            Label(L10n.text("No Logs"), systemImage: "waveform.path")
-                        } description: {
-                            Text(L10n.text(search.isEmpty && level == "all" ? "Plugin activity will appear here." : "Try another level or search term."))
-                        }
+                        EmptyResults(symbol: "waveform.path", title: L10n.text("No Logs"),
+                                     message: L10n.text(search.isEmpty && level == "all" ? "Plugin activity will appear here." : "Try another level or search term."))
                     }
                 }
             }

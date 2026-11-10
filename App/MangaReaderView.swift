@@ -119,16 +119,10 @@ struct MangaReaderView: View {
             if !model.loaded.isEmpty {
                 pages
             } else if let failure = model.failure {
-                VStack(spacing: 16) {
-                    Image(systemName: "exclamationmark.triangle").font(.largeTitle)
-                    Text(failure).multilineTextAlignment(.center).frame(maxWidth: 520)
-                    HStack {
-                        Button(L10n.text("Try Again")) { Task { await model.open(model.position.chapter, page: model.position.page) } }
-                        Button(L10n.text("Close")) { close() }
-                    }
-                    .controlButton()
-                }
-                .foregroundStyle(.white).padding()
+                ErrorState(title: L10n.text("Unable to Load"), message: failure, details: "",
+                           retry: { Task { await model.open(model.position.chapter, page: model.position.page) } },
+                           goBack: { close() }, backTitle: L10n.text("Close"))
+                    .padding().environment(\.colorScheme, .dark)
             } else {
                 VStack(spacing: 16) {
                     ProgressView().tint(.white).appControlSize(.large)

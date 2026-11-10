@@ -385,7 +385,7 @@ struct DanmakuListView: View {
             .onScrollByHand { following = false }
             .overlay {
                 if items.isEmpty {
-                    ContentUnavailableView.search(text: query)
+                    EmptyResults.search(query)
                 }
             }
             .overlay(alignment: .bottom) {

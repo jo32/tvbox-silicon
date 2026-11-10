@@ -27,7 +27,19 @@ struct PlaybackHistoryView: View {
         .screenBackdrop()
         .historyDetailsDestination()
         .tabTitle(L10n.text("Playback History"))
+        #if !os(tvOS)
+        // The page's actions live in the bar and, while managing, on a floating bar: both are the system's Liquid Glass.
+        .toolbar { if !history.entries.isEmpty { barActions } }
+        .safeAreaInset(edge: .bottom, spacing: 0) { if managing { selectionBar.transition(.move(edge: .bottom).combined(with: .opacity)) } }
+        .animation(.smooth(duration: 0.25), value: managing)
+        #endif
         .onChange(of: history.entries.isEmpty) { _, empty in if empty { managing = false; selected.removeAll() } }
+        #if DEBUG
+        // `-qaManageHistory 1` opens the page already managing, with the first two titles selected.
+        .onAppear {
+            if UserDefaults.standard.bool(forKey: "qaManageHistory") { managing = true; selected = Set(entries.prefix(2).map(\.id)) }
+        }
+        #endif
         // Leaving the page gives up a title still being prepared.
         .onDisappear { if store.playing == nil { store.cancelResume() } }
         .confirmationDialog(L10n.text("Remove selected history and its cached content?"), isPresented: $confirmsDelete, titleVisibility: .visible) {
@@ -62,6 +74,7 @@ struct PlaybackHistoryView: View {
     /// Count and actions on one line, or actions under the count when a phone is too narrow;
     /// managing swaps them for selection actions.
     private var header: some View {
+        #if os(tvOS)
         let title = SectionHeader(title: L10n.text("%lld titles", entries.count))
         return ViewThatFits(in: .horizontal) {
             HStack(alignment: .center, spacing: 12) {
@@ -75,8 +88,53 @@ struct PlaybackHistoryView: View {
             }
         }
         .tvFocusSection()
+        #else
+        // A quiet count: the actions are in the bar.
+        Text(L10n.text("%lld titles", entries.count)).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+            .monospacedDigit().contentTransition(.numericText())
+        #endif
     }
 
+    #if !os(tvOS)
+    @ToolbarContentBuilder private var barActions: some ToolbarContent {
+        if managing {
+            ToolbarItem(placement: .confirmationAction) {
+                Button(L10n.text("Done")) { managing = false; selected.removeAll() }.accessibilityIdentifier("history.manage")
+            }
+        } else {
+            ToolbarItem(placement: .primaryAction) {
+                Button(L10n.text("Manage history"), systemImage: "checklist") { managing = true }.accessibilityIdentifier("history.manage")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button(L10n.text("Clear history"), systemImage: "trash", role: .destructive) {
+                        deletionIDs = Set(history.entries.map(\.id)); confirmsDelete = true
+                    }
+                } label: { Label(L10n.text("More"), systemImage: "ellipsis") }
+            }
+        }
+    }
+
+    /// Select all and delete, floating over the grid while managing.
+    private var selectionBar: some View {
+        let all = !entries.isEmpty && selected.isSuperset(of: entries.map(\.id))
+        return GlassGroup(spacing: 12) {
+            HStack(spacing: 12) {
+                Button(L10n.text(all ? "Deselect All" : "Select all")) { selected = all ? [] : Set(entries.map(\.id)) }
+                    .controlButton().accessibilityIdentifier("history.selectAll")
+                Button { deletionIDs = selected; confirmsDelete = true } label: {
+                    Label(L10n.text("Delete selected (%lld)", selected.count), systemImage: "trash").lineLimit(1).fixedSize()
+                }
+                .controlButton(prominent: true).disabled(selected.isEmpty).accessibilityIdentifier("history.deleteSelected")
+            }
+        }
+        .appControlSize(.large)
+        .padding(.horizontal, Layout.gutter).padding(.top, 10).padding(.bottom, 14)
+        .frame(maxWidth: .infinity)
+    }
+    #endif
+
+    #if os(tvOS)
     @ViewBuilder private var actions: some View {
             if managing {
                 Button(L10n.text("Select all")) { selected = Set(entries.map(\.id)) }
@@ -98,6 +156,7 @@ struct PlaybackHistoryView: View {
                 .controlButton()
             }
     }
+    #endif
 
     /// Selects or deselects while managing; otherwise the card resumes the title itself.
     private func tap(_ entry: PlaybackHistoryEntry) {

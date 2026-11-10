@@ -299,8 +299,7 @@ struct MusicLyricsView: View {
                 } else if music.lyricsLoading || music.busy {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    ContentUnavailableView(L10n.text("No Lyrics"), systemImage: "quote.bubble",
-                                           description: Text(L10n.text("Neither catalog has lyrics for this song.")))
+                    EmptyResults(symbol: "quote.bubble", title: L10n.text("No Lyrics"), message: L10n.text("Neither catalog has lyrics for this song."), fills: true)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

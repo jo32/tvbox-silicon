@@ -125,13 +125,15 @@ enum QALaunch {
         if QASweep.enabled, let config = store.subscription { Task.detached(priority: .utility) { await QASweep.run(config) } }
         // `-qaSeedHistory <source key>:<video id>` records that video's first episode as part watched, for Watch Now's
         // Up Next and Continue Watching.
-        if let seed = UserDefaults.standard.string(forKey: "qaSeedHistory"), let config = store.subscription {
-            let parts = seed.split(separator: ":", maxSplits: 1).map(String.init)
-            if parts.count == 2, let site = config.sites.first(where: { $0.key == parts[0] }) {
+        if let seeds = UserDefaults.standard.string(forKey: "qaSeedHistory"), let config = store.subscription {
+            // Several, separated by commas, fill the History page; each is a little further along than the last.
+            for (index, seed) in seeds.split(separator: ",").enumerated() {
+                let parts = seed.split(separator: ":", maxSplits: 1).map(String.init)
+                guard parts.count == 2, let site = config.sites.first(where: { $0.key == parts[0] }) else { continue }
                 let client = CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL).applying(config)
                 if let video = try? await client.detail(parts[1]), let episode = video.episodes.first {
                     store.playbackHistory.record(PlaybackHistoryContext(origin: config.origin, site: site, video: video, episode: episode),
-                                                 position: 30, duration: 120)
+                                                 position: 30 + Double(index * 11 % 80), duration: 120)
                 }
             }
         }
