@@ -17,6 +17,8 @@ public enum SubtitleArchive {
         public var total = 32 << 20
         /// Inflated bytes per compressed byte. Subtitles deflate 3 to 10 times; a bomb thousands of times.
         public var ratio = 100
+        /// Every file, not only subtitles (a live plugin's ZIP: scripts, manifest, icons).
+        public var anyFile = false
         public init() {}
     }
 
@@ -90,8 +92,8 @@ public enum SubtitleArchive {
             // macOS keeps resource forks beside each file in a __MACOSX folder, named ._file.srt.
             if path.hasPrefix("__MACOSX/") || name.hasPrefix("._") { continue }
             let ext = (name as NSString).pathExtension.lowercased()
-            if archiveExtensions.contains(ext) { nested = true; continue }
-            guard subtitleExtensions.contains(ext) else { continue }
+            if !limits.anyFile, archiveExtensions.contains(ext) { nested = true; continue }
+            guard limits.anyFile || subtitleExtensions.contains(ext) else { continue }
             if flags & 0x1 != 0 { encrypted = true; continue }
             guard method == 0 || method == 8 else { unsupported = true; continue }
             guard inflated <= limits.entry else { throw Failure.tooLarge }

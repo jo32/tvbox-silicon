@@ -54,6 +54,7 @@
 		26A1C218652FCEEE9FC60E0F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B442C75C212445F3786397ED /* SettingsView.swift */; };
 		2750CF15FA8542E4C8196B3B /* MusicMacPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73C9A2A4F2D8A180EBDF8C8E /* MusicMacPlayer.swift */; };
 		277D741E2A86C06612A8034A /* CloudQRLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E78573DE76BCF27CABBB20F3 /* CloudQRLoginView.swift */; };
+		2780772DC63EC57AB830CAD0 /* LivePluginSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79ABEF8CC3883B021CEF3CEE /* LivePluginSignIn.swift */; };
 		2813CE0358963C61D7865EF7 /* DiscoverSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76143E60685F2F76994F90D7 /* DiscoverSearchView.swift */; };
 		29CEEA35351802EDF4606161 /* PlaybackWaitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57642E0B8E9377FD57BC9D7F /* PlaybackWaitView.swift */; };
 		2A79FAEF85C485687C54E766 /* OpenJDK-assembly-exception.txt in Resources */ = {isa = PBXBuildFile; fileRef = 4EF42E1957EFE569C0D2CF7D /* OpenJDK-assembly-exception.txt */; };
@@ -101,6 +102,7 @@
 		46F7F61F8B890B4EABC32C70 /* MacUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ACBC18014BA7190EBA2EDD7 /* MacUpdater.swift */; };
 		4861B86C4B02394CE7FF3DC0 /* PythonHost in Resources */ = {isa = PBXBuildFile; fileRef = 0558AED26E6028C2881DD044 /* PythonHost */; };
 		49FAE12E9DA2ED063E9C4754 /* PlaybackHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 334B106CCFB47B5E27376A16 /* PlaybackHistoryView.swift */; };
+		4BAF0943739F85C530148F50 /* LivePluginSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79ABEF8CC3883B021CEF3CEE /* LivePluginSignIn.swift */; };
 		4C65106175D517040E98330B /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D1010816125FBC3792AF838 /* Store.swift */; };
 		4EAAD9E59129B744D0008135 /* ExternalSubtitles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75B036EC33AB3F0991E78CDD /* ExternalSubtitles.swift */; };
 		4ECE8586E27A017017F26EDC /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181C983C0018A97F2A086298 /* DiscoveryView.swift */; };
@@ -140,6 +142,7 @@
 		67E6A7CC3D496FB46C963AC7 /* FeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 559683A9A4BDFA11A4A9FE67 /* FeedbackView.swift */; };
 		68952BF47707079971D26F5A /* DiscoverDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28110209CF4DBB819A2F3C74 /* DiscoverDetailView.swift */; };
 		68DA47E6E8C42E446AC17E45 /* SubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1212366D71C455D6EAE5E4 /* SubtitleOverlay.swift */; };
+		696980CEC13F77DBF7E8B7E8 /* LivePluginSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79ABEF8CC3883B021CEF3CEE /* LivePluginSignIn.swift */; };
 		697B344C9CEF446CDD596DDB /* MusicPlaybackSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7F15799E2A2FB8B88DCF8E4 /* MusicPlaybackSession.swift */; };
 		6A12E8A471B33DA5B0089D5A /* BilibiliAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B684AAD2C1CD8AC3699FB446 /* BilibiliAccountView.swift */; };
 		6B01742A91D2CBC1E9895B76 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 335A7E05458DD9DA9AA04125 /* InfoPlist.strings */; };
@@ -226,9 +229,11 @@
 		A6A01A74BB02107B9B37DF21 /* MangaQA.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0894F8B5758D4C02A76BCD8E /* MangaQA.swift */; };
 		A6CF37D3E8E26FD498A15CD1 /* JavaHost in Resources */ = {isa = PBXBuildFile; fileRef = F1B927CC6ECB2F8BDFB22287 /* JavaHost */; };
 		A75BCD1DBB7A45ED27CEBA63 /* DiscoverBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */; };
+		A9198AFD0F283D907F485E7F /* LivePluginsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 901EDEF85B9BA1B92932FEC1 /* LivePluginsView.swift */; };
 		AA2B9DEAC822A56D57A10055 /* DiscoverPersonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */; };
 		AC043E4B83A36550FA487318 /* MacUpdater.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ACBC18014BA7190EBA2EDD7 /* MacUpdater.swift */; };
 		ACA5E3296CAC1496D0C5606B /* PlayerEpisodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6411E1972F52DCE8C5E117F7 /* PlayerEpisodes.swift */; };
+		ADC01607279358ADDDA89A78 /* LivePluginsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 901EDEF85B9BA1B92932FEC1 /* LivePluginsView.swift */; };
 		B016FE71931AD22C08C3CB2C /* StyledSubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61C44303B4662294C11176AB /* StyledSubtitleOverlay.swift */; };
 		B02B784DE4DDF64B05C8FA0F /* MusicRemoteControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E59EDBC7BE62078557E781 /* MusicRemoteControl.swift */; };
 		B03711CE7478DB53B6591F83 /* DiscoverTrailer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74376E0596FEAF3CE3FBE7C8 /* DiscoverTrailer.swift */; };
@@ -309,6 +314,7 @@
 		E8E7D31FA6802352FA66EB56 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 335A7E05458DD9DA9AA04125 /* InfoPlist.strings */; };
 		EA59E4954399A7E5BC6C2348 /* unidbg.txt in Resources */ = {isa = PBXBuildFile; fileRef = 995F5F0DB35FE66B4F90B4FF /* unidbg.txt */; };
 		EBDFAB717675C3CBCA05B75F /* DetailAurora.swift in Sources */ = {isa = PBXBuildFile; fileRef = A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */; };
+		EC7C67386A7AD9F977E42224 /* LivePluginsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 901EDEF85B9BA1B92932FEC1 /* LivePluginsView.swift */; };
 		ED3A1F1DAE4D25F3AA743AC7 /* WebSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367AD12D73554C3C3667315D /* WebSignInView.swift */; };
 		ED3BFF07859A99C455624644 /* DanmakuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A5737402EC96F0FBF79243E /* DanmakuView.swift */; };
 		EE40CAB25587252D370219D3 /* PlaybackHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 334B106CCFB47B5E27376A16 /* PlaybackHistoryView.swift */; };
@@ -399,6 +405,7 @@
 		76143E60685F2F76994F90D7 /* DiscoverSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverSearchView.swift; sourceTree = "<group>"; };
 		77D75493765469B6134467AE /* Unicorn-LGPL2.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Unicorn-LGPL2.txt"; sourceTree = "<group>"; };
 		781912838F2DF6F1DD3963CF /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		79ABEF8CC3883B021CEF3CEE /* LivePluginSignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePluginSignIn.swift; sourceTree = "<group>"; };
 		7A5737402EC96F0FBF79243E /* DanmakuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DanmakuView.swift; sourceTree = "<group>"; };
 		8320284C7FB9590C44BA7102 /* JNA-Apache2.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "JNA-Apache2.txt"; sourceTree = "<group>"; };
 		846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverBrowseView.swift; sourceTree = "<group>"; };
@@ -407,6 +414,7 @@
 		8C41063DF832120F89C7509A /* MangaReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaReaderView.swift; sourceTree = "<group>"; };
 		8C5AB58ECA34E84E70A20906 /* PluginSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginSignInView.swift; sourceTree = "<group>"; };
 		8CB1FA4BB4990588B428781E /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
+		901EDEF85B9BA1B92932FEC1 /* LivePluginsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePluginsView.swift; sourceTree = "<group>"; };
 		90D706229ED242AE96AE52F8 /* Updates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Updates.swift; sourceTree = "<group>"; };
 		9644627CBD3EF1CE6A06E228 /* DateComparison.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateComparison.swift; sourceTree = "<group>"; };
 		995F5F0DB35FE66B4F90B4FF /* unidbg.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = unidbg.txt; sourceTree = "<group>"; };
@@ -576,6 +584,8 @@
 				739A64FB51780D4314D2DDF8 /* GlassKit.swift */,
 				B44CBA0E5BBD1D129D5D64E3 /* HLSProxy.swift */,
 				9B7E929CDDC1F085C6B55693 /* HomeView.swift */,
+				79ABEF8CC3883B021CEF3CEE /* LivePluginSignIn.swift */,
+				901EDEF85B9BA1B92932FEC1 /* LivePluginsView.swift */,
 				675EA4CF000337C94DF5B1D3 /* LiveRoomsView.swift */,
 				7459A3EBEF2E7C346B508738 /* LiveView.swift */,
 				2ACBC18014BA7190EBA2EDD7 /* MacUpdater.swift */,
@@ -1155,6 +1165,8 @@
 				1050D617A22F09CD0A01DE66 /* GlassKit.swift in Sources */,
 				34349D95E4EC0176C10862E2 /* HLSProxy.swift in Sources */,
 				1B6DFFAF679C5BAD70F09875 /* HomeView.swift in Sources */,
+				2780772DC63EC57AB830CAD0 /* LivePluginSignIn.swift in Sources */,
+				A9198AFD0F283D907F485E7F /* LivePluginsView.swift in Sources */,
 				300BD932FDBD4DD407F37374 /* LiveRoomsView.swift in Sources */,
 				7FB9AB1705559DD6C22EEFAE /* LiveView.swift in Sources */,
 				CDC78CAFF04C2753B881F19A /* MacUpdater.swift in Sources */,
@@ -1250,6 +1262,8 @@
 				F3B63B43988E72A87677A7AC /* GlassKit.swift in Sources */,
 				13AB1C878E7990BF8FB16849 /* HLSProxy.swift in Sources */,
 				14E05DC952FB2705E645EAE6 /* HomeView.swift in Sources */,
+				696980CEC13F77DBF7E8B7E8 /* LivePluginSignIn.swift in Sources */,
+				EC7C67386A7AD9F977E42224 /* LivePluginsView.swift in Sources */,
 				7283989DBA1B1F0E96A2C383 /* LiveRoomsView.swift in Sources */,
 				E64F015590BDBE0DFC8A216E /* LiveView.swift in Sources */,
 				AC043E4B83A36550FA487318 /* MacUpdater.swift in Sources */,
@@ -1347,6 +1361,8 @@
 				338825790412D642115F2BD3 /* GlassKit.swift in Sources */,
 				D1BC31CCC2FCC4A6AB834BD5 /* HLSProxy.swift in Sources */,
 				6012B7CF185E20A26CC68CD0 /* HomeView.swift in Sources */,
+				4BAF0943739F85C530148F50 /* LivePluginSignIn.swift in Sources */,
+				ADC01607279358ADDDA89A78 /* LivePluginsView.swift in Sources */,
 				03EDA66F1A059D8515CE0C80 /* LiveRoomsView.swift in Sources */,
 				F90D633F45956BEB583BB3C8 /* LiveView.swift in Sources */,
 				46F7F61F8B890B4EABC32C70 /* MacUpdater.swift in Sources */,

@@ -514,6 +514,17 @@ struct FormSettingsView: View {
                 }
             }
 
+            // Hidden with the other extras in App Store builds until a subscription is added.
+            if store.extrasUnlocked {
+                Section {
+                    let count = store.livePluginPlatforms.count
+                    FormLink(symbol: "dot.radiowaves.left.and.right", tint: .red, title: L10n.text("Live Plugins"),
+                             value: count == 0 ? nil : String(count)) { LivePluginsView() }
+                } footer: {
+                    Text(L10n.text("Live platforms added as AngelLive plugins show in Live TV."))
+                }
+            }
+
             Section(L10n.text("Accounts")) {
                 if store.extrasUnlocked {
                     FormLink(symbol: "play.tv.fill", tint: .pink, title: L10n.text("Bilibili"), value: bilibiliSummary) { BilibiliAccountView() }
@@ -1654,6 +1665,12 @@ struct TVSettingsView: View {
             }
             subscriptionSection
             if !MangaStore.shared.repositories.isEmpty { comicSection }
+            if store.extrasUnlocked {
+                TVSettingsSection(footer: L10n.text("Live platforms added as AngelLive plugins show in Live TV.")) {
+                    let count = store.livePluginPlatforms.count
+                    TVSettingsLink(title: L10n.text("Live Plugins"), value: count == 0 ? nil : String(count)) { LivePluginsView() }
+                }
+            }
             TVSettingsSection(title: L10n.text("Accounts")) {
                 if store.extrasUnlocked {
                     TVSettingsLink(title: L10n.text("Bilibili"), value: bilibiliSummary) { BilibiliAccountView() }

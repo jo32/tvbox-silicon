@@ -210,7 +210,7 @@ public enum HLSRemux {
 /// One HLS stream played through `HLSRemux`. Segments are made as AVPlayer asks for them, the next one ahead, and
 /// the last few are kept for both tracks' requests. A segment is named by its position: its place in a VOD
 /// playlist, or in the order a live one listed it, so a live stream's names stay put as its playlist moves on.
-final class HLSRemuxSession: RemuxStored, @unchecked Sendable {
+final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
     static let network: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 30

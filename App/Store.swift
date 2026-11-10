@@ -97,6 +97,11 @@ import TVCore
     /// Not observed: views fill these while drawing, and a write would draw every reader again.
     @ObservationIgnored private var siteListStamp = ""
     @ObservationIgnored private var cloudDrivesObserver: NSObjectProtocol?
+    @ObservationIgnored private var livePluginsObserver: NSObjectProtocol?
+    /// The installed live plugins' platforms, shown in Live TV even without a subscription.
+    private(set) var livePluginPlatforms = LivePlugins.shared.platforms
+    /// Live TV's sources: the subscription's (with the plugins' platforms), or the plugins' alone.
+    var liveSources: [LiveSource] { subscription?.lives ?? livePluginPlatforms.map(\.source) }
     @ObservationIgnored private var automaticCache: [Site]?
     @ObservationIgnored private var orderedCache: [Site]?
     @ObservationIgnored private var recommendationCache: [Site]?
@@ -166,6 +171,14 @@ import TVCore
         // Signing in to a drive or adding a server adds its source; signing out or removing one takes it away.
         cloudDrivesObserver = NotificationCenter.default.addObserver(forName: CloudFiles.drivesChanged, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshCloudFilesSources() }
+        }
+        // Installing or removing a live plugin adds or takes away its platform.
+        livePluginsObserver = NotificationCenter.default.addObserver(forName: LivePlugins.changed, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.livePluginPlatforms = LivePlugins.shared.platforms
+                self.rebuildSubscription(resetting: false)
+            }
         }
         searchModel.order = sourceOrder
         DownloadLibrary.shared.resolver = { [weak self] item in
@@ -507,7 +520,7 @@ import TVCore
     /// Shows every enabled subscription that has a copy, merged in list order.
     private func rebuildSubscription(resetting: Bool = true) {
         if resetting { searchModel.reset(); recommendationModel.reset() }
-        subscription = Subscription.merge(subscriptions.filter(\.enabled).compactMap { documents[$0.address] })?.withCloudSources(extrasUnlocked ? cloudDocument : nil)
+        subscription = Subscription.merge(subscriptions.filter(\.enabled).compactMap { documents[$0.address] })?.withCloudSources(extrasUnlocked ? cloudDocument : nil).withLivePlugins()
         refreshCloudSources()
         if let subscription {
             Self.registerPlugins(subscription)
