@@ -148,6 +148,14 @@ public enum LiveCatalog {
         }
     }
 
+    /// Whether `area` is a plugin platform's home page ("Recommended"), which `homeFeed` lays out.
+    public static func isHome(_ area: LiveArea) -> Bool { area.id == LivePluginCatalog.homeArea }
+
+    /// A plugin platform's home page: banners and titled sections of rooms.
+    public static func homeFeed(_ platform: LivePlatform) async throws -> LivePluginCatalog.HomeFeed {
+        try await LivePluginCatalog.homeFeed(platform)
+    }
+
     /// One page (from 1) of an area's rooms, busiest first; empty past the last page.
     public static func rooms(_ platform: LivePlatform, area: LiveArea, page: Int) async throws -> [LiveRoom] {
         if platform.plugin != nil { return try await LivePluginCatalog.rooms(platform, area: area, page: page) }
@@ -304,7 +312,7 @@ enum LiveText {
         text.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
             .replacingOccurrences(of: "&amp;", with: "&").replacingOccurrences(of: "&lt;", with: "<")
             .replacingOccurrences(of: "&gt;", with: ">").replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&#39;", with: "'").replacingOccurrences(of: "&nbsp;", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
     static func imageURL(_ text: String) -> URL? {
