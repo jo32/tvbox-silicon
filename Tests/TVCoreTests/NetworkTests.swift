@@ -300,6 +300,32 @@ private actor SearchCollector {
     #expect(model.items.isEmpty)
 }
 
+/// #810: the store rebuilds the subscription (and resets this model) when the built-in sources arrive after launch. The
+/// load in flight is dropped, so the count the view keys its load on must move, or Watch Now stays blank.
+@Test @MainActor func recommendationResetDroppingALoadAsksForAnotherLoad() async throws {
+    let base = URL(string: "https://example.com/config")!
+    let sub = try Subscription.parse(Data(#"{"sites":[{"key":"a","type":4,"api":"/api","indexs":1}]}"#.utf8), origin: base)
+    let api = CatalogClient(site: sub.sites[0], origin: base, http: client())
+    let model = RecommendationModel()
+    // Nothing to drop: a view that resets an empty model for want of a source doesn't load again.
+    model.reset()
+    #expect(model.resets == 0)
+    let load = Task { await model.load(client: api, subscriptionDate: sub.importedAt) }
+    for _ in 0..<100 where !model.busy { await Task.yield() }
+    #expect(model.busy)
+    model.reset()
+    await load.value
+    #expect(model.resets == 1)
+    #expect(model.items.isEmpty && model.site == nil && !model.busy)
+    // A shown home dropped by a reset counts too.
+    await model.load(client: api, subscriptionDate: sub.importedAt)
+    #expect(model.items.count == 1)
+    model.reset()
+    #expect(model.resets == 2)
+    model.reset()
+    #expect(model.resets == 2)
+}
+
 private final class OfflineProtocol: URLProtocol, @unchecked Sendable {
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }

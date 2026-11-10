@@ -76,6 +76,9 @@ public struct Recommendation: Identifiable, Hashable, Sendable {
     public private(set) var site: Site?
     public private(set) var busy = false
     public private(set) var error: String?
+    /// Counts resets that dropped a load or what it showed. A view keys its load on it, so a subscription rebuilt
+    /// while the home was loading (built-in sources fetched at launch) loads it again rather than staying blank (#810).
+    public private(set) var resets = 0
     private struct Cached {
         let items: [Recommendation]
         let categories: [Category]
@@ -87,6 +90,8 @@ public struct Recommendation: Identifiable, Hashable, Sendable {
     public init() {}
 
     public func reset() {
+        // An empty model counts no reset, so a view that resets it for want of a source doesn't load again and again.
+        if identity != nil || busy { resets += 1 }
         generation = UUID(); identity = nil; cache = [:]
         items = []; categories = []; site = nil; busy = false; error = nil
     }

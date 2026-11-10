@@ -813,7 +813,8 @@ struct RecommendationsView: View {
         sites.first(where: { $0.key == sourceKey })
             ?? sites.first(where: { !SourceHealth.shared.paused($0, origin: config.origin) }) ?? sites.first
     }
-    private var requestID: String { "\(config.origin)|\(config.importedAt)|\(site?.key ?? "")|\(revision)" }
+    /// `model.resets`: the store resets the model when it rebuilds the subscription, which drops a load in flight.
+    private var requestID: String { "\(config.origin)|\(config.importedAt)|\(site?.key ?? "")|\(revision)|\(model.resets)" }
 
     private var recommendationControls: some View {
         HStack(spacing: 12) {
