@@ -113,6 +113,8 @@ final class LoadedLivePlugin: @unchecked Sendable {
     private let cookieDomains: [String]
     /// A cookie sent even when signed out (`sessionMigration.defaultCookie`, SOOP's `AbroadChk=OK`).
     private let defaultCookie: String
+    /// `Host.ws` sockets the plugin has open, by session ID. Touched on `queue`.
+    private var sockets: [String: URLSessionWebSocketTask] = [:]
 
     init(id: String, folder: URL) throws {
         self.id = id
@@ -165,6 +167,8 @@ final class LoadedLivePlugin: @unchecked Sendable {
             closed = true
             let pending = calls; calls = [:]
             pending.values.forEach { $0.resume(throwing: CancellationError()) }
+            sockets.values.forEach { $0.cancel(with: .goingAway, reason: nil) }
+            sockets = [:]
         }
         network.invalidateAndCancel()
     }
@@ -300,8 +304,93 @@ final class LoadedLivePlugin: @unchecked Sendable {
         case "http":
             guard let options = args.first?.object else { throw LivePluginError(code: "INVALID_ARGS", message: "request options") }
             return try await http(options)
+        case "wsOpen":
+            guard let options = args.first?.object else { throw LivePluginError(code: "INVALID_ARGS", message: "socket options") }
+            return try await openSocket(options)
+        case "wsSend":
+            guard args.count > 1, let name = args[0].string, let frame = args[1].object,
+                  let socket = queue.sync(execute: { sockets[name] }) else { throw LivePluginError(code: "INVALID_ARGS", message: "socket") }
+            do {
+                if let base64 = frame["bytesBase64"]?.string, let data = Data(base64Encoded: Self.padded(base64)) { try await socket.send(.data(data)) }
+                else { try await socket.send(.string(frame["text"]?.string ?? "")) }
+            } catch { throw LivePluginError(code: "NETWORK", message: error.localizedDescription) }
+            return "{\"ok\":true}"
+        case "wsClose":
+            if let name = args.first?.string, let socket = queue.sync(execute: { sockets.removeValue(forKey: name) }) {
+                let code = args.count > 1 ? args[1].object?["code"]?.double.flatMap { URLSessionWebSocketTask.CloseCode(rawValue: Int($0)) } : nil
+                socket.cancel(with: code ?? .normalClosure, reason: (args.count > 1 ? args[1].object?["reason"]?.string : nil).map { Data($0.utf8) })
+            }
+            return "{\"ok\":true}"
         default:
             throw LivePluginError(code: "UNSUPPORTED", message: "host \(name)")
+        }
+    }
+
+    /// `Host.ws.open({url, headers, protocols, timeoutMs})`: answers `{sessionId}` once the handshake is done.
+    /// What arrives then goes to the script's `__yxSocket(sessionId, event)`. At most four at a time.
+    private func openSocket(_ options: [String: JSONValue]) async throws -> String {
+        guard let url = options["url"]?.string.flatMap(URL.init(string:)), url.scheme?.lowercased() == "wss" else {
+            throw LivePluginError(code: "INVALID_ARGS", message: "socket url")
+        }
+        guard queue.sync(execute: { sockets.count }) < 4 else { throw LivePluginError(code: "UNSUPPORTED", message: "too many sockets") }
+        var request = URLRequest(url: url)
+        for (key, value) in options["headers"]?.object ?? [:] where key.lowercased() != "cookie" {
+            if let text = value.string { request.setValue(text, forHTTPHeaderField: key) }
+        }
+        if request.value(forHTTPHeaderField: "User-Agent") == nil { request.setValue(Self.browserAgent, forHTTPHeaderField: "User-Agent") }
+        let protocols = (options["protocols"]?.array ?? []).compactMap(\.string)
+        let socket = protocols.isEmpty ? network.webSocketTask(with: request) : {
+            request.setValue(protocols.joined(separator: ", "), forHTTPHeaderField: "Sec-WebSocket-Protocol")
+            return network.webSocketTask(with: request)
+        }()
+        let opening = SocketOpening()
+        socket.delegate = opening
+        socket.resume()
+        do { try await opening.wait(seconds: min(60, max(1, (options["timeoutMs"]?.double ?? 30000) / 1000))) }
+        catch {
+            socket.cancel(with: .goingAway, reason: nil)
+            throw LivePluginError(code: (error as? URLError)?.code == .timedOut ? "TIMEOUT" : "NETWORK", message: error.localizedDescription)
+        }
+        let name = UUID().uuidString.lowercased()
+        guard queue.sync(execute: { () -> Bool in if closed { return false }; sockets[name] = socket; return true }) else {
+            socket.cancel(with: .goingAway, reason: nil)
+            throw CancellationError()
+        }
+        // Reading starts once the script has its session: the settle below runs first on `queue`.
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(50))
+            var last: [String: JSONValue] = ["type": .string("closed"), "code": .number(1000), "reason": .string("")]
+            while true {
+                var event: [String: JSONValue]
+                do {
+                    switch try await socket.receive() {
+                    case .string(let text): event = ["type": .string("text"), "text": .string(text)]
+                    case .data(let data): event = ["type": .string("binary"), "bytesBase64": .string(data.base64EncodedString())]
+                    @unknown default: continue
+                    }
+                } catch {
+                    if socket.closeCode != .invalid {
+                        last["code"] = .number(Double(socket.closeCode.rawValue))
+                        last["reason"] = .string(socket.closeReason.map { String(decoding: $0, as: UTF8.self) } ?? "")
+                    } else { last["reason"] = .string(error.localizedDescription) }
+                    break
+                }
+                guard let self, self.deliver(name, event) else { return }
+            }
+            guard let self else { return }
+            _ = self.deliver(name, last)
+            self.queue.async { self.sockets[name] = nil }
+        }
+        return "{\"sessionId\":\(Self.literal(name))}"
+    }
+
+    /// Hands a socket event to the script; false once the socket is gone.
+    private func deliver(_ name: String, _ event: [String: JSONValue]) -> Bool {
+        let json = String(decoding: (try? JSONEncoder().encode(JSONValue.object(event))) ?? Data("{}".utf8), as: UTF8.self)
+        return queue.sync {
+            guard !closed, sockets[name] != nil else { return false }
+            context.objectForKeyedSubscript("__yxSocket")?.call(withArguments: [name, json])
+            return true
         }
     }
 
@@ -490,6 +579,14 @@ final class LoadedLivePlugin: @unchecked Sendable {
       g.btoa = function (s) { s = String(s); let out = ''; for (let i = 0; i < s.length; i += 3) { const a = s.charCodeAt(i), b = s.charCodeAt(i + 1), c = s.charCodeAt(i + 2); if (a > 255 || b > 255 || c > 255) throw new Error('InvalidCharacterError'); const n = (a << 16) | ((b || 0) << 8) | (c || 0); out += B64[(n >> 18) & 63] + B64[(n >> 12) & 63] + (i + 1 < s.length ? B64[(n >> 6) & 63] : '=') + (i + 2 < s.length ? B64[n & 63] : '='); } return out; };
       g.atob = function (s) { s = String(s).replace(/[\s=]/g, '').replace(/-/g, '+').replace(/_/g, '/'); let out = '', bits = 0, value = 0; for (let i = 0; i < s.length; i++) { const v = B64.indexOf(s[i]); if (v < 0) continue; value = (value << 6) | v; bits += 6; if (bits >= 8) { bits -= 8; out += String.fromCharCode((value >> bits) & 255); } } return out; };
 
+      const sockets = new Map();
+      g.__yxSocket = function (id, json) {
+        const entry = sockets.get(id); if (!entry) return;
+        const event = JSON.parse(json);
+        if (event.type === 'closed') sockets.delete(id);
+        if (entry.cb) { try { entry.cb(event); } catch (e) { __yxLog('warn', 'socket handler: ' + e); } } else entry.queue.push(event);
+      };
+
       function makeError(code, message, context) {
         const error = new Error('LP_PLUGIN_ERROR:' + JSON.stringify({ code: String(code || 'UNKNOWN'), message: String(message || ''), context: context || {} }));
         error.code = String(code || 'UNKNOWN'); error.context = context || {};
@@ -517,6 +614,18 @@ final class LoadedLivePlugin: @unchecked Sendable {
           getCookieHeader: (id) => sync('cookieHeader', id === undefined || id === null ? '' : String(id)),
           getTransactionCookieHeader: (tx, scope) => Promise.resolve(sync('transactionCookies', String(tx || ''), scope == null ? '' : typeof scope === 'string' ? scope : String(scope.url || scope.domain || scope.host || ''))),
           seedTransactionCookies: (tx, cookies, options) => Promise.resolve(sync('seedCookies', String(tx || ''), cookies || {}, options || {})),
+        },
+        ws: {
+          open: (options) => later('wsOpen', options || {}).then((made) => {
+            const id = made.sessionId, entry = { cb: null, queue: [{ type: 'open' }] };
+            sockets.set(id, entry);
+            return {
+              sessionId: id,
+              onMessage(cb) { entry.cb = cb; const waiting = entry.queue; entry.queue = []; waiting.forEach((e) => { try { cb(e); } catch (_) {} }); },
+              send: (frame) => later('wsSend', id, frame || {}),
+              close: (how) => { sockets.delete(id); return later('wsClose', id, how || {}); },
+            };
+          }),
         },
         runtime: {
           inflateZlib: (b64) => sync('inflate', String(b64), 'zlib'),

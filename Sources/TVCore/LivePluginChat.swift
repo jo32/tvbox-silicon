@@ -339,7 +339,7 @@ actor PluginChatConnection {
 }
 
 /// Waits for a WebSocket's handshake to finish (or fail).
-private final class SocketOpening: NSObject, URLSessionWebSocketDelegate, @unchecked Sendable {
+final class SocketOpening: NSObject, URLSessionWebSocketDelegate, @unchecked Sendable {
     private let lock = NSLock()
     private var result: Result<Void, Error>?
     private var waiter: CheckedContinuation<Void, Error>?
