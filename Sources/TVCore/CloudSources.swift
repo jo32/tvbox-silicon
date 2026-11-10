@@ -60,6 +60,7 @@ public enum SourceAccounts {
         switch account {
         case "bilibili": BilibiliAccount.load().cookie
         case "douyin": DouyinAccount.load().cookie
+        case "hongguo": HongguoAccount.load().cookie
         default: ""
         }
     }
@@ -67,6 +68,7 @@ public enum SourceAccounts {
         switch account {
         case "bilibili": BilibiliAccount.load().signedIn
         case "douyin": DouyinAccount.load().signedIn
+        case "hongguo": HongguoAccount.load().signedIn
         default: false
         }
     }
