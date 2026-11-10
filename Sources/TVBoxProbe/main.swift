@@ -278,6 +278,8 @@ import TVCore
             }
             // Recoverable problems too, such as a playlist contradicting an earlier reload (-12312).
             for event in item.errorLog()?.events ?? [] { print("errorlog \(event.errorStatusCode) \(event.errorComment ?? "-")") }
+            // As the player does before it opens the room again: the next run reads this server through the loader.
+            if (item.error as NSError?)?.code == -12312 { LiveRepair.noteContradiction(live.channel.url); print("noted contradiction") }
             return
         }
         if args[1] == "--plugin-call", args.count > 3 {
