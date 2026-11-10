@@ -17,11 +17,14 @@ struct LivePluginAccountSection: View {
     @State private var webSignIn = false
     @State private var qr: LivePluginQRPlan?
     @State private var qrSignIn = false
+    /// The plugin signs in with a code entered on the platform's page (Twitch).
+    @State private var device = false
+    @State private var deviceSignIn = false
 
     var body: some View {
         Group {
             // Platforms that use no account (Huya, YouTube) show none.
-            if flow != nil || qr != nil || plugin.requiresLogin || signedIn { content }
+            if flow != nil || qr != nil || device || plugin.requiresLogin || signedIn { content }
         }
             .task { await refresh(check: true) }
             .onReceive(NotificationCenter.default.publisher(for: LivePluginAccounts.changed).receive(on: RunLoop.main)) { note in
@@ -34,6 +37,7 @@ struct LivePluginAccountSection: View {
             .sheet(isPresented: $qrSignIn) {
                 if let qr { LivePluginQRPage(plugin: plugin, plan: qr) }
             }
+            .sheet(isPresented: $deviceSignIn) { LivePluginDevicePage(plugin: plugin) }
             #endif
     }
 
@@ -53,8 +57,10 @@ struct LivePluginAccountSection: View {
         TVSettingsSection(title: L10n.text("Account"), footer: footer) {
             TVSettingsRowLabel(title: L10n.text("Status"), value: status, warning: valid == false) { EmptyView() }
             if let qr { TVSettingsLink(title: L10n.text("Sign In by QR Code")) { LivePluginQRPage(plugin: plugin, plan: qr) } }
-            TVSettingsLink(title: L10n.text("Paste a Cookie")) { LivePluginCookiePage(plugin: plugin) }
-            if signedIn { TVSettingsAction(title: L10n.text("Sign Out"), destructive: true) { LivePluginAccounts.setCookie(plugin.pluginId, nil) } }
+            if device { TVSettingsLink(title: signedIn ? L10n.text("Sign In Again") : L10n.text("Sign In")) { LivePluginDevicePage(plugin: plugin) } }
+            // A device-code platform has no cookie to paste.
+            if !device { TVSettingsLink(title: L10n.text("Paste a Cookie")) { LivePluginCookiePage(plugin: plugin) } }
+            if signedIn { TVSettingsAction(title: L10n.text("Sign Out"), destructive: true) { LivePluginAccounts.signOut(plugin.pluginId) } }
         }
         #else
         Section {
@@ -67,9 +73,13 @@ struct LivePluginAccountSection: View {
             if qr != nil {
                 Button(L10n.text("Sign In by QR Code")) { qrSignIn = true }
             }
-            RouteLink { LivePluginCookiePage(plugin: plugin) } label: { Text(L10n.text("Paste a Cookie")) }
+            if device {
+                Button(signedIn ? L10n.text("Sign In Again") : L10n.text("Sign In")) { deviceSignIn = true }
+            } else {
+                RouteLink { LivePluginCookiePage(plugin: plugin) } label: { Text(L10n.text("Paste a Cookie")) }
+            }
             if signedIn {
-                Button(L10n.text("Sign Out"), role: .destructive) { LivePluginAccounts.setCookie(plugin.pluginId, nil) }
+                Button(L10n.text("Sign Out"), role: .destructive) { LivePluginAccounts.signOut(plugin.pluginId) }
             }
         } header: {
             Text(L10n.text("Account"))
@@ -83,6 +93,7 @@ struct LivePluginAccountSection: View {
         signedIn = LivePluginAccounts.isSignedIn(plugin.pluginId)
         if flow == nil { flow = await LivePlugins.shared.loginFlow(plugin.pluginId) }
         if qr == nil { qr = await LivePlugins.shared.qrLogin(plugin.pluginId) }
+        if !device { device = await LivePlugins.shared.signsInByDeviceCode(plugin.pluginId) }
         guard check, signedIn else { valid = nil; return }
         checking = true
         valid = await LivePlugins.shared.checkSignIn(plugin.pluginId)

@@ -25,6 +25,8 @@ struct LivePlatformView: View {
     #endif
     @State private var qrPlan: LivePluginQRPlan?
     @State private var qrSignIn = false
+    @State private var deviceCode = false
+    @State private var deviceSignIn = false
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     var body: some View {
@@ -54,7 +56,13 @@ struct LivePlatformView: View {
                 LivePluginQRPage(plugin: plugin, plan: qrPlan, useWebPage: signInFlow == nil ? nil : { signingIn = true })
             }
         }
+        .sheet(isPresented: $deviceSignIn) {
+            if let plugin = platform.plugin.flatMap(LivePlugins.shared.installed) { LivePluginDevicePage(plugin: plugin) }
+        }
         #else
+        .navigationDestination(isPresented: $deviceSignIn) {
+            if let plugin = platform.plugin.flatMap(LivePlugins.shared.installed) { LivePluginDevicePage(plugin: plugin) }
+        }
         // A page, not a sheet: sheets over a pushed page hang on tvOS 27.
         .navigationDestination(isPresented: $qrSignIn) {
             if let plugin = platform.plugin.flatMap(LivePlugins.shared.installed), let qrPlan { LivePluginQRPage(plugin: plugin, plan: qrPlan) }
@@ -81,11 +89,12 @@ struct LivePlatformView: View {
         } else if areas.isEmpty && loader != nil { ChipSkeletonRow() }
         if let error {
             #if !os(tvOS)
-            if needsSignIn, signInFlow != nil || qrPlan != nil {
+            if needsSignIn, signInFlow != nil || qrPlan != nil || deviceCode {
                 // The Mac has no camera app to hand: the code first. A phone can't scan its own screen: the page first.
                 EmptyPage(symbol: "person.crop.circle.badge.exclamationmark", title: L10n.text("Sign In to %@", platform.name),
                           message: L10n.text("%@ shows its live rooms once you sign in. The sign-in stays on this device.", platform.name),
                           action: L10n.text("Sign In"), actionSymbol: "person.crop.circle", perform: {
+                              if deviceCode { deviceSignIn = true; return }
                               #if os(macOS)
                               if qrPlan != nil { qrSignIn = true } else { signingIn = true }
                               #else
@@ -97,10 +106,11 @@ struct LivePlatformView: View {
                 failure(error)
             }
             #else
-            if needsSignIn, qrPlan != nil {
+            if needsSignIn, qrPlan != nil || deviceCode {
                 EmptyPage(symbol: "person.crop.circle.badge.exclamationmark", title: L10n.text("Sign In to %@", platform.name),
                           message: L10n.text("%@ shows its live rooms once you sign in. The sign-in stays on this device.", platform.name),
-                          action: L10n.text("Sign In by QR Code"), actionSymbol: "qrcode", perform: { qrSignIn = true }) { EmptyView() }
+                          action: deviceCode ? L10n.text("Sign In") : L10n.text("Sign In by QR Code"), actionSymbol: "qrcode",
+                          perform: { if deviceCode { deviceSignIn = true } else { qrSignIn = true } }) { EmptyView() }
                     .padding(.vertical, 24).tvFocusSection()
             } else {
                 failure(error)
@@ -128,6 +138,7 @@ struct LivePlatformView: View {
         if needsSignIn, signInFlow == nil, let id = platform.plugin { signInFlow = await LivePlugins.shared.loginFlow(id) }
         #endif
         if needsSignIn, qrPlan == nil, let id = platform.plugin { qrPlan = await LivePlugins.shared.qrLogin(id) }
+        if needsSignIn, !deviceCode, let id = platform.plugin { deviceCode = await LivePlugins.shared.signsInByDeviceCode(id) }
         self.error = error.localizedDescription
     }
 

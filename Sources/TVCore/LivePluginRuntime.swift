@@ -69,7 +69,41 @@ public actor LivePluginRuntime {
         default: break
         }
         let plugin = try await plugin(id)
+        var payload = payload
+        // A device-code sign-in (Twitch): the plugin takes its token with each call, not from a cookie.
+        if !method.contains("Device"), !method.contains("Danmaku"), let credential = try await deviceCredential(id, plugin: plugin) {
+            payload["apiToken"] = credential["accessToken"]
+            payload["clientId"] = credential["clientId"]
+            payload["credentialKind"] = .string("oauth_device_code")
+        }
         return try await plugin.call(method, payload: .object(payload), timeout: timeout)
+    }
+
+    private var refreshes: [String: Task<[String: JSONValue]?, Error>] = [:]
+
+    /// The saved device-code credential, renewed first when it is about to run out. A renewal the platform
+    /// refuses signs the plugin out.
+    private func deviceCredential(_ id: String, plugin: LoadedLivePlugin) async throws -> [String: JSONValue]? {
+        guard let credential = LivePluginTokens.credential(id) else { return nil }
+        guard (credential["expireAt"]?.double ?? 0) - Date().timeIntervalSince1970 < 300 else { return credential }
+        if let task = refreshes[id] { return try await task.value }
+        let task = Task { () throws -> [String: JSONValue]? in
+            do {
+                let reply = try await plugin.call("refreshDeviceCredential", payload: .object(["credential": .object(credential)]), timeout: 30)
+                guard let fresh = reply.object?["credential"]?.object, fresh["accessToken"]?.string?.isEmpty == false else { return credential }
+                LivePluginTokens.set(id, fresh)
+                Diagnostics.shared.record(.info, "plugins", "\(id) device sign-in renewed")
+                return fresh
+            } catch let error as LivePluginError where error.code == "AUTH_REQUIRED" || error.code == "AUTH_EXPIRED" {
+                LivePluginTokens.set(id, nil)
+                Diagnostics.shared.record(.warning, "plugins", "\(id) device sign-in ended: \(error.message)")
+                return nil
+            }
+        }
+        refreshes[id] = task
+        defer { refreshes[id] = nil }
+        // The platform being unreachable is not a sign-out: the old token goes with the call.
+        return (try? await task.value) ?? credential
     }
 
     /// Whether the plugin defines `method`.
@@ -748,7 +782,16 @@ public enum LivePluginAccounts {
         return value
     }
 
-    public static func isSignedIn(_ id: String) -> Bool { !cookie(id).isEmpty }
+    public static func isSignedIn(_ id: String) -> Bool { !cookie(id).isEmpty || LivePluginTokens.credential(id) != nil }
+
+    /// Forgets the cookie and a device-code sign-in.
+    public static func signOut(_ id: String) {
+        if LivePluginTokens.credential(id) != nil {
+            LivePluginTokens.set(id, nil, notify: false)
+            Task { if await LivePluginRuntime.shared.has(id, "resetDeviceAuth") { _ = try? await LivePluginRuntime.shared.call(id, "resetDeviceAuth", [:], timeout: 10) } }
+        }
+        setCookie(id, nil)
+    }
 
     public static func setCookie(_ id: String, _ cookie: String?) {
         let value = cookie?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -766,6 +809,43 @@ public enum LivePluginAccounts {
 
     private static func base(_ id: String) -> [String: Any] {
         // On the Mac this is the login keychain: the data-protection one needs an entitlement Debug builds lack.
+        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: id]
+    }
+}
+
+/// Device-code sign-ins (`credentialKinds: oauth_device_code`): the access and refresh tokens the plugin handed
+/// over, in the Keychain, one item per plugin. They go back to that plugin only, in its calls' payloads.
+public enum LivePluginTokens {
+    static let service = "com.tvbox.yingxia.live-plugin-tokens"
+    nonisolated(unsafe) private static var cache: [String: [String: JSONValue]?] = [:]
+    private static let lock = NSLock()
+
+    public static func credential(_ id: String) -> [String: JSONValue]? {
+        if let cached = lock.withLock({ cache[id] }) { return cached }
+        var query = base(id)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        let value = SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess
+            ? (result as? Data).flatMap { try? JSONDecoder().decode(JSONValue.self, from: $0).object } : nil
+        lock.withLock { cache[id] = .some(value) }
+        return value
+    }
+
+    static func set(_ id: String, _ credential: [String: JSONValue]?, notify: Bool = true) {
+        SecItemDelete(base(id) as CFDictionary)
+        if let credential, let data = try? JSONEncoder().encode(JSONValue.object(credential)) {
+            var item = base(id)
+            item[kSecValueData as String] = data
+            item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            let status = SecItemAdd(item as CFDictionary, nil)
+            if status != errSecSuccess { Diagnostics.shared.record(.warning, "plugins", "keychain save failed status=\(status)") }
+        }
+        lock.withLock { cache[id] = .some(credential) }
+        if notify { NotificationCenter.default.post(name: LivePluginAccounts.changed, object: id) }
+    }
+
+    private static func base(_ id: String) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: id]
     }
 }

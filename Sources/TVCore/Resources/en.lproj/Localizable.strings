@@ -1815,3 +1815,7 @@
 "The platform sent no sign-in code." = "The platform sent no sign-in code.";
 "The platform confirmed the sign-in but sent no cookies." = "The platform confirmed the sign-in but sent no cookies.";
 "The platform didn't accept this sign-in. Try again." = "The platform didn't accept this sign-in. Try again.";
+"Scan the code, or open %@ on a phone or computer, and enter this code there." = "Scan the code, or open %@ on a phone or computer, and enter this code there.";
+"Waiting for you to approve the sign-in…" = "Waiting for you to approve the sign-in…";
+"Open the Sign-In Page" = "Open the Sign-In Page";
+"The sign-in was declined." = "The sign-in was declined.";

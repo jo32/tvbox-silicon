@@ -1815,3 +1815,7 @@
 "The platform sent no sign-in code." = "平台没有返回登录二维码。";
 "The platform confirmed the sign-in but sent no cookies." = "平台已确认登录，但没有返回登录信息。";
 "The platform didn't accept this sign-in. Try again." = "平台没有接受这次登录，请重试。";
+"Scan the code, or open %@ on a phone or computer, and enter this code there." = "扫描二维码，或在手机、电脑上打开 %@，并输入下面的代码。";
+"Waiting for you to approve the sign-in…" = "等待你批准登录…";
+"Open the Sign-In Page" = "打开登录页面";
+"The sign-in was declined." = "登录已被拒绝。";

@@ -1815,3 +1815,7 @@
 "The platform sent no sign-in code." = "プラットフォームからサインインコードが届きませんでした。";
 "The platform confirmed the sign-in but sent no cookies." = "サインインは確認されましたが、Cookieが届きませんでした。";
 "The platform didn't accept this sign-in. Try again." = "このサインインは受け付けられませんでした。もう一度お試しください。";
+"Scan the code, or open %@ on a phone or computer, and enter this code there." = "コードをスキャンするか、スマートフォンやパソコンで %@ を開き、このコードを入力してください。";
+"Waiting for you to approve the sign-in…" = "サインインの承認を待っています…";
+"Open the Sign-In Page" = "サインインページを開く";
+"The sign-in was declined." = "サインインは拒否されました。";

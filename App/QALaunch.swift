@@ -682,8 +682,15 @@ private struct QALivePluginSignIn: View {
 private struct QALivePluginQR: View {
     let plugin: LivePlugins.Installed
     @State private var plan: LivePluginQRPlan?
+    @State private var device = false
     var body: some View {
-        ZStack { if let plan { LivePluginQRPage(plugin: plugin, plan: plan, useWebPage: {}) } }
-            .task { plan = await LivePlugins.shared.qrLogin(plugin.pluginId) }
+        ZStack {
+            if let plan { LivePluginQRPage(plugin: plugin, plan: plan, useWebPage: {}) }
+            else if device { LivePluginDevicePage(plugin: plugin) }
+        }
+        .task {
+            plan = await LivePlugins.shared.qrLogin(plugin.pluginId)
+            device = await LivePlugins.shared.signsInByDeviceCode(plugin.pluginId)
+        }
     }
 }
