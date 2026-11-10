@@ -1,20 +1,21 @@
 import SwiftUI
 import TVCore
 
-// Pages with nothing to show and pages that failed share one look: the symbol on a Liquid Glass disc over a soft
-// glow, what happened, glass buttons for the ways forward, and the raw error on demand. No card around them.
+// Pages with nothing to show and pages that failed share one look: the symbol on a Liquid Glass disc, what happened,
+// glass buttons for the ways forward, and the raw error on demand. No card around them.
 
-/// What a page state is about; it picks the colours behind its symbol.
+/// What a page state is about; it picks its symbol's colours.
 enum StateTone {
     /// Nothing here yet, or nothing matched.
     case neutral
     /// Something failed.
     case problem
 
-    fileprivate var glow: [Color] {
+    /// The faint tint of the glass disc.
+    fileprivate var tint: Color {
         switch self {
-        case .neutral: [Brand.cyan, Brand.indigo]
-        case .problem: [Brand.amber, Brand.rose]
+        case .neutral: Brand.cyan
+        case .problem: Brand.amber
         }
     }
     /// The symbol's colour, deep enough to read on light glass.
@@ -28,27 +29,17 @@ enum StateTone {
     static func inferred(from symbol: String) -> StateTone { symbol.contains("exclamationmark") || symbol.contains("slash") ? .problem : .neutral }
 }
 
-/// A symbol on a Liquid Glass disc. The flat page backdrop gives glass nothing to bend, so two blurred discs of the
-/// tone's colours sit behind it: the glass picks them up, and the state reads as lit rather than as a grey box.
+/// A symbol on a Liquid Glass disc tinted with the tone's colour.
 struct StateArt: View {
     let symbol: String
     var tone = StateTone.neutral
     var size: CGFloat = 76
-    @Environment(\.colorScheme) private var scheme
     var body: some View {
         Image(systemName: symbol)
             .font(.system(size: size * 0.4, weight: .semibold))
             .foregroundStyle(tone.ink)
             .frame(width: size, height: size)
-            .glassSurface(.regular.tint(tone.glow[0].opacity(0.08)), in: Circle())
-            .background {
-                ZStack {
-                    Circle().fill(tone.glow[0]).frame(width: size * 0.95).offset(x: -size * 0.3, y: -size * 0.14)
-                    Circle().fill(tone.glow[1]).frame(width: size * 0.85).offset(x: size * 0.32, y: size * 0.2)
-                }
-                .blur(radius: size * 0.36)
-                .opacity(scheme == .dark ? 0.6 : 0.5)
-            }
+            .glassSurface(.regular.tint(tone.tint.opacity(0.08)), in: Circle())
             .accessibilityHidden(true)
     }
 }
