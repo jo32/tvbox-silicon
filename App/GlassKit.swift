@@ -1241,7 +1241,10 @@ struct LoadingCard: View {
                 ProgressView(value: fraction).progressViewStyle(.linear).tint(Brand.accent)
             }
             if explains, let reason = state.reason {
-                Text(reason).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                // Not `fixedSize`: asked how small it can be, a text fixed that way answers with its height at no width,
+                // hundreds of points, and on the Mac the window's content then grew past the window (the sidebar slid
+                // up and the card left the bottom) ten seconds into a slow load.
+                Text(reason).font(.caption).foregroundStyle(.secondary).lineLimit(4).multilineTextAlignment(.leading)
             }
         }
         .padding(.horizontal, 18).padding(.vertical, 14)
