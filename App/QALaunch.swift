@@ -378,6 +378,9 @@ enum QALaunch {
             case "live-plugin-sign-in":
                 if let plugin = parts.dropFirst().first.flatMap({ LivePlugins.shared.installed($0) }) { QALivePluginSignIn(plugin: plugin) }
             #endif
+            // `-qaPage live-plugin-qr:<pluginId>`: the plugin's QR sign-in, in the page itself.
+            case "live-plugin-qr":
+                if let plugin = parts.dropFirst().first.flatMap({ LivePlugins.shared.installed($0) }) { QALivePluginQR(plugin: plugin) }
             case "danmaku-list": QADanmakuList()
             #if !os(tvOS)
             case "danmaku-settings": QADanmakuSettings()
@@ -427,7 +430,7 @@ enum QALaunch {
 
     static func overrides(_ section: AppSection) -> Bool {
         guard section == self.section, let page else { return false }
-        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "cloud-login", "cloud-accounts", "subtitle-style", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add", "up", "comments", "chapters", "live-plugins", "live-plugin", "live-plugin-sign-in"].contains(page.split(separator: ":").first.map(String.init) ?? "")
+        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "cloud-login", "cloud-accounts", "subtitle-style", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add", "up", "comments", "chapters", "live-plugins", "live-plugin", "live-plugin-sign-in", "live-plugin-qr"].contains(page.split(separator: ":").first.map(String.init) ?? "")
     }
 }
 
@@ -674,3 +677,13 @@ private struct QALivePluginSignIn: View {
     }
 }
 #endif
+
+/// A live plugin's QR sign-in, once its manifest is read.
+private struct QALivePluginQR: View {
+    let plugin: LivePlugins.Installed
+    @State private var plan: LivePluginQRPlan?
+    var body: some View {
+        ZStack { if let plan { LivePluginQRPage(plugin: plugin, plan: plan, useWebPage: {}) } }
+            .task { plan = await LivePlugins.shared.qrLogin(plugin.pluginId) }
+    }
+}

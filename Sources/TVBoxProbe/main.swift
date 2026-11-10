@@ -291,6 +291,27 @@ import TVCore
             } catch { print("error \(error)") }
             return
         }
+        // --plugin-qr <plugin> [seconds]: a QR sign-in up to the code and a few polls (scan it to go all the way).
+        if args[1] == "--plugin-qr", args.count > 2 {
+            guard let plan = await LivePlugins.shared.qrLogin(args[2]) else { print("no QR sign-in"); return }
+            print("plan poll=\(plan.pollInterval)s timeout=\(plan.timeout)s refreshes=\(plan.maxRefreshes) verifies=\(plan.verifies) hint=\(plan.hint)")
+            let session = LivePluginQRSession(plugin: args[2], plan: plan)
+            let challenge = try await session.start()
+            print("code \(challenge.content.prefix(70))… (\(challenge.content.count) chars) expires=\(challenge.expires.map { Int($0.timeIntervalSinceNow) } ?? -1)s poll=\(challenge.pollInterval)s")
+            if let folder = ProcessInfo.processInfo.environment["QR_SAVE"] { try challenge.content.write(toFile: folder + "/qr.txt", atomically: true, encoding: .utf8) }
+            let end = Date().addingTimeInterval(args.count > 3 ? Double(args[3]) ?? 8 : 8)
+            try await Task.sleep(for: .seconds(challenge.firstPollDelay))
+            while Date() < end {
+                try await Task.sleep(for: .seconds(challenge.pollInterval))
+                let state = try await session.poll()
+                print("state \(state)")
+                if state == .confirmed || state == .expired { break }
+                if case .failed = state { break }
+            }
+            await session.cancel()
+            print("signed in: \(LivePluginAccounts.isSignedIn(args[2]))")
+            return
+        }
         if args[1] == "--plugin-danmaku", args.count > 2 {
             // --plugin-danmaku <pluginId> [roomId [userId]] [seconds]: listens to a room's chat through the plugin's danmaku
             // driver and prints each comment; without a room, the first room of the plugin's first area.

@@ -15,11 +15,13 @@ struct LivePluginAccountSection: View {
     /// What `validateCredential` said about the saved cookie: nil until asked, or when the plugin can't tell.
     @State private var valid: Bool?
     @State private var webSignIn = false
+    @State private var qr: LivePluginQRPlan?
+    @State private var qrSignIn = false
 
     var body: some View {
         Group {
             // Platforms that use no account (Huya, YouTube) show none.
-            if flow != nil || plugin.requiresLogin || signedIn { content }
+            if flow != nil || qr != nil || plugin.requiresLogin || signedIn { content }
         }
             .task { await refresh(check: true) }
             .onReceive(NotificationCenter.default.publisher(for: LivePluginAccounts.changed).receive(on: RunLoop.main)) { note in
@@ -28,6 +30,9 @@ struct LivePluginAccountSection: View {
             #if !os(tvOS)
             .sheet(isPresented: $webSignIn) {
                 if let flow { LivePluginWebSignIn(plugin: plugin, flow: flow) }
+            }
+            .sheet(isPresented: $qrSignIn) {
+                if let qr { LivePluginQRPage(plugin: plugin, plan: qr) }
             }
             #endif
     }
@@ -47,6 +52,7 @@ struct LivePluginAccountSection: View {
         #if os(tvOS)
         TVSettingsSection(title: L10n.text("Account"), footer: footer) {
             TVSettingsRowLabel(title: L10n.text("Status"), value: status, warning: valid == false) { EmptyView() }
+            if let qr { TVSettingsLink(title: L10n.text("Sign In by QR Code")) { LivePluginQRPage(plugin: plugin, plan: qr) } }
             TVSettingsLink(title: L10n.text("Paste a Cookie")) { LivePluginCookiePage(plugin: plugin) }
             if signedIn { TVSettingsAction(title: L10n.text("Sign Out"), destructive: true) { LivePluginAccounts.setCookie(plugin.pluginId, nil) } }
         }
@@ -57,6 +63,9 @@ struct LivePluginAccountSection: View {
             }
             if flow != nil {
                 Button(signedIn ? L10n.text("Sign In Again") : L10n.text("Sign In")) { webSignIn = true }
+            }
+            if qr != nil {
+                Button(L10n.text("Sign In by QR Code")) { qrSignIn = true }
             }
             RouteLink { LivePluginCookiePage(plugin: plugin) } label: { Text(L10n.text("Paste a Cookie")) }
             if signedIn {
@@ -73,6 +82,7 @@ struct LivePluginAccountSection: View {
     private func refresh(check: Bool) async {
         signedIn = LivePluginAccounts.isSignedIn(plugin.pluginId)
         if flow == nil { flow = await LivePlugins.shared.loginFlow(plugin.pluginId) }
+        if qr == nil { qr = await LivePlugins.shared.qrLogin(plugin.pluginId) }
         guard check, signedIn else { valid = nil; return }
         checking = true
         valid = await LivePlugins.shared.checkSignIn(plugin.pluginId)
