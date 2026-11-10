@@ -8,11 +8,13 @@ public struct HTTPClient: Sendable {
     let mirrors: GitHubMirrors
     public init(session: URLSession = .shared) { self.init(session: session, mirrors: .shared) }
     init(session: URLSession, mirrors: GitHubMirrors) { self.session = session; self.mirrors = mirrors }
-    public func get(_ url: URL, headers: [String: String] = [:]) async throws -> (Data, URL) {
+    /// `fresh` asks the server again instead of taking a copy from this device's HTTP cache.
+    public func get(_ url: URL, headers: [String: String] = [:], fresh: Bool = false) async throws -> (Data, URL) {
         if let data = try ImportedFiles.data(at: url) { return (data, url) }
         return try await mirrors.fetch(url, timeout: 25) { [session] address, timeout in
             var request = URLRequest(url: address, timeoutInterval: timeout)
             request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+            if fresh { request.cachePolicy = .reloadIgnoringLocalCacheData }
             for (key, value) in headers { request.setValue(value, forHTTPHeaderField: key) }
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw TVError.invalidConfiguration }
