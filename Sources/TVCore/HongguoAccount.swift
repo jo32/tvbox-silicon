@@ -110,8 +110,9 @@ public final class HongguoQRLogin: @unchecked Sendable {
     deinit { session.invalidateAndCancel() }
 
     public static func start() async throws -> HongguoQRLogin {
+        // An ephemeral session has a cookie store of its own, in memory. Not `HTTPCookieStorage()`: a store made
+        // that way keeps nothing, so the session cookies that confirming sets were lost.
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.httpCookieStorage = HTTPCookieStorage()
         configuration.httpCookieAcceptPolicy = .always
         let session = URLSession(configuration: configuration)
         let reply = try await HongguoPassport.json("/passport/web/get_qrcode/", [next], session: session)
