@@ -65,10 +65,10 @@ open build/DerivedData-mac/Build/Products/Debug/TVBox-macOS.app
 - Import TVBox JSON subscriptions by URL, with a default URL prefilled. Several subscriptions merge into one source list (`SubscriptionMerge`); each source keeps its origin, and failing sources cool down and search last (`SourceHealth`).
 - Save subscription snapshots, origin URLs, import dates, and favorite channels. A failed refresh preserves the last successfully imported configuration.
 - Preserve plugin-specific fields such as `ext`, `spider`, and rules. Resolve relative URLs against the final response URL.
-- Browse M3U and TVBox TXT live playlists, filter groups, search channels, and save favorites. Support configured User-Agent and Referer headers. Built-in Bilibili, Douyu, Huya and Douyin live rooms sit beside them.
+- Browse M3U and TVBox TXT live playlists, filter groups, search channels, and save favorites. Support configured User-Agent and Referer headers. Recommended Bilibili, Douyu, Huya and Douyin live rooms sit beside them.
 - Browse standard type 1/type 4 JSON sources: home pages, categories, search, pagination, details, playback sources, episodes, and resolved media URLs.
 - Run type 3 plugin sources (JAR, JavaScript, and Python on Mac). Bundled lightweight ports of common sources (`Sources/TVCore/ScriptAssets/sites/`) run first on QuickJS, with the original plugin as the fallback.
-- Built-in Bilibili (video, live, QR sign-in, and casts from the Bilibili phone app on Apple TV and Mac) and Hongguo short dramas, appended to the displayed subscription.
+- Recommended Bilibili (video, live, QR sign-in, and casts from the Bilibili phone app on Apple TV and Mac) and Hongguo short dramas, appended to the displayed subscription.
 - Play media with AVPlayer, display playback errors, and retry failed requests. On Mac, a private loopback HLS adapter handles supported image-prefixed MPEG-TS segments.
 - Playback history, Continue Watching, intro/outro skipping, automatic next episode and automatic danmaku ([library and cache notes](LIBRARY_CACHE.md)).
 - Offline downloads, resumable, played back through a loopback server (`Downloads.swift`, `DownloadTransfer.swift`, `LocalMediaServer.swift`). tvOS keeps them in Caches, which the system may purge.
@@ -77,7 +77,7 @@ open build/DerivedData-mac/Build/Products/Debug/TVBox-macOS.app
 
 Playback depends on the source, media format, device decoder, and network availability. Unsupported features include full CatVod/Android API compatibility, arbitrary desktop JVM applications, web video detection, magnet links, multiple-quality playback responses, XML collection APIs, EPG, and cloud sync. Complex playlist extensions and header requirements still need source-by-source verification.
 
-## Built-in Hongguo source
+## Recommended Hongguo source
 
 Hongguo is appended alongside Bilibili to the displayed subscription, without changing
 the imported document. It uses the bundled QuickJS runtime on macOS, iOS and tvOS.
@@ -151,7 +151,7 @@ Subscription-provided source names, channel names, categories, and video titles 
 | Path | Purpose |
 | --- | --- |
 | `App/` | Shared SwiftUI screens and platform-specific playback integration |
-| `Sources/TVCore/` | Subscription models, networking, catalogs, built-in sources, music, downloads, localization, and runtime boundaries |
+| `Sources/TVCore/` | Subscription models, networking, catalogs, recommended sources, music, downloads, localization, and runtime boundaries |
 | `Sources/TVCore/ScriptAssets/` | Bundled QuickJS source ports and their shared helpers |
 | `Sources/TVBoxProbe/` | Command-line plugin inspection, source checks, and basic DEX execution probes |
 | `Runtime/JavaHost/` | The Java plugin host for all platforms: Android API adapters, DEX conversion, and the native plugin bridge |

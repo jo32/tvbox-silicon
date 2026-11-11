@@ -469,7 +469,6 @@
 "Yingxia %@ is ready in TestFlight. Open TestFlight on this Apple TV and update Yingxia to get these features." = "映匣 %@ 已在 TestFlight 上架。在這台 Apple TV 上打開 TestFlight 並更新映匣，即可取得這些新功能。";
 "Here's what's new in version %@." = "看看 %@ 版本帶來了什麼。";
 "Bilibili" = "嗶哩嗶哩";
-"Built-in" = "內建";
 "Bilibili Account" = "嗶哩嗶哩帳號";
 "Sign In to Bilibili" = "登入嗶哩嗶哩";
 "Open the Bilibili app on your phone, scan this code, and confirm the sign-in. Without signing in, videos play at up to 1080P and anime and films at 480P." = "在手機上打開嗶哩嗶哩 App，掃描此 QR 碼並確認登入。未登入時，影片最高 1080P，番劇和影視最高 480P。";
@@ -778,7 +777,6 @@
 "No Matching Songs" = "沒有相符的歌曲";
 "Try the song's full name, or add the artist." = "試試完整歌名，或加上歌手。";
 "%@ didn't answer, so these results are from the other catalog." = "%@ 沒有回應，以下結果來自另一個曲庫。";
-"Source: GD Music (music.gdstudio.xyz)" = "音源：GD音樂台(music.gdstudio.xyz)";
 "Finding the best channel…" = "正在尋找最佳渠道…";
 "Quality to be confirmed" = "音質待確認";
 "Lossy quality" = "目前使用有損音質";
@@ -792,9 +790,6 @@
 "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead. High and Standard ask every channel for 320 or 128 kbps lossy audio, which uses far less data." = "「無損優先」在沒有渠道提供無損音訊時，會播放最好的有損版本並加以標示；「僅無損」則停止播放。「高」和「標準」會讓所有渠道提供 320 或 128 kbps 的有損音訊，流量小得多。";
 "QQ Music" = "QQ 音樂";
 "NetEase Cloud Music" = "網易雲音樂";
-"QQ Music, when VKeys fails" = "QQ 音樂，VKeys 失敗時使用";
-"HYW key" = "HYW 金鑰";
-"HYW stays off until you enter the key from its published script. GD Music (music.gdstudio.xyz) is for personal, non-commercial use and allows 50 requests every 5 minutes." = "填入 HYW 公開腳本中的金鑰後才會啟用。GD音樂台(music.gdstudio.xyz)僅限個人非商業使用，每 5 分鐘最多 50 次請求。";
 "Playback stopped, and no other channel could continue it." = "播放中斷，其他渠道也無法繼續播放。";
 "The other channel has a different version. Choose a channel to continue." = "其他渠道是另一個版本，請選擇渠道繼續。";
 "Live" = "現場";
@@ -806,7 +801,6 @@
 "Demo" = "小樣";
 "Other Version" = "其他版本";
 "Unknown format" = "未知格式";
-"GD Music" = "GD音樂台";
 "Lossless first" = "無損優先";
 "Lossless only" = "僅無損";
 "High (320 kbps)" = "高（320 kbps）";
@@ -866,13 +860,6 @@
 "Up to Date" = "已是最新";
 "Migu Music" = "咪咕音樂";
 "Kuwo Music" = "酷我音樂";
-"Migu" = "咪咕";
-"Nianxin" = "念心";
-"Xinghai" = "星海";
-"Kuwo Music and NetEase Cloud Music" = "酷我音樂和網易雲音樂";
-"Kuwo Music and NetEase Cloud Music, when the others fail" = "酷我音樂和網易雲音樂，其他通道失敗時使用";
-"Source: Xinghai (yy.zddyr.top)" = "音源：星海（yy.zddyr.top）";
-"Xinghai (yy.zddyr.top) asks to be credited and not overused, so it is only asked when the other channels fail." = "星海（yy.zddyr.top）要求註明來源且勿濫用，因此只在其他通道失敗時使用。";
 "None of the catalogs has lyrics for this song." = "各曲庫都沒有這首歌的歌詞。";
 "Nothing Up Next" = "沒有待播歌曲";
 "Play a song from search results, an album or a playlist, and the songs after it play next." = "從搜尋結果、專輯或歌單中播放一首歌，之後的歌曲會接著播放。";
@@ -1644,7 +1631,8 @@
 "The source gave no file." = "此來源沒有提供檔案。";
 "It is a RAR or 7z archive; only ZIP archives and SRT, WebVTT and ASS files can be shown." = "這是 RAR 或 7z 壓縮檔，只能顯示 ZIP 壓縮檔和 SRT、WebVTT、ASS 檔案。";
 "The script didn't download: %@" = "腳本未能下載：%@";
-"It has the same name as a source that comes with Yingxia." = "它與影匣內建的來源同名。";
+"It has the same name as a recommended source." = "它與推薦來源同名。";
+"Update the app to use the recommended sources." = "請更新 App 以使用推薦來源。";
 "The source's script is missing." = "找不到此來源的腳本。";
 "Subtitle Sources" = "字幕來源";
 "Add a Source" = "加入來源";

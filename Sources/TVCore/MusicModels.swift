@@ -149,35 +149,21 @@ public struct MusicProbeResult: Hashable, Codable, Sendable {
 }
 
 /// A service that turns a catalog song ID into a temporary audio address.
-public enum MusicProviderID: String, Codable, Sendable, Hashable, CaseIterable {
-    case vkeys, gdstudio, hyw, migu, nianxin, xinghai
+/// A way a song's audio is found: a channel of the recommended sources' subscription (`CloudMusic`), named by
+/// the subscription, or one of the two kinds of script the listener imports.
+public struct MusicProviderID: RawRepresentable, Codable, Sendable, Hashable {
+    public let rawValue: String
+    public init(rawValue: String) { self.rawValue = rawValue }
     /// What a music extension's `getSongInfo` gives for its own songs.
-    case `extension`
+    public static let `extension` = MusicProviderID(rawValue: "extension")
     /// The LX Music sources the listener imported (MusicLXSources.swift).
-    case lx
+    public static let lx = MusicProviderID(rawValue: "lx")
+
     public var name: String {
         switch self {
-        case .vkeys: "VKeys"
-        case .gdstudio: L10n.text("GD Music")
-        case .hyw: "HYW"
-        case .migu: L10n.text("Migu")
-        case .nianxin: L10n.text("Nianxin")
-        case .xinghai: L10n.text("Xinghai")
         case .extension: L10n.text("Extension")
         case .lx: L10n.text("LX Music Sources")
-        }
-    }
-    /// Services this provider is known to call itself, so a fallback never repeats a failed one.
-    public var upstreams: Set<String> {
-        switch self {
-        case .vkeys: ["vkeys"]
-        case .gdstudio: ["gdstudio"]
-        case .hyw: ["hyw"]
-        case .migu: ["migu"]
-        case .nianxin: ["nianxin"]
-        case .xinghai: ["xinghai"]
-        case .extension: ["extension"]
-        case .lx: ["lx"]
+        default: CloudMusic.current?.channel(self)?.name ?? rawValue
         }
     }
 }
@@ -191,7 +177,7 @@ public struct MusicCandidate: Identifiable, Hashable, Codable, Sendable {
         self.platform = platform; self.songID = songID; self.provider = provider
     }
     public var id: String { provider.rawValue + "|" + platform.rawValue + "|" + songID }
-    /// "VKeys · QQ Music".
+    /// The channel and the catalog: "Channel · QQ Music".
     public var name: String { provider.name + " · " + platform.name }
 }
 
@@ -358,26 +344,32 @@ public enum MusicProviderError: LocalizedError, Hashable, Sendable {
 public struct MusicPreferences: Equatable, Sendable {
     public var quality: MusicQualityPreference
     public var disabled: Set<MusicProviderID>
-    /// HYW needs a key from its own published script; without one it stays off.
-    public var hywKey: String
-    public init(quality: MusicQualityPreference = .losslessPreferred, disabled: Set<MusicProviderID> = [], hywKey: String = "") {
-        self.quality = quality; self.disabled = disabled; self.hywKey = hywKey
+    /// The keys the listener entered, by channel, for the channels that need one (`CloudMusic.Channel.keyLabel`).
+    public var keys: [String: String]
+    public init(quality: MusicQualityPreference = .losslessPreferred, disabled: Set<MusicProviderID> = [], keys: [String: String] = [:]) {
+        self.quality = quality; self.disabled = disabled; self.keys = keys
     }
 
+    public func key(_ provider: MusicProviderID) -> String { (keys[provider.rawValue] ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// A channel is used while it is switched on; one that needs a key stays off until it has one.
     public func enabled(_ provider: MusicProviderID) -> Bool {
         guard !disabled.contains(provider) else { return false }
-        return provider != .hyw || !hywKey.trimmingCharacters(in: .whitespaces).isEmpty
+        return CloudMusic.current?.channel(provider)?.keyLabel == nil || !key(provider).isEmpty
     }
 
     public static func load(_ defaults: UserDefaults = .standard) -> MusicPreferences {
-        MusicPreferences(quality: defaults.string(forKey: "musicQuality").flatMap(MusicQualityPreference.init(rawValue:)) ?? .losslessPreferred,
-                         disabled: Set((defaults.stringArray(forKey: "musicDisabledProviders") ?? []).compactMap(MusicProviderID.init(rawValue:))),
-                         hywKey: defaults.string(forKey: "musicHYWKey") ?? "")
+        var keys = defaults.dictionary(forKey: "musicChannelKeys") as? [String: String] ?? [:]
+        // Versions up to 1.8.17 kept one key, under its own name.
+        if keys["hyw"] == nil, let earlier = defaults.string(forKey: "musicHYWKey"), !earlier.isEmpty { keys["hyw"] = earlier }
+        return MusicPreferences(quality: defaults.string(forKey: "musicQuality").flatMap(MusicQualityPreference.init(rawValue:)) ?? .losslessPreferred,
+                                disabled: Set((defaults.stringArray(forKey: "musicDisabledProviders") ?? []).map(MusicProviderID.init(rawValue:))),
+                                keys: keys)
     }
 
     public func save(_ defaults: UserDefaults = .standard) {
         defaults.set(quality.rawValue, forKey: "musicQuality")
         defaults.set(disabled.map(\.rawValue).sorted(), forKey: "musicDisabledProviders")
-        defaults.set(hywKey, forKey: "musicHYWKey")
+        defaults.set(keys.filter { !$0.value.isEmpty }, forKey: "musicChannelKeys")
     }
 }

@@ -483,14 +483,10 @@ struct MusicMacNowPlaying: View {
         return selection.degraded ? format + " · " + L10n.text("Lossy quality") : format
     }
 
-    /// Both services ask to be named while their audio plays.
+    /// Some services ask to be named while their audio plays.
     static func credit(_ music: MusicPlaybackSession) -> String? {
-        guard music.failure == nil else { return nil }
-        switch music.selection?.candidate.provider {
-        case .gdstudio: return L10n.text("Source: GD Music (music.gdstudio.xyz)")
-        case .xinghai: return L10n.text("Source: Xinghai (yy.zddyr.top)")
-        default: return nil
-        }
+        guard music.failure == nil, let provider = music.selection?.candidate.provider else { return nil }
+        return CloudMusic.current?.channel(provider)?.credit
     }
 }
 #endif

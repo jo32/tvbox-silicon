@@ -469,7 +469,6 @@
 "Yingxia %@ is ready in TestFlight. Open TestFlight on this Apple TV and update Yingxia to get these features." = "映匣 %@ を TestFlight で配信中です。この Apple TV で TestFlight を開いて映匣をアップデートすると、これらの新機能を使えます。";
 "Here's what's new in version %@." = "バージョン %@ の新しいところをご紹介します。";
 "Bilibili" = "ビリビリ";
-"Built-in" = "内蔵";
 "Bilibili Account" = "ビリビリのアカウント";
 "Sign In to Bilibili" = "ビリビリにログイン";
 "Open the Bilibili app on your phone, scan this code, and confirm the sign-in. Without signing in, videos play at up to 1080P and anime and films at 480P." = "スマートフォンでビリビリアプリを開き、このコードをスキャンしてログインを確認してください。ログインしない場合、動画は最大 1080P、アニメと映画は 480P で再生されます。";
@@ -778,7 +777,6 @@
 "No Matching Songs" = "一致する曲はありません";
 "Try the song's full name, or add the artist." = "曲名を正確に入力するか、アーティスト名を加えてください。";
 "%@ didn't answer, so these results are from the other catalog." = "%@ が応答しなかったため、もう一方のカタログの結果を表示しています。";
-"Source: GD Music (music.gdstudio.xyz)" = "音源：GD音乐台 (music.gdstudio.xyz)";
 "Finding the best channel…" = "最適なチャンネルを探しています…";
 "Quality to be confirmed" = "音質は未確認";
 "Lossy quality" = "非可逆圧縮の音質";
@@ -792,9 +790,6 @@
 "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead. High and Standard ask every channel for 320 or 128 kbps lossy audio, which uses far less data." = "「ロスレス優先」は、ロスレス音声のあるチャンネルがないとき、最良の非可逆圧縮音声をその旨を表示して再生します。「ロスレスのみ」は再生しません。「高」と「標準」はすべてのチャンネルに 320 または 128 kbps の非可逆圧縮音声を要求し、通信量を大幅に抑えます。";
 "QQ Music" = "QQ Music";
 "NetEase Cloud Music" = "NetEase Cloud Music";
-"QQ Music, when VKeys fails" = "QQ Music（VKeys が失敗したとき）";
-"HYW key" = "HYW キー";
-"HYW stays off until you enter the key from its published script. GD Music (music.gdstudio.xyz) is for personal, non-commercial use and allows 50 requests every 5 minutes." = "HYW は、公開スクリプトのキーを入力するまでオフのままです。GD音乐台 (music.gdstudio.xyz) は個人の非商用利用に限られ、5 分ごとに 50 リクエストまでです。";
 "Playback stopped, and no other channel could continue it." = "再生が止まり、ほかのチャンネルでも続けられませんでした。";
 "The other channel has a different version. Choose a channel to continue." = "ほかのチャンネルは別バージョンです。続けるチャンネルを選んでください。";
 "Live" = "ライブ";
@@ -806,7 +801,6 @@
 "Demo" = "デモ";
 "Other Version" = "別バージョン";
 "Unknown format" = "不明な形式";
-"GD Music" = "GD音乐台";
 "Lossless first" = "ロスレス優先";
 "Lossless only" = "ロスレスのみ";
 "High (320 kbps)" = "高（320 kbps）";
@@ -866,13 +860,6 @@
 "Up to Date" = "最新";
 "Migu Music" = "咪咕音楽";
 "Kuwo Music" = "酷我音楽";
-"Migu" = "咪咕";
-"Nianxin" = "念心";
-"Xinghai" = "星海";
-"Kuwo Music and NetEase Cloud Music" = "酷我音楽と NetEase Cloud Music";
-"Kuwo Music and NetEase Cloud Music, when the others fail" = "酷我音楽と NetEase Cloud Music（ほかが失敗したとき）";
-"Source: Xinghai (yy.zddyr.top)" = "音源：星海（yy.zddyr.top）";
-"Xinghai (yy.zddyr.top) asks to be credited and not overused, so it is only asked when the other channels fail." = "星海（yy.zddyr.top）は出典の明記と使いすぎないよう求めているため、ほかのチャンネルが失敗したときだけ使います。";
 "None of the catalogs has lyrics for this song." = "どのカタログにもこの曲の歌詞がありません。";
 "Nothing Up Next" = "次に再生する曲はありません";
 "Play a song from search results, an album or a playlist, and the songs after it play next." = "検索結果、アルバム、プレイリストから曲を再生すると、その後の曲が続けて再生されます。";
@@ -1644,7 +1631,8 @@
 "The source gave no file." = "ソースがファイルを返しませんでした。";
 "It is a RAR or 7z archive; only ZIP archives and SRT, WebVTT and ASS files can be shown." = "RAR または 7z アーカイブです。表示できるのは ZIP アーカイブと SRT、WebVTT、ASS ファイルだけです。";
 "The script didn't download: %@" = "スクリプトをダウンロードできませんでした：%@";
-"It has the same name as a source that comes with Yingxia." = "影匣に含まれるソースと同じ名前です。";
+"It has the same name as a recommended source." = "おすすめのソースと同じ名前です。";
+"Update the app to use the recommended sources." = "おすすめのソースを使うには App をアップデートしてください。";
 "The source's script is missing." = "ソースのスクリプトが見つかりません。";
 "Subtitle Sources" = "字幕ソース";
 "Add a Source" = "ソースを追加";

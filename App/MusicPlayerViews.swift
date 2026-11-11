@@ -177,13 +177,9 @@ struct MusicNowPlaying: View {
     }
 
     @ViewBuilder private func source(_ music: MusicPlaybackSession) -> some View {
-        // Both services ask to be named when their audio plays.
-        if music.failure == nil, let provider = music.selection?.candidate.provider {
-            if provider == .gdstudio {
-                Text(L10n.text("Source: GD Music (music.gdstudio.xyz)")).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
-            } else if provider == .xinghai {
-                Text(L10n.text("Source: Xinghai (yy.zddyr.top)")).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
-            }
+        // Some services ask to be named when their audio plays.
+        if music.failure == nil, let provider = music.selection?.candidate.provider, let credit = CloudMusic.current?.channel(provider)?.credit {
+            Text(credit).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
         }
     }
 
@@ -445,22 +441,14 @@ struct MusicChannelsView: View {
 struct MusicSettingsView: View {
     @Environment(Store.self) private var store
 
-    /// Each channel and the services it plays from.
-    private static var channels: [(MusicProviderID, String)] {
-        [(.migu, L10n.text("Migu Music")),
-         (.nianxin, L10n.text("Kuwo Music and NetEase Cloud Music")),
-         (.vkeys, L10n.text("QQ Music")),
-         (.gdstudio, L10n.text("NetEase Cloud Music")),
-         (.xinghai, L10n.text("Kuwo Music and NetEase Cloud Music, when the others fail")),
-         (.hyw, L10n.text("QQ Music, when VKeys fails"))]
-    }
+    /// The channels the recommended sources list, each with the services it plays from; none are part of the app.
+    private static var channels: [CloudMusic.Channel] { CloudMusic.current?.channels ?? [] }
+    /// The channels that stay off until the listener enters a key.
+    private static var keyed: [CloudMusic.Channel] { channels.filter { $0.keyLabel != nil } }
     private static var qualityNote: String {
         L10n.text("Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead.")
     }
-    private static var channelNotes: [String] {
-        [L10n.text("HYW stays off until you enter the key from its published script. GD Music (music.gdstudio.xyz) is for personal, non-commercial use and allows 50 requests every 5 minutes."),
-         L10n.text("Xinghai (yy.zddyr.top) asks to be credited and not overused, so it is only asked when the other channels fail.")]
-    }
+    private static var channelNotes: [String] { CloudMusic.current?.notes ?? [] }
 
     var body: some View {
         @Bindable var music = store.music
@@ -474,11 +462,15 @@ struct MusicSettingsView: View {
                     music.preferences.quality = choices[((choices.firstIndex(of: music.preferences.quality) ?? 0) + 1) % choices.count]
                 }
             }
-            TVSettingsSection(title: L10n.text("Channels"), footer: Self.channelNotes.joined(separator: "\n\n")) {
-                ForEach(Self.channels, id: \.0) { provider, detail in
-                    TVSettingsToggle(title: provider.name, detail: detail, isOn: enabled(provider, music: music))
+            if !Self.channels.isEmpty {
+                TVSettingsSection(title: L10n.text("Channels"), footer: Self.channelNotes.joined(separator: "\n\n")) {
+                    ForEach(Self.channels) { channel in
+                        TVSettingsToggle(title: channel.name, detail: channel.detail, isOn: enabled(channel.id, music: music))
+                    }
+                    ForEach(Self.keyed) { channel in
+                        TVSettingsField(title: channel.keyLabel ?? channel.name, text: key(channel.id, music: music))
+                    }
                 }
-                TVSettingsField(title: L10n.text("HYW key"), text: $music.preferences.hywKey)
             }
             MusicLXSourcesSection()
             MusicExtensionsSection()
@@ -493,26 +485,30 @@ struct MusicSettingsView: View {
                 } footer: {
                     Text(Self.qualityNote)
                 }
-                Section {
-                    ForEach(Self.channels, id: \.0) { provider, detail in
-                        Toggle(isOn: enabled(provider, music: music)) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(provider.name)
-                                Text(detail).font(.caption).foregroundStyle(.secondary)
+                if !Self.channels.isEmpty {
+                    Section {
+                        ForEach(Self.channels) { channel in
+                            Toggle(isOn: enabled(channel.id, music: music)) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(channel.name)
+                                    Text(channel.detail).font(.caption).foregroundStyle(.secondary)
+                                }
                             }
+                            .settingsSwitch()
                         }
-                        .settingsSwitch()
-                    }
-                    TextField(L10n.text("HYW key"), text: $music.preferences.hywKey)
-                        .autocorrectionDisabled()
-                        #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                        #endif
-                } header: {
-                    Text(L10n.text("Channels"))
-                } footer: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(Self.channelNotes, id: \.self) { Text($0) }
+                        ForEach(Self.keyed) { channel in
+                            TextField(channel.keyLabel ?? channel.name, text: key(channel.id, music: music))
+                                .autocorrectionDisabled()
+                                #if os(iOS)
+                                .textInputAutocapitalization(.never)
+                                #endif
+                        }
+                    } header: {
+                        Text(L10n.text("Channels"))
+                    } footer: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(Self.channelNotes, id: \.self) { Text($0) }
+                        }
                     }
                 }
                 MusicLXSourcesSection()
@@ -523,6 +519,10 @@ struct MusicSettingsView: View {
             #endif
         }
         #endif
+    }
+
+    private func key(_ provider: MusicProviderID, music: MusicPlaybackSession) -> Binding<String> {
+        Binding(get: { music.preferences.keys[provider.rawValue] ?? "" }, set: { music.preferences.keys[provider.rawValue] = $0 })
     }
 
     private func enabled(_ provider: MusicProviderID, music: MusicPlaybackSession) -> Binding<Bool> {

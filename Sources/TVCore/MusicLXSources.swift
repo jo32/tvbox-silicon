@@ -3,7 +3,7 @@ import Foundation
 /// LX Music (洛雪音乐) custom sources: scripts a listener imports that turn a catalog song ID into an
 /// audio address, as in LX Music's "custom source" setting. Yingxia ships none. Each runs on QuickJS
 /// with the `lx` object of LX Music desktop's user API (ScriptAssets/lx/lx.js), and the enabled ones
-/// are one more channel, `MusicProviderID.lx`, tried after the built-in channels. Nothing runs until
+/// are one more channel, `MusicProviderID.lx`, tried after the subscription's channels. Nothing runs until
 /// a source is imported, and a source's runtime starts only when a song first needs it.
 
 /// The comment LX Music reads at the top of a source: `@name`, `@description`, `@version`, `@author`, `@homepage`.

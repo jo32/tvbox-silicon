@@ -599,7 +599,7 @@ struct LivePlatformCard: View {
                             .labelStyle(.titleAndIcon).lineLimit(1).layoutPriority(1)
                     }
                 } else {
-                    Text(platform.plugin != nil ? L10n.text("Plugin") : L10n.text("Built-in"))
+                    Text(platform.plugin != nil ? L10n.text("Plugin") : L10n.text("Recommended"))
                 }
             }
             .font(detailFont).foregroundStyle(.white.opacity(0.8))
