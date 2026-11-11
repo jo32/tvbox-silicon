@@ -5,7 +5,7 @@ import TVCore
 
 /// Search results in rows, as Music on the Mac and Spotify on Apple TV lay them out: albums and
 /// playlists as rows of covers, songs as columns of a few rows, each scrolling sideways. On the
-/// Mac a row's title opens all of it; on Apple TV the filter chips above do.
+/// Mac a row's title opens all of it; on Apple TV See All, left of the first cover, does.
 struct MusicTopResults: View {
     let search: MusicSearchModel
     /// Plays the results from this song.
@@ -21,7 +21,7 @@ struct MusicTopResults: View {
                     #if os(macOS)
                     MusicSectionLink(title: L10n.text("Songs")) { MusicSongsPage(title: L10n.text("Songs"), tracks: search.results) }
                     #else
-                    SectionHeader(title: L10n.text("Songs"))
+                    WatchNowTVHeading(title: L10n.text("Songs"), gutter: 0)
                     #endif
                     MusicSongGrid(tracks: Array(search.results.prefix(36)), play: play)
                 }
@@ -41,8 +41,12 @@ struct MusicTopResults: View {
                 // scrolled to where the old first item went. A new first item starts it over.
                 .id(items.first?.id)
             #else
-            SectionHeader(title: title)
-            ChipRow { tiles(items) }.tvFocusSection()
+            // The Music page's rails (`MusicBrowseShelves`), with See All left of the first cover.
+            let all = Route { AnyView(MusicCollectionsPage(title: title, collections: items)) }
+            WatchNowTVRail(title: title, seeAll: WatchNowTVSeeAll(height: WatchNowTVCover.width, route: all), gutter: MusicBrowseMetrics.inset) {
+                ForEach(items.prefix(24)) { MusicCollectionTile(collection: $0) }
+            }
+            .padding(.horizontal, -MusicBrowseMetrics.inset)
             #endif
         }
     }
@@ -58,7 +62,10 @@ struct MusicTopResults: View {
 
 enum MusicBrowseMetrics {
     #if os(tvOS)
-    static let cover: CGFloat = 230, tileSpacing: CGFloat = 40, sectionSpacing: CGFloat = 50, headerSpacing: CGFloat = 18
+    static let cover = DiscoverLayout.posterWidth, tileSpacing = DiscoverLayout.spacing, sectionSpacing: CGFloat = 50, headerSpacing: CGFloat = 18
+    /// The Music pages' margin: `pageContainer`'s gutter and `glassRowInsets`. Rails run out to the page's edge and
+    /// take it back as their own gutter, so a row scrolls under the margin and See All has room there.
+    static let inset = Layout.gutter + 40
     static let songArt: CGFloat = 72, songColumn: CGFloat = 560, songRows = 3
     #elseif os(iOS)
     static let cover: CGFloat = 148, tileSpacing: CGFloat = 14, sectionSpacing: CGFloat = 28, headerSpacing: CGFloat = 8
@@ -94,6 +101,14 @@ struct MusicCollectionTile: View {
     @State private var hovering = false
 
     var body: some View {
+        #if os(tvOS)
+        // Watch Now's and Discover's card: the cover lifts and the captions move down from under it.
+        RouteLink { MusicCollectionView(collection: collection) } label: {
+            WatchNowTVCover(title: collection.title, detail: collection.subtitle ?? collection.platform.name, poster: collection.artwork,
+                            square: true, symbol: collection.kind == .album ? "square.stack" : "music.note.list")
+        }
+        .cardButton()
+        #else
         let link = RouteLink { MusicCollectionView(collection: collection) } label: {
             VStack(alignment: .leading, spacing: 7) {
                 MusicArtwork(url: collection.artwork, size: size, symbol: collection.kind == .album ? "square.stack" : "music.note.list")
@@ -107,20 +122,15 @@ struct MusicCollectionTile: View {
             .frame(width: size, alignment: .leading)
             .contentShape(.rect)
         }
-        #if os(tvOS)
-        link.cardButton()
-        #else
         link.buttonStyle(.plain)
             .onHover { hovering = $0 }
             .animation(.easeOut(duration: 0.15), value: hovering)
         #endif
     }
 
-    #if os(tvOS)
-    private static let titleFont = Font.system(size: 24, weight: .semibold), subtitleFont = Font.system(size: 20)
-    #elseif os(iOS)
+    #if os(iOS)
     private static let titleFont = Font.subheadline.weight(.medium), subtitleFont = Font.caption
-    #else
+    #elseif os(macOS)
     private static let titleFont = Font.system(size: 12, weight: .medium), subtitleFont = Font.system(size: 11)
     #endif
 }
@@ -132,19 +142,28 @@ struct MusicBrowseShelves: View {
     let sections: [MusicBrowseSection]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: MusicBrowseMetrics.sectionSpacing) {
+        #if os(tvOS)
+        // Watch Now's rails: a heading, covers that lift, and See All waiting left of the first cover.
+        VStack(alignment: .leading, spacing: 6) {
             ForEach(sections) { section in
-                VStack(alignment: .leading, spacing: MusicBrowseMetrics.headerSpacing) {
-                    #if os(tvOS)
-                    SectionHeader(title: section.title)
-                    ChipRow { tiles(section.collections) }.tvFocusSection()
-                    #else
-                    MusicSectionLink(title: section.title) { MusicCollectionsPage(title: section.title, collections: section.collections) }
-                    ScrollStrip(overlayArrows: true, arrowCenter: MusicBrowseMetrics.cover / 2) { tiles(section.collections) }
-                    #endif
+                let all = Route { AnyView(MusicCollectionsPage(title: section.title, collections: section.collections)) }
+                WatchNowTVRail(title: section.title, seeAll: WatchNowTVSeeAll(height: WatchNowTVCover.width, route: all),
+                               gutter: MusicBrowseMetrics.inset) {
+                    ForEach(section.collections) { MusicCollectionTile(collection: $0) }
                 }
             }
         }
+        .padding(.horizontal, -MusicBrowseMetrics.inset)
+        #else
+        VStack(alignment: .leading, spacing: MusicBrowseMetrics.sectionSpacing) {
+            ForEach(sections) { section in
+                VStack(alignment: .leading, spacing: MusicBrowseMetrics.headerSpacing) {
+                    MusicSectionLink(title: section.title) { MusicCollectionsPage(title: section.title, collections: section.collections) }
+                    ScrollStrip(overlayArrows: true, arrowCenter: MusicBrowseMetrics.cover / 2) { tiles(section.collections) }
+                }
+            }
+        }
+        #endif
     }
 
     private func tiles(_ items: [MusicCollection]) -> some View {
@@ -154,7 +173,6 @@ struct MusicBrowseShelves: View {
     }
 }
 
-#if !os(tvOS)
 /// Every album or playlist a search found, or a whole shelf of the Music page, as a grid of covers.
 struct MusicCollectionsPage: View {
     let title: String
@@ -165,10 +183,18 @@ struct MusicCollectionsPage: View {
                 #if os(macOS)
                 Text(title).font(.largeTitle.weight(.bold))
                 #endif
+                #if os(tvOS)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: WatchNowTVCover.width), spacing: DiscoverLayout.spacing, alignment: .top)],
+                          alignment: .leading, spacing: 30) {
+                    ForEach(collections) { MusicCollectionTile(collection: $0) }
+                }
+                .focusSection()
+                #else
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: MusicBrowseMetrics.cover, maximum: MusicBrowseMetrics.cover * 1.35), spacing: 20, alignment: .top)],
                           alignment: .leading, spacing: 24) {
                     ForEach(collections) { MusicCollectionTile(collection: $0) }
                 }
+                #endif
             }
             .pageContainer()
         }
@@ -182,7 +208,6 @@ struct MusicCollectionsPage: View {
         #endif
     }
 }
-#endif
 
 #if os(macOS) || os(tvOS)
 /// Songs a few to a column, scrolling sideways: three columns to the width on the Mac.

@@ -104,6 +104,14 @@ struct MusicDownloadsView: View {
     /// Albums or playlists downloaded from their pages, as covers in a row; each opens its saved songs.
     @ViewBuilder private func shelf(_ title: String, _ collections: [MusicDownloadedCollection]) -> some View {
         if !collections.isEmpty {
+            #if os(tvOS)
+            // Watch Now's rail, out to the page's edge as on the Music page.
+            WatchNowTVRail(title: title, gutter: Layout.gutter) {
+                ForEach(collections) { MusicDownloadedTile(entry: $0, size: Self.tile) }
+            }
+            .padding(.horizontal, -Layout.gutter)
+            .padding(.top, 24)
+            #else
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(title: title)
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -114,7 +122,7 @@ struct MusicDownloadsView: View {
                 .scrollClipDisabled()
             }
             .padding(.top, 24)
-            .tvFocusSection()
+            #endif
         }
     }
 
@@ -261,6 +269,13 @@ private struct MusicDownloadedTile: View {
     var body: some View {
         let collection = entry.collection
         let saved = MusicDownloadLibrary.shared.items(in: entry).filter { $0.status == .completed }.count
+        #if os(tvOS)
+        RouteLink { MusicDownloadedCollectionView(id: entry.id) } label: {
+            WatchNowTVCover(title: collection.title, detail: L10n.text("%lld songs", saved), poster: collection.artwork,
+                            square: true, symbol: collection.kind == .album ? "square.stack" : "music.note.list")
+        }
+        .cardButton()
+        #else
         let link = RouteLink { MusicDownloadedCollectionView(id: entry.id) } label: {
             VStack(alignment: .leading, spacing: 7) {
                 MusicArtwork(url: collection.artwork, size: size, symbol: collection.kind == .album ? "square.stack" : "music.note.list")
@@ -270,23 +285,17 @@ private struct MusicDownloadedTile: View {
                     Text(collection.title).font(Self.titleFont).foregroundStyle(.primary).lineLimit(1)
                     Text(L10n.text("%lld songs", saved)).font(Self.subtitleFont).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
                 }
-                .cardCaption()
             }
             .frame(width: size, alignment: .leading)
             .contentShape(.rect)
         }
-        #if os(tvOS)
-        link.cardButton()
-        #else
         link.buttonStyle(.plain)
             .onHover { hovering = $0 }
             .animation(.easeOut(duration: 0.15), value: hovering)
         #endif
     }
 
-    #if os(tvOS)
-    private static let titleFont = Font.system(size: 24, weight: .semibold), subtitleFont = Font.system(size: 20)
-    #else
+    #if !os(tvOS)
     private static let titleFont = Font.subheadline.weight(.medium), subtitleFont = Font.caption
     #endif
 }

@@ -36,7 +36,8 @@ import Testing
         #expect(RangeServer.requests(name) == 2)
         // A stream has no file to hash; a server without ranges is left at once.
         #expect(await SubtitleFileHash.compute(URL(string: "https://cloud.test/live.m3u8")!, session: RangeServer.session) == nil)
-        #expect(await SubtitleFileHash.compute(URL(string: "https://cloud.test/gone.mp4")!, session: RangeServer.session) == nil)
+        // A name no other suite serves: CloudStreamsTests adds its own gone.mp4 to the shared server.
+        #expect(await SubtitleFileHash.compute(URL(string: "https://cloud.test/missing-\(UUID().uuidString).mp4")!, session: RangeServer.session) == nil)
     }
 
     @Test func theHintTakesTheTMDBMatch() {
