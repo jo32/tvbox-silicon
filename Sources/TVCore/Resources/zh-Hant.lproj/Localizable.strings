@@ -1801,6 +1801,7 @@
 "Open the Sign-In Page" = "打開登入頁面";
 "The sign-in was declined." = "登入已被拒絕。";
 "Sign-in details stay on this device." = "登入資訊只儲存在此裝置上。";
+"Show %lld Other Results" = "顯示其餘 %lld 個結果";
 "Intro Ends Here" = "片頭到此結束";
 "Outro Starts Here" = "片尾從此開始";
 "In the first five minutes" = "可設在前 5 分鐘內";

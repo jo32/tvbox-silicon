@@ -142,6 +142,10 @@ import Testing
     let defaults = try #require(UserDefaults(suiteName: UUID().uuidString))
     let library = DownloadLibrary(root: root, defaults: defaults)
     #expect(library.items.map(\.id) == ["e1", "e2", "e3"])
+    // The player's Previous and Next step through the show's saved episodes, and stop at its ends.
+    let first = URL(string: "tvbox-download://e1")!, last = URL(string: "tvbox-download://e3")!
+    #expect(library.neighbor(of: first, offset: 1)?.id == "e2" && library.neighbor(of: last, offset: -1)?.id == "e2")
+    #expect(library.neighbor(of: first, offset: -1) == nil && library.neighbor(of: last, offset: 1) == nil)
     #expect(library.file(for: items[0]) == root.appending(path: "e1").appending(path: "media.mp4"))
 
     // Moved away in Finder: playing it says so and it leaves the list.
