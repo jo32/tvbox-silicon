@@ -19,24 +19,7 @@ private func json(_ text: String) throws -> JSONValue { try JSONDecoder().decode
     #expect(throws: MusicProviderError.self) { try MiguMusicCatalog.parse(json(#"{"code":"100001"}"#)) }
 }
 
-@Test func miguAnswerUnscramblesAndOtherTiersAreFound() throws {
-    let plain = #"{"code":"000000","data":{"url":"https://freetyst.nf.migu.cn/public/2009/%E6%A0%87%E6%B8%85%E9%AB%98%E6%B8%85/MP3_128_16_Stero/600547.mp3?channelid=02&Key=abc+def"}}"#
-    let offset = 0x80, key = MiguProvider.key
-    let scrambled = [0xAB, 0xCD, 0x01, UInt8(offset)] + Array(plain.utf8).enumerated().map { index, byte in
-        UInt8((Int(byte) - offset + Int(key[index % key.count]) + 512) % 256)
-    }
-    let base = try MiguProvider.address(MiguProvider.unscramble(Data(scrambled)))
-    #expect(base.query()?.contains("Key=abc%2Bdef") == true)
-    #expect(MiguProvider.retone(base, to: "SQ")?.absoluteString
-            == "https://freetyst.nf.migu.cn/public/2009/%E6%AD%8C%E6%9B%B2%E4%B8%8B%E8%BD%BD/flac/600547.flac")
-    #expect(MiguProvider.retone(base, to: "HQ")?.absoluteString
-            == "https://freetyst.nf.migu.cn/public/2009/%E6%A0%87%E6%B8%85%E9%AB%98%E6%B8%85/MP3_320_16_Stero/600547.mp3")
-    #expect(MiguProvider.retone(URL(string: "https://other.test/a.mp3")!, to: "SQ") == nil)
-    #expect(throws: MusicProviderError.self) { try MiguProvider.unscramble(Data("{}".utf8)) }
-    #expect(throws: MusicProviderError.noResource) { try MiguProvider.address(json(#"{"code":"200002","info":"无版权"}"#)) }
-}
-
-@Test func kuwoSearchAndResolvers() throws {
+@Test func kuwoSearch() throws {
     let answer = try json(#"{"abslist":[{"MUSICRID":"MUSIC_228908","NAME":"晴天","ARTIST":"周杰伦&amp;费玉清","ALBUM":"叶惠美","DURATION":"269","web_albumpic_short":"120/s3s94/93/211513640.jpg"},{"NAME":"no id"}]}"#)
     let tracks = try KuwoMusicCatalog.parse(answer)
     #expect(tracks.map(\.id) == ["kuwo:228908"])
@@ -44,14 +27,6 @@ private func json(_ text: String) throws -> JSONValue { try JSONDecoder().decode
     #expect(tracks[0].artwork?.absoluteString == "https://img4.kuwo.cn/star/albumcover/500/s3s94/93/211513640.jpg")
     #expect(throws: MusicProviderError.self) { try KuwoMusicCatalog.parse(json(#"{"TOTAL":"0"}"#)) }
 
-    let nianxin = try NianxinProvider.parse(json(#"{"code":200,"data":{"url":"https://car-er.kuwo.cn/x/F000.flac"}}"#), level: "lossless")
-    #expect(nianxin.url.host() == "car-er.kuwo.cn" && nianxin.claimedQuality == "lossless" && nianxin.upstream == "nianxin")
-    #expect(throws: MusicProviderError.noResource) { try NianxinProvider.parse(json(#"{"code":200,"msg":"解析成功","url":""}"#), level: "lossless") }
-    #expect(throws: MusicProviderError.self) { try NianxinProvider.parse(json(#"{"code":500}"#), level: "lossless") }
-
-    let xinghai = try XinghaiProvider.parse(json(#"{"code":200,"url":"http://car-er.kuwo.cn/y/F000.flac?bitrate$2000","quality":"flac"}"#))
-    #expect(xinghai.claimedQuality == "flac" && xinghai.upstream == "xinghai")
-    #expect(throws: MusicProviderError.noResource) { try XinghaiProvider.parse(json(#"{"msg":"获取失败","code":500}"#)) }
 }
 
 @Test func miguAndKuwoLeadTheChannelOrder() {
@@ -61,14 +36,14 @@ private func json(_ text: String) throws -> JSONValue { try JSONDecoder().decode
     }
     var track = MusicTrack(platform: .qq, songID: "q", title: "晴天", artists: ["周杰伦"])
     track.ids[.netease] = "n"; track.ids[.migu] = "c_r"; track.ids[.kuwo] = "k"
-    let resolver = MusicResolver(providers: [
+    let resolver = MusicResolver(routes: .test, providers: [
         Stub(id: .vkeys, platforms: [.qq]), Stub(id: .gdstudio, platforms: [.netease]), Stub(id: .hyw, platforms: [.qq]),
         Stub(id: .migu, platforms: [.migu]), Stub(id: .nianxin, platforms: [.kuwo, .netease]), Stub(id: .xinghai, platforms: [.kuwo, .netease]),
     ], health: MusicHealth(file: nil))
     let order = resolver.candidates(for: track).map { $0.provider.rawValue + "·" + $0.platform.rawValue }
     #expect(order == ["migu·migu", "nianxin·kuwo", "vkeys·qq", "gdstudio·netease", "xinghai·kuwo", "nianxin·netease", "hyw·qq", "xinghai·netease"])
-    #expect(MusicResolver.isPrimary(MusicCandidate(platform: .kuwo, songID: "k", provider: .nianxin)))
-    #expect(!MusicResolver.isPrimary(MusicCandidate(platform: .netease, songID: "n", provider: .nianxin)))
+    #expect(MusicRoutes.test.isPrimary(MusicCandidate(platform: .kuwo, songID: "k", provider: .nianxin)))
+    #expect(!MusicRoutes.test.isPrimary(MusicCandidate(platform: .netease, songID: "n", provider: .nianxin)))
 }
 
 @Test func supplementaryCatalogsDoNotRepeatAListedSong() {

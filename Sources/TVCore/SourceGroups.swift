@@ -39,7 +39,7 @@ public enum SourceGroups {
         let pinnedSites = pinOrder.filter(eligible)
         if !pinnedSites.isEmpty { groups.append(SourceGroup(kind: .pinned, title: "Pinned Group", sites: pinnedSites)) }
         let builtInSites = builtIns.filter { eligible($0) && !isPinned($0, fallback: builtInOrigin) }
-        if !builtInSites.isEmpty { groups.append(SourceGroup(kind: .builtIn, title: "Built-in", sites: builtInSites)) }
+        if !builtInSites.isEmpty { groups.append(SourceGroup(kind: .builtIn, title: "Recommended", sites: builtInSites)) }
         for entry in entries where entry.enabled {
             guard let origin = documents[entry.address]?.origin else { continue }
             let own = mergedSites.filter { !$0.isBuiltIn && $0.provenance?.origin == origin && !isPinned($0, fallback: origin) && eligible($0) }

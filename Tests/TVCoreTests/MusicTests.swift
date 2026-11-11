@@ -92,7 +92,7 @@ private func neteaseTrack(_ title: String, _ artists: [String], duration: Double
 }
 
 private func resolver(_ providers: [any MusicStreamProvider], health: MusicHealth = MusicHealth(file: nil), budget: TimeInterval = 15) -> MusicResolver {
-    MusicResolver(providers: providers, prober: MusicProber(transport: audioTransport(), inspector: nil), health: health, budget: budget)
+    MusicResolver(routes: .test, providers: providers, prober: MusicProber(transport: audioTransport(), inspector: nil), health: health, budget: budget)
 }
 
 // MARK: - Identity and matching
@@ -212,21 +212,46 @@ private func resolver(_ providers: [any MusicStreamProvider], health: MusicHealt
     #expect(details["108914"]?.artwork?.absoluteString == "https://p1.music.126.net/a.jpg?param=300y300")
 }
 
-@Test func providerAnswersMapToClearErrors() throws {
-    func json(_ text: String) throws -> JSONValue { try JSONDecoder().decode(JSONValue.self, from: Data(text.utf8)) }
-    let ok = try VKeysProvider.parse(json(#"{"code":0,"data":{"kbps":"931kbps","url":"http://ws.stream.qqmusic.qq.com/F000.flac?vkey=x"}}"#))
-    #expect(ok.url.host() == "ws.stream.qqmusic.qq.com" && ok.claimedQuality == "931kbps")
-    #expect(throws: MusicProviderError.upstreamRisk) { try VKeysProvider.parse(json(#"{"code":-1,"message":"上游账号触发风控"}"#)) }
-    #expect(throws: MusicProviderError.noResource) { try VKeysProvider.parse(json(#"{"code":0,"data":{"url":""}}"#)) }
-    #expect(throws: MusicProviderError.noResource) { try VKeysProvider.parse(json(#"{"code":404,"message":"暂无"}"#)) }
+@Test func aChannelScriptsAnswerBecomesAStreamOrANamedFailure() throws {
+    func json(_ text: String) throws -> [String: JSONValue] { try JSONDecoder().decode([String: JSONValue].self, from: Data(text.utf8)) }
+    let ok = try CloudMusicProvider.stream(json(#"{"url":"http://ws.stream.example.com/F000.flac?vkey=x","claimed":"931kbps","upstream":"a:b","header":{"Referer":"https://r.example/"}}"#))
+    #expect(ok.url.host() == "ws.stream.example.com" && ok.claimedQuality == "931kbps" && ok.upstream == "a:b" && ok.headers == ["Referer": "https://r.example/"])
+    #expect(throws: MusicProviderError.upstreamRisk) { try CloudMusicProvider.stream(json(#"{"error":"upstreamRisk"}"#)) }
+    #expect(throws: MusicProviderError.noResource) { try CloudMusicProvider.stream(json(#"{"error":"noResource"}"#)) }
+    #expect(throws: MusicProviderError.rateLimited(until: nil)) { try CloudMusicProvider.stream(json(#"{"error":"rateLimited"}"#)) }
+    #expect(throws: MusicProviderError.authRequired) { try CloudMusicProvider.stream(json(#"{"error":"authRequired"}"#)) }
+    #expect(throws: MusicProviderError.timeout) { try CloudMusicProvider.stream(json(#"{"error":"timeout"}"#)) }
+    #expect(throws: MusicProviderError.invalidResponse("code 500")) { try CloudMusicProvider.stream(json(#"{"error":"invalidResponse","detail":"code 500"}"#)) }
+    #expect(throws: MusicProviderError.invalidResponse("somethingNew")) { try CloudMusicProvider.stream(json(#"{"error":"somethingNew"}"#)) }
+    // No address, or one that is not a web address, is no audio.
+    #expect(throws: MusicProviderError.noResource) { try CloudMusicProvider.stream(json(#"{"url":""}"#)) }
+    #expect(throws: MusicProviderError.noResource) { try CloudMusicProvider.stream(json(#"{"url":"file:///etc/hosts"}"#)) }
+}
 
-    #expect(try GDStudioProvider.parse(json(#"{"url":"https://m8.music.126.net/a.flac","br":944,"size":31646511}"#)).claimedQuality == "br 944")
-    #expect(throws: MusicProviderError.noResource) { try GDStudioProvider.parse(json(#"{"url":"","br":-1}"#)) }
+@Test func theSubscriptionNamesTheChannelsAndTheirOrder() throws {
+    let json = try JSONDecoder().decode(JSONValue.self, from: Data(#"""
+    {"api":"/v1/js/music.0123456789abcdef.js","primaries":2,
+     "channels":[{"id":"one","name":"One","names":{"en":"One"},"details":{"en":"QQ Music"},"platforms":["qq"]},
+                 {"id":"two","name":"Two","platforms":["kuwo","netease","ext","nowhere"],"budget":30,"credit":{"en":"Source: Two"},"key":{"en":"Two key"}},
+                 {"id":"none","platforms":[]},{"name":"no id","platforms":["qq"]}],
+     "order":[["kuwo","two"],["qq","one"],["netease","two"],["qq","two"],["migu","ghost"],["qq"]],
+     "notes":[{"en":"A note."},{}]}
+    """#.utf8))
+    let listing = try #require(CloudMusic.Listing(json: json))
+    #expect(listing.channels.map(\.id.rawValue) == ["one", "two"])
+    let two = try #require(listing.channel(MusicProviderID(rawValue: "two")))
+    #expect(two.platforms == [.kuwo, .netease] && two.budget == 30 && two.fallbackName == "Two")
+    // A route is kept only for a listed channel and a catalog it plays.
+    #expect(listing.routes.order.map { $0.platform.rawValue + ":" + $0.provider.rawValue } == ["kuwo:two", "qq:one", "netease:two"])
+    #expect(listing.routes.isPrimary(MusicCandidate(platform: .qq, songID: "1", provider: MusicProviderID(rawValue: "one"))))
+    #expect(!listing.routes.isPrimary(MusicCandidate(platform: .netease, songID: "1", provider: two.id)))
+    #expect(CloudMusic.Listing(json: .object(["api": .string("/x.js"), "channels": .array([])])) == nil)
+    #expect(CloudMusic.Listing(json: nil) == nil)
 
-    let hyw = try HYWProvider.parse(json(#"{"code":200,"url":"https://car-er.kuwo.cn/a.flac","source":"builtin-x","actualQuality":"flac","qualityVerified":false}"#))
-    #expect(hyw.upstream == "hyw:builtin-x" && hyw.claimedQuality == "flac")
-    #expect(throws: MusicProviderError.authRequired) { try HYWProvider.parse(json(#"{"code":403,"message":"bad key"}"#)) }
-    #expect(throws: MusicProviderError.invalidResponse("HYW code 500")) { try HYWProvider.parse(json(#"{"code":500}"#)) }
+    // A channel is told apart from the listener's own scripts, and saved choices keep their plain names.
+    let saved = try JSONEncoder().encode([MusicProviderID.lx, two.id])
+    #expect(String(decoding: saved, as: UTF8.self) == #"["lx","two"]"#)
+    #expect(try JSONDecoder().decode([MusicProviderID].self, from: saved) == [.lx, two.id])
 }
 
 @Test func gdRequestsEncodeTheQueryAndShareOneBudget() async throws {
@@ -334,14 +359,6 @@ private func resolver(_ providers: [any MusicStreamProvider], health: MusicHealt
 @Test func channelsAskForTheChosenTier() {
     #expect(MusicQualityPreference.high.requested == .high && MusicQualityPreference.standard.requested == .standard)
     #expect(MusicQualityPreference.losslessPreferred.wantsLossless && !MusicQualityPreference.high.wantsLossless)
-    #expect(VKeysProvider.code(for: .lossless) == "10" && VKeysProvider.code(for: .high) == "8" && VKeysProvider.code(for: .standard) == "6")
-    #expect(GDStudioProvider.bitrate(for: .lossless) == "999" && GDStudioProvider.bitrate(for: .high) == "320" && GDStudioProvider.bitrate(for: .standard) == "128")
-    #expect(HYWProvider.quality(for: .lossless) == "flac" && HYWProvider.quality(for: .standard) == "128k")
-    #expect(NianxinProvider.levels(for: .lossless) == ["lossless", "exhigh"] && NianxinProvider.levels(for: .standard) == ["standard"])
-    #expect(XinghaiProvider.quality(for: .lossless, platform: .kuwo) == "flac" && XinghaiProvider.quality(for: .high, platform: .kuwo) == "320k")
-    #expect(XinghaiProvider.quality(for: .lossless, platform: .netease) == "lossless" && XinghaiProvider.quality(for: .standard, platform: .netease) == "standard")
-    #expect(MiguProvider.tiers(for: .lossless).map(\.name) == ["SQ", "HQ"] && MiguProvider.tiers(for: .high).map(\.name) == ["HQ"])
-    #expect(MiguProvider.tiers(for: .standard).isEmpty)
 }
 
 @Test func lossyFirstKeepsLookingForLossless() async throws {
@@ -392,13 +409,13 @@ private func resolver(_ providers: [any MusicStreamProvider], health: MusicHealt
         // A live cut first: never joined. Then the same recording.
         return [neteaseTrack("倒强 (Live)", ["五月天"], duration: 300, id: "9"), neteaseTrack("倒强", ["五月天"], duration: 271.0, id: "386175")]
     }
-    let resolver = MusicResolver(providers: [blocked, gd], prober: MusicProber(transport: audioTransport(), inspector: nil),
+    let resolver = MusicResolver(routes: .test, providers: [blocked, gd], prober: MusicProber(transport: audioTransport(), inspector: nil),
                                  health: MusicHealth(file: nil), companions: MusicCompanionFinder(catalogs: [netease]))
     let selection = try await resolver.select(track, preference: .losslessPreferred)
     #expect(selection.candidate.provider == .gdstudio && selection.track.ids[.netease] == "386175")
     #expect(selection.attempts.map(\.candidate.provider) == [.vkeys, .gdstudio])
     // No same recording on NetEase: the original failure stands.
-    let nothing = MusicResolver(providers: [blocked, gd], prober: MusicProber(transport: audioTransport(), inspector: nil), health: MusicHealth(file: nil),
+    let nothing = MusicResolver(routes: .test, providers: [blocked, gd], prober: MusicProber(transport: audioTransport(), inspector: nil), health: MusicHealth(file: nil),
                                 companions: MusicCompanionFinder(catalogs: [FakeCatalog(platform: .netease) { _ in [neteaseTrack("倒强", ["别人"], duration: 271, id: "1")] }]))
     await #expect(throws: MusicProviderError.upstreamRisk) { try await nothing.select(track, preference: .losslessPreferred) }
 }

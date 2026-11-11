@@ -98,7 +98,7 @@ private func document(_ origin: String, sites: [(key: String, api: String)]) thr
     let earlier = source("earlier")
     let groups = [
         SourceGroup(kind: .pinned, title: "Pinned Group", sites: [pin]),
-        SourceGroup(kind: .builtIn, title: "Built-in", sites: [secondBuiltIn, firstBuiltIn]),
+        SourceGroup(kind: .builtIn, title: "Recommended", sites: [secondBuiltIn, firstBuiltIn]),
         SourceGroup(kind: .subscription("two"), title: "Two", sites: [later, pin]),
         SourceGroup(kind: .subscription("one"), title: "One", sites: [earlier]),
         SourceGroup(kind: .hidden, title: "Hidden Sources", sites: [source("hidden-src")]),

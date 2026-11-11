@@ -12,6 +12,7 @@ public enum CloudSources {
 
     nonisolated(unsafe) private static var document: Subscription?
     nonisolated(unsafe) private static var livePlatforms: [LivePlatform] = []
+    nonisolated(unsafe) private static var musicListing: CloudMusic.Listing?
     private static let lock = NSLock()
 
     /// The latest copy of the subscription the app has, which the app keeps current.
@@ -19,12 +20,15 @@ public enum CloudSources {
         get { lock.withLock { document } }
         set {
             let platforms = (newValue?.raw["yingxiaLive"]?.array ?? []).compactMap { $0.object.flatMap(LivePlatform.init(json:)) }
-            lock.withLock { document = newValue; livePlatforms = platforms }
+            let listing = CloudMusic.Listing(json: newValue?.raw["yingxiaMusic"])
+            lock.withLock { document = newValue; livePlatforms = platforms; musicListing = listing }
         }
     }
 
     /// Its live platforms (`yingxiaLive`).
     static var platforms: [LivePlatform] { lock.withLock { livePlatforms } }
+    /// Its music channels (`yingxiaMusic`).
+    static var music: CloudMusic.Listing? { lock.withLock { musicListing } }
 
     /// One of Yingxia's own sources from the latest copy.
     public static func site(where matches: (Site) -> Bool) -> Site? { current?.sites.first(where: matches) }
@@ -35,7 +39,7 @@ public enum CloudSources {
         // often, so a cached copy doubled the wait for a fixed script and made Refresh do nothing.
         let (data, finalURL) = try await http.get(address, headers: ["User-Agent": HTTPClient.subscriptionUserAgent], fresh: true)
         let document = try Subscription.parse(data, origin: finalURL)
-        guard accepts(document) else { throw TVError.unsupported(L10n.text("Update Yingxia to use its built-in sources.")) }
+        guard accepts(document) else { throw TVError.unsupported(L10n.text("Update the app to use the recommended sources.")) }
         return document
     }
 

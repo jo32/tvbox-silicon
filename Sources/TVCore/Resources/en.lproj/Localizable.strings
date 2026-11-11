@@ -470,7 +470,6 @@
 "Yingxia %@ is ready in TestFlight. Open TestFlight on this Apple TV and update Yingxia to get these features." = "Yingxia %@ is ready in TestFlight. Open TestFlight on this Apple TV and update Yingxia to get these features.";
 "Here's what's new in version %@." = "Here's what's new in version %@.";
 "Bilibili" = "Bilibili";
-"Built-in" = "Built-in";
 "Bilibili Account" = "Bilibili Account";
 "Sign In to Bilibili" = "Sign In to Bilibili";
 "Open the Bilibili app on your phone, scan this code, and confirm the sign-in. Without signing in, videos play at up to 1080P and anime and films at 480P." = "Open the Bilibili app on your phone, scan this code, and confirm the sign-in. Without signing in, videos play at up to 1080P and anime and films at 480P.";
@@ -779,7 +778,6 @@
 "No Matching Songs" = "No Matching Songs";
 "Try the song's full name, or add the artist." = "Try the song's full name, or add the artist.";
 "%@ didn't answer, so these results are from the other catalog." = "%@ didn't answer, so these results are from the other catalog.";
-"Source: GD Music (music.gdstudio.xyz)" = "Source: GD Music (music.gdstudio.xyz)";
 "Finding the best channel…" = "Finding the best channel…";
 "Quality to be confirmed" = "Quality to be confirmed";
 "Lossy quality" = "Lossy quality";
@@ -793,9 +791,6 @@
 "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead. High and Standard ask every channel for 320 or 128 kbps lossy audio, which uses far less data." = "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead. High and Standard ask every channel for 320 or 128 kbps lossy audio, which uses far less data.";
 "QQ Music" = "QQ Music";
 "NetEase Cloud Music" = "NetEase Cloud Music";
-"QQ Music, when VKeys fails" = "QQ Music, when VKeys fails";
-"HYW key" = "HYW key";
-"HYW stays off until you enter the key from its published script. GD Music (music.gdstudio.xyz) is for personal, non-commercial use and allows 50 requests every 5 minutes." = "HYW stays off until you enter the key from its published script. GD Music (music.gdstudio.xyz) is for personal, non-commercial use and allows 50 requests every 5 minutes.";
 "Playback stopped, and no other channel could continue it." = "Playback stopped, and no other channel could continue it.";
 "The other channel has a different version. Choose a channel to continue." = "The other channel has a different version. Choose a channel to continue.";
 "Live" = "Live";
@@ -807,7 +802,6 @@
 "Demo" = "Demo";
 "Other Version" = "Other Version";
 "Unknown format" = "Unknown format";
-"GD Music" = "GD Music";
 "Lossless first" = "Lossless first";
 "Lossless only" = "Lossless only";
 "High (320 kbps)" = "High (320 kbps)";
@@ -867,13 +861,6 @@
 "Up to Date" = "Up to Date";
 "Migu Music" = "Migu Music";
 "Kuwo Music" = "Kuwo Music";
-"Migu" = "Migu";
-"Nianxin" = "Nianxin";
-"Xinghai" = "Xinghai";
-"Kuwo Music and NetEase Cloud Music" = "Kuwo Music and NetEase Cloud Music";
-"Kuwo Music and NetEase Cloud Music, when the others fail" = "Kuwo Music and NetEase Cloud Music, when the others fail";
-"Source: Xinghai (yy.zddyr.top)" = "Source: Xinghai (yy.zddyr.top)";
-"Xinghai (yy.zddyr.top) asks to be credited and not overused, so it is only asked when the other channels fail." = "Xinghai (yy.zddyr.top) asks to be credited and not overused, so it is only asked when the other channels fail.";
 "None of the catalogs has lyrics for this song." = "None of the catalogs has lyrics for this song.";
 "Nothing Up Next" = "Nothing Up Next";
 "Play a song from search results, an album or a playlist, and the songs after it play next." = "Play a song from search results, an album or a playlist, and the songs after it play next.";
@@ -1644,7 +1631,8 @@
 "The source gave no file." = "The source gave no file.";
 "It is a RAR or 7z archive; only ZIP archives and SRT, WebVTT and ASS files can be shown." = "It is a RAR or 7z archive; only ZIP archives and SRT, WebVTT and ASS files can be shown.";
 "The script didn't download: %@" = "The script didn't download: %@";
-"It has the same name as a source that comes with Yingxia." = "It has the same name as a source that comes with Yingxia.";
+"It has the same name as a recommended source." = "It has the same name as a recommended source.";
+"Update the app to use the recommended sources." = "Update the app to use the recommended sources.";
 "The source's script is missing." = "The source's script is missing.";
 "Subtitle Sources" = "Subtitle Sources";
 "Add a Source" = "Add a Source";

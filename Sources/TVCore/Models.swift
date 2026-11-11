@@ -240,7 +240,7 @@ public struct Site: Identifiable, Codable, Hashable, Sendable {
             #endif
             return L10n.text("Requires script engine")
         case .jar:
-            if isBuiltIn { return L10n.text("Built-in") }
+            if isBuiltIn { return L10n.text("Recommended") }
             if runsLitePort { return L10n.text("Lite JavaScript · JAR fallback") }
             #if os(macOS) || os(iOS) || os(tvOS)
             if EmbeddedJarHost.available { return L10n.text("Local JAR · Experimental") }

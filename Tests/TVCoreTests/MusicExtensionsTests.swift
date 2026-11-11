@@ -112,7 +112,7 @@ private func library() throws -> (MusicExtensionLibrary, URL) {
 }
 
 @Test func musicExtensionSongsResolveOnlyThroughTheirChannel() throws {
-    let resolver = MusicResolver(providers: [VKeysProvider()])
+    let resolver = MusicResolver(routes: .test, providers: [EmptyMusicProvider(id: .vkeys, platforms: [.qq])])
     var track = MusicTrack(platform: .ext, songID: "E1\n{}", title: "x", artists: [])
     #expect(resolver.candidates(for: track).isEmpty)
     track.ids[.qq] = "001"
@@ -148,7 +148,7 @@ private func library() throws -> (MusicExtensionLibrary, URL) {
     #expect(plain.url.absoluteString == "https://audio.example/m11.mp3" && plain.headers == ["Referer": "https://audio.example/"])
     let throughLX = try await provider.resolve(try #require(found[0].ids[.ext]), platform: .ext, quality: .lossless)
     #expect(throughLX.url.absoluteString == "https://lx.example/m7.flac")
-    #expect(MusicResolver(providers: [provider]).candidates(for: found[0]).map(\.provider) == [.extension])
+    #expect(MusicResolver(routes: .test, providers: [provider]).candidates(for: found[0]).map(\.provider) == [.extension])
 
     // $fetch answers {data, status} even when the server can't be reached.
     let fetched = try await runtime.call(item, "getSongInfo", #"{"songmid":"fetch"}"#, seconds: 20)

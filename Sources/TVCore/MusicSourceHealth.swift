@@ -26,10 +26,13 @@ public actor MusicHealth {
     static let longestCooldown: TimeInterval = 30 * 60
     /// Risk control on the provider's upstream account rarely clears within minutes.
     static let riskCooldown: TimeInterval = 10 * 60
-    /// Requests allowed per service in `window`; services not listed are unlimited here.
-    /// Xinghai sets no number, only an overall limit and a request not to overuse it.
-    /// LX Music sources are third-party scripts with services of their own: at most one lookup every few seconds.
-    static let budgets: [String: Int] = ["gdstudio": 50, "xinghai": 30, "lx": 60]
+    /// Requests allowed per service in `window`, for what the app asks itself: GD Studio's search, and the LX Music
+    /// sources (third-party scripts with services of their own: at most one lookup every few seconds). A channel of
+    /// the subscription brings its own number (`CloudMusic.Channel.budget`); a service with neither is unlimited here.
+    static let budgets: [String: Int] = ["gdstudio": 50, "lx": 60]
+    static func budget(_ service: String) -> Int? {
+        budgets[service] ?? CloudMusic.current?.channel(MusicProviderID(rawValue: service))?.budget
+    }
     static let window: TimeInterval = 5 * 60
 
     private var records: [String: Record] = [:]
@@ -83,7 +86,7 @@ public actor MusicHealth {
     /// Takes one request from a service's budget, or throws `rateLimited` with when the oldest
     /// request in the window leaves it. Counted before sending, so a burst cannot overshoot.
     public func admit(_ service: String, now: Date = Date()) throws(MusicProviderError) {
-        guard let limit = Self.budgets[service] else { return }
+        guard let limit = Self.budget(service) else { return }
         var recent = (requests[service] ?? []).filter { now.timeIntervalSince($0) < Self.window }
         guard recent.count < limit else {
             requests[service] = recent
@@ -96,7 +99,7 @@ public actor MusicHealth {
 
     /// Requests left in a service's window, for diagnostics.
     public func remaining(_ service: String, now: Date = Date()) -> Int? {
-        guard let limit = Self.budgets[service] else { return nil }
+        guard let limit = Self.budget(service) else { return nil }
         return limit - (requests[service] ?? []).filter { now.timeIntervalSince($0) < Self.window }.count
     }
 

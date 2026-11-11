@@ -56,14 +56,14 @@ Portions of this software are copyright © 1996-2026 The FreeType Project (https
 
 ## Reference implementation
 
-The built-in Hongguo source uses the catalog and player response formats from
+The recommended Hongguo source uses the catalog and player response formats from
 [jackotom/hongguo-drama](https://github.com/jackotom/hongguo-drama), commit
 `2d2314213c2457c63f84055518d38a27210c7ad1` (GPL-3.0). Its `src/native/app-source.js`
 and `sm3.js` are adapted as ES modules under `Sources/TVCore/ScriptAssets/sites/hongguo/`.
 The signing algorithms' earlier drpys/hongguoTV attribution, modification record,
 and full GPL license are retained there and bundled with the app. Changes dated
 2026-10-12 replace Node/Electron dependencies with QuickJS and native Apple crypto.
-The built-in Xifan and Hema sources (`Xifan.js`, `Hema.js`) follow its `src/native/xifan.js` and
+The recommended Xifan and Hema sources (`Xifan.js`, `Hema.js`) follow its `src/native/xifan.js` and
 `src/native/hema.js` at commit `f210689c4adbf0986e3412cdb12a1c710c5dd611` (v4.1); the record is in the same
 `NOTICE.txt`.
 The catalog adapter and native sample-by-sample CENC media preparation are implemented

@@ -128,12 +128,12 @@ private func temporaryLibrary() throws -> (LXSourceLibrary, URL, UserDefaults) {
     #expect(library.sources.isEmpty)
 }
 
-@Test func lxChannelComesAfterTheBuiltInOnes() {
+@Test func lxChannelComesAfterTheSubscriptionsChannels() {
     struct Stub: MusicStreamProvider {
         let id: MusicProviderID; let platforms: Set<MusicPlatform>
         func resolve(_ songID: String, platform: MusicPlatform, quality: MusicAudioQuality) async throws -> ResolvedMusicStream { throw MusicProviderError.noResource }
     }
-    let resolver = MusicResolver(providers: [Stub(id: .lx, platforms: [.qq, .kuwo]), Stub(id: .vkeys, platforms: [.qq]), Stub(id: .nianxin, platforms: [.kuwo])])
+    let resolver = MusicResolver(routes: .test, providers: [Stub(id: .lx, platforms: [.qq, .kuwo]), Stub(id: .vkeys, platforms: [.qq]), Stub(id: .nianxin, platforms: [.kuwo])])
     var track = MusicTrack(platform: .qq, songID: "q", title: "t", artists: ["a"])
     track.ids[.kuwo] = "k"
     #expect(resolver.candidates(for: track).map { "\($0.provider.rawValue):\($0.platform.rawValue)" } == ["nianxin:kuwo", "vkeys:qq", "lx:qq", "lx:kuwo"])

@@ -92,7 +92,7 @@ public actor SubtitleSourceLibrary {
         let provider = try await SubtitleScriptProvider.load(script: script, label: origin?.absoluteString ?? "added")
         let manifest = provider.manifest
         if let existing = saved.first(where: { $0.id == manifest.id }), existing.builtIn {
-            throw SubtitleProviderError.incompatible(L10n.text("It has the same name as a source that comes with Yingxia."))
+            throw SubtitleProviderError.incompatible(L10n.text("It has the same name as a recommended source."))
         }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try Data(script.utf8).write(to: file(manifest.id), options: .atomic)

@@ -253,19 +253,12 @@ public struct MusicResolver: Sendable {
     /// For one selection, resolution and probing together.
     var budget: TimeInterval = 15
     var parallel = 2
-    /// Primary providers per catalog, then fallbacks. Migu's own servers and Kuwo through Nianxin
-    /// lead: in the 2026-10-14 test they played songs VKeys and GD no longer reach (Jay Chou's).
-    static let primaries: [(MusicPlatform, MusicProviderID)] = [(.migu, .migu), (.kuwo, .nianxin), (.qq, .vkeys), (.netease, .gdstudio)]
-    /// LX Music sources the listener imported come last: third-party scripts, asked when the built-in channels
-    /// found nothing better.
-    static let order: [(MusicPlatform, MusicProviderID)] = primaries + [(.kuwo, .xinghai), (.netease, .nianxin), (.qq, .hyw), (.netease, .xinghai),
-                                                                         (.qq, .lx), (.netease, .lx), (.kuwo, .lx), (.migu, .lx)]
-    static func isPrimary(_ candidate: MusicCandidate) -> Bool {
-        primaries.contains { $0.0 == candidate.platform && $0.1 == candidate.provider }
-    }
+    /// The order to ask in: the subscription's, then the listener's LX Music sources.
+    let routes: MusicRoutes
 
-    public init(providers: [any MusicStreamProvider], prober: MusicProber = MusicProber(), health: MusicHealth = .shared,
+    public init(routes: MusicRoutes = .current, providers: [any MusicStreamProvider], prober: MusicProber = MusicProber(), health: MusicHealth = .shared,
                 companions: MusicCompanionFinder? = nil, budget: TimeInterval = 15) {
+        self.routes = routes
         self.providers = Dictionary(providers.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         self.prober = prober; self.health = health; self.companions = companions; self.budget = budget
     }
@@ -274,23 +267,23 @@ public struct MusicResolver: Sendable {
     public init(preferences: MusicPreferences, transport: MusicTransport = URLSessionMusicTransport(), health: MusicHealth = .shared) {
         var list: [any MusicStreamProvider] = []
         if preferences.enabled(.extension), let extensions = MusicExtensionProvider() { list.append(extensions) }
-        if preferences.enabled(.vkeys) { list.append(VKeysProvider(transport: transport)) }
-        if preferences.enabled(.gdstudio) { list.append(GDStudioProvider(transport: transport, health: health)) }
-        if preferences.enabled(.hyw) { list.append(HYWProvider(key: preferences.hywKey, transport: transport)) }
-        if preferences.enabled(.migu) { list.append(MiguProvider(transport: transport)) }
-        if preferences.enabled(.nianxin) { list.append(NianxinProvider(transport: transport)) }
-        if preferences.enabled(.xinghai) { list.append(XinghaiProvider(transport: transport, health: health)) }
+        if let listing = CloudMusic.current {
+            for channel in listing.channels where preferences.enabled(channel.id) {
+                list.append(CloudMusicProvider(channel: channel, api: listing.api, key: preferences.key(channel.id), health: health))
+            }
+        }
         if preferences.enabled(.lx), let lx = LXMusicProvider(sources: LXSourceLibrary.shared.enabled, health: health) { list.append(lx) }
         self.init(providers: list, prober: MusicProber(transport: transport), health: health,
                   companions: MusicCompanionFinder(catalogs: MusicSearchModel.defaultCatalogs(transport: transport, health: health)))
     }
 
     public func candidates(for track: MusicTrack) -> [MusicCandidate] {
-        let listed = Self.order.compactMap { platform, provider -> MusicCandidate? in
+        let listed = routes.order.compactMap { route -> MusicCandidate? in
+            let platform = route.platform, provider = route.provider
             guard let songID = track.ids[platform], let resolver = providers[provider], resolver.platforms.contains(platform) else { return nil }
             return MusicCandidate(platform: platform, songID: songID, provider: provider)
         }
-        // A music extension's own song plays from what the extension gives; after the built-in channels when the
+        // A music extension's own song plays from what the extension gives; after the other channels when the
         // song was also found in a catalog.
         guard let songID = track.ids[.ext], providers[.extension]?.platforms.contains(.ext) == true else { return listed }
         return listed + [MusicCandidate(platform: .ext, songID: songID, provider: .extension)]
@@ -323,7 +316,7 @@ public struct MusicResolver: Sendable {
             if !found.isEmpty, let first = queue.first, cooling.contains(first) { break }
             // Each catalog's primary channel runs alongside the other's; a fallback, or a channel
             // cooling down, only runs alone, after what came before it failed.
-            let together = queue.prefix(parallel).prefix { Self.isPrimary($0) && !cooling.contains($0) }
+            let together = queue.prefix(parallel).prefix { routes.isPrimary($0) && !cooling.contains($0) }
             let wave = together.isEmpty ? [queue[0]] : Array(together)
             queue.removeFirst(wave.count)
             let winner: Found? = await withTaskGroup(of: (MusicCandidate, Result<(ResolvedMusicStream, MusicProbeResult), MusicProviderError>, Double).self) { group in

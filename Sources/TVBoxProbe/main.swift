@@ -434,6 +434,30 @@ import TVCore
             guard player.currentTime().seconds >= 2 else { throw TVError.emptyPlaylist }
             return
         }
+        if args[1] == "--music-channel" {
+            // --music-channel <channel> <platform> <song id> [lossless|high|standard] [subscription address]
+            // asks one of the subscription's music channels for a song and probes what it answers. The address
+            // is for a copy of the subscription served somewhere else (a local `wrangler dev`).
+            guard args.count >= 5, let platform = MusicPlatform(rawValue: args[3]) else { throw TVError.invalidConfiguration }
+            if args.count > 6, let address = URL(string: args[6]) {
+                // Never a cached copy: it would name the script of an earlier build.
+                let (data, _) = try await URLSession.shared.data(for: URLRequest(url: address, cachePolicy: .reloadIgnoringLocalCacheData))
+                CloudSources.current = try Subscription.parse(data, origin: address)
+            } else { CloudSources.current = try await CloudSources.fetch(http: HTTPClient()) }
+            guard let listing = CloudMusic.current else { print("the subscription lists no music channels"); return }
+            print("channels: " + listing.channels.map { "\($0.id.rawValue)[\($0.platforms.map(\.rawValue).sorted().joined(separator: ","))]" }.joined(separator: " "))
+            print("order: " + listing.routes.order.map { "\($0.provider.rawValue)·\($0.platform.rawValue)" }.joined(separator: " ") + " primaries=\(listing.routes.primaries)")
+            guard let channel = listing.channel(MusicProviderID(rawValue: args[2])) else { print("no such channel"); return }
+            let quality = args.count > 5 ? MusicAudioQuality(rawValue: args[5]) ?? .lossless : .lossless
+            let started = Date()
+            do {
+                let stream = try await CloudMusicProvider(channel: channel, api: listing.api, health: MusicHealth(file: nil)).resolve(args[4], platform: platform, quality: quality)
+                print(String(format: "resolved in %.1fs host=%@ claimed=%@ upstream=%@", Date().timeIntervalSince(started), stream.url.host() ?? "-", stream.claimedQuality ?? "-", stream.upstream ?? "-"))
+                let probe = try await MusicProber().probe(stream, expected: nil)
+                print("probe: \(probe.format.label) \(probe.completeness.rawValue) duration=\(probe.duration.map { String(format: "%.1f", $0) } ?? "-")")
+            } catch { print(String(format: "failed in %.1fs: ", Date().timeIntervalSince(started)) + MusicProviderError(error).detail) }
+            return
+        }
         if args[1] == "--hongguo-check" || args[1] == "--hongguo-play" {
             // --hongguo-play <series id> [episode number] isolates playback from catalog/search availability.
             // --hongguo-check [series id] [episode number] also checks the catalog, search and rankings.
