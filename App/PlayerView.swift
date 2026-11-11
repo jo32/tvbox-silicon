@@ -65,6 +65,8 @@ struct PlaybackView: View {
                                  enhancer: session.enhancer, upscale: $upscalesVideo, smooth: $smoothsVideo, info: $showsPlaybackInfo,
                                  speed: playbackSpeed, setSpeed: { playbackSpeed = $0; session.setSpeed($0) }, fills: $fillsScreen, danmakuArea: $danmakuArea,
                                  external: session.externalSubtitles, skip: session.skipOffer, skipSource: { session.skipSourceSegment() },
+                                 skipping: session.canSkip ? session.skipSettings : nil, setSkipping: { session.applySkipSettings($0) },
+                                 markSkip: { session.markSkip(intro: $0) },
                                  chapters: session.chapters,
                                  exitWhileWaiting: session.showsPicture ? nil : { dismiss() }, episodes: episodeChoices, transportBar: transportBar,
                                  titleRow: AnyView(TVPlayerTitleRow(channel: channel, session: session, transportBar: transportBar).environment(store))).ignoresSafeArea()
@@ -750,6 +752,10 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     /// The source's opening or ending credits playing now, offered as AVKit's Skip button (#256).
     var skip: PlaybackSkip? = nil
     var skipSource: @MainActor () -> Void = {}
+    /// The video's own intro and outro times, where it keeps any (#808): set from the menu at the place playing.
+    var skipping: EpisodeSkipSettings? = nil
+    var setSkipping: @MainActor (EpisodeSkipSettings) -> Void = { _ in }
+    var markSkip: @MainActor (_ intro: Bool) -> Void = { _ in }
     /// The part's chapters (Bilibili's 分段章节): a Chapters tab in the info panel, beside Danmaku.
     var chapters: [PlaybackChapter] = []
     private static let speeds: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
@@ -882,6 +888,27 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         let skipSource = skipSource
         let skips = skip.map { [UIAction(title: $0.kind == .intro ? L10n.text("Skip Intro") : L10n.text("Skip Outro"), image: UIImage(systemName: "forward.fill")) { _ in skipSource() }] } ?? []
         if controller.contextualActions.map(\.title) != skips.map(\.title) { controller.contextualActions = skips }
+        if let skipping, !live {
+            // No keyboard for a time here: the intro ends, or the outro starts, where the picture is. Each shows what
+            // it holds, or where it may be set.
+            let setSkipping = setSkipping, markSkip = markSkip
+            var options: [UIMenuElement] = [
+                UIAction(title: L10n.text("Automatically skip intro and outro"), state: skipping.enabled ? .on : .off) { _ in
+                    var value = skipping; value.enabled.toggle(); setSkipping(value)
+                },
+                UIAction(title: L10n.text("Intro Ends Here"),
+                         subtitle: skipping.introEnd > 0 ? EpisodeSkipSettings.formatTime(skipping.introEnd) : L10n.text("In the first five minutes")) { _ in markSkip(true) },
+                UIAction(title: L10n.text("Outro Starts Here"),
+                         subtitle: skipping.outroLength > 0 ? L10n.text("%@ before the end", EpisodeSkipSettings.formatTime(skipping.outroLength))
+                            : L10n.text("In the last ten minutes")) { _ in markSkip(false) },
+            ]
+            if skipping.introEnd > 0 || skipping.outroLength > 0 {
+                options.append(UIAction(title: L10n.text("Clear Intro and Outro"), image: UIImage(systemName: "xmark")) { _ in
+                    setSkipping(EpisodeSkipSettings(enabled: skipping.enabled))
+                })
+            }
+            items.append(UIMenu(title: L10n.text("Skip intro / outro"), image: UIImage(systemName: "forward.end"), children: options))
+        }
         if !live {
             let setSpeed = setSpeed, speed = speed
             let options = Self.speeds.map { rate in UIAction(title: Self.speedLabel(rate), state: rate == speed ? .on : .off) { _ in setSpeed(rate) } }

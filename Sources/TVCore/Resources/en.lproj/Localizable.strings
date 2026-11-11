@@ -1801,3 +1801,9 @@
 "Open the Sign-In Page" = "Open the Sign-In Page";
 "The sign-in was declined." = "The sign-in was declined.";
 "Sign-in details stay on this device." = "Sign-in details stay on this device.";
+"Intro Ends Here" = "Intro Ends Here";
+"Outro Starts Here" = "Outro Starts Here";
+"In the first five minutes" = "In the first five minutes";
+"In the last ten minutes" = "In the last ten minutes";
+"%@ before the end" = "%@ before the end";
+"Clear Intro and Outro" = "Clear Intro and Outro";

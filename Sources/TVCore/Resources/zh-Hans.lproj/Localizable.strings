@@ -1801,3 +1801,9 @@
 "Open the Sign-In Page" = "打开登录页面";
 "The sign-in was declined." = "登录已被拒绝。";
 "Sign-in details stay on this device." = "登录信息只保存在此设备上。";
+"Intro Ends Here" = "片头到此结束";
+"Outro Starts Here" = "片尾从此开始";
+"In the first five minutes" = "可设在前 5 分钟内";
+"In the last ten minutes" = "可设在最后 10 分钟内";
+"%@ before the end" = "结束前 %@";
+"Clear Intro and Outro" = "清除片头片尾时间";

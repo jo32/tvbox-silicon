@@ -1801,3 +1801,9 @@
 "Open the Sign-In Page" = "サインインページを開く";
 "The sign-in was declined." = "サインインは拒否されました。";
 "Sign-in details stay on this device." = "サインイン情報はこのデバイスにのみ保存されます。";
+"Intro Ends Here" = "オープニングはここまで";
+"Outro Starts Here" = "エンディングはここから";
+"In the first five minutes" = "最初の5分以内で設定";
+"In the last ten minutes" = "最後の10分以内で設定";
+"%@ before the end" = "終了の %@ 前";
+"Clear Intro and Outro" = "オープニングとエンディングを消去";
