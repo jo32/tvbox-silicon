@@ -1345,11 +1345,11 @@ extension PlaybackSession {
         }
         // A downloaded episode plays from disk: its file, or its HLS through a loopback server.
         if address.scheme == DownloadLibrary.scheme {
-            note(L10n.text("Opening the saved download"))
+            note(L10n.text("Opening the cached video"))
             do {
                 address = try await DownloadLibrary.shared.playbackAddress(for: address) { fraction in
                     Task { @MainActor [weak self] in
-                        self?.note(L10n.text("Preparing the saved download for this device · %lld%%", Int(fraction * 100)), replacing: "rewrap")
+                        self?.note(L10n.text("Preparing the cached video for this device · %lld%%", Int(fraction * 100)), replacing: "rewrap")
                     }
                 }
             }

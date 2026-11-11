@@ -8,7 +8,8 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
     /// Apple TV's sidebar item for the song playing, first while one is loaded; it opens the player.
     case nowPlaying = "Now Playing"
     var id: String { rawValue }
-    var title: String { L10n.text(rawValue) }
+    /// The raw values are also saved settings and QA arguments, so the offline cache keeps its old one.
+    var title: String { self == .downloads ? L10n.text("Offline Cache") : L10n.text(rawValue) }
     /// Where Software Update lives: Settings, or More when Settings is folded into it.
     var showsUpdateBadge: Bool { self == .settings || self == .more }
     var icon: String {

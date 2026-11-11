@@ -35,7 +35,7 @@ struct DownloadsView: View {
         .modifier(DownloadKindBar(shown: hasMusic, kind: $kind))
         .onAppear { if library.items.isEmpty && hasMusic { kind = .music } }
         .screenBackdrop()
-        .tabTitle(L10n.text("Downloads"))
+        .tabTitle(L10n.text("Offline Cache"))
         .task { await library.measure() }
         .onChange(of: library.items.filter { $0.status == .completed }.count) { Task { await library.measure() } }
         #if os(macOS)
@@ -46,18 +46,10 @@ struct DownloadsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Task { await library.measure() }
         }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { NSWorkspace.shared.open(hasMusic && kind == .music ? MusicDownloadLibrary.shared.root : library.root) } label: {
-                    Label(L10n.text("Show in Finder"), systemImage: "folder")
-                }
-                .help(L10n.text("Show in Finder"))
-            }
-        }
         #endif
-        .confirmationDialog(L10n.text("Delete all downloaded episodes of %@?", deleting?.title ?? ""),
+        .confirmationDialog(L10n.text("Delete all cached episodes of %@?", deleting?.title ?? ""),
                             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
-            Button(L10n.text("Delete Downloads"), role: .destructive) {
+            Button(L10n.text("Delete Cached Items"), role: .destructive) {
                 if let deleting { library.remove(deleting.items.map(\.id)) }
                 deleting = nil
             }
@@ -69,7 +61,7 @@ struct DownloadsView: View {
 
     #if os(macOS)
     private var storageSummary: String {
-        let used = L10n.text("%@ used by downloads", DownloadFormat.size(library.usage.downloads + MusicDownloadLibrary.shared.size))
+        let used = L10n.text("%@ used by the cache", DownloadFormat.size(library.usage.downloads + MusicDownloadLibrary.shared.size))
         guard let free = library.usage.available else { return used }
         return used + " · " + L10n.text("%@ free", DownloadFormat.size(free))
     }
@@ -111,14 +103,14 @@ struct DownloadsView: View {
         }
         .downloadCardButton()
         .contextMenu {
-            Button(L10n.text("Delete Downloads"), systemImage: "trash", role: .destructive) { deleting = show }
+            Button(L10n.text("Delete Cached Items"), systemImage: "trash", role: .destructive) { deleting = show }
         }
     }
 
-    /// "Downloaded", how many shows, then how they are sorted and 倒序, as glass controls.
+    /// "Cached", how many shows, then how they are sorted and 倒序, as glass controls.
     private func downloadedHeader(count: Int) -> some View {
         HStack(alignment: .center, spacing: 10) {
-            SectionHeader(title: L10n.text("Downloaded")).fixedSize().layoutPriority(1)
+            SectionHeader(title: L10n.text("Cached")).fixedSize().layoutPriority(1)
             Text("\(count)").font(.headline).monospacedDigit().foregroundStyle(.secondary)
             Spacer(minLength: 12)
             #if os(macOS)
@@ -160,7 +152,7 @@ struct DownloadsView: View {
         let paused = pending.filter { $0.status == .paused || $0.status == .failed }
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(L10n.text("Downloading")).font(.title3.weight(.semibold))
+                Text(L10n.text("Caching")).font(.title3.weight(.semibold))
                 Text("\(pending.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
                 Spacer(minLength: 12)
                 Menu {
@@ -196,7 +188,7 @@ struct DownloadsView: View {
         let paused = pending.filter { $0.status == .paused || $0.status == .failed }
         return VStack(alignment: .leading, spacing: Layout.headerSpacing) {
             HStack(alignment: .center, spacing: 12) {
-                SectionHeader(title: L10n.text("Downloading")).fixedSize().layoutPriority(1)
+                SectionHeader(title: L10n.text("Caching")).fixedSize().layoutPriority(1)
                 Text("\(pending.count)").font(.headline).monospacedDigit().foregroundStyle(.secondary)
                 Spacer(minLength: 12)
                 Menu {
@@ -274,7 +266,7 @@ private struct DownloadKindBar: ViewModifier {
     }
 
     private var picker: some View {
-        Picker(L10n.text("Downloads"), selection: $kind) {
+        Picker(L10n.text("Offline Cache"), selection: $kind) {
             Text(L10n.text("Videos")).tag(DownloadsView.Kind.videos)
             Text(L10n.text("Music")).tag(DownloadsView.Kind.music)
         }
@@ -305,7 +297,7 @@ enum DownloadSort: String, CaseIterable {
     case size
     var title: String {
         switch self {
-        case .date: L10n.text("Date Downloaded")
+        case .date: L10n.text("Date Cached")
         case .name: L10n.text("Name")
         case .size: L10n.text("Size")
         }
@@ -371,8 +363,8 @@ private struct EmptyDownloads: View {
     let available: Int64?
     let browse: () -> Void
     var body: some View {
-        EmptyPage(symbol: "arrow.down", title: L10n.text("No Downloads"),
-                  message: L10n.text("Choose Download on a video's page to save episodes for watching offline."),
+        EmptyPage(symbol: "arrow.down", title: L10n.text("Nothing Cached"),
+                  message: L10n.text("Choose Cache on a video's page to keep episodes for watching offline."),
                   action: L10n.text("Browse Sources"), actionSymbol: AppSection.sites.icon, perform: browse) {
             if let available {
                 Label(L10n.text("%@ available on this device", DownloadFormat.size(available)), systemImage: "internaldrive")
@@ -402,7 +394,7 @@ private struct StorageCard: View {
             }
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(DownloadFormat.size(downloads)).font(.system(.title, design: .rounded).weight(.bold)).monospacedDigit()
-                Text(L10n.text("used by downloads")).font(.subheadline).foregroundStyle(.secondary)
+                Text(L10n.text("used by the cache")).font(.subheadline).foregroundStyle(.secondary)
             }
             if capacity > 0 {
                 GeometryReader { proxy in
@@ -418,14 +410,14 @@ private struct StorageCard: View {
                 .frame(height: DownloadMetrics.thumb > 60 ? 16 : 10)
                 .accessibilityHidden(true)
                 HStack(spacing: 18) {
-                    legend(Brand.cyan, L10n.text("Downloads"), downloads)
+                    legend(Brand.cyan, L10n.text("Offline Cache"), downloads)
                     legend(Color.primary.opacity(0.28), L10n.text("Other"), other)
                     legend(Color.primary.opacity(0.12), L10n.text("Free"), free)
                 }
                 .font(.caption)
             }
             #if os(tvOS)
-            Text(L10n.text("tvOS may remove downloads when Apple TV runs low on storage.")).font(.caption).foregroundStyle(.secondary)
+            Text(L10n.text("tvOS may remove cached videos when Apple TV runs low on storage.")).font(.caption).foregroundStyle(.secondary)
             #endif
         }
         .padding(DownloadMetrics.thumb > 60 ? 28 : 18)
@@ -462,9 +454,9 @@ private struct QueueRow: View {
 
     @ViewBuilder private var menu: some View {
         if item.status == .queued, (position ?? 1) > 1 {
-            Button(L10n.text("Download Next"), systemImage: "arrow.up.to.line") { library.prioritize(item.id) }
+            Button(L10n.text("Cache Next"), systemImage: "arrow.up.to.line") { library.prioritize(item.id) }
         }
-        Button(L10n.text("Cancel Download"), systemImage: "xmark", role: .destructive) { library.remove([item.id]) }
+        Button(L10n.text("Cancel Caching"), systemImage: "xmark", role: .destructive) { library.remove([item.id]) }
     }
 
     #if os(macOS)
@@ -505,7 +497,7 @@ private struct QueueRow: View {
                 default:
                     roundControl("pause.circle.fill", L10n.text("Pause")) { library.pause(item.id) }
                 }
-                roundControl("xmark.circle.fill", L10n.text("Cancel Download")) { library.remove([item.id]) }
+                roundControl("xmark.circle.fill", L10n.text("Cancel Caching")) { library.remove([item.id]) }
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
@@ -553,7 +545,7 @@ private struct QueueRow: View {
                 default:
                     control("pause.fill", L10n.text("Pause")) { library.pause(item.id) }
                 }
-                control("xmark", L10n.text("Cancel Download")) { library.remove([item.id]) }
+                control("xmark", L10n.text("Cancel Caching")) { library.remove([item.id]) }
             }
         }
         .padding(DownloadMetrics.thumb > 60 ? 18 : 12)
@@ -577,7 +569,7 @@ private struct QueueRow: View {
             return parts.joined(separator: " · ")
         case .finishing: return L10n.text("Finishing…")
         case .paused: return L10n.text("Paused") + " · \(percent)%" + (compact ? "" : " · " + amount)
-        case .failed: return item.failure ?? L10n.text("Download failed")
+        case .failed: return item.failure ?? L10n.text("Caching failed")
         case .completed: return ""
         }
     }
@@ -831,8 +823,8 @@ struct DownloadShowPage: View {
         // Its last episode deleted: back to Downloads.
         .onChange(of: show == nil) { _, gone in if gone { dismiss() } }
         .task { if let show { await artwork.load([show]) } }
-        .confirmationDialog(L10n.text("Delete all downloaded episodes of %@?", show?.title ?? ""), isPresented: $deleting, titleVisibility: .visible) {
-            Button(L10n.text("Delete Downloads"), role: .destructive) {
+        .confirmationDialog(L10n.text("Delete all cached episodes of %@?", show?.title ?? ""), isPresented: $deleting, titleVisibility: .visible) {
+            Button(L10n.text("Delete Cached Items"), role: .destructive) {
                 if let show { library.remove(show.items.map(\.id)) }
             }
         }
@@ -891,7 +883,7 @@ struct DownloadShowPage: View {
                 .controlButton(prominent: true)
             }
             Button(role: .destructive) { deleting = true } label: {
-                Label(L10n.text("Delete Downloads"), systemImage: "trash").lineLimit(1).fixedSize()
+                Label(L10n.text("Delete Cached Items"), systemImage: "trash").lineLimit(1).fixedSize()
             }
             .controlButton()
         }
@@ -928,18 +920,7 @@ struct DownloadShowPage: View {
         .cardButton()
         .accessibilityLabel(L10n.text("Play %@", item.episode))
         .contextMenu {
-            #if os(macOS)
-            if let file = library.file(for: item) {
-                Button(L10n.text("Show in Finder"), systemImage: "folder") { NSWorkspace.shared.activateFileViewerSelecting([file]) }
-            }
-            #elseif os(iOS)
-            if let file = library.exportableFile(for: item) {
-                Button(L10n.text("Save or Share"), systemImage: "square.and.arrow.up") {
-                    DownloadSharing.share(file, named: DownloadLibrary.exportName(for: item))
-                }
-            }
-            #endif
-            Button(L10n.text("Delete Download"), systemImage: "trash", role: .destructive) { library.remove([item.id]) }
+            Button(L10n.text("Delete from Cache"), systemImage: "trash", role: .destructive) { library.remove([item.id]) }
         }
     }
 }
@@ -992,7 +973,7 @@ struct DownloadedBadge: View {
             .font(.system(size: DownloadMetrics.thumb > 60 ? 22 : 12, weight: .semibold))
             .foregroundStyle(Brand.onAccent, Brand.accent)
             .offset(x: 4, y: -4)
-            .accessibilityLabel(L10n.text("Downloaded"))
+            .accessibilityLabel(L10n.text("Cached"))
     }
 }
 
@@ -1008,9 +989,9 @@ struct DownloadState: View {
         Group {
             switch status {
             case .completed:
-                Image(systemName: "arrow.down.circle.fill").foregroundStyle(Brand.accent).accessibilityLabel(L10n.text("Downloaded"))
+                Image(systemName: "arrow.down.circle.fill").foregroundStyle(Brand.accent).accessibilityLabel(L10n.text("Cached"))
             case .failed:
-                Image(systemName: "exclamationmark.circle").foregroundStyle(Brand.rose).accessibilityLabel(L10n.text("Download failed"))
+                Image(systemName: "exclamationmark.circle").foregroundStyle(Brand.rose).accessibilityLabel(L10n.text("Caching failed"))
             case .downloading, .finishing:
                 ZStack {
                     Circle().stroke(Color.primary.opacity(0.15), lineWidth: 2)
@@ -1018,7 +999,7 @@ struct DownloadState: View {
                         .rotationEffect(.degrees(-90))
                 }
                 .frame(width: size, height: size)
-                .accessibilityLabel(L10n.text("Downloading"))
+                .accessibilityLabel(L10n.text("Caching"))
             case .queued, .paused:
                 Image(systemName: "arrow.down.circle").foregroundStyle(.secondary).accessibilityLabel(L10n.text("In Queue"))
             }
@@ -1054,7 +1035,7 @@ struct DownloadPicker: View {
                     .overlay { PosterImage(url: video.poster, headers: video.posterHeaders) }
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(L10n.text("Download Episodes")).font(.title2.weight(.bold))
+                    Text(L10n.text("Cache Episodes")).font(.title2.weight(.bold))
                     Text(video.name).font(.headline).lineLimit(2)
                     if !flag.isEmpty { Text(SourceLabel(flag).text).font(.subheadline).foregroundStyle(.secondary).lineLimit(1) }
                 }
@@ -1112,7 +1093,7 @@ struct DownloadPicker: View {
             added(chosen.count)
             dismiss()
         } label: {
-            Label(selection.isEmpty ? L10n.text("Download") : L10n.text("Download %lld", selection.count), systemImage: "arrow.down.circle.fill")
+            Label(selection.isEmpty ? L10n.text("Cache") : L10n.text("Cache %lld", selection.count), systemImage: "arrow.down.circle.fill")
         }
         .controlButton(prominent: true).disabled(selection.isEmpty)
     }
@@ -1128,7 +1109,7 @@ struct DownloadPicker: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .overlay { RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Color.primary.opacity(0.1)) }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(L10n.text("Download Episodes")).font(.title3.weight(.semibold))
+                    Text(L10n.text("Cache Episodes")).font(.title3.weight(.semibold))
                     Text(video.name).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(macSubtitle).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
@@ -1232,7 +1213,7 @@ struct DownloadPicker: View {
         }
         .buttonStyle(.plain)
         .disabled(locked)
-        .help(existing.flatMap { locked ? ($0.status == .completed ? L10n.text("Downloaded") : L10n.text("In Queue")) : nil } ?? episode.name)
+        .help(existing.flatMap { locked ? ($0.status == .completed ? L10n.text("Cached") : L10n.text("In Queue")) : nil } ?? episode.name)
         .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
@@ -1245,7 +1226,7 @@ struct DownloadPicker: View {
     }
 
     private func stateLabel(_ item: DownloadItem) -> some View {
-        Text(item.status == .completed ? L10n.text("Downloaded") : L10n.text("In Queue"))
+        Text(item.status == .completed ? L10n.text("Cached") : L10n.text("In Queue"))
             .font(.caption).foregroundStyle(.secondary).lineLimit(1).fixedSize()
     }
 
@@ -1275,7 +1256,7 @@ struct DownloadPicker: View {
                 Text(episode.name).lineLimit(1)
                 Spacer(minLength: 6)
                 if let existing, locked {
-                    Text(existing.status == .completed ? L10n.text("Downloaded") : L10n.text("In Queue")).font(.caption).foregroundStyle(.secondary)
+                    Text(existing.status == .completed ? L10n.text("Cached") : L10n.text("In Queue")).font(.caption).foregroundStyle(.secondary)
                 }
             }
             #if !os(tvOS)
@@ -1392,7 +1373,7 @@ extension View {
             Diagnostics.shared.record(.warning, "download", "continued task not permitted")
             return
         }
-        let request = BGContinuedProcessingTaskRequest(identifier: identifier, title: L10n.text("Downloading"), subtitle: name)
+        let request = BGContinuedProcessingTaskRequest(identifier: identifier, title: L10n.text("Caching"), subtitle: name)
         request.strategy = .fail
         do {
             try BGTaskScheduler.shared.submit(request)
@@ -1436,7 +1417,7 @@ extension View {
         task.progress.completedUnitCount = Int64(done * 1000)
         if let name = current(), name != subtitle {
             subtitle = name
-            task.updateTitle(L10n.text("Downloading"), subtitle: name)
+            task.updateTitle(L10n.text("Caching"), subtitle: name)
         }
         return true
     }
@@ -1461,37 +1442,6 @@ extension View {
             return item.episode.isEmpty ? item.title : "\(item.title) · \(item.episode)"
         }
         return (songs.first(where: \.isActive) ?? songs.first(where: { $0.status == .queued }))?.track.title
-    }
-}
-#endif
-
-#if os(iOS)
-/// Saves a finished download to Files or Photos, or sends it with AirDrop, through the share sheet. It hands over a
-/// renamed copy (`DownloadExport`), so deleting the saved file elsewhere leaves the download in the app.
-@MainActor enum DownloadSharing {
-    static func share(_ file: URL, named name: String) {
-        Task {
-            let copy = await Task.detached { () -> Result<URL, any Error> in Result { try DownloadExport.copy(file, named: name) } }.value
-            guard case .success(let copy) = copy else {
-                if case .failure(let error) = copy { Diagnostics.shared.failure("download", "share copy", error) }
-                // Deleted outside the app: stop listing it.
-                DownloadLibrary.shared.forgetMissing()
-                MusicDownloadLibrary.shared.forgetMissing()
-                return
-            }
-            guard let scene = UIApplication.shared.appWindowScene, let window = scene.keyWindow ?? scene.windows.first else { return }
-            var controller = window.rootViewController
-            while let next = controller?.presentedViewController, !next.isBeingDismissed { controller = next }
-            let sheet = UIActivityViewController(activityItems: [copy], applicationActivities: nil)
-            sheet.completionWithItemsHandler = { @Sendable _, _, _, _ in DownloadExport.clear() }
-            if let popover = sheet.popoverPresentationController {
-                // iPad: a sheet in the middle of the window, as the menu that opened it is gone.
-                popover.sourceView = window
-                popover.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.midY, width: 0, height: 0)
-                popover.permittedArrowDirections = []
-            }
-            controller?.present(sheet, animated: true)
-        }
     }
 }
 #endif

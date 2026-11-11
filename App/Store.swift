@@ -263,7 +263,7 @@ import TVCore
         let config = subscription
         guard let site = config?.sites.first(where: { $0.key == item.source.siteKey })
                 ?? cloudDocument?.sites.first(where: { $0.key == item.source.siteKey }) else {
-            throw TVError.unsupported(L10n.text("%@ is no longer in your subscription, so this download can't continue.", item.source.siteName))
+            throw TVError.unsupported(L10n.text("%@ is no longer in your subscription, so caching can't continue.", item.source.siteName))
         }
         let base = CatalogClient(site: site, origin: config?.origin ?? URL(string: "https://example.invalid/")!, jarURL: config?.spiderURL)
         let client = config.map { base.applying($0) } ?? base
