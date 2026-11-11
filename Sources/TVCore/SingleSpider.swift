@@ -92,7 +92,19 @@ public enum ImportedFiles {
     /// What an address on the reserved host holds; nil for every other address, which loads as usual.
     static func data(at url: URL) throws -> Data? {
         guard let file = file(for: url) else { return nil }
-        guard let data = try? Data(contentsOf: file) else { throw TVError.unsupported(L10n.text("This file is no longer on this device. Add it again.")) }
+        guard let data = try? Data(contentsOf: file) else { throw TVError.unsupported(missingMessage) }
         return data
+    }
+
+    /// What a file's address says when its copy isn't here. The subscription list follows the viewer to their other
+    /// devices through iCloud and a file's copy doesn't, so this is nearly always a file added on another device (#842).
+    public static var missingMessage: String {
+        L10n.text("This file is on the device it was added on, not on this one. Files don't sync to other devices; use a web address instead.")
+    }
+
+    /// An address on the reserved host whose copy isn't on this device.
+    public static func isMissing(_ address: String) -> Bool {
+        guard let url = URL(string: address), let file = file(for: url) else { return false }
+        return !FileManager.default.fileExists(atPath: file.path)
     }
 }

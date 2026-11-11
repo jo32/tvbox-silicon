@@ -385,7 +385,7 @@ import TVCore
         defer { importing = false }
         await fetch(subscriptions.filter(\.enabled))
         refreshCloudSources(force: true)
-        let failed = subscriptions.filter { $0.enabled && subscriptionErrors[$0.address] != nil }.count
+        let failed = subscriptions.filter { $0.enabled && subscriptionErrors[$0.address] != nil && !ImportedFiles.isMissing($0.address) }.count
         if failed > 0 { notice = L10n.text("%lld subscriptions could not be refreshed; their last copies stay in use.", failed) }
     }
     func setSubscription(_ entry: SubscriptionEntry, enabled: Bool) async {
@@ -436,6 +436,13 @@ import TVCore
     /// Fetches subscriptions side by side, keeps what arrives, and shows the merged result. A
     /// subscription that turns out to be a directory is replaced by the ones it lists, switched off.
     private func fetch(_ entries: [SubscriptionEntry]) async {
+        // A file added on another device has no copy here to read. Its row says so; it is not fetched, counted or
+        // reported as a failed refresh (#842).
+        let entries = entries.filter { entry in
+            guard ImportedFiles.isMissing(entry.address) else { return true }
+            subscriptionErrors[entry.address] = ImportedFiles.missingMessage
+            return false
+        }
         let http = http
         let results = await withTaskGroup(of: (SubscriptionEntry, Result<SubscriptionImport, any Error>).self) { group in
             for entry in entries {

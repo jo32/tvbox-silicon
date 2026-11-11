@@ -1372,7 +1372,7 @@
 "More Charts" = "更多榜单";
 "Add from File…" = "从文件添加…";
 "A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider." = "TVBox JSON 订阅、M3U / TXT 直播列表，或单个 Python（.py）或 JavaScript（.js）爬虫。";
-"This file is no longer on this device. Add it again." = "此文件已不在本设备上，请重新添加。";
+"This file is on the device it was added on, not on this one. Files don't sync to other devices; use a web address instead." = "此文件在添加它的设备上，不在本设备上。本地文件不会同步到其他设备，请改用网址订阅。";
 "LX Music Sources" = "洛雪音乐自定义源";
 "LX Music Source" = "洛雪音源";
 "This file is not an LX Music source." = "这不是洛雪音乐的自定义源脚本。";
