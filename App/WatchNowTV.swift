@@ -625,7 +625,9 @@ struct WatchNowTVCategoryRail: View {
         Task {
             defer { loading.remove(key) }
             do {
-                let page = try await client.list(category: category, query: "", page: 1)
+                // Rows of one plugin source start together (Discover starts four at once), and its queue turns
+                // away calls past the few it holds: wait and ask again, or the row would be gone for ten minutes.
+                let page = try await PluginQueue.retrying { try await client.list(category: category, query: "", page: 1) }
                 var seen = Set<String>()
                 let videos = page.videos.filter { seen.insert($0.id).inserted }
                 if rows[key]?.videos != videos { rows[key] = Row(videos: videos, date: Date()) } else { rows[key]?.date = Date() }

@@ -229,3 +229,51 @@ private func eventually(_ predicate: () -> Bool) async throws {
     #expect(CloudDriveQRLogin.aliyunRefreshToken(json.base64EncodedString()) == "0123456789abcdef0123456789abcdef")
     #expect(CloudDriveQRLogin.aliyunRefreshToken("not base64") == nil)
 }
+
+
+// Watch Now rows that the full queue turned away (report a8d5d1b15be4) call again instead of disappearing.
+@Test func busyPluginQueueCallsAreRetried() async throws {
+    final class Calls: @unchecked Sendable {
+        let lock = NSLock(); var count = 0
+        func next() -> Int { lock.withLock { count += 1; return count } }
+    }
+    let busy = TVError.unsupported(PluginQueue.busyMessage)
+    let calls = Calls()
+    let value = try await PluginQueue.retrying(delays: [0, 0, 0]) { () async throws -> String in
+        if calls.next() < 3 { throw busy }
+        return "row"
+    }
+    #expect(value == "row" && calls.count == 3)
+
+    // Other failures are the source's own and are not retried.
+    let failing = Calls()
+    await #expect(throws: TVError.self) {
+        try await PluginQueue.retrying(delays: [0, 0]) { () async throws -> String in _ = failing.next(); throw TVError.unsupported("HTTP 500") }
+    }
+    #expect(failing.count == 1)
+
+    // A queue that stays full gives up after the last wait.
+    let full = Calls()
+    do {
+        _ = try await PluginQueue.retrying(delays: [0, 0]) { () async throws -> String in _ = full.next(); throw busy }
+        Issue.record("Expected the busy error")
+    } catch { #expect(PluginQueue.isBusy(error)) }
+    #expect(full.count == 3)
+}
+
+// The worker's own rejection is what `PluginQueue.isBusy` recognizes.
+@Test func fullPluginQueueRejectionIsBusy() async throws {
+    let gate = NativeCallGate(); defer { gate.release() }
+    let worker = SerializedPluginWorker(maximumPending: 1, interactiveWidth: 1) { _, json in gate.execute(json) }
+    let first = Task { try await worker.request(resources: "app", json: "blocked-1") }
+    try await eventually { gate.executed.count == 1 }
+    let second = Task { try await worker.request(resources: "app", json: "blocked-2") }
+    try await eventually { worker.scheduling.pending == 1 }
+    do {
+        _ = try await worker.request(resources: "app", json: "blocked-3")
+        Issue.record("Expected the busy error")
+    } catch { #expect(PluginQueue.isBusy(error)) }
+    gate.release()
+    _ = try await first.value
+    _ = try await second.value
+}
