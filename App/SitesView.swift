@@ -1881,8 +1881,6 @@ struct VideoDetailView: View {
     @State private var episodeScroll: Episode.ID?
     /// The page's player shows its picture (or an error); until then the page's cover stays over it.
     @State private var playerStarted = false
-    /// Back on the cover while it starts: shown for a moment by a tap, as the player's controls are.
-    @State private var coverBack = false
     /// The page's player, whose wait the cover tells about.
     @State private var playerSession: PlaybackSession?
     /// The source's config center, open in the app (`ConfigCenterView`).
@@ -2907,7 +2905,7 @@ struct VideoDetailView: View {
         // only Full Screen hides them (#514).
         .statusBarHidden(fullScreen)
         .toolbar(.hidden, for: .navigationBar)
-        .background { EdgeSwipeBack(enabled: !fullScreen) }
+        .background { EdgeSwipeBack(enabled: !fullScreen, pictureHeight: playerHeight) }
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
             store.watchPageScopes.formUnion(watchScopes)
@@ -3011,12 +3009,6 @@ struct VideoDetailView: View {
         let poster = video.poster != nil ? video : detail ?? video
         return WatchCoverBackdrop(poster: poster.poster, headers: poster.posterHeaders, loading: starting, clear: !starting) { coverStatus($0) }
             .contentShape(Rectangle())
-            .onTapGesture { if starting { withAnimation(.smooth(duration: 0.25)) { coverBack.toggle() } } }
-            .task(id: coverBack) {
-                guard coverBack else { return }
-                try? await Task.sleep(for: .seconds(3))
-                if !Task.isCancelled { withAnimation(.smooth(duration: 0.3)) { coverBack = false } }
-            }
             .overlay {
                 if !starting, playable {
                     Button { playWatchCover() } label: {
@@ -3030,14 +3022,11 @@ struct VideoDetailView: View {
                 }
             }
             .overlay(alignment: .topLeading) {
-                // While it starts by itself nothing sits on the cover until it's tapped.
-                if !starting || coverBack {
-                    Button { dismiss() } label: { Image(systemName: "chevron.backward").font(.headline).frame(width: 22, height: 22) }
-                        .chromeButton()
-                        .accessibilityLabel(L10n.text("Back"))
-                        .padding(8)
-                        .transition(.opacity)
-                }
+                // Always there, while an episode starts too: hidden until a tap, Back took two (#801).
+                Button { dismiss() } label: { Image(systemName: "chevron.backward").font(.headline).frame(width: 22, height: 22) }
+                    .chromeButton()
+                    .accessibilityLabel(L10n.text("Back"))
+                    .padding(8)
             }
             .foregroundStyle(.white)
             .environment(\.colorScheme, .dark)
@@ -3340,18 +3329,28 @@ enum WatchPage {
 
 /// A swipe from the left edge goes back, as on any pushed page: hiding the navigation bar turns that gesture off.
 /// It also comes before the picture's slide-to-seek and the episode row's scrolling, which would otherwise take a
-/// swipe that starts at the edge.
+/// swipe that starts at the edge. On iOS 26 a swipe to the right from anywhere under the picture goes back too, as
+/// on the pages that keep their bar (#801).
 struct EdgeSwipeBack: UIViewControllerRepresentable {
     /// Off in Full Screen, where the swipe would leave the page.
     var enabled: Bool
+    /// The player at the top of the page. A swipe that starts on it belongs to the picture (slide to seek, the
+    /// progress bar) unless it starts at the edge.
+    var pictureHeight: CGFloat = 0
 
     func makeUIViewController(context: Context) -> Controller { Controller() }
-    func updateUIViewController(_ controller: Controller, context: Context) { controller.enabled = enabled }
+    func updateUIViewController(_ controller: Controller, context: Context) {
+        controller.enabled = enabled; controller.pictureHeight = pictureHeight
+    }
 
     final class Controller: UIViewController, UIGestureRecognizerDelegate {
         var enabled = true
+        var pictureHeight: CGFloat = 0
         private weak var recognizer: UIGestureRecognizer?
         private weak var previous: UIGestureRecognizerDelegate?
+        /// iOS 26's swipe from anywhere on the page, which a hidden bar turns off as it does the edge's.
+        private weak var content: UIGestureRecognizer?
+        private weak var previousContent: UIGestureRecognizerDelegate?
 
         override func viewWillAppear(_ animated: Bool) {
             super.viewWillAppear(animated)
@@ -3363,23 +3362,53 @@ struct EdgeSwipeBack: UIViewControllerRepresentable {
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
             // Again after a swipe that was let go halfway, which brings the page back.
-            guard let pop = navigationController?.interactivePopGestureRecognizer, pop.delegate !== self else { return }
-            recognizer = pop; previous = pop.delegate
-            pop.delegate = self; pop.isEnabled = true
+            if let pop = navigationController?.interactivePopGestureRecognizer, pop.delegate !== self {
+                recognizer = pop; previous = pop.delegate
+                pop.delegate = self; pop.isEnabled = true
+            }
+            if #available(iOS 26.0, *), let pop = navigationController?.interactiveContentPopGestureRecognizer, pop.delegate !== self {
+                content = pop; previousContent = pop.delegate
+                pop.delegate = self; pop.isEnabled = true
+            }
         }
 
         override func viewWillDisappear(_ animated: Bool) {
             super.viewWillDisappear(animated)
             // The swipe already under way goes on; other pages get the system's own rules back.
             if let recognizer, recognizer.delegate === self { recognizer.delegate = previous }
+            if let content, content.delegate === self { content.delegate = previousContent }
         }
 
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            enabled && (navigationController?.viewControllers.count ?? 0) > 1
+            guard enabled, (navigationController?.viewControllers.count ?? 0) > 1 else { return false }
+            return gestureRecognizer !== content || contentSwipeGoesBack(gestureRecognizer)
         }
 
+        /// A swipe from anywhere goes back when it heads right, starts under the picture, and isn't on a row that
+        /// scrolls sideways (the episodes, the cast) or on a view with a pan of its own.
+        private func contentSwipeGoesBack(_ swipe: UIGestureRecognizer) -> Bool {
+            guard let window = view.window else { return false }
+            if let pan = swipe as? UIPanGestureRecognizer {
+                let velocity = pan.velocity(in: window)
+                guard velocity.x >= abs(velocity.y) else { return false }
+            }
+            let point = swipe.location(in: window)
+            guard point.y > window.safeAreaInsets.top + pictureHeight else { return false }
+            var hit = window.hitTest(point, with: nil)
+            while let current = hit, current !== navigationController?.view {
+                if let scroll = current as? UIScrollView {
+                    if scroll.contentSize.width > scroll.bounds.width + 1 { return false }
+                } else if current.gestureRecognizers?.contains(where: { $0 is UIPanGestureRecognizer && $0.isEnabled }) == true {
+                    return false
+                }
+                hit = current.superview
+            }
+            return true
+        }
+
+        /// Only the edge's swipe comes first; the one from anywhere must not hold up the page's own scrolling.
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-            enabled && other is UIPanGestureRecognizer
+            enabled && gestureRecognizer === recognizer && other is UIPanGestureRecognizer
         }
     }
 }
