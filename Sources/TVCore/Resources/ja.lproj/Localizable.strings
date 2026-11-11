@@ -662,7 +662,6 @@
 "Previous Episode" = "前のエピソード";
 "Next Episode" = "次のエピソード";
 
-"Hongguo" = "Hongguo";
 "Episode %@" = "エピソード %@";
 "Episode %1$@" = "第%1$@話";
 "Episodes %1$@–%2$@" = "第%1$@-%2$@話";
@@ -673,10 +672,7 @@
 "Trending Live-action" = "実写人気ランキング";
 "Trending Animation" = "アニメ人気ランキング";
 "Trending AI Drama" = "AI 人気ランキング";
-"Hongguo could not be reached. Try again later." = "Hongguo に接続できません。しばらくしてから再試行してください。";
-"Hongguo returned incomplete data. Please refresh and try again." = "Hongguo のデータが不完全です。更新して再試行してください。";
-"Hongguo did not provide a playable source for this episode. Try again later." = "このエピソードの再生ソースがありません。しばらくしてから再試行してください。";
-"This Hongguo video could not be prepared for playback. Please try again." = "Hongguo の動画を再生する準備ができませんでした。再試行してください。";
+"This video could not be prepared for playback. Please try again." = "動画を再生する準備ができませんでした。再試行してください。";
 "This video is an MKV file, which Apple devices can't play." = "この動画は MKV ファイルのため、Apple のデバイスでは再生できません。";
 
 "Waiting for an earlier plugin request to finish." = "先行するプラグイン要求の完了を待っています。";
@@ -1807,9 +1803,4 @@
 "Waiting for you to approve the sign-in…" = "サインインの承認を待っています…";
 "Open the Sign-In Page" = "サインインページを開く";
 "The sign-in was declined." = "サインインは拒否されました。";
-"Hongguo Account" = "Hongguo アカウント";
-"Hongguo episodes play as this account. Sign-in details stay on this device." = "Hongguo のエピソードはこのアカウントで再生します。サインイン情報はこのデバイスにのみ保存されます。";
-"Sign In to Hongguo" = "Hongguo にサインイン";
-"Hongguo often won't play for devices that aren't signed in. Open the Hongguo app on your phone, scan this code, and confirm the sign-in." = "Hongguo はサインインしていないデバイスでは再生しないことがよくあります。スマートフォンで Hongguo アプリを開き、このコードをスキャンしてサインインを確認してください。";
-"Hongguo didn't answer. Try again." = "Hongguo から応答がありません。もう一度お試しください。";
-"Sign-in was approved, but Hongguo didn't return a login. Try again." = "サインインは承認されましたが、Hongguo からログイン情報が返ってきませんでした。もう一度お試しください。";
+"Sign-in details stay on this device." = "サインイン情報はこのデバイスにのみ保存されます。";

@@ -759,14 +759,14 @@ import IOKit.pwr_mgt
     private func makeItem(_ channel: Channel, url: URL) -> AVPlayerItem {
         // Some providers require request headers. AVURLAsset's HTTP-header option is
         // best-effort and is not a guarantee for every redirected HLS segment.
-        let asset = CloudStreams.asset(for: url) ?? HongguoStreams.asset(for: url) ?? DashStreams.asset(for: url) ?? LiveRepair.asset(for: url)
+        let asset = CloudStreams.asset(for: url) ?? CENCStreams.asset(for: url) ?? DashStreams.asset(for: url) ?? LiveRepair.asset(for: url)
             ?? AVURLAsset(url: url, options: Self.assetOptions(headers: channel.headers))
         let item = AVPlayerItem(asset: asset)
         if url.scheme == CloudStreams.scheme {
             // The duration sets how far ahead the file is read, on this device and for this bitrate (#702).
             Task { if let seconds = try? await asset.load(.duration).seconds { CloudStreams.setDuration(seconds, for: url) } }
         }
-        if url.scheme == HongguoStreams.scheme { item.preferredForwardBufferDuration = HongguoStreams.forwardBufferDuration }
+        if url.scheme == CENCStreams.scheme { item.preferredForwardBufferDuration = CENCStreams.forwardBufferDuration }
         item.textStyleRules = Self.subtitleRules()
         subtitles.attach(item)
         #if DEBUG
@@ -1051,7 +1051,7 @@ import IOKit.pwr_mgt
         throttleBoost(item)
         catchUpLive(item)
         queueUpcomingIfDue(item)
-        if let url = playing?.url { HongguoStreams.updatePosition(for: url, seconds: pendingResume ?? player.currentTime().seconds) }
+        if let url = playing?.url { CENCStreams.updatePosition(for: url, seconds: pendingResume ?? player.currentTime().seconds) }
         if tick % 5 == 0 { saveHistory() }
         let events = item.accessLog()?.events ?? []
         let now = Date()
@@ -1168,7 +1168,7 @@ import IOKit.pwr_mgt
         discardUpcoming()
         upcomingAttempted = false; skipsToUpcoming = false; advanced = nil
         upcomingEpisode = nil; onAdvance = nil; playsOn = { false }; clearBoost()
-        if let url = playing?.url { HongguoStreams.stop(url) }
+        if let url = playing?.url { CENCStreams.stop(url) }
         if let automatic { CloudStreams.stop(automatic); Remux.stop(automatic) }
         #if os(tvOS)
         HDRDisplay.reset()
@@ -1530,7 +1530,7 @@ extension PlaybackSession {
 
     /// Stops the streams a prepared episode opened.
     fileprivate static func release(_ channel: Channel, _ prepared: Prepared) {
-        HongguoStreams.stop(channel.url)
+        CENCStreams.stop(channel.url)
         CloudStreams.stop(prepared.url)
         stopAdapter(prepared)
     }
@@ -1553,7 +1553,7 @@ extension PlaybackSession {
         let channel = upcoming.channel
         Diagnostics.shared.record(.info, "player", "advance name=\(channel.name) ready=\(upcoming.item.status == .readyToPlay)")
         // Let go of the finished episode's stream; the queued one's becomes the session's.
-        if let url = playing?.url { HongguoStreams.stop(url) }
+        if let url = playing?.url { CENCStreams.stop(url) }
         if let automatic { CloudStreams.stop(automatic); Remux.stop(automatic) }
         #if os(macOS)
         if let proxy { Task { await proxy.stop() } }

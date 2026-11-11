@@ -2,8 +2,8 @@ import Foundation
 
 /// Fragmented CENC MP4s (an ftyp, a moov without samples, a sidx, then moof/mdat pairs), as the
 /// web player's episodes come. Each fragment is one entry of `samples`; it plays as one HLS segment
-/// (`HongguoFragmentSession`), decrypted from its own moof's senc.
-extension HongguoStreamIndex {
+/// (`CENCFragmentSession`), decrypted from its own moof's senc.
+extension CENCIndex {
     struct Fragmented: Sendable {
         /// Per-sample IV size of each protected track, by track ID.
         let ivSizes: [Int: Int]
@@ -190,18 +190,18 @@ extension HongguoStreamIndex {
 
 /// A fragmented episode as VOD HLS: the initialization segment is the ftyp and the clear moov, each media
 /// segment one decrypted fragment. The next fragment is fetched while one plays.
-final class HongguoFragmentSession: SegmentedStream, @unchecked Sendable {
+final class CENCFragmentSession: SegmentedStream, @unchecked Sendable {
     let id = UUID().uuidString.lowercased()
     let copiesHDR = false
     let master: String
     private let media: String
     private let count: Int
-    private let stream: HongguoByteStream
+    private let stream: CENCByteStream
     private let lock = NSLock()
     private var fetches: [Int: Task<Data, Error>] = [:]
     private var closed = false
 
-    init(stream: HongguoByteStream, index: HongguoStreamIndex) {
+    init(stream: CENCByteStream, index: CENCIndex) {
         self.stream = stream
         count = index.samples.count
         let spans = index.samples.map { max(0.001, $0.endTime - $0.time) }
@@ -236,7 +236,7 @@ final class HongguoFragmentSession: SegmentedStream, @unchecked Sendable {
         stale.forEach { $0.cancel() }
         let started = Date()
         let data = try await task.value
-        Diagnostics.shared.record(.debug, "hongguo.stream", "segment \(index) bytes=\(data.count) waited=\(Int(Date().timeIntervalSince(started) * 1000))ms")
+        Diagnostics.shared.record(.debug, "cenc.stream", "segment \(index) bytes=\(data.count) waited=\(Int(Date().timeIntervalSince(started) * 1000))ms")
         return data
     }
 

@@ -2,13 +2,13 @@ import Foundation
 import Testing
 @testable import TVCore
 
-struct HongguoTests {
+struct CENCTests {
     @Test(arguments: [false, true]) func cencDecryptionPreservesOffsetsAndClearSubsamples(subsamples: Bool) throws {
         let fixture = makeMovie(subsamples: subsamples)
         let file = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".mp4")
         defer { try? FileManager.default.removeItem(at: file) }
         try fixture.encrypted.write(to: file)
-        try HongguoMP4.decrypt(file: file, key: hex("2b7e151628aed2a6abf7158809cf4f3c"))
+        try CENCBoxes.decrypt(file: file, key: hex("2b7e151628aed2a6abf7158809cf4f3c"))
         let clear = try Data(contentsOf: file)
         #expect(clear.count == fixture.encrypted.count)
         #expect(clear.suffix(fixture.plain.count) == fixture.plain)
@@ -22,8 +22,8 @@ struct HongguoTests {
         defer { try? FileManager.default.removeItem(at: file) }
         let data = makeMovie(subsamples: false).encrypted.dropLast()
         try data.write(to: file)
-        #expect(throws: HongguoMP4.Failure.self) { try HongguoMP4.decrypt(file: file, key: Data(count: 16)) }
-        #expect(throws: HongguoMP4.Failure.self) { try HongguoMP4.boxes(Data([0, 0, 0, 1, 109, 111, 111, 118]), 0..<8) }
+        #expect(throws: CENCBoxes.Failure.self) { try CENCBoxes.decrypt(file: file, key: Data(count: 16)) }
+        #expect(throws: CENCBoxes.Failure.self) { try CENCBoxes.boxes(Data([0, 0, 0, 1, 109, 111, 111, 118]), 0..<8) }
     }
 
     @Test(arguments: [false, true]) func streamingDecryptsOnlyRequestedRangesAndSupportsTailMetadata(movieAtEnd: Bool) async throws {
@@ -35,7 +35,7 @@ struct HongguoTests {
         try fixture.encrypted.write(to: file)
         let server = LocalMediaServer()
         let url = try await server.address(of: file, root: root)
-        let stream = HongguoByteStream(urls: [url], key: hex("2b7e151628aed2a6abf7158809cf4f3c"), headers: [:], http: HTTPClient())
+        let stream = CENCByteStream(urls: [url], key: hex("2b7e151628aed2a6abf7158809cf4f3c"), headers: [:], http: HTTPClient())
         let index = try await stream.metadata()
         #expect(index.duration == 180)
         #expect(index.samples.count == 180)
@@ -55,7 +55,7 @@ struct HongguoTests {
         #expect(try await stream.read(at: destination, count: 17) == fixture.plain[32004..<32021])
         let afterSeek = await stream.statistics
         #expect(afterSeek.received < fixture.encrypted.count / 10)
-        #expect(afterSeek.cached <= HongguoByteStream.cacheLimit)
+        #expect(afterSeek.cached <= CENCByteStream.cacheLimit)
         await stream.clear()
         #expect(await stream.statistics.cached == 0)
     }
@@ -70,7 +70,7 @@ struct HongguoTests {
         try fixture.encrypted.write(to: file)
         let server = LocalMediaServer()
         let url = try await server.address(of: file, root: root)
-        let stream = HongguoByteStream(urls: [url], key: hex("2b7e151628aed2a6abf7158809cf4f3c"), headers: [:], http: HTTPClient())
+        let stream = CENCByteStream(urls: [url], key: hex("2b7e151628aed2a6abf7158809cf4f3c"), headers: [:], http: HTTPClient())
         let index = try await stream.metadata()
         let before = await stream.statistics
         let start = index.samples[0].bytes.lowerBound, end = index.samples[30].bytes.upperBound
@@ -92,7 +92,7 @@ struct HongguoTests {
         try fixture.encrypted.write(to: file)
         let server = LocalMediaServer()
         let url = try await server.address(of: file, root: root)
-        let stream = HongguoByteStream(urls: [url], key: hex("2b7e151628aed2a6abf7158809cf4f3c"), headers: [:], http: HTTPClient())
+        let stream = CENCByteStream(urls: [url], key: hex("2b7e151628aed2a6abf7158809cf4f3c"), headers: [:], http: HTTPClient())
         let index = try await stream.metadata()
         let before = await stream.statistics
         let future = Task { try await stream.read(at: index.samples[90].bytes.lowerBound, count: 100) }
@@ -107,29 +107,29 @@ struct HongguoTests {
 
     @Test(arguments: ["ignored", "wrong", "short"]) func streamingRejectsUnusableRangeResponses(response: String) async {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [HongguoRangeProtocol.self]
+        configuration.protocolClasses = [RangeFixtureProtocol.self]
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
-        let reader = HongguoRangeReader(urls: [URL(string: "https://fixture.example/\(response)")!], headers: [:], http: HTTPClient(session: session))
+        let reader = CENCRangeReader(urls: [URL(string: "https://fixture.example/\(response)")!], headers: [:], http: HTTPClient(session: session))
         await #expect(throws: (any Error).self) { try await reader.read(0..<32) }
     }
 
     @Test(arguments: ["referer-required", "referer-forbidden", "always-forbidden"])
     func streamingKeepsAppHeadersAndBoundsRefererRetry(policy: String) async throws {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [HongguoRangeProtocol.self]
+        configuration.protocolClasses = [RangeFixtureProtocol.self]
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
         let url = URL(string: "https://fixture.example/\(policy)?test=\(UUID())")!
-        let reader = HongguoRangeReader(urls: [url], headers: ["User-Agent": "com.phoenix.read/test"], http: HTTPClient(session: session))
+        let reader = CENCRangeReader(urls: [url], headers: ["User-Agent": "fixture/test"], retry: ["Referer": "https://retry.example/"], http: HTTPClient(session: session))
         if policy == "always-forbidden" {
             await #expect(throws: (any Error).self) { try await reader.read(0..<32) }
         } else {
             #expect(try await reader.read(0..<32).data.count == 32)
             #expect(try await reader.read(32..<64).data.count == 32)
         }
-        let requests = HongguoRangeProtocol.requests(for: url)
-        #expect(requests.allSatisfy { $0.value(forHTTPHeaderField: "User-Agent") == "com.phoenix.read/test" })
+        let requests = RangeFixtureProtocol.requests(for: url)
+        #expect(requests.allSatisfy { $0.value(forHTTPHeaderField: "User-Agent") == "fixture/test" })
         #expect(requests.first?.value(forHTTPHeaderField: "Referer") == nil)
         let ranges = requests.map { $0.value(forHTTPHeaderField: "Range") ?? "" }
         if policy == "referer-forbidden" {
@@ -137,23 +137,23 @@ struct HongguoTests {
             #expect(requests.allSatisfy { $0.value(forHTTPHeaderField: "Referer") == nil })
         } else {
             #expect(ranges == (policy == "always-forbidden" ? ["bytes=0-31", "bytes=0-31"] : ["bytes=0-31", "bytes=0-31", "bytes=32-63"]))
-            #expect(requests.dropFirst().allSatisfy { $0.value(forHTTPHeaderField: "Referer") == HongguoStreams.mediaReferer })
+            #expect(requests.dropFirst().allSatisfy { $0.value(forHTTPHeaderField: "Referer") == "https://retry.example/" })
         }
     }
 
     @Test func streamingMovesToTheBackupNodeWhenOneFails() async throws {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [HongguoRangeProtocol.self]
+        configuration.protocolClasses = [RangeFixtureProtocol.self]
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
         let failing = URL(string: "https://fixture.example/always-forbidden?test=\(UUID())")!
         let backup = URL(string: "https://fixture.example/backup?test=\(UUID())")!
-        let reader = HongguoRangeReader(urls: [failing, backup], headers: [:], http: HTTPClient(session: session))
+        let reader = CENCRangeReader(urls: [failing, backup], headers: [:], retry: ["Referer": "https://retry.example/"], http: HTTPClient(session: session))
         #expect(try await reader.read(0..<32).data.count == 32)
         #expect(try await reader.read(32..<64).data.count == 32)
         // The failed node had its Referer retry and is not asked again for later ranges.
-        #expect(HongguoRangeProtocol.requests(for: failing).count == 2)
-        let requests = HongguoRangeProtocol.requests(for: backup)
+        #expect(RangeFixtureProtocol.requests(for: failing).count == 2)
+        let requests = RangeFixtureProtocol.requests(for: backup)
         #expect(requests.map { $0.value(forHTTPHeaderField: "Range") } == ["bytes=0-31", "bytes=32-63"])
         #expect(requests.allSatisfy { $0.value(forHTTPHeaderField: "Referer") == nil })
     }
@@ -236,7 +236,7 @@ private extension Data {
     }
 }
 
-private final class HongguoRangeProtocol: URLProtocol, @unchecked Sendable {
+private final class RangeFixtureProtocol: URLProtocol, @unchecked Sendable {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var observed: [URLRequest] = []
     static func requests(for url: URL) -> [URLRequest] { lock.withLock { observed.filter { $0.url == url } } }
@@ -245,7 +245,7 @@ private final class HongguoRangeProtocol: URLProtocol, @unchecked Sendable {
     override func startLoading() {
         Self.lock.withLock { Self.observed.append(request) }
         let mode = request.url!.lastPathComponent
-        let hasReferer = request.value(forHTTPHeaderField: "Referer") == HongguoStreams.mediaReferer
+        let hasReferer = request.value(forHTTPHeaderField: "Referer") == "https://retry.example/"
         let forbidden = mode == "always-forbidden" || (mode == "referer-required" && !hasReferer) || (mode == "referer-forbidden" && hasReferer)
         let range = request.value(forHTTPHeaderField: "Range")?.replacingOccurrences(of: "bytes=", with: "bytes ") ?? "bytes 0-31"
         let response = HTTPURLResponse(url: request.url!, statusCode: forbidden ? 403 : mode == "ignored" ? 200 : 206, httpVersion: "HTTP/1.1",

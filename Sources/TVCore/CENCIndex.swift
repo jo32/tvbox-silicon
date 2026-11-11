@@ -2,7 +2,7 @@ import Foundation
 
 /// The sample tables are small even when the media is large. They let a range reader decrypt
 /// just the samples intersecting a player's request, including a seek into the middle of a GOP.
-struct HongguoStreamIndex: Sendable {
+struct CENCIndex: Sendable {
     struct Sample: Sendable {
         let bytes: Range<Int>
         let time: Double
@@ -17,7 +17,7 @@ struct HongguoStreamIndex: Sendable {
     let duration: Double
     /// Set for fragmented files, where each entry of `samples` is a whole moof/mdat fragment.
     let fragmented: Fragmented?
-    typealias MP4 = HongguoMP4
+    typealias MP4 = CENCBoxes
 
     init(movie original: Data, at offset: Int, length: Int, media: [Range<Int>]) throws {
         var metadata = original

@@ -343,7 +343,8 @@ struct FormSettingsView: View {
     @State private var cloudSummary = ""
     @State private var bilibiliSummary = ""
     @State private var douyinSummary = ""
-    @State private var hongguoSummary = ""
+    /// The recommended sources that take a sign-in, each with its row's subtitle.
+    @State private var sourceSignIns: [(signIn: SourceSignIn, summary: String)] = []
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
     @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
@@ -530,7 +531,9 @@ struct FormSettingsView: View {
                 if store.extrasUnlocked {
                     FormLink(symbol: "play.tv.fill", tint: .pink, title: L10n.text("Bilibili"), value: bilibiliSummary) { BilibiliAccountView() }
                     FormLink(symbol: "music.note", tint: .black, title: L10n.text("Douyin"), value: douyinSummary) { DouyinAccountView() }
-                    FormLink(symbol: "play.rectangle.on.rectangle.fill", tint: .red, title: L10n.text("Hongguo"), value: hongguoSummary) { HongguoAccountView() }
+                    ForEach(sourceSignIns, id: \.signIn.id) { entry in
+                        FormLink(symbol: "play.rectangle.on.rectangle.fill", tint: .red, title: entry.signIn.name, value: entry.summary) { SourceAccountView(signIn: entry.signIn) }
+                    }
                 }
                 FormLink(symbol: "externaldrive.fill.badge.person.crop", tint: .brown, title: L10n.text("Cloud Drive Accounts"), value: cloudSummary) { CloudDriveView() }
             }
@@ -787,7 +790,7 @@ struct FormSettingsView: View {
         #endif
         #endif
         // Refreshed whenever Settings reappears, so a sign-in on the account page shows here.
-        .onAppear { bilibiliSummary = BilibiliAccount.load().summary; douyinSummary = DouyinAccount.load().summary; hongguoSummary = HongguoAccount.load().summary; cloudSummary = CloudProvider.summary() }
+        .onAppear { bilibiliSummary = BilibiliAccount.load().summary; douyinSummary = DouyinAccount.load().summary; sourceSignIns = SourceSignIn.all.map { ($0, SourceAccount.load($0.id).summary) }; cloudSummary = CloudProvider.summary() }
         .task(id: store.extrasUnlocked) { if store.extrasUnlocked { await ContributorList.shared.check() } }
     }
 
@@ -1641,7 +1644,8 @@ struct TVSettingsView: View {
     @State private var cloudSummary = ""
     @State private var bilibiliSummary = ""
     @State private var douyinSummary = ""
-    @State private var hongguoSummary = ""
+    /// The recommended sources that take a sign-in, each with its row's subtitle.
+    @State private var sourceSignIns: [(signIn: SourceSignIn, summary: String)] = []
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
     @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
@@ -1675,7 +1679,9 @@ struct TVSettingsView: View {
                 if store.extrasUnlocked {
                     TVSettingsLink(title: L10n.text("Bilibili"), value: bilibiliSummary) { BilibiliAccountView() }
                     TVSettingsLink(title: L10n.text("Douyin"), value: douyinSummary) { DouyinAccountView() }
-                    TVSettingsLink(title: L10n.text("Hongguo"), value: hongguoSummary) { HongguoAccountView() }
+                    ForEach(sourceSignIns, id: \.signIn.id) { entry in
+                        TVSettingsLink(title: entry.signIn.name, value: entry.summary) { SourceAccountView(signIn: entry.signIn) }
+                    }
                 }
                 TVSettingsLink(title: L10n.text("Cloud Drive Accounts"), value: cloudSummary) { CloudDriveView() }
             }
@@ -1730,7 +1736,7 @@ struct TVSettingsView: View {
         }
         .tabTitle(L10n.text("Settings"))
         // Refreshed whenever Settings reappears, so a sign-in on the account page shows here.
-        .onAppear { bilibiliSummary = BilibiliAccount.load().summary; douyinSummary = DouyinAccount.load().summary; hongguoSummary = HongguoAccount.load().summary; cloudSummary = CloudProvider.summary() }
+        .onAppear { bilibiliSummary = BilibiliAccount.load().summary; douyinSummary = DouyinAccount.load().summary; sourceSignIns = SourceSignIn.all.map { ($0, SourceAccount.load($0.id).summary) }; cloudSummary = CloudProvider.summary() }
         .task(id: store.extrasUnlocked) { if store.extrasUnlocked { await ContributorList.shared.check() } }
     }
 

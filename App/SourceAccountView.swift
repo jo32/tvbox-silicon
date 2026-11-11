@@ -1,44 +1,47 @@
 import SwiftUI
 import TVCore
 
-/// The Hongguo account: sign in, or sign out. Hongguo often refuses to play for anonymous devices, and the
-/// Hongguo source plays as this account instead. Every platform signs in by scanning a code with the Hongguo
-/// phone app, as hongguoduanju.com does; an iPhone saves the code to Photos for its own Hongguo app.
-struct HongguoAccountView: View {
-    @State private var account = HongguoAccount.load()
+/// The account of a recommended source that takes a sign-in: sign in, or sign out. The source's entry names the
+/// service and says what to tell the viewer; its script gives the code to scan and reads the answers
+/// (`SourceSignIn`). An iPhone can save the code to Photos for the service's own app.
+struct SourceAccountView: View {
+    let signIn: SourceSignIn
+    @State private var account: SourceAccount
     @State private var attempt = 0
 
+    init(signIn: SourceSignIn) { self.signIn = signIn; _account = State(initialValue: SourceAccount.load(signIn.id)) }
+
     var body: some View {
-        SettingsPage(title: L10n.text("Hongguo Account"), symbol: "play.rectangle.on.rectangle") {
+        SettingsPage(title: signIn.name, symbol: "person.crop.circle") {
             if account.signedIn {
-                SettingsGroup(footer: L10n.text("Hongguo episodes play as this account. Sign-in details stay on this device.")) {
+                SettingsGroup(footer: signIn.signedInNote ?? L10n.text("Sign-in details stay on this device.")) {
                     SettingsRow(symbol: "person.crop.circle.fill", tint: .red, title: account.name.isEmpty ? L10n.text("Signed In") : account.name,
                                 subtitle: L10n.text("Signed In")) {
-                        Button(L10n.text("Sign Out")) { HongguoAccount.signOut(); account = HongguoAccount(); attempt += 1 }.settingsButton()
-                            .accessibilityIdentifier("hongguo.signOut")
+                        Button(L10n.text("Sign Out")) { SourceAccount.signOut(signIn.id); account = SourceAccount(); attempt += 1 }.settingsButton()
+                            .accessibilityIdentifier("sourceAccount.signOut")
                     }
                 }
             } else {
-                HongguoCodeSignIn { account = $0 }
+                SourceCodeSignIn(signIn: signIn) { account = $0 }
             }
         }
         .task(id: attempt) { await refresh() }
     }
 
-    /// Shows the current name, and notices a sign-in Hongguo no longer accepts.
+    /// Shows the current name, and notices a sign-in the service no longer accepts.
     private func refresh() async {
         guard account.signedIn else { return }
-        var current = account
-        if await current.refresh() { if current != account { try? current.save(); account = current } }
-        else { HongguoAccount.signOut(); account = HongguoAccount(); attempt += 1 }
+        if let current = await signIn.refreshed(account) { if current != account { try? current.save(signIn.id); account = current } }
+        else { SourceAccount.signOut(signIn.id); account = SourceAccount(); attempt += 1 }
     }
 }
 
-/// Signing in to Hongguo by scanning a code with the Hongguo phone app.
-struct HongguoCodeSignIn: View {
-    let signedIn: (HongguoAccount) -> Void
+/// Signing in by scanning a code with the service's phone app.
+struct SourceCodeSignIn: View {
+    let signIn: SourceSignIn
+    let signedIn: (SourceAccount) -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var login: HongguoQRLogin?
+    @State private var login: SourceSignIn.Code?
     @State private var scanned = false
     @State private var expired = false
     @State private var error: String?
@@ -60,17 +63,17 @@ struct HongguoCodeSignIn: View {
     private var details: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 10) {
-                Text(L10n.text("Sign In to Hongguo")).font(.title2.weight(.bold))
-                Text(L10n.text("Hongguo often won't play for devices that aren't signed in. Open the Hongguo app on your phone, scan this code, and confirm the sign-in."))
+                Text(L10n.text("Sign In to %@", signIn.name)).font(.title2.weight(.bold))
+                Text(signIn.note ?? L10n.text("Open the %@ app on your phone, scan this code, and confirm the sign-in.", signIn.name))
                     .font(.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             status
             if expired || error != nil {
                 Button(L10n.text("Get New Code")) { attempt += 1 }.settingsButton(prominent: true)
-                    .accessibilityIdentifier("hongguo.newCode")
+                    .accessibilityIdentifier("sourceAccount.newCode")
             }
             #if os(iOS)
-            if let login, !expired { SaveCodeButton(text: login.code, app: L10n.text("Hongguo")).id(login.code) }
+            if let login, !expired { SaveCodeButton(text: login.code, app: signIn.name).id(login.code) }
             #endif
         }
         .frame(maxWidth: 560, alignment: .leading)
@@ -110,11 +113,11 @@ struct HongguoCodeSignIn: View {
     private func run() async {
         login = nil; scanned = false; expired = false; error = nil
         do {
-            let login = try await HongguoQRLogin.start()
+            let login = try await signIn.start()
             self.login = login
             while !Task.isCancelled {
                 try await Task.sleep(for: .seconds(2))
-                switch try await login.poll() {
+                switch try await signIn.poll(login) {
                 case .waiting: continue
                 case .scanned: scanned = true
                 case .expired: expired = true; return
@@ -143,7 +146,7 @@ struct HongguoCodeSignIn: View {
     }
 }
 
-extension HongguoAccount {
+extension SourceAccount {
     /// The Settings row's subtitle.
     var summary: String { signedIn ? (name.isEmpty ? L10n.text("Signed In") : name) : L10n.text("Not Signed In") }
 }

@@ -546,8 +546,8 @@ struct LivePlatformCard: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         Color.clear.aspectRatio(16.0 / 9.0, contentMode: .fit)
-            // A cover fills the card and runs past it (Hongguo's are portrait); clipping hides that but still lets it
-            // take clicks, so on the Mac the card above a portrait cover (PandaTV over Hongguo) didn't open.
+            // A cover fills the card and runs past it (some are portrait); clipping hides that but still lets it
+            // take clicks, so on the Mac the card above a portrait cover didn't open.
             .background { backdrop.allowsHitTesting(false) }
             // Shade under the caption so white text reads on any cover.
             .overlay { LinearGradient(stops: [.init(color: .black.opacity(0.15), location: 0), .init(color: .clear, location: 0.3), .init(color: .black.opacity(0.85), location: 1)], startPoint: .top, endPoint: .bottom) }

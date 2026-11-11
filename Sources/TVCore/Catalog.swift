@@ -569,22 +569,24 @@ public struct CatalogClient: Sendable {
                     throw error
                 }
             }
-            // An encrypted MP4 with its key, which the app decrypts as it plays.
+            // An encrypted MP4 with its key (`decryptKey`), which the app decrypts as it plays; `backupUrls` are the same
+            // file elsewhere, and `retryHeader` what to add when a node answers 403.
             if let key = result["decryptKey"]?.string, !key.isEmpty {
                 do {
                     let remote = try WebAddress.resolve(choices[0].address)
                     let backups = (result["backupUrls"]?.array ?? []).compactMap { $0.string.flatMap { try? WebAddress.resolve($0) } }
+                    let retry = result["retryHeader"]?.object?.compactMapValues(\.string) ?? [:]
                     let address: URL
                     if forDownload {
-                        address = try await HongguoMedia.shared.prepare(url: remote, backups: backups, key: key, headers: headers, http: http)
+                        address = try await CENCFiles.shared.prepare(url: remote, backups: backups, key: key, headers: headers, retry: retry, http: http)
                     } else {
-                        address = try HongguoStreams.register(url: remote, backups: backups, key: key, headers: headers, http: http)
+                        address = try CENCStreams.register(url: remote, backups: backups, key: key, headers: headers, retry: retry, http: http)
                     }
                     choices = [PlaybackChoice(id: 0, name: episode.name, address: address.absoluteString)]
                     headers = [:]
                 } catch {
                     if error is CancellationError || Task.isCancelled { throw CancellationError() }
-                    throw TVError.unsupported(L10n.text("This Hongguo video could not be prepared for playback. Please try again."))
+                    throw TVError.unsupported(L10n.text("This video could not be prepared for playback. Please try again."))
                 }
             } else if danmaku != nil, let url = try? WebAddress.resolve(choices[0].address) {
                 DanmakuSource.register(url, feed: danmaku, duration: duration)
@@ -616,7 +618,7 @@ public struct CatalogClient: Sendable {
     /// This does not call a spider `isVideoFormat`.
     public func resolvePlayback(_ plan: PlaybackPlan, choice: PlaybackChoice) async throws -> Channel {
         // Addresses the app made itself from the play result: a keyed MP4 or DASH described as HLS.
-        if let url = URL(string: choice.address), url.scheme == HongguoStreams.scheme || url.scheme == DashStreams.scheme {
+        if let url = URL(string: choice.address), url.scheme == CENCStreams.scheme || url.scheme == DashStreams.scheme {
             return Channel(name: choice.name, group: plan.group, url: url, headers: url.scheme == DashStreams.scheme ? plan.headers : [:],
                            subtitles: plan.subtitles, skips: plan.skips)
         }

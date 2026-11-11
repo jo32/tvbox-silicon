@@ -68,7 +68,7 @@ open build/DerivedData-mac/Build/Products/Debug/TVBox-macOS.app
 - Browse M3U and TVBox TXT live playlists, filter groups, search channels, and save favorites. Support configured User-Agent and Referer headers. Recommended Bilibili, Douyu, Huya and Douyin live rooms sit beside them.
 - Browse standard type 1/type 4 JSON sources: home pages, categories, search, pagination, details, playback sources, episodes, and resolved media URLs.
 - Run type 3 plugin sources (JAR, JavaScript, and Python on Mac). Bundled lightweight ports of common sources (`Sources/TVCore/ScriptAssets/sites/`) run first on QuickJS, with the original plugin as the fallback.
-- Recommended Bilibili (video, live, QR sign-in, and casts from the Bilibili phone app on Apple TV and Mac) and Hongguo short dramas, appended to the displayed subscription.
+- Recommended Bilibili (video, live, QR sign-in, and casts from the Bilibili phone app on Apple TV and Mac) and short dramas, appended to the displayed subscription.
 - Play media with AVPlayer, display playback errors, and retry failed requests. On Mac, a private loopback HLS adapter handles supported image-prefixed MPEG-TS segments.
 - Playback history, Continue Watching, intro/outro skipping, automatic next episode and automatic danmaku ([library and cache notes](LIBRARY_CACHE.md)).
 - Offline downloads, resumable, played back through a loopback server (`Downloads.swift`, `DownloadTransfer.swift`, `LocalMediaServer.swift`). tvOS keeps them in Caches, which the system may purge.
@@ -77,24 +77,18 @@ open build/DerivedData-mac/Build/Products/Debug/TVBox-macOS.app
 
 Playback depends on the source, media format, device decoder, and network availability. Unsupported features include full CatVod/Android API compatibility, arbitrary desktop JVM applications, web video detection, magnet links, multiple-quality playback responses, XML collection APIs, EPG, and cloud sync. Complex playlist extensions and header requirements still need source-by-source verification.
 
-## Recommended Hongguo source
+## Protected MP4 playback
 
-Hongguo is appended alongside Bilibili to the displayed subscription, without changing
-the imported document. It uses the bundled QuickJS runtime on macOS, iOS and tvOS.
-The web catalog provides live-action, animated and AI dramas, four rankings, search,
-and complete episode IDs. Search currently exposes one batch because the website
-ignores its page parameter; category and ranking pagination follow the source.
-
-Playback first requests the exact episode through the app's signed model endpoint
-and its returned fallback endpoint. The adapter selects H.264/HEVC and resolves
-encrypted media URLs locally. Playback registers a virtual MP4 with AVFoundation's
+A recommended source's script can answer a play request with a Common Encryption (CENC)
+MP4 and its content key (`CENCStreams`); the app knows no service, only the format.
+Playback registers a virtual MP4 with AVFoundation's
 resource loader. Small HTTP Range requests read the MP4 sample tables (even when
 the moov is at the end), then fetch and decrypt only requested samples using native
 AES-CTR. Seeking reads the destination ranges without downloading the preceding
 media. Responses that ignore Range or return a different range are rejected.
-App media keeps the app endpoint's User-Agent. It omits Referer initially and retries
-HTTP 403 once with the app Referer, retaining the successful policy for subsequent
-ranges. Some CDN nodes reject the web browser headers even when another node works.
+Media requests carry the headers the script gives. When the script also gives retry
+headers (`retryHeader`), an HTTP 403 is retried once with them, and the policy that
+worked is kept for subsequent ranges.
 
 The player and resource loader use a roughly 60-second forward window. Decrypted
 ranges have a 16 MB memory limit and expire as the playhead advances or seeks;
@@ -102,18 +96,20 @@ stopping playback cancels pending requests and clears those ranges. Playback cre
 no complete movie on disk. Explicit offline downloads retain the complete-file
 preparation path through `preparePlayback(_:forDownload:)`, with disposable files
 eligible for cleanup after an hour at 512 MB, or after a day regardless of size.
-If app playback is unavailable, the adapter tries the selected episode's public web
-video. It does not substitute another episode or truncate the full episode list to
-the web preview count. Availability and quality still depend on the upstream response.
 
-`swift run TVBoxProbe --hongguo-check [series ID] [episode number]` checks catalog,
+A source whose entry has `yingxia.signIn` takes an account: its script's `account`
+function gives the QR code and reads the answers, and the app shows the code and keeps
+the sign-in on the device (`SourceAccount.swift`).
+
+`swift run TVBoxProbe --site-check <site key> [series ID] [episode number]` checks catalog,
 search, rankings, details, first-frame timing, bytes fetched before playback,
-paused buffering, and forward/backward seeking. `--hongguo-play <series ID> [episode number]`
-isolates playback from catalog/search availability. `HongguoTests`
-cover the QuickJS signing/crypto bridge, exact episode selection, parsing and CENC
+paused buffering, and forward/backward seeking. `--site-play <site key> <series ID> [episode number]`
+isolates playback from catalog/search availability; `--account <site key> start|check`
+runs a source's sign-in. `CENCTests`
+cover exact episode selection, parsing and CENC
 sample/subsample decryption using a NIST AES-CTR vector, middle-of-sample range reads,
 tail metadata, cache reuse, cancellation, the forward window, and invalid HTTP Range
-responses, app media headers, and bounded Referer retries. On tvOS, diagnostic logs
+responses, media headers, and bounded header retries. On tvOS, diagnostic logs
 are stored under `Library/Caches/com.tvbox.yingxia/Logs` so they can be retrieved
 from the app container after a device failure. Successful platform builds
 do not establish playback on physical iPhone or Apple TV devices.

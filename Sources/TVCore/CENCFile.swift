@@ -1,10 +1,11 @@
 import Foundation
 import CommonCrypto
 
-/// Prepares the encrypted MP4s returned by Hongguo's app API on every Apple platform.
+/// Prepares MP4s protected with Common Encryption (ISO/IEC 23001-7, the `cenc` scheme: AES-CTR) whose key the
+/// source supplies, on every Apple platform.
 /// Only small metadata and one sample at a time are held in memory. Keeping box sizes unchanged
 /// preserves chunk offsets, unlike removing protection boxes and rebuilding the whole movie.
-enum HongguoMP4 {
+enum CENCBoxes {
     enum Failure: Error { case invalid }
     struct Box {
         let start: Int
@@ -187,14 +188,14 @@ enum HongguoMP4 {
     }
 }
 
-actor HongguoMedia {
-    // Complete-file preparation is only for explicit offline downloads. Playback uses HongguoStreams.
-    static let shared = HongguoMedia()
+actor CENCFiles {
+    // Complete-file preparation is only for explicit offline downloads. Playback uses CENCStreams.
+    static let shared = CENCFiles()
     private let server = LocalMediaServer()
-    private let root = URL.cachesDirectory.appending(path: "com.tvbox.yingxia/HongguoMedia")
+    private let root = URL.cachesDirectory.appending(path: "com.tvbox.yingxia/ProtectedMedia")
 
-    func prepare(url: URL, backups: [URL] = [], key: String, headers: [String: String], http: HTTPClient) async throws -> URL {
-        guard key.count == 32, key.allSatisfy(\.isHexDigit) else { throw HongguoMP4.Failure.invalid }
+    func prepare(url: URL, backups: [URL] = [], key: String, headers: [String: String], retry: [String: String] = [:], http: HTTPClient) async throws -> URL {
+        guard key.count == 32, key.allSatisfy(\.isHexDigit) else { throw CENCBoxes.Failure.invalid }
         let bytes = stride(from: 0, to: 32, by: 2).compactMap { offset -> UInt8? in
             let start = key.index(key.startIndex, offsetBy: offset)
             return UInt8(key[start..<key.index(start, offsetBy: 2)], radix: 16)
@@ -208,31 +209,31 @@ actor HongguoMedia {
         let candidates = [url] + backups
         for (index, candidate) in candidates.enumerated() {
             do {
-                try await download(candidate, headers: headers, http: http, to: target)
+                try await download(candidate, headers: headers, retry: retry, http: http, to: target)
                 break
             } catch {
                 if error is CancellationError || Task.isCancelled || index + 1 == candidates.count { throw error }
-                Diagnostics.shared.record(.info, "hongguo.media", "node \(index) failed (\(error.localizedDescription)); trying backup \(index + 1) of \(backups.count)")
+                Diagnostics.shared.record(.info, "cenc.file", "node \(index) failed (\(error.localizedDescription)); trying backup \(index + 1) of \(backups.count)")
             }
         }
-        try HongguoMP4.decrypt(file: target, key: Data(bytes))
+        try CENCBoxes.decrypt(file: target, key: Data(bytes))
         let address = try await server.address(of: target, root: root)
         complete = true
         return address
     }
 
-    private func download(_ url: URL, headers: [String: String], http: HTTPClient, to target: URL) async throws {
+    private func download(_ url: URL, headers: [String: String], retry: [String: String], http: HTTPClient, to target: URL) async throws {
         var request = URLRequest(url: url, timeoutInterval: 90)
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         var (temporary, response) = try await http.session.download(for: request)
         defer { try? FileManager.default.removeItem(at: temporary) }
-        if (response as? HTTPURLResponse)?.statusCode == 403 {
+        if (response as? HTTPURLResponse)?.statusCode == 403, !retry.isEmpty {
             try? FileManager.default.removeItem(at: temporary)
             try Task.checkCancellation()
-            request.setValue(HongguoStreams.mediaReferer, forHTTPHeaderField: "Referer")
+            retry.forEach { request.setValue($1, forHTTPHeaderField: $0) }
             (temporary, response) = try await http.session.download(for: request)
         }
-        guard let response = response as? HTTPURLResponse, response.statusCode == 200 else { throw HongguoMP4.Failure.invalid }
+        guard let response = response as? HTTPURLResponse, response.statusCode == 200 else { throw CENCBoxes.Failure.invalid }
         try Task.checkCancellation()
         try FileManager.default.moveItem(at: temporary, to: target)
     }

@@ -662,7 +662,6 @@
 "Previous Episode" = "上一集";
 "Next Episode" = "下一集";
 
-"Hongguo" = "紅果短劇";
 "Episode %@" = "第 %@ 集";
 "Episode %1$@" = "第%1$@集";
 "Episodes %1$@–%2$@" = "第%1$@-%2$@集";
@@ -673,10 +672,7 @@
 "Trending Live-action" = "真人熱播榜";
 "Trending Animation" = "漫劇熱播榜";
 "Trending AI Drama" = "AI 熱播榜";
-"Hongguo could not be reached. Try again later." = "暫時無法連接紅果，請稍後重試。";
-"Hongguo returned incomplete data. Please refresh and try again." = "紅果傳回的資料不完整，請重新整理後再試。";
-"Hongguo did not provide a playable source for this episode. Try again later." = "紅果暫未提供本集的可用片源，請稍後重試。";
-"This Hongguo video could not be prepared for playback. Please try again." = "無法準備此紅果影片，請重試。";
+"This video could not be prepared for playback. Please try again." = "無法準備此影片，請重試。";
 "This video is an MKV file, which Apple devices can't play." = "此影片是 MKV 檔案，Apple 裝置無法播放。";
 
 "Waiting for an earlier plugin request to finish." = "正在等待先前的外掛請求結束。";
@@ -1807,9 +1803,4 @@
 "Waiting for you to approve the sign-in…" = "等待你核准登入…";
 "Open the Sign-In Page" = "打開登入頁面";
 "The sign-in was declined." = "登入已被拒絕。";
-"Hongguo Account" = "紅果短劇帳號";
-"Hongguo episodes play as this account. Sign-in details stay on this device." = "紅果短劇以此帳號播放。登入資訊只保存在本機。";
-"Sign In to Hongguo" = "登入紅果短劇";
-"Hongguo often won't play for devices that aren't signed in. Open the Hongguo app on your phone, scan this code, and confirm the sign-in." = "紅果常常不為未登入的裝置播放。請在手機上打開紅果短劇 App，掃描此碼並確認登入。";
-"Hongguo didn't answer. Try again." = "紅果沒有回應，請重試。";
-"Sign-in was approved, but Hongguo didn't return a login. Try again." = "已確認登入，但紅果沒有回傳登入資訊，請重試。";
+"Sign-in details stay on this device." = "登入資訊只儲存在此裝置上。";

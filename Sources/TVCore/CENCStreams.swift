@@ -3,10 +3,8 @@ import AVFoundation
 
 /// A virtual clear MP4. AVPlayer requests byte ranges; only those samples are fetched and
 /// decrypted. Neither opening an episode nor seeking requires a complete local movie.
-public enum HongguoStreams {
-    /// What the encrypted files' CDN wants on a retry after a 403 (Hongguo's app pages).
-    static let mediaReferer = "https://novelquickapp.com/"
-    public static let scheme = "tvbox-hongguo"
+public enum CENCStreams {
+    public static let scheme = "tvbox-cenc"
     public static let forwardBufferDuration: Double = 60
 
     public struct Statistics: Sendable {
@@ -17,86 +15,89 @@ public enum HongguoStreams {
         public let bufferedThrough: Double
     }
 
-    static func register(url: URL, backups: [URL] = [], key: String, headers: [String: String], http: HTTPClient) throws -> URL {
-        guard key.count == 32 else { throw HongguoMP4.Failure.invalid }
+    /// `retry`: headers the source says to add when a node answers 403, kept for the later ranges once they helped.
+    static func register(url: URL, backups: [URL] = [], key: String, headers: [String: String], retry: [String: String] = [:], http: HTTPClient) throws -> URL {
+        guard key.count == 32 else { throw CENCBoxes.Failure.invalid }
         let bytes = stride(from: 0, to: 32, by: 2).compactMap { offset -> UInt8? in
             let start = key.index(key.startIndex, offsetBy: offset)
             return UInt8(key[start..<key.index(start, offsetBy: 2)], radix: 16)
         }
-        guard bytes.count == 16 else { throw HongguoMP4.Failure.invalid }
-        return HongguoStreamStore.shared.add(HongguoByteStream(urls: [url] + backups, key: Data(bytes), headers: headers, http: http))
+        guard bytes.count == 16 else { throw CENCBoxes.Failure.invalid }
+        return CENCStreamStore.shared.add(CENCByteStream(urls: [url] + backups, key: Data(bytes), headers: headers, retry: retry, http: http))
     }
 
-    /// `register`, except that a fragmented file (the web player's episodes) becomes a local HLS stream. As a
+    /// `register`, except that a fragmented file becomes a local HLS stream. As a
     /// virtual file AVPlayer would read every fragment's moof before it plays; as HLS it fetches what it plays.
-    static func open(url: URL, backups: [URL] = [], key: String, headers: [String: String], http: HTTPClient) async throws -> URL {
-        let address = try register(url: url, backups: backups, key: key, headers: headers, http: http)
-        guard let stream = HongguoStreamStore.shared.stream(address) else { return address }
+    static func open(url: URL, backups: [URL] = [], key: String, headers: [String: String], retry: [String: String] = [:], http: HTTPClient) async throws -> URL {
+        let address = try register(url: url, backups: backups, key: key, headers: headers, retry: retry, http: http)
+        guard let stream = CENCStreamStore.shared.stream(address) else { return address }
         let index = try await stream.metadata()
         guard index.fragmented != nil else { return address }
-        let session = HongguoFragmentSession(stream: stream, index: index)
+        let session = CENCFragmentSession(stream: stream, index: index)
         RemuxStore.shared.add(session)
         return try await RemuxServer.shared.base().appending(path: "\(session.id)/master.m3u8")
     }
 
     public static func asset(for url: URL) -> AVURLAsset? {
-        guard HongguoStreamStore.shared.stream(url) != nil else { return nil }
+        guard CENCStreamStore.shared.stream(url) != nil else { return nil }
         let asset = AVURLAsset(url: url)
-        asset.resourceLoader.setDelegate(HongguoResourceLoader.shared, queue: HongguoResourceLoader.shared.queue)
+        asset.resourceLoader.setDelegate(CENCResourceLoader.shared, queue: CENCResourceLoader.shared.queue)
         return asset
     }
 
     public static func updatePosition(for url: URL, seconds: Double) {
-        guard seconds.isFinite, let stream = HongguoStreamStore.shared.stream(url) else { return }
+        guard seconds.isFinite, let stream = CENCStreamStore.shared.stream(url) else { return }
         Task { await stream.updatePosition(seconds) }
     }
 
     public static func stop(_ url: URL) {
-        HongguoResourceLoader.shared.cancel(url)
-        if let stream = HongguoStreamStore.shared.stream(url) { Task { await stream.clear() } }
+        CENCResourceLoader.shared.cancel(url)
+        if let stream = CENCStreamStore.shared.stream(url) { Task { await stream.clear() } }
     }
 
     public static func statistics(for url: URL) async -> Statistics? {
-        guard let stream = HongguoStreamStore.shared.stream(url) else { return nil }
+        guard let stream = CENCStreamStore.shared.stream(url) else { return nil }
         return await stream.statistics
     }
 }
 
-private final class HongguoStreamStore: @unchecked Sendable {
-    static let shared = HongguoStreamStore()
+private final class CENCStreamStore: @unchecked Sendable {
+    static let shared = CENCStreamStore()
     private let lock = NSLock()
-    private var streams: [URL: HongguoByteStream] = [:]
+    private var streams: [URL: CENCByteStream] = [:]
     private var order: [URL] = []
 
-    func add(_ stream: HongguoByteStream) -> URL {
-        let url = URL(string: "\(HongguoStreams.scheme)://\(UUID().uuidString.lowercased())/video.mp4")!
+    func add(_ stream: CENCByteStream) -> URL {
+        let url = URL(string: "\(CENCStreams.scheme)://\(UUID().uuidString.lowercased())/video.mp4")!
         let retired: [URL] = lock.withLock {
             streams[url] = stream; order.append(url)
             var old: [URL] = []
             while order.count > 4 { let first = order.removeFirst(); streams[first] = nil; old.append(first) }
             return old
         }
-        for old in retired { HongguoResourceLoader.shared.cancel(old) }
+        for old in retired { CENCResourceLoader.shared.cancel(old) }
         return url
     }
-    func stream(_ url: URL) -> HongguoByteStream? { lock.withLock { streams[url] } }
+    func stream(_ url: URL) -> CENCByteStream? { lock.withLock { streams[url] } }
 }
 
 /// Validates Range before consuming the body. A server that ignores Range must not silently
 /// turn a 128 KB playback request into a full-episode download.
 /// The app API also lists backup links: the same file on other CDN nodes. When a node fails,
 /// this and every later range moves to the next one.
-actor HongguoRangeReader {
+actor CENCRangeReader {
     let urls: [URL]
     let headers: [String: String]
     let http: HTTPClient
-    private var usesReferer = false
+    /// Headers to add after a node answers 403, as the source asked.
+    let retry: [String: String]
+    private var usesRetry = false
     private var mirror = 0
     private var length: Int?
 
-    init(urls: [URL], headers: [String: String], http: HTTPClient) {
+    init(urls: [URL], headers: [String: String], retry: [String: String] = [:], http: HTTPClient) {
         precondition(!urls.isEmpty)
-        self.urls = urls; self.headers = headers; self.http = http
+        self.urls = urls; self.headers = headers; self.retry = retry; self.http = http
     }
 
     func read(_ range: Range<Int>) async throws -> (data: Data, length: Int) {
@@ -105,7 +106,7 @@ actor HongguoRangeReader {
             do {
                 let reply = try await read(range, from: urls[index])
                 // Every node must serve the same file.
-                if let length, reply.length != length { throw HongguoMP4.Failure.invalid }
+                if let length, reply.length != length { throw CENCBoxes.Failure.invalid }
                 length = reply.length
                 return reply
             } catch {
@@ -113,19 +114,19 @@ actor HongguoRangeReader {
                 guard index + 1 < urls.count else { throw error }
                 // Another range may already have moved on while this one waited.
                 if mirror == index {
-                    mirror = index + 1; usesReferer = false
-                    Diagnostics.shared.record(.info, "hongguo.stream", "node \(index) failed (\(error.localizedDescription)); trying backup \(index + 1) of \(urls.count - 1)")
+                    mirror = index + 1; usesRetry = false
+                    Diagnostics.shared.record(.info, "cenc.stream", "node \(index) failed (\(error.localizedDescription)); trying backup \(index + 1) of \(urls.count - 1)")
                 }
             }
         }
     }
 
     private func read(_ range: Range<Int>, from url: URL) async throws -> (data: Data, length: Int) {
-        guard range.lowerBound >= 0, !range.isEmpty, range.count <= 16 << 20 else { throw HongguoMP4.Failure.invalid }
+        guard range.lowerBound >= 0, !range.isEmpty, range.count <= 16 << 20 else { throw CENCBoxes.Failure.invalid }
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 20)
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
-        let retry = usesReferer
-        if retry { request.setValue(HongguoStreams.mediaReferer, forHTTPHeaderField: "Referer") }
+        let retried = usesRetry
+        if retried { retry.forEach { request.setValue($1, forHTTPHeaderField: $0) } }
         request.setValue("bytes=\(range.lowerBound)-\(range.upperBound - 1)", forHTTPHeaderField: "Range")
         request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
         let (bytes, response) = try await http.session.bytes(for: request)
@@ -133,20 +134,20 @@ actor HongguoRangeReader {
         defer { task.cancel() }
         let httpResponse = response as? HTTPURLResponse
         if range.lowerBound == 0 || httpResponse?.statusCode != 206 {
-            Diagnostics.shared.record(.debug, "hongguo.stream", "range host=\(response.url?.host() ?? "-") requested=\(range.lowerBound)-\(range.upperBound - 1) status=\(httpResponse?.statusCode ?? 0) referer=\(retry) contentRange=\(httpResponse?.value(forHTTPHeaderField: "Content-Range") ?? "-") contentLength=\(response.expectedContentLength)")
+            Diagnostics.shared.record(.debug, "cenc.stream", "range host=\(response.url?.host() ?? "-") requested=\(range.lowerBound)-\(range.upperBound - 1) status=\(httpResponse?.statusCode ?? 0) retried=\(retried) contentRange=\(httpResponse?.value(forHTTPHeaderField: "Content-Range") ?? "-") contentLength=\(response.expectedContentLength)")
         }
-        // App CDN nodes have different Referer policies. Match the upstream client: omit it
-        // first, add the app's Referer only after 403, and reuse that choice for later ranges.
-        if httpResponse?.statusCode == 403, !retry {
+        // CDN nodes can differ in what they accept. The source's retry headers are left out first, added only
+        // after a 403, and that choice is reused for later ranges.
+        if httpResponse?.statusCode == 403, !retried, !retry.isEmpty {
             task.cancel()
             try Task.checkCancellation()
-            usesReferer = true
+            usesRetry = true
             return try await read(range, from: url)
         }
         if let status = httpResponse?.statusCode, status >= 400 {
             var detail = Data()
             for try await byte in bytes.prefix(512) { detail.append(byte) }
-            Diagnostics.shared.record(.error, "hongguo.stream", "HTTP \(status) \(String(decoding: detail, as: UTF8.self))")
+            Diagnostics.shared.record(.error, "cenc.stream", "HTTP \(status) \(String(decoding: detail, as: UTF8.self))")
             throw TVError.http(status)
         }
         guard let response = response as? HTTPURLResponse, response.statusCode == 206,
@@ -156,7 +157,7 @@ actor HongguoRangeReader {
               (1...512 << 20).contains(length), first == range.lowerBound,
               last == min(range.upperBound, length) - 1, last >= first,
               response.expectedContentLength == -1 || response.expectedContentLength == Int64(last - first + 1) else {
-            throw HongguoMP4.Failure.invalid
+            throw CENCBoxes.Failure.invalid
         }
         return (try await Self.body(bytes, expected: last - first + 1), length)
     }
@@ -166,23 +167,23 @@ actor HongguoRangeReader {
     private nonisolated static func body(_ bytes: sending URLSession.AsyncBytes, expected: Int) async throws -> Data {
         var data = [UInt8](); data.reserveCapacity(expected)
         for try await byte in bytes {
-            guard data.count < expected else { throw HongguoMP4.Failure.invalid }
+            guard data.count < expected else { throw CENCBoxes.Failure.invalid }
             data.append(byte)
             if data.count & 0x3fff == 0 { try Task.checkCancellation() }
         }
         try Task.checkCancellation()
-        guard data.count == expected else { throw HongguoMP4.Failure.invalid }
+        guard data.count == expected else { throw CENCBoxes.Failure.invalid }
         return Data(data)
     }
 }
 
-actor HongguoByteStream {
+actor CENCByteStream {
     static let chunkSize = 128 << 10
     static let cacheLimit = 16 << 20
-    private let reader: HongguoRangeReader
+    private let reader: CENCRangeReader
     private let key: Data
-    private var indexTask: Task<HongguoStreamIndex, Error>?
-    private var index: HongguoStreamIndex?
+    private var indexTask: Task<CENCIndex, Error>?
+    private var index: CENCIndex?
     private var prefix = Data()
     private struct Chunk { let range: Range<Int>; let data: Data; let time: ClosedRange<Double>? }
     private var cache: [Chunk] = []
@@ -191,17 +192,17 @@ actor HongguoByteStream {
     private var received = 0
     private var requests = 0
 
-    init(urls: [URL], key: Data, headers: [String: String], http: HTTPClient) {
-        reader = HongguoRangeReader(urls: urls, headers: headers, http: http)
+    init(urls: [URL], key: Data, headers: [String: String], retry: [String: String] = [:], http: HTTPClient) {
+        reader = CENCRangeReader(urls: urls, headers: headers, retry: retry, http: http)
         self.key = key
     }
 
-    var statistics: HongguoStreams.Statistics {
+    var statistics: CENCStreams.Statistics {
         .init(received: received, total: index?.length ?? 0, cached: cache.reduce(0) { $0 + $1.data.count }, requests: requests,
               bufferedThrough: cache.compactMap { $0.time?.upperBound }.max() ?? 0)
     }
 
-    func metadata() async throws -> HongguoStreamIndex {
+    func metadata() async throws -> CENCIndex {
         if let index { return index }
         if let indexTask { return try await indexTask.value }
         let task = Task { try await self.loadIndex() }
@@ -209,7 +210,7 @@ actor HongguoByteStream {
         defer { indexTask = nil }
         let value = try await task.value
         index = value
-        Diagnostics.shared.record(.info, "hongguo.stream", "index bytes=\(received) total=\(value.length) duration=\(Int(value.duration))s")
+        Diagnostics.shared.record(.info, "cenc.stream", "index bytes=\(received) total=\(value.length) duration=\(Int(value.duration))s")
         return value
     }
 
@@ -219,48 +220,48 @@ actor HongguoByteStream {
         return reply
     }
 
-    private func loadIndex() async throws -> HongguoStreamIndex {
+    private func loadIndex() async throws -> CENCIndex {
         let first = try await remote(0..<16384)
         prefix = first.data
         let length = first.length
-        Diagnostics.shared.record(.debug, "hongguo.stream", "prefix bytes=\(prefix.count) total=\(length) signature=\(prefix.prefix(16).map { String(format: "%02x", $0) }.joined())")
+        Diagnostics.shared.record(.debug, "cenc.stream", "prefix bytes=\(prefix.count) total=\(length) signature=\(prefix.prefix(16).map { String(format: "%02x", $0) }.joined())")
         var at = 0, count = 0, movie: (Data, Int)?, media: [Range<Int>] = [], segmentIndex: (Data, Int)?
         while at < length {
             try Task.checkCancellation()
             count += 1
-            guard count <= 128, at <= length - 8 else { throw HongguoMP4.Failure.invalid }
+            guard count <= 128, at <= length - 8 else { throw CENCBoxes.Failure.invalid }
             let upper = min(at + 16, length)
             let header: Data
             if upper <= prefix.count { header = Data(prefix[at..<upper]) }
             else { header = try await remote(at..<upper).data }
-            var size = try HongguoMP4.integer(header, 0), headerSize = 8
-            if size == 1 { size = try HongguoMP4.integer(header, 8, 8); headerSize = 16 }
+            var size = try CENCBoxes.integer(header, 0), headerSize = 8
+            if size == 1 { size = try CENCBoxes.integer(header, 8, 8); headerSize = 16 }
             if size == 0 { size = length - at }
-            guard size >= headerSize, size <= length - at else { throw HongguoMP4.Failure.invalid }
+            guard size >= headerSize, size <= length - at else { throw CENCBoxes.Failure.invalid }
             let type = String(decoding: header[4..<8], as: UTF8.self)
-            Diagnostics.shared.record(.debug, "hongguo.stream", "box type=\(type) at=\(at) size=\(size)")
+            Diagnostics.shared.record(.debug, "cenc.stream", "box type=\(type) at=\(at) size=\(size)")
             if type == "moof" {
                 // Fragmented: the sidx before the first fragment locates the rest, so the walk ends here.
-                guard let movie, let segmentIndex else { throw HongguoMP4.Failure.invalid }
-                Diagnostics.shared.record(.debug, "hongguo.stream", "parse fragmented index movie=\(movie.0.count) sidx=\(segmentIndex.0.count)")
-                return try HongguoStreamIndex(fragmentedMovie: movie.0, at: movie.1, length: length, segmentIndex: segmentIndex.0, at: segmentIndex.1)
+                guard let movie, let segmentIndex else { throw CENCBoxes.Failure.invalid }
+                Diagnostics.shared.record(.debug, "cenc.stream", "parse fragmented index movie=\(movie.0.count) sidx=\(segmentIndex.0.count)")
+                return try CENCIndex(fragmentedMovie: movie.0, at: movie.1, length: length, segmentIndex: segmentIndex.0, at: segmentIndex.1)
             }
             if type == "sidx", segmentIndex == nil {
-                guard size <= 1 << 20 else { throw HongguoMP4.Failure.invalid }
+                guard size <= 1 << 20 else { throw CENCBoxes.Failure.invalid }
                 let data = at + size <= prefix.count ? Data(prefix[at..<at + size]) : try await remote(at..<at + size).data
                 segmentIndex = (data, at)
             }
             if type == "moov" {
-                guard movie == nil, size <= 16 << 20 else { throw HongguoMP4.Failure.invalid }
+                guard movie == nil, size <= 16 << 20 else { throw CENCBoxes.Failure.invalid }
                 let data = at + size <= prefix.count ? Data(prefix[at..<at + size]) : try await remote(at..<at + size).data
                 movie = (data, at)
             }
             if type == "mdat" { media.append(at + headerSize..<at + size) }
             at += size
         }
-        guard let movie, !media.isEmpty else { throw HongguoMP4.Failure.invalid }
-        Diagnostics.shared.record(.debug, "hongguo.stream", "parse index movie=\(movie.0.count) mediaRanges=\(media.count)")
-        return try HongguoStreamIndex(movie: movie.0, at: movie.1, length: length, media: media)
+        guard let movie, !media.isEmpty else { throw CENCBoxes.Failure.invalid }
+        Diagnostics.shared.record(.debug, "cenc.stream", "parse index movie=\(movie.0.count) mediaRanges=\(media.count)")
+        return try CENCIndex(movie: movie.0, at: movie.1, length: length, media: media)
     }
 
     func updatePosition(_ seconds: Double) {
@@ -274,8 +275,8 @@ actor HongguoByteStream {
         let index = try await metadata()
         if let time = index.samples(in: offset..<offset + 1).first?.time,
            offset != lastDeliveredOffset,
-           abs(time - position) > HongguoStreams.forwardBufferDuration {
-            Diagnostics.shared.record(.debug, "hongguo.stream", "seek window from=\(Int(position)) to=\(Int(time))s")
+           abs(time - position) > CENCStreams.forwardBufferDuration {
+            Diagnostics.shared.record(.debug, "cenc.stream", "seek window from=\(Int(position)) to=\(Int(time))s")
             position = time
             prune()
         }
@@ -283,19 +284,19 @@ actor HongguoByteStream {
 
     func read(at offset: Int, count: Int, bounded: Bool = true) async throws -> Data {
         let index = try await metadata()
-        guard offset >= 0, offset < index.length, count > 0 else { throw HongguoMP4.Failure.invalid }
+        guard offset >= 0, offset < index.length, count > 0 else { throw CENCBoxes.Failure.invalid }
         let end = min(index.length, offset + min(count, Self.chunkSize))
         // Metadata is available regardless of the playhead, including a moov at the file's end.
         if offset >= index.movieRange.lowerBound, offset < index.movieRange.upperBound {
             return Data(index.movie[offset - index.movieRange.lowerBound..<min(end, index.movieRange.upperBound) - index.movieRange.lowerBound])
         }
-        // Fragmented files play as HLS (`HongguoStreams.open`), never as byte ranges.
-        guard index.fragmented == nil else { throw HongguoMP4.Failure.invalid }
+        // Fragmented files play as HLS (`CENCStreams.open`), never as byte ranges.
+        guard index.fragmented == nil else { throw CENCBoxes.Failure.invalid }
         var requested = offset..<end
         if offset < index.movieRange.lowerBound { requested = offset..<min(end, index.movieRange.lowerBound) }
         let covered = index.samples(in: requested)
         if bounded, let time = covered.map(\.time).min() {
-            while time > position + HongguoStreams.forwardBufferDuration {
+            while time > position + CENCStreams.forwardBufferDuration {
                 try await Task.sleep(for: .milliseconds(200))
             }
         }
@@ -313,7 +314,7 @@ actor HongguoByteStream {
         if expanded.upperBound <= prefix.count { encrypted = Data(prefix[expanded]) }
         else {
             let reply = try await remote(expanded)
-            guard reply.length == index.length else { throw HongguoMP4.Failure.invalid }
+            guard reply.length == index.length else { throw CENCBoxes.Failure.invalid }
             encrypted = reply.data
         }
         let decrypted = try index.decrypt(encrypted, at: expanded.lowerBound, key: key)
@@ -328,34 +329,34 @@ actor HongguoByteStream {
     /// A fragmented file's HLS initialization segment: its ftyp and the clear moov.
     func initialization() async throws -> Data {
         let index = try await metadata()
-        guard index.fragmented != nil, index.movieRange.lowerBound <= prefix.count else { throw HongguoMP4.Failure.invalid }
+        guard index.fragmented != nil, index.movieRange.lowerBound <= prefix.count else { throw CENCBoxes.Failure.invalid }
         return Data(prefix[0..<index.movieRange.lowerBound]) + index.movie
     }
 
     /// One whole fragment of a fragmented file, decrypted, with its moof's encryption boxes hidden.
     func fragment(_ i: Int) async throws -> Data {
         let index = try await metadata()
-        guard let tracks = index.fragmented, index.samples.indices.contains(i) else { throw HongguoMP4.Failure.invalid }
+        guard let tracks = index.fragmented, index.samples.indices.contains(i) else { throw CENCBoxes.Failure.invalid }
         let range = index.samples[i].bytes
         var data: Data
         if range.upperBound <= prefix.count { data = Data(prefix[range]) }
         else {
             let reply = try await remote(range)
-            guard reply.length == index.length else { throw HongguoMP4.Failure.invalid }
+            guard reply.length == index.length else { throw CENCBoxes.Failure.invalid }
             data = reply.data
         }
-        let size = try HongguoMP4.integer(data, 0)
-        guard size >= 8, size < data.count else { throw HongguoMP4.Failure.invalid }
-        let part = try HongguoStreamIndex.parseFragment(Data(data.prefix(size)), fragment: range, tracks: tracks)
+        let size = try CENCBoxes.integer(data, 0)
+        guard size >= 8, size < data.count else { throw CENCBoxes.Failure.invalid }
+        let part = try CENCIndex.parseFragment(Data(data.prefix(size)), fragment: range, tracks: tracks)
         data.replaceSubrange(0..<size, with: part.moof)
-        try HongguoStreamIndex.decrypt(&data, at: range.lowerBound, part: part, key: key)
+        try CENCIndex.decrypt(&data, at: range.lowerBound, part: part, key: key)
         return data
     }
 
     private func prune() {
         cache.removeAll { chunk in
             guard let time = chunk.time else { return false }
-            return time.upperBound < position - 5 || time.lowerBound > position + HongguoStreams.forwardBufferDuration + 5
+            return time.upperBound < position - 5 || time.lowerBound > position + CENCStreams.forwardBufferDuration + 5
         }
         var total = cache.reduce(0) { $0 + $1.data.count }
         while total > Self.cacheLimit, !cache.isEmpty { total -= cache.removeFirst().data.count }
@@ -369,9 +370,9 @@ actor HongguoByteStream {
 
 /// AVFoundation request objects stay on one serial queue. The async workers handle only byte
 /// ranges and re-enter that queue to respond, so cancelled requests never receive late data.
-private final class HongguoResourceLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecked Sendable {
-    static let shared = HongguoResourceLoader()
-    let queue = DispatchQueue(label: "tvbox.hongguo.loader")
+private final class CENCResourceLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecked Sendable {
+    static let shared = CENCResourceLoader()
+    let queue = DispatchQueue(label: "tvbox.cenc.loader")
     private struct Pending {
         let url: URL
         let request: AVAssetResourceLoadingRequest
@@ -380,12 +381,12 @@ private final class HongguoResourceLoader: NSObject, AVAssetResourceLoaderDelega
     private var pending: [ObjectIdentifier: Pending] = [:]
 
     func resourceLoader(_ loader: AVAssetResourceLoader, shouldWaitForLoadingOfRequestedResource request: AVAssetResourceLoadingRequest) -> Bool {
-        guard let url = request.request.url, let stream = HongguoStreamStore.shared.stream(url) else { return false }
+        guard let url = request.request.url, let stream = CENCStreamStore.shared.stream(url) else { return false }
         let id = ObjectIdentifier(request)
         let offset = request.dataRequest.map { max($0.requestedOffset, $0.currentOffset) }
         let length = request.dataRequest?.requestedLength ?? 0
         let toEnd = request.dataRequest?.requestsAllDataToEndOfResource ?? false
-        Diagnostics.shared.record(.debug, "hongguo.stream", "request offset=\(offset ?? -1) length=\(length) toEnd=\(toEnd) info=\(request.contentInformationRequest != nil)")
+        Diagnostics.shared.record(.debug, "cenc.stream", "request offset=\(offset ?? -1) length=\(length) toEnd=\(toEnd) info=\(request.contentInformationRequest != nil)")
         let task = Task { [weak self] in
             do {
                 let metadata = try await stream.metadata()
@@ -399,7 +400,7 @@ private final class HongguoResourceLoader: NSObject, AVAssetResourceLoaderDelega
                 }
                 guard active else { return }
                 if let offset {
-                    guard offset >= 0, offset <= Int64(metadata.length), length >= 0 else { throw HongguoMP4.Failure.invalid }
+                    guard offset >= 0, offset <= Int64(metadata.length), length >= 0 else { throw CENCBoxes.Failure.invalid }
                     var at = Int(offset)
                     let end = toEnd ? metadata.length : min(metadata.length, at + length)
                     try await stream.beginRequest(at: at)
@@ -418,8 +419,8 @@ private final class HongguoResourceLoader: NSObject, AVAssetResourceLoaderDelega
                 self.finish(id, error: nil)
             } catch {
                 // A seek or a closed player cancels the request (URLError -999 too): not a failure.
-                Diagnostics.shared.failure("hongguo.stream", "request failed offset=\(offset ?? -1)", error)
-                self?.finish(id, error: error is CancellationError ? error : TVError.unsupported(L10n.text("This Hongguo video could not be prepared for playback. Please try again.")))
+                Diagnostics.shared.failure("cenc.stream", "request failed offset=\(offset ?? -1)", error)
+                self?.finish(id, error: error is CancellationError ? error : TVError.unsupported(L10n.text("This video could not be prepared for playback. Please try again.")))
             }
         }
         pending[id] = Pending(url: url, request: request, task: task)
