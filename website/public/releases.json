@@ -80,10 +80,10 @@
             "ja": "そのほかの修正"
           },
           "detail": {
-            "en": "Live streams that only answer a browser now play on iPhone, iPad and Apple TV, as they did on the Mac. MKV files served by a source's own local server play. Watch Now loads its recommendations again after a reset. On the Mac, the loading card no longer pushes the window taller. Built-in sources pick up updates sooner.",
-            "zh-Hans": "只接受浏览器访问的直播流现在也能在 iPhone、iPad 和 Apple TV 上播放，与 Mac 一致。片源通过自带本地服务提供的 MKV 文件可以播放。“现在观看”在重置后会重新载入推荐。在 Mac 上，加载提示不再把窗口撑高。内置片源能更快获得更新。",
-            "zh-Hant": "只接受瀏覽器存取的直播串流現在也能在 iPhone、iPad 和 Apple TV 上播放，與 Mac 一致。片源透過自帶本機服務提供的 MKV 檔案可以播放。「立即觀看」在重置後會重新載入推薦。在 Mac 上，載入提示不再把視窗撐高。內建片源能更快取得更新。",
-            "ja": "ブラウザからのアクセスだけを受け付けるライブ配信が、Mac と同じく iPhone、iPad、Apple TV でも再生できます。ソース自身のローカルサーバーが配信する MKV ファイルを再生できます。「今すぐ観る」はリセット後におすすめを読み込み直します。Mac では読み込み中のカードがウインドウを縦に押し広げなくなりました。内蔵ソースの更新がより早く届きます。"
+            "en": "Live streams that only answer a browser now play on iPhone, iPad and Apple TV, as they did on the Mac. MKV files served by a source's own local server play. Watch Now loads its recommendations again after a reset. On the Mac, the loading card no longer pushes the window taller. Recommended sources pick up updates sooner.",
+            "zh-Hans": "只接受浏览器访问的直播流现在也能在 iPhone、iPad 和 Apple TV 上播放，与 Mac 一致。片源通过自带本地服务提供的 MKV 文件可以播放。“现在观看”在重置后会重新载入推荐。在 Mac 上，加载提示不再把窗口撑高。推荐片源能更快获得更新。",
+            "zh-Hant": "只接受瀏覽器存取的直播串流現在也能在 iPhone、iPad 和 Apple TV 上播放，與 Mac 一致。片源透過自帶本機服務提供的 MKV 檔案可以播放。「立即觀看」在重置後會重新載入推薦。在 Mac 上，載入提示不再把視窗撐高。推薦片源能更快取得更新。",
+            "ja": "ブラウザからのアクセスだけを受け付けるライブ配信が、Mac と同じく iPhone、iPad、Apple TV でも再生できます。ソース自身のローカルサーバーが配信する MKV ファイルを再生できます。「今すぐ観る」はリセット後におすすめを読み込み直します。Mac では読み込み中のカードがウインドウを縦に押し広げなくなりました。おすすめソースの更新がより早く届きます。"
           }
         }
       ]
@@ -1024,10 +1024,10 @@
         {
           "symbol": "cloud",
           "title": {
-            "en": "Built-in sources from the cloud",
-            "zh-Hans": "内置源改为在线更新",
-            "zh-Hant": "內建來源改為線上更新",
-            "ja": "内蔵ソースをクラウドから"
+            "en": "Recommended sources from the cloud",
+            "zh-Hans": "推荐源改为在线更新",
+            "zh-Hant": "推薦來源改為線上更新",
+            "ja": "おすすめソースをクラウドから"
           },
           "detail": {
             "en": "Bilibili, Hongguo, Xifan and Hema, and the Bilibili, Douyu, Huya and Douyin live channels, now come from Yingxia's online source list, so fixes reach you without an app update. They appear, together with Music, once you have added a subscription that works.",
@@ -1707,10 +1707,10 @@
             "ja": "ショートドラマのソースを 2 つ追加"
           },
           "detail": {
-            "en": "Xifan (西饭) and Hema (河马) join Hongguo as built-in short-drama sources, with genres, search and details. Only free episodes are listed, and Hema offers just the first few episodes of each drama.",
-            "zh-Hans": "西饭和河马加入红果，成为内置短剧源，可按类型浏览、搜索并查看详情。只列出免费剧集；河马每部剧只提供前几集。",
-            "zh-Hant": "西飯和河馬加入紅果，成為內建短劇來源，可依類型瀏覽、搜尋並查看詳情。只列出免費劇集；河馬每部劇只提供前幾集。",
-            "ja": "西飯（Xifan）と河馬（Hema）が紅果と並ぶ内蔵ショートドラマソースになりました。ジャンル別の閲覧、検索、詳細表示に対応しています。無料のエピソードのみ表示され、河馬は各ドラマの最初の数話のみです。"
+            "en": "Xifan (西饭) and Hema (河马) join Hongguo as recommended short-drama sources, with genres, search and details. Only free episodes are listed, and Hema offers just the first few episodes of each drama.",
+            "zh-Hans": "西饭和河马加入红果，成为推荐短剧源，可按类型浏览、搜索并查看详情。只列出免费剧集；河马每部剧只提供前几集。",
+            "zh-Hant": "西飯和河馬加入紅果，成為推薦短劇來源，可依類型瀏覽、搜尋並查看詳情。只列出免費劇集；河馬每部劇只提供前幾集。",
+            "ja": "西飯（Xifan）と河馬（Hema）が紅果と並ぶおすすめのショートドラマソースになりました。ジャンル別の閲覧、検索、詳細表示に対応しています。無料のエピソードのみ表示され、河馬は各ドラマの最初の数話のみです。"
           }
         },
         {
@@ -3343,10 +3343,10 @@
             "ja": "ライブで配信中の内容が見えるように"
           },
           "detail": {
-            "en": "Each built-in live platform is now a card showing its busiest room, with the streamer and the audience. Playlists appear as tiles, as in Sources.",
-            "zh-Hans": "每个内置直播平台现在显示为一张卡片，展示当前最热门的直播间、主播和观看人数。直播列表以方块显示，与“点播源”页面一致。",
-            "zh-Hant": "每個內建直播平台現在顯示為一張卡片，展示目前最熱門的直播間、主播和觀看人數。直播清單以方塊顯示，與「點播源」頁面一致。",
-            "ja": "内蔵の各ライブプラットフォームが、いま最も賑わっている配信ルームと配信者、視聴者数を表示するカードになりました。プレイリストは「ソース」と同じタイルで表示されます。"
+            "en": "Each recommended live platform is now a card showing its busiest room, with the streamer and the audience. Playlists appear as tiles, as in Sources.",
+            "zh-Hans": "每个推荐直播平台现在显示为一张卡片，展示当前最热门的直播间、主播和观看人数。直播列表以方块显示，与“点播源”页面一致。",
+            "zh-Hant": "每個推薦直播平台現在顯示為一張卡片，展示目前最熱門的直播間、主播和觀看人數。直播清單以方塊顯示，與「點播源」頁面一致。",
+            "ja": "おすすめの各ライブプラットフォームが、いま最も賑わっている配信ルームと配信者、視聴者数を表示するカードになりました。プレイリストは「ソース」と同じタイルで表示されます。"
           }
         },
         {
@@ -3427,10 +3427,10 @@
             "ja": "Bilibili のランキングが復活"
           },
           "detail": {
-            "en": "In the built-in Bilibili source, 排行榜 and the zone rankings (动画, 音乐, 游戏 and the rest) came up empty after a change on Bilibili’s side. They load again.",
-            "zh-Hans": "内置哔哩哔哩源中的“排行榜”和各分区排行（动画、音乐、游戏等）因 B 站接口变化而显示为空，现在可以正常加载。",
-            "zh-Hant": "內建嗶哩嗶哩來源中的「排行榜」和各分區排行（動畫、音樂、遊戲等）因 B 站介面變更而顯示為空，現在可以正常載入。",
-            "ja": "内蔵の Bilibili ソースで「排行榜」と各カテゴリのランキング（动画、音乐、游戏など）が Bilibili 側の変更で空になっていましたが、再び表示されるようになりました。"
+            "en": "In the recommended Bilibili source, 排行榜 and the zone rankings (动画, 音乐, 游戏 and the rest) came up empty after a change on Bilibili’s side. They load again.",
+            "zh-Hans": "推荐的哔哩哔哩源中的“排行榜”和各分区排行（动画、音乐、游戏等）因 B 站接口变化而显示为空，现在可以正常加载。",
+            "zh-Hant": "推薦的嗶哩嗶哩來源中的「排行榜」和各分區排行（動畫、音樂、遊戲等）因 B 站介面變更而顯示為空，現在可以正常載入。",
+            "ja": "おすすめの Bilibili ソースで「排行榜」と各カテゴリのランキング（动画、音乐、游戏など）が Bilibili 側の変更で空になっていましたが、再び表示されるようになりました。"
           }
         }
       ]
@@ -3613,10 +3613,10 @@
         {
           "symbol": "dot.radiowaves.left.and.right",
           "title": {
-            "en": "Douyu, Huya and Douyin live, built in",
-            "zh-Hans": "内置斗鱼、虎牙和抖音直播",
-            "zh-Hant": "內建鬥魚、虎牙和抖音直播",
-            "ja": "Douyu、Huya、Douyin のライブを内蔵"
+            "en": "Douyu, Huya and Douyin live",
+            "zh-Hans": "新增斗鱼、虎牙和抖音直播",
+            "zh-Hant": "新增鬥魚、虎牙和抖音直播",
+            "ja": "Douyu、Huya、Douyin のライブを追加"
           },
           "detail": {
             "en": "Live TV now has Douyu, Huya and Douyin next to Bilibili Live. Browse each platform’s categories, open a room, and switch its quality in the player. No subscription needed.",
@@ -3733,10 +3733,10 @@
         {
           "symbol": "play.rectangle.on.rectangle.fill",
           "title": {
-            "en": "Hongguo short dramas, built in",
-            "zh-Hans": "内置红果短剧",
-            "zh-Hant": "內建紅果短劇",
-            "ja": "Hongguo のショートドラマを内蔵"
+            "en": "Hongguo short dramas",
+            "zh-Hans": "新增红果短剧",
+            "zh-Hant": "新增紅果短劇",
+            "ja": "Hongguo のショートドラマを追加"
           },
           "detail": {
             "en": "Live-action, animated and AI dramas from Hongguo, plus the trending charts, with every episode of each series. Episodes stream as you watch, and no subscription is needed.",
@@ -3769,10 +3769,10 @@
             "ja": "ソースをアプリのように"
           },
           "detail": {
-            "en": "Each source is now a tile with its own icon, and taglines such as 秒播 sit on a second line. Built-in sources come first.",
-            "zh-Hans": "每个片源都是带图标的方块，「秒播」等标签显示在第二行，内置片源排在最前。",
-            "zh-Hant": "每個片源都是帶圖示的方塊，「秒播」等標籤顯示在第二行，內建片源排在最前。",
-            "ja": "各ソースがアイコン付きのタイルになり、「秒播」などのタグは 2 行目に表示されます。内蔵ソースが先頭に並びます。"
+            "en": "Each source is now a tile with its own icon, and taglines such as 秒播 sit on a second line. Recommended sources come first.",
+            "zh-Hans": "每个片源都是带图标的方块，「秒播」等标签显示在第二行，推荐片源排在最前。",
+            "zh-Hant": "每個片源都是帶圖示的方塊，「秒播」等標籤顯示在第二行，推薦片源排在最前。",
+            "ja": "各ソースがアイコン付きのタイルになり、「秒播」などのタグは 2 行目に表示されます。おすすめソースが先頭に並びます。"
           }
         },
         {
@@ -4109,16 +4109,16 @@
         {
           "symbol": "play.rectangle.fill",
           "title": {
-            "en": "Bilibili, built in",
-            "zh-Hans": "内置哔哩哔哩",
-            "zh-Hant": "內建嗶哩嗶哩",
-            "ja": "ビリビリを内蔵"
+            "en": "Bilibili",
+            "zh-Hans": "新增哔哩哔哩",
+            "zh-Hant": "新增嗶哩嗶哩",
+            "ja": "ビリビリを追加"
           },
           "detail": {
-            "en": "A built-in source with recommendations, rankings, zones and search, playing in up to 1080P.",
-            "zh-Hans": "内置片源，包含推荐、排行榜、分区和搜索，最高 1080P 播放。",
-            "zh-Hant": "內建片源，包含推薦、排行榜、分區和搜尋，最高 1080P 播放。",
-            "ja": "おすすめ、ランキング、ゾーン、検索を備えた内蔵ソース。最大 1080P で再生できます。"
+            "en": "A recommended source with recommendations, rankings, zones and search, playing in up to 1080P.",
+            "zh-Hans": "推荐片源，包含推荐、排行榜、分区和搜索，最高 1080P 播放。",
+            "zh-Hant": "推薦片源，包含推薦、排行榜、分區和搜尋，最高 1080P 播放。",
+            "ja": "おすすめ、ランキング、ゾーン、検索を備えたおすすめソース。最大 1080P で再生できます。"
           }
         },
         {
