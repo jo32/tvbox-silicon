@@ -502,24 +502,24 @@
 
 // Downloads
 "The video link stopped working (HTTP %lld) and could not be renewed. Try again later." = "视频链接已失效（HTTP %lld），且无法重新获取。请稍后再试。";
-"Live streams can't be downloaded." = "直播无法下载。";
-"This video is protected and can't be downloaded." = "此视频受保护，无法下载。";
+"Live streams can't be cached." = "直播无法缓存。";
+"This video is protected and can't be cached." = "此视频受保护，无法缓存。";
 "This link didn't return a video." = "此链接未返回视频。";
-"The server stopped allowing resumed downloads. Retry to start again." = "服务器不再支持断点续传。请重试以重新下载。";
+"The server stopped allowing caching to resume. Retry to start again." = "服务器不再支持断点续传。请重试以重新缓存。";
 "The server closed the connection early." = "服务器提前断开了连接。";
 "Not enough storage: this needs %@ more, and %@ is free." = "存储空间不足：还需要 %@，当前可用 %@。";
-"Downloads" = "下载";
-"This download is no longer on this device." = "此下载已不在本设备上。";
-"%@ is no longer in your subscription, so this download can't continue." = "%@ 已不在你的订阅中，无法继续下载。";
-"No Downloads" = "没有下载";
-"Choose Download on a video's page to save episodes for watching offline." = "在视频页面选择“下载”，即可保存剧集离线观看。";
-"Downloaded" = "已下载";
-"Date Downloaded" = "下载时间";
-"Delete all downloaded episodes of %@?" = "删除《%@》的所有已下载剧集？";
-"Delete Downloads" = "删除下载";
-"Delete Download" = "删除下载";
-"Downloading" = "正在下载";
-"At a Time" = "同时下载";
+"Offline Cache" = "离线缓存";
+"This cached video is no longer on this device." = "此缓存已不在本设备上。";
+"%@ is no longer in your subscription, so caching can't continue." = "%@ 已不在你的订阅中，无法继续缓存。";
+"Nothing Cached" = "没有缓存";
+"Choose Cache on a video's page to keep episodes for watching offline." = "在视频页面选择“缓存”，即可保存剧集离线观看。";
+"Cached" = "已缓存";
+"Date Cached" = "缓存时间";
+"Delete all cached episodes of %@?" = "删除《%@》的所有已缓存剧集？";
+"Delete Cached Items" = "删除缓存";
+"Delete from Cache" = "删除缓存";
+"Caching" = "正在缓存";
+"At a Time" = "同时缓存";
 "%lld at a time" = "同时 %lld 个";
 "Resume All" = "全部继续";
 "Pause All" = "全部暂停";
@@ -529,32 +529,32 @@
 "%@ left" = "剩余 %@";
 "Storage" = "存储空间";
 "%@ free" = "可用 %@";
-"used by downloads" = "已被下载占用";
-"%@ used by downloads" = "下载已占用 %@";
+"used by the cache" = "已被缓存占用";
+"%@ used by the cache" = "缓存已占用 %@";
 "Other" = "其他";
 "Free" = "可用";
-"tvOS may remove downloads when Apple TV runs low on storage." = "Apple TV 存储空间不足时，tvOS 可能会删除下载内容。";
+"tvOS may remove cached videos when Apple TV runs low on storage." = "Apple TV 存储空间不足时，tvOS 可能会删除缓存内容。";
 "Resume" = "继续";
 "Pause" = "暂停";
-"Cancel Download" = "取消下载";
-"Download Next" = "优先下载";
+"Cancel Caching" = "取消缓存";
+"Cache Next" = "优先缓存";
 "Waiting · #%lld in queue" = "等待中 · 队列第 %lld 位";
 "Waiting" = "等待中";
 "Finishing…" = "正在完成…";
 "Paused" = "已暂停";
-"Download failed" = "下载失败";
+"Caching failed" = "缓存失败";
 "1 episode" = "1 集";
 "%lld episodes" = "%lld 集";
 "Play %@" = "播放 %@";
-"Download Episodes" = "下载剧集";
+"Cache Episodes" = "缓存剧集";
 "Select All" = "全选";
 "Deselect All" = "取消全选";
-"Download" = "下载";
-"Download %lld" = "下载 %lld 集";
+"Cache" = "缓存";
+"Cache %lld" = "缓存 %lld 集";
 "In Queue" = "已在队列中";
-"1 episode added to Downloads." = "已将 1 集加入下载。";
-"%lld episodes added to Downloads." = "已将 %lld 集加入下载。";
-"Show Downloads" = "查看下载";
+"1 episode added to the cache." = "已将 1 集加入缓存。";
+"%lld episodes added to the cache." = "已将 %lld 集加入缓存。";
+"Show Cache" = "查看缓存";
 "Browse Sources" = "浏览点播源";
 "%@ available on this device" = "本机可用 %@";
 
@@ -947,12 +947,12 @@
 "Developer" = "开发者";
 "No replies yet. They'll appear here." = "还没有回复，有回复时会显示在这里。";
 "Couldn't check for replies. Please try again later." = "无法查看回复，请稍后再试。";
-"Remove Download" = "移除下载";
-"Downloaded Songs" = "已下载的歌曲";
-"No Downloaded Songs" = "没有已下载的歌曲";
-"Download a song, album or playlist from its menu to listen without a connection." = "在歌曲、专辑或歌单的菜单中选择“下载”，没有网络时也能收听。";
-"Delete all downloaded songs?" = "删除所有已下载的歌曲？";
-"%lld downloading" = "%lld 首正在下载";
+"Remove from Cache" = "移除缓存";
+"Cached Songs" = "已缓存的歌曲";
+"No Cached Songs" = "没有已缓存的歌曲";
+"Cache a song, album or playlist from its menu to listen without a connection." = "在歌曲、专辑或歌单的菜单中选择“缓存”，没有网络时也能收听。";
+"Delete all cached songs?" = "删除所有已缓存的歌曲？";
+"%lld caching" = "%lld 首正在缓存";
 
 // Signing in on the service's own page (iPhone, iPad).
 "Sign In Here" = "在此登录";
@@ -1066,7 +1066,6 @@
 "Choose what Watch Now shows in Settings." = "可在设置中选择“现在观看”显示哪些内容。";
 "Name" = "名称";
 "Name (optional)" = "名称（可选）";
-"Show in Finder" = "在访达中显示";
 "Telegram Group" = "Telegram 群组";
 "Chat with the developer and other users" = "与开发者和其他用户交流";
 "Prefer to chat? Join the Telegram group." = "想直接聊聊？加入 Telegram 群组。";
@@ -1135,8 +1134,8 @@
 "Finding the live stream" = "正在查找直播流";
 "Getting the file from the drive" = "正在从网盘获取文件";
 "Repackaging the video for this device" = "正在为此设备转封装视频";
-"Preparing the saved download for this device · %lld%%" = "正在为这台设备整理已下载的视频 · %lld%%";
-"Opening the saved download" = "正在打开已下载的视频";
+"Preparing the cached video for this device · %lld%%" = "正在为这台设备整理已缓存的视频 · %lld%%";
+"Opening the cached video" = "正在打开已缓存的视频";
 "Connecting to %@" = "正在连接 %@";
 "Receiving video from %@" = "正在从 %@ 接收视频";
 "Trouble with %@ (%@), trying again" = "%@ 出现问题（%@），正在重试";
@@ -1599,7 +1598,6 @@
 "%@ fps" = "%@ fps";
 "An SRT, WebVTT or ASS file, or a ZIP archive of them, up to 8 MB." = "SRT、WebVTT 或 ASS 文件，或它们的 ZIP 压缩包，最大 8 MB。";
 "Subtitles Not Added" = "未能添加字幕";
-"Save or Share" = "保存或分享";
 
 /* Subtitle sources (#576 M2) */
 "It uses manifest format %@." = "它使用的清单格式为 %@。";

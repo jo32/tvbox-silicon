@@ -2174,9 +2174,9 @@ struct VideoDetailView: View {
         if let count = queuedNotice {
             HStack(spacing: 12) {
                 Image(systemName: "arrow.down.circle.fill").foregroundStyle(Brand.accent)
-                Text(count == 1 ? L10n.text("1 episode added to Downloads.") : L10n.text("%lld episodes added to Downloads.", count)).font(.subheadline.weight(.medium))
+                Text(count == 1 ? L10n.text("1 episode added to the cache.") : L10n.text("%lld episodes added to the cache.", count)).font(.subheadline.weight(.medium))
                 Spacer(minLength: 8)
-                Button(L10n.text("Show Downloads")) { store.section = .downloads }.settingsButton()
+                Button(L10n.text("Show Cache")) { store.section = .downloads }.settingsButton()
             }
             .padding(14)
             .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -2525,11 +2525,11 @@ struct VideoDetailView: View {
     }
     private func downloadButton(iconOnly: Bool) -> some View {
         Button { choosingDownloads = true } label: {
-            Label(L10n.text("Download"), systemImage: "arrow.down.circle")
+            Label(L10n.text("Cache"), systemImage: "arrow.down.circle")
                 .labelStyle(DownloadLabelStyle(iconOnly: iconOnly))
                 .font(.headline).lineLimit(1).fixedSize()
         }
-        .controlButton().appControlSize(.large).accessibilityLabel(L10n.text("Download"))
+        .controlButton().appControlSize(.large).accessibilityLabel(L10n.text("Cache"))
     }
     /// Icon-only, beside Play and Download. An empty heart keeps the control color; a saved one is rose.
     /// Set as text in their font, so the button is as tall as theirs: a bare image made a smaller one on Apple TV.
@@ -2740,12 +2740,12 @@ struct VideoDetailView: View {
                     if episodeLabels[episode.id] != nil { Text(episode.name) }
                     FavoriteMenuButton(item: episodeFavorite(episode), name: episode.name)
                     if saved == nil || saved?.status == .failed {
-                        Button(L10n.text("Download"), systemImage: "arrow.down.circle") {
+                        Button(L10n.text("Cache"), systemImage: "arrow.down.circle") {
                             DownloadLibrary.shared.download(DownloadSource(site: client.site, videoID: video.id, episode: episode),
                                                             title: video.name, poster: video.poster, posterHeaders: video.posterHeaders)
                         }
                     } else if let saved {
-                        Button(L10n.text(saved.status == .completed ? "Delete Download" : "Cancel Download"), systemImage: "trash", role: .destructive) {
+                        Button(L10n.text(saved.status == .completed ? "Delete from Cache" : "Cancel Caching"), systemImage: "trash", role: .destructive) {
                             DownloadLibrary.shared.remove([saved.id])
                         }
                     }
@@ -3132,8 +3132,8 @@ struct VideoDetailView: View {
         let saved = store.favorites.contains(videoFavorite())
         let title = saved ? L10n.text("Remove %@ from favorites", currentVideo().name) : L10n.text("Add %@ to favorites", currentVideo().name)
         return HStack(alignment: .top, spacing: 14) {
-            Button { choosingDownloads = true } label: { WatchPlateLabel(symbol: "arrow.down.circle", caption: L10n.text("Download")) }
-                .accessibilityLabel(L10n.text("Download")).accessibilityIdentifier("detail.download")
+            Button { choosingDownloads = true } label: { WatchPlateLabel(symbol: "arrow.down.circle", caption: L10n.text("Cache")) }
+                .accessibilityLabel(L10n.text("Cache")).accessibilityIdentifier("detail.download")
             Button { store.favorites.toggle(videoFavorite()) } label: {
                 WatchPlateLabel(symbol: "heart", caption: saved ? L10n.text("Saved") : L10n.text("Favorite"), on: saved)
             }
@@ -3289,12 +3289,12 @@ struct VideoDetailView: View {
         .contextMenu {
             if episodeLabels[episode.id] != nil { Text(episode.name) }
             if saved == nil || saved?.status == .failed {
-                Button(L10n.text("Download"), systemImage: "arrow.down.circle") {
+                Button(L10n.text("Cache"), systemImage: "arrow.down.circle") {
                     DownloadLibrary.shared.download(DownloadSource(site: client.site, videoID: video.id, episode: episode),
                                                     title: video.name, poster: video.poster, posterHeaders: video.posterHeaders)
                 }
             } else if let saved {
-                Button(L10n.text(saved.status == .completed ? "Delete Download" : "Cancel Download"), systemImage: "trash", role: .destructive) {
+                Button(L10n.text(saved.status == .completed ? "Delete from Cache" : "Cancel Caching"), systemImage: "trash", role: .destructive) {
                     DownloadLibrary.shared.remove([saved.id])
                 }
             }
@@ -3614,7 +3614,7 @@ extension VideoDetailView {
                 VStack(alignment: .leading, spacing: 22) {
                     bilibiliTVPlay
                     HStack(alignment: .top, spacing: 16) {
-                        tvPlate("arrow.down.circle", caption: L10n.text("Download"), id: "detail.download", focus: .download) {
+                        tvPlate("arrow.down.circle", caption: L10n.text("Cache"), id: "detail.download", focus: .download) {
                             choosingDownloads = true
                         }
                         let saved = store.favorites.contains(videoFavorite())
@@ -3952,7 +3952,7 @@ extension VideoDetailView {
             VStack(alignment: .leading, spacing: 18) {
                 macPlay
                 HStack(alignment: .top, spacing: 6) {
-                    MacPlate(symbol: "arrow.down.circle", caption: L10n.text("Download"), id: "detail.download") { choosingDownloads = true }
+                    MacPlate(symbol: "arrow.down.circle", caption: L10n.text("Cache"), id: "detail.download") { choosingDownloads = true }
                     let saved = store.favorites.contains(videoFavorite())
                     MacPlate(symbol: "heart", caption: L10n.text(saved ? "Saved" : "Favorite"), on: saved, id: "detail.favorite") {
                         store.favorites.toggle(videoFavorite())

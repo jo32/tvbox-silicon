@@ -71,10 +71,10 @@ enum TransferError: LocalizedError, Equatable {
         switch self {
         case .expired(let status): L10n.text("The video link stopped working (HTTP %lld) and could not be renewed. Try again later.", status)
         case .http(let status): L10n.text("The server returned HTTP %lld.", status)
-        case .live: L10n.text("Live streams can't be downloaded.")
-        case .protected: L10n.text("This video is protected and can't be downloaded.")
+        case .live: L10n.text("Live streams can't be cached.")
+        case .protected: L10n.text("This video is protected and can't be cached.")
         case .notMedia: L10n.text("This link didn't return a video.")
-        case .rangeLost: L10n.text("The server stopped allowing resumed downloads. Retry to start again.")
+        case .rangeLost: L10n.text("The server stopped allowing caching to resume. Retry to start again.")
         case .incomplete: L10n.text("The server closed the connection early.")
         case .noSpace(let needed, let available):
             L10n.text("Not enough storage: this needs %@ more, and %@ is free.", Self.size(needed), Self.size(available))

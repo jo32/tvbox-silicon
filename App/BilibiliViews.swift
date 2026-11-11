@@ -1202,8 +1202,8 @@ struct BilibiliPhoneVideoPage<Parts: View, Status: View>: View {
             .accessibilityLabel(L10n.text("Favorite")).accessibilityIdentifier("bilibili.favorite")
             .frame(maxWidth: .infinity)
             if let download {
-                Button(action: download) { WatchPlateLabel(symbol: "arrow.down.circle", caption: L10n.text("Download")) }
-                    .accessibilityLabel(L10n.text("Download")).accessibilityIdentifier("detail.download")
+                Button(action: download) { WatchPlateLabel(symbol: "arrow.down.circle", caption: L10n.text("Cache")) }
+                    .accessibilityLabel(L10n.text("Cache")).accessibilityIdentifier("detail.download")
                     .frame(maxWidth: .infinity)
             }
             // A sheet of choices rather than a menu: iOS draws a menu's own glass around its label, a second, larger plate.
@@ -1416,7 +1416,7 @@ struct BilibiliMacVideoPage<Play: View, Parts: View, Status: View>: View {
                 }
                 MacPlate(symbol: "star", caption: caption(state?.favorites, L10n.text("Favorite")), on: state?.favorited == true,
                          tint: BilibiliMark.pink, id: "bilibili.favorite") { Task { await actions.favorite() } }
-                MacPlate(symbol: "arrow.down.circle", caption: L10n.text("Download"), id: "detail.download", action: download)
+                MacPlate(symbol: "arrow.down.circle", caption: L10n.text("Cache"), id: "detail.download", action: download)
                 MacPlateMenu(symbol: saved ? "heart" : "ellipsis", caption: saved ? L10n.text("Saved") : L10n.text("More"), on: saved,
                              title: L10n.text("More"), id: "bilibili.more") {
                     Button { Task { await actions.watchLater() } } label: { Label(L10n.text("Watch Later"), systemImage: "clock") }
@@ -1727,7 +1727,7 @@ struct BilibiliTVVideoPage<Play: View, Parts: View, Status: View>: View {
                     Button { Task { await actions.watchLater() } } label: { Label(L10n.text("Watch Later"), systemImage: "clock") }
                     Button { Task { await actions.triple() } } label: { Label(L10n.text("Like, Coin and Favorite"), systemImage: "sparkles") }
                     Divider()
-                    Button(action: download) { Label(L10n.text("Download"), systemImage: "arrow.down.circle") }
+                    Button(action: download) { Label(L10n.text("Cache"), systemImage: "arrow.down.circle") }
                     Button(action: toggleSaved) {
                         Label(saved ? L10n.text("Remove from Yingxia Favorites") : L10n.text("Add to Yingxia Favorites"),
                               systemImage: saved ? "heart.slash" : "heart")

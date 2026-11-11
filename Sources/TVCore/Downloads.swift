@@ -315,20 +315,20 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
 
     /// What the player opens for a finished download.
     public func channel(for item: DownloadItem) -> Channel {
-        Channel(name: "\(item.title) · \(item.episode)", group: L10n.text("Downloads"), url: URL(string: "\(Self.scheme)://\(item.id)")!)
+        Channel(name: "\(item.title) · \(item.episode)", group: L10n.text("Offline Cache"), url: URL(string: "\(Self.scheme)://\(item.id)")!)
     }
 
     /// The file (or, for HLS, the loopback address) that plays a `tvbox-download://` address. An HDR MKV saved
     /// before downloads became MP4s is rewrapped first, which `progress` follows (0...1).
     public func playbackAddress(for url: URL, progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws -> URL {
         guard url.scheme == Self.scheme, let id = url.host(), let item = item(id: id), item.status == .completed, var media = item.media else {
-            throw TVError.unsupported(L10n.text("This download is no longer on this device."))
+            throw TVError.unsupported(L10n.text("This cached video is no longer on this device."))
         }
         var file = folder(id).appending(path: media)
         guard FileManager.default.fileExists(atPath: file.path) else {
             // Deleted or moved away in Finder: stop listing it as downloaded.
             remove([id])
-            throw TVError.unsupported(L10n.text("This download is no longer on this device."))
+            throw TVError.unsupported(L10n.text("This cached video is no longer on this device."))
         }
         if Remux.handles(name: media) {
             let rewrapped = await Self.rewrap(media, in: folder(id), progress: progress)

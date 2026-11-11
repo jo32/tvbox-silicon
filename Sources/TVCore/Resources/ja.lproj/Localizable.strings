@@ -502,24 +502,24 @@
 
 // Downloads
 "The video link stopped working (HTTP %lld) and could not be renewed. Try again later." = "動画のリンクが無効になり（HTTP %lld）、再取得できませんでした。しばらくしてからお試しください。";
-"Live streams can't be downloaded." = "ライブ配信はダウンロードできません。";
-"This video is protected and can't be downloaded." = "この動画は保護されているため、ダウンロードできません。";
+"Live streams can't be cached." = "ライブ配信はキャッシュできません。";
+"This video is protected and can't be cached." = "この動画は保護されているため、キャッシュできません。";
 "This link didn't return a video." = "このリンクから動画を取得できませんでした。";
-"The server stopped allowing resumed downloads. Retry to start again." = "サーバーが再開ダウンロードに対応しなくなりました。再試行すると最初からダウンロードします。";
+"The server stopped allowing caching to resume. Retry to start again." = "サーバーが再開キャッシュに対応しなくなりました。再試行すると最初からキャッシュします。";
 "The server closed the connection early." = "サーバーが接続を途中で切断しました。";
 "Not enough storage: this needs %@ more, and %@ is free." = "空き容量が足りません：あと %@ 必要ですが、空きは %@ です。";
-"Downloads" = "ダウンロード";
-"This download is no longer on this device." = "このダウンロードはこのデバイスにありません。";
-"%@ is no longer in your subscription, so this download can't continue." = "%@ はサブスクリプションにないため、ダウンロードを続行できません。";
-"No Downloads" = "ダウンロードはありません";
-"Choose Download on a video's page to save episodes for watching offline." = "動画のページで「ダウンロード」を選ぶと、エピソードを保存してオフラインで視聴できます。";
-"Downloaded" = "ダウンロード済み";
-"Date Downloaded" = "ダウンロード日";
-"Delete all downloaded episodes of %@?" = "「%@」のダウンロード済みエピソードをすべて削除しますか？";
-"Delete Downloads" = "ダウンロードを削除";
-"Delete Download" = "ダウンロードを削除";
-"Downloading" = "ダウンロード中";
-"At a Time" = "同時ダウンロード数";
+"Offline Cache" = "オフラインキャッシュ";
+"This cached video is no longer on this device." = "このキャッシュはこのデバイスにありません。";
+"%@ is no longer in your subscription, so caching can't continue." = "%@ はサブスクリプションにないため、キャッシュを続行できません。";
+"Nothing Cached" = "キャッシュはありません";
+"Choose Cache on a video's page to keep episodes for watching offline." = "動画のページで「キャッシュ」を選ぶと、エピソードを保存してオフラインで視聴できます。";
+"Cached" = "キャッシュ済み";
+"Date Cached" = "キャッシュ日";
+"Delete all cached episodes of %@?" = "「%@」のキャッシュ済みエピソードをすべて削除しますか？";
+"Delete Cached Items" = "キャッシュを削除";
+"Delete from Cache" = "キャッシュを削除";
+"Caching" = "キャッシュ中";
+"At a Time" = "同時キャッシュ数";
 "%lld at a time" = "同時に %lld 件";
 "Resume All" = "すべて再開";
 "Pause All" = "すべて一時停止";
@@ -529,32 +529,32 @@
 "%@ left" = "残り %@";
 "Storage" = "ストレージ";
 "%@ free" = "空き %@";
-"used by downloads" = "ダウンロードで使用中";
-"%@ used by downloads" = "ダウンロードで %@ 使用中";
+"used by the cache" = "キャッシュで使用中";
+"%@ used by the cache" = "キャッシュで %@ 使用中";
 "Other" = "その他";
 "Free" = "空き";
-"tvOS may remove downloads when Apple TV runs low on storage." = "Apple TV の空き容量が少なくなると、tvOS がダウンロードを削除することがあります。";
+"tvOS may remove cached videos when Apple TV runs low on storage." = "Apple TV の空き容量が少なくなると、tvOS がキャッシュを削除することがあります。";
 "Resume" = "再開";
 "Pause" = "一時停止";
-"Cancel Download" = "ダウンロードをキャンセル";
-"Download Next" = "次にダウンロード";
+"Cancel Caching" = "キャッシュをキャンセル";
+"Cache Next" = "次にキャッシュ";
 "Waiting · #%lld in queue" = "待機中 · キューの %lld 番目";
 "Waiting" = "待機中";
 "Finishing…" = "仕上げ中…";
 "Paused" = "一時停止中";
-"Download failed" = "ダウンロードに失敗しました";
+"Caching failed" = "キャッシュに失敗しました";
 "1 episode" = "1 エピソード";
 "%lld episodes" = "%lld エピソード";
 "Play %@" = "%@ を再生";
-"Download Episodes" = "エピソードをダウンロード";
+"Cache Episodes" = "エピソードをキャッシュ";
 "Select All" = "すべて選択";
 "Deselect All" = "選択をすべて解除";
-"Download" = "ダウンロード";
-"Download %lld" = "%lld 件をダウンロード";
+"Cache" = "キャッシュ";
+"Cache %lld" = "%lld 件をキャッシュ";
 "In Queue" = "キューに追加済み";
-"1 episode added to Downloads." = "1 エピソードをダウンロードに追加しました。";
-"%lld episodes added to Downloads." = "%lld エピソードをダウンロードに追加しました。";
-"Show Downloads" = "ダウンロードを表示";
+"1 episode added to the cache." = "1 エピソードをキャッシュに追加しました。";
+"%lld episodes added to the cache." = "%lld エピソードをキャッシュに追加しました。";
+"Show Cache" = "キャッシュを表示";
 "Browse Sources" = "配信ソースを見る";
 "%@ available on this device" = "このデバイスの空き容量 %@";
 
@@ -947,12 +947,12 @@
 "Developer" = "開発者";
 "No replies yet. They'll appear here." = "まだ返信はありません。返信があるとここに表示されます。";
 "Couldn't check for replies. Please try again later." = "返信を確認できませんでした。しばらくしてからもう一度お試しください。";
-"Remove Download" = "ダウンロードを削除";
-"Downloaded Songs" = "ダウンロードした曲";
-"No Downloaded Songs" = "ダウンロードした曲はありません";
-"Download a song, album or playlist from its menu to listen without a connection." = "曲、アルバム、プレイリストのメニューからダウンロードすると、オフラインでも聴けます。";
-"Delete all downloaded songs?" = "ダウンロードした曲をすべて削除しますか？";
-"%lld downloading" = "%lld 曲をダウンロード中";
+"Remove from Cache" = "キャッシュを削除";
+"Cached Songs" = "キャッシュした曲";
+"No Cached Songs" = "キャッシュした曲はありません";
+"Cache a song, album or playlist from its menu to listen without a connection." = "曲、アルバム、プレイリストのメニューからキャッシュすると、オフラインでも聴けます。";
+"Delete all cached songs?" = "キャッシュした曲をすべて削除しますか？";
+"%lld caching" = "%lld 曲をキャッシュ中";
 
 // Signing in on the service's own page (iPhone, iPad).
 "Sign In Here" = "ここでサインイン";
@@ -1066,7 +1066,6 @@
 "Choose what Watch Now shows in Settings." = "「今すぐ観る」に表示する内容は設定で選べます。";
 "Name" = "名前";
 "Name (optional)" = "名前（省略可）";
-"Show in Finder" = "Finderで表示";
 "Telegram Group" = "Telegram グループ";
 "Chat with the developer and other users" = "開発者やほかのユーザーと話せます";
 "Prefer to chat? Join the Telegram group." = "チャットで話したいときは、Telegram グループへどうぞ。";
@@ -1135,8 +1134,8 @@
 "Finding the live stream" = "ライブ配信を探しています";
 "Getting the file from the drive" = "ドライブからファイルを取得しています";
 "Repackaging the video for this device" = "このデバイス向けに動画を変換しています";
-"Preparing the saved download for this device · %lld%%" = "このデバイス用にダウンロードを準備しています · %lld%%";
-"Opening the saved download" = "保存したダウンロードを開いています";
+"Preparing the cached video for this device · %lld%%" = "このデバイス用にキャッシュを準備しています · %lld%%";
+"Opening the cached video" = "保存したキャッシュを開いています";
 "Connecting to %@" = "%@ に接続しています";
 "Receiving video from %@" = "%@ から動画を受信しています";
 "Trouble with %@ (%@), trying again" = "%@ で問題が発生しました（%@）。再試行しています";
@@ -1599,7 +1598,6 @@
 "%@ fps" = "%@ fps";
 "An SRT, WebVTT or ASS file, or a ZIP archive of them, up to 8 MB." = "SRT、WebVTT、ASS ファイル、またはそれらの ZIP アーカイブ（8 MB まで）。";
 "Subtitles Not Added" = "字幕を追加できませんでした";
-"Save or Share" = "保存または共有";
 
 /* Subtitle sources (#576 M2) */
 "It uses manifest format %@." = "マニフェストの形式が %@ です。";

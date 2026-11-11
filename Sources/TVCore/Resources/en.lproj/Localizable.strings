@@ -503,23 +503,23 @@
 
 // Downloads
 "The video link stopped working (HTTP %lld) and could not be renewed. Try again later." = "The video link stopped working (HTTP %lld) and could not be renewed. Try again later.";
-"Live streams can't be downloaded." = "Live streams can't be downloaded.";
-"This video is protected and can't be downloaded." = "This video is protected and can't be downloaded.";
+"Live streams can't be cached." = "Live streams can't be cached.";
+"This video is protected and can't be cached." = "This video is protected and can't be cached.";
 "This link didn't return a video." = "This link didn't return a video.";
-"The server stopped allowing resumed downloads. Retry to start again." = "The server stopped allowing resumed downloads. Retry to start again.";
+"The server stopped allowing caching to resume. Retry to start again." = "The server stopped allowing caching to resume. Retry to start again.";
 "The server closed the connection early." = "The server closed the connection early.";
 "Not enough storage: this needs %@ more, and %@ is free." = "Not enough storage: this needs %@ more, and %@ is free.";
-"Downloads" = "Downloads";
-"This download is no longer on this device." = "This download is no longer on this device.";
-"%@ is no longer in your subscription, so this download can't continue." = "%@ is no longer in your subscription, so this download can't continue.";
-"No Downloads" = "No Downloads";
-"Choose Download on a video's page to save episodes for watching offline." = "Choose Download on a video's page to save episodes for watching offline.";
-"Downloaded" = "Downloaded";
-"Date Downloaded" = "Date Downloaded";
-"Delete all downloaded episodes of %@?" = "Delete all downloaded episodes of %@?";
-"Delete Downloads" = "Delete Downloads";
-"Delete Download" = "Delete Download";
-"Downloading" = "Downloading";
+"Offline Cache" = "Offline Cache";
+"This cached video is no longer on this device." = "This cached video is no longer on this device.";
+"%@ is no longer in your subscription, so caching can't continue." = "%@ is no longer in your subscription, so caching can't continue.";
+"Nothing Cached" = "Nothing Cached";
+"Choose Cache on a video's page to keep episodes for watching offline." = "Choose Cache on a video's page to keep episodes for watching offline.";
+"Cached" = "Cached";
+"Date Cached" = "Date Cached";
+"Delete all cached episodes of %@?" = "Delete all cached episodes of %@?";
+"Delete Cached Items" = "Delete Cached Items";
+"Delete from Cache" = "Delete from Cache";
+"Caching" = "Caching";
 "At a Time" = "At a Time";
 "%lld at a time" = "%lld at a time";
 "Resume All" = "Resume All";
@@ -530,32 +530,32 @@
 "%@ left" = "%@ left";
 "Storage" = "Storage";
 "%@ free" = "%@ free";
-"used by downloads" = "used by downloads";
-"%@ used by downloads" = "%@ used by downloads";
+"used by the cache" = "used by the cache";
+"%@ used by the cache" = "%@ used by the cache";
 "Other" = "Other";
 "Free" = "Free";
-"tvOS may remove downloads when Apple TV runs low on storage." = "tvOS may remove downloads when Apple TV runs low on storage.";
+"tvOS may remove cached videos when Apple TV runs low on storage." = "tvOS may remove cached videos when Apple TV runs low on storage.";
 "Resume" = "Resume";
 "Pause" = "Pause";
-"Cancel Download" = "Cancel Download";
-"Download Next" = "Download Next";
+"Cancel Caching" = "Cancel Caching";
+"Cache Next" = "Cache Next";
 "Waiting · #%lld in queue" = "Waiting · #%lld in queue";
 "Waiting" = "Waiting";
 "Finishing…" = "Finishing…";
 "Paused" = "Paused";
-"Download failed" = "Download failed";
+"Caching failed" = "Caching failed";
 "1 episode" = "1 episode";
 "%lld episodes" = "%lld episodes";
 "Play %@" = "Play %@";
-"Download Episodes" = "Download Episodes";
+"Cache Episodes" = "Cache Episodes";
 "Select All" = "Select All";
 "Deselect All" = "Deselect All";
-"Download" = "Download";
-"Download %lld" = "Download %lld";
+"Cache" = "Cache";
+"Cache %lld" = "Cache %lld";
 "In Queue" = "In Queue";
-"1 episode added to Downloads." = "1 episode added to Downloads.";
-"%lld episodes added to Downloads." = "%lld episodes added to Downloads.";
-"Show Downloads" = "Show Downloads";
+"1 episode added to the cache." = "1 episode added to the cache.";
+"%lld episodes added to the cache." = "%lld episodes added to the cache.";
+"Show Cache" = "Show Cache";
 "Browse Sources" = "Browse Sources";
 "%@ available on this device" = "%@ available on this device";
 
@@ -948,12 +948,12 @@
 "Developer" = "Developer";
 "No replies yet. They'll appear here." = "No replies yet. They'll appear here.";
 "Couldn't check for replies. Please try again later." = "Couldn't check for replies. Please try again later.";
-"Remove Download" = "Remove Download";
-"Downloaded Songs" = "Downloaded Songs";
-"No Downloaded Songs" = "No Downloaded Songs";
-"Download a song, album or playlist from its menu to listen without a connection." = "Download a song, album or playlist from its menu to listen without a connection.";
-"Delete all downloaded songs?" = "Delete all downloaded songs?";
-"%lld downloading" = "%lld downloading";
+"Remove from Cache" = "Remove from Cache";
+"Cached Songs" = "Cached Songs";
+"No Cached Songs" = "No Cached Songs";
+"Cache a song, album or playlist from its menu to listen without a connection." = "Cache a song, album or playlist from its menu to listen without a connection.";
+"Delete all cached songs?" = "Delete all cached songs?";
+"%lld caching" = "%lld caching";
 
 // Signing in on the service's own page (iPhone, iPad).
 "Sign In Here" = "Sign In Here";
@@ -1066,7 +1066,6 @@
 "Choose what Watch Now shows in Settings." = "Choose what Watch Now shows in Settings.";
 "Name" = "Name";
 "Name (optional)" = "Name (optional)";
-"Show in Finder" = "Show in Finder";
 "Telegram Group" = "Telegram Group";
 "Chat with the developer and other users" = "Chat with the developer and other users";
 "Prefer to chat? Join the Telegram group." = "Prefer to chat? Join the Telegram group.";
@@ -1135,8 +1134,8 @@
 "Finding the live stream" = "Finding the live stream";
 "Getting the file from the drive" = "Getting the file from the drive";
 "Repackaging the video for this device" = "Repackaging the video for this device";
-"Preparing the saved download for this device · %lld%%" = "Preparing the saved download for this device · %lld%%";
-"Opening the saved download" = "Opening the saved download";
+"Preparing the cached video for this device · %lld%%" = "Preparing the cached video for this device · %lld%%";
+"Opening the cached video" = "Opening the cached video";
 "Connecting to %@" = "Connecting to %@";
 "Receiving video from %@" = "Receiving video from %@";
 "Trouble with %@ (%@), trying again" = "Trouble with %@ (%@), trying again";
@@ -1599,7 +1598,6 @@
 "%@ fps" = "%@ fps";
 "An SRT, WebVTT or ASS file, or a ZIP archive of them, up to 8 MB." = "An SRT, WebVTT or ASS file, or a ZIP archive of them, up to 8 MB.";
 "Subtitles Not Added" = "Subtitles Not Added";
-"Save or Share" = "Save or Share";
 
 /* Subtitle sources (#576 M2) */
 "It uses manifest format %@." = "It uses manifest format %@.";
