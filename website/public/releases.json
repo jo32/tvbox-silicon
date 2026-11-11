@@ -1,6 +1,135 @@
 {
   "releases": [
     {
+      "version": "1.8.18",
+      "build": 56,
+      "date": "2026-11-12",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "appletv",
+          "title": {
+            "en": "Apple TV Music, laid out like Watch Now",
+            "zh-Hans": "Apple TV 音乐改用“现在观看”的样式",
+            "zh-Hant": "Apple TV 音樂改用「立即觀看」的樣式",
+            "ja": "Apple TV のミュージックを「今すぐ観る」と同じレイアウトに"
+          },
+          "detail": {
+            "en": "Albums, charts and playlists are cards in rows, as on Watch Now. A focused cover no longer hides its own title, and See All at the start of each row opens the whole shelf as a grid.",
+            "zh-Hans": "专辑、榜单和歌单改成与“现在观看”相同的卡片行。选中的封面不再遮住自己的标题，每行开头的“查看全部”会以网格打开整排内容。",
+            "zh-Hant": "專輯、排行榜和播放列表改成與「立即觀看」相同的卡片列。選中的封面不再遮住自己的標題，每列開頭的「查看全部」會以格狀開啟整列內容。",
+            "ja": "アルバム、チャート、プレイリストは「今すぐ観る」と同じカードの列になりました。フォーカスしたカバーが自分のタイトルを隠さなくなり、各列の先頭の「すべて表示」で列全体をグリッドで開けます。"
+          },
+          "platforms": [
+            "tvos"
+          ]
+        },
+        {
+          "symbol": "forward.end",
+          "title": {
+            "en": "Skip intros and outros on Apple TV",
+            "zh-Hans": "在 Apple TV 上跳过片头片尾",
+            "zh-Hant": "在 Apple TV 上跳過片頭片尾",
+            "ja": "Apple TV でオープニングとエンディングをスキップ"
+          },
+          "detail": {
+            "en": "The player's menu has Skip intro / outro: turn automatic skipping on, mark Intro Ends Here or Outro Starts Here at the moment that's playing, or clear them. No typing needed.",
+            "zh-Hans": "播放器菜单新增“跳过片头片尾”：可开启自动跳过，在当前播放位置标记“片头到此结束”或“片尾从此开始”，也可清除。无需输入时间。",
+            "zh-Hant": "播放器選單新增「跳過片頭片尾」：可開啟自動跳過，在目前播放位置標記「片頭到此結束」或「片尾從此開始」，也可清除。無需輸入時間。",
+            "ja": "プレーヤーのメニューに「オープニング・エンディングをスキップ」を追加しました。自動スキップのオン／オフ、再生中の位置で「オープニングはここまで」「エンディングはここから」を設定、消去ができます。入力は不要です。"
+          },
+          "platforms": [
+            "tvos"
+          ]
+        },
+        {
+          "symbol": "magnifyingglass",
+          "title": {
+            "en": "Search shows what you searched for",
+            "zh-Hans": "搜索只显示匹配的结果",
+            "zh-Hant": "搜尋只顯示符合的結果",
+            "ja": "検索は一致した作品だけを表示"
+          },
+          "detail": {
+            "en": "Sources pad their results with loosely related titles. When some titles match what you typed, only those show, and one button underneath brings back the others. A search nothing matches, like an actor's name, still shows everything.",
+            "zh-Hans": "片源常在结果里夹带关联不大的影片。只要有影片与输入内容匹配，就只显示这些，下方一个按钮可以显示其余结果。没有影片匹配时（例如搜索演员名），仍显示全部结果。",
+            "zh-Hant": "片源常在結果裡夾帶關聯不大的影片。只要有影片與輸入內容相符，就只顯示這些，下方一個按鈕可以顯示其餘結果。沒有影片相符時（例如搜尋演員名），仍顯示全部結果。",
+            "ja": "ソースは関連の薄い作品を結果に混ぜることがあります。入力に一致する作品があればそれだけを表示し、下のボタンで残りも表示できます。一致する作品がない検索（俳優名など）は、これまでどおりすべて表示します。"
+          }
+        },
+        {
+          "symbol": "arrow.down.circle",
+          "title": {
+            "en": "Offline Cache plays on",
+            "zh-Hans": "离线缓存可以连续播放",
+            "zh-Hant": "離線快取可以連續播放",
+            "ja": "オフラインキャッシュを続けて再生"
+          },
+          "detail": {
+            "en": "Downloads are now called Offline Cache. A cached episode has Previous and Next and moves on to the show's next cached episode when Auto-play next episode is on. Cached videos and songs stay in the app: Show in Finder, Save and Share are gone.",
+            "zh-Hans": "“下载”现在叫“离线缓存”。缓存的剧集有上一集和下一集，开启“自动播放下一集”后会接着播放同一部剧的下一集缓存。缓存的视频和歌曲只保存在 App 内，“在访达中显示”、“存储”和“分享”已移除。",
+            "zh-Hant": "「下載」現在叫「離線快取」。快取的劇集有上一集和下一集，開啟「自動播放下一集」後會接著播放同一部劇的下一集快取。快取的影片和歌曲只儲存在 App 內，「在 Finder 中顯示」、「儲存」和「分享」已移除。",
+            "ja": "「ダウンロード」は「オフラインキャッシュ」になりました。キャッシュしたエピソードには前へ・次へがあり、「次のエピソードを自動再生」がオンなら同じ作品の次のキャッシュを続けて再生します。キャッシュした動画と曲はアプリ内にだけ保存され、「Finder に表示」「保存」「共有」はなくなりました。"
+          }
+        },
+        {
+          "symbol": "hand.draw",
+          "title": {
+            "en": "Swipe back from anywhere on a video page",
+            "zh-Hans": "在视频页任意位置右滑返回",
+            "zh-Hant": "在影片頁任意位置右滑返回",
+            "ja": "動画ページのどこからでもスワイプで戻る"
+          },
+          "detail": {
+            "en": "On iOS 26, a swipe right that starts anywhere under the picture goes back, as on other pages; rows that scroll sideways keep their own swipe. Back also stays on screen while an episode starts.",
+            "zh-Hans": "在 iOS 26 上，从画面下方任意位置向右滑即可返回，与其他页面一致；可横向滚动的行仍保留自己的滑动。剧集开始播放时，返回按钮也会一直显示。",
+            "zh-Hant": "在 iOS 26 上，從畫面下方任意位置向右滑即可返回，與其他頁面一致；可橫向捲動的列仍保留自己的滑動。劇集開始播放時，返回按鈕也會一直顯示。",
+            "ja": "iOS 26 では、映像の下のどこからでも右にスワイプすると、ほかのページと同じように戻れます。横にスクロールする列はそのままスクロールします。エピソードの再生開始中も戻るボタンが表示されたままになります。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "music.note",
+          "title": {
+            "en": "Music plays again after a call or an alarm",
+            "zh-Hans": "来电或闹钟结束后音乐继续播放",
+            "zh-Hant": "來電或鬧鐘結束後音樂繼續播放",
+            "ja": "電話やアラームのあとに音楽が再開"
+          },
+          "detail": {
+            "en": "A song paused by a call, an alarm or Siri now picks up again when it's over, unless you paused it yourself.",
+            "zh-Hans": "被来电、闹钟或 Siri 暂停的歌曲，在结束后会继续播放，除非是你自己暂停的。",
+            "zh-Hant": "被來電、鬧鐘或 Siri 暫停的歌曲，在結束後會繼續播放，除非是你自己暫停的。",
+            "ja": "電話、アラーム、Siri で一時停止した曲は、それが終わると再生を再開します。自分で一時停止した場合は再開しません。"
+          },
+          "platforms": [
+            "ios",
+            "tvos"
+          ]
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "Comic pages that a source sends scrambled are put back together even when several load at once. On the Mac, the player's options menu no longer closes by itself in busy live rooms. iPhones and Apple TVs with less memory no longer crash when a Java source starts. Watch Now rows from a busy source load instead of disappearing. A subscription file added on another device explains that files don't sync, instead of failing every refresh. The sources Yingxia adds are now called Recommended, and the demo subscription address is gone.",
+            "zh-Hans": "片源打乱发送的漫画页面，即使同时加载多页也能正确还原。Mac 上，播放器的选项菜单在热闹的直播间里不再自己关闭。内存较小的 iPhone 和 Apple TV 启动 Java 片源时不再闪退。片源繁忙时，“现在观看”的行会继续加载而不是消失。在其他设备上添加的订阅文件会说明文件不会同步，不再每次刷新都失败。映匣附带的片源现在叫“推荐”，演示订阅地址已移除。",
+            "zh-Hant": "片源打亂傳送的漫畫頁面，即使同時載入多頁也能正確還原。Mac 上，播放器的選項選單在熱鬧的直播間裡不再自己關閉。記憶體較小的 iPhone 和 Apple TV 啟動 Java 片源時不再閃退。片源繁忙時，「立即觀看」的列會繼續載入而不是消失。在其他裝置上加入的訂閱檔案會說明檔案不會同步，不再每次重新整理都失敗。映匣附帶的片源現在叫「推薦」，示範訂閱位址已移除。",
+            "ja": "ソースがばらばらに送るマンガのページは、複数を同時に読み込んでも正しく元に戻ります。Mac では、にぎやかなライブ配信でもプレーヤーのオプションメニューが勝手に閉じなくなりました。メモリの少ない iPhone と Apple TV で Java ソースを起動してもクラッシュしなくなりました。ソースが混み合っていても「今すぐ観る」の列は消えずに読み込みます。別のデバイスで追加した購読ファイルは、エラーを繰り返す代わりにファイルは同期されないことを説明します。映匣が追加するソースは「おすすめ」と呼ぶようになり、デモ購読アドレスはなくなりました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.17",
       "build": 55,
       "date": "2026-11-11",
