@@ -23,6 +23,16 @@ public struct EpisodeSkipSettings: Codable, Equatable, Sendable {
         return nil
     }
 
+    /// These settings with the intro ending, or the outro starting, at `position`, and switched on: what Apple TV's
+    /// "Intro Ends Here" saves, where there is no keyboard for a time (#808). Nil where the rules above refuse it.
+    public func marking(intro: Bool, at position: Double, duration: Double) -> Self? {
+        guard position.isFinite, duration.isFinite, position >= 0, position <= duration else { return nil }
+        var value = self
+        value.enabled = true
+        if intro { value.introEnd = position.rounded(.down) } else { value.outroLength = (duration - position).rounded(.up) }
+        return value.validationError(duration: duration) == nil ? value : nil
+    }
+
     public static func parseTime(_ text: String) -> Double? {
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let parts = value.split(separator: ":", omittingEmptySubsequences: false)

@@ -114,6 +114,17 @@ import IOKit.pwr_mgt
         skipPass = EpisodeSkipPass()
     }
 
+    /// Whether this video keeps skip times: one from a source, not a live channel or a lone address.
+    var canSkip: Bool { skipScope != nil }
+
+    /// The intro ends, or the outro starts, where the picture is now (#808): Apple TV has no keyboard for a time.
+    /// A place the rules refuse (an intro past five minutes, say) changes nothing.
+    func markSkip(intro: Bool) {
+        guard let item = player.currentItem,
+              let settings = skipSettings.marking(intro: intro, at: player.currentTime().seconds, duration: item.duration.seconds) else { return }
+        applySkipSettings(settings)
+    }
+
     private func updateSkipping(_ item: AVPlayerItem) {
         let time = player.currentTime().seconds
         position = time.isFinite ? max(0, time) : 0

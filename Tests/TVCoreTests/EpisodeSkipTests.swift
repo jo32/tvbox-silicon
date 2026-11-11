@@ -14,6 +14,12 @@ import Testing
         #expect(valid.validationError(duration: length) != nil)
     }
     #expect(EpisodeSkipSettings(enabled: true, introEnd: 301).validationError(duration: 2700) != nil)
+    // Apple TV sets them at the place playing (#808), which also switches skipping on; a place the rules refuse is nil.
+    let marked = EpisodeSkipSettings().marking(intro: true, at: 90.6, duration: 2700)?.marking(intro: false, at: 2580, duration: 2700)
+    #expect(marked == EpisodeSkipSettings(enabled: true, introEnd: 90, outroLength: 120))
+    #expect(EpisodeSkipSettings().marking(intro: true, at: 301, duration: 2700) == nil)
+    #expect(EpisodeSkipSettings().marking(intro: false, at: 1000, duration: 2700) == nil)
+    #expect(EpisodeSkipSettings().marking(intro: true, at: 10, duration: .nan) == nil)
     #expect(EpisodeSkipSettings(enabled: true, outroLength: 601).validationError(duration: 2700) != nil)
     #expect(EpisodeSkipSettings(enabled: true, introEnd: 120, outroLength: 120).validationError(duration: 480) != nil)
     #expect(EpisodeSkipSettings(enabled: true, introEnd: .nan).validationError(duration: 2700) != nil)
