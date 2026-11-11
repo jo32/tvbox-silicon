@@ -1,5 +1,21 @@
 import Foundation
 
+/// The on-device plugin queue turning a caller away because it is full. That is this device's queue, not the
+/// source: the same call works once the calls ahead of it finish.
+public enum PluginQueue {
+    static let busyMessage = "The plugin runtime is busy. Wait for the current source."
+
+    public static func isBusy(_ error: Error) -> Bool { error.localizedDescription.hasPrefix("The plugin runtime is busy") }
+
+    /// Runs `call`, and while the queue turns it away, waits `delays` seconds in turn and calls again.
+    public static func retrying<T: Sendable>(delays: [Double] = [1, 2, 4, 8], _ call: @Sendable () async throws -> T) async throws -> T {
+        for delay in delays {
+            do { return try await call() } catch where isBusy(error) { try await Task.sleep(for: .seconds(delay)) }
+        }
+        return try await call()
+    }
+}
+
 /// Native plugin calls on two lanes. Searches run up to `width` at a time. Everything else (home,
 /// detail, playback) is what the viewer is waiting on: it has its own `interactiveWidth` slots
 /// and never waits behind a search burst. Java serializes calls per source, so a detail request
@@ -65,7 +81,7 @@ final class SerializedPluginWorker: @unchecked Sendable {
                     let state = "pending=\(pending.count) running=\(running.count)"
                     lock.unlock()
                     Diagnostics.shared.record(.warning, "jar.queue", "rejected busy search=\(search) \(state)")
-                    continuation.resume(throwing: TVError.unsupported("The plugin runtime is busy. Wait for the current source.")); return
+                    continuation.resume(throwing: TVError.unsupported(PluginQueue.busyMessage)); return
                 }
                 let work = Work(resources: resources, json: json, search: search)
                 work.waiters[id] = continuation; work.startHandlers[id] = onStart; pending.append(work)

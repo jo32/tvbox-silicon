@@ -101,7 +101,7 @@ import Observation
     nonisolated static func counts(_ error: Error) -> Bool {
         if error is CancellationError || (error as? URLError)?.code == .cancelled { return false }
         // The plugin runtime turning a caller away is this device's queue, not the source.
-        return !error.localizedDescription.hasPrefix("The plugin runtime is busy")
+        return !PluginQueue.isBusy(error)
     }
 
     private func update(_ key: String, _ change: (inout Record) -> Void) {
