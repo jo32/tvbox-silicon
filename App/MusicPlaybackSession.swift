@@ -66,6 +66,8 @@ typealias MusicTrack = TVCore.MusicTrack
     private var lyricsTask: Task<Void, Never>?
     private var cache = MusicStreamCache()
     private var recovery = MusicRecovery()
+    private var interruption = MusicInterruption()
+    private var interruptionObserver: NSObjectProtocol?
     private var itemObservation: NSKeyValueObservation?
     private var rateObservation: NSKeyValueObservation?
     private var observers: [NSObjectProtocol] = []
@@ -109,6 +111,14 @@ typealias MusicTrack = TVCore.MusicTrack
             let status = player.timeControlStatus
             Task { @MainActor [weak self] in self?.statusChanged(status) }
         }
+        #if !os(macOS)
+        // An alarm, a call or Siri pauses the player; it plays again when the system says it may (#803).
+        interruptionObserver = NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: AVAudioSession.sharedInstance(), queue: .main) { [weak self] note in
+            let began = (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt) == AVAudioSession.InterruptionType.began.rawValue
+            let options = AVAudioSession.InterruptionOptions(rawValue: note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0)
+            MainActor.assumeIsolated { self?.interrupted(began: began, mayResume: options.contains(.shouldResume)) }
+        }
+        #endif
     }
 
     var busy: Bool { phase == .resolving || phase == .loading }
@@ -288,6 +298,7 @@ typealias MusicTrack = TVCore.MusicTrack
 
     func pause() {
         guard phase == .playing || phase == .loading else { return }
+        interruption.viewerPaused()
         player.pause(); phase = .paused
         saveResumePoint(force: true)
     }
@@ -619,10 +630,23 @@ typealias MusicTrack = TVCore.MusicTrack
         case .waitingToPlayAtSpecifiedRate:
             if phase == .playing { phase = .loading }
         case .paused:
-            if phase == .playing { phase = .paused }
+            if phase == .playing { phase = .paused; interruption.systemPaused() }
         @unknown default: break
         }
     }
+
+    #if !os(macOS)
+    private func interrupted(began: Bool, mayResume: Bool) {
+        if began {
+            interruption.began(playing: phase == .playing || phase == .loading)
+            return
+        }
+        let paused = phase == .paused || phase == .loading && player.timeControlStatus == .paused
+        guard interruption.ended(shouldResume: mayResume, paused: paused), track != nil, hasStream else { return }
+        Diagnostics.shared.record(.info, "music", "plays again after an interruption")
+        activateAudioSession(); player.play(); phase = .loading
+    }
+    #endif
 
     private func tearDownItem() {
         itemObservation = nil; pictureObservation = nil

@@ -483,6 +483,30 @@ public struct MusicCompanionFinder: Sendable {
     }
 }
 
+/// Whether music plays again after an alarm, a call or Siri took the sound (#803). Music the system paused for the
+/// interruption plays again when the system says it may, as in Music; music the viewer paused, or that stopped for
+/// another reason long before (headphones pulled out), stays paused.
+public struct MusicInterruption: Sendable {
+    private var resumes = false
+    private var systemPausedAt: Date?
+    public init() {}
+
+    /// The player stopped without the viewer pausing it. An interruption's own pause can arrive just before its notice.
+    public mutating func systemPaused(now: Date = Date()) { systemPausedAt = now }
+    /// The viewer paused: nothing plays again by itself.
+    public mutating func viewerPaused() { resumes = false; systemPausedAt = nil }
+
+    public mutating func began(playing: Bool, now: Date = Date()) {
+        resumes = playing || systemPausedAt.map { now.timeIntervalSince($0) < 3 } == true
+    }
+
+    /// True when playback should start again; `paused` is whether it is still paused now.
+    public mutating func ended(shouldResume: Bool, paused: Bool) -> Bool {
+        defer { resumes = false }
+        return resumes && shouldResume && paused
+    }
+}
+
 /// What to do when playback of a selection fails: re-resolve the same channel once (its address
 /// may have expired), then move to a channel not tried yet, with at most two resolutions per
 /// recovery; then stop and offer Retry.
