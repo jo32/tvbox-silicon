@@ -108,6 +108,11 @@ import TVCore
     }
     /// One of Yingxia's own sources, from its subscription (fetched once).
     static func cloudSite(_ matches: @Sendable (Site) -> Bool) async throws -> Site {
+        // SOURCES_URL: another copy of the recommended sources' subscription (a local Worker), never cached.
+        if CloudSources.current == nil, let address = ProcessInfo.processInfo.environment["SOURCES_URL"].flatMap(URL.init(string:)) {
+            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: address, cachePolicy: .reloadIgnoringLocalCacheData))
+            CloudSources.current = try Subscription.parse(data, origin: address)
+        }
         if CloudSources.current == nil { CloudSources.current = try await CloudSources.fetch(http: HTTPClient()) }
         guard let site = CloudSources.site(where: matches) else { throw TVError.invalidConfiguration }
         return site
@@ -262,14 +267,14 @@ import TVCore
                     print("dumped \(name) \(data.count)")
                 }
             }
-            let item = AVPlayerItem(asset: HongguoStreams.asset(for: live.channel.url) ?? LiveRepair.asset(for: live.channel.url)
+            let item = AVPlayerItem(asset: CENCStreams.asset(for: live.channel.url) ?? LiveRepair.asset(for: live.channel.url)
                 ?? AVURLAsset(url: live.channel.url, options: ["AVURLAssetHTTPHeaderFieldsKey": live.channel.headers]))
             // As a player layer would: a video-only HLS item without any video output never starts.
             item.add(AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]))
             let player = AVPlayer(playerItem: item); player.isMuted = true; player.play()
             for second in 1...(Int(ProcessInfo.processInfo.environment["LIVE_SECONDS"] ?? "") ?? 10) {
                 try await Task.sleep(for: .seconds(1))
-                HongguoStreams.updatePosition(for: live.channel.url, seconds: player.currentTime().seconds)
+                CENCStreams.updatePosition(for: live.channel.url, seconds: player.currentTime().seconds)
                 if ProcessInfo.processInfo.environment["LIVE_DUMP"] != nil {
                     let buffered = item.loadedTimeRanges.map { String(format: "%.1f+%.1f", $0.timeRangeValue.start.seconds, $0.timeRangeValue.duration.seconds) }
                     print("  rate=\(player.rate) waiting=\(player.reasonForWaitingToPlay?.rawValue ?? "-") buffered=\(buffered) errors=\(item.errorLog()?.events.map { "\($0.errorStatusCode) \($0.errorComment ?? "")" } ?? [])")
@@ -458,13 +463,36 @@ import TVCore
             } catch { print(String(format: "failed in %.1fs: ", Date().timeIntervalSince(started)) + MusicProviderError(error).detail) }
             return
         }
-        if args[1] == "--hongguo-check" || args[1] == "--hongguo-play" {
-            // --hongguo-play <series id> [episode number] isolates playback from catalog/search availability.
-            // --hongguo-check [series id] [episode number] also checks the catalog, search and rankings.
+        if args[1] == "--account", args.count > 3 {
+            // --account <site key> start | poll <token> | check: a recommended source's sign-in, as Settings runs it.
+            // Never prints the sign-in itself.
+            _ = try await cloudSite { $0.key == args[2] }
+            guard let signIn = SourceSignIn.all.first(where: { $0.site.key == args[2] }) else { print("no sign-in for \(args[2])"); return }
+            print("sign-in \(signIn.id) name=\(signIn.name) note=\(signIn.note ?? "-")")
+            switch args[3] {
+            case "start":
+                let code = try await signIn.start()
+                print("code=\(code.code)")
+                for _ in 0..<(Int(ProcessInfo.processInfo.environment["POLLS"] ?? "") ?? 3) {
+                    try await Task.sleep(for: .seconds(2))
+                    let status = try await signIn.poll(code)
+                    if case .signedIn(let account) = status { print("signedIn name=\(account.name) cookie=\(account.cookie.count) chars"); return }
+                    print("status=\(status)")
+                }
+            default:
+                let account = SourceAccount.load(signIn.id)
+                guard account.signedIn else { print("not signed in"); return }
+                print("check: \((await signIn.refreshed(account)).map { "valid name=\($0.name)" } ?? "no longer accepted")")
+            }
+            return
+        }
+        if args[1] == "--site-check" || args[1] == "--site-play", args.count > 2, case let key = args[2], case let args = Array(args[...1] + args[3...]) {
+            // --site-play <site key> <series id> [episode number] isolates playback from catalog/search availability.
+            // --site-check <site key> [series id] [episode number] also checks the catalog, search and rankings.
             setvbuf(stdout, nil, _IONBF, 0)
-            let client = CatalogClient(site: try await cloudSite { $0.key == "builtin.hongguo" }, origin: CloudSources.address)
+            let client = CatalogClient(site: try await cloudSite { $0.key == key }, origin: CloudSources.address)
             var defaultID: String?
-            if args[1] == "--hongguo-check" {
+            if args[1] == "--site-check" {
                 let home = try await client.home()
                 defaultID = home.videos.first?.id
                 print("home categories=\(home.categories.count) videos=\(home.videos.count)")
@@ -480,7 +508,7 @@ import TVCore
                 for number in args[3...].compactMap({ Int($0) }) where video.episodes.indices.contains(number - 1) {
                     do {
                         let channel = try await client.playback(video.episodes[number - 1])
-                        print("episode \(number) streaming=\(channel.url.scheme == HongguoStreams.scheme) host=\(channel.url.host ?? "-")")
+                        print("episode \(number) streaming=\(channel.url.scheme == CENCStreams.scheme) host=\(channel.url.host ?? "-")")
                     } catch { print("episode \(number) failed: \(error)") }
                 }
                 return
@@ -490,44 +518,44 @@ import TVCore
             print("detail episodes=\(video.episodes.count) selected=\(index + 1)")
             let started = Date()
             let channel = try await client.playback(video.episodes[index])
-            print("resolve seconds=\(Date().timeIntervalSince(started)) streaming=\(channel.url.scheme == HongguoStreams.scheme)")
-            let asset = HongguoStreams.asset(for: channel.url) ?? AVURLAsset(url: channel.url, options: ["AVURLAssetHTTPHeaderFieldsKey": channel.headers])
+            print("resolve seconds=\(Date().timeIntervalSince(started)) streaming=\(channel.url.scheme == CENCStreams.scheme)")
+            let asset = CENCStreams.asset(for: channel.url) ?? AVURLAsset(url: channel.url, options: ["AVURLAssetHTTPHeaderFieldsKey": channel.headers])
             let item = AVPlayerItem(asset: asset), player = AVPlayer()
-            item.preferredForwardBufferDuration = HongguoStreams.forwardBufferDuration
+            item.preferredForwardBufferDuration = CENCStreams.forwardBufferDuration
             player.replaceCurrentItem(with: item); player.isMuted = true; player.play()
             let positionUpdates = Task {
                 while !Task.isCancelled {
-                    HongguoStreams.updatePosition(for: channel.url, seconds: player.currentTime().seconds)
+                    CENCStreams.updatePosition(for: channel.url, seconds: player.currentTime().seconds)
                     try? await Task.sleep(for: .milliseconds(200))
                 }
             }
-            defer { positionUpdates.cancel(); HongguoStreams.stop(channel.url) }
+            defer { positionUpdates.cancel(); CENCStreams.stop(channel.url) }
             var firstFrame = false
             for _ in 0..<100 {
                 try await Task.sleep(for: .milliseconds(200))
                 if item.status == .failed { throw item.error ?? TVError.emptyPlaylist }
                 if !firstFrame, player.currentTime().seconds > 0.05 {
                     firstFrame = true
-                    let stats = await HongguoStreams.statistics(for: channel.url)
+                    let stats = await CENCStreams.statistics(for: channel.url)
                     print("first frame seconds=\(Date().timeIntervalSince(started)) bytes=\(stats?.received ?? 0)/\(stats?.total ?? 0)")
                 }
                 if player.currentTime().seconds > 2 { break }
             }
             let duration = try await asset.load(.duration).seconds
             print("play status=\(item.status.rawValue) time=\(player.currentTime().seconds) size=\(item.presentationSize) duration=\(duration)")
-            if let stats = await HongguoStreams.statistics(for: channel.url) {
+            if let stats = await CENCStreams.statistics(for: channel.url) {
                 print("startup seconds=\(Date().timeIntervalSince(started)) bytes=\(stats.received)/\(stats.total) cache=\(stats.cached) requests=\(stats.requests)")
             }
             guard player.currentTime().seconds > 2 else { throw TVError.emptyPlaylist }
             player.pause()
             try await Task.sleep(for: .seconds(3))
-            let beforePause = await HongguoStreams.statistics(for: channel.url)
+            let beforePause = await CENCStreams.statistics(for: channel.url)
             try await Task.sleep(for: .seconds(3))
-            let afterPause = await HongguoStreams.statistics(for: channel.url)
+            let afterPause = await CENCStreams.statistics(for: channel.url)
             if let beforePause, let afterPause {
                 print("paused bytes=\(afterPause.received)/\(afterPause.total) additional=\(afterPause.received - beforePause.received) cache=\(afterPause.cached) bufferedThrough=\(afterPause.bufferedThrough)s")
                 guard afterPause.received == beforePause.received else { throw TVError.emptyPlaylist }
-                guard afterPause.bufferedThrough <= player.currentTime().seconds + HongguoStreams.forwardBufferDuration + 10 else { throw TVError.emptyPlaylist }
+                guard afterPause.bufferedThrough <= player.currentTime().seconds + CENCStreams.forwardBufferDuration + 10 else { throw TVError.emptyPlaylist }
                 if duration > 90 { guard afterPause.received < afterPause.total else { throw TVError.emptyPlaylist } }
             }
             player.play()
@@ -540,11 +568,11 @@ import TVCore
             print("seek back time=\(player.currentTime().seconds) status=\(item.status.rawValue)")
             guard item.status == .readyToPlay, (5...10).contains(player.currentTime().seconds) else { throw TVError.emptyPlaylist }
             player.pause()
-            HongguoStreams.stop(channel.url)
+            CENCStreams.stop(channel.url)
             return
         }
-        if args[1] == "--hongguo-bench" {
-            // --hongguo-bench <stream|file> <seconds> [series id] [episode number]: this process's CPU time,
+        if args[1] == "--site-bench", args.count > 4, case let key = args[2], case let args = Array(args[...1] + args[3...]) {
+            // --site-bench <site key> <stream|file> <seconds> [series id] [episode number]: this process's CPU time,
             // wakeups and network activity while an episode plays, streamed or from a prepared local file.
             setvbuf(stdout, nil, _IONBF, 0)
             let mode = args[2], seconds = Double(args[3]) ?? 60
@@ -555,7 +583,7 @@ import TVCore
                 _ = withUnsafeMutablePointer(to: &info) { $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_POWER_INFO), $0, &count) } }
                 return (cpu, info.task_interrupt_wakeups + info.task_platform_idle_wakeups)
             }
-            let client = CatalogClient(site: try await cloudSite { $0.key == "builtin.hongguo" }, origin: CloudSources.address)
+            let client = CatalogClient(site: try await cloudSite { $0.key == key }, origin: CloudSources.address)
             let id: String
             if args.count > 4 { id = args[4] } else { guard let first = try await client.home().videos.first?.id else { throw TVError.emptyPlaylist }; id = first }
             let video = try await client.detail(id)
@@ -565,28 +593,28 @@ import TVCore
             guard let url = URL(string: plan.choices[0].address) else { throw TVError.emptyPlaylist }
             let prepared = usage()
             print("prepare seconds=\(String(format: "%.1f", Date().timeIntervalSince(started))) cpu=\(String(format: "%.3f", prepared.cpu - before.cpu)) series=\(id) episode=\(index + 1)")
-            let asset = HongguoStreams.asset(for: url) ?? AVURLAsset(url: url)
+            let asset = CENCStreams.asset(for: url) ?? AVURLAsset(url: url)
             let item = AVPlayerItem(asset: asset), player = AVPlayer()
-            item.preferredForwardBufferDuration = HongguoStreams.forwardBufferDuration
+            item.preferredForwardBufferDuration = CENCStreams.forwardBufferDuration
             player.replaceCurrentItem(with: item); player.isMuted = true; player.play()
             for _ in 0..<150 where player.currentTime().seconds < 0.5 && item.status != .failed { try await Task.sleep(for: .milliseconds(100)) }
             guard player.currentTime().seconds >= 0.5 else { throw item.error ?? TVError.emptyPlaylist }
             let duration = try await asset.load(.duration).seconds
             print("playing size=\(item.presentationSize) duration=\(Int(duration))s")
-            let start = usage(), startStats = await HongguoStreams.statistics(for: url)
+            let start = usage(), startStats = await CENCStreams.statistics(for: url)
             var last = startStats?.received ?? 0, active = 0
             for _ in 0..<Int(seconds) {
                 try await Task.sleep(for: .seconds(1))
-                HongguoStreams.updatePosition(for: url, seconds: player.currentTime().seconds)
-                if let stats = await HongguoStreams.statistics(for: url) { if stats.received > last { active += 1 }; last = stats.received }
+                CENCStreams.updatePosition(for: url, seconds: player.currentTime().seconds)
+                if let stats = await CENCStreams.statistics(for: url) { if stats.received > last { active += 1 }; last = stats.received }
                 if item.status == .failed { throw item.error ?? TVError.emptyPlaylist }
             }
-            let end = usage(), endStats = await HongguoStreams.statistics(for: url)
+            let end = usage(), endStats = await CENCStreams.statistics(for: url)
             let played = player.currentTime().seconds
             print("bench mode=\(mode) played=\(String(format: "%.1f", played))s cpu=\(String(format: "%.3f", end.cpu - start.cpu))s cpu%=\(String(format: "%.2f", (end.cpu - start.cpu) / seconds * 100)) wakeups/s=\((end.wakeups - start.wakeups) / UInt64(max(1, seconds))) requests=\((endStats?.requests ?? 0) - (startStats?.requests ?? 0)) bytes=\((endStats?.received ?? 0) - (startStats?.received ?? 0)) networkActiveSeconds=\(active) total=\(endStats?.total ?? 0)")
             print("whole run cpu=\(String(format: "%.3f", end.cpu - before.cpu))s fetched=\(endStats?.received ?? 0) requests=\(endStats?.requests ?? 0)")
             player.pause()
-            HongguoStreams.stop(url)
+            CENCStreams.stop(url)
             return
         }
         if args[1] == "--cloud-site", args.count >= 3 {
@@ -607,7 +635,7 @@ import TVCore
             let channel = try await client.playback(episode)
             print("channel \(channel.url.absoluteString.prefix(120)) qualities=\(DashStreams.qualities(for: channel.url).map(\.label))")
             print("danmaku \(DanmakuSource.has(channel.url) ? (await DanmakuSource.comments(for: channel.url))?.count ?? 0 : -1)")
-            let asset = DashStreams.asset(for: channel.url) ?? HongguoStreams.asset(for: channel.url)
+            let asset = DashStreams.asset(for: channel.url) ?? CENCStreams.asset(for: channel.url)
                 ?? AVURLAsset(url: channel.url, options: ["AVURLAssetHTTPHeaderFieldsKey": channel.headers])
             let item = AVPlayerItem(asset: asset)
             let player = AVPlayer(playerItem: item); player.isMuted = true; player.play()

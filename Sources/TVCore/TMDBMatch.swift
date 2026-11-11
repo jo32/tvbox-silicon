@@ -58,11 +58,15 @@ public enum TMDBMatch {
         }
     }
 
-    /// Sources whose videos aren't on TMDB: the built-in Hongguo (short dramas), Bilibili (uploads) and Douyin, and
-    /// music sources. Each subscription picks its own keys, so a music source is known by its spider (csp_MusicGuard);
-    /// never by its name, which would skip video sources that happen to use such a word.
+    /// Sources whose videos aren't on TMDB: the recommended sources that say so (`yingxia.tmdb` false: short dramas,
+    /// uploads), and music sources. Each subscription picks its own keys, so a music source is known by its spider
+    /// (csp_MusicGuard); never by its name, which would skip video sources that happen to use such a word.
     public static func skipsSource(key: String, api: String) -> Bool {
-        ["builtin.hongguo", "builtin.xifan", "builtin.hema", "builtin.bilibili", "builtin.douyin"].contains(key) || api.localizedCaseInsensitiveContains("music")
+        skipsSource(recommended: CloudSources.site(where: { $0.key == key }), api: api)
+    }
+    static func skipsSource(recommended site: Site?, api: String) -> Bool {
+        if let site, case .bool(false)? = site.yingxia["tmdb"] { return true }
+        return api.localizedCaseInsensitiveContains("music")
     }
 
     /// Labels a source puts on AI-generated videos and short dramas, which aren't on TMDB: in the category

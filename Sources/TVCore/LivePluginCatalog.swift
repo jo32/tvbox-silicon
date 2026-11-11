@@ -154,8 +154,8 @@ public enum LivePluginCatalog {
         Diagnostics.shared.record(.info, "plugins", "\(plugin) play room=\(room) option=\(chosen.label) flv=\(chosen.flv) cenc=\(chosen.key != nil) host=\(url.host() ?? "-")")
         let address: URL
         if let key = chosen.key {
-            // A CENC MP4 with its key (Hongguo's episodes): decrypted as it plays, as Yingxia's own Hongguo source does.
-            address = try await HongguoStreams.open(url: url, key: key, headers: chosen.headers, http: HTTPClient())
+            // A CENC MP4 with its key: decrypted as it plays.
+            address = try await CENCStreams.open(url: url, key: key, headers: chosen.headers, http: HTTPClient())
         } else {
             // A server whose playlists contradicted themselves before is read through the loader that steadies them.
             address = chosen.flv ? try await FLVLive.open(url, headers: chosen.headers)
@@ -264,7 +264,7 @@ extension LivePluginCatalog.Option {
         self.headers = headers
         let hinted = C.text(quality["playbackHints"]?.object?["streamFormat"])
         let format = (hinted.isEmpty ? C.text(quality["liveCodeType"]) : hinted).lowercased()
-        // Some label any non-HLS file "flv" (Hongguo's MP4s): the address decides when it says otherwise.
+        // Some label any non-HLS file "flv": the address decides when it says otherwise.
         let path = self.url?.path().lowercased() ?? ""
         let file = path.hasSuffix(".mp4") || path.hasSuffix(".m3u8") || path.contains("media-video")
         flv = self.url.map(FLVLive.names) ?? false || (format == "flv" && !file)

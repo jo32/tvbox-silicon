@@ -55,8 +55,8 @@ private func source(_ key: String) -> Site {
 private struct Failure: Error {}
 
 /// Sources like those of Yingxia's own subscription.
-private let hongguo = Site(key: "builtin.hongguo", name: "Hongguo", type: 3, api: "https://example.com/hongguo.js", raw: ["yingxia": .object(["builtin": .bool(true)])])
-private let builtIns = [Site(key: "builtin.bilibili", name: "Bilibili", type: 3, api: "https://example.com/bili.js", raw: ["yingxia": .object(["builtin": .bool(true)])]), hongguo]
+private let drama = Site(key: "builtin.drama", name: "Drama", type: 3, api: "https://example.com/drama.js", raw: ["yingxia": .object(["builtin": .bool(true)])])
+private let builtIns = [Site(key: "builtin.bilibili", name: "Bilibili", type: 3, api: "https://example.com/bili.js", raw: ["yingxia": .object(["builtin": .bool(true)])]), drama]
 
 @Test @MainActor func failingSourcesGoRedWithoutBeingHidden() throws {
     let suite = "hidden.red." + UUID().uuidString
@@ -112,16 +112,16 @@ private let builtIns = [Site(key: "builtin.bilibili", name: "Bilibili", type: 3,
     defer { defaults.removePersistentDomain(forName: suite) }
     let hidden = HiddenSources(defaults: defaults)
     let site = source("a")
-    hidden.insert(hongguo, origin: origin)
+    hidden.insert(drama, origin: origin)
     hidden.insert(site, origin: origin)
     hidden.restoreBuiltIns([], origin: origin)
-    #expect(hidden.contains(hongguo, origin: origin))
+    #expect(hidden.contains(drama, origin: origin))
     let sites = [site] + builtIns
     hidden.restoreBuiltIns(sites, origin: origin)
-    #expect(!hidden.contains(hongguo, origin: origin))
+    #expect(!hidden.contains(drama, origin: origin))
     #expect(hidden.contains(site, origin: origin))
-    #expect(!HiddenSources(defaults: defaults).contains(hongguo, origin: origin))
-    hidden.toggle(hongguo, origin: origin)
+    #expect(!HiddenSources(defaults: defaults).contains(drama, origin: origin))
+    hidden.toggle(drama, origin: origin)
     hidden.restoreBuiltIns(sites, origin: origin)
-    #expect(hidden.contains(hongguo, origin: origin))
+    #expect(hidden.contains(drama, origin: origin))
 }

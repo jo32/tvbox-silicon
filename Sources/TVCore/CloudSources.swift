@@ -66,16 +66,14 @@ public enum SourceAccounts {
         switch account {
         case "bilibili": BilibiliAccount.load().cookie
         case "douyin": DouyinAccount.load().cookie
-        case "hongguo": HongguoAccount.load().cookie
-        default: ""
+        default: account.map { SourceAccount.load($0).cookie } ?? ""
         }
     }
     public static func signedIn(_ account: String?) -> Bool {
         switch account {
         case "bilibili": BilibiliAccount.load().signedIn
         case "douyin": DouyinAccount.load().signedIn
-        case "hongguo": HongguoAccount.load().signedIn
-        default: false
+        default: account.map { SourceAccount.load($0).signedIn } ?? false
         }
     }
 }

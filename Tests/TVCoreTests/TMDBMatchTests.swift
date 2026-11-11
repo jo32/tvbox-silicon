@@ -85,8 +85,10 @@ struct TMDBMatchTests {
         #expect(!TMDBMatch.labeledNotOnTMDB(request("x", category: "Mountain,Drama")))
     }
 
-    @Test func musicAndBuiltInSourcesAreSkipped() {
-        #expect(TMDBMatch.skipsSource(key: "builtin.bilibili", api: ""))
+    @Test func musicAndSourcesThatSaySoAreSkipped() {
+        func site(_ yingxia: [String: JSONValue]) -> Site { Site(key: "k", name: "n", type: 3, api: "https://example.com/a.js", raw: ["yingxia": .object(yingxia)]) }
+        #expect(TMDBMatch.skipsSource(recommended: site(["tmdb": .bool(false)]), api: ""))
+        #expect(!TMDBMatch.skipsSource(recommended: site([:]), api: ""))
         #expect(TMDBMatch.skipsSource(key: "MTV1", api: "csp_MusicGuard"))
         #expect(TMDBMatch.skipsSource(key: "q", api: "https://x/music.js"))
         #expect(!TMDBMatch.skipsSource(key: "Bili", api: "csp_BiliGuard"))

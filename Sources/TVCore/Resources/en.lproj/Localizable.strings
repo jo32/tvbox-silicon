@@ -663,7 +663,6 @@
 "Previous Episode" = "Previous Episode";
 "Next Episode" = "Next Episode";
 
-"Hongguo" = "Hongguo";
 "Episode %@" = "Episode %@";
 "Episode %1$@" = "Episode %1$@";
 "Episodes %1$@–%2$@" = "Episodes %1$@–%2$@";
@@ -674,10 +673,7 @@
 "Trending Live-action" = "Trending Live-action";
 "Trending Animation" = "Trending Animation";
 "Trending AI Drama" = "Trending AI Drama";
-"Hongguo could not be reached. Try again later." = "Hongguo could not be reached. Try again later.";
-"Hongguo returned incomplete data. Please refresh and try again." = "Hongguo returned incomplete data. Please refresh and try again.";
-"Hongguo did not provide a playable source for this episode. Try again later." = "Hongguo did not provide a playable source for this episode. Try again later.";
-"This Hongguo video could not be prepared for playback. Please try again." = "This Hongguo video could not be prepared for playback. Please try again.";
+"This video could not be prepared for playback. Please try again." = "This video could not be prepared for playback. Please try again.";
 "This video is an MKV file, which Apple devices can't play." = "This video is an MKV file, which Apple devices can't play.";
 
 "Waiting for an earlier plugin request to finish." = "Waiting for an earlier plugin request to finish.";
@@ -1807,9 +1803,4 @@
 "Waiting for you to approve the sign-in…" = "Waiting for you to approve the sign-in…";
 "Open the Sign-In Page" = "Open the Sign-In Page";
 "The sign-in was declined." = "The sign-in was declined.";
-"Hongguo Account" = "Hongguo Account";
-"Hongguo episodes play as this account. Sign-in details stay on this device." = "Hongguo episodes play as this account. Sign-in details stay on this device.";
-"Sign In to Hongguo" = "Sign In to Hongguo";
-"Hongguo often won't play for devices that aren't signed in. Open the Hongguo app on your phone, scan this code, and confirm the sign-in." = "Hongguo often won't play for devices that aren't signed in. Open the Hongguo app on your phone, scan this code, and confirm the sign-in.";
-"Hongguo didn't answer. Try again." = "Hongguo didn't answer. Try again.";
-"Sign-in was approved, but Hongguo didn't return a login. Try again." = "Sign-in was approved, but Hongguo didn't return a login. Try again.";
+"Sign-in details stay on this device." = "Sign-in details stay on this device.";

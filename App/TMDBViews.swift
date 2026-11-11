@@ -41,7 +41,7 @@ import TVCore
     var offset: Int { answer?.match.flatMap { $0.id == details?.id ? $0.offset : nil } ?? 0 }
     var candidates: [TMDBMatch.Candidate] { answer?.candidates ?? [] }
 
-    /// Not for sources whose videos aren't on TMDB: Hongguo's short dramas, Bilibili's uploads, Douyin, music.
+    /// Not for sources whose videos aren't on TMDB: short dramas, uploads, music.
     static func applies(to site: Site) -> Bool {
         TMDBMatch.enabled && !TMDBMatch.skipsSource(key: site.key, api: site.api)
     }

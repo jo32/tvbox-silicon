@@ -56,19 +56,11 @@ Portions of this software are copyright © 1996-2026 The FreeType Project (https
 
 ## Reference implementation
 
-The recommended Hongguo source uses the catalog and player response formats from
-[jackotom/hongguo-drama](https://github.com/jackotom/hongguo-drama), commit
-`2d2314213c2457c63f84055518d38a27210c7ad1` (GPL-3.0). Its `src/native/app-source.js`
-and `sm3.js` are adapted as ES modules under `Sources/TVCore/ScriptAssets/sites/hongguo/`.
-The signing algorithms' earlier drpys/hongguoTV attribution, modification record,
-and full GPL license are retained there and bundled with the app. Changes dated
-2026-10-12 replace Node/Electron dependencies with QuickJS and native Apple crypto.
-The recommended Xifan and Hema sources (`Xifan.js`, `Hema.js`) follow its `src/native/xifan.js` and
-`src/native/hema.js` at commit `f210689c4adbf0986e3412cdb12a1c710c5dd611` (v4.1); the record is in the same
-`NOTICE.txt`.
-The catalog adapter and native sample-by-sample CENC media preparation are implemented
-for Yingxia. No Electron, FFmpeg, captured user cookies, or fixed device IDs are bundled
-for this source.
+The scripts of the recommended sources are not part of this app: the sources service serves them and the app
+runs them. The reference implementations they are adapted from, with their attribution, modification records
+and licenses, are recorded with those scripts.
+The native sample-by-sample CENC media preparation is implemented for Yingxia. No Electron, FFmpeg,
+captured user cookies, or fixed device IDs are bundled.
 
 [FongMi/TV](https://github.com/FongMi/TV) is a GPL-3.0 reference implementation. The local reference checkout, when present, retains its own Git history and license. It is not included as an app build target. Its `quickjs/src/main/assets/js/lib/cheerio.min.js` and `crypto-js.js` assets (commit `c616c0aa3613e87529791587a9f71b78c278c991`) are copied unmodified into `Runtime/ScriptHost/assets/js/lib/` and bundled with the script host. Its `cat.js`, `gbk.js`, and `similarity.js` assets are copied unmodified from commit `4a11089cb6a1377cbf437ebccd24468296357132` into the same directory. The upstream license is retained as `Runtime/ScriptHost/LICENSE.assets` and `ScriptHost/LICENSE.assets` in the app. Embedded library copyright notices are preserved.
 
