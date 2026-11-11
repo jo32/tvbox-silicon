@@ -583,6 +583,47 @@ private struct FakeCatalog: MusicCatalogSource {
     #expect(empty.empty && !empty.failed)
 }
 
+@Test func musicPlaysAgainAfterAnInterruptionOnlyWhenTheSystemPausedIt() {
+    let start = Date(timeIntervalSince1970: 1_000)
+    // Playing when the alarm rings: plays again when the system allows it and nothing else started it meanwhile.
+    var playing = MusicInterruption()
+    playing.began(playing: true, now: start)
+    let answer1 = playing.ended(shouldResume: true, paused: true)
+    #expect(answer1)
+    let answer2 = playing.ended(shouldResume: true, paused: true)
+    #expect(!answer2)
+    // The player's own pause can arrive just before the notice.
+    var late = MusicInterruption()
+    late.systemPaused(now: start)
+    late.began(playing: false, now: start.addingTimeInterval(0.2))
+    let answer3 = late.ended(shouldResume: true, paused: true)
+    #expect(answer3)
+    // Paused by the viewer, stopped long before, not allowed by the system, or already playing: stays as it is.
+    var viewer = MusicInterruption()
+    viewer.systemPaused(now: start); viewer.viewerPaused()
+    viewer.began(playing: false, now: start.addingTimeInterval(0.2))
+    let answer4 = viewer.ended(shouldResume: true, paused: true)
+    #expect(!answer4)
+    var unplugged = MusicInterruption()
+    unplugged.systemPaused(now: start)
+    unplugged.began(playing: false, now: start.addingTimeInterval(600))
+    let answer5 = unplugged.ended(shouldResume: true, paused: true)
+    #expect(!answer5)
+    var refused = MusicInterruption()
+    refused.began(playing: true, now: start)
+    let answer6 = refused.ended(shouldResume: false, paused: true)
+    #expect(!answer6)
+    var resumed = MusicInterruption()
+    resumed.began(playing: true, now: start)
+    let answer7 = resumed.ended(shouldResume: true, paused: false)
+    #expect(!answer7)
+    var pausedMeanwhile = MusicInterruption()
+    pausedMeanwhile.began(playing: true, now: start)
+    pausedMeanwhile.viewerPaused()
+    let answer8 = pausedMeanwhile.ended(shouldResume: true, paused: true)
+    #expect(!answer8)
+}
+
 /// Waits for a search to finish, up to 5 seconds: fixed sleeps were too short with the whole suite running.
 @MainActor func settle(_ model: MusicSearchModel) async throws {
     try await Task.sleep(for: .milliseconds(20))
