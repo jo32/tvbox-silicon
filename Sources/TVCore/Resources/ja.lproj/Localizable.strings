@@ -1801,3 +1801,4 @@
 "Open the Sign-In Page" = "サインインページを開く";
 "The sign-in was declined." = "サインインは拒否されました。";
 "Sign-in details stay on this device." = "サインイン情報はこのデバイスにのみ保存されます。";
+"Show %lld Other Results" = "その他の結果 %lld 件を表示";

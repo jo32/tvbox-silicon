@@ -38,4 +38,10 @@ import Testing
 @Test func matchesComeFirstInTheirOwnOrder() {
     let titles = ["别的剧", "仁医 第二季", "无关", "仁医"]
     #expect(TitleMatch.ordered(titles, keyword: "仁医", title: { $0 }) == ["仁医 第二季", "仁医", "别的剧", "无关"])
+    // The search page shows the matching ones and keeps the rest behind a button (#770).
+    let parts = TitleMatch.split(titles, keyword: "仁医", title: { $0 })
+    #expect(parts.matching == ["仁医 第二季", "仁医"] && parts.other == ["别的剧", "无关"])
+    // A search by an actor's name matches no title: nothing to lead with, so the page shows them all.
+    #expect(TitleMatch.split(titles, keyword: "大泽隆夫", title: { $0 }).matching.isEmpty)
+    #expect(TitleMatch.split(titles, keyword: " ", title: { $0 }).other.isEmpty)
 }
