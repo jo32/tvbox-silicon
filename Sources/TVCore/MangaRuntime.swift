@@ -22,6 +22,8 @@ public actor MangaRuntime {
         let host: MangaHost
         let info: MangaSourceInfo
         let revision: String
+        /// The page being unscrambled (MangaRuntime.modify), which the next one waits for.
+        var modifying: Task<Void, Never>?
         init(script: ScriptSession, host: MangaHost, info: MangaSourceInfo, revision: String) { self.script = script; self.host = host; self.info = info; self.revision = revision }
     }
     private var sessions: [String: Session] = [:]
@@ -61,9 +63,9 @@ public actor MangaRuntime {
         return session
     }
 
-    private static func start(key: String, code: String, revision: String) async throws -> Session {
+    static func start(key: String, code: String, revision: String, profile: URL? = nil) async throws -> Session {
         let host = MangaHost(sourceKey: key)
-        let profile = MangaLibrary.root.appendingPathComponent("Profiles/\(key)", isDirectory: true)
+        let profile = profile ?? MangaLibrary.root.appendingPathComponent("Profiles/\(key)", isDirectory: true)
         let script = try await ScriptSession.start(module: "assets://venera/prelude.js", supplied: [:], profile: profile, label: "manga \(key)", extension: host)
         guard let api = ScriptAssets.bundled("assets://venera/init.js") else { script.close(); throw TVError.unsupported(L10n.text("The comic source runtime is missing from this build.")) }
         // A global script, so its classes and `let`s (ComicSource, Network, ...) are globals the source can see.
@@ -295,11 +297,28 @@ extension MangaRuntime {
 
     /// Runs the config's modifyImage script on the decoded page.
     func modify(_ key: String, config: Int, image: CGImage) async throws -> CGImage {
-        let host = try await host(key)
-        guard let input = host.bitmaps.add(image) else { return image }
-        defer { host.bitmaps.clear() }
-        let output = MangaValue.int(try await raw(key, "__venera.modify(\(config), \(input))", seconds: 30)) ?? input
-        return host.bitmaps.image(output) ?? image
+        try await modify(in: session(key), config: config, image: image)
+    }
+
+    /// One page at a time per source: the scripts' images share the source's store, which is emptied after each
+    /// page. The reader loads several pages at once, and one page's cleanup used to drop the next page's image
+    /// before its script ran, so that page stayed scrambled (#836). The scripts run one at a time anyway.
+    func modify(in session: Session, config: Int, image: CGImage) async throws -> CGImage {
+        let previous = session.modifying
+        let work = Task {
+            await previous?.value
+            return try await Self.unscramble(session, config: config, image: image)
+        }
+        session.modifying = Task { _ = try? await work.value }
+        return try await work.value
+    }
+
+    private static func unscramble(_ session: Session, config: Int, image: CGImage) async throws -> CGImage {
+        let bitmaps = session.host.bitmaps
+        guard let input = bitmaps.add(image) else { return image }
+        defer { bitmaps.clear() }
+        let output = MangaValue.int(try await Self.call(session.script, "__venera.modify(\(config), \(input))", seconds: 30)) ?? input
+        return bitmaps.image(output) ?? image
     }
 
     func release(_ key: String, config: Int) async {

@@ -74,7 +74,8 @@ public actor MangaImages {
     }
 
     public func data(source: String, url: String, kind: Kind, comic: String? = nil, chapter: String? = nil) async throws -> Data {
-        let key = source + "\n" + url
+        // Pages are kept under keys of their own since #836: some kept before then were stored still scrambled.
+        let key = (kind == .page ? "page\n" : "") + source + "\n" + url
         if let data = try? Data(contentsOf: Self.file(key)) { return data }
         if let task = pending[key] { return try await task.value }
         let thumbnail = kind == .cover ? thumbnailRequests[key] : nil
