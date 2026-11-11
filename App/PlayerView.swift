@@ -1250,11 +1250,8 @@ private struct DesktopPlaybackView: View {
     @State private var floats = false
     @State private var idle = ChromeIdle()
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
-    @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @State private var showsDanmakuList = false
     @State private var showsEpisodes = false
-    @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
-    @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     /// Devices with Yingxia open, for the Play On button; and the one the video was sent to.
     @State private var tvBrowser = PlayOnBrowser()
@@ -1401,6 +1398,48 @@ private struct DesktopPlaybackView: View {
     }
 
     private var optionsMenu: some View {
+        DesktopOptionsMenu(channel: channel, session: session, window: window, hasDanmaku: !session.danmaku.isEmpty, fillsFrame: $fillsFrame, floats: $floats,
+                           showsDanmakuList: $showsDanmakuList, importsSubtitleFile: $importsSubtitleFile, asksSubtitleAddress: $asksSubtitleAddress,
+                           searchesSubtitles: $searchesSubtitles)
+            .equatable()
+    }
+
+    private func setTrafficLights(visible: Bool) {
+        for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            window.standardWindowButton(kind)?.animator().alphaValue = visible ? 1 : 0
+        }
+    }
+}
+
+/// The Mac player's options menu, as a view of its own that is equal to itself while nothing it shows changes. In a
+/// live room every chat message evaluates the player's body again; built again with it, an open menu shut the submenu
+/// under the pointer, so Quality, Text Size and the others flickered and couldn't be picked (#846).
+private struct DesktopOptionsMenu: View, Equatable {
+    @Environment(Store.self) private var store
+    let channel: Channel
+    let session: PlaybackSession
+    let window: PlaybackWindow
+    /// Whether there are comments at all, not the comments: those change with every message.
+    let hasDanmaku: Bool
+    @Binding var fillsFrame: Bool
+    @Binding var floats: Bool
+    @Binding var showsDanmakuList: Bool
+    @Binding var importsSubtitleFile: Bool
+    @Binding var asksSubtitleAddress: Bool
+    @Binding var searchesSubtitles: Bool
+    @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
+    @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
+    @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
+    @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
+    @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
+
+    /// The bindings and settings reach the menu by themselves; only these decide what it is built from.
+    nonisolated static func == (a: Self, b: Self) -> Bool {
+        a.session === b.session && a.window === b.window && a.hasDanmaku == b.hasDanmaku && a.channel == b.channel
+    }
+
+    var body: some View {
+        @Bindable var session = session
         Menu {
             Toggle(L10n.text("Loop Playback"), isOn: $session.looping)
             Toggle(L10n.text("Fill Window"), isOn: $fillsFrame)
@@ -1415,7 +1454,7 @@ private struct DesktopPlaybackView: View {
                 MacSubtitleFiles(subtitles: session.externalSubtitles, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
                                  searchOnline: { searchesSubtitles = true })
             }
-            if !session.danmaku.isEmpty {
+            if hasDanmaku {
                 Toggle(L10n.text("Show Danmaku"), isOn: $showsDanmaku)
                 Picker(L10n.text("Danmaku Area"), selection: $danmakuArea) {
                     ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -1440,12 +1479,6 @@ private struct DesktopPlaybackView: View {
             .glassSurface(.regular.interactive(), in: Circle())
             .help(L10n.text("Playback Options"))
             .accessibilityLabel(L10n.text("Playback Options"))
-    }
-
-    private func setTrafficLights(visible: Bool) {
-        for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
-            window.standardWindowButton(kind)?.animator().alphaValue = visible ? 1 : 0
-        }
     }
 }
 
