@@ -1,7 +1,7 @@
 import Foundation
 
 /// Whether a search result's title is what was searched for (#374). Plenty of sources answer a search with loosely
-/// related titles; the ones that match come first, and nothing is hidden.
+/// related titles; the ones that match come first, and the search page keeps the rest behind one button (#770).
 public enum TitleMatch {
     /// Lower case, half-width, simplified, with spaces and punctuation gone: "Mission: Impossible" and "MISSION IMPOSSIBLE"
     /// and "機動搜查隊" and "机动搜查队" compare equal.
@@ -34,13 +34,19 @@ public enum TitleMatch {
         return false
     }
 
-    /// The items whose title matches first, then the rest, each in the order they came.
-    public static func ordered<T>(_ items: [T], keyword: String, title: (T) -> String) -> [T] {
-        guard !normalize(keyword).isEmpty else { return items }
+    /// The items whose title matches and the rest, each in the order they came. An empty keyword matches them all.
+    public static func split<T>(_ items: [T], keyword: String, title: (T) -> String) -> (matching: [T], other: [T]) {
+        guard !normalize(keyword).isEmpty else { return (items, []) }
         var matching: [T] = [], other: [T] = []
         for item in items {
             if matches(title: title(item), keyword: keyword) { matching.append(item) } else { other.append(item) }
         }
-        return matching + other
+        return (matching, other)
+    }
+
+    /// The items whose title matches first, then the rest, each in the order they came.
+    public static func ordered<T>(_ items: [T], keyword: String, title: (T) -> String) -> [T] {
+        let parts = split(items, keyword: keyword, title: title)
+        return parts.matching + parts.other
     }
 }

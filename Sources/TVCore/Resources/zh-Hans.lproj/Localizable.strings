@@ -1801,3 +1801,4 @@
 "Open the Sign-In Page" = "打开登录页面";
 "The sign-in was declined." = "登录已被拒绝。";
 "Sign-in details stay on this device." = "登录信息只保存在此设备上。";
+"Show %lld Other Results" = "显示其余 %lld 个结果";

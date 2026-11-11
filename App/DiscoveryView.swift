@@ -23,6 +23,9 @@ struct GlobalSearchView: View {
     @AppStorage("searchShowsActivity") private var showsActivity = false
     /// Whether the end of the results is on screen, so finished pages can ask for the next.
     @State private var endVisible = false
+    /// The loosely related results of this search are on the page too, after "Show Other Results".
+    @State private var othersShownFor: String?
+    private var showsOthers: Bool { othersShownFor == model.keyword }
     #if !os(tvOS)
     /// Results as rows of a small cover beside the whole title, instead of the poster grid: long or similar titles
     /// are cut to one line under a poster (#426).
@@ -39,17 +42,27 @@ struct GlobalSearchView: View {
     private var model: SearchModel { store.searchModel }
     private var history: [String] { (try? JSONDecoder().decode([String].self, from: historyData)) ?? [] }
     /// First pages in source order, then later pages as they arrive, so loading more only adds at the end.
-    private var posters: [SearchPoster] {
+    private var posters: [SearchPoster] { listing.posters }
+    /// The results on the page, and how many loosely related ones are kept behind "Show Other Results".
+    private var listing: (posters: [SearchPoster], others: Int) {
         let shown = model.matches.filter { model.selectedSource == nil || $0.id == model.selectedSource }
         let sites = Dictionary(shown.map { ($0.id, $0.site) }) { first, _ in first }
         var seen = Set<String>()
-        // The titles that are what was searched for lead (#374); the rest follow, none hidden. Later pages still only
-        // add at the end, so the grid doesn't move under a scrolling thumb.
-        let first = TitleMatch.ordered(
+        // The titles that are what was searched for lead (#374). Later pages still only add at the end, so the grid
+        // doesn't move under a scrolling thumb.
+        let first = TitleMatch.split(
             shown.flatMap { result in (result.page?.videos ?? []).map { SearchPoster(site: result.site, video: $0) } },
             keyword: model.keyword, title: { $0.video.name })
         let later = model.batches.flatMap { batch in sites[batch.source].map { site in batch.videos.map { SearchPoster(site: site, video: $0) } } ?? [] }
-        return (first + later).filter { seen.insert($0.id).inserted }
+        // Plenty of sources pad their answer with loosely related titles. While some titles do match, only those
+        // show and the rest wait behind one button (#770, #773). A search no title matches (an actor's name, say)
+        // shows everything, as before.
+        if !showsOthers, !first.matching.isEmpty, !first.other.isEmpty {
+            let more = TitleMatch.split(later, keyword: model.keyword, title: { $0.video.name })
+            let posters = (first.matching + more.matching).filter { seen.insert($0.id).inserted }
+            return (posters, (first.other + more.other).filter { seen.insert($0.id).inserted }.count)
+        }
+        return ((first.matching + first.other + later).filter { seen.insert($0.id).inserted }, 0)
     }
     /// Built-in sources can be selected while their first search is still in flight. One the viewer
     /// hid, or one paused for failing, isn't asked and gets no chip.
@@ -152,7 +165,7 @@ struct GlobalSearchView: View {
                     else {
                         if model.total == 0 {
                             EmptyResults(symbol: "magnifyingglass", title: L10n.text("No searchable sources are available on this device."))
-                        } else if posters.isEmpty {
+                        } else if listing.posters.isEmpty {
                             if model.busy {
                                 VStack(spacing: 18) {
                                     ProgressView()
@@ -163,15 +176,24 @@ struct GlobalSearchView: View {
                                 emptyResults(config)
                             }
                         } else {
+                            let listing = listing
                             LazyVGrid(columns: listed ? Self.rowColumns : Layout.posterColumns,
                                       spacing: listed ? Layout.gridSpacing : Layout.gridRowSpacing) {
-                                resultLinks(config)
+                                resultLinks(listing.posters, config)
                             }.scrollTargetLayout()
                             // A single row of results leaves nothing under the right of the rows above; as a section the
                             // remote still moves Down onto it (#481).
                             .tvFocusSection()
                             // Scrolling the end into view asks for the next page; while it stays in view each new page asks again.
-                            if model.canLoadMore(model.selectedSource) || model.loadingMore {
+                            if listing.others > 0 {
+                                // The sources have started answering with other titles: their further pages wait with them.
+                                Button { othersShownFor = model.keyword } label: {
+                                    searchActionLabel(L10n.text("Show %lld Other Results", listing.others), symbol: "ellipsis")
+                                }
+                                .searchAction()
+                                .frame(maxWidth: .infinity).padding(.vertical, 12)
+                                .accessibilityIdentifier("search.showOthers")
+                            } else if model.canLoadMore(model.selectedSource) || model.loadingMore {
                                 ProgressView().frame(maxWidth: .infinity).padding(.vertical, 24)
                                     .onScrolledIntoView(threshold: 0.2) { visible in
                                         endVisible = visible
@@ -397,7 +419,7 @@ struct GlobalSearchView: View {
         }
     }
 
-    @ViewBuilder private func resultLinks(_ config: Subscription) -> some View {
+    @ViewBuilder private func resultLinks(_ posters: [SearchPoster], _ config: Subscription) -> some View {
         ForEach(posters) { item in
             RouteLink {
                 CatalogDestination(video: item.video, client: CatalogClient(site: item.site, origin: config.origin, jarURL: config.spiderURL))
