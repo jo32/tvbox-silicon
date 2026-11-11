@@ -4,6 +4,9 @@
 #include <string.h>
 
 extern char *TVAppleRuntimeRequest(const char *, const char *);
+extern unsigned long long TVAppleRuntimeFittedHeap(unsigned long long, bool (*)(unsigned long long));
+static bool fitsUpTo200MB(unsigned long long megabytes) { return megabytes <= 200; }
+static bool fitsNothing(unsigned long long megabytes) { return false; }
 static const char *resources;
 
 // Expects the exact response, or a localized embedded_request error when `expected` is NULL.
@@ -47,6 +50,12 @@ int main(int argc, const char *argv[]) {
     @autoreleasepool {
         NSCAssert(argc == 2, @"Expected fixture resource directory");
         resources = argv[1];
+        // A heap the address space can't hold shrinks in 64 MB steps instead of ending the app
+        // (report 4224f86161ec); with no room at all the runtime isn't started.
+        NSCAssert(TVAppleRuntimeFittedHeap(384, fitsUpTo200MB) == 192, @"Heap not lowered to what fits");
+        NSCAssert(TVAppleRuntimeFittedHeap(1024, fitsUpTo200MB) == 192, @"Heap not lowered to what fits");
+        NSCAssert(TVAppleRuntimeFittedHeap(160, fitsUpTo200MB) == 160, @"Heap that fits was changed");
+        NSCAssert(TVAppleRuntimeFittedHeap(384, fitsNothing) == 0, @"Expected no heap without address space");
         // Exercise concurrent startup, attaching new workers, and recovery after exceptions.
         pthread_t workers[5];
         for (int i = 0; i < 5; i++) NSCAssert(pthread_create(&workers[i], NULL, run, NULL) == 0, @"Could not start worker");

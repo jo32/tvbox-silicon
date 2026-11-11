@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <sys/mman.h>
 #include <os/proc.h>
 #include <TargetConditionals.h>
 
@@ -24,6 +25,7 @@ static char *errorResponse(NSDictionary *envelope) {
 static char *failure(const char *message) { return errorResponse(@{@"error": @(message)}); }
 static char *requestFailure(const char *message) { return errorResponse(@{@"error": @(message), @"errorCode": @"embedded_request"}); }
 char *TVAppleRuntimeRequest(const char *resourcePath, const char *requestJSON);
+unsigned long long TVAppleRuntimeFittedHeap(unsigned long long megabytes, bool (*canReserve)(unsigned long long megabytes));
 
 // Java strings can hold unpaired UTF-16 surrogates (a plugin cutting text inside an emoji), which
 // have no UTF-8 form: strdup(NULL) crashed TestFlight build 29 while returning a search response.
@@ -80,7 +82,7 @@ static char *performRequest(JNIEnv *env, const char *requestJSON) {
 // The Java heap is sized from what this process may still use, not fixed: iOS kills an app over
 // its memory limit, and the limit differs by device. Native code (interpreter, plugins' guard
 // libraries, video) needs the rest, so the heap gets about a third, between 384 MB and 1 GB.
-static NSString *heapLimit(void) {
+static unsigned long long heapLimit(void) {
     unsigned long long available = 0;
 #if (TARGET_OS_IOS || TARGET_OS_TV) && !TARGET_OS_SIMULATOR
     // Simulators report no limit; they fall back to a share of the Mac's memory below.
@@ -90,7 +92,27 @@ static NSString *heapLimit(void) {
     unsigned long long megabytes = available / 3 / (1024 * 1024);
     if (megabytes < 384) megabytes = 384;
     if (megabytes > 1024) megabytes = 1024;
-    return [NSString stringWithFormat:@"-Xmx%llum", megabytes];
+    return megabytes;
+}
+
+// The JVM reserves address space for the whole heap, and later for the 128 MB class space, when it
+// starts, and ends the app when it can't ("Could not reserve enough space for ... KB object heap",
+// report 4224f86161ec: an iPhone XR on iOS 18). iOS gives an app limited address space, which the
+// other runtimes (Node, Unicorn) share, so a 3 GB device may not have 384 MB free in one piece.
+// Lower the heap in 64 MB steps until both fit; 0 means not even 64 MB does.
+static bool canReserveHeap(unsigned long long megabytes) {
+    size_t heap = (size_t)megabytes << 20, classes = (size_t)128 << 20;
+    void *heapSpace = mmap(NULL, heap, PROT_NONE, MAP_PRIVATE | MAP_ANON | MAP_NORESERVE, -1, 0);
+    if (heapSpace == MAP_FAILED) return false;
+    void *classSpace = mmap(NULL, classes, PROT_NONE, MAP_PRIVATE | MAP_ANON | MAP_NORESERVE, -1, 0);
+    munmap(heapSpace, heap);
+    if (classSpace == MAP_FAILED) return false;
+    munmap(classSpace, classes);
+    return true;
+}
+unsigned long long TVAppleRuntimeFittedHeap(unsigned long long megabytes, bool (*canReserve)(unsigned long long megabytes)) {
+    for (; megabytes >= 64; megabytes -= 64) if (canReserve(megabytes)) return megabytes;
+    return 0;
 }
 
 // A fatal JVM error (a native allocation that failed, say) ends the app with _exit(1), and a plugin's
@@ -154,8 +176,14 @@ char *TVAppleRuntimeRequest(const char *resourcePath, const char *requestJSON) {
             for (NSString *file in [[[NSFileManager defaultManager] contentsOfDirectoryAtPath:[host stringByAppendingPathComponent:@"lib"] error:NULL] sortedArrayUsingSelector:@selector(compare:)]) {
                 if ([file.pathExtension isEqualToString:@"jar"]) classpath = [classpath stringByAppendingFormat:@":%@/lib/%@", host, file];
             }
-            NSString *heap = heapLimit();
-            fprintf(stderr, "Java heap limit %s\n", heap.UTF8String);
+            unsigned long long wanted = heapLimit(), megabytes = TVAppleRuntimeFittedHeap(wanted, canReserveHeap);
+            fprintf(stderr, "Java heap limit %llu MB (wanted %llu MB)\n", megabytes, wanted);
+            if (megabytes == 0) {
+                fprintf(stderr, "Not enough free address space for the Java heap\n");
+                failed=YES; pthread_mutex_unlock(&startLock);
+                return failure("Could not start the embedded Java runtime.");
+            }
+            NSString *heap = [NSString stringWithFormat:@"-Xmx%llum", megabytes];
             // Shrink the committed heap after collections, so memory freed in Java goes back to iOS.
             // Class metadata gets 128 MB of address space instead of the default 1 GB: a 3 GB device may not have
             // 1 GB free in one piece, and then the JVM can't start ("Could not allocate compressed class space")
