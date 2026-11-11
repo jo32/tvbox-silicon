@@ -367,11 +367,15 @@ struct WatchNowTVCover: View {
     var landscape = false
     /// A word on the cover's corner (LIVE), painted into it so it lifts with the picture.
     var badge: (text: String, color: Color)? = nil
+    /// Square, at the poster's width: an album's or a playlist's cover.
+    var square = false
+    /// Shown until the cover loads, and when there is none.
+    var symbol = "film"
     private var width: CGFloat { landscape ? Self.landscapeWidth : Self.width }
-    private var height: CGFloat { landscape ? Self.landscapeHeight : Self.height }
+    private var height: CGFloat { landscape ? Self.landscapeHeight : square ? Self.width : Self.height }
     var body: some View {
         VStack(spacing: 5) {
-            PosterImage(url: poster, headers: headers).frame(width: width, height: height)
+            PosterImage(url: poster, headers: headers, symbol: symbol).frame(width: width, height: height)
                 .coverOverlay(alignment: .topLeading) {
                     if let badge {
                         Text(badge.text).font(.system(size: 20, weight: .bold)).foregroundStyle(.white)
