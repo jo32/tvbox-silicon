@@ -731,7 +731,9 @@ import TVCore
     /// auto-play is off, there is no next episode, or the source can't resolve it now.
     func upcomingEpisode(after channel: Channel) async -> Channel? {
         // Only while `channel` still plays: once the queue moves on, this was asked about the one before.
-        if CloudFiles.isFile(channel.url) { return autoPlayNext && playing == channel ? nextFile(after: channel) : nil }
+        if CloudFiles.isFile(channel.url) || channel.url.scheme == DownloadLibrary.scheme {
+            return autoPlayNext && playing == channel ? nextFile(after: channel) : nil
+        }
         guard autoPlayNext, let catalog = catalog(for: channel), let next = nextEpisode(after: channel) else { return nil }
         do {
             let resolved = try await catalog.client.playback(next)
@@ -745,7 +747,7 @@ import TVCore
 
     /// The queued episode started playing by itself: it becomes the one playing, as if it had been chosen.
     func advance(to next: Channel, from channel: Channel) {
-        if CloudFiles.isFile(next.url), playing == channel { playing = next; return }
+        if CloudFiles.isFile(next.url) || next.url.scheme == DownloadLibrary.scheme, playing == channel { playing = next; return }
         guard playing == channel, let catalog = catalog(for: channel) else { return }
         cancelEpisodeSelection()
         remember(catalog.video, client: catalog.client, for: next)
@@ -939,8 +941,13 @@ extension Store {
     func nextFile(after channel: Channel) -> Channel? { file(1, from: channel) }
     func previousFile(before channel: Channel) -> Channel? { file(-1, from: channel) }
 
-    /// The file `offset` places from the playing one in its folder, for the player's Previous and Next.
+    /// The file `offset` places from the playing one in its folder, for the player's Previous and Next. A saved
+    /// episode steps through the others saved from its show (#835, #820).
     private func file(_ offset: Int, from channel: Channel) -> Channel? {
+        if channel.url.scheme == DownloadLibrary.scheme {
+            let library = DownloadLibrary.shared
+            return library.neighbor(of: channel.url, offset: offset).map(library.channel(for:))
+        }
         guard let context = channel.historyContext, context.sourceKey == CloudFiles.sourceKey, let folder = filesFolder,
               folder.drive.key == context.episodeFlag, folder.id == context.videoID,
               let index = folder.files.firstIndex(where: { $0.id == context.episodeID }),
