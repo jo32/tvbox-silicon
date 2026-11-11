@@ -387,7 +387,7 @@ struct WatchNowTVCover: View {
                 Text(title).font(.system(size: 26))
                 Text(detail.isEmpty ? " " : detail).font(.system(size: 22, weight: .medium)).foregroundStyle(.white.opacity(0.5))
             }
-            .lineLimit(1).cardCaption()
+            .lineLimit(1).cardCaption(drop: square ? 0.09 : 0.06)
         }
         .frame(width: width)
     }

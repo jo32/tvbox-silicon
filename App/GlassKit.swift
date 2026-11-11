@@ -392,7 +392,9 @@ extension View {
     func posterClip<S: Shape>(_ shape: S) -> some View { modifier(PosterClip(shape: shape)) }
 
     /// Captions under the cover of a `cardButton`: on Apple TV they move down as the cover lifts, as on Discover.
-    func cardCaption() -> some View { modifier(CardCaption()) }
+    /// `drop` is how far, as a share of the cover's height: the system grows a cover by about 40 pt along its longer
+    /// side (220x330 to 246x370, 220x220 to 260x260), so a poster's bottom moves 6% of its height and a square's 9%.
+    func cardCaption(drop: CGFloat = 0.06) -> some View { modifier(CardCaption(drop: drop)) }
 
     /// An overlay on a cover, such as a progress bar or a badge, on the view that holds its `PosterImage`. On Apple TV
     /// the image paints it into its own bitmap, so the focus lift grows, moves and tilts it with the artwork, as Rex's
@@ -529,13 +531,14 @@ private struct CoverLift: ViewModifier {
 }
 
 private struct CardCaption: ViewModifier {
+    let drop: CGFloat
     #if os(tvOS)
     @Environment(\.isFocused) private var focused
     @Environment(\.cardCoverHeight) private var cover
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func body(content: Content) -> some View {
-        // 6% of the cover's height, as Rex's captions and DiscoverTVNativeShelf.Cell's move.
-        content.offset(y: focused ? cover * 0.06 : 0)
+        // A share of the cover's height: 6% for posters, as Rex's captions and DiscoverTVNativeShelf.Cell's move.
+        content.offset(y: focused ? cover * drop : 0)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: focused)
     }
     #else
