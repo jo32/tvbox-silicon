@@ -878,7 +878,6 @@ struct FormSettingsView: View {
             }
             Spacer()
             if store.importing { ProgressView().appControlSize(.small); ElapsedTime() }
-            Button(L10n.text("Use a Demo URL")) { store.subscriptionAddress = Store.defaultURL }
             Button(L10n.text("Add from File…")) { choosesFile = true }.disabled(store.importing)
                 .help(L10n.text("A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider."))
             Button(store.importing ? L10n.text("Importing…") : L10n.text("Add Subscription")) { add() }
@@ -1074,13 +1073,6 @@ private struct AddSubscriptionSheet: View {
                 } footer: {
                     if let error = store.importError { Text(error).foregroundStyle(Brand.amber) }
                     else { Text(L10n.text("Paste the address of a TVBox JSON subscription, an M3U or TXT live playlist, or an AList server.")) }
-                }
-                // Offered, never filled in or imported on its own.
-                Section {
-                    Button { store.subscriptionAddress = Store.defaultURL } label: {
-                        FormLabel(symbol: "sparkles", tint: Brand.indigo, title: L10n.text("Use a Demo URL"))
-                            .foregroundStyle(.primary)
-                    }
                 }
                 Section {
                     Button { choosesFile = true } label: {
@@ -2088,7 +2080,6 @@ private struct TVAddSubscriptionPage: View {
                     }
                 }
                 .disabled(store.importing || empty)
-                TVSettingsAction(title: L10n.text("Use a Demo URL")) { store.subscriptionAddress = Store.defaultURL }
             }
         }
     }

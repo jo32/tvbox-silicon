@@ -121,7 +121,6 @@ enum QALaunch {
             }
             await store.importSubscription(address: subscription)
         }
-        else if section != .discover, store.subscription == nil, !Distribution.isAppStore { await store.importSubscription(address: Store.defaultURL) }
         if QASweep.enabled, let config = store.subscription { Task.detached(priority: .utility) { await QASweep.run(config) } }
         // `-qaSeedHistory <source key>:<video id>` records that video's first episode as part watched, for Watch Now's
         // Up Next and Continue Watching.

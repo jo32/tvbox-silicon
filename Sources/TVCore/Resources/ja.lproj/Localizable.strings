@@ -29,7 +29,6 @@
 "Subscription URL" = "配信設定 URL";
 "Save and Refresh" = "保存して更新";
 "Use Default URL" = "既定の URL を使用";
-"Use a Demo URL" = "デモ用の URL を使用";
 "Current subscription: %@" = "現在の配信設定：%@";
 "Play a URL" = "URL を再生";
 "HTTP / HTTPS media URL" = "HTTP / HTTPS メディア URL";

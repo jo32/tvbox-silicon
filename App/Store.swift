@@ -2,7 +2,6 @@ import SwiftUI
 import TVCore
 
 @MainActor @Observable final class Store {
-    static let defaultURL = "https://raw.githubusercontent.com/qist/tvbox/master/fty.json"
     let searchModel = SearchModel()
     /// Song search and the music player; both outlive the Music page, so a song keeps playing elsewhere in the app.
     /// The Mac and Apple TV list every kind at once, in rows; a phone or iPad starts on songs.
@@ -73,7 +72,7 @@ import TVCore
     /// The Mac sidebar folds away while the manga reader fills the window, and comes back when it closes.
     /// macOS 26 floats the sidebar over the page, so it covered the left part of every comic page.
     var hidesSidebar = false
-    /// Every build shows the built-in services (Music, Bilibili, Douyin), the default subscription and
+    /// Every build shows the recommended services (Music, Bilibili, Douyin) and
     /// the plugin pages only once a subscription that works has been added: one that is on and whose
     /// copy has sources or live playlists.
     var extrasUnlocked: Bool {

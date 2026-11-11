@@ -29,7 +29,6 @@
 "Subscription URL" = "订阅地址";
 "Save and Refresh" = "保存并更新订阅";
 "Use Default URL" = "使用默认地址";
-"Use a Demo URL" = "使用演示地址";
 "Current subscription: %@" = "当前订阅：%@";
 "Play a URL" = "播放链接";
 "HTTP / HTTPS media URL" = "HTTP / HTTPS 媒体地址";
