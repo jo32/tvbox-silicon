@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.18",
+          "buildVersion": "56",
+          "date": "2026-11-12",
+          "localizedDescription": "• 搜索只显示匹配的结果\n• 离线缓存可以连续播放\n• 在视频页任意位置右滑返回\n• 来电或闹钟结束后音乐继续播放\n• 其他修复\n\n• Search shows what you searched for\n• Offline Cache plays on\n• Swipe back from anywhere on a video page\n• Music plays again after a call or an alarm\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.18/Yingxia-1.8.18-ios.ipa",
+          "size": 128572297,
+          "sha256": "2e0212b30f82934b460439101284338f8062e3822e4e3a5892eebfe10974aee0",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.17",
           "buildVersion": "55",
           "date": "2026-11-11",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.14/Yingxia-1.8.14-ios.ipa",
           "size": 126603435,
           "sha256": "d4302575a567fa0afe2886e0f03dc8ba45f89584329045e558ba378133e62604",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.13",
-          "buildVersion": "51",
-          "date": "2026-11-07",
-          "localizedDescription": "• Apple TV 支持猫源\n• 播放器视频标签\n• 字幕延迟\n• 源里的设置项\n• 源自己的网盘登录\n• 播放接对剧集\n• 其他修复\n\n• CatPawOpen on Apple TV\n• Video tags in the player\n• Subtitle Delay\n• Settings inside sources\n• Drive sign-ins from the source\n• Play picks up the right episode\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.13/Yingxia-1.8.13-ios.ipa",
-          "size": 124619585,
-          "sha256": "93fcba7f5b74bbd2cd0796b3df6f9d8d61182083d84fc7547841e46be7c3510e",
           "minOSVersion": "17.0"
         }
       ],
