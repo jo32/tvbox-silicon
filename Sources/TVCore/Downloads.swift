@@ -313,6 +313,16 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
 
     // MARK: Playback
 
+    /// The finished download `offset` places from the one `url` plays, among its show's saved episodes in the
+    /// order Downloads lists them: what the player's Previous and Next reach, and what plays on after it.
+    public func neighbor(of url: URL, offset: Int) -> DownloadItem? {
+        guard url.scheme == Self.scheme, let id = url.host(), let current = item(id: id) else { return nil }
+        let show = items.filter { $0.status == .completed && $0.source.siteKey == current.source.siteKey && $0.source.videoID == current.source.videoID }
+            .sorted { $0.episode.localizedStandardCompare($1.episode) == .orderedAscending }
+        guard let index = show.firstIndex(where: { $0.id == id }), show.indices.contains(index + offset) else { return nil }
+        return show[index + offset]
+    }
+
     /// What the player opens for a finished download.
     public func channel(for item: DownloadItem) -> Channel {
         Channel(name: "\(item.title) · \(item.episode)", group: L10n.text("Offline Cache"), url: URL(string: "\(Self.scheme)://\(item.id)")!)
