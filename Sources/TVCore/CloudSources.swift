@@ -1,12 +1,15 @@
 import Foundation
 
-/// Yingxia's own sources (Bilibili, the short-drama sites, the live platforms) are not part of the app:
-/// they live in a private repository and come from a subscription its Worker serves. The app adds that
-/// subscription beside the viewer's own whenever they have one (`Subscription.withCloudSources`) and runs
-/// its scripts on the device like any JavaScript source, with the language and the signed-in account of
-/// the service passed in each source's ext.
+/// Service metadata from a subscription explicitly enabled by the viewer.
+/// No subscription address is bundled or fetched automatically.
 public enum CloudSources {
-    public static let address = URL(string: "https://yingxia-sources.getmegaportal.com/v1/tvbox.json")!
+    /// Relative service scripts resolve against the subscribed document, never a fixed server.
+    public static var address: URL {
+        get throws {
+            guard let origin = current?.origin else { throw TVError.invalidConfiguration }
+            return origin
+        }
+    }
     /// Newer subscriptions may change shape; an app reads only the versions it knows.
     static let version = 1
 
@@ -15,7 +18,7 @@ public enum CloudSources {
     nonisolated(unsafe) private static var musicListing: CloudMusic.Listing?
     private static let lock = NSLock()
 
-    /// The latest copy of the subscription the app has, which the app keeps current.
+    /// The active service subscription selected from the viewer's enabled subscriptions.
     public static var current: Subscription? {
         get { lock.withLock { document } }
         set {
@@ -34,9 +37,8 @@ public enum CloudSources {
     public static func site(where matches: (Site) -> Bool) -> Site? { current?.sites.first(where: matches) }
 
     /// Fetches the subscription; it is only used in a shape this app reads.
-    public static func fetch(http: HTTPClient) async throws -> Subscription {
-        // Never from the HTTP cache: the Worker lets a copy live ten minutes, and the app already asks at most that
-        // often, so a cached copy doubled the wait for a fixed script and made Refresh do nothing.
+    public static func fetch(http: HTTPClient, address: URL) async throws -> Subscription {
+        // Explicit diagnostic fetches should see current scripts rather than an HTTP-cached copy.
         let (data, finalURL) = try await http.get(address, headers: ["User-Agent": HTTPClient.subscriptionUserAgent], fresh: true)
         let document = try Subscription.parse(data, origin: finalURL)
         guard accepts(document) else { throw TVError.unsupported(L10n.text("Update the app to use the recommended sources.")) }
@@ -50,13 +52,10 @@ public enum CloudSources {
 }
 
 extension Subscription {
-    /// The subscription's sources and live playlists plus Yingxia's own (from `cloud`) and the drives in Cloud
-    /// Files; the app shows this, the document keeps only its own. Yingxia's live platforms come first.
-    public func withCloudSources(_ cloud: Subscription?) -> Subscription {
-        let own = cloud.map { cloud in cloud.sites.filter { site in !sites.contains { $0.key == site.key } } } ?? []
-        let extra = (own + CloudFilesSource.sites()).filter { site in !sites.contains { $0.key == site.key } }
-        let platforms = (cloud?.lives ?? []).filter { live in !lives.contains { $0.url == live.url } }
-        return Subscription(origin: origin, importedAt: importedAt, sites: sites + extra, lives: platforms + lives, raw: raw)
+    /// Adds only drives the viewer configured in Cloud Files.
+    public func withCloudFiles() -> Subscription {
+        let extra = CloudFilesSource.sites().filter { site in !sites.contains { $0.key == site.key } }
+        return Subscription(origin: origin, importedAt: importedAt, sites: sites + extra, lives: lives, raw: raw)
     }
 }
 

@@ -8,7 +8,7 @@ import TVCore
         library.resolver = { _ in
             guard target.hasPrefix("bili:") else { return Channel(name: "probe", url: URL(string: target)!) }
             let parts = target.split(separator: ":").map(String.init)
-            let client = CatalogClient(site: try await cloudSite(\.isBilibili), origin: CloudSources.address)
+            let client = CatalogClient(site: try await cloudSite(\.isBilibili), origin: try CloudSources.address)
             let video = try await client.detail(parts[1])
             let channel = try await client.playback(video.episodes[min(parts.count > 2 ? Int(parts[2]) ?? 0 : 0, video.episodes.count - 1)])
             print("resolved \(channel.url.absoluteString.prefix(100))")
@@ -107,13 +107,19 @@ import TVCore
         return String(format: "%d MB in %.1fs = %.2f MB/s", bytes >> 20, seconds, Double(bytes) / seconds / 1_048_576)
     }
     /// One of Yingxia's own sources, from its subscription (fetched once).
+    static func sourcesAddress() throws -> URL {
+        guard let text = ProcessInfo.processInfo.environment["SOURCES_URL"], let url = URL(string: text) else {
+            throw TVError.unsupported("Set SOURCES_URL to the subscription to test.")
+        }
+        return url
+    }
     static func cloudSite(_ matches: @Sendable (Site) -> Bool) async throws -> Site {
         // SOURCES_URL: another copy of the recommended sources' subscription (a local Worker), never cached.
         if CloudSources.current == nil, let address = ProcessInfo.processInfo.environment["SOURCES_URL"].flatMap(URL.init(string:)) {
             let (data, _) = try await URLSession.shared.data(for: URLRequest(url: address, cachePolicy: .reloadIgnoringLocalCacheData))
             CloudSources.current = try Subscription.parse(data, origin: address)
         }
-        if CloudSources.current == nil { CloudSources.current = try await CloudSources.fetch(http: HTTPClient()) }
+        if CloudSources.current == nil { CloudSources.current = try await CloudSources.fetch(http: HTTPClient(), address: Self.sourcesAddress()) }
         guard let site = CloudSources.site(where: matches) else { throw TVError.invalidConfiguration }
         return site
     }
@@ -164,7 +170,7 @@ import TVCore
         let args = CommandLine.arguments
         // Yingxia's own sources and live platforms come from its subscription.
         if args.count >= 2, args[1] == "--live" || args[1] == "--cloud-site" || args[1].hasPrefix("--bili") || args[1] == "--download" {
-            CloudSources.current = try await CloudSources.fetch(http: HTTPClient())
+            CloudSources.current = try await CloudSources.fetch(http: HTTPClient(), address: Self.sourcesAddress())
         }
         guard args.count >= 2 else {
             print("Usage: TVBoxProbe <jar path> [class descriptor] [static int method]")
@@ -420,7 +426,7 @@ import TVCore
             // --drama-check xifan|hema [keyword]: home, search, a detail and two seconds of its first episode.
             setvbuf(stdout, nil, _IONBF, 0)
             let site = try await cloudSite { $0.key == (args[2] == "hema" ? "builtin.hema" : "builtin.xifan") }
-            let client = CatalogClient(site: site, origin: CloudSources.address)
+            let client = CatalogClient(site: site, origin: try CloudSources.address)
             let home = try await client.home()
             print("home categories=\(home.categories.count) videos=\(home.videos.count) first=\(home.categories.prefix(3).map(\.name))")
             let search = try await client.list(category: nil, query: args.count > 3 ? args[3] : "总裁", page: 1)
@@ -448,7 +454,7 @@ import TVCore
                 // Never a cached copy: it would name the script of an earlier build.
                 let (data, _) = try await URLSession.shared.data(for: URLRequest(url: address, cachePolicy: .reloadIgnoringLocalCacheData))
                 CloudSources.current = try Subscription.parse(data, origin: address)
-            } else { CloudSources.current = try await CloudSources.fetch(http: HTTPClient()) }
+            } else { CloudSources.current = try await CloudSources.fetch(http: HTTPClient(), address: Self.sourcesAddress()) }
             guard let listing = CloudMusic.current else { print("the subscription lists no music channels"); return }
             print("channels: " + listing.channels.map { "\($0.id.rawValue)[\($0.platforms.map(\.rawValue).sorted().joined(separator: ","))]" }.joined(separator: " "))
             print("order: " + listing.routes.order.map { "\($0.provider.rawValue)·\($0.platform.rawValue)" }.joined(separator: " ") + " primaries=\(listing.routes.primaries)")
@@ -490,7 +496,7 @@ import TVCore
             // --site-play <site key> <series id> [episode number] isolates playback from catalog/search availability.
             // --site-check <site key> [series id] [episode number] also checks the catalog, search and rankings.
             setvbuf(stdout, nil, _IONBF, 0)
-            let client = CatalogClient(site: try await cloudSite { $0.key == key }, origin: CloudSources.address)
+            let client = CatalogClient(site: try await cloudSite { $0.key == key }, origin: try CloudSources.address)
             var defaultID: String?
             if args[1] == "--site-check" {
                 let home = try await client.home()
@@ -583,7 +589,7 @@ import TVCore
                 _ = withUnsafeMutablePointer(to: &info) { $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_POWER_INFO), $0, &count) } }
                 return (cpu, info.task_interrupt_wakeups + info.task_platform_idle_wakeups)
             }
-            let client = CatalogClient(site: try await cloudSite { $0.key == key }, origin: CloudSources.address)
+            let client = CatalogClient(site: try await cloudSite { $0.key == key }, origin: try CloudSources.address)
             let id: String
             if args.count > 4 { id = args[4] } else { guard let first = try await client.home().videos.first?.id else { throw TVError.emptyPlaylist }; id = first }
             let video = try await client.detail(id)
@@ -622,7 +628,7 @@ import TVCore
             // home's first video), details, the first episode's stream through AVPlayer for a few seconds.
             setvbuf(stdout, nil, _IONBF, 0)
             let site = try await cloudSite { $0.key == args[2] }
-            let client = CatalogClient(site: site, origin: CloudSources.address)
+            let client = CatalogClient(site: site, origin: try CloudSources.address)
             let home = try await client.home()
             print("home \(site.name) categories=\(home.categories.map(\.name).joined(separator: ",")) videos=\(home.videos.count)")
             var videos = home.videos
@@ -648,7 +654,7 @@ import TVCore
         if args[1] == "--bili-categories" {
             // --bili-categories [filter]: every category of the built-in Bilibili source with its first page's size.
             setvbuf(stdout, nil, _IONBF, 0)
-            let client = CatalogClient(site: try await cloudSite(\.isBilibili), origin: CloudSources.address)
+            let client = CatalogClient(site: try await cloudSite(\.isBilibili), origin: try CloudSources.address)
             let home = try await client.home()
             print("home categories=\(home.categories.count) videos=\(home.videos.count)")
             for category in home.categories where args.count < 3 || category.id.contains(args[2]) || category.name.contains(args[2]) {
@@ -665,7 +671,7 @@ import TVCore
             // --bili-play <BV id | season_N> [part index] [seconds]: the built-in Bilibili source end to end,
             // through its script port, playback resolution and AVPlayer.
             setvbuf(stdout, nil, _IONBF, 0)
-            let client = CatalogClient(site: try await cloudSite(\.isBilibili), origin: CloudSources.address)
+            let client = CatalogClient(site: try await cloudSite(\.isBilibili), origin: try CloudSources.address)
             let video = try await client.detail(args[2])
             let episode = video.episodes[min(args.count > 3 ? Int(args[3]) ?? 0 : 0, video.episodes.count - 1)]
             print("detail \(video.name) parts=\(video.episodes.count) playing=\(episode.name) \(episode.address)")
