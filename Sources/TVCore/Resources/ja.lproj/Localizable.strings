@@ -981,6 +981,7 @@
 "%@ hasn't prepared a version of this video that Apple devices can play." = "%@ はこのビデオの Apple デバイスで再生できる版をまだ用意していません。";
 "%@ says: %@" = "%@：%@";
 "%@ didn't accept the user name and password." = "%@ はこのユーザ名とパスワードを受け付けませんでした。";
+"%@ uses a certificate this device doesn't trust, for example a self-signed one. Use the server's http:// address, or give the server a trusted certificate." = "%@ の証明書はこのデバイスで信頼されていません（自己署名証明書など）。サーバの http:// アドレスを使うか、サーバに信頼された証明書を設定してください。";
 "Added the AList server %@. Browse it in Cloud Files." = "AList サーバ %@ を追加しました。クラウドファイルで閲覧できます。";
 "Added %lld AList servers. Browse them in Cloud Files." = "AList サーバを %lld 台追加しました。クラウドファイルで閲覧できます。";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "このアドレスは現在 AList サーバです。追加し直すとクラウドファイルで閲覧できます。";

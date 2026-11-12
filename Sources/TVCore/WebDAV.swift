@@ -25,10 +25,26 @@ public actor WebDAV {
         parts.percentEncodedPath = ""; parts.query = nil; parts.fragment = nil; parts.user = nil; parts.password = nil
         guard let address = parts.string else { return nil }
         let server = AListServer(name: host, address: address, root: root, username: username, password: password, kind: .webdav)
-        guard let status = try? await propfind(server, path: root, folder: true, depth: 0).0 else { return nil }
+        let status: Int
+        do {
+            status = try await propfind(server, path: root, folder: true, depth: 0).0
+        } catch {
+            // Nothing answered. A certificate the device doesn't trust (a NAS's or router's self-signed one, #864) has
+            // its own message: "no server answered" sent people looking for a wrong address.
+            let code = (error as? URLError)?.code
+            Diagnostics.shared.record(.warning, "files", "webdav probe failed scheme=\(parts.scheme ?? "-") code=\(code?.rawValue ?? 0)")
+            if let code, Self.certificateFailures.contains(code) {
+                throw TVError.unsupported(L10n.text("%@ uses a certificate this device doesn't trust, for example a self-signed one. Use the server's http:// address, or give the server a trusted certificate.", host))
+            }
+            return nil
+        }
         if status == 401 { throw refusal(server) }
         return status == 207 ? server : nil
     }
+
+    private static let certificateFailures: Set<URLError.Code> = [
+        .serverCertificateUntrusted, .serverCertificateHasUnknownRoot, .serverCertificateHasBadDate, .serverCertificateNotYetValid,
+    ]
 
     /// Checks a share before it is saved: its root lists with the account given.
     public func check(_ server: AListServer) async throws {
