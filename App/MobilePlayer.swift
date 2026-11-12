@@ -80,6 +80,11 @@ struct MobilePlayerView: View {
     @State private var locked = false
     @State private var showsLock = false
     @State private var lockTask: Task<Void, Never>?
+    /// The episode that Next, or the end of this one, asked for and its source couldn't give: said over the picture for
+    /// a moment. Only the options menu and the episode list said so, and the button seemed to do nothing (#865).
+    @State private var episodeFailure: EpisodeFailure?
+    @State private var episodeFailureTask: Task<Void, Never>?
+    @State private var askedEpisode = ""
 
     var body: some View {
         ZStack {
@@ -129,6 +134,7 @@ struct MobilePlayerView: View {
             skippedLabel
             swipeLabel
             levelLabel
+            episodeFailureLabel
             if let playingOn {
                 PlayOnPlaceholder(receiver: playingOn) {
                     self.playingOn = nil
@@ -168,6 +174,10 @@ struct MobilePlayerView: View {
         // Pausing ends the faster speed in the session; another episode or quality plays at the chosen one.
         .onChange(of: session.boost == nil) { _, ended in if ended { boost = nil } }
         .onChange(of: clock.item) { endBoost() }
+        .onChange(of: store.resolvingEpisode?.name) { _, name in
+            if let name { askedEpisode = name; showEpisodeFailure(nil) }
+        }
+        .onChange(of: store.episodeError) { _, reason in showEpisodeFailure(reason) }
         .sensoryFeedback(trigger: boost) { old, new in
             guard let new else { return nil }
             guard let old else { return .impact(weight: .light) }
@@ -327,6 +337,49 @@ struct MobilePlayerView: View {
             .accessibilityLabel(L10n.text(level.volume ? "Volume" : "Brightness"))
             .accessibilityValue(Text(level.value, format: .percent.precision(.fractionLength(0))))
             .accessibilityIdentifier("player.level")
+        }
+    }
+
+    private struct EpisodeFailure: Equatable {
+        var name: String
+        var reason: String
+    }
+
+    /// The episode list says it itself, and a player that stopped with an error shows that instead.
+    private func showEpisodeFailure(_ reason: String?) {
+        episodeFailureTask?.cancel()
+        guard let reason, !showsEpisodes, session.error == nil else {
+            if episodeFailure != nil { withAnimation(.easeOut(duration: 0.3)) { episodeFailure = nil } }
+            return
+        }
+        withAnimation(.easeOut(duration: 0.2)) { episodeFailure = EpisodeFailure(name: askedEpisode, reason: reason) }
+        episodeFailureTask = Task {
+            try? await Task.sleep(for: .seconds(6))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.3)) { episodeFailure = nil }
+        }
+    }
+
+    /// At the top, where the faster speed shows: below the top row when the controls are up.
+    @ViewBuilder private var episodeFailureLabel: some View {
+        if let episodeFailure {
+            VStack(spacing: 3) {
+                Label(L10n.text("Couldn't play %@", EpisodeRow.title(episodeFailure.name)), systemImage: "exclamationmark.triangle.fill")
+                    .font(.subheadline.weight(.semibold)).lineLimit(1)
+                Text(episodeFailure.reason).font(.caption).lineLimit(2).multilineTextAlignment(.center)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .environment(\.colorScheme, .dark)
+            .padding(.horizontal, 24)
+            .padding(.top, inline ? (chromeVisible ? 58 : 10) : chromeVisible ? 112 : 24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .animation(.easeOut(duration: 0.2), value: chromeVisible)
+            .allowsHitTesting(false)
+            .transition(.opacity)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("player.episodeFailure")
         }
     }
 
