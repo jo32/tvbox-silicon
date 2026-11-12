@@ -305,7 +305,7 @@ struct GlobalSearchView: View {
                 .focusSection()
                 #endif
                 if model.busy {
-                    SearchActivityList(origin: config.origin, completed: model.completed, total: model.total, runStart: model.runStart,
+                    SearchActivityList(origin: config.origin, sources: model.activeSources, completed: model.completed, total: model.total, runStart: model.runStart,
                                        showsSources: showsActivity)
                         .transition(.opacity)
                 }
@@ -646,21 +646,25 @@ struct GlobalSearchView: View {
         }
     }
 }
-/// What a running search is doing: overall progress, a time estimate, and one row per plugin
-/// source in flight. A first search can spend minutes building plugin components, and the
+/// What a running search is doing: overall progress, a time estimate, and one row per
+/// source in flight across every runtime and subscribed document. A first search can spend minutes building plugin components, and the
 /// summary count alone looks stuck.
 private struct SearchActivityList: View {
     let origin: URL
+    let sources: [SearchSourceActivity]
     let completed: Int
     let total: Int
     let runStart: (date: Date, completed: Int)?
     /// The progress bar always shows; the sources being searched fold behind the chevron.
     let showsSources: Bool
-    /// The on-device plugin worker runs at most this many searches at once.
+    /// Keep the original compact list of at most five in-flight sources.
     private let limit = 5
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.5)) { timeline in
-            let active = Array(PluginPreparation.active(origin: origin).prefix(limit))
+            let active = Array(sources.prefix(limit))
+            let snapshots = Dictionary(active.compactMap { item in
+                PluginPreparation.snapshot(site: item.site, origin: item.site.origin(or: origin)).map { (item.id, $0) }
+            }, uniquingKeysWith: { first, _ in first })
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 14) {
                     #if os(tvOS)
@@ -678,7 +682,7 @@ private struct SearchActivityList: View {
                             .foregroundStyle(.secondary).monospacedDigit().fixedSize()
                     }
                 }
-                if active.contains(where: { $0.snapshot.stage == .converting || $0.snapshot.converted > 0 }) {
+                if snapshots.values.contains(where: { $0.stage == .converting || $0.converted > 0 }) {
                     Label(L10n.text("Preparing plugins for first use. Later searches are much faster."), systemImage: "hourglass")
                         .foregroundStyle(.secondary)
                 }
@@ -686,10 +690,10 @@ private struct SearchActivityList: View {
                     Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
                         ForEach(active) { item in
                             GridRow {
-                                Text(item.name).fontWeight(.semibold).lineLimit(1)
-                                Text(status(item.snapshot)).foregroundStyle(.secondary).lineLimit(1)
+                                Text(item.site.name).fontWeight(.semibold).lineLimit(1)
+                                Text(snapshots[item.id].map(status) ?? L10n.text("Searching…")).foregroundStyle(.secondary).lineLimit(1)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                Text(Duration.seconds(max(0, Int(timeline.date.timeIntervalSince(item.snapshot.started))))
+                                Text(Duration.seconds(max(0, Int(timeline.date.timeIntervalSince(item.started))))
                                         .formatted(.time(pattern: .minuteSecond)))
                                     .monospacedDigit().foregroundStyle(.secondary)
                                     .gridColumnAlignment(.trailing)
