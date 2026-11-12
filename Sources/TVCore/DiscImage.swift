@@ -81,15 +81,17 @@ public enum DiscImage {
         return items
     }
 
-    /// The disc's longest playlist, its clips one after the other. Among playlists as long, the one with fewer
-    /// clips: a disc that hides its title among decoys repeats clips in them.
+    /// The disc's longest playlist, its clips one after the other. A playlist that plays a clip more than once is
+    /// passed over while another doesn't: a menu's background loops one clip, and a disc that hides its title among
+    /// decoys repeats clips in them, and either can run longer than the film (one film's disc played a
+    /// three-hour playlist of 183 clips, its menu, #883). Among playlists as long, the one with fewer clips.
     static func bluray(_ volume: UDFVolume) async throws -> DiscTitle? {
         guard let bdmv = try await volume.child(of: volume.root, named: "BDMV", directory: true),
               let playlists = try await volume.child(of: bdmv.icb, named: "PLAYLIST", directory: true),
               let streams = try await volume.child(of: bdmv.icb, named: "STREAM", directory: true) else { return nil }
         var clips: [String: UDFVolume.Entry] = [:]
         for entry in try await volume.list(streams.icb) where !entry.directory { clips[entry.name.uppercased()] = entry }
-        var best: (name: String, items: [PlayItem], duration: Int64)?
+        var best: (name: String, items: [PlayItem], duration: Int64, repeats: Bool)?
         for entry in try await volume.list(playlists.icb).sorted(by: { $0.name < $1.name })
         where !entry.directory && entry.name.uppercased().hasSuffix(".MPLS") {
             try Task.checkCancellation()
@@ -97,8 +99,12 @@ public enum DiscImage {
                   let items = playItems(try await volume.contents(node)), !items.isEmpty,
                   items.allSatisfy({ clips["\($0.clip).M2TS"] != nil && $0.end > $0.start }) else { continue }
             let duration = items.reduce(0) { $0 + $1.end - $1.start }
-            if let best, duration < best.duration || (duration == best.duration && items.count >= best.items.count) { continue }
-            best = (entry.name, items, duration)
+            let repeats = Set(items.map(\.clip)).count < items.count
+            if let best {
+                if repeats != best.repeats { if repeats { continue } }
+                else if duration < best.duration || (duration == best.duration && items.count >= best.items.count) { continue }
+            }
+            best = (entry.name, items, duration, repeats)
         }
         guard let best else { return nil }
         var parts: [DiscTitle.Part] = []
