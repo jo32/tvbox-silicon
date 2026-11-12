@@ -1143,11 +1143,16 @@ private struct NativePlayerView: UIViewControllerRepresentable {
 @MainActor final class PlaybackWindow: NSWindow {
     weak var session: PlaybackSession?
 
+    private var scroll = ScrollAxisLock()
+
     /// The wheel over the picture sets the volume, as in other players; AVKit's own handling scrubbed the video.
-    /// Over the episode list and other panels it still scrolls them.
+    /// A sideways swipe is still AVKit's, to scrub with (#874). Over the episode list and other panels it still
+    /// scrolls them.
     override func sendEvent(_ event: NSEvent) {
         if event.type == .scrollWheel, event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
-           let session, let hit = contentView?.hitTest(event.locationInWindow), Self.isPicture(hit) {
+           let session, let hit = contentView?.hitTest(event.locationInWindow), Self.isPicture(hit),
+           scroll.axis(dx: event.scrollingDeltaX, dy: event.scrollingDeltaY, starts: !event.phase.isDisjoint(with: [.began, .mayBegin]),
+                       tracked: !event.phase.isEmpty || !event.momentumPhase.isEmpty) == .vertical {
             let delta = event.scrollingDeltaY * (event.hasPreciseScrollingDeltas ? 0.003 : 0.02)
             if delta != 0 {
                 session.player.isMuted = false
