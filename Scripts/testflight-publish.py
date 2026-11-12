@@ -55,6 +55,10 @@ def builds(app, version):
         # Processing builds can be listed before Apple creates their beta details.
         detail = b.get("relationships", {}).get("buildBetaDetail", {}).get("data") or {}
         b["beta"] = details.get(detail.get("id"), {})
+        # Apple can omit relationship linkage even after the detail endpoint is ready.
+        if not b["beta"] and b["attributes"]["processingState"] == "VALID":
+            response = call(f"/builds/{b['id']}/buildBetaDetail", ok=(404,))
+            b["beta"] = (response.get("data") or {}).get("attributes", {})
     return res["data"]
 
 
