@@ -26,7 +26,7 @@ import TVCore
     /// The history entry being resumed; another entry, or leaving the page, replaces or cancels it.
     private(set) var resumingHistoryID: String?
     private var resumeTask: Task<Void, Never>?
-    /// Every enabled subscription merged in list order, plus the built-in sources.
+    /// Every enabled subscription merged in list order, plus configured cloud drives.
     var subscription: Subscription?
     /// The address being typed in to add a subscription.
     var subscriptionAddress: String
@@ -72,16 +72,10 @@ import TVCore
     /// The Mac sidebar folds away while the manga reader fills the window, and comes back when it closes.
     /// macOS 26 floats the sidebar over the page, so it covered the left part of every comic page.
     var hidesSidebar = false
-    /// Every build shows the recommended services (Music, Bilibili, Douyin) and
-    /// the plugin pages only once a subscription that works has been added: one that is on and whose
-    /// copy has sources or live playlists.
+    /// Unlock additional sections once an enabled subscription has sources or live playlists.
     var extrasUnlocked: Bool {
         subscriptions.contains { $0.enabled && documents[$0.address].map { !$0.sites.isEmpty || !$0.lives.isEmpty } == true }
     }
-    /// Yingxia's own sources (`CloudSources`), added beside the viewer's subscriptions once one works.
-    private(set) var cloudDocument: Subscription?
-    @ObservationIgnored private var cloudFetchedAt: Date?
-    @ObservationIgnored private var cloudFetch: Task<Void, Never>?
     /// Sections kept out of the tab bar and sidebar until then; Manga while no Venera comic source list
     /// is subscribed (one is added with Add Subscription, like any other).
     var hiddenSections: [AppSection] {
@@ -156,9 +150,6 @@ import TVCore
         }
         subscriptions = entries
         documents = copies
-        let cloud = (try? Data(contentsOf: Self.cloudFile)).flatMap { try? JSONDecoder().decode(Subscription.self, from: $0) }.flatMap { CloudSources.accepts($0) ? $0 : nil }
-        cloudDocument = cloud
-        CloudSources.current = cloud
         subscriptionAddress = ""
         if persistsChanges, let legacyAddress {
             if let legacy, copies[legacyAddress] != nil { try? Self.save(legacy, to: Self.file(for: entries[0])) }
@@ -261,7 +252,7 @@ import TVCore
     private func resolveDownload(_ item: DownloadItem) async throws -> Channel {
         let config = subscription
         guard let site = config?.sites.first(where: { $0.key == item.source.siteKey })
-                ?? cloudDocument?.sites.first(where: { $0.key == item.source.siteKey }) else {
+                ?? CloudSources.current?.sites.first(where: { $0.key == item.source.siteKey }) else {
             throw TVError.unsupported(L10n.text("%@ is no longer in your subscription, so caching can't continue.", item.source.siteName))
         }
         let base = CatalogClient(site: site, origin: config?.origin ?? URL(string: "https://example.invalid/")!, jarURL: config?.spiderURL)
@@ -298,7 +289,6 @@ import TVCore
         #endif
     }
     private static var legacyFile: URL { subscriptionDirectory.appending(path: "subscription.json") }
-    private static var cloudFile: URL { subscriptionDirectory.appending(path: "cloud-sources.json") }
     private static func file(for entry: SubscriptionEntry) -> URL {
         subscriptionDirectory.appending(path: "subscriptions").appending(path: entry.cacheName)
     }
@@ -384,7 +374,6 @@ import TVCore
         importing = true; importError = nil; notice = nil
         defer { importing = false }
         await fetch(subscriptions.filter(\.enabled))
-        refreshCloudSources(force: true)
         let failed = subscriptions.filter { $0.enabled && subscriptionErrors[$0.address] != nil && !ImportedFiles.isMissing($0.address) }.count
         if failed > 0 { notice = L10n.text("%lld subscriptions could not be refreshed; their last copies stay in use.", failed) }
     }
@@ -526,8 +515,10 @@ import TVCore
     /// Shows every enabled subscription that has a copy, merged in list order.
     private func rebuildSubscription(resetting: Bool = true) {
         if resetting { searchModel.reset(); recommendationModel.reset() }
-        subscription = Subscription.merge(subscriptions.filter(\.enabled).compactMap { documents[$0.address] })?.withCloudSources(extrasUnlocked ? cloudDocument : nil).withLivePlugins()
-        refreshCloudSources()
+        let enabled = subscriptions.filter(\.enabled).compactMap { documents[$0.address] }
+        // Only an explicitly enabled subscription may supply service metadata. Ignore the old automatic cache.
+        CloudSources.current = enabled.first(where: CloudSources.accepts)
+        subscription = Subscription.merge(enabled)?.withCloudFiles().withLivePlugins()
         if let subscription {
             Self.registerPlugins(subscription)
             hiddenSources.restoreBuiltIns(subscription.sites, origin: subscription.origin)
@@ -538,34 +529,6 @@ import TVCore
             let origin = subscription.origin, spider = subscription.spiderURL
             Task { await PluginConversionAhead.shared.schedule(sites: visible, origin: origin, spider: spider) }
             #endif
-        }
-    }
-    /// Fetches Yingxia's own subscription while a subscription works: at once when there is no copy, else
-    /// every ten minutes at most. A failed fetch keeps the last copy.
-    private func refreshCloudSources(force: Bool = false) {
-        guard extrasUnlocked, cloudFetch == nil else { return }
-        #if DEBUG
-        // `-qaNoCloudSources 1`: only the QA subscription's sources, for UI tests that count results.
-        if UserDefaults.standard.bool(forKey: "qaNoCloudSources") { return }
-        #endif
-        if !force, cloudDocument != nil, let fetched = cloudFetchedAt, Date.now.timeIntervalSince(fetched) < 600 { return }
-        let http = http, persists = persistsChanges
-        cloudFetch = Task { [weak self] in
-            let result: Result<Subscription, any Error>
-            do { result = .success(try await CloudSources.fetch(http: http)) } catch { result = .failure(error) }
-            guard let self else { return }
-            self.cloudFetch = nil
-            self.cloudFetchedAt = .now
-            switch result {
-            case .success(let document):
-                if persists, let data = try? JSONEncoder().encode(document) { try? Self.save(data, to: Self.cloudFile) }
-                CloudSources.current = document
-                let changed = (try? JSONEncoder().encode(document.raw)) != (try? JSONEncoder().encode(self.cloudDocument?.raw))
-                self.cloudDocument = document
-                if changed { self.rebuildSubscription() }
-            case .failure(let error):
-                Diagnostics.shared.failure("subscription", "built-in sources", error)
-            }
         }
     }
     private func refreshCloudFilesSources() {

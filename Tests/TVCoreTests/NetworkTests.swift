@@ -227,7 +227,7 @@ private actor SearchCollector {
 
 @Test @MainActor func searchDoesNotAskBuiltInsTheViewerHid() async throws {
     let base = URL(string: "https://example.com/config")!
-    let sub = try Subscription.parse(Data(#"{"sites":[{"key":"a","type":4,"api":"/api"}]}"#.utf8), origin: base).withCloudSources(nil)
+    let sub = try Subscription.parse(Data(#"{"sites":[{"key":"a","type":4,"api":"/api"}]}"#.utf8), origin: base).withCloudFiles()
     let model = SearchModel(http: client())
     model.search("movie", config: sub) { $0.isBuiltIn }
     // The search page shows a chip for each built-in it is still asking; hidden ones get none.

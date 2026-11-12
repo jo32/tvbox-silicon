@@ -3,7 +3,7 @@ import Testing
 @testable import TVCore
 
 struct DashStreamsTests {
-    @Test func cloudSourcesAreAddedOnceWithTheirLivePlatformsFirst() throws {
+    @Test func recommendedSourcesRequireAnExplicitSubscription() throws {
         let data = Data(#"{"spider":"./x.jar","sites":[{"key":"a","name":"A","type":1,"api":"https://example.com/api"}],"lives":[{"name":"TV","url":"https://example.com/tv.m3u"}]}"#.utf8)
         let subscription = try Subscription.parse(data, origin: URL(string: "https://example.com/sub.json")!)
         let cloud = try Subscription.parse(Data(#"""
@@ -13,16 +13,16 @@ struct DashStreamsTests {
                    {"key":"a","name":"Clash","type":3,"api":"https://s.example/v1/js/a.js","yingxia":{"builtin":true}}],
          "lives":[{"name":"Douyu Live","url":"douyu-live://rooms"}],
          "yingxiaLive":[{"id":"douyu","scheme":"douyu-live","api":"https://s.example/v1/js/live-douyu.1.js","name":"Douyu Live","tint":"#FF6B1A","glyph":"斗"}]}
-        """#.utf8), origin: CloudSources.address)
+        """#.utf8), origin: URL(string: "https://s.example/sub.json")!)
         #expect(CloudSources.accepts(cloud))
-        let shown = subscription.withCloudSources(cloud)
+        let shown = try #require(Subscription.merge([subscription, cloud]))
         // Drives signed in on this machine add their "My <drive>" sources too; they don't matter here.
         let keys = { (subscription: Subscription) in subscription.sites.map(\.key).filter { !$0.hasPrefix(CloudFilesSource.keyPrefix) } }
-        // The subscription's own source wins a clash; Yingxia's are added after it, once.
-        #expect(keys(shown) == ["a", "builtin.bilibili"])
-        #expect(keys(shown.withCloudSources(cloud)) == ["a", "builtin.bilibili"])
-        #expect(shown.lives.map(\.url.absoluteString) == ["douyu-live://rooms", "https://example.com/tv.m3u"])
-        #expect(keys(subscription.withCloudSources(nil)) == ["a"])
+        // Only explicit subscription merging adds the recommended source; clashes keep provenance.
+        #expect(keys(shown).prefix(2) == ["a", "builtin.bilibili"])
+        #expect(keys(try #require(Subscription.merge([shown, cloud]))) == keys(shown))
+        #expect(shown.lives.map(\.url.absoluteString) == ["https://example.com/tv.m3u", "douyu-live://rooms"])
+        #expect(keys(subscription.withCloudFiles()) == ["a"])
         let site = try #require(shown.sites.first { $0.key == "builtin.bilibili" })
         #expect(site.isBuiltIn && site.isBilibili && site.runsInProcess && site.account == "bilibili")
         let ext = try #require(try site.pluginExtension(origin: nil)?.object)
@@ -32,12 +32,18 @@ struct DashStreamsTests {
         let saved = CloudSources.current
         defer { CloudSources.current = saved }
         CloudSources.current = cloud
+        #expect(try CloudSources.address == cloud.origin)
         let douyu = try #require(LivePlatform(rawValue: "douyu"))
         #expect(LivePlatform(scheme: "douyu-live") == douyu && douyu.glyph == "斗" && douyu.searchable)
-        #expect(shown.lives.first?.platform == douyu && shown.lives.last?.platform == nil)
+        #expect(shown.lives.last?.platform == douyu && shown.lives.first?.platform == nil)
         #expect(LiveCatalog.room(URL(string: "douyu-live://room/9999")!)?.id == "9999" && !LiveCatalog.isRoom(URL(string: "huya-live://room/1")!))
+        // Disabling/removing the explicit subscription clears services instead of keeping an automatic copy.
+        CloudSources.current = nil
+        #expect(CloudSources.site(where: \.isBilibili) == nil)
+        #expect(CloudSources.platforms.isEmpty && CloudMusic.current == nil)
+        #expect(throws: TVError.self) { try CloudSources.address }
         // An app reads only the subscription versions it knows.
-        #expect(!CloudSources.accepts(try Subscription.parse(Data(#"{"yingxia":{"version":2},"sites":[{"key":"x","type":3,"api":"https://x/x.js"}]}"#.utf8), origin: CloudSources.address)))
+        #expect(!CloudSources.accepts(try Subscription.parse(Data(#"{"yingxia":{"version":2},"sites":[{"key":"x","type":3,"api":"https://x/x.js"}]}"#.utf8), origin: URL(string: "https://s.example/sub.json")!)))
     }
 
     @Test func biliProxyAddressesAndDanmakuFeedsNameTheirVideo() {

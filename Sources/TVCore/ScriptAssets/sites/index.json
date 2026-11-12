@@ -46,16 +46,6 @@
    "sites": "小虎少儿",
    "status": "OK"
   },
-  "Bili": {
-   "script": "https://yingxia-sources.getmegaportal.com/v1/js/bili.js",
-   "sites": "笔触琉璃, 少儿教育, 小学/初中/高中课堂, 笔璃合集/歌曲",
-   "status": "OK; the Bilibili script from Yingxia's own subscription (CloudSources), DASH playback"
-  },
-  "BiliGuard": {
-   "script": "https://yingxia-sources.getmegaportal.com/v1/js/bili.js",
-   "sites": "哔哔/课堂/MV (fty)",
-   "status": "OK"
-  },
   "BttwooGuard": {
    "script": "Bttwoo.js",
    "sites": "比特 (fty)",

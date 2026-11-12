@@ -60,6 +60,13 @@ xcodebuild -project TVBox.xcodeproj -scheme TVBox-macOS \
 open build/DerivedData-mac/Build/Products/Debug/TVBox-macOS.app
 ```
 
+Recommended service sources are ordinary opt-in subscriptions. The app bundles no default sources
+address, never fetches a recommended subscription automatically, and ignores the former
+`cloud-sources.json` cache. Enabling, disabling or removing the subscription also enables or clears
+its music channels, live platforms and source sign-ins. Relative scripts resolve against that
+subscription's own address. CLI probes require an explicit `SOURCES_URL` (or the music-channel
+command's subscription argument).
+
 ## Features
 
 - Import TVBox JSON subscriptions by URL, with a default URL prefilled. Several subscriptions merge into one source list (`SubscriptionMerge`); each source keeps its origin, and failing sources cool down and search last (`SourceHealth`).
