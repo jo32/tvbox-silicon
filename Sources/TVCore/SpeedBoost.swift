@@ -84,3 +84,38 @@ extension SpeedBoost {
         }
     }
 }
+
+/// The right arrow key on the Mac: a tap skips ahead, and held past `delay` it plays faster until it is let go, as
+/// in Bilibili (issue #871). It follows the key itself and not the key repeat, which can be slow or switched off.
+public struct KeyHold: Equatable, Sendable {
+    /// Seconds a key stays down before it counts as held.
+    public static let delay = 0.35
+    public enum Release: Equatable, Sendable {
+        /// Let go before `delay`, after it, or without its press having been seen.
+        case tap, held, stray
+    }
+    public private(set) var isDown = false
+    private var isHeld = false
+
+    public init() {}
+
+    /// A key-down event. True for the press itself, which starts the wait; the repeats that follow change nothing,
+    /// and neither do those of a key that was already down before its events came here.
+    public mutating func press(repeated: Bool) -> Bool {
+        guard !isDown, !repeated else { return false }
+        isDown = true; isHeld = false
+        return true
+    }
+
+    /// `delay` after the press. True when the key is still down, so the hold begins.
+    public mutating func wait() -> Bool {
+        guard isDown, !isHeld else { return false }
+        isHeld = true
+        return true
+    }
+
+    public mutating func release() -> Release {
+        defer { isDown = false; isHeld = false }
+        return isHeld ? .held : isDown ? .tap : .stray
+    }
+}

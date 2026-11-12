@@ -101,3 +101,27 @@ import Testing
     #expect(SpeedBoost.Throttle(wanted: 2, after: throttle).rate == 2)
     #expect(SpeedBoost.Throttle(wanted: 3, after: SpeedBoost.Throttle(wanted: 4)).rate == 3)
 }
+
+@Test func aTappedKeySkipsAndAHeldOnePlaysFaster() {
+    var key = KeyHold()
+    // A tap: let go before the wait is over.
+    let pressed = key.press(repeated: false)
+    #expect(pressed && key.isDown)
+    let tapped = key.release()
+    #expect(tapped == .tap && !key.isDown)
+    // The wait of a press that is over starts nothing.
+    let late = key.wait()
+    #expect(!late)
+    // A hold: the key repeat changes nothing, and it ends as a hold, not as a skip.
+    let again = key.press(repeated: false), repeated = key.press(repeated: true), began = key.wait()
+    #expect(again && !repeated && began)
+    let repeatedHeld = key.press(repeated: true), beganTwice = key.wait()
+    #expect(!repeatedHeld && !beganTwice)
+    let held = key.release()
+    #expect(held == .held)
+    // A key that was down before its events came here (another window had them) does nothing.
+    let stale = key.press(repeated: true)
+    #expect(!stale && !key.isDown)
+    let stray = key.release()
+    #expect(stray == .stray)
+}
