@@ -54,6 +54,27 @@ struct DiscImageTests {
         #expect(inside == whole.subdata(in: clip.count + 1_000..<clip.count + 1_500))
     }
 
+    /// A menu's background loops one clip for hours, longer than the film (#883): the film plays, not the loop.
+    /// A disc whose every playlist repeats a clip still plays its longest.
+    @Test func bluRayPassesOverAPlaylistThatRepeatsAClip() async throws {
+        let clip = try DiscFixtures.clip()
+        let times = DiscFixtures.timestamps(clip)
+        let start = try #require(times.min()) / 2, end = (try #require(times.max()) + 3_600) / 2
+        let film = DiscFixtures.playlist([.init(clip: "00001", start: start, end: end), .init(clip: "00002", start: start, end: end)])
+        let menu = DiscFixtures.playlist(Array(repeating: .init(clip: "00003", start: start, end: end), count: 6))
+        let shortLoop = DiscFixtures.playlist(Array(repeating: .init(clip: "00003", start: start, end: end), count: 3))
+        func summary(_ playlists: [String: Data]) async throws -> String {
+            let files = playlists.sorted { $0.key < $1.key }.map { UDFImageBuilder.File(path: "BDMV/PLAYLIST/\($0.key).mpls", data: $0.value) }
+                + ["00001", "00002", "00003"].map { UDFImageBuilder.File(path: "BDMV/STREAM/\($0).m2ts", data: clip) }
+            let image = UDFImageBuilder(metadata: true, files: [.init(path: "BDMV/index.bdmv", data: Data("INDX0200".utf8))] + files).build()
+            return try #require(try await DiscImage.title(MemorySource(image)) as? DiscTitle).summary
+        }
+        // Whichever comes first in the folder.
+        #expect(try await summary(["00020": menu, "00800": film]).contains("00800.mpls clips=2"))
+        #expect(try await summary(["00001": film, "00020": menu]).contains("00001.mpls clips=2"))
+        #expect(try await summary(["00020": menu, "00021": shortLoop]).contains("00020.mpls clips=6"))
+    }
+
     @Test func dvdPlaysItsLargestTitleSet() async throws {
         let parts = (1...3).map { index in Data((0..<5_000 + index).map { UInt8(truncatingIfNeeded: $0 * index) }) }
         let image = UDFImageBuilder(metadata: false, files: [
