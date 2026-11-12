@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.19",
+          "buildVersion": "57",
+          "date": "2026-11-13",
+          "localizedDescription": "• 推荐源由你选择\n• 搜索进度列表恢复显示\n• 长文件名选集更清楚\n• 连续播放更稳定\n• 其他修复\n\n• Recommended sources are your choice\n• Search progress is visible again\n• Tell video files apart\n• Smoother playback between episodes\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.19/Yingxia-1.8.19-ios.ipa",
+          "size": 128610491,
+          "sha256": "039d51da984ec9e5c68ec68f6aa6516d827b82e61be1ccb74cda3a31ee38c486",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.18",
           "buildVersion": "56",
           "date": "2026-11-12",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.15/Yingxia-1.8.15-ios.ipa",
           "size": 127927291,
           "sha256": "547065673f43e092a95c787069582157acf48a1d1d0a0edbb14e82eaad316bbd",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.14",
-          "buildVersion": "52",
-          "date": "2026-11-08",
-          "localizedDescription": "• 全新哔哩哔哩\n• 字幕文件和在线字幕\n• iPhone 播放器与视频页\n• 下载页全新设计\n• 发现、选集及其他\n• 其他修复\n\n• Bilibili, rebuilt\n• Subtitle files and online subtitles\n• iPhone player and video page\n• Downloads, redesigned\n• Discover, episodes and more\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.14/Yingxia-1.8.14-ios.ipa",
-          "size": 126603435,
-          "sha256": "d4302575a567fa0afe2886e0f03dc8ba45f89584329045e558ba378133e62604",
           "minOSVersion": "17.0"
         }
       ],
