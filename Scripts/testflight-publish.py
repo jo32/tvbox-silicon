@@ -52,7 +52,9 @@ def builds(app, version):
     res = call(f"/builds?filter[app]={app}&filter[preReleaseVersion.version]={version}&sort=-uploadedDate&limit=50&include=buildBetaDetail")
     details = {i["id"]: i["attributes"] for i in res.get("included", []) if i["type"] == "buildBetaDetails"}
     for b in res["data"]:
-        b["beta"] = details.get(b["relationships"]["buildBetaDetail"]["data"]["id"], {})
+        # Processing builds can be listed before Apple creates their beta details.
+        detail = b.get("relationships", {}).get("buildBetaDetail", {}).get("data") or {}
+        b["beta"] = details.get(detail.get("id"), {})
     return res["data"]
 
 
