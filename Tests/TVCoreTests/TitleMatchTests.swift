@@ -1,3 +1,4 @@
+import Observation
 import Testing
 @testable import TVCore
 
@@ -44,4 +45,20 @@ import Testing
     // A search by an actor's name matches no title: nothing to lead with, so the page shows them all.
     #expect(TitleMatch.split(titles, keyword: "大泽隆夫", title: { $0 }).matching.isEmpty)
     #expect(TitleMatch.split(titles, keyword: " ", title: { $0 }).other.isEmpty)
+}
+
+@Test func aSplitListMatchesAsEachTitleWould() {
+    let titles = ["庆余年", "慶餘年 第二季", "庆 余 年 番外", "完全不同", "庆余"]
+    let parts = TitleMatch.split(titles, keyword: "庆余年第二季", title: { $0 })
+    #expect(parts.matching == titles.filter { TitleMatch.matches(title: $0, keyword: "庆余年第二季") })
+    #expect(parts.matching == ["庆余年", "慶餘年 第二季", "庆 余 年 番外"] && parts.other == ["完全不同", "庆余"])
+}
+
+/// SwiftUI writes the search page's scroll position on every row scrolled past; nothing may redraw for it (#910).
+@MainActor @Test func scrollingTheSearchResultsRedrawsNothing() {
+    final class Flag: @unchecked Sendable { var raised = false }
+    let model = SearchModel(), changed = Flag()
+    withObservationTracking { _ = model.scrollID } onChange: { changed.raised = true }
+    model.scrollID = "row"
+    #expect(!changed.raised && model.scrollID == "row")
 }
