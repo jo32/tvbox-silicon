@@ -7,6 +7,8 @@ import TVCore
     struct Chapter: Identifiable {
         let index: Int
         let pages: [String]
+        /// Read a while ago: its rows stay in the column, as tall as they were, without their pictures.
+        var released = false
         var id: Int { index }
     }
     struct Position: Hashable { var chapter: Int; var page: Int }
@@ -23,6 +25,7 @@ import TVCore
     /// Page shapes (width / height) once known, so the column doesn't jump as pages load.
     var aspects: [String: CGFloat] = [:]
     private var saved = Date.distantPast
+    private var released = Date.distantPast
 
     init(_ reading: MangaReading) {
         comic = reading.comic
@@ -59,9 +62,28 @@ import TVCore
         defer { loadingNext = false }
         if let pages = try? await fetch(last.index + 1) {
             loaded.append(Chapter(index: last.index + 1, pages: pages))
-            // Long reads keep a few chapters, not every image of the comic.
-            if loaded.count > 3, loaded.first!.index < position.chapter { loaded.removeFirst() }
+            release()
         }
+    }
+
+    /// Long reads keep the pictures of a few chapters, not of the whole comic: the chapter being read and the two
+    /// before it. Older chapters keep their rows, each as tall as its page was, so nothing below them moves. Taking
+    /// a chapter out of the column instead moved every later page up by its height, and the reader, near the end of
+    /// a chapter, was suddenly a chapter or more ahead (#879).
+    private func release() {
+        for at in loaded.indices {
+            let old = loaded[at].index < position.chapter - 2
+            guard loaded[at].released != old else { continue }
+            loaded[at].released = old
+            if old { released = Date() }
+        }
+    }
+
+    /// A released chapter scrolled back into view takes its pictures back. Not right after a release: a row swapped
+    /// for its placeholder out of sight may report appearing.
+    func restore(_ chapter: Int) {
+        guard Date().timeIntervalSince(released) > 1, let at = loaded.firstIndex(where: { $0.index == chapter && $0.released }) else { return }
+        loaded[at].released = false
     }
 
     private func fetch(_ chapter: Int) async throws -> [String] {
@@ -70,7 +92,9 @@ import TVCore
 
     func seen(_ position: Position) {
         guard position != self.position else { return }
+        let turned = position.chapter != self.position.chapter
         self.position = position
+        if turned { release() }
         save(force: false)
         prefetch()
     }
@@ -234,6 +258,15 @@ struct MangaPageImage: View {
     }
 }
 
+/// Where a page was, as tall as the page, without its picture.
+private struct MangaPagePlace: View {
+    let model: MangaReaderModel
+    let url: String
+    var body: some View {
+        Color.clear.aspectRatio(model.aspects[url] ?? 0.7, contentMode: .fit).frame(maxWidth: .infinity)
+    }
+}
+
 // MARK: - Vertical
 
 /// Pages one under another, read on into the next chapter; pinch or double-tap to zoom.
@@ -291,12 +324,19 @@ struct MangaVerticalReader: View {
                     }
                     ForEach(model.loaded) { chapter in
                         ForEach(Array(chapter.pages.enumerated()), id: \.offset) { index, url in
-                            MangaPageImage(model: model, chapter: chapter.index, index: index, url: url, pixelWidth: min(size.width * scale * 1.5, 2400))
-                                .id(MangaReaderModel.Position(chapter: chapter.index, page: index))
-                                .onAppear { model.seen(.init(chapter: chapter.index, page: index)) }
-                                #if os(tvOS)
-                                .focusable()
-                                #endif
+                            if chapter.released {
+                                // The page's place, exactly as tall as the page was (see `MangaReaderModel.release`).
+                                MangaPagePlace(model: model, url: url)
+                                    .id(MangaReaderModel.Position(chapter: chapter.index, page: index))
+                                    .onAppear { model.restore(chapter.index) }
+                            } else {
+                                MangaPageImage(model: model, chapter: chapter.index, index: index, url: url, pixelWidth: min(size.width * scale * 1.5, 2400))
+                                    .id(MangaReaderModel.Position(chapter: chapter.index, page: index))
+                                    .onAppear { model.seen(.init(chapter: chapter.index, page: index)) }
+                                    #if os(tvOS)
+                                    .focusable()
+                                    #endif
+                            }
                         }
                         MangaChapterEnd(model: model, chapter: chapter.index)
                     }
