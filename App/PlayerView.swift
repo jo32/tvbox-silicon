@@ -1146,12 +1146,22 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     weak var session: PlaybackSession?
 
     private var scroll = ScrollAxisLock()
+    /// The second click of a double-click went to full screen: its mouse-up is not passed on either.
+    private var takesMouseUp = false
 
     /// The wheel over the picture sets the volume, as in other players; AVKit's own handling scrubbed the video.
     /// A sideways swipe is still AVKit's, to scrub with (#874). Over the episode list and other panels it still
     /// scrolls them.
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyUp, event.keyCode == 124, arrow.isDown { arrowReleased(skips: true) }
+        // A double-click on the picture goes full screen and back, as in QuickTime Player and IINA (#838). Only the second
+        // click is taken, down and up, so a single click still shows or hides AVKit's controls at once, as before.
+        if event.type == .leftMouseUp, takesMouseUp { takesMouseUp = false; return }
+        if event.type == .leftMouseDown {
+            takesMouseUp = event.clickCount == 2 && event.modifierFlags.intersection([.command, .control, .option]).isEmpty
+                && contentView?.hitTest(event.locationInWindow).map(Self.isBarePicture) == true
+            if takesMouseUp { toggleFullScreen(nil); return }
+        }
         if event.type == .scrollWheel, event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
            let session, let hit = contentView?.hitTest(event.locationInWindow), Self.isPicture(hit),
            scroll.axis(dx: event.scrollingDeltaX, dy: event.scrollingDeltaY, starts: !event.phase.isDisjoint(with: [.began, .mayBegin]),
@@ -1200,6 +1210,18 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     private static func isPicture(_ view: NSView) -> Bool {
         var current: NSView? = view
         while let v = current { if v is AVPlayerView { return true }; current = v.superview }
+        return false
+    }
+
+    /// The picture and not AVKit's floating controls over it: their buttons and sliders are controls, on glass platters.
+    private static func isBarePicture(_ view: NSView) -> Bool {
+        var current: NSView? = view
+        while let v = current {
+            if v is AVPlayerView { return true }
+            if v is NSControl || v is NSVisualEffectView { return false }
+            if #available(macOS 26, *), v is NSGlassEffectView { return false }
+            current = v.superview
+        }
         return false
     }
 
