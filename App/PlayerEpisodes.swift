@@ -142,12 +142,16 @@ struct PlayerEpisodesSheet: View {
         let stills = tmdb.episodes(items)
         let showsStills = !tmdb.episodeTiles(items).isEmpty
         let titles = Dictionary(items.map { ($0.id, labels[$0.id] ?? EpisodeRow.title($0.name)) }, uniquingKeysWith: { first, _ in first })
-        // 第1集, 01, 4K国语: small tiles. File names and long titles: two-line cards.
+        // 第1集, 01, 4K国语: small tiles. Longer titles: two-line cards. File names a card would cut short: a row
+        // each, the whole name, because what tells two files of a film apart (HDR, the audio, the subtitles) is at the
+        // end of the name, where a card's … was (#897).
         let short = (titles.values.map(\.count).max() ?? 0) <= 6
+        let rows = !showsStills && !short && titles.contains { Self.overflowsCard($0.value, withDetail: details[$0.key] != nil) }
         let minimum: CGFloat = showsStills ? Self.stillTile : short ? Self.shortTile : Self.longTile
         let shown = reversesEpisodes ? items.reversed() : items
-        return LazyVGrid(columns: [GridItem(.adaptive(minimum: minimum), spacing: showsStills ? 12 : 8, alignment: .top)],
-                         spacing: showsStills ? 14 : 8) {
+        let columns = rows ? [GridItem(.flexible(), alignment: .top)]
+            : [GridItem(.adaptive(minimum: minimum), spacing: showsStills ? 12 : 8, alignment: .top)]
+        return LazyVGrid(columns: columns, spacing: showsStills ? 14 : 8) {
             ForEach(shown) { episode in
                 let title = titles[episode.id] ?? episode.name
                 let isCurrent = episode.id == current
@@ -162,7 +166,7 @@ struct PlayerEpisodesSheet: View {
                         TMDBEpisodeTile(name: title, info: stills[episode.id], detail: details[episode.id], current: isCurrent, loading: loading, width: nil,
                                         backdrops: tmdb.episodeBackdrops)
                     } else {
-                        EpisodeCell(title: title, detail: details[episode.id], current: isCurrent, loading: loading, compact: short)
+                        EpisodeCell(title: title, detail: details[episode.id], current: isCurrent, loading: loading, compact: short, whole: rows)
                     }
                 }
                 .buttonStyle(.plain)
@@ -180,6 +184,12 @@ struct PlayerEpisodesSheet: View {
     #else
     private static let stillTile: CGFloat = 160, shortTile: CGFloat = 76, longTile: CGFloat = 220
     #endif
+
+    /// Whether a card at its narrowest shows less than the whole title: one line above the file's detail, two without
+    /// it. A card's line holds about 26 Latin letters or digits, or 13 Chinese characters.
+    static func overflowsCard(_ title: String, withDetail: Bool) -> Bool {
+        title.unicodeScalars.reduce(0) { $0 + ($1.isASCII ? 1 : 2) } > (withDetail ? 26 : 52)
+    }
 
     /// TMDB's details as the video's page has them: the answer this device kept, else the same lookup the page runs.
     private func lookUp() async {
@@ -202,19 +212,29 @@ private struct EpisodeCell: View {
     let current: Bool
     let loading: Bool
     let compact: Bool
+    /// A row of its own with the whole name, however many lines that takes (within reason), for file names.
+    var whole = false
+    /// A file name that wraps where its parts end. Left alone, Movie.2025.2160p.WEB-DL.H265 is one word that breaks
+    /// only at its hyphen, leaving most of a line empty: a line may end after a dot or an underscore, and not at a hyphen.
+    static func breakable(_ name: String) -> String {
+        name.replacingOccurrences(of: ".", with: ".\u{200B}").replacingOccurrences(of: "_", with: "_\u{200B}")
+            .replacingOccurrences(of: "-", with: "\u{2011}")
+    }
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
         HStack(spacing: 6) {
             if loading { ProgressView().appControlSize(.small) }
-            VStack(alignment: compact ? .center : .leading, spacing: 1) {
-                Text(title).lineLimit(compact || detail != nil ? 1 : 2).multilineTextAlignment(compact ? .center : .leading)
+            VStack(alignment: compact ? .center : .leading, spacing: whole ? 3 : 1) {
+                Text(whole ? Self.breakable(title) : title).lineLimit(whole ? 4 : compact || detail != nil ? 1 : 2)
+                    .multilineTextAlignment(compact ? .center : .leading)
+                    .fixedSize(horizontal: false, vertical: whole)
                 if let detail { EpisodeFileDetail(text: detail) }
             }
         }
         .font(.subheadline.weight(current ? .semibold : .regular))
         .foregroundStyle(current ? Brand.onAccent : Color.primary)
         .tint(current ? Brand.onAccent : nil)
-        .padding(.horizontal, compact ? 8 : 12)
+        .padding(.horizontal, compact ? 8 : 12).padding(.vertical, whole ? 10 : 0)
         .frame(maxWidth: .infinity, minHeight: compact ? 44 : 54, alignment: compact ? .center : .leading)
         .glassOrFill(current ? GlassStyle.regular.tint(Brand.accent).interactive() : .regular.interactive(),
                      current ? Brand.accent : Color.primary.opacity(0.06), in: shape)
