@@ -162,7 +162,7 @@ struct PlaybackView: View {
             if !Task.isCancelled { toggleFullScreen() }
         }
         #endif
-        .onChange(of: channel) { _, channel in startCatalogPlayback(session, channel: channel, store: store); showOnStart() }
+        .onChange(of: channel) { _, channel in startCatalogPlayback(session, channel: channel, store: store); showOnStart(opening: false) }
         #if os(iOS)
         .onChange(of: session.showsPicture || session.error != nil, initial: true) { _, started in watch?.started(started) }
         .onAppear { watch?.opened(session) }
@@ -335,15 +335,17 @@ struct PlaybackView: View {
         scheduleHide()
     }
 
-    /// A channel starting shows the controls for a moment, except at the top of a watch page, which plays by itself.
-    private func showOnStart() {
+    /// Opening the player shows the controls for a moment, except at the top of a watch page, which plays by itself.
+    /// Another episode taking over the open player (auto-play at the end of one, Next) leaves them as they were: still
+    /// up for a viewer who just used them, and not over the picture each time an episode ends by itself (#875).
+    private func showOnStart(opening: Bool = true) {
         #if os(iOS)
         if playerLayout == .inline, !UserDefaults.standard.bool(forKey: "qaPlayerControls") {
             hideTask?.cancel(); quietStart = true; showsChrome = false
             return
         }
         #endif
-        poke()
+        if opening { poke() }
     }
 
     private func scheduleHide() {
@@ -403,7 +405,7 @@ struct PlaybackView: View {
     #endif
     #else
     private func poke() {}
-    private func showOnStart() {}
+    private func showOnStart(opening: Bool = true) {}
     #endif
 
     @ViewBuilder private var status: some View {
