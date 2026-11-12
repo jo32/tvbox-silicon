@@ -15,14 +15,14 @@ export function SoonPill({ small = false }: { small?: boolean }) {
 }
 
 /** The current Mac release on download.getmegaportal.com (R2 bucket megaportal-downloads): Apple silicon, and Intel. */
-export const MAC_DOWNLOAD = "https://download.getmegaportal.com/yingxia/1.8.18/Yingxia-1.8.18-macos-arm64.dmg";
-export const MAC_INTEL_DOWNLOAD = "https://download.getmegaportal.com/yingxia/1.8.18/Yingxia-1.8.18-macos-x86_64.dmg";
+export const MAC_DOWNLOAD = "https://download.getmegaportal.com/yingxia/1.8.19/Yingxia-1.8.19-macos-arm64.dmg";
+export const MAC_INTEL_DOWNLOAD = "https://download.getmegaportal.com/yingxia/1.8.19/Yingxia-1.8.19-macos-x86_64.dmg";
 
 /** iPhone/iPad and Apple TV IPAs for sideloading, next to the Mac release. */
 export const DOWNLOADS = {
   mac: MAC_DOWNLOAD,
-  ios: "https://download.getmegaportal.com/yingxia/1.8.18/Yingxia-1.8.18-ios.ipa",
-  tv: "https://download.getmegaportal.com/yingxia/1.8.18/Yingxia-1.8.18-tvos.ipa",
+  ios: "https://download.getmegaportal.com/yingxia/1.8.19/Yingxia-1.8.19-ios.ipa",
+  tv: "https://download.getmegaportal.com/yingxia/1.8.19/Yingxia-1.8.19-tvos.ipa",
 } as const;
 
 /** Public TestFlight invites (external testing), the recommended install for iPhone, iPad and Apple TV.

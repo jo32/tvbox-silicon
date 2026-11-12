@@ -1,6 +1,112 @@
 {
   "releases": [
     {
+      "version": "1.8.19",
+      "build": 57,
+      "date": "2026-11-13",
+      "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.19/Yingxia-1.8.19-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.19/Yingxia-1.8.19-macos-x86_64.dmg",
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "checkmark.circle",
+          "title": {
+            "en": "Recommended sources are your choice",
+            "zh-Hans": "推荐源由你选择",
+            "zh-Hant": "推薦來源由你選擇",
+            "ja": "おすすめソースは自分で選択"
+          },
+          "detail": {
+            "en": "Recommended sources are no longer added automatically when you add another subscription. Add and enable their subscription to use them; old automatic copies are ignored.",
+            "zh-Hans": "添加其他订阅时，不再自动加入推荐源。只有主动添加并启用推荐源的订阅才会显示，旧的自动缓存也不再使用。",
+            "zh-Hant": "加入其他訂閱時，不再自動加入推薦來源。只有主動加入並啟用推薦來源的訂閱才會顯示，舊的自動快取也不再使用。",
+            "ja": "別の購読を追加しても、おすすめソースは自動追加されません。利用するにはその購読を追加して有効にしてください。以前の自動キャッシュも使用しません。"
+          }
+        },
+        {
+          "symbol": "magnifyingglass",
+          "title": {
+            "en": "Search progress is visible again",
+            "zh-Hans": "搜索进度列表恢复显示",
+            "zh-Hant": "搜尋進度列表恢復顯示",
+            "ja": "検索の進行状況を再び表示"
+          },
+          "detail": {
+            "en": "Expand the details beside Stop to see up to five sources being searched, their status and elapsed time. It now covers sources from different subscriptions and every search runtime.",
+            "zh-Hans": "展开“停止”旁的详情，可查看最多五个正在搜索的源、当前状态和耗时。来自不同订阅及不同运行方式的片源都能显示。",
+            "zh-Hant": "展開「停止」旁的詳細資訊，可查看最多五個正在搜尋的來源、目前狀態和耗時。來自不同訂閱及不同執行方式的來源都能顯示。",
+            "ja": "「停止」の横の詳細を開くと、検索中のソースを最大5件、状態と経過時間とともに表示します。異なる購読や実行方式にも対応しました。"
+          }
+        },
+        {
+          "symbol": "list.bullet",
+          "title": {
+            "en": "Tell video files apart",
+            "zh-Hans": "长文件名选集更清楚",
+            "zh-Hant": "長檔名選集更清楚",
+            "ja": "長いファイル名で動画を区別"
+          },
+          "detail": {
+            "en": "Long episode file names get a row of their own so HDR, audio and subtitle information at the end is easier to read. Short episode labels keep their compact tiles.",
+            "zh-Hans": "较长的剧集文件名改为单独一行，方便辨认末尾的 HDR、音轨和字幕信息。简短集数仍保留紧凑的方块。",
+            "zh-Hant": "較長的集數檔名改為單獨一列，方便辨認末尾的 HDR、音軌和字幕資訊。簡短集數仍保留緊湊的方塊。",
+            "ja": "長いエピソードのファイル名を1行ずつ表示し、末尾のHDR・音声・字幕情報を読みやすくしました。短い話数はコンパクトなタイルのままです。"
+          }
+        },
+        {
+          "symbol": "play.circle",
+          "title": {
+            "en": "Smoother playback between episodes",
+            "zh-Hans": "连续播放更稳定",
+            "zh-Hant": "連續播放更穩定",
+            "ja": "エピソードを続けて快適に再生"
+          },
+          "detail": {
+            "en": "Smooth Motion remembers a picture size that was too slow for this device, so later episodes do not repeat the same stuttering attempts. Blu-ray images prefer the film over a repeated menu loop. Untrusted WebDAV certificates get a clear error.",
+            "zh-Hans": "平滑运动会记住设备处理过慢的视频尺寸，后续剧集不再反复尝试并卡顿。蓝光镜像优先播放正片，避免菜单背景循环。WebDAV 证书不受信任时会明确提示。",
+            "zh-Hant": "平滑運動會記住裝置處理過慢的影片尺寸，後續集數不再反覆嘗試並卡頓。藍光映像優先播放正片，避免選單背景循環。WebDAV 憑證不受信任時會明確提示。",
+            "ja": "スムーズモーションは端末に負荷が高すぎた映像サイズを記憶し、次の話で同じ試行によるカクつきを繰り返しません。Blu-rayイメージはループするメニューより本編を優先し、WebDAVの証明書エラーも明確に表示します。"
+          }
+        },
+        {
+          "symbol": "keyboard",
+          "title": {
+            "en": "Mac player and browsing fixes",
+            "zh-Hans": "Mac 播放与浏览修复",
+            "zh-Hant": "Mac 播放與瀏覽修正",
+            "ja": "Macの再生と閲覧を改善"
+          },
+          "detail": {
+            "en": "Hold the right arrow to play faster; sideways trackpad swipes seek again. Danmaku defaults to one row, with a setting for more. Bilibili related-video and comment rows support arrows and dragging.",
+            "zh-Hans": "长按右方向键可加速播放，触控板横向滑动恢复快进快退。弹幕默认一行，也可在设置中增加。Bilibili 相关视频和评论行支持箭头与拖动。",
+            "zh-Hant": "長按右方向鍵可加速播放，觸控板橫向滑動恢復快轉倒轉。彈幕預設一列，也可在設定中增加。Bilibili 相關影片和留言列支援箭頭與拖曳。",
+            "ja": "右矢印の長押しで倍速再生し、トラックパッドの横スワイプでシークできます。弾幕は標準で1行となり、設定で増やせます。Bilibiliの関連動画とコメントは矢印とドラッグに対応しました。"
+          },
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "The iPhone and iPad player explains when the next episode fails to load. On iOS 26 and later, Now Playing loses its light bottom edge and Live loses a stray search icon. Vertical comic reading no longer jumps ahead a chapter.",
+            "zh-Hans": "iPhone 和 iPad 的下一集加载失败时会给出提示。iOS 26 及以上的音乐播放页不再出现底部浅边，直播页不再残留搜索图标。漫画竖向阅读不再意外跳过章节。",
+            "zh-Hant": "iPhone 和 iPad 的下一集載入失敗時會給出提示。iOS 26 及以上的音樂播放頁不再出現底部淺邊，直播頁不再殘留搜尋圖示。漫畫直向閱讀不再意外跳過章節。",
+            "ja": "iPhoneとiPadでは次のエピソードを読み込めない場合に案内を表示します。iOS 26以降の再生中画面の下端やライブ画面の検索アイコンの表示を修正し、マンガの縦読みで章が飛ぶ問題も修正しました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.18",
       "build": 56,
       "date": "2026-11-12",

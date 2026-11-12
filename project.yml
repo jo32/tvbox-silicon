@@ -16,8 +16,8 @@ settings:
     # a view there is safe, so keep the compile-time checks and drop the runtime trap.
     # https://developer.apple.com/forums/thread/802729
     OTHER_SWIFT_FLAGS: $(inherited) -Xfrontend -disable-dynamic-actor-isolation
-    MARKETING_VERSION: '1.8.18'
-    CURRENT_PROJECT_VERSION: '56'
+    MARKETING_VERSION: '1.8.19'
+    CURRENT_PROJECT_VERSION: '57'
     GENERATE_INFOPLIST_FILE: YES
     INFOPLIST_KEY_CFBundleDisplayName: Yingxia
     INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.entertainment
