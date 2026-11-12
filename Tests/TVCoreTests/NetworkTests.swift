@@ -213,6 +213,7 @@ private actor SearchCollector {
     await model.task?.value
     #expect(model.videoCount == 1)
     #expect(!model.busy)
+    #expect(model.activeSources.isEmpty)
     model.search("second", config: sub)
     await model.task?.value
     model.search("first", config: sub)
@@ -474,4 +475,33 @@ private final class OfflineProtocol: URLProtocol, @unchecked Sendable {
     order.enabled = false
     model.search("film", config: sub)
     #expect(model.matches.map(\.site.key) == ["a", "b", "c"]) // Cached results are listed in the current order.
+}
+
+/// Holds requests open so activity can be inspected independently of response timing.
+private final class SearchActivityProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {}
+    override func stopLoading() {}
+}
+
+@Test @MainActor func searchActivityIncludesNonPluginSourcesFromEverySubscriptionAndClearsOnStop() async throws {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [SearchActivityProtocol.self]
+    let model = SearchModel(http: HTTPClient(session: URLSession(configuration: configuration)))
+    let first = try Subscription.parse(Data(#"{"sites":[{"key":"activity-first","type":4,"api":"/api"}]}"#.utf8),
+                                       origin: URL(string: "https://activity-first.example/sub.json")!)
+    let second = try Subscription.parse(Data(#"{"sites":[{"key":"activity-second","type":4,"api":"/api"}]}"#.utf8),
+                                        origin: URL(string: "https://activity-second.example/sub.json")!)
+    let merged = try #require(Subscription.merge([first, second]))
+    model.search("activity", config: merged)
+    let task = model.task
+    for _ in 0..<100 where model.activeSources.count < 2 { try await Task.sleep(for: .milliseconds(20)) }
+    #expect(Set(model.activeSources.map(\.id)) == ["activity-first", "activity-second"])
+    #expect(Set(model.activeSources.map { $0.site.origin(or: merged.origin) }) == [first.origin, second.origin])
+    #expect(model.completed == 0)
+    model.stop()
+    #expect(model.activeSources.isEmpty)
+    await task?.value
+    #expect(model.activeSources.isEmpty && model.results.isEmpty)
 }

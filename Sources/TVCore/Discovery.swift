@@ -41,10 +41,18 @@ public struct SearchSourceResult: Identifiable, Sendable {
     public var id: String { site.id }
 }
 
+/// One source currently executing a global search, regardless of runtime or subscription.
+public struct SearchSourceActivity: Identifiable, Sendable {
+    public let site: Site
+    public let started: Date
+    public var id: String { site.id }
+}
+
 public enum GlobalSearch {
     /// Limit simultaneous plugin processes and publish each source independently.
     public static func search(sites: [Site], origin: URL, jarURL: URL?, query: String,
                               http: HTTPClient = HTTPClient(), concurrency: Int = 4,
+                              onStart: @escaping @Sendable (Site) async -> Void = { _ in },
                               onResult: @escaping @Sendable (SearchSourceResult) async -> Void) async {
         let keyword = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !keyword.isEmpty else { return }
@@ -57,19 +65,20 @@ public enum GlobalSearch {
         // The plugin JVM runs at most `searchWidth` plugin searches and turns away callers
         // beyond a short queue, so JAR sources never exceed that width.
         async let plugins: Void = run(eligible.filter { $0.preferredRuntime == .jar }, concurrency: EmbeddedJarHost.searchWidth, origin: origin, jarURL: jarURL,
-                                      keyword: keyword, http: http, onResult: onResult)
+                                      keyword: keyword, http: http, onStart: onStart, onResult: onResult)
         async let scripts: Void = run(eligible.filter { $0.preferredRuntime == .javascript || $0.preferredRuntime == .python }, concurrency: concurrency,
-                                      origin: origin, jarURL: jarURL, keyword: keyword, http: http, onResult: onResult)
+                                      origin: origin, jarURL: jarURL, keyword: keyword, http: http, onStart: onStart, onResult: onResult)
         await run(eligible.filter(\.native), concurrency: concurrency, origin: origin, jarURL: jarURL,
-                  keyword: keyword, http: http, onResult: onResult)
+                  keyword: keyword, http: http, onStart: onStart, onResult: onResult)
         await scripts
         await plugins
         #else
-        await run(eligible, concurrency: concurrency, origin: origin, jarURL: jarURL, keyword: keyword, http: http, onResult: onResult)
+        await run(eligible, concurrency: concurrency, origin: origin, jarURL: jarURL, keyword: keyword, http: http, onStart: onStart, onResult: onResult)
         #endif
     }
 
     private static func run(_ eligible: [Site], concurrency: Int, origin: URL, jarURL: URL?, keyword: String, http: HTTPClient,
+                            onStart: @escaping @Sendable (Site) async -> Void,
                             onResult: @escaping @Sendable (SearchSourceResult) async -> Void) async {
         guard !eligible.isEmpty else { return }
         await withTaskGroup(of: SearchSourceResult.self) { group in
@@ -79,6 +88,7 @@ public enum GlobalSearch {
                     let started = ContinuousClock.now
                     do {
                         try Task.checkCancellation()
+                        await onStart(site)
                         let page = try await CatalogClient(site: site, origin: origin, http: http, jarURL: jarURL)
                             .list(category: nil, query: keyword, page: 1)
                         Diagnostics.shared.record(.debug, "search", "source=\(site.key) ok videos=\(page.videos.count) elapsed=\(started.duration(to: .now))")
