@@ -62,8 +62,10 @@ def wait_processed(platform, app, version, build):
     for _ in range(120):  # up to an hour
         match = [b for b in builds(app, version) if b["attributes"]["version"] == build]
         state = match[0]["attributes"]["processingState"] if match else "NOT_YET_LISTED"
-        if state == "VALID":
+        if state == "VALID" and match[0]["beta"]:
             return match[0]
+        if state == "VALID":
+            state = "BETA_DETAILS_PENDING"
         if state in ("FAILED", "INVALID"):
             raise RuntimeError(f"{platform} {version} ({build}) processing {state}")
         print(f"   {platform}: {state}, waiting", flush=True)
