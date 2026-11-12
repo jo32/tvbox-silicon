@@ -49,10 +49,11 @@ struct MusicNowPlayingScreen: View {
         .padding(.horizontal, 28).padding(.top, 30).padding(.bottom, 6)
         .foregroundStyle(.white)
         .tint(.white)
-        .background { backdrop.ignoresSafeArea() }
+        .background { sheetBackdrop.ignoresSafeArea() }
         .environment(\.colorScheme, .dark)
         .presentationDragIndicator(.visible)
-        .presentationBackground { backdrop }
+        .presentationBackground { if Self.shapesOwnSheet { Color.clear } else { backdrop } }
+        .presentationCornerRadius(Self.shapesOwnSheet ? 0 : nil)
         .task(id: music.track?.artwork) {
             guard let url = music.track?.artwork, let color = await PosterPalette.average(url) else { return }
             withAnimation(.easeInOut(duration: 0.6)) { tint = color }
@@ -72,6 +73,21 @@ struct MusicNowPlayingScreen: View {
 
     private var backdrop: some View {
         LinearGradient(colors: [tint.blend(with: .black, by: 0.2), tint.blend(with: .black, by: 0.62)], startPoint: .top, endPoint: .bottom)
+    }
+
+    /// On an iPhone, iOS 26 and later round the bottom corners of a full-height sheet too, not quite as the display rounds
+    /// its own, so the page behind showed as a light edge around the bottom of this dark sheet (#797). There the sheet
+    /// has no corners or background of its own, and the backdrop rounds the top ones as the system did.
+    private static let shapesOwnSheet: Bool = {
+        if #available(iOS 26, *) { UIDevice.current.userInterfaceIdiom == .phone } else { false }
+    }()
+
+    @ViewBuilder private var sheetBackdrop: some View {
+        if Self.shapesOwnSheet {
+            backdrop.clipShape(.rect(topLeadingRadius: 38, topTrailingRadius: 38, style: .continuous))
+        } else {
+            backdrop
+        }
     }
 
     /// Title, artist and the menu; beside a small cover when a panel is open.
