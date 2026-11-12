@@ -116,7 +116,8 @@ final class DanmakuEngine: @unchecked Sendable {
             let lane = layout.laneHeight
             let top = size.height * 0.04
             // Bottom comments rest at the foot of the picture, or of the area when it stops above the lower quarter.
-            let bottom = area.share < DanmakuArea.threeQuarters.share ? top + size.height * 0.96 * area.share : size.height * 0.92
+            // One line has a single row, which they share with the others.
+            let bottom = area.share < DanmakuArea.threeQuarters.share ? top + max(lane, size.height * 0.96 * area.share) : size.height * 0.92
             return active.map { item in
                 let placement = item.placement
                 let x: Double, y: Double
