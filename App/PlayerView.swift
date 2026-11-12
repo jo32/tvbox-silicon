@@ -1149,6 +1149,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     /// A sideways swipe is still AVKit's, to scrub with (#874). Over the episode list and other panels it still
     /// scrolls them.
     override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyUp, event.keyCode == 124, arrow.isDown { arrowReleased(skips: true) }
         if event.type == .scrollWheel, event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
            let session, let hit = contentView?.hitTest(event.locationInWindow), Self.isPicture(hit),
            scroll.axis(dx: event.scrollingDeltaX, dy: event.scrollingDeltaY, starts: !event.phase.isDisjoint(with: [.began, .mayBegin]),
@@ -1161,6 +1162,37 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             return
         }
         super.sendEvent(event)
+    }
+
+    /// The right arrow: a tap skips ahead, held it plays at the hold speed until it is let go (`KeyHold`, #871).
+    private var arrow = KeyHold()
+    private var arrowWait: Task<Void, Never>?
+
+    private func arrowPressed(repeated: Bool) {
+        // A new press while one is still open: its key-up was lost, so the hold it may have started ends first.
+        if !repeated, arrow.isDown { arrowReleased(skips: false) }
+        guard arrow.press(repeated: repeated) else { return }
+        arrowWait = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(KeyHold.delay))
+            guard !Task.isCancelled, let self, self.arrow.wait() else { return }
+            let chosen = UserDefaults.standard.object(forKey: SpeedBoost.key) as? Double
+            self.session?.setBoost(Float(SpeedBoost(rate: chosen ?? SpeedBoost.standard).rate))
+        }
+    }
+
+    private func arrowReleased(skips: Bool) {
+        arrowWait?.cancel(); arrowWait = nil
+        switch arrow.release() {
+        case .tap: if skips { session?.skip(10) }
+        case .held: session?.setBoost(nil)
+        case .stray: break
+        }
+    }
+
+    /// The key-up goes to whichever window is key by then, so a hold ends here.
+    override func resignKey() {
+        arrowReleased(skips: false)
+        super.resignKey()
     }
 
     private static func isPicture(_ view: NSView) -> Bool {
@@ -1206,7 +1238,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         switch event.keyCode {
         case 49: session?.togglePlayback()
         case 123: session?.skip(event.modifierFlags.contains(.shift) ? -60 : -10)
-        case 124: session?.skip(event.modifierFlags.contains(.shift) ? 60 : 10)
+        case 124:
+            if event.modifierFlags.contains(.shift) { session?.skip(60) } else { arrowPressed(repeated: event.isARepeat) }
         case 126: if let player = session?.player { player.volume = min(1, player.volume + 0.05) }
         case 125: if let player = session?.player { player.volume = max(0, player.volume - 0.05) }
         case 53:
@@ -1265,6 +1298,35 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     }
 }
 
+/// The faster speed while the right arrow is held, at the top as on iPhone. A view of its own, so a hold redraws
+/// only this.
+private struct DesktopBoostLabel: View {
+    let session: PlaybackSession
+
+    var body: some View {
+        if let rate = session.boost {
+            HStack(spacing: 6) {
+                Text(Self.label(rate))
+                // Held lower than asked: the connection can't keep up with the faster speed.
+                if let wanted = session.boostWanted { Text(Self.label(wanted)).strikethrough().opacity(0.55) }
+                Image(systemName: "forward.fill")
+            }
+            .font(.subheadline.weight(.semibold).monospacedDigit())
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .glassSurface(.regular, in: Capsule())
+            .padding(.top, 56)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .allowsHitTesting(false)
+            .accessibilityIdentifier("player.boost")
+        }
+    }
+
+    private static func label(_ speed: Float) -> String {
+        Double(speed).formatted(.number.precision(.fractionLength(0...2))) + "×"
+    }
+}
+
 private struct DesktopPlaybackRoot: View {
     let channel: Channel
     let session: PlaybackSession
@@ -1307,6 +1369,7 @@ private struct DesktopPlaybackView: View {
                 if showsDanmaku && !session.danmaku.isEmpty { DanmakuOverlay(player: session.player, comments: session.danmaku, opacity: session.danmakuOpacity, revision: session.danmakuRevision).ignoresSafeArea() }
                 SubtitleOverlay(cues: session.subtitles, fills: fillsFrame).ignoresSafeArea()
                 SourceSkipButton(session: session)
+                DesktopBoostLabel(session: session)
                 // Under the title bar's buttons, so it stays put while they come and go.
                 if showsPlaybackInfo && session.error == nil && session.showsPicture && playingOn == nil {
                     PlaybackInfoPanel(session: session)
