@@ -185,6 +185,9 @@ struct MobilePlayerView: View {
         }
         .task(id: clock.item.map(ObjectIdentifier.init)) { await tracks.load(clock.item) }
         .sensoryFeedback(.impact(weight: .medium), trigger: locked)
+        // Full screen, the clock and battery come and go with the controls, as in the TV app, so a long video doesn't
+        // hide the time (#901); locked, the picture keeps the screen to itself. A watch page shows them above it.
+        .statusBarHidden(!inline && (!chromeVisible || locked))
         // A failure, or a watch page's player back from full screen, has controls to reach.
         .onChange(of: session.error != nil || inline) { _, unlock in if unlock { setLocked(false) } }
         .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, search: $searchesSubtitles, subtitles: session.externalSubtitles)
