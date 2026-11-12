@@ -53,7 +53,8 @@ public actor Emby {
         if id == "/" {
             answer = try await call(server) { "/Users/\($0)/Views" }
         } else {
-            answer = try await call(server, query: ["ParentId": id, "Fields": "Path", "SortBy": "SortName"]) { "/Users/\($0)/Items" }
+            // Emby names an item's container only when asked; Jellyfin ignores the field and always does.
+            answer = try await call(server, query: ["ParentId": id, "Fields": "Path,Container", "SortBy": "SortName"]) { "/Users/\($0)/Items" }
         }
         let items = (answer as? [String: Any])?["Items"] as? [[String: Any]] ?? []
         return items.compactMap { Self.file($0, server: server) }
@@ -70,8 +71,9 @@ public actor Emby {
     }
 
     /// An item as a file: folders by their name, and media by a name ending in the extension of
-    /// the file the server keeps, which says how it plays. Episodes lead with their number so the
-    /// season lists in order.
+    /// the file the server keeps, which says how it plays. A video whose file the server doesn't show
+    /// (a `.strm` naming an address, or a path kept from this user) still plays: the player reads its
+    /// container from its first bytes. Episodes lead with their number so the season lists in order.
     static func file(_ item: [String: Any], server: AListServer) -> CloudFile? {
         guard let id = item["Id"] as? String, var name = (item["Name"] as? String)?.trimmingCharacters(in: .whitespaces),
               !name.isEmpty, item["CollectionType"] as? String != "livetv" else { return nil }
@@ -81,7 +83,8 @@ public actor Emby {
             if item["Type"] as? String == "Episode", let number = item["IndexNumber"] as? Int { name = "\(number). \(name)" }
             if item["Type"] as? String == "Movie", let year = item["ProductionYear"] as? Int, !name.contains(String(year)) { name += " (\(year))" }
             if let type = Self.type(path: source?["Path"] as? String ?? item["Path"] as? String,
-                                    container: source?["Container"] as? String ?? item["Container"] as? String) { name += "." + type }
+                                    container: source?["Container"] as? String ?? item["Container"] as? String)
+                ?? (item["MediaType"] as? String == "Video" ? "mp4" : nil) { name += "." + type }
         }
         var artwork: URL?
         if let tag = (item["ImageTags"] as? [String: Any])?["Primary"] as? String,
@@ -89,15 +92,19 @@ public actor Emby {
             image.queryItems = [URLQueryItem(name: "tag", value: tag), URLQueryItem(name: "maxHeight", value: "240")]
             artwork = image.url
         }
-        return CloudFile(id: id, name: name, isFolder: isFolder, size: (source?["Size"] as? NSNumber)?.int64Value ?? 0, artwork: artwork)
+        return CloudFile(id: id, name: name, isFolder: isFolder, size: Self.stored(source) ? (source?["Size"] as? NSNumber)?.int64Value ?? 0 : 0,
+                         artwork: artwork)
     }
 
     /// The extension of the file the server keeps, else one for the container it names (Jellyfin
-    /// names an MP4's as FFmpeg does, "mov,mp4,m4a,3gp,3g2,mj2").
+    /// names an MP4's as FFmpeg does, "mov,mp4,m4a,3gp,3g2,mj2"). A `.strm`'s media source has the
+    /// address it names as its path, query and all, and "strm" as its container until played.
     static func type(path: String?, container: String?) -> String? {
-        let type = ((path ?? "") as NSString).pathExtension.lowercased()
+        var file = path ?? ""
+        if let address = URLComponents(string: file), address.host != nil { file = address.path }
+        let type = (file as NSString).pathExtension.lowercased()
         if !type.isEmpty, type.count <= 5, type != "strm" { return type }
-        let names = (container ?? "").lowercased().split(separator: ",").map(String.init)
+        let names = (container ?? "").lowercased().split(separator: ",").map(String.init).filter { $0 != "strm" }
         if names.contains("mp4") { return "mp4" }
         guard let first = names.first else { return nil }
         return ["matroska": "mkv", "mpegts": "ts", "mpeg": "mpg"][first] ?? first
@@ -125,9 +132,17 @@ public actor Emby {
         address.queryItems = [URLQueryItem(name: "static", value: "true")]
         if let source = media?["Id"] as? String { address.queryItems?.append(URLQueryItem(name: "MediaSourceId", value: source)) }
         guard let url = address.url, let signIn = signIns[server.id] else { throw TVError.invalidURL }
-        return CloudStreams.Source(url: url, headers: Self.headers(server, token: signIn.token),
-                                   length: (media?["Size"] as? NSNumber)?.intValue ?? 0, name: name)
+        let headers = Self.headers(server, token: signIn.token)
+        var length = (media?["Size"] as? NSNumber)?.intValue ?? 0
+        // A `.strm`'s size is the .strm's own: the server relays the address it names, which says its size.
+        if !Self.stored(media) {
+            length = await SubtitleFileHash.range(url, headers: headers, from: 0, count: 1, session: session).map { Int($0.1) } ?? 0
+        }
+        return CloudStreams.Source(url: url, headers: headers, length: length, name: name)
     }
+
+    /// Whether a media source is a file the server keeps, rather than an address it relays (a `.strm`'s).
+    static func stored(_ source: [String: Any]?) -> Bool { (source?["Protocol"] as? String ?? "File") == "File" }
 
     /// GETs an endpoint of the signed-in user (`path` is given the user's id), signing in first, and
     /// again, once, when the server no longer takes the token.
