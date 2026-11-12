@@ -90,7 +90,13 @@ public enum CloudFilesSource {
             return lists
         }
         let lines = playlist(entry.name, files, subfolders: zip(subfolders, inside).map { (name: $0.name, files: $1) }, drive: drive)
-        guard !lines.isEmpty else { throw TVError.unsupported(L10n.text("This folder has no videos Apple devices can play.")) }
+        guard !lines.isEmpty else {
+            // The kinds of file it held, so a report says why nothing plays.
+            let types = Dictionary(grouping: (files + inside.joined()).filter { !$0.isFolder }) { ($0.name as NSString).pathExtension.lowercased() }
+                .map { "\($0.key.isEmpty ? "-" : $0.key)×\($0.value.count)" }.sorted().joined(separator: " ")
+            Diagnostics.shared.record(.warning, "files", "nothing plays folders=\(subfolders.count) files=\(types.isEmpty ? "none" : types)")
+            throw TVError.unsupported(L10n.text("This folder has no videos Apple devices can play."))
+        }
         fields["vod_play_from"] = .string(lines.map { lineName($0.name) }.joined(separator: "$$$"))
         fields["vod_play_url"] = .string(lines.map { $0.files.map(episode).joined(separator: "#") }.joined(separator: "$$$"))
         return fields
