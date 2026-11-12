@@ -15,8 +15,9 @@ struct LivePlatformView: View {
     @State private var loader: Task<Void, Never>?
     @State private var error: String?
     @State private var query = ""
-    /// Read again on appearing: Douyin becomes searchable once signed in.
-    @State private var searchable = true
+    /// Read again on appearing: Douyin becomes searchable once signed in. It starts as the platform is: iOS 26 leaves
+    /// the search field's magnifying glass on the page, and on every page after it, when a field goes as its page opens (#893).
+    @State private var searchable: Bool
     /// The plugin said it shows nothing until the viewer signs in (Kuaishou, Xiaohongshu).
     @State private var needsSignIn = false
     #if !os(tvOS)
@@ -30,6 +31,12 @@ struct LivePlatformView: View {
     @State private var deviceCode = false
     @State private var deviceSignIn = false
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    init(platform: LivePlatform, initialQuery: String = "") {
+        self.platform = platform
+        self.initialQuery = initialQuery
+        _searchable = State(initialValue: platform.searchable)
+    }
 
     var body: some View {
         ScrollView {
