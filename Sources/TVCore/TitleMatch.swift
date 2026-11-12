@@ -17,31 +17,45 @@ public enum TitleMatch {
     /// The title holds the keyword, or, for a keyword of three characters or more, all of its characters in order
     /// (so "机动搜查队" finds "机动搜查队404" and "机动搜查队 劇場版"). An empty keyword matches everything.
     public static func matches(title: String, keyword: String) -> Bool {
-        var wanted = normalize(keyword)
-        guard !wanted.isEmpty else { return true }
-        let name = normalize(title)
-        if name.contains(wanted) { return true }
-        let range = NSRange(wanted.startIndex..., in: wanted)
-        if let found = season.firstMatch(in: wanted, range: range), let cut = Range(found.range, in: wanted), cut.lowerBound != wanted.startIndex {
-            wanted = String(wanted[..<cut.lowerBound])
-            if name.contains(wanted) { return true }
-        }
-        guard wanted.count >= 3 else { return false }
-        var remaining = wanted[...]
-        for character in name {
-            if character == remaining.first { remaining = remaining.dropFirst(); if remaining.isEmpty { return true } }
-        }
-        return false
+        Wanted(keyword).map { $0.matches(title) } ?? true
     }
 
     /// The items whose title matches and the rest, each in the order they came. An empty keyword matches them all.
     public static func split<T>(_ items: [T], keyword: String, title: (T) -> String) -> (matching: [T], other: [T]) {
-        guard !normalize(keyword).isEmpty else { return (items, []) }
+        // The keyword is the same for every title: normalized once, not once per result of the search.
+        guard let wanted = Wanted(keyword) else { return (items, []) }
         var matching: [T] = [], other: [T] = []
         for item in items {
-            if matches(title: title(item), keyword: keyword) { matching.append(item) } else { other.append(item) }
+            if wanted.matches(title(item)) { matching.append(item) } else { other.append(item) }
         }
         return (matching, other)
+    }
+
+    /// The keyword, normalized, and without a season at its end; nil for an empty keyword.
+    private struct Wanted {
+        let full: String
+        let core: String
+        init?(_ keyword: String) {
+            full = normalize(keyword)
+            guard !full.isEmpty else { return nil }
+            let range = NSRange(full.startIndex..., in: full)
+            if let found = season.firstMatch(in: full, range: range), let cut = Range(found.range, in: full), cut.lowerBound != full.startIndex {
+                core = String(full[..<cut.lowerBound])
+            } else {
+                core = full
+            }
+        }
+
+        func matches(_ title: String) -> Bool {
+            let name = normalize(title)
+            if name.contains(full) || (core != full && name.contains(core)) { return true }
+            guard core.count >= 3 else { return false }
+            var remaining = core[...]
+            for character in name {
+                if character == remaining.first { remaining = remaining.dropFirst(); if remaining.isEmpty { return true } }
+            }
+            return false
+        }
     }
 
     /// The items whose title matches first, then the rest, each in the order they came.

@@ -163,6 +163,8 @@ struct GlobalSearchView: View {
                         #endif
                     }
                     else {
+                        // Once per update: it checks every result's title against the keyword.
+                        let listing = listing
                         if model.total == 0 {
                             EmptyResults(symbol: "magnifyingglass", title: L10n.text("No searchable sources are available on this device."))
                         } else if listing.posters.isEmpty {
@@ -176,7 +178,6 @@ struct GlobalSearchView: View {
                                 emptyResults(config)
                             }
                         } else {
-                            let listing = listing
                             LazyVGrid(columns: listed ? Self.rowColumns : Layout.posterColumns,
                                       spacing: listed ? Layout.gridSpacing : Layout.gridRowSpacing) {
                                 resultLinks(listing.posters, config)
@@ -286,6 +287,7 @@ struct GlobalSearchView: View {
 
     private func searchHeader(_ config: Subscription) -> some View {
         @Bindable var model = model
+        let sourceItems = sourceItems
         return VStack(alignment: .leading, spacing: 14) {
             if !model.keyword.isEmpty {
                 ViewThatFits(in: .horizontal) {
