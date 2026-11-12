@@ -981,6 +981,7 @@
 "%@ hasn't prepared a version of this video that Apple devices can play." = "%@尚未為此影片準備 Apple 裝置可播放的版本。";
 "%@ says: %@" = "%@ 提示：%@";
 "%@ didn't accept the user name and password." = "%@ 不接受此使用者名稱和密碼。";
+"%@ uses a certificate this device doesn't trust, for example a self-signed one. Use the server's http:// address, or give the server a trusted certificate." = "%@ 使用的憑證不受此裝置信任（例如自簽憑證）。請改用伺服器的 http:// 位址，或為伺服器換用受信任的憑證。";
 "Added the AList server %@. Browse it in Cloud Files." = "已新增 AList 伺服器 %@，可在「網盤檔案」中瀏覽。";
 "Added %lld AList servers. Browse them in Cloud Files." = "已新增 %lld 個 AList 伺服器，可在「網盤檔案」中瀏覽。";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "此網址現在是 AList 伺服器。重新新增即可在「網盤檔案」中瀏覽。";

@@ -215,6 +215,12 @@ import Testing
         await #expect(throws: TVError.self) { try await client.probe(URL(string: "http://dav.test/NAS")!, username: "me", password: "no") }
         // A web server that doesn't speak WebDAV isn't a share.
         #expect(try await client.probe(URL(string: "http://dav.test/site")!) == nil)
+        // Nor is an address nothing answers at; but a certificate the device doesn't trust says so (#864).
+        #expect(try await client.probe(URL(string: "http://dav.test/offline")!) == nil)
+        do {
+            _ = try await client.probe(URL(string: "https://dav.test/selfsigned/Movies%20Library")!, username: "me", password: "pw")
+            Issue.record("an untrusted certificate went unreported")
+        } catch { #expect(error.localizedDescription.contains("dav.test") && error.localizedDescription.contains("http://")) }
     }
 
     @Test func aWebDAVFilePlaysByRangedReadsWithTheAccount() async throws {
@@ -486,6 +492,8 @@ final class WebDAVStub: URLProtocol, @unchecked Sendable {
         let folder = #"<D:response><D:href>/NAS/</D:href><D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype><D:getlastmodified>Fri, 30 Oct 2026 07:40:00 GMT</D:getlastmodified></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>"#
         let file = #"<D:response><D:href>http://dav.test/NAS/S01E01%20%231.mp4</D:href><D:propstat><D:prop><D:resourcetype/><D:getcontentlength>1048576</D:getcontentlength><D:getlastmodified>Fri, 30 Oct 2026 07:40:00 GMT</D:getlastmodified></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat><D:propstat><D:prop><D:quota/></D:prop><D:status>HTTP/1.1 404 Not Found</D:status></D:propstat></D:response>"#
         let subfolder = #"<D:response><D:href>/NAS/%E5%89%A7%E9%9B%86/</D:href><D:propstat><D:prop><D:resourcetype><D:collection/></D:resourcetype></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>"#
+        if path.hasPrefix("/selfsigned") { client.urlProtocol(self, didFailWithError: URLError(.serverCertificateUntrusted)); return }
+        if path.hasPrefix("/offline") { client.urlProtocol(self, didFailWithError: URLError(.cannotConnectToHost)); return }
         let status: Int, responses: [String]
         if path.hasPrefix("/site") { (status, responses) = (405, []) }
         else if account != "Basic bWU6cHc=" { (status, responses) = (401, []) }

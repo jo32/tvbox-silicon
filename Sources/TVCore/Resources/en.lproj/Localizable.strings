@@ -982,6 +982,7 @@
 "%@ hasn't prepared a version of this video that Apple devices can play." = "%@ hasn't prepared a version of this video that Apple devices can play.";
 "%@ says: %@" = "%@ says: %@";
 "%@ didn't accept the user name and password." = "%@ didn't accept the user name and password.";
+"%@ uses a certificate this device doesn't trust, for example a self-signed one. Use the server's http:// address, or give the server a trusted certificate." = "%@ uses a certificate this device doesn't trust, for example a self-signed one. Use the server's http:// address, or give the server a trusted certificate.";
 "Added the AList server %@. Browse it in Cloud Files." = "Added the AList server %@. Browse it in Cloud Files.";
 "Added %lld AList servers. Browse them in Cloud Files." = "Added %lld AList servers. Browse them in Cloud Files.";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "This address is now an AList server. Add it again to browse it in Cloud Files.";
