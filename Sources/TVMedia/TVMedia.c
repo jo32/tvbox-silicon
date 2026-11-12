@@ -306,6 +306,7 @@ int tvm_stream(const TVMInput *input, int index, TVMStream *out) {
     out->isForced = (st->disposition & AV_DISPOSITION_FORCED) != 0;
     const AVCodecDescriptor *descriptor = avcodec_descriptor_get(par->codec_id);
     out->isText = descriptor && (descriptor->props & AV_CODEC_PROP_TEXT_SUB);
+    out->id = st->id;
     out->extradata = par->extradata;
     out->extradataSize = par->extradata_size;
     return 0;

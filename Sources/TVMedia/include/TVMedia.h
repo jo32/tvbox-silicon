@@ -54,6 +54,8 @@ typedef struct {
     int isDefault, isForced;
     /// A text subtitle (not a picture-based one such as PGS).
     int isText;
+    /// The container's id for the stream: an MPEG transport stream's PID.
+    int id;
     /// The codec's configuration bytes (avcC, hvcC, ...), valid while the input is open.
     const uint8_t *extradata;
     int extradataSize;
