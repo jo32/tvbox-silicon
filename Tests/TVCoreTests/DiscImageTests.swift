@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Testing
 @testable import TVCore
@@ -20,6 +21,30 @@ struct DiscImageTests {
                      DiscImage.PlayItem(clip: "00056", start: 900, end: 45_900)]
         #expect(DiscImage.playItems(DiscFixtures.playlist(items)) == items)
         #expect(DiscImage.playItems(Data("MOBJ0200".utf8) + Data(count: 40)) == nil)
+    }
+
+    /// The clips' streams carry no languages; the playlist's stream number table names them by PID (#884). A
+    /// sub-path's streams are in other clips, and a multi-angle item lists its angles first.
+    @Test func playlistsNameTheirStreamsLanguages() {
+        let streams = [DiscFixtures.ListedStream(coding: 0x1B, pid: 0x1011, language: ""),
+                       .init(coding: 0x83, pid: 0x1100, language: "kor"), .init(coding: 0x81, pid: 0x1101, language: "CHI"),
+                       .init(coding: 0xA1, pid: 0x1A00, language: "eng", subPath: true),
+                       .init(coding: 0x90, pid: 0x1200, language: "chi"), .init(coding: 0x90, pid: 0x1201, language: "eng"),
+                       .init(coding: 0x91, pid: 0x1400, language: "kor")]
+        let item = DiscImage.PlayItem(clip: "00001", start: 0, end: 90_000)
+        let playlist = DiscFixtures.playlist([item, item], streams: streams)
+        #expect(DiscImage.playItems(playlist) == [item, item])
+        #expect(DiscImage.streamLanguages(playlist) == [0x1100: "kor", 0x1101: "chi", 0x1200: "chi", 0x1201: "eng", 0x1400: "kor"])
+        // Two angles: one more clip named before the table.
+        var bytes = [UInt8](playlist)
+        let at = 40 + 10
+        bytes[at + 12] |= 0x10
+        bytes.insert(contentsOf: [2, 0] + Array("00002M2TS".utf8) + [0], at: at + 34)
+        let length = (Int(bytes[at]) << 8 | Int(bytes[at + 1])) + 12
+        bytes[at] = UInt8(length >> 8); bytes[at + 1] = UInt8(length & 0xFF)
+        #expect(DiscImage.streamLanguages(Data(bytes))[0x1201] == "eng")
+        #expect(DiscImage.streamLanguages(DiscFixtures.playlist([item])).isEmpty)
+        #expect(DiscImage.streamLanguages(Data(playlist.prefix(60))).isEmpty)
     }
 
     /// A Blu-ray's longest playlist plays, its clips one after the other, each clip's clock moved on to where the
@@ -129,6 +154,27 @@ extension RemuxTests {
         let clipSeconds = Double(2 * (end - start)) / 90_000
         #expect(abs(seconds - 2 * clipSeconds) < 0.5, "\(seconds) s for two clips of \(clipSeconds) s")
     }
+
+    /// A disc's subtitles get the languages its playlist names (#884): AVPlayer calls a track without one "Unknown".
+    @Test func bluRayTracksTakeTheirPlaylistsLanguages() async throws {
+        let clip = try DiscFixtures.clip(subtitles: [0x1200, 0x1201])
+        let times = DiscFixtures.timestamps(clip)
+        let start = try #require(times.min()) / 2, end = (try #require(times.max()) + 3_600) / 2
+        let image = UDFImageBuilder(metadata: true, files: [
+            .init(path: "BDMV/PLAYLIST/00001.mpls", data: DiscFixtures.playlist([.init(clip: "00010", start: start, end: end)], streams: [
+                .init(coding: 0x24, pid: 0x1011, language: ""), .init(coding: 0x90, pid: 0x1200, language: "kor"),
+                .init(coding: 0x90, pid: 0x1201, language: "eng")])),
+            .init(path: "BDMV/STREAM/00010.m2ts", data: clip),
+        ]).build()
+        let master = try await Remux.open(MemorySource(image))
+        defer { Remux.stop(master) }
+        let text = String(decoding: try await URLSession.shared.data(from: master).0, as: UTF8.self)
+        #expect(text.contains(#"LANGUAGE="ko""#) && text.contains(#"LANGUAGE="en""#), "\(text)")
+        let group = try await AVURLAsset(url: master).loadMediaSelectionGroup(for: .legible)
+        #expect(group?.options.compactMap(\.extendedLanguageTag) == ["ko", "en"])
+        // The menus add each one's format.
+        #expect(Set(Remux.trackDetails(master).subtitles.values.map(\.format)) == ["PGS"])
+    }
 }
 
 /// A file in memory, read as the repackager reads a drive's file.
@@ -158,6 +204,47 @@ enum DiscFixtures {
         return clip
     }
 
+    /// The clip with Blu-ray subtitle streams (PGS, without packets) added to its program map as a disc's clips have
+    /// them: by PID alone, under the "HDMV" registration, with no language.
+    static func clip(subtitles pids: [Int]) throws -> Data {
+        var bytes = [UInt8](try clip())
+        func pid(_ ts: Int) -> Int { Int(bytes[ts + 1] & 0x1F) << 8 | Int(bytes[ts + 2]) }
+        func section(_ ts: Int) -> Int {
+            let payload = ts + 4 + (bytes[ts + 3] & 0x20 != 0 ? 1 + Int(bytes[ts + 4]) : 0)
+            return payload + 1 + Int(bytes[payload])
+        }
+        var map: Int?
+        for packet in stride(from: 0, to: bytes.count - 191, by: 192) {
+            let ts = packet + 4
+            guard bytes[ts] == 0x47, bytes[ts + 1] & 0x40 != 0 else { continue }
+            let start = section(ts)
+            if pid(ts) == 0 { map = Int(bytes[start + 10] & 0x1F) << 8 | Int(bytes[start + 11]); continue }
+            guard pid(ts) == map else { continue }
+            let length = Int(bytes[start + 1] & 0x0F) << 8 | Int(bytes[start + 2])
+            var table = Array(bytes[start..<start + 3 + length - 4])
+            let info = Int(table[10] & 0x0F) << 8 | Int(table[11])
+            table.insert(contentsOf: [0x05, 4] + Array("HDMV".utf8), at: 12 + info)
+            table[10] = table[10] & 0xF0 | UInt8((info + 6) >> 8); table[11] = UInt8((info + 6) & 0xFF)
+            for pid in pids { table += [0x90, 0xE0 | UInt8(pid >> 8), UInt8(pid & 0xFF), 0xF0, 0x00] }
+            table[1] = table[1] & 0xF0 | UInt8((table.count + 1) >> 8); table[2] = UInt8((table.count + 1) & 0xFF)
+            table += crc32(table)
+            precondition(start + table.count <= ts + 188)
+            bytes.replaceSubrange(start..<start + table.count, with: table)
+            for at in start + table.count..<ts + 188 { bytes[at] = 0xFF }
+        }
+        return Data(bytes)
+    }
+
+    /// MPEG-2's CRC-32 of a section.
+    static func crc32(_ bytes: [UInt8]) -> [UInt8] {
+        var crc: UInt32 = 0xFFFF_FFFF
+        for byte in bytes {
+            crc ^= UInt32(byte) << 24
+            for _ in 0..<8 { crc = crc & 0x8000_0000 != 0 ? crc << 1 ^ 0x04C1_1DB7 : crc << 1 }
+        }
+        return [24, 16, 8, 0].map { UInt8(crc >> $0 & 0xFF) }
+    }
+
     /// The PTS of each PES packet that starts in `clip` (192-byte packets).
     static func timestamps(_ clip: Data) -> [Int64] {
         let bytes = [UInt8](clip)
@@ -177,14 +264,37 @@ enum DiscFixtures {
         return times
     }
 
-    /// An MPLS playlist with these play items (each with room after its times, as real ones have).
-    static func playlist(_ items: [DiscImage.PlayItem]) -> Data {
+    /// A stream a playlist's stream number table lists: its coding type (0x24 HEVC, 0x83 TrueHD, 0x90 PG subtitles, ...),
+    /// its PID, and its language. `subPath` puts it in another clip, as a sub-path's stream.
+    struct ListedStream {
+        var coding: UInt8, pid: Int, language: String
+        var subPath = false
+    }
+
+    /// An MPLS playlist with these play items (each with room after its times, as real ones have). The first lists
+    /// `streams` in its stream number table, grouped as discs group them: video, audio, subtitles, menus.
+    static func playlist(_ items: [DiscImage.PlayItem], streams: [ListedStream] = []) -> Data {
         func u16(_ value: Int) -> [UInt8] { [UInt8(value >> 8 & 0xFF), UInt8(value & 0xFF)] }
         func u32(_ value: Int64) -> [UInt8] { [24, 16, 8, 0].map { UInt8(value >> $0 & 0xFF) } }
+        let video: Set<UInt8> = [0x01, 0x02, 0x1B, 0xEA, 0x24]
+        let groups = [streams.filter { video.contains($0.coding) }, streams.filter { !video.contains($0.coding) && $0.coding < 0x90 || $0.coding >= 0xA1 },
+                      streams.filter { $0.coding == 0x90 || $0.coding == 0x92 }, streams.filter { $0.coding == 0x91 }]
+        var table: [UInt8] = [0, 0] + groups.map { UInt8($0.count) } + [0, 0, 0] + [UInt8](repeating: 0, count: 5)
+        for stream in groups.joined() {
+            let pid = u16(stream.pid)
+            table += stream.subPath ? [9, 2, 0, 0] + pid + [0, 0, 0, 0] : [9, 1] + pid + [0, 0, 0, 0, 0, 0]
+            let language = Array(stream.language.utf8)
+            switch stream.coding {
+            case 0x90, 0x91: table += [5, stream.coding] + language + [0]
+            case let coding where video.contains(coding): table += [5, coding, 0x61, 0, 0, 0]
+            default: table += [5, stream.coding, 0x61] + language
+            }
+        }
         var list: [UInt8] = [0, 0] + u16(items.count) + u16(0)
-        for item in items {
+        for (index, item) in items.enumerated() {
             var body = Array(item.clip.utf8) + Array("M2TS".utf8) + [0x00, 0x01, 0x00] + u32(item.start) + u32(item.end)
-            body += [UInt8](repeating: 0, count: 30)
+            if index == 0, !streams.isEmpty { body += [UInt8](repeating: 0, count: 12) + u16(table.count) + table }
+            else { body += [UInt8](repeating: 0, count: 30) }
             list += u16(body.count) + body
         }
         var data = Array("MPLS0200".utf8) + u32(40) + u32(0) + u32(0) + [UInt8](repeating: 0, count: 20)

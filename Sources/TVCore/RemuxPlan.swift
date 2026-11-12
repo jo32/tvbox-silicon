@@ -25,6 +25,8 @@ struct RemuxPlan: Sendable, Equatable {
         var bitRate: Int64 = 0
         var language = "", title = ""
         var isDefault = false, isForced = false, isText = false
+        /// The container's id for it: a transport stream's PID, by which a Blu-ray playlist names its language.
+        var pid = 0
         /// Dolby Atmos in E-AC-3 (JOC): FFmpeg's decoder names it with profile 30 (AV_PROFILE_EAC3_DDP_ATMOS) while
         /// it probes. The track is copied as is; FFmpeg's muxer writes the JOC flag into its dec3 box itself.
         var isAtmos: Bool { kind == .audio && codec == "eac3" && profile == 30 }
@@ -280,11 +282,14 @@ struct RemuxPlan: Sendable, Equatable {
         return parts.isEmpty ? nil : parts.joined(separator: ",")
     }
 
-    /// The NAME each subtitle track has in the master playlist, by track: what AVPlayer's option for it shows as its
-    /// `displayName`. Named as `masterPlaylist` names them.
-    func subtitleNames() -> [Int: String] {
+    /// The NAME each subtitle track has in the master playlist, by track: its AVPlayer option's title (its
+    /// `displayName` is its language's name). Named as `masterPlaylist` names them.
+    func subtitleNames() -> [Int: String] { names(of: .subtitle) }
+
+    /// The NAME each audio or subtitle track has in the master playlist, by track.
+    func names(of kind: Stream.Kind) -> [Int: String] {
         var names = Set<String>(), result: [Int: String] = [:]
-        for index in tracks.indices where tracks[index].kind == .subtitle {
+        for index in tracks.indices where tracks[index].kind == kind {
             let name = Self.displayName(tracks[index])
             var value = name, number = 2
             while names.contains(value) { value = "\(name) (\(number))"; number += 1 }
@@ -333,23 +338,49 @@ struct RemuxPlan: Sendable, Equatable {
 
     private func quoted(_ text: String) -> String { text.replacingOccurrences(of: "\"", with: "'").replacingOccurrences(of: "\n", with: " ") }
 
-    /// The stream's title, or its language, or its format.
     /// The HLS CHANNELS attribute: Apple's authoring spec names Dolby Atmos in E-AC-3 "16/JOC".
     static func channels(_ track: Track) -> String {
         guard track.mode == .copy else { return "\(track.channels)" }
         return track.stream.isAtmos ? "16/JOC" : "\(track.stream.channels)"
     }
 
+    /// The stream's title, or its language, or its format.
     static func displayName(_ track: Track) -> String {
         let stream = track.stream
         let title = stream.title.trimmingCharacters(in: .whitespacesAndNewlines)
         if !title.isEmpty { return title }
         if let tag = languageTag(stream.language), let name = Locale.current.localizedString(forLanguageCode: tag) { return name }
-        let names = ["ac3": "AC-3", "eac3": "E-AC-3", "dts": "DTS", "truehd": "TrueHD", "subrip": "SRT", "ass": "ASS", "ssa": "SSA", "webvtt": "WebVTT", "mov_text": "Text"]
-        let format = names[stream.codec] ?? stream.codec.uppercased()
+        return format(track) ?? stream.codec.uppercased()
+    }
+
+    /// The stream's format as the player's menus name it: "TrueHD 5.1", "E-AC-3 5.1 Atmos", "PGS". Nil for a subtitle
+    /// file or translation, which isn't a stream of the file.
+    static func format(_ track: Track) -> String? {
+        let stream = track.stream
+        guard stream.index >= 0 else { return nil }
+        let names = ["ac3": "AC-3", "eac3": "E-AC-3", "dts": "DTS", "truehd": "TrueHD", "pcm_bluray": "LPCM", "pcm_dvd": "LPCM",
+                     "subrip": "SRT", "ass": "ASS", "ssa": "SSA", "webvtt": "WebVTT", "mov_text": "Text",
+                     "hdmv_pgs_subtitle": "PGS", "dvd_subtitle": "VobSub"]
+        var format = names[stream.codec] ?? stream.codec.uppercased()
+        // FFmpeg's DTS-HD profiles: High Resolution, Master Audio (and its DTS:X kinds).
+        if stream.codec == "dts" { format = [50: "DTS-HD HRA", 60: "DTS-HD MA", 61: "DTS:X", 62: "DTS:X"][stream.profile] ?? format }
         guard stream.kind == .audio else { return format }
         let layout = [1: "1.0", 2: "2.0", 6: "5.1", 8: "7.1"][stream.channels] ?? "\(stream.channels)ch"
         return "\(format) \(layout)" + (stream.isAtmos && track.mode == .copy ? " Atmos" : "")
+    }
+
+    /// What the player's menus add to each audio and subtitle track's language, by its NAME in the master playlist
+    /// (its option's title): its own title and its format.
+    func trackDetails() -> (audio: [String: TrackDetail], subtitles: [String: TrackDetail]) {
+        func details(_ kind: Stream.Kind) -> [String: TrackDetail] {
+            var result: [String: TrackDetail] = [:]
+            for (index, name) in names(of: kind) {
+                let track = tracks[index]
+                result[name] = TrackDetail(title: track.stream.title.trimmingCharacters(in: .whitespacesAndNewlines), format: Self.format(track))
+            }
+            return result
+        }
+        return (details(.audio), details(.subtitle))
     }
 
     /// The BCP 47 tag HLS wants for a Matroska (ISO 639-2) language code; nil when it names none.

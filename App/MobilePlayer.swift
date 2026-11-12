@@ -718,7 +718,7 @@ struct MobilePlayerView: View {
             if let audio = tracks.audio, audio.options.count > 1 {
                 Menu(L10n.text("Audio")) {
                     Picker(L10n.text("Audio"), selection: Binding(get: { tracks.selected(in: audio) }, set: { tracks.select($0, in: audio) })) {
-                        ForEach(audio.options, id: \.self) { Text($0.displayName).tag(Optional($0)) }
+                        ForEach(audio.options, id: \.self) { Text(audio.name($0)).tag(Optional($0)) }
                     }
                     .pickerStyle(.inline)
                 }
@@ -738,7 +738,7 @@ struct MobilePlayerView: View {
                     Picker(L10n.text("Subtitles"), selection: Binding(get: { session.externalSubtitles.selected == nil ? tracks.selected(in: legible) : nil },
                                                                       set: { tracks.select($0, in: legible); session.choseSubtitle($0); session.externalSubtitles.nativeChosen() })) {
                         if legible.group.allowsEmptySelection { Text(L10n.text("Off")).tag(AVMediaSelectionOption?.none) }
-                        ForEach(legible.options, id: \.self) { Text($0.displayName).tag(Optional($0)) }
+                        ForEach(legible.options, id: \.self) { Text(legible.name($0)).tag(Optional($0)) }
                     }
                     .pickerStyle(.inline)
                 } else if session.externalSubtitles.selected != nil {
@@ -1508,6 +1508,19 @@ private struct PlayerLayerView: UIViewRepresentable {
     struct Group {
         let group: AVMediaSelectionGroup
         let options: [AVMediaSelectionOption]
+        /// The menu's names for them (`TrackLabel`): the language and what else is known, not just the language.
+        let names: [AVMediaSelectionOption: String]
+        init(group: AVMediaSelectionGroup, options: [AVMediaSelectionOption], details: [String: TrackDetail]) {
+            self.group = group; self.options = options
+            let labels = TrackLabel.names(options.map { option in
+                let title = AVMetadataItem.metadataItems(from: option.commonMetadata, filteredByIdentifier: .commonIdentifierTitle).first?.stringValue
+                let detail = title.flatMap { details[$0] }
+                return TrackLabel.Option(displayName: option.displayName, language: option.extendedLanguageTag ?? option.locale?.identifier,
+                                         title: detail?.title ?? title, format: detail?.format)
+            })
+            names = Dictionary(zip(options, labels)) { first, _ in first }
+        }
+        func name(_ option: AVMediaSelectionOption) -> String { names[option] ?? option.displayName }
     }
     private(set) var audio: Group?
     private(set) var legible: Group?
@@ -1522,10 +1535,12 @@ private struct PlayerLayerView: UIViewRepresentable {
         let audible = try? await asset.loadMediaSelectionGroup(for: .audible)
         let subtitles = try? await asset.loadMediaSelectionGroup(for: .legible)
         guard !Task.isCancelled, self.item === item else { return }
-        audio = audible.map { Group(group: $0, options: $0.options) }
+        // A repackaged file's tracks: their titles and formats, which the options don't carry.
+        let details = (asset as? AVURLAsset).map { Remux.trackDetails($0.url) } ?? (audio: [:], subtitles: [:])
+        audio = audible.map { Group(group: $0, options: $0.options, details: details.audio) }
         // Forced subtitles only translate foreign speech and come on by themselves; they aren't a choice.
         legible = subtitles.map { group in
-            Group(group: group, options: group.options.filter { !$0.hasMediaCharacteristic(.containsOnlyForcedSubtitles) })
+            Group(group: group, options: group.options.filter { !$0.hasMediaCharacteristic(.containsOnlyForcedSubtitles) }, details: details.subtitles)
         }
     }
 

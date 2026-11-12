@@ -295,10 +295,13 @@ final class RemuxSession: @unchecked Sendable {
         var video: Int32 = -1
         // ASS headers by stream, and the attachments that are fonts: copied while the input holds them.
         var headers: [Int: Data] = [:], fonts: [StyledSubtitleFont] = [], fontBytes = 0
+        // A Blu-ray's clips name no languages; its playlist names them by PID (#884).
+        let languages = (source as? DiscTitle)?.languages ?? [:]
         for index in 0..<tvm_stream_count(input) {
             var raw = TVMStream()
             guard tvm_stream(input, index, &raw) == 0 else { continue }
-            let stream = Self.stream(raw, index: Int(index))
+            var stream = Self.stream(raw, index: Int(index))
+            if stream.language.isEmpty, let language = languages[stream.pid] { stream.language = language }
             if stream.kind == .video, video < 0, stream.width > 0 { video = index }
             streams.append(stream)
             if stream.kind == .subtitle, ["ass", "ssa"].contains(stream.codec), let bytes = raw.extradata, raw.extradataSize > 0 {
@@ -616,7 +619,7 @@ final class RemuxSession: @unchecked Sendable {
                                 doviCompatibility: Int(raw.doviCompatibility), intraRefresh: raw.intraRefresh != 0,
                                 sampleRate: Int(raw.sampleRate), channels: Int(raw.channels),
                                 bitRate: raw.bitRate, language: text(raw.language), title: text(raw.title),
-                                isDefault: raw.isDefault != 0, isForced: raw.isForced != 0, isText: raw.isText != 0)
+                                isDefault: raw.isDefault != 0, isForced: raw.isForced != 0, isText: raw.isText != 0, pid: Int(raw.id))
     }
 
     private static let logOnce: Void = {

@@ -81,6 +81,47 @@ public enum DiscImage {
         return items
     }
 
+    /// The language of each stream a Blu-ray playlist (`*.mpls`) plays, by PID: its first play item's stream number
+    /// table names one for every sound, subtitle and menu stream of the clip. The clip's own streams carry none, so
+    /// without it every track is "Unknown" (#884). ISO 639-2 codes, as the disc has them.
+    static func streamLanguages(_ data: Data) -> [Int: String] {
+        let bytes = [UInt8](data)
+        guard bytes.count >= 20, String(decoding: bytes[0..<4], as: UTF8.self) == "MPLS" else { return [:] }
+        func u16(_ at: Int) -> Int { Int(bytes[at]) << 8 | Int(bytes[at + 1]) }
+        let list = Int(bytes[8]) << 24 | Int(bytes[9]) << 16 | Int(bytes[10]) << 8 | Int(bytes[11])
+        let item = list + 10
+        guard item + 34 <= bytes.count, u16(list + 6) > 0 else { return [:] }
+        let end = min(bytes.count, item + 2 + u16(item))
+        var at = item + 34
+        // A multi-angle item lists its other angles' clips first, ten bytes each.
+        if bytes[item + 12] & 0x10 != 0, at + 2 <= end { at += 2 + 10 * max(0, Int(bytes[at]) - 1) }
+        guard at + 16 <= end else { return [:] }
+        // Primary video, primary audio, PG and text subtitles, IG, secondary audio, secondary video, PiP subtitles.
+        let count = bytes[at + 4..<at + 11].reduce(0) { $0 + Int($1) }
+        at += 16
+        var languages: [Int: String] = [:]
+        for _ in 0..<count {
+            guard at + 1 < end else { break }
+            let entry = at, attributes = at + 1 + Int(bytes[at])
+            guard attributes + 1 < end else { break }
+            let next = attributes + 1 + Int(bytes[attributes])
+            guard next <= end else { break }
+            defer { at = next }
+            // Only streams of the clip itself (entry type 1); a sub-path's are in other clips.
+            guard bytes[entry + 1] == 1, entry + 4 <= attributes else { continue }
+            let language: Int
+            switch bytes[attributes + 1] {
+            case 0x03, 0x04, 0x80...0x86, 0xA1, 0xA2, 0x92: language = attributes + 3   // sound; text subtitles
+            case 0x90, 0x91: language = attributes + 2                                  // PG subtitles, menus
+            default: continue
+            }
+            guard language + 3 <= next else { continue }
+            let code = String(decoding: bytes[language..<language + 3], as: UTF8.self)
+            if code.allSatisfy({ $0.isASCII && $0.isLetter }) { languages[u16(entry + 2)] = code.lowercased() }
+        }
+        return languages
+    }
+
     /// The disc's longest playlist, its clips one after the other. A playlist that plays a clip more than once is
     /// passed over while another doesn't: a menu's background loops one clip, and a disc that hides its title among
     /// decoys repeats clips in them, and either can run longer than the film (one film's disc played a
@@ -91,12 +132,13 @@ public enum DiscImage {
               let streams = try await volume.child(of: bdmv.icb, named: "STREAM", directory: true) else { return nil }
         var clips: [String: UDFVolume.Entry] = [:]
         for entry in try await volume.list(streams.icb) where !entry.directory { clips[entry.name.uppercased()] = entry }
-        var best: (name: String, items: [PlayItem], duration: Int64, repeats: Bool)?
+        var best: (name: String, items: [PlayItem], duration: Int64, repeats: Bool, languages: [Int: String])?
         for entry in try await volume.list(playlists.icb).sorted(by: { $0.name < $1.name })
         where !entry.directory && entry.name.uppercased().hasSuffix(".MPLS") {
             try Task.checkCancellation()
-            guard let node = try? await volume.node(entry.icb), node.length < 1 << 20,
-                  let items = playItems(try await volume.contents(node)), !items.isEmpty,
+            guard let node = try? await volume.node(entry.icb), node.length < 1 << 20 else { continue }
+            let data = try await volume.contents(node)
+            guard let items = playItems(data), !items.isEmpty,
                   items.allSatisfy({ clips["\($0.clip).M2TS"] != nil && $0.end > $0.start }) else { continue }
             let duration = items.reduce(0) { $0 + $1.end - $1.start }
             let repeats = Set(items.map(\.clip)).count < items.count
@@ -104,7 +146,7 @@ public enum DiscImage {
                 if repeats != best.repeats { if repeats { continue } }
                 else if duration < best.duration || (duration == best.duration && items.count >= best.items.count) { continue }
             }
-            best = (entry.name, items, duration, repeats)
+            best = (entry.name, items, duration, repeats, streamLanguages(data))
         }
         guard let best else { return nil }
         var parts: [DiscTitle.Part] = []
@@ -118,7 +160,8 @@ public enum DiscImage {
             clock += item.end - item.start
         }
         let title = DiscTitle(base: volume.source, parts: parts, packets: true,
-                              summary: "blu-ray playlist=\(best.name) clips=\(best.items.count) s=\(best.duration / 45_000)")
+                              summary: "blu-ray playlist=\(best.name) clips=\(best.items.count) s=\(best.duration / 45_000)",
+                              languages: best.languages)
         // AACS marks every protected packet in its arrival header; a decrypted image clears the marks.
         let first = try await title.read(at: 0, count: 192)
         if first.count == 192, first[first.startIndex] & 0xC0 != 0 { throw Failure.encrypted }
@@ -175,6 +218,8 @@ struct DiscTitle: RemuxSource {
     /// Whether the parts are 192-byte transport packets whose timestamps may move.
     let packets: Bool
     let summary: String
+    /// Its streams' languages by PID, from a Blu-ray playlist (`DiscImage.streamLanguages`).
+    var languages: [Int: String] = [:]
     var length: Int64 { parts.last.map { $0.start + $0.length } ?? 0 }
     var transfer: (received: Int64, host: String?)? { base.transfer }
     func close() async { await base.close() }
