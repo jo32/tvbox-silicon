@@ -832,15 +832,12 @@ struct BilibiliRelatedRow: View {
         VStack(alignment: .leading, spacing: 10) {
             if !videos.isEmpty {
                 Text(L10n.text("Related Videos")).font(.headline)
-                ScrollView(.horizontal) {
-                    LazyHStack(alignment: .top, spacing: railSpacing) {
-                        ForEach(videos) { video in
-                            RouteLink { CatalogDestination(video: video, client: client) } label: { BilibiliVideoTile(video: video) }
-                                .cardButton()
-                        }
-                    }
-                    .padding(.vertical, 12)
-                }
+                #if os(macOS)
+                // A mouse wheel can't scroll sideways: without the rail's arrows and dragging, the videos past the
+                // window's edge could only be reached by widening the window (#881).
+                DiscoverRail(arrowCenter: 12 + BilibiliMetrics.tile * 9 / 32) { tiles }
+                #else
+                ScrollView(.horizontal) { tiles }
                 .scrollIndicators(.never)
                 .scrollClipDisabled()
                 #if os(iOS)
@@ -849,9 +846,20 @@ struct BilibiliRelatedRow: View {
                 .padding(.horizontal, -16)
                 #endif
                 .tvFocusSection()
+                #endif
             }
         }
         .task(id: bvid) { videos = (try? await BilibiliAPI.related(bvid: bvid)) ?? [] }
+    }
+
+    private var tiles: some View {
+        LazyHStack(alignment: .top, spacing: railSpacing) {
+            ForEach(videos) { video in
+                RouteLink { CatalogDestination(video: video, client: client) } label: { BilibiliVideoTile(video: video) }
+                    .cardButton()
+            }
+        }
+        .padding(.vertical, 12)
     }
 
     private var railSpacing: CGFloat {
@@ -1495,18 +1503,17 @@ struct BilibiliMacVideoPage<Play: View, Parts: View, Status: View>: View {
                 .buttonStyle(.plain).foregroundStyle(.secondary)
                 .accessibilityLabel(L10n.text("All Comments")).accessibilityIdentifier("bilibili.comments.all")
             }
-            ScrollView(.horizontal) {
+            // The rail's arrows and dragging: a mouse wheel can't scroll the cards sideways (#881).
+            DiscoverRail {
                 LazyHStack(alignment: .top, spacing: 14) {
                     ForEach(hotComments) { comment in
-                        Button { showsComments = true } label: { BilibiliMacCommentCard(comment: comment) }
+                        DiscoverButton { showsComments = true } label: { BilibiliMacCommentCard(comment: comment) }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("bilibili.comment")
                     }
                 }
                 .padding(.vertical, 4)
             }
-            .scrollIndicators(.never)
-            .scrollClipDisabled()
         }
     }
 }
