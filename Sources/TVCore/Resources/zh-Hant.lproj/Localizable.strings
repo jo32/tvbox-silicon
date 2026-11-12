@@ -1400,7 +1400,6 @@
 "Douban Hot Movies" = "豆瓣熱門電影";
 "Douban Hot Series" = "豆瓣熱門劇集";
 "Douban Hot Variety Shows" = "豆瓣熱門綜藝";
-"Douban" = "豆瓣";
 
 "%@ (Translated from %@)" = "%@（譯自%@）";
 
@@ -1810,3 +1809,7 @@
 "In the last ten minutes" = "可設在最後 10 分鐘內";
 "%@ before the end" = "結束前 %@";
 "Clear Intro and Outro" = "清除片頭片尾時間";
+
+"Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "無損優先會在所有管道都沒有無損音訊時，播放最佳的有損音訊並標明音質。僅限無損則會停止播放。";
+
+"The video servers could not be reached. Try again later." = "無法連線影片伺服器，請稍後再試。";

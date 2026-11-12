@@ -1400,7 +1400,6 @@
 "Douban Hot Movies" = "Douban Hot Movies";
 "Douban Hot Series" = "Douban Hot Series";
 "Douban Hot Variety Shows" = "Douban Hot Variety Shows";
-"Douban" = "Douban";
 
 "%@ (Translated from %@)" = "%@ (Translated from %@)";
 
@@ -1810,3 +1809,7 @@
 "In the last ten minutes" = "In the last ten minutes";
 "%@ before the end" = "%@ before the end";
 "Clear Intro and Outro" = "Clear Intro and Outro";
+
+"Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead.";
+
+"The video servers could not be reached. Try again later." = "The video servers could not be reached. Try again later.";

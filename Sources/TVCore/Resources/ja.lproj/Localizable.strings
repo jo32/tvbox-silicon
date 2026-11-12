@@ -1400,7 +1400,6 @@
 "Douban Hot Movies" = "Douban 人気映画";
 "Douban Hot Series" = "Douban 人気ドラマ";
 "Douban Hot Variety Shows" = "Douban 人気バラエティ";
-"Douban" = "Douban";
 
 "%@ (Translated from %@)" = "%@（%@から翻訳）";
 
@@ -1810,3 +1809,7 @@
 "In the last ten minutes" = "最後の10分以内で設定";
 "%@ before the end" = "終了の %@ 前";
 "Clear Intro and Outro" = "オープニングとエンディングを消去";
+
+"Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "「ロスレス優先」は、どのチャンネルにもロスレス音源がない場合、最良の非可逆音源をその音質と明示して再生します。「ロスレスのみ」では再生を停止します。";
+
+"The video servers could not be reached. Try again later." = "動画サーバーに接続できませんでした。時間をおいてもう一度お試しください。";

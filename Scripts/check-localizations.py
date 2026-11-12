@@ -9,6 +9,14 @@ root = pathlib.Path(__file__).resolve().parents[1]
 languages = ("en", "zh-Hans", "zh-Hant", "ja")
 entry = re.compile(r'^("(?:[^"\\]|\\.)*")\s*=\s*("(?:[^"\\]|\\.)*");$', re.M)
 formats = re.compile(r'%(?:\d+\$)?(?:ll)?[@du]')
+def arguments(text):
+    # Positional placeholders may reorder arguments in a translation.
+    result = []
+    for index, token in enumerate(formats.findall(text), 1):
+        match = re.fullmatch(r"%(?:(\d+)\$)?((?:ll)?[@du])", token)
+        result.append((int(match[1]) if match[1] else index, match[2]))
+    return collections.Counter(result)
+
 tables = {}
 for language in languages:
     path = root / "Sources/TVCore/Resources" / f"{language}.lproj/Localizable.strings"
@@ -16,13 +24,15 @@ for language in languages:
     assert len(rows) == len(dict(rows)), f"Duplicate keys: {language}"
     tables[language] = dict(rows)
 source = tables["en"]
+# Context-specific lookup keys intentionally differ from their visible English labels.
+english_labels = {"Filter Type": "Type", "Filter Genre": "Genre", "Catalog Series": "TV Shows"}
 for language, table in tables.items():
     assert table.keys() == source.keys(), f"Mismatched keys: {language}"
     for key, value in table.items():
         assert value.strip(), f"Empty translation: {language} {key}"
-        assert collections.Counter(formats.findall(key)) == collections.Counter(formats.findall(value)), f"Format mismatch: {language} {key}"
+        assert arguments(key) == arguments(value), f"Format mismatch: {language} {key}"
         if language == "en":
-            assert key == value, f"English source drift: {key}"
+            assert value == english_labels.get(key, key), f"English source drift: {key}"
 for folder in (root / "App", root / "Sources/TVCore"):
     for path in folder.glob("*.swift"):
         for literal in re.findall(r'L10n.text\(("(?:[^"\\]|\\.)*")', path.read_text()):
