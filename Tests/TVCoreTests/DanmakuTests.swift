@@ -49,7 +49,25 @@ struct DanmakuTests {
         let whole = DanmakuLayout(width: 1000, height: 1000, laneHeight: 50, scrollArea: DanmakuArea.full.share)
         #expect(whole.scrollLanes == 20 && whole.fixedLanes == 6)
         #expect(DanmakuArea.standard.share == 0.75 && DanmakuArea(rawValue: 50) == .half)
-        #expect(DanmakuArea.allCases.map(\.next) == [.half, .threeQuarters, .full, .quarter])
+        #expect(DanmakuArea.allCases.map(\.next) == [.quarter, .half, .threeQuarters, .full, .oneLine])
+    }
+
+    @Test func oneLineKeepsEveryCommentInTheTopRow() {
+        var layout = DanmakuLayout(width: 1000, height: 1000, laneHeight: 50, scrollArea: DanmakuArea.oneLine.share, scrollDuration: 10)
+        #expect(layout.scrollLanes == 1 && layout.fixedLanes == 1)
+        let scroll = Danmaku(time: 0, position: .scroll, text: "s")
+        #expect(layout.place(scroll, width: 100, at: 0)?.lane == 0)
+        // The row is taken until the first comment has moved in with a gap behind it; there is no second row to use.
+        #expect(layout.place(scroll, width: 100, at: 0.5) == nil)
+        #expect(layout.place(scroll, width: 100, at: 2)?.lane == 0)
+        // A bottom comment has only that row too: it waits for scrolling comments to clear the middle,
+        var empty = DanmakuLayout(width: 1000, height: 1000, laneHeight: 50, scrollArea: DanmakuArea.oneLine.share, scrollDuration: 10)
+        let foot = Danmaku(time: 0, position: .bottom, text: "b")
+        #expect(layout.place(foot, width: 100, at: 2.5) == nil)
+        #expect(empty.place(foot, width: 100, at: 0)?.lane == 0)
+        // and holds it against top comments while it shows.
+        #expect(empty.place(Danmaku(time: 1, position: .top, text: "t"), width: 100, at: 1) == nil)
+        #expect(empty.place(foot, width: 100, at: 4.5)?.lane == 0)
     }
 
     @Test func styleMenuKeepsTheStoredChoice() {

@@ -160,13 +160,15 @@ struct ProtobufReader {
 
 /// How much of the picture comments may use, from the top (弹幕区域): a quarter or a half keeps them off faces
 /// and subtitles. Stored in percent under `key`; three quarters is where comments always scrolled.
+/// One line (zero percent) is a single row along the top edge, so nothing covers the picture below it.
 public enum DanmakuArea: Int, CaseIterable, Sendable {
-    case quarter = 25, half = 50, threeQuarters = 75, full = 100
+    case oneLine = 0, quarter = 25, half = 50, threeQuarters = 75, full = 100
     public static let key = "danmakuArea"
     public static let standard = DanmakuArea.threeQuarters
     public var share: Double { Double(rawValue) / 100 }
     public var title: String {
         switch self {
+        case .oneLine: L10n.text("One Line")
         case .quarter: L10n.text("Top Quarter")
         case .half: L10n.text("Top Half")
         case .threeQuarters: L10n.text("Top Three Quarters")
@@ -221,6 +223,8 @@ public struct DanmakuLayout {
     private var scrolling: [Placement?]
     private var top: [Placement?]
     private var bottom: [Placement?]
+    /// With one row there is no foot of the area apart from that row, so bottom comments take turns in it like top ones.
+    private let singleRow: Bool
 
     public init(width: Double, height: Double, laneHeight: Double, scrollArea: Double = 0.75, scrollDuration: Double = 9, fixedDuration: Double = 4) {
         self.width = width; self.laneHeight = laneHeight; self.scrollDuration = scrollDuration; self.fixedDuration = fixedDuration
@@ -230,6 +234,7 @@ public struct DanmakuLayout {
         scrolling = Array(repeating: nil, count: scrollLanes)
         top = Array(repeating: nil, count: fixedLanes)
         bottom = Array(repeating: nil, count: fixedLanes)
+        singleRow = scrollLanes == 1
     }
 
     /// How long a placement stays on screen.
@@ -261,18 +266,19 @@ public struct DanmakuLayout {
             }
             return nil
         case .top, .bottom:
-            let lanes = comment.position == .top ? top : bottom
+            let pinsToTop = comment.position == .top || singleRow
+            let lanes = pinsToTop ? top : bottom
             guard let lane = lanes.indices.first(where: { lane in
                 guard lanes[lane].map({ time - $0.start >= fixedDuration }) ?? true else { return false }
                 // A top comment also keeps clear of scrolling comments crossing the centre of its row while it shows.
-                guard comment.position == .top, lane < scrolling.count, let moving = scrolling[lane] else { return true }
+                guard pinsToTop, lane < scrolling.count, let moving = scrolling[lane] else { return true }
                 let left = (width - textWidth) / 2, right = left + textWidth
                 let passed = width - (time - moving.start) * moving.speed + moving.width <= left
                 let arrives = width - (time + fixedDuration - moving.start) * moving.speed < right
                 return passed || !arrives
             }) else { return nil }
             let placement = Placement(comment: comment, start: time, width: textWidth, lane: lane, speed: 0)
-            if comment.position == .top { top[lane] = placement } else { bottom[lane] = placement }
+            if pinsToTop { top[lane] = placement } else { bottom[lane] = placement }
             return placement
         }
     }
