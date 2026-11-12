@@ -4511,11 +4511,11 @@
   ],
   "testflight": {
     "ios": {
-      "build": 55,
+      "build": 57,
       "link": "https://testflight.apple.com/join/dU6UNbzp"
     },
     "tvos": {
-      "build": 55,
+      "build": 57,
       "link": "https://testflight.apple.com/join/SSgWEwSr"
     }
   }
