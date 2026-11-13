@@ -346,7 +346,6 @@ struct FormSettingsView: View {
     /// The recommended sources that take a sign-in, each with its row's subtitle.
     @State private var sourceSignIns: [(signIn: SourceSignIn, summary: String)] = []
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
-    @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     @AppStorage(ErrorReports.key) private var sendsErrorReports = true
@@ -592,11 +591,8 @@ struct FormSettingsView: View {
                         FormLabel(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Show Danmaku"), subtitle: danmakuNote)
                     }
                     .settingsSwitch()
-                    Picker(selection: $danmakuArea) {
-                        ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
-                    } label: {
-                        FormLabel(symbol: "rectangle.tophalf.inset.filled", tint: .teal, title: L10n.text("Danmaku Area"))
-                    }
+                    FormLink(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Danmaku Service")) { DanmakuServiceSettingsView() }
+                        .accessibilityIdentifier("settings.danmakuService")
                     Toggle(isOn: $receivesCasts) {
                         FormLabel(symbol: "tv.and.mediabox.fill", tint: BilibiliMark.blue, title: L10n.text("Cast from the Bilibili App"),
                                   subtitle: L10n.text("With your phone on the same network, tap the TV button in a Bilibili video and choose %@.", L10n.text("Yingxia")))
@@ -947,7 +943,6 @@ private struct PressableStyle: ButtonStyle {
 struct PlaybackSettingsView: View {
     @Environment(Store.self) private var store
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
-    @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @AppStorage(SpeedBoost.key) private var holdSpeed = SpeedBoost.standard
     @AppStorage(PictureLevel.key) private var slidesLevels = true
     @AppStorage(PictureDoubleTap.key) private var doubleTapSkips = true
@@ -994,12 +989,8 @@ struct PlaybackSettingsView: View {
                         FormLabel(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Show Danmaku"))
                     }
                     .settingsSwitch()
-                    // "Danmaku Area" beside "Top Three Quarters" didn't fit, and the picker put its value on a line of its own.
-                    Picker(selection: $danmakuArea) {
-                        ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
-                    } label: {
-                        FormLabel(symbol: "rectangle.tophalf.inset.filled", tint: .teal, title: L10n.text("Area"))
-                    }
+                    FormLink(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Danmaku Service")) { DanmakuServiceSettingsView() }
+                        .accessibilityIdentifier("settings.danmakuService")
                 }
             }
             if VideoEnhancement.canUpscale || VideoEnhancement.canSmooth {

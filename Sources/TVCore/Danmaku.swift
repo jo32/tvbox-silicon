@@ -179,11 +179,12 @@ public enum DanmakuArea: Int, CaseIterable, Sendable {
     public var next: DanmakuArea { Self.allCases[((Self.allCases.firstIndex(of: self) ?? 0) + 1) % Self.allCases.count] }
 }
 
-/// Text size and opacity for every comment track (matched or imported comments, Bilibili videos and live rooms).
-/// The size is stored in points under `fontSizeKey`, where 22 is the standard size.
+/// Display preferences for every comment track (matched or imported comments, Bilibili videos and live rooms).
+/// The size is stored in points under `fontSizeKey`, where 22 is the standard size. Comment types default to shown.
 public enum DanmakuStyle {
-    public static let fontSizeKey = "danmakuFontSize", opacityKey = "danmakuOpacity"
-    public static let standardFontSize = 22.0, standardOpacity = 0.85
+    public static let fontSizeKey = "danmakuFontSize", opacityKey = "danmakuOpacity", speedKey = "danmakuSpeed"
+    public static let scrollKey = "danmakuScroll", topKey = "danmakuTop", bottomKey = "danmakuBottom"
+    public static let standardFontSize = 22.0, standardOpacity = 0.85, standardSpeed = 1.0
     /// The sizes the player's menu offers, smallest first. A size the older slider stored between them stays in the list.
     public static func fontSizes(including current: Double) -> [Double] {
         choices([16, 18, 20, 22, 26, 30, 36], current).sorted()
@@ -192,10 +193,19 @@ public enum DanmakuStyle {
     public static func opacities(including current: Double) -> [Double] {
         choices([1, 0.85, 0.7, 0.5, 0.3], current).sorted(by: >)
     }
+    /// Scrolling speeds, slowest first; a stored value between the menu's choices remains selectable.
+    public static func speeds(including current: Double) -> [Double] {
+        choices([0.5, 0.75, 1, 1.25, 1.5, 2], clampedSpeed(current)).sorted()
+    }
     /// How many times the standard size comments are drawn, within the slider's 16–36 range.
     public static func textScale(_ fontSize: Double) -> Double {
         fontSize.isFinite ? min(36, max(16, fontSize)) / standardFontSize : 1
     }
+    public static func clampedSpeed(_ speed: Double) -> Double {
+        speed.isFinite ? min(2, max(0.5, speed)) : standardSpeed
+    }
+    /// Scrolling duration relative to the usual nine seconds. Fixed comments keep their own duration.
+    public static func scrollDurationMultiplier(_ speed: Double) -> Double { 1 / clampedSpeed(speed) }
     private static func choices(_ standard: [Double], _ current: Double) -> [Double] {
         !current.isFinite || standard.contains(where: { abs($0 - current) < 0.001 }) ? standard : standard + [current]
     }
@@ -220,7 +230,8 @@ public struct DanmakuLayout {
     public let fixedLanes: Int
     public let scrollDuration: Double
     public let fixedDuration: Double
-    private var scrolling: [Placement?]
+    /// Several comments can share a lane; fixed comments must avoid all of them, including those ahead of the newest.
+    private var scrolling: [[Placement]]
     private var top: [Placement?]
     private var bottom: [Placement?]
     /// With one row there is no foot of the area apart from that row, so bottom comments take turns in it like top ones.
@@ -231,7 +242,7 @@ public struct DanmakuLayout {
         scrollLanes = max(1, Int(height * scrollArea / laneHeight))
         // Top comments stay inside the scrolling area when that is smaller than their usual 30%.
         fixedLanes = max(1, Int(height * min(0.3, scrollArea) / laneHeight))
-        scrolling = Array(repeating: nil, count: scrollLanes)
+        scrolling = Array(repeating: [], count: scrollLanes)
         top = Array(repeating: nil, count: fixedLanes)
         bottom = Array(repeating: nil, count: fixedLanes)
         singleRow = scrollLanes == 1
@@ -241,12 +252,16 @@ public struct DanmakuLayout {
     public func duration(_ placement: Placement) -> Double { placement.speed > 0 ? (width + placement.width) / placement.speed : fixedDuration }
 
     public mutating func place(_ comment: Danmaku, width textWidth: Double, at time: Double) -> Placement? {
+        let expired = time - scrollDuration
+        for lane in scrolling.indices {
+            scrolling[lane].removeAll { $0.start <= expired }
+        }
         switch comment.position {
         case .scroll:
             let speed = (width + textWidth) / scrollDuration
             let gap = laneHeight
             for lane in scrolling.indices {
-                if let last = scrolling[lane] {
+                if let last = scrolling[lane].last {
                     let elapsed = time - last.start
                     // The previous comment's tail must be on screen with a gap behind it,
                     let tail = width - elapsed * last.speed + last.width
@@ -261,7 +276,7 @@ public struct DanmakuLayout {
                     guard time + (width - right) / speed >= pinned.start + fixedDuration else { continue }
                 }
                 let placement = Placement(comment: comment, start: time, width: textWidth, lane: lane, speed: speed)
-                scrolling[lane] = placement
+                scrolling[lane].append(placement)
                 return placement
             }
             return nil
@@ -270,12 +285,14 @@ public struct DanmakuLayout {
             let lanes = pinsToTop ? top : bottom
             guard let lane = lanes.indices.first(where: { lane in
                 guard lanes[lane].map({ time - $0.start >= fixedDuration }) ?? true else { return false }
-                // A top comment also keeps clear of scrolling comments crossing the centre of its row while it shows.
-                guard pinsToTop, lane < scrolling.count, let moving = scrolling[lane] else { return true }
+                // A top comment also keeps clear of every scrolling comment crossing the centre while it shows.
+                guard pinsToTop, lane < scrolling.count else { return true }
                 let left = (width - textWidth) / 2, right = left + textWidth
-                let passed = width - (time - moving.start) * moving.speed + moving.width <= left
-                let arrives = width - (time + fixedDuration - moving.start) * moving.speed < right
-                return passed || !arrives
+                return scrolling[lane].allSatisfy { moving in
+                    let passed = width - (time - moving.start) * moving.speed + moving.width <= left
+                    let arrives = width - (time + fixedDuration - moving.start) * moving.speed < right
+                    return passed || !arrives
+                }
             }) else { return nil }
             let placement = Placement(comment: comment, start: time, width: textWidth, lane: lane, speed: 0)
             if pinsToTop { top[lane] = placement } else { bottom[lane] = placement }

@@ -161,9 +161,10 @@ import IOKit.pwr_mgt
     private(set) var errorSymbol = "play.slash.fill"
     /// Bullet comments for the media, when its source has them.
     private var sourceDanmaku: [Danmaku] = []
-    var danmaku: [Danmaku] { sourceDanmaku.isEmpty ? catalogDanmaku.renderedComments : sourceDanmaku }
+    private var usesCatalogDanmaku: Bool { sourceDanmaku.isEmpty || catalogDanmaku.overridesSourceComments }
+    var danmaku: [Danmaku] { usesCatalogDanmaku ? catalogDanmaku.renderedComments : sourceDanmaku }
     var danmakuOpacity: Double { catalogDanmaku.opacity }
-    var danmakuRevision: String { sourceDanmaku.isEmpty ? catalogDanmaku.renderedRevision : "" }
+    var danmakuRevision: String { usesCatalogDanmaku ? catalogDanmaku.renderedRevision : "" }
     var onPlaybackEnded: (() -> Void)?
     /// Plays another line of the same episode when this file can't play here (an MKV original);
     /// returns that line's name, or nil when there is none.
@@ -1240,11 +1241,12 @@ import IOKit.pwr_mgt
         bilibiliPart = channel.bilibiliPart
         position = 0; duration = 0
         upcomingAttempted = false
-        // A drive's folder and file names don't name a show to find comments for.
+        // Keep the context even when native comments win, so an explicit service/platform chosen in Settings can
+        // rematch the playing episode. A drive's folder and file names still do not identify a show automatically.
         let source = channel.historyContext?.sourceKey
-        if !DanmakuSource.has(channel.url), source != Bilibili.siteKey, source != CloudFiles.sourceKey {
-            catalogDanmaku.startAutomatic(channel.historyContext)
-        }
+        catalogDanmaku.startAutomatic(channel.historyContext,
+            usesSourceComments: DanmakuSource.has(channel.url) || source == Bilibili.siteKey,
+            allowsAutomatic: source != CloudFiles.sourceKey)
     }
 
     private func restorePositionIfNeeded(_ item: AVPlayerItem) {

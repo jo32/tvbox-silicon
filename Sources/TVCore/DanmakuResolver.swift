@@ -8,18 +8,45 @@ public struct DanmakuResolver: Sendable {
     /// Asked for an official page's comments when dmku fails or has none. It takes `type=json&id=<page>`.
     public let backupServer: URL?
     public let officialLookup: Bool
+    public let preferredSource: DanmakuProvider
+    private let dandanCredentials: DandanplayCredentials?
+    public var isCustomServer: Bool { DanmakuService.isCustomServer(dandanServer) }
     public static let defaultBackupServer = URL(string: "https://danmu.zxz.ee/")!
     public init(cache: MediaCache = .shared, http: DanmakuHTTP = .init(),
                 dandanServer: String = CatalogDanmakuClient.defaultServer, dmkuServer: URL = URL(string: "https://dmku.hls.one/")!,
-                backupServer: URL? = Self.defaultBackupServer, officialLookup: Bool = true) {
+                backupServer: URL? = Self.defaultBackupServer, officialLookup: Bool = true,
+                preferredSource: DanmakuProvider = .automatic, dandanCredentials: DandanplayCredentials? = .bundled) {
         self.cache = cache; self.http = http; self.dandanServer = (try? CatalogDanmakuClient(address: dandanServer).server.absoluteString) ?? dandanServer
         self.dmkuServer = dmkuServer; self.backupServer = backupServer; self.officialLookup = officialLookup
+        self.preferredSource = preferredSource; self.dandanCredentials = dandanCredentials
     }
+    /// Legacy unscoped episode identity. Use the instance method for reading, storing or removing comments.
     public static func episodeKey(_ context: PlaybackHistoryContext) -> String {
-        CatalogDanmakuMatcher.episodeNumber(context.episodeName).map { "episode:\($0)" } ?? context.episodeName
+        CatalogDanmakuMatcher.explicitEpisodeNumber(context.episodeName).map { "episode:\($0)" } ?? context.episodeName
+    }
+    /// MediaCache key for this server/platform and episode; pair it with `kind: .danmaku, scope: context.id`.
+    public func cacheKey(_ context: PlaybackHistoryContext) -> String {
+        String(decoding: try! JSONEncoder().encode(["danmaku-v2", DanmakuService.cacheIdentity(server: dandanServer, preferredSource: preferredSource),
+            CatalogDanmakuMatcher.normalized(context.videoName), context.year ?? "", Self.episodeKey(context)]), as: UTF8.self)
+    }
+    public func episodeKey(_ context: PlaybackHistoryContext) -> String { cacheKey(context) }
+    public func forget(_ context: PlaybackHistoryContext) { cache.remove(cacheKey(context), kind: .danmaku, scope: context.id) }
+    public func removeCachedEpisode(_ context: PlaybackHistoryContext) { forget(context) }
+    /// A manual selection replaces prefetched episodes for this work and invalidates their in-flight tickets.
+    /// Call after loading the selection, then use the returned ticket for `remember` and `cache`.
+    public func invalidateEpisodes(for context: PlaybackHistoryContext) -> MediaCache.Ticket {
+        cache.remove(kind: .danmaku, scope: context.id)
+        return cache.ticket()
+    }
+    /// Store manual/imported results using precisely the same namespace as automatic resolution.
+    public func cache(_ result: AutomaticDanmakuResult, for context: PlaybackHistoryContext, ticket: MediaCache.Ticket? = nil) {
+        if let data = try? JSONEncoder().encode(result) {
+            cache.store(data, for: cacheKey(context), kind: .danmaku, scope: context.id, ttl: 7 * 86400, ticket: ticket ?? cache.ticket())
+        }
     }
     private func lookupKey(_ context: PlaybackHistoryContext) -> String {
-        String(data: try! JSONEncoder().encode([CatalogDanmakuMatcher.normalized(context.videoName), context.year ?? "", dandanServer, dmkuServer.absoluteString]), encoding: .utf8)!
+        String(decoding: try! JSONEncoder().encode(["danmaku-mapping-v2", CatalogDanmakuMatcher.normalized(context.videoName), context.year ?? "",
+            DanmakuService.cacheIdentity(server: dandanServer, preferredSource: preferredSource), dmkuServer.absoluteString]), as: UTF8.self)
     }
     private struct Outcome: Sendable {
         var result: AutomaticDanmakuResult?
@@ -45,37 +72,42 @@ public struct DanmakuResolver: Sendable {
         for server in [dmkuServer] + (backupServer.map { [$0] } ?? []) { cache.remove(Self.pauseKey(server), kind: .lookup) }
     }
     public func remember(_ mapping: DanmakuMapping, for context: PlaybackHistoryContext, ticket: MediaCache.Ticket) {
+        // Older callers supplied a plain dandan mapping. Mark it as a custom catalog mapping so the
+        // conservative episode matcher is also used for hand-selected custom tracks.
+        let mapping = isCustomServer && mapping.source == nil ? DanmakuMapping(provider: mapping.provider,
+            title: mapping.title, year: mapping.year, tracks: mapping.tracks, animeID: mapping.animeID, source: mapping.provider) : mapping
         let key = lookupKey(context)
         var mappings = cache.data(for: key, kind: .lookup).flatMap { try? JSONDecoder().decode([DanmakuMapping].self, from: $0) } ?? []
-        mappings.removeAll { $0.provider == mapping.provider }; mappings.append(mapping)
+        mappings.removeAll { $0.provider == mapping.provider }; mappings.insert(mapping, at: 0)
         if let data = try? JSONEncoder().encode(mappings) {
             cache.store(data, for: key, kind: .lookup, ttl: 30 * 86400, ticket: ticket)
         }
     }
     private func keep(_ mapping: DanmakuMapping?, in mappings: inout [DanmakuMapping], key: String, ticket: MediaCache.Ticket) {
         guard let mapping, !mapping.tracks.isEmpty else { return }
-        mappings.removeAll { $0.provider == mapping.provider }; mappings.append(mapping)
+        mappings.removeAll { $0.provider == mapping.provider }; mappings.insert(mapping, at: 0)
         if let data = try? JSONEncoder().encode(mappings) {
             cache.store(data, for: key, kind: .lookup, ttl: 30 * 86400, ticket: ticket)
         }
     }
     private func keep(_ result: AutomaticDanmakuResult, context: PlaybackHistoryContext, ticket: MediaCache.Ticket) -> AutomaticDanmakuResult {
-        if let data = try? JSONEncoder().encode(result) {
-            cache.store(data, for: Self.episodeKey(context), kind: .danmaku, scope: context.id, ttl: 7 * 86400, ticket: ticket)
-        }
+        cache(result, for: context, ticket: ticket)
         return result
     }
     /// `first` is asked before the comment servers: the source's own comments (a CatPawOpen bundle's, #506), or nil.
     public func resolve(_ context: PlaybackHistoryContext, ticket: MediaCache.Ticket? = nil,
                         first: (@Sendable (PlaybackHistoryContext) async -> AutomaticDanmakuResult?)? = nil) async throws -> AutomaticDanmakuResult {
         let ticket = ticket ?? cache.ticket()
-        let key = Self.episodeKey(context)
+        try Task.checkCancellation()
+        let key = cacheKey(context)
         if let data = cache.data(for: key, kind: .danmaku, scope: context.id),
            var result = try? JSONDecoder().decode(AutomaticDanmakuResult.self, from: data),
            ["loaded", "unmatched", "unavailable"].contains(result.state) {
             result.cached = true; return result
         }
-        if let first, let result = await first(context), !result.comments.isEmpty {
+        // A custom service is an explicit routing choice, including when it returns nothing or fails.
+        if isCustomServer { return try await resolveCustom(context, ticket: ticket) }
+        if preferredSource == .automatic, let first, let result = await first(context), !result.comments.isEmpty {
             try Task.checkCancellation()
             return keep(result, context: context, ticket: ticket)
         }
@@ -87,8 +119,9 @@ public struct DanmakuResolver: Sendable {
         // providers find nothing. A title that already matched there (automatically, or picked by hand) asks it
         // first, as that costs one request; the wait stays bounded so the others aren't held up.
         let dandanSaved = saved.first { $0.provider == "dandan" }
-        let dandanFirst = dandanSaved?.track(for: context) != nil
-        var responded = false, unreachable = false
+        let allowsDandan = preferredSource == .automatic || preferredSource == .dandan
+        let dandanFirst = allowsDandan && dandanSaved?.track(for: context) != nil
+        var responded = preferredSource != .automatic, unreachable = false
         if dandanFirst, let outcome = await askDandanplay(context, cached: dandanSaved, lookupKey: lookupKey, wait: 5, ticket: ticket) {
             try Task.checkCancellation()
             responded = outcome.responded
@@ -96,14 +129,15 @@ public struct DanmakuResolver: Sendable {
             if let result = outcome.result, !result.comments.isEmpty { return keep(result, context: context, ticket: ticket) }
         }
         let found: AutomaticDanmakuResult? = try await withThrowingTaskGroup(of: Outcome.self) { group in
-            if let page = context.officialPage.flatMap({ OfficialVideoPage.validated($0.absoluteString) }) {
+            if let page = context.officialPage.flatMap({ OfficialVideoPage.validated($0.absoluteString) }),
+               preferredSource == .automatic || DanmakuProvider(source: CatalogDanmakuMatcher.episodeSource(title: "", url: page)) == preferredSource {
                 group.addTask {
                     let mapping = DanmakuMapping(provider: "direct", title: context.videoName, year: context.year,
                         tracks: [DanmakuTrack(number: CatalogDanmakuMatcher.episodeNumber(context.episodeName), title: context.episodeName, page: page)])
                     return await self.official(context, provider: "direct", cached: mapping, ticket: ticket)
                 }
             } else if officialLookup {
-                for provider in ["iqiyi", "tencent"] {
+                for provider in ["iqiyi", "tencent"] where preferredSource == .automatic || preferredSource.rawValue == provider {
                     group.addTask { await self.official(context, provider: provider, cached: saved.first { $0.provider == provider }, ticket: ticket) }
                 }
             }
@@ -120,7 +154,7 @@ public struct DanmakuResolver: Sendable {
             return nil
         }
         if let found { return keep(found, context: context, ticket: ticket) }
-        if !dandanFirst, let outcome = await askDandanplay(context, cached: dandanSaved, lookupKey: lookupKey, wait: 15, ticket: ticket) {
+        if allowsDandan, !dandanFirst, let outcome = await askDandanplay(context, cached: dandanSaved, lookupKey: lookupKey, wait: 15, ticket: ticket) {
             try Task.checkCancellation()
             responded = responded || outcome.responded
             keep(outcome.mapping, in: &mappings, key: lookupKey, ticket: ticket)
@@ -138,6 +172,112 @@ public struct DanmakuResolver: Sendable {
         }
         return result
     }
+    private func resolveCustom(_ context: PlaybackHistoryContext, ticket: MediaCache.Ticket) async throws -> AutomaticDanmakuResult {
+        guard !DandanplayPause.isPaused(dandanServer) else { return customNegative(context, state: "unavailable", ticket: ticket) }
+        let key = lookupKey(context)
+        var mappings = cache.data(for: key, kind: .lookup).flatMap { try? JSONDecoder().decode([DanmakuMapping].self, from: $0) } ?? []
+        let saved = mappings.first { mapping in
+            (preferredSource == .automatic || DanmakuProvider(source: mapping.provider) == preferredSource)
+                && mapping.track(for: context) != nil
+        }
+        var mapping = saved
+        do {
+            let client = try CatalogDanmakuClient(address: dandanServer, transport: http, credentials: dandanCredentials)
+            if mapping == nil { mapping = try await customMapping(context, client: client) }
+            if let selected = mapping, let track = selected.track(for: context), let id = track.id {
+                let comments: [CatalogDanmakuComment]
+                do {
+                    comments = try await client.comments(CatalogDanmakuEpisode(id: id, title: track.title))
+                } catch TVError.http(404) where saved != nil {
+                    // Only a saved ID is stale. Refresh once, preserving the selected catalog/platform.
+                    mapping = try await refreshedCustomMapping(context, saved: selected, client: client)
+                    guard let refreshed = mapping, let fresh = refreshed.track(for: context), let freshID = fresh.id else {
+                        return customNegative(context, state: "unmatched", ticket: ticket)
+                    }
+                    comments = try await client.comments(CatalogDanmakuEpisode(id: freshID, title: fresh.title))
+                }
+                try Task.checkCancellation()
+                if let mapping, let selectedTrack = mapping.track(for: context) {
+                    keep(mapping, in: &mappings, key: key, ticket: ticket)
+                    let platform = DanmakuProvider(source: selectedTrack.source ?? mapping.source ?? mapping.provider)
+                    let source = platform == .automatic ? mapping.source ?? mapping.provider : platform.title
+                    let result = AutomaticDanmakuResult(comments: comments, track: mapping.title + " · " + selectedTrack.title,
+                        source: source, state: comments.isEmpty ? "unmatched" : "loaded")
+                    return comments.isEmpty ? customNegative(context, state: "unmatched", ticket: ticket) : keep(result, context: context, ticket: ticket)
+                }
+            }
+            try Task.checkCancellation()
+            return customNegative(context, state: "unmatched", ticket: ticket)
+        } catch {
+            try Task.checkCancellation()
+            if error is CancellationError { throw error }
+            if error is DandanplayLimitReached { DandanplayPause.pause(dandanServer) }
+            // Keep a proven mapping through a transient outage; do not refresh IDs on transport/5xx failures.
+            keep(mapping, in: &mappings, key: key, ticket: ticket)
+            return customNegative(context, state: "unavailable", ticket: ticket)
+        }
+    }
+
+    private func customNegative(_ context: PlaybackHistoryContext, state: String, ticket: MediaCache.Ticket) -> AutomaticDanmakuResult {
+        let result = AutomaticDanmakuResult(comments: [], track: "", source: "", state: state)
+        if let data = try? JSONEncoder().encode(result) {
+            cache.store(data, for: cacheKey(context), kind: .danmaku, scope: context.id, ttl: state == "unmatched" ? 300 : 30, ticket: ticket)
+        }
+        return result
+    }
+
+    private func customMapping(_ context: PlaybackHistoryContext, client: CatalogDanmakuClient,
+                               selectedSource: DanmakuProvider? = nil) async throws -> DanmakuMapping? {
+        let preference = selectedSource ?? preferredSource
+        let results = try await client.search(context.videoName, source: preference)
+        let candidates = CatalogDanmakuMatcher.animeCandidates(title: context.videoName, year: context.year, source: preference, in: results)
+        let groups = Dictionary(grouping: candidates, by: { $0.source })
+        // Platform order is stable, but no order within a platform resolves an ambiguous edition.
+        let order = DanmakuProvider.allCases.filter { $0 != .automatic }
+        let unique = groups.values.compactMap { $0.count == 1 ? $0.first : nil }.sorted { left, right in
+            let l = order.firstIndex(of: left.provider) ?? order.count, r = order.firstIndex(of: right.provider) ?? order.count
+            return l == r ? left.source < right.source : l < r
+        }
+        for anime in unique.prefix(12) {
+            try Task.checkCancellation()
+            let episodes = try await client.episodes(anime)
+            if let mapping = customMapping(context, anime: anime, episodes: episodes, preference: preference) { return mapping }
+        }
+        return nil
+    }
+
+    private func customMapping(_ context: PlaybackHistoryContext, anime: CatalogDanmakuAnime,
+                               episodes: [CatalogDanmakuEpisode], preference: DanmakuProvider) -> DanmakuMapping? {
+        let platforms = preference == .automatic ? DanmakuProvider.allCases.filter { $0 != .automatic } + [.automatic] : [preference]
+        for platform in platforms {
+            let filtered = episodes.filter { episode in
+                platform == .automatic ? episode.provider == .automatic : episode.provider == platform
+            }
+            // Duplicate rows for the same service ID must not create false ambiguity.
+            var seen = Set<CatalogDanmakuEpisode>()
+            let unique = filtered.filter { seen.insert($0).inserted }
+            guard CatalogDanmakuMatcher.episode(name: context.episodeName, seriesTitle: anime.title, in: unique) != nil else { continue }
+            let source = platform == .automatic ? anime.source : platform.rawValue
+            return DanmakuMapping(provider: source, title: anime.title, year: anime.year,
+                tracks: unique.map { DanmakuTrack(number: $0.episodeNumber, title: $0.title, id: $0.id, source: $0.source) }, animeID: anime.id, source: source)
+        }
+        return nil
+    }
+
+    private func refreshedCustomMapping(_ context: PlaybackHistoryContext, saved: DanmakuMapping,
+                                        client: CatalogDanmakuClient) async throws -> DanmakuMapping? {
+        let platform = DanmakuProvider(source: saved.source ?? saved.provider)
+        if let animeID = saved.animeID {
+            let anime = CatalogDanmakuAnime(id: animeID, title: saved.title, source: saved.source ?? saved.provider, year: saved.year)
+            do {
+                return customMapping(context, anime: anime, episodes: try await client.episodes(anime), preference: platform)
+            } catch TVError.http(404) {
+                // Catalog IDs may also have changed. One title search is enough; never retry indefinitely.
+            }
+        }
+        return try await customMapping(context, client: client, selectedSource: platform)
+    }
+
     /// Asks Dandanplay, waiting at most `wait` seconds. nil when it isn't asked: its limit was reached a short
     /// while ago, or it recently had no work with this title (kept a week, so every episode of a series it doesn't
     /// list costs one search, not one each).
@@ -214,7 +354,7 @@ public struct DanmakuResolver: Sendable {
     }
     private func dandan(_ context: PlaybackHistoryContext, cached: DanmakuMapping?) async -> Outcome {
         do {
-            let client = try CatalogDanmakuClient(address: dandanServer, transport: http)
+            let client = try CatalogDanmakuClient(address: dandanServer, transport: http, credentials: dandanCredentials)
             var mapping = cached
             if mapping?.track(for: context) == nil {
                 guard let anime = CatalogDanmakuMatcher.anime(title: context.videoName, in: try await client.search(context.videoName)) else {

@@ -43,6 +43,7 @@ struct MobilePlayerView: View {
     @State private var speed: Float = 1
     @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @State private var showsDanmakuList = false
+    @State private var showsDanmakuSettings = false
     @State private var showsEpisodes = false
     /// Devices with Yingxia open, for the Play On button; and the one the video was sent to.
     @State private var tvBrowser = PlayOnBrowser()
@@ -195,6 +196,9 @@ struct MobilePlayerView: View {
         .sheet(isPresented: $showsDanmakuList) {
             DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
                 .danmakuListPresentation()
+        }
+        .sheet(isPresented: $showsDanmakuSettings) {
+            CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet()
         }
     }
 
@@ -675,22 +679,22 @@ struct MobilePlayerView: View {
             }
             // On a watch page the episodes are on the page itself.
             if !inline { CatalogPlaybackActions(channel: channel, session: session) }
-            // One button for danmaku: show or hide them, or open the list.
-            if !session.danmaku.isEmpty {
-                Menu {
-                    Toggle(isOn: $showsDanmaku) { Label(L10n.text("Show Danmaku"), systemImage: "text.bubble") }
-                    Picker(selection: $danmakuArea) {
-                        ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
-                    } label: { Label(L10n.text("Danmaku Area"), systemImage: "rectangle.tophalf.inset.filled") }
-                    .pickerStyle(.menu)
-                    DanmakuStylePickers(model: session.catalogDanmaku)
-                    Button { showsDanmakuList = true } label: { Label(L10n.text("Danmaku List"), systemImage: "list.bullet.rectangle") }
-                } label: {
-                    Image(systemName: showsDanmaku ? "text.bubble.fill" : "text.bubble").font(.headline).frame(width: 22, height: 22)
-                }
-                .chromeButton()
-                .accessibilityLabel(L10n.text("Danmaku"))
+            Menu {
+                Toggle(isOn: $showsDanmaku) { Label(L10n.text("Show Danmaku"), systemImage: "text.bubble") }
+                Button { showsDanmakuSettings = true } label: { Label(L10n.text("Danmaku Settings…"), systemImage: "slider.horizontal.3") }
+                Picker(selection: $danmakuArea) {
+                    ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
+                } label: { Label(L10n.text("Danmaku Area"), systemImage: "rectangle.tophalf.inset.filled") }
+                .pickerStyle(.menu)
+                DanmakuStylePickers(model: session.catalogDanmaku)
+                Button { showsDanmakuList = true } label: { Label(L10n.text("Danmaku List"), systemImage: "list.bullet.rectangle") }
+                    .disabled(session.danmaku.isEmpty)
+            } label: {
+                Image(systemName: showsDanmaku ? "text.bubble.fill" : "text.bubble").font(.headline).frame(width: 22, height: 22)
             }
+            .chromeButton()
+            .accessibilityLabel(L10n.text("Danmaku"))
+            .accessibilityIdentifier("player.danmakuMenu")
             // Turns the picture even with Portrait Orientation Lock on, the way the system's own rotation can't.
             // Only on a phone-sized screen: iPhone Duo's inner display (regular both ways) ignores orientations.
             if !inline, PlayerOrientation.available, horizontalSizeClass == .compact || verticalSizeClass == .compact {

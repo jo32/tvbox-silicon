@@ -53,7 +53,7 @@ private actor CatPawAsks {
     let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     let servers = DanmakuHTTP { request in Issue.record("asked \(request.url?.absoluteString ?? "")"); throw TVError.http(404) }
-    let resolver = DanmakuResolver(cache: MediaCache(root: root), http: servers, dandanServer: "https://dandan.test",
+    let resolver = DanmakuResolver(cache: MediaCache(root: root), http: servers, dandanServer: CatalogDanmakuClient.defaultServer,
                                    dmkuServer: URL(string: "https://dmku.test")!, backupServer: nil, officialLookup: false)
     let context = catPawContext()
     let own = AutomaticDanmakuResult(comments: try CatalogDanmakuParser.parse(catPawXML), track: "测试剧 · 第3集", source: "木偶", state: "loaded")
