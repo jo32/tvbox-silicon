@@ -18,6 +18,7 @@ enum QALaunch {
         case "live": .live
         case "music": .music
         case "manga": .manga
+        case "novels": .novels
         case "search": .search
         case "sites": .sites
         case "favorites": .favorites

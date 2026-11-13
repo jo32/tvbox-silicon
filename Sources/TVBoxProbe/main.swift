@@ -183,6 +183,27 @@ import TVCore
             try await manga(args[2], keyword: args.count > 3 ? args[3] : nil)
             return
         }
+        if args[1] == "--novel-check", args.count >= 3 {
+            // --novel-check <Legado list URL or file> [keyword] [--limit N] [--offset N] [--jobs N]: every source searched,
+            // and the keyword's book read through to its first chapter.
+            setvbuf(stdout, nil, _IONBF, 0)
+            try await novelCheck(Array(args[2...]))
+            return
+        }
+        if args[1] == "--novel-bench", args.count >= 3 {
+            // --novel-bench <list> [sessions]: runtime boot time, memory, and load() time over the list.
+            setvbuf(stdout, nil, _IONBF, 0)
+            novelProfiles()
+            let sources = try await novelList(args[2])
+            for line in try await NovelRuntime.benchmark(sources, sessions: args.count > 3 ? Int(args[3]) ?? 16 : 16) { print(line) }
+            return
+        }
+        if args[1] == "--novel-read", args.count >= 5 {
+            // --novel-read <list> <source key or name> <keyword>: one Legado source, verbosely.
+            setvbuf(stdout, nil, _IONBF, 0)
+            try await novelRead(args[2], args[3], keyword: args[4])
+            return
+        }
         if args[1] == "--download", args.count >= 4 {
             // --download <media URL | bili:<BV>[:part]> <folder> [pause after seconds]: the download queue end to end,
             // optionally paused and resumed partway, then the result played through AVPlayer.
@@ -1007,4 +1028,149 @@ final class ManagedAtomicCounter: @unchecked Sendable {
     private var count = 0
     func add() { lock.withLock { count += 1 } }
     var value: Int { lock.withLock { count } }
+}
+
+// MARK: - Novels (Legado book sources)
+
+extension Probe {
+    static func novelList(_ target: String) async throws -> [NovelSource] {
+        let data: Data
+        if target.hasPrefix("http") {
+            var request = URLRequest(url: URL(string: target)!)
+            request.timeoutInterval = 60
+            data = try await URLSession.shared.data(for: request).0
+        } else { data = try Data(contentsOf: URL(filePath: target)) }
+        guard let sources = NovelSource.list(from: data) else { throw TVError.unsupported("not a Legado book source list") }
+        return sources
+    }
+
+    /// One source end to end: search → details → table of contents → the first chapter's text.
+    static func novelRun(_ source: NovelSource, keyword: String, verbose: Bool) async -> (stage: String, line: String) {
+        let runtime = NovelRuntime.shared
+        let began = Date()
+        func took() -> String { String(format: "%.1fs", Date().timeIntervalSince(began)) }
+        func short(_ error: Error) -> String { error.localizedDescription.replacingOccurrences(of: "\n", with: " ").prefix(160).description }
+        guard source.searchable else { return ("no-search", "no searchUrl") }
+        var books: [NovelBook]
+        do { books = try await runtime.search(source, keyword: keyword, page: 1) } catch { return ("search-error", "search: \(short(error)) \(took())") }
+        // Niche sources don't have every book: then the source's own test word (ruleSearch.checkKeyWord).
+        let object = (try? JSONSerialization.jsonObject(with: Data(source.json.utf8))) as? [String: Any]
+        let rules = (object?["ruleSearch"] as? [String: Any]) ?? ((object?["ruleSearch"] as? String).flatMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) } as? [String: Any])
+        if books.isEmpty, let check = (rules?["checkKeyWord"] as? String)?.trimmingCharacters(in: .whitespaces), !check.isEmpty, check != keyword {
+            do { books = try await runtime.search(source, keyword: check, page: 1) } catch { return ("search-error", "search \(check): \(short(error)) \(took())") }
+        }
+        if verbose { for book in books.prefix(5) { print("  book: \(book.name) / \(book.author) | \(book.kind) | \(book.lastChapter) | \(book.url) | cover \(book.cover.prefix(80))") } }
+        let wanted = novelKey(keyword)
+        // The keyword's book, or else the first result (niche sources don't have every book).
+        guard let picked = books.first(where: { novelKey($0.name) == wanted }) ?? books.first(where: { novelKey($0.name).contains(wanted) }) ?? books.first else {
+            return ("search-empty", "search: no results \(took())")
+        }
+        var book = picked
+        do { book = try await runtime.details(source, book: picked) } catch { return ("info-error", "search \(books.count) → info: \(short(error)) \(took())") }
+        if verbose { print("  info: \(book.name) / \(book.author) | kind \(book.kind) | words \(book.wordCount) | last \(book.lastChapter) | toc \(book.tocURL) | cover \(book.cover.prefix(100))\n  intro: \(book.intro.prefix(160))") }
+        let chapters: [NovelChapter]
+        do { chapters = try await runtime.chapters(source, book: book) } catch { return ("toc-error", "search \(books.count) → toc: \(short(error)) \(took())") }
+        if verbose { for chapter in chapters.prefix(4) + chapters.suffix(2) { print("  chapter \(chapter.index): \(chapter.title) \(chapter.isVolume ? "[volume] " : "")\(chapter.isVip ? "[vip] " : "")\(chapter.url.prefix(100))") } }
+        let readable = chapters.filter { !$0.isVolume }
+        guard let first = readable.first else { return ("toc-empty", "search \(books.count) → toc empty \(took())") }
+        let next = readable.dropFirst().first
+        do {
+            let content = try await runtime.content(source, book: book, chapter: first, next: next)
+            let characters = content.paragraphs.reduce(0) { $0 + $1.count }
+            if verbose { print("  content \(content.title): \(content.paragraphs.count) paragraphs, \(characters) characters"); for line in content.paragraphs.prefix(5) { print("    " + line.prefix(120)) } }
+            if characters < 200 { return ("content-short", "search \(books.count) → toc \(chapters.count) → content only \(characters) chars: \(content.paragraphs.joined(separator: " ").prefix(100)) \(took())") }
+            return ("ok", "search \(books.count) → toc \(chapters.count) → content \(content.paragraphs.count)¶ \(characters) chars \(took())")
+        } catch { return ("content-error", "search \(books.count) → toc \(chapters.count) → content: \(short(error)) \(took())") }
+    }
+
+    /// Whether the source's site answers from here: "up", "down" (no answer), or "blocked" (403/5xx, a bot check, a parked domain).
+    static func novelReach(_ source: NovelSource) async -> String {
+        let address = String(source.key.split(separator: "#").first ?? "").trimmingCharacters(in: .whitespaces)
+        guard let url = URL(string: address), url.scheme?.hasPrefix("http") == true else { return "up" }
+        var request = URLRequest(url: url, timeoutInterval: 12)
+        request.setValue("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36", forHTTPHeaderField: "User-Agent")
+        guard let (data, response) = try? await URLSession.shared.data(for: request), let http = response as? HTTPURLResponse else { return "down" }
+        let text = String(decoding: data.prefix(6000), as: UTF8.self)
+        if http.statusCode == 403 || http.statusCode == 451 || http.statusCode >= 500 || text.contains("Just a moment...") || text.contains("region has been denied") { return "blocked" }
+        return "up"
+    }
+
+    static func novelKey(_ text: String) -> String { text.lowercased().filter { !$0.isWhitespace && !$0.isPunctuation && !$0.isSymbol } }
+
+    static func novelProfiles() {
+        NovelRuntime.profilesRoot = FileManager.default.temporaryDirectory.appendingPathComponent("novel-probe-profiles", isDirectory: true)
+    }
+
+    /// --novel-check <list URL or file> [keyword] [--limit N] [--offset N] [--jobs N]
+    static func novelCheck(_ args: [String]) async throws {
+        novelProfiles()
+        func option(_ name: String) -> Int? { args.firstIndex(of: name).flatMap { args.indices.contains($0 + 1) ? Int(args[$0 + 1]) : nil } }
+        var plain: [String] = [], skip = false
+        for value in args { if skip { skip = false } else if value.hasPrefix("--") { skip = true } else { plain.append(value) } }
+        let keyword = plain.count > 1 ? plain[1] : "斗破苍穹"
+        let all = try await novelList(plain[0])
+        let offset = option("--offset") ?? 0, limit = option("--limit") ?? all.count, jobs = max(1, option("--jobs") ?? 6)
+        var sources = Array(all.dropFirst(offset).prefix(limit))
+        if let sample = option("--sample"), sample < sources.count {
+            // The same sample every run: a fixed-seed shuffle.
+            var seed: UInt64 = 0x9E3779B97F4A7C15
+            var generator = AnyRandom { seed &+= 0x9E3779B97F4A7C15; var z = seed; z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9; z = (z ^ (z >> 27)) &* 0x94D049BB133111EB; return z ^ (z >> 31) }
+            sources = Array(sources.filter { !$0.disabledByList }.shuffled(using: &generator).prefix(sample))
+        }
+        print("\(all.count) sources in the list; checking \(sources.count) with \(keyword), \(jobs) at a time")
+        var stages: [String: Int] = [:]
+        var index = 0
+        await withTaskGroup(of: (Int, NovelSource, String, String).self) { group in
+            func add() {
+                guard index < sources.count else { return }
+                let (n, source) = (index, sources[index]); index += 1
+                group.addTask {
+                    async let reach = novelReach(source)
+                    let result = await novelRun(source, keyword: keyword, verbose: false)
+                    await NovelRuntime.shared.reset(source.key)
+                    let site = await reach
+                    return (n, source, result.stage == "ok" || site == "up" ? result.stage : result.stage + "/" + site, result.line)
+                }
+            }
+            for _ in 0..<jobs { add() }
+            while let (n, source, stage, line) = await group.next() {
+                stages[stage, default: 0] += 1
+                print("[\(n + offset)] \(stage.padding(toLength: 14, withPad: " ", startingAt: 0)) \(source.name) <\(source.key.prefix(60))>\(source.disabledByList ? " (off in list)" : "") — \(line)")
+                add()
+            }
+        }
+        print("summary:", stages.sorted { $0.value > $1.value }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))
+        // Sources whose site is down or refuses this network can't pass anywhere from here.
+        let reachable = stages.filter { !$0.key.contains("/") }.values.reduce(0, +)
+        print(String(format: "ok %d of %d (%.0f%%); of the %d whose site answers from here: %.0f%%", stages["ok"] ?? 0, sources.count, Double(stages["ok"] ?? 0) * 100 / Double(max(sources.count, 1)),
+                     reachable, Double(stages["ok"] ?? 0) * 100 / Double(max(reachable, 1))))
+    }
+
+    /// --novel-read <list> <source key or name> <keyword>: one source, verbosely.
+    static func novelRead(_ list: String, _ which: String, keyword: String) async throws {
+        novelProfiles()
+        let sources = try await novelList(list)
+        guard let source = sources.first(where: { $0.key == which }) ?? sources.first(where: { $0.name == which }) ?? sources.first(where: { $0.name.contains(which) || $0.key.contains(which) }) else {
+            throw TVError.unsupported("no source \(which)")
+        }
+        print("source \(source.name) <\(source.key)> searchable=\(source.searchable) explorable=\(source.explorable)")
+        if source.explorable {
+            do {
+                let kinds = try await NovelRuntime.shared.exploreKinds(source)
+                print("explore: \(kinds.count) kinds: \(kinds.prefix(8).map { $0.title + ($0.url.isEmpty ? "" : "→") }.joined(separator: ", "))")
+                if let kind = kinds.first(where: { !$0.url.isEmpty }) {
+                    let books = try await NovelRuntime.shared.explore(source, url: kind.url, page: 1)
+                    print("explore \(kind.title): \(books.count) books: \(books.prefix(5).map(\.name).joined(separator: ", "))")
+                }
+            } catch { print("explore failed: \(error.localizedDescription)") }
+        }
+        let result = await novelRun(source, keyword: keyword, verbose: true)
+        print(result.stage, result.line)
+    }
+}
+
+struct AnyRandom: RandomNumberGenerator {
+    let make: () -> UInt64
+    init(_ make: @escaping () -> UInt64) { self.make = make }
+    mutating func next() -> UInt64 { make() }
 }

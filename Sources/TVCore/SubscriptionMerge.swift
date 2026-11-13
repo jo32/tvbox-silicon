@@ -140,6 +140,9 @@ public enum SubscriptionImport: Sendable {
     /// A Venera comic source list (`index.json` of venera-configs or a copy), with how many sources it lists:
     /// it feeds the Manga section, not Watch Now.
     case comicSources(Int)
+    /// A Legado book source list (one JSON array of `bookSourceUrl` sources), with the data downloaded:
+    /// it feeds the Novels section.
+    case novelSources(Int, Data)
 }
 
 extension HTTPClient {
@@ -147,6 +150,7 @@ extension HTTPClient {
         let (data, finalURL) = try await get(url, headers: ["User-Agent": Self.subscriptionUserAgent])
         if let bundle = CatPawOpen.bundle(data, at: finalURL) { return .subscription(try await CatPawOpen.subscription(bundle: bundle, origin: finalURL, http: self)) }
         if let count = MangaSources.listedCount(data) { return .comicSources(count) }
+        if let sources = NovelSource.list(from: data) { return .novelSources(sources.count, data) }
         if let servers = AListServer.list(from: data) { return .alist(servers) }
         if let entries = Subscription.directory(data, origin: finalURL) { return .directory(entries) }
         do { return .subscription(try await Subscription.parse(data, origin: finalURL).sniffingScripts(http: self)) }
