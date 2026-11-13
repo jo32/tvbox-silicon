@@ -1375,6 +1375,7 @@
 "Add from File…" = "Add from File…";
 "A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider." = "A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider.";
 "This file is on the device it was added on, not on this one. Files don't sync to other devices; use a web address instead." = "This file is on the device it was added on, not on this one. Files don't sync to other devices; use a web address instead.";
+"This source needs %@, a file next to its config. Only the config file itself was added, so add the config by its web address instead." = "This source needs %@, a file next to its config. Only the config file itself was added, so add the config by its web address instead.";
 "LX Music Sources" = "LX Music Sources";
 "LX Music Source" = "LX Music Source";
 "This file is not an LX Music source." = "This file is not an LX Music source.";

@@ -1375,6 +1375,7 @@
 "Add from File…" = "從檔案加入…";
 "A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider." = "TVBox JSON 訂閱、M3U / TXT 直播清單，或單一 Python（.py）或 JavaScript（.js）爬蟲。";
 "This file is on the device it was added on, not on this one. Files don't sync to other devices; use a web address instead." = "此檔案在加入它的裝置上，不在這部裝置上。本機檔案不會同步到其他裝置，請改用網址訂閱。";
+"This source needs %@, a file next to its config. Only the config file itself was added, so add the config by its web address instead." = "此來源需要設定檔旁邊的 %@，但加入時只匯入了設定檔本身。請改用網址加入此設定。";
 "LX Music Sources" = "洛雪音樂自訂源";
 "LX Music Source" = "洛雪音源";
 "This file is not an LX Music source." = "這不是洛雪音樂的自訂源腳本。";

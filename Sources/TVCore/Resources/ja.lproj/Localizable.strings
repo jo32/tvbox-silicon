@@ -1375,6 +1375,7 @@
 "Add from File…" = "ファイルから追加…";
 "A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider." = "TVBox JSON 配信設定、M3U / TXT ライブ再生リスト、または Python（.py）か JavaScript（.js）のスパイダー 1 つ。";
 "This file is on the device it was added on, not on this one. Files don't sync to other devices; use a web address instead." = "このファイルは追加したデバイスにあり、このデバイスにはありません。ファイルはほかのデバイスに同期されないため、URL で追加してください。";
+"This source needs %@, a file next to its config. Only the config file itself was added, so add the config by its web address instead." = "このソースには設定ファイルの隣にある %@ が必要ですが、追加されたのは設定ファイルだけです。設定を URL で追加してください。";
 "LX Music Sources" = "LX Music カスタムソース";
 "LX Music Source" = "LX Music ソース";
 "This file is not an LX Music source." = "このファイルは LX Music のカスタムソースではありません。";
