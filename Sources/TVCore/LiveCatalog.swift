@@ -53,7 +53,9 @@ public struct LivePlatform: Hashable, Identifiable, Sendable {
     /// An installed plugin as a platform: `<id>-plugin-live://room/<room>` addresses, its icon as the mark.
     init(plugin record: LivePlugins.Installed) {
         let slug = record.pluginId.lowercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == ".") }
-        id = "plugin." + record.pluginId; scheme = "\(slug.isEmpty ? "p" : slug)-plugin-live"; api = ""
+        // A URL scheme starts with a letter. For an ID like "9xiu", "9xiu-plugin-live://rooms" isn't a URL, and
+        // `source` trapped on every launch.
+        id = "plugin." + record.pluginId; scheme = "\(slug.first?.isLetter == true ? slug : "p" + slug)-plugin-live"; api = ""
         names = [:]; fallbackName = record.name
         tint = record.tint ?? "#5E5CE6"
         mark = "plugin"; glyph = String(record.name.prefix(1)); split = false
