@@ -86,6 +86,7 @@ public actor LocalJarHost {
                     let data: Data
                     if let pluginData { data = pluginData }
                     else { data = try await PluginDownloads.shared.data(at: jarURL, http: http) }
+                    if runtime == .python { try PluginDownloads.refuseWebPageScript(data) }
                     Diagnostics.shared.record(.info, "jar.download", "\(context) downloaded bytes=\(data.count)")
                     try Task.checkCancellation()
                     let jar = job.appendingPathComponent(runtime == .python ? "plugin.py" : runtime == .javascript ? "plugin.js" : "plugin.jar")

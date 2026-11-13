@@ -33,6 +33,7 @@ public actor EmbeddedPythonHost {
             throw TVError.unsupported(L10n.text("This source requires a Python runtime, which is not available on this platform."))
         }
         let data = try await PluginDownloads.shared.data(at: scriptURL, http: http)
+        try PluginDownloads.refuseWebPageScript(data)
         try Task.checkCancellation()
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
         let identity = Data((scriptURL.absoluteString + "\n" + site.key + "\n" + site.api + "\n" + origin.absoluteString).utf8) + (try encoder.encode(site.raw))

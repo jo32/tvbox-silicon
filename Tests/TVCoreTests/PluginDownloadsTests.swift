@@ -203,3 +203,15 @@ private final class TransferSamples: @unchecked Sendable {
     #expect(PluginPreparation.snapshot(site: site, origin: origin)?.stage == .loading)
     #expect(PluginPreparation.snapshot(site: site, origin: origin)?.converted == 0)
 }
+
+/// Hosts that answer a missing `./py/x.py` with their home page made Python sources fail with
+/// "SyntaxError: invalid syntax (<digest>.py, line 1)" (report d4cb1f05eaec and its family).
+@Test func aWebPageIsNotRunAsAScript() throws {
+    for page in ["<!DOCTYPE html>\n<html lang=\"zh-CN\">", "\u{FEFF}\n  <html><head>", "<!doctype html><title>404</title>"] {
+        #expect(throws: TVError.self) { try PluginDownloads.refuseWebPageScript(Data(page.utf8)) }
+    }
+    // Scripts that only mention a page further in still run.
+    for script in ["# coding=utf-8\nhtml = '<html>'\n", "\"\"\"<!DOCTYPE html> template\"\"\"\n", "from base.spider import Spider\n", ""] {
+        #expect(throws: Never.self) { try PluginDownloads.refuseWebPageScript(Data(script.utf8)) }
+    }
+}
