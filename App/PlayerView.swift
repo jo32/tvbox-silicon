@@ -1213,7 +1213,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         return false
     }
 
-    /// The picture and not AVKit's floating controls over it: their buttons and sliders are controls, on glass platters.
+    /// The picture and not AVKit's controls over it: their buttons and sliders are controls, on glass platters.
     private static func isBarePicture(_ view: NSView) -> Bool {
         var current: NSView? = view
         while let v = current {
@@ -1394,10 +1394,11 @@ private struct DesktopPlaybackView: View {
                 SubtitleOverlay(cues: session.subtitles, fills: fillsFrame).ignoresSafeArea()
                 SourceSkipButton(session: session)
                 DesktopBoostLabel(session: session)
-                // Under the title bar's buttons, so it stays put while they come and go.
+                // Under the title bar's buttons and AVKit's row of controls below them (macOS 26), so it stays put while
+                // they come and go.
                 if showsPlaybackInfo && session.error == nil && session.showsPicture && playingOn == nil {
                     PlaybackInfoPanel(session: session)
-                        .padding(.leading, 16).padding(.top, 56)
+                        .padding(.leading, 16).padding(.top, 96)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         .transition(.opacity)
                 }
@@ -1613,12 +1614,12 @@ private struct MacSubtitleFiles: View {
     }
 }
 
-/// AVPlayerView without its controls for live streams. Its floating controls build a scrubber from the
+/// AVPlayerView without its controls for live streams. Its controls build a scrubber from the
 /// item's duration and seekable range; a live item has an indefinite duration and, at first, no
 /// seekable range, and AVKit traps on that range (macOS 27). An IPTV channel is a plain address, so it
 /// is only known to be live once its item is ready: the controls wait for a ready item with a finite
 /// duration. tvOS avoids it with linear playback.
-/// `live` is fixed for a view's life: set to `.none` on a view that has shown its floating controls,
+/// `live` is fixed for a view's life: set to `.none` on a view that has shown its controls,
 /// AVKit takes the buttons away but leaves their empty glass platter, which still fades in under the
 /// mouse (macOS 27). A view made without controls has no platter.
 private struct DesktopNativePlayer: NSViewRepresentable {
@@ -1637,8 +1638,8 @@ private struct DesktopNativePlayer: NSViewRepresentable {
     }
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> AVPlayerView {
-        let view = AVPlayerView()
-        // The wait lives in the content overlay, under the floating controls, and lets the mouse through to them.
+        let view = DesktopAVPlayerView()
+        // The wait lives in the content overlay, under the controls, and lets the mouse through to them.
         // It follows the overlay's frame and sets no size of its own: with NSHostingView's default sizing
         // constraints, its SwiftUI content's size pushed back through the overlay and the whole player was laid
         // out at that size (16 × 130 pt once loading ended, the video a 16 × 9 box).
@@ -1650,7 +1651,9 @@ private struct DesktopNativePlayer: NSViewRepresentable {
             container.addSubview(host)
             context.coordinator.host = host
         }
-        view.controlsStyle = live ? .none : .floating
+        // The controls along the foot of the picture, the scrubber as wide as they are, as in QuickTime Player. The
+        // floating panel sat over the middle of the picture with a short scrubber; on a wide film it covered faces (#932).
+        view.controlsStyle = live ? .none : .inline
         view.player = player
         // No full-screen button of AVKit's own: it took only this view full screen, in a window of AVKit's, without
         // the subtitles and danmaku drawn over it, the controls above it or the arrow keys' 10 s seek (#750). The
@@ -1674,6 +1677,22 @@ private struct DesktopNativePlayer: NSViewRepresentable {
             if let enhancer { EnhancedVideoSurface(enhancer: enhancer, fills: fillsFrame) }
             if let waiting { waiting.view.transition(.opacity) }
         }.animation(.easeInOut(duration: 0.7), value: waiting == nil))
+    }
+}
+
+/// The Mac player's AVPlayerView. Its controls' top row (Picture in Picture and AirPlay on the left, the volume on the
+/// right; macOS 26 and later) goes at the top of the view's safe area, which is only the title bar, or nothing in full
+/// screen: it sat behind the player's own row of buttons there. This moves the safe area's top below that row.
+private final class DesktopAVPlayerView: AVPlayerView {
+    /// The foot of `DesktopPlaybackView`'s top bar (10 pt down, 34 pt buttons), and a gap.
+    private static let topBar: CGFloat = 46
+
+    override func layout() {
+        if #available(macOS 26, *) {
+            let extra = max(0, Self.topBar - (safeAreaInsets.top - additionalSafeAreaInsets.top))
+            if additionalSafeAreaInsets.top != extra { additionalSafeAreaInsets.top = extra }
+        }
+        super.layout()
     }
 }
 
