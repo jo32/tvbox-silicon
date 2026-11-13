@@ -591,8 +591,8 @@ struct FormSettingsView: View {
                         FormLabel(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Show Danmaku"), subtitle: danmakuNote)
                     }
                     .settingsSwitch()
-                    FormLink(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Danmaku Service")) { DanmakuServiceSettingsView() }
-                        .accessibilityIdentifier("settings.danmakuService")
+                    FormLink(symbol: "slider.horizontal.3", tint: .teal, title: L10n.text("Danmaku Settings")) { DanmakuSettingsView() }
+                        .accessibilityIdentifier("settings.danmakuSettings")
                     Toggle(isOn: $receivesCasts) {
                         FormLabel(symbol: "tv.and.mediabox.fill", tint: BilibiliMark.blue, title: L10n.text("Cast from the Bilibili App"),
                                   subtitle: L10n.text("With your phone on the same network, tap the TV button in a Bilibili video and choose %@.", L10n.text("Yingxia")))
@@ -989,8 +989,9 @@ struct PlaybackSettingsView: View {
                         FormLabel(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Show Danmaku"))
                     }
                     .settingsSwitch()
-                    FormLink(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Danmaku Service")) { DanmakuServiceSettingsView() }
-                        .accessibilityIdentifier("settings.danmakuService")
+                    // Area, size, speed, the kinds shown, blocked words and matching: one page, like Subtitle Style (#768).
+                    FormLink(symbol: "slider.horizontal.3", tint: .teal, title: L10n.text("Danmaku Settings")) { DanmakuSettingsView() }
+                        .accessibilityIdentifier("settings.danmakuSettings")
                 }
             }
             if VideoEnhancement.canUpscale || VideoEnhancement.canSmooth {
@@ -1630,7 +1631,6 @@ struct TVSettingsView: View {
     /// The recommended sources that take a sign-in, each with its row's subtitle.
     @State private var sourceSignIns: [(signIn: SourceSignIn, summary: String)] = []
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
-    @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     @AppStorage(BilibiliCastController.key) private var receivesCasts = true
@@ -1678,7 +1678,7 @@ struct TVSettingsView: View {
             TVSettingsSection(title: L10n.text("Playback"), footer: playbackFooter) {
                 if store.extrasUnlocked {
                     TVSettingsToggle(title: L10n.text("Show Danmaku"), isOn: $showsDanmaku)
-                    TVSettingsAction(title: L10n.text("Danmaku Area"), value: danmakuArea.title) { danmakuArea = danmakuArea.next }
+                    TVSettingsLink(title: L10n.text("Danmaku Settings")) { DanmakuSettingsView() }
                     TVSettingsToggle(title: L10n.text("Cast from the Bilibili App"), isOn: $receivesCasts)
                         .onChange(of: receivesCasts) { _, on in
                             if on { BilibiliCastController.shared.start(store) } else { BilibiliCastController.shared.stop() }
@@ -1925,12 +1925,14 @@ struct TVSettingsField: View {
     var prose = false
     /// A key or password: dots in the row, a secure field to type it.
     var secret = false
+    /// What the row shows while there is no text.
+    var emptyValue: String? = nil
     @State private var editing = false
     @State private var draft = ""
     @State private var cancelled = false
     var body: some View {
         Button { draft = text; cancelled = false; editing = true } label: {
-            TVSettingsRowLabel(title: title, value: text.isEmpty ? L10n.text("Not set") : secret ? String(repeating: "•", count: 8) : text)
+            TVSettingsRowLabel(title: title, value: text.isEmpty ? (emptyValue ?? L10n.text("Not set")) : secret ? String(repeating: "•", count: 8) : text)
         }
         .glassRow()
         .alert(title, isPresented: $editing) {

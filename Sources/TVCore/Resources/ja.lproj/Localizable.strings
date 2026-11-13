@@ -1837,3 +1837,27 @@
 "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "「ロスレス優先」は、どのチャンネルにもロスレス音源がない場合、最良の非可逆音源をその音質と明示して再生します。「ロスレスのみ」では再生を停止します。";
 
 "The video servers could not be reached. Try again later." = "動画サーバーに接続できませんでした。時間をおいてもう一度お試しください。";
+
+// Settings › Danmaku
+"Two Lines" = "2 行";
+"Three Lines" = "3 行";
+"Danmaku Settings" = "弾幕の設定";
+"Display" = "表示";
+"Comment Types" = "弾幕の種類";
+"Colored Comments" = "カラー弾幕";
+"Turn off Colored Comments to draw every comment in white, which stays readable over bright pictures." = "「カラー弾幕」をオフにすると、すべての弾幕が白で表示され、明るい画面でも読みやすくなります。";
+"Blocked Words" = "NG ワード";
+"Add a word or /pattern/" = "単語または /パターン/ を追加";
+"Add Blocked Word" = "NG ワードを追加";
+"No blocked words" = "NG ワードはありません";
+"Comments containing any of these words are hidden in every video. Put a pattern between slashes, like /^哈+$/, to match it as a regular expression." = "これらの語を含む弾幕は、すべての動画で非表示になります。/^哈+$/ のようにスラッシュで囲むと、正規表現として照合します。";
+"Applies to comments in every video, including one that is playing." = "再生中の動画を含め、すべての動画の弾幕に適用されます。";
+"Here it comes!" = "来るぞ！";
+"This scene is incredible" = "この場面すごい";
+"Hahahahaha" = "ｗｗｗｗｗ";
+"Third time watching" = "3 回目の視聴";
+"The music is so good" = "音楽が最高";
+"Plot twist!" = "まさかの展開！";
+"Classic moment" = "名シーン";
+"Welcome back, everyone" = "おかえり";
+"Who else is watching tonight?" = "今夜見てる人いる？";

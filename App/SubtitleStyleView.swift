@@ -161,7 +161,7 @@ struct SubtitlePreview: View {
 }
 
 /// A dusk sky over dark hills: bright and dark parts, so a subtitle can be judged over both.
-private struct SubtitleScene: View {
+struct SubtitleScene: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
