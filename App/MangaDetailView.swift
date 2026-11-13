@@ -565,7 +565,7 @@ struct MangaDetailView: View {
 
 #if !os(tvOS)
 /// Under the comic page on the Mac, iPhone and iPad: near black, tinted by a blur of the cover.
-private struct MangaPageBackground: View {
+struct MangaPageBackground: View {
     let image: CGImage?
     var body: some View {
         ZStack {
@@ -587,7 +587,7 @@ private struct MangaPageBackground: View {
 /// The picture at the top of the iPhone's comic page, as Discover's title page: the cover across the screen from its top
 /// edge, darker toward the title over its foot, which fades into the page. On an iPad, too wide to fill with a portrait
 /// cover, the cover stands whole over a blur of itself.
-private struct MangaPhoneCover: View {
+struct MangaPhoneCover: View {
     let image: CGImage?
     let height: CGFloat
     let fills: Bool

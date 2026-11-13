@@ -81,6 +81,7 @@ import TVCore
     var hiddenSections: [AppSection] {
         var hidden: [AppSection] = extrasUnlocked ? [] : [.music]
         if MangaStore.shared.repositories.isEmpty { hidden.append(.manga) }
+        if NovelStore.shared.lists.isEmpty { hidden.append(.novels) }
         return hidden
     }
     private let defaults: UserDefaults
@@ -317,7 +318,9 @@ import TVCore
         guard !importing else { return }
         importing = true; importError = nil; notice = nil
         defer { importing = false }
-        let typed = (address ?? subscriptionAddress).trimmingCharacters(in: .whitespacesAndNewlines)
+        var typed = (address ?? subscriptionAddress).trimmingCharacters(in: .whitespacesAndNewlines)
+        // Legado's one-tap import links (legado://import/bookSource?src=…) carry the list's address.
+        if let link = URL(string: typed), let inner = NovelSources.importAddress(link) { typed = inner.absoluteString }
         do {
             let url = try WebAddress.resolve(typed: typed)
             switch try await http.subscriptionImport(url) {
@@ -339,6 +342,10 @@ import TVCore
                 // Comic source lists feed Manga (and show it); they are listed under Subscriptions too.
                 MangaStore.shared.addRepository(url)
                 notice = L10n.text("Added a Venera comic source list (%lld sources). Choose the ones to install in Comic Sources.", count)
+            case .novelSources(let count, let data):
+                // Book source lists feed Novels (and show it); they are listed under Subscriptions too.
+                try NovelStore.shared.addList(url, data: data)
+                notice = L10n.text("Added a Legado book source list (%lld sources). Search and read in Novels.", count)
             case .alist(let servers):
                 // AList servers are browsed in Cloud Files, not merged as sources.
                 let saved = try AListServers.add(servers)
@@ -374,6 +381,7 @@ import TVCore
         importing = true; importError = nil; notice = nil
         defer { importing = false }
         await fetch(subscriptions.filter(\.enabled))
+        await NovelStore.shared.refreshLists()
         let failed = subscriptions.filter { $0.enabled && subscriptionErrors[$0.address] != nil && !ImportedFiles.isMissing($0.address) }.count
         if failed > 0 { notice = L10n.text("%lld subscriptions could not be refreshed; their last copies stay in use.", failed) }
     }
@@ -453,6 +461,8 @@ import TVCore
                 subscriptions.replaceSubrange(index...index, with: listed.filter { !known.contains($0.address) })
             case .success(.comicSources):
                 subscriptionErrors[entry.address] = L10n.text("This address is now a comic source list. Add it again to use it for Manga.")
+            case .success(.novelSources):
+                subscriptionErrors[entry.address] = L10n.text("This address is now a book source list. Add it again to use it for Novels.")
             case .success(.alist):
                 subscriptionErrors[entry.address] = L10n.text("This address is now an AList server. Add it again to browse it in Cloud Files.")
             case .failure(let error):

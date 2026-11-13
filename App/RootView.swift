@@ -2,7 +2,7 @@ import SwiftUI
 import TVCore
 
 enum AppSection: String, CaseIterable, Identifiable, Hashable {
-    case home = "Watch Now", discover = "Discover", live = "Live TV", music = "Music", manga = "Manga", search = "Global Search", sites = "Sources", files = "Cloud Files", favorites = "Favorites", history = "Playback History", downloads = "Downloads", settings = "Settings", more = "More"
+    case home = "Watch Now", discover = "Discover", live = "Live TV", music = "Music", manga = "Manga", novels = "Novels", search = "Global Search", sites = "Sources", files = "Cloud Files", favorites = "Favorites", history = "Playback History", downloads = "Downloads", settings = "Settings", more = "More"
     /// Messages from the website (App/Announcements.swift); only the phone lists it, in More.
     case messages = "Messages"
     /// Apple TV's sidebar item for the song playing, first while one is loaded; it opens the player.
@@ -20,6 +20,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .live: "dot.radiowaves.left.and.right"
         case .music: "music.note"
         case .manga: "book.fill"
+        case .novels: "text.book.closed.fill"
         case .sites: "square.grid.2x2.fill"
         case .files: "folder.fill"
         case .favorites: "heart.fill"
@@ -74,7 +75,7 @@ struct RootView: View {
         // The iPad's sidebar, in the order set in Settings > Edit Tab Bar (#427).
         return PhoneTabs.sidebar(stored: storedTabs, hiding: store.hiddenSections)
         #else
-        let sections = [AppSection.home, .discover, .live, .music, .manga, .search, .sites, .files, .history, .favorites, .downloads, .settings]
+        let sections = [AppSection.home, .discover, .live, .music, .manga, .novels, .search, .sites, .files, .history, .favorites, .downloads, .settings]
             .filter { !store.hiddenSections.contains($0) }
         #if os(tvOS)
         // Where the remote already goes to change section, so the song is one move away from anywhere.
@@ -364,6 +365,7 @@ struct SectionPage: View {
         case .live: LiveView()
         case .music: MusicView()
         case .manga: MangaView()
+        case .novels: NovelView()
         case .sites: SitesView()
         case .files: CloudFilesView()
         case .favorites: FavoritesView()
@@ -458,7 +460,7 @@ private struct MacSidebar: View {
     @Environment(Store.self) private var store
     @Environment(Updates.self) private var updates
     private var groups: [(title: String, items: [AppSection])] {
-        let groups: [(title: String, items: [AppSection])] = [(L10n.text("Browse"), [.home, .discover, .search, .live, .music, .manga, .sites, .files]),
+        let groups: [(title: String, items: [AppSection])] = [(L10n.text("Browse"), [.home, .discover, .search, .live, .music, .manga, .novels, .sites, .files]),
                                                              (L10n.text("Library"), [.history, .favorites, .downloads, .settings])]
         return groups.map { (title: $0.title, items: $0.items.filter { !store.hiddenSections.contains($0) }) }
     }

@@ -441,6 +441,11 @@ struct FormSettingsView: View {
                         MangaRepositoryView(url: url)
                     }
                 }
+                ForEach(NovelStore.shared.lists) { list in
+                    FormLink(symbol: "text.book.closed.fill", tint: .green, title: NovelSources.title(of: list.address), value: L10n.text("Novels")) {
+                        NovelListView(url: list.address)
+                    }
+                }
                 // Next to the subscriptions they come from: hiding a source that stopped working, and showing again
                 // one hidden by mistake (#669, #704). The same list as the Sources page's Edit.
                 if store.subscription != nil {
@@ -512,6 +517,18 @@ struct FormSettingsView: View {
                     Text(L10n.text("Manga"))
                 } footer: {
                     Text(L10n.text("Manga shows while a Venera comic source list is among your subscriptions."))
+                }
+            }
+
+            if !NovelStore.shared.lists.isEmpty {
+                Section {
+                    let store = NovelStore.shared
+                    FormLink(symbol: "text.book.closed.fill", tint: .green, title: L10n.text("Book Sources"),
+                             value: L10n.text("%lld on", store.enabledKeys.count)) { NovelSourcesView() }
+                } header: {
+                    Text(L10n.text("Novels"))
+                } footer: {
+                    Text(L10n.text("Novels shows while a Legado book source list is among your subscriptions."))
                 }
             }
 
@@ -1652,6 +1669,7 @@ struct TVSettingsView: View {
             }
             subscriptionSection
             if !MangaStore.shared.repositories.isEmpty { comicSection }
+            if !NovelStore.shared.lists.isEmpty { novelSection }
             if store.extrasUnlocked {
                 TVSettingsSection(footer: L10n.text("Live platforms added as AngelLive plugins show in Live TV.")) {
                     let count = store.livePluginPlatforms.count
@@ -1729,6 +1747,12 @@ struct TVSettingsView: View {
         return L10n.text("With your phone on the same network, tap the TV button in a Bilibili video and choose %@.", L10n.text("Yingxia")) + "\n" + phones
     }
 
+    private var novelSection: some View {
+        TVSettingsSection(title: L10n.text("Novels"), footer: L10n.text("Novels shows while a Legado book source list is among your subscriptions.")) {
+            TVSettingsLink(title: L10n.text("Book Sources"), value: L10n.text("%lld on", NovelStore.shared.enabledKeys.count)) { NovelSourcesView() }
+        }
+    }
+
     private var comicSection: some View {
         TVSettingsSection(title: L10n.text("Manga"), footer: L10n.text("Manga shows while a Venera comic source list is among your subscriptions.")) {
             let sources = MangaStore.shared.sources
@@ -1744,6 +1768,9 @@ struct TVSettingsView: View {
             }
             ForEach(MangaStore.shared.repositories, id: \.self) { url in
                 TVSettingsLink(title: MangaSources.title(of: url), value: L10n.text("Manga")) { MangaRepositoryView(url: url) }
+            }
+            ForEach(NovelStore.shared.lists) { list in
+                TVSettingsLink(title: NovelSources.title(of: list.address), value: L10n.text("Novels")) { NovelListView(url: list.address) }
             }
             TVSettingsLink(title: L10n.text("Add Subscription")) { TVAddSubscriptionPage() }
             if store.subscriptions.count > 1 { TVSettingsLink(title: L10n.text("Remove Subscriptions")) { TVRemoveSubscriptionsPage() } }
