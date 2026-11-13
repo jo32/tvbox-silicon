@@ -1837,3 +1837,27 @@
 "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead.";
 
 "The video servers could not be reached. Try again later." = "The video servers could not be reached. Try again later.";
+
+// Settings › Danmaku
+"Two Lines" = "Two Lines";
+"Three Lines" = "Three Lines";
+"Danmaku Settings" = "Danmaku Settings";
+"Display" = "Display";
+"Comment Types" = "Comment Types";
+"Colored Comments" = "Colored Comments";
+"Turn off Colored Comments to draw every comment in white, which stays readable over bright pictures." = "Turn off Colored Comments to draw every comment in white, which stays readable over bright pictures.";
+"Blocked Words" = "Blocked Words";
+"Add a word or /pattern/" = "Add a word or /pattern/";
+"Add Blocked Word" = "Add Blocked Word";
+"No blocked words" = "No blocked words";
+"Comments containing any of these words are hidden in every video. Put a pattern between slashes, like /^哈+$/, to match it as a regular expression." = "Comments containing any of these words are hidden in every video. Put a pattern between slashes, like /^哈+$/, to match it as a regular expression.";
+"Applies to comments in every video, including one that is playing." = "Applies to comments in every video, including one that is playing.";
+"Here it comes!" = "Here it comes!";
+"This scene is incredible" = "This scene is incredible";
+"Hahahahaha" = "Hahahahaha";
+"Third time watching" = "Third time watching";
+"The music is so good" = "The music is so good";
+"Plot twist!" = "Plot twist!";
+"Classic moment" = "Classic moment";
+"Welcome back, everyone" = "Welcome back, everyone";
+"Who else is watching tonight?" = "Who else is watching tonight?";

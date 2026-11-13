@@ -49,7 +49,7 @@ struct DanmakuTests {
         let whole = DanmakuLayout(width: 1000, height: 1000, laneHeight: 50, scrollArea: DanmakuArea.full.share)
         #expect(whole.scrollLanes == 20 && whole.fixedLanes == 6)
         #expect(DanmakuArea.standard.share == 0.75 && DanmakuArea(rawValue: 50) == .half)
-        #expect(DanmakuArea.allCases.map(\.next) == [.quarter, .half, .threeQuarters, .full, .oneLine])
+        #expect(DanmakuArea.allCases.map(\.next) == [.twoLines, .threeLines, .quarter, .half, .threeQuarters, .full, .oneLine])
     }
 
     @Test func oneLineKeepsEveryCommentInTheTopRow() {
@@ -167,5 +167,49 @@ struct CastMediaDanmakuTests {
         let cast = URL(string: "http://14.17.92.11/upgcxcode/88/70/42500557088/42500557088-1-192.mp4?e=x&ua=tvproj")!
         #expect(DanmakuSource.registerBilibiliMedia(cast) && DanmakuSource.has(cast))
         #expect(!DanmakuSource.registerBilibiliMedia(URL(string: "https://example.com/video.mp4")!))
+    }
+}
+
+/// Settings › Danmaku: the line choices and filters (#768, #924, #592, #638).
+struct DanmakuSettingsTests {
+    @Test func lineChoicesKeepCommentsToTheirRows() {
+        #expect(DanmakuArea.twoLines.lines == 2 && DanmakuArea.twoLines.share == 0 && DanmakuArea.oneLine.lines == 1)
+        #expect(DanmakuArea.quarter.lines == nil && DanmakuArea(rawValue: 3) == .threeLines)
+        var layout = DanmakuLayout(width: 1000, height: 1000, laneHeight: 50, lines: DanmakuArea.twoLines.lines)
+        #expect(layout.scrollLanes == 2 && layout.fixedLanes == 2 && layout.bottomSharesTop)
+        let scroll = Danmaku(time: 0, position: .scroll, text: "s")
+        #expect(layout.place(scroll, width: 100, at: 0)?.lane == 0)
+        #expect(layout.place(scroll, width: 100, at: 0)?.lane == 1)
+        #expect(layout.place(scroll, width: 100, at: 0) == nil)
+        // Top and bottom comments take turns in the same two rows, drawn from the top.
+        var pinned = DanmakuLayout(width: 1000, height: 1000, laneHeight: 50, lines: 2)
+        #expect(pinned.place(Danmaku(time: 0, position: .top, text: "t"), width: 100, at: 0)?.lane == 0)
+        #expect(pinned.place(Danmaku(time: 0, position: .bottom, text: "b"), width: 100, at: 0)?.lane == 1)
+        #expect(pinned.place(Danmaku(time: 0, position: .bottom, text: "b"), width: 100, at: 0) == nil)
+        // Never more rows than the picture holds; a share of it keeps the old rule.
+        #expect(DanmakuLayout(width: 1000, height: 120, laneHeight: 50, lines: 3).scrollLanes == 2)
+        #expect(!DanmakuLayout(width: 1000, height: 1000, laneHeight: 50, scrollArea: 0.25).bottomSharesTop)
+    }
+
+    @Test func filterDropsWordsAndColors() {
+        let comments = [
+            Danmaku(time: 1, position: .scroll, color: 0xFE0302, text: "前方高能"),
+            Danmaku(time: 2, position: .top, text: "顶部"),
+            Danmaku(time: 3, position: .bottom, text: "底部"),
+            Danmaku(time: 4, position: .scroll, text: "哈哈哈哈"),
+            Danmaku(time: 5, position: .scroll, text: "SPOILER ahead"),
+            Danmaku(time: 6, position: .scroll, text: "ｓｐｏｉｌｅｒ"),
+        ]
+        #expect(DanmakuFilter().apply(comments) == comments)
+        // Plain words ignore case and width; /…/ is a pattern, and an invalid one is plain text.
+        #expect(DanmakuFilter(words: ["spoiler", "/^哈+$/", "/[/"]).apply(comments).map(\.time) == [1, 2, 3])
+        let white = DanmakuFilter(colors: false).apply(comments)
+        #expect(white.allSatisfy { $0.color == 0xFFFFFF } && white.count == comments.count && white[0].text == "前方高能")
+        #expect(DanmakuFilter.words(" a \n\n/b/\n") == ["a", "/b/"] && DanmakuFilter.stored(["a", "/b/"]) == "a\n/b/")
+        #expect(DanmakuFilter.isPattern("/b/") && !DanmakuFilter.isPattern("//") && !DanmakuFilter.isPattern("a/"))
+    }
+
+    @Test func titlesForTheSettingsPage() {
+        #expect(DanmakuStyle.speedTitle(1.25) == "1.25×" && DanmakuStyle.speedTitle(9) == "2×")
     }
 }

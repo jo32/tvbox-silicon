@@ -753,6 +753,10 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     /// Fill Screen: the picture is cropped to the whole screen rather than fitted inside it, as on iPhone.
     var fills: Binding<Bool> = .constant(false)
     var danmakuArea: Binding<DanmakuArea> = .constant(.standard)
+    /// The danmaku look from Settings › Danmaku, which the transport bar's Danmaku menu sets too (#789).
+    @AppStorage(DanmakuStyle.fontSizeKey) private var danmakuFontSize = DanmakuStyle.standardFontSize
+    @AppStorage(DanmakuStyle.opacityKey) private var danmakuOpacity = DanmakuStyle.standardOpacity
+    @AppStorage(DanmakuStyle.speedKey) private var danmakuSpeed = DanmakuStyle.standardSpeed
     /// Subtitle files beside the video (#576); the item's own are in AVKit's Subtitles menu.
     var external: ExternalSubtitles? = nil
     /// The source's opening or ending credits playing now, offered as AVKit's Skip button (#256).
@@ -872,9 +876,24 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             let areas = DanmakuArea.allCases.map { option in
                 UIAction(title: option.title, state: area.wrappedValue == option ? .on : .off) { _ in area.wrappedValue = option }
             }
+            // Size, opacity and speed too: on a TV this menu is all a remote reaches while watching (#789).
+            let fontSize = $danmakuFontSize, opacity = $danmakuOpacity, speed = $danmakuSpeed
+            let sizes = DanmakuStyle.fontSizes(including: danmakuFontSize).map { option in
+                UIAction(title: DanmakuStyle.sizeTitle(option), state: abs(option - danmakuFontSize) < 0.001 ? .on : .off) { _ in fontSize.wrappedValue = option }
+            }
+            let opacities = DanmakuStyle.opacities(including: danmakuOpacity).map { option in
+                UIAction(title: DanmakuStyle.percent(option), state: abs(option - danmakuOpacity) < 0.001 ? .on : .off) { _ in opacity.wrappedValue = option }
+            }
+            let current = DanmakuStyle.clampedSpeed(danmakuSpeed)
+            let speeds = DanmakuStyle.speeds(including: danmakuSpeed).map { option in
+                UIAction(title: DanmakuStyle.speedTitle(option), state: abs(option - current) < 0.001 ? .on : .off) { _ in speed.wrappedValue = option }
+            }
             items.append(UIMenu(title: L10n.text("Danmaku"), image: UIImage(systemName: showsDanmaku ? "text.bubble.fill" : "text.bubble"), children: [
                 UIAction(title: L10n.text("Show Danmaku"), state: showsDanmaku ? .on : .off) { _ in binding.wrappedValue.toggle() },
                 UIMenu(title: L10n.text("Danmaku Area"), image: UIImage(systemName: "rectangle.tophalf.inset.filled"), children: areas),
+                UIMenu(title: L10n.text("Text Size"), image: UIImage(systemName: "textformat.size"), children: sizes),
+                UIMenu(title: L10n.text("Opacity"), image: UIImage(systemName: "circle.lefthalf.filled"), children: opacities),
+                UIMenu(title: L10n.text("Scroll Speed"), image: UIImage(systemName: "speedometer"), children: speeds),
             ]))
         }
         if qualities.count > 1 {

@@ -10,21 +10,50 @@ struct DanmakuOverlay: View {
     let comments: [Danmaku]
     var opacity = 0.9
     var revision = ""
+    @State private var jumps = 0
+
+    var body: some View {
+        DanmakuCanvas(comments: comments, revision: revision, opacity: opacity, jumps: jumps) { player.currentTime().seconds }
+            .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.timeJumpedNotification)) { notification in
+                guard let item = notification.object as? AVPlayerItem, item === player.currentItem else { return }
+                jumps += 1
+            }
+    }
+}
+
+/// Comments drawn at the moment `clock` gives, in the look and with the filters chosen in Settings › Danmaku and the
+/// player's danmaku menus: one set for every track (matched or imported comments, Bilibili videos, live rooms). Both
+/// the player's overlay and that page's moving preview, so the preview shows exactly what the player will draw.
+struct DanmakuCanvas: View {
+    let comments: [Danmaku]
+    var revision = ""
+    var opacity = DanmakuStyle.standardOpacity
+    /// Changes when the player jumps: its time-jump notification catches small seeks that look like ordinary frames.
+    var jumps = 0
+    let clock: () -> Double
     @AppStorage(DanmakuArea.key) private var area = DanmakuArea.standard
     @AppStorage(DanmakuStyle.fontSizeKey) private var fontSize = DanmakuStyle.standardFontSize
     @AppStorage(DanmakuStyle.speedKey) private var speed = DanmakuStyle.standardSpeed
     @AppStorage(DanmakuStyle.scrollKey) private var scroll = true
     @AppStorage(DanmakuStyle.topKey) private var top = true
     @AppStorage(DanmakuStyle.bottomKey) private var bottom = true
+    @AppStorage(DanmakuFilter.colorsKey) private var colors = true
+    @AppStorage(DanmakuFilter.wordsKey) private var blockedWords = ""
     @State private var engine = DanmakuEngine()
     @Environment(\.displayScale) private var scale
+
+    private struct Load: Equatable {
+        let revision: String, count: Int, filter: DanmakuFilter
+    }
+
+    private var filter: DanmakuFilter { DanmakuFilter(colors: colors, words: DanmakuFilter.words(blockedWords)) }
 
     var body: some View {
         TimelineView(.animation) { timeline in
             Canvas { context, size in
-                // Reading the timeline's date makes every tick a new drawing; the clock itself is the player's.
+                // Reading the timeline's date makes every tick a new drawing; the clock itself is the caller's.
                 _ = timeline.date
-                let time = player.currentTime().seconds
+                let time = clock()
                 guard time.isFinite else { return }
                 for sprite in engine.frame(time: time, size: size, scale: scale, area: area, textScale: DanmakuStyle.textScale(fontSize),
                                            speed: speed, scroll: scroll, top: top, bottom: bottom) {
@@ -36,11 +65,12 @@ struct DanmakuOverlay: View {
         // No `ignoresSafeArea` here: it would win over the caller's, and the iPhone keeps comments below the Dynamic Island.
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .task(id: "\(revision):\(comments.count)") { engine.load(comments, revision: revision) }
-        .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.timeJumpedNotification)) { notification in
-            guard let item = notification.object as? AVPlayerItem, item === player.currentItem else { return }
-            engine.reset()
+        .task(id: Load(revision: revision, count: comments.count, filter: filter)) {
+            // Filtering keeps the order and drops comments in place, so a live track still only grows at the end.
+            let filter = filter
+            engine.load(filter.apply(comments), revision: "\(revision)|\(filter.colors)|\(DanmakuFilter.stored(filter.words))")
         }
+        .onChange(of: jumps) { engine.reset() }
     }
 }
 
@@ -49,6 +79,8 @@ enum DanmakuPreference {
     static let key = "danmakuEnabled"
 }
 
+#if !os(tvOS)
+// The player's menus and sheets on iPhone, iPad and Mac; the TV has its transport menu and Settings › Danmaku.
 /// Rows shared by global settings and the playback panel; no comment track needs to be loaded.
 struct DanmakuDisplaySettings: View {
     @AppStorage(DanmakuArea.key) private var area = DanmakuArea.standard
@@ -101,6 +133,7 @@ private struct DanmakuMotionPickers: View {
     @AppStorage(DanmakuStyle.scrollKey) private var scroll = true
     @AppStorage(DanmakuStyle.topKey) private var top = true
     @AppStorage(DanmakuStyle.bottomKey) private var bottom = true
+    @AppStorage(DanmakuFilter.colorsKey) private var colors = true
 
     var body: some View {
         Picker(selection: Binding(get: { DanmakuStyle.clampedSpeed(speed) }, set: { speed = $0 })) {
@@ -111,8 +144,10 @@ private struct DanmakuMotionPickers: View {
         Toggle(L10n.text("Scrolling Comments"), isOn: $scroll).settingsSwitch().accessibilityIdentifier("danmaku.scroll")
         Toggle(L10n.text("Top Comments"), isOn: $top).settingsSwitch().accessibilityIdentifier("danmaku.top")
         Toggle(L10n.text("Bottom Comments"), isOn: $bottom).settingsSwitch().accessibilityIdentifier("danmaku.bottom")
+        Toggle(L10n.text("Colored Comments"), isOn: $colors).settingsSwitch().accessibilityIdentifier("danmaku.colors")
     }
 }
+#endif
 
 final class DanmakuEngine: @unchecked Sendable {
     struct Sprite { let image: CGImage; let frame: CGRect }
@@ -198,19 +233,35 @@ final class DanmakuEngine: @unchecked Sendable {
             let lane = layout.laneHeight
             let top = size.height * 0.04
             // Bottom comments rest at the foot of the picture, or of the area when it stops above the lower quarter.
-            // One line has a single row, which they share with the others.
+            // A few counted lines have no foot apart from their rows, which bottom comments share with top ones.
             let bottom = area.share < DanmakuArea.threeQuarters.share ? top + max(lane, size.height * 0.96 * area.share) : size.height * 0.92
             return active.map { item in
                 let placement = item.placement
                 let x: Double, y: Double
                 switch placement.comment.position {
                 case .scroll: x = layout.width - (time - placement.start) * placement.speed; y = top + Double(placement.lane) * lane
-                case .top: x = (layout.width - item.size.width) / 2; y = top + Double(placement.lane) * lane
-                case .bottom: x = (layout.width - item.size.width) / 2; y = bottom - Double(placement.lane + 1) * lane
+                case .bottom where !layout.bottomSharesTop:
+                    x = (layout.width - item.size.width) / 2; y = bottom - Double(placement.lane + 1) * lane
+                case .top, .bottom: x = (layout.width - item.size.width) / 2; y = top + Double(placement.lane) * lane
                 }
                 return Sprite(image: item.image, frame: CGRect(x: x, y: y + (lane - item.size.height) / 2, width: item.size.width, height: item.size.height))
             }
         }
+    }
+
+    /// About 43pt on a 1080p TV, 22pt in a small Mac window. From the shorter side: an upright iPhone's full-screen
+    /// player is tall and narrow, and its height made the text twice the size it is when the phone is turned.
+    /// The chosen text size scales that, and the lanes with it, so larger comments don't overlap.
+    static func fontSize(in size: CGSize, textScale: Double) -> CGFloat {
+        min(44, max(15, min(size.width, size.height) * 0.04)) * textScale
+    }
+
+    /// The part of a picture `size` big that comments use in `area`: from just under the top edge down through its
+    /// rows. Settings › Danmaku outlines it on the preview.
+    static func areaFrame(in size: CGSize, area: DanmakuArea, textScale: Double) -> CGRect {
+        let lane = fontSize(in: size, textScale: textScale) * 1.35, top = size.height * 0.04, height = size.height * 0.96
+        let rows = area.lines ?? max(1, Int(height * area.share / lane))
+        return CGRect(x: 0, y: top, width: size.width, height: min(height, CGFloat(rows) * lane))
     }
 
     private func image(_ comment: Danmaku, size: CGFloat, scale: CGFloat) -> CGImage? {
@@ -226,12 +277,9 @@ final class DanmakuEngine: @unchecked Sendable {
                          speed: Double, scroll: Bool, top: Bool, bottom: Bool) {
         self.size = size; self.area = area; self.textScale = textScale
         self.speed = speed; self.scroll = scroll; self.top = top; self.bottom = bottom
-        // About 43pt on a 1080p TV, 22pt in a small Mac window. From the shorter side: an upright iPhone's full-screen
-        // player is tall and narrow, and its height made the text twice the size it is when the phone is turned.
-        // The chosen text size scales that, and the lanes with it, so larger comments don't overlap.
-        fontSize = min(44, max(15, min(size.width, size.height) * 0.04)) * textScale
+        fontSize = Self.fontSize(in: size, textScale: textScale)
         layout = DanmakuLayout(width: size.width, height: size.height * 0.96, laneHeight: fontSize * 1.35, scrollArea: area.share,
-                               scrollDuration: 9 * DanmakuStyle.scrollDurationMultiplier(speed))
+                               lines: area.lines, scrollDuration: 9 * DanmakuStyle.scrollDurationMultiplier(speed))
         active = []
         var low = 0, high = comments.count
         while low < high { let mid = (low + high) / 2; if comments[mid].time < time { low = mid + 1 } else { high = mid } }

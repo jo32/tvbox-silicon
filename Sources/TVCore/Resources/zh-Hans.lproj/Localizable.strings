@@ -1837,3 +1837,27 @@
 "Lossless first plays the best lossy stream, marked as such, when no channel has lossless audio. Lossless only stops instead." = "无损优先会在所有渠道都没有无损音频时，播放最佳的有损音频并标明音质。仅限无损则会停止播放。";
 
 "The video servers could not be reached. Try again later." = "无法连接视频服务器，请稍后重试。";
+
+// Settings › Danmaku
+"Two Lines" = "两行";
+"Three Lines" = "三行";
+"Danmaku Settings" = "弹幕设置";
+"Display" = "显示";
+"Comment Types" = "弹幕类型";
+"Colored Comments" = "彩色弹幕";
+"Turn off Colored Comments to draw every comment in white, which stays readable over bright pictures." = "关闭「彩色弹幕」后，所有弹幕都显示为白色，在明亮的画面上也看得清。";
+"Blocked Words" = "屏蔽词";
+"Add a word or /pattern/" = "添加词语或 /正则/";
+"Add Blocked Word" = "添加屏蔽词";
+"No blocked words" = "没有屏蔽词";
+"Comments containing any of these words are hidden in every video. Put a pattern between slashes, like /^哈+$/, to match it as a regular expression." = "含有这些词语的弹幕在所有视频中都会隐藏。把规则写在两个斜杠之间（例如 /^哈+$/），就按正则表达式匹配。";
+"Applies to comments in every video, including one that is playing." = "对所有视频的弹幕生效，包括正在播放的视频。";
+"Here it comes!" = "前方高能！";
+"This scene is incredible" = "这一幕绝了";
+"Hahahahaha" = "哈哈哈哈哈";
+"Third time watching" = "三刷打卡";
+"The music is so good" = "配乐好好听";
+"Plot twist!" = "反转了！";
+"Classic moment" = "名场面";
+"Welcome back, everyone" = "欢迎回来";
+"Who else is watching tonight?" = "今晚还有谁在看？";

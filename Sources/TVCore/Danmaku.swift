@@ -160,15 +160,28 @@ struct ProtobufReader {
 
 /// How much of the picture comments may use, from the top (弹幕区域): a quarter or a half keeps them off faces
 /// and subtitles. Stored in percent under `key`; three quarters is where comments always scrolled.
-/// One line (zero percent) is a single row along the top edge, so nothing covers the picture below it.
+/// One line (zero percent) is a single row along the top edge, so nothing covers the picture below it; two and three
+/// lines (#924) store their number of rows.
 public enum DanmakuArea: Int, CaseIterable, Sendable {
-    case oneLine = 0, quarter = 25, half = 50, threeQuarters = 75, full = 100
+    case oneLine = 0, twoLines = 2, threeLines = 3, quarter = 25, half = 50, threeQuarters = 75, full = 100
     public static let key = "danmakuArea"
     public static let standard = DanmakuArea.threeQuarters
-    public var share: Double { Double(rawValue) / 100 }
+    /// The rows a line choice keeps comments to; nil for a share of the picture.
+    public var lines: Int? {
+        switch self {
+        case .oneLine: 1
+        case .twoLines: 2
+        case .threeLines: 3
+        default: nil
+        }
+    }
+    /// The share of the picture; zero for a line choice, whose rows are counted instead.
+    public var share: Double { lines == nil ? Double(rawValue) / 100 : 0 }
     public var title: String {
         switch self {
         case .oneLine: L10n.text("One Line")
+        case .twoLines: L10n.text("Two Lines")
+        case .threeLines: L10n.text("Three Lines")
         case .quarter: L10n.text("Top Quarter")
         case .half: L10n.text("Top Half")
         case .threeQuarters: L10n.text("Top Three Quarters")
@@ -197,6 +210,13 @@ public enum DanmakuStyle {
     public static func speeds(including current: Double) -> [Double] {
         choices([0.5, 0.75, 1, 1.25, 1.5, 2], clampedSpeed(current)).sorted()
     }
+    /// A size as a share of the standard one, as Subtitle Style shows its size: 100% is the standard size.
+    public static func sizeTitle(_ fontSize: Double) -> String { percent(fontSize / standardFontSize) }
+    public static func percent(_ value: Double) -> String { value.formatted(.percent.precision(.fractionLength(0))) }
+    /// A speed as the player's menu shows it, like "1.25×".
+    public static func speedTitle(_ speed: Double) -> String {
+        clampedSpeed(speed).formatted(.number.precision(.fractionLength(0...2))) + "×"
+    }
     /// How many times the standard size comments are drawn, within the slider's 16–36 range.
     public static func textScale(_ fontSize: Double) -> Double {
         fontSize.isFinite ? min(36, max(16, fontSize)) / standardFontSize : 1
@@ -208,6 +228,44 @@ public enum DanmakuStyle {
     public static func scrollDurationMultiplier(_ speed: Double) -> Double { 1 / clampedSpeed(speed) }
     private static func choices(_ standard: [Double], _ current: Double) -> [Double] {
         !current.isFinite || standard.contains(where: { abs($0 - current) < 0.001 }) ? standard : standard + [current]
+    }
+}
+
+/// Which comments are drawn besides the kinds `DanmakuStyle` turns off (弹幕屏蔽): by colour and by blocked words.
+/// Like the style, it applies to every track; each choice is stored under its own key.
+public struct DanmakuFilter: Hashable, Sendable {
+    public static let colorsKey = "danmakuShowsColors", wordsKey = "danmakuBlockedWords"
+    /// Off draws every comment in white, for colours that vanish into the picture (#592, #638).
+    public var colors: Bool
+    /// Comments containing any of these are hidden. An entry between slashes (`/^哈+$/`) is a regular expression,
+    /// as on Bilibili; an invalid one is matched as plain text.
+    public var words: [String]
+
+    public init(colors: Bool = true, words: [String] = []) {
+        self.colors = colors; self.words = words
+    }
+
+    /// The stored list: one entry per line.
+    public static func words(_ stored: String) -> [String] {
+        stored.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+    public static func stored(_ words: [String]) -> String { words.joined(separator: "\n") }
+    public static func isPattern(_ word: String) -> Bool { word.count > 2 && word.hasPrefix("/") && word.hasSuffix("/") }
+
+    public func apply(_ comments: [Danmaku]) -> [Danmaku] {
+        guard self != DanmakuFilter() else { return comments }
+        // Plain words ignore case and full- or half-width forms.
+        let blocked: [(String) -> Bool] = words.map { word in
+            if Self.isPattern(word), let pattern = try? NSRegularExpression(pattern: String(word.dropFirst().dropLast())) {
+                return { text in pattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil }
+            }
+            return { text in text.range(of: word, options: [.caseInsensitive, .widthInsensitive]) != nil }
+        }
+        return comments.compactMap { comment in
+            guard !blocked.contains(where: { $0(comment.text) }) else { return nil }
+            guard !colors, comment.color != 0xFFFFFF else { return comment }
+            return Danmaku(time: comment.time, position: comment.position, color: 0xFFFFFF, scale: comment.scale, text: comment.text)
+        }
     }
 }
 
@@ -234,18 +292,26 @@ public struct DanmakuLayout {
     private var scrolling: [[Placement]]
     private var top: [Placement?]
     private var bottom: [Placement?]
-    /// With one row there is no foot of the area apart from that row, so bottom comments take turns in it like top ones.
-    private let singleRow: Bool
+    /// With one row, or a few counted ones (`lines`), there is no foot of the area apart from them, so bottom comments
+    /// take turns in the top rows like top ones, and are drawn there.
+    public let bottomSharesTop: Bool
 
-    public init(width: Double, height: Double, laneHeight: Double, scrollArea: Double = 0.75, scrollDuration: Double = 9, fixedDuration: Double = 4) {
+    /// `lines` keeps comments to that many rows (never more than `height` holds) instead of `scrollArea` of it.
+    public init(width: Double, height: Double, laneHeight: Double, scrollArea: Double = 0.75, lines: Int? = nil,
+                scrollDuration: Double = 9, fixedDuration: Double = 4) {
         self.width = width; self.laneHeight = laneHeight; self.scrollDuration = scrollDuration; self.fixedDuration = fixedDuration
-        scrollLanes = max(1, Int(height * scrollArea / laneHeight))
-        // Top comments stay inside the scrolling area when that is smaller than their usual 30%.
-        fixedLanes = max(1, Int(height * min(0.3, scrollArea) / laneHeight))
+        if let lines {
+            scrollLanes = max(1, min(lines, Int(height / laneHeight)))
+            fixedLanes = scrollLanes
+        } else {
+            scrollLanes = max(1, Int(height * scrollArea / laneHeight))
+            // Top comments stay inside the scrolling area when that is smaller than their usual 30%.
+            fixedLanes = max(1, Int(height * min(0.3, scrollArea) / laneHeight))
+        }
         scrolling = Array(repeating: [], count: scrollLanes)
         top = Array(repeating: nil, count: fixedLanes)
         bottom = Array(repeating: nil, count: fixedLanes)
-        singleRow = scrollLanes == 1
+        bottomSharesTop = lines != nil || scrollLanes == 1
     }
 
     /// How long a placement stays on screen.
@@ -281,7 +347,7 @@ public struct DanmakuLayout {
             }
             return nil
         case .top, .bottom:
-            let pinsToTop = comment.position == .top || singleRow
+            let pinsToTop = comment.position == .top || bottomSharesTop
             let lanes = pinsToTop ? top : bottom
             guard let lane = lanes.indices.first(where: { lane in
                 guard lanes[lane].map({ time - $0.start >= fixedDuration }) ?? true else { return false }

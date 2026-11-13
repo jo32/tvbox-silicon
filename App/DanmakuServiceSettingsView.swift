@@ -2,16 +2,12 @@
 import SwiftUI
 import TVCore
 
-/// The same service and display controls in Settings and over the playing video.
-struct DanmakuServiceSettingsView: View {
-    var body: some View {
-        Form { DanmakuServiceSettings().settingsRows() }
-            .settingsForm(L10n.text("Danmaku Service"))
-    }
-}
-
+/// The service and display controls over the playing video, and the service ones on Settings › Danmaku.
 /// Sections rather than another form, so playback can add matching, timing and file controls.
 struct DanmakuServiceSettings: View {
+    /// Settings › Danmaku has its own Show Danmaku switch at the top and its own display rows.
+    var showsSwitch = true
+    var showsDisplay = true
     @AppStorage(DanmakuPreference.key) private var enabled = true
     @AppStorage(DanmakuService.serverKey) private var server = CatalogDanmakuClient.defaultServer
     @AppStorage(DanmakuService.automaticKey) private var automatic = true
@@ -23,8 +19,10 @@ struct DanmakuServiceSettings: View {
     var body: some View {
         Group {
         Section {
-            Toggle(L10n.text("Show Danmaku"), isOn: $enabled)
-                .settingsSwitch().accessibilityIdentifier("danmaku.enabled")
+            if showsSwitch {
+                Toggle(L10n.text("Show Danmaku"), isOn: $enabled)
+                    .settingsSwitch().accessibilityIdentifier("danmaku.enabled")
+            }
             Toggle(L10n.text("Automatically match the current episode"), isOn: Binding(
                 get: { automatic },
                 set: { save(server: server, source: source, automatic: $0) }))
@@ -71,9 +69,11 @@ struct DanmakuServiceSettings: View {
             Text(L10n.text("Enter a Dandanplay-compatible server root or an API prefix ending in /api/v2. A token in the path is supported. The URL is saved only on this device."))
         }
 
-        Section {
-            DanmakuDisplaySettings()
-        } header: { Text(L10n.text("Danmaku Display")) }
+        if showsDisplay {
+            Section {
+                DanmakuDisplaySettings()
+            } header: { Text(L10n.text("Danmaku Display")) }
+        }
         }
         .onChange(of: address) { _, _ in failure = nil; saved = false }
         .onChange(of: server) { _, value in address = value }
