@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.20",
+          "buildVersion": "58",
+          "date": "2026-11-14",
+          "localizedDescription": "• 阅读网络小说\n• 弹幕随心设置\n• Emby 和 Jellyfin 的 .strm 剧集可以播放\n• 时间和电量随控件显示\n• 其他修复\n\n• Read web novels\n• Danmaku, your way\n• Emby and Jellyfin .strm series play\n• Clock and battery with the controls\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.20/Yingxia-1.8.20-ios.ipa",
+          "size": 129641477,
+          "sha256": "40dd7de6345ddcdcf60b1afd2cd69031400b3cda9a71a33a1781eadc46218cd8",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.19",
           "buildVersion": "57",
           "date": "2026-11-13",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.16/Yingxia-1.8.16-ios.ipa",
           "size": 127939079,
           "sha256": "cebee1c21ad03527f097a52295b41e2a299d6610f30248ec50ac410ab3da0232",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.15",
-          "buildVersion": "53",
-          "date": "2026-11-08",
-          "localizedDescription": "• 云盘播放自动适配设备\n• 字幕：ASS 样式与图片字幕\n• 播放与播放器控制\n• 搜索、评分与片源\n• Mac：视频页与漫画页\n• 其他修复\n\n• Cloud drives that adapt to your device\n• Subtitles: ASS styling and picture subtitles\n• Playback and player controls\n• Search, ratings and sources\n• Mac: video and comic pages\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.15/Yingxia-1.8.15-ios.ipa",
-          "size": 127927291,
-          "sha256": "547065673f43e092a95c787069582157acf48a1d1d0a0edbb14e82eaad316bbd",
           "minOSVersion": "17.0"
         }
       ],
