@@ -1,6 +1,113 @@
 {
   "releases": [
     {
+      "version": "1.8.20",
+      "build": 58,
+      "date": "2026-11-14",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "book.closed",
+          "title": {
+            "en": "Read web novels",
+            "zh-Hans": "阅读网络小说",
+            "zh-Hant": "閱讀網路小說",
+            "ja": "Web 小説を読む"
+          },
+          "detail": {
+            "en": "Add a Legado (阅读) book-source list as a subscription and a Novels section appears: browse and search its sources, keep a bookshelf, and read in a paged reader with themes, fonts and the chapter list. Sources that check for a web browser can't be read on Apple TV.",
+            "zh-Hans": "将阅读（Legado）书源列表添加为订阅后，会出现“小说”栏目：浏览和搜索各书源、加入书架，并在分页阅读器中阅读，可选主题、字体和章节目录。需要网页浏览器验证的书源无法在 Apple TV 上阅读。",
+            "zh-Hant": "將閱讀（Legado）書源列表加入為訂閱後，會出現「小說」欄目：瀏覽和搜尋各書源、加入書架，並在分頁閱讀器中閱讀，可選主題、字型和章節目錄。需要網頁瀏覽器驗證的書源無法在 Apple TV 上閱讀。",
+            "ja": "Legado（閱讀）の書源リストをサブスクリプションとして追加すると「小説」セクションが表示されます。書源の閲覧と検索、本棚、テーマ・フォント・目次付きのページ送りリーダーで読めます。ウェブブラウザの確認が必要な書源は Apple TV では読めません。"
+          }
+        },
+        {
+          "symbol": "text.bubble",
+          "title": {
+            "en": "Danmaku, your way",
+            "zh-Hans": "弹幕随心设置",
+            "zh-Hant": "彈幕隨心設定",
+            "ja": "弾幕コメントを自由に設定"
+          },
+          "detail": {
+            "en": "Settings › Danmaku puts every choice on one page with a live preview: area (now also two or three lines), text size, opacity, scroll speed, comment types, blocked words (plain or /regex/) and the server, including servers you add yourself. Colored Comments can be turned off. On Apple TV, the player's menu has Text Size, Opacity and Scroll Speed.",
+            "zh-Hans": "设置 › 弹幕 把所有选项集中在一页，并带实时预览：显示区域（新增两行、三行）、字号、不透明度、弹幕速度、弹幕类型、屏蔽词（普通文字或 /正则/）和服务器，也可以添加自己的服务器。彩色弹幕可以关闭。在 Apple TV 上，播放器菜单中可调整字号、不透明度和弹幕速度。",
+            "zh-Hant": "設定 › 彈幕 把所有選項集中在一頁，並附即時預覽：顯示區域（新增兩行、三行）、字號、不透明度、彈幕速度、彈幕類型、屏蔽詞（一般文字或 /正則/）和伺服器，也可以加入自己的伺服器。彩色彈幕可以關閉。在 Apple TV 上，播放器選單中可調整字號、不透明度和彈幕速度。",
+            "ja": "設定 › 弾幕コメント で、すべての項目をライブプレビュー付きの 1 ページで設定できます。表示エリア（2 行・3 行を追加）、文字サイズ、不透明度、スクロール速度、コメントの種類、NG ワード（文字列または /正規表現/）、サーバ（自分で追加したサーバも）。カラー弾幕はオフにできます。Apple TV では、プレーヤーのメニューで文字サイズ、不透明度、スクロール速度を変更できます。"
+          }
+        },
+        {
+          "symbol": "externaldrive",
+          "title": {
+            "en": "Emby and Jellyfin .strm series play",
+            "zh-Hans": "Emby 和 Jellyfin 的 .strm 剧集可以播放",
+            "zh-Hant": "Emby 和 Jellyfin 的 .strm 劇集可以播放",
+            "ja": "Emby・Jellyfin の .strm シリーズを再生"
+          },
+          "detail": {
+            "en": "Series kept as .strm files on an Emby or Jellyfin server list and play their episodes, instead of saying the folder has nothing to play.",
+            "zh-Hans": "在 Emby 或 Jellyfin 服务器上以 .strm 文件保存的剧集，现在会列出并播放各集，不再提示文件夹中没有可播放的视频。",
+            "zh-Hant": "在 Emby 或 Jellyfin 伺服器上以 .strm 檔案儲存的劇集，現在會列出並播放各集，不再提示資料夾中沒有可播放的影片。",
+            "ja": "Emby や Jellyfin サーバに .strm ファイルで保存したシリーズのエピソードが一覧に表示され、再生できるようになりました。「再生できるビデオがない」とは表示されません。"
+          }
+        },
+        {
+          "symbol": "macbook",
+          "title": {
+            "en": "Mac player controls along the foot",
+            "zh-Hans": "Mac 播放控件移到画面底部",
+            "zh-Hant": "Mac 播放控制項移到畫面底部",
+            "ja": "Mac のプレーヤー操作を画面下部に"
+          },
+          "detail": {
+            "en": "The playback controls run along the bottom of the picture with a long progress bar, and in full screen they sit under a wide film. Double-click the picture to enter or leave full screen.",
+            "zh-Hans": "播放控件沿画面底部排开，进度条更长；全屏时位于宽银幕影片下方的黑边中。双击画面可进入或退出全屏。",
+            "zh-Hant": "播放控制項沿畫面底部排開，進度條更長；全螢幕時位於寬銀幕影片下方的黑邊中。按兩下畫面可進入或退出全螢幕。",
+            "ja": "再生操作が画面下部に並び、シークバーが長くなりました。フルスクリーンではワイドな映画の下の黒帯に表示されます。画面をダブルクリックするとフルスクリーンを切り替えられます。"
+          },
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "symbol": "iphone",
+          "title": {
+            "en": "Clock and battery with the controls",
+            "zh-Hans": "时间和电量随控件显示",
+            "zh-Hant": "時間和電量隨控制項顯示",
+            "ja": "時刻とバッテリーを操作パネルと一緒に表示"
+          },
+          "detail": {
+            "en": "In full screen on iPhone and iPad, the status bar now shows and hides together with the player's controls.",
+            "zh-Hans": "在 iPhone 和 iPad 上全屏播放时，状态栏会随播放器控件一起显示和隐藏。",
+            "zh-Hant": "在 iPhone 和 iPad 上全螢幕播放時，狀態列會隨播放器控制項一起顯示和隱藏。",
+            "ja": "iPhone と iPad のフルスクリーン再生で、ステータスバーがプレーヤーの操作パネルと一緒に表示・非表示になります。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "The next episode starts without bringing up the controls. Search results scroll smoothly again. Blu-ray disc tracks are named by language. Typing a skip intro or outro time turns automatic skipping on. The Now Playing cover moves as one picture. A live plugin whose ID starts with a digit no longer closes the app, and a missing config file or a web page in place of a Python script now says so.",
+            "zh-Hans": "下一集开始时不再弹出播放控件。搜索结果滚动重新变得流畅。蓝光光盘的音轨和字幕按语言命名。手动输入片头或片尾时间会自动开启跳过。“正在播放”的封面过渡更自然。ID 以数字开头的直播插件不再导致应用退出；配置文件缺失或 Python 脚本地址返回网页时，会给出明确提示。",
+            "zh-Hant": "下一集開始時不再彈出播放控制項。搜尋結果捲動重新變得流暢。藍光光碟的音軌和字幕依語言命名。手動輸入片頭或片尾時間會自動開啟跳過。「正在播放」的封面過渡更自然。ID 以數字開頭的直播外掛不再導致 App 結束；設定檔缺失或 Python 腳本網址傳回網頁時，會給出明確提示。",
+            "ja": "次のエピソードが始まるときに操作パネルが表示されなくなりました。検索結果のスクロールが再び滑らかになりました。Blu-ray ディスクの音声と字幕に言語名が付きます。オープニングやエンディングの時間を入力すると自動スキップがオンになります。「再生中」のカバーが自然に動きます。ID が数字で始まるライブプラグインでアプリが終了しなくなり、設定ファイルがない場合や Python スクリプトの代わりにウェブページが返された場合はその旨を表示します。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.19",
       "build": 57,
       "date": "2026-11-13",
