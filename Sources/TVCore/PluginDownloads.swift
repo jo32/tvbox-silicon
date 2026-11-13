@@ -27,6 +27,16 @@ actor PluginDownloads {
     private let directory: URL?
     init(lifetime: TimeInterval = 300, directory: URL? = nil) { self.lifetime = lifetime; self.directory = directory }
 
+    /// A script never starts with a tag, so one that does is the host's home or 404 page: some hosts answer every
+    /// missing path with it. The script runtime would only say "SyntaxError: invalid syntax (<digest>.py, line 1)".
+    static func refuseWebPageScript(_ data: Data) throws {
+        let start = String(decoding: data.prefix(64), as: UTF8.self)
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{FEFF}"))).lowercased()
+        if start.hasPrefix("<!doctype") || start.hasPrefix("<html") {
+            throw TVError.unsupported(L10n.text("The plugin download returned a web page instead of a plugin. Its host may be offline."))
+        }
+    }
+
     func data(at url: URL, http: HTTPClient, progress: Update? = nil) async throws -> Data {
         if let data = try ImportedFiles.data(at: url) { return data }
         progress?(.checking, 0, nil)
