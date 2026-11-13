@@ -301,6 +301,7 @@ private struct TVDanmakuSettingsPage: View {
     @AppStorage(DanmakuService.automaticKey) private var automatic = true
     @AppStorage(DanmakuService.preferredSourceKey) private var preferredSource = ""
     @AppStorage(DanmakuService.serverKey) private var server = CatalogDanmakuClient.defaultServer
+    @AppStorage(DanmakuService.officialLookupKey) private var officialLookup = true
     @State private var failure: String?
     private static let sizes: [Double] = [16, 18, 20, 22, 26, 30, 36]
     private static let opacities: [Double] = [0.3, 0.5, 0.7, 0.85, 1]
@@ -351,6 +352,11 @@ private struct TVDanmakuSettingsPage: View {
                             save(source: all[((all.firstIndex(of: source) ?? 0) + 1) % all.count])
                         }
                         TVSettingsField(title: L10n.text("Danmaku server URL"), text: Binding(get: { server }, set: { save(server: $0) }))
+                    }
+                    if !DanmakuService.isCustomServer(server) {
+                        TVSettingsSection(footer: DanmakuService.officialLookupNote) {
+                            TVSettingsToggle(title: L10n.text("Find official episodes for dmku"), isOn: $officialLookup)
+                        }
                     }
                     TVSettingsSection(footer: DanmakuSettings.appliesNote) {
                         TVSettingsAction(title: L10n.text("Reset to Standard")) { settings.reset() }

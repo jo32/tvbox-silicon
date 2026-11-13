@@ -62,7 +62,7 @@ import UniformTypeIdentifiers
             return Self(server: DanmakuService.server(), preferredSource: DanmakuService.preferredSource(),
                         automatic: defaults.object(forKey: DanmakuService.automaticKey) == nil || defaults.bool(forKey: DanmakuService.automaticKey),
                         dmkuServer: defaults.string(forKey: "danmakuDmkuServer") ?? "https://dmku.hls.one/",
-                        officialLookup: defaults.object(forKey: "danmakuOfficialLookup") == nil || defaults.bool(forKey: "danmakuOfficialLookup"))
+                        officialLookup: defaults.object(forKey: DanmakuService.officialLookupKey) == nil || defaults.bool(forKey: DanmakuService.officialLookupKey))
         }
         func resolver(server: String? = nil) -> DanmakuResolver {
             DanmakuResolver(dandanServer: server ?? self.server,
@@ -113,10 +113,12 @@ import UniformTypeIdentifiers
             cancelAutomatic()
             if retry, let context = automaticContext {
                 let resolver = updated.resolver()
-                resolver.removeCachedEpisode(context); resolver.forgetUnreachableServers()
+                resolver.forget(context); resolver.forgetUnreachableServers()
             }
             resetComments(); resumeAutomatic()
-        } else if !enabled || !automatic {
+        } else if (wasEnabled && !enabled) || (previous.automatic && !automatic) {
+            // Only when one was just switched off: any other key changing (a display setting, a system write) must
+            // not cancel an episode being loaded by hand while matching is off, or reset its state to idle.
             cancelAutomatic()
         } else if (!wasEnabled || !previous.automatic) && comments.isEmpty {
             resumeAutomatic()
@@ -198,7 +200,7 @@ import UniformTypeIdentifiers
 
     func retryAutomatic() {
         let settings = Preferences.load(), resolver = settings.resolver()
-        if let context = automaticContext { resolver.removeCachedEpisode(context) }
+        if let context = automaticContext { resolver.forget(context) }
         resolver.forgetUnreachableServers()
         cancelAutomatic(); resetComments(); resumeAutomatic()
     }
@@ -213,10 +215,16 @@ import UniformTypeIdentifiers
         let ticket = automaticContext.map { resolver.invalidateEpisodes(for: $0) } ?? MediaCache.shared.ticket()
         self.comments = comments; track = anime.title + " · " + episode.title
         let platform = episode.source.isEmpty ? anime.source : episode.source
-        source = platform.isEmpty ? L10n.text("Danmaku Service") : Self.sourceTitle(platform)
+        source = platform.isEmpty ? L10n.text("Danmaku Service") : episode.source.isEmpty ? anime.sourceTitle : episode.sourceTitle
         fromCache = false; manuallySelected = true; selectedOverridesSource = true; currentResolver = resolver
         cacheCurrent(resolver: resolver, ticket: ticket)
-        if let context = automaticContext, !siblings.isEmpty {
+        if let context = automaticContext, !siblings.isEmpty, !resolver.isCustomServer {
+            // The official server: saved as Dandanplay's, which is where automatic matching looks for (and first asks)
+            // a title already matched there. Saved under the platform instead, the next episode searched again.
+            resolver.remember(DanmakuMapping(provider: "dandan", title: context.videoName, year: context.year,
+                tracks: siblings.map { DanmakuTrack(number: CatalogDanmakuMatcher.episodeNumber($0.title), title: $0.title, id: $0.id) }),
+                for: context, ticket: ticket)
+        } else if let context = automaticContext, !siblings.isEmpty {
             let provider = DanmakuProvider(source: platform)
             let selectedTracks = siblings.filter { sibling in
                 let siblingSource = sibling.source.isEmpty ? anime.source : sibling.source
@@ -233,7 +241,7 @@ import UniformTypeIdentifiers
 
     func clear(keepingContext: Bool = false) {
         cancelAutomatic()
-        if keepingContext, let context = automaticContext { (currentResolver ?? Preferences.load().resolver()).removeCachedEpisode(context) }
+        if keepingContext, let context = automaticContext { (currentResolver ?? Preferences.load().resolver()).forget(context) }
         if !keepingContext { automaticContext = nil; usesSourceComments = false; allowsAutomatic = true }
         resetComments()
     }
@@ -258,10 +266,6 @@ import UniformTypeIdentifiers
         guard let context = automaticContext, !comments.isEmpty else { return }
         resolver.cache(AutomaticDanmakuResult(comments: comments, track: track, source: source, state: "loaded"),
                        for: context, ticket: ticket ?? MediaCache.shared.ticket())
-    }
-    static func sourceTitle(_ source: String) -> String {
-        let provider = DanmakuProvider(source: source)
-        return provider == .automatic ? source : provider.title
     }
 }
 
@@ -328,7 +332,7 @@ struct CatalogDanmakuSettingsView: View {
                                 Button { load(episode, anime: anime) } label: {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(episode.title)
-                                        if !episode.source.isEmpty { Text(CatalogDanmakuModel.sourceTitle(episode.source)).font(.caption).foregroundStyle(.secondary) }
+                                        if !episode.source.isEmpty { Text(episode.sourceTitle).font(.caption).foregroundStyle(.secondary) }
                                     }
                                 }
                                 .disabled(busy).accessibilityIdentifier("danmaku.episode." + episode.id).id(episode.id)
@@ -395,7 +399,7 @@ struct CatalogDanmakuSettingsView: View {
     }
     private var source: DanmakuProvider { DanmakuProvider(rawValue: preferredSource) ?? .automatic }
     private func animeDetails(_ anime: CatalogDanmakuAnime) -> String {
-        let platform = anime.source.isEmpty ? L10n.text("Unknown Source") : CatalogDanmakuModel.sourceTitle(anime.source)
+        let platform = anime.source.isEmpty ? L10n.text("Unknown Source") : anime.sourceTitle
         return ([platform, anime.year ?? L10n.text("Unknown Year"), anime.type]).filter { !$0.isEmpty }.joined(separator: " · ")
     }
     private func shift(by seconds: Double) { model.offset = min(300, max(-300, model.offset + seconds)) }

@@ -220,7 +220,7 @@ private actor CustomDanmakuTransport {
     let equivalent = DanmakuResolver(cache: cache, http: http, dandanServer: "https://EXAMPLE.com:443/a/api/v2/", preferredSource: .tencent)
     let otherServer = DanmakuResolver(cache: cache, http: http, dandanServer: "https://example.com/b", preferredSource: .tencent)
     let otherProvider = DanmakuResolver(cache: cache, http: http, dandanServer: "https://example.com/a", preferredSource: .iqiyi)
-    #expect(first.cacheKey(context) == equivalent.episodeKey(context))
+    #expect(first.cacheKey(context) == equivalent.cacheKey(context))
     #expect(first.cacheKey(context) != otherServer.cacheKey(context))
     #expect(first.cacheKey(context) != otherProvider.cacheKey(context))
     let result = try await first.resolve(context)
@@ -233,7 +233,7 @@ private actor CustomDanmakuTransport {
     #expect(try await otherProvider.resolve(context).cached)
     first.cache(result, for: context)
     #expect(try await first.resolve(context).cached)
-    first.removeCachedEpisode(context)
+    first.forget(context)
     #expect(cache.data(for: first.cacheKey(context), kind: .danmaku, scope: context.id) == nil)
     // Bare legacy cache entries cannot leak after configuring a service.
     cache.store(try JSONEncoder().encode(result), for: DanmakuResolver.episodeKey(context), kind: .danmaku, scope: context.id,
@@ -349,4 +349,55 @@ private actor CustomDanmakuTransport {
     #expect(DanmakuProvider(source: "qq") == .tencent)
     #expect(DanmakuProvider(source: "mgtv") == .imgo)
     #expect(DanmakuProvider.allCases.allSatisfy { !$0.title.isEmpty })
+}
+
+@Test func customDanmakuKeepsAHandPickFromAnotherPlatform() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let cache = MediaCache(root: root), transport = CustomDanmakuTransport()
+    let resolver = DanmakuResolver(cache: cache, http: .init { try await transport.send($0) }, dandanServer: "https://example.com/other-platform",
+                                   preferredSource: .tencent)
+    let context = customContext(), next = customContext("第2集")
+    // Tencent preferred, but the viewer picked the Bilibili entry by hand: the next episode keeps using it.
+    resolver.remember(DanmakuMapping(provider: "bilibili", title: context.videoName, year: context.year, tracks: [
+        .init(number: 1, title: "第1集", id: "pick-1", source: "bilibili"),
+        .init(number: 2, title: "第2集", id: "pick-2", source: "bilibili")
+    ], animeID: "201", source: "bilibili"), for: context, ticket: cache.ticket())
+    #expect(try await resolver.resolve(next).source == DanmakuProvider.bilibili.title)
+    #expect(await transport.count("comment/pick-2") == 1)
+    #expect(await transport.count("search/anime") == 0)
+}
+
+@Test func customDanmakuSaysWhenTheServerNeedsAuthorization() async throws {
+    for status in [401, 403] {
+        let client = try CatalogDanmakuClient(address: "https://example.com", transport: .init { _ in throw TVError.http(status) })
+        await #expect(throws: DanmakuAuthorizationRequired.self) { try await client.search("测试剧") }
+    }
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let resolver = DanmakuResolver(cache: MediaCache(root: root), http: .init { _ in throw TVError.http(401) },
+                                   dandanServer: "https://example.com/expired-token")
+    #expect(try await resolver.resolve(customContext()).state == "unavailable")
+}
+
+@Test func customDanmakuReadsFromAsASourceOnlyInServiceTags() {
+    // Different films, not one title from two sources.
+    for title in ["Escape from Alcatraz", "Escape from Tomorrow"] {
+        let metadata = CatalogDanmakuMatcher.titleMetadata(title)
+        #expect(metadata.title == title && metadata.source == nil)
+    }
+    #expect(CatalogDanmakuMatcher.titleMetadata("测试剧(2023)【电视剧】from 360").source == "360")
+    #expect(CatalogDanmakuMatcher.titleMetadata("测试剧 from bilibili") == ("测试剧", nil, "bilibili", nil))
+}
+
+@Test func officialServerMatchesAsAutomaticForAPlatformItCannotFollow() {
+    let context = customContext()
+    #expect(DanmakuResolver(preferredSource: .bilibili).officialPreference(context) == .automatic)
+    #expect(DanmakuResolver(preferredSource: .migu).officialPreference(context) == .automatic)
+    #expect(DanmakuResolver(preferredSource: .tencent).officialPreference(context) == .tencent)
+    #expect(DanmakuResolver(preferredSource: .dandan).officialPreference(context) == .dandan)
+    #expect(DanmakuResolver(officialLookup: false, preferredSource: .iqiyi).officialPreference(context) == .automatic)
+    var bilibili = context
+    bilibili.officialPage = URL(string: "https://www.bilibili.com/bangumi/play/ep123456")
+    #expect(DanmakuResolver(preferredSource: .bilibili).officialPreference(bilibili) == .bilibili)
 }

@@ -9,7 +9,6 @@ struct CatalogPlaybackActions: View {
     let session: PlaybackSession
     @Environment(Store.self) private var store
     @State private var showsSkip = false
-    @State private var showsDanmaku = false
 
     var body: some View {
         if channel.historyContext != nil {
@@ -37,10 +36,6 @@ struct CatalogPlaybackActions: View {
                     } label: { Label(L10n.text("Chapters"), systemImage: "list.bullet") }
                     .accessibilityIdentifier("player.chapters")
                 }
-                Toggle(L10n.text("Show Danmaku"), isOn: Binding(
-                    get: { session.catalogDanmaku.enabled }, set: { session.catalogDanmaku.enabled = $0 }))
-                Button(L10n.text("Danmaku Settings…")) { showsDanmaku = true }
-                    .accessibilityIdentifier("player.danmaku")
                 if let error = store.episodeError { Text(error) }
             } label: {
                 #if os(macOS)
@@ -63,9 +58,6 @@ struct CatalogPlaybackActions: View {
             .accessibilityLabel(L10n.text("Playback Options"))
             .accessibilityIdentifier("player.catalogOptions")
             .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).playerSheet() }
-            .sheet(isPresented: $showsDanmaku) {
-                CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet()
-            }
         }
     }
 }

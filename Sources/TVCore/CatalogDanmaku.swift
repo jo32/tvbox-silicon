@@ -255,9 +255,12 @@ public enum CatalogDanmakuMatcher {
     static func titleMetadata(_ text: String) -> (title: String, year: String?, source: String?, type: String?) {
         var title = text.trimmingCharacters(in: .whitespacesAndNewlines)
         var source: String?, type: String?, year: String?
-        if let range = title.range(of: #"(?:\s+|(?<=】))from\s+([a-zA-Z0-9_-]+)\s*$"#, options: [.regularExpression, .caseInsensitive]) {
-            let suffix = String(title[range])
-            source = suffix.split(whereSeparator: { $0.isWhitespace }).last.map(String.init)
+        // Services write "Title(2023)【电视剧】from tencent". Only that form, or a platform's own name, is a source:
+        // "Escape from Alcatraz" and "Escape from Tomorrow" are different films, not one title from two sources.
+        if let range = title.range(of: #"(?:\s+|(?<=】))from\s+([a-zA-Z0-9_-]+)\s*$"#, options: [.regularExpression, .caseInsensitive]),
+           let word = title[range].split(whereSeparator: { $0.isWhitespace }).last.map(String.init),
+           title[..<range.lowerBound].hasSuffix("】") || DanmakuProvider(source: word) != .automatic {
+            source = word
             title.removeSubrange(range)
             if let range = title.range(of: #"【[^】]+】\s*$"#, options: .regularExpression) {
                 type = String(title[range]).trimmingCharacters(in: CharacterSet(charactersIn: "【】 "))
@@ -311,6 +314,13 @@ public struct DandanplayLimitReached: LocalizedError, Sendable {
     public init() {}
     public var errorDescription: String? {
         L10n.text("Dandanplay has reached its request limit for now. Try again later, or choose another danmaku server.")
+    }
+}
+
+/// The server refused the request (HTTP 401 or 403): a token in its address is wrong or has expired, or it isn't public.
+public struct DanmakuAuthorizationRequired: LocalizedError, Sendable {
+    public var errorDescription: String? {
+        L10n.text("This danmaku server requires authorization. Choose a compatible public or self-hosted server.")
     }
 }
 
@@ -400,7 +410,9 @@ public struct CatalogDanmakuClient: Sendable {
         }
         if let transport {
             let data: Data
-            do { data = try await transport.send(request) } catch TVError.http(429) { throw DandanplayLimitReached() }
+            do { data = try await transport.send(request) }
+            catch TVError.http(429) { throw DandanplayLimitReached() }
+            catch TVError.http(let status) where status == 401 || status == 403 { throw DanmakuAuthorizationRequired() }
             guard data.count <= CatalogDanmakuParser.maximumBytes else { throw unsupported() }
             try Self.checkLimit(data)
             return data
@@ -409,6 +421,7 @@ public struct CatalogDanmakuClient: Sendable {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             if status == 429 { throw DandanplayLimitReached() }
+            if status == 401 || status == 403 { throw DanmakuAuthorizationRequired() }
             // Preserve HTTP status identity so a stale catalog ID can be refreshed on 404.
             throw TVError.http(status)
         }

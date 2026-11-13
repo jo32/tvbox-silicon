@@ -42,6 +42,11 @@ public enum DanmakuService {
     public static let serverKey = "danmakuServer"
     public static let automaticKey = "danmakuAutoMatch"
     public static let preferredSourceKey = "danmakuPreferredSource"
+    /// With the official server: whether iQIYI and Tencent Video episode pages are looked up and sent to dmku.
+    public static let officialLookupKey = "danmakuOfficialLookup"
+    public static var officialLookupNote: String {
+        L10n.text("Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent.")
+    }
     public static let changed = Notification.Name("DanmakuService.changed")
 
     public static func server(defaults: UserDefaults = .standard) -> String {

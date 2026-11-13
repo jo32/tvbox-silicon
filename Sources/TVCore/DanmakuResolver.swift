@@ -29,9 +29,20 @@ public struct DanmakuResolver: Sendable {
         String(decoding: try! JSONEncoder().encode(["danmaku-v2", DanmakuService.cacheIdentity(server: dandanServer, preferredSource: preferredSource),
             CatalogDanmakuMatcher.normalized(context.videoName), context.year ?? "", Self.episodeKey(context)]), as: UTF8.self)
     }
-    public func episodeKey(_ context: PlaybackHistoryContext) -> String { cacheKey(context) }
     public func forget(_ context: PlaybackHistoryContext) { cache.remove(cacheKey(context), kind: .danmaku, scope: context.id) }
-    public func removeCachedEpisode(_ context: PlaybackHistoryContext) { forget(context) }
+    /// The platform the official server's matching follows. It can follow Dandanplay, iQIYI and Tencent Video (through
+    /// their catalogs), and any platform whose official page the source gave. For another one it matches as Automatic:
+    /// asking no one and caching "no match" for every episode left the video without comments and gave no reason.
+    func officialPreference(_ context: PlaybackHistoryContext) -> DanmakuProvider {
+        switch preferredSource {
+        case .automatic, .dandan: return preferredSource
+        case .iqiyi where officialLookup, .tencent where officialLookup: return preferredSource
+        default:
+            guard let page = context.officialPage.flatMap({ OfficialVideoPage.validated($0.absoluteString) }),
+                  DanmakuProvider(source: CatalogDanmakuMatcher.episodeSource(title: "", url: page)) == preferredSource else { return .automatic }
+            return preferredSource
+        }
+    }
     /// A manual selection replaces prefetched episodes for this work and invalidates their in-flight tickets.
     /// Call after loading the selection, then use the returned ticket for `remember` and `cache`.
     public func invalidateEpisodes(for context: PlaybackHistoryContext) -> MediaCache.Ticket {
@@ -107,6 +118,7 @@ public struct DanmakuResolver: Sendable {
         }
         // A custom service is an explicit routing choice, including when it returns nothing or fails.
         if isCustomServer { return try await resolveCustom(context, ticket: ticket) }
+        let preferredSource = officialPreference(context)
         if preferredSource == .automatic, let first, let result = await first(context), !result.comments.isEmpty {
             try Task.checkCancellation()
             return keep(result, context: context, ticket: ticket)
@@ -120,7 +132,9 @@ public struct DanmakuResolver: Sendable {
         // first, as that costs one request; the wait stays bounded so the others aren't held up.
         let dandanSaved = saved.first { $0.provider == "dandan" }
         let allowsDandan = preferredSource == .automatic || preferredSource == .dandan
-        let dandanFirst = allowsDandan && dandanSaved?.track(for: context) != nil
+        // Mappings are kept per platform preference, so a Dandanplay one saved under another preference was picked by
+        // hand there; it is used like a platform's hand pick on a custom server, not ignored.
+        let dandanFirst = dandanSaved?.track(for: context) != nil
         var responded = preferredSource != .automatic, unreachable = false
         if dandanFirst, let outcome = await askDandanplay(context, cached: dandanSaved, lookupKey: lookupKey, wait: 5, ticket: ticket) {
             try Task.checkCancellation()
@@ -176,10 +190,9 @@ public struct DanmakuResolver: Sendable {
         guard !DandanplayPause.isPaused(dandanServer) else { return customNegative(context, state: "unavailable", ticket: ticket) }
         let key = lookupKey(context)
         var mappings = cache.data(for: key, kind: .lookup).flatMap { try? JSONDecoder().decode([DanmakuMapping].self, from: $0) } ?? []
-        let saved = mappings.first { mapping in
-            (preferredSource == .automatic || DanmakuProvider(source: mapping.provider) == preferredSource)
-                && mapping.track(for: context) != nil
-        }
+        // Mappings are kept per platform preference (`lookupKey`), so any saved one was found for this preference or
+        // picked by hand under it, possibly from another platform; a hand pick is kept rather than searched again.
+        let saved = mappings.first { $0.track(for: context) != nil }
         var mapping = saved
         do {
             let client = try CatalogDanmakuClient(address: dandanServer, transport: http, credentials: dandanCredentials)
@@ -212,16 +225,19 @@ public struct DanmakuResolver: Sendable {
             try Task.checkCancellation()
             if error is CancellationError { throw error }
             if error is DandanplayLimitReached { DandanplayPause.pause(dandanServer) }
+            // A refused token or address won't fix itself within seconds; ask again only as often as for "no match".
+            if error is DanmakuAuthorizationRequired { return customNegative(context, state: "unavailable", ttl: 300, ticket: ticket) }
             // Keep a proven mapping through a transient outage; do not refresh IDs on transport/5xx failures.
             keep(mapping, in: &mappings, key: key, ticket: ticket)
             return customNegative(context, state: "unavailable", ticket: ticket)
         }
     }
 
-    private func customNegative(_ context: PlaybackHistoryContext, state: String, ticket: MediaCache.Ticket) -> AutomaticDanmakuResult {
+    private func customNegative(_ context: PlaybackHistoryContext, state: String, ttl: TimeInterval? = nil,
+                                ticket: MediaCache.Ticket) -> AutomaticDanmakuResult {
         let result = AutomaticDanmakuResult(comments: [], track: "", source: "", state: state)
         if let data = try? JSONEncoder().encode(result) {
-            cache.store(data, for: cacheKey(context), kind: .danmaku, scope: context.id, ttl: state == "unmatched" ? 300 : 30, ticket: ticket)
+            cache.store(data, for: cacheKey(context), kind: .danmaku, scope: context.id, ttl: ttl ?? (state == "unmatched" ? 300 : 30), ticket: ticket)
         }
         return result
     }
@@ -238,10 +254,21 @@ public struct DanmakuResolver: Sendable {
             let l = order.firstIndex(of: left.provider) ?? order.count, r = order.firstIndex(of: right.provider) ?? order.count
             return l == r ? left.source < right.source : l < r
         }
-        for anime in unique.prefix(12) {
+        // A few episode lists at a time: one after another, twelve shows on a slow server took minutes. The earliest
+        // show in the order above still wins.
+        let shortlist = Array(unique.prefix(12))
+        for start in stride(from: 0, to: shortlist.count, by: 4) {
             try Task.checkCancellation()
-            let episodes = try await client.episodes(anime)
-            if let mapping = customMapping(context, anime: anime, episodes: episodes, preference: preference) { return mapping }
+            let batch = Array(shortlist[start..<min(start + 4, shortlist.count)])
+            let lists = try await withThrowingTaskGroup(of: (Int, [CatalogDanmakuEpisode]).self) { group in
+                for (index, anime) in batch.enumerated() { group.addTask { (index, try await client.episodes(anime)) } }
+                var lists = [[CatalogDanmakuEpisode]](repeating: [], count: batch.count)
+                for try await (index, episodes) in group { lists[index] = episodes }
+                return lists
+            }
+            for (anime, episodes) in zip(batch, lists) {
+                if let mapping = customMapping(context, anime: anime, episodes: episodes, preference: preference) { return mapping }
+            }
         }
         return nil
     }
