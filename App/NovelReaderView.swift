@@ -578,7 +578,7 @@ struct NovelReaderView: View {
                 HStack(spacing: 12) {
                     Text(remaining(pages.spreadCount - spread - 1))
                     Spacer(minLength: 8)
-                    if model.fetching != nil { ProgressView().controlSize(.mini) }
+                    if model.fetching != nil { ProgressView().appControlSize(.mini) }
                     Text("\(spread + 1) / \(pages.spreadCount)")
                 }
                 .font(.system(size: chromeFont, weight: .light).monospacedDigit())
@@ -973,7 +973,7 @@ struct NovelReaderView: View {
                         #else
                         HStack(spacing: 6) {
                             Text(choice.title).font(choice.font(size: 16))
-                            if fonts.downloading.contains(choice) { ProgressView().controlSize(.mini) }
+                            if fonts.downloading.contains(choice) { ProgressView().appControlSize(.mini) }
                         }
                         .frame(maxWidth: .infinity, minHeight: 40)
                         .background(store.font == choice ? AnyShapeStyle(colors.text.opacity(0.14)) : AnyShapeStyle(colors.text.opacity(0.05)),
