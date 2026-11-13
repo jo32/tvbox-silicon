@@ -83,8 +83,13 @@ struct EpisodeSkipSettingsView: View {
         #endif
     }
 
+    /// A time typed in switches automatic skipping on, as Use Current Position does. Saved with the switch at the top
+    /// still off, the times skipped nothing, and nothing said why (#865).
     private func timeField(_ title: String, text: Binding<String>, identifier: String) -> some View {
-        TextField(title, text: text, prompt: Text("01:30"))
+        TextField(title, text: Binding(get: { text.wrappedValue }, set: { value in
+            text.wrappedValue = value
+            if !value.isEmpty { enabled = true }
+        }), prompt: Text("01:30"))
             .monospacedDigit()
             .accessibilityIdentifier(identifier)
             #if os(iOS)
