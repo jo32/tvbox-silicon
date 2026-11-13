@@ -104,6 +104,10 @@ typealias MusicTrack = TVCore.MusicTrack
         // to a receiver that can play video, and an Android TV box's AirPlay app then plays the FLAC itself: with
         // static on some songs, or not at all (-11870, "external playback not supported for asset") (#376).
         player.allowsExternalPlayback = false
+        #if DEBUG
+        // `-qaMute 1`: QA runs on a shared Mac play silently, as the video player does.
+        if UserDefaults.standard.bool(forKey: "qaMute") { player.isMuted = true }
+        #endif
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.25, preferredTimescale: 600), queue: .main) { [weak self] time in
             MainActor.assumeIsolated { self?.tick(time) }
         }

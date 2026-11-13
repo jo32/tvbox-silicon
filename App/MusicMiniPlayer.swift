@@ -7,12 +7,23 @@ struct MusicArtwork: View {
     let url: URL?
     var size: CGFloat?
     var symbol = "music.note"
+    /// For a cover without a fixed size that grows and shrinks in place; 12 pt otherwise.
+    var cornerRadius: CGFloat?
+    /// The next song's cover fades in over this one, as in Music, rather than cutting to it.
+    var fades = false
     var body: some View {
         Color.clear
             .aspectRatio(1, contentMode: .fit)
-            .overlay { PosterImage(url: url, symbol: symbol) }
+            .overlay {
+                if fades {
+                    PosterImage(url: url, symbol: symbol).id(url).transition(.opacity)
+                } else {
+                    PosterImage(url: url, symbol: symbol)
+                }
+            }
+            .animation(fades ? .easeInOut(duration: 0.35) : nil, value: url)
             .frame(width: size, height: size)
-            .posterClip(RoundedRectangle(cornerRadius: size.map { max(4, $0 * 0.12) } ?? 12, style: .continuous))
+            .posterClip(RoundedRectangle(cornerRadius: cornerRadius ?? size.map { max(4, $0 * 0.12) } ?? 12, style: .continuous))
     }
 }
 
@@ -27,7 +38,7 @@ struct MusicMiniPlayer: View {
     var body: some View {
         let music = store.music
         HStack(spacing: inline ? 10 : 12) {
-            MusicArtwork(url: music.track?.artwork, size: inline ? 28 : 34)
+            MusicArtwork(url: music.track?.artwork, size: inline ? 28 : 34, fades: true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(music.track?.title ?? "").font(.subheadline.weight(.semibold)).lineLimit(1)
                 if let failure = music.failure {
@@ -54,7 +65,9 @@ struct MusicMiniPlayer: View {
             }
             .font(.title3)
         }
-        .padding(.leading, inline ? 6 : 10).padding(.trailing, inline ? 4 : 8)
+        // Beside the minimized tab bar the strip is a 48 pt capsule: 10 pt in, the cover sits in the middle of its round
+        // end, as far from the end as from the top and bottom. At 6 pt it was pressed into the curve (#858).
+        .padding(.leading, 10).padding(.trailing, inline ? 4 : 8)
         .frame(maxHeight: .infinity)
         .contentShape(.rect)
         .onTapGesture { music.presentsPlayer = true }
