@@ -1,0 +1,99 @@
+#if !os(tvOS)
+import SwiftUI
+import TVCore
+
+/// The same service and display controls in Settings and over the playing video.
+struct DanmakuServiceSettingsView: View {
+    var body: some View {
+        Form { DanmakuServiceSettings().settingsRows() }
+            .settingsForm(L10n.text("Danmaku Service"))
+    }
+}
+
+/// Sections rather than another form, so playback can add matching, timing and file controls.
+struct DanmakuServiceSettings: View {
+    @AppStorage(DanmakuPreference.key) private var enabled = true
+    @AppStorage(DanmakuService.serverKey) private var server = CatalogDanmakuClient.defaultServer
+    @AppStorage(DanmakuService.automaticKey) private var automatic = true
+    @AppStorage(DanmakuService.preferredSourceKey) private var preferredSource = ""
+    @State private var address = DanmakuService.server()
+    @State private var failure: String?
+    @State private var saved = false
+
+    var body: some View {
+        Group {
+        Section {
+            Toggle(L10n.text("Show Danmaku"), isOn: $enabled)
+                .settingsSwitch().accessibilityIdentifier("danmaku.enabled")
+            Toggle(L10n.text("Automatically match the current episode"), isOn: Binding(
+                get: { automatic },
+                set: { save(server: server, source: source, automatic: $0) }))
+                .settingsSwitch().accessibilityIdentifier("danmaku.automatic")
+            Picker(L10n.text("Preferred Source Platform"), selection: Binding(
+                get: { source },
+                set: { save(server: server, source: $0, automatic: automatic) })) {
+                ForEach(DanmakuProvider.allCases, id: \.self) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .accessibilityIdentifier("danmaku.preferredSource")
+        } header: { Text(L10n.text("Danmaku Service")) }
+          footer: { Text(L10n.text("Matching comments appear automatically. If none match or the service is unavailable, the video stays clear.")) }
+
+        Section {
+            TextField(L10n.text("Danmaku server URL"), text: $address,
+                      prompt: Text(L10n.text("Danmaku server URL")))
+                .autocorrectionDisabled()
+                #if os(iOS)
+                .textInputAutocapitalization(.never).keyboardType(.URL)
+                #endif
+                .onSubmit(saveAddress)
+                .accessibilityIdentifier("danmaku.server")
+            HStack {
+                Button(L10n.text("Save"), action: saveAddress)
+                    .disabled(address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityIdentifier("danmaku.server.save")
+                Button(L10n.text("Use Official URL")) {
+                    address = CatalogDanmakuClient.defaultServer
+                    saveAddress()
+                }
+                .accessibilityIdentifier("danmaku.server.reset")
+            }
+            if let failure {
+                Text(failure).font(.caption).foregroundStyle(.red)
+                    .accessibilityIdentifier("danmaku.server.error")
+            } else if saved {
+                Text(L10n.text("Danmaku service settings saved."))
+                    .font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("danmaku.server.saved")
+            }
+        } footer: {
+            Text(L10n.text("Enter a Dandanplay-compatible server root or an API prefix ending in /api/v2. A token in the path is supported. The URL is saved only on this device."))
+        }
+
+        Section {
+            DanmakuDisplaySettings()
+        } header: { Text(L10n.text("Danmaku Display")) }
+        }
+        .onChange(of: address) { _, _ in failure = nil; saved = false }
+        .onChange(of: server) { _, value in address = value }
+    }
+
+    private var source: DanmakuProvider { DanmakuProvider(rawValue: preferredSource) ?? .automatic }
+
+    private func saveAddress() {
+        guard !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        save(server: address, source: source, automatic: automatic)
+        if failure == nil { address = server }
+    }
+
+    private func save(server address: String, source: DanmakuProvider, automatic: Bool) {
+        do {
+            try DanmakuService.save(server: address, preferredSource: source, automatic: automatic)
+            failure = nil; saved = true
+        } catch {
+            failure = error.localizedDescription; saved = false
+        }
+    }
+}
+#endif

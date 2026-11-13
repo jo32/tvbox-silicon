@@ -77,6 +77,14 @@ public final class MediaCache: @unchecked Sendable {
             persist()
         }
     }
+    /// Remove one category in a work's scope, invalidating downloads started before the deletion.
+    public func remove(kind: Kind, scope: String) {
+        lock.withLock {
+            generation &+= 1
+            for key in entries.keys.filter({ entries[$0]?.scope == scope && entries[$0]?.kind == kind }) { erase(key) }
+            persist()
+        }
+    }
     public func remove(_ key: String, kind: Kind, scope: String = "") {
         lock.withLock { generation &+= 1; erase(id(key, kind, scope)); persist() }
     }

@@ -31,7 +31,7 @@ public enum CatalogDanmakuParser {
             return try reader.read(data)
         }
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              root["comments"] != nil || root["danmuku"] != nil else {
+              root["success"] as? Bool != false, root["comments"] != nil || root["danmuku"] != nil else {
             throw TVError.unsupported(L10n.text("The service did not return a supported danmaku list."))
         }
         // dmku (code 23): time,"right"|"top"|"bottom",color,size,text. danmu.zxz.ee (code 200): time,mode,color,text,sent.
@@ -103,33 +103,178 @@ private final class DanmakuXMLReader: NSObject, XMLParserDelegate {
 }
 
 public struct CatalogDanmakuAnime: Identifiable, Sendable, Hashable {
+    /// The service's catalog ID, not the platform-native bangumi ID.
     public let id: String
     public let title: String
     public let type: String
+    public let source: String
+    public let year: String?
+    public let typeCode: String?
+    public let bangumiID: String?
+    public var provider: DanmakuProvider { DanmakuProvider(source: source) }
+    public var sourceTitle: String { provider == .automatic ? source : provider.title }
+
+    public init(id: String, title: String, type: String = "", source: String = "", year: String? = nil,
+                typeCode: String? = nil, bangumiID: String? = nil) {
+        let metadata = CatalogDanmakuMatcher.titleMetadata(title)
+        self.id = id; self.title = title; self.type = type.isEmpty ? metadata.type ?? "" : type
+        self.source = source.isEmpty ? metadata.source ?? "" : source
+        self.year = year ?? metadata.year; self.typeCode = typeCode; self.bangumiID = bangumiID
+    }
 }
 
 public struct CatalogDanmakuEpisode: Identifiable, Sendable, Hashable {
     public let id: String
     public let title: String
+    public let episodeNumber: Int?
+    public let source: String
+    public let url: URL?
+    public var provider: DanmakuProvider { DanmakuProvider(source: source) }
+    public var sourceTitle: String { provider == .automatic ? source : provider.title }
+
+    public init(id: String, title: String, episodeNumber: Int? = nil, source: String = "", url: URL? = nil) {
+        self.id = id; self.title = title
+        self.episodeNumber = episodeNumber.flatMap { (1...9999).contains($0) ? $0 : nil } ?? CatalogDanmakuMatcher.explicitEpisodeNumber(title)
+        self.source = source.isEmpty ? CatalogDanmakuMatcher.episodeSource(title: title, url: url) : source
+        self.url = url
+    }
 }
 
 /// Prefer no track to a track from the wrong season or episode.
 public enum CatalogDanmakuMatcher {
-    public static func anime(title: String, in results: [CatalogDanmakuAnime]) -> CatalogDanmakuAnime? {
-        let key = normalized(title)
-        guard !key.isEmpty else { return nil }
-        var seen = Set<String>()
-        let matches = results.filter { normalized($0.title) == key && seen.insert($0.id).inserted }
+    public static func anime(title: String, year: String? = nil, source: DanmakuProvider = .automatic,
+                             in results: [CatalogDanmakuAnime]) -> CatalogDanmakuAnime? {
+        let matches = animeCandidates(title: title, year: year, source: source, in: results)
         return matches.count == 1 ? matches.first : nil
     }
 
+    /// Exact work/season matches. Multiple platforms are kept separate by the resolver; duplicate
+    /// editions within one platform remain ambiguous. Unknown aggregators can expose a requested platform.
+    static func animeCandidates(title: String, year: String?, source: DanmakuProvider,
+                                in results: [CatalogDanmakuAnime]) -> [CatalogDanmakuAnime] {
+        let metadata = titleMetadata(title), key = normalized(metadata.title)
+        guard !key.isEmpty else { return [] }
+        let requestedYear = year.flatMap(parseYear) ?? metadata.year
+        if let year = year.flatMap(parseYear), let titledYear = metadata.year, year != titledYear { return [] }
+        var seen = Set<String>()
+        let matches = results.filter { anime in
+            let candidate = titleMetadata(anime.title)
+            guard normalized(candidate.title) == key,
+                  source == .automatic || anime.provider == source || anime.provider == .automatic,
+                  anime.year == nil || candidate.year == nil || anime.year == candidate.year,
+                  requestedYear == nil || anime.year == nil || anime.year == requestedYear else { return false }
+            return seen.insert(anime.source + "|" + anime.id).inserted
+        }
+        if requestedYear == nil, Set(matches.compactMap(\.year)).count > 1 { return [] }
+        // A known exact year is stronger than an undated duplicate, but only for that platform.
+        return matches.filter { anime in
+            requestedYear == nil || anime.year != nil || !matches.contains { $0.source == anime.source && $0.year == requestedYear }
+        }
+    }
+
     public static func episode(name: String, in episodes: [CatalogDanmakuEpisode]) -> CatalogDanmakuEpisode? {
-        if let number = episodeNumber(name) {
-            let matches = episodes.filter { episodeNumber($0.title) == number }
-            return matches.count == 1 ? matches.first : nil
+        episode(name: name, seriesTitle: "", in: episodes)
+    }
+
+    /// Titles with an explicit episode number outrank metadata. Metadata never overrides an explicit
+    /// contradictory title, nor supplies a number to a preview, special, or an arbitrary named extra.
+    public static func episode(name: String, seriesTitle: String, source: DanmakuProvider = .automatic,
+                               in episodes: [CatalogDanmakuEpisode]) -> CatalogDanmakuEpisode? {
+        guard !isExtra(name) else { return nil }
+        let candidates = episodes.filter { !isExtra($0.title) && (source == .automatic || $0.provider == source) }
+        if let number = explicitEpisodeNumber(name) {
+            let explicit = candidates.filter { explicitEpisodeNumber($0.title) == number }
+            if !explicit.isEmpty { return explicit.count == 1 ? explicit.first : nil }
+            let metadata = candidates.filter {
+                explicitEpisodeNumber($0.title) == nil && $0.episodeNumber == number && isUnnamedMain($0.title, seriesTitle: seriesTitle)
+            }
+            return metadata.count == 1 ? metadata.first : nil
         }
         let movies = ["正片", "电影", "電影", "剧场版", "劇場版", "hd", "hd中字", "hd国语", "1080p", "720p", "蓝光", "藍光", "完整版", "fullmovie"]
-        return episodes.count == 1 && movies.contains(normalized(name)) ? episodes.first : nil
+        return candidates.count == 1 && movies.contains(normalized(name)) ? candidates.first : nil
+    }
+
+    static func isExtra(_ title: String) -> Bool {
+        let key = normalized(title)
+        let words = ["预告", "预览", "先导", "花絮", "彩蛋", "番外", "特典", "特别篇", "特别节目", "精华", "片段", "剪辑", "幕后", "采访", "访谈", "探班", "官宣", "阵容", "海报", "概念片", "宣传", "预热", "首映礼", "发布会"]
+        return words.contains(where: key.contains)
+            || title.range(of: #"(?i)(?<![a-z])(?:trailer|preview|teaser|bonus|special|extra|ova|oad)(?![a-z])"#, options: .regularExpression) != nil
+            || title.range(of: #"(?i)(?:^|[\s【\[])SP\s*\d"#, options: .regularExpression) != nil
+    }
+
+    static func explicitEpisodeNumber(_ title: String) -> Int? {
+        guard !isExtra(title) else { return nil }
+        // Service titles often prefix the platform and work name: 【qq】 三体 第1集 …
+        let pattern = #"第\s*([0-9]{1,4}|[零〇一二两三四五六七八九十百]+)\s*[集话話回]"#
+        guard let expression = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let matches = expression.matches(in: title, range: NSRange(title.startIndex..., in: title))
+        let numbers = matches.compactMap { match -> Int? in
+            guard let range = Range(match.range, in: title) else { return nil }
+            return episodeNumber(String(title[range]).replacingOccurrences(of: " ", with: ""))
+        }
+        if !matches.isEmpty { return Set(numbers).count == 1 ? numbers.first : nil }
+        return episodeNumber(title)
+    }
+
+    static func isUnnamedMain(_ title: String, seriesTitle: String) -> Bool {
+        guard !isExtra(title) else { return false }
+        let clean = title.replacingOccurrences(of: #"^\s*[【\[][^】\]]+[】\]]\s*"#, with: "", options: .regularExpression)
+        let key = normalized(clean)
+        if !seriesTitle.isEmpty && key == normalized(titleMetadata(seriesTitle).title) { return true }
+        guard !hasNumberedTitle(clean) else { return false }
+        return key.isEmpty || ["正片", "全集", "full", "fullepisode"].contains(key)
+    }
+
+    private static func hasNumberedTitle(_ title: String) -> Bool {
+        // A range, season/episode notation or malformed explicit label is not an unnamed main episode.
+        title.range(of: #"[0-9零〇一二两三四五六七八九十百]"#, options: .regularExpression) != nil
+    }
+
+    static func episodeSource(title: String, url: URL?) -> String {
+        if let expression = try? NSRegularExpression(pattern: #"^\s*[【\[]([^】\]]+)[】\]]"#),
+           let match = expression.firstMatch(in: title, range: NSRange(title.startIndex..., in: title)),
+           let range = Range(match.range(at: 1), in: title) {
+            let tag = String(title[range]).replacingOccurrences(of: #"[0-9]+$"#, with: "", options: .regularExpression)
+            let provider = DanmakuProvider(source: tag)
+            if provider != .automatic { return provider.rawValue }
+        }
+        let host = url?.host()?.lowercased() ?? ""
+        for (domain, provider) in [("iqiyi.com", DanmakuProvider.iqiyi), ("qq.com", .tencent), ("bilibili.com", .bilibili),
+                                   ("youku.com", .youku), ("mgtv.com", .imgo), ("miguvideo.com", .migu)] {
+            if host == domain || host.hasSuffix("." + domain) { return provider.rawValue }
+        }
+        return ""
+    }
+
+    static func parseYear(_ value: String) -> String? {
+        guard let range = value.range(of: #"^(?:19|20)[0-9]{2}(?=$|[-/年])"#, options: .regularExpression) else { return nil }
+        return String(value[range])
+    }
+
+    /// Remove service-authored metadata only; season names and arbitrary subtitles remain significant.
+    static func titleMetadata(_ text: String) -> (title: String, year: String?, source: String?, type: String?) {
+        var title = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var source: String?, type: String?, year: String?
+        if let range = title.range(of: #"(?:\s+|(?<=】))from\s+([a-zA-Z0-9_-]+)\s*$"#, options: [.regularExpression, .caseInsensitive]) {
+            let suffix = String(title[range])
+            source = suffix.split(whereSeparator: { $0.isWhitespace }).last.map(String.init)
+            title.removeSubrange(range)
+            if let range = title.range(of: #"【[^】]+】\s*$"#, options: .regularExpression) {
+                type = String(title[range]).trimmingCharacters(in: CharacterSet(charactersIn: "【】 "))
+                title.removeSubrange(range)
+            }
+        }
+        // Some implementations label the source with parentheses instead of `from`.
+        if let range = title.range(of: #"[（(][^()（）]+[）)]\s*$"#, options: .regularExpression) {
+            let tag = String(title[range]).trimmingCharacters(in: CharacterSet(charactersIn: "（）() "))
+            let provider = DanmakuProvider(source: tag)
+            if provider != .automatic { source = source ?? provider.rawValue; title.removeSubrange(range) }
+        }
+        if let range = title.range(of: #"[（(](?:19|20)[0-9]{2}[）)]\s*$"#, options: .regularExpression) {
+            year = String(title[range]).trimmingCharacters(in: CharacterSet(charactersIn: "（）() "))
+            title.removeSubrange(range)
+        }
+        return (title.trimmingCharacters(in: .whitespacesAndNewlines), year, source, type)
     }
 
     public static func episodeNumber(_ name: String) -> Int? {
@@ -186,48 +331,65 @@ public struct CatalogDanmakuClient: Sendable {
         guard url.user == nil, url.password == nil, url.query == nil, url.fragment == nil else {
             throw TVError.unsupported(L10n.text("Enter the danmaku server base URL, without a query or fragment."))
         }
-        // Accept either a server root (including a self-hosted token path) or /api/v2.
-        var value = url.absoluteString
-        while value.hasSuffix("/") { value.removeLast() }
-        if value.hasSuffix("/api/v2") { value = String(value.dropLast(7)) }
-        guard let base = URL(string: value) else { throw TVError.invalidURL }
+        // Work on the encoded path: a token containing %2F or %2B must not be decoded or re-encoded.
+        var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        parts.scheme = parts.scheme?.lowercased(); parts.host = parts.host?.lowercased()
+        if (parts.scheme == "https" && parts.port == 443) || (parts.scheme == "http" && parts.port == 80) { parts.port = nil }
+        var path = parts.percentEncodedPath
+        while path.hasSuffix("/") { path.removeLast() }
+        if path.hasSuffix("/api/v2") { path = String(path.dropLast(7)) }
+        parts.percentEncodedPath = path
+        guard let base = parts.url else { throw TVError.invalidURL }
         server = base.absoluteString == Self.legacyDefaultServer ? URL(string: Self.defaultServer)! : base
     }
 
-    public func search(_ keyword: String) async throws -> [CatalogDanmakuAnime] {
-        let data = try await request("search/anime", query: [.init(name: "keyword", value: keyword)])
+    public func search(_ keyword: String, source: DanmakuProvider = .automatic) async throws -> [CatalogDanmakuAnime] {
+        let data = try await request("search/anime", query: [.init(name: "keyword", value: keyword)], timeout: 45)
         let root = try object(data)
         guard let rows = root["animes"] as? [[String: Any]] else { throw unsupported() }
         return rows.prefix(100).compactMap { row in
-            guard let id = Self.identifier(row["bangumiId"] ?? row["animeId"]), let title = row["animeTitle"] as? String else { return nil }
-            return CatalogDanmakuAnime(id: id, title: title, type: row["typeDescription"] as? String ?? "")
+            // Self-hosted services return a numeric animeId alongside an opaque platform bangumiId.
+            guard let id = Self.identifier(row["animeId"]) ?? Self.identifier(row["bangumiId"]),
+                  let title = row["animeTitle"] as? String else { return nil }
+            let anime = CatalogDanmakuAnime(id: id, title: title, type: row["typeDescription"] as? String ?? "",
+                source: row["source"] as? String ?? "", year: (row["startDate"] as? String).flatMap(CatalogDanmakuMatcher.parseYear),
+                typeCode: Self.text(row["type"]), bangumiID: Self.identifier(row["bangumiId"]))
+            return source == .automatic || anime.provider == source || anime.provider == .automatic ? anime : nil
         }
     }
 
     public func episodes(_ anime: CatalogDanmakuAnime) async throws -> [CatalogDanmakuEpisode] {
-        let root = try object(try await request("bangumi/" + anime.id))
+        guard let animeID = Self.identifier(anime.id) else { throw unsupported() }
+        let root = try object(try await request("bangumi/" + animeID))
         guard let bangumi = root["bangumi"] as? [String: Any], let rows = bangumi["episodes"] as? [[String: Any]] else { throw unsupported() }
         return rows.prefix(5_000).compactMap { row in
-            guard let id = Self.identifier(row["episodeId"]), let title = row["episodeTitle"] as? String else { return nil }
-            return CatalogDanmakuEpisode(id: id, title: title)
+            guard let id = Self.identifier(row["episodeId"]) else { return nil }
+            let title = row["episodeTitle"] as? String ?? ""
+            let url = (row["url"] as? String).flatMap { try? WebAddress.resolve($0) }
+            let inferred = CatalogDanmakuMatcher.episodeSource(title: title, url: url)
+            let source = row["source"] as? String ?? (inferred.isEmpty ? anime.source : inferred)
+            return CatalogDanmakuEpisode(id: id, title: title, episodeNumber: Self.text(row["episodeNumber"]).flatMap(Int.init), source: source, url: url)
         }
     }
 
     public func comments(_ episode: CatalogDanmakuEpisode) async throws -> [CatalogDanmakuComment] {
-        try CatalogDanmakuParser.parse(await request("comment/" + episode.id, query: [
-            .init(name: "withRelated", value: "true"), .init(name: "chConvert", value: "0")]))
+        guard let id = Self.identifier(episode.id) else { throw unsupported() }
+        return try CatalogDanmakuParser.parse(await request("comment/" + id, query: [
+            .init(name: "withRelated", value: "true"), .init(name: "chConvert", value: "0"), .init(name: "format", value: "json")]))
     }
 
+    private static func text(_ value: Any?) -> String? { (value as? String) ?? (value as? NSNumber)?.stringValue }
     private static func identifier(_ value: Any?) -> String? {
-        let text = (value as? String) ?? (value as? NSNumber)?.stringValue
-        guard let text, !text.isEmpty, text.count <= 64, text.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
+        guard let text = text(value), !text.isEmpty, text.count <= 128,
+              text.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") }) else { return nil }
         return text
     }
 
-    private func request(_ path: String, query: [URLQueryItem] = []) async throws -> Data {
-        var parts = URLComponents(url: server.appending(path: "api/v2/" + path), resolvingAgainstBaseURL: false)!
+    private func request(_ path: String, query: [URLQueryItem] = [], timeout: TimeInterval = 25) async throws -> Data {
+        var parts = URLComponents(url: server, resolvingAgainstBaseURL: false)!
+        parts.percentEncodedPath += "/api/v2/" + path
         parts.queryItems = query.isEmpty ? nil : query
-        var request = URLRequest(url: parts.url!, timeoutInterval: 25)
+        var request = URLRequest(url: parts.url!, timeoutInterval: timeout)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Yingxia (danmaku; https://www.getmegaportal.com)", forHTTPHeaderField: "User-Agent")
         if DandanplayCredentials.isOfficial(request.url!) {
@@ -247,8 +409,8 @@ public struct CatalogDanmakuClient: Sendable {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             if status == 429 { throw DandanplayLimitReached() }
-            if status == 401 || status == 403 { throw TVError.unsupported(L10n.text("This danmaku server requires authorization. Choose a compatible public or self-hosted server.")) }
-            throw TVError.unsupported(L10n.text("The server returned HTTP %lld.", status))
+            // Preserve HTTP status identity so a stale catalog ID can be refreshed on 404.
+            throw TVError.http(status)
         }
         if response.expectedContentLength > CatalogDanmakuParser.maximumBytes { throw TVError.unsupported(L10n.text("The danmaku file is too large.")) }
         var data = Data()

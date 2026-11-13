@@ -79,6 +79,73 @@ struct DanmakuTests {
         #expect(DanmakuStyle.textScale(33) == 1.5 && DanmakuStyle.textScale(80) == 36 / 22.0 && DanmakuStyle.textScale(.nan) == 1)
     }
 
+    @Test func scrollSpeedPreferencesAreBoundedAndKeepCustomChoices() {
+        #expect(DanmakuStyle.standardSpeed == 1)
+        #expect(DanmakuStyle.speeds(including: 1) == [0.5, 0.75, 1, 1.25, 1.5, 2])
+        #expect(DanmakuStyle.speeds(including: 1.1) == [0.5, 0.75, 1, 1.1, 1.25, 1.5, 2])
+        #expect(DanmakuStyle.clampedSpeed(-10) == 0.5 && DanmakuStyle.clampedSpeed(10) == 2)
+        #expect(DanmakuStyle.clampedSpeed(1.1) == 1.1)
+        for invalid in [Double.nan, .infinity, -.infinity] {
+            #expect(DanmakuStyle.clampedSpeed(invalid) == 1)
+            #expect(DanmakuStyle.scrollDurationMultiplier(invalid) == 1)
+            #expect(DanmakuStyle.speeds(including: invalid) == [0.5, 0.75, 1, 1.25, 1.5, 2])
+        }
+        #expect(DanmakuStyle.scrollDurationMultiplier(-10) == 2)
+        #expect(DanmakuStyle.scrollDurationMultiplier(10) == 0.5)
+    }
+
+    @Test(arguments: [0.5, 0.75, 1, 1.25, 1.5, 2])
+    func speedChangesScrollingTravelWithoutChangingFixedLifetime(_ speed: Double) throws {
+        var layout = DanmakuLayout(width: 1000, height: 400, laneHeight: 50,
+                                   scrollDuration: 9 * DanmakuStyle.scrollDurationMultiplier(speed))
+        let movingPlacement = layout.place(Danmaku(time: 0, position: .scroll, text: "moving"), width: 200, at: 0)
+        let moving = try #require(movingPlacement)
+        // The standard comment crosses all 1200 points in nine video seconds; speed scales that distance per second.
+        #expect(abs(moving.speed - (1200 / 9.0) * speed) < 0.0001)
+        #expect(abs(layout.duration(moving) * speed - 9) < 0.0001)
+        let pinned = Danmaku(time: 0, position: .bottom, text: "pinned")
+        let fixedPlacement = layout.place(pinned, width: 200, at: 0)
+        let fixed = try #require(fixedPlacement)
+        #expect(fixed.speed == 0 && layout.duration(fixed) == 4)
+        // The first row remains occupied for the same four video seconds at every scrolling speed.
+        #expect(layout.place(pinned, width: 200, at: 3.9)?.lane != fixed.lane)
+        #expect(layout.place(pinned, width: 200, at: 4)?.lane == fixed.lane)
+    }
+
+    @Test(arguments: [0.5, 0.75, 1, 1.25, 1.5, 2])
+    func mixedCommentTrajectoriesNeverOverlapAtAnySpeed(_ speed: Double) {
+        var layout = DanmakuLayout(width: 1000, height: 400, laneHeight: 50, scrollArea: DanmakuArea.oneLine.share,
+                                   scrollDuration: 9 * DanmakuStyle.scrollDurationMultiplier(speed))
+        let positions: [Danmaku.Position] = [.top, .scroll, .scroll, .bottom, .scroll]
+        let widths: [Double] = [120, 80, 600, 240, 1400, 320]
+        var placements: [DanmakuLayout.Placement] = []
+        for index in 0..<120 {
+            let time = Double(index) / 4
+            let comment = Danmaku(time: time, position: positions[index % positions.count], text: "\(index)")
+            if let placed = layout.place(comment, width: widths[index % widths.count], at: time) { placements.append(placed) }
+        }
+        #expect(placements.contains { $0.comment.position == .scroll })
+        #expect(placements.contains { $0.comment.position != .scroll })
+        // Check the actual visible rectangles at 60 fps, including a long, fast follower behind short comments
+        // and fixed comments sharing the single row. This checks the whole trajectory after each accepted placement.
+        var overlap: String?
+        for frame in 0..<3000 {
+            let time = Double(frame) / 60
+            let visible = placements.filter { time >= $0.start && time < $0.start + layout.duration($0) }
+            for (index, first) in visible.enumerated() {
+                let left = first.speed > 0 ? layout.width - (time - first.start) * first.speed : (layout.width - first.width) / 2
+                for second in visible.dropFirst(index + 1) where first.lane == second.lane {
+                    let other = second.speed > 0 ? layout.width - (time - second.start) * second.speed : (layout.width - second.width) / 2
+                    let shared = min(layout.width, left + first.width, other + second.width) - max(0, left, other)
+                    if shared > 0.0001 { overlap = "\(first.comment.text), \(second.comment.text) at \(time)"; break }
+                }
+                if overlap != nil { break }
+            }
+            if overlap != nil { break }
+        }
+        #expect(overlap == nil, "Overlapping comments: \(overlap ?? "none")")
+    }
+
     @Test func topCommentsAndScrollingCommentsDoNotOverlap() {
         var layout = DanmakuLayout(width: 1000, height: 400, laneHeight: 50, scrollArea: 0.5, scrollDuration: 10)
         let moving = Danmaku(time: 0, position: .scroll, text: "x")

@@ -21,6 +21,7 @@ struct PlaybackView: View {
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
     @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @State private var showsDanmakuList = false
+    @State private var showsDanmakuSettings = false
     @State private var showsEpisodes = false
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
@@ -237,6 +238,9 @@ struct PlaybackView: View {
             DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
                 .danmakuListPresentation()
         }
+        .sheet(isPresented: $showsDanmakuSettings) {
+            CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet()
+        }
     }
 
     private var chromeTitle: some View {
@@ -299,22 +303,22 @@ struct PlaybackView: View {
             }
             .chromeButton()
             .accessibilityLabel(L10n.text("Subtitle Files"))
-            // One button for danmaku: show or hide them, or open the list.
-            if !session.danmaku.isEmpty {
-                Menu {
-                    Toggle(isOn: $showsDanmaku) { Label(L10n.text("Show Danmaku"), systemImage: "text.bubble") }
-                    Picker(selection: $danmakuArea) {
-                        ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
-                    } label: { Label(L10n.text("Danmaku Area"), systemImage: "rectangle.tophalf.inset.filled") }
-                    .pickerStyle(.menu)
-                    DanmakuStylePickers(model: session.catalogDanmaku)
-                    Button { showsDanmakuList = true } label: { Label(L10n.text("Danmaku List"), systemImage: "list.bullet.rectangle") }
-                } label: {
-                    Image(systemName: showsDanmaku ? "text.bubble.fill" : "text.bubble").font(.headline).frame(width: 22, height: 22)
-                }
-                .chromeButton()
-                .accessibilityLabel(L10n.text("Danmaku"))
+            // Settings stay reachable before comments load, including when automatic matching found none.
+            Menu {
+                Toggle(isOn: $showsDanmaku) { Label(L10n.text("Show Danmaku"), systemImage: "text.bubble") }
+                Picker(selection: $danmakuArea) {
+                    ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
+                } label: { Label(L10n.text("Danmaku Area"), systemImage: "rectangle.tophalf.inset.filled") }
+                .pickerStyle(.menu)
+                DanmakuStylePickers(model: session.catalogDanmaku)
+                Button(L10n.text("Danmaku Settings…")) { showsDanmakuSettings = true }
+                Button { showsDanmakuList = true } label: { Label(L10n.text("Danmaku List"), systemImage: "list.bullet.rectangle") }
+                    .disabled(session.danmaku.isEmpty)
+            } label: {
+                Image(systemName: showsDanmaku ? "text.bubble.fill" : "text.bubble").font(.headline).frame(width: 22, height: 22)
             }
+            .chromeButton()
+            .accessibilityLabel(L10n.text("Danmaku"))
         }
     }
 
@@ -1369,6 +1373,7 @@ private struct DesktopPlaybackView: View {
     @State private var idle = ChromeIdle()
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
     @State private var showsDanmakuList = false
+    @State private var showsDanmakuSettings = false
     @State private var showsEpisodes = false
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     /// Devices with Yingxia open, for the Play On button; and the one the video was sent to.
@@ -1447,6 +1452,9 @@ private struct DesktopPlaybackView: View {
             DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
                 .danmakuListPresentation()
         }
+        .sheet(isPresented: $showsDanmakuSettings) {
+            CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet()
+        }
         .onDisappear { idle.detach(); tvBrowser.stop() }
         .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, search: $searchesSubtitles, subtitles: session.externalSubtitles)
         // A subtitle file dropped on the video shows on it (#576).
@@ -1519,8 +1527,8 @@ private struct DesktopPlaybackView: View {
 
     private var optionsMenu: some View {
         DesktopOptionsMenu(channel: channel, session: session, window: window, hasDanmaku: !session.danmaku.isEmpty, fillsFrame: $fillsFrame, floats: $floats,
-                           showsDanmakuList: $showsDanmakuList, importsSubtitleFile: $importsSubtitleFile, asksSubtitleAddress: $asksSubtitleAddress,
-                           searchesSubtitles: $searchesSubtitles)
+                           showsDanmakuList: $showsDanmakuList, showsDanmakuSettings: $showsDanmakuSettings,
+                           importsSubtitleFile: $importsSubtitleFile, asksSubtitleAddress: $asksSubtitleAddress, searchesSubtitles: $searchesSubtitles)
             .equatable()
     }
 
@@ -1544,6 +1552,7 @@ private struct DesktopOptionsMenu: View, Equatable {
     @Binding var fillsFrame: Bool
     @Binding var floats: Bool
     @Binding var showsDanmakuList: Bool
+    @Binding var showsDanmakuSettings: Bool
     @Binding var importsSubtitleFile: Bool
     @Binding var asksSubtitleAddress: Bool
     @Binding var searchesSubtitles: Bool
@@ -1574,13 +1583,15 @@ private struct DesktopOptionsMenu: View, Equatable {
                 MacSubtitleFiles(subtitles: session.externalSubtitles, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
                                  searchOnline: { searchesSubtitles = true })
             }
-            if hasDanmaku {
+            Menu(L10n.text("Danmaku")) {
                 Toggle(L10n.text("Show Danmaku"), isOn: $showsDanmaku)
                 Picker(L10n.text("Danmaku Area"), selection: $danmakuArea) {
                     ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 DanmakuStylePickers(model: session.catalogDanmaku)
-                Button(L10n.text("Danmaku List…")) { showsDanmakuList = true }
+                Button(L10n.text("Danmaku Settings…")) { showsDanmakuSettings = true }
+                    .accessibilityIdentifier("player.danmakuSettings")
+                Button(L10n.text("Danmaku List…")) { showsDanmakuList = true }.disabled(!hasDanmaku)
             }
             Divider()
             Button(L10n.text("Enter / Exit Full Screen")) { window.toggleFullScreen(nil) }
@@ -1766,7 +1777,7 @@ extension Store {
         return other.flag
     }
     if let context = channel.historyContext, let next = store.nextEpisode(after: channel),
-       let catalog = store.catalog(for: channel), context.sourceKey != Bilibili.siteKey {
+       let catalog = store.catalog(for: channel) {
         session.catalogDanmaku.prefetch(PlaybackHistoryContext(origin: context.origin, site: catalog.client.site,
             video: catalog.video, episode: next))
     }

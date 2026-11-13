@@ -12,6 +12,10 @@ struct DanmakuOverlay: View {
     var revision = ""
     @AppStorage(DanmakuArea.key) private var area = DanmakuArea.standard
     @AppStorage(DanmakuStyle.fontSizeKey) private var fontSize = DanmakuStyle.standardFontSize
+    @AppStorage(DanmakuStyle.speedKey) private var speed = DanmakuStyle.standardSpeed
+    @AppStorage(DanmakuStyle.scrollKey) private var scroll = true
+    @AppStorage(DanmakuStyle.topKey) private var top = true
+    @AppStorage(DanmakuStyle.bottomKey) private var bottom = true
     @State private var engine = DanmakuEngine()
     @Environment(\.displayScale) private var scale
 
@@ -22,7 +26,8 @@ struct DanmakuOverlay: View {
                 _ = timeline.date
                 let time = player.currentTime().seconds
                 guard time.isFinite else { return }
-                for sprite in engine.frame(time: time, size: size, scale: scale, area: area, textScale: DanmakuStyle.textScale(fontSize)) {
+                for sprite in engine.frame(time: time, size: size, scale: scale, area: area, textScale: DanmakuStyle.textScale(fontSize),
+                                           speed: speed, scroll: scroll, top: top, bottom: bottom) {
                     context.draw(Image(decorative: sprite.image, scale: scale), in: sprite.frame)
                 }
             }
@@ -31,7 +36,11 @@ struct DanmakuOverlay: View {
         // No `ignoresSafeArea` here: it would win over the caller's, and the iPhone keeps comments below the Dynamic Island.
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .task(id: "\(revision):\(comments.count)") { engine.load(comments) }
+        .task(id: "\(revision):\(comments.count)") { engine.load(comments, revision: revision) }
+        .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.timeJumpedNotification)) { notification in
+            guard let item = notification.object as? AVPlayerItem, item === player.currentItem else { return }
+            engine.reset()
+        }
     }
 }
 
@@ -40,33 +49,83 @@ enum DanmakuPreference {
     static let key = "danmakuEnabled"
 }
 
+/// Rows shared by global settings and the playback panel; no comment track needs to be loaded.
+struct DanmakuDisplaySettings: View {
+    @AppStorage(DanmakuArea.key) private var area = DanmakuArea.standard
+    @AppStorage(DanmakuStyle.fontSizeKey) private var fontSize = DanmakuStyle.standardFontSize
+    @AppStorage(DanmakuStyle.opacityKey) private var opacity = DanmakuStyle.standardOpacity
+
+    var body: some View {
+        Picker(selection: $area) {
+            ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
+        } label: { Label(L10n.text("Danmaku Area"), systemImage: "rectangle.tophalf.inset.filled") }
+        .pickerStyle(.menu)
+        .accessibilityIdentifier("danmaku.area")
+        DanmakuTextStylePickers(fontSize: $fontSize, opacity: $opacity)
+        DanmakuMotionPickers()
+    }
+}
+
 #if !os(tvOS)
-/// Text size and opacity for the player's danmaku menu, next to the area, for whatever comments are playing.
+/// Display controls beside the area in the player's menu, for whatever comments are playing.
 struct DanmakuStylePickers: View {
     @Bindable var model: CatalogDanmakuModel
 
     var body: some View {
-        Picker(selection: $model.fontSize) {
-            ForEach(DanmakuStyle.fontSizes(including: model.fontSize), id: \.self) { Text(verbatim: "\(Int($0.rounded()))").tag($0) }
-        } label: { Label(L10n.text("Text Size"), systemImage: "textformat.size") }
-        .pickerStyle(.menu)
-        Picker(selection: $model.opacity) {
-            ForEach(DanmakuStyle.opacities(including: model.opacity), id: \.self) { Text(verbatim: "\(Int(($0 * 100).rounded()))%").tag($0) }
-        } label: { Label(L10n.text("Opacity"), systemImage: "circle.lefthalf.filled") }
-        .pickerStyle(.menu)
+        DanmakuTextStylePickers(fontSize: $model.fontSize, opacity: $model.opacity)
+        DanmakuMotionPickers()
     }
 }
 #endif
+
+private struct DanmakuTextStylePickers: View {
+    @Binding var fontSize: Double
+    @Binding var opacity: Double
+
+    var body: some View {
+        Picker(selection: $fontSize) {
+            ForEach(DanmakuStyle.fontSizes(including: fontSize), id: \.self) { Text(verbatim: "\(Int($0.rounded()))").tag($0) }
+        } label: { Label(L10n.text("Text Size"), systemImage: "textformat.size") }
+        .pickerStyle(.menu)
+        .accessibilityIdentifier("danmaku.fontSize")
+        Picker(selection: $opacity) {
+            ForEach(DanmakuStyle.opacities(including: opacity), id: \.self) { Text(verbatim: "\(Int(($0 * 100).rounded()))%").tag($0) }
+        } label: { Label(L10n.text("Opacity"), systemImage: "circle.lefthalf.filled") }
+        .pickerStyle(.menu)
+        .accessibilityIdentifier("danmaku.opacity")
+    }
+}
+
+private struct DanmakuMotionPickers: View {
+    @AppStorage(DanmakuStyle.speedKey) private var speed = DanmakuStyle.standardSpeed
+    @AppStorage(DanmakuStyle.scrollKey) private var scroll = true
+    @AppStorage(DanmakuStyle.topKey) private var top = true
+    @AppStorage(DanmakuStyle.bottomKey) private var bottom = true
+
+    var body: some View {
+        Picker(selection: Binding(get: { DanmakuStyle.clampedSpeed(speed) }, set: { speed = $0 })) {
+            ForEach(DanmakuStyle.speeds(including: speed), id: \.self) { Text(verbatim: "\($0.formatted(.number.precision(.fractionLength(0...2))))×").tag($0) }
+        } label: { Label(L10n.text("Scroll Speed"), systemImage: "speedometer") }
+        .pickerStyle(.menu)
+        .accessibilityIdentifier("danmaku.speed")
+        Toggle(L10n.text("Scrolling Comments"), isOn: $scroll).settingsSwitch().accessibilityIdentifier("danmaku.scroll")
+        Toggle(L10n.text("Top Comments"), isOn: $top).settingsSwitch().accessibilityIdentifier("danmaku.top")
+        Toggle(L10n.text("Bottom Comments"), isOn: $bottom).settingsSwitch().accessibilityIdentifier("danmaku.bottom")
+    }
+}
 
 final class DanmakuEngine: @unchecked Sendable {
     struct Sprite { let image: CGImage; let frame: CGRect }
     private struct Active { let placement: DanmakuLayout.Placement; let image: CGImage; let size: CGSize }
     private let lock = NSLock()
     private var comments: [Danmaku] = []
+    private var revision = ""
     private var layout: DanmakuLayout?
     private var size = CGSize.zero
     private var area = DanmakuArea.standard
     private var textScale = 1.0
+    private var speed = DanmakuStyle.standardSpeed
+    private var scroll = true, top = true, bottom = true
     private var fontSize: CGFloat = 24
     private var next = 0
     private var active: [Active] = []
@@ -77,30 +136,53 @@ final class DanmakuEngine: @unchecked Sendable {
     /// dozens of comments in one frame and stall it; the rest wait a frame, and those a second late are dropped.
     private static let perFrame = 4, onScreen = 150
 
-    func load(_ comments: [Danmaku]) {
+    func load(_ comments: [Danmaku], revision: String = "") {
         lock.withLock {
             // Live comments only grow at the end: keep the layout and what is already on screen.
-            if !self.comments.isEmpty, comments.count > self.comments.count, comments.first == self.comments.first {
+            // A new track or time offset supplies a new revision even when its first comment is unchanged.
+            if revision == self.revision, !self.comments.isEmpty, comments.count > self.comments.count,
+               comments.first == self.comments.first, comments[self.comments.count - 1] == self.comments.last {
                 self.comments = comments; return
             }
-            self.comments = comments; layout = nil
+            self.comments = comments; self.revision = revision; layout = nil
         }
     }
 
-    func frame(time: Double, size: CGSize, scale: CGFloat, area: DanmakuArea = .standard, textScale: Double = 1) -> [Sprite] {
+    /// The player's time-jump notification catches small seeks that look like ordinary frame advances.
+    func reset() { lock.withLock { layout = nil } }
+
+    func frame(time: Double, size: CGSize, scale: CGFloat, area: DanmakuArea = .standard, textScale: Double = 1,
+               speed: Double = DanmakuStyle.standardSpeed, scroll: Bool = true, top: Bool = true, bottom: Bool = true) -> [Sprite] {
         lock.withLock {
-            guard !comments.isEmpty, size.width > 0, size.height > 0 else { return [] }
-            // A new size, area or text size, or a seek (any jump the clock would not make by itself), starts over at `time`.
-            if layout == nil || size != self.size || area != self.area || textScale != self.textScale
-                || time < lastTime - 0.3 || time > lastTime + 2 {
-                restart(at: time, size: size, area: area, textScale: textScale)
+            guard time.isFinite, !comments.isEmpty, size.width > 0, size.height > 0 else { return [] }
+            let speed = DanmakuStyle.clampedSpeed(speed)
+            // Changes restart at the player's current time; past comments never replay with a new style.
+            // Any backward movement, or a large forward jump between frames, also clears the old placements.
+            let restarted = layout == nil || size != self.size || area != self.area || textScale != self.textScale
+                || speed != self.speed || scroll != self.scroll || top != self.top || bottom != self.bottom
+                || time < lastTime || time > lastTime + 2
+            if restarted {
+                restart(at: time, size: size, area: area, textScale: textScale, speed: speed, scroll: scroll, top: top, bottom: bottom)
+            }
+            // Repeated paused frames draw the same placements without draining a dense track's queue.
+            let advances = restarted || time > lastTime
+            if !advances, next < comments.count, comments[next].time <= time {
+                // Discard the rest of a burst while paused, so resuming cannot replay that backlog.
+                next = comments.partitioningIndex { $0.time > time }
             }
             lastTime = time
             var budget = Self.perFrame
-            while next < comments.count, comments[next].time <= time {
+            while advances, next < comments.count, comments[next].time <= time {
                 let comment = comments[next]
+                let shown: Bool
+                switch comment.position {
+                case .scroll: shown = scroll
+                case .top: shown = top
+                case .bottom: shown = bottom
+                }
+                // Filtering precedes measurement, drawing and the frame budget, so hidden types reserve no lanes.
                 // Comments passed over (a stall, a skipped frame, a burst) are not shown late.
-                guard time - comment.time < 1, active.count < Self.onScreen, var layout else { next += 1; continue }
+                guard shown, time - comment.time < 1, active.count < Self.onScreen, var layout else { next += 1; continue }
                 guard budget > 0 else { break }
                 budget -= 1; next += 1
                 let font = fontSize * comment.scale
@@ -140,13 +222,16 @@ final class DanmakuEngine: @unchecked Sendable {
         return image
     }
 
-    private func restart(at time: Double, size: CGSize, area: DanmakuArea, textScale: Double) {
+    private func restart(at time: Double, size: CGSize, area: DanmakuArea, textScale: Double,
+                         speed: Double, scroll: Bool, top: Bool, bottom: Bool) {
         self.size = size; self.area = area; self.textScale = textScale
+        self.speed = speed; self.scroll = scroll; self.top = top; self.bottom = bottom
         // About 43pt on a 1080p TV, 22pt in a small Mac window. From the shorter side: an upright iPhone's full-screen
         // player is tall and narrow, and its height made the text twice the size it is when the phone is turned.
         // The chosen text size scales that, and the lanes with it, so larger comments don't overlap.
         fontSize = min(44, max(15, min(size.width, size.height) * 0.04)) * textScale
-        layout = DanmakuLayout(width: size.width, height: size.height * 0.96, laneHeight: fontSize * 1.35, scrollArea: area.share)
+        layout = DanmakuLayout(width: size.width, height: size.height * 0.96, laneHeight: fontSize * 1.35, scrollArea: area.share,
+                               scrollDuration: 9 * DanmakuStyle.scrollDurationMultiplier(speed))
         active = []
         var low = 0, high = comments.count
         while low < high { let mid = (low + high) / 2; if comments[mid].time < time { low = mid + 1 } else { high = mid } }

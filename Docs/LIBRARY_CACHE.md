@@ -38,13 +38,29 @@ seconds); if it has no usable track, the first nonempty fallback result wins;
 unmatched episodes and unavailable services leave the video playing without an
 overlay or an alert.
 
-The iOS/macOS Danmaku settings sheet offers automatic matching, a Dandanplay server URL,
-manual Dandanplay search, XML/JSON import, timing offset, font size and opacity.
-Automatic matching and the existing Show Danmaku setting can be disabled.
-Matching sends title/episode information to the configured providers; official
-lookup queries the platforms' public endpoints, and dmku receives the validated
-public episode-page URL. Resolved media URLs and media authorization headers are
-not sent to these providers.
+On macOS, Settings → Danmaku Service configures a Dandanplay-compatible server,
+including self-hosted `danmu_api` services. The same page is available in iOS
+Playback settings and from the player's Danmaku Settings menu. Enter the server
+root, an optional token path, or an address ending in `/api/v2`, then save. The
+address stays in this device's preferences; no personal service is bundled.
+
+With a custom server, automatic matching searches only that service using the
+video's title, year and episode. The source picker selects Automatic, iQIYI,
+Tencent Video, Bilibili, Youku, Mango TV, Migu or Dandanplay. Availability depends
+on which providers the service offers. Changing the service or source reloads
+the current episode and uses a separate cache. Uncertain titles, seasons and
+episodes remain unmatched; use manual search and episode selection when needed.
+
+The player's sheet also offers XML/JSON import, display area, text size, opacity,
+scroll speed, scrolling/top/bottom comment switches, and timing adjustment. Advance
+comments when they appear late, delay them when they appear early, or reset the
+offset. Comments follow the video's clock while pausing, seeking or changing
+playback speed. Show Danmaku and automatic matching can each be disabled.
+
+Matching sends title/episode information to the configured service. With the
+default service, official lookup can query the platforms' public endpoints and
+send validated public episode-page URLs to the comment server. Resolved media
+URLs and media authorization headers are not sent to these services.
 
 Catalog comments adapt into the existing `DanmakuOverlay` renderer. Bilibili VOD,
 live chat, quality selection and casting retain their existing resolution and

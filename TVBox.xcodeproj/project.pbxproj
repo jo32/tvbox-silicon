@@ -80,6 +80,9 @@
 		34A7CB6F4A24249F52079A4D /* runtime-probe.jar in Resources */ = {isa = PBXBuildFile; fileRef = E19FE970E68D278C15E8DBF8 /* runtime-probe.jar */; };
 		36506AEA4D6F2E1541C1BCD1 /* AppleRuntime.m in Sources */ = {isa = PBXBuildFile; fileRef = FFE4BA19E4F4F2797D929A6F /* AppleRuntime.m */; };
 		37B3CD8A4542A1B2304DBB75 /* CatalogDanmakuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C093554D3863FDB5D2E832B5 /* CatalogDanmakuView.swift */; };
+		6B838BFE95C7460CBDB57001 /* DanmakuServiceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B838BFE95C7460CBDB57000 /* DanmakuServiceSettingsView.swift */; };
+		6B838BFE95C7460CBDB57002 /* DanmakuServiceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B838BFE95C7460CBDB57000 /* DanmakuServiceSettingsView.swift */; };
+		6B838BFE95C7460CBDB57003 /* DanmakuServiceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B838BFE95C7460CBDB57000 /* DanmakuServiceSettingsView.swift */; };
 		38089AAF28B91679EFEA5F70 /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52B784080CDE6CF171AEA5E7 /* DiscoverView.swift */; };
 		38395AAE5193EB91CF33602A /* DiscoverDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28110209CF4DBB819A2F3C74 /* DiscoverDetailView.swift */; };
 		38BF027CC7866E805A20DDD1 /* StyledSubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61C44303B4662294C11176AB /* StyledSubtitleOverlay.swift */; };
@@ -457,6 +460,7 @@
 		BF5733BA144503E76421BCFD /* MusicTVPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicTVPlayer.swift; sourceTree = "<group>"; };
 		C05256E7BDC34745BDE22193 /* MangaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaStore.swift; sourceTree = "<group>"; };
 		C093554D3863FDB5D2E832B5 /* CatalogDanmakuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogDanmakuView.swift; sourceTree = "<group>"; };
+		6B838BFE95C7460CBDB57000 /* DanmakuServiceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DanmakuServiceSettingsView.swift; sourceTree = "<group>"; };
 		C3FBB140165AC6F0A60866F5 /* LivePluginQRSignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePluginQRSignIn.swift; sourceTree = "<group>"; };
 		CEE19E104EAA6C4F620B8E53 /* CloudDriveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudDriveView.swift; sourceTree = "<group>"; };
 		D091093D028D2FD9AB72B79C /* SubtitleStyleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleStyleView.swift; sourceTree = "<group>"; };
@@ -572,6 +576,7 @@
 				CEE19E104EAA6C4F620B8E53 /* CloudDriveView.swift */,
 				4A0D2EAF4F07329DAB40B97D /* CloudFilesView.swift */,
 				E78573DE76BCF27CABBB20F3 /* CloudQRLoginView.swift */,
+				6B838BFE95C7460CBDB57000 /* DanmakuServiceSettingsView.swift */,
 				7A5737402EC96F0FBF79243E /* DanmakuView.swift */,
 				9644627CBD3EF1CE6A06E228 /* DateComparison.swift */,
 				A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */,
@@ -1156,6 +1161,7 @@
 				C6D7579CAFFAB9B441C0703C /* CloudDriveView.swift in Sources */,
 				8EB254B55B70CF8A923D1CD0 /* CloudFilesView.swift in Sources */,
 				91C07692EFFEE27619AA9FF3 /* CloudQRLoginView.swift in Sources */,
+				6B838BFE95C7460CBDB57001 /* DanmakuServiceSettingsView.swift in Sources */,
 				ED3BFF07859A99C455624644 /* DanmakuView.swift in Sources */,
 				2F46BE251F004B53430FD516 /* DateComparison.swift in Sources */,
 				6F182F91BDACFBFC8E6B3B0E /* DetailAurora.swift in Sources */,
@@ -1256,6 +1262,7 @@
 				D10B5A0245BDE1A5E05A6BD7 /* CloudDriveView.swift in Sources */,
 				1D82C5470FDA73053EAD6398 /* CloudFilesView.swift in Sources */,
 				277D741E2A86C06612A8034A /* CloudQRLoginView.swift in Sources */,
+				6B838BFE95C7460CBDB57002 /* DanmakuServiceSettingsView.swift in Sources */,
 				2EF5CCF1BA71B68F4DCF2F71 /* DanmakuView.swift in Sources */,
 				5389383E76A0D20F8A86317A /* DateComparison.swift in Sources */,
 				7DCDDEB6A7774CAF5C85D539 /* DetailAurora.swift in Sources */,
@@ -1358,6 +1365,7 @@
 				59953BBDD74AED0A292F7079 /* CloudDriveView.swift in Sources */,
 				BA97CE75C2E0DF21635E17EA /* CloudFilesView.swift in Sources */,
 				31D893FEF33876FD07BB58BA /* CloudQRLoginView.swift in Sources */,
+				6B838BFE95C7460CBDB57003 /* DanmakuServiceSettingsView.swift in Sources */,
 				C10EEC4D7AED0BE564BF2246 /* DanmakuView.swift in Sources */,
 				E7D008DE20C7450D031909C1 /* DateComparison.swift in Sources */,
 				EBDFAB717675C3CBCA05B75F /* DetailAurora.swift in Sources */,

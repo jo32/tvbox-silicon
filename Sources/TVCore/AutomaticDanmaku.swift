@@ -21,8 +21,9 @@ public struct DanmakuTrack: Codable, Hashable, Sendable {
     public let title: String
     public let page: URL?
     public let id: String?
-    public init(number: Int?, title: String, page: URL? = nil, id: String? = nil) {
-        self.number = number; self.title = title; self.page = page; self.id = id
+    public let source: String?
+    public init(number: Int?, title: String, page: URL? = nil, id: String? = nil, source: String? = nil) {
+        self.number = number; self.title = title; self.page = page; self.id = id; self.source = source
     }
 }
 public struct DanmakuMapping: Codable, Sendable {
@@ -30,18 +31,34 @@ public struct DanmakuMapping: Codable, Sendable {
     public let title: String
     public let year: String?
     public let tracks: [DanmakuTrack]
-    public init(provider: String, title: String, year: String?, tracks: [DanmakuTrack]) {
+    /// Catalog identity retained for refreshing a manual selection when its episode IDs expire.
+    public let animeID: String?
+    public let source: String?
+    public init(provider: String, title: String, year: String?, tracks: [DanmakuTrack], animeID: String? = nil, source: String? = nil) {
         self.provider = provider; self.title = title; self.year = year; self.tracks = tracks
+        self.animeID = animeID; self.source = source
     }
     public func track(for context: PlaybackHistoryContext) -> DanmakuTrack? {
-        guard CatalogDanmakuMatcher.normalized(title) == CatalogDanmakuMatcher.normalized(context.videoName),
-              context.year == nil || year == nil || context.year == year else { return nil }
-        if let number = CatalogDanmakuMatcher.episodeNumber(context.episodeName) {
-            let matches = tracks.filter { $0.number == number }
-            return matches.count == 1 ? matches.first : nil
+        let work = CatalogDanmakuAnime(id: animeID ?? "mapping", title: title, source: source ?? provider, year: year)
+        guard CatalogDanmakuMatcher.anime(title: context.videoName, year: context.year, in: [work]) != nil else { return nil }
+        // Official catalogs already provide authoritative episode numbers; keep their existing behavior.
+        if animeID == nil, source == nil {
+            if let number = CatalogDanmakuMatcher.episodeNumber(context.episodeName) {
+                let matches = tracks.filter { $0.number == number }
+                return matches.count == 1 ? matches.first : nil
+            }
+            let movies = ["正片", "电影", "hd", "1080p", "720p", "完整版", "蓝光"]
+            return tracks.count == 1 && movies.contains(CatalogDanmakuMatcher.normalized(context.episodeName)) ? tracks.first : nil
         }
-        let movies = ["正片", "电影", "hd", "1080p", "720p", "完整版", "蓝光"]
-        return tracks.count == 1 && movies.contains(CatalogDanmakuMatcher.normalized(context.episodeName)) ? tracks.first : nil
+        let selectedProvider = DanmakuProvider(source: source ?? provider)
+        let episodes = tracks.enumerated().compactMap { index, track -> CatalogDanmakuEpisode? in
+            let episode = CatalogDanmakuEpisode(id: String(index), title: track.title, episodeNumber: track.number, source: track.source ?? source ?? provider)
+            guard selectedProvider == .automatic || episode.provider == selectedProvider else { return nil }
+            return episode
+        }
+        guard let match = CatalogDanmakuMatcher.episode(name: context.episodeName, seriesTitle: title, in: episodes),
+              let index = Int(match.id) else { return nil }
+        return tracks[index]
     }
 }
 public struct AutomaticDanmakuResult: Codable, Sendable {

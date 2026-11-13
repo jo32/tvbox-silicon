@@ -3,40 +3,125 @@ import AVKit
 import TVCore
 import UniformTypeIdentifiers
 
-@MainActor @Observable final class CatalogDanmakuModel {
+@MainActor @Observable final class CatalogDanmakuModel: NSObject {
     private(set) var comments: [CatalogDanmakuComment] = []
     private(set) var track = ""
     private(set) var revision = UUID()
     var offset = 0.0
     var enabled = UserDefaults.standard.object(forKey: "danmakuEnabled") == nil ? true : UserDefaults.standard.bool(forKey: "danmakuEnabled") {
         didSet {
+            guard enabled != oldValue, !synchronizingPreferences else { return }
             UserDefaults.standard.set(enabled, forKey: "danmakuEnabled")
             if !enabled { cancelAutomatic() }
-            else if comments.isEmpty { startAutomatic(automaticContext) }
+            else if comments.isEmpty { resumeAutomatic() }
         }
     }
-    var automatic = UserDefaults.standard.object(forKey: "danmakuAutoMatch") == nil ? true : UserDefaults.standard.bool(forKey: "danmakuAutoMatch") {
+    var automatic = UserDefaults.standard.object(forKey: DanmakuService.automaticKey) == nil ? true : UserDefaults.standard.bool(forKey: DanmakuService.automaticKey) {
         didSet {
-            UserDefaults.standard.set(automatic, forKey: "danmakuAutoMatch")
-            if automatic { startAutomatic(automaticContext) } else { cancelAutomatic() }
+            guard automatic != oldValue, !synchronizingPreferences else { return }
+            UserDefaults.standard.set(automatic, forKey: DanmakuService.automaticKey)
+            if automatic { resumeAutomatic() } else { cancelAutomatic() }
         }
     }
     /// Applies to every track, Bilibili's own and live rooms included; the player's danmaku menu sets it too.
     var opacity = UserDefaults.standard.object(forKey: DanmakuStyle.opacityKey) as? Double ?? DanmakuStyle.standardOpacity {
-        didSet { UserDefaults.standard.set(opacity, forKey: DanmakuStyle.opacityKey) }
+        didSet { if opacity != oldValue { UserDefaults.standard.set(opacity, forKey: DanmakuStyle.opacityKey) } }
     }
-    /// Read by `DanmakuOverlay` from the same key, so it sizes every track, not only these comments.
     var fontSize = UserDefaults.standard.object(forKey: DanmakuStyle.fontSizeKey) as? Double ?? DanmakuStyle.standardFontSize {
-        didSet { UserDefaults.standard.set(fontSize, forKey: DanmakuStyle.fontSizeKey) }
+        didSet { if fontSize != oldValue { UserDefaults.standard.set(fontSize, forKey: DanmakuStyle.fontSizeKey) } }
     }
     private var generation = UUID()
     private var automaticTask: Task<Void, Never>?
     private var prefetchTask: Task<Void, Never>?
     private var automaticContext: PlaybackHistoryContext?
+    private var usesSourceComments = false
+    private var allowsAutomatic = true
+    private var manuallySelected = false
+    private var selectedOverridesSource = false
+    @ObservationIgnored private var currentResolver: DanmakuResolver?
+    @ObservationIgnored private var synchronizingPreferences = false
+    @ObservationIgnored private var preferences = Preferences.load()
+    @ObservationIgnored private var preferencesTask: Task<Void, Never>?
+    @ObservationIgnored private var retriesSavedPreferences = false
     private(set) var automaticState = "idle"
     private(set) var source = ""
     private(set) var fromCache = false
     var context: PlaybackHistoryContext? { automaticContext }
+    /// Native source comments remain the default; an explicit service/platform or manual track takes priority.
+    var overridesSourceComments: Bool { !comments.isEmpty && (manuallySelected || selectedOverridesSource) }
+
+    private struct Preferences: Equatable {
+        let server: String
+        let preferredSource: DanmakuProvider
+        let automatic: Bool
+        let dmkuServer: String
+        let officialLookup: Bool
+        var overridesSource: Bool { DanmakuService.isCustomServer(server) || preferredSource != .automatic }
+        static func load() -> Self {
+            let defaults = UserDefaults.standard
+            return Self(server: DanmakuService.server(), preferredSource: DanmakuService.preferredSource(),
+                        automatic: defaults.object(forKey: DanmakuService.automaticKey) == nil || defaults.bool(forKey: DanmakuService.automaticKey),
+                        dmkuServer: defaults.string(forKey: "danmakuDmkuServer") ?? "https://dmku.hls.one/",
+                        officialLookup: defaults.object(forKey: "danmakuOfficialLookup") == nil || defaults.bool(forKey: "danmakuOfficialLookup"))
+        }
+        func resolver(server: String? = nil) -> DanmakuResolver {
+            DanmakuResolver(dandanServer: server ?? self.server,
+                            dmkuServer: URL(string: dmkuServer) ?? URL(string: "https://dmku.hls.one/")!,
+                            officialLookup: officialLookup, preferredSource: preferredSource)
+        }
+    }
+
+    override init() {
+        super.init()
+        // Selector observers are weak: Settings must not keep a closed playback session alive.
+        NotificationCenter.default.addObserver(self, selector: #selector(serviceChanged), name: DanmakuService.changed, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(defaultsChanged), name: UserDefaults.didChangeNotification, object: nil)
+    }
+
+    @objc nonisolated private func serviceChanged() {
+        Task { @MainActor [weak self] in self?.schedulePreferencesRefresh(retry: true) }
+    }
+    @objc nonisolated private func defaultsChanged() {
+        Task { @MainActor [weak self] in self?.schedulePreferencesRefresh() }
+    }
+    private func schedulePreferencesRefresh(retry: Bool = false) {
+        retriesSavedPreferences = retriesSavedPreferences || retry
+        preferencesTask?.cancel()
+        // Saving updates several keys and posts a service notification. Treat that as one change.
+        preferencesTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(50))
+            guard !Task.isCancelled, let self else { return }
+            let retry = self.retriesSavedPreferences
+            self.retriesSavedPreferences = false; self.preferencesTask = nil
+            self.refreshPreferences(retry: retry)
+        }
+    }
+    private func refreshPreferences(retry: Bool = false) {
+        let defaults = UserDefaults.standard
+        let updated = Preferences.load(), previous = preferences
+        preferences = updated
+        let wasEnabled = enabled
+        synchronizingPreferences = true
+        enabled = defaults.object(forKey: "danmakuEnabled") == nil || defaults.bool(forKey: "danmakuEnabled")
+        automatic = updated.automatic
+        opacity = defaults.object(forKey: DanmakuStyle.opacityKey) as? Double ?? DanmakuStyle.standardOpacity
+        fontSize = defaults.object(forKey: DanmakuStyle.fontSizeKey) as? Double ?? DanmakuStyle.standardFontSize
+        synchronizingPreferences = false
+        let serviceChanged = updated.server != previous.server || updated.preferredSource != previous.preferredSource
+            || updated.dmkuServer != previous.dmkuServer || updated.officialLookup != previous.officialLookup
+        if serviceChanged || (retry && automatic) {
+            cancelAutomatic()
+            if retry, let context = automaticContext {
+                let resolver = updated.resolver()
+                resolver.removeCachedEpisode(context); resolver.forgetUnreachableServers()
+            }
+            resetComments(); resumeAutomatic()
+        } else if !enabled || !automatic {
+            cancelAutomatic()
+        } else if (!wasEnabled || !previous.automatic) && comments.isEmpty {
+            resumeAutomatic()
+        }
+    }
 
     @ObservationIgnored private var renderedKey: String?
     @ObservationIgnored private var rendered: [Danmaku] = []
@@ -54,86 +139,107 @@ import UniformTypeIdentifiers
         return rendered
     }
 
-    func startAutomatic(_ context: PlaybackHistoryContext?) {
+    func startAutomatic(_ context: PlaybackHistoryContext?, usesSourceComments: Bool = false, allowsAutomatic: Bool = true) {
         cancelAutomatic()
         automaticContext = context
-        guard let context, automatic, enabled, comments.isEmpty else { return }
+        self.usesSourceComments = usesSourceComments
+        self.allowsAutomatic = allowsAutomatic
+        // Resolve using preferences now, including when an episode starts after Settings was changed.
+        let settings = Preferences.load()
+        preferences = settings
+        synchronizingPreferences = true; automatic = settings.automatic; synchronizingPreferences = false
+        guard let context, automatic, enabled, allowsAutomatic, comments.isEmpty,
+              !usesSourceComments || settings.overridesSource else { return }
+        let resolver = settings.resolver()
+        currentResolver = resolver
         let active = generation
         automaticState = "searching"
         automaticTask = Task { [weak self] in
-            guard let self else { return }
-            defer { if self.generation == active { self.automaticTask = nil } }
             do {
-                let result = try await Self.resolver().resolve(context, first: CatPawDanmaku.comments)
+                let result = try await resolver.resolve(context, first: settings.overridesSource ? nil : CatPawDanmaku.comments)
                 try Task.checkCancellation()
-                guard self.generation == active, self.enabled, self.automatic else { return }
+                guard let self, self.generation == active, self.enabled, self.automatic, Preferences.load() == settings else { return }
                 self.comments = result.comments
                 self.track = result.track; self.source = result.source; self.fromCache = result.cached
-                self.offset = 0; self.revision = UUID()
-                self.automaticState = result.state
+                self.manuallySelected = false; self.selectedOverridesSource = settings.overridesSource
+                self.offset = 0; self.revision = UUID(); self.automaticState = result.state
+                self.automaticTask = nil
             } catch {
-                guard self.generation == active else { return }
+                guard let self, self.generation == active else { return }
                 // Optional overlay failures never interrupt video playback or show alerts.
                 self.automaticState = error is CancellationError ? "idle" : "unavailable"
+                self.automaticTask = nil
             }
         }
     }
 
+    private func resumeAutomatic() {
+        startAutomatic(automaticContext, usesSourceComments: usesSourceComments, allowsAutomatic: allowsAutomatic)
+    }
     private func cancelAutomatic() {
         generation = UUID(); automaticTask?.cancel(); automaticTask = nil; prefetchTask?.cancel(); prefetchTask = nil; automaticState = "idle"
     }
 
     func prefetch(_ context: PlaybackHistoryContext?) {
         prefetchTask?.cancel()
-        guard let context, automatic, enabled else { return }
-        let active = generation
-        let ticket = MediaCache.shared.ticket()
+        let settings = Preferences.load()
+        guard let context, settings.automatic, enabled, allowsAutomatic,
+              !usesSourceComments || settings.overridesSource else { return }
+        let active = generation, ticket = MediaCache.shared.ticket()
+        let automaticTask = automaticTask, resolver = settings.resolver()
         prefetchTask = Task { [weak self] in
-            guard let self else { return }
-            await self.automaticTask?.value
-            guard !Task.isCancelled, self.generation == active, !self.comments.isEmpty else { return }
+            await automaticTask?.value
+            guard !Task.isCancelled, self?.generation == active, self?.comments.isEmpty == false else { return }
             try? await Task.sleep(for: .seconds(3))
-            guard !Task.isCancelled, self.generation == active else { return }
-            _ = try? await Self.resolver().resolve(context, ticket: ticket, first: CatPawDanmaku.comments)
+            guard !Task.isCancelled, self?.generation == active, Preferences.load() == settings else { return }
+            _ = try? await resolver.resolve(context, ticket: ticket, first: settings.overridesSource ? nil : CatPawDanmaku.comments)
         }
     }
-    private static func resolver() -> DanmakuResolver {
-        let defaults = UserDefaults.standard
-        return DanmakuResolver(dandanServer: defaults.string(forKey: "danmakuServer") ?? CatalogDanmakuClient.defaultServer,
-            dmkuServer: URL(string: defaults.string(forKey: "danmakuDmkuServer") ?? "https://dmku.hls.one/") ?? URL(string: "https://dmku.hls.one/")!,
-            officialLookup: defaults.object(forKey: "danmakuOfficialLookup") == nil || defaults.bool(forKey: "danmakuOfficialLookup"))
-    }
+
     func retryAutomatic() {
-        let context = automaticContext
-        if let context { MediaCache.shared.remove(DanmakuResolver.episodeKey(context), kind: .danmaku, scope: context.id) }
-        // A retry asks comment servers that failed a moment ago, too.
-        Self.resolver().forgetUnreachableServers()
-        clear(); startAutomatic(context)
+        let settings = Preferences.load(), resolver = settings.resolver()
+        if let context = automaticContext { resolver.removeCachedEpisode(context) }
+        resolver.forgetUnreachableServers()
+        cancelAutomatic(); resetComments(); resumeAutomatic()
     }
 
     func load(_ episode: CatalogDanmakuEpisode, anime: CatalogDanmakuAnime, client: CatalogDanmakuClient, siblings: [CatalogDanmakuEpisode] = []) async throws {
         cancelAutomatic()
-        let ticket = MediaCache.shared.ticket()
-        let active = UUID(); generation = active
+        let settings = Preferences.load(), resolver = settings.resolver(server: client.server.absoluteString)
+        let active = generation
         let comments = try await client.comments(episode)
         try Task.checkCancellation()
-        guard generation == active else { throw CancellationError() }
+        guard generation == active, Preferences.load() == settings else { throw CancellationError() }
+        let ticket = automaticContext.map { resolver.invalidateEpisodes(for: $0) } ?? MediaCache.shared.ticket()
         self.comments = comments; track = anime.title + " · " + episode.title
-        source = "Dandanplay"; fromCache = false; cacheCurrent(ticket: ticket)
+        let platform = episode.source.isEmpty ? anime.source : episode.source
+        source = platform.isEmpty ? L10n.text("Danmaku Service") : Self.sourceTitle(platform)
+        fromCache = false; manuallySelected = true; selectedOverridesSource = true; currentResolver = resolver
+        cacheCurrent(resolver: resolver, ticket: ticket)
         if let context = automaticContext, !siblings.isEmpty {
-            DanmakuResolver(dandanServer: client.server.absoluteString).remember(
-                DanmakuMapping(provider: "dandan", title: context.videoName, year: context.year,
-                    tracks: siblings.map { DanmakuTrack(number: CatalogDanmakuMatcher.episodeNumber($0.title), title: $0.title, id: $0.id) }),
+            let provider = DanmakuProvider(source: platform)
+            let selectedTracks = siblings.filter { sibling in
+                let siblingSource = sibling.source.isEmpty ? anime.source : sibling.source
+                return provider == .automatic ? siblingSource == platform : DanmakuProvider(source: siblingSource) == provider
+            }
+            resolver.remember(DanmakuMapping(provider: provider == .automatic ? platform : provider.rawValue,
+                title: context.videoName, year: context.year,
+                tracks: selectedTracks.map { DanmakuTrack(number: $0.episodeNumber ?? CatalogDanmakuMatcher.episodeNumber($0.title),
+                    title: $0.title, page: $0.url, id: $0.id, source: $0.source) }, animeID: anime.id, source: platform),
                 for: context, ticket: ticket)
         }
-        offset = 0; revision = UUID(); enabled = true
+        offset = 0; revision = UUID(); automaticState = comments.isEmpty ? "unmatched" : "loaded"; enabled = true
     }
 
     func clear(keepingContext: Bool = false) {
         cancelAutomatic()
-        if !keepingContext { automaticContext = nil }
-        else if let context = automaticContext { MediaCache.shared.remove(DanmakuResolver.episodeKey(context), kind: .danmaku, scope: context.id) }
+        if keepingContext, let context = automaticContext { (currentResolver ?? Preferences.load().resolver()).removeCachedEpisode(context) }
+        if !keepingContext { automaticContext = nil; usesSourceComments = false; allowsAutomatic = true }
+        resetComments()
+    }
+    private func resetComments() {
         comments = []; track = ""; source = ""; fromCache = false; offset = 0; revision = UUID()
+        manuallySelected = false; selectedOverridesSource = false; currentResolver = nil
     }
 
     func importFile(_ url: URL) throws {
@@ -144,14 +250,18 @@ import UniformTypeIdentifiers
         let parsed = try CatalogDanmakuParser.parse(Data(contentsOf: url, options: .mappedIfSafe))
         cancelAutomatic()
         comments = parsed; track = url.deletingPathExtension().lastPathComponent
-        source = L10n.text("Imported file"); fromCache = false; cacheCurrent()
-        offset = 0; revision = UUID(); enabled = true
+        source = L10n.text("Imported file"); fromCache = false; manuallySelected = true; selectedOverridesSource = true
+        let resolver = Preferences.load().resolver(); currentResolver = resolver; cacheCurrent(resolver: resolver)
+        offset = 0; revision = UUID(); automaticState = parsed.isEmpty ? "unmatched" : "loaded"; enabled = true
     }
-    private func cacheCurrent(ticket: MediaCache.Ticket? = nil) {
-        guard let context = automaticContext, !comments.isEmpty,
-              let data = try? JSONEncoder().encode(AutomaticDanmakuResult(comments: comments, track: track, source: source, state: "loaded")) else { return }
-        MediaCache.shared.store(data, for: DanmakuResolver.episodeKey(context), kind: .danmaku, scope: context.id,
-            ttl: 7 * 86400, ticket: ticket ?? MediaCache.shared.ticket())
+    private func cacheCurrent(resolver: DanmakuResolver, ticket: MediaCache.Ticket? = nil) {
+        guard let context = automaticContext, !comments.isEmpty else { return }
+        resolver.cache(AutomaticDanmakuResult(comments: comments, track: track, source: source, state: "loaded"),
+                       for: context, ticket: ticket ?? MediaCache.shared.ticket())
+    }
+    static func sourceTitle(_ source: String) -> String {
+        let provider = DanmakuProvider(source: source)
+        return provider == .automatic ? source : provider.title
     }
 }
 
@@ -160,8 +270,8 @@ struct CatalogDanmakuSettingsView: View {
     let model: CatalogDanmakuModel
     let channelName: String
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("danmakuServer") private var server = CatalogDanmakuClient.defaultServer
-    @AppStorage("danmakuOfficialLookup") private var officialLookup = true
+    @AppStorage(DanmakuService.serverKey) private var server = CatalogDanmakuClient.defaultServer
+    @AppStorage(DanmakuService.preferredSourceKey) private var preferredSource = ""
     @State private var keyword = ""
     @State private var animes: [CatalogDanmakuAnime] = []
     @State private var episodes: [CatalogDanmakuEpisode] = []
@@ -170,6 +280,7 @@ struct CatalogDanmakuSettingsView: View {
     @State private var searched = false
     @State private var error: String?
     @State private var work: Task<Void, Never>?
+    @State private var workGeneration = UUID()
     @State private var showsImporter = false
 
     var body: some View {
@@ -177,39 +288,32 @@ struct CatalogDanmakuSettingsView: View {
         NavigationStack {
             ScrollViewReader { proxy in
                 Form {
+                    DanmakuServiceSettings()
                     Section {
-                        Toggle(L10n.text("Show Danmaku"), isOn: $model.enabled).settingsSwitch().accessibilityIdentifier("danmaku.enabled")
-                        Toggle(L10n.text("Automatically match the current episode"), isOn: $model.automatic)
-                            .settingsSwitch()
-                            .accessibilityIdentifier("danmaku.automatic")
-                        Text(L10n.text("Matching comments appear automatically. If none match or the service is unavailable, the video stays clear."))
-                            .font(.caption).foregroundStyle(.secondary)
                         Text(status).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("danmaku.status")
-                        Button(L10n.text("Retry automatic matching")) { model.retryAutomatic() }.disabled(model.context == nil)
+                        Button(L10n.text("Retry automatic matching")) { cancelWork(); model.retryAutomatic() }.disabled(model.context == nil)
                         if !model.track.isEmpty {
                             Text(model.track).font(.subheadline)
                             Text(model.source + (model.fromCache ? " · " + L10n.text("From local cache") : "")).font(.caption).foregroundStyle(.secondary)
                             Text(L10n.text("Loaded %lld comments", model.comments.count)).foregroundStyle(.secondary)
-                            HStack {
-                                Text(L10n.text("Opacity"))
-                                Slider(value: $model.opacity, in: 0.2...1)
-                            }
-                            HStack {
-                                Text(L10n.text("Text Size"))
-                                Slider(value: $model.fontSize, in: 16...36, step: 2)
-                            }
                             Stepper(value: $model.offset, in: -300...300, step: 0.5) {
                                 Text(L10n.text("Time Offset: %@ s", String(format: "%+.1f", model.offset)))
                             }
+                            HStack {
+                                Button(L10n.text("Advance 5 s")) { shift(by: -5) }
+                                Button(L10n.text("Advance 0.5 s")) { shift(by: -0.5) }
+                            }
+                            HStack {
+                                Button(L10n.text("Delay 0.5 s")) { shift(by: 0.5) }
+                                Button(L10n.text("Delay 5 s")) { shift(by: 5) }
+                                Button(L10n.text("Reset Timing")) { model.offset = 0 }.disabled(model.offset == 0)
+                            }
                             Text(L10n.text("A positive offset shows comments later. Playback controls stay available."))
                                 .font(.caption).foregroundStyle(.secondary)
-                            Button(L10n.text("Clear Danmaku"), role: .destructive) { work?.cancel(); busy = false; model.clear(keepingContext: true) }
+                            Button(L10n.text("Clear Danmaku"), role: .destructive) { cancelWork(); model.clear(keepingContext: true) }
                         }
-                    }
+                    } header: { Text(L10n.text("Current Danmaku")) }
                     Section {
-                        Toggle(L10n.text("Find official episodes for dmku"), isOn: $officialLookup).settingsSwitch()
-                        Text(L10n.text("Uses Dandanplay first, then tries iQIYI and Tencent Video if no comments are found or the service is unavailable. Official public episode pages are sent to dmku, or to danmu.zxz.ee when dmku has none; stream URLs and playback headers are never sent."))
-                            .font(.caption).foregroundStyle(.secondary)
                         HStack {
                             TextField(L10n.text("Video title"), text: $keyword).onSubmit { search() }.accessibilityIdentifier("danmaku.keyword")
                             Button(L10n.text("Search")) { search() }.disabled(busy || keyword.trimmingCharacters(in: .whitespaces).isEmpty).accessibilityIdentifier("danmaku.search")
@@ -217,17 +321,24 @@ struct CatalogDanmakuSettingsView: View {
                         if busy { ProgressView(L10n.text("Loading…")) }
                         if let error { Text(error).foregroundStyle(.red).font(.callout) }
                         if let anime = selectedAnime {
-                            Button(L10n.text("Back to search results")) { work?.cancel(); busy = false; selectedAnime = nil; episodes = []; error = nil }
+                            Button(L10n.text("Back to search results")) { cancelWork(); selectedAnime = nil; episodes = []; error = nil }
                             Text(anime.title).font(.headline)
-                            ForEach(episodes) { episode in
-                                Button(episode.title) { load(episode, anime: anime) }.disabled(busy).accessibilityIdentifier("danmaku.episode." + episode.id)
+                            Text(animeDetails(anime)).font(.caption).foregroundStyle(.secondary)
+                            ForEach(episodes, id: \.self) { episode in
+                                Button { load(episode, anime: anime) } label: {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(episode.title)
+                                        if !episode.source.isEmpty { Text(CatalogDanmakuModel.sourceTitle(episode.source)).font(.caption).foregroundStyle(.secondary) }
+                                    }
+                                }
+                                .disabled(busy).accessibilityIdentifier("danmaku.episode." + episode.id).id(episode.id)
                             }
                         } else {
-                            ForEach(animes) { anime in
+                            ForEach(animes, id: \.self) { anime in
                                 Button { select(anime) } label: {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(anime.title)
-                                        if !anime.type.isEmpty { Text(anime.type).font(.caption).foregroundStyle(.secondary) }
+                                        Text(animeDetails(anime)).font(.caption).foregroundStyle(.secondary)
                                     }
                                 }.disabled(busy).accessibilityIdentifier("danmaku.anime." + anime.id)
                             }
@@ -240,26 +351,12 @@ struct CatalogDanmakuSettingsView: View {
                     Section {
                         Button(L10n.text("Import Danmaku File")) { showsImporter = true }.disabled(busy)
                     } footer: { Text(L10n.text("Import Bilibili XML or Dandanplay JSON from Files. Imported comments do not require a network connection.")) }
-                    Section {
-                        TextField(L10n.text("Danmaku server URL"), text: $server)
-                            #if os(iOS)
-                            .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                            #endif
-                            .onChange(of: server) { _, _ in
-                                work?.cancel(); busy = false; animes = []; episodes = []; selectedAnime = nil; searched = false; error = nil
-                            }
-                        Button(L10n.text("Use Default URL")) { server = CatalogDanmakuClient.defaultServer }
-                    } header: { Text(L10n.text("Danmaku Service")) }
-                      footer: { Text(L10n.text("Uses the official Dandanplay service. You can also enter your own compatible server.")) }
                 }
-                // The Mac's default form style lays the rows out in columns without a scroll view, so a show with many
-                // episodes grew the sheet past the bottom of the screen and nothing scrolled (#671). Grouped scrolls.
+                // Grouped forms scroll on Mac, including a show with thousands of episodes.
                 .formStyle(.grouped)
                 .navigationTitle(L10n.text("Danmaku"))
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { dismiss() } } }
                 #if DEBUG
-                // `-qaDanmakuSearch <n>` searches the title, opens the n-th result's episodes (1 is the first) and scrolls to
-                // the last of them, for checking a long episode list (#671).
                 .task {
                     let pick = UserDefaults.standard.integer(forKey: "qaDanmakuSearch")
                     guard pick > 0 else { return }
@@ -276,11 +373,11 @@ struct CatalogDanmakuSettingsView: View {
         #if os(macOS)
         .frame(minWidth: 520, idealWidth: 560, minHeight: 500, idealHeight: 640)
         #endif
-        .onAppear {
-            if server.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/")) == CatalogDanmakuClient.legacyDefaultServer { server = CatalogDanmakuClient.defaultServer }
-            keyword = channelName.components(separatedBy: " · ").first ?? channelName
-        }
-        .onDisappear { work?.cancel() }
+        .onAppear { keyword = channelName.components(separatedBy: " · ").first ?? channelName }
+        .onDisappear { cancelWork() }
+        .onChange(of: server) { _, _ in resetSearch() }
+        .onChange(of: preferredSource) { _, _ in resetSearch() }
+        .onReceive(NotificationCenter.default.publisher(for: DanmakuService.changed)) { _ in resetSearch() }
         .fileImporter(isPresented: $showsImporter, allowedContentTypes: [.xml, .json]) { result in
             do { try model.importFile(result.get()); dismiss() }
             catch { self.error = error.localizedDescription }
@@ -296,13 +393,23 @@ struct CatalogDanmakuSettingsView: View {
         default: L10n.text("Automatic matching is idle.")
         }
     }
-
+    private var source: DanmakuProvider { DanmakuProvider(rawValue: preferredSource) ?? .automatic }
+    private func animeDetails(_ anime: CatalogDanmakuAnime) -> String {
+        let platform = anime.source.isEmpty ? L10n.text("Unknown Source") : CatalogDanmakuModel.sourceTitle(anime.source)
+        return ([platform, anime.year ?? L10n.text("Unknown Year"), anime.type]).filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+    private func shift(by seconds: Double) { model.offset = min(300, max(-300, model.offset + seconds)) }
+    private func cancelWork() { workGeneration = UUID(); work?.cancel(); work = nil; busy = false }
+    private func resetSearch() {
+        cancelWork(); animes = []; episodes = []; selectedAnime = nil; searched = false; error = nil
+    }
     private func perform(_ operation: @escaping @MainActor () async throws -> Void) {
-        work?.cancel(); busy = true; error = nil
+        cancelWork(); busy = true; error = nil
+        let active = workGeneration
         work = Task { @MainActor in
             do { try await operation() }
-            catch { if !Task.isCancelled { self.error = error.localizedDescription } }
-            if !Task.isCancelled { busy = false }
+            catch { if !Task.isCancelled, workGeneration == active { self.error = error.localizedDescription } }
+            if !Task.isCancelled, workGeneration == active { busy = false; work = nil }
         }
     }
     private func search() {
@@ -310,14 +417,14 @@ struct CatalogDanmakuSettingsView: View {
         let query = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return }
         selectedAnime = nil; episodes = []; animes = []; searched = true
-        let address = server
+        let address = DanmakuService.server(), source = source
         perform {
-            let results = try await CatalogDanmakuClient(address: address).search(query)
+            let results = try await CatalogDanmakuClient(address: address).search(query, source: source)
             try Task.checkCancellation(); animes = results
         }
     }
     private func select(_ anime: CatalogDanmakuAnime) {
-        let address = server
+        let address = DanmakuService.server()
         perform {
             let results = try await CatalogDanmakuClient(address: address).episodes(anime)
             try Task.checkCancellation(); episodes = results; selectedAnime = anime
@@ -325,7 +432,7 @@ struct CatalogDanmakuSettingsView: View {
         }
     }
     private func load(_ episode: CatalogDanmakuEpisode, anime: CatalogDanmakuAnime) {
-        let address = server
+        let address = DanmakuService.server()
         perform { try await model.load(episode, anime: anime, client: CatalogDanmakuClient(address: address), siblings: episodes); dismiss() }
     }
 }

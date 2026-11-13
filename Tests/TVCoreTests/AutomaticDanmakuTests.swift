@@ -2,6 +2,8 @@ import Foundation
 import Testing
 @testable import TVCore
 
+private let automaticCredentials = DandanplayCredentials(appId: "test-app", appSecret: "test-secret")
+
 private func automaticContext(episode: String = "第1集") -> PlaybackHistoryContext {
     var context = PlaybackHistoryContext(origin: URL(string: "https://example.com/config")!, sourceKey: "movies", sourceName: "Movies", videoID: "series", videoName: "测试剧",
         episodeID: episode, episodeName: episode, episodeFlag: "line")
@@ -35,7 +37,7 @@ private actor DanmakuTestTransport {
             if mode == "backup" || mode == "none" { return Data(#"{"code":23,"danmuku":[]}"#.utf8) }
             return Data(##"{"code":23,"danmuku":[[1.5,"right","#fff","32px","真实协议测试"],[4,"top","#f00","32px","顶部"]]}"##.utf8)
         }
-        if host == "dandan.test" || host.hasPrefix("limit") {
+        if host == "api.dandanplay.net" || host.hasPrefix("limit") {
             if mode == "limit" { return Data(#"{"success":false,"errorCode":429,"errorMessage":"已达到接口调用配额上限"}"#.utf8) }
             if mode == "limit-http" { throw TVError.http(429) }
             if mode == "slow" { try await Task.sleep(for: .seconds(10)) }
@@ -57,7 +59,7 @@ private actor DanmakuTestTransport {
     let transport = DanmakuTestTransport("dmku")
     let http = DanmakuHTTP { try await transport.send($0) }
     let cache = MediaCache(root: root)
-    let resolver = DanmakuResolver(cache: cache, http: http, dandanServer: "https://dandan.test", dmkuServer: URL(string: "https://dmku.test")!)
+    let resolver = DanmakuResolver(cache: cache, http: http, dandanServer: "https://api.dandanplay.net", dmkuServer: URL(string: "https://dmku.test")!, dandanCredentials: automaticCredentials)
     let result = try await resolver.resolve(automaticContext())
     #expect(result.source == "dmku · iqiyi")
     #expect(result.comments.count == 2)
@@ -84,26 +86,26 @@ private actor DanmakuTestTransport {
     for mode in ["dmku", "slow"] {
         let transport = DanmakuTestTransport(mode)
         let resolver = DanmakuResolver(cache: MediaCache(root: root.appending(path: mode)), http: DanmakuHTTP { try await transport.send($0) },
-            dandanServer: "https://dandan.test", dmkuServer: URL(string: "https://dmku.test")!)
+            dandanServer: "https://api.dandanplay.net", dmkuServer: URL(string: "https://dmku.test")!, dandanCredentials: automaticCredentials)
         let start = Date()
         let result = try await resolver.resolve(automaticContext())
         #expect(result.source == "dmku · iqiyi")
         #expect(Date().timeIntervalSince(start) < 7)
-        #expect(await transport.count(host: "dandan.test") == 0)
+        #expect(await transport.count(host: "api.dandanplay.net") == 0)
     }
     // They have none: Dandanplay is asked. The next episode of a title it matched asks it first, with one request.
     let transport = DanmakuTestTransport("dandan")
     let resolver = DanmakuResolver(cache: MediaCache(root: root.appending(path: "dandan")), http: DanmakuHTTP { try await transport.send($0) },
-        dandanServer: "https://dandan.test", dmkuServer: URL(string: "https://dmku.test")!)
+        dandanServer: "https://api.dandanplay.net", dmkuServer: URL(string: "https://dmku.test")!, dandanCredentials: automaticCredentials)
     let first = try await resolver.resolve(automaticContext())
     #expect(first.source == "Dandanplay")
     #expect(await transport.count("mesh.if.iqiyi.com/portal/lw/search/homePageV3") == 1)
-    #expect(await transport.count("dandan.test/api/v2/search/anime") == 1)
+    #expect(await transport.count("api.dandanplay.net/api/v2/search/anime") == 1)
     let dmku = await transport.count(host: "dmku.test")
     let next = try await resolver.resolve(automaticContext(episode: "第2集"))
     #expect(next.source == "Dandanplay")
-    #expect(await transport.count("dandan.test/api/v2/search/anime") == 1)
-    #expect(await transport.count("dandan.test/api/v2/comment/123002") == 1)
+    #expect(await transport.count("api.dandanplay.net/api/v2/search/anime") == 1)
+    #expect(await transport.count("api.dandanplay.net/api/v2/comment/123002") == 1)
     #expect(await transport.count(host: "dmku.test") == dmku)
 }
 
@@ -112,13 +114,13 @@ private actor DanmakuTestTransport {
     defer { try? FileManager.default.removeItem(at: root) }
     let transport = DanmakuTestTransport("none")
     let resolver = DanmakuResolver(cache: MediaCache(root: root), http: DanmakuHTTP { try await transport.send($0) },
-        dandanServer: "https://dandan.test", dmkuServer: URL(string: "https://dmku.test")!)
+        dandanServer: "https://api.dandanplay.net", dmkuServer: URL(string: "https://dmku.test")!, dandanCredentials: automaticCredentials)
     for episode in ["第1集", "第2集", "第3集"] {
         let result = try await resolver.resolve(automaticContext(episode: episode))
         #expect(result.comments.isEmpty)
         #expect(result.state == "unmatched")
     }
-    #expect(await transport.count(host: "dandan.test") == 1)
+    #expect(await transport.count(host: "api.dandanplay.net") == 1)
 }
 
 @Test func dandanplaysLimitIsNamedAndAutomaticMatchingStopsAskingForAWhile() async throws {
@@ -130,7 +132,7 @@ private actor DanmakuTestTransport {
         let http = DanmakuHTTP { try await transport.send($0) }
         let server = "https://\(mode).test"
         let resolver = DanmakuResolver(cache: MediaCache(root: root.appending(path: mode)), http: http,
-            dandanServer: server, dmkuServer: URL(string: "https://dmku.test")!)
+            dandanServer: server, dmkuServer: URL(string: "https://dmku.test")!, dandanCredentials: automaticCredentials)
         for episode in ["第1集", "第2集"] {
             let result = try await resolver.resolve(automaticContext(episode: episode))
             #expect(result.comments.isEmpty)
@@ -148,13 +150,13 @@ private actor DanmakuTestTransport {
     defer { try? FileManager.default.removeItem(at: root) }
     let transport = DanmakuTestTransport("backup")
     let resolver = DanmakuResolver(cache: MediaCache(root: root), http: DanmakuHTTP { try await transport.send($0) },
-        dandanServer: "https://dandan.test", dmkuServer: URL(string: "https://dmku.test")!, backupServer: URL(string: "https://backup.test/")!)
+        dandanServer: "https://api.dandanplay.net", dmkuServer: URL(string: "https://dmku.test")!, backupServer: URL(string: "https://backup.test/")!, dandanCredentials: automaticCredentials)
     let result = try await resolver.resolve(automaticContext())
     #expect(result.source == "backup.test · iqiyi")
     #expect(result.comments.map(\.text) == ["备用解析", "顶部"])
     #expect(result.comments.last?.mode == .top)
     #expect(result.comments.last?.color == 0xff0000)
-    #expect(await transport.count("dmku.test") == 1)
+    #expect(await transport.count(host: "dmku.test") == 1)
 }
 
 @Test func officialMatchingRejectsRemakesWrongSeasonsTrailersAndCredentialURLs() throws {
@@ -209,7 +211,7 @@ private actor DanmakuTestTransport {
     // dmku answers 503 and the backup times out. Dandanplay doesn't list the title, which is not why nothing came.
     let transport = DanmakuTestTransport("down")
     let resolver = DanmakuResolver(cache: MediaCache(root: root), http: DanmakuHTTP { try await transport.send($0) },
-        dandanServer: "https://dandan.test", dmkuServer: URL(string: "https://dmku.test")!, backupServer: URL(string: "https://backup.test/")!)
+        dandanServer: "https://api.dandanplay.net", dmkuServer: URL(string: "https://dmku.test")!, backupServer: URL(string: "https://backup.test/")!, dandanCredentials: automaticCredentials)
     let first = try await resolver.resolve(automaticContext())
     #expect(first.comments.isEmpty)
     #expect(first.state == "unavailable")
@@ -224,7 +226,7 @@ private actor DanmakuTestTransport {
     // A retry asks them again, and they are back.
     resolver.forgetUnreachableServers()
     await transport.setMode("dmku")
-    resolver.cache.remove(DanmakuResolver.episodeKey(automaticContext(episode: "第2集")), kind: .danmaku, scope: automaticContext().id)
+    resolver.removeCachedEpisode(automaticContext(episode: "第2集"))
     let recovered = try await resolver.resolve(automaticContext(episode: "第2集"))
     #expect(recovered.state == "loaded")
     #expect(await transport.count(host: "dmku.test") == 2)
