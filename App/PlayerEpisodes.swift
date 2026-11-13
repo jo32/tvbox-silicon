@@ -93,6 +93,11 @@ struct PlayerEpisodesSheet: View {
         let current = playing.historyContext?.episode(in: episodes)
         let flag = selectedFlag.flatMap { flags.contains($0) ? $0 : nil } ?? current?.flag ?? flags.first ?? ""
         let items = episodes.filter { $0.flag == flag }
+        // TMDB's stills when its season lines up with most of the episodes and it has pictures, as on the page. While
+        // TMDB hasn't answered, tiles with the episodes' numbers, also as on the page, so its stills fade into the same
+        // tiles: even the answer this device kept arrives a moment after the sheet opens, and rows turning into tiles
+        // then drew every tile at a row's width, shrinking, over the others.
+        let tiles = !tmdb.episodeTiles(items).isEmpty || (tmdbPending(catalog) && items.count <= 60)
         return ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
@@ -109,11 +114,13 @@ struct PlayerEpisodesSheet: View {
                             .font(.footnote).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    grid(items, labels: catalog.labels, details: catalog.details, current: current?.id)
+                    grid(items, tiles: tiles, labels: catalog.labels, details: catalog.details, current: current?.id)
                 }
                 .padding(16)
             }
             .onAppear { if let id = current?.id { proxy.scrollTo(id, anchor: .center) } }
+            // The layout changed under the episode playing (TMDB had nothing to show): back to it.
+            .onChange(of: tiles) { _, _ in if let id = current?.id { proxy.scrollTo(id, anchor: .center) } }
         }
     }
 
@@ -137,10 +144,14 @@ struct PlayerEpisodesSheet: View {
         }
     }
 
-    private func grid(_ items: [Episode], labels: [Episode.ID: String], details: [Episode.ID: String], current: Episode.ID?) -> some View {
-        // TMDB's stills when its season lines up with most of the episodes and it has pictures, as on the page.
+    /// TMDB hasn't answered yet, or is still looking: the first moment of every sheet for a title it may know.
+    private func tmdbPending(_ catalog: PlaybackCatalog) -> Bool {
+        tmdb.phase == .looking || (tmdb.phase == .idle && TMDBLookup.applies(to: catalog.client.site))
+    }
+
+    private func grid(_ items: [Episode], tiles showsStills: Bool, labels: [Episode.ID: String], details: [Episode.ID: String],
+                      current: Episode.ID?) -> some View {
         let stills = tmdb.episodes(items)
-        let showsStills = !tmdb.episodeTiles(items).isEmpty
         let titles = Dictionary(items.map { ($0.id, labels[$0.id] ?? EpisodeRow.title($0.name)) }, uniquingKeysWith: { first, _ in first })
         // 第1集, 01, 4K国语: small tiles. Longer titles: two-line cards. File names a card would cut short: a row
         // each, the whole name, because what tells two files of a film apart (HDR, the audio, the subtitles) is at the
@@ -176,7 +187,8 @@ struct PlayerEpisodesSheet: View {
                 .contextMenu { if labels[episode.id] != nil { Text(episode.name) } }
             }
         }
-        .animation(.smooth(duration: 0.4), value: showsStills)
+        // Tiles that turn into rows or cards change at once: morphing, each tile shrank or grew across the others.
+        .animation(nil, value: showsStills)
     }
 
     #if os(macOS)
@@ -199,7 +211,7 @@ struct PlayerEpisodesSheet: View {
         let key = TMDBMatchStore.key(source: site.key, video: catalog.video.id)
         let request = TMDBMatch.Request(video: catalog.video, listVideo: catalog.video,
                                         source: TMDBMatch.SourceRef(key: site.key, name: site.name))
-        guard !TMDBMatch.labeledNotOnTMDB(request) else { return }
+        guard !TMDBMatch.labeledNotOnTMDB(request) else { tmdb.skip(); return }
         await tmdb.run(key: key, request: request)
     }
 }
