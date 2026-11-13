@@ -848,10 +848,15 @@ private final class PosterBitmap: @unchecked Sendable {
 
 private actor PosterLoader {
     static let shared = PosterLoader()
-    private let cache = NSCache<NSString, PosterBitmap>()
+    /// NSCache is safe to use from any thread, which `cached` does.
+    private nonisolated(unsafe) let cache = NSCache<NSString, PosterBitmap>()
     private var pending: [PosterResource: Task<PosterBitmap, Error>] = [:]
     private var revision = MediaCache.shared.revision
     init() { cache.countLimit = 96; cache.totalCostLimit = 48 * 1024 * 1024 }
+
+    /// A cover already decoded in memory, read at once: a view made again for a cover it showed before draws it in its
+    /// first frame, instead of the placeholder until `load` answers.
+    nonisolated func cached(_ resource: PosterResource) -> PosterBitmap? { cache.object(forKey: resource.cacheKey as NSString) }
 
     func load(_ resource: PosterResource) async throws -> PosterBitmap {
         let current = MediaCache.shared.revision
@@ -910,8 +915,10 @@ struct PosterImage: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     #endif
     private var resource: PosterResource? { url.map { PosterResource(url: $0, headers: headers) } }
+    /// The loaded image or, until it arrives, the one the loader already holds for this address (#857).
+    private var shown: PosterBitmap? { bitmap ?? resource.flatMap { PosterLoader.shared.cached($0) } }
     var body: some View {
-        artwork
+        artwork(shown)
         .contentShape(.rect)
         .task(id: resource) {
             bitmap = nil
@@ -926,7 +933,7 @@ struct PosterImage: View {
     #if os(tvOS)
     /// One image, cropped to the frame and never clipped: a borderless button lifts the first image in its label and
     /// draws the glass rim around it, which a clip would cut off, as on Discover's covers.
-    private var artwork: some View {
+    private func artwork(_ bitmap: PosterBitmap?) -> some View {
         GeometryReader { proxy in
             Image(decorative: baked(Self.cover(bitmap?.image, proxy.size), proxy.size), scale: 1).resizable()
                 .overlay { if bitmap == nil { Image(systemName: symbol).font(.title2).foregroundStyle(.white.opacity(0.55)) } }
@@ -964,7 +971,7 @@ struct PosterImage: View {
         return image.cropping(to: rect.integral) ?? image
     }
     #else
-    private var artwork: some View {
+    private func artwork(_ bitmap: PosterBitmap?) -> some View {
         ZStack {
             Color(white: 0.20)
             Image(systemName: symbol).font(.title2).foregroundStyle(.white.opacity(0.55))
