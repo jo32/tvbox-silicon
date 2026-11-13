@@ -92,7 +92,12 @@ public enum ImportedFiles {
     /// What an address on the reserved host holds; nil for every other address, which loads as usual.
     static func data(at url: URL) throws -> Data? {
         guard let file = file(for: url) else { return nil }
-        guard let data = try? Data(contentsOf: file) else { throw TVError.unsupported(missingMessage) }
+        guard let data = try? Data(contentsOf: file) else {
+            // A config added as a file can name files beside it (`./py/x.py`), and only the config itself was added.
+            // That isn't a file from another device, so it says what is missing instead.
+            guard url.pathComponents.filter({ $0 != "/" }).count > 1 else { throw TVError.unsupported(missingMessage) }
+            throw TVError.unsupported(L10n.text("This source needs %@, a file next to its config. Only the config file itself was added, so add the config by its web address instead.", "." + url.path(percentEncoded: false)))
+        }
         return data
     }
 

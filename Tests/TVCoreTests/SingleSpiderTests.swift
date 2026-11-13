@@ -68,6 +68,13 @@ import Testing
     // Nothing outside the folder is reachable through the reserved host.
     #expect(throws: (any Error).self) { try ImportedFiles.data(at: URL(string: "https://files.yingxia.invalid/../Preferences/x.plist")!) }
     #expect(throws: (any Error).self) { try ImportedFiles.data(at: URL(string: "https://files.yingxia.invalid/a/b.py")!) }
+    // A file a config added as a file names beside itself was never added: it says so, not "another device".
+    let configFile = ImportedFiles.address("tv.json")
+    let beside = try #require(URL(string: "./js/ss/a.py", relativeTo: configFile)?.absoluteURL)
+    do { _ = try ImportedFiles.data(at: beside); Issue.record("read a file that was never added") } catch {
+        #expect(error.localizedDescription.contains("./js/ss/a.py"))
+        #expect(error.localizedDescription != ImportedFiles.missingMessage)
+    }
     #expect(try ImportedFiles.data(at: URL(string: "https://example.com/a.py")!) == nil)
 }
 
