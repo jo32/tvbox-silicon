@@ -1,3 +1,28 @@
 {
-  "messages": []
+  "messages": [
+    {
+      "id": "2026-11-13-recommended-sources-subscription",
+      "title": {
+        "en": "Recommended sources are now a subscription",
+        "zh-Hans": "推荐片源已改为订阅",
+        "zh-Hant": "推薦片源已改為訂閱",
+        "ja": "おすすめのソースはサブスクリプションになりました"
+      },
+      "body": {
+        "en": "Starting with this version, the recommended sources that used to come with the app are no longer built in. To keep using them, add their subscription. Join our Telegram group to find out how.",
+        "zh-Hans": "从这个版本开始，原来内置的推荐片源不再随 App 提供，需要添加订阅后才能使用。加入我们的 Telegram 群，查看获取订阅的方法。",
+        "zh-Hant": "從這個版本開始，原本內建的推薦片源不再隨 App 提供，需要加入訂閱後才能使用。加入我們的 Telegram 群組，查看取得訂閱的方法。",
+        "ja": "このバージョンから、これまで内蔵していたおすすめのソースはアプリに含まれなくなりました。引き続き使うにはサブスクリプションを追加してください。追加方法は Telegram グループでご案内しています。"
+      },
+      "link": "https://t.me/+knKAmySfMycyMzg5",
+      "linkTitle": {
+        "en": "Join Telegram Group",
+        "zh-Hans": "加入 Telegram 群",
+        "zh-Hant": "加入 Telegram 群組",
+        "ja": "Telegram グループに参加"
+      },
+      "minBuild": 57,
+      "end": "2026-12-31"
+    }
+  ]
 }
