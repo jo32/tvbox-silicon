@@ -226,7 +226,7 @@ private actor DanmakuTestTransport {
     // A retry asks them again, and they are back.
     resolver.forgetUnreachableServers()
     await transport.setMode("dmku")
-    resolver.removeCachedEpisode(automaticContext(episode: "第2集"))
+    resolver.forget(automaticContext(episode: "第2集"))
     let recovered = try await resolver.resolve(automaticContext(episode: "第2集"))
     #expect(recovered.state == "loaded")
     #expect(await transport.count(host: "dmku.test") == 2)
@@ -238,4 +238,28 @@ private actor DanmakuTestTransport {
     #expect(!DanmakuResolver.serverFailed(URLError(.cancelled)))
     #expect(!DanmakuResolver.serverFailed(TVError.http(404)))
     #expect(!DanmakuResolver.serverFailed(TVError.invalidConfiguration))
+}
+
+@Test func theOfficialServerStillMatchesForAPlatformItCannotAskAndKeepsAHandPick() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    // Bilibili preferred with the official server: nothing can be asked for it, so it matches as Automatic instead
+    // of caching "no match" for every episode.
+    let transport = DanmakuTestTransport("dandan")
+    let bilibili = DanmakuResolver(cache: MediaCache(root: root.appending(path: "bilibili")), http: DanmakuHTTP { try await transport.send($0) },
+        dandanServer: "https://api.dandanplay.net", dmkuServer: URL(string: "https://dmku.test")!, preferredSource: .bilibili,
+        dandanCredentials: automaticCredentials)
+    #expect(try await bilibili.resolve(automaticContext()).source == "Dandanplay")
+    // Tencent preferred, and a Dandanplay show picked by hand: the next episode uses it rather than searching again.
+    let cache = MediaCache(root: root.appending(path: "tencent"))
+    let tencent = DanmakuResolver(cache: cache, http: DanmakuHTTP { try await transport.send($0) },
+        dandanServer: "https://api.dandanplay.net", dmkuServer: URL(string: "https://dmku.test")!, preferredSource: .tencent,
+        dandanCredentials: automaticCredentials)
+    let context = automaticContext()
+    tencent.remember(DanmakuMapping(provider: "dandan", title: context.videoName, year: context.year, tracks: [
+        DanmakuTrack(number: 1, title: "第1集", id: "123001"), DanmakuTrack(number: 2, title: "第2集", id: "123002")
+    ]), for: context, ticket: cache.ticket())
+    let searches = await transport.count("api.dandanplay.net/api/v2/search/anime")
+    #expect(try await tencent.resolve(automaticContext(episode: "第2集")).source == "Dandanplay")
+    #expect(await transport.count("api.dandanplay.net/api/v2/search/anime") == searches)
 }

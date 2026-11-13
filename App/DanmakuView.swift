@@ -192,10 +192,11 @@ final class DanmakuEngine: @unchecked Sendable {
             guard time.isFinite, !comments.isEmpty, size.width > 0, size.height > 0 else { return [] }
             let speed = DanmakuStyle.clampedSpeed(speed)
             // Changes restart at the player's current time; past comments never replay with a new style.
-            // Any backward movement, or a large forward jump between frames, also clears the old placements.
+            // Moving back more than a moment, or a large forward jump between frames, also clears the old placements; the
+            // player's clock can step back a few milliseconds after a stall or a rate change, and seeks reset it anyway.
             let restarted = layout == nil || size != self.size || area != self.area || textScale != self.textScale
                 || speed != self.speed || scroll != self.scroll || top != self.top || bottom != self.bottom
-                || time < lastTime || time > lastTime + 2
+                || time < lastTime - 0.3 || time > lastTime + 2
             if restarted {
                 restart(at: time, size: size, area: area, textScale: textScale, speed: speed, scroll: scroll, top: top, bottom: bottom)
             }

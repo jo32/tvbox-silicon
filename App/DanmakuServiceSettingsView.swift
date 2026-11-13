@@ -12,6 +12,7 @@ struct DanmakuServiceSettings: View {
     @AppStorage(DanmakuService.serverKey) private var server = CatalogDanmakuClient.defaultServer
     @AppStorage(DanmakuService.automaticKey) private var automatic = true
     @AppStorage(DanmakuService.preferredSourceKey) private var preferredSource = ""
+    @AppStorage(DanmakuService.officialLookupKey) private var officialLookup = true
     @State private var address = DanmakuService.server()
     @State private var failure: String?
     @State private var saved = false
@@ -37,6 +38,14 @@ struct DanmakuServiceSettings: View {
             .accessibilityIdentifier("danmaku.preferredSource")
         } header: { Text(L10n.text("Danmaku Service")) }
           footer: { Text(L10n.text("Matching comments appear automatically. If none match or the service is unavailable, the video stays clear.")) }
+
+        // The official server's fallback sends episode pages to other services; say so, and let it be turned off.
+        if !DanmakuService.isCustomServer(server) {
+            Section {
+                Toggle(L10n.text("Find official episodes for dmku"), isOn: $officialLookup)
+                    .settingsSwitch().accessibilityIdentifier("danmaku.officialLookup")
+            } footer: { Text(DanmakuService.officialLookupNote) }
+        }
 
         Section {
             TextField(L10n.text("Danmaku server URL"), text: $address,
