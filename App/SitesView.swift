@@ -134,8 +134,9 @@ struct SitesView: View {
             // (#669, #704), and for the search order: things seldom changed, kept off the page (#973, #994).
             if pick == nil, store.subscription != nil {
                 ToolbarItem(placement: .primaryAction) {
+                    // Short titles: iPadOS draws this menu at a fixed width and wrapped "Hide or Show Sources" onto two lines.
                     Menu {
-                        Button { choosingHidden = true } label: { Label(L10n.text("Hide or Show Sources"), systemImage: "eye.slash") }
+                        Button { choosingHidden = true } label: { Label(L10n.text("Hidden Sources"), systemImage: "eye.slash") }
                             .accessibilityIdentifier("sources.edit.hidden")
                         Button { arranging = true } label: { Label(L10n.text("Custom Search Order"), systemImage: "arrow.up.arrow.down") }
                             .accessibilityIdentifier("sources.edit.order")
