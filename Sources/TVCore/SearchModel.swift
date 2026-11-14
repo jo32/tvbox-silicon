@@ -6,6 +6,8 @@ import Observation
     public var selectedSource: String?
     public var results: [SearchSourceResult] = []
     public private(set) var activeSources: [SearchSourceActivity] = []
+    /// Sources this search has yet to ask, in the order it asks them; each leaves the list as it starts.
+    public private(set) var waitingSources: [Site] = []
     public var busy = false
     public var completed = 0
     public var total = 0
@@ -119,7 +121,7 @@ import Observation
     public func stop() {
         generation = UUID()
         task?.cancel(); task = nil
-        activeSources = []
+        activeSources = []; waitingSources = []
         cancelPages()
         stopped = busy; busy = false
         suspended = false
@@ -229,13 +231,14 @@ import Observation
                 : (arranged.filter { warm.contains($0.key) } + arranged.filter { !warm.contains($0.key) }).enumerated().sorted { ($0.element.isBuiltIn ? 0 : 1, $0.offset) < ($1.element.isBuiltIn ? 0 : 1, $1.offset) }.map(\.element)
             let ordered = preferred.filter { !failing($0) } + preferred.filter(failing)
             guard self.generation == token else { return }
+            self.waitingSources = ordered
             await GlobalSearch.search(sites: ordered, origin: config.origin, jarURL: config.spiderURL, query: keyword, http: self.http, onStart: { site in
                 await self.started(site, token: token)
             }) { result in
                 await self.receive(result, token: token)
             }
             guard self.generation == token else { return }
-            self.busy = false; self.task = nil; self.activeSources = []
+            self.busy = false; self.task = nil; self.activeSources = []; self.waitingSources = []
             if self.completed == self.total {
                 self.cache[keyword] = Cached(results: self.results, total: self.total, created: Date())
                 if self.cache.count > 6, let oldest = self.cache.min(by: { $0.value.created < $1.value.created })?.key { self.cache[oldest] = nil }
@@ -261,6 +264,7 @@ import Observation
     private func started(_ site: Site, token: UUID) {
         guard generation == token else { return }
         activeSources.append(SearchSourceActivity(site: site, started: Date()))
+        waitingSources.removeAll { $0.id == site.id }
     }
 
     private func receive(_ result: SearchSourceResult, token: UUID) {
