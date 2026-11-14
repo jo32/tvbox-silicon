@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.21",
+          "buildVersion": "59",
+          "date": "2026-11-15",
+          "localizedDescription": "• 直播：在播放器里换台，看正在播出的节目\n• 更多直播频道能播放，画面更清晰\n• 全新图标，另有十款可选\n• 更整洁的来源页面\n• 弹幕匹配更准确\n• 其他修复\n\n• Live TV: channels in the player, and what's on\n• More live channels play, and look sharp\n• A new icon, and ten more to choose from\n• A tidier Sources page\n• Danmaku finds more shows\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.21/Yingxia-1.8.21-ios.ipa",
+          "size": 156030437,
+          "sha256": "5cceabb0e5a9a04e1b4bcd9b5872ca008353dc1ff0fac65d08d265cfb4e1a080",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.20",
           "buildVersion": "58",
           "date": "2026-11-14",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.17/Yingxia-1.8.17-ios.ipa",
           "size": 128559563,
           "sha256": "933a65a3dfe7d39b8297b8220a45ab08f62799f09f8d797ad90b85b57c4f3b38",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.16",
-          "buildVersion": "54",
-          "date": "2026-11-10",
-          "localizedDescription": "• iPhone 全屏后点击恢复正常\n• 虎牙弹幕不再中断\n• 猫源不再导致 App 退出\n• 其他修复\n\n• Full screen on iPhone answers taps again\n• Huya danmaku keeps flowing\n• CatPawOpen sources no longer close the app\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.16/Yingxia-1.8.16-ios.ipa",
-          "size": 127939079,
-          "sha256": "cebee1c21ad03527f097a52295b41e2a299d6610f30248ec50ac410ab3da0232",
           "minOSVersion": "17.0"
         }
       ],
