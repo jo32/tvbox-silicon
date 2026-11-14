@@ -1963,3 +1963,12 @@
 "Current Chapter" = "Current Chapter";
 "This source checks for a web browser, which Apple TV doesn't have. Read it on iPhone, iPad or Mac." = "This source checks for a web browser, which Apple TV doesn't have. Read it on iPhone, iPad or Mac.";
 "The site's browser check didn't pass. Try again later." = "The site's browser check didn't pass. Try again later.";
+"This is a Legado subscription source (订阅源), not a book source list. Add the address of a book source list instead." = "This is a Legado subscription source (订阅源), not a book source list. Add the address of a book source list instead.";
+"This page lists %lld Legado book source lists. Choose the ones to add in Settings › Novels › Book Sources." = "This page lists %lld Legado book source lists. Choose the ones to add in Settings › Novels › Book Sources.";
+"This address is now a page of book source lists. Add it again to choose from them." = "This address is now a page of book source lists. Add it again to choose from them.";
+"Lists You Can Add" = "Lists You Can Add";
+"Clear Lists You Can Add" = "Clear Lists You Can Add";
+"Found on %@. Lists you add appear under Source Lists." = "Found on %@. Lists you add appear under Source Lists.";
+"Added" = "Added";
+"Adding…" = "Adding…";
+"The file is larger than %lld MB." = "The file is larger than %lld MB.";

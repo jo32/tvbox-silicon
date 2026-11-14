@@ -520,7 +520,7 @@ struct FormSettingsView: View {
                 }
             }
 
-            if !NovelStore.shared.lists.isEmpty {
+            if !NovelStore.shared.lists.isEmpty || !NovelStore.shared.offers.isEmpty {
                 Section {
                     let store = NovelStore.shared
                     FormLink(symbol: "text.book.closed.fill", tint: .green, title: L10n.text("Book Sources"),
@@ -1669,7 +1669,7 @@ struct TVSettingsView: View {
             }
             subscriptionSection
             if !MangaStore.shared.repositories.isEmpty { comicSection }
-            if !NovelStore.shared.lists.isEmpty { novelSection }
+            if !NovelStore.shared.lists.isEmpty || !NovelStore.shared.offers.isEmpty { novelSection }
             if store.extrasUnlocked {
                 TVSettingsSection(footer: L10n.text("Live platforms added as AngelLive plugins show in Live TV.")) {
                     let count = store.livePluginPlatforms.count

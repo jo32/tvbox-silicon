@@ -54,7 +54,8 @@ public actor NovelBooks {
     public static let shared = NovelBooks()
     private var reading: [String: Task<NovelContent, Error>] = [:]
 
-    static func source(_ key: String) throws -> NovelSource {
+    static func source(_ key: String) async throws -> NovelSource {
+        await NovelSources.shared.loaded()
         guard let source = NovelSources.shared.source(key) else {
             throw TVError.unsupported(L10n.text("This book's source is no longer in your book source lists."))
         }
@@ -131,7 +132,7 @@ public actor NovelBooks {
 
     /// The book's page: intro, cover, the table of contents' address.
     public func details(_ book: NovelBook) async throws -> NovelBook {
-        let source = try Self.source(book.sourceKey)
+        let source = try await Self.source(book.sourceKey)
         var filled = try await NovelRuntime.shared.details(source, book: book)
         // Keep what the search found when the page leaves a field out.
         if filled.name.isEmpty { filled.name = book.name }
@@ -155,7 +156,7 @@ public actor NovelBooks {
         if !refresh, let data = try? Data(contentsOf: file), let saved = try? JSONDecoder().decode([NovelChapter].self, from: data), !saved.isEmpty {
             return saved
         }
-        let source = try Self.source(book.sourceKey)
+        let source = try await Self.source(book.sourceKey)
         do {
             var chapters = try await NovelRuntime.shared.chapters(source, book: book)
             for index in chapters.indices { chapters[index].index = index }
@@ -189,7 +190,7 @@ public actor NovelBooks {
         if let running = reading[key] { return try await running.value }
         let next = chapters[(index + 1)...].first { !$0.isVolume }
         let task = Task { () throws -> NovelContent in
-            let source = try Self.source(book.sourceKey)
+            let source = try await Self.source(book.sourceKey)
             var content = try await NovelRuntime.shared.content(source, book: book, chapter: chapter, next: next)
             if content.title.isEmpty { content.title = chapter.title }
             guard !content.paragraphs.isEmpty else { throw TVError.unsupported(L10n.text("The source returned an empty chapter.")) }

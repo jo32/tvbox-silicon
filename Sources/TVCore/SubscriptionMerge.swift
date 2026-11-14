@@ -143,16 +143,22 @@ public enum SubscriptionImport: Sendable {
     /// A Legado book source list (one JSON array of `bookSourceUrl` sources), with the data downloaded:
     /// it feeds the Novels section.
     case novelSources(Int, Data)
+    /// A page of Legado book source lists, or a Legado subscription source (订阅源) that opens one: the lists it links
+    /// to, for the viewer to choose from in Book Sources.
+    case novelIndex([NovelSourceOffer])
 }
 
 extension HTTPClient {
     public func subscriptionImport(_ url: URL) async throws -> SubscriptionImport {
-        let (data, finalURL) = try await get(url, headers: ["User-Agent": Self.subscriptionUserAgent])
+        let (data, finalURL) = try await get(url, headers: ["User-Agent": Self.subscriptionUserAgent], limit: Self.subscriptionLimit)
         if let bundle = CatPawOpen.bundle(data, at: finalURL) { return .subscription(try await CatPawOpen.subscription(bundle: bundle, origin: finalURL, http: self)) }
         if let count = MangaSources.listedCount(data) { return .comicSources(count) }
         if let sources = NovelSource.list(from: data) { return .novelSources(sources.count, data) }
+        if let pages = NovelSourceIndex.pages(from: data) { return .novelIndex(try await NovelSourceIndex.offers(pages: pages, http: self)) }
         if let servers = AListServer.list(from: data) { return .alist(servers) }
         if let entries = Subscription.directory(data, origin: finalURL) { return .directory(entries) }
+        let offers = NovelSourceIndex.offers(inPage: data, origin: finalURL)
+        if !offers.isEmpty { return .novelIndex(offers) }
         do { return .subscription(try await Subscription.parse(data, origin: finalURL).sniffingScripts(http: self)) }
         catch {
             // An AList server answers its address with its web page.

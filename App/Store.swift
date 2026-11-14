@@ -346,6 +346,10 @@ import TVCore
                 // Book source lists feed Novels (and show it); they are listed under Subscriptions too.
                 try NovelStore.shared.addList(url, data: data)
                 notice = L10n.text("Added a Legado book source list (%lld sources). Search and read in Novels.", count)
+            case .novelIndex(let offers):
+                // A page of lists (or a Legado subscription source that opens one): Book Sources offers them one by one.
+                NovelStore.shared.offer(offers)
+                notice = L10n.text("This page lists %lld Legado book source lists. Choose the ones to add in Settings › Novels › Book Sources.", offers.count)
             case .alist(let servers):
                 // AList servers are browsed in Cloud Files, not merged as sources.
                 let saved = try AListServers.add(servers)
@@ -463,6 +467,8 @@ import TVCore
                 subscriptionErrors[entry.address] = L10n.text("This address is now a comic source list. Add it again to use it for Manga.")
             case .success(.novelSources):
                 subscriptionErrors[entry.address] = L10n.text("This address is now a book source list. Add it again to use it for Novels.")
+            case .success(.novelIndex):
+                subscriptionErrors[entry.address] = L10n.text("This address is now a page of book source lists. Add it again to choose from them.")
             case .success(.alist):
                 subscriptionErrors[entry.address] = L10n.text("This address is now an AList server. Add it again to browse it in Cloud Files.")
             case .failure(let error):

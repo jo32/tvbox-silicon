@@ -8,8 +8,12 @@ public struct HTTPClient: Sendable {
     let mirrors: GitHubMirrors
     public init(session: URLSession = .shared) { self.init(session: session, mirrors: .shared) }
     init(session: URLSession, mirrors: GitHubMirrors) { self.session = session; self.mirrors = mirrors }
-    /// `fresh` asks the server again instead of taking a copy from this device's HTTP cache.
-    public func get(_ url: URL, headers: [String: String] = [:], fresh: Bool = false) async throws -> (Data, URL) {
+    /// Most downloads stop at 20 MB; a subscription address can also be a book source list, and complete Legado lists
+    /// run past 20 MB (one with 3907 sources is 21 MB).
+    public static let subscriptionLimit = 64_000_000
+    /// `fresh` asks the server again instead of taking a copy from this device's HTTP cache. `limit` is the most bytes
+    /// accepted.
+    public func get(_ url: URL, headers: [String: String] = [:], fresh: Bool = false, limit: Int = 20_000_000) async throws -> (Data, URL) {
         if let data = try ImportedFiles.data(at: url) { return (data, url) }
         return try await mirrors.fetch(url, timeout: 25) { [session] address, timeout in
             var request = URLRequest(url: address, timeoutInterval: timeout)
@@ -19,7 +23,10 @@ public struct HTTPClient: Sendable {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw TVError.invalidConfiguration }
             guard (200..<300).contains(http.statusCode) else { throw TVError.http(http.statusCode) }
-            guard data.count <= 20_000_000 else { throw TVError.unsupported(L10n.text("The playlist exceeds 20 MB. Use a smaller subscription.")) }
+            guard data.count <= limit else {
+                throw TVError.unsupported(limit == 20_000_000 ? L10n.text("The playlist exceeds 20 MB. Use a smaller subscription.")
+                                          : L10n.text("The file is larger than %lld MB.", limit / 1_000_000))
+            }
             // A mirror's address isn't the file's origin: relative paths resolve against the original.
             return (data, address == url ? response.url ?? url : url)
         }

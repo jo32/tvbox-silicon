@@ -5,6 +5,8 @@ import TVCore
 struct NovelSourcesView: View {
     @State private var store = NovelStore.shared
     @State private var refreshing = false
+    @State private var adding: Set<URL> = []
+    @State private var offerErrors: [URL: String] = [:]
 
     private let about = L10n.text("Book sources are Legado (阅读) sources. Add a list as a subscription in Settings › Subscriptions. Each source reads a website; the website's content is its own.")
 
@@ -19,6 +21,21 @@ struct NovelSourcesView: View {
             if !store.lists.isEmpty {
                 SettingsGroup {
                     TVSettingsAction(title: L10n.text("Refresh All"), busy: refreshing) { refresh() }.disabled(refreshing)
+                }
+            }
+            if !store.offers.isEmpty {
+                SettingsGroup(title: L10n.text("Lists You Can Add"), footer: offersFooter) {
+                    ForEach(store.offers) { offer in
+                        let added = isAdded(offer)
+                        Button { if !added { add(offer) } } label: {
+                            TVSettingsRowLabel(title: offer.name, detail: offerErrors[offer.address] ?? offer.address.lastPathComponent,
+                                               value: added ? L10n.text("Added") : adding.contains(offer.address) ? L10n.text("Adding…") : L10n.text("Add"))
+                        }
+                        .glassRow()
+                    }
+                }
+                SettingsGroup {
+                    TVSettingsAction(title: L10n.text("Clear Lists You Can Add")) { store.offer([]) }
                 }
             }
         }
@@ -50,16 +67,65 @@ struct NovelSourcesView: View {
                     }
                 }
             } footer: { Text(about) }
+            if !store.offers.isEmpty {
+                Section {
+                    ForEach(store.offers) { offer in offerRow(offer) }
+                } header: {
+                    HStack {
+                        Text(L10n.text("Lists You Can Add"))
+                        Spacer()
+                        Button(L10n.text("Clear")) { store.offer([]) }
+                            .font(.footnote.weight(.semibold)).textCase(nil).tint(.secondary)
+                    }
+                } footer: { Text(offersFooter) }
+            }
         }
         .screenTitle(L10n.text("Book Sources"))
         .onAppear { store.reloadSources() }
         #endif
     }
 
+    #if !os(tvOS)
+    private func offerRow(_ offer: NovelSourceOffer) -> some View {
+        let error = offerErrors[offer.address]
+        return HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(offer.name).lineLimit(1)
+                Text(error ?? offer.address.lastPathComponent).font(.caption).foregroundStyle(error == nil ? Color.secondary : Brand.amber).lineLimit(2)
+            }
+            Spacer()
+            if isAdded(offer) {
+                // Not a Label: a Label would move the row's separator to its title.
+                (Text(Image(systemName: "checkmark")) + Text(" " + L10n.text("Added"))).font(.callout).foregroundStyle(.secondary)
+            } else if adding.contains(offer.address) {
+                ProgressView().appControlSize(.small)
+            } else {
+                Button(L10n.text("Add")) { add(offer) }.buttonStyle(.bordered).buttonBorderShape(.capsule)
+            }
+        }
+    }
+    #endif
+
+    private var offersFooter: String {
+        L10n.text("Found on %@. Lists you add appear under Source Lists.", store.offers.first?.address.host() ?? "")
+    }
+    private func isAdded(_ offer: NovelSourceOffer) -> Bool { store.lists.contains { $0.address == offer.address } }
+    private func add(_ offer: NovelSourceOffer) {
+        guard !adding.contains(offer.address) else { return }
+        adding.insert(offer.address); offerErrors[offer.address] = nil
+        Task {
+            defer { adding.remove(offer.address) }
+            do { try await store.add(offer) } catch { offerErrors[offer.address] = error.novelMessage }
+        }
+    }
+
     /// "12 of 340 on".
     private func count(_ list: NovelSourceList) -> String {
+        // Read the store first: saved lists load in the background, and an empty list never reads `enabledKeys` in the
+        // filter, so the row would not update when they arrive.
+        let keys = store.enabledKeys
         let sources = NovelSources.shared.sources(in: list.address)
-        return L10n.text("%lld of %lld on", sources.filter { store.enabledKeys.contains($0.key) }.count, sources.count)
+        return L10n.text("%lld of %lld on", sources.filter { keys.contains($0.key) }.count, sources.count)
     }
 
     private func refresh() {
