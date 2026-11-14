@@ -1293,11 +1293,26 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         return false
     }
 
+    /// The picture's size, once known.
+    private var videoSize: NSSize?
+    /// Fill Window (#978): the picture fills whatever shape the window has, so the window resizes freely, to any
+    /// shape, as in VLC. Turning it off gives the window the picture's shape again and locks it.
+    var fillsFrame = false {
+        didSet {
+            guard fillsFrame != oldValue else { return }
+            // Resize increments and an aspect ratio cancel each other: increments of 1 unlock the shape.
+            if fillsFrame { contentResizeIncrements = NSSize(width: 1, height: 1) }
+            else if let videoSize { fit(toVideo: videoSize) }
+        }
+    }
+
     /// Sizes the window to the picture and keeps its shape while it is resized (#689), so there are no black bars to
     /// drag away. A video of the shape the window already has leaves the size the viewer chose alone; full screen and
-    /// a zoomed window are left as they are.
+    /// a zoomed window are left as they are, and so is a window the picture fills (#978).
     func fit(toVideo video: NSSize) {
         guard video.width > 0, video.height > 0, video.width.isFinite, video.height.isFinite else { return }
+        videoSize = video
+        guard !fillsFrame else { return }
         contentAspectRatio = video
         guard !styleMask.contains(.fullScreen), !isZoomed, let contentView else { return }
         let current = contentView.bounds.size
@@ -1496,6 +1511,7 @@ private struct DesktopPlaybackView: View {
         .onChange(of: showsDanmaku) { _, value in session.catalogDanmaku.enabled = value }
         .onChange(of: session.catalogDanmaku.enabled) { _, value in showsDanmaku = value }
         .onChange(of: floats) { _, value in window.level = value ? .floating : .normal }
+        .onChange(of: fillsFrame, initial: true) { _, value in window.fillsFrame = value }
         // Each picture that appears (the next episode too) shapes the window; the size arrives a moment after it.
         .task(id: session.showsPicture) {
             guard session.showsPicture else { return }

@@ -873,11 +873,11 @@ import IOKit.pwr_mgt
     /// A file AVPlayer reads by itself and `Remux` can read too: not HLS, and not already repackaged.
     private static func repackagable(_ url: URL) -> Bool {
         !Remux.isRemuxed(url) && url.pathExtension.lowercased() != "m3u8"
-            && ["http", "https", "file", CloudStreams.scheme].contains(url.scheme)
+            && ["http", "https", "file", CloudStreams.scheme, CENCStreams.scheme].contains(url.scheme)
     }
 
-    /// A file whose picture AVPlayer can't decode plays its sound alone: HEVC that an MP4 tags `hev1`, or VP9
-    /// (#215). It opens again repackaged as HLS (`Remux.showsPicture`) and resumes where it was asked to. When it
+    /// A file whose picture AVPlayer can't decode plays its sound alone: HEVC that an MP4 tags `hev1`, VP9 (#215), or
+    /// Hongguo's ByteVC2 (#957, read clear through its decrypting stream). It opens again repackaged as HLS (`Remux.showsPicture`) and resumes where it was asked to. When it
     /// can't be repackaged, the sound plays on as before.
     private func repackage(_ item: AVPlayerItem, channel: Channel, url: URL, generation active: UUID) {
         player.pause(); loading = true
@@ -886,6 +886,7 @@ import IOKit.pwr_mgt
         preparation = Task { [weak self] in
             let source: RemuxSource?
             if url.scheme == CloudStreams.scheme { source = await CloudStreams.remuxSource(for: url) }
+            else if url.scheme == CENCStreams.scheme { source = await CENCStreams.remuxSource(for: url) }
             else if url.isFileURL { source = try? Remux.fileSource(url) }
             else {
                 do { source = try await Remux.httpSource(url, headers: channel.headers) }
