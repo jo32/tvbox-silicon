@@ -20,6 +20,11 @@ public enum Playlist {
                 group = attribute("group-title", in: line) ?? ""
                 logo = attribute("tvg-logo", in: line).flatMap { try? WebAddress.resolve($0, relativeTo: origin) }
                 entryHeaders = headers
+                // APTV-style playlists put the headers on the entry itself; some servers answer only that user agent (#995).
+                if let agent = attribute("http-user-agent", in: line), !agent.isEmpty { entryHeaders["User-Agent"] = agent }
+                if let referrer = attribute("http-referrer", in: line) ?? attribute("http-referer", in: line), !referrer.isEmpty {
+                    entryHeaders["Referer"] = referrer
+                }
             } else if line.hasPrefix("#EXTGRP:") {
                 group = String(line.dropFirst(8))
             } else if line.hasPrefix("#EXTVLCOPT:") {
