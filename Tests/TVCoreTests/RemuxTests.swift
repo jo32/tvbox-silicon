@@ -1,6 +1,7 @@
 import AVFoundation
 import CommonCrypto
 import Foundation
+import os
 import Testing
 import VideoToolbox
 @testable import TVCore
@@ -734,10 +735,6 @@ import VideoToolbox
         0-3.m4s
 
         """), "\(video)")
-        // Repackaged, AVPlayer shows the live picture.
-        let played = await picture(master)
-        #expect(played.status == .readyToPlay && played.size == CGSize(width: 320, height: 180) && played.video, "\(played)")
-
         // One segment joins and two leave the source; they stay listed (`liveBehind`), names as they were.
         video = try await moved(102, [0, 1, 0])
         #expect(video.contains("#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-DISCONTINUITY-SEQUENCE:0\n#EXT-X-MAP:URI=\"0-0.mp4\"\n"), "\(video)")
@@ -758,6 +755,14 @@ import VideoToolbox
             let data = try await fetch(folder.appending(path: file))
             #expect(data.count > 8 && data.subdata(in: 4..<8) == Data((file.hasSuffix("mp4") ? "ftyp" : "moof").utf8), "\(file)")
         }
+        // Asked for by AVPlayer (its picture), a segment stays listed however far the source moves on.
+        _ = try await fetch(folder.appending(path: "0-5.m4s"))
+        video = try await moved(115, [1, 1])
+        // (Without it, one would leave: six listed, the source's two and three behind.)
+        #expect(video.contains("#EXT-X-MEDIA-SEQUENCE:5\n") && video.hasSuffix("0-10.m4s\n"), "\(video)")
+        // Repackaged, AVPlayer shows the live picture.
+        let played = await picture(master)
+        #expect(played.status == .readyToPlay && played.size == CGSize(width: 320, height: 180) && played.video, "\(played)")
     }
 
     /// Segments disguised behind an image header, AES-128 encrypted (the IV from the media sequence), and an advert's
@@ -818,6 +823,20 @@ import VideoToolbox
         #expect(output.video == "h264" && output.audio == "aac" && output.audioConverted)
         let played = await picture(master)
         #expect(played.status == .readyToPlay && played.size == CGSize(width: 320, height: 180) && played.video, "\(played)")
+    }
+
+    /// A live stream's downloads run four at a time; the earliest waiting goes next.
+    @Test func fetchGateLetsTheEarliestGoNext() async {
+        let gate = FetchGate(limit: 1)
+        await gate.enter(0)
+        let order = OSAllocatedUnfairLock(initialState: [Int]())
+        let later = Task { await gate.enter(9); order.withLock { $0.append(9) }; gate.leave() }
+        try? await Task.sleep(for: .milliseconds(50))
+        let sooner = Task { await gate.enter(3); order.withLock { $0.append(3) }; gate.leave() }
+        try? await Task.sleep(for: .milliseconds(50))
+        gate.leave()
+        await later.value; await sooner.value
+        #expect(order.withLock { $0 } == [3, 9])
     }
 
     @Test func hlsWhosePictureAVPlayerShowsIsLeftAlone() async throws {
