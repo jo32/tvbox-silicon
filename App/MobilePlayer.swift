@@ -45,6 +45,7 @@ struct MobilePlayerView: View {
     @State private var showsDanmakuList = false
     @State private var showsDanmakuSettings = false
     @State private var showsEpisodes = false
+    @State private var showsChannels = false
     /// Devices with Yingxia open, for the Play On button; and the one the video was sent to.
     @State private var tvBrowser = PlayOnBrowser()
     @State private var playingOn: String?
@@ -193,6 +194,7 @@ struct MobilePlayerView: View {
         .onChange(of: session.error != nil || inline) { _, unlock in if unlock { setLocked(false) } }
         .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, search: $searchesSubtitles, subtitles: session.externalSubtitles)
         .playerEpisodesSheet(isPresented: $showsEpisodes, channel: channel)
+        .playerChannelsSheet(isPresented: $showsChannels, channel: channel, session: session)
         .sheet(isPresented: $showsDanmakuList) {
             DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
                 .danmakuListPresentation()
@@ -828,25 +830,39 @@ struct MobilePlayerView: View {
         let next = store.step(back: false, from: channel, session: session)
         // On a watch page the episodes are on the page itself.
         let episodes = !inline && PlayerEpisodesSheet.offered(for: channel, in: store)
-        if previous != nil || next != nil || episodes || toggleFullScreen != nil {
+        let channels = !inline && PlayerChannelsSheet.offered(for: channel, session: session, in: store)
+        if previous != nil || next != nil || episodes || channels || toggleFullScreen != nil {
             HStack(spacing: 10) {
                 if let previous {
                     Button { previous.go() } label: { Image(systemName: "backward.end.fill") }
                         .buttonStyle(PlayerCircleStyle(size: 36))
                         .disabled(previous.busy)
-                        .accessibilityLabel(L10n.text("Previous Episode"))
+                        .accessibilityLabel(previous.title(back: true))
                 }
                 if let next {
                     Button { next.go() } label: { Image(systemName: "forward.end.fill") }
                         .buttonStyle(PlayerCircleStyle(size: 36))
                         .disabled(next.busy)
-                        .accessibilityLabel(L10n.text("Next Episode"))
+                        .accessibilityLabel(next.title(back: false))
                 }
                 if episodes {
                     PlayerEpisodesButton(channel: channel, isPresented: $showsEpisodes) {
                         HStack(spacing: 6) {
                             Image(systemName: PlayerEpisodesSheet.symbol)
                             Text(L10n.text("Episodes"))
+                        }
+                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 14).frame(height: 36)
+                        .glassSurface(.regular.interactive(), in: Capsule())
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                if channels {
+                    PlayerChannelsButton(channel: channel, session: session, isPresented: $showsChannels) {
+                        HStack(spacing: 6) {
+                            Image(systemName: PlayerChannelsSheet.symbol)
+                            Text(L10n.text("Channel List"))
                         }
                         .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
                         .padding(.horizontal, 14).frame(height: 36)

@@ -151,4 +151,77 @@ private struct TVEpisodePlateStyle: ButtonStyle {
         }
     }
 }
+/// The info panel's Channel List (#1010): the list the live channel was picked from, a group at a time, as a strip over
+/// the picture like the Episodes tab.
+struct TVPlayerChannelsPanel: View {
+    let channel: Channel
+    @Environment(Store.self) private var store
+    @State private var selectedGroup: String?
+
+    /// The channel playing now, which may have changed while the panel was open.
+    private var playing: Channel { store.playing ?? channel }
+
+    var body: some View {
+        Group {
+            if let lineup = store.lineup(for: playing) { content(lineup) } else { Color.clear }
+        }
+        .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+    }
+
+    private func content(_ lineup: LiveLineup) -> some View {
+        let playing = playing
+        var seen = Set<String>()
+        let groups = lineup.channels.map(\.group).filter { seen.insert($0).inserted }
+        let group = selectedGroup.flatMap { groups.contains($0) ? $0 : nil } ?? playing.group
+        let items = groups.count > 1 ? lineup.channels.filter { $0.group == group } : lineup.channels
+        return VStack(alignment: .leading, spacing: 14) {
+            if groups.count > 1 {
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal) {
+                        LazyHStack(spacing: 14) {
+                            ForEach(groups, id: \.self) { value in
+                                Button { selectedGroup = value } label: {
+                                    Text(value.isEmpty ? L10n.text("Ungrouped") : value).lineLimit(1)
+                                }
+                                .buttonStyle(TVEpisodePlateStyle(selected: value == group, capsule: true))
+                                .id(value)
+                            }
+                        }
+                        .padding(.horizontal, 40).padding(.vertical, 8)
+                    }
+                    .scrollClipDisabled()
+                    .focusSection()
+                    .onAppear { proxy.scrollTo(group, anchor: .center) }
+                }
+            }
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal) {
+                    LazyHStack(spacing: 20) {
+                        ForEach(items) { item in
+                            let current = item.id == playing.id
+                            Button { if !current { store.playing = item } } label: {
+                                HStack(spacing: 16) {
+                                    ChannelLogo(channel: item, size: 56)
+                                    Text(item.name).font(.headline).lineLimit(1)
+                                    if current { Image(systemName: "speaker.wave.2.fill").font(.caption) }
+                                }
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                            }
+                            .buttonStyle(TVEpisodePlateStyle(selected: current, capsule: false))
+                            .id(item.id)
+                            .accessibilityAddTraits(current ? .isSelected : [])
+                        }
+                    }
+                    .padding(.horizontal, 40).padding(.vertical, 10)
+                }
+                .scrollClipDisabled()
+                .focusSection()
+                .onAppear { proxy.scrollTo(playing.id, anchor: .center) }
+                .onChange(of: group) { _, _ in if let first = items.first { proxy.scrollTo(first.id, anchor: .leading) } }
+            }
+        }
+        .padding(.vertical, 20)
+    }
+}
 #endif

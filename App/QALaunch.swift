@@ -61,7 +61,8 @@ enum QALaunch {
         guard section != nil || page != nil || UserDefaults.standard.string(forKey: "qaPlay") != nil
                 || UserDefaults.standard.string(forKey: "qaDownload") != nil
                 || UserDefaults.standard.string(forKey: "qaPlayLive") != nil
-                || UserDefaults.standard.string(forKey: "qaPlayURL") != nil else { return }
+                || UserDefaults.standard.string(forKey: "qaPlayURL") != nil
+                || UserDefaults.standard.string(forKey: "qaPlayChannel") != nil else { return }
         if UserDefaults.standard.bool(forKey: "qaResetHistory") { store.playbackHistory.clear() }
         #if os(macOS)
         // `-qaWindowSnapshot <png> [-qaWindowSize 1230x830] [-qaSnapshotDelay 20]`: draws the main window into a PNG
@@ -173,6 +174,17 @@ enum QALaunch {
             let subtitles = (UserDefaults.standard.string(forKey: "qaSubtitleURLs") ?? "").split(separator: ",").compactMap { URL(string: String($0)) }
                 .map { ExternalSubtitle(name: $0.lastPathComponent, url: $0) }
             store.playing = Channel(name: url.lastPathComponent, group: "QA", url: url, resumePosition: resume > 0 ? resume : nil, subtitles: subtitles)
+        }
+        // `-qaPlayChannel <index>` plays that channel of the subscription's first live playlist, picked from its list as
+        // the Live tab does: Previous and Next Channel and the channel list go through the playlist (#1010).
+        if let index = UserDefaults.standard.string(forKey: "qaPlayChannel").flatMap(Int.init),
+           let source = store.liveSources.first(where: { !$0.isBuiltIn }) {
+            do {
+                let channels = try await HTTPClient().channels(source)
+                if channels.indices.contains(index) { store.watch(channels[index], in: LiveLineup(title: source.name, channels: channels)) }
+            } catch {
+                Diagnostics.shared.record(.warning, "qa", "playlist not loaded: \(error.localizedDescription)")
+            }
         }
         // `-qaPlay <site key>:<video id>[:<episode index>]` opens that source's video in the player.
         if let target = UserDefaults.standard.string(forKey: "qaPlay"), let config = store.subscription {

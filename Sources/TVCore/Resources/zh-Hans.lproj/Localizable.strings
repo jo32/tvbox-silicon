@@ -1973,3 +1973,8 @@
 "Added" = "已添加";
 "Adding…" = "正在添加…";
 "The file is larger than %lld MB." = "文件超过 %lld MB。";
+"Previous Channel" = "上一个频道";
+"Next Channel" = "下一个频道";
+"Channel List" = "频道列表";
+"Line %@" = "线路 %@";
+"Line %@ didn't play. Trying line %@." = "线路 %1$@ 无法播放，正在尝试线路 %2$@。";

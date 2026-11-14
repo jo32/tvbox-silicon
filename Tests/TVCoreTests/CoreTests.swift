@@ -94,6 +94,62 @@ private func fixture(_ name: String, _ ext: String) throws -> Data {
     #expect(channels[1].group == "体育")
     #expect(throws: (any Error).self) { try Playlist.parse("<html>502 Bad Gateway</html>", origin: base) }
 }
+/// #679: a channel listed again in its group, or with TVBox's `url1#url2`, is one channel with several lines.
+@Test func repeatedChannelsBecomeLinesOfOne() throws {
+    let text = """
+    央视,#genre#
+    CCTV1,https://a.example.com/1.m3u8
+    CCTV1,https://b.example.com/1.m3u8$备用|Referer=https://b.example.com/
+    CCTV2,https://a.example.com/2.m3u8#https://b.example.com/2.m3u8$高清#https://a.example.com/2.m3u8
+    CCTV1,https://a.example.com/1.m3u8
+    卫视,#genre#
+    CCTV1,https://c.example.com/1.m3u8
+    Fragment,https://a.example.com/live.m3u8#t=1
+    """
+    let channels = try Playlist.parse(text, origin: base, headers: ["User-Agent": "Default"])
+    #expect(channels.map(\.name) == ["CCTV1", "CCTV2", "CCTV1", "Fragment"])
+    #expect(channels[0].alternates == [ChannelLine(url: URL(string: "https://b.example.com/1.m3u8")!,
+                                                   headers: ["User-Agent": "Default", "Referer": "https://b.example.com/"])])
+    #expect(channels[0].headers == ["User-Agent": "Default"])
+    #expect(channels[0].lines.map(\.url.host) == ["a.example.com", "b.example.com"])
+    #expect(channels[1].lines.map(\.url.absoluteString) == ["https://a.example.com/2.m3u8", "https://b.example.com/2.m3u8"])
+    #expect(channels[2].group == "卫视" && channels[2].alternates.isEmpty)
+    #expect(channels[3].url.absoluteString == "https://a.example.com/live.m3u8#t=1")
+    // M3U too, by name within the group.
+    let m3u = try Playlist.parse("""
+    #EXTM3U
+    #EXTINF:-1 group-title="News",News
+    https://a.example.com/news.m3u8
+    #EXTINF:-1 group-title="News" http-user-agent="Other",News
+    https://b.example.com/news.m3u8
+    """, origin: base)
+    #expect(m3u.count == 1 && m3u[0].alternates.map(\.headers["User-Agent"]) == ["Other"])
+}
+
+/// #1010: Previous and Next Channel go round the list the channel was picked from.
+@Test func liveLineupGoesRoundItsChannels() {
+    let channels = ["一", "二", "三"].map { Channel(name: $0, group: "G", url: URL(string: "https://example.com/\($0.unicodeScalars.first!.value)")!) }
+    let lineup = LiveLineup(title: "List", channels: channels)
+    #expect(lineup.neighbor(of: channels[0], back: false)?.name == "二")
+    #expect(lineup.neighbor(of: channels[0], back: true)?.name == "三")
+    #expect(lineup.neighbor(of: channels[2], back: false)?.name == "一")
+    #expect(lineup.position(of: channels[1]) == 1)
+    let stranger = Channel(name: "四", group: "G", url: URL(string: "https://example.com/4")!)
+    #expect(lineup.position(of: stranger) == nil && lineup.neighbor(of: stranger, back: false) == nil)
+    #expect(LiveLineup(title: "One", channels: [channels[0]]).neighbor(of: channels[0], back: false) == nil)
+}
+
+/// A favorite saved before channels had lines still opens, and one with lines keeps them.
+@Test func channelLinesAreSavedAndOptional() throws {
+    let old = #"{"name":"CCTV1","group":"央视","url":"https://a.example.com/1.m3u8","headers":{}}"#
+    let decoded = try JSONDecoder().decode(Channel.self, from: Data(old.utf8))
+    #expect(decoded.alternates.isEmpty && decoded.lines.count == 1)
+    var channel = Channel(name: "CCTV1", group: "央视", url: URL(string: "https://a.example.com/1.m3u8")!)
+    channel.alternates = [ChannelLine(url: URL(string: "https://b.example.com/1.m3u8")!, headers: ["Referer": "x"])]
+    let again = try JSONDecoder().decode(Channel.self, from: JSONEncoder().encode(channel))
+    #expect(again == channel && again.lines[1].headers == ["Referer": "x"] && again.lines[1].name == "CCTV1")
+}
+
 @Test func apiQueryPreservesExistingAuthentication() throws {
     let config = try Subscription.parse(Data(#"{"sites":[{"key":"a","api":"https://example.com/api?token=abc&pg=99","type":4,"ext":{"foo":"中文"}}]}"#.utf8), origin: base)
     let client = CatalogClient(site: config.sites[0], origin: base)

@@ -315,6 +315,13 @@ public struct Subscription: Codable, Sendable {
     }
 }
 
+/// Another address of a live channel, with the request headers it needs (#679).
+public struct ChannelLine: Codable, Hashable, Sendable {
+    public let url: URL
+    public let headers: [String: String]
+    public init(url: URL, headers: [String: String] = [:]) { self.url = url; self.headers = headers }
+}
+
 public struct Channel: Identifiable, Codable, Hashable, Sendable {
     public let name: String
     public let group: String
@@ -331,6 +338,13 @@ public struct Channel: Identifiable, Codable, Hashable, Sendable {
     public var skips: [PlaybackSkip] = []
     /// The Bilibili part playing, for its chapters, subtitles and the account's watch progress. Not saved.
     public var bilibiliPart: BilibiliAPI.Part? = nil
+    /// A live channel's other addresses, after `url`: a playlist that lists the channel more than once in a group, or
+    /// TVBox's `url1#url2`. The player tries the next when one doesn't play (#679). Saved with a favorite.
+    public var alternates: [ChannelLine] = []
+    /// Every address of the channel as a channel of its own, `url` first; just the channel when it has one.
+    public var lines: [Channel] {
+        [self] + alternates.map { Channel(name: name, group: group, url: $0.url, logo: logo, headers: $0.headers) }
+    }
     public var displayGroup: String { group.isEmpty ? L10n.text("Ungrouped") : group }
     public var id: String { group + "|" + name + "|" + url.absoluteString }
     public init(name: String, group: String = "", url: URL, logo: URL? = nil, headers: [String: String] = [:], skipScope: String? = nil,
@@ -340,5 +354,18 @@ public struct Channel: Identifiable, Codable, Hashable, Sendable {
         self.historyContext = historyContext; self.resumePosition = resumePosition; self.subtitles = subtitles
         self.skips = skips; self.bilibiliPart = bilibiliPart
     }
-    private enum CodingKeys: String, CodingKey { case name, group, url, logo, headers, skipScope, historyContext, resumePosition }
+    private enum CodingKeys: String, CodingKey { case name, group, url, logo, headers, skipScope, historyContext, resumePosition, alternates }
+    /// Favorites saved before channels had lines have none.
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        name = try values.decode(String.self, forKey: .name)
+        group = try values.decode(String.self, forKey: .group)
+        url = try values.decode(URL.self, forKey: .url)
+        logo = try values.decodeIfPresent(URL.self, forKey: .logo)
+        headers = try values.decode([String: String].self, forKey: .headers)
+        skipScope = try values.decodeIfPresent(String.self, forKey: .skipScope)
+        historyContext = try values.decodeIfPresent(PlaybackHistoryContext.self, forKey: .historyContext)
+        resumePosition = try values.decodeIfPresent(Double.self, forKey: .resumePosition)
+        alternates = try values.decodeIfPresent([ChannelLine].self, forKey: .alternates) ?? []
+    }
 }

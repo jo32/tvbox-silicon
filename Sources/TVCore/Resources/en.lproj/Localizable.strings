@@ -1973,3 +1973,8 @@
 "Added" = "Added";
 "Adding…" = "Adding…";
 "The file is larger than %lld MB." = "The file is larger than %lld MB.";
+"Previous Channel" = "Previous Channel";
+"Next Channel" = "Next Channel";
+"Channel List" = "Channel List";
+"Line %@" = "Line %@";
+"Line %@ didn't play. Trying line %@." = "Line %@ didn't play. Trying line %@.";
