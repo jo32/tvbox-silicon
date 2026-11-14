@@ -791,7 +791,12 @@ struct NovelReaderView: View {
                     .buttonStyle(NovelRoundButtonStyle(size: 40))
                     .accessibilityLabel(L10n.text("Contents"))
             }
+            #if os(macOS)
+            // Up in the title bar, as in the manga reader: under the 52 pt title bar the buttons sat far below the top edge.
+            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 22)
+            #else
             .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 22)
+            #endif
             // The page's own colour fades in behind the bar, so the text never runs under the buttons.
             .background {
                 LinearGradient(stops: [.init(color: colors.background, location: 0), .init(color: colors.background, location: 0.8),
@@ -813,6 +818,10 @@ struct NovelReaderView: View {
         #if os(tvOS)
         .focusSection()
         .defaultFocus($controlFocus, "contents")
+        #endif
+        #if os(macOS)
+        .ignoresSafeArea(.container, edges: .top)
+        .background { ReaderHidesWindowButtons() }
         #endif
     }
 
