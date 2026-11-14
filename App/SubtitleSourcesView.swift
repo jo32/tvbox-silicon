@@ -8,6 +8,7 @@ struct SubtitleSourcesView: View {
     @State private var address = ""
     @State private var adding = false
     @State private var failure: String?
+    @AppStorage(SubtitleSearchPolicy.timeLimitKey) private var timeLimit = SubtitleSearchPolicy.defaultTimeLimit
 
     var body: some View {
         page
@@ -20,6 +21,12 @@ struct SubtitleSourcesView: View {
             TVSettingsSection {
                 ForEach(items) { item in
                     TVSettingsLink(title: item.name, value: status(item), warning: item.enabled && missingKey(item)) { SubtitleSourcePage(item: item) }
+                }
+            }
+            TVSettingsSection(footer: Self.timeLimitNote) {
+                TVSettingsAction(title: L10n.text("Search Time Limit"), value: Self.seconds(timeLimit)) {
+                    let limits = SubtitleSearchPolicy.timeLimits
+                    timeLimit = limits[((limits.firstIndex(of: timeLimit) ?? 0) + 1) % limits.count]
                 }
             }
             TVSettingsSection(title: L10n.text("Add a Source"), footer: failure ?? Self.addNote) {
@@ -47,6 +54,13 @@ struct SubtitleSourcesView: View {
                 Text(Self.note)
             }
             Section {
+                Picker(L10n.text("Search Time Limit"), selection: $timeLimit) {
+                    ForEach(SubtitleSearchPolicy.timeLimits, id: \.self) { Text(Self.seconds($0)).tag($0) }
+                }
+            } footer: {
+                Text(Self.timeLimitNote)
+            }
+            Section {
                 TextField(L10n.text("Script Address"), text: $address, prompt: Text("https://…"))
                     #if os(iOS)
                     .keyboardType(.URL).textInputAutocapitalization(.never)
@@ -72,6 +86,8 @@ struct SubtitleSourcesView: View {
     }
 
     static let note = L10n.text("Search Online in the player's subtitle menu asks the sources that are on. Most need a free key from their site.")
+    static let timeLimitNote = L10n.text("How long Search Online waits for the sources. Results show as each source answers, so a longer limit only waits longer for slow ones.")
+    static func seconds(_ value: Double) -> String { L10n.text("%@ seconds", String(Int(value))) }
     static let addNote = L10n.text("A source script reaches only the sites it lists, and can't read your files or other sources' keys.")
 
     private func status(_ item: SubtitleSourceItem) -> String {

@@ -3,10 +3,22 @@ import Foundation
 
 /// How long and how wide a subtitle search runs (#576 M2).
 public struct SubtitleSearchPolicy: Sendable {
+    /// Settings › Subtitle Sources › Search Time Limit (#967): seconds a search waits, for each source and in all.
+    public static let timeLimitKey = "subtitleSearchSeconds"
+    public static let timeLimits: [Double] = [3, 5, 8, 15, 30]
+    /// 3 s left OpenSubtitles out of many searches (#967). Results still show as each source answers, so a longer
+    /// limit only waits longer for the slow ones.
+    public static let defaultTimeLimit: Double = 8
+    /// The viewer's choice, else the default (also for a value that isn't one of `timeLimits`).
+    public static func timeLimit(_ defaults: UserDefaults = .standard) -> Double {
+        let value = defaults.double(forKey: timeLimitKey)
+        return timeLimits.contains(value) ? value : defaultTimeLimit
+    }
+
     /// Each source gets this long.
-    public var perSource: Double = 3
+    public var perSource: Double = SubtitleSearchPolicy.defaultTimeLimit
     /// The whole search ends by this, whatever is still out.
-    public var total: Double = 3
+    public var total: Double = SubtitleSearchPolicy.defaultTimeLimit
     /// Sources asked at once.
     public var parallel = 3
     /// The most results kept from one source.
@@ -56,22 +68,25 @@ public actor SubtitleSearch {
         self.policy = policy; self.files = files
     }
 
-    /// The search's progress, ending with `finished`. Stopping the stream stops the search.
-    public nonisolated func search(_ hint: SubtitleHint, sources: [SubtitleSearchSource]) -> AsyncStream<SubtitleSearchProgress> {
+    /// The search's progress, ending with `finished`. Stopping the stream stops the search. `seconds`, when given,
+    /// is the time limit for each source and for the whole search, in place of the policy's.
+    public nonisolated func search(_ hint: SubtitleHint, sources: [SubtitleSearchSource], within seconds: Double? = nil) -> AsyncStream<SubtitleSearchProgress> {
         AsyncStream { continuation in
-            let task = Task { await self.run(hint, sources: sources) { continuation.yield($0) }; continuation.finish() }
+            let task = Task { await self.run(hint, sources: sources, within: seconds) { continuation.yield($0) }; continuation.finish() }
             continuation.onTermination = { _ in task.cancel() }
         }
     }
 
     /// The search, all at once (for tests and callers that don't show progress).
-    public func results(_ hint: SubtitleHint, sources: [SubtitleSearchSource]) async -> SubtitleSearchProgress {
+    public func results(_ hint: SubtitleHint, sources: [SubtitleSearchSource], within seconds: Double? = nil) async -> SubtitleSearchProgress {
         var last = SubtitleSearchProgress()
-        await run(hint, sources: sources) { last = $0 }
+        await run(hint, sources: sources, within: seconds) { last = $0 }
         return last
     }
 
-    private func run(_ hint: SubtitleHint, sources: [SubtitleSearchSource], report: (SubtitleSearchProgress) -> Void) async {
+    private func run(_ hint: SubtitleHint, sources: [SubtitleSearchSource], within limit: Double?, report: (SubtitleSearchProgress) -> Void) async {
+        var policy = self.policy
+        if let limit { policy.perSource = limit; policy.total = limit }
         var progress = SubtitleSearchProgress()
         var found: [String: [SubtitleCandidate]] = [:]
         var waiting: [SubtitleSearchSource] = []
@@ -98,13 +113,13 @@ public actor SubtitleSearch {
         guard !waiting.isEmpty else { return }
 
         let deadline = ContinuousClock.now + .seconds(policy.total)
-        let policy = policy
+        let limits = policy
         await withTaskGroup(of: (SubtitleSearchSource, Result<[SubtitleCandidate], SubtitleProviderError>).self) { group in
             var queue = waiting.makeIterator()
             func next() -> Bool {
                 guard let source = queue.next() else { return false }
                 let left = Self.seconds(deadline - ContinuousClock.now)
-                let seconds = min(policy.perSource, left)
+                let seconds = min(limits.perSource, left)
                 group.addTask {
                     guard seconds > 0.05 else { return (source, .failure(.timeout)) }
                     do {
@@ -120,12 +135,12 @@ public actor SubtitleSearch {
                 }
                 return true
             }
-            for _ in 0..<max(1, policy.parallel) { _ = next() }
+            for _ in 0..<max(1, limits.parallel) { _ = next() }
             while let (source, result) = await group.next() {
                 if Task.isCancelled { group.cancelAll(); return }
                 switch result {
                 case .success(let list):
-                    let own = Array(rank([source.id: list], sources: [source], hint: hint).prefix(policy.perSourceLimit))
+                    let own = Array(rank([source.id: list], sources: [source], hint: hint).prefix(limits.perSourceLimit))
                     found[source.id] = own
                     cache[cacheKey(source, hint)] = (Date(), own)
                     progress.statuses[source.id] = .found(own.count)

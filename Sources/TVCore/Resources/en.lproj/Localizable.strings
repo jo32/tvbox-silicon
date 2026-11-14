@@ -1973,3 +1973,6 @@
 "Added" = "Added";
 "Adding…" = "Adding…";
 "The file is larger than %lld MB." = "The file is larger than %lld MB.";
+"Search Time Limit" = "Search Time Limit";
+"%@ seconds" = "%@ seconds";
+"How long Search Online waits for the sources. Results show as each source answers, so a longer limit only waits longer for slow ones." = "How long Search Online waits for the sources. Results show as each source answers, so a longer limit only waits longer for slow ones.";

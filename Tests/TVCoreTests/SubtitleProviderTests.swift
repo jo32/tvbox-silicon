@@ -225,6 +225,26 @@ private func temporaryCache() -> SubtitleResourceCache {
         #expect(updates.last?.candidates.count == 5)
     }
 
+    /// #967: the viewer's Search Time Limit, 8 s unless they chose another of the offered values; a search given a
+    /// limit keeps to it in place of the policy's.
+    @Test func searchTimeLimitComesFromTheSetting() async throws {
+        let defaults = try #require(UserDefaults(suiteName: "subtitle-limit-\(UUID().uuidString)"))
+        #expect(SubtitleSearchPolicy.timeLimit(defaults) == 8)
+        defaults.set(15.0, forKey: SubtitleSearchPolicy.timeLimitKey)
+        #expect(SubtitleSearchPolicy.timeLimit(defaults) == 15)
+        defaults.set(7.0, forKey: SubtitleSearchPolicy.timeLimitKey)
+        #expect(SubtitleSearchPolicy.timeLimit(defaults) == 8)
+        #expect(SubtitleSearchPolicy().total == 8 && SubtitleSearchPolicy().perSource == 8)
+
+        let sources = [SubtitleSearchSource(StubProvider("fast", answer: .success([candidate("fast", "1")]))),
+                       SubtitleSearchSource(StubProvider("stuck", delay: 5, stubborn: true))]
+        let started = Date()
+        let progress = await SubtitleSearch(files: temporaryCache()).results(hint("Show"), sources: sources, within: 0.5)
+        #expect(Date().timeIntervalSince(started) < 2)
+        #expect(progress.statuses["fast"] == .found(1))
+        #expect(progress.statuses["stuck"] == .failed(.timeout))
+    }
+
     @Test func endsByTheDeadlineWhateverIsOut() async throws {
         var policy = SubtitleSearchPolicy()
         policy.total = 0.5; policy.perSource = 0.5
