@@ -462,6 +462,7 @@ import IOKit.pwr_mgt
     /// -17223, "cannot be played on this device"). The file opens again with its picture converted to SDR,
     /// and so do the files opened after it. A mirrored or recorded screen refuses HDR the same way, but only
     /// while it lasts: then this file alone converts. Dolby Vision 5 can't convert, so it isn't tried again.
+    /// A live room's stream is the repackaged one just stopped, so the room is asked for its stream again (#941).
     private func retryHDR(after failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
         // A repackaged HLS stream's HDR variant is refused before any segment loads: -1002 or -12927 (#345).
         let refused = Self.refusedContent(failure) || Remux.isSegmented(url) && Self.refusedVariant(failure)
@@ -475,10 +476,15 @@ import IOKit.pwr_mgt
         detachItem(); observation = nil
         Diagnostics.shared.record(.warning, "player", "hdr refused captured=\(captured); converting to sdr \(failure.map(Self.describe) ?? "-")")
         Remux.stop(url)
+        let room = liveRoom
         preparation = Task { [weak self] in
             guard let self else { return }
+            var channel = channel
             let prepared: Prepared
-            do { prepared = try await self.prepare(channel) }
+            do {
+                if let room { channel = try await LiveCatalog.resolve(room).channel }
+                prepared = try await self.prepare(channel)
+            }
             catch {
                 guard self.generation == active, !Task.isCancelled else { return }
                 self.error = error.localizedDescription; self.loading = false; return
