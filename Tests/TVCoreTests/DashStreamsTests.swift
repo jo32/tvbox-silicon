@@ -27,6 +27,7 @@ struct DashStreamsTests {
         #expect(site.isBuiltIn && site.isBilibili && site.runsInProcess && site.account == "bilibili")
         let ext = try #require(try site.pluginExtension(origin: nil)?.object)
         #expect(ext["builtin"] == .bool(true) && ext["lang"]?.string?.isEmpty == false && ext["cookie"] != nil)
+        #expect(ext["decodes"] == .array([.string("bvc2")]))
         #expect(Site.localizedName(["yingxia": .object(["names": .object(["zh-Hans": .string("哔哩哔哩")])])], language: "zh-Hans") == "哔哩哔哩")
         // The live platforms are read from the copy the app keeps.
         let saved = CloudSources.current

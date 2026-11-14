@@ -188,6 +188,25 @@ static int probe_intra_refresh(AVFormatContext *format) {
 
 /// `prepare`: probe the colours and go back to the first keyframe, as playing needs. Without it the reader stays
 /// at the start of the file, with what finding the streams read still to come.
+/// ByteVC2 (#957), which Hongguo sends some episodes in, is VVC under an MP4 sample entry FFmpeg doesn't know (`bvc2`,
+/// with a `bv2C` box of ByteDance's own instead of vvcC). Its samples are VVC NAL units with 4-byte lengths, and every
+/// keyframe carries the parameter sets. Named VVC, with a vvcC that says just that (4-byte lengths, no profile record,
+/// no parameter sets), FFmpeg's own VVC decoder decodes it.
+static void name_bytevc2(AVFormatContext *format) {
+    for (unsigned i = 0; i < format->nb_streams; i++) {
+        AVCodecParameters *par = format->streams[i]->codecpar;
+        if (par->codec_type != AVMEDIA_TYPE_VIDEO || par->codec_id != AV_CODEC_ID_NONE || par->codec_tag != MKTAG('b', 'v', 'c', '2'))
+            continue;
+        uint8_t *record = av_mallocz(2 + AV_INPUT_BUFFER_PADDING_SIZE);
+        if (!record) continue;
+        record[0] = 0xfe; // reserved bits, lengthSizeMinusOne 3, ptl_present_flag 0; then num_of_arrays 0
+        av_freep(&par->extradata);
+        par->extradata = record;
+        par->extradata_size = 2;
+        par->codec_id = AV_CODEC_ID_VVC;
+    }
+}
+
 static TVMInput *open_input(void *context, TVMReadFunction read, TVMInterruptFunction interrupted, int64_t size, int prepare,
                             char *error, int errorSize) {
     TVMInput *input = av_mallocz(sizeof(TVMInput));
@@ -213,6 +232,7 @@ static TVMInput *open_input(void *context, TVMReadFunction read, TVMInterruptFun
     int status = avformat_open_input(&format, NULL, NULL, NULL);
     if (status < 0) { tvm_close(input); fail(error, errorSize, status, "open"); return NULL; }
     input->format = format;
+    name_bytevc2(format);
     status = avformat_find_stream_info(format, NULL);
     if (status < 0) { tvm_close(input); fail(error, errorSize, status, "stream info"); return NULL; }
     if (!prepare) return input;

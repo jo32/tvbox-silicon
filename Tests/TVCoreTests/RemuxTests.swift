@@ -360,7 +360,7 @@ import VideoToolbox
     }
 
     @Test func picturesAVPlayerCantDecodeAreRepackagedWhenThatShowsThem() {
-        #expect(Remux.showsPicture(["hev1"]) && Remux.showsPicture(["dvhe"]) && Remux.showsPicture(["vp09"]))
+        #expect(Remux.showsPicture(["hev1"]) && Remux.showsPicture(["dvhe"]) && Remux.showsPicture(["vp09"]) && Remux.showsPicture(["bvc2"]))
         #expect(!Remux.showsPicture([]) && !Remux.showsPicture(["av01"]) && !Remux.showsPicture(["hev1", "av01"]))
     }
 
@@ -402,6 +402,45 @@ import VideoToolbox
         }
         let played = await ready(url)
         #expect(played.status == .readyToPlay && abs(played.duration - 8) < 0.2)
+    }
+
+    /// ByteVC2, the VVC (H.266) that Hongguo sends some episodes in (#957), under an MP4 sample entry neither AVPlayer
+    /// nor FFmpeg names (`bvc2`): VVC NAL units with 4-byte lengths, the parameter sets in every keyframe. FFmpeg's VVC
+    /// decoder decodes it for the conversion. The fixture is vvenc 1.14's 160x96 all-intra picture, 20 frames at 10 fps,
+    /// in a `bvc2` entry; `remux-bvc2-cenc.mp4` is the same file encrypted as Hongguo's are (CENC, each whole sample
+    /// AES-CTR with an 8-byte IV), key 000102…0f.
+    @Test func byteVC2IsConverted() async throws {
+        let file = try fixture("remux-bvc2.mp4")
+        let track = try #require(try await AVURLAsset(url: file).loadTracks(withMediaType: .video).first)
+        #expect(try await track.load(.isPlayable) == false)
+        let url = try await Remux.open(try Remux.fileSource(file))
+        defer { Remux.stop(url) }
+        let master = String(decoding: try await fetch(url), as: UTF8.self)
+        #expect(master.contains("CODECS=\"avc1.") && master.contains("RESOLUTION=160x96"))
+        let played = await ready(url)
+        #expect(played.status == .readyToPlay && abs(played.duration - 2) < 0.2)
+    }
+
+    /// Hongguo's files are encrypted: the repackager reads the clear file through the decrypting stream.
+    @Test func encryptedByteVC2IsConvertedThroughItsDecryptingStream() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appending(path: "episode.mp4")
+        try FileManager.default.copyItem(at: try fixture("remux-bvc2-cenc.mp4"), to: file)
+        let server = LocalMediaServer()
+        let remote = try await server.address(of: file, root: root)
+        let stream = try CENCStreams.register(url: remote, key: "000102030405060708090a0b0c0d0e0f", headers: [:], http: HTTPClient())
+        let source = try #require(await CENCStreams.remuxSource(for: stream))
+        #expect(source.length == Int64(try Data(contentsOf: file).count))
+        #expect(try await source.read(at: source.length, count: 16).isEmpty)
+        let url = try await Remux.open(source)
+        defer { Remux.stop(url) }
+        let master = String(decoding: try await fetch(url), as: UTF8.self)
+        #expect(master.contains("CODECS=\"avc1."))
+        let played = await ready(url)
+        #expect(played.status == .readyToPlay && abs(played.duration - 2) < 0.2)
+        _ = server
     }
 
     // MARK: - Links

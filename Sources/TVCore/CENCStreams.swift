@@ -38,6 +38,13 @@ public enum CENCStreams {
         return try await RemuxServer.shared.base().appending(path: "\(session.id)/master.m3u8")
     }
 
+    /// The clear file behind a stream, for the repackager: a picture AVPlayer can't decode in it (ByteVC2, #957)
+    /// is converted from there. Nil when the stream is gone or its file can't be read.
+    public static func remuxSource(for url: URL) async -> RemuxSource? {
+        guard let stream = CENCStreamStore.shared.stream(url), let index = try? await stream.metadata() else { return nil }
+        return CENCRemuxSource(stream: stream, length: Int64(index.length))
+    }
+
     public static func asset(for url: URL) -> AVURLAsset? {
         guard CENCStreamStore.shared.stream(url) != nil else { return nil }
         let asset = AVURLAsset(url: url)
@@ -59,6 +66,18 @@ public enum CENCStreams {
         guard let stream = CENCStreamStore.shared.stream(url) else { return nil }
         return await stream.statistics
     }
+}
+
+/// The repackager reads ahead as far as it needs, so the player's position doesn't hold its reads back.
+struct CENCRemuxSource: RemuxSource {
+    let stream: CENCByteStream
+    let length: Int64
+    func read(at offset: Int64, count: Int) async throws -> Data {
+        guard offset < length else { return Data() }
+        return try await stream.read(at: Int(offset), count: count, bounded: false)
+    }
+    var transfer: (received: Int64, host: String?)? { nil }
+    func close() async { await stream.clear() }
 }
 
 private final class CENCStreamStore: @unchecked Sendable {

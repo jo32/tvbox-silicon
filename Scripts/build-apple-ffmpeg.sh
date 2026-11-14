@@ -1,8 +1,8 @@
 #!/bin/bash
 # Builds the small FFmpeg that Sources/TVMedia uses to repackage MKV, AVI, FLV, WMV and RMVB for AVPlayer
 # (Docs/mkv-playback-plan.md): demuxers, the MP4 muxer, the decoders and AudioToolbox/VideoToolbox encoders
-# of the conversion path, VideoToolbox decoding for HDR to SDR, dav1d for AV1 without AV1 hardware, and nothing
-# else (no network, no programs, no external libraries but zlib and dav1d). LGPL only (dav1d is BSD).
+# of the conversion path, VideoToolbox decoding for HDR to SDR, dav1d for AV1 without AV1 hardware, FFmpeg's VVC
+# decoder for ByteVC2 (#957), and nothing else (no network, no programs, no external libraries but zlib and dav1d). LGPL only (dav1d is BSD).
 # Output: build/FFmpeg/FFmpeg.xcframework (Vendor/FFmpeg links to it), one static library per platform.
 # Builds are kept in a cache shared by every checkout and worktree, one per recipe (the lines between RECIPE
 # and END below), so a checkout usually just links the one already built (about 5 minutes otherwise; dav1d's
@@ -59,7 +59,8 @@ if [ ! -x "$TOOLS/bin/ninja" ]; then
 fi
 
 DEMUXERS=matroska,avi,flv,asf,rm,mpegts,mpegps,mov,ogg
-VIDEO_DECODERS=h264,hevc,mpeg1video,mpeg2video,mpeg4,msmpeg4v1,msmpeg4v2,msmpeg4v3,h263,flv,vc1,wmv1,wmv2,wmv3,rv10,rv20,rv30,rv40,vp6,vp6a,vp6f,vp8,vp9,theora,mjpeg,libdav1d
+# vvc decodes ByteVC2, the VVC (H.266) that Hongguo sends some episodes in (#957); TVMedia names it, see name_bytevc2.
+VIDEO_DECODERS=h264,hevc,mpeg1video,mpeg2video,mpeg4,msmpeg4v1,msmpeg4v2,msmpeg4v3,h263,flv,vc1,wmv1,wmv2,wmv3,rv10,rv20,rv30,rv40,vp6,vp6a,vp6f,vp8,vp9,theora,mjpeg,vvc,libdav1d
 AUDIO_DECODERS=aac,aac_latm,ac3,eac3,dca,truehd,mlp,mp1,mp2,mp3,vorbis,opus,flac,alac,pcm_s16le,pcm_s16be,pcm_s24le,pcm_s24be,pcm_s32le,pcm_f32le,pcm_u8,pcm_bluray,pcm_dvd,wmav1,wmav2,wmapro,wmalossless,cook,sipr,atrac3,ra_144,ra_288,amrnb,amrwb,adpcm_ima_wav,adpcm_ms
 # Bitmap subtitles (Blu-ray PGS, DVD VobSub), which the app draws over the picture itself (#576 M3).
 SUBTITLE_DECODERS=pgssub,dvdsub
