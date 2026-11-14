@@ -78,10 +78,13 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
     func choose(_ choice: AppIconChoice) async {
         failure = nil
         guard choice != current else { return }
+        // The check moves at once: the call returns only after the system's alert is closed.
+        let previous = current
+        current = choice
         do {
             try await UIApplication.shared.setAlternateIconName(choice.alternateName)
-            current = choice
         } catch {
+            current = previous
             failure = L10n.text("Couldn't change the app icon: %@", error.localizedDescription)
         }
     }
