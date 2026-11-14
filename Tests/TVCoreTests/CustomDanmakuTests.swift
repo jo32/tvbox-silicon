@@ -401,3 +401,25 @@ private actor CustomDanmakuTransport {
     bilibili.officialPage = URL(string: "https://www.bilibili.com/bangumi/play/ep123456")
     #expect(DanmakuResolver(preferredSource: .bilibili).officialPreference(bilibili) == .bilibili)
 }
+
+@Test func aShowPickedByHandFollowsWithAutomaticMatchingOffAndSearchesNothing() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let cache = MediaCache(root: root), transport = CustomDanmakuTransport()
+    let resolver = DanmakuResolver(cache: cache, http: .init { try await transport.send($0) }, dandanServer: "https://example.com/picked")
+    let context = customContext(), next = customContext("第2集")
+    // Nothing picked: with matching off nothing is asked.
+    #expect(!resolver.hasPick(for: next))
+    #expect(try await resolver.resolve(next, savedOnly: true).comments.isEmpty)
+    #expect(await transport.total() == 0)
+    resolver.remember(DanmakuMapping(provider: "tencent", title: context.videoName, year: context.year, tracks: [
+        .init(number: 1, title: "第1集", id: "manual-1", source: "tencent"),
+        .init(number: 2, title: "第2集", id: "manual-2", source: "tencent")
+    ], animeID: "101", source: "tencent"), for: context, ticket: cache.ticket(), picked: true)
+    #expect(resolver.hasPick(for: next))
+    #expect(try await resolver.resolve(next, savedOnly: true).source == DanmakuProvider.tencent.title)
+    #expect(await transport.count("comment/manual-2") == 1)
+    #expect(await transport.total() == 1)
+    resolver.forgetPick(context)
+    #expect(!resolver.hasPick(for: next))
+}
