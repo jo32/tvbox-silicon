@@ -819,6 +819,13 @@ import TVCore
             return
         }
         let site = client.site
+        // An episode saved on this device plays from it, where it stopped, with no request to the source (#960).
+        let savedEpisode = Episode(id: entry.context.episodeID, name: entry.context.episodeName, address: "", flag: entry.context.episodeFlag)
+        if !entry.completed, let saved = DownloadLibrary.shared.item(for: DownloadSource(site: site, videoID: entry.context.videoID, episode: savedEpisode)),
+           saved.status == .completed {
+            playing = savedChannel(saved)
+            return
+        }
         let previousPlayback = playing
         do {
             // Plugin/API sources resolve an episode again. Direct-file APIs must refresh
@@ -917,6 +924,15 @@ extension Store {
                                                  subtitles: folder.subtitles) } ?? channel
     }
 
+    /// A saved episode, under the history entry it has online: its progress and Continue Watching are the same
+    /// whether it streams or plays from the device, and it opens where it stopped (#960).
+    func savedChannel(_ item: DownloadItem) -> Channel {
+        guard var context = item.historyContext(in: subscription) else { return DownloadLibrary.shared.channel(for: item) }
+        let entry = playbackHistory.entries.first { $0.id == context.id }
+        if context.year == nil { context.year = entry?.context.year }
+        return DownloadLibrary.shared.channel(for: item, context: context, resumePosition: entry?.resumePosition(for: item.source.episode))
+    }
+
     func nextFile(after channel: Channel) -> Channel? { file(1, from: channel) }
     func previousFile(before channel: Channel) -> Channel? { file(-1, from: channel) }
 
@@ -924,8 +940,7 @@ extension Store {
     /// episode steps through the others saved from its show (#835, #820).
     private func file(_ offset: Int, from channel: Channel) -> Channel? {
         if channel.url.scheme == DownloadLibrary.scheme {
-            let library = DownloadLibrary.shared
-            return library.neighbor(of: channel.url, offset: offset).map(library.channel(for:))
+            return DownloadLibrary.shared.neighbor(of: channel.url, offset: offset).map(savedChannel)
         }
         guard let context = channel.historyContext, context.sourceKey == CloudFiles.sourceKey, let folder = filesFolder,
               folder.drive.key == context.episodeFlag, folder.id == context.videoID,

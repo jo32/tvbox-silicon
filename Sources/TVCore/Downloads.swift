@@ -20,6 +20,20 @@ public struct DownloadSource: Codable, Hashable, Sendable {
     public var key: String { [siteKey, videoID, flag, episodeID].joined(separator: "\u{1F}") }
 }
 
+extension DownloadItem {
+    /// The history entry the episode has when it streams from its source, so playing the saved copy records the
+    /// same progress and the same Continue Watching (#960). Nil once the source is no longer in the subscription.
+    public func historyContext(in subscription: Subscription?) -> PlaybackHistoryContext? {
+        guard let subscription, let site = subscription.sites.first(where: { $0.key == source.siteKey }) else { return nil }
+        var context = PlaybackHistoryContext(origin: site.origin(or: subscription.origin), sourceKey: site.sourceKey, sourceName: site.name,
+                                             videoID: source.videoID, videoName: title, poster: poster,
+                                             episodeID: source.episodeID, episodeName: source.episodeName, episodeFlag: source.flag)
+        context.posterHeaders = posterHeaders.isEmpty ? nil : posterHeaders
+        context.officialPage = OfficialVideoPage.validated(source.address)
+        return context
+    }
+}
+
 public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
     public enum Status: String, Codable, Sendable {
         /// Waiting for a free slot in the queue.
@@ -323,9 +337,11 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
         return show[index + offset]
     }
 
-    /// What the player opens for a finished download.
-    public func channel(for item: DownloadItem) -> Channel {
-        Channel(name: "\(item.title) · \(item.episode)", group: L10n.text("Offline Cache"), url: URL(string: "\(Self.scheme)://\(item.id)")!)
+    /// What the player opens for a finished download: under the episode's history entry when there is one
+    /// (`DownloadItem.historyContext(in:)`), so it records progress and opens where it stopped.
+    public func channel(for item: DownloadItem, context: PlaybackHistoryContext? = nil, resumePosition: Double? = nil) -> Channel {
+        Channel(name: "\(item.title) · \(item.episode)", group: L10n.text("Offline Cache"), url: URL(string: "\(Self.scheme)://\(item.id)")!,
+                skipScope: context?.id, historyContext: context, resumePosition: resumePosition)
     }
 
     /// The file (or, for HLS, the loopback address) that plays a `tvbox-download://` address. An HDR MKV saved

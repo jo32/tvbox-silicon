@@ -216,3 +216,24 @@ import Testing
     #expect(starts == 2)
     library.pause(item.id)
 }
+
+/// #960: a saved episode plays under the history entry it has online, so its progress and Continue Watching are the
+/// same either way; once its source leaves the subscription it has none.
+@Test func savedEpisodesShareTheirOnlineHistoryEntry() throws {
+    let origin = try #require(URL(string: "https://example.org/tv.json"))
+    let site = Site(key: "s", name: "S", type: 3, api: "csp_Test", raw: [:])
+    let subscription = Subscription(origin: origin, importedAt: Date(), sites: [site], lives: [], raw: [:])
+    let episode = Episode(id: "2", name: "第 2 集", address: "https://example.com/2.mp4", flag: "line")
+    let poster = URL(string: "https://example.com/p.jpg")
+    let item = DownloadItem(id: "e2", title: "Show", episode: episode.name, poster: poster, posterHeaders: [:],
+                            source: DownloadSource(site: site, videoID: "v", episode: episode), created: Date(), status: .completed, media: "media.mp4")
+    let online = PlaybackHistoryContext(origin: origin, site: site, video: Video(id: "v", name: "Show", poster: poster), episode: episode)
+    let saved = try #require(item.historyContext(in: subscription))
+    #expect(saved.id == online.id)
+    #expect(saved.episode(in: [episode]) == episode)
+    #expect(saved.videoName == "Show" && saved.poster == poster && saved.sourceName == "S")
+    let entry = PlaybackHistoryEntry(context: online, position: 600, duration: 1500, updatedAt: Date())
+    #expect(entry.resumePosition(for: item.source.episode) == 600)
+    #expect(item.historyContext(in: Subscription(origin: origin, importedAt: Date(), sites: [], lives: [], raw: [:])) == nil)
+    #expect(item.historyContext(in: nil) == nil)
+}
