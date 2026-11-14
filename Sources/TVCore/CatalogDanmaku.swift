@@ -251,9 +251,30 @@ public enum CatalogDanmakuMatcher {
         return String(value[range])
     }
 
+    /// The words a source tags a title's edition with ("小城良方（臻彩）", "三体【4K 国语】"): picture, sound, language
+    /// or cut. They are the source's, not the work's, so the services know the title without them.
+    private static let releaseWords = ["臻彩", "杜比视界", "杜比", "蓝光", "藍光", "原盘", "原画", "高码率", "高码", "超清", "高清",
+        "60帧", "120帧", "60fps", "4k", "8k", "2160p", "1080p", "720p", "hdr10", "hdr", "dolbyvision", "国粤双语", "国粤",
+        "双语", "雙語", "国语", "國語", "粤语", "粵語", "中英字幕", "中英双字", "中字", "中英", "未删减版", "未删减", "无删减",
+        "完整版", "修复版", "精编版", "加长版", "导演剪辑版"]
+
+    /// The title without edition notes in brackets at its end. A note with anything else in it (a season, a part,
+    /// a subtitle) stays, so "（第二季）" is never dropped to match the first season.
+    public static func withoutReleaseNotes(_ text: String) -> String {
+        var title = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        while let range = title.range(of: #"[（(【\[][^（）()【】\[\]]+[）)】\]]\s*$"#, options: .regularExpression),
+              range.lowerBound > title.startIndex {
+            var note = normalized(String(title[range]))
+            for word in releaseWords { note = note.replacingOccurrences(of: word, with: "") }
+            guard note.isEmpty else { break }
+            title = String(title[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return title
+    }
+
     /// Remove service-authored metadata only; season names and arbitrary subtitles remain significant.
     static func titleMetadata(_ text: String) -> (title: String, year: String?, source: String?, type: String?) {
-        var title = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var title = withoutReleaseNotes(text)
         var source: String?, type: String?, year: String?
         // Services write "Title(2023)【电视剧】from tencent". Only that form, or a platform's own name, is a source:
         // "Escape from Alcatraz" and "Escape from Tomorrow" are different films, not one title from two sources.

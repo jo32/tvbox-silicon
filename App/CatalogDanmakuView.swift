@@ -377,7 +377,7 @@ struct CatalogDanmakuSettingsView: View {
         #if os(macOS)
         .frame(minWidth: 520, idealWidth: 560, minHeight: 500, idealHeight: 640)
         #endif
-        .onAppear { keyword = channelName.components(separatedBy: " · ").first ?? channelName }
+        .onAppear { keyword = CatalogDanmakuMatcher.withoutReleaseNotes(channelName.components(separatedBy: " · ").first ?? channelName) }
         .onDisappear { cancelWork() }
         .onChange(of: server) { _, _ in resetSearch() }
         .onChange(of: preferredSource) { _, _ in resetSearch() }
