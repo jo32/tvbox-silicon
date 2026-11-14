@@ -126,7 +126,9 @@ const subtitleSource = {
 
 ### Search (`SubtitleSearch`)
 
-- At most 3 sources are asked at once. Each gets 3 s, and the whole search ends at 3 s whatever is still out.
+- At most 3 sources are asked at once. Each gets the search time limit, and the whole search ends at that limit whatever is
+  still out. The limit is set in Settings › Subtitle Sources › Search Time Limit: 3, 5, 8, 15 or 30 s, 8 s by default
+  (`SubtitleSearchPolicy.timeLimit()`; it was a fixed 3 s, which left OpenSubtitles out of many searches, #967).
   A source that is still running is abandoned, not waited for (`SubtitleSearch.race`). Each source's results
   appear as soon as it answers.
 - A source missing a required key isn't asked. It shows "Add your key…" instead.

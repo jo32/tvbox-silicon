@@ -1973,3 +1973,6 @@
 "Added" = "已添加";
 "Adding…" = "正在添加…";
 "The file is larger than %lld MB." = "文件超过 %lld MB。";
+"Search Time Limit" = "搜索时限";
+"%@ seconds" = "%@ 秒";
+"How long Search Online waits for the sources. Results show as each source answers, so a longer limit only waits longer for slow ones." = "在线搜索等待各字幕来源的时长。每个来源一有结果就会显示，所以时限加长只是多等慢的来源。";

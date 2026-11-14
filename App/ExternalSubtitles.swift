@@ -284,7 +284,7 @@ import UniformTypeIdentifiers
             self.hasSources = !sources.isEmpty
             guard !sources.isEmpty else { self.onlineState = .noSources; return }
             Diagnostics.shared.record(.info, "subtitles", "online search sources=\(sources.count) episode=\(asked.episode != nil) hash=\(asked.movieHash != nil) tmdb=\(asked.tmdbID != nil)")
-            for await progress in SubtitleSearch.shared.search(asked, sources: sources) {
+            for await progress in SubtitleSearch.shared.search(asked, sources: sources, within: SubtitleSearchPolicy.timeLimit()) {
                 guard self.generation == active, !Task.isCancelled else { return }
                 self.online = progress
             }
