@@ -21,6 +21,8 @@ struct RemuxPlan: Sendable, Equatable {
         var doviProfile = -1, doviCompatibility = -1
         /// x264's intra refresh: its keyframes are recovery points, where AVPlayer can't start a segment.
         var intraRefresh = false
+        /// Two fields to each frame, a moment apart (broadcast 1080i).
+        var interlaced = false
         var sampleRate = 0, channels = 0
         var bitRate: Int64 = 0
         var language = "", title = ""
@@ -56,6 +58,9 @@ struct RemuxPlan: Sendable, Equatable {
         var toneMapWidth = 0, toneMapHeight = 0
         /// Whether the player draws bitmap subtitles (PGS, VobSub) itself, so they are offered as (empty) renditions.
         var bitmapSubtitles = false
+        /// Whether a repackaged live picture that is interlaced is deinterlaced: AVPlayer on an iPhone, iPad or Apple
+        /// TV shows both fields woven (a double picture where anything moves); a Mac deinterlaces it itself.
+        var deinterlace = false
     }
 
     /// The video track first, then the audio, then the text subtitles.

@@ -305,6 +305,7 @@ int tvm_stream(const TVMInput *input, int index, TVMStream *out) {
         out->sampleAspectNum = aspect.num; out->sampleAspectDen = aspect.den;
         out->colorTransfer = par->color_trc; out->colorPrimaries = par->color_primaries;
         out->intraRefresh = input->intraRefresh == index;
+        out->interlaced = par->field_order != AV_FIELD_UNKNOWN && par->field_order != AV_FIELD_PROGRESSIVE;
     }
     out->doviProfile = out->doviLevel = out->doviCompatibility = -1;
     const AVPacketSideData *dovi = av_packet_side_data_get(par->coded_side_data, par->nb_coded_side_data, AV_PKT_DATA_DOVI_CONF);
@@ -375,6 +376,8 @@ typedef struct Track {
     AVAudioFifo *fifo;
     struct SwsContext *scaler;
     AVFrame *scaled;
+    /// A deinterlaced copy of a decoded frame (the decoder's own isn't ours to change).
+    AVFrame *woven;
     /// Tone mapping at a smaller size: the picture is shrunk first, in its own colors, which costs far less.
     struct SwsContext *shrinker;
     AVFrame *shrunk;
@@ -992,6 +995,7 @@ void tvm_cursor_free(TVMCursor *cursor) {
         if (track->fifo) av_audio_fifo_free(track->fifo);
         sws_freeContext(track->scaler);
         av_frame_free(&track->scaled);
+        av_frame_free(&track->woven);
         sws_freeContext(track->shrinker);
         av_frame_free(&track->shrunk);
         av_frame_free(&track->uploaded);
@@ -1317,6 +1321,8 @@ static int mapper_queue(TVMCursor *cursor, Track *track, const AVFrame *frame, i
     return 0;
 }
 
+static int deinterlace(Track *track, AVFrame **input);
+
 static int encode_video(TVMCursor *cursor, Track *track, AVFrame *frame) {
     int status;
     if (!track->encoder) {
@@ -1387,6 +1393,7 @@ static int encode_video(TVMCursor *cursor, Track *track, AVFrame *frame) {
         av_frame_copy_props(track->scaled, frame);
         input = track->scaled;
     }
+    if (track->spec.deinterlace && input->format != AV_PIX_FMT_VIDEOTOOLBOX && (status = deinterlace(track, &input)) < 0) return status;
     int64_t pts = av_rescale_q(frame->best_effort_timestamp, track->in->time_base, encoder->time_base);
     if (track->lastFramePts != AV_NOPTS_VALUE && pts <= track->lastFramePts) pts = track->lastFramePts + 1;
     track->lastFramePts = pts;
@@ -1401,6 +1408,53 @@ static int encode_video(TVMCursor *cursor, Track *track, AVFrame *frame) {
     status = receive_video(cursor, track);
     track->usEncode += av_gettime_relative() - mapped;
     return status;
+}
+
+/// The later field's lines of a plane, `first` on, every other one: where a pixel differs from the lines above and
+/// below in the same direction (combing: the two fields caught different moments), it becomes their average; still
+/// parts keep both fields' detail. A negative `threshold` averages every pixel.
+static void deinterlace_plane(uint8_t *data, int linesize, int width, int height, int first, int threshold) {
+    for (int y = first; y < height; y += 2) {
+        uint8_t *row = data + (ptrdiff_t)y * linesize;
+        const uint8_t *above = y > 0 ? row - linesize : row + linesize;
+        const uint8_t *below = y + 1 < height ? row + linesize : above;
+        for (int x = 0; x < width; x++) {
+            int a = above[x], b = below[x], c = row[x];
+            if (threshold < 0 || (c - a) * (c - b) > threshold) row[x] = (uint8_t)((a + b + 1) >> 1);
+        }
+    }
+}
+
+/// Interlaced broadcast video (1080i): AVPlayer on an iPhone, iPad or Apple TV shows both fields woven, a double
+/// picture wherever anything moves. `*input` becomes a copy with the later field rebuilt where it combs.
+static int deinterlace(Track *track, AVFrame **input) {
+    AVFrame *source = *input;
+    if (!(source->flags & AV_FRAME_FLAG_INTERLACED)) return 0;
+    if (source->format != AV_PIX_FMT_YUV420P && source->format != AV_PIX_FMT_NV12) return 0;
+    int status;
+    if (source != track->scaled) {
+        if (!track->woven && !(track->woven = av_frame_alloc())) return AVERROR(ENOMEM);
+        av_frame_unref(track->woven);
+        track->woven->format = source->format;
+        track->woven->width = source->width;
+        track->woven->height = source->height;
+        if ((status = av_frame_get_buffer(track->woven, 0)) < 0) return status;
+        if ((status = av_frame_copy(track->woven, source)) < 0) return status;
+        if ((status = av_frame_copy_props(track->woven, source)) < 0) return status;
+        source = track->woven;
+    }
+    // Top field first: the bottom (odd) lines are the later field.
+    int first = source->flags & AV_FRAME_FLAG_TOP_FIELD_FIRST ? 1 : 0;
+    deinterlace_plane(source->data[0], source->linesize[0], source->width, source->height, first, 100);
+    if (source->format == AV_PIX_FMT_NV12) {
+        deinterlace_plane(source->data[1], source->linesize[1], source->width, (source->height + 1) / 2, first, -1);
+    } else {
+        for (int plane = 1; plane < 3; plane++)
+            deinterlace_plane(source->data[plane], source->linesize[plane], (source->width + 1) / 2, (source->height + 1) / 2, first, -1);
+    }
+    source->flags &= ~(AV_FRAME_FLAG_INTERLACED | AV_FRAME_FLAG_TOP_FIELD_FIRST);
+    *input = source;
+    return 0;
 }
 
 static int take_frame(TVMCursor *cursor, Track *track, AVFrame *frame) {

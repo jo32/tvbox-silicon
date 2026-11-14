@@ -356,7 +356,7 @@ final class RemuxSession: @unchecked Sendable {
         var tracks = plan.tracks.map { track in
             TVMTrack(stream: Int32(track.stream.index), mode: track.mode.rawValue, bitRate: Int32(track.bitRate),
                      channels: Int32(track.channels), dolbyVision: track.dolbyVision.rawValue, toneMap: track.toneMap ? 1 : 0,
-                     width: Int32(track.width), height: Int32(track.height))
+                     width: Int32(track.width), height: Int32(track.height), deinterlace: 0)
         }
         guard let cursor = tvm_cursor_create(input, &tracks, Int32(tracks.count), Self.offset) else { throw TVError.unsupported("remux cursor") }
         self.cursor = cursor
@@ -596,6 +596,7 @@ final class RemuxSession: @unchecked Sendable {
                                       hdr: AVPlayer.eligibleForHDRPlayback && !Remux.refusesHDR && !Remux.screenCaptured)
         device.bitmapSubtitles = tvm_bitmap_available("hdmv_pgs_subtitle") != 0
         #if !os(macOS)
+        device.deinterlace = true
         // An Apple TV or iPhone tone maps a 4K picture too slowly to keep up; one that shows no HDR gets 1080p.
         device.toneMapWidth = 1920
         device.toneMapHeight = 1080
@@ -616,7 +617,7 @@ final class RemuxSession: @unchecked Sendable {
         return RemuxPlan.Stream(index: index, kind: kind, codec: text(raw.codec), profile: Int(raw.profile), level: Int(raw.level),
                                 width: Int(raw.width), height: Int(raw.height), bitDepth: Int(raw.bitDepth), chroma: Int(raw.chroma),
                                 frameRate: raw.frameRate, colorTransfer: Int(raw.colorTransfer), doviProfile: Int(raw.doviProfile),
-                                doviCompatibility: Int(raw.doviCompatibility), intraRefresh: raw.intraRefresh != 0,
+                                doviCompatibility: Int(raw.doviCompatibility), intraRefresh: raw.intraRefresh != 0, interlaced: raw.interlaced != 0,
                                 sampleRate: Int(raw.sampleRate), channels: Int(raw.channels),
                                 bitRate: raw.bitRate, language: text(raw.language), title: text(raw.title),
                                 isDefault: raw.isDefault != 0, isForced: raw.isForced != 0, isText: raw.isText != 0, pid: Int(raw.id))
