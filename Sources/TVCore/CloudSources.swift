@@ -92,11 +92,14 @@ extension Site {
     /// Yingxia's own sources run on the in-process runtime on every platform, even the Mac's.
     var runsInProcess: Bool { isBuiltIn && !isCloudFiles && runtime == .javascript }
 
-    /// A built-in source's ext: its entry's own (an object) plus the app's language and the account's cookie.
+    /// A built-in source's ext: its entry's own (an object) plus the app's language, the account's cookie, and the
+    /// pictures the app plays beyond what AVPlayer decodes (`decodes`): ByteVC2, which the repackager converts (#957).
+    /// Hongguo offers an episode it has only in ByteVC2 to an app that lists it, and tells older ones it can't play.
     var builtInExtension: JSONValue {
         if isCloudFiles { return .object([:]) }
         var fields = raw["ext"]?.object ?? [:]
         fields["lang"] = .string(L10n.resolvedLanguage())
+        fields["decodes"] = .array([.string("bvc2")])
         if account != nil { fields["cookie"] = .string(SourceAccounts.cookie(account)) }
         return .object(fields)
     }
