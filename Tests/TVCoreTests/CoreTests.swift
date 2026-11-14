@@ -67,6 +67,25 @@ private func fixture(_ name: String, _ ext: String) throws -> Data {
     #expect(channels[1].headers["User-Agent"] == "TV App")
     #expect(channels[1].headers["Referer"] == nil)
 }
+/// #995: "我的电视" (APTV-style) sets `http-user-agent` on the #EXTINF line; its CCTV1 server answers 404 to any other agent.
+@Test func m3uHeadersOnTheEntryLine() throws {
+    let text = """
+    #EXTM3U x-tvg-url="http://example.com/e.xml"
+    #EXTINF:-1 tvg-name="CCTV1" http-user-agent="AptvPlayer-UA" group-title="央视频道",CCTV1
+    http://example.com/live.php?id=CCTV1
+    #EXTINF:-1 http-referrer="https://example.com/" group-title="News",News
+    https://example.com/news.m3u8
+    #EXTINF:-1 http-user-agent="Entry" group-title="News",Overridden
+    #EXTVLCOPT:http-user-agent=Option
+    https://example.com/other.m3u8
+    #EXTINF:-1 group-title="News",Plain
+    https://example.com/plain.m3u8
+    """
+    let channels = try Playlist.parse(text, origin: base, headers: ["User-Agent": "Default"])
+    #expect(channels.map(\.headers["User-Agent"]) == ["AptvPlayer-UA", "Default", "Option", "Default"])
+    #expect(channels.map(\.headers["Referer"]) == [nil, "https://example.com/", nil, nil])
+    #expect(channels[0].group == "央视频道")
+}
 @Test func txtGroupsAndDeduplication() throws {
     let text = "新闻,#genre#\n一台,https://example.com/1.m3u8\n一台,https://example.com/1.m3u8\n体育,#genre#\n二台,https://example.com/2.m3u8"
     let channels = try Playlist.parse(text, origin: base)
