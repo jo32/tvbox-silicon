@@ -513,10 +513,13 @@ struct AppMark: View {
     }
 }
 
-/// Decorative poster tiles: staggered columns in the icon's blues, fading into the canvas.
+/// Poster tiles in staggered columns, fading into the canvas: this week's trending covers from Discover, each fading in
+/// over its placeholder as it arrives. A tile with no cover (offline, or before the list answers) keeps its placeholder.
 private struct PosterWall: View {
-    private static let hues: [Color] = [Brand.cyan, Brand.indigo, Brand.teal, Brand.cyan.opacity(0.6)]
-    private static let symbols = ["film", "sparkles.tv", "theatermasks", "music.note.tv", "popcorn", "star"]
+    /// The covers, kept for the session so coming back to the page draws them without asking again.
+    @MainActor private static var loaded: [URL]?
+    @State private var posters = PosterWall.loaded ?? []
+
     var body: some View {
         GeometryReader { proxy in
             let spacing = proxy.size.width * 0.045
@@ -524,7 +527,10 @@ private struct PosterWall: View {
             HStack(alignment: .top, spacing: spacing) {
                 ForEach(0..<3, id: \.self) { column in
                     VStack(spacing: spacing) {
-                        ForEach(0..<4, id: \.self) { row in tile(column * 4 + row, width: width) }
+                        ForEach(0..<4, id: \.self) { row in
+                            let index = column * 4 + row
+                            PosterWallTile(index: index, width: width, poster: index < posters.count ? posters[index] : nil)
+                        }
                     }
                     .offset(y: column == 1 ? -width * 0.55 : column == 2 ? -width * 0.15 : 0)
                 }
@@ -535,9 +541,45 @@ private struct PosterWall: View {
             // An ellipse that reaches clear at the frame's edges, so no tile meets a hard clip.
             .mask { EllipticalGradient(stops: [.init(color: .black, location: 0), .init(color: .black.opacity(0.75), location: 0.45), .init(color: .clear, location: 1)], endRadiusFraction: 0.5) }
         }
+        .task {
+            guard Self.loaded == nil, let page = try? await TMDBCatalog.page(.trending), !Task.isCancelled else { return }
+            let covers = Array(page.items.compactMap(\.poster).prefix(12))
+            Self.loaded = covers
+            posters = covers
+        }
+    }
+}
+
+/// One tile of the wall: the placeholder, and the cover fading in over it once loaded.
+private struct PosterWallTile: View {
+    private static let hues: [Color] = [Brand.cyan, Brand.indigo, Brand.teal, Brand.cyan.opacity(0.6)]
+    private static let symbols = ["film", "sparkles.tv", "theatermasks", "music.note.tv", "popcorn", "star"]
+    let index: Int
+    let width: CGFloat
+    let poster: URL?
+    @State private var cover: CGImage?
+
+    var body: some View {
+        ZStack {
+            placeholder
+            if let cover {
+                Image(decorative: cover, scale: 1).resizable().scaledToFill()
+                    .frame(width: width, height: width * 1.5)
+                    .transition(.opacity)
+            }
+        }
+        .frame(width: width, height: width * 1.5)
+        .clipShape(RoundedRectangle(cornerRadius: width * 0.08, style: .continuous))
+        .task(id: poster) {
+            guard let poster else { cover = nil; return }
+            if let image = PosterPalette.cachedImage(poster) { cover = image; return }
+            guard let image = await PosterPalette.image(poster), !Task.isCancelled else { return }
+            // Down each column and across, rather than all at once.
+            withAnimation(.easeOut(duration: 0.6).delay(Double(index / 4) * 0.12 + Double(index % 4) * 0.08)) { cover = image }
+        }
     }
 
-    private func tile(_ index: Int, width: CGFloat) -> some View {
+    private var placeholder: some View {
         let hue = Self.hues[index % Self.hues.count]
         let lit = index % 3 != 1
         return RoundedRectangle(cornerRadius: width * 0.08, style: .continuous)
@@ -556,7 +598,6 @@ private struct PosterWall: View {
                 .foregroundStyle(.white.opacity(lit ? 0.35 : 0.12))
                 .padding(width * 0.09)
             }
-            .frame(width: width, height: width * 1.45)
     }
 }
 
