@@ -43,6 +43,8 @@ typedef struct {
     int colorTransfer, colorPrimaries;
     /// H.264 that x264 encoded with intra refresh: no keyframe a player can start at after the first.
     int intraRefresh;
+    /// The picture is interlaced: each frame two fields, a moment apart (broadcast 1080i).
+    int interlaced;
     /// Dolby Vision profile and level from the stream's configuration record, -1 when it has none.
     int doviProfile, doviLevel, doviCompatibility;
     int sampleRate, channels;
@@ -79,6 +81,8 @@ typedef struct {
     int toneMap;
     /// The size converted video is made at; 0 keeps the source's.
     int width, height;
+    /// Non-zero: interlaced frames of converted video are deinterlaced first (`deinterlace`).
+    int deinterlace;
 } TVMTrack;
 
 void tvm_set_log(TVMLogFunction log);
