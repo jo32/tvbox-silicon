@@ -671,7 +671,7 @@ public struct CatalogClient: Sendable {
     private func playResolved(_ plan: PlaybackPlan, choice: PlaybackChoice) async throws -> Channel {
         let address = Self.unwrapPluginProxy(choice.address)
         if address.lowercased().hasPrefix("magnet:") { throw TVError.unsupported(L10n.text("This source returned a magnet link. Torrent playback is not supported.")) }
-        if Self.isPluginProxy(address) {
+        if Self.isPluginProxy(address), !Self.servesOwnProxy(address, catPaw: site.isCatPawOpen) {
             // A Bili JAR spider's proxy id: Yingxia's own Bilibili source plays the same video.
             if let id = Self.bilibiliProxyID(address), let bilibili = CloudSources.site(where: \.isBilibili) {
                 let channel = try await CatalogClient(site: bilibili, origin: CloudSources.address, http: http)
@@ -761,6 +761,15 @@ public struct CatalogClient: Sendable {
             if authority.hasPrefix(host + ":"), let port = Int(authority.dropFirst(host.count + 1)), (-1...65535).contains(port) { return true }
         }
         return false
+    }
+    /// A CatPawOpen bundle answers its own `/proxy?url=` on the port its Node server listens on, as it does its
+    /// `/m3u8-proxy?`, so that address plays as it is (#990). A spider's TVBox proxy (port -1, or one the app doesn't
+    /// run) still can't.
+    static func servesOwnProxy(_ address: String, catPaw: Bool) -> Bool {
+        guard catPaw, isPluginProxy(address), let marker = address.range(of: "/proxy?") else { return false }
+        let authority = address[..<marker.lowerBound]
+        guard let colon = authority.lastIndex(of: ":"), let port = Int(authority[authority.index(after: colon)...]) else { return false }
+        return port > 0
     }
     /// The query of a plugin proxy address, split by hand. Plugins don't always percent-encode the wrapped
     /// address (spaces, CJK, `|` headers, a bare `%`), and `URLComponents.percentEncodedQuery` traps on those.

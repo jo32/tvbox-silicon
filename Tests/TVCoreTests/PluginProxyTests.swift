@@ -26,3 +26,16 @@ import Testing
     #expect(CatalogClient.bilibiliProxyID("http://127.0.0.1:9978/proxy?do=bili&aid=1&cid=2&ep=3&title=第 1 集") == "1_2_3")
     #expect(CatalogClient.bilibiliProxyID("http://127.0.0.1:9978/proxy?do=bili&aid=1&cid=2%") == nil)
 }
+
+/// #990: a CatPawOpen bundle's play result points at its own `/proxy?url=` (a video kept on an image or photo CDN), which
+/// its Node server answers like its `/m3u8-proxy?`. Only a JAR or script spider's TVBox proxy is one the app can't play.
+@Test func aCatPawBundlesOwnProxyPlaysAsItIs() {
+    let own = "http://127.0.0.1:59371/proxy?url=https%3A%2F%2Fexample.com%2Fv.mp4&sig=abc"
+    #expect(CatalogClient.servesOwnProxy(own, catPaw: true))
+    #expect(CatalogClient.unwrapPluginProxy(own) == own)
+    #expect(!CatalogClient.servesOwnProxy(own, catPaw: false))
+    for other in ["http://127.0.0.1:-1/proxy?do=py&url=x", "http://127.0.0.1/proxy?url=x", "http://127.0.0.1:0/proxy?url=x",
+                  "https://example.com:8080/proxy?url=x", "http://127.0.0.1:59371/m3u8-proxy?url=x"] {
+        #expect(!CatalogClient.servesOwnProxy(other, catPaw: true))
+    }
+}
