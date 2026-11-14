@@ -1335,10 +1335,19 @@ extension View {
         return false
     }
     /// The continued-processing task ended: the queue emptied, or the system (or the person, from its progress)
-    /// stopped it. Off screen, stop as the grace period's end would.
+    /// stopped it. Off screen, stop as the grace period's end would; the downloads carry on when the app returns.
+    /// Stopped while the app is in front (or just under Notification Center), it can only be the person pressing
+    /// Stop: pause everything, as Pause All does, so the next download or the return to the app doesn't start
+    /// them again (#947).
     static func continuedEnded(expired: Bool) {
-        guard UIApplication.shared.applicationState != .active else { return }
-        if expired { suspend() }
+        let state = UIApplication.shared.applicationState
+        if expired, state != .background {
+            Diagnostics.shared.record(.info, "download", "continued task stopped in front: pausing downloads")
+            DownloadLibrary.shared.pauseAll()
+            MusicDownloadLibrary.shared.pauseAll()
+        }
+        guard state != .active else { return }
+        if expired, state == .background { suspend() }
         end()
     }
     #endif

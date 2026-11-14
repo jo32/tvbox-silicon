@@ -82,7 +82,9 @@ public struct DanmakuResolver: Sendable {
     public func forgetUnreachableServers() {
         for server in [dmkuServer] + (backupServer.map { [$0] } ?? []) { cache.remove(Self.pauseKey(server), kind: .lookup) }
     }
-    public func remember(_ mapping: DanmakuMapping, for context: PlaybackHistoryContext, ticket: MediaCache.Ticket) {
+    /// `picked`: the viewer chose this show by hand, so its next episodes follow it even with automatic matching off
+    /// (`hasPick`, #963).
+    public func remember(_ mapping: DanmakuMapping, for context: PlaybackHistoryContext, ticket: MediaCache.Ticket, picked: Bool = false) {
         // Older callers supplied a plain dandan mapping. Mark it as a custom catalog mapping so the
         // conservative episode matcher is also used for hand-selected custom tracks.
         let mapping = isCustomServer && mapping.source == nil ? DanmakuMapping(provider: mapping.provider,
@@ -93,7 +95,12 @@ public struct DanmakuResolver: Sendable {
         if let data = try? JSONEncoder().encode(mappings) {
             cache.store(data, for: key, kind: .lookup, ttl: 30 * 86400, ticket: ticket)
         }
+        if picked { cache.store(Data([1]), for: pickKey(context), kind: .lookup, ttl: 30 * 86400, ticket: ticket) }
     }
+    /// Whether the viewer matched this show (title, year, service) by hand.
+    public func hasPick(for context: PlaybackHistoryContext) -> Bool { cache.data(for: pickKey(context), kind: .lookup) != nil }
+    public func forgetPick(_ context: PlaybackHistoryContext) { cache.remove(pickKey(context), kind: .lookup) }
+    private func pickKey(_ context: PlaybackHistoryContext) -> String { "danmaku-pick|" + lookupKey(context) }
     private func keep(_ mapping: DanmakuMapping?, in mappings: inout [DanmakuMapping], key: String, ticket: MediaCache.Ticket) {
         guard let mapping, !mapping.tracks.isEmpty else { return }
         mappings.removeAll { $0.provider == mapping.provider }; mappings.insert(mapping, at: 0)
@@ -106,8 +113,11 @@ public struct DanmakuResolver: Sendable {
         return result
     }
     /// `first` is asked before the comment servers: the source's own comments (a CatPawOpen bundle's, #506), or nil.
+    /// `savedOnly`: automatic matching is off, so only a show matched before (by hand, `hasPick`) is followed and
+    /// nothing is searched.
     public func resolve(_ context: PlaybackHistoryContext, ticket: MediaCache.Ticket? = nil,
-                        first: (@Sendable (PlaybackHistoryContext) async -> AutomaticDanmakuResult?)? = nil) async throws -> AutomaticDanmakuResult {
+                        first: (@Sendable (PlaybackHistoryContext) async -> AutomaticDanmakuResult?)? = nil,
+                        savedOnly: Bool = false) async throws -> AutomaticDanmakuResult {
         let ticket = ticket ?? cache.ticket()
         try Task.checkCancellation()
         let key = cacheKey(context)
@@ -117,9 +127,9 @@ public struct DanmakuResolver: Sendable {
             result.cached = true; return result
         }
         // A custom service is an explicit routing choice, including when it returns nothing or fails.
-        if isCustomServer { return try await resolveCustom(context, ticket: ticket) }
+        if isCustomServer { return try await resolveCustom(context, ticket: ticket, savedOnly: savedOnly) }
         let preferredSource = officialPreference(context)
-        if preferredSource == .automatic, let first, let result = await first(context), !result.comments.isEmpty {
+        if !savedOnly, preferredSource == .automatic, let first, let result = await first(context), !result.comments.isEmpty {
             try Task.checkCancellation()
             return keep(result, context: context, ticket: ticket)
         }
@@ -142,6 +152,7 @@ public struct DanmakuResolver: Sendable {
             keep(outcome.mapping, in: &mappings, key: lookupKey, ticket: ticket)
             if let result = outcome.result, !result.comments.isEmpty { return keep(result, context: context, ticket: ticket) }
         }
+        if savedOnly { return AutomaticDanmakuResult(comments: [], track: "", source: "", state: "unmatched") }
         let found: AutomaticDanmakuResult? = try await withThrowingTaskGroup(of: Outcome.self) { group in
             if let page = context.officialPage.flatMap({ OfficialVideoPage.validated($0.absoluteString) }),
                preferredSource == .automatic || DanmakuProvider(source: CatalogDanmakuMatcher.episodeSource(title: "", url: page)) == preferredSource {
@@ -186,7 +197,7 @@ public struct DanmakuResolver: Sendable {
         }
         return result
     }
-    private func resolveCustom(_ context: PlaybackHistoryContext, ticket: MediaCache.Ticket) async throws -> AutomaticDanmakuResult {
+    private func resolveCustom(_ context: PlaybackHistoryContext, ticket: MediaCache.Ticket, savedOnly: Bool = false) async throws -> AutomaticDanmakuResult {
         guard !DandanplayPause.isPaused(dandanServer) else { return customNegative(context, state: "unavailable", ticket: ticket) }
         let key = lookupKey(context)
         var mappings = cache.data(for: key, kind: .lookup).flatMap { try? JSONDecoder().decode([DanmakuMapping].self, from: $0) } ?? []
@@ -196,7 +207,10 @@ public struct DanmakuResolver: Sendable {
         var mapping = saved
         do {
             let client = try CatalogDanmakuClient(address: dandanServer, transport: http, credentials: dandanCredentials)
-            if mapping == nil { mapping = try await customMapping(context, client: client) }
+            if mapping == nil {
+                if savedOnly { return AutomaticDanmakuResult(comments: [], track: "", source: "", state: "unmatched") }
+                mapping = try await customMapping(context, client: client)
+            }
             if let selected = mapping, let track = selected.track(for: context), let id = track.id {
                 let comments: [CatalogDanmakuComment]
                 do {

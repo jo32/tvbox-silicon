@@ -150,20 +150,24 @@ import UniformTypeIdentifiers
         let settings = Preferences.load()
         preferences = settings
         synchronizingPreferences = true; automatic = settings.automatic; synchronizingPreferences = false
-        guard let context, automatic, enabled, allowsAutomatic, comments.isEmpty,
-              !usesSourceComments || settings.overridesSource else { return }
+        guard let context, enabled, allowsAutomatic, comments.isEmpty else { return }
+        // A show matched by hand keeps that match for its next episodes, with automatic matching off or over the
+        // source's own comments too; then only the pick is followed and nothing is searched. Before, only the episode
+        // picked had comments (#963).
+        let searches = automatic && (!usesSourceComments || settings.overridesSource)
         let resolver = settings.resolver()
+        guard searches || resolver.hasPick(for: context) else { return }
         currentResolver = resolver
         let active = generation
         automaticState = "searching"
         automaticTask = Task { [weak self] in
             do {
-                let result = try await resolver.resolve(context, first: settings.overridesSource ? nil : CatPawDanmaku.comments)
+                let result = try await resolver.resolve(context, first: settings.overridesSource ? nil : CatPawDanmaku.comments, savedOnly: !searches)
                 try Task.checkCancellation()
-                guard let self, self.generation == active, self.enabled, self.automatic, Preferences.load() == settings else { return }
+                guard let self, self.generation == active, self.enabled, self.automatic || !searches, Preferences.load() == settings else { return }
                 self.comments = result.comments
                 self.track = result.track; self.source = result.source; self.fromCache = result.cached
-                self.manuallySelected = false; self.selectedOverridesSource = settings.overridesSource
+                self.manuallySelected = !searches; self.selectedOverridesSource = settings.overridesSource
                 self.offset = 0; self.revision = UUID(); self.automaticState = result.state
                 self.automaticTask = nil
             } catch {
@@ -223,7 +227,7 @@ import UniformTypeIdentifiers
             // a title already matched there. Saved under the platform instead, the next episode searched again.
             resolver.remember(DanmakuMapping(provider: "dandan", title: context.videoName, year: context.year,
                 tracks: siblings.map { DanmakuTrack(number: CatalogDanmakuMatcher.episodeNumber($0.title), title: $0.title, id: $0.id) }),
-                for: context, ticket: ticket)
+                for: context, ticket: ticket, picked: true)
         } else if let context = automaticContext, !siblings.isEmpty {
             let provider = DanmakuProvider(source: platform)
             let selectedTracks = siblings.filter { sibling in
@@ -234,14 +238,18 @@ import UniformTypeIdentifiers
                 title: context.videoName, year: context.year,
                 tracks: selectedTracks.map { DanmakuTrack(number: $0.episodeNumber ?? CatalogDanmakuMatcher.episodeNumber($0.title),
                     title: $0.title, page: $0.url, id: $0.id, source: $0.source) }, animeID: anime.id, source: platform),
-                for: context, ticket: ticket)
+                for: context, ticket: ticket, picked: true)
         }
         offset = 0; revision = UUID(); automaticState = comments.isEmpty ? "unmatched" : "loaded"; enabled = true
     }
 
     func clear(keepingContext: Bool = false) {
         cancelAutomatic()
-        if keepingContext, let context = automaticContext { (currentResolver ?? Preferences.load().resolver()).forget(context) }
+        if keepingContext, let context = automaticContext {
+            // Cleared by hand: the show's next episodes no longer follow the pick either.
+            let resolver = currentResolver ?? Preferences.load().resolver()
+            resolver.forget(context); resolver.forgetPick(context)
+        }
         if !keepingContext { automaticContext = nil; usesSourceComments = false; allowsAutomatic = true }
         resetComments()
     }

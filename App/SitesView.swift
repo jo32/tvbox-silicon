@@ -18,8 +18,11 @@ struct SitesView: View {
     /// choice can be shown. `prepared` keeps the reload to once per visit, not per pushed source.
     @State private var collapsed: Set<String>
     @State private var prepared = false
-    /// The fold as it was when a search began; restored when the search is cleared.
-    @State private var foldBeforeSearch: Set<String>?
+    /// Groups folded during the current search. A search opens every group; clearing it shows the page's own fold
+    /// again in the same update. Swapping `collapsed` in `onChange` drew one pass with every group open, hidden
+    /// sources included, before the fold came back: the page flickered or folded with cards ghosting over it (#935).
+    @State private var searchFold: Set<String> = []
+    private var folded: Set<String> { query.isEmpty ? collapsed : searchFold }
     @State private var arranging = false
     @State private var choosingHidden = false
     init(pick: ((Site) -> Void)? = nil, pickable: [Site] = [], picked: String? = nil) {
@@ -48,7 +51,7 @@ struct SitesView: View {
                         }
                         ForEach(groups) { group in
                             groupHeader(group)
-                            if !collapsed.contains(group.id) {
+                            if !folded.contains(group.id) {
                                 LazyVGrid(columns: Layout.cardColumns, spacing: Layout.cardSpacing) {
                                     ForEach(group.sites) { site in
                                         if let pick {
@@ -78,6 +81,8 @@ struct SitesView: View {
                         }
                         #endif
                     }.pageContainer()
+                    // Starting or clearing a search swaps the whole page at once: never as a fade.
+                    .transaction(value: query) { $0.animation = nil }
                 }
                 // Picking opens on the current choice rather than the top of a long page.
                 .defaultFocus($focusedSite, picked)
@@ -120,25 +125,21 @@ struct SitesView: View {
         .onChange(of: store.section) { _, new in
             if new != .sites { prepared = false }
         }
-        .onChange(of: query) { old, new in
-            if old.isEmpty && !new.isEmpty {
-                foldBeforeSearch = collapsed
-                collapsed = []
-            } else if !old.isEmpty && new.isEmpty, let saved = foldBeforeSearch {
-                collapsed = saved
-                foldBeforeSearch = nil
-            }
+        .onChange(of: query) { _, new in
+            if new.isEmpty { searchFold = [] }
         }
     }
 
     @ViewBuilder
     private func groupHeader(_ group: SourceGroup) -> some View {
-        let open = !collapsed.contains(group.id)
+        let open = !folded.contains(group.id)
         let header = Button {
             withAnimation(.snappy(duration: 0.3)) {
-                if open { collapsed.insert(group.id) } else { collapsed.remove(group.id) }
+                // A search opens every group for the moment; only the page's own fold is kept.
+                if !query.isEmpty {
+                    if open { searchFold.insert(group.id) } else { searchFold.remove(group.id) }
+                } else if open { collapsed.insert(group.id) } else { collapsed.remove(group.id) }
             }
-            // A search opens every group for the moment; only the page's own fold is kept.
             if pick == nil && query.isEmpty { UserDefaults.standard.set(collapsed.sorted(), forKey: Self.foldKey) }
         } label: {
             HStack(spacing: 8) {
@@ -174,7 +175,7 @@ struct SitesView: View {
     /// The page as the viewer last left it: every group open unless they folded it.
     private func applyDefaultFold() {
         collapsed = pick == nil ? Self.savedFold : []
-        foldBeforeSearch = nil
+        searchFold = []
     }
 }
 

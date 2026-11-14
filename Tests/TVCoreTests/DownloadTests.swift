@@ -110,6 +110,9 @@ import Testing
     library.pauseAll()
     #expect(library.items.allSatisfy { $0.status == .paused })
     #expect(library.isPaused)
+    // Coming back to the app wakes the queue; paused songs stay paused (#947).
+    library.wake()
+    #expect(library.items.allSatisfy { $0.status == .paused })
     // Still paused, and still grouped, when the app opens again.
     let reopened = MusicDownloadLibrary(root: root)
     #expect(reopened.items.allSatisfy { $0.status == .paused })
