@@ -839,6 +839,11 @@ enum PosterPalette {
     static func image(_ url: URL, headers: [String: String] = [:]) async -> CGImage? {
         try? await PosterLoader.shared.load(PosterResource(url: url, headers: headers)).image
     }
+
+    /// The cover if it is already decoded in memory, read at once, so a view made again can draw it in its first frame.
+    static func cachedImage(_ url: URL, headers: [String: String] = [:]) -> CGImage? {
+        PosterLoader.shared.cached(PosterResource(url: url, headers: headers))?.image
+    }
 }
 
 private final class PosterBitmap: @unchecked Sendable {
