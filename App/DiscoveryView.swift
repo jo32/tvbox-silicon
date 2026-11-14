@@ -307,7 +307,7 @@ struct GlobalSearchView: View {
                 .focusSection()
                 #endif
                 if model.busy {
-                    SearchActivityList(origin: config.origin, sources: model.activeSources, completed: model.completed, total: model.total, runStart: model.runStart,
+                    SearchActivityList(origin: config.origin, sources: model.activeSources, waiting: model.waitingSources, completed: model.completed, total: model.total, runStart: model.runStart,
                                        showsSources: showsActivity)
                         .transition(.opacity)
                 }
@@ -654,16 +654,23 @@ struct GlobalSearchView: View {
 private struct SearchActivityList: View {
     let origin: URL
     let sources: [SearchSourceActivity]
+    /// The sources still to be asked, next first; they fill the rows the running ones leave.
+    let waiting: [Site]
     let completed: Int
     let total: Int
     let runStart: (date: Date, completed: Int)?
     /// The progress bar always shows; the sources being searched fold behind the chevron.
     let showsSources: Bool
-    /// Keep the original compact list of at most five in-flight sources.
+    /// Five rows: the sources in flight, then the next ones in line. Each runtime asks at most four at a time, so
+    /// in flight alone there were often only four.
     private let limit = 5
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.5)) { timeline in
             let active = Array(sources.prefix(limit))
+            let next = Array(waiting.prefix(limit - active.count))
+            // The list keeps the height of all its rows until the search ends. A source that answers leaves its row a
+            // moment before the next one starts, and the chips and results under the list jumped up and back each time.
+            let blank = max(0, min(limit, total) - active.count - next.count)
             let snapshots = Dictionary(active.compactMap { item in
                 PluginPreparation.snapshot(site: item.site, origin: item.site.origin(or: origin)).map { (item.id, $0) }
             }, uniquingKeysWith: { first, _ in first })
@@ -701,13 +708,24 @@ private struct SearchActivityList: View {
                                     .gridColumnAlignment(.trailing)
                             }
                         }
+                        ForEach(next) { site in
+                            GridRow {
+                                Text(site.name).fontWeight(.semibold).lineLimit(1)
+                                Text(L10n.text("Waiting")).foregroundStyle(.tertiary).lineLimit(1)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Text(verbatim: "")
+                            }
+                        }
+                        ForEach(0..<blank, id: \.self) { _ in
+                            GridRow { Text(verbatim: " ").hidden() }
+                        }
                     }
                     .transition(.opacity)
                 }
             }
             .font(.subheadline)
             .accessibilityElement(children: .combine)
-            .animation(.smooth(duration: 0.25), value: active.map(\.id))
+            .animation(.smooth(duration: 0.25), value: active.map(\.id) + next.map(\.id))
         }
     }
     /// While searching, the plugin's "loading" stage is the search itself.

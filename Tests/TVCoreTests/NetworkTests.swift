@@ -505,3 +505,21 @@ private final class SearchActivityProtocol: URLProtocol, @unchecked Sendable {
     await task?.value
     #expect(model.activeSources.isEmpty && model.results.isEmpty)
 }
+
+@Test @MainActor func searchListsTheSourcesStillWaitingUntilTheyStart() async throws {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [SearchActivityProtocol.self]
+    let model = SearchModel(http: HTTPClient(session: URLSession(configuration: configuration)))
+    let sites = (1...6).map { #"{"key":"waiting-\#($0)","type":4,"api":"/api"}"# }.joined(separator: ",")
+    let config = try Subscription.parse(Data(#"{"sites":[\#(sites)]}"#.utf8), origin: URL(string: "https://waiting.example/sub.json")!)
+    model.search("waiting", config: config)
+    let task = model.task
+    for _ in 0..<100 where model.activeSources.count < 4 { try await Task.sleep(for: .milliseconds(20)) }
+    // Four at a time; the other two wait in line, and none is in both lists.
+    #expect(model.activeSources.count == 4)
+    #expect(model.waitingSources.count == 2)
+    #expect(Set(model.activeSources.map(\.id)).union(model.waitingSources.map(\.id)) == Set(config.sites.map(\.id)))
+    model.stop()
+    #expect(model.waitingSources.isEmpty && model.activeSources.isEmpty)
+    await task?.value
+}
