@@ -1065,8 +1065,11 @@ private struct SeekBar<Accessory: View>: View {
             .frame(height: Self.timeRow)
             .accessibilityHidden(true)
             ZStack(alignment: .leading) {
+                // The played part is an overlay, so it never sizes the bar: at the very end it is the bar's whole
+                // measured width, and as a child it held the bar (and the watch page around it) at the landscape
+                // width after leaving Full Screen (#1008).
                 Capsule().fill(.white.opacity(0.3)).frame(height: held ? 6 : 4)
-                Capsule().fill(.white).frame(width: max(0, x), height: held ? 6 : 4)
+                    .overlay(alignment: .leading) { Capsule().fill(.white).frame(width: max(0, x)) }
                 Circle().fill(.white)
                     .frame(width: held ? 24 : 14, height: held ? 24 : 14)
                     .shadow(color: .black.opacity(0.35), radius: 3)
