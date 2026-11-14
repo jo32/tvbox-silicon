@@ -1982,6 +1982,11 @@
 "%@ seconds" = "%@ 秒";
 "How long Search Online waits for the sources. Results show as each source answers, so a longer limit only waits longer for slow ones." = "線上搜尋等待各字幕來源的時間。每個來源一有結果就會顯示，所以時限加長只是多等較慢的來源。";
 
+/* Sources page (#973, #974, #994) */
+"Search for “%@”" = "搜尋「%@」";
+"Videos from every source" = "在全部點播源中找影片";
+"Move Left" = "左移";
+"Move Right" = "右移";
 /* Live program guide (#802) */
 "Program Guide" = "節目表";
 "Now On" = "正在播出";
