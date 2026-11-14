@@ -1981,3 +1981,9 @@
 "Search Time Limit" = "Search Time Limit";
 "%@ seconds" = "%@ seconds";
 "How long Search Online waits for the sources. Results show as each source answers, so a longer limit only waits longer for slow ones." = "How long Search Online waits for the sources. Results show as each source answers, so a longer limit only waits longer for slow ones.";
+
+/* Sources page (#973, #974, #994) */
+"Search for “%@”" = "Search for “%@”";
+"Videos from every source" = "Videos from every source";
+"Move Left" = "Move Left";
+"Move Right" = "Move Right";

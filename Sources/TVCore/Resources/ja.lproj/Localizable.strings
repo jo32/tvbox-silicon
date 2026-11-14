@@ -1981,3 +1981,9 @@
 "Search Time Limit" = "検索の制限時間";
 "%@ seconds" = "%@ 秒";
 "How long Search Online waits for the sources. Results show as each source answers, so a longer limit only waits longer for slow ones." = "オンライン検索が各ソースを待つ時間です。結果はソースが応答するたびに表示されるため、長くしても遅いソースを長く待つだけです。";
+
+/* Sources page (#973, #974, #994) */
+"Search for “%@”" = "「%@」を検索";
+"Videos from every source" = "すべてのソースから動画を探す";
+"Move Left" = "左へ移動";
+"Move Right" = "右へ移動";
