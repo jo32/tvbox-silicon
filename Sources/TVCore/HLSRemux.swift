@@ -140,6 +140,8 @@ public enum HLSRemux {
         var audio: String?, audioProfile = 0
         /// The source's sound is converted to AAC: Apple devices don't decode it (MP2, MP3, DTS, ...).
         var audioConverted = false
+        /// The source's picture is interlaced and made progressive (`RemuxPlan.Device.deinterlace`).
+        var deinterlaced = false
         var width = 0, height = 0, transfer = 0
         var bytes = 0
         var initializations: [Int: Data] = [:]
@@ -167,10 +169,17 @@ public enum HLSRemux {
             let codec = withUnsafeBytes(of: raw.codec) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
             if raw.kind == Int32(TVMKindVideo), video == nil, raw.width > 0, ["h264", "hevc"].contains(codec) {
                 let stream = RemuxSession.stream(raw, index: Int(index))
-                let track = RemuxPlan.videoTrack(stream, device: device)
+                var track = RemuxPlan.videoTrack(stream, device: device)
+                // Interlaced H.264 (CCTV's 1080i) is converted, deinterlaced, where AVPlayer would show it woven.
+                let deinterlace = device.deinterlace && stream.interlaced && codec == "h264" && track.mode == .copy
+                if deinterlace {
+                    track.mode = .h264
+                    track.bitRate = RemuxPlan.videoBitRate(stream, hevc: false)
+                }
                 video = TVMTrack(stream: index, mode: track.mode.rawValue, bitRate: Int32(track.bitRate), channels: 0,
                                  dolbyVision: Int32(TVMDolbyVisionDrop), toneMap: track.toneMap ? 1 : 0,
-                                 width: Int32(track.width), height: Int32(track.height))
+                                 width: Int32(track.width), height: Int32(track.height), deinterlace: deinterlace ? 1 : 0)
+                output.deinterlaced = deinterlace
                 output.video = codec
                 output.picture = track.mode == .copy ? codec : track.mode == .hevc ? "hevc" : "h264"
                 output.toneMapped = track.toneMap
@@ -181,7 +190,8 @@ public enum HLSRemux {
             } else if raw.kind == Int32(TVMKindAudio), audio == nil, raw.channels > 0 {
                 let copy = ["aac", "ac3", "eac3"].contains(codec)
                 audio = TVMTrack(stream: index, mode: Int32(copy ? TVMModeCopy : TVMModeAAC), bitRate: 192_000,
-                                 channels: raw.channels >= 6 ? 6 : raw.channels == 1 ? 1 : 2, dolbyVision: 0, toneMap: 0, width: 0, height: 0)
+                                 channels: raw.channels >= 6 ? 6 : raw.channels == 1 ? 1 : 2, dolbyVision: 0, toneMap: 0, width: 0, height: 0,
+                                 deinterlace: 0)
                 output.audio = copy ? codec : "aac"
                 output.audioConverted = !copy
                 output.audioProfile = copy ? Int(raw.profile) : 1
@@ -301,7 +311,7 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
         }
         let first: HLSRemux.Output
         do { first = try await session.output(probe) } catch { session.close(); throw error }
-        guard first.format == "mpegts", first.video == "hevc" || first.audioConverted else {
+        guard first.format == "mpegts", first.video == "hevc" || first.audioConverted || first.deinterlaced else {
             session.close()
             throw TVError.unsupported("nothing to repackage in \(first.format): \(first.video) \(first.audio ?? "-")")
         }
@@ -309,7 +319,7 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
         // AVPlayer first sees the playlist made so far: read again now, it would list segments that came out while
         // these were fetched, and start with one of them, not yet made (57 s to the picture from a slow server).
         session.lock.withLock { session.refreshed = Date() }
-        Diagnostics.shared.record(.info, "remux", "hls open host=\(address.host() ?? "-") segments=\(segments.count) live=\(live) audio=\(first.audio ?? "-") size=\(first.width)x\(first.height) transfer=\(first.transfer) hdr=\(device.hdr) sdr=\(first.toneMapped) discontinuities=\(segments.filter(\.discontinuity).count) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
+        Diagnostics.shared.record(.info, "remux", "hls open host=\(address.host() ?? "-") segments=\(segments.count) live=\(live) audio=\(first.audio ?? "-") size=\(first.width)x\(first.height) transfer=\(first.transfer) hdr=\(device.hdr) sdr=\(first.toneMapped) deinterlaced=\(first.deinterlaced) discontinuities=\(segments.filter(\.discontinuity).count) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
         return session
     }
 
