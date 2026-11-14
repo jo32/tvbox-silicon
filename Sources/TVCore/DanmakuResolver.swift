@@ -259,7 +259,7 @@ public struct DanmakuResolver: Sendable {
     private func customMapping(_ context: PlaybackHistoryContext, client: CatalogDanmakuClient,
                                selectedSource: DanmakuProvider? = nil) async throws -> DanmakuMapping? {
         let preference = selectedSource ?? preferredSource
-        let results = try await client.search(context.videoName, source: preference)
+        let results = try await client.search(CatalogDanmakuMatcher.withoutReleaseNotes(context.videoName), source: preference)
         let candidates = CatalogDanmakuMatcher.animeCandidates(title: context.videoName, year: context.year, source: preference, in: results)
         let groups = Dictionary(grouping: candidates, by: { $0.source })
         // Platform order is stable, but no order within a platform resolves an ambiguous edition.
@@ -398,7 +398,7 @@ public struct DanmakuResolver: Sendable {
             let client = try CatalogDanmakuClient(address: dandanServer, transport: http, credentials: dandanCredentials)
             var mapping = cached
             if mapping?.track(for: context) == nil {
-                guard let anime = CatalogDanmakuMatcher.anime(title: context.videoName, in: try await client.search(context.videoName)) else {
+                guard let anime = CatalogDanmakuMatcher.anime(title: context.videoName, in: try await client.search(CatalogDanmakuMatcher.withoutReleaseNotes(context.videoName))) else {
                     return Outcome(responded: true, unlisted: true)
                 }
                 let episodes = try await client.episodes(anime)

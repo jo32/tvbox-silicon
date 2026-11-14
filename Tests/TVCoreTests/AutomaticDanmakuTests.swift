@@ -264,6 +264,27 @@ private actor DanmakuTestTransport {
     #expect(await transport.count("api.dandanplay.net/api/v2/search/anime") == searches)
 }
 
+/// #953: a source that tags the edition ("小城良方（臻彩）") still finds the show on iQIYI, while a season or other
+/// note in brackets stays part of the title.
+@Test func officialMatchingLooksPastEditionNotesInTheTitle() throws {
+    #expect(CatalogDanmakuMatcher.withoutReleaseNotes("小城良方（臻彩）") == "小城良方")
+    #expect(CatalogDanmakuMatcher.withoutReleaseNotes("三体【4K 国语】(HDR)") == "三体")
+    #expect(CatalogDanmakuMatcher.withoutReleaseNotes("琅琊榜 [1080P 中字]") == "琅琊榜")
+    for kept in ["奔跑吧（第二季）", "测试剧(2023)", "（臻彩）", "名侦探柯南（剧场版）", "测试剧"] {
+        #expect(CatalogDanmakuMatcher.withoutReleaseNotes(kept) == kept)
+    }
+    #expect(CatalogDanmakuMatcher.titleMetadata("测试剧(2023)（蓝光）").title == "测试剧")
+    #expect(CatalogDanmakuMatcher.titleMetadata("测试剧(2023)（蓝光）").year == "2023")
+
+    var context = automaticContext()
+    context = PlaybackHistoryContext(origin: context.origin, sourceKey: context.sourceKey, sourceName: context.sourceName, videoID: context.videoID,
+        videoName: "测试剧（臻彩）", episodeID: "第1集", episodeName: "第1集", episodeFlag: "line")
+    let album: [String: Any] = ["title": "测试剧", "qipuId": "1", "year": ["value": "2025"],
+        "videos": [["number": "1", "title": "第1集", "pageUrl": "https://www.iqiyi.com/v_a.html"]]]
+    let mapping = try #require(OfficialDanmakuCatalog.parseIQiyi(["data": ["templates": [["albumInfo": album]]]], context: context))
+    #expect(mapping.track(for: context)?.page?.absoluteString == "https://www.iqiyi.com/v_a.html")
+}
+
 @Test func automaticMatchingOffFollowsAShowPickedByHandOnTheOfficialServer() async throws {
     let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }

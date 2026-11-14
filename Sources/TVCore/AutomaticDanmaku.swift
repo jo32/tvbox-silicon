@@ -104,7 +104,7 @@ public struct OfficialDanmakuCatalog: Sendable {
     public init(http: DanmakuHTTP = .init()) { self.http = http }
     public func iqiyi(_ context: PlaybackHistoryContext) async throws -> DanmakuMapping? {
         var url = URLComponents(string: "https://mesh.if.iqiyi.com/portal/lw/search/homePageV3")!
-        url.queryItems = ["key": context.videoName, "current_page": "1", "mode": "1", "source": "input", "pcv": "13.074.22699",
+        url.queryItems = ["key": CatalogDanmakuMatcher.withoutReleaseNotes(context.videoName), "current_page": "1", "mode": "1", "source": "input", "pcv": "13.074.22699",
             "version": "13.074.22699", "pageNum": "1", "pageSize": "25", "pu": "", "u": UUID().uuidString,
             "userVip": "0", "vipType": "-1", "osShortName": "win10"].map { URLQueryItem(name: $0.key, value: $0.value) }
         let root = try await http.json(url.url!, referer: "https://www.iqiyi.com/")
@@ -117,7 +117,8 @@ public struct OfficialDanmakuCatalog: Sendable {
             return item["intentAlbumInfos"] as? [[String: Any]] ?? []
         }
         let matches = albums.filter { album in
-            guard let title = album["title"] as? String, CatalogDanmakuMatcher.normalized(HTMLText.plain(title)) == CatalogDanmakuMatcher.normalized(context.videoName) else { return false }
+            guard let title = album["title"] as? String,
+                  CatalogDanmakuMatcher.normalized(HTMLText.plain(title)) == CatalogDanmakuMatcher.normalized(CatalogDanmakuMatcher.withoutReleaseNotes(context.videoName)) else { return false }
             let year = (album["year"] as? [String: Any])?["value"] as? String ?? album["superscript"] as? String
             return context.year == nil || year == context.year
         }
@@ -139,7 +140,7 @@ public struct OfficialDanmakuCatalog: Sendable {
     }
     public func tencent(_ context: PlaybackHistoryContext) async throws -> DanmakuMapping? {
         let endpoint = URL(string: "https://pbaccess.video.qq.com/trpc.videosearch.mobile_search.MultiTerminalSearch/MbSearch?vplatform=2")!
-        let payload: [String: Any] = ["version": "25071701", "clientType": 1, "query": context.videoName, "pagenum": 0,
+        let payload: [String: Any] = ["version": "25071701", "clientType": 1, "query": CatalogDanmakuMatcher.withoutReleaseNotes(context.videoName), "pagenum": 0,
             "pagesize": 30, "uuid": UUID().uuidString, "isPrefetch": true, "isneedQc": true,
             "extraInfo": ["multi_terminal_pc": "1", "themeType": "1", "sugRelatedIds": "{}", "appVersion": ""]]
         let root = try await http.json(endpoint, body: JSONSerialization.data(withJSONObject: payload), referer: "https://v.qq.com/")
@@ -149,7 +150,7 @@ public struct OfficialDanmakuCatalog: Sendable {
         var seen = Set<String>()
         let matches = items.filter { item in
             guard let info = item["videoInfo"] as? [String: Any], let title = info["title"] as? String,
-                  CatalogDanmakuMatcher.normalized(HTMLText.plain(title)) == CatalogDanmakuMatcher.normalized(context.videoName),
+                  CatalogDanmakuMatcher.normalized(HTMLText.plain(title)) == CatalogDanmakuMatcher.normalized(CatalogDanmakuMatcher.withoutReleaseNotes(context.videoName)),
                   (info["playFlag"] as? Int) != 2, let id = (item["doc"] as? [String: Any])?["id"] as? String,
                   id.range(of: #"^[a-zA-Z0-9]+$"#, options: .regularExpression) != nil else { return false }
             let year = (info["year"] as? NSNumber)?.stringValue ?? info["year"] as? String
