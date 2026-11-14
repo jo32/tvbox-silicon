@@ -59,6 +59,7 @@
 		2158BE026F2A22702C9A2890 /* PluginSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C5AB58ECA34E84E70A20906 /* PluginSignInView.swift */; };
 		224B543BAFC40C8B7BACF9A5 /* MusicNowPlayingPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D10D9BAFE11E31196C70422 /* MusicNowPlayingPanels.swift */; };
 		22F9E199DA029BC80E87C06B /* MusicMiniPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBED9BDC96E5249DBA0BFDB0 /* MusicMiniPlayer.swift */; };
+		2492B8A78FE5DE90D1389ACE /* AppIcons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5194EB255D269658DD7A81E3 /* AppIcons.xcassets */; };
 		24A10F4DDF5D0BC9B37A66DB /* Unicorn-LGPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 77D75493765469B6134467AE /* Unicorn-LGPL2.txt */; };
 		255C64CDFFBEE99EEEA11AA6 /* JNA-Apache2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 8320284C7FB9590C44BA7102 /* JNA-Apache2.txt */; };
 		26A1C218652FCEEE9FC60E0F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B442C75C212445F3786397ED /* SettingsView.swift */; };
@@ -80,6 +81,7 @@
 		2F46BE251F004B53430FD516 /* DateComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9644627CBD3EF1CE6A06E228 /* DateComparison.swift */; };
 		2F58769982B29FDB6BE2304C /* DiscoverTrailer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74376E0596FEAF3CE3FBE7C8 /* DiscoverTrailer.swift */; };
 		2F95C18CB44C1D8FFD03583F /* BilibiliMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A2914C1B5B5ABA5F4B25A7 /* BilibiliMark.swift */; };
+		2FBFF2917B5B05512E63C964 /* AppIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9D3CE0B68B0F030C83B0A18 /* AppIcons.swift */; };
 		2FC4E061F678727D6DB5BE10 /* NovelReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD3EB3627A26DB28A92F4EEF /* NovelReaderView.swift */; };
 		300BD932FDBD4DD407F37374 /* LiveRoomsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675EA4CF000337C94DF5B1D3 /* LiveRoomsView.swift */; };
 		308A38681AA7812EF6DC4DFE /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 335A7E05458DD9DA9AA04125 /* InfoPlist.strings */; };
@@ -251,6 +253,7 @@
 		99DDB54D60A36E748D5E8C73 /* CacheSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4EB0D74F8DB73E33CC129F8 /* CacheSettingsView.swift */; };
 		9A75F15C645F052034EA6926 /* PluginSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C5AB58ECA34E84E70A20906 /* PluginSignInView.swift */; };
 		9AD1AE51475719ED2DE59664 /* libffi.txt in Resources */ = {isa = PBXBuildFile; fileRef = 06D9469858E5C5A118DED875 /* libffi.txt */; };
+		9CB04426B553A005BE74B1B8 /* AppIcons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5194EB255D269658DD7A81E3 /* AppIcons.xcassets */; };
 		9D695241F4A54C5335B16668 /* DiscoverTVLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDA3D261D268813DF5C90B82 /* DiscoverTVLayout.swift */; };
 		9DFF07E1B415DEBA91C79373 /* SubtitleTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13947E20489465F172C8B5B7 /* SubtitleTranslator.swift */; };
 		9EA22FB689805BA07AB44C4C /* MangaReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C41063DF832120F89C7509A /* MangaReaderView.swift */; };
@@ -271,6 +274,7 @@
 		B02B784DE4DDF64B05C8FA0F /* MusicRemoteControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E59EDBC7BE62078557E781 /* MusicRemoteControl.swift */; };
 		B03711CE7478DB53B6591F83 /* DiscoverTrailer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74376E0596FEAF3CE3FBE7C8 /* DiscoverTrailer.swift */; };
 		B0AA965C1DB5AA7CF03E9415 /* SitesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75124CC2471CF95C1FFB168A /* SitesView.swift */; };
+		B13EACE55DE94A531B1A4F60 /* AppIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9D3CE0B68B0F030C83B0A18 /* AppIcons.swift */; };
 		B19F7759D04CE58A64304EF8 /* WebSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367AD12D73554C3C3667315D /* WebSignInView.swift */; };
 		B2DB0FA87761427C0C95FE91 /* MusicPlaybackSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7F15799E2A2FB8B88DCF8E4 /* MusicPlaybackSession.swift */; };
 		B351A3B692D2C43212B5F65F /* DownloadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B45CB8261D922949ADBDBE15 /* DownloadsView.swift */; };
@@ -333,6 +337,7 @@
 		DA8C1C5A565A05C1E3370C26 /* NovelTypesetter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11C204B56A5D9FB9E63F4671 /* NovelTypesetter.swift */; };
 		DB55B4EA2085691230ACCE09 /* Capstone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 08B7C43C763200E67A22E365 /* Capstone-LLVM.txt */; };
 		DBC3CE787002095C1BA56C84 /* BilibiliCastController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B1CEF969E4F3D3301A8D61 /* BilibiliCastController.swift */; };
+		DBC8741A78FEBA10C325D08A /* AppIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9D3CE0B68B0F030C83B0A18 /* AppIcons.swift */; };
 		DC9FE649E0C2DA0F156FD876 /* BilibiliViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57363D217E83F0E69B2DF678 /* BilibiliViews.swift */; };
 		DCA11A29757C300445BFA5C4 /* NovelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 597A8F41A0CB8104B10C12EC /* NovelStore.swift */; };
 		DCDBDF4DC20083178A7B5778 /* WatchNowPhone.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70E10B1B4ED09D544D6F679 /* WatchNowPhone.swift */; };
@@ -435,6 +440,7 @@
 		4D5F41819EAA3AFE7BD6E5AD /* WebSniffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSniffer.swift; sourceTree = "<group>"; };
 		4EF42E1957EFE569C0D2CF7D /* OpenJDK-assembly-exception.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OpenJDK-assembly-exception.txt"; sourceTree = "<group>"; };
 		51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverPersonView.swift; sourceTree = "<group>"; };
+		5194EB255D269658DD7A81E3 /* AppIcons.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AppIcons.xcassets; sourceTree = "<group>"; };
 		52B784080CDE6CF171AEA5E7 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		559683A9A4BDFA11A4A9FE67 /* FeedbackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackView.swift; sourceTree = "<group>"; };
 		57363D217E83F0E69B2DF678 /* BilibiliViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BilibiliViews.swift; sourceTree = "<group>"; };
@@ -488,6 +494,7 @@
 		A74141D324E35BE13394BC0C /* NovelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelView.swift; sourceTree = "<group>"; };
 		A90392B70C28DA6CC7497B9F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetailAurora.swift; sourceTree = "<group>"; };
+		A9D3CE0B68B0F030C83B0A18 /* AppIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIcons.swift; sourceTree = "<group>"; };
 		AB076E674CF0D07EFFAE17DA /* WatchNowTV.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchNowTV.swift; sourceTree = "<group>"; };
 		AB7347843C885A97DFE397DD /* DouyinAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DouyinAccountView.swift; sourceTree = "<group>"; };
 		ADB3063A14E368A71892DCEE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -612,6 +619,7 @@
 			isa = PBXGroup;
 			children = (
 				F43A8E3DBB135075D0CF9D44 /* Announcements.swift */,
+				A9D3CE0B68B0F030C83B0A18 /* AppIcons.swift */,
 				A0E8559808CF7D11225EB30B /* Assets.xcassets */,
 				B684AAD2C1CD8AC3699FB446 /* BilibiliAccountView.swift */,
 				D7B1CEF969E4F3D3301A8D61 /* BilibiliCastController.swift */,
@@ -730,6 +738,7 @@
 				0558AED26E6028C2881DD044 /* PythonHost */,
 				BB24E05B7991A6EC8248BB34 /* ScriptHost */,
 				42F85A68BE50D8E117754B11 /* App */,
+				B23B41B6B40377B09DE2B297 /* Config */,
 				F361880C14567AA8C2E4DA50 /* iOS */,
 				1D59E68466D22F2A478A3347 /* macOS */,
 				3481683B30DDE3C81FFF2FF1 /* Native */,
@@ -756,6 +765,14 @@
 				FB8C8A2729B74B279EE60736 /* TVCore */,
 			);
 			path = Packages;
+			sourceTree = "<group>";
+		};
+		B23B41B6B40377B09DE2B297 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				5194EB255D269658DD7A81E3 /* AppIcons.xcassets */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 		D9AC68A53354DF07C59EC817 /* RuntimeLicenses */ = {
@@ -954,6 +971,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9CB04426B553A005BE74B1B8 /* AppIcons.xcassets in Resources */,
 				D6CA2441FEC9F02492410BFB /* Assets.xcassets in Resources */,
 				A149AE9D183C5FB64D411761 /* Assets.xcassets in Resources */,
 				95638C5F64B74B017FAB3FD7 /* Capstone-LLVM.txt in Resources */,
@@ -982,6 +1000,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2492B8A78FE5DE90D1389ACE /* AppIcons.xcassets in Resources */,
 				912D01F4DF378FF63945C13D /* Assets.xcassets in Resources */,
 				8253F7BDC07638BD6F654962 /* Assets.xcassets in Resources */,
 				FF51906A6F86833239C53A33 /* Capstone-LLVM.txt in Resources */,
@@ -1208,6 +1227,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				8A685170BCEDE3AE50C538DA /* Announcements.swift in Sources */,
+				B13EACE55DE94A531B1A4F60 /* AppIcons.swift in Sources */,
 				0BAEA44063C146779B061BB1 /* ApplePython.c in Sources */,
 				36506AEA4D6F2E1541C1BCD1 /* AppleRuntime.m in Sources */,
 				F2F68C26F3FB2279B102CF52 /* BilibiliAccountView.swift in Sources */,
@@ -1323,6 +1343,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D5E6CDAD56F3272FD731DBDE /* Announcements.swift in Sources */,
+				DBC8741A78FEBA10C325D08A /* AppIcons.swift in Sources */,
 				6A12E8A471B33DA5B0089D5A /* BilibiliAccountView.swift in Sources */,
 				DBC3CE787002095C1BA56C84 /* BilibiliCastController.swift in Sources */,
 				2F95C18CB44C1D8FFD03583F /* BilibiliMark.swift in Sources */,
@@ -1436,6 +1457,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D54D6BFE675267FF2D16FC49 /* Announcements.swift in Sources */,
+				2FBFF2917B5B05512E63C964 /* AppIcons.swift in Sources */,
 				B7C3291A656E2548E80F1E4B /* ApplePython.c in Sources */,
 				FD9721B84A06B25F362AF291 /* AppleRuntime.m in Sources */,
 				197B66B980AC69849F199D41 /* BilibiliAccountView.swift in Sources */,
@@ -1657,6 +1679,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-Classic AppIcon-Porcelain AppIcon-Obsidian AppIcon-Azure AppIcon-Daybreak AppIcon-Iris AppIcon-Lagoon AppIcon-RoseQuartz AppIcon-Citrus AppIcon-Cosmic";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "$(ICLOUD_ENTITLEMENTS)";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -1703,6 +1726,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-Classic AppIcon-Porcelain AppIcon-Obsidian AppIcon-Azure AppIcon-Daybreak AppIcon-Iris AppIcon-Lagoon AppIcon-RoseQuartz AppIcon-Citrus AppIcon-Cosmic";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "$(ICLOUD_ENTITLEMENTS)";
 				CODE_SIGN_IDENTITY = "iPhone Developer";

@@ -1992,3 +1992,24 @@
 "Now On" = "Now On";
 "Coming Up" = "Coming Up";
 "An XMLTV file (.xml or .xml.gz), or an address with {name} for each channel. Leave it empty to use the playlist's own guide." = "An XMLTV file (.xml or .xml.gz), or an address with {name} for each channel. Leave it empty to use the playlist's own guide.";
+
+/* Settings › App Icon */
+"App Icon" = "App Icon";
+"Aurora" = "Aurora";
+"Classic" = "Classic";
+"Porcelain" = "Porcelain";
+"Obsidian" = "Obsidian";
+"Azure" = "Azure";
+"Daybreak" = "Daybreak";
+"Iris" = "Iris";
+"Lagoon" = "Lagoon";
+"Rose Quartz" = "Rose Quartz";
+"Citrus" = "Citrus";
+"Cosmic" = "Cosmic";
+"Couldn't change the app icon: %@" = "Couldn't change the app icon: %@";
+"Couldn't open that picture." = "Couldn't open that picture.";
+"A square picture works best. One with see-through corners, such as an icon made for the Mac, shows as it is." = "A square picture works best. One with see-through corners, such as an icon made for the Mac, shows as it is.";
+"Choose Picture…" = "Choose Picture…";
+"Remove Custom Picture" = "Remove Custom Picture";
+"The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Aurora." = "The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Aurora.";
+"The icon on your Home Screen. The system confirms the change with a short message." = "The icon on your Home Screen. The system confirms the change with a short message.";

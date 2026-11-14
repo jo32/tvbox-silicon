@@ -72,6 +72,10 @@ import TVCore
                 #if os(tvOS) || os(macOS)
                 .task { PlayOnController.shared.start(store) }
                 #endif
+                #if os(macOS)
+                // The Dock icon picked in Settings › App Icon; the bundle's own shows until here.
+                .task { AppIcons.shared.apply() }
+                #endif
                 #if os(iOS)
                 // Both links carry the app's one scheme, and only the action's host tells them apart.
                 .onOpenURL { url in

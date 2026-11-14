@@ -502,14 +502,21 @@ private struct HomeFavoriteCard: View {
     }
 }
 
-/// The app icon artwork, masked like a home-screen icon.
+/// The app icon artwork, masked like a home-screen icon: on iPhone, iPad and Mac the one picked in Settings › App Icon.
 struct AppMark: View {
     var size: CGFloat
     var body: some View {
-        Image("YingxiaLogo").resizable().interpolation(.high).scaledToFill()
+        artwork.resizable().interpolation(.high).scaledToFill()
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
             .shadow(color: Color(red: 0.1, green: 0.55, blue: 1).opacity(0.35), radius: size * 0.22, y: size * 0.06)
+    }
+    private var artwork: Image {
+        #if os(tvOS)
+        Image("YingxiaLogo")
+        #else
+        AppIcons.shared.artwork
+        #endif
     }
 }
 
