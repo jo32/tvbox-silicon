@@ -1992,3 +1992,24 @@
 "Now On" = "正在播出";
 "Coming Up" = "即將播出";
 "An XMLTV file (.xml or .xml.gz), or an address with {name} for each channel. Leave it empty to use the playlist's own guide." = "XMLTV 檔案（.xml 或 .xml.gz），或帶 {name} 的按頻道查詢網址。留空則使用直播源內建的節目表。";
+
+/* Settings › App Icon */
+"App Icon" = "App 圖像";
+"Aurora" = "極光";
+"Classic" = "經典";
+"Porcelain" = "白瓷";
+"Obsidian" = "黑曜石";
+"Azure" = "蔚藍";
+"Daybreak" = "破曉";
+"Iris" = "鳶尾";
+"Lagoon" = "瀉湖";
+"Rose Quartz" = "玫瑰石英";
+"Citrus" = "柑橘";
+"Cosmic" = "宇宙";
+"Couldn't change the app icon: %@" = "無法更換 App 圖像：%@";
+"Couldn't open that picture." = "無法打開這張圖片。";
+"A square picture works best. One with see-through corners, such as an icon made for the Mac, shows as it is." = "方形圖片效果最好。四角透明的圖片（例如為 Mac 製作的圖像）會按原樣顯示。";
+"Choose Picture…" = "選擇圖片…";
+"Remove Custom Picture" = "移除自訂圖片";
+"The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Aurora." = "映匣開啟時，Dock 顯示你選的圖像；在 Finder 等其他地方仍是「極光」。";
+"The icon on your Home Screen. The system confirms the change with a short message." = "主畫面上的圖像。更換後，系統會顯示一則簡短提示。";

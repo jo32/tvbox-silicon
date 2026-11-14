@@ -1,5 +1,5 @@
-// Renders the dark and tinted iOS app icons from the light one.
-// Usage: swift Design/make-ios-icon.swift Config/iOS/Assets.xcassets/AppIcon.appiconset
+// Renders the dark and tinted iOS app icons from the light one, for the Classic icon (the app's own before Aurora).
+// Usage: swift Design/make-ios-icon.swift Config/iOS/Assets.xcassets/AppIcon-Classic.appiconset
 import AppKit
 import CoreGraphics
 

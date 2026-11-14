@@ -569,6 +569,10 @@ struct FormSettingsView: View {
             // deeper, so this page stays a short list of places.
             Section {
                 FormLink(symbol: AppSection.home.icon, tint: Brand.cyan, title: L10n.text("Watch Now")) { WatchNowSettingsView() }
+                if AppIcons.isAvailable {
+                    FormLink(symbol: "paintpalette.fill", tint: .pink, title: L10n.text("App Icon"), value: AppIcons.shared.title) { AppIconSettingsView() }
+                        .accessibilityIdentifier("settings.appIcon")
+                }
                 FormLink(symbol: "slider.horizontal.below.rectangle", tint: .orange, title: L10n.text("Playback")) { PlaybackSettingsView() }
                 FormLink(symbol: "play.fill", tint: Brand.indigo, title: L10n.text("Play a URL")) { PlayURLView() }
                 EditTabBarRow()
@@ -580,6 +584,10 @@ struct FormSettingsView: View {
             #else
             Section {
                 FormLink(symbol: AppSection.home.icon, tint: Brand.cyan, title: L10n.text("Watch Now")) { WatchNowSettingsView() }
+                if AppIcons.isAvailable {
+                    FormLink(symbol: "paintpalette.fill", tint: .pink, title: L10n.text("App Icon"), value: AppIcons.shared.title) { AppIconSettingsView() }
+                        .accessibilityIdentifier("settings.appIcon")
+                }
                 // iPhone and iPad list the app's language in the Settings app; on the Mac it is hidden deep in System
                 // Settings, so it is picked here.
                 Picker(selection: $language) {
