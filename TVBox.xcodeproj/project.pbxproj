@@ -72,6 +72,7 @@
 		2A9680486C1F040EA193F12E /* MusicTVScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66DF697EACE4307031398E5A /* MusicTVScreen.swift */; };
 		2B263C305CDC1687A050CCBC /* DownloadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B45CB8261D922949ADBDBE15 /* DownloadsView.swift */; };
 		2C6D239842DA86D6B4908569 /* MangaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FF91FA9A33437C335253F10 /* MangaView.swift */; };
+		2D5B8A96BCE9BA50EC670157 /* GatherMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90F5A2CC425C9574421FAE57 /* GatherMark.swift */; };
 		2D5C517BA45AA3ACE1C53D73 /* DiscoverArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E644254088B8C9E61B8363D /* DiscoverArtwork.swift */; };
 		2E2372AA323482FCF4B01156 /* LiveGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72830F1F2EF52362002EBA43 /* LiveGuide.swift */; };
 		2EF2744DCA81AD6098398028 /* Keystone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 3A398E8AF0C7E4C94787F4B3 /* Keystone-LLVM.txt */; };
@@ -136,6 +137,7 @@
 		522603702A50B36D66B9470E /* Keystone-GPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 084C8344E2997DB3ED8FE974 /* Keystone-GPL2.txt */; };
 		525911655642125513C947A1 /* DiscoverCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6941C03B313E9FC30883FFE /* DiscoverCalendarView.swift */; };
 		5389383E76A0D20F8A86317A /* DateComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9644627CBD3EF1CE6A06E228 /* DateComparison.swift */; };
+		538A2EE66BFFC50E104AEFC4 /* GatherMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90F5A2CC425C9574421FAE57 /* GatherMark.swift */; };
 		53F697A2DD9E8D5443E43646 /* SitesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75124CC2471CF95C1FFB168A /* SitesView.swift */; };
 		545262EEE6798D31D5522FF5 /* MangaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FF91FA9A33437C335253F10 /* MangaView.swift */; };
 		545F29F3323EB776FED1A94E /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31D1816B8ED53D49478FD843 /* MoreView.swift */; };
@@ -197,6 +199,7 @@
 		74CAE612DB09FB67343FE8B4 /* MobilePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08D7BF6713A8519BEED17EE3 /* MobilePlayer.swift */; };
 		75327F454262A1854A16C462 /* WebSniffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D5F41819EAA3AFE7BD6E5AD /* WebSniffer.swift */; };
 		762AAE7DEDF6675A62474B19 /* CatalogPlaybackActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46C4D3FABE1C6E7A7B63BA62 /* CatalogPlaybackActions.swift */; };
+		76E61A654D2CB475711A69A6 /* GatherMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90F5A2CC425C9574421FAE57 /* GatherMark.swift */; };
 		78CE336AE6714726DFDFDB43 /* CatalogPlaybackActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46C4D3FABE1C6E7A7B63BA62 /* CatalogPlaybackActions.swift */; };
 		7BD36EB4555214FD392DAFEE /* MangaSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E5BAF6D854E7CE5DA362D0 /* MangaSourcesView.swift */; };
 		7C7B124A35FE1D0AA83DCE0B /* MusicMacBrowse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D442D4FB2D2EB656FBBCB2C /* MusicMacBrowse.swift */; };
@@ -469,6 +472,7 @@
 		8CB1FA4BB4990588B428781E /* PlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerView.swift; sourceTree = "<group>"; };
 		901EDEF85B9BA1B92932FEC1 /* LivePluginsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePluginsView.swift; sourceTree = "<group>"; };
 		90D706229ED242AE96AE52F8 /* Updates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Updates.swift; sourceTree = "<group>"; };
+		90F5A2CC425C9574421FAE57 /* GatherMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatherMark.swift; sourceTree = "<group>"; };
 		91355F9A371572D91388ED36 /* DanmakuSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DanmakuSettingsView.swift; sourceTree = "<group>"; };
 		9644627CBD3EF1CE6A06E228 /* DateComparison.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateComparison.swift; sourceTree = "<group>"; };
 		995F5F0DB35FE66B4F90B4FF /* unidbg.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = unidbg.txt; sourceTree = "<group>"; };
@@ -643,6 +647,7 @@
 				75B036EC33AB3F0991E78CDD /* ExternalSubtitles.swift */,
 				9BD8F5818C392424F43FF0C9 /* FavoriteControls.swift */,
 				559683A9A4BDFA11A4A9FE67 /* FeedbackView.swift */,
+				90F5A2CC425C9574421FAE57 /* GatherMark.swift */,
 				739A64FB51780D4314D2DDF8 /* GlassKit.swift */,
 				B44CBA0E5BBD1D129D5D64E3 /* HLSProxy.swift */,
 				9B7E929CDDC1F085C6B55693 /* HomeView.swift */,
@@ -1239,6 +1244,7 @@
 				BB014638AF8BB6A44F1C58FA /* ExternalSubtitles.swift in Sources */,
 				D4A131B02DE0A206E18B4F0A /* FavoriteControls.swift in Sources */,
 				FBE0D58826319D7544827004 /* FeedbackView.swift in Sources */,
+				76E61A654D2CB475711A69A6 /* GatherMark.swift in Sources */,
 				1050D617A22F09CD0A01DE66 /* GlassKit.swift in Sources */,
 				34349D95E4EC0176C10862E2 /* HLSProxy.swift in Sources */,
 				1B6DFFAF679C5BAD70F09875 /* HomeView.swift in Sources */,
@@ -1351,6 +1357,7 @@
 				96FE538997506DEE3A88A64D /* ExternalSubtitles.swift in Sources */,
 				E0B7524BAA3500D6675442D7 /* FavoriteControls.swift in Sources */,
 				EE69AE0800A8DAB7450170D3 /* FeedbackView.swift in Sources */,
+				2D5B8A96BCE9BA50EC670157 /* GatherMark.swift in Sources */,
 				F3B63B43988E72A87677A7AC /* GlassKit.swift in Sources */,
 				13AB1C878E7990BF8FB16849 /* HLSProxy.swift in Sources */,
 				14E05DC952FB2705E645EAE6 /* HomeView.swift in Sources */,
@@ -1465,6 +1472,7 @@
 				4EAAD9E59129B744D0008135 /* ExternalSubtitles.swift in Sources */,
 				4FDAA1091EFC2C8B0EA634C7 /* FavoriteControls.swift in Sources */,
 				67E6A7CC3D496FB46C963AC7 /* FeedbackView.swift in Sources */,
+				538A2EE66BFFC50E104AEFC4 /* GatherMark.swift in Sources */,
 				338825790412D642115F2BD3 /* GlassKit.swift in Sources */,
 				D1BC31CCC2FCC4A6AB834BD5 /* HLSProxy.swift in Sources */,
 				6012B7CF185E20A26CC68CD0 /* HomeView.swift in Sources */,
