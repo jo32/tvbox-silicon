@@ -52,6 +52,7 @@ struct PlayerChannelsSheet: View {
     var body: some View {
         NavigationStack {
             content
+                .environment(store.guide(for: playing))
                 .navigationTitle(store.lineup(for: playing)?.title ?? playing.name)
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
@@ -117,7 +118,10 @@ struct PlayerChannelsSheet: View {
         } label: {
             HStack(spacing: 12) {
                 ChannelLogo(channel: item, size: 36)
-                Text(item.name).font(current ? .body.weight(.semibold) : .body).lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.name).font(current ? .body.weight(.semibold) : .body).lineLimit(1)
+                    NowOnText(channel: item).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
                 Spacer(minLength: 8)
                 if current { Image(systemName: "speaker.wave.2.fill").foregroundStyle(Brand.accent) }
             }

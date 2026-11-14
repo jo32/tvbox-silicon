@@ -165,6 +165,7 @@ struct TVPlayerChannelsPanel: View {
         Group {
             if let lineup = store.lineup(for: playing) { content(lineup) } else { Color.clear }
         }
+        .environment(store.guide(for: playing))
         .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
     }
@@ -203,7 +204,10 @@ struct TVPlayerChannelsPanel: View {
                             Button { if !current { store.playing = item } } label: {
                                 HStack(spacing: 16) {
                                     ChannelLogo(channel: item, size: 56)
-                                    Text(item.name).font(.headline).lineLimit(1)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.name).font(.headline).lineLimit(1)
+                                        NowOnText(channel: item).font(.caption).lineLimit(1).opacity(0.7)
+                                    }
                                     if current { Image(systemName: "speaker.wave.2.fill").font(.caption) }
                                 }
                                 .padding(.horizontal, 10).padding(.vertical, 6)

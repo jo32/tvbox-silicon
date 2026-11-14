@@ -5,7 +5,7 @@ public enum Playlist {
         var result: [Channel] = [], seen = Set<String>()
         // Where each named channel is in `result`, by group and name: the same channel again is another line of it.
         var named: [String: Int] = [:]
-        var name: String?, logo: URL?, group = "", entryHeaders = headers
+        var name: String?, logo: URL?, guideID: String?, group = "", entryHeaders = headers
         let lines = text.replacingOccurrences(of: "\u{FEFF}", with: "").components(separatedBy: .newlines)
         let m3u = lines.contains { $0.trimmingCharacters(in: .whitespaces).hasPrefix("#EXTINF:") }
         for raw in lines {
@@ -21,6 +21,8 @@ public enum Playlist {
                 name = separator.map { String(line[line.index(after: $0)...]) } ?? L10n.text("Unnamed channel")
                 group = attribute("group-title", in: line) ?? ""
                 logo = attribute("tvg-logo", in: line).flatMap { try? WebAddress.resolve($0, relativeTo: origin) }
+                guideID = [attribute("tvg-id", in: line), attribute("tvg-name", in: line)]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
                 entryHeaders = headers
                 // APTV-style playlists put the headers on the entry itself; some servers answer only that user agent (#995).
                 if let agent = attribute("http-user-agent", in: line), !agent.isEmpty { entryHeaders["User-Agent"] = agent }
@@ -52,6 +54,7 @@ public enum Playlist {
                     }
                 } else {
                     var channel = Channel(name: name ?? first.url.lastPathComponent, group: group, url: first.url, logo: logo, headers: first.headers)
+                    channel.guideID = guideID
                     for line in lines.dropFirst() where line.url != channel.url && !channel.alternates.contains(where: { $0.url == line.url }) {
                         channel.alternates.append(line)
                     }
@@ -60,12 +63,21 @@ public enum Playlist {
                         result.append(channel)
                     }
                 }
-                name = nil; logo = nil; entryHeaders = headers
+                name = nil; logo = nil; guideID = nil; entryHeaders = headers
             }
         }
         guard !result.isEmpty else { throw TVError.emptyPlaylist }
         return result
     }
+    /// The XMLTV guide an M3U's header names, `#EXTM3U x-tvg-url="…"` (or `url-tvg`); the first when it lists several
+    /// (#802).
+    public static func guideAddress(in text: String) -> String? {
+        let header = text.prefix(4096).replacingOccurrences(of: "\u{FEFF}", with: "").components(separatedBy: .newlines)
+            .first { $0.trimmingCharacters(in: .whitespaces).hasPrefix("#EXTM3U") }
+        guard let header, let value = attribute("x-tvg-url", in: header) ?? attribute("url-tvg", in: header) else { return nil }
+        return value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty }
+    }
+
     /// TVBox lists a channel's lines in one entry, `url1#url2`. A `#` that doesn't start another address is the
     /// address's own (a fragment).
     static func addresses(_ text: String) -> [String] {

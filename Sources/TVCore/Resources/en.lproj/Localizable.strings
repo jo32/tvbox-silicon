@@ -1987,3 +1987,8 @@
 "Videos from every source" = "Videos from every source";
 "Move Left" = "Move Left";
 "Move Right" = "Move Right";
+/* Live program guide (#802) */
+"Program Guide" = "Program Guide";
+"Now On" = "Now On";
+"Coming Up" = "Coming Up";
+"An XMLTV file (.xml or .xml.gz), or an address with {name} for each channel. Leave it empty to use the playlist's own guide." = "An XMLTV file (.xml or .xml.gz), or an address with {name} for each channel. Leave it empty to use the playlist's own guide.";

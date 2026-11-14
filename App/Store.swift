@@ -54,10 +54,19 @@ import TVCore
     /// The channels the live channel playing was picked from, in order (its playlist, or the favorites): the player's
     /// Previous and Next Channel and its channel list go through them (#1010).
     var liveLineup: LiveLineup?
-    /// Plays a live channel picked from `lineup`.
-    func watch(_ channel: Channel, in lineup: LiveLineup) {
+    /// The program guide of the playlist `liveLineup` is (#802).
+    private(set) var liveGuide: LiveGuide?
+    /// Plays a live channel picked from `lineup`, with its playlist's guide.
+    func watch(_ channel: Channel, in lineup: LiveLineup, guide: LiveGuide? = nil) {
         liveLineup = lineup
+        liveGuide = guide
         playing = channel
+    }
+    /// The guide of the list the channel was picked from.
+    func guide(for channel: Channel) -> LiveGuide? { lineup(for: channel) != nil ? liveGuide : nil }
+    /// Program guide addresses the viewer typed in for live playlists, by playlist address (#802).
+    var guideAddresses: [String: String] {
+        didSet { if persistsChanges { defaults.set(guideAddresses, forKey: "liveGuideAddresses") } }
     }
     /// The list the channel was picked from, when it holds others to switch to.
     func lineup(for channel: Channel) -> LiveLineup? {
@@ -149,6 +158,7 @@ import TVCore
         cloudSync = defaults === UserDefaults.standard && !defaults.bool(forKey: "qaIsolatedData") ? CloudSync() : nil
         favorites = Favorites(defaults: defaults)
         autoPlayNext = defaults.object(forKey: "autoPlayNextEpisode") == nil || defaults.bool(forKey: "autoPlayNextEpisode")
+        guideAddresses = defaults.dictionary(forKey: "liveGuideAddresses") as? [String: String] ?? [:]
         let saved = defaults.data(forKey: "subscriptions").flatMap { try? JSONDecoder().decode([SubscriptionEntry].self, from: $0) }
         var entries = saved ?? [], copies: [String: Subscription] = [:]
         for entry in entries {

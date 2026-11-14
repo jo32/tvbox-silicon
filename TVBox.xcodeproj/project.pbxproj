@@ -73,6 +73,7 @@
 		2B263C305CDC1687A050CCBC /* DownloadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B45CB8261D922949ADBDBE15 /* DownloadsView.swift */; };
 		2C6D239842DA86D6B4908569 /* MangaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FF91FA9A33437C335253F10 /* MangaView.swift */; };
 		2D5C517BA45AA3ACE1C53D73 /* DiscoverArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E644254088B8C9E61B8363D /* DiscoverArtwork.swift */; };
+		2E2372AA323482FCF4B01156 /* LiveGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72830F1F2EF52362002EBA43 /* LiveGuide.swift */; };
 		2EF2744DCA81AD6098398028 /* Keystone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 3A398E8AF0C7E4C94787F4B3 /* Keystone-LLVM.txt */; };
 		2EF5CCF1BA71B68F4DCF2F71 /* DanmakuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A5737402EC96F0FBF79243E /* DanmakuView.swift */; };
 		2F46BE251F004B53430FD516 /* DateComparison.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9644627CBD3EF1CE6A06E228 /* DateComparison.swift */; };
@@ -209,6 +210,7 @@
 		8253F7BDC07638BD6F654962 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A90392B70C28DA6CC7497B9F /* Assets.xcassets */; };
 		827566269F191FCBF27F2FEA /* Keystone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 3A398E8AF0C7E4C94787F4B3 /* Keystone-LLVM.txt */; };
 		82933DAB592E786763C7D05B /* MusicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 235375CC2420B76124FCEBC2 /* MusicView.swift */; };
+		82C0C95D669F59F144346401 /* LiveGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72830F1F2EF52362002EBA43 /* LiveGuide.swift */; };
 		82E7112F0FCDD1CEB5A40E59 /* Unicorn-GPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = B61DBAA2E8637B976A160D47 /* Unicorn-GPL2.txt */; };
 		83F1E26D09D8B358690DCADC /* MangaDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B33761B860B18DD0F3CE7FAC /* MangaDetailView.swift */; };
 		84C5345267FA2D8221B2F9FB /* Keystone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 3A398E8AF0C7E4C94787F4B3 /* Keystone-LLVM.txt */; };
@@ -240,6 +242,7 @@
 		97DFD3224F5E543A2BE6EDE0 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CB1FA4BB4990588B428781E /* PlayerView.swift */; };
 		97EB7EDFE8BA6C35B6197AFF /* DiscoverSearchFilters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 356AA3CFC2271101141EF964 /* DiscoverSearchFilters.swift */; };
 		982EF0148420E135FF05E244 /* SubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1212366D71C455D6EAE5E4 /* SubtitleOverlay.swift */; };
+		985050FA44CEC892F76F3424 /* LiveGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72830F1F2EF52362002EBA43 /* LiveGuide.swift */; };
 		98A0CBECF27EE28054D96B01 /* Unicorn-GPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = B61DBAA2E8637B976A160D47 /* Unicorn-GPL2.txt */; };
 		98A9859E7B3074992592FA40 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E98A015784E934A3CA8E1BB2 /* PrivacyInfo.xcprivacy */; };
 		99DDB54D60A36E748D5E8C73 /* CacheSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4EB0D74F8DB73E33CC129F8 /* CacheSettingsView.swift */; };
@@ -444,6 +447,7 @@
 		6876ACF1E9D9F80BBC4F22C4 /* PlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackView.swift; sourceTree = "<group>"; };
 		688641B892E4732AFEB875A3 /* CatPawSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatPawSignInView.swift; sourceTree = "<group>"; };
 		6FF91FA9A33437C335253F10 /* MangaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaView.swift; sourceTree = "<group>"; };
+		72830F1F2EF52362002EBA43 /* LiveGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveGuide.swift; sourceTree = "<group>"; };
 		73945256FDDE0952A22BF98C /* releases.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = releases.json; sourceTree = "<group>"; };
 		739A64FB51780D4314D2DDF8 /* GlassKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassKit.swift; sourceTree = "<group>"; };
 		73C9A2A4F2D8A180EBDF8C8E /* MusicMacPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicMacPlayer.swift; sourceTree = "<group>"; };
@@ -642,6 +646,7 @@
 				739A64FB51780D4314D2DDF8 /* GlassKit.swift */,
 				B44CBA0E5BBD1D129D5D64E3 /* HLSProxy.swift */,
 				9B7E929CDDC1F085C6B55693 /* HomeView.swift */,
+				72830F1F2EF52362002EBA43 /* LiveGuide.swift */,
 				C3FBB140165AC6F0A60866F5 /* LivePluginQRSignIn.swift */,
 				79ABEF8CC3883B021CEF3CEE /* LivePluginSignIn.swift */,
 				901EDEF85B9BA1B92932FEC1 /* LivePluginsView.swift */,
@@ -1237,6 +1242,7 @@
 				1050D617A22F09CD0A01DE66 /* GlassKit.swift in Sources */,
 				34349D95E4EC0176C10862E2 /* HLSProxy.swift in Sources */,
 				1B6DFFAF679C5BAD70F09875 /* HomeView.swift in Sources */,
+				2E2372AA323482FCF4B01156 /* LiveGuide.swift in Sources */,
 				12758A07284A42E827217426 /* LivePluginQRSignIn.swift in Sources */,
 				2780772DC63EC57AB830CAD0 /* LivePluginSignIn.swift in Sources */,
 				A9198AFD0F283D907F485E7F /* LivePluginsView.swift in Sources */,
@@ -1348,6 +1354,7 @@
 				F3B63B43988E72A87677A7AC /* GlassKit.swift in Sources */,
 				13AB1C878E7990BF8FB16849 /* HLSProxy.swift in Sources */,
 				14E05DC952FB2705E645EAE6 /* HomeView.swift in Sources */,
+				985050FA44CEC892F76F3424 /* LiveGuide.swift in Sources */,
 				E325A2E05D1FC8E659899AF6 /* LivePluginQRSignIn.swift in Sources */,
 				696980CEC13F77DBF7E8B7E8 /* LivePluginSignIn.swift in Sources */,
 				EC7C67386A7AD9F977E42224 /* LivePluginsView.swift in Sources */,
@@ -1461,6 +1468,7 @@
 				338825790412D642115F2BD3 /* GlassKit.swift in Sources */,
 				D1BC31CCC2FCC4A6AB834BD5 /* HLSProxy.swift in Sources */,
 				6012B7CF185E20A26CC68CD0 /* HomeView.swift in Sources */,
+				82C0C95D669F59F144346401 /* LiveGuide.swift in Sources */,
 				4F9DABA09098C4A53467C128 /* LivePluginQRSignIn.swift in Sources */,
 				4BAF0943739F85C530148F50 /* LivePluginSignIn.swift in Sources */,
 				ADC01607279358ADDDA89A78 /* LivePluginsView.swift in Sources */,

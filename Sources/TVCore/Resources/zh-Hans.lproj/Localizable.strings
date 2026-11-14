@@ -1987,3 +1987,8 @@
 "Videos from every source" = "在全部点播源中找影片";
 "Move Left" = "左移";
 "Move Right" = "右移";
+/* Live program guide (#802) */
+"Program Guide" = "节目单";
+"Now On" = "正在播出";
+"Coming Up" = "即将播出";
+"An XMLTV file (.xml or .xml.gz), or an address with {name} for each channel. Leave it empty to use the playlist's own guide." = "XMLTV 文件（.xml 或 .xml.gz），或带 {name} 的按频道查询地址。留空则使用直播源自带的节目单。";
