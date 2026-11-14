@@ -776,7 +776,7 @@ private struct MangaReaderChrome: View {
         .animation(.smooth(duration: 0.2), value: visible)
         #if os(macOS)
         .ignoresSafeArea(.container, edges: .top)
-        .background { MangaHidesWindowButtons() }
+        .background { ReaderHidesWindowButtons() }
         #endif
     }
 
@@ -916,10 +916,11 @@ private struct MangaChapterPicker: View {
 }
 
 #if os(macOS)
-/// Hides the window's close, minimise and zoom buttons while the reader is open, so its top bar can sit in the title bar
-/// lined up with the bottom bar: with the toolbar hidden, macOS fades them in when the pointer comes near, over the bar's
-/// close button. The reader's own close button, Esc and Command-W still close it; the buttons come back with it.
-private struct MangaHidesWindowButtons: NSViewRepresentable {
+/// Hides the window's close, minimise and zoom buttons while a reader's controls are up, so its top bar can sit in the
+/// title bar lined up with the bottom bar: with the toolbar hidden, macOS fades them in when the pointer comes near, over
+/// the bar's close button. The reader's own close button, Esc and Command-W still close it; the buttons come back with it.
+/// Used by the manga and novel readers.
+struct ReaderHidesWindowButtons: NSViewRepresentable {
     func makeNSView(context: Context) -> Probe { Probe() }
     func updateNSView(_ probe: Probe, context: Context) {}
 
