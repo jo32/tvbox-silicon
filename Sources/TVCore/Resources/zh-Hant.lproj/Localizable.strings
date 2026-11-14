@@ -1963,3 +1963,12 @@
 "Current Chapter" = "目前章節";
 "This source checks for a web browser, which Apple TV doesn't have. Read it on iPhone, iPad or Mac." = "此書源要求網頁瀏覽器驗證，而 Apple TV 沒有瀏覽器。請在 iPhone、iPad 或 Mac 上閱讀。";
 "The site's browser check didn't pass. Try again later." = "網站的瀏覽器驗證未通過，請稍後再試。";
+"This is a Legado subscription source (订阅源), not a book source list. Add the address of a book source list instead." = "這是「閱讀」的訂閱源，不是書源列表。請改為加入書源列表的位址。";
+"This page lists %lld Legado book source lists. Choose the ones to add in Settings › Novels › Book Sources." = "此頁面列出 %lld 個閱讀書源列表。請在「設定 › 小說 › 書源」中選擇要加入的列表。";
+"This address is now a page of book source lists. Add it again to choose from them." = "此位址現在是書源列表的索引頁。請重新加入它以從中選擇。";
+"Lists You Can Add" = "可加入的列表";
+"Clear Lists You Can Add" = "清除可加入的列表";
+"Found on %@. Lists you add appear under Source Lists." = "來自 %@。加入的列表會出現在「源列表」中。";
+"Added" = "已加入";
+"Adding…" = "正在加入…";
+"The file is larger than %lld MB." = "檔案超過 %lld MB。";

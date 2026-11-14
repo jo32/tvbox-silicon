@@ -6,6 +6,8 @@ import TVCore
     static let shared = NovelStore()
 
     private(set) var lists: [NovelSourceList] = NovelSources.shared.lists
+    /// Lists a page of lists offered, to add one by one in Book Sources.
+    private(set) var offers: [NovelSourceOffer] = NovelSources.shared.offers
     private(set) var sources: [NovelSource] = NovelSources.shared.all
     private(set) var enabledKeys: Set<String> = Set(NovelSources.shared.enabled.map(\.key))
     private(set) var shelf: [NovelLibrary.ShelfBook] = NovelLibrary.load("shelf.json", as: [NovelLibrary.ShelfBook].self) ?? []
@@ -71,6 +73,7 @@ import TVCore
 
     func reloadSources() {
         lists = NovelSources.shared.lists
+        offers = NovelSources.shared.offers
         sources = NovelSources.shared.all
         enabledKeys = Set(NovelSources.shared.enabled.map(\.key))
         recompute()
@@ -116,6 +119,12 @@ import TVCore
         reloadSources()
     }
     func removeList(_ url: URL) { NovelSources.shared.remove(url); reloadSources() }
+    func offer(_ offers: [NovelSourceOffer]) { NovelSources.shared.offer(offers); reloadSources() }
+    /// Downloads an offered list and adds it.
+    func add(_ offer: NovelSourceOffer) async throws {
+        try await NovelSources.shared.refresh(offer.address)
+        reloadSources()
+    }
     /// Downloads every list again; one that fails keeps its last copy.
     func refreshLists() async {
         for list in lists { _ = try? await NovelSources.shared.refresh(list.address) }

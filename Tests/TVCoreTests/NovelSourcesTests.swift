@@ -46,3 +46,39 @@ import Testing
     #expect(book.coverRequest?.headers["Referer"] == "https://example.com")
     #expect(NovelBook(sourceKey: "s", url: "/b", name: "n", cover: "//img.example/c.jpg").coverRequest?.url.scheme == "https")
 }
+
+/// A Legado subscription source (订阅源) is not a book source list: it names the page it opens, and that page's
+/// one-tap import links are the book source lists to offer, each named after the text before it.
+@Test func novelSubscriptionSourceOpensItsPageOfLists() throws {
+    let feed = """
+    [{"articleStyle":0,"enableJs":true,"ruleArticles":"id.content@h3","ruleLink":"a@href","ruleTitle":"a@textNodes","singleUrl":true,
+      "sortUrl":"首页::https://lists.example","sourceGroup":"书源","sourceName":"阅读APP源","sourceUrl":"https://lists.example"}]
+    """
+    #expect(NovelSourceIndex.pages(from: Data(feed.utf8)) == [URL(string: "https://lists.example")!])
+    #expect(NovelSource.list(from: Data(feed.utf8)) == nil)
+    // No sortUrl: the source's own address; a scripted one is skipped.
+    #expect(NovelSourceIndex.pages(from: Data(#"{"sourceUrl":"https://b.example/x","ruleArticles":"a"}"#.utf8)) == [URL(string: "https://b.example/x")!])
+    #expect(NovelSourceIndex.pages(from: Data(#"{"sourceUrl":"https://b.example","sortUrl":"@js:result"}"#.utf8)) == [])
+    // Book sources and TVBox subscriptions are not subscription sources.
+    #expect(NovelSourceIndex.pages(from: Data(#"[{"bookSourceUrl":"https://a","sourceUrl":"https://a","searchUrl":"/s"}]"#.utf8)) == nil)
+    #expect(NovelSourceIndex.pages(from: Data(#"{"sites":[{"key":"a","api":"b"}]}"#.utf8)) == nil)
+
+    let page = """
+    <h2 id="id_0">书源</h2><p><details><summary>点击展开</summary></p>
+    <ul><li><p>全量书源 </p><ul>
+    <li><a href="https://lists.example/sources/b778.json">访问直链</a></li>
+    <li><a href="legado://import/bookSource?src=https://lists.example/sources/b778.json">一键导入</a></li>
+    <li>上一次同步状态: 同步成功, 共 3907 条</li></ul></li></ul><hr />
+    <ul><li><p>XIU2精品书源 &amp; more 🔥</p><ul>
+    <li><a href="legado://import/bookSource?src=https://lists.example/sources/71e5.json">一键导入</a></li></ul></li></ul>
+    <ul><li><p>无名</p><ul><li><a href="yuedu://booksource/importonline?src=/sources/rel.json">x</a></li></ul></li></ul>
+    <h2 id="id_1">订阅源</h2><ul><li><p>订阅</p><ul>
+    <li><a href="legado://import/rssSource?src=https://lists.example/sources/c579.json">一键导入</a></li>
+    <li><a href="legado://import/bookSource?src=https://lists.example/sources/b778.json">again</a></li></ul></li></ul>
+    """
+    let offers = NovelSourceIndex.offers(inPage: Data(page.utf8), origin: URL(string: "https://lists.example/")!)
+    #expect(offers.map(\.name) == ["全量书源", "XIU2精品书源 & more 🔥", "无名"])
+    #expect(offers.map(\.address.absoluteString) == ["https://lists.example/sources/b778.json", "https://lists.example/sources/71e5.json",
+                                                     "https://lists.example/sources/rel.json"])
+    #expect(NovelSourceIndex.offers(inPage: Data(#"{"sites":[]}"#.utf8), origin: URL(string: "https://x")!).isEmpty)
+}

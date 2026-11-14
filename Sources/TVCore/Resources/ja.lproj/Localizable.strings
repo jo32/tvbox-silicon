@@ -1963,3 +1963,12 @@
 "Current Chapter" = "現在の章";
 "This source checks for a web browser, which Apple TV doesn't have. Read it on iPhone, iPad or Mac." = "この書籍ソースはブラウザによる確認を必要としますが、Apple TV にはブラウザがありません。iPhone、iPad、Mac でお読みください。";
 "The site's browser check didn't pass. Try again later." = "サイトのブラウザ確認を通過できませんでした。しばらくしてからもう一度お試しください。";
+"This is a Legado subscription source (订阅源), not a book source list. Add the address of a book source list instead." = "これは Legado（閱読）の購読ソース（订阅源）で、ブックソースリストではありません。ブックソースリストのアドレスを追加してください。";
+"This page lists %lld Legado book source lists. Choose the ones to add in Settings › Novels › Book Sources." = "このページには Legado のブックソースリストが %lld 件あります。「設定 › 小説 › ブックソース」で追加するものを選んでください。";
+"This address is now a page of book source lists. Add it again to choose from them." = "このアドレスはブックソースリストの一覧ページになりました。もう一度追加して、そこから選んでください。";
+"Lists You Can Add" = "追加できるリスト";
+"Clear Lists You Can Add" = "追加できるリストを消去";
+"Found on %@. Lists you add appear under Source Lists." = "%@ で見つかりました。追加したリストは「ソースリスト」に表示されます。";
+"Added" = "追加済み";
+"Adding…" = "追加中…";
+"The file is larger than %lld MB." = "ファイルが %lld MB を超えています。";
