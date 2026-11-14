@@ -1,6 +1,115 @@
 {
   "releases": [
     {
+      "version": "1.8.21",
+      "build": 59,
+      "date": "2026-11-15",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "tv",
+          "title": {
+            "en": "Live TV: channels in the player, and what's on",
+            "zh-Hans": "直播：在播放器里换台，看正在播出的节目",
+            "zh-Hant": "直播：在播放器裡換台，看正在播出的節目",
+            "ja": "ライブ TV：プレーヤーでチャンネル切り替え、番組表も"
+          },
+          "detail": {
+            "en": "Switch channels without leaving the player, and a channel that stops playing moves on to its other lines by itself. Playlists with a program guide (XMLTV or DIYP) show what's on now on the channel cards and in the player's channel list; on Apple TV the guide also shows its progress and what's next.",
+            "zh-Hans": "无需退出播放器即可换台；某条线路无法播放时会自动换到该频道的其他线路。带节目单（XMLTV 或 DIYP）的直播源会在频道卡片和播放器的频道列表中显示正在播出的节目；在 Apple TV 上，节目单还会显示播放进度和下一个节目。",
+            "zh-Hant": "無需離開播放器即可換台；某條線路無法播放時會自動換到該頻道的其他線路。帶節目表（XMLTV 或 DIYP）的直播源會在頻道卡片和播放器的頻道列表中顯示正在播出的節目；在 Apple TV 上，節目表還會顯示播放進度和下一個節目。",
+            "ja": "プレーヤーを閉じずにチャンネルを切り替えられます。再生できなくなったチャンネルは自動的に別の回線に切り替わります。番組表（XMLTV または DIYP）付きのプレイリストでは、チャンネルカードとプレーヤーのチャンネル一覧に放送中の番組が表示されます。Apple TV の番組表には進行状況と次の番組も表示されます。"
+          }
+        },
+        {
+          "symbol": "antenna.radiowaves.left.and.right",
+          "title": {
+            "en": "More live channels play, and look sharp",
+            "zh-Hans": "更多直播频道能播放，画面更清晰",
+            "zh-Hant": "更多直播頻道能播放，畫面更清晰",
+            "ja": "再生できるライブチャンネルが増え、映像もくっきり"
+          },
+          "detail": {
+            "en": "Channels with MP2 sound now play instead of failing, start sooner on slow servers, and interlaced 1080i channels no longer show double edges on iPhone, iPad and Apple TV. Playlists that set a user agent or referrer per channel are honored, and an HDR stream the player refuses plays as SDR.",
+            "zh-Hans": "使用 MP2 音频的频道现在可以播放，不再报错；在较慢的服务器上起播更快；隔行扫描的 1080i 频道在 iPhone、iPad 和 Apple TV 上不再出现重影。直播源为单个频道指定的 User-Agent 或 Referrer 会被采用；播放器无法播放的 HDR 直播流会改为 SDR 播放。",
+            "zh-Hant": "使用 MP2 音訊的頻道現在可以播放，不再出錯；在較慢的伺服器上起播更快；交錯掃描的 1080i 頻道在 iPhone、iPad 和 Apple TV 上不再出現重影。直播源為單一頻道指定的 User-Agent 或 Referrer 會被採用；播放器無法播放的 HDR 直播串流會改為 SDR 播放。",
+            "ja": "MP2 音声のチャンネルがエラーにならず再生できるようになり、遅いサーバでも早く始まります。インターレースの 1080i チャンネルは iPhone・iPad・Apple TV で二重に見えなくなりました。チャンネルごとの User-Agent や Referrer の指定に対応し、プレーヤーが再生できない HDR ストリームは SDR で再生します。"
+          }
+        },
+        {
+          "symbol": "app.badge",
+          "title": {
+            "en": "A new icon, and ten more to choose from",
+            "zh-Hans": "全新图标，另有十款可选",
+            "zh-Hant": "全新圖示，另有十款可選",
+            "ja": "新しいアイコンと、選べる 10 種類"
+          },
+          "detail": {
+            "en": "Aurora is Yingxia's new icon. Settings › App Icon offers ten more, including the previous one as Classic. On the Mac the chosen icon appears in the Dock, and Choose Picture… makes a picture of your own the icon.",
+            "zh-Hans": "Aurora 是映匣的新图标。设置 › 应用图标 中另有十款可选，包括以前的图标“经典”。在 Mac 上，所选图标会显示在程序坞中，也可以用“选择图片…”把自己的图片设为图标。",
+            "zh-Hant": "Aurora 是映匣的新圖示。設定 › App 圖像 中另有十款可選，包括以前的圖像「經典」。在 Mac 上，所選圖像會顯示在 Dock 中，也可以用「選擇圖片…」把自己的圖片設為圖像。",
+            "ja": "Aurora が映匣の新しいアイコンになりました。設定 › アプリアイコン で、以前のアイコン（クラシック）を含む 10 種類から選べます。Mac では選んだアイコンが Dock に表示され、「画像を選択…」で自分の画像をアイコンにできます。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "square.stack",
+          "title": {
+            "en": "A tidier Sources page",
+            "zh-Hans": "更整洁的来源页面",
+            "zh-Hant": "更整潔的來源頁面",
+            "ja": "すっきりしたソースページ"
+          },
+          "detail": {
+            "en": "Switch subscriptions with the chips at the top. Ordering and hiding sources now live under Edit, and a search can look for the videos too.",
+            "zh-Hans": "用顶部的标签切换订阅。来源的排序和隐藏移到了“编辑”中，搜索时也可以直接搜索视频。",
+            "zh-Hant": "用頂部的標籤切換訂閱。來源的排序和隱藏移到了「編輯」中，搜尋時也可以直接搜尋影片。",
+            "ja": "上部のチップでサブスクリプションを切り替えられます。ソースの並べ替えと非表示は「編集」にまとまり、検索時にビデオも探せます。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "text.bubble",
+          "title": {
+            "en": "Danmaku finds more shows",
+            "zh-Hans": "弹幕匹配更准确",
+            "zh-Hant": "彈幕匹配更準確",
+            "ja": "弾幕コメントがより多くの作品に"
+          },
+          "detail": {
+            "en": "Danmaku matches titles that carry edition notes from the source, and a show you matched by hand keeps that match on its next episodes. Subtitle search now gives up after 8 seconds, with a Search Time Limit setting.",
+            "zh-Hans": "带有来源版本说明的片名也能匹配到弹幕；手动匹配过的剧集，后续各集会沿用该匹配。字幕搜索默认 8 秒后停止，并新增“搜索时限”设置。",
+            "zh-Hant": "帶有來源版本說明的片名也能匹配到彈幕；手動匹配過的劇集，後續各集會沿用該匹配。字幕搜尋預設 8 秒後停止，並新增「搜尋時限」設定。",
+            "ja": "ソースの版表記が付いたタイトルでも弾幕コメントが見つかり、手動で一致させた作品は次のエピソードでもその一致が使われます。字幕検索は既定で 8 秒で終了し、「検索の制限時間」設定が追加されました。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "More short-drama episodes play (ByteVC2 video is converted). Offline Cache episodes keep their progress and show in Continue Watching, and Stop in the iOS 26 download progress pauses downloads. On the Mac, Fill Window lets the player window resize freely, and the novel reader's buttons sit in the title bar. Novel lists can be picked from a Legado index page, and lists over 20 MB import. On iPhone, the seek bar no longer holds the watch page at landscape width. Clearing a source search goes back to the page's top, the search source list keeps its height, a CatPawOpen source's own proxy address plays, and a subscription with no music channels says so instead of timing out.",
+            "zh-Hans": "更多短剧剧集可以播放（ByteVC2 视频会被转换）。离线缓存的剧集会保留播放进度并出现在“继续观看”中；在 iOS 26 的下载进度中点“停止”会暂停下载。在 Mac 上，“填满窗口”时可以自由调整播放器窗口大小，小说阅读器的按钮移到了标题栏。可以从阅读（Legado）索引页选择书源列表，超过 20 MB 的列表也能导入。在 iPhone 上，进度条不再把观看页撑到横屏宽度。清除来源搜索会回到页面顶部，搜索来源列表保持高度不变，CatPawOpen 来源自带的代理地址可以播放；订阅中没有音乐频道时会直接提示，而不是超时。",
+            "zh-Hant": "更多短劇劇集可以播放（ByteVC2 影片會被轉換）。離線快取的劇集會保留播放進度並出現在「繼續觀看」中；在 iOS 26 的下載進度中點「停止」會暫停下載。在 Mac 上，「填滿視窗」時可以自由調整播放器視窗大小，小說閱讀器的按鈕移到了標題列。可以從閱讀（Legado）索引頁選擇書源列表，超過 20 MB 的列表也能匯入。在 iPhone 上，進度條不再把觀看頁撐到橫向寬度。清除來源搜尋會回到頁面頂部，搜尋來源列表保持高度不變，CatPawOpen 來源自帶的代理位址可以播放；訂閱中沒有音樂頻道時會直接提示，而不是逾時。",
+            "ja": "より多くのショートドラマが再生できます（ByteVC2 の映像を変換）。オフラインキャッシュのエピソードは再生位置を保ち「視聴を続ける」に表示され、iOS 26 のダウンロード進行状況の「停止」でダウンロードが一時停止します。Mac では「ウインドウに合わせて拡大」でもプレーヤーウインドウのサイズを自由に変えられ、小説リーダーのボタンがタイトルバーに移りました。Legado のインデックスページから書源リストを選べ、20 MB を超えるリストも読み込めます。iPhone では、シークバーが視聴ページを横向きの幅に広げなくなりました。ソース検索をクリアするとページの先頭に戻り、検索のソース一覧の高さが変わらなくなり、CatPawOpen ソース自身のプロキシアドレスが再生でき、音楽チャンネルのないサブスクリプションではタイムアウトではなくその旨が表示されます。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.20",
       "build": 58,
       "date": "2026-11-14",
