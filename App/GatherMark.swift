@@ -1,34 +1,37 @@
 import SwiftUI
 
 /// The three-blade mark putting itself together: a film, a note and a book (what Yingxia plays and reads) pop in one by
-/// one where the blades go, each swirls into its blade, then the finished mark spins up and settles. It plays once when it
-/// appears and then holds still, so an idle page does no work.
+/// one where the blades go, each swirls into its blade, then the finished mark spins up and settles. It plays each time it
+/// comes on screen (switching back to its tab included) and then holds still, so an idle page does no work.
 struct GatherMark: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var time: Double = 0
+    /// Bumped on every appearance; each change plays the keyframes again from the start.
+    @State private var plays = 0
 
     var body: some View {
-        GatherMarkFrame(time: time)
-            .aspectRatio(1, contentMode: .fit)
-            .accessibilityHidden(true)
-            .onAppear {
-                guard time == 0 else { return }
-                if reduceMotion {
-                    time = GatherTimeline.duration
-                } else {
-                    withAnimation(.linear(duration: GatherTimeline.duration)) { time = GatherTimeline.duration }
+        Group {
+            if reduceMotion {
+                GatherMarkFrame(time: GatherTimeline.duration)
+            } else {
+                KeyframeAnimator(initialValue: 0.0, trigger: plays) { time in
+                    GatherMarkFrame(time: time)
+                } keyframes: { _ in
+                    KeyframeTrack {
+                        MoveKeyframe(0.0)
+                        LinearKeyframe(GatherTimeline.duration, duration: GatherTimeline.duration)
+                    }
                 }
             }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .accessibilityHidden(true)
+        .onAppear { plays += 1 }
     }
 }
 
-/// One moment of the animation. SwiftUI interpolates `time`, so the body redraws each frame while it plays.
-struct GatherMarkFrame: View, Animatable {
+/// One moment of the animation, `time` seconds in.
+struct GatherMarkFrame: View {
     var time: Double
-    nonisolated var animatableData: Double {
-        get { time }
-        set { time = newValue }
-    }
 
     private static let symbols = ["music.note", "book.fill"]
     /// Where a blade's centre of mass sits in the mark's 920-unit square (blade 0, before it is turned).
