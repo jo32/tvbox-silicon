@@ -809,6 +809,7 @@
 "The channel's music account is blocked for now." = "The channel's music account is blocked for now.";
 "The channel needs a valid key." = "The channel needs a valid key.";
 "The channel took too long to answer." = "The channel took too long to answer.";
+"None of your subscriptions lists music channels. Add one that does, such as the recommended sources, to play music." = "None of your subscriptions lists music channels. Add one that does, such as the recommended sources, to play music.";
 "The channel sent an answer the app can't read." = "The channel sent an answer the app can't read.";
 "This device can't play the channel's audio format." = "This device can't play the channel's audio format.";
 "No lossless version is available right now." = "No lossless version is available right now.";

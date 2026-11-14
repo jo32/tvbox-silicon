@@ -523,7 +523,8 @@ typealias MusicTrack = TVCore.MusicTrack
     /// No channel could play the song: skip it while a queue goes on, otherwise stop and say why.
     private func songFailed(_ error: MusicProviderError, run: UUID, message: String? = nil) {
         consecutiveFailures += 1
-        if let queue, queue.skipsAfterFailure(consecutive: consecutiveFailures), let title = track?.title {
+        // With no channel at all, the next song fails the same way: stop and say so.
+        if error != .noChannels, let queue, queue.skipsAfterFailure(consecutive: consecutiveFailures), let title = track?.title {
             notice = L10n.text("Skipped “%@”: %@", title, message ?? error.localizedDescription)
             Diagnostics.shared.record(.warning, "music", "skipped after: \(error.detail)")
             phase = .resolving
