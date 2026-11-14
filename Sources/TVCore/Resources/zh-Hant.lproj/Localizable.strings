@@ -1981,3 +1981,9 @@
 "Search Time Limit" = "搜尋時限";
 "%@ seconds" = "%@ 秒";
 "How long Search Online waits for the sources. Results show as each source answers, so a longer limit only waits longer for slow ones." = "線上搜尋等待各字幕來源的時間。每個來源一有結果就會顯示，所以時限加長只是多等較慢的來源。";
+
+/* Live program guide (#802) */
+"Program Guide" = "節目表";
+"Now On" = "正在播出";
+"Coming Up" = "即將播出";
+"An XMLTV file (.xml or .xml.gz), or an address with {name} for each channel. Leave it empty to use the playlist's own guide." = "XMLTV 檔案（.xml 或 .xml.gz），或帶 {name} 的按頻道查詢網址。留空則使用直播源內建的節目表。";

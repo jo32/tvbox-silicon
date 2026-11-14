@@ -180,8 +180,13 @@ enum QALaunch {
         if let index = UserDefaults.standard.string(forKey: "qaPlayChannel").flatMap(Int.init),
            let source = store.liveSources.first(where: { !$0.isBuiltIn }) {
             do {
-                let channels = try await HTTPClient().channels(source)
-                if channels.indices.contains(index) { store.watch(channels[index], in: LiveLineup(title: source.name, channels: channels)) }
+                let playlist = try await HTTPClient().playlist(source)
+                let channels = playlist.channels
+                let guide = LiveGuide.address(for: source, playlist: playlist.guide, in: store).map(LiveGuide.init)
+                if let guide { Task { await guide.load(channels) } }
+                if channels.indices.contains(index) {
+                    store.watch(channels[index], in: LiveLineup(title: source.name, channels: channels), guide: guide)
+                }
             } catch {
                 Diagnostics.shared.record(.warning, "qa", "playlist not loaded: \(error.localizedDescription)")
             }

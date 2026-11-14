@@ -126,6 +126,62 @@ private func fixture(_ name: String, _ ext: String) throws -> Data {
     #expect(m3u.count == 1 && m3u[0].alternates.map(\.headers["User-Agent"]) == ["Other"])
 }
 
+/// #802: an XMLTV guide (gzipped, as most are) keeps the playlist's channels' programmes in time, matched by tvg-id or
+/// by name however the two spell it.
+@Test func programGuideReadsXMLTV() throws {
+    let gz = try #require(Data(base64Encoded: "H4sIAAAAAAAC/62SzU7CQBSF9z7FZBZuTG2nGAOxLQsSnwDdT2CkTcq0aUeC7lho3JCgElDjyqBo0ISFMRJMfBla6Vs4lJ8ACinR2dxkzs35zr0zSrKYN0GBOK5hURWiTQkCQjNW1qA5Fe6ld4U4TGprCiuAHKHEwcxyBIMeWALFeaJCRlwGuZ7RMaXEBEaWm0BNyRqubeKjsAuYeGB2rEMtlUrvI0WcVmd7ww4Bga/uh1c5m+8UR5g5oH5IMV0M9Ts1r1z3yq1+8zSio8V04sw5at7JW69bC+7Og9LlEh/bsXIOzvMILsMOU6EsydsIoZgUl/gBG4MKuWjZU1piWhuZDVfJDGbOjHP16DWeFDG85+QJbwl7CyUWsrkWi8yutYN6t1+q+hcvkwRZ4ma0It/IoEbNE1+WR1otD1jHeXsH8K347eqfFjOBjb/U0Mv7bPU6Fa/R9G+f+5X7FREyWjyrLEfA+9c3Qf11OOs/vnuI/ske//0hp/de7j+UfqeKrKCtfQMHVp2BQgQAAA=="))
+    let cctv = { var c = Channel(name: "CCTV-1 高清", group: "央视", url: URL(string: "https://example.com/1")!); c.guideID = "1"; return c }()
+    let hunan = Channel(name: "湖南卫视HD", group: "卫视", url: URL(string: "https://example.com/2")!)
+    let from = Date(timeIntervalSince1970: 1_794_652_200) // 2026-11-14 18:30 +0800
+    let guide = try ProgramGuide.xmltv(gz, wanted: ProgramGuide.wanted([cctv, hunan]), from: from, to: from.addingTimeInterval(30 * 3600))
+    let news = try #require(guide.schedule(for: cctv))
+    #expect(news.map(\.title) == ["新闻 & 天气", "新闻联播"])
+    #expect(news.now(at: from.addingTimeInterval(45 * 60))?.title == "新闻联播")
+    #expect(news.next(after: from)?.title == "新闻联播")
+    let shows = try #require(guide.schedule(for: hunan))
+    // A programme without a stop time runs until the next one.
+    #expect(shows.first?.end == ProgramGuide.xmltvDate("20261114210000 +0800"))
+    #expect(shows.now(at: from.addingTimeInterval(2 * 3600))?.title == "快乐大本营")
+    #expect(guide.schedule(for: Channel(name: "其他频道", url: URL(string: "https://example.com/3")!)) == nil)
+    #expect(ProgramGuide.xmltvDate("20261114190000 +0800") == Date(timeIntervalSince1970: 1_794_654_000))
+    #expect(ProgramGuide.xmltvDate("20261114110000") == Date(timeIntervalSince1970: 1_794_654_000))
+}
+
+@Test func programGuideKeysMatchHowPlaylistsSpellChannels() {
+    #expect(ProgramGuide.key("CCTV-1 综合") == "cctv1")
+    #expect(ProgramGuide.key("ＣＣＴＶ１高清") == "cctv1")
+    #expect(ProgramGuide.key("CCTV5+ 体育赛事") == "cctv5+")
+    #expect(ProgramGuide.key("CCTV-4K") == "cctv4k")
+    #expect(ProgramGuide.key("湖南卫视HD") == ProgramGuide.key("湖南卫视"))
+    #expect(ProgramGuide.key("翡翠台 高清") == "翡翠台")
+}
+
+/// #802: where a playlist's guide comes from, and a DIYP answer for one channel's day.
+@Test func programGuideAddressesAndDIYP() throws {
+    let text = "#EXTM3U x-tvg-url=\"https://epg.example/e.xml.gz, https://other.example/b.xml\"\n#EXTINF:-1 tvg-id=\"cctv1\" tvg-name=\"CCTV1\",CCTV-1\nhttps://example.com/1.m3u8\n#EXTINF:-1 tvg-name=\"湖南卫视\",湖南卫视 HD\nhttps://example.com/2.m3u8\n"
+    #expect(Playlist.guideAddress(in: text) == "https://epg.example/e.xml.gz")
+    #expect(Playlist.guideAddress(in: "频道,#genre#\nCCTV1,https://example.com/1") == nil)
+    let channels = try Playlist.parse(text, origin: URL(string: "https://example.com/list.m3u")!)
+    #expect(channels.map(\.guideID) == ["cctv1", "湖南卫视"])
+    let data = Data(#"{"lives":[{"name":"直播","url":"https://example.com/list.m3u","epg":"https://diyp.example/?ch={name}&date={date}"}]}"#.utf8)
+    let subscription = try Subscription.parse(data, origin: URL(string: "https://example.com/c.json")!)
+    let source = try #require(subscription.lives.first)
+    let epg = try #require(source.guide)
+    let address = try #require(GuideAddress(epg))
+    let day = Date(timeIntervalSince1970: 1_794_652_200) // 2026-11-14 18:30 +0800
+    #expect(address.address(for: "CCTV-1 综合", on: day)?.absoluteString
+            == "https://diyp.example/?ch=CCTV-1%20%E7%BB%BC%E5%90%88&date=2026-11-14")
+    #expect(GuideAddress("e.xml.gz", relativeTo: URL(string: "https://epg.example/list/")) == .xmltv(URL(string: "https://epg.example/list/e.xml.gz")!))
+    #expect(GuideAddress("") == nil)
+    let answer = Data(#"{"channel_name":"CCTV1","date":"2026-11-14","epg_data":[{"start":"23:30","end":"00:30","title":"午夜剧场"},{"start":"19:00","end":"19:30","title":"新闻联播"},{"start":"19:30","end":"","title":"焦点访谈"}]}"#.utf8)
+    let day1 = ProgramGuide.diyp(answer, on: day)
+    #expect(day1.map(\.title) == ["新闻联播", "焦点访谈", "午夜剧场"])
+    #expect(day1[0].start == Date(timeIntervalSince1970: 1_794_654_000))
+    #expect(day1[1].end == day1[2].start)
+    #expect(day1[2].end == Date(timeIntervalSince1970: 1_794_673_800)) // 00:30 the next day
+    #expect(day1.now(at: day.addingTimeInterval(45 * 60))?.title == "新闻联播")
+}
+
 /// #1010: Previous and Next Channel go round the list the channel was picked from.
 @Test func liveLineupGoesRoundItsChannels() {
     let channels = ["一", "二", "三"].map { Channel(name: $0, group: "G", url: URL(string: "https://example.com/\($0.unicodeScalars.first!.value)")!) }

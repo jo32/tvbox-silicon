@@ -256,9 +256,11 @@ public struct LiveSource: Identifiable, Codable, Hashable, Sendable {
     public let name: String
     public let url: URL
     public let headers: [String: String]
+    /// The program guide its subscription entry names (`epg`): an XMLTV file, or an address with `{name}` (#802).
+    public let guide: String?
     public var id: String { name + "|" + url.absoluteString }
-    public init(name: String, url: URL, headers: [String: String] = [:]) {
-        self.name = name; self.url = url; self.headers = headers
+    public init(name: String, url: URL, headers: [String: String] = [:], guide: String? = nil) {
+        self.name = name; self.url = url; self.headers = headers; self.guide = guide
     }
 }
 
@@ -297,7 +299,8 @@ public struct Subscription: Codable, Sendable {
                   let url = (try? WebAddress.resolve(address, relativeTo: origin)) ?? LiveCatalog.platformAddress(address) else { return nil }
             var headers = v["header"]?.object?.compactMapValues(\.string) ?? [:]
             if let ua = v["ua"]?.string { headers["User-Agent"] = ua }
-            return LiveSource(name: Site.localizedName(v) ?? v["name"]?.string ?? L10n.text("Live TV"), url: url, headers: headers)
+            let guide = v["epg"]?.string.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
+            return LiveSource(name: Site.localizedName(v) ?? v["name"]?.string ?? L10n.text("Live TV"), url: url, headers: headers, guide: guide)
         }
         guard !sites.isEmpty || !lives.isEmpty else { throw TVError.invalidConfiguration }
         return Subscription(origin: origin, importedAt: Date(), sites: sites, lives: lives, raw: raw)
@@ -341,9 +344,15 @@ public struct Channel: Identifiable, Codable, Hashable, Sendable {
     /// A live channel's other addresses, after `url`: a playlist that lists the channel more than once in a group, or
     /// TVBox's `url1#url2`. The player tries the next when one doesn't play (#679). Saved with a favorite.
     public var alternates: [ChannelLine] = []
+    /// The playlist's `tvg-id` (or `tvg-name`) for the channel, to find it in a program guide (#802). Saved.
+    public var guideID: String? = nil
     /// Every address of the channel as a channel of its own, `url` first; just the channel when it has one.
     public var lines: [Channel] {
-        [self] + alternates.map { Channel(name: name, group: group, url: $0.url, logo: logo, headers: $0.headers) }
+        [self] + alternates.map {
+            var line = Channel(name: name, group: group, url: $0.url, logo: logo, headers: $0.headers)
+            line.guideID = guideID
+            return line
+        }
     }
     public var displayGroup: String { group.isEmpty ? L10n.text("Ungrouped") : group }
     public var id: String { group + "|" + name + "|" + url.absoluteString }
@@ -354,7 +363,7 @@ public struct Channel: Identifiable, Codable, Hashable, Sendable {
         self.historyContext = historyContext; self.resumePosition = resumePosition; self.subtitles = subtitles
         self.skips = skips; self.bilibiliPart = bilibiliPart
     }
-    private enum CodingKeys: String, CodingKey { case name, group, url, logo, headers, skipScope, historyContext, resumePosition, alternates }
+    private enum CodingKeys: String, CodingKey { case name, group, url, logo, headers, skipScope, historyContext, resumePosition, alternates, guideID }
     /// Favorites saved before channels had lines have none.
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -367,5 +376,6 @@ public struct Channel: Identifiable, Codable, Hashable, Sendable {
         historyContext = try values.decodeIfPresent(PlaybackHistoryContext.self, forKey: .historyContext)
         resumePosition = try values.decodeIfPresent(Double.self, forKey: .resumePosition)
         alternates = try values.decodeIfPresent([ChannelLine].self, forKey: .alternates) ?? []
+        guideID = try values.decodeIfPresent(String.self, forKey: .guideID)
     }
 }

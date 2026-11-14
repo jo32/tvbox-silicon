@@ -1981,3 +1981,9 @@
 "Search Time Limit" = "検索の制限時間";
 "%@ seconds" = "%@ 秒";
 "How long Search Online waits for the sources. Results show as each source answers, so a longer limit only waits longer for slow ones." = "オンライン検索が各ソースを待つ時間です。結果はソースが応答するたびに表示されるため、長くしても遅いソースを長く待つだけです。";
+
+/* Live program guide (#802) */
+"Program Guide" = "番組表";
+"Now On" = "放送中";
+"Coming Up" = "この後";
+"An XMLTV file (.xml or .xml.gz), or an address with {name} for each channel. Leave it empty to use the playlist's own guide." = "XMLTV ファイル（.xml または .xml.gz）、またはチャンネルごとの {name} を含むアドレス。空欄にするとプレイリストの番組表を使います。";
