@@ -808,6 +808,7 @@
 "The channel's music account is blocked for now." = "このチャンネルの音楽アカウントは現在制限されています。";
 "The channel needs a valid key." = "このチャンネルには有効なキーが必要です。";
 "The channel took too long to answer." = "このチャンネルの応答が遅すぎます。";
+"None of your subscriptions lists music channels. Add one that does, such as the recommended sources, to play music." = "追加したサブスクリプションには音楽チャンネルがありません。おすすめのソースなど、音楽チャンネルを含むサブスクリプションを追加してください。";
 "The channel sent an answer the app can't read." = "このチャンネルの応答を読み取れません。";
 "This device can't play the channel's audio format." = "このデバイスはこのチャンネルの音声形式を再生できません。";
 "No lossless version is available right now." = "今は利用できるロスレス版がありません。";

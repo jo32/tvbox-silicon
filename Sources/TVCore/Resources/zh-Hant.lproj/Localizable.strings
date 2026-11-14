@@ -808,6 +808,7 @@
 "The channel's music account is blocked for now." = "此渠道的音樂帳號暫時被風控。";
 "The channel needs a valid key." = "此渠道需要有效的金鑰。";
 "The channel took too long to answer." = "此渠道回應逾時。";
+"None of your subscriptions lists music channels. Add one that does, such as the recommended sources, to play music." = "你加入的訂閱都沒有提供音樂渠道。請加入提供音樂渠道的訂閱（例如推薦片源的訂閱）後再播放。";
 "The channel sent an answer the app can't read." = "此渠道回傳了無法辨識的內容。";
 "This device can't play the channel's audio format." = "此裝置無法播放該渠道的音訊格式。";
 "No lossless version is available right now." = "暫未找到可用無損版本。";

@@ -629,3 +629,26 @@ private struct FakeCatalog: MusicCatalogSource {
     try await Task.sleep(for: .milliseconds(20))
     for _ in 0..<250 where model.busy { try await Task.sleep(for: .milliseconds(20)) }
 }
+
+/// #979: with no subscription listing music channels, a song the LX Music sources can't play says what is missing,
+/// not the last source's timeout.
+@Test func noListedChannelsSayWhatIsMissing() async throws {
+    let slow = FakeProvider(id: .lx, platforms: [.qq]) { _ in throw MusicProviderError.timeout }
+    var unlisted = resolver([slow]); unlisted.channelsListed = false
+    await #expect(throws: MusicProviderError.noChannels) {
+        _ = try await unlisted.select(qqTrack("晴天", ["周杰伦"], duration: 269), preference: .high)
+    }
+    var nothing = resolver([]); nothing.channelsListed = false
+    await #expect(throws: MusicProviderError.noChannels) {
+        _ = try await nothing.select(qqTrack("晴天", ["周杰伦"], duration: 269), preference: .high)
+    }
+    // A listed channel that times out still says so.
+    await #expect(throws: MusicProviderError.timeout) {
+        _ = try await resolver([slow]).select(qqTrack("晴天", ["周杰伦"], duration: 269), preference: .high)
+    }
+    // An LX Music source that plays is enough on its own.
+    let lx = FakeProvider(id: .lx, platforms: [.qq]) { _ in stream("/mp3/269") }
+    var playing = resolver([lx]); playing.channelsListed = false
+    let selection = try await playing.select(qqTrack("晴天", ["周杰伦"], duration: 269), preference: .high)
+    #expect(selection.candidate.provider == .lx)
+}

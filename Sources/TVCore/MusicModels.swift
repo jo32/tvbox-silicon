@@ -286,6 +286,9 @@ public enum MusicProviderError: LocalizedError, Hashable, Sendable {
     case notLossless
     case network(String)
     case cancelled
+    /// No subscription the listener added lists music channels (`yingxiaMusic`), and the LX Music sources, if
+    /// any, found nothing: no song can play until one is added.
+    case noChannels
 
     public var errorDescription: String? {
         switch self {
@@ -302,6 +305,7 @@ public enum MusicProviderError: LocalizedError, Hashable, Sendable {
         case .notLossless: L10n.text("No lossless version is available right now.")
         case .network: L10n.text("Can't connect to the network.")
         case .cancelled: L10n.text("Cancelled.")
+        case .noChannels: L10n.text("None of your subscriptions lists music channels. Add one that does, such as the recommended sources, to play music.")
         }
     }
 
@@ -320,7 +324,7 @@ public enum MusicProviderError: LocalizedError, Hashable, Sendable {
     public var countsAgainstChannel: Bool {
         switch self {
         case .rateLimited, .upstreamRisk, .authRequired, .timeout, .invalidResponse: true
-        case .noMatch, .noResource, .preview, .differentRecording, .unsupportedFormat, .notLossless, .network, .cancelled: false
+        case .noMatch, .noResource, .preview, .differentRecording, .unsupportedFormat, .notLossless, .network, .cancelled, .noChannels: false
         }
     }
 

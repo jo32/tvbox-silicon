@@ -255,6 +255,9 @@ public struct MusicResolver: Sendable {
     var parallel = 2
     /// The order to ask in: the subscription's, then the listener's LX Music sources.
     let routes: MusicRoutes
+    /// Whether a subscription lists music channels. Without one only LX Music sources are asked, and when they find
+    /// nothing the failure says what is missing rather than what the last source did (#979).
+    var channelsListed = true
 
     public init(routes: MusicRoutes = .current, providers: [any MusicStreamProvider], prober: MusicProber = MusicProber(), health: MusicHealth = .shared,
                 companions: MusicCompanionFinder? = nil, budget: TimeInterval = 15) {
@@ -275,6 +278,7 @@ public struct MusicResolver: Sendable {
         if preferences.enabled(.lx), let lx = LXMusicProvider(sources: LXSourceLibrary.shared.enabled, health: health) { list.append(lx) }
         self.init(providers: list, prober: MusicProber(transport: transport), health: health,
                   companions: MusicCompanionFinder(catalogs: MusicSearchModel.defaultCatalogs(transport: transport, health: health)))
+        channelsListed = CloudMusic.current != nil
     }
 
     public func candidates(for track: MusicTrack) -> [MusicCandidate] {
@@ -305,7 +309,10 @@ public struct MusicResolver: Sendable {
             let key = MusicHealth.key(candidate.provider.rawValue, candidate.platform, .resolve)
             if await health.failing(key) { cooling.append(candidate) } else { ready.append(candidate) }
         }
-        guard !(ready.isEmpty && cooling.isEmpty) else { throw providers.isEmpty ? MusicProviderError.authRequired : MusicProviderError.noResource }
+        guard !(ready.isEmpty && cooling.isEmpty) else {
+            if !channelsListed { throw MusicProviderError.noChannels }
+            throw providers.isEmpty ? MusicProviderError.authRequired : MusicProviderError.noResource
+        }
         // A cooling channel is only asked when nothing else is left: one probe, after the others.
         var queue = ready + cooling
         var attempts: [MusicAttempt] = [], found: [Found] = [], order = 0
@@ -358,6 +365,7 @@ public struct MusicResolver: Sendable {
         }
         guard let best = usable.min(by: { Self.better($0, than: $1, preference: preference) }) else {
             if !found.isEmpty { throw MusicProviderError.notLossless }
+            if !channelsListed { throw MusicProviderError.noChannels }
             throw Self.summary(attempts.compactMap { attempt in
                 if case .failed(let error) = attempt.outcome { return error }
                 return nil
