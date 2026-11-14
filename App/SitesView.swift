@@ -2782,7 +2782,7 @@ struct VideoDetailView: View {
         let resume = resumePosition(for: episode)
         // A downloaded episode plays from the device: no link to fetch, and it works offline.
         if let saved = download(episode), saved.status == .completed {
-            store.playing = DownloadLibrary.shared.channel(for: saved)
+            store.playing = store.savedChannel(saved)
             return
         }
         // A drive line goes to the plugin even without an app sign-in: the plugin asks for its account itself, with
