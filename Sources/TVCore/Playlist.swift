@@ -3,6 +3,8 @@ import Foundation
 public enum Playlist {
     public static func parse(_ text: String, origin: URL, headers: [String: String] = [:]) throws -> [Channel] {
         var result: [Channel] = [], seen = Set<String>()
+        // Where each named channel is in `result`, by group and name: the same channel again is another line of it.
+        var named: [String: Int] = [:]
         var name: String?, logo: URL?, group = "", entryHeaders = headers
         let lines = text.replacingOccurrences(of: "\u{FEFF}", with: "").components(separatedBy: .newlines)
         let m3u = lines.contains { $0.trimmingCharacters(in: .whitespaces).hasPrefix("#EXTINF:") }
@@ -41,22 +43,55 @@ public enum Playlist {
                     if parts[1].trimmingCharacters(in: .whitespaces) == "#genre#" { group = parts[0]; continue }
                     name = parts[0]; address = parts[1]; entryHeaders = headers
                 }
-                let parts = address.split(separator: "|", maxSplits: 1).map(String.init)
-                guard let first = parts.first, let url = try? WebAddress.resolve(first, relativeTo: origin) else { name = nil; continue }
-                if parts.count == 2 {
-                    for pair in parts[1].split(separator: "&") {
-                        let kv = pair.split(separator: "=", maxSplits: 1).map(String.init)
-                        if kv.count == 2 { entryHeaders[kv[0]] = kv[1].removingPercentEncoding ?? kv[1] }
+                let lines = addresses(address).compactMap { Self.channelLine($0, headers: entryHeaders, origin: origin) }
+                guard let first = lines.first else { name = nil; continue }
+                if let name, let at = named[group + "|" + name] {
+                    // The same channel again in its group: another line of it, as TVBox players treat it (#679).
+                    for line in lines where line.url != result[at].url && !result[at].alternates.contains(where: { $0.url == line.url }) {
+                        result[at].alternates.append(line)
+                    }
+                } else {
+                    var channel = Channel(name: name ?? first.url.lastPathComponent, group: group, url: first.url, logo: logo, headers: first.headers)
+                    for line in lines.dropFirst() where line.url != channel.url && !channel.alternates.contains(where: { $0.url == line.url }) {
+                        channel.alternates.append(line)
+                    }
+                    if seen.insert(channel.id).inserted {
+                        if let name { named[group + "|" + name] = result.count }
+                        result.append(channel)
                     }
                 }
-                let channel = Channel(name: name ?? url.lastPathComponent, group: group, url: url, logo: logo, headers: entryHeaders)
-                if seen.insert(channel.id).inserted { result.append(channel) }
                 name = nil; logo = nil; entryHeaders = headers
             }
         }
         guard !result.isEmpty else { throw TVError.emptyPlaylist }
         return result
     }
+    /// TVBox lists a channel's lines in one entry, `url1#url2`. A `#` that doesn't start another address is the
+    /// address's own (a fragment).
+    static func addresses(_ text: String) -> [String] {
+        let pieces = text.components(separatedBy: "#").map { $0.trimmingCharacters(in: .whitespaces) }
+        return pieces.count > 1 && pieces.allSatisfy({ $0.contains("://") }) ? pieces : [text]
+    }
+
+    /// An address with the entry's headers, and its own after a `|` (`url|User-Agent=…&Referer=…`). A line's name
+    /// after a `$` (`url$高清`) is dropped.
+    private static func channelLine(_ address: String, headers: [String: String], origin: URL) -> ChannelLine? {
+        let parts = address.split(separator: "|", maxSplits: 1).map(String.init)
+        guard var first = parts.first else { return nil }
+        if let dollar = first.lastIndex(of: "$"), !first[first.index(after: dollar)...].contains(where: { "/=&?".contains($0) }) {
+            first = String(first[..<dollar])
+        }
+        guard let url = try? WebAddress.resolve(first, relativeTo: origin) else { return nil }
+        var headers = headers
+        if parts.count == 2 {
+            for pair in parts[1].split(separator: "&") {
+                let kv = pair.split(separator: "=", maxSplits: 1).map(String.init)
+                if kv.count == 2 { headers[kv[0]] = kv[1].removingPercentEncoding ?? kv[1] }
+            }
+        }
+        return ChannelLine(url: url, headers: headers)
+    }
+
     private static func attribute(_ key: String, in text: String) -> String? {
         guard let regex = try? NSRegularExpression(pattern: NSRegularExpression.escapedPattern(for: key) + "=\"([^\"]*)\""),
               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),

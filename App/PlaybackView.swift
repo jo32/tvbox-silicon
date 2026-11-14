@@ -200,6 +200,16 @@ import IOKit.pwr_mgt
     private var switchNotice: String?
     /// Qualities the stream can switch between (Bilibili), and the one chosen; nil is automatic.
     private(set) var qualities: [StreamQuality] = []
+    /// A live channel's lines (#679), the one playing, and those tried since the channel or the line was chosen. Empty
+    /// for a channel of one address.
+    private(set) var lines: [Channel] = []
+    private(set) var line = 0
+    private var triedLines: Set<Int> = []
+    /// When the line playing became ready. One that isn't ready after `lineWait` gives way to the next, as one that
+    /// fails does: a dead IPTV address can keep AVPlayer waiting a minute before it says so.
+    private var lineReadyAt: ContinuousClock.Instant?
+    private var lineWatch: Task<Void, Never>?
+    static let lineWait: Duration = .seconds(15)
     /// The sound tracks of a file that groups none of them (`UngroupedAudio`), for the player's Audio choice, and the
     /// one playing. Empty when AVFoundation offers the choice itself, or there is none.
     private(set) var audioChoices: [UngroupedAudio.Choice] = []
@@ -659,6 +669,34 @@ import IOKit.pwr_mgt
         Self.current = self
         // The queue has already moved on to this episode by itself.
         if let advanced, advanced == channel { self.advanced = nil; return }
+        lines = channel.alternates.isEmpty ? [] : channel.lines
+        line = 0; triedLines = [0]
+        open(channel)
+    }
+
+    /// Plays line `index` of the live channel, as the viewer chose: the others are there to fall back on again.
+    func choose(line index: Int) {
+        guard lines.indices.contains(index), index != line else { return }
+        Diagnostics.shared.record(.info, "player", "line \(index + 1)/\(lines.count) chosen")
+        line = index; triedLines = [index]
+        open(lines[index])
+    }
+
+    /// The channel's next line not tried since it was chosen, when this one failed or hasn't started (#679); false when
+    /// there is none left. A line that played a while before it dropped leaves every line to try again.
+    private func tryNextLine(after failure: Error?) -> Bool {
+        guard lines.count > 1 else { return false }
+        if let readyAt = lineReadyAt, readyAt.duration(to: .now) > .seconds(60) { triedLines = [line] }
+        guard let next = (1..<lines.count).map({ (line + $0) % lines.count }).first(where: { !triedLines.contains($0) }) else { return false }
+        Diagnostics.shared.record(.warning, "player", "line \(line + 1)/\(lines.count) \(failure.map(Self.describe) ?? "not ready"); trying line \(next + 1)")
+        let failed = line
+        line = next; triedLines.insert(next)
+        open(lines[next])
+        note(L10n.text("Line %@ didn't play. Trying line %@.", "\(failed + 1)", "\(next + 1)"))
+        return true
+    }
+
+    private func open(_ channel: Channel) {
         savedDownload = channel.url.scheme == DownloadLibrary.scheme
         stop(); error = nil; errorSymbol = "play.slash.fill"; loading = true; showsPicture = false; sourceDanmaku = []; qualities = []; quality = nil; switchNotice = nil
         begin(channel)
@@ -669,6 +707,14 @@ import IOKit.pwr_mgt
                                     danmaku: UserDefaults.standard.object(forKey: DanmakuPreference.key) == nil || UserDefaults.standard.bool(forKey: DanmakuPreference.key),
                                     sharper: UserDefaults.standard.bool(forKey: VideoEnhancement.upscaleKey))
         let activeGeneration = generation
+        lineReadyAt = nil
+        if lines.count > 1 {
+            lineWatch = Task { [weak self] in
+                try? await Task.sleep(for: Self.lineWait)
+                guard let self, !Task.isCancelled, self.generation == activeGeneration, self.lineReadyAt == nil, self.error == nil else { return }
+                _ = self.tryNextLine(after: nil)
+            }
+        }
         Diagnostics.shared.record(.info, "player", "start name=\(channel.name) group=\(channel.group) url=\(channel.url.absoluteString) headers=\(channel.headers.keys.sorted().joined(separator: ","))")
         preparation = Task { [weak self] in
             guard let self else { return }
@@ -692,6 +738,7 @@ import IOKit.pwr_mgt
             do { prepared = try await self.prepare(channel) }
             catch {
                 guard self.generation == activeGeneration, !Task.isCancelled else { return }
+                if self.tryNextLine(after: error) { return }
                 self.error = error.localizedDescription; self.loading = false; return
             }
             guard self.generation == activeGeneration, !Task.isCancelled else { return Self.stopAdapter(prepared) }
@@ -956,6 +1003,7 @@ import IOKit.pwr_mgt
                 self.hasTimeline = timeline
                 if status == .readyToPlay {
                     if self.isLive { self.liveReadyAt = .now }
+                    self.lineReadyAt = .now; self.lineWatch?.cancel(); self.lineWatch = nil
                     if UngroupedAudio.playOne(item) { Diagnostics.shared.record(.info, "player", "ungrouped audio tracks; playing the first") }
                     Task { [weak self] in
                         let choices = await UngroupedAudio.choices(item)
@@ -990,6 +1038,7 @@ import IOKit.pwr_mgt
                     if self.reopenedAfterDrop, self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
                     Diagnostics.shared.record(.error, "player", "failed host=\(self.transfer.host ?? channel.url.host() ?? "-") \(self.transfer.failure.map { "upstream=\($0) " } ?? "")\(detail) \(self.failureContext(channel, url: url, item: item))")
                     if self.retryLive(after: failure) { return }
+                    if self.tryNextLine(after: failure) { return }
                     // A refused link is usually an expired one: say so in plain words rather than the system's.
                     let expired = refused || [401, 403, 404, 410].contains(self.transfer.httpStatus ?? 0)
                     self.loading = false
@@ -1009,6 +1058,7 @@ import IOKit.pwr_mgt
                 if self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
                 Diagnostics.shared.record(.error, "player", "interrupted host=\(self.transfer.host ?? channel.url.host() ?? "-") at=\(Int(self.player.currentTime().seconds.isFinite ? self.player.currentTime().seconds : -1))s \(failure.map(Self.describe) ?? "-") \(self.failureContext(channel, url: url, item: item))")
                 if self.retryLive(after: failure) { return }
+                if self.tryNextLine(after: failure) { return }
                 self.error = message ?? L10n.text("Playback was interrupted."); self.loading = false
             }
         }
@@ -1210,6 +1260,7 @@ import IOKit.pwr_mgt
         generation = UUID()
         chat?.stop(); chat = nil
         preparation?.cancel(); preparation = nil
+        lineWatch?.cancel(); lineWatch = nil
         sampler?.cancel(); sampler = nil
         transfer = Transfer(); steps = []
         #if os(macOS)

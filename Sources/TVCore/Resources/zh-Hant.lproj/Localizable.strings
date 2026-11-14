@@ -1973,6 +1973,11 @@
 "Added" = "已加入";
 "Adding…" = "正在加入…";
 "The file is larger than %lld MB." = "檔案超過 %lld MB。";
+"Previous Channel" = "上一個頻道";
+"Next Channel" = "下一個頻道";
+"Channel List" = "頻道列表";
+"Line %@" = "線路 %@";
+"Line %@ didn't play. Trying line %@." = "線路 %1$@ 無法播放，正在嘗試線路 %2$@。";
 "Search Time Limit" = "搜尋時限";
 "%@ seconds" = "%@ 秒";
 "How long Search Online waits for the sources. Results show as each source answers, so a longer limit only waits longer for slow ones." = "線上搜尋等待各字幕來源的時間。每個來源一有結果就會顯示，所以時限加長只是多等較慢的來源。";

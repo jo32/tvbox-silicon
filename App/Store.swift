@@ -51,6 +51,19 @@ import TVCore
     }
     /// Set while a listening source's episode goes to the video player on purpose.
     @ObservationIgnored private var playsAsVideo = false
+    /// The channels the live channel playing was picked from, in order (its playlist, or the favorites): the player's
+    /// Previous and Next Channel and its channel list go through them (#1010).
+    var liveLineup: LiveLineup?
+    /// Plays a live channel picked from `lineup`.
+    func watch(_ channel: Channel, in lineup: LiveLineup) {
+        liveLineup = lineup
+        playing = channel
+    }
+    /// The list the channel was picked from, when it holds others to switch to.
+    func lineup(for channel: Channel) -> LiveLineup? {
+        guard let lineup = liveLineup, lineup.channels.count > 1, lineup.position(of: channel) != nil else { return nil }
+        return lineup
+    }
     /// The videos whose iPhone watch page is on screen (`PlaybackHistoryContext.id`): their episodes play at the top
     /// of the page instead of in the full-screen player.
     var watchPageScopes: Set<String> = []

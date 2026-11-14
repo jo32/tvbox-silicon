@@ -115,6 +115,7 @@ struct LiveSourceCard: View {
 
 struct ChannelListView: View {
     let source: LiveSource
+    @Environment(Store.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var channels: [Channel] = []
     @State private var query = ""
@@ -163,7 +164,7 @@ struct ChannelListView: View {
                 }
                 if !filtered.isEmpty {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.cardMin), spacing: 12)], spacing: 12) {
-                        ForEach(filtered) { ChannelCard(channel: $0) }
+                        ForEach(filtered) { ChannelCard(channel: $0, play: watch) }
                     }
                 }
             }.pageContainer()
@@ -189,6 +190,9 @@ struct ChannelListView: View {
             Text(L10n.text("Channels: %lld", filtered.count)).font(.caption).foregroundStyle(.secondary)
         }
     }
+    /// Plays a channel with the whole playlist to switch through in the player (#1010).
+    private func watch(_ channel: Channel) { store.watch(channel, in: LiveLineup(title: source.name, channels: channels)) }
+
     private func load() async {
         guard !loading else { return }
         loading = true; error = nil
@@ -307,7 +311,7 @@ private struct TVChannelGuide: View {
                         ForEach(filtered) { channel in
                             Button {
                                 showingSearch = false
-                                store.playing = channel
+                                watch(channel)
                             } label: {
                                 HStack(spacing: 24) {
                                     TVGuideLogo(channel: channel, size: 54)
@@ -332,8 +336,11 @@ private struct TVChannelGuide: View {
             .accessibilityAddTraits(group == value ? [.isSelected] : [])
     }
 
+    /// Plays a channel with the whole playlist to switch through in the player (#1010).
+    private func watch(_ channel: Channel) { store.watch(channel, in: LiveLineup(title: source.name, channels: channels)) }
+
     private func channelRow(_ channel: Channel) -> some View {
-        Button { store.playing = channel } label: {
+        Button { watch(channel) } label: {
             HStack(spacing: 26) {
                 TVGuideLogo(channel: channel, size: 52).frame(width: 100)
                 Rectangle().fill(.primary.opacity(0.12)).frame(width: 1, height: 48)
@@ -477,7 +484,10 @@ struct FavoritesView: View {
         VStack(alignment: .leading, spacing: Layout.headerSpacing) {
             SectionHeader(title: L10n.text("Live TV"))
             LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.cardMin), spacing: 12)], spacing: 12) {
-                ForEach(store.favorites.liveChannels) { ChannelCard(channel: $0) }
+                ForEach(store.favorites.liveChannels) { channel in
+                    // The other favorite channels are the ones to switch through in the player (#1010).
+                    ChannelCard(channel: channel) { store.watch($0, in: LiveLineup(title: L10n.text("Favorites"), channels: store.favorites.liveChannels)) }
+                }
             }
         }
         .tvFocusSection()
@@ -730,10 +740,15 @@ struct ChannelCard: View {
     @Environment(Store.self) private var store
     @Environment(\.stripDrag) private var drag
     let channel: Channel
+    /// How the card plays its channel, when it is one of a list to switch through (#1010).
+    var play: ((Channel) -> Void)? = nil
     var body: some View {
         let favorite = store.isFavorite(channel)
         HStack(spacing: 10) {
-            Button { if drag?.active != true { store.playing = channel } } label: {
+            Button {
+                guard drag?.active != true else { return }
+                if let play { play(channel) } else { store.playing = channel }
+            } label: {
                 HStack(spacing: 14) {
                     ChannelLogo(channel: channel)
                     VStack(alignment: .leading, spacing: 3) {

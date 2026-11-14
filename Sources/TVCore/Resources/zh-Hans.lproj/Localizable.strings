@@ -1973,6 +1973,11 @@
 "Added" = "已添加";
 "Adding…" = "正在添加…";
 "The file is larger than %lld MB." = "文件超过 %lld MB。";
+"Previous Channel" = "上一个频道";
+"Next Channel" = "下一个频道";
+"Channel List" = "频道列表";
+"Line %@" = "线路 %@";
+"Line %@ didn't play. Trying line %@." = "线路 %1$@ 无法播放，正在尝试线路 %2$@。";
 "Search Time Limit" = "搜索时限";
 "%@ seconds" = "%@ 秒";
 "How long Search Online waits for the sources. Results show as each source answers, so a longer limit only waits longer for slow ones." = "在线搜索等待各字幕来源的时长。每个来源一有结果就会显示，所以时限加长只是多等慢的来源。";

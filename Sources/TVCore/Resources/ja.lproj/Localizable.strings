@@ -1973,6 +1973,11 @@
 "Added" = "追加済み";
 "Adding…" = "追加中…";
 "The file is larger than %lld MB." = "ファイルが %lld MB を超えています。";
+"Previous Channel" = "前のチャンネル";
+"Next Channel" = "次のチャンネル";
+"Channel List" = "チャンネル一覧";
+"Line %@" = "ライン %@";
+"Line %@ didn't play. Trying line %@." = "ライン %1$@ を再生できません。ライン %2$@ を試しています。";
 "Search Time Limit" = "検索の制限時間";
 "%@ seconds" = "%@ 秒";
 "How long Search Online waits for the sources. Results show as each source answers, so a longer limit only waits longer for slow ones." = "オンライン検索が各ソースを待つ時間です。結果はソースが応答するたびに表示されるため、長くしても遅いソースを長く待つだけです。";
