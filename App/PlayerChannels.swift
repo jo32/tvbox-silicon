@@ -78,8 +78,9 @@ struct PlayerChannelsSheet: View {
         let groups = channels.map(\.group).filter { seen.insert($0).inserted }
         let shown = group.flatMap { groups.contains($0) ? $0 : nil } ?? playing.group
         let items = groups.count > 1 ? channels.filter { $0.group == shown } : channels
-        return ScrollViewReader { proxy in
-            ScrollView {
+        // The lines and groups stay put above the channels: in the same scroll view, choosing a group scrolled them away.
+        return VStack(spacing: 0) {
+            if session.lines.count > 1 || groups.count > 1 {
                 VStack(alignment: .leading, spacing: 14) {
                     if session.lines.count > 1 {
                         VStack(alignment: .leading, spacing: 8) {
@@ -99,14 +100,22 @@ struct PlayerChannelsSheet: View {
                         .contentMargins(.horizontal, 16, for: .scrollContent).scrollClipDisabled()
                         .padding(.horizontal, -16)
                     }
+                }
+                .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 10)
+            }
+            ScrollViewReader { proxy in
+                ScrollView {
                     LazyVStack(spacing: 4) {
                         ForEach(items) { item in row(item, current: item.id == playing.id).id(item.id) }
                     }
+                    .padding(.horizontal, 16).padding(.bottom, 16).padding(.top, 4)
                 }
-                .padding(16)
+                .onAppear { proxy.scrollTo(playing.id, anchor: .center) }
+                .onChange(of: shown) { _, _ in
+                    if items.contains(where: { $0.id == playing.id }) { proxy.scrollTo(playing.id, anchor: .center) }
+                    else if let first = items.first { proxy.scrollTo(first.id, anchor: .top) }
+                }
             }
-            .onAppear { proxy.scrollTo(playing.id, anchor: .center) }
-            .onChange(of: shown) { _, _ in if let first = items.first { proxy.scrollTo(first.id, anchor: .top) } }
         }
     }
 

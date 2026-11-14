@@ -506,6 +506,37 @@ import IOKit.pwr_mgt
         return true
     }
 
+    /// MPEG-TS HLS whose sound AVPlayer can't decode, the MPEG-1 Layer II of many IPTV channels, fails at once with
+    /// 'fmt?'. It opens again repackaged (`HLSRemux`): the picture copied, the sound converted to AAC. When that doesn't
+    /// work either, the channel's next line, or the error.
+    private func retryConvertingAudio(after failure: Error?, channel: Channel, url: URL, generation active: UUID) -> Bool {
+        guard Self.unsupportedFormat(failure), !Remux.isRemuxed(url), ["http", "https"].contains(url.scheme) else { return false }
+        detachItem(); observation = nil
+        Diagnostics.shared.record(.warning, "player", "format refused; repackaging host=\(url.host() ?? "-") \(Self.describe(failure!))")
+        note(L10n.text("Repackaging the video for this device"))
+        loading = true
+        preparation = Task { [weak self] in
+            var remuxed: URL?
+            do { remuxed = try await HLSRemux.open(url, headers: channel.headers) }
+            catch { if !Task.isCancelled { Diagnostics.shared.record(.info, "player", "hls not repackaged \(Self.describe(error))") } }
+            guard let self, self.generation == active, !Task.isCancelled else {
+                if let remuxed { Remux.stop(remuxed) }
+                return
+            }
+            guard let remuxed else {
+                if self.tryNextLine(after: failure) { return }
+                self.loading = false
+                self.errorSymbol = "play.slash.fill"
+                self.error = failure?.localizedDescription ?? L10n.text("This media cannot be played. Try another channel or source.")
+                return
+            }
+            self.configure(channel, url: remuxed, generation: active)
+            self.externalSubtitles.playing(remuxed)
+            self.automatic = remuxed
+        }
+        return true
+    }
+
     /// The other line could not be resolved either: show why instead of loading forever.
     func lineSwitchFailed(_ message: String) {
         guard switchNotice != nil else { return }
@@ -1034,6 +1065,7 @@ import IOKit.pwr_mgt
                 if status == .failed {
                     if self.retryRange(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.retryHDR(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
+                    if self.retryConvertingAudio(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
                     if self.reopenedAfterDrop, self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
                     Diagnostics.shared.record(.error, "player", "failed host=\(self.transfer.host ?? channel.url.host() ?? "-") \(self.transfer.failure.map { "upstream=\($0) " } ?? "")\(detail) \(self.failureContext(channel, url: url, item: item))")
@@ -1737,6 +1769,16 @@ extension PlaybackSession {
         var current = error as NSError?
         while let error = current {
             if error.domain == "CoreMediaErrorDomain", [-1002, -12927].contains(error.code) { return true }
+            current = error.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return false
+    }
+
+    /// AVPlayer can't decode what the stream carries: CoreMedia's 'fmt?' (1718449215), as for MP2 sound in MPEG-TS.
+    nonisolated static func unsupportedFormat(_ error: Error?) -> Bool {
+        var current = error as NSError?
+        while let error = current {
+            if error.domain == "CoreMediaErrorDomain", error.code == 1718449215 { return true }
             current = error.userInfo[NSUnderlyingErrorKey] as? NSError
         }
         return false

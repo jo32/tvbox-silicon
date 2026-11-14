@@ -8,10 +8,13 @@ import TVMedia
 /// repackager's loopback server under the playlist's own durations and discontinuities. AES-128 keys are applied
 /// here. A live stream's playlist is read again as AVPlayer reloads the repackaged one, which then lists the same
 /// segments (an IPTV channel in 4K, #361). An HDR picture is tone mapped to SDR on a device that doesn't show HDR
-/// now, as a repackaged file's is: AVPlayer refuses its HDR variant there (#345).
+/// now, as a repackaged file's is: AVPlayer refuses its HDR variant there (#345). Sound AVPlayer can't decode in
+/// MPEG-TS, the MPEG-1 Layer II of many IPTV channels, is converted to AAC, the picture copied: such a stream fails
+/// at once ('fmt?') and opens again here.
 public enum HLSRemux {
     /// Opens the stream behind `url` (a master or media playlist) and returns the address of its repackaged master
-    /// playlist. Throws when its first segment isn't MPEG-TS carrying HEVC, or the playlist is one this doesn't handle.
+    /// playlist. Throws when its first segment isn't MPEG-TS carrying HEVC or sound to convert, or the playlist is one
+    /// this doesn't handle.
     public static func open(_ url: URL, headers: [String: String]) async throws -> URL {
         try await open(url, headers: headers, network: HLSRemuxSession.network, device: RemuxSession.device())
     }
@@ -135,6 +138,8 @@ public enum HLSRemux {
         /// The source's picture codec, and the one the segments carry (`hevc` or `h264` once tone mapped).
         var video = "", picture = "", toneMapped = false
         var audio: String?, audioProfile = 0
+        /// The source's sound is converted to AAC: Apple devices don't decode it (MP2, MP3, DTS, ...).
+        var audioConverted = false
         var width = 0, height = 0, transfer = 0
         var bytes = 0
         var initializations: [Int: Data] = [:]
@@ -178,6 +183,7 @@ public enum HLSRemux {
                 audio = TVMTrack(stream: index, mode: Int32(copy ? TVMModeCopy : TVMModeAAC), bitRate: 192_000,
                                  channels: raw.channels >= 6 ? 6 : raw.channels == 1 ? 1 : 2, dolbyVision: 0, toneMap: 0, width: 0, height: 0)
                 output.audio = copy ? codec : "aac"
+                output.audioConverted = !copy
                 output.audioProfile = copy ? Int(raw.profile) : 1
             }
         }
@@ -207,8 +213,8 @@ public enum HLSRemux {
     }
 }
 
-/// One HLS stream played through `HLSRemux`. Segments are made as AVPlayer asks for them, the next one ahead, and
-/// the last few are kept for both tracks' requests. A segment is named by its position: its place in a VOD
+/// One HLS stream played through `HLSRemux`. Segments are made as AVPlayer asks for them, the next one ahead (a live
+/// stream's as soon as they're listed), and the last few are kept for both tracks' requests. A segment is named by its position: its place in a VOD
 /// playlist, or in the order a live one listed it, so a live stream's names stay put as its playlist moves on.
 final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
     static let network: URLSession = {
@@ -219,6 +225,11 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
         return URLSession(configuration: configuration)
     }()
     static let kept = 6
+    /// A live stream's segments are made as soon as its playlist lists them, side by side, and stay listed a few
+    /// more after the source drops them: IPTV servers often send each connection slower than the stream plays (a
+    /// 4 s CCTV segment took 16 s), which several at once keep up with, a little further behind the live edge.
+    static let liveKept = 12
+    static let liveBehind = 3
 
     let id = UUID().uuidString.lowercased()
     /// The playlist has no end: it is read again as AVPlayer reloads the repackaged one (#361).
@@ -260,7 +271,7 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
     }
 
     /// Reads the playlist (the variant with the highest bandwidth of a master one) and repackages one segment, which
-    /// must be MPEG-TS carrying HEVC: a VOD stream's first, a live one's newest.
+    /// must be MPEG-TS carrying HEVC or sound to convert: a VOD stream's first, a live one's newest.
     static func make(_ url: URL, headers: [String: String], network: URLSession, device: RemuxPlan.Device) async throws -> HLSRemuxSession {
         let began = Date()
         var source = url
@@ -278,11 +289,14 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
         let session = HLSRemuxSession(segments: segments, source: source, live: live, target: target, headers: headers,
                                       network: network, device: device)
         let probe = live ? segments.count - 1 : 0
+        if live {
+            session.lock.withLock { for position in max(0, segments.count - Self.liveKept / 2)..<probe { _ = try? session.start(position) } }
+        }
         let first: HLSRemux.Output
         do { first = try await session.output(probe) } catch { session.close(); throw error }
-        guard first.format == "mpegts", first.video == "hevc" else {
+        guard first.format == "mpegts", first.video == "hevc" || first.audioConverted else {
             session.close()
-            throw TVError.unsupported("not HEVC in MPEG-TS: \(first.format) \(first.video)")
+            throw TVError.unsupported("nothing to repackage in \(first.format): \(first.video) \(first.audio ?? "-")")
         }
         session.describe(first, at: probe)
         Diagnostics.shared.record(.info, "remux", "hls open host=\(address.host() ?? "-") segments=\(segments.count) live=\(live) audio=\(first.audio ?? "-") size=\(first.width)x\(first.height) transfer=\(first.transfer) hdr=\(device.hdr) sdr=\(first.toneMapped) discontinuities=\(segments.filter(\.discontinuity).count) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
@@ -388,7 +402,7 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
         let start = first + listed.count
         listed += added
         runs += Self.runs(added, start: start, run: runs.last ?? start)
-        let drop = max(0, listed.count - fresh.count)
+        let drop = max(0, listed.count - fresh.count - Self.liveBehind)
         if drop > 0 {
             discontinuities += listed.prefix(drop).filter(\.discontinuity).count
             listed.removeFirst(drop); runs.removeFirst(drop); first += drop
@@ -396,6 +410,8 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
             initializations = initializations.filter { current.contains($0.key) }
         }
         if let longest = added.map(\.duration).max() { target = max(target, Int(longest.rounded(.up))) }
+        let end = first + listed.count
+        for position in end - added.count..<end { _ = try? self.start(position) }
     }
 
     /// The position of the segment beginning each one's discontinuity: `run` until one of them begins another.
@@ -471,12 +487,14 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
             }
         }
         made[index] = task
-        while order.count > Self.kept { made.removeValue(forKey: order.removeFirst()) }
+        while order.count > (live ? Self.liveKept : Self.kept) { made.removeValue(forKey: order.removeFirst()) }
         return task
     }
 
     private func make(_ segment: HLSRemux.Segment) async throws -> HLSRemux.Output {
+        let began = Date()
         var data = try await fetch(segment.url)
+        Diagnostics.shared.record(.debug, "remux", "hls fetched sequence=\(segment.sequence) bytes=\(data.count) seconds=\(String(format: "%.1f", segment.duration)) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
         if let key = segment.key {
             data = try HLSRemux.decrypt(data, key: try await keyData(key.url), iv: key.iv ?? HLSRemux.iv(segment.sequence))
         }

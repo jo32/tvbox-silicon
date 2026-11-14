@@ -738,19 +738,23 @@ import VideoToolbox
         let played = await picture(master)
         #expect(played.status == .readyToPlay && played.size == CGSize(width: 320, height: 180) && played.video, "\(played)")
 
-        // One segment joins and two leave: names stay as they were.
+        // One segment joins and two leave the source; they stay listed (`liveBehind`), names as they were.
         video = try await moved(102, [0, 1, 0])
-        #expect(video.contains("#EXT-X-MEDIA-SEQUENCE:2\n#EXT-X-DISCONTINUITY-SEQUENCE:0\n#EXT-X-DISCONTINUITY\n#EXT-X-MAP:URI=\"0-2.mp4\"\n#EXTINF:2.000000,\n0-2.m4s\n"), "\(video)")
+        #expect(video.contains("#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-DISCONTINUITY-SEQUENCE:0\n#EXT-X-MAP:URI=\"0-0.mp4\"\n"), "\(video)")
         #expect(video.hasSuffix("0-3.m4s\n#EXT-X-DISCONTINUITY\n#EXT-X-MAP:URI=\"0-4.mp4\"\n#EXTINF:2.000000,\n0-4.m4s\n"), "\(video)")
+        // Two more join: the oldest leave, three behind the source's own.
+        video = try await moved(105, [1, 1])
+        #expect(video.contains("#EXT-X-MEDIA-SEQUENCE:2\n#EXT-X-DISCONTINUITY-SEQUENCE:0\n#EXT-X-DISCONTINUITY\n#EXT-X-MAP:URI=\"0-2.mp4\"\n#EXTINF:2.000000,\n0-2.m4s\n"), "\(video)")
         // The discontinuity's first segment leaves; its initialization segment stays, and is counted.
-        video = try await moved(103, [1, 0])
+        video = try await moved(106, [1, 0])
         #expect(video.contains("#EXT-X-MEDIA-SEQUENCE:3\n#EXT-X-DISCONTINUITY-SEQUENCE:1\n#EXT-X-MAP:URI=\"0-2.mp4\"\n#EXTINF:2.000000,\n0-3.m4s\n"), "\(video)")
         #expect(RemuxPlan.box("hvcC", in: try await fetch(folder.appending(path: "0-2.mp4"))) != nil)
         #expect(try await text("1.m3u8").contains("1-3.m4s"))
-        // Sequences 105 and 106 were missed: the next segment begins a discontinuity of its own.
-        video = try await moved(107, [1])
-        #expect(video.contains("#EXT-X-MEDIA-SEQUENCE:5\n#EXT-X-DISCONTINUITY-SEQUENCE:2\n#EXT-X-DISCONTINUITY\n#EXT-X-MAP:URI=\"0-5.mp4\"\n#EXTINF:2.000000,\n0-5.m4s\n"), "\(video)")
-        for file in ["0-5.mp4", "0-5.m4s", "1-5.m4s"] {
+        // Sequences 108 and 109 were missed: the next segment begins a discontinuity of its own.
+        video = try await moved(110, [1])
+        #expect(video.contains("#EXT-X-MEDIA-SEQUENCE:5\n#EXT-X-DISCONTINUITY-SEQUENCE:2\n#EXT-X-MAP:URI=\"0-4.mp4\"\n#EXTINF:2.000000,\n0-5.m4s\n"), "\(video)")
+        #expect(video.hasSuffix("#EXT-X-DISCONTINUITY\n#EXT-X-MAP:URI=\"0-8.mp4\"\n#EXTINF:2.000000,\n0-8.m4s\n"), "\(video)")
+        for file in ["0-8.mp4", "0-8.m4s", "1-8.m4s"] {
             let data = try await fetch(folder.appending(path: file))
             #expect(data.count > 8 && data.subdata(in: 4..<8) == Data((file.hasSuffix("mp4") ? "ftyp" : "moof").utf8), "\(file)")
         }
@@ -797,6 +801,23 @@ import VideoToolbox
         #expect(first.toneMapped && first.initializations[0] == second.initializations[0])
         let played = await picture(master)
         #expect(played.status == .readyToPlay && played.size == CGSize(width: 320, height: 180) && played.video)
+    }
+
+    /// H.264 with MPEG-1 Layer II sound in MPEG-TS, as many IPTV channels send it: AVPlayer refuses it ('fmt?'), so it
+    /// is repackaged, the picture copied and the sound converted to AAC.
+    @Test func hlsWithSoundAVPlayerCantDecodeIsConverted() async throws {
+        let name = "mp2-\(UUID().uuidString)"
+        _ = RangeServer.add("\(name).ts", try Data(contentsOf: fixture("remux-h264-mp2.ts")))
+        let url = RangeServer.add("\(name).m3u8", Data("#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXTINF:0.4,\n\(name).ts\n#EXT-X-ENDLIST\n".utf8))
+        let master = try await HLSRemux.open(url, headers: [:], network: RangeServer.session)
+        defer { Remux.stop(master) }
+        let text = String(decoding: try await fetch(master), as: UTF8.self)
+        #expect(text.contains("CODECS=\"avc1.") && text.contains(",mp4a.40.2\""), "\(text)")
+        let session = try #require(RemuxStore.shared.segmented(master.deletingLastPathComponent().lastPathComponent))
+        let output = try await session.output(0)
+        #expect(output.video == "h264" && output.audio == "aac" && output.audioConverted)
+        let played = await picture(master)
+        #expect(played.status == .readyToPlay && played.size == CGSize(width: 320, height: 180) && played.video, "\(played)")
     }
 
     @Test func hlsWhosePictureAVPlayerShowsIsLeftAlone() async throws {
