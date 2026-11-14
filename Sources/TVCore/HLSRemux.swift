@@ -225,11 +225,14 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
         return URLSession(configuration: configuration)
     }()
     static let kept = 6
-    /// A live stream's segments are made as soon as its playlist lists them, side by side, and stay listed a few
-    /// more after the source drops them: IPTV servers often send each connection slower than the stream plays (a
-    /// 4 s CCTV segment took 16 s), which several at once keep up with, a little further behind the live edge.
+    /// A live stream's segments are made as soon as its playlist lists them, four at a time, the earliest first, and
+    /// stay listed a few more after the source drops them, and while AVPlayer still plays them: IPTV servers often
+    /// send each connection slower than the stream plays (a 4 s CCTV segment took 16 s), which several at once keep
+    /// up with, further behind the live edge.
     static let liveKept = 12
     static let liveBehind = 3
+    static let liveLongest = 30
+    static let liveFetches = 4
 
     let id = UUID().uuidString.lowercased()
     /// The playlist has no end: it is read again as AVPlayer reloads the repackaged one (#361).
@@ -262,6 +265,9 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
     private var order: [Int] = []
     private var keys: [URL: Task<Data, Error>] = [:]
     private var closed = false
+    /// The segment AVPlayer asked for last (its picture), kept listed while a slow server holds it far behind.
+    private var playing: Int?
+    private let gate = FetchGate(limit: liveFetches)
 
     private init(segments: [HLSRemux.Segment], source: URL, live: Bool, target: Int, headers: [String: String],
                  network: URLSession, device: RemuxPlan.Device) {
@@ -290,7 +296,8 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
                                       network: network, device: device)
         let probe = live ? segments.count - 1 : 0
         if live {
-            session.lock.withLock { for position in max(0, segments.count - Self.liveKept / 2)..<probe { _ = try? session.start(position) } }
+            // Those AVPlayer starts with, three target durations from the end, beside the probe.
+            session.lock.withLock { for position in max(0, segments.count - Self.liveFetches)..<probe { _ = try? session.start(position) } }
         }
         let first: HLSRemux.Output
         do { first = try await session.output(probe) } catch { session.close(); throw error }
@@ -299,6 +306,9 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
             throw TVError.unsupported("nothing to repackage in \(first.format): \(first.video) \(first.audio ?? "-")")
         }
         session.describe(first, at: probe)
+        // AVPlayer first sees the playlist made so far: read again now, it would list segments that came out while
+        // these were fetched, and start with one of them, not yet made (57 s to the picture from a slow server).
+        session.lock.withLock { session.refreshed = Date() }
         Diagnostics.shared.record(.info, "remux", "hls open host=\(address.host() ?? "-") segments=\(segments.count) live=\(live) audio=\(first.audio ?? "-") size=\(first.width)x\(first.height) transfer=\(first.transfer) hdr=\(device.hdr) sdr=\(first.toneMapped) discontinuities=\(segments.filter(\.discontinuity).count) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
         return session
     }
@@ -402,7 +412,9 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
         let start = first + listed.count
         listed += added
         runs += Self.runs(added, start: start, run: runs.last ?? start)
-        let drop = max(0, listed.count - fresh.count - Self.liveBehind)
+        var drop = max(0, listed.count - fresh.count - Self.liveBehind)
+        if let playing { drop = min(drop, max(0, playing - 1 - first)) }
+        drop = max(drop, listed.count - Self.liveLongest)
         if drop > 0 {
             discontinuities += listed.prefix(drop).filter(\.discontinuity).count
             listed.removeFirst(drop); runs.removeFirst(drop); first += drop
@@ -427,6 +439,7 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
         let running: [Task<HLSRemux.Output, Error>] = lock.withLock {
             closed = true
             refreshing?.cancel()
+            gate.drain()
             defer { made = [:]; order = []; keys = [:] }
             return Array(made.values)
         }
@@ -453,7 +466,10 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
     }
 
     func segment(track: Int, index: Int) async throws -> Data {
-        lock.withLock { if !closed, segment(at: index + 1) != nil { _ = try? start(index + 1) } }
+        lock.withLock {
+            if track == 0 { playing = index }
+            if !closed, segment(at: index + 1) != nil { _ = try? start(index + 1) }
+        }
         guard let data = try await output(index).media[track] else { throw TVError.unsupported("segment \(index) has no track \(track)") }
         return data
     }
@@ -478,7 +494,7 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
         guard let segment = segment(at: index) else { throw TVError.unsupported("no such segment") }
         order.append(index)
         let task = Task { [self] in
-            do { return try await make(segment) }
+            do { return try await make(segment, at: index) }
             catch {
                 // Made again when AVPlayer asks again.
                 lock.withLock { _ = made.removeValue(forKey: index); order.removeAll { $0 == index } }
@@ -491,7 +507,11 @@ final class HLSRemuxSession: SegmentedStream, @unchecked Sendable {
         return task
     }
 
-    private func make(_ segment: HLSRemux.Segment) async throws -> HLSRemux.Output {
+    private func make(_ segment: HLSRemux.Segment, at position: Int) async throws -> HLSRemux.Output {
+        let gated = live
+        if gated { await gate.enter(position) }
+        defer { if gated { gate.leave() } }
+        try Task.checkCancellation()
         let began = Date()
         var data = try await fetch(segment.url)
         Diagnostics.shared.record(.debug, "remux", "hls fetched sequence=\(segment.sequence) bytes=\(data.count) seconds=\(String(format: "%.1f", segment.duration)) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
@@ -554,4 +574,48 @@ private let memoryInterrupted: TVMInterruptFunction = { _ in 0 }
 private let memoryWrite: TVMWriteFunction = { context, track, bytes, size in
     guard let bytes, size > 0 else { return }
     memory(context).written[Int(track), default: Data()].append(bytes, count: Int(size))
+}
+
+/// Lets a few of a live stream's segments download at once, the earliest first: the one AVPlayer needs next doesn't
+/// share a slow server with every newer one.
+final class FetchGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private let limit: Int
+    private var running = 0
+    private var drained = false
+    private var waiting: [(position: Int, continuation: CheckedContinuation<Void, Never>)] = []
+
+    init(limit: Int) { self.limit = limit }
+
+    func enter(_ position: Int) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let now: Bool = lock.withLock {
+                if drained || running < limit { running += 1; return true }
+                waiting.append((position, continuation))
+                waiting.sort { $0.position < $1.position }
+                return false
+            }
+            if now { continuation.resume() }
+        }
+    }
+
+    /// A download finished: its place goes to the earliest waiting.
+    func leave() {
+        let next = lock.withLock { () -> CheckedContinuation<Void, Never>? in
+            guard !waiting.isEmpty else { running = max(0, running - 1); return nil }
+            return waiting.removeFirst().continuation
+        }
+        next?.resume()
+    }
+
+    /// The stream closed: every waiting one goes on (and stops, cancelled).
+    func drain() {
+        let all = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+            drained = true
+            running += waiting.count
+            defer { waiting = [] }
+            return waiting.map(\.continuation)
+        }
+        all.forEach { $0.resume() }
+    }
 }
