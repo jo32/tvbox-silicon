@@ -263,3 +263,19 @@ private actor DanmakuTestTransport {
     #expect(try await tencent.resolve(automaticContext(episode: "第2集")).source == "Dandanplay")
     #expect(await transport.count("api.dandanplay.net/api/v2/search/anime") == searches)
 }
+
+@Test func automaticMatchingOffFollowsAShowPickedByHandOnTheOfficialServer() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let transport = DanmakuTestTransport("dandan"), cache = MediaCache(root: root)
+    let resolver = DanmakuResolver(cache: cache, http: DanmakuHTTP { try await transport.send($0) },
+        dandanServer: "https://api.dandanplay.net", dmkuServer: URL(string: "https://dmku.test")!, dandanCredentials: automaticCredentials)
+    let context = automaticContext()
+    resolver.remember(DanmakuMapping(provider: "dandan", title: context.videoName, year: context.year, tracks: [
+        DanmakuTrack(number: 1, title: "第1集", id: "123001"), DanmakuTrack(number: 2, title: "第2集", id: "123002")
+    ]), for: context, ticket: cache.ticket(), picked: true)
+    #expect(resolver.hasPick(for: automaticContext(episode: "第2集")))
+    #expect(try await resolver.resolve(automaticContext(episode: "第2集"), savedOnly: true).source == "Dandanplay")
+    #expect(await transport.count("api.dandanplay.net/api/v2/search/anime") == 0)
+    #expect(await transport.count("dmku.test") == 0)
+}
