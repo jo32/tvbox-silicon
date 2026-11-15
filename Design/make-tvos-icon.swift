@@ -1,59 +1,108 @@
-// Renders the tvOS app icon layers and top shelf images from Design/yingxia-icon.png.
-// Usage: swift Design/make-tvos-icon.swift <Assets.xcassets>
+// Renders the Apple TV app icon layers, the top shelf images and the in-app mark from the app's own icon on iPhone,
+// iPad and Mac (Config/iOS/Assets.xcassets/AppIcon.appiconset/AppIcon.png, made by Design/make-app-icons.swift).
+//
+// Usage (from the repository root): swift Design/make-tvos-icon.swift Config/tvOS/Assets.xcassets
+//
+// The icon is one square, opaque picture, while an Apple TV icon is wider (5:3) and a stack of layers the system tilts
+// apart when the icon is focused. So:
+// - Back: the picture's background colours, measured at its side edges, carried across the width, so the square
+//   continues to the left and right.
+// - Front: the square itself, as tall as the icon, its left and right edges faded into the back layer.
 import AppKit
 import CoreGraphics
 
 let root = URL(fileURLWithPath: CommandLine.arguments[1])
 let brand = root.appendingPathComponent("App Icon & Top Shelf Image.brandassets")
-let source = NSImage(contentsOfFile: "Design/yingxia-icon.png")!.cgImage(forProposedRect: nil, context: nil, hints: nil)!
+let sourceURL = URL(fileURLWithPath: "Config/iOS/Assets.xcassets/AppIcon.appiconset/AppIcon.png")
+let markFolder = URL(fileURLWithPath: "App/Assets.xcassets/AppMark.imageset")
+let space = CGColorSpace(name: CGColorSpace.sRGB)!
 
-/// The artwork's own corner colour, so the back layer continues it.
-let edge: (CGFloat, CGFloat, CGFloat) = {
-    let context = CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-    context.draw(source.cropping(to: CGRect(x: 0, y: 0, width: 24, height: 24))!, in: CGRect(x: 0, y: 0, width: 1, height: 1))
-    let p = context.data!.assumingMemoryBound(to: UInt8.self)
-    return (CGFloat(p[0]) / 255, CGFloat(p[1]) / 255, CGFloat(p[2]) / 255)
+guard let imageSource = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),
+      let source = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else { fatalError("Can't read \(sourceURL.path)") }
+let side = source.width
+
+/// The colour of each row of the back layer (top row first). The picture's background is two-tone (MediaPocketPurple:
+/// purple above its pocket, lavender below), so it is measured from thin strips at the left and right edges: the top
+/// colour near the top, the bottom one near the foot, and the row where the left edge turns from one to the other, with
+/// a soft step between. Rows taken straight from the edges would carry streaks of whatever touches them.
+let edgeRows: [(Double, Double, Double)] = {
+    var data = [UInt8](repeating: 0, count: side * side * 4)
+    let context = CGContext(data: &data, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4, space: space,
+                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    context.draw(source, in: CGRect(x: 0, y: 0, width: side, height: side))
+    let strip = max(2, side / 64)
+    func mean(rows: Range<Int>, columns: [Int]) -> (Double, Double, Double) {
+        var sum = (0.0, 0.0, 0.0)
+        for y in rows { for x in columns {
+            let i = (y * side + x) * 4
+            sum.0 += Double(data[i]); sum.1 += Double(data[i + 1]); sum.2 += Double(data[i + 2])
+        } }
+        let n = Double(rows.count * columns.count)
+        return (sum.0 / n, sum.1 / n, sum.2 / n)
+    }
+    func distance(_ a: (Double, Double, Double), _ b: (Double, Double, Double)) -> Double { abs(a.0 - b.0) + abs(a.1 - b.1) + abs(a.2 - b.2) }
+    let edges = Array(0..<strip) + Array((side - strip)..<side)
+    let top = mean(rows: (side * 2 / 100)..<(side * 15 / 100), columns: edges)
+    let bottom = mean(rows: (side * 80 / 100)..<(side * 97 / 100), columns: edges)
+    let left = Array(0..<strip)
+    let split = ((side / 5)..<(side * 4 / 5)).first { y in
+        let c = mean(rows: y..<(y + 1), columns: left)
+        return distance(c, bottom) < distance(c, top)
+    } ?? side / 2
+    let soft = Double(side) * 0.04
+    return (0..<side).map { y in
+        let t = min(1, max(0, (Double(y - split) + soft / 2) / soft))
+        let s = t * t * (3 - 2 * t)
+        return (top.0 + (bottom.0 - top.0) * s, top.1 + (bottom.1 - top.1) * s, top.2 + (bottom.2 - top.2) * s)
+    }
 }()
 
 enum Layer { case back, front, flat }
 
-func render(width: Int, height: Int, layer: Layer, glyph: CGFloat) -> Data {
-    let space = CGColorSpace(name: CGColorSpace.sRGB)!
-    let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-    let size = CGSize(width: width, height: height)
-    let center = CGPoint(x: size.width / 2, y: size.height / 2)
+/// A `width` × `height` layer with the square centred, its side `glyph` × the height.
+func render(width: Int, height: Int, layer: Layer, glyph: CGFloat) -> CGImage {
+    let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    let squareSide = CGFloat(height) * glyph
+    let square = CGRect(x: (CGFloat(width) - squareSide) / 2, y: (CGFloat(height) - squareSide) / 2, width: squareSide, height: squareSide)
     if layer != .front {
-        context.setFillColor(CGColor(srgbRed: edge.0, green: edge.1, blue: edge.2, alpha: 1))
-        context.fill(CGRect(origin: .zero, size: size))
-        // A soft blue glow behind the mark, as in the artwork.
-        let glow = CGGradient(colorsSpace: space, colors: [CGColor(srgbRed: 0.05, green: 0.25, blue: 0.85, alpha: 0.55), CGColor(srgbRed: 0.05, green: 0.25, blue: 0.85, alpha: 0)] as CFArray, locations: [0, 1])!
-        context.drawRadialGradient(glow, startCenter: center, startRadius: 0, endCenter: center, endRadius: max(size.width, size.height) * 0.55, options: [])
+        // Row by row; CG's origin is at the foot, the rows' at the top. Above and below a square shorter than the
+        // layer, the first and last rows carry on.
+        for y in 0..<height {
+            let row = Int(((CGFloat(height - 1 - y) + 0.5 - square.minY) / squareSide * CGFloat(side)).rounded(.down))
+            let c = edgeRows[min(max(row, 0), side - 1)]
+            context.setFillColor(CGColor(srgbRed: c.0 / 255, green: c.1 / 255, blue: c.2 / 255, alpha: 1))
+            context.fill(CGRect(x: 0, y: y, width: width, height: 1))
+        }
     }
     if layer != .back {
-        // The square artwork, its own background faded out at the edges so only the mark stands out.
-        let side = size.height * glyph
-        let rect = CGRect(x: center.x - side / 2, y: center.y - side / 2, width: side, height: side)
-        let mask = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue)!
-        let fade = CGGradient(colorsSpace: CGColorSpaceCreateDeviceGray(), colors: [CGColor(gray: 1, alpha: 1), CGColor(gray: 1, alpha: 1), CGColor(gray: 0, alpha: 1)] as CFArray, locations: [0, 0.62, 1])!
-        mask.drawRadialGradient(fade, startCenter: center, startRadius: 0, endCenter: center, endRadius: side / 2, options: [])
+        // The square, its outer eighth on each side fading out.
+        let mask = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceGray(),
+                             bitmapInfo: CGImageAlphaInfo.none.rawValue)!
+        let fade = CGGradient(colorsSpace: CGColorSpaceCreateDeviceGray(),
+                              colors: [CGColor(gray: 0, alpha: 1), CGColor(gray: 1, alpha: 1), CGColor(gray: 1, alpha: 1), CGColor(gray: 0, alpha: 1)] as CFArray,
+                              locations: [0, 0.125, 0.875, 1])!
+        mask.clip(to: square)
+        mask.drawLinearGradient(fade, start: CGPoint(x: square.minX, y: 0), end: CGPoint(x: square.maxX, y: 0), options: [])
         context.saveGState()
-        context.clip(to: CGRect(origin: .zero, size: size), mask: mask.makeImage()!)
+        context.clip(to: CGRect(x: 0, y: 0, width: width, height: height), mask: mask.makeImage()!)
         context.interpolationQuality = .high
-        context.draw(source, in: rect)
+        context.draw(source, in: square)
         context.restoreGState()
     }
-    let image = context.makeImage()!
-    return NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])!
+    return context.makeImage()!
 }
 
-func write(_ data: Data, _ path: String) {
-    let url = brand.appendingPathComponent(path)
+func png(_ image: CGImage) -> Data { NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])! }
+func write(_ data: Data, _ url: URL) {
     try! FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     try! data.write(to: url)
 }
-func json(_ object: Any, _ path: String) {
-    write(try! JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]), path)
+func write(_ data: Data, _ path: String) { write(data, brand.appendingPathComponent(path)) }
+func json(_ object: Any, _ url: URL) {
+    write(try! JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]), url)
 }
+func json(_ object: Any, _ path: String) { json(object, brand.appendingPathComponent(path)) }
 let info = ["author": "xcode", "version": 1] as [String: Any]
 
 // Icon image stacks: a back and a front layer, so the system can add parallax.
@@ -66,7 +115,7 @@ for (name, width, height, scales) in [("App Icon - Small", 400, 240, [1, 2]), ("
         var images: [[String: String]] = []
         for scale in scales {
             let file = "\(layerName.lowercased())@\(scale)x.png"
-            write(render(width: width * scale, height: height * scale, layer: layer, glyph: 0.98), "\(dir)/Content.imageset/\(file)")
+            write(png(render(width: width * scale, height: height * scale, layer: layer, glyph: 1)), "\(dir)/Content.imageset/\(file)")
             images.append(["filename": file, "idiom": "tv", "scale": "\(scale)x"])
         }
         json(["images": images, "info": info], "\(dir)/Content.imageset/Contents.json")
@@ -78,7 +127,7 @@ for (name, width, height) in [("Top Shelf Image", 1920, 720), ("Top Shelf Image 
     var images: [[String: String]] = []
     for scale in [1, 2] {
         let file = "top-shelf@\(scale)x.png"
-        write(render(width: width * scale, height: height * scale, layer: .flat, glyph: 0.9), "\(name).imageset/\(file)")
+        write(png(render(width: width * scale, height: height * scale, layer: .flat, glyph: 1)), "\(name).imageset/\(file)")
         images.append(["filename": file, "idiom": "tv", "scale": "\(scale)x"])
     }
     json(["images": images, "info": info], "\(name).imageset/Contents.json")
@@ -92,3 +141,12 @@ json(["assets": [
 ], "info": info], "Contents.json")
 json(["info": info], "../Contents.json")
 print("Wrote \(brand.path)")
+
+// AppMark on Apple TV (Settings, the update sheet): the square at 512 px; AppMark rounds its corners.
+let mark = CGContext(data: nil, width: 512, height: 512, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                     bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+mark.interpolationQuality = .high
+mark.draw(source, in: CGRect(x: 0, y: 0, width: 512, height: 512))
+write(png(mark.makeImage()!), markFolder.appendingPathComponent("app-mark.png"))
+json(["images": [["filename": "app-mark.png", "idiom": "universal"]], "info": info], markFolder.appendingPathComponent("Contents.json"))
+print("Wrote \(markFolder.path)")

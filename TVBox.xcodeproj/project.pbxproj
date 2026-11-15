@@ -1679,7 +1679,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = arm64;
-				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-Aurora AppIcon-Porcelain AppIcon-Obsidian AppIcon-Azure AppIcon-Daybreak AppIcon-Iris AppIcon-Lagoon AppIcon-RoseQuartz AppIcon-Citrus AppIcon-Cosmic";
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-MediaPocketGray AppIcon-MediaLayers AppIcon-PlayTriangle AppIcon-SealMusic AppIcon-ShibaManga AppIcon-CatCinema AppIcon-AnimalTrio AppIcon-Classic AppIcon-Aurora AppIcon-Porcelain AppIcon-Obsidian AppIcon-Azure AppIcon-Daybreak AppIcon-Iris AppIcon-Lagoon AppIcon-RoseQuartz AppIcon-Citrus AppIcon-Cosmic";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "$(ICLOUD_ENTITLEMENTS)";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -1726,7 +1726,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = arm64;
-				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-Aurora AppIcon-Porcelain AppIcon-Obsidian AppIcon-Azure AppIcon-Daybreak AppIcon-Iris AppIcon-Lagoon AppIcon-RoseQuartz AppIcon-Citrus AppIcon-Cosmic";
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-MediaPocketGray AppIcon-MediaLayers AppIcon-PlayTriangle AppIcon-SealMusic AppIcon-ShibaManga AppIcon-CatCinema AppIcon-AnimalTrio AppIcon-Classic AppIcon-Aurora AppIcon-Porcelain AppIcon-Obsidian AppIcon-Azure AppIcon-Daybreak AppIcon-Iris AppIcon-Lagoon AppIcon-RoseQuartz AppIcon-Citrus AppIcon-Cosmic";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = "$(ICLOUD_ENTITLEMENTS)";
 				CODE_SIGN_IDENTITY = "iPhone Developer";

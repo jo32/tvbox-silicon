@@ -163,7 +163,7 @@ targets:
       CODE_SIGN_ENTITLEMENTS: $(ICLOUD_ENTITLEMENTS)
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       # Keep in step with AppIconChoice (App/AppIcons.swift).
-      ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: AppIcon-Aurora AppIcon-Porcelain AppIcon-Obsidian AppIcon-Azure AppIcon-Daybreak AppIcon-Iris AppIcon-Lagoon AppIcon-RoseQuartz AppIcon-Citrus AppIcon-Cosmic
+      ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: AppIcon-MediaPocketGray AppIcon-MediaLayers AppIcon-PlayTriangle AppIcon-SealMusic AppIcon-ShibaManga AppIcon-CatCinema AppIcon-AnimalTrio AppIcon-Classic AppIcon-Aurora AppIcon-Porcelain AppIcon-Obsidian AppIcon-Azure AppIcon-Daybreak AppIcon-Iris AppIcon-Lagoon AppIcon-RoseQuartz AppIcon-Citrus AppIcon-Cosmic
       TARGETED_DEVICE_FAMILY: '1,2'
     info:
       properties:
