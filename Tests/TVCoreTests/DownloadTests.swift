@@ -240,3 +240,28 @@ import Testing
     #expect(item.historyContext(in: Subscription(origin: origin, importedAt: Date(), sites: [], lives: [], raw: [:])) == nil)
     #expect(item.historyContext(in: nil) == nil)
 }
+
+@MainActor @Test func downloadedEpisodesPlayOnInEpisodeOrderWhateverTheirSizeTags() throws {
+    // #1022: drive files start with their size, so by name 14 [2.3GB] came before 16 [2.3GB] and 15 [2.9GB].
+    let root = FileManager.default.temporaryDirectory.appending(path: "downloads-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: root) }
+    let site = Site(key: "s", name: "S", type: 3, api: "csp_Test", raw: [:])
+    let names = [14: "[2.3GB]行尸走肉S09E14.mkv【行尸走肉第九季】", 16: "[2.3GB]行尸走肉S09E16.mkv【行尸走肉第九季】",
+                 15: "[2.9GB]行尸走肉S09E15.mkv【行尸走肉第九季】"]
+    let items = [14, 16, 15].map { number in
+        let episode = Episode(id: "\(number)", name: names[number]!, address: "https://example.com/\(number).mkv", flag: "夸克原画")
+        return DownloadItem(id: "e\(number)", title: "行尸走肉第九季", episode: episode.name, poster: nil, posterHeaders: [:],
+                            source: DownloadSource(site: site, videoID: "v", episode: episode), created: Date(), status: .completed, media: "media.mkv")
+    }
+    for item in items {
+        try FileManager.default.createDirectory(at: root.appending(path: item.id), withIntermediateDirectories: true)
+        try Data("mkv".utf8).write(to: root.appending(path: item.id).appending(path: "media.mkv"))
+    }
+    try JSONEncoder().encode(items).write(to: root.appending(path: "downloads.json"))
+    let defaults = try #require(UserDefaults(suiteName: UUID().uuidString))
+    let library = DownloadLibrary(root: root, defaults: defaults)
+    #expect(DownloadItem.inEpisodeOrder(items).map(\.id) == ["e14", "e15", "e16"])
+    let next = library.neighbor(of: URL(string: "tvbox-download://e14")!, offset: 1)
+    #expect(next?.id == "e15")
+    #expect(library.neighbor(of: URL(string: "tvbox-download://e16")!, offset: -1)?.id == "e15")
+}

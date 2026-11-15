@@ -78,6 +78,17 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
     public var isActive: Bool { status == .downloading || status == .finishing }
     /// Not finished: running, waiting, paused or failed.
     public var isPending: Bool { status != .completed }
+
+    /// One show's episodes in episode order, by name without what drive sources put around it: a size tag first
+    /// ("[2.3GB]Show.S09E16.mkv" sorted before "[2.9GB]Show.S09E15.mkv", so 14 played on into 16, #1022), the share's tag
+    /// and the file extension. Each name is cleaned once.
+    public static func inEpisodeOrder(_ items: [DownloadItem]) -> [DownloadItem] {
+        items.map { (key: EpisodeLabels.clean($0.episode), item: $0) }.sorted { a, b in
+            let order = a.key.localizedStandardCompare(b.key)
+            if order != .orderedSame { return order == .orderedAscending }
+            return a.item.episode.localizedStandardCompare(b.item.episode) == .orderedAscending
+        }.map(\.item)
+    }
 }
 
 /// Downloaded episodes and the queue that fetches them. A fixed number of downloads run at once
@@ -331,8 +342,9 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
     /// order Downloads lists them: what the player's Previous and Next reach, and what plays on after it.
     public func neighbor(of url: URL, offset: Int) -> DownloadItem? {
         guard url.scheme == Self.scheme, let id = url.host(), let current = item(id: id) else { return nil }
-        let show = items.filter { $0.status == .completed && $0.source.siteKey == current.source.siteKey && $0.source.videoID == current.source.videoID }
-            .sorted { $0.episode.localizedStandardCompare($1.episode) == .orderedAscending }
+        let show = DownloadItem.inEpisodeOrder(items.filter {
+            $0.status == .completed && $0.source.siteKey == current.source.siteKey && $0.source.videoID == current.source.videoID
+        })
         guard let index = show.firstIndex(where: { $0.id == id }), show.indices.contains(index + offset) else { return nil }
         return show[index + offset]
     }
