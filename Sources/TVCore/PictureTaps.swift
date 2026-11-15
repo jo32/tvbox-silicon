@@ -30,14 +30,14 @@ public struct PictureTaps: Sendable {
         return x < width / 3 ? .back : x > width * 2 / 3 ? .forward : .middle
     }
 
-    /// A tap at `time` seconds (any steady clock).
-    public mutating func tap(at time: Double, in zone: Zone) -> Action {
+    /// A tap at `time` seconds (any steady clock); a skip moves `step` seconds (`SkipInterval`).
+    public mutating func tap(at time: Double, in zone: Zone, step: Double = Self.seconds) -> Action {
         let previous = last
         last = (time, zone)
-        let seconds = zone == .back ? -Self.seconds : Self.seconds
+        let seconds = zone == .back ? -step : step
         if let run = skipping, run.zone == zone, let previous, time - previous.time <= Self.streak {
-            skipping = (zone, run.total + Self.seconds)
-            return .skip(seconds: seconds, total: run.total + Self.seconds, first: false)
+            skipping = (zone, run.total + step)
+            return .skip(seconds: seconds, total: run.total + step, first: false)
         }
         skipping = nil
         guard let previous, previous.zone == zone, time - previous.time <= Self.interval else { return .toggleControls }
@@ -46,9 +46,31 @@ public struct PictureTaps: Sendable {
             last = nil
             return .togglePlayback
         }
-        skipping = (zone, Self.seconds)
-        return .skip(seconds: seconds, total: Self.seconds, first: true)
+        skipping = (zone, step)
+        return .skip(seconds: seconds, total: step, first: true)
     }
+}
+
+/// How far the skip buttons and a double tap on a side move (#929): 10 seconds unless chosen otherwise, from the
+/// steps the system's skip symbols are drawn for.
+public enum SkipInterval {
+    public static let key = "player.skipSeconds"
+    public static let standard = 10.0
+    public static let choices: [Double] = [5, 10, 15, 30, 45, 60, 75, 90]
+
+    /// A stored value that isn't one of the choices skips the standard 10 seconds.
+    public static func seconds(_ stored: Double) -> Double { choices.contains(stored) ? stored : standard }
+
+    public static func symbol(forward: Bool, seconds: Double) -> String {
+        (forward ? "goforward." : "gobackward.") + String(Int(Self.seconds(seconds)))
+    }
+}
+
+/// How the picture meets the screen (#952, #1111), as in Infuse and VLC: whole inside it, filling it and cropped, or
+/// stretched to its shape. Pinching moves between Fit and Fill; the choice stays for the next video.
+public enum VideoFill: String, CaseIterable, Sendable {
+    case fit, fill, stretch
+    public static let key = "player.videoFill"
 }
 
 /// Whether two taps on a side skip (the default) or, with this off, play or pause as two taps in the middle do.

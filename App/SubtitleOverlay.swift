@@ -84,9 +84,10 @@ import TVCore
 
     /// The picture's whole rect in a view `bounds` big: fitted inside it, or filling it and running past its edges
     /// (cropped), which styled subtitles need to land where their script places them.
-    func videoRect(in bounds: CGSize, fills: Bool) -> CGRect {
+    /// Stretched to the view's shape, the picture is the view.
+    func videoRect(in bounds: CGSize, fills: Bool, stretches: Bool = false) -> CGRect {
         let whole = CGRect(origin: .zero, size: bounds)
-        guard pictureSize.width > 0, pictureSize.height > 0 else { return whole }
+        guard !stretches, pictureSize.width > 0, pictureSize.height > 0 else { return whole }
         let fit = AVMakeRect(aspectRatio: pictureSize, insideRect: whole)
         guard fills, fit.width > 0, fit.height > 0 else { return fit }
         let scale = max(bounds.width / fit.width, bounds.height / fit.height)
@@ -267,13 +268,15 @@ struct SubtitleOverlay: View {
     let cues: SubtitleCues
     /// The picture fills the view and is cropped, rather than fitting inside it.
     var fills = false
+    /// The picture is stretched to the view's shape.
+    var stretches = false
     var body: some View {
         GeometryReader { proxy in
             if !cues.native, cues.styled.isActive {
-                StyledSubtitleCanvas(styled: cues.styled, picture: cues.videoRect(in: proxy.size, fills: fills), video: cues.pictureSize)
+                StyledSubtitleCanvas(styled: cues.styled, picture: cues.videoRect(in: proxy.size, fills: fills, stretches: stretches), video: cues.pictureSize)
             }
             if !cues.native, !cues.lines.isEmpty {
-                let picture = cues.pictureRect(in: proxy.size, fills: fills)
+                let picture = cues.pictureRect(in: proxy.size, fills: fills || stretches)
                 let style = cues.style.clamped
                 SubtitleLines(lines: cues.lines, style: style, letters: max(12, picture.height * style.size / 100))
                     .subtitlePlacement(style, in: picture)
