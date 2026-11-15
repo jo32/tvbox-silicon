@@ -1200,6 +1200,12 @@ private struct NativePlayerView: UIViewControllerRepresentable {
 
     func close() { window?.close() }
 
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        (sender as? PlaybackWindow)?.resized(to: frameSize) ?? frameSize
+    }
+
+    func windowWillStartLiveResize(_ notification: Notification) { window?.startsDrag() }
+
     func windowWillClose(_ notification: Notification) {
         session.stop()
         window?.contentView = nil
@@ -1226,6 +1232,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         // click is taken, down and up, so a single click still shows or hides AVKit's controls at once, as before.
         if event.type == .leftMouseUp, takesMouseUp { takesMouseUp = false; return }
         if event.type == .leftMouseDown {
+            pressedAt = convertPoint(toScreen: event.locationInWindow)
             takesMouseUp = event.clickCount == 2 && event.modifierFlags.intersection([.command, .control, .option]).isEmpty
                 && contentView?.hitTest(event.locationInWindow).map(Self.isBarePicture) == true
             if takesMouseUp { toggleFullScreen(nil); return }
@@ -1300,20 +1307,61 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     var fillsFrame = false {
         didSet {
             guard fillsFrame != oldValue else { return }
-            // Resize increments and an aspect ratio cancel each other: increments of 1 unlock the shape.
-            if fillsFrame { contentResizeIncrements = NSSize(width: 1, height: 1) }
-            else if let videoSize { fit(toVideo: videoSize) }
+            if !fillsFrame, let videoSize { fit(toVideo: videoSize) }
         }
     }
 
-    /// Sizes the window to the picture and keeps its shape while it is resized (#689), so there are no black bars to
+    /// Where a drag of the window's edge or corner started, and which edges it moves.
+    private var drag: (frame: NSRect, mouse: NSPoint, edges: (left: Bool, right: Bool, bottom: Bool, top: Bool))?
+
+    /// Where the last click went down: AppKit starts a drag only after its first step, by when the pointer has moved.
+    private var pressedAt: NSPoint?
+
+    func startsDrag() {
+        let mouse = pressedAt ?? NSEvent.mouseLocation, margin: CGFloat = 12
+        drag = (frame, mouse, (mouse.x <= frame.minX + margin, mouse.x >= frame.maxX - margin,
+                               mouse.y <= frame.minY + margin, mouse.y >= frame.maxY - margin))
+    }
+
+    /// The size a drag of the window's edge or corner gives it (`windowWillResize`): the picture's shape (#689), so there
+    /// are no black bars to drag away, unless Shift is held, which resizes it freely, to any shape, as in IINA. Shift is
+    /// checked on every step, so it can be pressed or let go midway. The window keeps the shape itself, not with
+    /// `contentAspectRatio`: AppKit reads that once, when a drag starts.
+    func resized(to proposed: NSSize) -> NSSize {
+        guard inLiveResize, !styleMask.contains(.fullScreen) else { return proposed }
+        let flags = (NSApp.currentEvent?.modifierFlags ?? []).union(NSEvent.modifierFlags)
+        if flags.contains(.shift) {
+            // AppKit's own Shift-drag keeps the window's shape, so the size comes from the pointer instead.
+            guard let drag else { return proposed }
+            let mouse = NSEvent.mouseLocation, minimum = frameRect(forContentRect: NSRect(origin: .zero, size: contentMinSize)).size
+            var size = drag.frame.size
+            if drag.edges.right { size.width += mouse.x - drag.mouse.x } else if drag.edges.left { size.width -= mouse.x - drag.mouse.x }
+            if drag.edges.top { size.height += mouse.y - drag.mouse.y } else if drag.edges.bottom { size.height -= mouse.y - drag.mouse.y }
+            return NSSize(width: max(minimum.width, size.width.rounded()), height: max(minimum.height, size.height.rounded()))
+        }
+        guard !fillsFrame, let videoSize, videoSize.width > 0, videoSize.height > 0 else { return proposed }
+        let ratio = videoSize.width / videoSize.height
+        let old = contentRect(forFrameRect: frame).size
+        var size = contentRect(forFrameRect: NSRect(origin: .zero, size: proposed)).size
+        guard old.width > 0, old.height > 0, size.width > 0, size.height > 0 else { return proposed }
+        // The side the drag moves more leads and the other follows: an edge moves one side, a corner both.
+        if abs(size.width - old.width) / old.width >= abs(size.height - old.height) / old.height { size.height = size.width / ratio }
+        else { size.width = size.height * ratio }
+        let minimum = contentMinSize
+        if size.width < minimum.width || size.height < minimum.height {
+            let up = max(minimum.width / size.width, minimum.height / size.height)
+            size.width *= up; size.height *= up
+        }
+        return frameRect(forContentRect: NSRect(origin: .zero, size: NSSize(width: size.width.rounded(), height: size.height.rounded()))).size
+    }
+
+    /// Sizes the window to the picture, which `resized(to:)` then keeps while it is resized (#689), so there are no black bars to
     /// drag away. A video of the shape the window already has leaves the size the viewer chose alone; full screen and
     /// a zoomed window are left as they are, and so is a window the picture fills (#978).
     func fit(toVideo video: NSSize) {
         guard video.width > 0, video.height > 0, video.width.isFinite, video.height.isFinite else { return }
         videoSize = video
         guard !fillsFrame else { return }
-        contentAspectRatio = video
         guard !styleMask.contains(.fullScreen), !isZoomed, let contentView else { return }
         let current = contentView.bounds.size
         guard current.width > 0, current.height > 0 else { return }
