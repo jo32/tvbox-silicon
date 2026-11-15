@@ -27,24 +27,41 @@ struct PlaybackWait: Equatable {
     let starting: Bool
     var showsWords = true
     var appearAfter: TimeInterval = 0
+    /// When the wait began, if it began before this view (see `PlaybackWaitView.init`).
+    var since: Date? = nil
     let state: @MainActor (TimeInterval) -> PlaybackWait
+    /// Fades in, but goes at once: the first frame takes its place with no crossfade.
+    static let transition = AnyTransition.asymmetric(insertion: .opacity, removal: .identity)
     var view: some View {
-        PlaybackWaitView(artwork: artwork, starting: starting, showsWords: showsWords, appearAfter: appearAfter, state: state).id(starting)
+        PlaybackWaitView(artwork: artwork, starting: starting, showsWords: showsWords, appearAfter: appearAfter, since: since, state: state).id(starting)
     }
 }
 
-/// While a video gets ready: its artwork where the picture will be, a slow band of morning light passing
-/// over it, and one line of words below. It sits in the player's content overlay, under AVKit's own
-/// controls, so a tap still reaches them, and nothing of it covers their rows.
+/// While a video gets ready: its artwork across the whole player, blurred, and one line of words over it. It sits in
+/// the player's content overlay, under AVKit's own controls, so a tap still reaches them, and nothing of it covers
+/// their rows.
 struct PlaybackWaitView: View {
     let artwork: PlaybackArtwork
     let starting: Bool
     var showsWords = true
     var appearAfter: TimeInterval = 0
     let state: @MainActor (TimeInterval) -> PlaybackWait
-    @State private var started = Date()
+    @State private var started: Date
     @State private var poster: CGImage?
-    @State private var drifting = false
+
+    /// A view made again mid-wait (the Mac's player view is remade when its controls come) picks up where the last one
+    /// was: the wait's own start, and the cover already decoded, in its first frame. Starting over, the cover went and
+    /// faded back and the words hid again, as if the video had loaded and then gone back to waiting.
+    init(artwork: PlaybackArtwork, starting: Bool, showsWords: Bool = true, appearAfter: TimeInterval = 0, since: Date? = nil,
+         state: @escaping @MainActor (TimeInterval) -> PlaybackWait) {
+        self.artwork = artwork
+        self.starting = starting
+        self.showsWords = showsWords
+        self.appearAfter = appearAfter
+        self.state = state
+        _started = State(initialValue: since ?? Date())
+        _poster = State(initialValue: starting ? artwork.poster.flatMap { PosterPalette.cachedImage($0, headers: artwork.headers) } : nil)
+    }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -53,9 +70,8 @@ struct PlaybackWaitView: View {
             let layout = Self.layout(size: proxy.size, picture: picture)
             ZStack {
                 if starting {
-                    ambient
                     // Behind an error only the colours stay, so the message has the stage to itself.
-                    if showsWords { artwork(picture: picture, card: layout.card) }
+                    if showsWords { artwork(in: proxy.size, picture: picture) } else { ambient }
                 }
                 if showsWords { words(in: proxy.size, layout: layout) }
             }
@@ -65,11 +81,10 @@ struct PlaybackWaitView: View {
         .allowsHitTesting(false)
         .environment(\.colorScheme, .dark)
         .task(id: artwork.poster) {
-            guard starting, let url = artwork.poster else { return }
+            guard starting, poster == nil, let url = artwork.poster else { return }
             let image = await PosterPalette.image(url, headers: artwork.headers)
             guard !Task.isCancelled else { return }
             withAnimation(.easeOut(duration: 0.6)) { poster = image }
-            drifting = true
         }
     }
 
@@ -92,41 +107,25 @@ struct PlaybackWaitView: View {
         .clipped()
     }
 
-    @ViewBuilder private func artwork(picture: CGRect, card area: CGRect) -> some View {
-        if let poster, CGFloat(poster.width) >= CGFloat(poster.height) * 1.3 {
-            // A wide still fills the picture and drifts, slowly, like an opening title.
-            ZStack {
-                Color.clear.overlay {
-                    Image(decorative: poster, scale: 1).resizable().scaledToFill()
-                        .scaleEffect(drifting && !reduceMotion ? 1.05 : 1)
-                        .animation(.linear(duration: 30), value: drifting)
-                }
-                .overlay(Color.black.opacity(0.16))
-                if !reduceMotion { LightSweep() }
+    /// The artwork filling the whole player, blurred, whatever its shape; a dark band with the light passing over it
+    /// where the picture will be when there is none.
+    @ViewBuilder private func artwork(in size: CGSize, picture: CGRect) -> some View {
+        if let poster {
+            Color.black.overlay {
+                Image(decorative: poster, scale: 1).resizable().scaledToFill()
+                    .blur(radius: max(16, min(size.width, size.height) * 0.04), opaque: true)
+                    .overlay(Color.black.opacity(0.3))
             }
-            .frame(width: picture.width, height: picture.height).clipped()
-            .position(x: picture.midX, y: picture.midY)
+            .frame(width: size.width, height: size.height).clipped()
             .transition(.opacity)
-        } else if let poster {
-            // A tall poster floats as a card on its own colours, with the light passing over the card.
-            let ratio = CGFloat(poster.width) / CGFloat(max(1, poster.height))
-            let height = max(1, min(area.height, area.width / ratio)), width = height * ratio
-            let shape = RoundedRectangle(cornerRadius: height * 0.035, style: .continuous)
-            Image(decorative: poster, scale: 1).resizable()
-                .frame(width: width, height: height)
-                .overlay { if !reduceMotion { LightSweep() } }
-                .clipShape(shape)
-                .overlay { shape.strokeBorder(.white.opacity(0.14), lineWidth: 0.5) }
-                .shadow(color: .black.opacity(0.5), radius: height * 0.09, y: height * 0.035)
-                .position(x: area.midX, y: area.midY)
-                .transition(.opacity)
         } else {
             ZStack {
+                Color.black
                 LinearGradient(colors: [Color(white: 0.15), Color(white: 0.06)], startPoint: .top, endPoint: .bottom)
-                if !reduceMotion { LightSweep() }
+                    .overlay { if !reduceMotion { LightSweep() } }
+                    .frame(width: picture.width, height: picture.height).clipped()
+                    .position(x: picture.midX, y: picture.midY)
             }
-            .frame(width: picture.width, height: picture.height).clipped()
-            .position(x: picture.midX, y: picture.midY)
         }
     }
 
@@ -141,6 +140,8 @@ struct PlaybackWaitView: View {
         var wordsBottom: CGFloat = 0
         /// One line: the hint joins the message, so nothing changes height when it appears.
         var inlineCaption = false
+        /// The words in the middle of the player, with nothing to hang from.
+        var centred = false
     }
 
     @MainActor private static func layout(size: CGSize, picture: CGRect) -> WaitLayout {
@@ -160,17 +161,11 @@ struct PlaybackWaitView: View {
         let card = CGRect(x: axis - picture.width * 0.3, y: centre - half, width: picture.width * 0.6, height: half * 2)
         return WaitLayout(card: card, axis: axis, wordsBottom: wordsBottom, inlineCaption: true)
         #elseif os(macOS)
-        // AVPlayerView's floating controls take the lower part of the window (about 120–205 pt up in a 700 pt one):
-        // the card and the words stay above them, the words hanging just under the card.
-        let wordsLimit = min(size.height * 0.68, size.height - 215)
-        var card = picture.insetBy(dx: 0, dy: picture.height * 0.08)
-        card.size.height = max(1, min(card.height, wordsLimit - wordsHeight - 18 - card.minY))
-        return WaitLayout(card: card, axis: size.width / 2, wordsTop: card.maxY + 18)
+        // Nothing sits over the middle here (AVKit's bars are at the top and foot): the words take it.
+        return WaitLayout(card: picture, axis: size.width / 2, centred: true)
         #else
-        // No button sits over the card here: it takes the picture's height above the words.
-        var card = picture.insetBy(dx: 0, dy: picture.height * 0.08)
-        card.size.height = max(1, min(card.height, size.height - bottomGap - wordsHeight - 20 - card.minY))
-        return WaitLayout(card: card, axis: size.width / 2, wordsBottom: bottomGap)
+        // AVKit spins its own wheel in the middle: the words stay low, above the transport bar.
+        return WaitLayout(card: picture, axis: size.width / 2, wordsBottom: bottomGap)
         #endif
     }
 
@@ -228,7 +223,8 @@ struct PlaybackWaitView: View {
             VStack(spacing: 0) {
                 if let top = layout.wordsTop { Color.clear.frame(height: top) } else { Spacer(minLength: 0) }
                 stack
-                if layout.wordsTop == nil { Color.clear.frame(height: layout.wordsBottom) } else { Spacer(minLength: 0) }
+                if layout.centred { Spacer(minLength: 0) }
+                else if layout.wordsTop == nil { Color.clear.frame(height: layout.wordsBottom) } else { Spacer(minLength: 0) }
             }
             .frame(width: size.width, height: size.height)
             .offset(x: layout.axis - size.width / 2)
@@ -259,14 +255,11 @@ struct PlaybackWaitView: View {
     private static let captionWidth: CGFloat = 900
     /// Clears the transport bar, which tvOS shows by itself while a video loads (its scrubber sits about 175 pt up).
     private static let bottomGap: CGFloat = 250
-    private static let wordsHeight: CGFloat = 175
     #elseif os(macOS)
     private static let pillFont = Font.callout.weight(.medium)
     private static let captionFont = Font.footnote
     private static let pillPadding: CGFloat = 10
     private static let captionWidth: CGFloat = 520
-    private static let bottomGap: CGFloat = 96
-    private static let wordsHeight: CGFloat = 115
     #else
     private static let pillFont = Font.subheadline.weight(.medium)
     private static let captionFont = Font.footnote

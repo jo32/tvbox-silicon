@@ -515,7 +515,11 @@ extension PlaybackWaitContent {
         let artwork = PlaybackArtwork(poster: catalog?.video.poster ?? channel.historyContext?.poster,
                                       headers: catalog?.video.posterHeaders ?? channel.historyContext?.posterHeaders ?? [:])
         let resume = channel.resumePosition, hint = linesHint && catalog != nil
-        return PlaybackWaitContent(artwork: artwork, starting: starting, showsWords: session.error == nil, appearAfter: starting ? 0.6 : 1.5) { [session] elapsed in
+        // Until the first frame, the wait runs from the episode's start, so a wait view made again (the Mac's player view is
+        // remade as the video gets ready) carries on where it was rather than starting over.
+        let since = starting && !session.showsPicture ? session.openedAt : nil
+        return PlaybackWaitContent(artwork: artwork, starting: starting, showsWords: session.error == nil, appearAfter: starting ? 0.6 : 1.5,
+                                   since: since) { [session] elapsed in
             session.wait(elapsed: elapsed, resume: resume, linesHint: hint)
         }
     }
@@ -1158,9 +1162,10 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             if showsDanmaku && !comments.isEmpty { DanmakuOverlay(player: player, comments: comments, opacity: opacity, revision: revision).ignoresSafeArea() }
             if let subtitles { SubtitleOverlay(cues: subtitles, fills: fills.wrappedValue) }
             if let titleRow { titleRow }
-            if let waiting { waiting.view.transition(.opacity) }
+            if let waiting { waiting.view.transition(PlaybackWaitContent.transition) }
         }
-        .animation(.easeInOut(duration: 0.7), value: waiting == nil))
+        // In with a fade; out at once, so the first frame replaces the wait with no pause or crossfade.
+        .animation(waiting == nil ? nil : .easeInOut(duration: 0.7), value: waiting == nil))
     }
 }
 #endif
@@ -1834,8 +1839,9 @@ private struct DesktopNativePlayer: NSViewRepresentable {
     private var overlay: AnyView {
         AnyView(ZStack {
             if let enhancer { EnhancedVideoSurface(enhancer: enhancer, fills: fillsFrame) }
-            if let waiting { waiting.view.transition(.opacity) }
-        }.animation(.easeInOut(duration: 0.7), value: waiting == nil))
+            if let waiting { waiting.view.transition(PlaybackWaitContent.transition) }
+        // In with a fade; out at once, so the first frame replaces the wait with no pause or crossfade.
+        }.animation(waiting == nil ? nil : .easeInOut(duration: 0.7), value: waiting == nil))
     }
 }
 
