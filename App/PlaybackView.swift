@@ -157,6 +157,8 @@ import IOKit.pwr_mgt
     var buffering = false
     /// Whether the picture has started moving: the waiting screen stays until then, so no black frame shows between.
     private(set) var showsPicture = false
+    /// When this episode (or line) began to open: the waiting screen counts from here until the first frame.
+    private(set) var openedAt = Date()
     /// The SF Symbol that names the latest failure for the error screen.
     private(set) var errorSymbol = "play.slash.fill"
     /// Bullet comments for the media, when its source has them.
@@ -729,7 +731,7 @@ import IOKit.pwr_mgt
 
     private func open(_ channel: Channel) {
         savedDownload = channel.url.scheme == DownloadLibrary.scheme
-        stop(); error = nil; errorSymbol = "play.slash.fill"; loading = true; showsPicture = false; sourceDanmaku = []; qualities = []; quality = nil; switchNotice = nil
+        stop(); error = nil; errorSymbol = "play.slash.fill"; loading = true; showsPicture = false; openedAt = .now; sourceDanmaku = []; qualities = []; quality = nil; switchNotice = nil
         begin(channel)
         isLive = LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live")
         liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false

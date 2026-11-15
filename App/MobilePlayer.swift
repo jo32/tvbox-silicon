@@ -110,9 +110,9 @@ struct MobilePlayerView: View {
                         if waiting.starting { WatchCoverBackdrop(poster: waiting.artwork.poster, headers: waiting.artwork.headers, loading: session.error == nil) }
                         else { WaitSpinner(status: waiting.state) }
                     }
-                    .transition(.opacity)
+                    .transition(PlaybackWaitContent.transition)
                 } else {
-                    waiting.view.playerBleed(true).transition(.opacity)
+                    waiting.view.playerBleed(true).transition(PlaybackWaitContent.transition)
                 }
             }
             if pip.active { pipPlaceholder }
@@ -156,8 +156,9 @@ struct MobilePlayerView: View {
             controls.opacity(chromeVisible && !locked ? 1 : 0).allowsHitTesting(chromeVisible && !locked && !settling)
             if !inline { lockButton }
         }
-        .animation(.easeInOut(duration: 0.7), value: waiting == nil)
-        .animation(.easeInOut(duration: 0.4), value: waiting?.starting)
+        // In with a fade; out at once, so the first frame replaces the wait with no pause or crossfade.
+        .animation(waiting == nil ? nil : .easeInOut(duration: 0.7), value: waiting == nil)
+        .animation(waiting == nil ? nil : .easeInOut(duration: 0.4), value: waiting?.starting)
         .onAppear {
             clock.attach(session.player)
             speed = session.player.defaultRate
