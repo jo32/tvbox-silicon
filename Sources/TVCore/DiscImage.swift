@@ -163,7 +163,7 @@ public enum DiscImage {
                               summary: "blu-ray playlist=\(best.name) clips=\(best.items.count) s=\(best.duration / 45_000)",
                               languages: best.languages)
         // AACS marks every protected packet in its arrival header; a decrypted image clears the marks.
-        let first = try await title.read(at: 0, count: 192)
+        let first = try await DiscRead.fully(title, at: 0, count: 192)
         if first.count == 192, first[first.startIndex] & 0xC0 != 0 { throw Failure.encrypted }
         return title
     }

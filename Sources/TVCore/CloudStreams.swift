@@ -48,6 +48,15 @@ public enum CloudStreams {
         return asset
     }
 
+    /// Whether the drive has brought in at least three times what playback eats since its first bytes: enough to
+    /// start playing without first building a cushion.
+    public static func keepsUp(_ url: URL) async -> Bool {
+        guard let stream = CloudStreamStore.shared.stream(url), let needed = await stream.playbackBytesPerSecond,
+              let since = await stream.firstBytes else { return false }
+        let seconds = Date().timeIntervalSince(since)
+        return seconds >= 1 && Double(stream.counter.value) / seconds >= 3 * needed
+    }
+
     /// Bytes received from the CDN and its host, for the player's speed readout.
     public static func transfer(for url: URL) -> (received: Int64, host: String?)? {
         guard let stream = CloudStreamStore.shared.stream(url) else { return nil }
@@ -140,6 +149,45 @@ public enum CloudStreams {
     }
 }
 
+/// One range request's response and bytes, in order, for `CloudByteStream.download`.
+private final class CloudFetch: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    enum Event: Sendable { case response(URLResponse), data(Data), done(Error?) }
+    private let sink: AsyncStream<Event>.Continuation
+    init(_ sink: AsyncStream<Event>.Continuation) { self.sink = sink }
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+                    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        sink.yield(.response(response))
+        completionHandler(.allow)
+    }
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) { sink.yield(.data(data)) }
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        sink.yield(.done(error))
+        sink.finish()
+    }
+}
+
+extension CloudStreams {
+    /// Where an MP4's index (moov) is, from the file's first bytes: the top-level boxes' sizes lead there. When the
+    /// media (`mdat`) comes first, everything after it. Nil when the boxes can't be followed.
+    static func indexRange(_ head: Data, length: Int) -> Range<Int>? {
+        let bytes = [UInt8](head.prefix(4096))
+        var at = 0
+        while at + 8 <= bytes.count {
+            var size = bytes[at..<at + 4].reduce(0) { $0 << 8 | Int($1) }
+            let type = String(decoding: bytes[at + 4..<at + 8], as: UTF8.self)
+            if size == 1 {
+                guard at + 16 <= bytes.count else { return nil }
+                size = bytes[at + 8..<at + 16].reduce(0) { $0 << 8 | Int($1) }
+            }
+            if type == "moov" { return at..<(size == 0 ? length : min(length, at + size)) }
+            guard size >= 8, at + size < length else { return nil }
+            if type == "mdat" { return at + size..<length }
+            at += size
+        }
+        return nil
+    }
+}
+
 final class CloudCounter: @unchecked Sendable {
     private let lock = NSLock()
     private var total: Int64 = 0
@@ -186,6 +234,16 @@ actor CloudByteStream {
     private var cache: [Int: Data] = [:]
     private var recent: [Int] = []
     private var inflight: [Int: Task<Data, Error>] = [:]
+    /// Once the player has read the file's index (`setDuration`), a chunk's bytes go to it as they arrive instead of
+    /// when all 2 MB are in: a seek then waits for the drive's first bytes, not a whole chunk from each connection.
+    private var progressive = false
+    /// Where an MP4's index (moov) is, from its first boxes. Chunks clear of it go to the player as they arrive even
+    /// before it has read the index: nothing in them is retagged (`playableSampleEntries`).
+    private var indexBytes: Range<Int>?
+    /// The bytes of chunks still arriving, by the download that is filling them.
+    private var partial: [Int: (download: UUID, bytes: Data)] = [:]
+    /// Reads waiting for more of a chunk that is arriving.
+    private var arrivals: [Int: [CheckedContinuation<Void, Never>]] = [:]
     /// Where AVPlayer is reading. A file whose audio sits far from its video is read in two
     /// places at once; a jump away from all of them is a seek. On the iPhone AVPlayer also reads one
     /// place on two overlapping requests, the newer starting a few chunks behind the older (issue #433).
@@ -198,6 +256,10 @@ actor CloudByteStream {
     private var cacheLimit = CloudBufferPlan.fallback.cacheChunks
     /// What playback consumes, once the player has told the duration.
     private var bytesPerSecond: Double?
+    /// What playback reads per second on average, once the player knows the duration.
+    var playbackBytesPerSecond: Double? { bytesPerSecond }
+    /// When the drive first answered with bytes.
+    private(set) var firstBytes: Date?
     /// The drive has refused a connection on this stream: it is not asked for more than it gave.
     private var refusedEver = false
     /// The most connections this stream may grow to, from `mostConnections`, when it falls behind playback.
@@ -244,17 +306,37 @@ actor CloudByteStream {
 
     func contentType() async throws -> String {
         if let type { return type }
-        let value = try CloudStreams.contentType(try await chunk(0), name: source.name)
+        // Its first bytes say what it is: no need to wait for the rest of the chunk.
+        let head = try await arrived(0, past: 4095)
+        fetchIndexEarly()
+        let value = try CloudStreams.contentType(head, name: source.name)
         type = value
-        // An MP4's index is often at the end: ask for that chunk now, not when the player gets there.
-        if chunks > 3, ["mp4", "m4v", "mov"].contains((source.name as NSString).pathExtension.lowercased()), cache[chunks - 1] == nil, inflight[chunks - 1] == nil {
-            _ = start(chunks - 1)
+        // The first chunk says exactly where the index is, when it doesn't fit in the last chunk: ask for all of it now.
+        indexBytes = CloudStreams.indexRange(head, length: source.length)
+        if let range = indexBytes, range.lowerBound >= Self.chunkSize, !range.isEmpty {
+            let first = range.lowerBound / Self.chunkSize
+            for index in first...min(chunks - 1, (range.upperBound - 1) / Self.chunkSize, first + 3) where cache[index] == nil && inflight[index] == nil {
+                _ = start(index)
+            }
         }
         Diagnostics.shared.record(.info, "cloud.stream", "open host=\(host ?? "-") length=\(source.length) type=\(value)")
         return value
     }
 
-    func head() async -> Data? { try? await chunk(0).prefix(DiscImage.headLength) }
+    func head() async -> Data? {
+        let head = try? await arrived(0, past: DiscImage.headLength - 1).prefix(DiscImage.headLength)
+        fetchIndexEarly()
+        return head
+    }
+
+    /// An MP4's index (moov) is often at its end, and the player reads nothing else until it has it: ask for that chunk
+    /// once the first bytes came, not a whole chunk's download later. Not before: a drive that caps connections
+    /// refuses one past its limit, and before it served any bytes that reads as a refused link.
+    private func fetchIndexEarly() {
+        guard chunks > 3, ["mp4", "m4v", "mov"].contains((source.name as NSString).pathExtension.lowercased()),
+              cache[chunks - 1] == nil, inflight[chunks - 1] == nil else { return }
+        _ = start(chunks - 1)
+    }
 
     /// From now on the bytes stay as stored; chunks already retagged are fetched again.
     func keepSampleEntries() {
@@ -282,9 +364,11 @@ actor CloudByteStream {
                 }
             }
         }
-        let bytes = try await chunk(index)
-        prefetch(after: index)
         let start = offset - index * Self.chunkSize
+        let bytes = try await available(index, from: start)
+        // Not for a reader dropped while this one waited (the player jumped elsewhere): that would fetch again the
+        // chunks the jump let go.
+        if readers.contains(where: near) { prefetch(after: index) }
         // A copy, not a slice: AVFoundation misread slices of a cached chunk as damaged media.
         return Data(bytes[start..<min(bytes.count, start + count)])
     }
@@ -297,6 +381,35 @@ actor CloudByteStream {
         waiting[index, default: 0] += 1
         defer { waiting[index, default: 1] -= 1; if waiting[index] == 0 { waiting[index] = nil } }
         return try await (inflight[index] ?? start(index)).value
+    }
+
+    /// The chunk, or as much of it as has arrived when that reaches past `offset` (progressive streams).
+    private func available(_ index: Int, from offset: Int) async throws -> Data {
+        let bytes = index * Self.chunkSize..<(index + 1) * Self.chunkSize
+        let clear = progressive || !rewritesSampleEntries || indexBytes.map { !$0.overlaps(bytes) } == true
+        guard clear, cache[index] == nil else { return try await chunk(index) }
+        return try await arrived(index, past: offset)
+    }
+
+    /// The chunk's bytes so far once they reach past `offset`, or the whole chunk.
+    private func arrived(_ index: Int, past offset: Int) async throws -> Data {
+        waiting[index, default: 0] += 1
+        defer { waiting[index, default: 1] -= 1; if waiting[index] == 0 { waiting[index] = nil } }
+        let task = inflight[index] ?? start(index)
+        while true {
+            if let data = cache[index] {
+                recent.removeAll { $0 == index }; recent.append(index)
+                return data
+            }
+            if let part = partial[index]?.bytes, part.count > offset { return part }
+            // Finished without a chunk (failed, or the stream was cleared): its error.
+            if inflight[index] == nil { return try await task.value }
+            await withCheckedContinuation { arrivals[index, default: []].append($0) }
+        }
+    }
+
+    private func wake(_ index: Int) {
+        for waiter in arrivals.removeValue(forKey: index) ?? [] { waiter.resume() }
     }
 
     private func prefetch(after index: Int) {
@@ -314,53 +427,80 @@ actor CloudByteStream {
         return task
     }
 
+    /// Chunk `index`, its bytes kept in `partial` as they arrive for reads that want them before the rest.
     private func download(_ index: Int) async throws -> Data {
+        let id = UUID()
+        partial[index] = (id, Data())
+        partial[index]?.bytes.reserveCapacity(Self.chunkSize)
         // A cancelled download was already let go, and the chunk may be on its way again in another.
-        defer { if !Task.isCancelled { inflight[index] = nil } }
+        defer {
+            if !Task.isCancelled { inflight[index] = nil }
+            if partial[index]?.download == id { partial[index] = nil }
+            wake(index)
+        }
         let first = index * Self.chunkSize, last = min(source.length, first + Self.chunkSize) - 1
         var attempt = 0, cut = 0, refusals = 0
-        var received = Data()
+        func received() -> Int { partial[index]?.download == id ? partial[index]?.bytes.count ?? 0 : 0 }
         while true {
             try Task.checkCancellation()
             attempt += 1
-            let current = source, from = first + received.count
+            let current = source, from = first + received()
             var request = URLRequest(url: current.url)
             current.headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
             request.setValue("bytes=\(from)-\(last)", forHTTPHeaderField: "Range")
             request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
             do {
-                let (data, response) = try await session.data(for: request)
-                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                let (events, sink) = AsyncStream.makeStream(of: CloudFetch.Event.self)
+                let task = session.dataTask(with: request)
+                task.delegate = CloudFetch(sink)
+                var status = 0, end: Int?, body = Data(), failure: Error?, flowing = false
+                try await withTaskCancellationHandler {
+                    task.resume()
+                    for await event in events {
+                        switch event {
+                        case .response(let response):
+                            status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                            let range = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Range")?.firstMatch(of: /^bytes (\d+)-(\d+)\/(\d+)$/)
+                            end = range.flatMap { Int($0.2) }
+                            flowing = status == 206 && range.flatMap { Int($0.1) } == from && (end ?? .max) <= last
+                            if flowing { served = true; firstBytes = firstBytes ?? Date() }
+                        case .data(let data):
+                            guard flowing else { if body.count < 4096 { body.append(data) }; continue }
+                            guard partial[index]?.download == id else { task.cancel(); continue }
+                            partial[index]?.bytes.append(data)
+                            counter.add(data.count)
+                            wake(index)
+                        case .done(let error): failure = error
+                        }
+                    }
+                    try Task.checkCancellation()
+                } onCancel: { task.cancel() }
+                if let failure { throw failure }
                 // The signed address expired, or the drive wants a fresh session: resolve once more.
                 if [401, 403, 404, 410].contains(status), attempt <= 2, await renew() { continue }
                 // 115 answers 403 to connections past a few at once on a link it is serving (issue #312). Failing the
                 // read made FFmpeg lose its place in the file: read on fewer connections and ask again.
                 if [403, 429, 503].contains(status), served, refusals < 6 {
                     refusals += 1
-                    refused(index, status: status, body: data)
+                    refused(index, status: status, body: body)
                     try await Task.sleep(for: .milliseconds(250 * refusals))
                     continue
                 }
-                let range = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Range")?.firstMatch(of: /^bytes (\d+)-(\d+)\/(\d+)$/)
-                let end = range.flatMap { Int($0.2) }
-                guard status == 206, let range, Int(range.1) == from, let end, end <= last, !data.isEmpty, data.count == end - from + 1 else {
+                let got = received()
+                guard flowing, let end, got > from - first else {
                     // A drive sometimes answers a range with no bytes, or fewer than it says: the next try gets them.
                     if status == 206, cut < 2 {
                         cut += 1
-                        Diagnostics.shared.record(.debug, "cloud.stream", "chunk=\(index) short answer bytes=\(data.count) range=\(range.map { "\($0.1)-\($0.2)" } ?? "-"); again")
+                        Diagnostics.shared.record(.debug, "cloud.stream", "chunk=\(index) short answer bytes=\(got) end=\(end.map(String.init) ?? "-"); again")
                         try await Task.sleep(for: .milliseconds(300 * cut))
                         continue
                     }
-                    Diagnostics.shared.record(.error, "cloud.stream", "chunk=\(index) status=\(status) bytes=\(data.count)")
+                    Diagnostics.shared.record(.error, "cloud.stream", "chunk=\(index) status=\(status) bytes=\(got)")
                     throw TVError.http(status == 200 ? 416 : status)
                 }
-                counter.add(data.count)
-                rate.bytes += data.count
-                received.append(data)
-                served = true
-                growth.bytes += data.count
-                // A drive that sends part of the range at a time: ask for the rest.
-                if end < last { attempt = 0; continue }
+                rate.bytes += got - (from - first); growth.bytes += got - (from - first)
+                // A drive that sends part of the range at a time, or a connection cut short: ask for the rest.
+                if first + got <= last { attempt = 0; continue }
                 if Date().timeIntervalSince(rate.since) >= 10 {
                     let seconds = Date().timeIntervalSince(rate.since)
                     Diagnostics.shared.record(.debug, "cloud.stream", "rate bytesPerSecond=\(Int(Double(rate.bytes) / seconds)) readers=\(readers) inflight=\(inflight.count)")
@@ -371,7 +511,9 @@ actor CloudByteStream {
                     sinceRefusal += 1
                     if sinceRefusal >= Self.probeAfter { connections += 1; sinceRefusal = 0 }
                 }
-                let playable = rewritesSampleEntries ? CloudStreams.playableSampleEntries(received) : received
+                let bytes = partial[index]?.bytes ?? Data()
+                partial[index] = nil
+                let playable = rewritesSampleEntries ? CloudStreams.playableSampleEntries(bytes) : bytes
                 cache[index] = playable
                 recent.removeAll { $0 == index }; recent.append(index)
                 while recent.count > cacheLimit { cache[recent.removeFirst()] = nil }
@@ -380,7 +522,7 @@ actor CloudByteStream {
                 // A loopback proxy (a CatPawOpen bundle's) refuses once iOS took back the suspended app's sockets, and
                 // listens again on a new port: ask where (#485).
                 if error.code == .cannotConnectToHost, ["127.0.0.1", "localhost"].contains(current.url.host() ?? ""), await renew() { continue }
-                Diagnostics.shared.record(.debug, "cloud.stream", "chunk=\(index) retry \(error.code.rawValue)")
+                Diagnostics.shared.record(.debug, "cloud.stream", "chunk=\(index) retry \(error.code.rawValue) kept=\(received())")
                 try await Task.sleep(for: .milliseconds(400 * attempt))
             }
         }
@@ -399,6 +541,7 @@ actor CloudByteStream {
     func setDuration(_ seconds: Double) {
         guard seconds.isFinite, seconds > 1, source.length > 0 else { return }
         bytesPerSecond = Double(source.length) / seconds
+        progressive = true
         let plan = CloudBufferPlan.make(length: source.length, duration: seconds, budget: CloudDevice.cacheBudget, chunkSize: Self.chunkSize)
         readAheadChunks = plan.readAhead; cacheLimit = plan.cacheChunks
         growth = (Date(), 0)
@@ -447,7 +590,8 @@ actor CloudByteStream {
 
     func clear() {
         for task in inflight.values { task.cancel() }
-        inflight.removeAll(); cache.removeAll(); recent.removeAll(); readers.removeAll(); waiting.removeAll()
+        inflight.removeAll(); cache.removeAll(); recent.removeAll(); readers.removeAll(); waiting.removeAll(); partial.removeAll()
+        for index in Array(arrivals.keys) { wake(index) }
     }
 }
 

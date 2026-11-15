@@ -147,6 +147,49 @@ struct CloudStreamsTests {
         }
     }
 
+    /// Once the player knows the duration, reads get a chunk's bytes as they arrive, even when a connection breaks off
+    /// halfway through one and the rest is asked for again.
+    @Test func aPlayingStreamHandsOverBytesAsTheyArrive() async throws {
+        let size = CloudByteStream.chunkSize * 4 + 4321
+        var bytes = Data(count: size)
+        bytes.withUnsafeMutableBytes { raw in for i in 0..<size { raw[i] = UInt8(truncatingIfNeeded: i &* 29 &+ i >> 10) } }
+        let name = "trickle-\(UUID().uuidString).mkv"
+        let url = RangeServer.add(name, bytes, trickle: true, breaks: 2)
+        let stream = CloudByteStream(source: .init(url: url, headers: [:], length: size, name: name), session: RangeServer.session) { nil }
+        await stream.setDuration(60)
+        var at = 0, copy = Data(), pieces = 0
+        while at < size {
+            let part = try await stream.read(at: at, count: size - at)
+            #expect(!part.isEmpty)
+            copy.append(part); at += part.count; pieces += 1
+        }
+        #expect(copy == bytes)
+        // Not one piece per chunk: the first bytes of each came before the rest.
+        #expect(pieces > 5)
+        for offset in [size - 7, 3, CloudByteStream.chunkSize - 2, CloudByteStream.chunkSize * 3 + 99] {
+            let part = try await stream.read(at: offset, count: 64)
+            #expect(!part.isEmpty && part == bytes[offset..<offset + part.count])
+        }
+        #expect(RangeServer.requests(name) >= 7)
+        await stream.clear()
+    }
+
+    @Test func theIndexIsFoundFromTheFirstBoxes() {
+        func box(_ type: String, _ size: Int, large: Bool = false) -> Data {
+            var data = Data()
+            func put(_ value: Int, _ count: Int) { for shift in stride(from: (count - 1) * 8, through: 0, by: -8) { data.append(UInt8(truncatingIfNeeded: value >> shift)) } }
+            put(large ? 1 : size, 4); data.append(contentsOf: Array(type.utf8))
+            if large { put(size, 8) }
+            return data
+        }
+        var head = box("ftyp", 32); head.append(Data(count: 24))
+        #expect(CloudStreams.indexRange(head + box("mdat", 3_000_000_000, large: true), length: 3_000_100_000) == 3_000_000_032..<3_000_100_000)
+        #expect(CloudStreams.indexRange(head + box("free", 8) + box("mdat", 900_000), length: 1_000_000) == 900_040..<1_000_000)
+        #expect(CloudStreams.indexRange(head + box("moov", 5000), length: 1_000_000) == 32..<5032)
+        // A size past the file's end: not an MP4 the index can be found in.
+        #expect(CloudStreams.indexRange(head + box("mdat", 2_000_000), length: 1_000_000) == nil)
+    }
+
     /// Reports from 2026-10: a drive answered a range 2.5 GB into an episode with 206 and no bytes, which stopped it.
     @Test func aRangeAnsweredWithNoBytesIsAskedAgain() async throws {
         let size = CloudByteStream.chunkSize * 2 + 77
@@ -298,6 +341,8 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) private static var counts: [String: Int] = [:]
     /// Answers a drive gives now and then: `empty` ranges with no bytes, then at most `cap` bytes per range.
     nonisolated(unsafe) private static var faults: [String: (empty: Int, cap: Int?)] = [:]
+    /// Files whose bytes come in small pieces, a little apart, and how many of their connections still break off halfway.
+    nonisolated(unsafe) private static var trickles: [String: Int] = [:]
     /// Files that answer at most this many requests at once, each a little later, and refuse the rest with 403 (115's CDN).
     nonisolated(unsafe) private static var limits: [String: Int] = [:]
     nonisolated(unsafe) private static var active: [String: Int] = [:]
@@ -312,8 +357,10 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
     }()
     static let session = URLSession(configuration: configuration)
     /// `restOfFile` answers every range with everything from its start, as a plugin's drive proxy does.
-    static func add(_ name: String, _ data: Data, restOfFile: Bool = false, empty: Int = 0, cap: Int? = nil, connections: Int? = nil) -> URL {
+    static func add(_ name: String, _ data: Data, restOfFile: Bool = false, empty: Int = 0, cap: Int? = nil, connections: Int? = nil,
+                    trickle: Bool = false, breaks: Int = 0) -> URL {
         lock.withLock {
+            if trickle { trickles[name] = breaks }
             files[name] = data
             if restOfFile { Self.restOfFile.insert(name) }
             if empty > 0 || cap != nil { faults[name] = (empty, cap) }
@@ -364,6 +411,29 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
         }
         var headers = ["Content-Length": "\(range.count)", "Content-Type": "application/octet-stream"]
         if status == 206 { headers["Content-Range"] = "bytes \(range.lowerBound)-\(range.upperBound - 1)/\(data.count)" }
+        let breaks = Self.lock.withLock {
+            guard let left = Self.trickles[name] else { return Int?.none }
+            if left > 0 { Self.trickles[name] = left - 1 }
+            return left
+        }
+        if let breaks {
+            client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!, cacheStoragePolicy: .notAllowed)
+            let body = data.subdata(in: range), piece = 128 * 1024
+            let end = breaks > 0 ? body.count / 2 : body.count
+            func send(_ at: Int) {
+                DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(3)) { [self] in
+                    guard let client = self.client else { return }
+                    if at >= end {
+                        if breaks > 0 { client.urlProtocol(self, didFailWithError: URLError(.networkConnectionLost)) }
+                        else { client.urlProtocolDidFinishLoading(self) }
+                        return
+                    }
+                    client.urlProtocol(self, didLoad: body.subdata(in: at..<min(end, at + piece)))
+                    send(at + piece)
+                }
+            }
+            send(0); return
+        }
         guard limited else {
             client.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: "HTTP/1.1", headerFields: headers)!, cacheStoragePolicy: .notAllowed)
             client.urlProtocol(self, didLoad: data.subdata(in: range))
