@@ -272,15 +272,15 @@ extension Color {
 
 // Content-first surfaces: neutral backgrounds, quiet controls, and strong selection contrast.
 
-/// The icon's navy canvases with neutral controls: the active state is light on dark (dark on light),
-/// never a hue, so it reads the same on Liquid Glass.
+/// The app's colours. Classic, the default theme (App/ColorThemes.swift), has navy canvases with neutral controls: the
+/// active state is light on dark (dark on light), never a hue, so it reads the same on Liquid Glass.
 enum Brand {
-    /// Selection, prominent actions and progress. A fixed grey rather than `.primary`: as a tint,
-    /// `.primary` turned prominent buttons white-on-white. On Apple TV no button is filled with it,
+    /// Selection, prominent actions and progress, in the colour theme's highlight. Classic's is a fixed grey rather than
+    /// `.primary`: as a tint, `.primary` turned prominent buttons white-on-white. On Apple TV no button is filled with it,
     /// so it never sits beside the white focus.
-    static let accent = Color(light: Color(white: 0.12), dark: Color(white: 0.92))
+    static var accent: Color { ColorThemes.shared.current.palette.accent }
     /// Label colour on an accent fill.
-    static let onAccent = Color(light: .white, dark: Color(white: 0.06))
+    static var onAccent: Color { ColorThemes.shared.current.palette.onAccent }
     /// The icon's cyan, for decoration only (icon tiles, charts, artwork placeholders), not for state.
     static let cyan = Color(red: 0.30, green: 0.78, blue: 1.0)
     static let indigo = Color(red: 0.42, green: 0.50, blue: 1.0)
@@ -339,15 +339,17 @@ enum Layout {
 struct Backdrop: View {
     @Environment(\.colorScheme) private var scheme
     var body: some View {
-        // Flat canvas (the icon's navy / cool white); artwork supplies the rest of the colour.
-        (scheme == .dark ? Color(red: 0.020, green: 0.035, blue: 0.090) : Color(red: 0.955, green: 0.965, blue: 0.985)).ignoresSafeArea()
+        // Flat canvas in the colour theme (Classic: navy / cool white); artwork supplies the rest of the colour.
+        let palette = ColorThemes.shared.current.palette
+        (scheme == .dark ? palette.backdropDark : palette.backdropLight).ignoresSafeArea()
     }
 }
 
 struct Surface: View {
     @Environment(\.colorScheme) private var scheme
     var body: some View {
-        (scheme == .dark ? Color(red: 0.075, green: 0.105, blue: 0.19) : Color(red: 0.915, green: 0.935, blue: 0.965))
+        let palette = ColorThemes.shared.current.palette
+        scheme == .dark ? palette.surfaceDark : palette.surfaceLight
     }
 }
 
@@ -1327,10 +1329,11 @@ struct LoadingCard: View {
 }
 
 #if os(tvOS)
+/// Apple TV's surfaces, in the colour theme.
 enum TVStyle {
-    static let background = Color(red: 0.020, green: 0.035, blue: 0.090)
-    static let surface = Color(red: 0.09, green: 0.125, blue: 0.22)
-    static let raised = Color(red: 0.13, green: 0.175, blue: 0.29)
+    static var background: Color { ColorThemes.shared.current.palette.backdropDark }
+    static var surface: Color { ColorThemes.shared.current.palette.tvSurface }
+    static var raised: Color { ColorThemes.shared.current.palette.tvRaised }
 }
 /// Tiles that draw their own surface and light it up on focus (`\.isFocused` reaches the label),
 /// so there is no second plate around them: just the lift.

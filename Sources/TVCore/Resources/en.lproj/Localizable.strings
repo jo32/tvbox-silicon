@@ -2021,3 +2021,17 @@
 "Remove Custom Picture" = "Remove Custom Picture";
 "The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Pocket." = "The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Pocket.";
 "The icon on your Home Screen. The system confirms the change with a short message." = "The icon on your Home Screen. The system confirms the change with a short message.";
+
+/* Settings › Color Theme */
+"Violet" = "Violet";
+"Ocean" = "Ocean";
+"Forest" = "Forest";
+"Amber" = "Amber";
+"Rose" = "Rose";
+"Crimson" = "Crimson";
+"Orchid" = "Orchid";
+"Graphite" = "Graphite";
+"Color Theme" = "Color Theme";
+"Changes the highlight color and the backgrounds of the app's pages. Classic is the app's original look." = "Changes the highlight color and the backgrounds of the app's pages. Classic is the app's original look.";
+"Highlight" = "Highlight";
+"The highlight is used for selections and buttons; the background color tints the pages. A gray background keeps them neutral." = "The highlight is used for selections and buttons; the background color tints the pages. A gray background keeps them neutral.";

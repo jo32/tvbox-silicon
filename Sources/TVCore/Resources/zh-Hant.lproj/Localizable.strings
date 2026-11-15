@@ -2021,3 +2021,17 @@
 "Remove Custom Picture" = "移除自訂圖片";
 "The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Pocket." = "映匣開啟時，Dock 顯示你選的圖像；在 Finder 等其他地方仍是「口袋」。";
 "The icon on your Home Screen. The system confirms the change with a short message." = "主畫面上的圖像。更換後，系統會顯示一則簡短提示。";
+
+/* Settings › Color Theme */
+"Violet" = "紫羅蘭";
+"Ocean" = "海洋";
+"Forest" = "森林";
+"Amber" = "琥珀";
+"Rose" = "玫瑰";
+"Crimson" = "緋紅";
+"Orchid" = "蘭紫";
+"Graphite" = "石墨";
+"Color Theme" = "配色主題";
+"Changes the highlight color and the backgrounds of the app's pages. Classic is the app's original look." = "改變高亮色和 App 內各頁面的背景。「經典」是 App 原本的樣子。";
+"Highlight" = "高亮色";
+"The highlight is used for selections and buttons; the background color tints the pages. A gray background keeps them neutral." = "高亮色用於選取項目和按鈕；背景色會為各頁面染上色調。選灰色則保持中性。";

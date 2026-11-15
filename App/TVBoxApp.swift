@@ -40,7 +40,7 @@ import TVCore
             RootView()
                 #if !os(tvOS)
                 // tvOS draws plain buttons and section links in the tint, so it keeps the neutral default.
-                .tint(Brand.accent)
+                .modifier(ThemeTint())
                 #endif
                 .task { Diagnostics.shared.record(.info, "app", "Application scene opened") }
                 .task { await ErrorReports.shared.start() }
@@ -149,7 +149,7 @@ import TVCore
         #if os(macOS)
         // The music mini player, floating over other apps at the bottom right; also in the Window menu.
         Window(L10n.text("Mini Player"), id: MusicMacMiniPlayer.windowID) {
-            MusicMacMiniPlayer().environment(store).tint(Brand.accent)
+            MusicMacMiniPlayer().environment(store).modifier(ThemeTint())
         }
         .windowStyle(.plain)
         .windowLevel(.floating)

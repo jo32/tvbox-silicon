@@ -77,7 +77,7 @@ struct NovelListColors {
     var background: Color?
     var text: Color
     var accent: Color
-    static let standard = NovelListColors(background: nil, text: .primary, accent: Brand.accent)
+    static var standard: NovelListColors { NovelListColors(background: nil, text: .primary, accent: Brand.accent) }
 }
 
 /// The table of contents, for the book's page and the reader: the book at the top with the order and a jump to the

@@ -2021,3 +2021,17 @@
 "Remove Custom Picture" = "カスタム画像を削除";
 "The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Pocket." = "映匣を開いている間は、選んだアイコンが Dock に表示されます。Finder などでは「ポケット」のままです。";
 "The icon on your Home Screen. The system confirms the change with a short message." = "ホーム画面のアイコンです。変更すると、システムが短いメッセージで知らせます。";
+
+/* Settings › Color Theme */
+"Violet" = "バイオレット";
+"Ocean" = "オーシャン";
+"Forest" = "フォレスト";
+"Amber" = "アンバー";
+"Rose" = "ローズ";
+"Crimson" = "クリムゾン";
+"Orchid" = "オーキッド";
+"Graphite" = "グラファイト";
+"Color Theme" = "カラーテーマ";
+"Changes the highlight color and the backgrounds of the app's pages. Classic is the app's original look." = "ハイライトの色と、App の各ページの背景が変わります。「クラシック」は App 本来の見た目です。";
+"Highlight" = "ハイライト";
+"The highlight is used for selections and buttons; the background color tints the pages. A gray background keeps them neutral." = "ハイライトは選択項目やボタンに、背景色はページの色味に使われます。グレーにすると無彩色のままです。";
