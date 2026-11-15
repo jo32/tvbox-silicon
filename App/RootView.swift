@@ -219,7 +219,6 @@ struct RootView: View {
             }
             #endif
             #if os(iOS)
-            .minimizesTabBarOnScroll()
             .onChange(of: TabSizeClasses(horizontal: sizeClass, vertical: verticalSizeClass), initial: true) { _, now in
                 followsSizeClasses(now)
             }

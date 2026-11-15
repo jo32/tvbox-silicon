@@ -191,12 +191,6 @@ extension View {
     }
     #endif
 
-    #if os(iOS)
-    @ViewBuilder func minimizesTabBarOnScroll() -> some View {
-        if #available(iOS 26, *) { tabBarMinimizeBehavior(.onScrollDown) } else { self }
-    }
-    #endif
-
     // iOS 17 and tvOS 17 stand-ins for iOS 18 and tvOS 18 APIs. macOS 15 always takes the first branch.
 
     /// Calls `action` when someone starts scrolling by hand. Before iOS 18 there is no scroll phase,
