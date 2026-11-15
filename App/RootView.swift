@@ -269,7 +269,10 @@ struct RootView: View {
         if #available(iOS 18, tvOS 18, *) {
             TabView(selection: $store.section) {
                 ForEach(tabs) { item in
-                    Tab(value: item) { tabPage(item) } label: { tabLabel(item) }
+                    // The page is the section's own: iOS 18 keeps a tab's page by its place in the bar, so a section the
+                    // tab bar editor put in another's place (Novels for Favorites) got a stack whose links pushed
+                    // nothing (#1012, #1115). iOS 26 and 27 didn't.
+                    Tab(value: item) { tabPage(item).id(item) } label: { tabLabel(item) }
                         #if os(iOS)
                         .badge(tabBadge(item))
                         #endif
