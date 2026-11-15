@@ -90,6 +90,15 @@ import TVCore
     }
     private var episodeRequest = UUID()
     private var episodeTask: Task<Void, Never>?
+    /// The next episode's stream, resolved while a short episode plays (#1021, #900): Next, the end of the episode and
+    /// the queue start it without asking the source again, so the cover no longer waits on the source each time.
+    @ObservationIgnored private var nextAhead: (episode: Episode, resolved: Channel, at: Date)?
+    @ObservationIgnored private var nextAheadTask: (episode: Episode, task: Task<Void, Never>)?
+    /// Signed links expire: one resolved longer ago than this is asked for again.
+    static let nextAheadLifetime: TimeInterval = 5 * 60
+    /// Episodes this long or shorter (short dramas, clips) have the next one resolved while they play. A longer one's
+    /// is resolved 30 seconds before its end for the queue, as before.
+    static let nextAheadLength: Double = 10 * 60
     var section: AppSection = .home
     /// The Mac sidebar folds away while the manga reader fills the window, and comes back when it closes.
     /// macOS 26 floats the sidebar over the page, so it covered the left part of every comic page.
@@ -738,13 +747,45 @@ import TVCore
         }
         guard autoPlayNext, let catalog = catalog(for: channel), let next = nextEpisode(after: channel) else { return nil }
         do {
-            let resolved = try await catalog.client.playback(next)
+            let resolved: Channel
+            if let ahead = await nextAhead(for: next) { resolved = ahead } else { resolved = try await catalog.client.playback(next) }
             guard !Task.isCancelled, playing == channel else { return nil }
             return episodeChannel(resolved, video: catalog.video, episode: next, client: catalog.client)
         } catch {
             if !(error is CancellationError) { Diagnostics.shared.failure("catalog", "upcoming episode \(catalog.client.reportContext) flag=\(next.flag)", error) }
             return nil
         }
+    }
+
+    /// Resolves the episode after `channel` while it plays, when it lasts `nextAheadLength` or less, once per episode.
+    func resolveNextAhead(after channel: Channel, duration: Double) {
+        guard duration > 0, duration <= Self.nextAheadLength, playing == channel,
+              let catalog = catalog(for: channel), let next = nextEpisode(after: channel) else { return }
+        if nextAheadTask?.episode == next { return }
+        if let ahead = nextAhead, ahead.episode == next, Date().timeIntervalSince(ahead.at) < Self.nextAheadLifetime { return }
+        nextAheadTask?.task.cancel()
+        let task = Task { [weak self] in
+            do {
+                let resolved = try await catalog.client.playback(next)
+                guard !Task.isCancelled, let self else { return }
+                self.nextAhead = (next, resolved, Date())
+                Diagnostics.shared.record(.info, "catalog", "next episode resolved ahead flag=\(next.flag)")
+            } catch {
+                if !(error is CancellationError) {
+                    Diagnostics.shared.record(.warning, "catalog", "next episode not resolved ahead \(Diagnostics.describe(error))")
+                }
+            }
+            if self?.nextAheadTask?.episode == next { self?.nextAheadTask = nil }
+        }
+        nextAheadTask = (next, task)
+    }
+
+    /// The stream resolved ahead for `episode`, waiting for one still on its way; nil when there is none, or it is too
+    /// old to trust.
+    private func nextAhead(for episode: Episode) async -> Channel? {
+        if let pending = nextAheadTask, pending.episode == episode { await pending.task.value }
+        guard let ahead = nextAhead, ahead.episode == episode, Date().timeIntervalSince(ahead.at) < Self.nextAheadLifetime else { return nil }
+        return ahead.resolved
     }
 
     /// The queued episode started playing by itself: it becomes the one playing, as if it had been chosen.
@@ -793,7 +834,9 @@ import TVCore
             guard let self else { return }
             defer { if self.episodeRequest == request { self.resolvingEpisode = nil; self.episodeTask = nil } }
             do {
-                let resolved = try await catalog.client.playback(episode)
+                // Resolved ahead while a short episode played, Next starts it at once.
+                let resolved: Channel
+                if let ahead = await self.nextAhead(for: episode) { resolved = ahead } else { resolved = try await catalog.client.playback(episode) }
                 guard !Task.isCancelled, self.episodeRequest == request, self.playing == channel else { return }
                 self.playing = self.catalogChannel(resolved, video: catalog.video, episode: episode, client: catalog.client)
             } catch {
