@@ -9,6 +9,8 @@ public actor Emby {
     public static let shared = Emby()
     private let session: URLSession
     private var signIns: [String: SignIn] = [:]
+    /// Each server's libraries by id, with the kind of item a library of their type lists (`itemTypes`).
+    private var libraries: [String: [String: String]] = [:]
 
     struct SignIn: Equatable { var token: String; var user: String }
 
@@ -47,18 +49,36 @@ public actor Emby {
     }
 
     /// The root ("/") lists the user's libraries; any other folder is an item whose children list:
-    /// a library's films or series, a series' seasons, a season's episodes.
+    /// a library's films or series, a series' seasons, a season's episodes. A film or series library
+    /// lists every film or series in it, as the server's own apps do, however its folders nest them
+    /// (#1063); other libraries (home videos, mixed content) list folder by folder.
     func list(_ server: AListServer, id: String) async throws -> [CloudFile] {
-        let answer: Any
-        if id == "/" {
-            answer = try await call(server) { "/Users/\($0)/Views" }
-        } else {
-            // Emby names an item's container only when asked; Jellyfin ignores the field and always does.
-            answer = try await call(server, query: ["ParentId": id, "Fields": "Path,Container", "SortBy": "SortName"]) { "/Users/\($0)/Items" }
+        if id == "/" { return try await views(server) }
+        if libraries[server.id] == nil { _ = try? await views(server) }
+        // Emby names an item's container only when asked; Jellyfin ignores the field and always does.
+        var query = ["ParentId": id, "Fields": "Path,Container", "SortBy": "SortName"]
+        if let types = libraries[server.id]?[id] {
+            query["Recursive"] = "true"; query["IncludeItemTypes"] = types
+            // Only the poster is shown: the rest would make a library of thousands much larger.
+            query["EnableImageTypes"] = "Primary"; query["ImageTypeLimit"] = "1"; query["EnableUserData"] = "false"
         }
+        let answer = try await call(server, query: query) { "/Users/\($0)/Items" }
         let items = (answer as? [String: Any])?["Items"] as? [[String: Any]] ?? []
         return items.compactMap { Self.file($0, server: server) }
     }
+
+    /// The user's libraries, remembering which list their films or series as a whole.
+    private func views(_ server: AListServer) async throws -> [CloudFile] {
+        let answer = try await call(server) { "/Users/\($0)/Views" }
+        let items = (answer as? [String: Any])?["Items"] as? [[String: Any]] ?? []
+        libraries[server.id] = items.reduce(into: [:]) { kinds, item in
+            if let id = item["Id"] as? String, let types = Self.itemTypes[(item["CollectionType"] as? String ?? "").lowercased()] { kinds[id] = types }
+        }
+        return items.compactMap { Self.file($0, server: server) }
+    }
+
+    /// What a library of each type lists, by its `CollectionType`.
+    static let itemTypes = ["movies": "Movie", "tvshows": "Series", "musicvideos": "MusicVideo"]
 
     /// Films, series and videos in the user's libraries whose names hold `term`.
     func search(_ server: AListServer, _ term: String, page: Int, size: Int) async throws -> (files: [CloudFile], total: Int) {
