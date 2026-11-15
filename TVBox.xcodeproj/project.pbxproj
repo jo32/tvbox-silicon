@@ -389,6 +389,7 @@
 		F90D633F45956BEB583BB3C8 /* LiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7459A3EBEF2E7C346B508738 /* LiveView.swift */; };
 		F938FF6194BF4053F4F63501 /* MangaDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B33761B860B18DD0F3CE7FAC /* MangaDetailView.swift */; };
 		FA6CC845EF0E0E913AA393E8 /* DanmakuSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91355F9A371572D91388ED36 /* DanmakuSettingsView.swift */; };
+		FA820ECE634F6CE935A25E2B /* AppIcons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5194EB255D269658DD7A81E3 /* AppIcons.xcassets */; };
 		FBD490433241B703DEC0B46B /* SubtitleTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13947E20489465F172C8B5B7 /* SubtitleTranslator.swift */; };
 		FBE0D58826319D7544827004 /* FeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 559683A9A4BDFA11A4A9FE67 /* FeedbackView.swift */; };
 		FC0F00688179660407FD70E1 /* CatalogPlaybackActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46C4D3FABE1C6E7A7B63BA62 /* CatalogPlaybackActions.swift */; };
@@ -950,6 +951,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FA820ECE634F6CE935A25E2B /* AppIcons.xcassets in Resources */,
 				D8878E7A04E94E6A88CA4DB7 /* Assets.xcassets in Resources */,
 				6CE6FB43EF6031C2E216DF33 /* Assets.xcassets in Resources */,
 				DB55B4EA2085691230ACCE09 /* Capstone-LLVM.txt in Resources */,
@@ -1711,6 +1713,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-MediaPocketGray AppIcon-MediaLayers AppIcon-PlayTriangle AppIcon-SealMusic AppIcon-ShibaManga AppIcon-CatCinema AppIcon-AnimalTrio AppIcon-Classic AppIcon-Aurora AppIcon-Porcelain AppIcon-Obsidian AppIcon-Azure AppIcon-Daybreak AppIcon-Iris AppIcon-Lagoon AppIcon-RoseQuartz AppIcon-Citrus AppIcon-Cosmic";
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
 				CODE_SIGN_ENTITLEMENTS = "$(ICLOUD_ENTITLEMENTS)";
@@ -1758,6 +1761,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-MediaPocketGray AppIcon-MediaLayers AppIcon-PlayTriangle AppIcon-SealMusic AppIcon-ShibaManga AppIcon-CatCinema AppIcon-AnimalTrio AppIcon-Classic AppIcon-Aurora AppIcon-Porcelain AppIcon-Obsidian AppIcon-Azure AppIcon-Daybreak AppIcon-Iris AppIcon-Lagoon AppIcon-RoseQuartz AppIcon-Citrus AppIcon-Cosmic";
 				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
 				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
 				CODE_SIGN_ENTITLEMENTS = "$(ICLOUD_ENTITLEMENTS)";

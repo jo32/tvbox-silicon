@@ -1,4 +1,3 @@
-#if !os(tvOS)
 import ImageIO
 import SwiftUI
 import TVCore
@@ -10,8 +9,9 @@ import UIKit
 #endif
 
 // MARK: App icons
-// Settings › App Icon on iPhone, iPad and Mac. iPhone and iPad switch to an alternate icon that ships in the app
-// (Config/iOS/Assets.xcassets/AppIcon-<name>); the Mac has no alternate icons, so it draws the chosen one, or a
+// Settings › App Icon. iPhone and iPad switch to an alternate icon that ships in the app
+// (Config/iOS/Assets.xcassets/AppIcon-<name>), Apple TV to its wide version (Config/tvOS/Assets.xcassets, from
+// Design/make-tvos-icon.swift); the Mac has no alternate icons, so it draws the chosen one, or a
 // picture of the viewer's own, as its Dock icon while it runs. The artwork of each icon, for the picker and the Dock,
 // is AppIconArt-<name> in Config/AppIcons.xcassets. All of them come from Design/make-app-icons.swift.
 
@@ -51,7 +51,7 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
     }
     /// The artwork's image set.
     var art: String { "AppIconArt-\(rawValue)" }
-    /// The alternate icon's name on iPhone and iPad; nil for the app's own.
+    /// The alternate icon's name on iPhone, iPad and Apple TV; nil for the app's own.
     var alternateName: String? { self == .standard ? nil : "AppIcon-\(rawValue)" }
 }
 
@@ -75,7 +75,7 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
         return Image((current ?? .standard).art)
     }
 
-    #if os(iOS)
+    #if os(iOS) || os(tvOS)
     /// False where the system offers no alternate icons, such as an iPad app running on a Mac.
     static var isAvailable: Bool { UIApplication.shared.supportsAlternateIcons }
 
@@ -267,6 +267,24 @@ struct AppIconSettingsView: View {
 
     var body: some View {
         SettingsPage(title: L10n.text("App Icon"), symbol: "app.badge") {
+            #if os(tvOS)
+            SettingsGroup(footer: icons.failure ?? note) {
+                ForEach(AppIconChoice.allCases) { choice in
+                    Button { Task { await icons.choose(choice) } } label: {
+                        TVSettingsRowLabel(title: choice.title) {
+                            Image(choice.art).resizable().interpolation(.high).scaledToFill()
+                                .frame(width: 54, height: 54)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            Image(systemName: "checkmark").font(.system(size: 26, weight: .semibold))
+                                .opacity(icons.current == choice ? 1 : 0)
+                        }
+                    }
+                    .glassRow()
+                    .accessibilityIdentifier("appIcon.\(choice.rawValue)")
+                    .accessibilityAddTraits(icons.current == choice ? .isSelected : [])
+                }
+            }
+            #else
             SettingsGroup(footer: icons.failure ?? note) {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: AppIconTile.width), spacing: 12, alignment: .top)], spacing: 18) {
                     ForEach(AppIconChoice.allCases) { choice in
@@ -289,6 +307,7 @@ struct AppIconSettingsView: View {
                 }
                 .padding(.vertical, 10)
             }
+            #endif
             #if os(macOS)
             SettingsGroup(footer: L10n.text("A square picture works best. One with see-through corners, such as an icon made for the Mac, shows as it is.")) {
                 Button { choosesPicture = true } label: {
@@ -310,7 +329,7 @@ struct AppIconSettingsView: View {
             }
             #endif
         }
-        #if DEBUG && os(iOS)
+        #if DEBUG && (os(iOS) || os(tvOS))
         // `-qaChooseIcon <name>` picks that icon as a tap would. Not on the Mac, where the choice is saved in the
         // viewer's own defaults; pass `-appIcon <name>` there instead.
         .task {
@@ -332,12 +351,16 @@ struct AppIconSettingsView: View {
     private var note: String {
         #if os(macOS)
         L10n.text("The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Pocket.")
+        #elseif os(tvOS)
+        // The top shelf image belongs to the app, not the icon.
+        L10n.text("The icon on the Home Screen. When Yingxia sits in the top row, the picture above it stays Pocket.")
         #else
         L10n.text("The icon on your Home Screen. The system confirms the change with a short message.")
         #endif
     }
 }
 
+#if !os(tvOS)
 /// One icon in the picker: the artwork as an icon, its name, and a check under the one in use.
 private struct AppIconTile: View {
     #if os(macOS)

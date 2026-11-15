@@ -292,12 +292,10 @@ enum QALaunch {
         folder == drive.root ? drive.name : (folder as NSString).lastPathComponent
     }
 
-    /// `-qaPage app-icon`: Settings › App Icon (iPhone, iPad and Mac). `-qaPage color-theme`: Settings › Color Theme;
+    /// `-qaPage app-icon`: Settings › App Icon. `-qaPage color-theme`: Settings › Color Theme;
     /// `-colorTheme <name>` starts in that theme.
     @MainActor @ViewBuilder private static var appIconPage: some View {
-        #if !os(tvOS)
         AppIconSettingsView()
-        #endif
     }
 
     /// The pushed page to show as the section's root, so detail screens can be captured without taps.

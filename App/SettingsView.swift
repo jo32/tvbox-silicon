@@ -1711,6 +1711,7 @@ struct TVSettingsView: View {
             }
             TVSettingsSection {
                 TVSettingsLink(title: L10n.text("Watch Now")) { WatchNowSettingsView() }
+                TVSettingsLink(title: L10n.text("App Icon"), value: AppIcons.shared.title) { AppIconSettingsView() }
                 TVSettingsLink(title: L10n.text("Color Theme"), value: ColorThemes.shared.current.title) { ColorThemeSettingsView() }
             }
             TVSettingsSection(title: L10n.text("Playback"), footer: playbackFooter) {

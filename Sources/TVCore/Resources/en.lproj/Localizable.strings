@@ -2021,6 +2021,7 @@
 "Remove Custom Picture" = "Remove Custom Picture";
 "The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Pocket." = "The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Pocket.";
 "The icon on your Home Screen. The system confirms the change with a short message." = "The icon on your Home Screen. The system confirms the change with a short message.";
+"The icon on the Home Screen. When Yingxia sits in the top row, the picture above it stays Pocket." = "The icon on the Home Screen. When Yingxia sits in the top row, the picture above it stays Pocket.";
 
 /* Settings › Color Theme */
 "Violet" = "Violet";
