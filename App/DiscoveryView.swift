@@ -1201,15 +1201,15 @@ struct RecommendationsView: View {
     /// categories, as on Apple TV. A category's heading opens the source's page.
     private var phoneRails: some View {
         VStack(alignment: .leading, spacing: 30) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    Text(L10n.text("Recommendations")).font(.system(size: DiscoverLayout.heading, weight: .semibold)).lineLimit(1)
-                    Spacer(minLength: 8)
-                    recommendationControls.fixedSize()
-                }
+            // One line: the source and its switch stand in for the heading (#997), with Refresh at the end.
+            HStack(spacing: 8) {
                 if fixedSite == nil, let site, sites.count > 1, openRoute != nil {
                     sourcePickerButton(site)
+                } else {
+                    Text(L10n.text("Recommendations")).font(.system(size: DiscoverLayout.heading, weight: .semibold)).lineLimit(1)
                 }
+                Spacer(minLength: 8)
+                recommendationControls.fixedSize()
             }
             .padding(.horizontal, DiscoverLayout.gutter)
             // Every category row starts loading with the heading, not when it scrolls on screen.
