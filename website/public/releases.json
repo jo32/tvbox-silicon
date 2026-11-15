@@ -4837,11 +4837,11 @@
   ],
   "testflight": {
     "ios": {
-      "build": 59,
+      "build": 60,
       "link": "https://testflight.apple.com/join/dU6UNbzp"
     },
     "tvos": {
-      "build": 59,
+      "build": 60,
       "link": "https://testflight.apple.com/join/SSgWEwSr"
     }
   }
