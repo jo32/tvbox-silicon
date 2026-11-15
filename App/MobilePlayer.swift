@@ -619,8 +619,7 @@ struct MobilePlayerView: View {
                     .accessibilityLabel(L10n.text("Back"))
                     .accessibilityIdentifier("player.close")
                 Spacer(minLength: 0)
-                toolbar
-                optionsMenu
+                HStack(spacing: 0) { toolbar; optionsMenu }.chromeGroup()
             }
             .simultaneousGesture(TapGesture().onEnded { poke() })
         } else {
@@ -637,7 +636,7 @@ struct MobilePlayerView: View {
                 .keyboardShortcut(.cancelAction)
             Text(channel.name).font(.headline).lineLimit(1)
                 .shadow(color: .black.opacity(0.6), radius: 4)
-            HStack(spacing: 10) { toolbar; optionsMenu }
+            HStack(spacing: 0) { toolbar; optionsMenu }.chromeGroup()
         }
         .simultaneousGesture(TapGesture().onEnded { poke() })
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topRowHeight = $0 }
@@ -656,13 +655,13 @@ struct MobilePlayerView: View {
         .padding(.bottom, 2)
     }
 
+    /// The buttons share one glass capsule with the options menu (`chromeGroup`), so none has glass of its own.
     private var toolbar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 0) {
             // With Yingxia found on an Apple TV or Mac, one menu holds those and AirPlay.
             if tvBrowser.receivers.isEmpty {
                 AirPlayButton()
                     .frame(width: 44, height: 44)
-                    .glassSurface(.regular.interactive(), in: Circle())
                     .contentShape(Circle())
             } else {
                 PlayOnButton(channel: channel, session: session, browser: tvBrowser) { receiver in
@@ -832,7 +831,8 @@ struct MobilePlayerView: View {
         let episodes = !inline && PlayerEpisodesSheet.offered(for: channel, in: store)
         let channels = !inline && PlayerChannelsSheet.offered(for: channel, session: session, in: store)
         if previous != nil || next != nil || episodes || channels || toggleFullScreen != nil {
-            HStack(spacing: 10) {
+            // One glass capsule, as the top row's buttons (`chromeGroup`).
+            HStack(spacing: 0) {
                 if let previous {
                     Button { previous.go() } label: { Image(systemName: "backward.end.fill") }
                         .buttonStyle(PlayerCircleStyle(size: 36))
@@ -852,8 +852,7 @@ struct MobilePlayerView: View {
                             Text(L10n.text("Episodes"))
                         }
                         .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
-                        .padding(.horizontal, 14).frame(height: 36)
-                        .glassSurface(.regular.interactive(), in: Capsule())
+                        .padding(.horizontal, 12).frame(height: 36)
                         .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
@@ -865,8 +864,7 @@ struct MobilePlayerView: View {
                             Text(L10n.text("Channel List"))
                         }
                         .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
-                        .padding(.horizontal, 14).frame(height: 36)
-                        .glassSurface(.regular.interactive(), in: Capsule())
+                        .padding(.horizontal, 12).frame(height: 36)
                         .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
@@ -881,6 +879,7 @@ struct MobilePlayerView: View {
                     .accessibilityIdentifier("player.fullScreen")
                 }
             }
+            .chromeGroup()
             .simultaneousGesture(TapGesture().onEnded { poke() })
         }
     }
@@ -1241,11 +1240,13 @@ private struct PlayerTopBar: SwiftUI.Layout {
 private struct PlayerCircleStyle: ButtonStyle {
     var size: CGFloat
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.chromeGrouped) private var grouped
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: size * 0.4, weight: .semibold)).foregroundStyle(.white)
             .frame(width: size, height: size)
-            .glassSurface(.regular.interactive(), in: Circle())
+            // In a button group (`chromeGroup`) the group's capsule is the glass.
+            .glassSurface(grouped ? .identity : .regular.interactive(), in: Circle())
             .contentShape(Circle())
             .opacity(enabled ? (configuration.isPressed ? 0.72 : 1) : 0.38)
             // Gives under the finger, so a tap shows before the player answers.

@@ -218,7 +218,7 @@ struct PlayOnButton: View {
         #if os(macOS)
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
         .fixedSize()
-        .glassSurface(.regular.interactive(), in: Circle())
+        .playerBarButton()
         .help(L10n.text("Play on Another Device"))
         #else
         .chromeButton()

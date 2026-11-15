@@ -46,11 +46,11 @@ struct CatalogPlaybackActions: View {
                 #endif
             }
             #if os(macOS)
-            // The same 34 pt glass circle as the window's other buttons; a bordered menu drew a wider capsule, and a
+            // A 34 pt button in the window's glass button group; a bordered menu drew a wider capsule, and a
             // borderless one drew its icon at the leading edge of the circle instead of the centre.
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
             .fixedSize()
-            .glassSurface(.regular.interactive(), in: Circle())
+            .playerBarButton()
             .help(L10n.text("Playback Options"))
             #else
             .chromeButton()
