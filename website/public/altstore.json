@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.22",
+          "buildVersion": "60",
+          "date": "2026-11-15",
+          "localizedDescription": "• 配色主题\n• 全新应用图标，Apple TV 也能换\n• 更清爽的播放器\n• 云盘视频起播、跳转更快\n• 其他修复\n\n• Color themes\n• New app icons, on Apple TV too\n• A calmer player\n• Cloud drive videos start and seek faster\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.22/Yingxia-1.8.22-ios.ipa",
+          "size": 178050981,
+          "sha256": "58cd71d52bfd9e83abbb7e57f6010d0dfc6f1e62de4923b115a3ebd4631b6fb6",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.21",
           "buildVersion": "59",
           "date": "2026-11-15",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.18/Yingxia-1.8.18-ios.ipa",
           "size": 128572297,
           "sha256": "2e0212b30f82934b460439101284338f8062e3822e4e3a5892eebfe10974aee0",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.17",
-          "buildVersion": "55",
-          "date": "2026-11-11",
-          "localizedDescription": "• 用插件添加直播平台\n• 登录红果短剧\n• 空白页和出错页焕然一新\n• 所选字幕延续到下一集\n• 其他修复\n\n• Add live platforms as plugins\n• Sign in to Hongguo\n• A cleaner look for empty and error pages\n• Your subtitle choice carries to the next episode\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.17/Yingxia-1.8.17-ios.ipa",
-          "size": 128559563,
-          "sha256": "933a65a3dfe7d39b8297b8220a45ab08f62799f09f8d797ad90b85b57c4f3b38",
           "minOSVersion": "17.0"
         }
       ],
