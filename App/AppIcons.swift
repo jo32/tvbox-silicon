@@ -264,10 +264,17 @@ struct AppIconSettingsView: View {
     #if os(macOS)
     @State private var choosesPicture = false
     #endif
+    #if os(tvOS)
+    /// The row in focus, whose icon the left of the page shows.
+    @FocusState private var focused: AppIconChoice?
+    #endif
 
     var body: some View {
-        SettingsPage(title: L10n.text("App Icon"), symbol: "app.badge") {
+        Group {
             #if os(tvOS)
+            TVSettingsSubpage(title: L10n.text("App Icon")) {
+                AppIconPreview(choice: focused ?? icons.current ?? .standard)
+            } content: {
             SettingsGroup(footer: icons.failure ?? note) {
                 ForEach(AppIconChoice.allCases) { choice in
                     Button { Task { await icons.choose(choice) } } label: {
@@ -280,11 +287,14 @@ struct AppIconSettingsView: View {
                         }
                     }
                     .glassRow()
+                    .focused($focused, equals: choice)
                     .accessibilityIdentifier("appIcon.\(choice.rawValue)")
                     .accessibilityAddTraits(icons.current == choice ? .isSelected : [])
                 }
             }
+            }
             #else
+            SettingsPage(title: L10n.text("App Icon"), symbol: "app.badge") {
             SettingsGroup(footer: icons.failure ?? note) {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: AppIconTile.width), spacing: 12, alignment: .top)], spacing: 18) {
                     ForEach(AppIconChoice.allCases) { choice in
@@ -307,7 +317,6 @@ struct AppIconSettingsView: View {
                 }
                 .padding(.vertical, 10)
             }
-            #endif
             #if os(macOS)
             SettingsGroup(footer: L10n.text("A square picture works best. One with see-through corners, such as an icon made for the Mac, shows as it is.")) {
                 Button { choosesPicture = true } label: {
@@ -326,6 +335,8 @@ struct AppIconSettingsView: View {
             }
             .fileImporter(isPresented: $choosesPicture, allowedContentTypes: [.image]) { result in
                 if case .success(let url) = result { icons.importPicture(url) }
+            }
+            #endif
             }
             #endif
         }
@@ -360,7 +371,26 @@ struct AppIconSettingsView: View {
     }
 }
 
-#if !os(tvOS)
+#if os(tvOS)
+/// An icon as the Apple TV Home Screen shows it: the wide image stack from Config/tvOS/Assets.xcassets, flattened.
+private struct AppIconPreview: View {
+    let choice: AppIconChoice
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 30, style: .continuous)
+        Group {
+            if let stack = UIImage(named: choice.alternateName ?? "App Icon - Small") {
+                Image(uiImage: stack).resizable()
+            } else {
+                Image(choice.art).resizable().scaledToFill()
+            }
+        }
+        .frame(width: 400, height: 240)
+        .clipShape(shape)
+        .shadow(color: .black.opacity(0.45), radius: 30, y: 16)
+        .accessibilityHidden(true)
+    }
+}
+#else
 /// One icon in the picker: the artwork as an icon, its name, and a check under the one in use.
 private struct AppIconTile: View {
     #if os(macOS)
