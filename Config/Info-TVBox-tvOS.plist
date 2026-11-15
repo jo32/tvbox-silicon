@@ -8,6 +8,30 @@
 	<string>Yingxia</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundleAlternateIcons</key>
+		<array>
+			<string>AppIcon-MediaPocketGray</string>
+			<string>AppIcon-MediaLayers</string>
+			<string>AppIcon-PlayTriangle</string>
+			<string>AppIcon-SealMusic</string>
+			<string>AppIcon-ShibaManga</string>
+			<string>AppIcon-CatCinema</string>
+			<string>AppIcon-AnimalTrio</string>
+			<string>AppIcon-Classic</string>
+			<string>AppIcon-Aurora</string>
+			<string>AppIcon-Porcelain</string>
+			<string>AppIcon-Obsidian</string>
+			<string>AppIcon-Azure</string>
+			<string>AppIcon-Daybreak</string>
+			<string>AppIcon-Iris</string>
+			<string>AppIcon-Lagoon</string>
+			<string>AppIcon-RoseQuartz</string>
+			<string>AppIcon-Citrus</string>
+			<string>AppIcon-Cosmic</string>
+		</array>
+	</dict>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
