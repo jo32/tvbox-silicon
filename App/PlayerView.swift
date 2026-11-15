@@ -1938,6 +1938,15 @@ extension Store {
     }
     // Near the end the next episode is resolved and queued, so it plays on without stopping to load.
     session.playsOn = { [weak store] in store?.autoPlayNext == true }
+    // A short episode's next one is resolved while it plays (#1021), once its own start is out of the way and its
+    // length is known.
+    Task { [weak store, weak session] in
+        for _ in 0..<6 {
+            try? await Task.sleep(for: .seconds(5))
+            guard let store, let session, store.playing == channel else { return }
+            if session.duration > 0 { return store.resolveNextAhead(after: channel, duration: session.duration) }
+        }
+    }
     session.upcomingEpisode = { [weak store] in await store?.upcomingEpisode(after: channel) }
     session.onAdvance = { [weak store] next in store?.advance(to: next, from: channel) }
     session.onUnplayableFile = { [weak store, weak session] in
