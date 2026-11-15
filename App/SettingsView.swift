@@ -295,6 +295,8 @@ extension View {
                 // The app's navy canvas, as on every other page, instead of the system's black.
                 .scrollContentBackground(.hidden)
                 .background { Backdrop() }
+                #elseif os(macOS)
+                .modifier(ThemedFormBackground())
                 #endif
             // Only when there is room to spare: a zero margin would replace the system's own insets.
             if extra > 0 { form.contentMargins(.horizontal, extra, for: .scrollContent) } else { form }

@@ -60,8 +60,8 @@ struct ThemePalette: Sendable {
     var surfaceLight: Color, surfaceDark: Color
     /// Apple TV, always dark: tiles and the raised, focused version of them (TVStyle).
     var tvSurface: Color, tvRaised: Color
-    /// The same, following the appearance; and settings rows, white on light pages.
-    let accent: Color, onAccent: Color, rowFill: Color
+    /// The same, following the appearance; settings rows, white on light pages; the canvas and the panels.
+    let accent: Color, onAccent: Color, rowFill: Color, canvas: Color, panel: Color
 
     init(accentLight: Color, accentDark: Color, onAccentLight: Color, onAccentDark: Color, backdropLight: Color, backdropDark: Color,
          surfaceLight: Color, surfaceDark: Color, tvSurface: Color, tvRaised: Color) {
@@ -71,6 +71,8 @@ struct ThemePalette: Sendable {
         accent = Color(light: accentLight, dark: accentDark)
         onAccent = Color(light: onAccentLight, dark: onAccentDark)
         rowFill = Color(light: .white, dark: surfaceDark)
+        canvas = Color(light: backdropLight, dark: backdropDark)
+        panel = Color(light: surfaceLight, dark: surfaceDark)
     }
 
     /// A theme around one hue: canvases tinted with it, as Classic's navy is (`tint` 1; 0 gives greys), and a highlight
@@ -79,12 +81,12 @@ struct ThemePalette: Sendable {
                      onDark: Color = Color(white: 0.06)) -> ThemePalette {
         let h = hue / 360
         return ThemePalette(accentLight: light, accentDark: dark, onAccentLight: onLight, onAccentDark: onDark,
-                            backdropLight: Color(hue: h, saturation: 0.035 * tint, brightness: 0.985),
-                            backdropDark: Color(hue: h, saturation: 0.72 * tint, brightness: 0.085),
-                            surfaceLight: Color(hue: h, saturation: 0.06 * tint, brightness: 0.965),
-                            surfaceDark: Color(hue: h, saturation: 0.55 * tint, brightness: 0.19),
-                            tvSurface: Color(hue: h, saturation: 0.55 * tint, brightness: 0.22),
-                            tvRaised: Color(hue: h, saturation: 0.5 * tint, brightness: 0.29))
+                            backdropLight: Color(hue: h, saturation: 0.07 * tint, brightness: 0.98),
+                            backdropDark: Color(hue: h, saturation: 0.8 * tint, brightness: 0.12),
+                            surfaceLight: Color(hue: h, saturation: 0.13 * tint, brightness: 0.95),
+                            surfaceDark: Color(hue: h, saturation: 0.62 * tint, brightness: 0.23),
+                            tvSurface: Color(hue: h, saturation: 0.6 * tint, brightness: 0.25),
+                            tvRaised: Color(hue: h, saturation: 0.55 * tint, brightness: 0.33))
     }
 
     /// Custom: `highlight` as it is on light pages, lifted towards white on dark ones if it is dark; the canvases tinted
@@ -210,6 +212,31 @@ struct ThemeRGB: Equatable, Sendable {
 struct ThemeTint: ViewModifier {
     func body(content: Content) -> some View { content.tint(Brand.accent) }
 }
+
+extension ColorThemes {
+    /// Whether the Mac's own chrome (sidebar, Settings pages) takes the theme; Classic keeps the system's, as before themes.
+    var tintsChrome: Bool { current != .classic }
+}
+
+#if os(macOS)
+/// Under a Mac sidebar: the theme's panel colour, or nothing in Classic (the system's sidebar).
+struct ThemedSidebarFill: View {
+    var body: some View {
+        if ColorThemes.shared.tintsChrome { ColorThemes.shared.current.palette.panel.ignoresSafeArea() }
+    }
+}
+
+/// A Mac Settings form on the theme's canvas, up under the title bar; Classic keeps the system's background.
+struct ThemedFormBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        if ColorThemes.shared.tintsChrome {
+            content.scrollContentBackground(.hidden).background { Backdrop() }
+        } else {
+            content
+        }
+    }
+}
+#endif
 
 // MARK: Settings › Color Theme
 

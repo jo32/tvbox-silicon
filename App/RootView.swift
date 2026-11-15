@@ -490,6 +490,7 @@ private struct MacSidebar: View {
         }
         .scrollIndicators(.never)
         .safeAreaInset(edge: .bottom, spacing: 0) { SidebarStatus() }
+        .background { ThemedSidebarFill() }
     }
 }
 
@@ -503,24 +504,28 @@ private struct SidebarRow: View {
     @State private var hovering = false
 
     var body: some View {
+        // Classic keeps the neutral rows; another theme draws the icons and the selection in its highlight.
+        let themed = ColorThemes.shared.tintsChrome
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: section.icon)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(themed ? AnyShapeStyle(Brand.accent.opacity(selected ? 1 : 0.8))
+                                     : selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
                     .frame(width: 20)
                 Text(section.title)
                     .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                    .foregroundStyle(themed && selected ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(.primary))
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 if badge { NewBadge() }
             }
-            .foregroundStyle(.primary)
             .padding(.horizontal, 10)
             .frame(height: 32)
             .background {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.primary.opacity(selected ? 0.11 : (hovering ? 0.05 : 0)))
+                    .fill(themed ? Brand.accent.opacity(selected ? 0.2 : (hovering ? 0.08 : 0))
+                                 : Color.primary.opacity(selected ? 0.11 : (hovering ? 0.05 : 0)))
             }
             .contentShape(Rectangle())
         }
