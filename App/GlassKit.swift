@@ -191,6 +191,13 @@ extension View {
     }
     #endif
 
+    #if os(iOS)
+    /// iOS 26: the tab bar shrinks to the current tab while scrolling down, unless switched off in Settings.
+    @ViewBuilder func minimizesTabBarOnScroll(_ enabled: Bool) -> some View {
+        if #available(iOS 26, *) { tabBarMinimizeBehavior(enabled ? .onScrollDown : .never) } else { self }
+    }
+    #endif
+
     // iOS 17 and tvOS 17 stand-ins for iOS 18 and tvOS 18 APIs. macOS 15 always takes the first branch.
 
     /// Calls `action` when someone starts scrolling by hand. Before iOS 18 there is no scroll phase,

@@ -362,6 +362,7 @@ struct FormSettingsView: View {
     @State private var showsFeedback = false
     @Environment(\.openURL) private var openURL
     @AppStorage(PhoneTabs.labelsKey) private var showsTabLabels = true
+    @AppStorage(PhoneTabs.collapsesKey) private var collapsesTabBar = true
     #endif
     #if os(macOS)
     @AppStorage(BilibiliCastController.key) private var receivesCasts = true
@@ -587,6 +588,13 @@ struct FormSettingsView: View {
                     FormLabel(symbol: "dock.rectangle", tint: .gray, title: L10n.text("Tab Bar Labels"))
                 }
                 .settingsSwitch()
+                if #available(iOS 26, *) {
+                    Toggle(isOn: $collapsesTabBar) {
+                        FormLabel(symbol: "arrow.down.right.and.arrow.up.left", tint: .gray, title: L10n.text("Collapse Tab Bar When Scrolling"))
+                    }
+                    .settingsSwitch()
+                    .accessibilityIdentifier("settings.collapseTabBar")
+                }
             }
             #else
             Section {
