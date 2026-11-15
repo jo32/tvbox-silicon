@@ -579,11 +579,11 @@
 "This danmaku server requires authorization. Choose a compatible public or self-hosted server." = "This danmaku server requires authorization. Choose a compatible public or self-hosted server.";
 "The danmaku server could not complete this request. Try another server." = "The danmaku server could not complete this request. Try another server.";
 "Wait for the video duration. Live streams cannot use skipping." = "Wait for the video duration. Live streams cannot use skipping.";
-"Skipping is available for videos at least two minutes long." = "Skipping is available for videos at least two minutes long.";
 "Enter a valid time such as 01:30." = "Enter a valid time such as 01:30.";
-"The intro cannot exceed five minutes or a quarter of the video." = "The intro cannot exceed five minutes or a quarter of the video.";
-"The outro cannot exceed ten minutes or a quarter of the video." = "The outro cannot exceed ten minutes or a quarter of the video.";
-"Keep at least 60% of the video as main content." = "Keep at least 60% of the video as main content.";
+"The intro must end before the outro starts." = "The intro must end before the outro starts.";
+"Intro skipped" = "Intro skipped";
+"Undo" = "Undo";
+"Skipping the outro in %@ s" = "Skipping the outro in %@ s";
 "Automatically skip intro and outro" = "Automatically skip intro and outro";
 "Intro ends at" = "Intro ends at";
 "Outro starts at" = "Outro starts at";

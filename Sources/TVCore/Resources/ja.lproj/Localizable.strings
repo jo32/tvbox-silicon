@@ -578,11 +578,11 @@
 "This danmaku server requires authorization. Choose a compatible public or self-hosted server." = "この弾幕サーバーは認証が必要です。対応する公開サーバーか独自サーバーを選んでください。";
 "The danmaku server could not complete this request. Try another server." = "弾幕のリクエストを完了できませんでした。別のサーバーをお試しください。";
 "Wait for the video duration. Live streams cannot use skipping." = "動画の長さを読み込み中です。ライブ配信では使用できません。";
-"Skipping is available for videos at least two minutes long." = "2分以上の動画で使用できます。";
 "Enter a valid time such as 01:30." = "01:30 のような有効な時間を入力してください。";
-"The intro cannot exceed five minutes or a quarter of the video." = "オープニングは5分以内、かつ動画の4分の1以内にしてください。";
-"The outro cannot exceed ten minutes or a quarter of the video." = "エンディングは10分以内、かつ動画の4分の1以内にしてください。";
-"Keep at least 60% of the video as main content." = "動画の60%以上を本編として残してください。";
+"The intro must end before the outro starts." = "オープニングはエンディングより前に終わる必要があります。";
+"Intro skipped" = "オープニングをスキップしました";
+"Undo" = "取り消す";
+"Skipping the outro in %@ s" = "%@ 秒後にエンディングをスキップします";
 "Automatically skip intro and outro" = "オープニングとエンディングを自動スキップ";
 "Intro ends at" = "オープニング終了位置";
 "Outro starts at" = "エンディング開始位置";

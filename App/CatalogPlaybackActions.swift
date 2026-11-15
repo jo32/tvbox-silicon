@@ -82,6 +82,42 @@ struct SourceSkipButton: View {
     }
 }
 
+/// The viewer's own intro and outro times at work (#1003): the intro just skipped, with Undo, and a countdown before
+/// the outro is skipped, with Cancel, so a wrong time can be put right on the spot.
+struct SkipNoticeView: View {
+    let session: PlaybackSession
+    var body: some View {
+        if let notice = session.skipNotice {
+            HStack(spacing: 12) {
+                switch notice {
+                case .introSkipped:
+                    Text(L10n.text("Intro skipped"))
+                    Button(L10n.text("Undo")) { session.undoIntroSkip() }
+                        .foregroundStyle(.orange)
+                        .accessibilityIdentifier("player.skipNotice.undo")
+                case .outroIn(let seconds):
+                    Text(L10n.text("Skipping the outro in %@ s", String(seconds)))
+                        .contentTransition(.numericText(countsDown: true))
+                        .monospacedDigit()
+                    Button(L10n.text("Cancel")) { session.keepOutro() }
+                        .foregroundStyle(.orange)
+                        .accessibilityIdentifier("player.skipNotice.keep")
+                }
+            }
+            .font(.subheadline.weight(.semibold))
+            .buttonStyle(.plain)
+            .padding(.horizontal, 14).padding(.vertical, 9)
+            .glassSurface(.regular.interactive(), in: Capsule())
+            .foregroundStyle(.white)
+            .animation(.smooth(duration: 0.25), value: notice)
+            .padding(.leading, 20).padding(.bottom, 96)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            .transition(.opacity)
+            .accessibilityIdentifier("player.skipNotice")
+        }
+    }
+}
+
 extension View {
     /// A settings sheet over the player, dark like the player. A player at the top of a page makes only its own views
     /// dark (`PlayerScheme`); before iOS 26 a sheet it opens inherits that for its text but keeps the phone's light

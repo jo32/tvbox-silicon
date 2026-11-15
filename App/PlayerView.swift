@@ -100,6 +100,7 @@ struct PlaybackView: View {
             status
             #if !os(tvOS)
             SourceSkipButton(session: session)
+            SkipNoticeView(session: session)
             #endif
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "qaPlaybackProbe") {
