@@ -2042,6 +2042,7 @@
 "Status Bar" = "ステータスバー";
 "Icon Color %@" = "アイコンの色 %@";
 "Start From a Theme" = "テーマから始める";
+"Choose a Theme" = "テーマを選ぶ";
 "Selections, buttons and progress" = "選択項目、ボタン、進行状況";
 "Where the page background starts, at the top left" = "ページ背景の始まり(左上)";
 "Where it ends, at the bottom right. Pick the same color for a flat background." = "終わり(右下)。同じ色を選ぶと単色の背景になります。";

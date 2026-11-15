@@ -2042,6 +2042,7 @@
 "Status Bar" = "Status Bar";
 "Icon Color %@" = "Icon Color %@";
 "Start From a Theme" = "Start From a Theme";
+"Choose a Theme" = "Choose a Theme";
 "Selections, buttons and progress" = "Selections, buttons and progress";
 "Where the page background starts, at the top left" = "Where the page background starts, at the top left";
 "Where it ends, at the bottom right. Pick the same color for a flat background." = "Where it ends, at the bottom right. Pick the same color for a flat background.";

@@ -2042,6 +2042,7 @@
 "Status Bar" = "状态栏";
 "Icon Color %@" = "图标颜色 %@";
 "Start From a Theme" = "从主题开始";
+"Choose a Theme" = "选择主题";
 "Selections, buttons and progress" = "选中项、按钮和进度";
 "Where the page background starts, at the top left" = "页面背景的起点（左上角）";
 "Where it ends, at the bottom right. Pick the same color for a flat background." = "终点（右下角）。选同一颜色即为纯色背景。";

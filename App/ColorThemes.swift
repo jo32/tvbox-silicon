@@ -517,14 +517,18 @@ struct ColorThemeSettingsView: View {
             if themes.current == .custom {
                 SettingsGroup(title: L10n.text("Custom"),
                               footer: L10n.text("Each color is used exactly as picked, in light and dark mode. Text turns light or dark to match the page background.")) {
-                    Menu {
-                        ForEach(ColorTheme.choices.filter { $0 != .custom }) { theme in
-                            Button(theme.title) { themes.startCustom(from: theme, dark: scheme == .dark) }
+                    // A row like the others: its label at the leading edge, the menu at the trailing one.
+                    LabeledContent {
+                        Menu(L10n.text("Choose a Theme")) {
+                            ForEach(ColorTheme.choices.filter { $0 != .custom }) { theme in
+                                Button(theme.title) { themes.startCustom(from: theme, dark: scheme == .dark) }
+                            }
                         }
+                        .fixedSize()
+                        .accessibilityIdentifier("colorTheme.startFrom")
                     } label: {
                         FormLabel(symbol: "wand.and.stars", tint: Brand.accent, title: L10n.text("Start From a Theme"))
                     }
-                    .accessibilityIdentifier("colorTheme.startFrom")
                     ForEach(CustomThemeElement.editable) { element in
                         ColorPicker(selection: Binding(get: { themes.customColor(element).color },
                                                        set: { themes.setCustom(element, to: ThemeRGB($0)) }),
