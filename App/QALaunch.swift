@@ -292,7 +292,8 @@ enum QALaunch {
         folder == drive.root ? drive.name : (folder as NSString).lastPathComponent
     }
 
-    /// `-qaPage app-icon`: Settings › App Icon (iPhone, iPad and Mac).
+    /// `-qaPage app-icon`: Settings › App Icon (iPhone, iPad and Mac). `-qaPage color-theme`: Settings › Color Theme;
+    /// `-colorTheme <name>` starts in that theme.
     @MainActor @ViewBuilder private static var appIconPage: some View {
         #if !os(tvOS)
         AppIconSettingsView()
@@ -312,6 +313,8 @@ enum QALaunch {
             NovelSourcesView()
         } else if section == self.section, page == "app-icon" {
             appIconPage
+        } else if section == self.section, page == "color-theme" {
+            ColorThemeSettingsView()
         } else if section == self.section, let page, let config = store.subscription {
             let parts = page.split(separator: ":", maxSplits: 2).map(String.init)
             switch parts.first {
@@ -460,7 +463,7 @@ enum QALaunch {
 
     static func overrides(_ section: AppSection) -> Bool {
         guard section == self.section, let page else { return false }
-        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "app-icon", "cloud-login", "cloud-accounts", "subtitle-style", "danmaku-style", "book-sources", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add", "up", "comments", "chapters", "live-plugins", "live-plugin", "live-plugin-sign-in", "live-plugin-qr"].contains(page.split(separator: ":").first.map(String.init) ?? "")
+        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "app-icon", "color-theme", "cloud-login", "cloud-accounts", "subtitle-style", "danmaku-style", "book-sources", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add", "up", "comments", "chapters", "live-plugins", "live-plugin", "live-plugin-sign-in", "live-plugin-qr"].contains(page.split(separator: ":").first.map(String.init) ?? "")
     }
 }
 

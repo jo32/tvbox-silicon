@@ -137,8 +137,9 @@ struct SettingsPage<Content: View>: View {
 enum SettingsStyle {
     static let radius: CGFloat = 12
     static let groupFill = Color.primary.opacity(0.05)
-    /// Row fill on the app's canvas on iPhone and iPad: the navy of the More tab's tiles.
-    static let rowFill = Color(light: .white, dark: Color(red: 0.075, green: 0.105, blue: 0.19))
+    /// Row fill on the app's canvas on iPhone and iPad: in dark mode the colour theme's panel (Classic: the navy of the
+    /// More tab's tiles).
+    static var rowFill: Color { ColorThemes.shared.current.palette.rowFill }
 }
 
 // MARK: Settings
@@ -294,6 +295,8 @@ extension View {
                 // The app's navy canvas, as on every other page, instead of the system's black.
                 .scrollContentBackground(.hidden)
                 .background { Backdrop() }
+                #elseif os(macOS)
+                .modifier(ThemedFormBackground())
                 #endif
             // Only when there is room to spare: a zero margin would replace the system's own insets.
             if extra > 0 { form.contentMargins(.horizontal, extra, for: .scrollContent) } else { form }
@@ -573,6 +576,10 @@ struct FormSettingsView: View {
                     FormLink(symbol: "paintpalette.fill", tint: .pink, title: L10n.text("App Icon"), value: AppIcons.shared.title) { AppIconSettingsView() }
                         .accessibilityIdentifier("settings.appIcon")
                 }
+                FormLink(symbol: "swatchpalette.fill", tint: .purple, title: L10n.text("Color Theme"), value: ColorThemes.shared.current.title) {
+                    ColorThemeSettingsView()
+                }
+                .accessibilityIdentifier("settings.colorTheme")
                 FormLink(symbol: "slider.horizontal.below.rectangle", tint: .orange, title: L10n.text("Playback")) { PlaybackSettingsView() }
                 FormLink(symbol: "play.fill", tint: Brand.indigo, title: L10n.text("Play a URL")) { PlayURLView() }
                 EditTabBarRow()
@@ -588,6 +595,10 @@ struct FormSettingsView: View {
                     FormLink(symbol: "paintpalette.fill", tint: .pink, title: L10n.text("App Icon"), value: AppIcons.shared.title) { AppIconSettingsView() }
                         .accessibilityIdentifier("settings.appIcon")
                 }
+                FormLink(symbol: "swatchpalette.fill", tint: .purple, title: L10n.text("Color Theme"), value: ColorThemes.shared.current.title) {
+                    ColorThemeSettingsView()
+                }
+                .accessibilityIdentifier("settings.colorTheme")
                 // iPhone and iPad list the app's language in the Settings app; on the Mac it is hidden deep in System
                 // Settings, so it is picked here.
                 Picker(selection: $language) {
@@ -1700,6 +1711,7 @@ struct TVSettingsView: View {
             }
             TVSettingsSection {
                 TVSettingsLink(title: L10n.text("Watch Now")) { WatchNowSettingsView() }
+                TVSettingsLink(title: L10n.text("Color Theme"), value: ColorThemes.shared.current.title) { ColorThemeSettingsView() }
             }
             TVSettingsSection(title: L10n.text("Playback"), footer: playbackFooter) {
                 if store.extrasUnlocked {

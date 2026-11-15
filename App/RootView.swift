@@ -115,6 +115,7 @@ struct RootView: View {
                 // section change collapsed the sidebar while the new page was still a placeholder.
                 NavigationStack(path: $detailPath) { content(store.section).musicBar().routeDestinations() }
                     .environment(\.openRoute, RouteOpener { detailPath.append($0) })
+                    .overlay { ThemedTitleBand() }
             }
             .onChange(of: store.section) { detailPath = NavigationPath() }
             .onChange(of: store.hidesSidebar) { _, hide in
@@ -467,17 +468,19 @@ private struct MacSidebar: View {
 
     var body: some View {
         let ordered = groups.flatMap(\.items)
+        let decor = ColorThemes.shared.current.palette.regions?.decor
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 ForEach(groups, id: \.title) { group in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(group.title)
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(decor == nil ? AnyShapeStyle(.tertiary) : AnyShapeStyle(Brand.accent.opacity(0.85)))
                             .padding(.horizontal, 10).padding(.bottom, 4)
                             .accessibilityAddTraits(.isHeader)
                         ForEach(group.items) { item in
                             SidebarRow(section: item, selected: store.section == item,
+                                       decor: decor.map { $0[(ordered.firstIndex(of: item) ?? 0) % $0.count] },
                                        badge: item.showsUpdateBadge && !updates.available.isEmpty,
                                        shortcut: (ordered.firstIndex(of: item).map { $0 + 1 }).flatMap { $0 < 10 ? Character(String($0)) : nil }) {
                                 store.section = item
@@ -490,12 +493,15 @@ private struct MacSidebar: View {
         }
         .scrollIndicators(.never)
         .safeAreaInset(edge: .bottom, spacing: 0) { SidebarStatus() }
+        .background { ThemedSidebarFill() }
     }
 }
 
 private struct SidebarRow: View {
     let section: AppSection
     let selected: Bool
+    /// A mixed theme's icon colour for this row.
+    var decor: Color? = nil
     var badge = false
     /// ⌘1–⌘9; sections past the ninth have none.
     let shortcut: Character?
@@ -503,24 +509,28 @@ private struct SidebarRow: View {
     @State private var hovering = false
 
     var body: some View {
+        // Classic keeps the neutral rows; another theme draws the icons and the selection in its highlight.
+        let themed = ColorThemes.shared.tintsChrome
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: section.icon)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(decor.map { AnyShapeStyle($0) } ?? (themed ? AnyShapeStyle(Brand.accent.opacity(selected ? 1 : 0.8))
+                                     : selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary)))
                     .frame(width: 20)
                 Text(section.title)
                     .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                    .foregroundStyle(themed && selected ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(.primary))
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 if badge { NewBadge() }
             }
-            .foregroundStyle(.primary)
             .padding(.horizontal, 10)
             .frame(height: 32)
             .background {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.primary.opacity(selected ? 0.11 : (hovering ? 0.05 : 0)))
+                    .fill(themed ? Brand.accent.opacity(selected ? 0.2 : (hovering ? 0.08 : 0))
+                                 : Color.primary.opacity(selected ? 0.11 : (hovering ? 0.05 : 0)))
             }
             .contentShape(Rectangle())
         }
@@ -544,11 +554,15 @@ struct SidebarStatus: View {
     }
     var body: some View {
         if let version {
+            // A mixed theme draws it as an editor's status bar, in a strip of its own colour.
+            let regions = ColorThemes.shared.current.palette.regions
             Text(version)
-                .font(.caption).monospacedDigit().foregroundStyle(.tertiary).lineLimit(1)
+                .font(.caption).monospacedDigit().lineLimit(1)
+                .foregroundStyle(regions.map { AnyShapeStyle($0.onStatus) } ?? AnyShapeStyle(.tertiary))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20).frame(height: 40)
-                .overlay(alignment: .top) { Divider().padding(.horizontal, 12) }
+                .background { regions?.status }
+                .overlay(alignment: .top) { if regions == nil { Divider().padding(.horizontal, 12) } }
                 .selectable()
         }
     }

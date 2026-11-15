@@ -143,6 +143,7 @@
 		53F697A2DD9E8D5443E43646 /* SitesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75124CC2471CF95C1FFB168A /* SitesView.swift */; };
 		545262EEE6798D31D5522FF5 /* MangaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FF91FA9A33437C335253F10 /* MangaView.swift */; };
 		545F29F3323EB776FED1A94E /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31D1816B8ED53D49478FD843 /* MoreView.swift */; };
+		54A96B89DA4D05725C0D0DB1 /* ColorThemes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFD150AEEA34722E2F2F7E83 /* ColorThemes.swift */; };
 		556C5D64B9A97EFB038F0747 /* MusicDownloadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F678BCB59DDEA3AD1329B11 /* MusicDownloadsView.swift */; };
 		55C41E0E739A11AA44235092 /* MusicTVPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5733BA144503E76421BCFD /* MusicTVPlayer.swift */; };
 		56A6EE507B32FD9A832FB255 /* MusicNowPlayingScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0131105AAF88C36366936A /* MusicNowPlayingScreen.swift */; };
@@ -288,11 +289,13 @@
 		BA2A29F18602E8BF1C65CCDB /* MangaDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B33761B860B18DD0F3CE7FAC /* MangaDetailView.swift */; };
 		BA97CE75C2E0DF21635E17EA /* CloudFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A0D2EAF4F07329DAB40B97D /* CloudFilesView.swift */; };
 		BB014638AF8BB6A44F1C58FA /* ExternalSubtitles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75B036EC33AB3F0991E78CDD /* ExternalSubtitles.swift */; };
+		BB38C5CFD612604156A97463 /* ColorThemes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFD150AEEA34722E2F2F7E83 /* ColorThemes.swift */; };
 		BB4A23786D789829360C242B /* TVBoxApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A2BB58B1720E9D6D85F93F4 /* TVBoxApp.swift */; };
 		BB831CF3D63240DF89E53C9F /* releases.json in Resources */ = {isa = PBXBuildFile; fileRef = 73945256FDDE0952A22BF98C /* releases.json */; };
 		BBFB3628886EBD871DD46499 /* TVPlayerEpisodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B482395E1DB3E0C2FF8CDC6 /* TVPlayerEpisodes.swift */; };
 		BC4E3C9C3181FF25AA7E06F9 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C911ACB6C027C8F9A096409 /* RootView.swift */; };
 		BE6FB2873A21222464CED1D8 /* BilibiliMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A2914C1B5B5ABA5F4B25A7 /* BilibiliMark.swift */; };
+		BEFFC109286C99EB1495F6DD /* ColorThemes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFD150AEEA34722E2F2F7E83 /* ColorThemes.swift */; };
 		BF24E0090C85FF457201F1CA /* NovelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 597A8F41A0CB8104B10C12EC /* NovelStore.swift */; };
 		BF897F1F4B399DAA732ED4ED /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D1010816125FBC3792AF838 /* Store.swift */; };
 		BFCFF64AE36615F3BAE33874 /* BilibiliCastController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B1CEF969E4F3D3301A8D61 /* BilibiliCastController.swift */; };
@@ -498,6 +501,7 @@
 		AB076E674CF0D07EFFAE17DA /* WatchNowTV.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchNowTV.swift; sourceTree = "<group>"; };
 		AB7347843C885A97DFE397DD /* DouyinAccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DouyinAccountView.swift; sourceTree = "<group>"; };
 		ADB3063A14E368A71892DCEE /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AFD150AEEA34722E2F2F7E83 /* ColorThemes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorThemes.swift; sourceTree = "<group>"; };
 		B2CD4FD12F4DD3AAE1F8592A /* MusicPlayerViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlayerViews.swift; sourceTree = "<group>"; };
 		B33761B860B18DD0F3CE7FAC /* MangaDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaDetailView.swift; sourceTree = "<group>"; };
 		B442C75C212445F3786397ED /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -632,6 +636,7 @@
 				CEE19E104EAA6C4F620B8E53 /* CloudDriveView.swift */,
 				4A0D2EAF4F07329DAB40B97D /* CloudFilesView.swift */,
 				E78573DE76BCF27CABBB20F3 /* CloudQRLoginView.swift */,
+				AFD150AEEA34722E2F2F7E83 /* ColorThemes.swift */,
 				26F144846346C7C8F52CE20C /* DanmakuServiceSettingsView.swift */,
 				91355F9A371572D91388ED36 /* DanmakuSettingsView.swift */,
 				7A5737402EC96F0FBF79243E /* DanmakuView.swift */,
@@ -1241,6 +1246,7 @@
 				C6D7579CAFFAB9B441C0703C /* CloudDriveView.swift in Sources */,
 				8EB254B55B70CF8A923D1CD0 /* CloudFilesView.swift in Sources */,
 				91C07692EFFEE27619AA9FF3 /* CloudQRLoginView.swift in Sources */,
+				BB38C5CFD612604156A97463 /* ColorThemes.swift in Sources */,
 				F74139021653CFA0E17CE123 /* DanmakuServiceSettingsView.swift in Sources */,
 				E9F0900B56C80C647D87FD3E /* DanmakuSettingsView.swift in Sources */,
 				ED3BFF07859A99C455624644 /* DanmakuView.swift in Sources */,
@@ -1355,6 +1361,7 @@
 				D10B5A0245BDE1A5E05A6BD7 /* CloudDriveView.swift in Sources */,
 				1D82C5470FDA73053EAD6398 /* CloudFilesView.swift in Sources */,
 				277D741E2A86C06612A8034A /* CloudQRLoginView.swift in Sources */,
+				54A96B89DA4D05725C0D0DB1 /* ColorThemes.swift in Sources */,
 				3F7AA2351B3C009CDDE41C4F /* DanmakuServiceSettingsView.swift in Sources */,
 				41FB20C693CBD87C569DCC18 /* DanmakuSettingsView.swift in Sources */,
 				2EF5CCF1BA71B68F4DCF2F71 /* DanmakuView.swift in Sources */,
@@ -1471,6 +1478,7 @@
 				59953BBDD74AED0A292F7079 /* CloudDriveView.swift in Sources */,
 				BA97CE75C2E0DF21635E17EA /* CloudFilesView.swift in Sources */,
 				31D893FEF33876FD07BB58BA /* CloudQRLoginView.swift in Sources */,
+				BEFFC109286C99EB1495F6DD /* ColorThemes.swift in Sources */,
 				14C397640E05A3FA9CE444D8 /* DanmakuServiceSettingsView.swift in Sources */,
 				FA6CC845EF0E0E913AA393E8 /* DanmakuSettingsView.swift in Sources */,
 				C10EEC4D7AED0BE564BF2246 /* DanmakuView.swift in Sources */,
