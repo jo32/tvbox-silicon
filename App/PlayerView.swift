@@ -263,7 +263,7 @@ struct PlaybackView: View {
     }
 
     private var chromeButtons: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 2) {
             if let previous = store.step(back: true, from: channel, session: session) {
                 Button { previous.go() } label: {
                     Image(systemName: "backward.end.fill").font(.headline).frame(width: 22, height: 22)
@@ -337,6 +337,7 @@ struct PlaybackView: View {
             .chromeButton()
             .accessibilityLabel(L10n.text("Danmaku"))
         }
+        .chromeGroup(inset: 3)
     }
 
     private var chromeClose: some View {
@@ -1602,49 +1603,47 @@ private struct DesktopPlaybackView: View {
                 .shadow(color: .black.opacity(0.6), radius: 4)
                 .padding(.leading, 86)
             Spacer(minLength: 12)
-            GlassGroup(spacing: 8) {
-                HStack(spacing: 8) {
-                    if session.isLive || !session.hasTimeline {
-                        // AVKit's controls are hidden without a timeline (see DesktopNativePlayer), so play and mute live here.
-                        barButton(session.paused ? "play.fill" : "pause.fill", L10n.text("Play / Pause (Space)")) { session.togglePlayback() }
-                        barButton(session.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", L10n.text("Mute (M)")) { session.player.isMuted.toggle() }
-                    } else {
-                        barButton("gobackward.10", L10n.text("Back 10 seconds (←)")) { session.skip(-10) }
-                        barButton("goforward.10", L10n.text("Forward 10 seconds (→)")) { session.skip(10) }
-                    }
-                    if let previous = store.step(back: true, from: channel, session: session) {
-                        barButton("backward.end.fill", previous.title(back: true), help: previous.name) { previous.go() }
-                            .disabled(previous.busy)
-                    }
-                    if let next = store.step(back: false, from: channel, session: session) {
-                        barButton("forward.end.fill", next.title(back: false), help: next.name) { next.go() }
-                            .disabled(next.busy)
-                    }
-                    PlayerEpisodesButton(channel: channel, isPresented: $showsEpisodes) {
-                        Image(systemName: PlayerEpisodesSheet.symbol).font(.system(size: 14, weight: .medium))
-                            .frame(width: 34, height: 34)
-                            .glassSurface(.regular.interactive(), in: Circle())
-                            .contentShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    PlayerChannelsButton(channel: channel, session: session, isPresented: $showsChannels) {
-                        Image(systemName: PlayerChannelsSheet.symbol).font(.system(size: 14, weight: .medium))
-                            .frame(width: 34, height: 34)
-                            .glassSurface(.regular.interactive(), in: Circle())
-                            .contentShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    if !tvBrowser.receivers.isEmpty {
-                        PlayOnButton(channel: channel, session: session, browser: tvBrowser) { receiver in
-                            session.player.pause()
-                            playingOn = receiver
-                        }
-                    }
-                    CatalogPlaybackActions(channel: channel, session: session)
-                    optionsMenu
-                    barButton("arrow.up.left.and.arrow.down.right", L10n.text("Enter / Exit Full Screen")) { window.toggleFullScreen(nil) }
+            // One glass capsule holds the buttons, like a toolbar group: a glass circle each read as loose bubbles.
+            HStack(spacing: 2) {
+                if session.isLive || !session.hasTimeline {
+                    // AVKit's controls are hidden without a timeline (see DesktopNativePlayer), so play and mute live here.
+                    barButton(session.paused ? "play.fill" : "pause.fill", L10n.text("Play / Pause (Space)")) { session.togglePlayback() }
+                    barButton(session.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", L10n.text("Mute (M)")) { session.player.isMuted.toggle() }
+                } else {
+                    barButton("gobackward.10", L10n.text("Back 10 seconds (←)")) { session.skip(-10) }
+                    barButton("goforward.10", L10n.text("Forward 10 seconds (→)")) { session.skip(10) }
                 }
+                if let previous = store.step(back: true, from: channel, session: session) {
+                    barButton("backward.end.fill", previous.title(back: true), help: previous.name) { previous.go() }
+                        .disabled(previous.busy)
+                }
+                if let next = store.step(back: false, from: channel, session: session) {
+                    barButton("forward.end.fill", next.title(back: false), help: next.name) { next.go() }
+                        .disabled(next.busy)
+                }
+                PlayerEpisodesButton(channel: channel, isPresented: $showsEpisodes) {
+                    Image(systemName: PlayerEpisodesSheet.symbol).font(.system(size: 14, weight: .medium))
+                        .frame(width: 34, height: 34)
+                        .playerBarButton()
+                }
+                .buttonStyle(.plain)
+                PlayerChannelsButton(channel: channel, session: session, isPresented: $showsChannels) {
+                    Image(systemName: PlayerChannelsSheet.symbol).font(.system(size: 14, weight: .medium))
+                        .frame(width: 34, height: 34)
+                        .playerBarButton()
+                }
+                .buttonStyle(.plain)
+                if !tvBrowser.receivers.isEmpty {
+                    PlayOnButton(channel: channel, session: session, browser: tvBrowser) { receiver in
+                        session.player.pause()
+                        playingOn = receiver
+                    }
+                }
+                CatalogPlaybackActions(channel: channel, session: session)
+                optionsMenu
+                barButton("arrow.up.left.and.arrow.down.right", L10n.text("Enter / Exit Full Screen")) { window.toggleFullScreen(nil) }
             }
+            .chromeGroup(inset: 2)
         }
         .padding(.top, 10).padding(.trailing, 16).padding(.bottom, 36)
         .background(alignment: .top) {
@@ -1657,7 +1656,7 @@ private struct DesktopPlaybackView: View {
         Button(action: action) { Image(systemName: symbol).font(.system(size: 14, weight: .medium)) }
             .buttonStyle(.plain)
             .frame(width: 34, height: 34)
-            .glassSurface(.regular.interactive(), in: Circle())
+            .playerBarButton()
             .help(help ?? label)
             .accessibilityLabel(label)
     }
@@ -1744,7 +1743,7 @@ private struct DesktopOptionsMenu: View, Equatable {
             // A borderless menu drew its icon at the leading edge of the circle; a plain one keeps it centred.
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
             .fixedSize()
-            .glassSurface(.regular.interactive(), in: Circle())
+            .playerBarButton()
             .help(L10n.text("Playback Options"))
             .accessibilityLabel(L10n.text("Playback Options"))
     }

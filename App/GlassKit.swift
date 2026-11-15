@@ -75,6 +75,61 @@ struct GlassGroup<Content: View>: View {
     }
 }
 
+#if !os(tvOS)
+private struct ChromeGroupedKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    /// Inside a player's button group (`chromeGroup`): the group draws the glass, so `chromeButton()` draws none.
+    var chromeGrouped: Bool {
+        get { self[ChromeGroupedKey.self] }
+        set { self[ChromeGroupedKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// A row of player buttons in one glass capsule, as a toolbar groups its items. A glass circle for each button
+    /// read as a string of loose bubbles.
+    func chromeGroup(inset: CGFloat = 0) -> some View {
+        padding(inset).glassSurface(.regular, in: Capsule()).environment(\.chromeGrouped, true)
+    }
+}
+#endif
+
+#if os(macOS)
+/// `chromeButton()` on the Mac: the bordered glass circle alone, or a plain button in a group's capsule.
+private struct MacChromeButton: ViewModifier {
+    @Environment(\.chromeGrouped) private var grouped
+    @ViewBuilder func body(content: Content) -> some View {
+        if grouped {
+            content.menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+                .fixedSize()
+                .frame(width: 34, height: 34)
+                .playerBarButton()
+        } else {
+            content.controlButton().buttonBorderShape(.circle).appControlSize(.large)
+        }
+    }
+}
+#endif
+
+#if os(macOS)
+/// A button in the Mac player's top bar. The bar draws one glass capsule around all of them, so a button has no glass
+/// of its own; a soft circle shows which one is under the pointer.
+private struct PlayerBarButton: ViewModifier {
+    @State private var hovering = false
+    func body(content: Content) -> some View {
+        content
+            .background { Circle().fill(.white.opacity(hovering ? 0.16 : 0)) }
+            .contentShape(Circle())
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+}
+
+extension View {
+    func playerBarButton() -> some View { modifier(PlayerBarButton()) }
+}
+#endif
+
 extension View {
     /// Apple TVs without Liquid Glass on tvOS 26 take the material path too: there the glass dropped its tint, so a
     /// focused chip's white plate never showed and its black label sat on a dark capsule (#214).
@@ -1329,6 +1384,8 @@ extension View {
     @ViewBuilder func chromeButton() -> some View {
         #if os(iOS)
         buttonStyle(ChromeButtonStyle())
+        #elseif os(macOS)
+        modifier(MacChromeButton())
         #else
         controlButton().buttonBorderShape(.circle).appControlSize(.large)
         #endif
@@ -1418,11 +1475,14 @@ extension View {
 /// capsules too wide for a phone's player bar.
 private struct ChromeButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.chromeGrouped) private var grouped
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline).foregroundStyle(.white)
             .frame(width: 44, height: 44)
-            .glassSurface(.regular.interactive(), in: Circle())
+            // In a button group the group's capsule is the glass; a pressed button lights up inside it.
+            .background { if grouped { Circle().fill(.white.opacity(configuration.isPressed ? 0.2 : 0)) } }
+            .glassSurface(grouped ? .identity : .regular.interactive(), in: Circle())
             .contentShape(Circle())
             .opacity(enabled ? (configuration.isPressed ? 0.72 : 1) : 0.38)
     }
