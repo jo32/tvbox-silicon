@@ -77,6 +77,9 @@ struct DanmakuCanvas: View {
 /// Whether comments are shown, from Settings and the player's own toggle.
 enum DanmakuPreference {
     static let key = "danmakuEnabled"
+    /// The player's danmaku button: scrolling text, not a speech bubble, which beside Subtitle Files' captions bubble
+    /// read as the same button twice. It has no filled form; the menu's Show Danmaku tick says whether comments show.
+    static let symbol = "text.line.first.and.arrowtriangle.forward"
 }
 
 #if !os(tvOS)
