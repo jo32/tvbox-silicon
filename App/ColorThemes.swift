@@ -10,8 +10,8 @@ import UIKit
 // MARK: Color themes
 // Settings › Color Theme. A theme sets the app's own colours (Brand.accent and Brand.onAccent, the page canvas, the panels
 // on it and Apple TV's surfaces); artwork, the decorative colours (Brand.cyan…) and the system's accent stay as they are.
-// Classic is the app's original look, navy canvases with a neutral highlight. Custom is made from two colours the viewer
-// picks (iPhone, iPad and Mac; Apple TV has no colour picker).
+// Classic is the app's original look, navy canvases with a neutral highlight. Custom takes a colour the viewer picks for
+// each part of the window (iPhone, iPad and Mac; Apple TV has no colour picker).
 
 /// A colour theme the app ships with.
 enum ColorTheme: String, CaseIterable, Identifiable, Sendable {
@@ -74,7 +74,8 @@ struct ThemePalette: Sendable {
     /// Apple TV, always dark: tiles and the raised, focused version of them (TVStyle).
     var tvSurface: Color, tvRaised: Color
     /// The same, following the appearance; settings rows, white on light pages; the canvas and the panels.
-    let accent: Color, onAccent: Color, rowFill: Color, canvas: Color, panel: Color
+    let accent: Color, onAccent: Color, canvas: Color, panel: Color
+    var rowFill: Color
     /// A mixed theme's colours for each part of the window; nil in one-colour themes.
     var regions: ThemeRegions? = nil
 
@@ -118,23 +119,50 @@ struct ThemePalette: Sendable {
                                    backdropLight: tone(canvas[0], 0.2, 0.97), backdropDark: tone(canvas[0], 0.62, 0.24),
                                    surfaceLight: tone(middle, 0.1, 0.995), surfaceDark: tone(middle, 0.5, 0.29),
                                    tvSurface: tone(middle, 0.55, 0.27), tvRaised: tone(middle, 0.5, 0.36))
+        let deeper = decor.map { ThemeRGB($0).mixed(with: ThemeRGB(0, 0, 0), by: 0.18).color }
         palette.regions = ThemeRegions(canvasLight: canvas.map { tone($0, 0.2, 0.97) }, canvasDark: canvas.map { tone($0, 0.62, 0.24) },
                                        sidebarLight: sidebar.map { tone($0, 0.3, 0.93) }, sidebarDark: sidebar.map { tone($0, 0.7, 0.16) },
-                                       titleBar: Color(light: tone(title, 0.42, 0.9), dark: tone(title, 0.78, 0.21)),
+                                       titleBarLight: tone(title, 0.42, 0.9), titleBarDark: tone(title, 0.78, 0.21),
                                        status: status, onStatus: onStatus,
-                                       // A little deeper on light pages, so a lemon or sand icon still reads on a pale sidebar.
-                                       decor: decor.map { Color(light: ThemeRGB($0).mixed(with: ThemeRGB(0, 0, 0), by: 0.18).color, dark: $0) })
+                                       // Icons a little deeper on light pages, so a lemon or sand one still reads on a pale sidebar.
+                                       decorLight: deeper, decorDark: decor)
         return palette
     }
 
-    /// Custom: `highlight` as it is on light pages, lifted towards white on dark ones if it is dark; the canvases tinted
-    /// with `background`'s hue, as much as it is saturated (a grey gives grey canvases).
-    static func custom(highlight: ThemeRGB, background: ThemeRGB) -> ThemePalette {
-        let dark = highlight.luminance < 0.35 ? highlight.mixed(with: ThemeRGB(1, 1, 1), by: 0.45) : highlight
-        func label(on color: ThemeRGB) -> Color { color.luminance > 0.5 ? Color(white: 0.06) : .white }
-        let (hue, saturation, _) = background.hsb
-        return hued(hue * 360, tint: min(1, saturation / 0.45), light: highlight.color, dark: dark.color,
-                    onLight: label(on: highlight), onDark: label(on: dark))
+    /// Custom: each element in exactly the colour picked for it, the same in light and dark mode (the app takes the
+    /// appearance that suits the page background, see `ColorThemes.customScheme`).
+    static func custom(_ colors: [CustomThemeElement: ThemeRGB]) -> ThemePalette {
+        func rgb(_ element: CustomThemeElement) -> ThemeRGB { colors[element] ?? element.fallback }
+        func color(_ element: CustomThemeElement) -> Color { rgb(element).color }
+        func label(on element: CustomThemeElement) -> Color { rgb(element).luminance > 0.18 ? Color(white: 0.06) : .white }
+        let highlight = color(.highlight), panel = color(.panel), top = color(.canvasTop)
+        var palette = ThemePalette(accentLight: highlight, accentDark: highlight, onAccentLight: label(on: .highlight),
+                                   onAccentDark: label(on: .highlight), backdropLight: top, backdropDark: top,
+                                   surfaceLight: panel, surfaceDark: panel, tvSurface: panel, tvRaised: panel)
+        palette.rowFill = panel
+        let canvas = [top, color(.canvasBottom)], sidebar = [color(.sidebar), color(.sidebar)]
+        let icons = [color(.icon1), color(.icon2), color(.icon3), color(.icon4)]
+        palette.regions = ThemeRegions(canvasLight: canvas, canvasDark: canvas, sidebarLight: sidebar, sidebarDark: sidebar,
+                                       titleBarLight: color(.titleBar), titleBarDark: color(.titleBar),
+                                       status: color(.statusBar), onStatus: label(on: .statusBar), decorLight: icons, decorDark: icons)
+        return palette
+    }
+
+    /// This theme's colours as Custom's elements, as they look in light or dark mode: a starting point for Custom.
+    func customElements(dark: Bool) -> [CustomThemeElement: ThemeRGB] {
+        let accent = dark ? accentDark : accentLight
+        let canvas = regions.map { dark ? $0.canvasDark : $0.canvasLight } ?? [dark ? backdropDark : backdropLight]
+        // One-colour themes draw settings rows white on light pages.
+        let panel = dark ? surfaceDark : (regions == nil ? Color.white : surfaceLight)
+        let sidebar = regions.map { (dark ? $0.sidebarDark : $0.sidebarLight)[0] } ?? (dark ? surfaceDark : surfaceLight)
+        let title = regions.map { dark ? $0.titleBarDark : $0.titleBarLight } ?? canvas[0]
+        let icons = regions.map { dark ? $0.decorDark : $0.decorLight } ?? ThemeRegions.standardDecor
+        let colors: [(CustomThemeElement, Color)] = [
+            (.highlight, accent), (.canvasTop, canvas[0]), (.canvasBottom, canvas[canvas.count - 1]), (.panel, panel),
+            (.sidebar, sidebar), (.titleBar, title), (.statusBar, regions?.status ?? accent),
+            (.icon1, icons[0]), (.icon2, icons[1]), (.icon3, icons[2]), (.icon4, icons[3]),
+        ]
+        return Dictionary(uniqueKeysWithValues: colors.map { ($0.0, ThemeRGB($0.1)) })
     }
 
     private static func rgb(_ red: Double, _ green: Double, _ blue: Double) -> Color { Color(red: red, green: green, blue: blue) }
@@ -197,21 +225,97 @@ struct ThemePalette: Sendable {
     ]
 }
 
-/// A mixed theme's colours for the parts of the window an editor theme colours apart (see `ThemePalette.mixed`).
+/// A mixed theme's colours for the parts of the window an editor theme colours apart (see `ThemePalette.mixed`), and
+/// Custom's.
 struct ThemeRegions: Sendable {
+    /// The app icon's cyan, indigo, teal and amber: the icon colours of every other theme.
+    static let standardDecor = [Color(red: 0.30, green: 0.78, blue: 1.0), Color(red: 0.42, green: 0.50, blue: 1.0),
+                                Color(red: 0.20, green: 0.84, blue: 0.80), Color(red: 1.0, green: 0.76, blue: 0.30)]
     /// The canvas, light and dark, from the top leading corner to the bottom trailing one.
-    var canvasLight: [Color], canvasDark: [Color]
+    let canvasLight: [Color], canvasDark: [Color]
     /// The Mac sidebar, top to bottom.
-    var sidebarLight: [Color], sidebarDark: [Color]
+    let sidebarLight: [Color], sidebarDark: [Color]
     /// The band under the Mac window's toolbar.
-    var titleBar: Color
+    let titleBarLight: Color, titleBarDark: Color
     /// The strip at the foot of the Mac sidebar, and its label colour.
-    var status: Color, onStatus: Color
+    let status: Color, onStatus: Color
     /// Icons and decoration: this theme's Brand.cyan, .indigo, .teal and .amber.
-    var decor: [Color]
+    let decorLight: [Color], decorDark: [Color]
+    /// The title bar and icon colours, following the appearance.
+    let titleBar: Color, decor: [Color]
+
+    init(canvasLight: [Color], canvasDark: [Color], sidebarLight: [Color], sidebarDark: [Color], titleBarLight: Color,
+         titleBarDark: Color, status: Color, onStatus: Color, decorLight: [Color], decorDark: [Color]) {
+        (self.canvasLight, self.canvasDark, self.sidebarLight, self.sidebarDark) = (canvasLight, canvasDark, sidebarLight, sidebarDark)
+        (self.titleBarLight, self.titleBarDark, self.status, self.onStatus) = (titleBarLight, titleBarDark, status, onStatus)
+        (self.decorLight, self.decorDark) = (decorLight, decorDark)
+        titleBar = Color(light: titleBarLight, dark: titleBarDark)
+        decor = zip(decorLight, decorDark).map { Color(light: $0, dark: $1) }
+    }
 }
 
-/// An sRGB colour as three numbers, for Custom's two colours: saved as "r g b".
+/// One part of the window whose colour Custom lets the viewer pick.
+enum CustomThemeElement: String, CaseIterable, Identifiable, Sendable {
+    case highlight, canvasTop, canvasBottom, panel, sidebar, titleBar, statusBar, icon1, icon2, icon3, icon4
+
+    var id: String { rawValue }
+    /// The elements this device draws: the sidebar, its status strip and the title bar are the Mac's.
+    static var editable: [CustomThemeElement] {
+        #if os(macOS)
+        allCases
+        #else
+        allCases.filter { ![.sidebar, .titleBar, .statusBar].contains($0) }
+        #endif
+    }
+
+    var title: String {
+        switch self {
+        case .highlight: L10n.text("Highlight")
+        case .canvasTop: L10n.text("Page Background, Top")
+        case .canvasBottom: L10n.text("Page Background, Bottom")
+        case .panel: L10n.text("Cards and Rows")
+        case .sidebar: L10n.text("Sidebar")
+        case .titleBar: L10n.text("Title Bar")
+        case .statusBar: L10n.text("Status Bar")
+        case .icon1: L10n.text("Icon Color %@", "1")
+        case .icon2: L10n.text("Icon Color %@", "2")
+        case .icon3: L10n.text("Icon Color %@", "3")
+        case .icon4: L10n.text("Icon Color %@", "4")
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .highlight: L10n.text("Selections, buttons and progress")
+        case .canvasTop: L10n.text("Where the page background starts, at the top left")
+        case .canvasBottom: L10n.text("Where it ends, at the bottom right. Pick the same color for a flat background.")
+        case .panel: L10n.text("Cards, lists and settings rows")
+        case .sidebar: L10n.text("Behind the sections on the left")
+        case .titleBar: L10n.text("The band under the window's toolbar")
+        case .statusBar: L10n.text("The version strip at the foot of the sidebar")
+        case .icon1, .icon2, .icon3, .icon4: L10n.text("Section icons, settings icons and tiles")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .highlight: "paintbrush.fill"
+        case .canvasTop: "square.tophalf.filled"
+        case .canvasBottom: "square.bottomhalf.filled"
+        case .panel: "rectangle.on.rectangle"
+        case .sidebar: "sidebar.left"
+        case .titleBar: "macwindow"
+        case .statusBar: "rectangle.bottomthird.inset.filled"
+        case .icon1, .icon2, .icon3, .icon4: "paintpalette.fill"
+        }
+    }
+
+    /// Until the viewer picks it: Violet's colour in dark mode.
+    var fallback: ThemeRGB { Self.fallbacks[self] ?? ThemeRGB(0.5, 0.5, 0.5) }
+    private static let fallbacks = ThemePalette.all[.violet]!.customElements(dark: true)
+}
+
+/// An sRGB colour as three numbers/// An sRGB colour as three numbers, for Custom's colours: saved as "r g b".
 struct ThemeRGB: Equatable, Sendable {
     var red: Double, green: Double, blue: Double
     init(_ red: Double, _ green: Double, _ blue: Double) { (self.red, self.green, self.blue) = (red, green, blue) }
@@ -257,35 +361,52 @@ struct ThemeRGB: Equatable, Sendable {
 @Observable final class ColorThemes: @unchecked Sendable {
     static let shared = ColorThemes()
     static let key = "colorTheme"
-    static let highlightKey = "colorThemeHighlight", backgroundKey = "colorThemeBackground"
+    static let customKey = "colorThemeCustom"
 
     private(set) var current: ColorTheme
-    /// Custom's two colours; until picked, Violet's.
-    private(set) var highlight: ThemeRGB
-    private(set) var background: ThemeRGB
+    /// Custom's colours by element, as picked; the rest are Violet's.
+    private(set) var custom: [CustomThemeElement: ThemeRGB]
     private(set) var customPalette: ThemePalette
 
     private init() {
         let defaults = UserDefaults.standard
         current = defaults.string(forKey: Self.key).flatMap(ColorTheme.init(rawValue:)) ?? .standard
-        let highlight = ThemeRGB(saved: defaults.string(forKey: Self.highlightKey)) ?? ThemeRGB(0.40, 0.33, 0.95)
-        let background = ThemeRGB(saved: defaults.string(forKey: Self.backgroundKey)) ?? ThemeRGB(0.40, 0.33, 0.95)
-        (self.highlight, self.background) = (highlight, background)
-        customPalette = ThemePalette.custom(highlight: highlight, background: background)
+        let saved = defaults.dictionary(forKey: Self.customKey) as? [String: String] ?? [:]
+        let custom = Dictionary(uniqueKeysWithValues: saved.compactMap { key, value in
+            CustomThemeElement(rawValue: key).flatMap { element in ThemeRGB(saved: value).map { (element, $0) } }
+        })
+        self.custom = custom
+        customPalette = ThemePalette.custom(custom)
     }
 
-    /// Changes one of Custom's colours, and makes Custom the theme in use.
-    func setCustom(highlight: ThemeRGB? = nil, background: ThemeRGB? = nil) {
-        if let highlight, highlight != self.highlight {
-            self.highlight = highlight
-            UserDefaults.standard.set(highlight.saved, forKey: Self.highlightKey)
-        }
-        if let background, background != self.background {
-            self.background = background
-            UserDefaults.standard.set(background.saved, forKey: Self.backgroundKey)
-        }
-        customPalette = ThemePalette.custom(highlight: self.highlight, background: self.background)
+    func customColor(_ element: CustomThemeElement) -> ThemeRGB { custom[element] ?? element.fallback }
+    /// Whether the viewer has picked any of Custom's colours yet.
+    var customized: Bool { !custom.isEmpty }
+
+    /// Sets one of Custom's colours, and makes Custom the theme in use.
+    func setCustom(_ element: CustomThemeElement, to color: ThemeRGB) {
+        guard custom[element] != color || current != .custom else { return }
+        custom[element] = color
+        saveCustom()
+    }
+
+    /// Starts Custom again from `theme`'s colours as they look in light or dark mode, and makes it the theme in use.
+    func startCustom(from theme: ColorTheme, dark: Bool) {
+        custom = theme.palette.customElements(dark: dark)
+        saveCustom()
+    }
+
+    private func saveCustom() {
+        UserDefaults.standard.set(Dictionary(uniqueKeysWithValues: custom.map { ($0.key.rawValue, $0.value.saved) }), forKey: Self.customKey)
+        customPalette = ThemePalette.custom(custom)
         choose(.custom)
+    }
+
+    /// Custom's colours are the same in light and dark mode, so the app takes the appearance whose text reads on its
+    /// page background; every other theme follows the system.
+    var customScheme: ColorScheme? {
+        guard current == .custom else { return nil }
+        return (customColor(.canvasTop).luminance + customColor(.canvasBottom).luminance) / 2 > 0.18 ? .light : .dark
     }
 
     func choose(_ theme: ColorTheme) {
@@ -296,9 +417,9 @@ struct ThemeRGB: Equatable, Sendable {
     }
 }
 
-/// The app-wide tint in the theme's highlight. A modifier of its own, so a theme change redraws it.
+/// The app-wide tint in the theme's highlight, and Custom's appearance. A modifier of its own, so a theme change redraws it.
 struct ThemeTint: ViewModifier {
-    func body(content: Content) -> some View { content.tint(Brand.accent) }
+    func body(content: Content) -> some View { content.tint(Brand.accent).preferredColorScheme(ColorThemes.shared.customScheme) }
 }
 
 extension ColorThemes {
@@ -355,6 +476,7 @@ struct ThemedFormBackground: ViewModifier {
 
 struct ColorThemeSettingsView: View {
     @State private var themes = ColorThemes.shared
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         SettingsPage(title: L10n.text("Color Theme"), symbol: "swatchpalette") {
@@ -376,7 +498,14 @@ struct ColorThemeSettingsView: View {
             SettingsGroup(footer: note) {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: ColorThemeTile.width), spacing: 12, alignment: .top)], spacing: 18) {
                     ForEach(ColorTheme.choices) { theme in
-                        Button { themes.choose(theme) } label: {
+                        Button {
+                            // Custom starts from the theme in use, as it looks now.
+                            if theme == .custom && !themes.customized {
+                                themes.startCustom(from: themes.current == .custom ? .violet : themes.current, dark: scheme == .dark)
+                            } else {
+                                themes.choose(theme)
+                            }
+                        } label: {
                             ColorThemeTile(theme: theme, selected: themes.current == theme)
                         }
                         .buttonStyle(.plain)
@@ -387,17 +516,24 @@ struct ColorThemeSettingsView: View {
             }
             if themes.current == .custom {
                 SettingsGroup(title: L10n.text("Custom"),
-                              footer: L10n.text("The highlight is used for selections and buttons; the background color tints the pages. A gray background keeps them neutral.")) {
-                    ColorPicker(selection: Binding(get: { themes.highlight.color }, set: { themes.setCustom(highlight: ThemeRGB($0)) }),
-                                supportsOpacity: false) {
-                        FormLabel(symbol: "paintbrush.fill", tint: themes.highlight.color, title: L10n.text("Highlight"))
+                              footer: L10n.text("Each color is used exactly as picked, in light and dark mode. Text turns light or dark to match the page background.")) {
+                    Menu {
+                        ForEach(ColorTheme.choices.filter { $0 != .custom }) { theme in
+                            Button(theme.title) { themes.startCustom(from: theme, dark: scheme == .dark) }
+                        }
+                    } label: {
+                        FormLabel(symbol: "wand.and.stars", tint: Brand.accent, title: L10n.text("Start From a Theme"))
                     }
-                    .accessibilityIdentifier("colorTheme.highlight")
-                    ColorPicker(selection: Binding(get: { themes.background.color }, set: { themes.setCustom(background: ThemeRGB($0)) }),
-                                supportsOpacity: false) {
-                        FormLabel(symbol: "square.fill", tint: themes.background.color, title: L10n.text("Background"))
+                    .accessibilityIdentifier("colorTheme.startFrom")
+                    ForEach(CustomThemeElement.editable) { element in
+                        ColorPicker(selection: Binding(get: { themes.customColor(element).color },
+                                                       set: { themes.setCustom(element, to: ThemeRGB($0)) }),
+                                    supportsOpacity: false) {
+                            FormLabel(symbol: element.symbol, tint: themes.customColor(element).color, title: element.title,
+                                      subtitle: element.detail)
+                        }
+                        .accessibilityIdentifier("colorTheme.custom.\(element.rawValue)")
                     }
-                    .accessibilityIdentifier("colorTheme.background")
                 }
             }
             #endif
@@ -405,7 +541,7 @@ struct ColorThemeSettingsView: View {
     }
 
     private var note: String {
-        L10n.text("Changes the highlight color and the backgrounds of the app's pages. Classic is the app's original look.")
+        L10n.text("Changes the app's colors: the highlight, page backgrounds, cards and icons, and on a Mac the sidebar and title bar. Classic is the app's original look.")
     }
 }
 
@@ -436,13 +572,13 @@ struct ColorThemeSwatch: View {
                     LinearGradient(colors: dark ? regions.sidebarDark : regions.sidebarLight, startPoint: .top, endPoint: .bottom)
                         .frame(width: w * 0.3)
                     VStack(spacing: h * 0.06) {
-                        ForEach(regions.decor.indices, id: \.self) { index in
-                            Circle().fill(regions.decor[index]).frame(width: h * 0.1, height: h * 0.1)
+                        ForEach(regions.decorDark.indices, id: \.self) { index in
+                            Circle().fill((dark ? regions.decorDark : regions.decorLight)[index]).frame(width: h * 0.1, height: h * 0.1)
                         }
                     }
                     .frame(width: w * 0.3)
                     .offset(y: h * 0.24)
-                    regions.titleBar.frame(height: h * 0.15)
+                    (dark ? regions.titleBarDark : regions.titleBarLight).frame(height: h * 0.15)
                     regions.status.frame(width: w * 0.3, height: h * 0.1).offset(y: h * 0.9)
                     RoundedRectangle(cornerRadius: h * 0.06, style: .continuous)
                         .fill(dark ? palette.surfaceDark : palette.surfaceLight)

@@ -283,10 +283,10 @@ enum Brand {
     static var onAccent: Color { ColorThemes.shared.current.palette.onAccent }
     /// The icon's cyan, for decoration only (icon tiles, charts, artwork placeholders), not for state. A mixed colour
     /// theme puts its own four icon colours in place of cyan, indigo, teal and amber.
-    static var cyan: Color { decor(0) ?? Color(red: 0.30, green: 0.78, blue: 1.0) }
-    static var indigo: Color { decor(1) ?? Color(red: 0.42, green: 0.50, blue: 1.0) }
-    static var teal: Color { decor(2) ?? Color(red: 0.20, green: 0.84, blue: 0.80) }
-    static var amber: Color { decor(3) ?? Color(red: 1.0, green: 0.76, blue: 0.30) }
+    static var cyan: Color { decor(0) ?? ThemeRegions.standardDecor[0] }
+    static var indigo: Color { decor(1) ?? ThemeRegions.standardDecor[1] }
+    static var teal: Color { decor(2) ?? ThemeRegions.standardDecor[2] }
+    static var amber: Color { decor(3) ?? ThemeRegions.standardDecor[3] }
     private static func decor(_ index: Int) -> Color? { ColorThemes.shared.current.palette.regions?.decor[index] }
     static let rose = Color(red: 0.95, green: 0.38, blue: 0.42)
     /// Yingxia's own credit. Third-party notices keep their authors' copyright lines unchanged.
