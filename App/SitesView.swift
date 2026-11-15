@@ -2004,6 +2004,12 @@ struct VideoDetailView: View {
     @State private var playerStarted = false
     /// The page's player, whose wait the cover tells about.
     @State private var playerSession: PlaybackSession?
+    /// Settings › Playback: a video of one episode plays as its page opens (#885), and a video started on its page goes
+    /// Full Screen at once (#1065).
+    @AppStorage(WatchPage.autoPlayKey) private var autoPlays = true
+    @AppStorage(WatchPage.fullScreenKey) private var startsFullScreen = false
+    /// Playback began on the page with Start in Full Screen on: Full Screen once the picture shows.
+    @State private var fullScreenOnStart = false
     /// The source's config center, open in the app (`ConfigCenterView`).
     @State private var showsConfigCenter = false
     #endif
@@ -2112,7 +2118,8 @@ struct VideoDetailView: View {
             #if os(iOS)
             // A video of one episode then plays by itself, from where the viewer stopped if watched before. One of
             // several waits on its cover for the viewer to choose the line and episode (#260).
-            if continues, resume == nil, watchChannel == nil, store.resumingHistoryID == nil, activeEpisodes.count <= 1 {
+            // With Play Automatically off it waits on its cover too, for Play (#885).
+            if continues, resume == nil, watchChannel == nil, store.resumingHistoryID == nil, activeEpisodes.count <= 1, autoPlays {
                 playWatchCover()
             }
             #endif
@@ -3052,7 +3059,17 @@ struct VideoDetailView: View {
             if ended { playerSession = nil }
             if ended && fullScreen { setFullScreen(landscape: false) }
             // Started with the phone already sideways: Full Screen at once, as turning it would.
-            if !ended { phoneTurned() }
+            if !ended { fullScreenOnStart = startsFullScreen && !fullScreen; phoneTurned() }
+        }
+        // Start in Full Screen: once the picture shows, so the phone turns for a picture wider than tall and stays
+        // upright for a portrait one, as the Full Screen button does. Another episode starting in the page's player
+        // (Next, auto-play) leaves the page as the viewer left it.
+        .onChange(of: playerStarted) { _, started in
+            guard started, fullScreenOnStart else { return }
+            fullScreenOnStart = false
+            guard !fullScreen, let session = playerSession, session.error == nil else { return }
+            let size = session.player.currentItem?.presentationSize ?? .zero
+            setFullScreen(landscape: size.height == 0 || size.width >= size.height)
         }
         .sheet(isPresented: $showsAllEpisodes) { allEpisodes }
     }
@@ -3442,6 +3459,11 @@ struct VideoDetailView: View {
 /// iPhone: a video's page is a watch page, its player at the top (`VideoDetailView`). Not on iPhone Duo's inner
 /// display (regular both ways), which has an iPad's room.
 enum WatchPage {
+    /// A video of one episode plays as soon as its page opens (Settings › Playback); off, it waits for Play.
+    static let autoPlayKey = "watchPage.autoPlay"
+    /// A video started on its page fills the screen at once.
+    static let fullScreenKey = "watchPage.startsFullScreen"
+
     @MainActor static func applies(_ horizontal: UserInterfaceSizeClass?, _ vertical: UserInterfaceSizeClass?) -> Bool {
         UIDevice.current.userInterfaceIdiom == .phone && !(horizontal == .regular && vertical == .regular)
     }

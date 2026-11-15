@@ -1587,6 +1587,10 @@
 "Swipe or press the arrows to move the subtitle. Press Select when it's in place." = "滑動或按方向鍵移動字幕，放好後按確認鍵。";
 "Gestures" = "手勢";
 "Brightness and Volume" = "亮度和音量";
+"Video Page" = "影片詳情頁";
+"Play Automatically" = "自動播放";
+"Start in Full Screen" = "開始播放時全螢幕";
+"With Play Automatically on, a video of one episode starts as soon as its page opens. With Start in Full Screen on, a video fills the screen as soon as it starts on its page." = "開啟「自動播放」後，單集影片在打開詳情頁時立即開始播放。開啟「開始播放時全螢幕」後，在詳情頁開始播放的影片會立即全螢幕。";
 "Area" = "區域";
 "This plugin setting only works in Android TVBox." = "這項外掛設定只能在 Android 版 TVBox 中使用。";
 "The plugin finished without a message." = "外掛已完成，沒有回傳訊息。";
