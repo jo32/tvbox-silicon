@@ -772,7 +772,8 @@ struct MobilePlayerView: View {
                     }
                 }
             }
-            if !session.isLive {
+            // With a seek bar the speed has its own button beside it (`speedButton`).
+            if !session.isLive, !session.hasTimeline {
                 Menu(L10n.text("Playback Speed")) {
                     Picker(L10n.text("Playback Speed"), selection: Binding(get: { speed }, set: { speed = $0; session.setSpeed($0) })) {
                         ForEach(Self.speeds, id: \.self) { Text(Self.speedLabel($0)).tag($0) }
@@ -792,7 +793,7 @@ struct MobilePlayerView: View {
         .accessibilityIdentifier("player.options")
     }
 
-    private static let speeds: [Float] = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
+    private static let speeds: [Float] = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]
     private static func speedLabel(_ speed: Float) -> String {
         Double(speed).formatted(.number.precision(.fractionLength(0...2))) + "×"
     }
@@ -830,9 +831,11 @@ struct MobilePlayerView: View {
         // On a watch page the episodes are on the page itself.
         let episodes = !inline && PlayerEpisodesSheet.offered(for: channel, in: store)
         let channels = !inline && PlayerChannelsSheet.offered(for: channel, session: session, in: store)
-        if previous != nil || next != nil || episodes || channels || toggleFullScreen != nil {
+        let speeds = session.hasTimeline && !session.isLive
+        if speeds || previous != nil || next != nil || episodes || channels || toggleFullScreen != nil {
             // One glass capsule, as the top row's buttons (`chromeGroup`).
             HStack(spacing: 0) {
+                if speeds { speedButton }
                 if let previous {
                     Button { previous.go() } label: { Image(systemName: "backward.end.fill") }
                         .buttonStyle(PlayerCircleStyle(size: 36))
@@ -882,6 +885,26 @@ struct MobilePlayerView: View {
             .chromeGroup()
             .simultaneousGesture(TapGesture().onEnded { poke() })
         }
+    }
+
+    /// The speed, by the seek bar: a tap lists them all, from a quarter to four times.
+    private var speedButton: some View {
+        Menu {
+            Picker(L10n.text("Playback Speed"), selection: Binding(get: { speed }, set: { speed = $0; session.setSpeed($0) })) {
+                ForEach(Self.speeds, id: \.self) { Text(Self.speedLabel($0)).tag($0) }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            Text(Self.speedLabel(speed))
+                .font(.system(size: 14, weight: .semibold)).monospacedDigit().foregroundStyle(.white)
+                .lineLimit(1).fixedSize()
+                .frame(minWidth: 36).padding(.horizontal, 6).frame(height: 36)
+                .contentShape(Capsule())
+        }
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
+        .accessibilityLabel(L10n.text("Playback Speed"))
+        .accessibilityValue(Self.speedLabel(speed))
+        .accessibilityIdentifier("player.speed")
     }
 
     @ViewBuilder private var bottomRow: some View {
