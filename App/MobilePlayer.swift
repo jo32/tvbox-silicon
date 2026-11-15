@@ -691,7 +691,7 @@ struct MobilePlayerView: View {
                 Button { showsDanmakuList = true } label: { Label(L10n.text("Danmaku List"), systemImage: "list.bullet.rectangle") }
                     .disabled(session.danmaku.isEmpty)
             } label: {
-                Image(systemName: showsDanmaku ? "text.bubble.fill" : "text.bubble").font(.headline).frame(width: 22, height: 22)
+                Image(systemName: DanmakuPreference.symbol).font(.headline).frame(width: 22, height: 22)
             }
             .chromeButton()
             .accessibilityLabel(L10n.text("Danmaku"))

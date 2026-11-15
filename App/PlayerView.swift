@@ -332,7 +332,7 @@ struct PlaybackView: View {
                 Button { showsDanmakuList = true } label: { Label(L10n.text("Danmaku List"), systemImage: "list.bullet.rectangle") }
                     .disabled(session.danmaku.isEmpty)
             } label: {
-                Image(systemName: showsDanmaku ? "text.bubble.fill" : "text.bubble").font(.headline).frame(width: 22, height: 22)
+                Image(systemName: DanmakuPreference.symbol).font(.headline).frame(width: 22, height: 22)
             }
             .chromeButton()
             .accessibilityLabel(L10n.text("Danmaku"))
@@ -894,7 +894,9 @@ private struct NativePlayerView: UIViewControllerRepresentable {
                 panel.safeAreaRegions = []
                 tabs.append(panel)
             }
-            if !chapters.isEmpty {
+            // Chapters that are AVKit's own markers (PlaybackSession.mark) already have AVKit's Chapters tab; a second
+            // one of ours listed them twice.
+            if !chapters.isEmpty, player.currentItem?.navigationMarkerGroups.isEmpty ?? true {
                 let list = UIHostingController(rootView: PlayerChaptersView(player: player, chapters: chapters))
                 list.title = L10n.text("Chapters")
                 list.preferredContentSize = CGSize(width: 0, height: 330)
@@ -927,7 +929,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             let speeds = DanmakuStyle.speeds(including: danmakuSpeed).map { option in
                 UIAction(title: DanmakuStyle.speedTitle(option), state: abs(option - current) < 0.001 ? .on : .off) { _ in speed.wrappedValue = option }
             }
-            items.append(UIMenu(title: L10n.text("Danmaku"), image: UIImage(systemName: showsDanmaku ? "text.bubble.fill" : "text.bubble"), children: [
+            items.append(UIMenu(title: L10n.text("Danmaku"), image: UIImage(systemName: DanmakuPreference.symbol), children: [
                 UIAction(title: L10n.text("Show Danmaku"), state: showsDanmaku ? .on : .off) { _ in binding.wrappedValue.toggle() },
                 UIMenu(title: L10n.text("Danmaku Area"), image: UIImage(systemName: "rectangle.tophalf.inset.filled"), children: areas),
                 UIMenu(title: L10n.text("Text Size"), image: UIImage(systemName: "textformat.size"), children: sizes),
@@ -971,7 +973,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
                     setSkipping(EpisodeSkipSettings(enabled: skipping.enabled))
                 })
             }
-            items.append(UIMenu(title: L10n.text("Skip intro / outro"), image: UIImage(systemName: "forward.end"), children: options))
+            // Not forward.end: beside Next Episode's forward.end.fill it read as a second Next button.
+            items.append(UIMenu(title: L10n.text("Skip intro / outro"), image: UIImage(systemName: "arrow.right.to.line"), children: options))
         }
         if !live {
             let setSpeed = setSpeed, speed = speed
