@@ -1813,7 +1813,15 @@ private struct DesktopNativePlayer: NSViewRepresentable {
         context.coordinator.subtitles = subtitles
         view.pictureInPictureDelegate = context.coordinator
         view.showsSharingServiceButton = false
+        // Setting `speeds` puts the player back to normal speed, and this view is new whenever the controls come or go,
+        // as they do while each next episode loads: pick the speed it played at again (#1015).
+        let speed = player.defaultRate
         view.speeds = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4].map { AVPlaybackSpeed(rate: Float($0), localizedName: "\($0)×") }
+        if let picked = view.speeds.first(where: { $0.rate == speed }) { view.selectSpeed(picked) }
+        else {
+            player.defaultRate = speed
+            if player.rate != 0 { player.rate = speed }
+        }
         return view
     }
     func updateNSView(_ view: AVPlayerView, context: Context) {
