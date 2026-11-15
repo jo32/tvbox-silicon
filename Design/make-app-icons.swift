@@ -30,6 +30,10 @@ let setIcons = ["01_MediaLayers", "02_MediaPocketPurple", "03_PlayTriangle", "04
                 "06_ShibaManga", "07_CatCinema", "08_AnimalTrio"]
 /// The app's own icon; every other one is an alternate.
 let primary = "MediaPocketPurple"
+/// Masters whose top and bottom rows hold the clipped rim of a shape behind the art, by the number of rows at each edge.
+/// MediaPocketPurple: a light band, near-white at its ends, along the top, and a dark one along the bottom, both across
+/// the middle 70%. Those rows are painted with the background beside them.
+let clippedRims: [String: (top: Int, bottom: Int)] = ["MediaPocketPurple": (top: 18, bottom: 24)]
 
 var options: [String: URL] = [:]
 var arguments = CommandLine.arguments.dropFirst()
@@ -97,6 +101,34 @@ func macPlate(_ art: CGImage) -> CGImage {
     }
 }
 
+/// `image` with its top and bottom rows in the background colour at their two ends, blended into the art over a few
+/// rows inside them.
+func coverRims(_ image: CGImage, top: Int, bottom: Int) -> CGImage {
+    let width = image.width, height = image.height, fade = 4
+    let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                            space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+    context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+    let pixels = context.data!.assumingMemoryBound(to: UInt8.self)
+    /// `y` counts from the edge inwards; row 0 of the bitmap's memory is the picture's top row.
+    func cover(_ rows: Int, fromBottom: Bool) {
+        for y in 0..<(rows + fade) {
+            let row = pixels + (fromBottom ? height - 1 - y : y) * width * 4
+            let amount = y < rows ? 1.0 : 1.0 - Double(y - rows + 1) / Double(fade + 1)
+            let left = 8 * 4, right = (width - 9) * 4
+            for x in 0..<width {
+                let t = Double(x) / Double(width - 1)
+                for c in 0..<3 {
+                    let background = Double(row[left + c]) * (1 - t) + Double(row[right + c]) * t
+                    row[x * 4 + c] = UInt8((background * amount + Double(row[x * 4 + c]) * (1 - amount)).rounded())
+                }
+            }
+        }
+    }
+    if top > 0 { cover(top, fromBottom: false) }
+    if bottom > 0 { cover(bottom, fromBottom: true) }
+    return context.makeImage()!
+}
+
 func iosIconSet(_ image: CGImage, at folder: URL) {
     if manager.fileExists(atPath: folder.path) { try! manager.removeItem(at: folder) }
     write(scaled(image, to: 1024), to: folder.appendingPathComponent("AppIcon.png"))
@@ -121,6 +153,7 @@ writeJSON(["info": ["author": "xcode", "version": 1]], to: artCatalog.appendingP
 /// One icon: its iOS set, its artwork, and for the app's own icon the Mac's set.
 func make(_ master: CGImage, name: String) {
     guard master.width == 1024, master.height == 1024 else { fatalError("\(name) is not 1024 × 1024") }
+    let master = clippedRims[name].map { coverRims(master, top: $0.top, bottom: $0.bottom) } ?? master
     let set = name == primary ? "AppIcon" : "AppIcon-\(name)"
     iosIconSet(master, at: iosCatalog.appendingPathComponent("\(set).appiconset"))
     artSet(master, name: name)
