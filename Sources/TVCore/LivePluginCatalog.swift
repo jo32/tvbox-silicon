@@ -156,10 +156,18 @@ public enum LivePluginCatalog {
         if let key = chosen.key {
             // A CENC MP4 with its key: decrypted as it plays.
             address = try await CENCStreams.open(url: url, key: key, headers: chosen.headers, http: HTTPClient())
+        } else if chosen.flv {
+            do {
+                address = try await FLVLive.open(url, headers: chosen.headers)
+            } catch is FLVLive.NotFLV {
+                // Some plugins label every address "flv", plain video files too (AngelLive's Hongguo episodes): play it as it is.
+                Diagnostics.shared.record(.info, "plugins", "\(plugin) flv option isn't FLV; playing it directly host=\(url.host() ?? "-")")
+                chosen.flv = false
+                address = url
+            }
         } else {
             // A server whose playlists contradicted themselves before is read through the loader that steadies them.
-            address = chosen.flv ? try await FLVLive.open(url, headers: chosen.headers)
-                : LiveRepair.contradicts(url) ? LiveRepair.address(url, headers: chosen.headers) : url
+            address = LiveRepair.contradicts(url) ? LiveRepair.address(url, headers: chosen.headers) : url
         }
         let qualities = options.compactMap { option -> StreamQuality? in
             var parts = URLComponents(url: channel.url, resolvingAgainstBaseURL: false)
@@ -267,6 +275,7 @@ extension LivePluginCatalog.Option {
         // Some label any non-HLS file "flv": the address decides when it says otherwise.
         let path = self.url?.path().lowercased() ?? ""
         let file = path.hasSuffix(".mp4") || path.hasSuffix(".m3u8") || path.contains("media-video")
+            || self.url?.query()?.lowercased().contains("mime_type=video_mp4") == true
         flv = self.url.map(FLVLive.names) ?? false || (format == "flv" && !file)
         let decryption = quality["decryption"]?.object
         encrypted = decryption != nil

@@ -11,8 +11,13 @@ public enum FLVLive {
     /// Whether `url` names an FLV stream by its path (`.flv`), the way the platforms' addresses do.
     public static func names(_ url: URL) -> Bool { url.pathExtension.lowercased() == "flv" }
 
+    /// What `open` throws when the stream isn't FLV at all (a plain video file a plugin labelled "flv").
+    public struct NotFLV: LocalizedError {
+        public var errorDescription: String? { L10n.text("This live stream isn't FLV.") }
+    }
+
     /// Starts reading the stream and returns the address of its HLS master playlist once its first run is
-    /// repackaged. Throws when the stream answers with an error, isn't FLV, or carries no H.264/HEVC picture.
+    /// repackaged. Throws when the stream answers with an error, isn't FLV (`NotFLV`), or carries no H.264/HEVC picture.
     public static func open(_ url: URL, headers: [String: String]) async throws -> URL {
         let session = FLVLiveSession(url: url, headers: headers, device: RemuxSession.device())
         RemuxStore.shared.add(session)
@@ -337,7 +342,8 @@ final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @
             runs = lock.withLock { tags.compactMap { segmenter.add($0) } }
         } catch {
             Diagnostics.shared.record(.warning, "remux", "flv live \(error)")
-            lock.withLock { ended = TVError.unsupported(L10n.text("This live stream isn't FLV.")) }
+            let failure: Error = error as? FLVTagReader.Failure == .notFLV ? FLVLive.NotFLV() : TVError.unsupported(L10n.text("This live stream isn't FLV."))
+            lock.withLock { ended = failure }
             dataTask.cancel(); wake()
             return
         }

@@ -37,6 +37,27 @@ struct FLVLiveTests {
         #expect(throws: FLVTagReader.Failure.self) { try reader.append(Data("#EXTM3U\n#EXT-X-VERSION:3\n".utf8)) }
     }
 
+    @Test func aPlainVideoFileIsReportedAsNotFLV() async throws {
+        // A plugin labelled an MP4 file "flv" (AngelLive's Hongguo episodes, #1047): it says so, so the caller can play it as it is.
+        // The session is started directly: the shared store keeps three, and parallel tests would close it.
+        let file = FileManager.default.temporaryDirectory.appending(path: "flv-\(UUID().uuidString).mp4")
+        try (Data([0, 0, 0, 0x20]) + Data("ftypisom".utf8) + Data(count: 4096)).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let session = FLVLiveSession(url: file, headers: [:], device: RemuxSession.device())
+        defer { session.close() }
+        await #expect(throws: FLVLive.NotFLV.self) { try await session.start() }
+    }
+
+    @Test func pluginVideoFilesLabelledFLVAreNotFLV() {
+        let reply: JSONValue = .array([.object(["cdn": .string("选集"), "qualitys": .array([
+            .object(["title": .string("第1集"), "liveCodeType": .string("flv"),
+                     "url": .string("https://v11-hgweb.qznovelvod.com/abc/6af2/video/tos/cn/tos-cn-v-6fcc8e/6d09/?a=8662&mime_type=video_mp4&qs=0")]),
+            .object(["title": .string("原画"), "liveCodeType": .string("flv"),
+                     "url": .string("https://tx-flv-web.yy.com/live/abc?wsSecret=1")]),
+        ])])])
+        #expect(LivePluginCatalog.options(reply).map(\.flv) == [false, true])
+    }
+
     @Test func runsBeginAtKeyframesAfterTheMinimum() throws {
         var segmenter = FLVSegmenter()
         var runs: [FLVSegmenter.Run] = []
