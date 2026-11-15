@@ -1580,6 +1580,10 @@
 "Swipe or press the arrows to move the subtitle. Press Select when it's in place." = "Swipe or press the arrows to move the subtitle. Press Select when it's in place.";
 "Gestures" = "Gestures";
 "Brightness and Volume" = "Brightness and Volume";
+"Video Page" = "Video Page";
+"Play Automatically" = "Play Automatically";
+"Start in Full Screen" = "Start in Full Screen";
+"With Play Automatically on, a video of one episode starts as soon as its page opens. With Start in Full Screen on, a video fills the screen as soon as it starts on its page." = "With Play Automatically on, a video of one episode starts as soon as its page opens. With Start in Full Screen on, a video fills the screen as soon as it starts on its page.";
 "Area" = "Area";
 "This plugin setting only works in Android TVBox." = "This plugin setting only works in Android TVBox.";
 "The plugin finished without a message." = "The plugin finished without a message.";

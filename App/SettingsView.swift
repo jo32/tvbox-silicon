@@ -994,6 +994,8 @@ struct PlaybackSettingsView: View {
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     @AppStorage(AdSkip.key) private var skipsAds = true
+    @AppStorage(WatchPage.autoPlayKey) private var autoPlays = true
+    @AppStorage(WatchPage.fullScreenKey) private var startsFullScreen = false
     var body: some View {
         SettingsPage(title: L10n.text("Playback"), symbol: "slider.horizontal.below.rectangle") {
             // Few groups with short rows: one card per switch, each with its own long note, read as a stack of
@@ -1014,6 +1016,21 @@ struct PlaybackSettingsView: View {
                     FormLabel(symbol: "sun.max.fill", tint: .yellow, title: L10n.text("Brightness and Volume"))
                 }
                 .settingsSwitch()
+            }
+            // The iPhone's video page, with the player at its top (#885, #1065); iPad's player opens full screen.
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                SettingsGroup(title: L10n.text("Video Page"), footer: L10n.text("With Play Automatically on, a video of one episode starts as soon as its page opens. With Start in Full Screen on, a video fills the screen as soon as it starts on its page.")) {
+                    Toggle(isOn: $autoPlays) {
+                        FormLabel(symbol: "play.fill", tint: .pink, title: L10n.text("Play Automatically"))
+                    }
+                    .settingsSwitch()
+                    .accessibilityIdentifier("settings.watchAutoPlay")
+                    Toggle(isOn: $startsFullScreen) {
+                        FormLabel(symbol: "arrow.up.left.and.arrow.down.right", tint: .indigo, title: L10n.text("Start in Full Screen"))
+                    }
+                    .settingsSwitch()
+                    .accessibilityIdentifier("settings.watchFullScreen")
+                }
             }
             SettingsGroup(footer: SettingsNote.playbackInfo) {
                 FormLink(symbol: "captions.bubble.fill", tint: .orange, title: L10n.text("Subtitle Style")) { SubtitleStyleView() }
