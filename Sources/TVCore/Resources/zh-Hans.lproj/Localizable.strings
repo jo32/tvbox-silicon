@@ -1473,6 +1473,16 @@
 "Searches all %d installed sources." = "搜索全部 %d 个已安装的漫画源。";
 "Sign In with Cookies" = "用 Cookie 登录";
 "Signed in." = "已登录。";
+"Your account and password are sent only to this book source's website, and kept on this device." = "账号和密码只会发送给此书源的网站，并保存在本设备上。";
+"Sign In on the Website" = "在网站上登录";
+"Sign in on the page, then tap Done. This source then reads the website as you." = "在网页上登录后点「完成」，此书源之后会以你的身份读取网站。";
+"This source has nothing to fill in to sign in." = "此书源登录无需填写任何内容。";
+"This source signs in on its website, which Apple TV can't open." = "此书源需要在网站上登录，Apple TV 无法打开网页。";
+"These sources can sign in to an account on their website." = "这些书源可以登录其网站的账号。";
+"Not signed in yet." = "还没有登录。";
+"This source's sign-in form isn't supported yet." = "暂不支持此书源的登录界面。";
+"This source's sign-in form couldn't be read." = "无法读取此书源的登录界面。";
+"This source has no login function." = "此书源没有登录函数（login）。";
 "Source Lists" = "源列表";
 "Source address (.js)" = "漫画源地址（.js）";
 "Source list address (index.json)" = "源列表地址（index.json）";

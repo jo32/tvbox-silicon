@@ -18,6 +18,9 @@ public struct NovelSource: Codable, Hashable, Sendable, Identifiable {
     public var explorable: Bool
     /// Whether the list itself marks it as switched off (`enabled: false`).
     public var disabledByList: Bool
+    /// Whether it signs in: with a form (`loginUi`), or on a web page (`loginUrl` an address). A login script
+    /// with no form has nothing to ask, as in Legado.
+    public var signsIn: Bool
     /// The source object, as JSON text.
     public var json: String
     /// The JSON's checksum: a changed source restarts its runtime.
@@ -38,6 +41,9 @@ public struct NovelSource: Codable, Hashable, Sendable, Identifiable {
         searchable = !(Self.string(object["searchUrl"]) ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         explorable = (object["enabledExplore"] as? Bool ?? true) && !(Self.string(object["exploreUrl"]) ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         disabledByList = (object["enabled"] as? Bool) == false
+        let form = (Self.string(object["loginUi"]) ?? "").filter { !$0.isWhitespace }
+        let login = (Self.string(object["loginUrl"]) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        signsIn = !(form.isEmpty || form == "[]") || (login.lowercased().hasPrefix("http") && !login.contains(where: \.isWhitespace))
         json = String(decoding: data, as: UTF8.self)
         revision = PluginChecksum.sha256(data)
     }
@@ -152,6 +158,57 @@ public struct NovelChapter: Codable, Hashable, Sendable, Identifiable {
         isVip = ((try? c.decodeIfPresent(Bool.self, forKey: .isVip)) ?? nil) ?? false
         tag = ((try? c.decodeIfPresent(String.self, forKey: .tag)) ?? nil) ?? ""
         variables = ((try? c.decodeIfPresent([String: String].self, forKey: .variables)) ?? nil) ?? [:]
+    }
+}
+
+/// A source's sign-in form (Legado's `loginUi`) and what it holds now.
+public struct NovelSignInForm: Codable, Hashable, Sendable {
+    public struct Field: Codable, Hashable, Sendable {
+        public var name: String
+        /// `text`, `password`, `select`, `toggle` (choices, as `select`), `button` or `label`.
+        public var type: String
+        /// A button's script or web page; a toggle's script run when it changes.
+        public var action: String?
+        /// A select's or toggle's choices.
+        public var chars: [String]
+        public init(name: String, type: String, action: String? = nil, chars: [String] = []) { self.name = name; self.type = type; self.action = action; self.chars = chars }
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            name = ((try? c.decodeIfPresent(String.self, forKey: .name)) ?? nil) ?? ""
+            type = ((try? c.decodeIfPresent(String.self, forKey: .type)) ?? nil) ?? "text"
+            action = (try? c.decodeIfPresent(String.self, forKey: .action)) ?? nil
+            chars = ((try? c.decodeIfPresent([String].self, forKey: .chars)) ?? nil) ?? []
+        }
+    }
+    public var rows: [Field]
+    /// Each field's value, by its name: what was saved, else its default.
+    public var values: [String: String]
+    /// With no form: the web page the source signs in on.
+    public var web: String?
+    public var signedIn: Bool
+    public init(rows: [Field], values: [String: String], web: String? = nil, signedIn: Bool = false) { self.rows = rows; self.values = values; self.web = web; self.signedIn = signedIn }
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        rows = ((try? c.decodeIfPresent([Field].self, forKey: .rows)) ?? nil) ?? []
+        values = ((try? c.decodeIfPresent([String: String].self, forKey: .values)) ?? nil) ?? [:]
+        web = (try? c.decodeIfPresent(String.self, forKey: .web)) ?? nil
+        signedIn = ((try? c.decodeIfPresent(Bool.self, forKey: .signedIn)) ?? nil) ?? false
+    }
+}
+
+/// What signing in, or a form's button, came to.
+public struct NovelSignInOutcome: Codable, Hashable, Sendable {
+    /// What the source's script said (`java.toast`).
+    public var said: [String]
+    /// Values the script put in the form (`java.upLoginData`).
+    public var values: [String: String]?
+    /// A web page the button opens.
+    public var open: String?
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        said = ((try? c.decodeIfPresent([String].self, forKey: .said)) ?? nil) ?? []
+        values = (try? c.decodeIfPresent([String: String].self, forKey: .values)) ?? nil
+        open = (try? c.decodeIfPresent(String.self, forKey: .open)) ?? nil
     }
 }
 

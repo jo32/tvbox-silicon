@@ -256,7 +256,7 @@ function makeSource(json) {
         put(k, v) { store.set('v', k, v); return v; }, get(k) { return store.get('v', k); },
         getVariable() { return store.get('sourceVariable', 'v'); }, putVariable(v) { if (v == null) store.remove('sourceVariable', 'v'); else store.set('sourceVariable', 'v', v); },
         setVariable(v) { this.putVariable(v); },
-        getLoginInfo() { return store.get('login', 'info') || null; }, getLoginInfoMap() { return lenientJSON(store.get('login', 'info')) ?? {}; },
+        getLoginInfo() { return store.get('login', 'info') || null; }, getLoginInfoMap() { return mapView(lenientJSON(store.get('login', 'info'))); },
         putLoginInfo(info) { store.set('login', 'info', info); return true; }, removeLoginInfo() { store.remove('login', 'info'); },
         getLoginHeader() { return store.get('login', 'header') || null; }, getLoginHeaderMap() { return lenientJSON(store.get('login', 'header')) ?? null; },
         putLoginHeader(header) { store.set('login', 'header', header); }, removeLoginHeader() { store.remove('login', 'header'); },
@@ -265,6 +265,18 @@ function makeSource(json) {
         refreshExplore() { exploreKindsKept = null; }, refreshJSLib() { }, getConcurrentRate() { return json.concurrentRate ?? null; },
         getDisplayNameGroup() { return json.bookSourceName ?? ''; },
     }), json);
+}
+/// A plain object that also answers Java's Map calls (Legado hands scripts a HashMap: `getLoginInfoMap().get('账号')`).
+function mapView(value) {
+    const map = value && typeof value === 'object' && !Array.isArray(value) ? { ...value } : {};
+    const methods = {
+        get(k) { return map[String(k)] ?? null; }, put(k, v) { const old = map[String(k)] ?? null; map[String(k)] = v; return old; },
+        getOrDefault(k, d) { return String(k) in map ? map[String(k)] : d; }, containsKey(k) { return String(k) in map; },
+        remove(k) { const old = map[String(k)] ?? null; delete map[String(k)]; return old; }, keySet() { return Object.keys(map); },
+        values() { return Object.values(map); }, size() { return Object.keys(map).length; }, isEmpty() { return !Object.keys(map).length; },
+    };
+    for (const [k, fn] of Object.entries(methods)) Object.defineProperty(map, k, { value: fn, enumerable: false, configurable: true, writable: true });
+    return map;
 }
 function headerMap(hasLoginHeader = true) {
     const map = {};
@@ -1300,7 +1312,9 @@ Object.assign(Analyzer.prototype, {
     s2t(text) { try { return host('novel.convert', JSON.stringify({ text: String(text ?? ''), to: 'hant' })) ?? String(text); } catch { return String(text ?? ''); } },
     log(message) { log(isNode(message) ? outerHTML(message) : jsString(message)); return message; },
     logType(value) { log(value == null ? 'null' : Array.isArray(value) ? 'Array' : typeof value); },
-    toast(message) { log('toast', jsString(message)); }, longToast(message) { log('toast', jsString(message)); },
+    toast(message) { log('toast', jsString(message)); signInSaid?.push(jsString(message)); }, longToast(message) { this.toast(message); },
+    // The sign-in form's script calls (Legado's SourceLoginJsExtensions).
+    upLoginData(data) { if (signInValues) Object.assign(signInValues, stringMap(data instanceof JavaMap ? data.toJSON() : data)); }, reLoginView() { }, copyText(text) { log('copyText', jsString(text)); },
     randomUUID() { const h = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join(''); return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20)}`; },
     androidId() { let id = store.get('device', 'androidId'); if (!id) { id = Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join(''); store.set('device', 'androidId', id); } return id; },
     getCookie(tag, key) { return key ? cookie.getKey(tag, key) : cookie.getCookie(tag); },
@@ -1938,6 +1952,81 @@ for (const [name, fn] of Object.entries({
     if (!('attr' in Array.prototype)) Object.defineProperty(Array.prototype, 'attr', { value(name) { for (const n of this) { const v = attrOf(n, String(name), ''); if (v) return v; } return ''; }, writable: true, configurable: true });
 }
 
+// --- Signing in (Legado's SourceLoginDialog) ----------------------------------------------------
+// A source signs in with a form (`loginUi`: text, password, select and toggle fields, labels and buttons). What the
+// form holds is the source's login info, which the `loginUrl` script's login() reads (source.getLoginInfoMap()) to
+// sign in, usually keeping a token with source.putLoginHeader(). A source with no form signs in on its website.
+let signInSaid = null, signInValues = null;
+const inlineJS = rule => { const t = String(rule ?? '').trim(); const m = /^<js>([\s\S]*?)<\/js>$/i.exec(t) ?? /^@js:([\s\S]*)$/i.exec(t); return m ? m[1].trim() : null; };
+const isWebAddress = text => /^https?:\/\/\S+$/i.test(String(text ?? '').trim());
+/// The `loginUrl` script, or '' when there is none or it is a web page.
+const loginScript = () => { const t = String(S.loginUrl ?? '').trim(); const code = inlineJS(t) ?? t; return isWebAddress(code) ? '' : code; };
+/// Runs `code` after the login script, with the form's values as `result`; answers what it said and the values it set.
+function signInRun(code, values) {
+    signInSaid = []; signInValues = { ...values };
+    try {
+        const an = new Analyzer({}); an.baseUrl = S.bookSourceUrl;
+        const value = an.evalJS((loginScript() ? loginScript() + '\n' : '') + code, mapView(values));
+        return { value, said: signInSaid, values: signInValues };
+    } catch (error) {
+        // A script's own message (`throw '密码错误'`) as it wrote it.
+        if (error instanceof LegadoError) throw error;
+        fail(String(error?.message ?? error));
+    } finally { signInSaid = null; signInValues = null; }
+}
+function signInRows(stored) {
+    const rule = String(S.loginUi ?? '').trim();
+    if (!rule || rule.replace(/\s/g, '') === '[]') return [];
+    if (rule.startsWith('{') && Number(lenientJSON(rule)?.version) === 2) fail("This source's sign-in form isn't supported yet.");
+    const js = inlineJS(rule);
+    let rows = js != null ? signInRun(js, stored).value : rule;
+    if (typeof rows === 'string' || rows instanceof String) rows = lenientJSON(String(rows));
+    if (!Array.isArray(rows)) fail("This source's sign-in form couldn't be read.");
+    return Array.from(rows).filter(r => r && typeof r === 'object').map(r => ({
+        name: String(r.name ?? ''), type: String(r.type ?? 'text'), action: r.action == null || r.action === '' ? null : String(r.action),
+        chars: Array.isArray(r.chars) ? r.chars.filter(c => c != null).map(String) : [], default: r.default == null ? null : String(r.default),
+    })).filter(r => ['text', 'password', 'select', 'toggle', 'button', 'label'].includes(r.type) && r.name.trim());
+}
+/// The web page a source with no form signs in on: its `loginUrl` when that is an address.
+function signInPage() {
+    if (String(S.loginUi ?? '').replace(/\s/g, '').replace(/^\[\]$/, '')) return null;
+    const page = inlineJS(S.loginUrl) ?? String(S.loginUrl ?? '').trim();
+    return isWebAddress(page) ? absoluteURL(S.bookSourceUrl, page.trim()) : null;
+}
+/// Signing out: the login info, the login header, and what signing in on the website kept.
+function signOut() {
+    store.remove('login', 'info'); store.remove('login', 'header');
+    const page = signInPage();
+    if (page && store.get('login', 'web')) cookie.removeCookie(page);
+    store.remove('login', 'web');
+    return true;
+}
+function signInForm() {
+    const kept = lenientJSON(store.get('login', 'info'));
+    const stored = kept && typeof kept === 'object' && !Array.isArray(kept) ? stringMap(kept) : {};
+    const rows = signInRows(stored);
+    const values = {};
+    for (const r of rows) if (r.type !== 'button' && r.type !== 'label') values[r.name] = stored[r.name] ?? r.default ?? (r.chars[0] ?? '');
+    return { rows, values, web: signInPage(), signedIn: !!(store.get('login', 'info') || store.get('login', 'header') || store.get('login', 'web')) };
+}
+/// The form's Sign In: keeps the values as the source's login info, then runs its login().
+function signIn(values) {
+    const map = stringMap(values);
+    if (!Object.keys(map).length) { store.remove('login', 'info'); return { said: [], values: null }; }
+    store.set('login', 'info', JSON.stringify(map));
+    if (!loginScript()) return { said: [], values: null };
+    const { value, said, values: changed } = signInRun("typeof login == 'function' ? (login.apply(this), true) : false", map);
+    if (value === false) fail('This source has no login function.');
+    return { said, values: changed };
+}
+/// A form button: a web page to open, or a script run with the form's values.
+function signInAction(values, action) {
+    const text = String(action ?? '').trim();
+    if (isWebAddress(text)) return { said: [], values: null, open: text };
+    const { said, values: changed } = signInRun(text, stringMap(values));
+    return { said, values: changed };
+}
+
 // --- Entry points (NovelRuntime.swift) --------------------------------------------------------
 const baselineGlobals = new Set([...Object.getOwnPropertyNames(globalThis), '__legado', '__cryptoJS', 'CryptoJS']);
 function resetSourceState() {
@@ -2024,6 +2113,12 @@ globalThis.__legado = {
         const paragraphs = String(text).split(/\r?\n/).map(line => line.replace(/<img[^>]*>/gi, '').replace(/^[\s　 ]+|[\s　 ]+$/g, '')).filter(Boolean);
         return { title: String(chapter.title ?? ''), paragraphs, variables: stringMap(chapter.variableMap) };
     }, budget),
+    loginForm: budget => run(() => signInForm(), budget),
+    login: (values, budget) => run(() => signIn(values), budget),
+    loginAction: (values, action, budget) => run(() => signInAction(values, action), budget),
+    logout: budget => run(() => signOut(), budget),
+    // The cookies of a sign-in on the website, for the source's requests (Legado's WebViewLoginFragment).
+    keepCookies: (url, text, budget) => run(() => { cookie.replaceCookie(String(url), String(text)); store.set('login', 'web', '1'); return true; }, budget),
     // Debugging: a rule run on a text.
     rule: (rule, content, base) => run(() => new Analyzer({}).setContent(String(content), base).getStringList(String(rule))),
 };

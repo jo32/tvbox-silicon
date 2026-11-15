@@ -1473,6 +1473,16 @@
 "Searches all %d installed sources." = "インストール済みの %d 個のソースすべてを検索します。";
 "Sign In with Cookies" = "Cookie でサインイン";
 "Signed in." = "サインインしました。";
+"Your account and password are sent only to this book source's website, and kept on this device." = "アカウントとパスワードはこのブックソースのサイトにのみ送信され、このデバイスに保存されます。";
+"Sign In on the Website" = "ウェブサイトでサインイン";
+"Sign in on the page, then tap Done. This source then reads the website as you." = "ページでサインインしてから「完了」をタップすると、このソースはあなたとしてサイトを読み込みます。";
+"This source has nothing to fill in to sign in." = "このソースのサインインには入力する項目がありません。";
+"This source signs in on its website, which Apple TV can't open." = "このソースはウェブサイトでサインインしますが、Apple TV ではサイトを開けません。";
+"These sources can sign in to an account on their website." = "これらのソースはサイトのアカウントにサインインできます。";
+"Not signed in yet." = "まだサインインしていません。";
+"This source's sign-in form isn't supported yet." = "このソースのサインインフォームにはまだ対応していません。";
+"This source's sign-in form couldn't be read." = "このソースのサインインフォームを読み込めませんでした。";
+"This source has no login function." = "このソースには login 関数がありません。";
 "Source Lists" = "ソースリスト";
 "Source address (.js)" = "ソースのアドレス（.js）";
 "Source list address (index.json)" = "ソースリストのアドレス（index.json）";
