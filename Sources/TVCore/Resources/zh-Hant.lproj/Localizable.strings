@@ -2021,6 +2021,7 @@
 "Remove Custom Picture" = "移除自訂圖片";
 "The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Pocket." = "映匣開啟時，Dock 顯示你選的圖像；在 Finder 等其他地方仍是「口袋」。";
 "The icon on your Home Screen. The system confirms the change with a short message." = "主畫面上的圖像。更換後，系統會顯示一則簡短提示。";
+"The icon on the Home Screen. When Yingxia sits in the top row, the picture above it stays Pocket." = "主畫面上的圖像。映匣放在第一排時，上方顯示的大圖仍是「口袋」。";
 
 /* Settings › Color Theme */
 "Violet" = "紫羅蘭";

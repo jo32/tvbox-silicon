@@ -502,22 +502,14 @@ private struct HomeFavoriteCard: View {
     }
 }
 
-/// The app icon artwork, masked like a home-screen icon: on iPhone, iPad and Mac the one picked in Settings › App Icon;
-/// on Apple TV, Pocket, the TV's own icon (Design/make-tvos-icon.swift).
+/// The app icon artwork, masked like a home-screen icon: the one picked in Settings › App Icon.
 struct AppMark: View {
     var size: CGFloat
     var body: some View {
-        artwork.resizable().interpolation(.high).scaledToFill()
+        AppIcons.shared.artwork.resizable().interpolation(.high).scaledToFill()
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
             .shadow(color: Color(red: 0.1, green: 0.55, blue: 1).opacity(0.35), radius: size * 0.22, y: size * 0.06)
-    }
-    private var artwork: Image {
-        #if os(tvOS)
-        Image("AppMark")
-        #else
-        AppIcons.shared.artwork
-        #endif
     }
 }
 

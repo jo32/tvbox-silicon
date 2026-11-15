@@ -1711,6 +1711,7 @@ struct TVSettingsView: View {
             }
             TVSettingsSection {
                 TVSettingsLink(title: L10n.text("Watch Now")) { WatchNowSettingsView() }
+                TVSettingsLink(title: L10n.text("App Icon"), value: AppIcons.shared.title) { AppIconSettingsView() }
                 TVSettingsLink(title: L10n.text("Color Theme"), value: ColorThemes.shared.current.title) { ColorThemeSettingsView() }
             }
             TVSettingsSection(title: L10n.text("Playback"), footer: playbackFooter) {
@@ -2001,17 +2002,17 @@ struct TVSettingsField: View {
     }
 }
 
-/// A page under Settings: a large symbol and title on the left, its rows on the right.
-struct TVSettingsSubpage<Content: View>: View {
-    let symbol: String
+/// A page under Settings: a large symbol (or another `hero`, such as App Icon's preview) and title on the left, its
+/// rows on the right.
+struct TVSettingsSubpage<Hero: View, Content: View>: View {
     let title: String
     var subtitle: String? = nil
+    @ViewBuilder var hero: Hero
     @ViewBuilder var content: Content
     var body: some View {
         TVSettingsLayout {
             VStack(spacing: 30) {
-                Image(systemName: symbol).font(.system(size: 120, weight: .regular)).foregroundStyle(.secondary)
-                    .frame(height: 180)
+                hero
                 VStack(spacing: 10) {
                     Text(title).font(.system(size: 44, weight: .bold)).multilineTextAlignment(.center).lineLimit(2)
                     if let subtitle, !subtitle.isEmpty {
@@ -2022,6 +2023,21 @@ struct TVSettingsSubpage<Content: View>: View {
             .accessibilityElement(children: .combine)
         } list: { content }
         .screenTitle("")
+    }
+}
+
+extension TVSettingsSubpage where Hero == TVSettingsSymbol {
+    init(symbol: String, title: String, subtitle: String? = nil, @ViewBuilder content: () -> Content) {
+        self.init(title: title, subtitle: subtitle, hero: { TVSettingsSymbol(name: symbol) }, content: content)
+    }
+}
+
+/// The symbol that leads most pages under Settings.
+struct TVSettingsSymbol: View {
+    let name: String
+    var body: some View {
+        Image(systemName: name).font(.system(size: 120, weight: .regular)).foregroundStyle(.secondary)
+            .frame(height: 180)
     }
 }
 
