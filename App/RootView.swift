@@ -177,6 +177,7 @@ struct RootView: View {
     /// The phone's tab bar: the tabs the viewer arranged in Settings, then More with the rest. Which screens use
     /// it, and why: `PhoneTabs.inUse`.
     @AppStorage(PhoneTabs.labelsKey) private var showsTabLabels = true
+    @AppStorage(PhoneTabs.collapsesKey) private var collapsesTabBar = true
     private var phoneTabs: Bool { PhoneTabs.inUse(horizontal: tabSizes.horizontal) }
     /// Sections a phone reaches through More, as arranged in the tab bar editor.
     private var inMore: [AppSection] { PhoneTabs(stored: storedTabs).arranged(slots: barSlots, hiding: store.hiddenSections).more }
@@ -219,7 +220,7 @@ struct RootView: View {
             }
             #endif
             #if os(iOS)
-            .minimizesTabBarOnScroll()
+            .minimizesTabBarOnScroll(collapsesTabBar)
             .onChange(of: TabSizeClasses(horizontal: sizeClass, vertical: verticalSizeClass), initial: true) { _, now in
                 followsSizeClasses(now)
             }

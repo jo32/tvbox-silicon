@@ -1047,6 +1047,7 @@
 "Brightness" = "亮度";
 "Slide for Brightness and Volume" = "滑动调节亮度和音量";
 "Tab Bar Labels" = "标签栏文字";
+"Collapse Tab Bar When Scrolling" = "滚动时收起标签栏";
 "Off shows only the icons in the tab bar along the bottom." = "关闭后，底部标签栏只显示图标。";
 "Slide up or down on the left of the video to change the brightness, or on the right to change the volume." = "在视频左侧上下滑动调节亮度，在右侧上下滑动调节音量。";
 "Custom Search Order" = "自定义搜索顺序";

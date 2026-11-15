@@ -192,8 +192,9 @@ extension View {
     #endif
 
     #if os(iOS)
-    @ViewBuilder func minimizesTabBarOnScroll() -> some View {
-        if #available(iOS 26, *) { tabBarMinimizeBehavior(.onScrollDown) } else { self }
+    /// iOS 26: the tab bar shrinks to the current tab while scrolling down, unless switched off in Settings.
+    @ViewBuilder func minimizesTabBarOnScroll(_ enabled: Bool) -> some View {
+        if #available(iOS 26, *) { tabBarMinimizeBehavior(enabled ? .onScrollDown : .never) } else { self }
     }
     #endif
 

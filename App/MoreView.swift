@@ -8,6 +8,8 @@ struct PhoneTabs: Equatable {
     static let storageKey = "phoneTabOrder"
     /// Off: the bar along the bottom shows only the icons.
     static let labelsKey = "phoneTabLabels"
+    /// Whether the tab bar shrinks to the current tab while scrolling down (iOS 26). On unless switched off (#1098).
+    static let collapsesKey = "phoneTabBarCollapses"
     static let barSlots = 4
     /// iPhone Duo's inner display (regular both ways): its side tab bar has room for seven before More.
     static let wideBarSlots = 7
