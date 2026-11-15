@@ -18,7 +18,6 @@ struct DanmakuSettingsView: View {
 
 /// The look and filters as stored, under the keys `DanmakuCanvas` and the player's menus read.
 struct DanmakuSettings: DynamicProperty {
-    @AppStorage(DanmakuPreference.key) var shows = true
     @AppStorage(DanmakuArea.key) var area = DanmakuArea.standard
     @AppStorage(DanmakuStyle.fontSizeKey) var fontSize = DanmakuStyle.standardFontSize
     @AppStorage(DanmakuStyle.opacityKey) var opacity = DanmakuStyle.standardOpacity
@@ -146,12 +145,6 @@ private struct FormDanmakuSettingsPage: View {
     var body: some View {
         Form {
             Group {
-                Section {
-                    Toggle(isOn: settings.$shows) {
-                        FormLabel(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Show Danmaku"))
-                    }
-                    .settingsSwitch()
-                }
                 Section {
                     Picker(selection: settings.$area) {
                         ForEach(DanmakuArea.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -317,9 +310,6 @@ private struct TVDanmakuSettingsPage: View {
             .frame(maxHeight: .infinity)
             ScrollView {
                 VStack(alignment: .leading, spacing: 48) {
-                    TVSettingsSection {
-                        TVSettingsToggle(title: L10n.text("Show Danmaku"), isOn: settings.$shows)
-                    }
                     TVSettingsSection(title: L10n.text("Display")) {
                         TVSettingsAction(title: L10n.text("Danmaku Area"), value: settings.area.title) { settings.area = settings.area.next }
                         TVSettingsAction(title: L10n.text("Text Size"), value: DanmakuStyle.sizeTitle(settings.fontSize)) {

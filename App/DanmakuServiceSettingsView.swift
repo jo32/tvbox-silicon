@@ -5,7 +5,7 @@ import TVCore
 /// The service and display controls over the playing video, and the service ones on Settings › Danmaku.
 /// Sections rather than another form, so playback can add matching, timing and file controls.
 struct DanmakuServiceSettings: View {
-    /// Settings › Danmaku has its own Show Danmaku switch at the top and its own display rows.
+    /// Settings › Danmaku Settings has its own display rows, and Show Danmaku is the switch right above its link (#1117).
     var showsSwitch = true
     var showsDisplay = true
     @AppStorage(DanmakuPreference.key) private var enabled = true
