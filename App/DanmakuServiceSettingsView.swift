@@ -66,6 +66,12 @@ struct DanmakuServiceSettings: View {
                 }
                 .accessibilityIdentifier("danmaku.server.reset")
             }
+            #if os(iOS)
+            // Two buttons in one form row: with the row's default style a tap anywhere in it ran both, Save and
+            // then Use Official URL, so a typed address was saved and at once replaced by the official one (#1053).
+            // Borderless buttons each take only their own taps.
+            .buttonStyle(.borderless)
+            #endif
             if let failure {
                 Text(failure).font(.caption).foregroundStyle(.red)
                     .accessibilityIdentifier("danmaku.server.error")
