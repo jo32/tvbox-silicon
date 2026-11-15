@@ -1474,6 +1474,16 @@
 "Searches all %d installed sources." = "Searches all %d installed sources.";
 "Sign In with Cookies" = "Sign In with Cookies";
 "Signed in." = "Signed in.";
+"Your account and password are sent only to this book source's website, and kept on this device." = "Your account and password are sent only to this book source's website, and kept on this device.";
+"Sign In on the Website" = "Sign In on the Website";
+"Sign in on the page, then tap Done. This source then reads the website as you." = "Sign in on the page, then tap Done. This source then reads the website as you.";
+"This source has nothing to fill in to sign in." = "This source has nothing to fill in to sign in.";
+"This source signs in on its website, which Apple TV can't open." = "This source signs in on its website, which Apple TV can't open.";
+"These sources can sign in to an account on their website." = "These sources can sign in to an account on their website.";
+"Not signed in yet." = "Not signed in yet.";
+"This source's sign-in form isn't supported yet." = "This source's sign-in form isn't supported yet.";
+"This source's sign-in form couldn't be read." = "This source's sign-in form couldn't be read.";
+"This source has no login function." = "This source has no login function.";
 "Source Lists" = "Source Lists";
 "Source address (.js)" = "Source address (.js)";
 "Source list address (index.json)" = "Source list address (index.json)";

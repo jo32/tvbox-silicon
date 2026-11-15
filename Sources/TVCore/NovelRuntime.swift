@@ -14,6 +14,8 @@ import WebKit
 /// NovelStore and NovelHTTP, whichever runtime runs them.
 public actor NovelRuntime {
     public static let shared = NovelRuntime()
+    /// What the engine's requests say they are (engine.js `UA`): a phone's browser.
+    public static let userAgent = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
     /// Shared runtimes for searching: as many as searches run at once (NovelBooks fans out 16 at a time).
     static let poolSize = 16
     /// Runtimes kept for reading, one per source.
@@ -68,6 +70,31 @@ public actor NovelRuntime {
         let value = try await readingCall(source, "content", [Self.object(book), Self.object(chapter), next.map(Self.object) ?? NSNull()], budget: 45) as? [String: Any]
         let content = try decode(NovelContent.self, value)
         return NovelContent(title: content.title.isEmpty ? chapter.title : content.title, paragraphs: content.paragraphs)
+    }
+
+    // MARK: Signing in (Legado's SourceLoginDialog), in the source's reading runtime
+
+    public func signInForm(_ source: NovelSource) async throws -> NovelSignInForm {
+        try decode(NovelSignInForm.self, try await readingCall(source, "loginForm", [], budget: 30))
+    }
+
+    /// Keeps the form's values as the source's login info and runs its login script.
+    public func signIn(_ source: NovelSource, values: [String: String]) async throws -> NovelSignInOutcome {
+        try decode(NovelSignInOutcome.self, try await readingCall(source, "login", [values], budget: 60))
+    }
+
+    /// A form button's script, with the form's values.
+    public func signInAction(_ source: NovelSource, values: [String: String], action: String) async throws -> NovelSignInOutcome {
+        try decode(NovelSignInOutcome.self, try await readingCall(source, "loginAction", [values, action], budget: 60))
+    }
+
+    /// The cookies a sign-in on the source's website left (`name=value; …`), for its requests from now on.
+    public func keepSignInCookies(_ source: NovelSource, page: String, cookies: String) async throws {
+        _ = try await readingCall(source, "keepCookies", [page, cookies], budget: 10)
+    }
+
+    public func signOut(_ source: NovelSource) async throws {
+        _ = try await readingCall(source, "logout", [], budget: 10)
     }
 
     /// Drops a source's reading runtime and what it keeps in memory, e.g. after its list was updated or removed.
@@ -439,8 +466,13 @@ final class NovelHTTP: NSObject, URLSessionDataDelegate, @unchecked Sendable {
 /// Sources' variables, logins, caches and saved cookies, per source, on disk (Profiles/<hash>.json).
 final class NovelStore: @unchecked Sendable {
     static let shared = NovelStore()
+    /// A source's login info (its sign-in form: account, password…) is kept in the Keychain, not in its profile file.
+    static let loginKey = "login:info"
+    nonisolated(unsafe) static var logins: any SubtitleCredentialStore = KeychainSubtitleCredentials(service: "com.jo32.yingxia.novel-logins")
     private let lock = NSLock()
     private var values: [String: [String: String]] = [:]
+    /// Sources whose login info was read from the Keychain: only when asked for, not on every source's first call.
+    private var loginsRead: Set<String> = []
     private let writer = DispatchQueue(label: "novel.store")
 
     private static func file(_ source: String) -> URL {
@@ -456,12 +488,21 @@ final class NovelStore: @unchecked Sendable {
             if values[source] == nil {
                 values[source] = (try? Data(contentsOf: Self.file(source))).flatMap { try? JSONDecoder().decode([String: String].self, from: $0) } ?? [:]
             }
+            if key == Self.loginKey, loginsRead.insert(source).inserted, let info = Self.logins.values(for: source)["info"] {
+                values[source]?[key] = info
+            }
             switch request["op"] as? String {
             case "get": return values[source]?[key] ?? ""
             case "set": values[source]?[key] = request["value"] as? String ?? ""
             default: values[source]?.removeValue(forKey: key)
             }
-            let snapshot = values[source] ?? [:], file = Self.file(source)
+            if key == Self.loginKey {
+                let info = values[source]?[key] ?? ""
+                Self.logins.set(info.isEmpty ? [:] : ["info": info], for: source)
+                return nil
+            }
+            var snapshot = values[source] ?? [:], file = Self.file(source)
+            snapshot.removeValue(forKey: Self.loginKey)
             writer.async {
                 try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
                 if let data = try? JSONEncoder().encode(snapshot) { try? data.write(to: file, options: .atomic) }
