@@ -1200,6 +1200,13 @@ private struct NativePlayerView: UIViewControllerRepresentable {
 
     func close() { window?.close() }
 
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        window?.followShift()
+        return frameSize
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) { window?.followShift(ended: true) }
+
     func windowWillClose(_ notification: Notification) {
         session.stop()
         window?.contentView = nil
@@ -1226,6 +1233,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         // click is taken, down and up, so a single click still shows or hides AVKit's controls at once, as before.
         if event.type == .leftMouseUp, takesMouseUp { takesMouseUp = false; return }
         if event.type == .leftMouseDown {
+            followShift()
             takesMouseUp = event.clickCount == 2 && event.modifierFlags.intersection([.command, .control, .option]).isEmpty
                 && contentView?.hitTest(event.locationInWindow).map(Self.isBarePicture) == true
             if takesMouseUp { toggleFullScreen(nil); return }
@@ -1306,6 +1314,20 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         }
     }
 
+    /// Shift held while dragging an edge or a corner resizes the window freely, to any shape, as in IINA; the picture
+    /// keeps its own shape inside it. Let go of Shift, during the drag or after it, and the window keeps the picture's
+    /// shape again on the next drag. Checked at mouse-down and on every step of the drag, since the drag's own events
+    /// don't come through `sendEvent`.
+    func followShift(ended: Bool = false) {
+        guard !fillsFrame, let videoSize else { return }
+        let free = !ended && NSEvent.modifierFlags.contains(.shift)
+        guard free != resizesFreely else { return }
+        resizesFreely = free
+        // Resize increments and an aspect ratio cancel each other: increments of 1 unlock the shape.
+        if free { contentResizeIncrements = NSSize(width: 1, height: 1) } else { contentAspectRatio = videoSize }
+    }
+    private var resizesFreely = false
+
     /// Sizes the window to the picture and keeps its shape while it is resized (#689), so there are no black bars to
     /// drag away. A video of the shape the window already has leaves the size the viewer chose alone; full screen and
     /// a zoomed window are left as they are, and so is a window the picture fills (#978).
@@ -1314,6 +1336,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         videoSize = video
         guard !fillsFrame else { return }
         contentAspectRatio = video
+        resizesFreely = false
         guard !styleMask.contains(.fullScreen), !isZoomed, let contentView else { return }
         let current = contentView.bounds.size
         guard current.width > 0, current.height > 0 else { return }
