@@ -44,9 +44,17 @@ public enum NovelLibrary {
 /// One search result: the same book from every source that listed it, the first source's copy first.
 public struct NovelSearchHit: Sendable, Identifiable, Hashable {
     public var books: [NovelBook]
-    public var id: String { books[0].match }
+    /// The first book's `match`, worked out once: search looks up every book every source answers with by it.
+    public let id: String
+    /// The first book's title and author as `match` reads them, for ranking.
+    let name: String, author: String
     public var book: NovelBook { books[0] }
-    public init(books: [NovelBook]) { self.books = books }
+    public init(books: [NovelBook]) {
+        self.books = books
+        name = NovelBook.normalized(books[0].name)
+        author = NovelBook.normalized(books[0].author)
+        id = name + "|" + author
+    }
 }
 
 /// Books from their sources, through NovelRuntime, with tables of contents and chapters kept on disk.
@@ -95,28 +103,32 @@ public actor NovelBooks {
     /// Adds `found` to `hits`, joining books with the same title and author. Books whose name doesn't contain the
     /// keyword (some sources answer every search with their front page) go after the ones that do.
     public nonisolated static func merge(_ found: [NovelBook], into hits: inout [NovelSearchHit], keyword: String) {
+        // This runs on the main thread after every source's answer. Each title is normalized once, not again for every
+        // comparison: with a few thousand results from a few hundred sources that took seconds per answer, and the
+        // watchdog ended the app (1b60dff9c5c8).
         let wanted = NovelBook.normalized(keyword)
+        var position = Dictionary(hits.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
         for book in found where !book.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !book.url.isEmpty {
-            if let index = hits.firstIndex(where: { $0.id == book.match }) {
+            let hit = NovelSearchHit(books: [book])
+            if let index = position[hit.id] {
                 if !hits[index].books.contains(where: { $0.sourceKey == book.sourceKey }) { hits[index].books.append(book) }
             } else {
-                hits.append(NovelSearchHit(books: [book]))
+                position[hit.id] = hits.count
+                hits.append(hit)
             }
         }
         func rank(_ hit: NovelSearchHit) -> Int {
-            let name = NovelBook.normalized(hit.book.name)
-            if name == wanted { return 0 }
-            if name.hasPrefix(wanted) { return 1 }
-            if name.contains(wanted) || NovelBook.normalized(hit.book.author) == wanted { return 2 }
+            if hit.name == wanted { return 0 }
+            if hit.name.hasPrefix(wanted) { return 1 }
+            if hit.name.contains(wanted) || hit.author == wanted { return 2 }
             return 3
         }
         // Stable: within a rank, more sources first, then the order they arrived in.
-        hits = hits.enumerated().sorted { a, b in
-            let ra = rank(a.element), rb = rank(b.element)
-            if ra != rb { return ra < rb }
-            if a.element.books.count != b.element.books.count { return a.element.books.count > b.element.books.count }
+        hits = hits.enumerated().map { (rank: rank($1), offset: $0, hit: $1) }.sorted { a, b in
+            if a.rank != b.rank { return a.rank < b.rank }
+            if a.hit.books.count != b.hit.books.count { return a.hit.books.count > b.hit.books.count }
             return a.offset < b.offset
-        }.map(\.element)
+        }.map(\.hit)
     }
 
     // MARK: Explore
