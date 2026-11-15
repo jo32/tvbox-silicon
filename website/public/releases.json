@@ -1,6 +1,110 @@
 {
   "releases": [
     {
+      "version": "1.8.22",
+      "build": 60,
+      "date": "2026-11-15",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "swatchpalette",
+          "title": {
+            "en": "Color themes",
+            "zh-Hans": "配色主题",
+            "zh-Hant": "配色主題",
+            "ja": "カラーテーマ"
+          },
+          "detail": {
+            "en": "Settings › Color Theme gives Yingxia new colors: Classic, ten one-color themes, and eight mixed themes that color each part of the window differently. On iPhone, iPad and Mac, Custom lets you pick every color yourself, starting from any theme.",
+            "zh-Hans": "在“设置 › 配色主题”中为映匣换上新配色：经典、十种单色主题，以及为窗口各部分分别上色的八种混合主题。在 iPhone、iPad 和 Mac 上，还可以选“自定”，从任意主题出发亲自挑选每一种颜色。",
+            "zh-Hant": "在「設定 › 配色主題」中為映匣換上新配色：經典、十種單色主題，以及為視窗各部分分別上色的八種混合主題。在 iPhone、iPad 和 Mac 上，還可以選「自訂」，從任一主題出發親自挑選每一種顏色。",
+            "ja": "「設定 › カラーテーマ」で映匣の配色を変えられます。クラシック、10 種類の単色テーマ、ウインドウの部分ごとに色を変える 8 種類のミックステーマがあります。iPhone、iPad、Mac では「カスタム」で、好きなテーマを元にすべての色を自分で選べます。"
+          }
+        },
+        {
+          "symbol": "app.badge",
+          "title": {
+            "en": "New app icons, on Apple TV too",
+            "zh-Hans": "全新应用图标，Apple TV 也能换",
+            "zh-Hant": "全新 App 圖像，Apple TV 也能換",
+            "ja": "新しいアプリアイコン、Apple TV でも"
+          },
+          "detail": {
+            "en": "Pocket is Yingxia's new icon, and Settings › App Icon offers 19 to choose from, including Seal, Shiba, Cat and Friends. Apple TV can now change its icon too, with each one drawn wide and layered for the Home Screen.",
+            "zh-Hans": "“口袋”是映匣的新图标；在“设置 › 应用图标”中有 19 款可选，包括海豹、柴犬、猫咪和小伙伴。现在 Apple TV 也能更换图标，每款都为主屏幕重新绘制成带层次的宽版。",
+            "zh-Hant": "「口袋」是映匣的新圖像；在「設定 › App 圖像」中有 19 款可選，包括海豹、柴犬、貓咪和小夥伴。現在 Apple TV 也能更換圖像，每款都為主畫面重新繪製成帶層次的寬版。",
+            "ja": "映匣の新しいアイコンは「ポケット」です。「設定 › アプリアイコン」ではアザラシ、柴犬、ネコ、なかまなど 19 種類から選べます。Apple TV でもアイコンを変えられるようになり、どれもホーム画面用に奥行きのある横長で描き直しました。"
+          }
+        },
+        {
+          "symbol": "play.rectangle",
+          "title": {
+            "en": "A calmer player",
+            "zh-Hans": "更清爽的播放器",
+            "zh-Hant": "更清爽的播放器",
+            "ja": "すっきりしたプレーヤー"
+          },
+          "detail": {
+            "en": "While a video loads, its cover fills the player, softly blurred, and the picture appears the moment it's ready. On Mac, iPhone and iPad the player's buttons sit together in one glass bar, and on iPhone and iPad a speed button beside the seek bar picks from 0.25× to 4×.",
+            "zh-Hans": "视频加载时，封面会模糊铺满整个播放器，画面一就绪便立刻出现。在 Mac、iPhone 和 iPad 上，播放器的按钮合并在一条玻璃栏中；在 iPhone 和 iPad 上，进度条旁新增速度按钮，可选 0.25× 到 4×。",
+            "zh-Hant": "影片載入時，封面會模糊鋪滿整個播放器，畫面一就緒便立刻出現。在 Mac、iPhone 和 iPad 上，播放器的按鈕合併在一條玻璃欄中；在 iPhone 和 iPad 上，進度列旁新增速度按鈕，可選 0.25× 到 4×。",
+            "ja": "動画の読み込み中は、カバー画像がぼかされてプレーヤー全体に広がり、映像の準備ができるとすぐに切り替わります。Mac、iPhone、iPad ではプレーヤーのボタンが 1 本のガラスのバーにまとまり、iPhone と iPad ではシークバーの横の速度ボタンで 0.25× から 4× まで選べます。"
+          }
+        },
+        {
+          "symbol": "icloud",
+          "title": {
+            "en": "Cloud drive videos start and seek faster",
+            "zh-Hans": "云盘视频起播、跳转更快",
+            "zh-Hant": "雲端硬碟影片起播、跳轉更快",
+            "ja": "クラウドドライブの動画の再生開始とシークが速く"
+          },
+          "detail": {
+            "en": "Videos from cloud drives start, resume and seek sooner: playback begins as the first bytes arrive instead of waiting for whole chunks, and resuming where you left off no longer reads the file from the start first.",
+            "zh-Hans": "云盘中的视频起播、续播和跳转都更快：收到第一批数据就开始播放，不再等整块下载完；从上次的位置继续播放时，也不会先从文件开头读起。",
+            "zh-Hant": "雲端硬碟中的影片起播、續播和跳轉都更快：收到第一批資料就開始播放，不再等整塊下載完；從上次的位置繼續播放時，也不會先從檔案開頭讀起。",
+            "ja": "クラウドドライブの動画の再生開始、続きからの再生、シークが速くなりました。データ全体を待たず最初の数バイトが届いた時点で再生が始まり、続きから再生するときにファイルの先頭から読み込むこともなくなりました。"
+          }
+        },
+        {
+          "symbol": "macwindow",
+          "title": {
+            "en": "Mac player window",
+            "zh-Hans": "Mac 播放器窗口",
+            "zh-Hant": "Mac 播放器視窗",
+            "ja": "Mac のプレーヤーウインドウ"
+          },
+          "detail": {
+            "en": "Hold Shift while dragging the player window's edge to give it any shape; a plain drag keeps the video's shape. The speed you pick now stays when the next episode starts.",
+            "zh-Hans": "拖动播放器窗口边缘时按住 Shift，即可调整成任意形状；直接拖动则保持视频比例。选好的播放速度在下一集开始时也会保留。",
+            "zh-Hant": "拖曳播放器視窗邊緣時按住 Shift，即可調整成任意形狀；直接拖曳則保持影片比例。選好的播放速度在下一集開始時也會保留。",
+            "ja": "Shift キーを押しながらプレーヤーウインドウの端をドラッグすると自由な形に変えられます。普通にドラッグすると動画の縦横比を保ちます。選んだ再生速度は次のエピソードでもそのままです。"
+          },
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "Danmaku now lasts to the end of long, busy episodes. A custom danmaku server address can be saved on iPhone and iPad again. The Apple TV player no longer shows look-alike buttons or a second Chapters tab. Novel search answers arrive faster.",
+            "zh-Hans": "热门长剧集的弹幕现在能一直持续到结尾。在 iPhone 和 iPad 上又可以保存自定义弹幕服务器地址了。Apple TV 播放器不再显示外观相似的重复按钮和第二个“章节”标签。小说搜索结果出现得更快。",
+            "zh-Hant": "熱門長劇集的彈幕現在能一直持續到結尾。在 iPhone 和 iPad 上又可以儲存自訂彈幕伺服器位址了。Apple TV 播放器不再顯示外觀相似的重複按鈕和第二個「章節」標籤。小說搜尋結果出現得更快。",
+            "ja": "コメントの多い長いエピソードでも、弾幕が最後まで流れるようになりました。iPhone と iPad でカスタムの弾幕サーバーアドレスを再び保存できます。Apple TV のプレーヤーに似たボタンや 2 つ目の「チャプター」タブが表示されなくなりました。小説の検索結果が速く表示されます。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.21",
       "build": 59,
       "date": "2026-11-15",
