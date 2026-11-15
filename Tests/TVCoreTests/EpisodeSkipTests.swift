@@ -10,18 +10,23 @@ import Testing
     #expect(EpisodeSkipSettings.parseTime("1:02:03") == 3723)
     let valid = EpisodeSkipSettings(enabled: true, introEnd: 90, outroLength: 120)
     #expect(valid.validationError(duration: 2700) == nil)
-    for length in [0.0, .infinity, .nan, 119] {
+    for length in [0.0, .infinity, .nan] {
         #expect(valid.validationError(duration: length) != nil)
     }
-    #expect(EpisodeSkipSettings(enabled: true, introEnd: 301).validationError(duration: 2700) != nil)
+    // No limits on their length (#1003): a short anime episode's long opening, a long intro, a short video.
+    #expect(EpisodeSkipSettings(enabled: true, introEnd: 90, outroLength: 90).validationError(duration: 720) == nil)
+    #expect(EpisodeSkipSettings(enabled: true, introEnd: 301).validationError(duration: 2700) == nil)
+    #expect(EpisodeSkipSettings(enabled: true, introEnd: 20, outroLength: 30).validationError(duration: 90) == nil)
+    // Only an intro that runs into the outro is refused.
+    #expect(EpisodeSkipSettings(enabled: true, introEnd: 60, outroLength: 30).validationError(duration: 90) != nil)
     // Apple TV sets them at the place playing (#808), which also switches skipping on; a place the rules refuse is nil.
     let marked = EpisodeSkipSettings().marking(intro: true, at: 90.6, duration: 2700)?.marking(intro: false, at: 2580, duration: 2700)
     #expect(marked == EpisodeSkipSettings(enabled: true, introEnd: 90, outroLength: 120))
-    #expect(EpisodeSkipSettings().marking(intro: true, at: 301, duration: 2700) == nil)
-    #expect(EpisodeSkipSettings().marking(intro: false, at: 1000, duration: 2700) == nil)
+    #expect(EpisodeSkipSettings().marking(intro: true, at: 301, duration: 2700) == EpisodeSkipSettings(enabled: true, introEnd: 301))
+    #expect(EpisodeSkipSettings(introEnd: 1200).marking(intro: false, at: 1000, duration: 2700) == nil)
     #expect(EpisodeSkipSettings().marking(intro: true, at: 10, duration: .nan) == nil)
-    #expect(EpisodeSkipSettings(enabled: true, outroLength: 601).validationError(duration: 2700) != nil)
-    #expect(EpisodeSkipSettings(enabled: true, introEnd: 120, outroLength: 120).validationError(duration: 480) != nil)
+    #expect(EpisodeSkipSettings(enabled: true, outroLength: 601).validationError(duration: 2700) == nil)
+    #expect(EpisodeSkipSettings(enabled: true, introEnd: 120, outroLength: 120).validationError(duration: 480) == nil)
     #expect(EpisodeSkipSettings(enabled: true, introEnd: .nan).validationError(duration: 2700) != nil)
 }
 
@@ -89,4 +94,23 @@ import Testing
         #expect(pass.target(time: 0, duration: duration, playing: true, settings: settings) == nil)
         #expect(pass.target(time: duration - 1, duration: duration, playing: true, settings: settings) == nil)
     }
+}
+
+@Test func theOutroCountsDownAndCanBeKept() {
+    let settings = EpisodeSkipSettings(enabled: true, introEnd: 90, outroLength: 120)
+    var pass = EpisodeSkipPass()
+    // Five seconds before the outro starts at 2580, the countdown shows; it is gone once skipped.
+    #expect(pass.outroCountdown(time: 2570, duration: 2700, settings: settings) == nil)
+    #expect(pass.outroCountdown(time: 2576, duration: 2700, settings: settings) == 4)
+    #expect(pass.target(time: 2580, duration: 2700, playing: true, settings: settings) == 2699.95)
+    #expect(pass.outroCountdown(time: 2579, duration: 2700, settings: settings) == nil)
+    // Kept: no countdown and no skip this time through.
+    var kept = EpisodeSkipPass()
+    kept.keepOutro()
+    #expect(kept.outroCountdown(time: 2576, duration: 2700, settings: settings) == nil)
+    #expect(kept.target(time: 0, duration: 2700, playing: true, settings: settings) == 90)
+    #expect(kept.target(time: 2590, duration: 2700, playing: true, settings: settings) == nil)
+    // Off, or without an outro time, nothing counts down.
+    #expect(EpisodeSkipPass().outroCountdown(time: 2576, duration: 2700, settings: EpisodeSkipSettings(introEnd: 90, outroLength: 120)) == nil)
+    #expect(EpisodeSkipPass().outroCountdown(time: 2696, duration: 2700, settings: EpisodeSkipSettings(enabled: true, introEnd: 90)) == nil)
 }

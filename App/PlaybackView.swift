@@ -35,6 +35,16 @@ import IOKit.pwr_mgt
     private(set) var sourceSkips: [PlaybackSkip] = []
     private(set) var skipOffer: PlaybackSkip?
     private var skippedSource = Set<PlaybackSkip>()
+    /// What the player says about the viewer's intro and outro times (#1003): the intro it just skipped, which Undo
+    /// plays after all, or the seconds left before it skips the outro, which Cancel keeps.
+    enum SkipNotice: Equatable {
+        case introSkipped(from: Double)
+        case outroIn(seconds: Int)
+    }
+    private(set) var skipNotice: SkipNotice?
+    private var introNoticeUntil: Date?
+    /// How long the intro's notice stays.
+    private static let introNoticeLength: TimeInterval = 6
     /// The episode's chapters (Bilibili's 分段章节), for the player's Chapters menu and Apple TV's chapter markers.
     private(set) var chapters: [PlaybackChapter] = []
     /// The Bilibili part playing, whose progress goes back to the signed-in account.
@@ -49,6 +59,37 @@ import IOKit.pwr_mgt
         let target = length.isFinite && skip.end >= length - 1 ? max(0, length - 0.05) : skip.end
         Diagnostics.shared.record(.info, "player", "skip source \(skip.kind.rawValue) to=\(Int(target))")
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    /// Plays the intro after all, from where it was skipped.
+    func undoIntroSkip() {
+        guard case .introSkipped(let from) = skipNotice else { return }
+        skipNotice = nil; introNoticeUntil = nil
+        Diagnostics.shared.record(.info, "player", "skip intro undone")
+        jump(to: from)
+    }
+
+    /// Plays this episode's outro rather than skipping it.
+    func keepOutro() {
+        skipPass.keepOutro()
+        skipNotice = nil
+        Diagnostics.shared.record(.info, "player", "skip outro kept")
+    }
+
+    private func showIntroSkipped(from time: Double) {
+        skipNotice = .introSkipped(from: time)
+        introNoticeUntil = Date().addingTimeInterval(Self.introNoticeLength)
+    }
+
+    /// The intro's notice until it times out, else the outro's countdown; assigned only when it changes.
+    private func updateSkipNotice(time: Double, duration: Double) {
+        var notice = skipNotice
+        if case .introSkipped = notice, (introNoticeUntil ?? .distantPast) <= Date() { notice = nil; introNoticeUntil = nil }
+        if case .introSkipped = notice {} else {
+            notice = skipPass.outroCountdown(time: time, duration: duration, settings: skipSettings)
+                .map { .outroIn(seconds: max(1, Int($0.rounded(.up)))) }
+        }
+        if notice != skipNotice { skipNotice = notice }
     }
 
     /// Plays from `seconds`, as a chapter in the Chapters menu does.
@@ -133,6 +174,7 @@ import IOKit.pwr_mgt
         guard skipScope != nil, !editingSkip, !seekingSegment, pendingResume == nil, !restoringPosition,
               item.status == .readyToPlay else { return }
         updateSourceSkip(time: time)
+        updateSkipNotice(time: time, duration: length)
         var pass = skipPass
         guard let target = pass.target(time: time, duration: length, playing: player.rate > 0, settings: skipSettings) else {
             skipPass = pass
@@ -140,6 +182,8 @@ import IOKit.pwr_mgt
         }
         guard item.seekableTimeRanges.contains(where: { CMTimeRangeContainsTime($0.timeRangeValue, time: CMTime(seconds: target, preferredTimescale: 600)) }) else { return }
         skipPass = pass
+        // The intro skipped says so, with Undo, rather than jump without a word; the outro had its countdown.
+        if time < skipSettings.introEnd, target == skipSettings.introEnd { showIntroSkipped(from: time) } else { skipNotice = nil }
         seekingSegment = true
         let activeGeneration = generation
         Diagnostics.shared.record(.info, "player", "skip segment from=\(Int(time)) to=\(Int(target))")
@@ -189,6 +233,8 @@ import IOKit.pwr_mgt
     private var upcomingObservation: NSKeyValueObservation?
     /// Whether this episode has already tried to queue the next one (once each, even when that failed).
     private var upcomingAttempted = false
+    /// The queued episode was moved past its intro before it played: it says so once it does.
+    private var upcomingSkippedIntro = false
     /// The queue moves past this episode because the next one was asked for, not because it ended.
     private var skipsToUpcoming = false
     /// The episode the queue moved on to, which `start` then finds already playing.
@@ -1284,6 +1330,7 @@ import IOKit.pwr_mgt
         historyContext = nil; pendingResume = nil; restoringPosition = false
         requestedResumePosition = nil; restoredPosition = nil
         skipScope = nil; skipSettings = EpisodeSkipSettings(); skipPass = EpisodeSkipPass()
+        skipNotice = nil; introNoticeUntil = nil
         position = 0; duration = 0; editingSkip = false; resumeAfterEditing = false; seekingSegment = false
         sourceSkips = []; skipOffer = nil; skippedSource = []; chapters = []; bilibiliPart = nil
         onPlaybackEnded = nil; onUnplayableFile = nil
@@ -1329,6 +1376,7 @@ import IOKit.pwr_mgt
         skipScope = channel.skipScope
         skipSettings = skipScope.map { EpisodeSkipSettings.load(scope: $0, defaults: skipDefaults) } ?? EpisodeSkipSettings()
         skipPass = EpisodeSkipPass(); seekingSegment = false
+        skipNotice = nil; introNoticeUntil = nil
         sourceSkips = channel.skips; skipOffer = nil; skippedSource = []; chapters = []
         bilibiliPart = channel.bilibiliPart
         position = 0; duration = 0
@@ -1622,6 +1670,7 @@ extension PlaybackSession {
                         if let intro, intro.enabled, intro.introEnd > 0,
                            intro.validationError(duration: queued.duration.seconds) == nil, queued.currentTime().seconds < intro.introEnd {
                             queued.seek(to: CMTime(seconds: intro.introEnd, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero, completionHandler: nil)
+                            self.upcomingSkippedIntro = true
                         }
                     }
                 }
@@ -1633,7 +1682,7 @@ extension PlaybackSession {
     /// The episode then ends paused and switches the ordinary way.
     fileprivate func discardUpcoming() {
         upcomingTask?.cancel(); upcomingTask = nil
-        upcomingObservation = nil
+        upcomingObservation = nil; upcomingSkippedIntro = false
         player.actionAtItemEnd = .pause
         guard let upcoming else { return }
         self.upcoming = nil
@@ -1694,6 +1743,8 @@ extension PlaybackSession {
                 self.sourceDanmaku = comments
             }
         }
+        if upcomingSkippedIntro { showIntroSkipped(from: 0) }
+        upcomingSkippedIntro = false
         advanced = channel
         onAdvance?(channel)
     }

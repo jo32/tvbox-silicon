@@ -578,11 +578,11 @@
 "This danmaku server requires authorization. Choose a compatible public or self-hosted server." = "此弹幕服务需要授权，请使用兼容的公开服务或自建服务。";
 "The danmaku server could not complete this request. Try another server." = "弹幕服务无法完成请求，请尝试其他服务。";
 "Wait for the video duration. Live streams cannot use skipping." = "请等待视频时长加载，直播不支持片头片尾跳过。";
-"Skipping is available for videos at least two minutes long." = "仅支持时长不少于两分钟的视频。";
 "Enter a valid time such as 01:30." = "请输入有效时间，例如 01:30。";
-"The intro cannot exceed five minutes or a quarter of the video." = "片头最多五分钟，且不能超过视频时长的四分之一。";
-"The outro cannot exceed ten minutes or a quarter of the video." = "片尾最多十分钟，且不能超过视频时长的四分之一。";
-"Keep at least 60% of the video as main content." = "请至少保留 60% 的视频作为正片。";
+"The intro must end before the outro starts." = "片头结束时间需早于片尾开始时间。";
+"Intro skipped" = "已为你跳过片头";
+"Undo" = "撤销";
+"Skipping the outro in %@ s" = "%@ 秒后为你跳过片尾";
 "Automatically skip intro and outro" = "自动跳过片头片尾";
 "Intro ends at" = "片头结束位置";
 "Outro starts at" = "片尾开始位置";

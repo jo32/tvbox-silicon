@@ -10,16 +10,13 @@ public struct EpisodeSkipSettings: Codable, Equatable, Sendable {
         self.enabled = enabled; self.introEnd = introEnd; self.outroLength = outroLength
     }
 
-    public static func introLimit(_ duration: Double) -> Double { min(300, duration / 4) }
-    public static func outroLimit(_ duration: Double) -> Double { min(600, duration / 4) }
-
+    /// Any times the video has room for, as long as the intro ends before the outro starts. Limits on their length
+    /// (five minutes, a quarter of the video, 60% left between) refused the right times for short episodes, such as
+    /// an anime's 90-second opening in a 12-minute episode (#1003).
     public func validationError(duration: Double) -> String? {
         guard duration.isFinite, duration > 0 else { return L10n.text("Wait for the video duration. Live streams cannot use skipping.") }
-        guard duration >= 120 else { return L10n.text("Skipping is available for videos at least two minutes long.") }
         guard introEnd.isFinite, outroLength.isFinite, introEnd >= 0, outroLength >= 0 else { return L10n.text("Enter a valid time such as 01:30.") }
-        guard introEnd <= Self.introLimit(duration) else { return L10n.text("The intro cannot exceed five minutes or a quarter of the video.") }
-        guard outroLength <= Self.outroLimit(duration) else { return L10n.text("The outro cannot exceed ten minutes or a quarter of the video.") }
-        guard duration - introEnd - outroLength >= max(60, duration * 0.6) else { return L10n.text("Keep at least 60% of the video as main content.") }
+        guard introEnd + outroLength < duration else { return L10n.text("The intro must end before the outro starts.") }
         return nil
     }
 
@@ -89,9 +86,23 @@ public struct EpisodeSkipSettings: Codable, Equatable, Sendable {
 /// Each segment is skipped once per play-through. Rewinding manually never traps the viewer
 /// in an automatic seek loop; restarting playback or applying new settings starts a new pass.
 public struct EpisodeSkipPass: Sendable {
+    /// How long before the outro the player counts down to skipping it, so the viewer can keep it (#1003).
+    public static let outroWarning = 5.0
     private var introHandled = false
     private var outroHandled = false
     public init() {}
+
+    /// Seconds until the outro is skipped, while that is `outroWarning` or less; nil before then, and once it is
+    /// skipped or kept.
+    public func outroCountdown(time: Double, duration: Double, settings: EpisodeSkipSettings) -> Double? {
+        guard !outroHandled, settings.enabled, settings.outroLength > 0, time.isFinite,
+              settings.validationError(duration: duration) == nil else { return nil }
+        let left = duration - settings.outroLength - time
+        return left > 0 && left <= Self.outroWarning ? left : nil
+    }
+
+    /// The viewer keeps this play-through's outro.
+    public mutating func keepOutro() { outroHandled = true }
 
     public mutating func target(time: Double, duration: Double, playing: Bool, settings: EpisodeSkipSettings) -> Double? {
         guard playing, time.isFinite, time >= 0, time <= duration, settings.enabled,
