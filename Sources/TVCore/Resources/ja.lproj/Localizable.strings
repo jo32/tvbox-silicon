@@ -1014,8 +1014,15 @@
 "Subtitles" = "字幕";
 "Playback Speed" = "再生速度";
 "Fill Screen" = "画面いっぱいに表示";
-"Back 10 seconds" = "10 秒戻る";
-"Forward 10 seconds" = "10 秒進む";
+"Back %@ seconds" = "%@ 秒戻る";
+"Forward %@ seconds" = "%@ 秒進む";
+"Picture Size" = "画面サイズ";
+"Fit" = "全体を表示";
+"Fill" = "画面いっぱい";
+"Stretch" = "引き伸ばす";
+"Show Time and Battery" = "時刻とバッテリーを表示";
+"Skip Interval" = "スキップ間隔";
+"Double-tap the left or right of the video to skip forward or back. Turn this off and a double tap plays or pauses instead." = "動画の左側または右側をダブルタップすると早送り・早戻しします。オフにすると、ダブルタップで再生/一時停止になります。";
 "Half-Speed Scrubbing" = "半速スクラブ";
 "Quarter-Speed Scrubbing" = "1/4速スクラブ";
 "Fine Scrubbing" = "微調整スクラブ";
@@ -1780,7 +1787,6 @@
 "The archive holds no SRT, WebVTT or ASS files." = "アーカイブに SRT、WebVTT、ASS ファイルがありません。";
 "None of the archive's files is for this episode." = "アーカイブにこのエピソードのファイルがありません。";
 "Double-Tap to Skip" = "ダブルタップでスキップ";
-"Double-tap the left or right of the video to skip 10 seconds. Turn this off and a double tap plays or pauses instead." = "動画の左側または右側をダブルタップすると10秒スキップします。オフにすると、ダブルタップで再生/一時停止になります。";
 "Skip Ad Segments" = "広告セグメントをスキップ";
 "Turn Off" = "オフにする";
 "Turn On" = "オンにする";

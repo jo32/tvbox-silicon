@@ -58,3 +58,15 @@ import Testing
     #expect(PictureLevel.slides(fromY: 400, height: 800))
     #expect(!PictureLevel.slides(fromY: 780, height: 800))
 }
+
+@Test func doubleTapsSkipTheChosenInterval() {
+    var taps = PictureTaps()
+    #expect(taps.tap(at: 0, in: .back, step: 30) == .toggleControls)
+    #expect(taps.tap(at: 0.2, in: .back, step: 30) == .skip(seconds: -30, total: 30, first: true))
+    #expect(taps.tap(at: 0.7, in: .back, step: 30) == .skip(seconds: -30, total: 60, first: false))
+    // The skip buttons' symbols exist for each choice; anything else stored skips 10 seconds.
+    #expect(SkipInterval.seconds(45) == 45)
+    #expect(SkipInterval.seconds(7) == 10)
+    #expect(SkipInterval.symbol(forward: true, seconds: 5) == "goforward.5")
+    #expect(SkipInterval.symbol(forward: false, seconds: 0) == "gobackward.10")
+}

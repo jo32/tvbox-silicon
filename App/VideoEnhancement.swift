@@ -283,6 +283,8 @@ private protocol EnhancementEngine: AnyObject, Sendable {
 struct EnhancedVideoSurface: View {
     let enhancer: VideoEnhancer
     var fills = false
+    /// Stretched to the view's shape (the iPhone and iPad player's Stretch).
+    var stretches = false
     /// Whether AVKit's picture runs under the safe areas, as it does on a screen of its own. At the top of an iPhone
     /// watch page it keeps to its frame, so the enhanced picture must too.
     var bleeds = true
@@ -291,17 +293,17 @@ struct EnhancedVideoSurface: View {
             // The same area as AVKit's own picture: inside the safe area (under the Mac's title bar) the fitted
             // picture came out smaller than AVKit's, and under the status bar above a watch page's player it came out
             // taller and higher; either way AVKit's picture showed around its edges.
-            Host(enhancer: enhancer, fills: fills).ignoresSafeArea(edges: bleeds ? .all : []).allowsHitTesting(false).accessibilityHidden(true)
+            Host(enhancer: enhancer, gravity: stretches ? .resize : fills ? .resizeAspectFill : .resizeAspect).ignoresSafeArea(edges: bleeds ? .all : []).allowsHitTesting(false).accessibilityHidden(true)
         }
     }
 
     #if os(macOS)
     private struct Host: NSViewRepresentable {
         let enhancer: VideoEnhancer
-        let fills: Bool
+        let gravity: AVLayerVideoGravity
         func makeNSView(context: Context) -> SurfaceView { SurfaceView(enhancer: enhancer) }
         func updateNSView(_ view: SurfaceView, context: Context) {
-            enhancer.layer.videoGravity = fills ? .resizeAspectFill : .resizeAspect
+            enhancer.layer.videoGravity = gravity
         }
     }
 
@@ -335,10 +337,10 @@ struct EnhancedVideoSurface: View {
     #else
     private struct Host: UIViewRepresentable {
         let enhancer: VideoEnhancer
-        let fills: Bool
+        let gravity: AVLayerVideoGravity
         func makeUIView(context: Context) -> SurfaceView { SurfaceView(enhancer: enhancer) }
         func updateUIView(_ view: SurfaceView, context: Context) {
-            enhancer.layer.videoGravity = fills ? .resizeAspectFill : .resizeAspect
+            enhancer.layer.videoGravity = gravity
         }
     }
 

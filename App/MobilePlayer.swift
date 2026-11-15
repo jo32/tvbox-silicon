@@ -39,7 +39,11 @@ struct MobilePlayerView: View {
     @State private var asksSubtitleAddress = false
     @State private var searchesSubtitles = false
     @State private var nowPlaying = VideoNowPlaying()
-    @State private var fillsScreen = false
+    /// Fit, Fill or Stretch; kept for the next video, as other players do.
+    @AppStorage(VideoFill.key) private var videoFill = VideoFill.fit
+    /// The time and battery in the full-screen controls (#996).
+    @AppStorage(PlayerStatusBadge.key) private var showsStatus = true
+    @AppStorage(SkipInterval.key) private var skipInterval = SkipInterval.standard
     @State private var speed: Float = 1
     @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @State private var showsDanmakuList = false
@@ -90,17 +94,17 @@ struct MobilePlayerView: View {
 
     var body: some View {
         ZStack {
-            PlayerLayerView(player: session.player, fills: fillsScreen, pip: pip).playerBleed(!inline)
+            PlayerLayerView(player: session.player, gravity: videoFill.gravity, pip: pip).playerBleed(!inline)
                 // Picture in Picture shows only the player's layer, so AVPlayer draws the subtitles there.
                 .onChange(of: pip.active) { _, active in session.subtitles.native = active }
             // The enhanced picture covers the layer's own, under everything else.
-            EnhancedVideoSurface(enhancer: session.enhancer, fills: fillsScreen, bleeds: !inline)
+            EnhancedVideoSurface(enhancer: session.enhancer, fills: videoFill == .fill, stretches: videoFill == .stretch, bleeds: !inline)
             if showsDanmaku && !session.danmaku.isEmpty {
                 DanmakuOverlay(player: session.player, comments: session.danmaku, opacity: session.danmakuOpacity, revision: session.danmakuRevision)
                     // Across the whole width, but below the Dynamic Island and above the home indicator when upright.
                     .playerBleed(!inline, edges: .horizontal)
             }
-            SubtitleOverlay(cues: session.subtitles, fills: fillsScreen).playerBleed(!inline)
+            SubtitleOverlay(cues: session.subtitles, fills: videoFill == .fill, stretches: videoFill == .stretch).playerBleed(!inline)
             // The artwork dissolves into the first frame.
             if let waiting {
                 if inline {
@@ -121,7 +125,7 @@ struct MobilePlayerView: View {
             // Two taps on a side skip, touching and holding plays faster, and sliding sideways seeks.
             PictureGestures(tap: tapped, hold: held, swipe: swiped, levels: slidesLevels) { wider in
                 guard !locked else { return }
-                withAnimation(.easeInOut(duration: 0.25)) { fillsScreen = wider }
+                withAnimation(.easeInOut(duration: 0.25)) { videoFill = wider ? .fill : .fit }
             }
             .playerBleed(!inline)
             // Moved to its new frame at once, not animated with a watch page going full screen: on iOS 26 the animated
@@ -190,7 +194,8 @@ struct MobilePlayerView: View {
         .sensoryFeedback(.impact(weight: .medium), trigger: locked)
         // Full screen, the clock and battery come and go with the controls, as in the TV app, so a long video doesn't
         // hide the time (#901); locked, the picture keeps the screen to itself. A watch page shows them above it.
-        .statusBarHidden(!inline && (!chromeVisible || locked))
+        // Where the controls have their own (`statusBadge`), the status bar stays hidden rather than say it twice.
+        .statusBarHidden(!inline && (!chromeVisible || locked || statusBadge))
         // A failure, or a watch page's player back from full screen, has controls to reach.
         .onChange(of: session.error != nil || inline) { _, unlock in if unlock { setLocked(false) } }
         .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, search: $searchesSubtitles, subtitles: session.externalSubtitles)
@@ -237,7 +242,7 @@ struct MobilePlayerView: View {
             return
         }
         let zone = PictureTaps.zone(x: x, width: width, seekable: doubleTapSkips && seekable && showsTransport && playingOn == nil && !pip.active)
-        switch taps.tap(at: ProcessInfo.processInfo.systemUptime, in: zone) {
+        switch taps.tap(at: ProcessInfo.processInfo.systemUptime, in: zone, step: SkipInterval.seconds(skipInterval)) {
         case .toggleControls:
             let showing = !chromeVisible
             toggleChrome()
@@ -398,7 +403,7 @@ struct MobilePlayerView: View {
         if let skipped {
             // Glass like the other gesture labels, with the skip buttons' symbol; it bounces on each further tap.
             VStack(spacing: 4) {
-                Image(systemName: skipped.forward ? "goforward.10" : "gobackward.10")
+                Image(systemName: SkipInterval.symbol(forward: skipped.forward, seconds: skipInterval))
                     .font(.system(size: 30, weight: .medium))
                     .symbolEffect(.bounce, value: skipped.total)
                 Text((skipped.forward ? "+" : "\u{2212}") + L10n.text("%lld s", Int(skipped.total)))
@@ -637,10 +642,20 @@ struct MobilePlayerView: View {
                 .keyboardShortcut(.cancelAction)
             Text(channel.name).font(.headline).lineLimit(1)
                 .shadow(color: .black.opacity(0.6), radius: 4)
-            HStack(spacing: 0) { toolbar; optionsMenu }.chromeGroup()
+            HStack(spacing: 0) {
+                if statusBadge { PlayerStatusBadge() }
+                toolbar; optionsMenu
+            }
+            .chromeGroup()
         }
         .simultaneousGesture(TapGesture().onEnded { poke() })
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topRowHeight = $0 }
+    }
+
+    /// The time and battery at the start of the full-screen buttons (#996): on iPad, and on an iPhone held sideways,
+    /// which has no status bar; an iPhone held upright shows the status bar with the controls instead (#901).
+    private var statusBadge: Bool {
+        showsStatus && !inline && !(horizontalSizeClass == .compact && verticalSizeClass == .regular)
     }
 
     /// Over the seek bar, as in MiraPlay: the title's logo on the left and the video's tags on the right (#520).
@@ -782,8 +797,15 @@ struct MobilePlayerView: View {
                     .pickerStyle(.inline)
                 }
             }
-            Toggle(L10n.text("Fill Screen"), isOn: $fillsScreen)
+            Picker(selection: $videoFill) {
+                ForEach(VideoFill.allCases, id: \.self) { Label($0.title, systemImage: $0.symbol).tag($0) }
+            } label: { Label(L10n.text("Picture Size"), systemImage: "aspectratio") }
+            .pickerStyle(.menu)
+            .accessibilityIdentifier("player.videoFill")
             Toggle(L10n.text("Show Video Info"), isOn: $showsPlaybackInfo)
+            if !inline && !(horizontalSizeClass == .compact && verticalSizeClass == .regular) {
+                Toggle(L10n.text("Show Time and Battery"), isOn: $showsStatus)
+            }
         } label: {
             Image(systemName: "slider.horizontal.3").font(.headline).frame(width: 22, height: 22)
                 .symbolVariant(pictureSwitches && (upscalesVideo || smoothsVideo) ? .fill : .none)
@@ -804,9 +826,10 @@ struct MobilePlayerView: View {
     private var centerRow: some View {
         HStack(spacing: 20) {
             if seekable && !inline {
-                Button { session.skip(-10); sought() } label: { Image(systemName: "gobackward.10") }
+                let step = SkipInterval.seconds(skipInterval)
+                Button { session.skip(-step); sought() } label: { Image(systemName: SkipInterval.symbol(forward: false, seconds: step)) }
                     .buttonStyle(PlayerCircleStyle(size: 52))
-                    .accessibilityLabel(L10n.text("Back 10 seconds"))
+                    .accessibilityLabel(L10n.text("Back %@ seconds", String(Int(step))))
             }
             Button { session.togglePlayback() } label: {
                 // Swapped as the music player's is.
@@ -816,16 +839,19 @@ struct MobilePlayerView: View {
                 .accessibilityLabel(L10n.text(session.paused ? "Play" : "Pause"))
                 .accessibilityIdentifier("player.playPause")
             if seekable && !inline {
-                Button { session.skip(10); sought() } label: { Image(systemName: "goforward.10") }
+                let step = SkipInterval.seconds(skipInterval)
+                Button { session.skip(step); sought() } label: { Image(systemName: SkipInterval.symbol(forward: true, seconds: step)) }
                     .buttonStyle(PlayerCircleStyle(size: 52))
-                    .accessibilityLabel(L10n.text("Forward 10 seconds"))
+                    .accessibilityLabel(L10n.text("Forward %@ seconds", String(Int(step))))
             }
         }
         .simultaneousGesture(TapGesture().onEnded { poke() })
     }
 
     /// Previous and Next Episode, small and at the right of the time above the seek bar. Beside ±10 and play, a tap
-    /// that ran past +10 out of habit changed the episode. Then 选集, which opens the episodes in a sheet (#524).
+    /// that ran past +10 out of habit changed the episode. 选集 opens the episodes in a sheet (#524). Previous and Next
+    /// sit at the two ends of the group, with the rest between: side by side, a tap meant for one changed the channel
+    /// the other way (#1113).
     @ViewBuilder private var stepButtons: some View {
         let previous = store.step(back: true, from: channel, session: session)
         let next = store.step(back: false, from: channel, session: session)
@@ -836,19 +862,13 @@ struct MobilePlayerView: View {
         if speeds || previous != nil || next != nil || episodes || channels || toggleFullScreen != nil {
             // One glass capsule, as the top row's buttons (`chromeGroup`).
             HStack(spacing: 0) {
-                if speeds { speedButton }
                 if let previous {
                     Button { previous.go() } label: { Image(systemName: "backward.end.fill") }
                         .buttonStyle(PlayerCircleStyle(size: 36))
                         .disabled(previous.busy)
                         .accessibilityLabel(previous.title(back: true))
                 }
-                if let next {
-                    Button { next.go() } label: { Image(systemName: "forward.end.fill") }
-                        .buttonStyle(PlayerCircleStyle(size: 36))
-                        .disabled(next.busy)
-                        .accessibilityLabel(next.title(back: false))
-                }
+                if speeds { speedButton }
                 if episodes {
                     PlayerEpisodesButton(channel: channel, isPresented: $showsEpisodes) {
                         HStack(spacing: 6) {
@@ -881,6 +901,12 @@ struct MobilePlayerView: View {
                     .buttonStyle(PlayerCircleStyle(size: 36))
                     .accessibilityLabel(L10n.text(full ? "Exit Full Screen" : "Full Screen"))
                     .accessibilityIdentifier("player.fullScreen")
+                }
+                if let next {
+                    Button { next.go() } label: { Image(systemName: "forward.end.fill") }
+                        .buttonStyle(PlayerCircleStyle(size: 36))
+                        .disabled(next.busy)
+                        .accessibilityLabel(next.title(back: false))
                 }
             }
             .chromeGroup()
@@ -1092,6 +1118,8 @@ private struct SeekBar<Accessory: View>: View {
         let duration = clock.duration
         let value = min(max(0, position), duration)
         let x = duration > 0 ? width * value / duration : 0
+        // How far the video has loaded past the position (#900): a lighter part of the bar ahead of the played one.
+        let loaded = duration > 0 ? width * min(max(clock.buffered, value), duration) / duration : 0
         let held = drag != nil
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
@@ -1107,7 +1135,8 @@ private struct SeekBar<Accessory: View>: View {
                 // The played part is an overlay, so it never sizes the bar: at the very end it is the bar's whole
                 // measured width, and as a child it held the bar (and the watch page around it) at the landscape
                 // width after leaving Full Screen (#1008).
-                Capsule().fill(.white.opacity(0.3)).frame(height: held ? 6 : 4)
+                Capsule().fill(.white.opacity(0.25)).frame(height: held ? 6 : 4)
+                    .overlay(alignment: .leading) { Capsule().fill(.white.opacity(0.5)).frame(width: max(0, loaded)) }
                     .overlay(alignment: .leading) { Capsule().fill(.white).frame(width: max(0, x)) }
                 Circle().fill(.white)
                     .frame(width: held ? 24 : 14, height: held ? 24 : 14)
@@ -1380,7 +1409,7 @@ private struct PictureGestures: UIViewRepresentable {
 /// The picture in an AVPlayerLayer, which Picture in Picture takes over while it runs.
 private struct PlayerLayerView: UIViewRepresentable {
     let player: AVPlayer
-    let fills: Bool
+    let gravity: AVLayerVideoGravity
     let pip: PictureInPicture
     final class LayerView: UIView {
         override class var layerClass: AnyClass { AVPlayerLayer.self }
@@ -1394,7 +1423,101 @@ private struct PlayerLayerView: UIViewRepresentable {
     }
     func updateUIView(_ view: LayerView, context: Context) {
         if view.playerLayer.player !== player { view.playerLayer.player = player }
-        view.playerLayer.videoGravity = fills ? .resizeAspectFill : .resizeAspect
+        view.playerLayer.videoGravity = gravity
+    }
+}
+
+extension VideoFill {
+    var gravity: AVLayerVideoGravity {
+        switch self {
+        case .fit: .resizeAspect
+        case .fill: .resizeAspectFill
+        case .stretch: .resize
+        }
+    }
+    var title: String {
+        switch self {
+        case .fit: L10n.text("Fit")
+        case .fill: L10n.text("Fill")
+        case .stretch: L10n.text("Stretch")
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .fit: "rectangle.center.inset.filled"
+        case .fill: "arrow.up.left.and.arrow.down.right"
+        case .stretch: "arrow.left.and.right"
+        }
+    }
+}
+
+/// The time and the battery at the start of the full-screen buttons (#996). The battery is watched only while it
+/// shows; the simulator, which has none, shows the time alone.
+struct PlayerStatusBadge: View {
+    static let key = "player.showsTimeAndBattery"
+    @State private var battery = PlayerBattery()
+
+    var body: some View {
+        HStack(spacing: 6) {
+            TimelineView(.everyMinute) { context in
+                // As the status bar shows it: no AM or PM.
+                Text(context.date, format: .dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
+            }
+            if let level = battery.level {
+                HStack(spacing: 3) {
+                    Text(level, format: .percent.precision(.fractionLength(0)))
+                    Image(systemName: battery.symbol)
+                        .foregroundStyle(level <= 0.2 && !battery.charging ? .red : .white)
+                }
+            }
+        }
+        .font(.system(size: 14, weight: .semibold)).monospacedDigit()
+        .lineLimit(1).fixedSize()
+        .padding(.leading, 14).padding(.trailing, 6).frame(height: 44)
+        .onAppear { battery.start() }
+        .onDisappear { battery.stop() }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("player.status")
+    }
+}
+
+@MainActor @Observable final class PlayerBattery {
+    /// 0 to 1; nil where the device has no battery to report.
+    private(set) var level: Double?
+    private(set) var charging = false
+    @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    @ObservationIgnored private var enabledMonitoring = false
+
+    var symbol: String {
+        guard let level else { return "battery.100percent" }
+        if charging { return "battery.100percent.bolt" }
+        return level >= 0.875 ? "battery.100percent" : level >= 0.625 ? "battery.75percent"
+            : level >= 0.375 ? "battery.50percent" : level >= 0.125 ? "battery.25percent" : "battery.0percent"
+    }
+
+    func start() {
+        guard observers.isEmpty else { return }
+        let device = UIDevice.current
+        if !device.isBatteryMonitoringEnabled { device.isBatteryMonitoringEnabled = true; enabledMonitoring = true }
+        read()
+        for name in [UIDevice.batteryLevelDidChangeNotification, UIDevice.batteryStateDidChangeNotification] {
+            observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.read() }
+            })
+        }
+    }
+
+    func stop() {
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers = []
+        if enabledMonitoring { UIDevice.current.isBatteryMonitoringEnabled = false; enabledMonitoring = false }
+    }
+
+    private func read() {
+        let device = UIDevice.current
+        let value = device.batteryLevel
+        level = value < 0 || device.batteryState == .unknown ? nil : Double(value)
+        charging = device.batteryState == .charging || device.batteryState == .full
     }
 }
 
@@ -1451,8 +1574,12 @@ private struct PlayerLayerView: UIViewRepresentable {
     private(set) var item: AVPlayerItem?
     /// Where the seek bar is held, until the precise seek it ends with lands.
     private(set) var scrubbing: Double?
+    /// Where the loaded part around the position ends: the seek bar shows it ahead of the played part (#900).
+    private(set) var buffered: Double = 0
     @ObservationIgnored private weak var player: AVPlayer?
     @ObservationIgnored private var token: Any?
+    /// The item's loaded ranges, which grow while it is paused too.
+    @ObservationIgnored private var loading: NSKeyValueObservation?
 
     func attach(_ player: AVPlayer) {
         detach()
@@ -1467,6 +1594,7 @@ private struct PlayerLayerView: UIViewRepresentable {
     func detach() {
         if let token { player?.removeTimeObserver(token) }
         token = nil
+        loading = nil
     }
 
     /// The player's position now, read without waiting for the next tick.
@@ -1544,13 +1672,30 @@ private struct PlayerLayerView: UIViewRepresentable {
 
     private func tick(_ time: CMTime) {
         guard let player else { return }
-        if item !== player.currentItem { item = player.currentItem }
+        if item !== player.currentItem {
+            item = player.currentItem
+            buffered = 0
+            loading = item?.observe(\.loadedTimeRanges, options: [.new]) { [weak self] _, _ in
+                Task { @MainActor [weak self] in self?.measureLoaded() }
+            }
+        }
         let seconds = time.seconds
         position = seconds.isFinite ? max(0, seconds) : 0
         let length = player.currentItem?.duration.seconds ?? 0
         let finite = length.isFinite ? max(0, length) : 0
         // Observation reports every assignment, even of the same value; the duration rarely changes.
         if finite != duration { duration = finite }
+        measureLoaded()
+    }
+
+    /// Changed by a second or more, so the bar isn't redrawn for every few packets.
+    private func measureLoaded() {
+        guard let player, let item = player.currentItem else { return }
+        let now = player.currentTime()
+        let range = item.loadedTimeRanges.lazy.map(\.timeRangeValue).first { CMTimeRangeContainsTime($0, time: now) }
+        let end = range.map { CMTimeRangeGetEnd($0).seconds } ?? 0
+        let value = end.isFinite ? max(0, end) : 0
+        if abs(value - buffered) >= 1 || (value == 0) != (buffered == 0) { buffered = value }
     }
 }
 

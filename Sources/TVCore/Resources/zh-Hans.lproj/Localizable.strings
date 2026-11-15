@@ -1014,8 +1014,15 @@
 "Subtitles" = "字幕";
 "Playback Speed" = "播放速度";
 "Fill Screen" = "填满屏幕";
-"Back 10 seconds" = "后退 10 秒";
-"Forward 10 seconds" = "前进 10 秒";
+"Back %@ seconds" = "后退 %@ 秒";
+"Forward %@ seconds" = "前进 %@ 秒";
+"Picture Size" = "画面尺寸";
+"Fit" = "适应屏幕";
+"Fill" = "填满屏幕";
+"Stretch" = "拉伸";
+"Show Time and Battery" = "显示时间和电量";
+"Skip Interval" = "快进快退时长";
+"Double-tap the left or right of the video to skip forward or back. Turn this off and a double tap plays or pauses instead." = "双击视频左侧或右侧可快退或快进。关闭后，双击将改为播放或暂停。";
 "Half-Speed Scrubbing" = "半速拖动";
 "Quarter-Speed Scrubbing" = "四分之一速拖动";
 "Fine Scrubbing" = "精细拖动";
@@ -1780,7 +1787,6 @@
 "The archive holds no SRT, WebVTT or ASS files." = "压缩包里没有 SRT、WebVTT 或 ASS 文件。";
 "None of the archive's files is for this episode." = "压缩包里没有这一集的文件。";
 "Double-Tap to Skip" = "双击快进快退";
-"Double-tap the left or right of the video to skip 10 seconds. Turn this off and a double tap plays or pauses instead." = "双击视频左侧或右侧可快进或快退 10 秒。关闭后，双击将改为播放或暂停。";
 "Skip Ad Segments" = "跳过广告片段";
 "Turn Off" = "关闭";
 "Turn On" = "开启";
