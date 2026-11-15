@@ -1512,7 +1512,8 @@ struct BilibiliMacVideoPage<Play: View, Parts: View, Status: View>: View {
                             .accessibilityIdentifier("bilibili.comment")
                     }
                 }
-                .padding(.vertical, 4)
+                // Room for the glass to swell under the pointer, as the related videos' rail leaves its tiles.
+                .padding(.vertical, 12)
             }
         }
     }
