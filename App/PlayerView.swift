@@ -1648,7 +1648,8 @@ private struct DesktopPlaybackView: View {
             }
             .chromeGroup(inset: 2)
         }
-        .padding(.top, 10).padding(.trailing, 16).padding(.bottom, 36)
+        // 6 pt from the side, like AVKit's PiP and volume pills under it, so the right edges line up.
+        .padding(.top, 10).padding(.trailing, 6).padding(.bottom, 36)
         .background(alignment: .top) {
             LinearGradient(colors: [.black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom)
                 .allowsHitTesting(false)
