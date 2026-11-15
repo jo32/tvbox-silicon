@@ -234,8 +234,12 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: com.jo32.yingxia.tv
       CODE_SIGN_ENTITLEMENTS: $(ICLOUD_ENTITLEMENTS)
       ASSETCATALOG_COMPILER_APPICON_NAME: App Icon & Top Shelf Image
-      # Keep in step with AppIconChoice (App/AppIcons.swift) and the iOS list above.
-      ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: AppIcon-MediaPocketGray AppIcon-MediaLayers AppIcon-PlayTriangle AppIcon-SealMusic AppIcon-ShibaManga AppIcon-CatCinema AppIcon-AnimalTrio AppIcon-Classic AppIcon-Aurora AppIcon-Porcelain AppIcon-Obsidian AppIcon-Azure AppIcon-Daybreak AppIcon-Iris AppIcon-Lagoon AppIcon-RoseQuartz AppIcon-Citrus AppIcon-Cosmic
     info:
       properties:
         ITSAppUsesNonExemptEncryption: false
+        # The alternate icons (Settings › App Icon), image stacks in Config/tvOS/Assets.xcassets. tvOS takes them as an
+        # array of names. ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES would make actool write iOS's dictionary form,
+        # which App Store Connect refuses for tvOS (ITMS-90471, "missing the Alternate Icon asset").
+        # Keep in step with AppIconChoice (App/AppIcons.swift) and the iOS list above.
+        CFBundleIcons:
+          CFBundleAlternateIcons: [AppIcon-MediaPocketGray, AppIcon-MediaLayers, AppIcon-PlayTriangle, AppIcon-SealMusic, AppIcon-ShibaManga, AppIcon-CatCinema, AppIcon-AnimalTrio, AppIcon-Classic, AppIcon-Aurora, AppIcon-Porcelain, AppIcon-Obsidian, AppIcon-Azure, AppIcon-Daybreak, AppIcon-Iris, AppIcon-Lagoon, AppIcon-RoseQuartz, AppIcon-Citrus, AppIcon-Cosmic]
