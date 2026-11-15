@@ -49,6 +49,27 @@ import Testing
     #expect(throws: (any Error).self) { try CatalogDanmakuParser.parse(Data(repeating: 0, count: CatalogDanmakuParser.maximumBytes + 1)) }
 }
 
+/// A list longer than the limit keeps comments to the end of the episode, thinning only the busy stretches (#1061).
+@Test func catalogDanmakuOverTheLimitStillReachesTheEnd() throws {
+    // 40,000 comments over 40 minutes in posting order, then 10 in a quiet stretch at the end.
+    let busy = (0..<40_000).map { (time: Double($0) * 0.06, text: "c\($0)") }
+    let quiet = (0..<10).map { (time: 3_000 + Double($0) * 4.5, text: "q\($0)") }
+    let rows = busy + quiet
+    let json = Data(("{\"comments\":[" + rows.map { "{\"p\":\"\($0.time),1,16777215,u\",\"m\":\"\($0.text)\"}" }.joined(separator: ",") + "]}").utf8)
+    let xml = Data(("<i>" + rows.map { "<d p=\"\($0.time),1,25,16777215\">\($0.text)</d>" }.joined() + "</i>").utf8)
+    for data in [json, xml] {
+        let comments = try CatalogDanmakuParser.parse(data)
+        #expect(comments.count <= CatalogDanmakuParser.maximumComments)
+        #expect(comments.count > CatalogDanmakuParser.maximumComments - 500)
+        #expect(comments.map(\.time) == comments.map(\.time).sorted())
+        // Every 5-second stretch of the busy part still has comments, up to its last minute.
+        let stretches = Set(comments.filter { $0.time < 2_400 }.map { Int($0.time / 5) })
+        #expect(stretches.count == 480)
+        // The quiet stretch keeps all of its comments.
+        #expect(comments.filter { $0.text.hasPrefix("q") }.count == 10)
+    }
+}
+
 @Test func catalogDanmakuAcceptsSelfHostedPrefixWithoutDuplicatingAPIVersion() throws {
     let client = try CatalogDanmakuClient(address: "https://example.com/private-prefix/api/v2/")
     #expect(client.server.absoluteString == "https://example.com/private-prefix")

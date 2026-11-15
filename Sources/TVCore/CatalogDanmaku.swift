@@ -21,6 +21,8 @@ public struct CatalogDanmakuComment: Sendable, Hashable, Codable {
 public enum CatalogDanmakuParser {
     public static let maximumBytes = 8 * 1024 * 1024
     public static let maximumComments = 30_000
+    /// The stretch of the video that `spread` gives an equal share of the comments.
+    static let spreadSeconds = 5.0
 
     /// Dandanplay v2 JSON: p = time,mode,color,user. Bilibili-style XML uses
     /// time,mode,size,color,... instead; these two layouts must not be confused.
@@ -38,7 +40,7 @@ public enum CatalogDanmakuParser {
         let code = (root["code"] as? NSNumber)?.intValue
         if let rows = root["danmuku"] as? [[Any]], code == 23 || code == 200 {
             var seen = Set<CatalogDanmakuComment>()
-            return rows.prefix(maximumComments).compactMap { row in
+            return spread(rows.compactMap { row in
                 guard row.count >= 5, let time = row[0] as? NSNumber else { return nil }
                 let mode: Int, text: String
                 if code == 23 {
@@ -55,19 +57,46 @@ public enum CatalogDanmakuParser {
                 let color = UInt32(colorText, radix: 16) ?? 0xffffff
                 guard let comment = CatalogDanmakuComment(time: time.doubleValue, mode: mode, color: color, text: text), seen.insert(comment).inserted else { return nil }
                 return comment
-            }.sorted { $0.time < $1.time }
+            })
         }
         guard let rows = root["comments"] as? [[String: Any]] else {
             throw TVError.unsupported(L10n.text("The service did not return a supported danmaku list."))
         }
         var seen = Set<CatalogDanmakuComment>()
-        return rows.prefix(maximumComments).compactMap { row -> CatalogDanmakuComment? in
+        return spread(rows.compactMap { row -> CatalogDanmakuComment? in
             guard let p = row["p"] as? String, let text = row["m"] as? String else { return nil }
             let fields = p.split(separator: ",", omittingEmptySubsequences: false)
             guard fields.count >= 3, let time = Double(fields[0]), let mode = Int(fields[1]), let color = UInt32(fields[2]),
                   let comment = CatalogDanmakuComment(time: time, mode: mode, color: color, text: text), seen.insert(comment).inserted else { return nil }
             return comment
-        }.sorted { $0.time < $1.time }
+        })
+    }
+
+    /// At most `maximumComments`, in time order and spread over the whole video. Services list comments in the order
+    /// they were posted or played, so cutting the list at the limit dropped everything after it, and the end of a busy
+    /// episode had no comments (#1061). Each `spreadSeconds` stretch gets the same largest share that keeps the total
+    /// within the limit: quiet stretches keep all of theirs, and the busiest are thinned evenly within the stretch.
+    static func spread(_ comments: [CatalogDanmakuComment]) -> [CatalogDanmakuComment] {
+        let sorted = comments.sorted { $0.time < $1.time }
+        guard sorted.count > maximumComments else { return sorted }
+        var stretches: [ArraySlice<CatalogDanmakuComment>] = []
+        var start = 0
+        for index in 1...sorted.count where index == sorted.count
+            || Int(sorted[index].time / spreadSeconds) != Int(sorted[start].time / spreadSeconds) {
+            stretches.append(sorted[start..<index])
+            start = index
+        }
+        var share = 0, most = stretches.map(\.count).max() ?? 0
+        while share < most {
+            let middle = (share + most + 1) / 2
+            if stretches.reduce(0, { $0 + min($1.count, middle) }) <= maximumComments { share = middle } else { most = middle - 1 }
+        }
+        // More stretches than the limit (a list over days, which no video has): every nth comment instead.
+        guard share > 0 else { return (0..<maximumComments).map { sorted[$0 * sorted.count / maximumComments] } }
+        return stretches.flatMap { stretch -> [CatalogDanmakuComment] in
+            guard stretch.count > share else { return Array(stretch) }
+            return (0..<share).map { stretch[stretch.startIndex + $0 * stretch.count / share] }
+        }
     }
 }
 
@@ -82,8 +111,8 @@ private final class DanmakuXMLReader: NSObject, XMLParserDelegate {
         let parser = XMLParser(data: data)
         parser.delegate = self; parser.shouldResolveExternalEntities = false
         let valid = parser.parse()
-        guard rootIsValid, valid || comments.count >= CatalogDanmakuParser.maximumComments else { throw TVError.unsupported(L10n.text("The service did not return a supported danmaku list.")) }
-        return Array(Set(comments)).sorted { $0.time < $1.time }
+        guard rootIsValid, valid else { throw TVError.unsupported(L10n.text("The service did not return a supported danmaku list.")) }
+        return CatalogDanmakuParser.spread(Array(Set(comments)))
     }
     func parser(_ parser: XMLParser, didStartElement name: String, namespaceURI: String?, qualifiedName: String?, attributes fields: [String: String]) {
         if name == "i" { rootIsValid = true }
@@ -98,7 +127,6 @@ private final class DanmakuXMLReader: NSObject, XMLParserDelegate {
         let fields = p.split(separator: ",", omittingEmptySubsequences: false)
         if fields.count >= 4, let time = Double(fields[0]), let mode = Int(fields[1]), let color = UInt32(fields[3]),
            let comment = CatalogDanmakuComment(time: time, mode: mode, color: color, text: text) { comments.append(comment) }
-        if comments.count >= CatalogDanmakuParser.maximumComments { parser.abortParsing() }
     }
 }
 
