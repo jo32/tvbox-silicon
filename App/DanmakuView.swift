@@ -28,7 +28,8 @@ struct DanmakuCanvas: View {
     let comments: [Danmaku]
     var revision = ""
     var opacity = DanmakuStyle.standardOpacity
-    /// Changes when the player jumps: its time-jump notification catches small seeks that look like ordinary frames.
+    /// Changes when the player says its time jumped: that catches small seeks that look like ordinary frames. AVPlayer
+    /// also says so when only its rate changes (play, a held speed boost and its release), which the engine tells apart.
     var jumps = 0
     let clock: () -> Double
     @AppStorage(DanmakuArea.key) private var area = DanmakuArea.standard
@@ -70,7 +71,7 @@ struct DanmakuCanvas: View {
             let filter = filter
             engine.load(filter.apply(comments), revision: "\(revision)|\(filter.colors)|\(DanmakuFilter.stored(filter.words))")
         }
-        .onChange(of: jumps) { engine.reset() }
+        .onChange(of: jumps) { engine.jumped(to: clock()) }
     }
 }
 
@@ -168,6 +169,10 @@ final class DanmakuEngine: @unchecked Sendable {
     private var next = 0
     private var active: [Active] = []
     private var lastTime = -1.0
+    /// When (system uptime) the clock last moved more than `step` between two frames: a seek, which the player's
+    /// time-jump notification reports a few frames later.
+    private var lastStep = -Double.infinity
+    private static let step = 0.25
     /// Rendered text, reused: busy tracks repeat the same few words, and drawing text is the costly part.
     private var images: [String: CGImage] = [:]
     /// Dense tracks (Dandanplay merges several sites, up to 30,000 comments) would otherwise measure and draw
@@ -186,8 +191,15 @@ final class DanmakuEngine: @unchecked Sendable {
         }
     }
 
-    /// The player's time-jump notification catches small seeks that look like ordinary frame advances.
-    func reset() { lock.withLock { layout = nil } }
+    /// The player's time-jump notification catches small seeks that look like ordinary frame advances. AVPlayer posts it
+    /// for every rate change too, with no jump at all: playing after a pause, and the start and end of a held speed
+    /// boost. Those keep the comments on screen (#1056); only a clock that moved now, or a moment ago, clears them.
+    func jumped(to time: Double) {
+        lock.withLock {
+            let moved = !time.isFinite || abs(time - lastTime) > Self.step || ProcessInfo.processInfo.systemUptime - lastStep < 0.5
+            if moved { layout = nil }
+        }
+    }
 
     func frame(time: Double, size: CGSize, scale: CGFloat, area: DanmakuArea = .standard, textScale: Double = 1,
                speed: Double = DanmakuStyle.standardSpeed, scroll: Bool = true, top: Bool = true, bottom: Bool = true) -> [Sprite] {
@@ -209,6 +221,7 @@ final class DanmakuEngine: @unchecked Sendable {
                 // Discard the rest of a burst while paused, so resuming cannot replay that backlog.
                 next = comments.partitioningIndex { $0.time > time }
             }
+            if abs(time - lastTime) > Self.step { lastStep = ProcessInfo.processInfo.systemUptime }
             lastTime = time
             var budget = Self.perFrame
             while advances, next < comments.count, comments[next].time <= time {
