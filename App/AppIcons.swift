@@ -15,17 +15,27 @@ import UIKit
 // picture of the viewer's own, as its Dock icon while it runs. The artwork of each icon, for the picker and the Dock,
 // is AppIconArt-<name> in Config/AppIcons.xcassets. All of them come from Design/make-app-icons.swift.
 
-/// An icon the app ships with. Classic is the app's own; the rest are alternates.
+/// An icon the app ships with. Pocket (MediaPocketPurple) is the app's own; the rest are alternates.
 enum AppIconChoice: String, CaseIterable, Identifiable {
     // Keep in step with ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES (project.yml) and Design/make-app-icons.swift.
+    case pocket = "MediaPocketPurple", grayPocket = "MediaPocketGray", layers = "MediaLayers", play = "PlayTriangle"
+    case seal = "SealMusic", shiba = "ShibaManga", cat = "CatCinema", friends = "AnimalTrio"
     case classic = "Classic", aurora = "Aurora", porcelain = "Porcelain", obsidian = "Obsidian", azure = "Azure"
     case daybreak = "Daybreak", iris = "Iris", lagoon = "Lagoon", roseQuartz = "RoseQuartz", citrus = "Citrus", cosmic = "Cosmic"
 
-    static let standard = AppIconChoice.classic
+    static let standard = AppIconChoice.pocket
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .pocket: L10n.text("Pocket")
+        case .grayPocket: L10n.text("Gray Pocket")
+        case .layers: L10n.text("Layers")
+        case .play: L10n.text("Glass Play")
+        case .seal: L10n.text("Seal")
+        case .shiba: L10n.text("Shiba")
+        case .cat: L10n.text("Cat")
+        case .friends: L10n.text("Friends")
         case .classic: L10n.text("Classic")
         case .aurora: L10n.text("Aurora")
         case .porcelain: L10n.text("Porcelain")
@@ -71,7 +81,6 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
 
     private init() {
         let name = UIApplication.shared.alternateIconName
-        // 1.8.21 had Classic as the alternate AppIcon-Classic; a phone still set to it lands on .standard, Classic.
         current = AppIconChoice.allCases.first { $0.alternateName == name } ?? .standard
     }
 
@@ -93,7 +102,7 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
 
     #if os(macOS)
     static let isAvailable = true
-    /// The chosen icon's raw value, or `customValue`; missing for Classic.
+    /// The chosen icon's raw value, or `customValue`; missing for the app's own icon.
     static let key = "appIcon"
     private static let customValue = "Custom"
     /// The viewer's picture, as a 1024 px square.
@@ -178,7 +187,7 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
         chooseCustom()
     }
 
-    /// Forgets the picture, and goes back to Classic if it was in use.
+    /// Forgets the picture, and goes back to the app's own icon if it was in use.
     func removeCustom() {
         try? FileManager.default.removeItem(at: Self.customFile)
         custom = nil
@@ -322,7 +331,7 @@ struct AppIconSettingsView: View {
 
     private var note: String {
         #if os(macOS)
-        L10n.text("The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Classic.")
+        L10n.text("The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Pocket.")
         #else
         L10n.text("The icon on your Home Screen. The system confirms the change with a short message.")
         #endif

@@ -1,12 +1,17 @@
-// Builds the app icons that Settings › App Icon offers (App/AppIconChoice.swift) from the "Tobe / 10 Color Themes"
-// delivery: a folder of NN-name/NN-name-1024.png, opaque full-square masters.
+// Builds the app icons that Settings › App Icon offers (App/AppIcons.swift) from two deliveries, each optional:
+// - --set: "iOS App Icons PNG Set", whose 02_1024x1024_FullBleed_PNG/NN_Name_1024x1024.png are opaque full-square
+//   masters. Its MediaPocketPurple is the app's own icon on every platform.
+// - --themes: "Tobe / 10 Color Themes", a folder of NN-name/NN-name-1024.png, opaque full-square masters.
 //
-// Usage (from the repository root): swift Design/make-app-icons.swift <themes folder>
+// Usage (from the repository root): swift Design/make-app-icons.swift [--set <folder>] [--themes <folder>]
+// Then run Design/make-tvos-icon.swift, which draws the Apple TV icon from the iOS one.
 //
 // Writes:
-// - Config/iOS/Assets.xcassets/AppIcon-<Name>.appiconset: every theme, as alternate icons. The app's own icon,
-//   Classic (Config/iOS/Assets.xcassets/AppIcon.appiconset and the Mac's AppIcon.appiconset), is left as it is; its
-//   dark and tinted versions come from Design/make-ios-icon.swift.
+// - Config/iOS/Assets.xcassets/AppIcon.appiconset and Config/macOS/Assets.xcassets/AppIcon.appiconset: the app's own
+//   icon; on the Mac on its rounded plate with a margin and a shadow, as macOS 15 and earlier draw icons as they are.
+// - Config/iOS/Assets.xcassets/AppIcon-<Name>.appiconset: every other icon, as alternate icons. Classic, the icon
+//   before MediaPocketPurple (AppIcon-Classic), is left as it is; its dark and tinted versions come from
+//   Design/make-ios-icon.swift.
 // - Config/AppIcons.xcassets/AppIconArt-<Name>.imageset: 512 px artwork of every icon, Classic too, for the picker
 //   and for the Mac, which draws the chosen one on the same plate as its Dock icon (AppIcons.dockImage).
 import AppKit
@@ -14,19 +19,29 @@ import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
 
-/// Folder in the delivery → icon name. Keep in step with AppIconChoice.
+/// Folder in the Tobe delivery → icon name. Keep in step with AppIconChoice.
 let themes: [(folder: String, name: String)] = [
     ("01-porcelain", "Porcelain"), ("02-obsidian", "Obsidian"), ("03-azure", "Azure"), ("04-aurora", "Aurora"),
     ("05-daybreak", "Daybreak"), ("06-iris", "Iris"), ("07-lagoon", "Lagoon"), ("08-rose-quartz", "RoseQuartz"),
     ("09-citrus", "Citrus"), ("10-cosmic", "Cosmic"),
 ]
+/// Icons in the PNG set, by their file name's middle part, which is also the icon name. Keep in step with AppIconChoice.
+let setIcons = ["01_MediaLayers", "02_MediaPocketPurple", "03_PlayTriangle", "04_MediaPocketGray", "05_SealMusic",
+                "06_ShibaManga", "07_CatCinema", "08_AnimalTrio"]
+/// The app's own icon; every other one is an alternate.
+let primary = "MediaPocketPurple"
 
-guard CommandLine.arguments.count == 2 else {
-    FileHandle.standardError.write("usage: swift Design/make-app-icons.swift <themes folder>\n".data(using: .utf8)!)
-    exit(2)
+var options: [String: URL] = [:]
+var arguments = CommandLine.arguments.dropFirst()
+while let flag = arguments.popFirst() {
+    guard ["--set", "--themes"].contains(flag), let folder = arguments.popFirst() else {
+        FileHandle.standardError.write("usage: swift Design/make-app-icons.swift [--set <folder>] [--themes <folder>]\n".data(using: .utf8)!)
+        exit(2)
+    }
+    options[flag] = URL(fileURLWithPath: folder)
 }
-let delivery = URL(fileURLWithPath: CommandLine.arguments[1])
 let iosCatalog = URL(fileURLWithPath: "Config/iOS/Assets.xcassets")
+let macCatalog = URL(fileURLWithPath: "Config/macOS/Assets.xcassets")
 let artCatalog = URL(fileURLWithPath: "Config/AppIcons.xcassets")
 let manager = FileManager.default
 
@@ -64,6 +79,24 @@ func scaled(_ image: CGImage, to size: Int) -> CGImage {
     render(size: size) { $0.draw(image, in: CGRect(x: 0, y: 0, width: size, height: size)) }
 }
 
+/// The Mac's icon plate, as Apple's template has it: an 824 pt rounded square in a 1024 pt canvas, corner radius 185,
+/// with a soft shadow under it. AppIcons.dockImage draws the same.
+func macPlate(_ art: CGImage) -> CGImage {
+    render(size: 1024, alpha: true) { context in
+        let body = CGRect(x: 100, y: 100, width: 824, height: 824)
+        let plate = CGPath(roundedRect: body, cornerWidth: 185, cornerHeight: 185, transform: nil)
+        context.saveGState()
+        context.setShadow(offset: CGSize(width: 0, height: -12), blur: 28, color: CGColor(gray: 0, alpha: 0.35))
+        context.addPath(plate)
+        context.setFillColor(CGColor(gray: 0, alpha: 1))
+        context.fillPath()
+        context.restoreGState()
+        context.addPath(plate)
+        context.clip()
+        context.draw(art, in: body)
+    }
+}
+
 func iosIconSet(_ image: CGImage, at folder: URL) {
     if manager.fileExists(atPath: folder.path) { try! manager.removeItem(at: folder) }
     write(scaled(image, to: 1024), to: folder.appendingPathComponent("AppIcon.png"))
@@ -85,15 +118,38 @@ func artSet(_ image: CGImage, name: String) {
 
 writeJSON(["info": ["author": "xcode", "version": 1]], to: artCatalog.appendingPathComponent("Contents.json"))
 
-for theme in themes {
-    let master = load(delivery.appendingPathComponent(theme.folder).appendingPathComponent("\(theme.folder)-1024.png"))
-    guard master.width == 1024, master.height == 1024 else { fatalError("\(theme.folder) is not 1024 × 1024") }
-    let set = "AppIcon-\(theme.name)"
+/// One icon: its iOS set, its artwork, and for the app's own icon the Mac's set.
+func make(_ master: CGImage, name: String) {
+    guard master.width == 1024, master.height == 1024 else { fatalError("\(name) is not 1024 × 1024") }
+    let set = name == primary ? "AppIcon" : "AppIcon-\(name)"
     iosIconSet(master, at: iosCatalog.appendingPathComponent("\(set).appiconset"))
-    artSet(master, name: theme.name)
-    print("\(theme.name) → \(set)")
+    artSet(master, name: name)
+    if name == primary {
+        let plate = macPlate(master)
+        let folder = macCatalog.appendingPathComponent("AppIcon.appiconset")
+        for points in [16, 32, 128, 256, 512] {
+            for scale in [1, 2] {
+                let size = points * scale
+                let image = render(size: size, alpha: true) { $0.draw(plate, in: CGRect(x: 0, y: 0, width: size, height: size)) }
+                write(image, to: folder.appendingPathComponent("icon_\(points)x\(points)@\(scale)x.png"))
+            }
+        }
+    }
+    print("\(name) → \(set)")
 }
 
-// The app's own icon: artwork from its iOS set, which this script leaves alone.
-artSet(load(iosCatalog.appendingPathComponent("AppIcon.appiconset/AppIcon.png")), name: "Classic")
+if let delivery = options["--set"] {
+    let masters = delivery.appendingPathComponent("02_1024x1024_FullBleed_PNG")
+    for file in setIcons {
+        make(load(masters.appendingPathComponent("\(file)_1024x1024.png")), name: String(file.drop { $0 != "_" }.dropFirst()))
+    }
+}
+if let delivery = options["--themes"] {
+    for theme in themes {
+        make(load(delivery.appendingPathComponent(theme.folder).appendingPathComponent("\(theme.folder)-1024.png")), name: theme.name)
+    }
+}
+
+// The icon before MediaPocketPurple: artwork from its iOS set, which this script leaves alone.
+artSet(load(iosCatalog.appendingPathComponent("AppIcon-Classic.appiconset/AppIcon.png")), name: "Classic")
 print("Classic → AppIconArt-Classic")

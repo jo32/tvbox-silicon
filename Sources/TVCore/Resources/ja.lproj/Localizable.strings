@@ -1995,6 +1995,14 @@
 
 /* Settings › App Icon */
 "App Icon" = "アプリアイコン";
+"Pocket" = "ポケット";
+"Gray Pocket" = "グレーポケット";
+"Layers" = "レイヤー";
+"Glass Play" = "ガラスの再生";
+"Seal" = "アザラシ";
+"Shiba" = "柴犬";
+"Cat" = "ネコ";
+"Friends" = "なかま";
 "Aurora" = "オーロラ";
 "Classic" = "クラシック";
 "Porcelain" = "ポーセリン";
@@ -2011,5 +2019,5 @@
 "A square picture works best. One with see-through corners, such as an icon made for the Mac, shows as it is." = "正方形の画像がおすすめです。Mac 用アイコンのように四隅が透明な画像は、そのまま表示されます。";
 "Choose Picture…" = "画像を選択…";
 "Remove Custom Picture" = "カスタム画像を削除";
-"The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Classic." = "映匣を開いている間は、選んだアイコンが Dock に表示されます。Finder などでは「クラシック」のままです。";
+"The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Pocket." = "映匣を開いている間は、選んだアイコンが Dock に表示されます。Finder などでは「ポケット」のままです。";
 "The icon on your Home Screen. The system confirms the change with a short message." = "ホーム画面のアイコンです。変更すると、システムが短いメッセージで知らせます。";

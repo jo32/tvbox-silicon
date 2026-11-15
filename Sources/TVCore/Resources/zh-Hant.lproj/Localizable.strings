@@ -1995,6 +1995,14 @@
 
 /* Settings › App Icon */
 "App Icon" = "App 圖像";
+"Pocket" = "口袋";
+"Gray Pocket" = "灰口袋";
+"Layers" = "層疊";
+"Glass Play" = "玻璃播放";
+"Seal" = "海豹";
+"Shiba" = "柴犬";
+"Cat" = "貓咪";
+"Friends" = "小夥伴";
 "Aurora" = "極光";
 "Classic" = "經典";
 "Porcelain" = "白瓷";
@@ -2011,5 +2019,5 @@
 "A square picture works best. One with see-through corners, such as an icon made for the Mac, shows as it is." = "方形圖片效果最好。四角透明的圖片（例如為 Mac 製作的圖像）會按原樣顯示。";
 "Choose Picture…" = "選擇圖片…";
 "Remove Custom Picture" = "移除自訂圖片";
-"The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Classic." = "映匣開啟時，Dock 顯示你選的圖像；在 Finder 等其他地方仍是「經典」。";
+"The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Pocket." = "映匣開啟時，Dock 顯示你選的圖像；在 Finder 等其他地方仍是「口袋」。";
 "The icon on your Home Screen. The system confirms the change with a short message." = "主畫面上的圖像。更換後，系統會顯示一則簡短提示。";
