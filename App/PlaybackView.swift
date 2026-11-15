@@ -1355,7 +1355,11 @@ import IOKit.pwr_mgt
         let pattern: Duration.TimeFormatStyle.Pattern = target >= 3600 ? .hourMinuteSecond : .minuteSecond
         note(L10n.text("Jumping to %@", Duration.seconds(Int(target)).formatted(.time(pattern: pattern))))
         let activeGeneration = generation
-        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+        let drive = (item.asset as? AVURLAsset)?.url
+        // Up to 10 s early, at the keyframe before the saved place: the player shows it without first reading and
+        // decoding the frames up to the exact second (half a second and more from a cloud drive).
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: CMTime(seconds: 10, preferredTimescale: 600),
+                    toleranceAfter: .zero) { [weak self] finished in
             Task { @MainActor [weak self] in
                 guard let self, self.generation == activeGeneration else { return }
                 self.restoringPosition = false; self.pendingResume = nil; self.loading = false
@@ -1365,7 +1369,11 @@ import IOKit.pwr_mgt
                 }
                 self.restoredPosition = self.player.currentTime().seconds
                 Diagnostics.shared.record(.info, "player", "history resume requested=\(requested) restored=\(self.restoredPosition ?? -1)")
-                if !self.editingSkip { self.player.play() }
+                // A drive bringing in several times what the video needs: play now, without AVPlayer's wait for a
+                // cushion first (1–1.5 s). It still waits if the bytes fall behind later.
+                let quick = if let drive { await CloudStreams.keepsUp(drive) } else { false }
+                guard self.generation == activeGeneration else { return }
+                if !self.editingSkip { quick ? self.player.playImmediately(atRate: self.player.defaultRate) : self.player.play() }
                 self.saveHistory()
             }
         }
