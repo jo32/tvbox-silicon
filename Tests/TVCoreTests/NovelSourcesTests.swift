@@ -40,6 +40,19 @@ import Testing
     #expect(hits[0].books.map(\.sourceKey) == ["s1", "s2"])
 }
 
+/// A search over a few hundred sources: every answer is merged on the main thread, so it must stay quick as results pile up.
+@Test func novelSearchMergesManyAnswersQuickly() {
+    var hits: [NovelSearchHit] = []
+    let started = Date()
+    for source in 0..<300 {
+        let books = (0..<20).map { NovelBook(sourceKey: "s\(source)", url: "/\(source)/\($0)", name: "第\((source * 7 + $0) % 1000)本 斗破苍穹", author: "天蚕土豆") }
+        NovelBooks.merge(books, into: &hits, keyword: "斗破苍穹")
+    }
+    #expect(hits.count == 1000)
+    #expect(hits.allSatisfy { Set($0.books.map(\.sourceKey)).count == $0.books.count })
+    #expect(Date().timeIntervalSince(started) < 10)
+}
+
 @Test func novelCoverCarriesItsHeaders() {
     let book = NovelBook(sourceKey: "s", url: "/b", name: "n", cover: #"https://img.example/c.jpg,{"headers":{"Referer":"https://example.com"}}"#)
     #expect(book.coverRequest?.url.absoluteString == "https://img.example/c.jpg")
