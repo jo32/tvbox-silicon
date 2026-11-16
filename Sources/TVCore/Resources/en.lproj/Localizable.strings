@@ -987,7 +987,8 @@
 "Added the AList server %@. Browse it in Cloud Files." = "Added the AList server %@. Browse it in Cloud Files.";
 "Added %lld AList servers. Browse them in Cloud Files." = "Added %lld AList servers. Browse them in Cloud Files.";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "This address is now an AList server. Add it again to browse it in Cloud Files.";
-"Sign in to Quark, UC or 115 under Cloud Drive Accounts to browse their files here." = "Sign in to Quark, UC or 115 under Cloud Drive Accounts to browse their files here.";
+"Sign in to Quark, UC, 115 or Baidu Netdisk under Cloud Drive Accounts to browse their files here." = "Sign in to Quark, UC, 115 or Baidu Netdisk under Cloud Drive Accounts to browse their files here.";
+"This file no longer exists." = "This file no longer exists.";
 "Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too." = "Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too.";
 "Edit Server" = "Edit Server";
 "Remove Server" = "Remove Server";

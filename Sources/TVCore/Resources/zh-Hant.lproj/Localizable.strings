@@ -986,7 +986,8 @@
 "Added the AList server %@. Browse it in Cloud Files." = "已新增 AList 伺服器 %@，可在「網盤檔案」中瀏覽。";
 "Added %lld AList servers. Browse them in Cloud Files." = "已新增 %lld 個 AList 伺服器，可在「網盤檔案」中瀏覽。";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "此網址現在是 AList 伺服器。重新新增即可在「網盤檔案」中瀏覽。";
-"Sign in to Quark, UC or 115 under Cloud Drive Accounts to browse their files here." = "在「網盤帳號」中登入夸克、UC 或 115 後，即可在此瀏覽其中的檔案。";
+"Sign in to Quark, UC, 115 or Baidu Netdisk under Cloud Drive Accounts to browse their files here." = "在「網盤帳號」中登入夸克、UC、115 或百度網盤後，即可在此瀏覽其中的檔案。";
+"This file no longer exists." = "此檔案已不存在。";
 "Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too." = "用開啟 AList、OpenList 伺服器、NAS 的 WebDAV 共享或 Emby、Jellyfin 伺服器的網址來新增它。在「新增訂閱」中貼上 AList 網址或 TVBox AList 設定，也能新增伺服器。";
 "Edit Server" = "編輯伺服器";
 "Remove Server" = "移除伺服器";

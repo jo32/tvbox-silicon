@@ -435,9 +435,9 @@ enum CloudProvider: String, Identifiable, CaseIterable {
         case .xunlei: .cyan
         }
     }
-    /// Baidu, Aliyun and Xunlei only serve plugins, so an App Store build lists them once a subscription is added;
-    /// Quark, UC and 115 are browsed in Cloud Files too.
-    @MainActor static func shown(_ store: Store) -> [CloudProvider] { store.extrasUnlocked ? allCases : [.quark, .uc, .pan115] }
+    /// Aliyun and Xunlei only serve plugins, so an App Store build lists them once a subscription is added;
+    /// Quark, UC, 115 and Baidu Netdisk are browsed in Cloud Files too.
+    @MainActor static func shown(_ store: Store) -> [CloudProvider] { store.extrasUnlocked ? allCases : [.quark, .uc, .pan115, .baidu] }
 
     /// Quark and UC sign in on their web page on a Mac; Xunlei with a texted code; every other sign-in is a code to scan.
     var signsInOnWeb: Bool { self == .quark || self == .uc }
