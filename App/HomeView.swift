@@ -369,7 +369,7 @@ private struct HomeFavoriteCard: View {
     @ViewBuilder private var tvBody: some View {
         switch item {
         case .live(let channel):
-            tvButton(name: channel.name) { store.playing = channel } label: {
+            tvButton(name: channel.name) { store.watchFavorite(channel) } label: {
                 media(ChannelLogo(channel: channel), title: channel.name, subtitle: channel.displayGroup)
             }
         case .video(let video):
@@ -408,7 +408,7 @@ private struct HomeFavoriteCard: View {
     @ViewBuilder private var cardBody: some View {
         switch item {
         case .live(let channel):
-            ChannelCard(channel: channel)
+            ChannelCard(channel: channel) { store.watchFavorite($0) }
         case .video(let video):
             videoCard(video)
         case .episode(let episode):

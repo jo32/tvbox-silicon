@@ -62,6 +62,11 @@ import TVCore
         liveGuide = guide
         playing = channel
     }
+    /// Plays a favorite live channel with the other favorite channels to switch through, wherever it was picked: the
+    /// Live page, Watch Now or the Favorites page (#1172).
+    func watchFavorite(_ channel: Channel) {
+        watch(channel, in: LiveLineup(title: L10n.text("Favorites"), channels: favorites.liveChannels))
+    }
     /// The guide of the list the channel was picked from.
     func guide(for channel: Channel) -> LiveGuide? { lineup(for: channel) != nil ? liveGuide : nil }
     /// Program guide addresses the viewer typed in for live playlists, by playlist address (#802).

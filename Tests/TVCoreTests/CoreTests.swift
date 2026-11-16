@@ -195,6 +195,16 @@ private func fixture(_ name: String, _ ext: String) throws -> Data {
     #expect(LiveLineup(title: "One", channels: [channels[0]]).neighbor(of: channels[0], back: false) == nil)
 }
 
+/// #1172: a channel found by search switches through the playlist it came from.
+@Test func liveLineupFindsThePlaylistHoldingAChannel() {
+    let make = { (name: String, n: Int) in Channel(name: name, group: "G", url: URL(string: "https://example.com/\(n)")!) }
+    let first = [make("一", 1), make("二", 2)], second = [make("三", 3), make("四", 4), make("五", 5)]
+    let lists = [(title: "A", channels: first), (title: "B", channels: second)]
+    let lineup = LiveLineup.first(holding: second[1], in: lists)
+    #expect(lineup?.title == "B" && lineup?.channels.count == 3 && lineup?.position(of: second[1]) == 1)
+    #expect(LiveLineup.first(holding: make("六", 6), in: lists) == nil)
+}
+
 /// A favorite saved before channels had lines still opens, and one with lines keeps them.
 @Test func channelLinesAreSavedAndOptional() throws {
     let old = #"{"name":"CCTV1","group":"央视","url":"https://a.example.com/1.m3u8","headers":{}}"#

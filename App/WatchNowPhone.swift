@@ -453,7 +453,7 @@ private struct WatchNowPhoneFavorite: View {
             }
             .tmdbCardButton().contextMenu { FavoriteMenuButton(item: item, name: episode.video.videoName) }
         case .live(let channel):
-            plate(title: channel.name, detail: channel.displayGroup, action: { store.playing = channel }) {
+            plate(title: channel.name, detail: channel.displayGroup, action: { store.watchFavorite(channel) }) {
                 ChannelLogo(channel: channel, size: 64)
             }
         case .music(let track):
