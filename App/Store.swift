@@ -382,6 +382,11 @@ import TVCore
                 // A page of lists (or a Legado subscription source that opens one): Book Sources offers them one by one.
                 NovelStore.shared.offer(offers)
                 notice = L10n.text("This page lists %lld Legado book source lists. Choose the ones to add in Settings › Novels › Book Sources.", offers.count)
+            case .lxMusicSource(let script):
+                // An LX Music source plays music, so it joins Music's own sources (#1177). A file's copy has no address
+                // to fetch it again from.
+                let source = try await LXSourceLibrary.shared.add(script: script, origin: ImportedFiles.isImported(url.absoluteString) ? nil : url)
+                notice = L10n.text("Added the LX Music source “%@”. Music plays songs through it; manage it in Music Settings › LX Music Sources.", source.info.name)
             case .alist(let servers):
                 // AList servers are browsed in Cloud Files, not merged as sources.
                 let saved = try AListServers.add(servers)
@@ -560,6 +565,8 @@ import TVCore
                 subscriptionErrors[entry.address] = L10n.text("This address is now a page of book source lists. Add it again to choose from them.")
             case .success(.alist):
                 subscriptionErrors[entry.address] = L10n.text("This address is now an AList server. Add it again to browse it in Cloud Files.")
+            case .success(.lxMusicSource):
+                subscriptionErrors[entry.address] = L10n.text("This address is now an LX Music source. Add it again to play music through it.")
             case .failure(let error):
                 Diagnostics.shared.failure("subscription", "refresh host=\(URL(string: entry.address)?.host() ?? "-")", error)
                 subscriptionErrors[entry.address] = error.localizedDescription

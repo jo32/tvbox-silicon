@@ -146,6 +146,9 @@ public enum SubscriptionImport: Sendable {
     /// A page of Legado book source lists, or a Legado subscription source (订阅源) that opens one: the lists it links
     /// to, for the viewer to choose from in Book Sources.
     case novelIndex([NovelSourceOffer])
+    /// An LX Music custom source (洛雪音源), the script's text: people add these here too (#1177). It goes to Music's
+    /// LX Music Sources, not Watch Now. Only content that is no subscription reads as one.
+    case lxMusicSource(String)
 }
 
 extension HTTPClient {
@@ -161,6 +164,8 @@ extension HTTPClient {
         if !offers.isEmpty { return .novelIndex(offers) }
         do { return .subscription(try await Subscription.parse(data, origin: finalURL).sniffingScripts(http: self)) }
         catch {
+            // An LX Music source isn't a subscription, but people add one here to play music (#1177).
+            if let script = LXSourceLibrary.script(in: data) { return .lxMusicSource(script) }
             // An AList server answers its address with its web page.
             if let server = await AList.probe(url, session: session) { return .alist([server]) }
             throw error

@@ -2092,3 +2092,5 @@
 "Use New Address" = "Use New Address";
 "File" = "File";
 "Yingxia keeps its own copy of this file. Later changes to the original don't reach the app; open it again to update it." = "Yingxia keeps its own copy of this file. Later changes to the original don't reach the app; open it again to update it.";
+"Added the LX Music source “%@”. Music plays songs through it; manage it in Music Settings › LX Music Sources." = "Added the LX Music source “%@”. Music plays songs through it; manage it in Music Settings › LX Music Sources.";
+"This address is now an LX Music source. Add it again to play music through it." = "This address is now an LX Music source. Add it again to play music through it.";

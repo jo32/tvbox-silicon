@@ -138,6 +138,15 @@ public final class LXSourceLibrary: @unchecked Sendable {
     /// LX Music refuses larger scripts too.
     static let scriptLimit = 9_000_000
 
+    /// The text of `data` when it reads as an LX Music source: a script that opens with the comment LX Music reads, naming
+    /// the source (published ones all do, obfuscated ones too). A Listenify music extension can open with the same
+    /// comment; it defines `getSongInfo`.
+    public static func script(in data: Data) -> String? {
+        guard data.count <= scriptLimit, let script = String(data: data, encoding: .utf8),
+              MusicExtension.header(script)["name"] != nil, !script.contains("getSongInfo") else { return nil }
+        return script
+    }
+
     private let folder: URL
     private let defaults: UserDefaults
     private let lock = NSLock()
