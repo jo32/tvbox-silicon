@@ -161,3 +161,30 @@ private func temporaryLibrary() throws -> (LXSourceLibrary, URL, UserDefaults) {
     }
     #expect(throws: ScriptHostError.self) { try ScriptCrypto.rsaRaw(publicKey: "-----BEGIN PUBLIC KEY-----\nAAAA\n-----END PUBLIC KEY-----", data: message) }
 }
+
+/// People add LX Music sources under Subscriptions too (#1177). Such a file used to fail as a broken JSON configuration
+/// ("The data couldn't be read because it isn't in the correct format"); it now reads as an LX source.
+@Test func lxSourcesAddedAsSubscriptionsReadAsLXSources() async throws {
+    #expect(LXSourceLibrary.script(in: Data(fakeSource.utf8)) == fakeSource)
+    // Obfuscated sources keep only the header readable.
+    let obfuscated = "\u{FEFF}/*!\n * @name 独家音源\n * @version 5\n */\nglobalThis['SERVER_SCRIPT_CONFIG'] = {};(function(_0x1){})()"
+    #expect(LXSourceLibrary.script(in: Data(obfuscated.utf8)) != nil)
+    for other in ["{\"sites\": []}", "/*\n * @name Radio\n */\nasync function getSongInfo() {}", "/* no name */ const a = 1", "var rule = {}"] {
+        #expect(LXSourceLibrary.script(in: Data(other.utf8)) == nil)
+    }
+    let folder = FileManager.default.temporaryDirectory.appending(path: "lx-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let picked = folder.appending(path: "lx-\(UUID().uuidString).js")
+    try Data(fakeSource.utf8).write(to: picked)
+    let address = try ImportedFiles.add(picked)
+    defer { ImportedFiles.remove(address.absoluteString) }
+    guard case .lxMusicSource(let script) = try await HTTPClient().subscriptionImport(address) else { Issue.record("not an LX source"); return }
+    #expect(script == fakeSource)
+    // A spider that opens with the same kind of comment is still a subscription.
+    let spider = folder.appending(path: "spider-\(UUID().uuidString).js")
+    try Data("/*!\n * @name Spider\n */\nexport default { detail, category, homeContent }\n".utf8).write(to: spider)
+    let spiderAddress = try ImportedFiles.add(spider)
+    defer { ImportedFiles.remove(spiderAddress.absoluteString) }
+    guard case .subscription = try await HTTPClient().subscriptionImport(spiderAddress) else { Issue.record("not a subscription"); return }
+}

@@ -662,7 +662,7 @@ struct MusicScrubber: View {
         run {
             let scoped = file.startAccessingSecurityScopedResource()
             defer { if scoped { file.stopAccessingSecurityScopedResource() } }
-            let data = try Data(contentsOf: file)
+            let data = try ImportedFiles.read(file)
             guard let script = String(data: data, encoding: .utf8) else { throw TVError.unsupported(L10n.text("This file is not an LX Music source.")) }
             return try await LXSourceLibrary.shared.add(script: script, origin: nil)
         }
@@ -805,7 +805,7 @@ struct MusicLXSourcesSection: View {
         run {
             let scoped = file.startAccessingSecurityScopedResource()
             defer { if scoped { file.stopAccessingSecurityScopedResource() } }
-            let data = try Data(contentsOf: file)
+            let data = try ImportedFiles.read(file)
             guard let script = String(data: data, encoding: .utf8) else { throw TVError.unsupported(L10n.text("This file is not a music extension.")) }
             return try await MusicExtensionLibrary.shared.add(script: script, origin: nil)
         }
