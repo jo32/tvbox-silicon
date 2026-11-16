@@ -2096,3 +2096,15 @@
 "This address is now an LX Music source. Add it again to play music through it." = "此地址现在是洛雪音源。重新添加即可通过它播放音乐。";
 "Use This Source" = "使用此音源";
 "“%@” is already added." = "“%@”已添加过。";
+"Follow Show" = "追剧";
+"Unfollow Show" = "取消追剧";
+"Following Show" = "已追剧";
+"Following Calendar" = "追剧日历";
+"Air Calendar" = "播出日历";
+"Episode %@ / %@" = "第 %@/%@ 集";
+"%@ · %@ Episodes" = "%@ · 共 %@ 集";
+"%@ of %@ aired" = "已播 %@/%@ 集";
+"Tomorrow" = "明天";
+"No upcoming episodes" = "暂无更新";
+"No Shows Followed" = "还没有追剧";
+"Open a series in Discover and tap Follow Show to see when its new episodes air." = "在发现里打开一部剧，点「追剧」，它的新剧集播出日期会显示在这里。";

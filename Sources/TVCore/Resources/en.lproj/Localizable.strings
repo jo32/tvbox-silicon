@@ -2096,3 +2096,15 @@
 "This address is now an LX Music source. Add it again to play music through it." = "This address is now an LX Music source. Add it again to play music through it.";
 "Use This Source" = "Use This Source";
 "“%@” is already added." = "“%@” is already added.";
+"Follow Show" = "Follow Show";
+"Unfollow Show" = "Unfollow Show";
+"Following Show" = "Following";
+"Following Calendar" = "My Shows";
+"Air Calendar" = "Air Calendar";
+"Episode %@ / %@" = "Ep %@ of %@";
+"%@ · %@ Episodes" = "%@ · %@ Episodes";
+"%@ of %@ aired" = "%@ of %@ aired";
+"Tomorrow" = "Tomorrow";
+"No upcoming episodes" = "No upcoming episodes";
+"No Shows Followed" = "No Shows Followed";
+"Open a series in Discover and tap Follow Show to see when its new episodes air." = "Open a series in Discover and tap Follow Show to see when its new episodes air.";

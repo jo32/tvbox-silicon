@@ -39,6 +39,8 @@ import TVCore
     /// The last good copy of each subscription, by address.
     private(set) var documents: [String: Subscription] = [:]
     let favorites: Favorites
+    /// The series followed from Discover (追剧, #1186).
+    let followedShows: FollowedShows
     var importing = false
     var error: String?
     /// Why the last subscription import failed. It shows under the address field, not in the app-wide alert: on
@@ -175,6 +177,7 @@ import TVCore
         sourceOrder = SourceOrder(defaults: playbackDefaults)
         cloudSync = defaults === UserDefaults.standard && !defaults.bool(forKey: "qaIsolatedData") ? CloudSync() : nil
         favorites = Favorites(defaults: defaults)
+        followedShows = FollowedShows(defaults: defaults)
         autoPlayNext = defaults.object(forKey: "autoPlayNextEpisode") == nil || defaults.bool(forKey: "autoPlayNextEpisode")
         guideAddresses = defaults.dictionary(forKey: "liveGuideAddresses") as? [String: String] ?? [:]
         let saved = defaults.data(forKey: "subscriptions").flatMap { try? JSONDecoder().decode([SubscriptionEntry].self, from: $0) }
@@ -605,7 +608,9 @@ import TVCore
     private func setUpCloudSync() {
         guard let sync = cloudSync else { return }
         let favorites = favorites, history = playbackHistory, pinned = pinnedSources, hidden = hiddenSources, order = sourceOrder
+        let followed = followedShows
         sync.register("favorites", current: { favorites.syncValues }, apply: { favorites.adopt($0) })
+        sync.register("followedShows", current: { followed.syncValues }, apply: { followed.adopt($0) })
         sync.register("history", delay: .seconds(30), current: { Dictionary(history.entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }) },
                       apply: { history.adopt($0.map(\.value)) })
         sync.register("subscriptions", current: { [weak self] in self?.syncedSubscriptions ?? [:] }, apply: { [weak self] in self?.adoptSubscriptions($0) })
@@ -616,6 +621,7 @@ import TVCore
         // Only "on" is an item: a new device's default (off) is no change, so it can't switch the order off everywhere.
         sync.register("sourceOrderOn", current: { order.enabled ? ["on": true] : [:] }, apply: { if order.enabled == $0.isEmpty { order.enabled = !$0.isEmpty } })
         favorites.onChange = { sync.changed("favorites") }
+        followed.onChange = { sync.changed("followedShows") }
         history.onChange = { sync.changed("history") }
         pinned.onChange = { sync.changed("pinnedSources") }
         hidden.onChange = { sync.changed("hiddenSources") }

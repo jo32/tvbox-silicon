@@ -12,6 +12,7 @@
 		024BC7DE6E06F79B6511FC89 /* PlaybackHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 334B106CCFB47B5E27376A16 /* PlaybackHistoryView.swift */; };
 		03843072ECAC2CFBF3568416 /* WatchNowTV.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB076E674CF0D07EFFAE17DA /* WatchNowTV.swift */; };
 		03EDA66F1A059D8515CE0C80 /* LiveRoomsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675EA4CF000337C94DF5B1D3 /* LiveRoomsView.swift */; };
+		04B932B7AFF6D997A26C7D3D /* DiscoverFollowing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51C2CCCBC2CD58D4D132DE14 /* DiscoverFollowing.swift */; };
 		05392A45E74A244DECCD26BB /* MusicPlayerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2CD4FD12F4DD3AAE1F8592A /* MusicPlayerViews.swift */; };
 		05615614C0A5DBC4A03C95FF /* NovelSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 190385A01FCD240DDB5AD4EA /* NovelSourcesView.swift */; };
 		05ADD9BDB518BD383F27577C /* NovelQA.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF046FB7D8F99B3EC47C9069 /* NovelQA.swift */; };
@@ -128,6 +129,7 @@
 		4BAF0943739F85C530148F50 /* LivePluginSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79ABEF8CC3883B021CEF3CEE /* LivePluginSignIn.swift */; };
 		4C10AE29307F2F5C354403A3 /* SourceAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 575633259B74E3A953F65F95 /* SourceAccountView.swift */; };
 		4C65106175D517040E98330B /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D1010816125FBC3792AF838 /* Store.swift */; };
+		4D24EB78DDDCF156FD4A3E62 /* DiscoverFollowing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51C2CCCBC2CD58D4D132DE14 /* DiscoverFollowing.swift */; };
 		4EAAD9E59129B744D0008135 /* ExternalSubtitles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75B036EC33AB3F0991E78CDD /* ExternalSubtitles.swift */; };
 		4ECE8586E27A017017F26EDC /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181C983C0018A97F2A086298 /* DiscoveryView.swift */; };
 		4F9DABA09098C4A53467C128 /* LivePluginQRSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3FBB140165AC6F0A60866F5 /* LivePluginQRSignIn.swift */; };
@@ -260,6 +262,7 @@
 		9EA22FB689805BA07AB44C4C /* MangaReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C41063DF832120F89C7509A /* MangaReaderView.swift */; };
 		9FD7B6E48A98DE1D6DDBC3E3 /* SubtitleStyleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D091093D028D2FD9AB72B79C /* SubtitleStyleView.swift */; };
 		A02125568B4CAB3B33994198 /* DiscoverBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */; };
+		A0219F9153C87470719727CC /* DiscoverFollowing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51C2CCCBC2CD58D4D132DE14 /* DiscoverFollowing.swift */; };
 		A125C19021DB4DC7DFADCBDA /* MangaSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E5BAF6D854E7CE5DA362D0 /* MangaSourcesView.swift */; };
 		A149AE9D183C5FB64D411761 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ADB3063A14E368A71892DCEE /* Assets.xcassets */; };
 		A1DE1070F1A8B76CC5EE65C0 /* SubtitleSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30744245D01C4D31B1F3ABD8 /* SubtitleSourcesView.swift */; };
@@ -445,6 +448,7 @@
 		4EF42E1957EFE569C0D2CF7D /* OpenJDK-assembly-exception.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "OpenJDK-assembly-exception.txt"; sourceTree = "<group>"; };
 		51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverPersonView.swift; sourceTree = "<group>"; };
 		5194EB255D269658DD7A81E3 /* AppIcons.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AppIcons.xcassets; sourceTree = "<group>"; };
+		51C2CCCBC2CD58D4D132DE14 /* DiscoverFollowing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverFollowing.swift; sourceTree = "<group>"; };
 		52B784080CDE6CF171AEA5E7 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		559683A9A4BDFA11A4A9FE67 /* FeedbackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackView.swift; sourceTree = "<group>"; };
 		57363D217E83F0E69B2DF678 /* BilibiliViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BilibiliViews.swift; sourceTree = "<group>"; };
@@ -647,6 +651,7 @@
 				846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */,
 				B6941C03B313E9FC30883FFE /* DiscoverCalendarView.swift */,
 				28110209CF4DBB819A2F3C74 /* DiscoverDetailView.swift */,
+				51C2CCCBC2CD58D4D132DE14 /* DiscoverFollowing.swift */,
 				51267CBBD9E8D192777FB1BA /* DiscoverPersonView.swift */,
 				356AA3CFC2271101141EF964 /* DiscoverSearchFilters.swift */,
 				76143E60685F2F76994F90D7 /* DiscoverSearchView.swift */,
@@ -1258,6 +1263,7 @@
 				1331896EA47189E426A4DE6C /* DiscoverBrowseView.swift in Sources */,
 				E56EBB8E41D7FDB1702F20F2 /* DiscoverCalendarView.swift in Sources */,
 				598C9B1ACA758778E88E48D5 /* DiscoverDetailView.swift in Sources */,
+				A0219F9153C87470719727CC /* DiscoverFollowing.swift in Sources */,
 				1236A790753CA813B297575D /* DiscoverPersonView.swift in Sources */,
 				C0CF8F2481F4B90775C681F8 /* DiscoverSearchFilters.swift in Sources */,
 				E0E5700C59932DA281F7A5CE /* DiscoverSearchView.swift in Sources */,
@@ -1373,6 +1379,7 @@
 				A75BCD1DBB7A45ED27CEBA63 /* DiscoverBrowseView.swift in Sources */,
 				525911655642125513C947A1 /* DiscoverCalendarView.swift in Sources */,
 				68952BF47707079971D26F5A /* DiscoverDetailView.swift in Sources */,
+				04B932B7AFF6D997A26C7D3D /* DiscoverFollowing.swift in Sources */,
 				1D9F55E8F4446D174D346871 /* DiscoverPersonView.swift in Sources */,
 				963C1AD1D27CD834FFDF0273 /* DiscoverSearchFilters.swift in Sources */,
 				2813CE0358963C61D7865EF7 /* DiscoverSearchView.swift in Sources */,
@@ -1490,6 +1497,7 @@
 				A02125568B4CAB3B33994198 /* DiscoverBrowseView.swift in Sources */,
 				3C881605253C551AFF6652EA /* DiscoverCalendarView.swift in Sources */,
 				38395AAE5193EB91CF33602A /* DiscoverDetailView.swift in Sources */,
+				4D24EB78DDDCF156FD4A3E62 /* DiscoverFollowing.swift in Sources */,
 				AA2B9DEAC822A56D57A10055 /* DiscoverPersonView.swift in Sources */,
 				97EB7EDFE8BA6C35B6197AFF /* DiscoverSearchFilters.swift in Sources */,
 				FDB9BF271E35ADEFD6FD6568 /* DiscoverSearchView.swift in Sources */,
