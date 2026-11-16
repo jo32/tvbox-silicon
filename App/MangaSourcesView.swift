@@ -257,7 +257,7 @@ struct MangaRepositoryView: View {
                     #if os(tvOS)
                     .buttonStyle(.bordered)
                     #else
-                    .buttonStyle(.borderedProminent).appControlSize(.small)
+                    .prominentButton().appControlSize(.small)
                     #endif
             }
         }

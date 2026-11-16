@@ -1715,7 +1715,7 @@ private struct PluginWindowView: View {
             ForEach(window.buttons.sorted { order($0.role) < order($1.role) }) { button in
                 if button.role == .positive {
                     Button(button.text) { send(PluginEvent(window: window.id, kind: .click, view: button.id)) }
-                        .buttonStyle(.borderedProminent).disabled(!button.enabled)
+                        .prominentButton().disabled(!button.enabled)
                 } else {
                     Button(button.text) { send(PluginEvent(window: window.id, kind: .click, view: button.id)) }
                         .buttonStyle(.bordered).disabled(!button.enabled)
@@ -2426,7 +2426,7 @@ struct VideoDetailView: View {
         #if os(iOS)
         if ConfigCenter.page(of: detail, site: client.site) != nil {
             Button { showsConfigCenter = true } label: { Label(L10n.text("Open Config Center"), systemImage: "gearshape") }
-                .buttonStyle(.borderedProminent)
+                .prominentButton()
                 .accessibilityIdentifier("detail.configCenter")
         } else {
             Text(L10n.text("No playable sources were found for this video.")).foregroundStyle(.secondary)

@@ -107,6 +107,18 @@ extension View {
     }
 }
 
+extension View {
+    /// A filled button outside a settings row, in the system accent. `.borderedProminent` always labels its fill in white,
+    /// and the Classic theme's tint is a light grey in Dark Mode, so a button in the app-wide tint read white on grey (#1097).
+    @ViewBuilder func prominentButton() -> some View {
+        #if os(tvOS)
+        buttonStyle(.borderedProminent)
+        #else
+        buttonStyle(.borderedProminent).tint(systemAccent)
+        #endif
+    }
+}
+
 #if !os(tvOS)
 /// The system's accent, not the app's: `Color.accentColor` follows the app-wide tint here.
 var systemAccent: Color {
@@ -921,7 +933,7 @@ struct FormSettingsView: View {
             Button(L10n.text("Add from File…")) { choosesFile = true }.disabled(store.importing)
                 .help(L10n.text("A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider."))
             Button(store.importing ? L10n.text("Importing…") : L10n.text("Add Subscription")) { add() }
-                .buttonStyle(.borderedProminent).disabled(!canAdd)
+                .prominentButton().disabled(!canAdd)
         }
         .fileImporter(isPresented: $choosesFile, allowedContentTypes: SubscriptionFile.types) { result in
             if case .success(let file) = result { Task { await store.importSubscriptionFile(file) } }
@@ -1289,7 +1301,7 @@ private struct PlayURLView: View {
                     #endif
                     .onSubmit(open)
                 #if os(macOS)
-                HStack { Spacer(); Button(L10n.text("Open Player"), action: open).buttonStyle(.borderedProminent).disabled(empty) }
+                HStack { Spacer(); Button(L10n.text("Open Player"), action: open).prominentButton().disabled(empty) }
                 #else
                 Button(L10n.text("Open Player"), action: open).disabled(empty)
                 #endif
