@@ -108,3 +108,13 @@ private final class LockedBox<Value: Sendable>: @unchecked Sendable {
         set { lock.withLock { stored = newValue } }
     }
 }
+
+@Test func airScheduleSeasonTitleKeepsOnlyRealNames() {
+    let generic = L10n.text("Season %@", "1")
+    #expect(AirSchedule.seasonTitle("Season 1", number: 1) == generic)
+    #expect(AirSchedule.seasonTitle("第 1 季", number: 1) == generic)
+    #expect(AirSchedule.seasonTitle("第1季", number: 1) == generic)
+    #expect(AirSchedule.seasonTitle("シーズン1", number: 1) == generic)
+    #expect(AirSchedule.seasonTitle("", number: 2) == L10n.text("Season %@", "2"))
+    #expect(AirSchedule.seasonTitle("少年歌行 风花雪月篇", number: 3) == "少年歌行 风花雪月篇")
+}

@@ -29,6 +29,16 @@ public struct AirSchedule: Codable, Hashable, Sendable {
     public let status: String?
     public let fetched: Date
 
+    /// The season as the app's language says it ("第 1 季"): TMDB's name only when it is a real title, since its generic
+    /// "Season 1" comes in whatever language the schedule was fetched in.
+    public var seasonTitle: String { Self.seasonTitle(seasonName, number: season) }
+
+    public static func seasonTitle(_ name: String, number: Int) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        let generic = trimmed.isEmpty || trimmed.range(of: #"^(Season|第|シーズン)\s*\d+\s*(季)?$"#, options: [.regularExpression, .caseInsensitive]) != nil
+        return generic ? L10n.text("Season %@", String(number)) : trimmed
+    }
+
     public init(showID: Int, season: Int, seasonName: String, total: Int, episodes: [Episode], networks: [String], status: String?, fetched: Date) {
         self.showID = showID; self.season = season; self.seasonName = seasonName; self.total = max(total, episodes.count)
         self.episodes = episodes; self.networks = networks; self.status = status; self.fetched = fetched

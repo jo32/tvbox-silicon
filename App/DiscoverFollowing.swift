@@ -163,7 +163,7 @@ struct DiscoverAirCalendarView: View {
                 .clipShape(RoundedRectangle(cornerRadius: tvLayout ? 20 : 10, style: .continuous))
             VStack(alignment: .leading, spacing: tvLayout ? 10 : 5) {
                 Text(show.name).font(.system(size: tvLayout ? 48 : 20, weight: .bold)).lineLimit(2)
-                Text(L10n.text("%@ · %@ Episodes", schedule.seasonName, String(schedule.total)))
+                Text(L10n.text("%@ · %@ Episodes", schedule.seasonTitle, String(schedule.total)))
                     .font(.system(size: tvLayout ? 28 : 14)).opacity(0.75)
                 if !schedule.networks.isEmpty {
                     Text(schedule.networks.prefix(3).joined(separator: " / ")).font(.system(size: tvLayout ? 26 : 13, weight: .semibold)).opacity(0.6)
