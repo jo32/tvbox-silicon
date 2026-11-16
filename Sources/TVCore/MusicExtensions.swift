@@ -200,9 +200,18 @@ public final class MusicExtensionLibrary: @unchecked Sendable {
     @discardableResult
     public func add(script: String, origin: URL?, runtime: MusicExtensionRuntime = .shared) async throws -> MusicExtension {
         guard !script.isEmpty, script.utf8.count <= Self.scriptLimit else { throw TVError.unsupported(L10n.text("This file is not a music extension.")) }
+        // Adding an extension again keeps one entry: the same text only turns it back on; a newer text from the address it
+        // came from replaces it in its place.
+        let previous = existing(script: script, origin: origin)
+        if let previous, (try? Data(contentsOf: file(previous.id))) == Data(script.utf8) {
+            if !previous.enabled { setEnabled(previous.id, true) }
+            return extensions.first { $0.id == previous.id } ?? previous
+        }
         let header = MusicExtension.header(script)
-        var item = MusicExtension(name: header["name"] ?? L10n.text("Music Extension"), summary: header["description"] ?? "",
-                                  version: header["version"] ?? "", author: header["author"] ?? "", origin: origin)
+        var item = MusicExtension(id: previous?.id ?? UUID().uuidString, name: header["name"] ?? L10n.text("Music Extension"),
+                                  summary: header["description"] ?? "", version: header["version"] ?? "", author: header["author"] ?? "",
+                                  origin: origin ?? previous?.origin, added: previous?.added ?? Date())
+        if let previous { await runtime.close(previous.id) }
         item.functions = try await runtime.start(item, script: script)
         guard item.has("getSongInfo"), item.has("getConfig") || item.has("search") else {
             await runtime.close(item.id)
@@ -214,7 +223,9 @@ public final class MusicExtensionLibrary: @unchecked Sendable {
         }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try Data(script.utf8).write(to: file(item.id), options: .atomic)
-        update { $0.append(item) }
+        update { list in
+            if let index = list.firstIndex(where: { $0.id == item.id }) { list[index] = item } else { list.append(item) }
+        }
         Diagnostics.shared.record(.info, "music", "extension added: \(item.functions.joined(separator: ","))")
         return item
     }
@@ -254,6 +265,14 @@ public final class MusicExtensionLibrary: @unchecked Sendable {
     }
 
     private func file(_ id: String) -> URL { folder.appending(path: id + ".js") }
+
+    /// The extension `script` was already added as: the same text, or a script fetched from the same address.
+    func existing(script: String, origin: URL?) -> MusicExtension? {
+        let text = Data(script.utf8)
+        return extensions.first { item in
+            (origin != nil && item.origin == origin) || (try? Data(contentsOf: file(item.id))) == text
+        }
+    }
 
     private func update(_ change: (inout [MusicExtension]) -> Void) {
         lock.withLock {

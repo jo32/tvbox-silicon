@@ -193,3 +193,17 @@ private func library() throws -> (MusicExtensionLibrary, URL) {
     await model.reload(.ext)
     #expect(model.sections.isEmpty)
 }
+
+@Test func musicExtensionAddedAgainKeepsOneEntry() async throws {
+    let (library, folder) = try library()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let runtime = MusicExtensionRuntime(library: library, lx: MusicExtensionNoLX())
+    let first = try await library.add(script: fakeExtension, origin: nil, runtime: runtime)
+    let again = try await library.add(script: fakeExtension, origin: nil, runtime: runtime)
+    #expect(again.id == first.id && library.extensions.count == 1)
+    // A different text from an address is another extension; a newer one from that address replaces it.
+    let address = try #require(URL(string: "https://scripts.example/fake.js"))
+    let other = try await library.add(script: fakeExtension + "\n// copy\n", origin: address, runtime: runtime)
+    let newer = try await library.add(script: fakeExtension + "\n// v2\n", origin: address, runtime: runtime)
+    #expect(newer.id == other.id && library.extensions.map(\.id) == [first.id, other.id])
+}

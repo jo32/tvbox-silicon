@@ -2094,3 +2094,5 @@
 "Yingxia keeps its own copy of this file. Later changes to the original don't reach the app; open it again to update it." = "映匣会保存这个文件的副本。之后修改原文件不会同步到映匣；需要更新时，请再次用映匣打开它。";
 "Added the LX Music source “%@”. Music plays songs through it; manage it in Music Settings › LX Music Sources." = "已添加洛雪音源“%@”，音乐会通过它播放歌曲。可在“音乐设置 › 洛雪音乐自定义源”中管理。";
 "This address is now an LX Music source. Add it again to play music through it." = "此地址现在是洛雪音源。重新添加即可通过它播放音乐。";
+"Use This Source" = "使用此音源";
+"“%@” is already added." = "“%@”已添加过。";

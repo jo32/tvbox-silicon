@@ -188,3 +188,25 @@ private func temporaryLibrary() throws -> (LXSourceLibrary, URL, UserDefaults) {
     defer { ImportedFiles.remove(spiderAddress.absoluteString) }
     guard case .subscription = try await HTTPClient().subscriptionImport(spiderAddress) else { Issue.record("not a subscription"); return }
 }
+
+@Test func lxSourceAddedAgainKeepsOneEntry() async throws {
+    let (library, folder, _) = try temporaryLibrary()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let runtime = LXSourceRuntime()
+    let address = try #require(URL(string: "https://example.com/lx.js"))
+    let first = try await library.add(script: fakeSource, origin: address, runtime: runtime)
+    library.setEnabled(first.id, false)
+    // The same text again, here from a file: still the one entry, switched back on.
+    let again = try await library.add(script: fakeSource, origin: nil, runtime: runtime)
+    #expect(again.id == first.id && again.enabled && again.origin == address)
+    #expect(library.sources.map(\.id) == [first.id])
+    // A newer text from the same address replaces it in its place.
+    let newer = fakeSource + "\n// v2\n"
+    let updated = try await library.add(script: newer, origin: address, runtime: runtime)
+    #expect(updated.id == first.id && updated.added == first.added && library.sources.count == 1)
+    let kept = try await library.script(for: updated)
+    #expect(kept == newer)
+    // Another script from a file is another source.
+    let other = try await library.add(script: fakeSource + "\n// other\n", origin: nil, runtime: runtime)
+    #expect(other.id != first.id && library.sources.map(\.id) == [first.id, other.id])
+}

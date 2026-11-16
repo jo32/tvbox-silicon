@@ -2094,3 +2094,5 @@
 "Yingxia keeps its own copy of this file. Later changes to the original don't reach the app; open it again to update it." = "映匣はこのファイルのコピーを保存します。元のファイルを後で変更しても映匣には反映されません。更新するには、もう一度映匣で開いてください。";
 "Added the LX Music source “%@”. Music plays songs through it; manage it in Music Settings › LX Music Sources." = "LX Music ソース「%@」を追加しました。ミュージックはこのソースで曲を再生します。ミュージック設定 › LX Music カスタムソースで管理できます。";
 "This address is now an LX Music source. Add it again to play music through it." = "このアドレスは現在 LX Music ソースです。追加し直すとこのソースで音楽を再生できます。";
+"Use This Source" = "このソースを使用";
+"“%@” is already added." = "「%@」は追加済みです。";

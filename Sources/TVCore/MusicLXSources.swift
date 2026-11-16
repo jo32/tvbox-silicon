@@ -126,6 +126,8 @@ public struct LXSource: Codable, Identifiable, Hashable, Sendable {
 /// The imported sources: a small list in user defaults and each script in a file.
 public final class LXSourceLibrary: @unchecked Sendable {
     public static let shared = LXSourceLibrary(folder: LXSourceLibrary.defaultFolder, defaults: .standard)
+    /// Posted on the main queue after a source is added, switched on or off, or removed.
+    public static let changed = Notification.Name("LXSourcesChanged")
     static var defaultFolder: URL {
         #if os(tvOS)
         // tvOS only permits Caches; a cleared script is fetched again from where it came from.
@@ -169,8 +171,17 @@ public final class LXSourceLibrary: @unchecked Sendable {
     @discardableResult
     public func add(script: String, origin: URL?, runtime: LXSourceRuntime = .shared) async throws -> LXSource {
         guard !script.isEmpty, script.utf8.count <= Self.scriptLimit else { throw TVError.unsupported(L10n.text("This file is not an LX Music source.")) }
+        // Adding a source again keeps one entry (#1177: people added the same file three times). The same text only turns
+        // it back on; a newer text from the address it came from replaces it in its place.
+        let previous = existing(script: script, origin: origin)
+        if let previous, (try? Data(contentsOf: file(previous.id))) == Data(script.utf8) {
+            if !previous.enabled { setEnabled(previous.id, true) }
+            return sources.first { $0.id == previous.id } ?? previous
+        }
         let info = LXSourceInfo(script: script)
-        var source = LXSource(info: info, sources: [:], origin: origin)
+        var source = LXSource(id: previous?.id ?? UUID().uuidString, info: info, sources: [:], origin: origin ?? previous?.origin,
+                              added: previous?.added ?? Date())
+        if let previous { await runtime.close(previous.id) }
         let declared = try await runtime.start(source, script: script)
         source.sources = declared.filter { LXSourceKey.platform($0.key) != nil }
         guard !source.sources.isEmpty else {
@@ -179,7 +190,9 @@ public final class LXSourceLibrary: @unchecked Sendable {
         }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try Data(script.utf8).write(to: file(source.id), options: .atomic)
-        update { $0.append(source) }
+        update { list in
+            if let index = list.firstIndex(where: { $0.id == source.id }) { list[index] = source } else { list.append(source) }
+        }
         Diagnostics.shared.record(.info, "music", "lx source added: \(source.sources.keys.sorted().joined(separator: ","))")
         return source
     }
@@ -189,6 +202,14 @@ public final class LXSourceLibrary: @unchecked Sendable {
             if let index = list.firstIndex(where: { $0.id == id }) { list[index].enabled = enabled }
         }
         if !enabled { Task { await LXSourceRuntime.shared.close(id) } }
+    }
+
+    /// The source `script` was already added as: the same text, or a script fetched from the same address.
+    func existing(script: String, origin: URL?) -> LXSource? {
+        let text = Data(script.utf8)
+        return sources.first { source in
+            (origin != nil && source.origin == origin) || (try? Data(contentsOf: file(source.id))) == text
+        }
     }
 
     public func remove(_ id: String) {
@@ -227,6 +248,8 @@ public final class LXSourceLibrary: @unchecked Sendable {
             cached = list
             if let data = try? JSONEncoder().encode(list) { defaults.set(data, forKey: Self.defaultsKey) }
         }
+        // Settings › Subscriptions lists the sources too.
+        DispatchQueue.main.async { NotificationCenter.default.post(name: Self.changed, object: nil) }
     }
 }
 
