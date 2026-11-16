@@ -303,6 +303,9 @@ enum QALaunch {
         // Pages that need no subscription, so an App Store build (`-qaAppStore 1`) can show them before one is added.
         if section == self.section, store.subscription == nil, page == "cloud-accounts" {
             CloudDriveView()
+        } else if section == self.section, store.subscription == nil, let page, page.hasPrefix("cloud-login:"),
+                  let drive = CloudDriveQRLogin.Drive(rawValue: String(page.dropFirst("cloud-login:".count))) {
+            CloudQRLoginView(drive: drive) {}
         } else if section == self.section, page == "subtitle-style" {
             SubtitleStyleView()
         } else if section == self.section, page == "danmaku-style" {
@@ -425,7 +428,7 @@ enum QALaunch {
             #if !os(tvOS)
             case "danmaku-settings": QADanmakuSettings()
             #endif
-            // `-qaPage cloud-login:<quark|uc|baidu|aliyun>`; `cloud-accounts` shows the accounts page.
+            // `-qaPage cloud-login:<quark|uc|baidu|aliyun|pan115|tianyi|pan123>`; `cloud-accounts` shows the accounts page.
             case "cloud-login": CloudQRLoginView(drive: parts.dropFirst().first.flatMap(CloudDriveQRLogin.Drive.init(rawValue:)) ?? .quark) {}
             case "cloud-accounts": CloudDriveView()
             #if os(macOS)

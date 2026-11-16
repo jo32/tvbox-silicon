@@ -20,13 +20,15 @@ struct CloudQRLoginView: View {
         case .baidu: L10n.text("Baidu Netdisk")
         case .aliyun: L10n.text("Aliyun Drive")
         case .pan115: L10n.text("115 Cloud")
+        case .tianyi: L10n.text("Tianyi Cloud")
+        case .pan123: L10n.text("123pan")
         }
     }
     private var title: String {
         switch drive {
         case .quark: L10n.text("Sign In to Quark")
         case .uc: L10n.text("Sign In to UC")
-        case .baidu, .aliyun, .pan115: L10n.text("Sign In to %@", name)
+        case .baidu, .aliyun, .pan115, .tianyi, .pan123: L10n.text("Sign In to %@", name)
         }
     }
     private var scanPrompt: String {
@@ -148,6 +150,8 @@ struct CloudQRLoginView: View {
                     case .baidu: accounts.baiduCookie = credentials.cookie
                     case .aliyun: accounts.token = credentials.refreshToken ?? ""
                     case .pan115: accounts.pan115Cookie = credentials.cookie
+                    case .tianyi: accounts.tianyiToken = credentials.accessToken
+                    case .pan123: accounts.pan123Token = credentials.accessToken
                     }
                     try accounts.save()
                     dismiss()
