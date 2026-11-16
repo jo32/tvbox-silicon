@@ -2,8 +2,10 @@
 // - --set: "iOS App Icons PNG Set", whose 02_1024x1024_FullBleed_PNG/NN_Name_1024x1024.png are opaque full-square
 //   masters. Its MediaPocketPurple is the app's own icon on every platform.
 // - --themes: "Tobe / 10 Color Themes", a folder of NN-name/NN-name-1024.png, opaque full-square masters.
+// - --logos: the "logos" delivery (2026-11-16), folders of opaque full-square PNGs (1254 px, scaled to 1024). Two of
+//   them are icons: picacg/v2 (Panda) and Arc/v1_2 (Arc). Its unchan.md has the prompts they were made from.
 //
-// Usage (from the repository root): swift Design/make-app-icons.swift [--set <folder>] [--themes <folder>]
+// Usage (from the repository root): swift Design/make-app-icons.swift [--set <folder>] [--themes <folder>] [--logos <folder>]
 // Then run Design/make-tvos-icon.swift, which draws the Apple TV icon from the iOS one.
 //
 // Writes:
@@ -28,6 +30,8 @@ let themes: [(folder: String, name: String)] = [
 /// Icons in the PNG set, by their file name's middle part, which is also the icon name. Keep in step with AppIconChoice.
 let setIcons = ["01_MediaLayers", "02_MediaPocketPurple", "03_PlayTriangle", "04_MediaPocketGray", "05_SealMusic",
                 "06_ShibaManga", "07_CatCinema", "08_AnimalTrio"]
+/// Pictures in the logos delivery, by path inside it → icon name. Keep in step with AppIconChoice.
+let logos: [(file: String, name: String)] = [("picacg/v2.png", "Panda"), ("Arc/v1_2.png", "Arc")]
 /// The app's own icon; every other one is an alternate.
 let primary = "MediaPocketPurple"
 /// Masters whose top and bottom rows hold the clipped rim of a shape behind the art, by the number of rows at each edge.
@@ -38,8 +42,8 @@ let clippedRims: [String: (top: Int, bottom: Int)] = ["MediaPocketPurple": (top:
 var options: [String: URL] = [:]
 var arguments = CommandLine.arguments.dropFirst()
 while let flag = arguments.popFirst() {
-    guard ["--set", "--themes"].contains(flag), let folder = arguments.popFirst() else {
-        FileHandle.standardError.write("usage: swift Design/make-app-icons.swift [--set <folder>] [--themes <folder>]\n".data(using: .utf8)!)
+    guard ["--set", "--themes", "--logos"].contains(flag), let folder = arguments.popFirst() else {
+        FileHandle.standardError.write("usage: swift Design/make-app-icons.swift [--set <folder>] [--themes <folder>] [--logos <folder>]\n".data(using: .utf8)!)
         exit(2)
     }
     options[flag] = URL(fileURLWithPath: folder)
@@ -181,6 +185,9 @@ if let delivery = options["--themes"] {
     for theme in themes {
         make(load(delivery.appendingPathComponent(theme.folder).appendingPathComponent("\(theme.folder)-1024.png")), name: theme.name)
     }
+}
+if let delivery = options["--logos"] {
+    for logo in logos { make(scaled(load(delivery.appendingPathComponent(logo.file)), to: 1024), name: logo.name) }
 }
 
 // The icon before MediaPocketPurple: artwork from its iOS set, which this script leaves alone.

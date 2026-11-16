@@ -20,6 +20,7 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
     // Keep in step with ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES (project.yml) and Design/make-app-icons.swift.
     case pocket = "MediaPocketPurple", grayPocket = "MediaPocketGray", layers = "MediaLayers", play = "PlayTriangle"
     case seal = "SealMusic", shiba = "ShibaManga", cat = "CatCinema", friends = "AnimalTrio"
+    case panda = "Panda", arc = "Arc"
     case classic = "Classic", aurora = "Aurora", porcelain = "Porcelain", obsidian = "Obsidian", azure = "Azure"
     case daybreak = "Daybreak", iris = "Iris", lagoon = "Lagoon", roseQuartz = "RoseQuartz", citrus = "Citrus", cosmic = "Cosmic"
 
@@ -36,6 +37,8 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
         case .shiba: L10n.text("Shiba")
         case .cat: L10n.text("Cat")
         case .friends: L10n.text("Friends")
+        case .panda: L10n.text("Panda")
+        case .arc: L10n.text("Arc")
         case .classic: L10n.text("Classic")
         case .aurora: L10n.text("Aurora")
         case .porcelain: L10n.text("Porcelain")

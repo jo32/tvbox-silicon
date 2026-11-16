@@ -170,7 +170,7 @@ let alternates = try! FileManager.default.contentsOfDirectory(atPath: iosIcons.p
 for set in alternates {
     let name = (set as NSString).deletingPathExtension
     let icon = Icon(iosIcons.appendingPathComponent("\(set)/AppIcon.png"),
-                    oneTone: ["AppIcon-SealMusic", "AppIcon-ShibaManga", "AppIcon-CatCinema", "AppIcon-AnimalTrio"].contains(name))
+                    oneTone: ["AppIcon-SealMusic", "AppIcon-ShibaManga", "AppIcon-CatCinema", "AppIcon-AnimalTrio", "AppIcon-Panda"].contains(name))
     writeStack(icon, root.appendingPathComponent("\(name).imagestack"), width: 400, height: 240, scales: [1, 2])
     print("Wrote \(name)")
 }
