@@ -60,11 +60,23 @@ public enum ImportedFiles {
     public static func add(_ file: URL) throws -> URL {
         let name = file.lastPathComponent.replacingOccurrences(of: "/", with: "_").trimmingCharacters(in: CharacterSet(charactersIn: ". "))
         guard !name.isEmpty else { throw TVError.invalidURL }
-        let data = try Data(contentsOf: file)
+        let data = try read(file)
         guard data.count <= 20_000_000 else { throw TVError.unsupported(L10n.text("The playlist exceeds 20 MB. Use a smaller subscription.")) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try data.write(to: directory.appending(path: name), options: .atomic)
         return address(name)
+    }
+
+    /// Reads a picked or opened file through a file coordinator, which first downloads an iCloud Drive file
+    /// that is only a placeholder on this device; a plain read fails on those.
+    public static func read(_ file: URL) throws -> Data {
+        var coordination: NSError?
+        var result: Result<Data, Error> = .failure(TVError.invalidURL)
+        NSFileCoordinator().coordinate(readingItemAt: file, options: .withoutChanges, error: &coordination) { url in
+            result = Result { try Data(contentsOf: url) }
+        }
+        if let coordination { throw coordination }
+        return try result.get()
     }
 
     /// Deletes the copy behind an address on the reserved host; any other address is left alone.

@@ -2085,3 +2085,5 @@
 "This address doesn't hold a subscription. Add it as a new one instead." = "This address doesn't hold a subscription. Add it as a new one instead.";
 "Couldn't load this address: %@" = "Couldn't load this address: %@";
 "Use New Address" = "Use New Address";
+"File" = "File";
+"Yingxia keeps its own copy of this file. Later changes to the original don't reach the app; open it again to update it." = "Yingxia keeps its own copy of this file. Later changes to the original don't reach the app; open it again to update it.";

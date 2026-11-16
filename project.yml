@@ -103,6 +103,13 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: com.tvbox.yingxia.handoff
             CFBundleURLSchemes: [yingxia]
+        # Open With: a .json, .m3u, .txt, .py or .js file opens as a subscription (#983, App/TVBoxApp.swift).
+        # Alternate, so Yingxia is offered but never becomes the default app for these types.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Subscription File
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.json, public.m3u-playlist, public.plain-text, public.python-script, com.netscape.javascript-source]
         # Sparkle (App/MacUpdater.swift) picks the appcast for the package in code. Every update must be signed
         # with this key (private half: ~/.sparkle/yingxia_ed25519.key on the release Mac), and so must the appcast.
         SUPublicEDKey: GH90e0snzIFHgk1wn+91KyrD6jbOnOu7sC7GJPWdG6c=
@@ -188,6 +195,15 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: com.tvbox.yingxia.handoff
             CFBundleURLSchemes: [yingxia]
+        # The share sheet and Open In: a .json, .m3u, .txt, .py or .js file opens as a subscription (#983,
+        # App/TVBoxApp.swift). Alternate, so Yingxia is offered but never becomes the default app for these types;
+        # in place, so the app copies the file itself and Open In leaves no copy in Documents/Inbox.
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Subscription File
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.json, public.m3u-playlist, public.plain-text, public.python-script, com.netscape.javascript-source]
+        LSSupportsOpeningDocumentsInPlace: true
   TVBox-tvOS:
     templates: [SharedApp]
     preBuildScripts:

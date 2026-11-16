@@ -403,7 +403,10 @@ import TVCore
         let copied = Result { try ImportedFiles.add(file) }
         if scoped { file.stopAccessingSecurityScopedResource() }
         guard case .success(let url) = copied else {
-            if case .failure(let error) = copied { importError = L10n.text("Import failed: %@", error.localizedDescription) }
+            if case .failure(let error) = copied {
+                Diagnostics.shared.failure("subscription", "import file ext=\(file.pathExtension)", error)
+                importError = L10n.text("Import failed: %@", error.localizedDescription)
+            }
             return
         }
         let address = url.absoluteString, known = subscriptions.contains { $0.address == address }
