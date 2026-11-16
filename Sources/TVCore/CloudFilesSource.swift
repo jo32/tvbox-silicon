@@ -59,6 +59,8 @@ public enum CloudFilesSource {
         case .baidu: found = try await BaiduFiles.shared.search(query, page: page, size: pageSize)
         case .tianyi: found = try await TianyiFiles.shared.search(query, page: page, size: pageSize)
         case .pan123: found = try await Pan123Files.shared.search(query, page: page, size: pageSize)
+        // Guangya's web page has no search to ask.
+        case .guangya: return ([], 1)
         case .alist(let server) where server.isWebDAV: return ([], 1)
         case .alist(let server) where server.isEmby: found = try await Emby.shared.search(server, query, page: page, size: pageSize)
         case .alist(let server) where server.isFnOS: found = try await FnOS.shared.search(server, query, page: page, size: pageSize)

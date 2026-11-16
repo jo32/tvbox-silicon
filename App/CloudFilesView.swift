@@ -440,6 +440,7 @@ extension CloudFilesDrive {
         case .baidu: CloudProvider.baidu.symbol
         case .tianyi: CloudProvider.tianyi.symbol
         case .pan123: CloudProvider.pan123.symbol
+        case .guangya: CloudProvider.guangya.symbol
         case .alist(let server): server.isEmby || server.isFnOS ? "play.tv" : server.isWebDAV ? "externaldrive.connected.to.line.below" : "server.rack"
         }
     }
@@ -451,6 +452,7 @@ extension CloudFilesDrive {
         case .baidu: CloudProvider.baidu.tint
         case .tianyi: CloudProvider.tianyi.tint
         case .pan123: CloudProvider.pan123.tint
+        case .guangya: CloudProvider.guangya.tint
         case .alist: .teal
         }
     }
