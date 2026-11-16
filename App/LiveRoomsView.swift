@@ -361,6 +361,7 @@ struct LiveRoomGrid: View {
 struct LiveSearchResults: View {
     let query: String
     let sources: [LiveSource]
+    @Environment(Store.self) private var store
     @State private var found: [LivePlatform: [LiveRoom]] = [:]
     @State private var failures: [LivePlatform: String] = [:]
     @State private var playlists: [String: [Channel]] = [:]
@@ -383,7 +384,7 @@ struct LiveSearchResults: View {
                 VStack(alignment: .leading, spacing: Layout.headerSpacing) {
                     SectionHeader(title: L10n.text("Live Channels"))
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.cardMin), spacing: 12)], spacing: 12) {
-                        ForEach(channels.prefix(60)) { ChannelCard(channel: $0) }
+                        ForEach(channels.prefix(60)) { ChannelCard(channel: $0, play: watch) }
                     }
                 }
             }
@@ -418,6 +419,12 @@ struct LiveSearchResults: View {
             }
             loadingPlaylists = false
         }
+    }
+
+    /// Plays a channel found here with the rest of its playlist to switch through in the player (#1172).
+    private func watch(_ channel: Channel) {
+        let lists = playlistSources.map { (title: $0.name, channels: playlists[$0.id] ?? []) }
+        if let lineup = LiveLineup.first(holding: channel, in: lists) { store.watch(channel, in: lineup) } else { store.playing = channel }
     }
 
     private func section(_ platform: LivePlatform) -> some View {

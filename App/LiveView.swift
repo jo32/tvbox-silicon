@@ -516,7 +516,7 @@ struct FavoritesView: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.cardMin), spacing: 12)], spacing: 12) {
                 ForEach(store.favorites.liveChannels) { channel in
                     // The other favorite channels are the ones to switch through in the player (#1010).
-                    ChannelCard(channel: channel) { store.watch($0, in: LiveLineup(title: L10n.text("Favorites"), channels: store.favorites.liveChannels)) }
+                    ChannelCard(channel: channel) { store.watchFavorite($0) }
                 }
             }
         }
