@@ -308,12 +308,23 @@ private struct MusicHome: View {
         let library = store.music.library
         let browse = store.musicBrowse
         let resumable = store.music.track == nil ? library.resumePoint : nil
+        let downloads = !MusicDownloadLibrary.shared.items.isEmpty
+        let empty = library.history.isEmpty && resumable == nil && !downloads && browse.sections.isEmpty && !browse.loading
+        #if os(tvOS)
+        // Apple TV has no toolbar button for Music Settings (where music sources are added), so the page offers it
+        // here once there is something to show; the empty page below has its own (#1024).
+        if !empty {
+            Button(action: openSettings) { Label(L10n.text("Music Settings"), systemImage: "slider.horizontal.3") }
+                .glassPill()
+                .accessibilityIdentifier("music.settings")
+                .padding(.bottom, 20)
+        }
+        #endif
         if let point = resumable, let track = point.queue.current {
             MusicContinueCard(point: point, track: track).padding(.bottom, 20)
         }
         let liked = store.favorites.musicTracks.count
         if liked > 0 { MusicLikedLink(count: liked).padding(.bottom, 20) }
-        let downloads = !MusicDownloadLibrary.shared.items.isEmpty
         if downloads { MusicDownloadsLink().padding(.bottom, 20) }
         if !browse.sections.isEmpty {
             MusicBrowseShelves(sections: browse.sections).padding(.bottom, 28)
@@ -349,7 +360,7 @@ private struct MusicHome: View {
                     MusicTrackRow(track: track) { store.music.play(track) }
                 }
             }
-        } else if resumable == nil && !downloads && browse.sections.isEmpty && !browse.loading {
+        } else if empty {
             EmptyPage(symbol: "music.note", title: L10n.text("Search for a Song"),
                       message: L10n.text("Type a song's name, or its name and the artist. Yingxia finds the recording and plays it from the best channel available, lossless first."),
                       action: L10n.text("Music Settings"), actionSymbol: "slider.horizontal.3", perform: openSettings)
