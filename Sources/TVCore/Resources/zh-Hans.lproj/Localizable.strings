@@ -2042,7 +2042,8 @@
 "A square picture works best. One with see-through corners, such as an icon made for the Mac, shows as it is." = "方形图片效果最好。四角透明的图片（例如为 Mac 制作的图标）会按原样显示。";
 "Choose Picture…" = "选择图片…";
 "Remove Custom Picture" = "移除自定图片";
-"The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Pocket." = "映匣打开时，程序坞显示你选的图标；在访达等其他地方仍是“口袋”。";
+"The Dock and Finder show the icon you pick, also while Yingxia is closed." = "你选的图标会显示在程序坞和访达中，映匣关闭后也不变。";
+"Yingxia can't change its own icon where it's installed, so the Dock shows this icon only while Yingxia is open." = "映匣无法更改安装位置中自己的图标，因此只在映匣打开时，程序坞才显示这个图标。";
 "The icon on your Home Screen. The system confirms the change with a short message." = "主屏幕上的图标。更换后，系统会弹出一条简短提示。";
 "The icon on the Home Screen. When Yingxia sits in the top row, the picture above it stays Pocket." = "主屏幕上的图标。映匣放在第一排时，上方显示的大图仍是“口袋”。";
 
