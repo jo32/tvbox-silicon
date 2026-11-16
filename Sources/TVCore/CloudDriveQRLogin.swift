@@ -5,15 +5,15 @@ import Foundation
 /// sets. Baidu Netdisk: the passport's QR login sets BDUSS, STOKEN and PTOKEN. Aliyun Drive:
 /// the approved code carries the account's refresh token. 115: the approved code signs in a client, which
 /// gets the UID, CID, SEID and KID cookies. Tianyi Cloud: the TV app's code yields the account's access token. 123pan:
-/// the web app's code yields its Bearer token.
+/// the web app's code yields its Bearer token. Guangya: a device sign-in (OAuth 2), approved in its app, gets tokens.
 public struct CloudDriveQRLogin: Sendable {
-    public enum Drive: String, Sendable { case quark, uc, baidu, aliyun, pan115, tianyi, pan123 }
+    public enum Drive: String, Sendable { case quark, uc, baidu, aliyun, pan115, tianyi, pan123, guangya }
     public struct Credentials: Sendable, Equatable {
         public let cookie: String
         public let serviceTicket: String?
-        /// Aliyun Drive's refresh token.
+        /// Aliyun Drive's and Guangya's refresh token.
         public var refreshToken: String? = nil
-        /// Tianyi Cloud's access token, 123pan's Bearer token.
+        /// Tianyi Cloud's access token, 123pan's Bearer token, Guangya's access token.
         public var accessToken: String? = nil
     }
     public enum Status: Sendable, Equatable { case waiting, expired, signedIn(Credentials) }
@@ -39,6 +39,7 @@ public struct CloudDriveQRLogin: Sendable {
         case .pan115: return try await start115()
         case .tianyi: return try await startTianyi()
         case .pan123: return try await start123()
+        case .guangya: return try await startGuangya()
         case .quark, .uc: break
         }
         let members = try await members(drive, "getTokenForQrcodeLogin", [:])
@@ -53,6 +54,7 @@ public struct CloudDriveQRLogin: Sendable {
         case .pan115: return try await poll115()
         case .tianyi: return try await pollTianyi()
         case .pan123: return try await poll123()
+        case .guangya: return try await pollGuangya()
         case .quark, .uc: break
         }
         let (status, members) = try await Self.call(drive, "getServiceTicketByQrcodeToken", ["token": token])
@@ -454,6 +456,39 @@ public struct CloudDriveQRLogin: Sendable {
         }
         return request
     }
+
+    // MARK: Guangya
+
+    /// A device code: its address goes in the QR code, which the Guangya app opens and approves. It lasts two minutes.
+    private static func startGuangya() async throws -> CloudDriveQRLogin {
+        let request = GuangyaFiles.request(URL(string: GuangyaFiles.accountAPI + "/v1/auth/device/code")!,
+                                           body: ["scope": "user", "client_id": GuangyaFiles.clientID])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try check(response)
+        let answer = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        guard let device = answer?["device_code"] as? String, let code = answer?["verification_uri_complete"] as? String,
+              !device.isEmpty, !code.isEmpty else {
+            throw TVError.unsupported(L10n.text("Couldn't get a sign-in code. Try again."))
+        }
+        // The account service keeps answering "authorization_pending" for a code past its time.
+        let lifetime = (answer?["expires_in"] as? NSNumber)?.doubleValue ?? 120
+        return CloudDriveQRLogin(drive: .guangya, code: code, token: device,
+                                 state: ["expires": String(Date().timeIntervalSince1970 + lifetime)])
+    }
+
+    private func pollGuangya() async throws -> Status {
+        if let expires = state["expires"].flatMap(Double.init), Date().timeIntervalSince1970 > expires { return .expired }
+        let answer: [String: Any]
+        do { answer = try await GuangyaFiles.token(["grant_type": "urn:ietf:params:oauth:grant-type:device_code", "device_code": token]) }
+        catch let failure as GuangyaTokenError { return Self.guangyaWaits(failure.code) ? .waiting : .expired }
+        guard let access = answer["access_token"] as? String, let refresh = answer["refresh_token"] as? String, !refresh.isEmpty else {
+            throw TVError.unsupported(L10n.text("Sign-in was approved, but the drive didn't return a login. Try again."))
+        }
+        return .signedIn(Credentials(cookie: "", serviceTicket: nil, refreshToken: refresh, accessToken: access))
+    }
+
+    /// The device code is still waiting for approval; any other error ("expired_token", "access_denied") ends it.
+    static func guangyaWaits(_ error: String) -> Bool { error == "authorization_pending" || error == "slow_down" }
 
     private static let browser = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
     private static func milliseconds() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }

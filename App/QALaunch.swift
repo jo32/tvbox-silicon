@@ -435,7 +435,7 @@ enum QALaunch {
             #if !os(tvOS)
             case "danmaku-settings": QADanmakuSettings()
             #endif
-            // `-qaPage cloud-login:<quark|uc|baidu|aliyun|pan115|tianyi|pan123>`; `cloud-accounts` shows the accounts page.
+            // `-qaPage cloud-login:<quark|uc|baidu|aliyun|pan115|tianyi|pan123|guangya>`; `cloud-accounts` shows the accounts page.
             case "cloud-login": CloudQRLoginView(drive: parts.dropFirst().first.flatMap(CloudDriveQRLogin.Drive.init(rawValue:)) ?? .quark) {}
             case "cloud-accounts": CloudDriveView()
             #if os(macOS)
