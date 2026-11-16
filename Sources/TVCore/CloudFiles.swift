@@ -161,6 +161,7 @@ public enum CloudFiles {
         case .pan123: files = try await Pan123Files.shared.list(folder)
         case .alist(let server) where server.isWebDAV: files = try await WebDAV.shared.list(server, path: folder)
         case .alist(let server) where server.isEmby: files = try await Emby.shared.list(server, id: folder)
+        case .alist(let server) where server.isFnOS: files = try await FnOS.shared.list(server, id: folder)
         case .alist(let server): files = try await AList.shared.list(server, path: folder, password: password)
         }
         return CloudFile.arranged(files)
@@ -232,6 +233,7 @@ public enum CloudFiles {
         case .pan123: return try await Pan123Files.shared.link(id, name: name)
         case .alist(let server) where server.isWebDAV: return try await WebDAV.shared.source(server, path: id, name: name)
         case .alist(let server) where server.isEmby: return try await Emby.shared.source(server, id: id, name: name)
+        case .alist(let server) where server.isFnOS: return try await FnOS.shared.source(server, id: id, name: name)
         case .alist(let server): return try await AList.shared.link(server, path: id, name: name)
         }
     }
@@ -258,6 +260,7 @@ public enum CloudFiles {
         case .pan123: return try await Pan123Files.shared.stream(id, name: name)
         case .alist(let server) where server.isWebDAV: return try await WebDAV.shared.stream(server, path: id, name: name)
         case .alist(let server) where server.isEmby: return try await Emby.shared.stream(server, id: id, name: name)
+        case .alist(let server) where server.isFnOS: return try await FnOS.shared.stream(server, id: id, name: name)
         case .alist(let server): return try await AList.shared.stream(server, path: id, name: name)
         }
     }

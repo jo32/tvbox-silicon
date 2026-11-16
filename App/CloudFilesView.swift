@@ -30,7 +30,7 @@ struct CloudFilesView: View {
                     .glassRow()
                 }
             }
-            FilesSection(title: "AList · WebDAV · Emby", footer: L10n.text("Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too.")) {
+            FilesSection(title: "AList · WebDAV · Emby", footer: L10n.text("Add an AList or OpenList server, a NAS's WebDAV share, an Emby or Jellyfin server, or an fnOS NAS's media library, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too.")) {
                 ForEach(servers) { server in
                     FolderLink(drive: .alist(server), folder: server.root, name: server.name) {
                         FileRowLabel(symbol: CloudFilesDrive.alist(server).symbol, tint: .teal, title: server.name,
@@ -232,7 +232,7 @@ struct AListServerForm: View {
                 Section {
                     fields
                 } footer: {
-                    Text(L10n.text("The server's address, such as http://192.168.1.10:5244 for AList, http://192.168.1.10:8096 for Emby or Jellyfin, or the WebDAV address your NAS shows. Add a folder after an AList or WebDAV address to start there. Emby and Jellyfin always want the user name; the others only when they don't let guests browse."))
+                    Text(L10n.text("The server's address, such as http://192.168.1.10:5244 for AList, http://192.168.1.10:8096 for Emby or Jellyfin, http://192.168.1.10:5666 for fnOS, or the WebDAV address your NAS shows. Add a folder after an AList or WebDAV address to start there. Emby, Jellyfin and fnOS always want the user name; the others only when they don't let guests browse."))
                 }
                 if let error { Section { Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Brand.amber) } }
             }
@@ -280,12 +280,13 @@ struct AListServerForm: View {
             do {
                 let url = try WebAddress.resolve(address)
                 let username = server.username.trimmingCharacters(in: .whitespaces)
-                // An AList server, else an Emby or Jellyfin server, else a WebDAV share such as a NAS's.
+                // An AList server, else an Emby or Jellyfin server, else a 飞牛 fnOS NAS, else a WebDAV share such as a NAS's.
                 var probed = await AList.probe(url)
                 if probed == nil { probed = await Emby.probe(url) }
+                if probed == nil { probed = await FnOS.probe(url) }
                 if probed == nil { probed = try await WebDAV.shared.probe(url, username: username, password: server.password) }
                 guard var found = probed else {
-                    error = L10n.text("No AList, WebDAV, Emby or Jellyfin server answered at this address.")
+                    error = L10n.text("No AList, WebDAV, Emby, Jellyfin or fnOS server answered at this address.")
                     return
                 }
                 found.id = server.id
@@ -295,6 +296,7 @@ struct AListServerForm: View {
                 found.folderPassword = server.folderPassword
                 if found.isWebDAV { try await WebDAV.shared.check(found) }
                 else if found.isEmby { try await Emby.shared.check(found) }
+                else if found.isFnOS { try await FnOS.shared.check(found) }
                 else { try await AList.shared.check(found) }
                 if isNew { try AListServers.add([found]) } else { try AListServers.update(found) }
                 saved()
@@ -438,7 +440,7 @@ extension CloudFilesDrive {
         case .baidu: CloudProvider.baidu.symbol
         case .tianyi: CloudProvider.tianyi.symbol
         case .pan123: CloudProvider.pan123.symbol
-        case .alist(let server): server.isEmby ? "play.tv" : server.isWebDAV ? "externaldrive.connected.to.line.below" : "server.rack"
+        case .alist(let server): server.isEmby || server.isFnOS ? "play.tv" : server.isWebDAV ? "externaldrive.connected.to.line.below" : "server.rack"
         }
     }
     var tint: Color {
