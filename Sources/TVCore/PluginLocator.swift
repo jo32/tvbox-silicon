@@ -129,40 +129,44 @@ public actor PluginLocator {
 /// Just enough ZIP reading for plugin archives, including ones disguised behind image or text bytes.
 enum ZipArchive {
     static func entries(in archive: Data, where include: (String) -> Bool) -> [Data] {
-        let bytes = [UInt8](archive)
-        func u16(_ at: Int) -> Int { at + 1 < bytes.count ? Int(bytes[at]) | Int(bytes[at + 1]) << 8 : 0 }
-        func u32(_ at: Int) -> Int { at + 3 < bytes.count ? u16(at) | u16(at + 2) << 16 : 0 }
-        // The end-of-central-directory record sits in the last 64 KiB plus its 22-byte header.
-        var end = -1
-        var position = bytes.count - 22
-        while position >= max(0, bytes.count - 65_557) {
-            if u32(position) == 0x0605_4b50 { end = position; break }
-            position -= 1
-        }
-        guard end >= 0 else { return [] }
-        let size = u32(end + 12), declared = u32(end + 16)
-        // Bytes prepended to the archive shift every recorded offset by the same amount.
-        let shift = end - size - declared
-        var cursor = end - size
-        var found: [Data] = []
-        for _ in 0..<u16(end + 10) {
-            guard cursor >= 0, u32(cursor) == 0x0201_4b50 else { break }
-            let method = u16(cursor + 10), compressed = u32(cursor + 20), length = u32(cursor + 24)
-            let nameLength = u16(cursor + 28), extra = u16(cursor + 30), comment = u16(cursor + 32)
-            let local = u32(cursor + 42) + shift
-            let name = String(decoding: bytes[min(bytes.count, cursor + 46)..<min(bytes.count, cursor + 46 + nameLength)], as: UTF8.self)
-            cursor += 46 + nameLength + extra + comment
-            guard include(name), local >= 0, u32(local) == 0x0403_4b50, length > 0, length < 64 << 20 else { continue }
-            let start = local + 30 + u16(local + 26) + u16(local + 28)
-            guard start + compressed <= bytes.count else { continue }
-            if method == 0 { found.append(Data(bytes[start..<start + compressed])); continue }
-            guard method == 8 else { continue }
-            var output = [UInt8](repeating: 0, count: length)
-            let written = bytes[start..<start + compressed].withUnsafeBufferPointer { source in
-                compression_decode_buffer(&output, length, source.baseAddress!, compressed, nil, COMPRESSION_ZLIB)
+        // Read in place: copying a whole plugin jar into an array first doubled the memory it takes, and low-memory
+        // iPads were killed making that copy while a search looked through the subscription's archives.
+        archive.withUnsafeBytes { raw -> [Data] in
+            let bytes = raw.bindMemory(to: UInt8.self)
+            func u16(_ at: Int) -> Int { at >= 0 && at + 1 < bytes.count ? Int(bytes[at]) | Int(bytes[at + 1]) << 8 : 0 }
+            func u32(_ at: Int) -> Int { at >= 0 && at + 3 < bytes.count ? u16(at) | u16(at + 2) << 16 : 0 }
+            // The end-of-central-directory record sits in the last 64 KiB plus its 22-byte header.
+            var end = -1
+            var position = bytes.count - 22
+            while position >= max(0, bytes.count - 65_557) {
+                if u32(position) == 0x0605_4b50 { end = position; break }
+                position -= 1
             }
-            if written == length { found.append(Data(output)) }
+            guard end >= 0, let base = bytes.baseAddress else { return [] }
+            let size = u32(end + 12), declared = u32(end + 16)
+            // Bytes prepended to the archive shift every recorded offset by the same amount.
+            let shift = end - size - declared
+            var cursor = end - size
+            var found: [Data] = []
+            for _ in 0..<u16(end + 10) {
+                guard cursor >= 0, u32(cursor) == 0x0201_4b50 else { break }
+                let method = u16(cursor + 10), compressed = u32(cursor + 20), length = u32(cursor + 24)
+                let nameLength = u16(cursor + 28), extra = u16(cursor + 30), comment = u16(cursor + 32)
+                let local = u32(cursor + 42) + shift
+                let name = String(decoding: UnsafeBufferPointer(rebasing: bytes[min(bytes.count, cursor + 46)..<min(bytes.count, cursor + 46 + nameLength)]), as: UTF8.self)
+                cursor += 46 + nameLength + extra + comment
+                guard include(name), local >= 0, u32(local) == 0x0403_4b50, length > 0, length < 64 << 20 else { continue }
+                let start = local + 30 + u16(local + 26) + u16(local + 28)
+                guard start + compressed <= bytes.count else { continue }
+                if method == 0 { found.append(Data(bytes: base + start, count: compressed)); continue }
+                guard method == 8 else { continue }
+                var output = Data(count: length)
+                let written = output.withUnsafeMutableBytes { target in
+                    compression_decode_buffer(target.bindMemory(to: UInt8.self).baseAddress!, length, base + start, compressed, nil, COMPRESSION_ZLIB)
+                }
+                if written == length { found.append(output) }
+            }
+            return found
         }
-        return found
     }
 }
