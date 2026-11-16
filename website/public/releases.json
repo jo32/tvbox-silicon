@@ -1,6 +1,129 @@
 {
   "releases": [
     {
+      "version": "1.8.23",
+      "build": 61,
+      "date": "2026-11-16",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "cloud",
+          "title": {
+            "en": "More cloud drives",
+            "zh-Hans": "更多网盘",
+            "zh-Hant": "更多網盤",
+            "ja": "対応クラウドドライブが増えました"
+          },
+          "detail": {
+            "en": "Cloud Files now opens Baidu Netdisk, Tianyi Cloud, 123pan and Guangya Cloud too. Sign in under Settings › Cloud Drive Accounts (Tianyi, 123pan and Guangya with a code you scan in their app), then browse and play your videos; all of them but Guangya can be searched. Sources that play 115 links now use the 115 account you signed in to in Yingxia.",
+            "zh-Hans": "“网盘文件”现在也能打开百度网盘、天翼云盘、123云盘和光鸭云盘。在“设置 › 网盘账号”中登录（天翼、123 和光鸭用它们的 App 扫码），即可浏览和播放其中的视频；除光鸭外都能搜索。播放 115 链接的源，现在也会使用你在映匣中登录的 115 账号。",
+            "zh-Hant": "「網盤檔案」現在也能打開百度網盤、天翼雲盤、123雲盤和光鴨雲盤。在「設定 › 網盤帳號」中登入（天翼、123 和光鴨用它們的 App 掃碼），即可瀏覽和播放其中的影片；除光鴨外都能搜尋。播放 115 連結的源，現在也會使用你在映匣中登入的 115 帳號。",
+            "ja": "「クラウドファイル」で Baidu Netdisk、Tianyi Cloud、123pan、Guangya Cloud も開けるようになりました。「設定 › クラウドドライブのアカウント」でサインインすると（Tianyi、123pan、Guangya は各アプリでコードをスキャン）、動画を閲覧して再生できます。Guangya 以外は検索もできます。115 のリンクを再生するソースは、映匣でサインインした 115 アカウントを使うようになりました。"
+          }
+        },
+        {
+          "symbol": "server.rack",
+          "title": {
+            "en": "fnOS NAS and media servers",
+            "zh-Hans": "飞牛 NAS 与媒体服务器",
+            "zh-Hant": "飛牛 NAS 與媒體伺服器",
+            "ja": "fnOS NAS とメディアサーバ"
+          },
+          "detail": {
+            "en": "Add your fnOS (飞牛) NAS in Cloud Files › Add Server with its address, user name and password, then browse its media libraries and series, search and play. Emby and Jellyfin libraries that keep films in subfolders now list every title.",
+            "zh-Hans": "在“网盘文件 › 添加服务器”中填入飞牛 NAS 的地址、用户名和密码，即可浏览飞牛影视的媒体库和剧集、搜索并播放。把影片放在子文件夹中的 Emby 和 Jellyfin 媒体库，现在也会列出全部影片。",
+            "zh-Hant": "在「網盤檔案 › 新增伺服器」中填入飛牛 NAS 的位址、使用者名稱和密碼，即可瀏覽飛牛影視的媒體庫和劇集、搜尋並播放。把影片放在子資料夾中的 Emby 和 Jellyfin 媒體庫，現在也會列出全部影片。",
+            "ja": "「クラウドファイル › サーバを追加」で fnOS（飛牛）NAS のアドレス、ユーザ名、パスワードを入力すると、メディアライブラリやシリーズを閲覧、検索、再生できます。映画をサブフォルダに分けている Emby と Jellyfin のライブラリも、すべての作品が表示されるようになりました。"
+          }
+        },
+        {
+          "symbol": "play.rectangle",
+          "title": {
+            "en": "Player on iPhone and iPad",
+            "zh-Hans": "iPhone 和 iPad 播放器",
+            "zh-Hant": "iPhone 和 iPad 播放器",
+            "ja": "iPhone と iPad のプレーヤー"
+          },
+          "detail": {
+            "en": "Full screen shows the time and battery. Picture Size picks Fit, Fill or Stretch, and Settings › Playback › Skip Interval sets the skip buttons from 5 to 90 seconds. The seek bar shows what's already loaded, and Previous and Next now sit at opposite ends. On iPhone, Settings › Playback › Video Page can stop videos from playing automatically, or start them in full screen.",
+            "zh-Hans": "全屏时显示时间和电量。“画面尺寸”可选适应屏幕、填满屏幕或拉伸；“设置 › 播放 › 快进快退时长”可把快进快退按钮设为 5 到 90 秒。进度条会显示已加载的部分，上一集和下一集按钮分列两端。在 iPhone 上，“设置 › 播放 › 视频详情页”可关闭自动播放，或开始播放时直接全屏。",
+            "zh-Hant": "全螢幕時顯示時間和電量。「畫面尺寸」可選符合螢幕、填滿螢幕或拉伸；「設定 › 播放 › 快轉倒轉時長」可把快轉倒轉按鈕設為 5 到 90 秒。進度列會顯示已載入的部分，上一集和下一集按鈕分列兩端。在 iPhone 上，「設定 › 播放 › 影片詳情頁」可關閉自動播放，或開始播放時直接全螢幕。",
+            "ja": "フルスクリーンで時刻とバッテリー残量が表示されます。「画面サイズ」で全体を表示・画面いっぱい・引き伸ばすを選べ、「設定 › 再生 › スキップ間隔」でスキップボタンを 5〜90 秒に設定できます。シークバーには読み込み済みの範囲が表示され、前へと次へのボタンは両端に分かれました。iPhone では「設定 › 再生 › 動画の詳細ページ」で自動再生をオフにしたり、再生開始時にフルスクリーンにしたりできます。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "forward.end",
+          "title": {
+            "en": "Intro and outro skipping",
+            "zh-Hans": "跳过片头片尾",
+            "zh-Hant": "跳過片頭片尾",
+            "ja": "オープニングとエンディングのスキップ"
+          },
+          "detail": {
+            "en": "Intro and outro times no longer have length limits, so short episodes with long openings can skip them too. Skipping an intro shows a notice with Undo, and five seconds before the outro a countdown lets you cancel.",
+            "zh-Hans": "片头片尾时长不再有限制，开头较长的短集也能跳过。跳过片头时会显示提示并可撤销；片尾前 5 秒会倒计时，可以取消。",
+            "zh-Hant": "片頭片尾時長不再有限制，開頭較長的短集也能跳過。跳過片頭時會顯示提示並可復原；片尾前 5 秒會倒數，可以取消。",
+            "ja": "オープニングとエンディングの時間に制限がなくなり、オープニングの長い短いエピソードでもスキップできます。オープニングをスキップすると取り消せる通知が表示され、エンディングの 5 秒前にはキャンセルできるカウントダウンが表示されます。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "list.bullet.rectangle",
+          "title": {
+            "en": "Subscriptions and sources",
+            "zh-Hans": "订阅与点播源",
+            "zh-Hant": "訂閱與點播源",
+            "ja": "配信設定とソース"
+          },
+          "detail": {
+            "en": "Change a subscription's address in Settings › Subscriptions. On iPhone and iPad, open .json, .m3u, .txt, .py and .js files in Yingxia from Files or another app's share sheet to add them, and swipe sideways on the Sources page to switch source groups.",
+            "zh-Hans": "可在“设置 › 订阅”中修改订阅地址。在 iPhone 和 iPad 上，可从“文件”或其他 App 的共享菜单用映匣打开 .json、.m3u、.txt、.py 和 .js 文件来添加订阅；在点播源页面左右滑动即可切换源分组。",
+            "zh-Hant": "可在「設定 › 訂閱」中修改訂閱位址。在 iPhone 和 iPad 上，可從「檔案」或其他 App 的分享選單用映匣打開 .json、.m3u、.txt、.py 和 .js 檔案來新增訂閱；在點播源頁面左右滑動即可切換源分組。",
+            "ja": "「設定 › 配信設定」で配信設定のアドレスを変更できます。iPhone と iPad では、「ファイル」や他のアプリの共有メニューから .json、.m3u、.txt、.py、.js ファイルを映匣で開いて追加でき、ソースのページを左右にスワイプするとソースのグループを切り替えられます。"
+          }
+        },
+        {
+          "symbol": "book",
+          "title": {
+            "en": "Novels: sign in to book sources",
+            "zh-Hans": "小说：登录书源",
+            "zh-Hant": "小說：登入書源",
+            "ja": "小説：ブックソースにサインイン"
+          },
+          "detail": {
+            "en": "Book sources that need an account can now sign in: a book source list in Settings › Book Sources shows a Sign In section, with the source's own form or its website. Passwords stay in this device's Keychain.",
+            "zh-Hans": "需要账号的书源现在可以登录了：在“设置 › 书源”中打开书源列表，会显示“登录”部分，可填写书源自己的表单或在其网站上登录。密码只保存在本机的钥匙串中。",
+            "zh-Hant": "需要帳號的書源現在可以登入了：在「設定 › 書源」中打開書源列表，會顯示「登入」部分，可填寫書源自己的表單或在其網站上登入。密碼只儲存在本機的鑰匙圈中。",
+            "ja": "アカウントが必要なブックソースにサインインできるようになりました。「設定 › ブックソース」でリストを開くと「サインイン」の項目があり、ソースのフォームまたは Web サイトでサインインします。パスワードはこのデバイスのキーチェーンにのみ保存されます。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "On iPhone with iOS 26 or later, Settings can keep the tab bar from collapsing while you scroll, and a tab moved into another's place opens its pages again. Danmaku no longer blinks away during a speed boost or a resume. Short episodes have the next one ready sooner, and Offline Cache plays on in episode order. Some live streams that failed now play. Apple TV Music has its settings button back, songs from music extensions find their lyrics, and filled buttons are readable in Dark Mode. On Mac, the icon you pick stays in the Dock after Yingxia quits. Searching no longer crashes older iPads.",
+            "zh-Hans": "在 iOS 26 及以上的 iPhone 上，可在设置中让标签栏滚动时不再收起；换到其他位置的标签也能正常打开页面了。倍速和继续播放时弹幕不再闪没。短剧会更早准备好下一集，离线缓存按集数顺序连播。部分原本无法播放的直播流现在可以播放。Apple TV 音乐页的设置按钮回来了，音乐扩展的歌曲也能找到歌词，深色模式下的实心按钮文字清晰可读。在 Mac 上，选好的图标在映匣退出后仍留在程序坞中。旧款 iPad 搜索时不再闪退。",
+            "zh-Hant": "在 iOS 26 及以上的 iPhone 上，可在設定中讓標籤列捲動時不再收合；換到其他位置的標籤也能正常打開頁面了。倍速和繼續播放時彈幕不再閃沒。短劇會更早準備好下一集，離線快取按集數順序連播。部分原本無法播放的直播串流現在可以播放。Apple TV 音樂頁的設定按鈕回來了，音樂擴充功能的歌曲也能找到歌詞，深色模式下的實心按鈕文字清晰可讀。在 Mac 上，選好的圖像在映匣結束後仍留在 Dock 中。舊款 iPad 搜尋時不再閃退。",
+            "ja": "iOS 26 以降の iPhone では、スクロール時にタブバーを縮小しない設定ができ、別の位置に移したタブのページも正しく開くようになりました。早送りや再開のときに弾幕が消えなくなりました。短いエピソードは次のエピソードの準備が早くなり、オフラインキャッシュはエピソード順に続けて再生します。再生できなかった一部のライブ配信が再生できます。Apple TV のミュージックに設定ボタンが戻り、ミュージック拡張機能の曲でも歌詞が見つかり、ダークモードの塗りつぶしボタンの文字が読みやすくなりました。Mac では、選んだアイコンが映匣の終了後も Dock に残ります。古い iPad で検索中にクラッシュしなくなりました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.22",
       "build": 60,
       "date": "2026-11-15",
