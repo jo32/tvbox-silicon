@@ -134,12 +134,20 @@ extension NeteaseMusicCatalog: MusicLyricsSource {
 /// belongs to a recording, then from the other catalog that lists the same recording.
 public struct MusicLyricsLoader: Sendable {
     let sources: [any MusicLyricsSource]
-    public init(sources: [any MusicLyricsSource]) { self.sources = sources }
+    /// Looks up a track no lyrics catalog lists, such as a music extension's own song, by title and artist (#1058).
+    let companions: MusicCompanionFinder?
+    public init(sources: [any MusicLyricsSource], companions: MusicCompanionFinder? = nil) {
+        self.sources = sources; self.companions = companions
+    }
     public init(transport: MusicTransport = URLSessionMusicTransport()) {
-        self.init(sources: [QQMusicCatalog(transport: transport), NeteaseMusicCatalog(transport: transport)])
+        let sources: [any MusicLyricsSource] = [QQMusicCatalog(transport: transport), NeteaseMusicCatalog(transport: transport)]
+        let catalogs = MusicSearchModel.defaultCatalogs(transport: transport).filter { catalog in sources.contains { $0.platform == catalog.platform } }
+        self.init(sources: sources, companions: MusicCompanionFinder(catalogs: catalogs))
     }
 
     public func lyrics(for track: MusicTrack, playing platform: MusicPlatform?) async -> MusicLyrics? {
+        var track = track
+        if !sources.contains(where: { track.ids[$0.platform] != nil }), let companions, let wider = await companions.find(track) { track = wider }
         let ordered = sources.sorted { a, _ in a.platform == platform }
         var unsynced: MusicLyrics?
         for source in ordered {

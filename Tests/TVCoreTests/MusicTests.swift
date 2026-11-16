@@ -420,6 +420,28 @@ private func resolver(_ providers: [any MusicStreamProvider], health: MusicHealt
     await #expect(throws: MusicProviderError.upstreamRisk) { try await nothing.select(track, preference: .losslessPreferred) }
 }
 
+@Test func anExtensionSongFindsItsLyricsThroughACatalog() async throws {
+    // #1058: a music extension's song lists only its .ext id, so no lyrics catalog was ever asked.
+    let track = MusicTrack(platform: .ext, songID: "listenify:42", title: "无悔当下", artists: ["梦涵"], duration: 233)
+    struct Lyrics: MusicLyricsSource {
+        let platform = MusicPlatform.netease
+        func lyrics(songID: String) async throws -> MusicLyrics? {
+            songID == "2646486144" ? MusicLyrics.parse("[00:01.00]无悔当下", platform: .netease) : nil
+        }
+    }
+    let netease = FakeCatalog(platform: .netease) { query in
+        #expect(query == "无悔当下 梦涵")
+        return [neteaseTrack("无悔当下", ["别人"], duration: 233, id: "1"), neteaseTrack("无悔当下", ["梦涵"], duration: 233.4, id: "2646486144")]
+    }
+    let loader = MusicLyricsLoader(sources: [Lyrics()], companions: MusicCompanionFinder(catalogs: [netease]))
+    #expect(await loader.lyrics(for: track, playing: .ext)?.lines.first?.text == "无悔当下")
+    // A track a lyrics catalog already lists is not searched for.
+    let listed = MusicLyricsLoader(sources: [Lyrics()], companions: MusicCompanionFinder(catalogs: [FakeCatalog(platform: .netease) { _ in
+        Issue.record("searched a listed track"); return []
+    }]))
+    #expect(await listed.lyrics(for: neteaseTrack("无悔当下", ["梦涵"], duration: 233, id: "2646486144"), playing: .netease) != nil)
+}
+
 @Test func theBudgetBoundsSlowChannels() async throws {
     let track = qqTrack("夜曲", ["周杰伦"], duration: 226.83, id: "001zMQr71F1Qo8")
     let slow = FakeProvider(id: .vkeys, platforms: [.qq]) { _ in
