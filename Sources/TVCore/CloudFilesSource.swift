@@ -61,6 +61,7 @@ public enum CloudFilesSource {
         case .pan123: found = try await Pan123Files.shared.search(query, page: page, size: pageSize)
         case .alist(let server) where server.isWebDAV: return ([], 1)
         case .alist(let server) where server.isEmby: found = try await Emby.shared.search(server, query, page: page, size: pageSize)
+        case .alist(let server) where server.isFnOS: found = try await FnOS.shared.search(server, query, page: page, size: pageSize)
         case .alist(let server): found = try await AList.shared.search(server, query, page: page, size: pageSize)
         }
         return (found.files.filter { $0.isFolder || drive.plays($0) }, max(1, (found.total + pageSize - 1) / pageSize))

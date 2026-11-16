@@ -17,10 +17,12 @@ public struct AListServer: Codable, Hashable, Identifiable, Sendable {
     public var folderPassword: String
     /// What answers at `address`. Nil in servers saved before WebDAV shares could be added, which are all AList.
     public var kind: Kind?
-    public enum Kind: String, Codable, Sendable { case alist, webdav, emby }
+    public enum Kind: String, Codable, Sendable { case alist, webdav, emby, fnos }
     public var isWebDAV: Bool { kind == .webdav }
     /// An Emby or Jellyfin server: its folders are libraries and items, named by their ids.
     public var isEmby: Bool { kind == .emby }
+    /// A 飞牛 fnOS NAS's 飞牛影视: its folders are libraries, folders, series and seasons, named `<type>:<guid>`.
+    public var isFnOS: Bool { kind == .fnos }
 
     public init(id: String = UUID().uuidString, name: String, address: String, root: String = "/",
                 username: String = "", password: String = "", folderPassword: String = "", kind: Kind? = nil) {

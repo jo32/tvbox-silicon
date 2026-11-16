@@ -15,8 +15,11 @@ public enum CloudStreams {
         public let length: Int
         /// The drive's file name; its extension can be wrong (a 4K video named .mp3).
         public let name: String
-        public init(url: URL, headers: [String: String], length: Int, name: String) {
-            self.url = url; self.headers = headers; self.length = length; self.name = name
+        /// Headers made afresh for every request, for a server that signs each one with the time (飞牛影视's `Authx`).
+        public let freshHeaders: (@Sendable (URL) -> [String: String])?
+        public init(url: URL, headers: [String: String], length: Int, name: String,
+                    freshHeaders: (@Sendable (URL) -> [String: String])? = nil) {
+            self.url = url; self.headers = headers; self.length = length; self.name = name; self.freshHeaders = freshHeaders
         }
     }
 
@@ -447,6 +450,7 @@ actor CloudByteStream {
             let current = source, from = first + received()
             var request = URLRequest(url: current.url)
             current.headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+            current.freshHeaders?(current.url).forEach { request.setValue($1, forHTTPHeaderField: $0) }
             request.setValue("bytes=\(from)-\(last)", forHTTPHeaderField: "Range")
             request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
             do {

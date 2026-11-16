@@ -58,6 +58,13 @@ enum QALaunch {
            let server = try? await WebDAV.shared.probe(url) {
             _ = try? AListServers.add([server])
         }
+        // `-qaFnOSServer <address> -qaServerUser <name> -qaServerPassword <password>` adds a 飞牛 fnOS NAS, as the Add form would.
+        if let address = UserDefaults.standard.string(forKey: "qaFnOSServer"), let url = try? WebAddress.resolve(address),
+           var server = await FnOS.probe(url) {
+            server.username = UserDefaults.standard.string(forKey: "qaServerUser") ?? ""
+            server.password = UserDefaults.standard.string(forKey: "qaServerPassword") ?? ""
+            if (try? await FnOS.shared.check(server)) != nil { _ = try? AListServers.add([server]) }
+        }
         guard section != nil || page != nil || UserDefaults.standard.string(forKey: "qaPlay") != nil
                 || UserDefaults.standard.string(forKey: "qaDownload") != nil
                 || UserDefaults.standard.string(forKey: "qaPlayLive") != nil
