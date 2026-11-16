@@ -2081,3 +2081,7 @@
 "Mint Lemonade" = "ミントレモネード";
 "Peach Soda" = "ピーチソーダ";
 "Neon Night" = "ネオンナイト";
+"Another subscription already uses this address." = "このアドレスはほかの配信設定で使われています。";
+"This address doesn't hold a subscription. Add it as a new one instead." = "このアドレスは配信設定ではありません。新しい配信設定として追加してください。";
+"Couldn't load this address: %@" = "このアドレスを読み込めません：%@";
+"Use New Address" = "新しいアドレスを使う";

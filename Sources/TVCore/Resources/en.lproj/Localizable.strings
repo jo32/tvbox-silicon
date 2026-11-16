@@ -2081,3 +2081,7 @@
 "Mint Lemonade" = "Mint Lemonade";
 "Peach Soda" = "Peach Soda";
 "Neon Night" = "Neon Night";
+"Another subscription already uses this address." = "Another subscription already uses this address.";
+"This address doesn't hold a subscription. Add it as a new one instead." = "This address doesn't hold a subscription. Add it as a new one instead.";
+"Couldn't load this address: %@" = "Couldn't load this address: %@";
+"Use New Address" = "Use New Address";

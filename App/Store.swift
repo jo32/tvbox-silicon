@@ -433,6 +433,60 @@ import TVCore
         subscriptions[index].name = name
         saveSubscriptionList()
     }
+    /// Points a subscription at another address: a mirror, or where it moved (#982). The new address must answer with a
+    /// subscription. The entry keeps its name, place and switch, and what was saved against its sources (pins, hides,
+    /// the source order, source health, Continue Watching, favorites, intro and outro times) follows it. Nil when it
+    /// worked, else why not; nothing changes then.
+    func changeSubscriptionAddress(_ entry: SubscriptionEntry, to typed: String) async -> String? {
+        let text = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, text != entry.address, !importing else { return nil }
+        importing = true
+        defer { importing = false }
+        let url: URL, value: Subscription
+        do {
+            url = try WebAddress.resolve(typed: text)
+            guard url.absoluteString != entry.address else { return nil }
+            guard !subscriptions.contains(where: { $0.address == url.absoluteString }) else {
+                return L10n.text("Another subscription already uses this address.")
+            }
+            guard case .subscription(let fetched) = try await http.subscriptionImport(url) else {
+                return L10n.text("This address doesn't hold a subscription. Add it as a new one instead.")
+            }
+            value = fetched
+        } catch {
+            Diagnostics.shared.failure("subscription", "change address host=\((try? WebAddress.resolve(typed: text))?.host() ?? "-")", error)
+            return L10n.text("Couldn't load this address: %@", error.localizedDescription)
+        }
+        // The list may have changed while the address loaded.
+        guard let index = subscriptions.firstIndex(where: { $0.address == entry.address }) else { return nil }
+        guard !subscriptions.contains(where: { $0.address == url.absoluteString }) else {
+            return L10n.text("Another subscription already uses this address.")
+        }
+        let old = documents[entry.address]?.origin ?? URL(string: entry.address)
+        var moved = subscriptions[index]
+        moved.address = url.absoluteString
+        subscriptions[index] = moved
+        documents[entry.address] = nil; subscriptionErrors[entry.address] = nil
+        if persistsChanges { try? FileManager.default.removeItem(at: Self.file(for: entry)) }
+        keep(value, for: moved)
+        // Another subscription answering from the same place keeps what was saved there.
+        if let old, old.absoluteString != value.origin.absoluteString,
+           !documents.values.contains(where: { $0.origin.absoluteString == old.absoluteString }) {
+            moveSavedState(from: old, to: value.origin)
+        }
+        saveSubscriptionList()
+        rebuildSubscription()
+        return nil
+    }
+    private func moveSavedState(from old: URL, to new: URL) {
+        pinnedSources.moveOrigin(from: old, to: new)
+        hiddenSources.moveOrigin(from: old, to: new)
+        sourceOrder.moveOrigin(from: old, to: new)
+        SourceHealth.shared.moveOrigin(from: old, to: new)
+        playbackHistory.moveOrigin(from: old, to: new)
+        favorites.moveOrigin(from: old, to: new)
+        EpisodeSkipSettings.moveOrigin(from: old, to: new, defaults: playbackDefaults)
+    }
     func removeSubscription(_ entry: SubscriptionEntry) { removeSubscriptions([entry.address]) }
     /// Removes several subscriptions and their saved copies, then merges what is left once.
     func removeSubscriptions(_ addresses: Set<String>) {

@@ -1193,16 +1193,27 @@ enum SubscriptionFile {
 }
 
 /// One subscription: switch it on or off, move it (earlier subscriptions win duplicate sources), or remove it.
-private struct SubscriptionDetailView: View {
+struct SubscriptionDetailView: View {
     @Environment(Store.self) private var store
     @Environment(\.dismiss) private var dismiss
     let entry: SubscriptionEntry
     @State private var confirmsRemoval = false
+    /// The address this page shows: it follows a change made here (#982).
+    @State private var address: String
+    @State private var draft: String
+    @State private var changing = false
+    @State private var changeError: String?
+    init(entry: SubscriptionEntry) {
+        self.entry = entry
+        _address = State(initialValue: entry.address)
+        _draft = State(initialValue: entry.address)
+    }
     var body: some View {
-        let current = store.subscriptions.first { $0.address == entry.address } ?? entry
-        let index = store.subscriptions.firstIndex { $0.address == entry.address } ?? 0
-        let failure = store.subscriptionErrors[entry.address]
-        let copy = store.documents[entry.address]
+        let current = store.subscriptions.first { $0.address == address } ?? entry
+        let index = store.subscriptions.firstIndex { $0.address == address } ?? 0
+        let failure = store.subscriptionErrors[address]
+        let copy = store.documents[address]
+        let edited = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         Form { Group {
             Section {
                 Toggle(isOn: Binding(get: { current.enabled }, set: { on in Task { await store.setSubscription(current, enabled: on) } })) {
@@ -1216,11 +1227,33 @@ private struct SubscriptionDetailView: View {
                               prompt: Text(SubscriptionEntry(address: current.address).title))
                         .labelsHidden().multilineTextAlignment(.trailing)
                 }
-                LabeledContent(L10n.text("Subscription URL")) {
-                    Text(current.address).lineLimit(2).truncationMode(.middle).textSelection(.enabled).foregroundStyle(.secondary)
+                if ImportedFiles.isImported(current.address) {
+                    LabeledContent(L10n.text("Subscription URL")) {
+                        Text(current.address).lineLimit(2).truncationMode(.middle).textSelection(.enabled).foregroundStyle(.secondary)
+                    }
+                } else {
+                    // A mirror, or where the subscription moved (#982): typed here, used once confirmed.
+                    LabeledContent(L10n.text("Subscription URL")) {
+                        TextField(L10n.text("Subscription URL"), text: $draft)
+                            .labelsHidden().multilineTextAlignment(.trailing).foregroundStyle(.secondary)
+                            .autocorrectionDisabled()
+                            #if os(iOS)
+                            .textInputAutocapitalization(.never).keyboardType(.URL)
+                            #endif
+                            .onSubmit { changeAddress(current) }
+                            .disabled(changing)
+                    }
+                    if !edited.isEmpty, edited != current.address {
+                        HStack {
+                            Button(L10n.text("Use New Address")) { changeAddress(current) }.disabled(changing || store.importing)
+                            Spacer()
+                            if changing { ProgressView() } else { Button(L10n.text("Cancel")) { draft = current.address; changeError = nil } }
+                        }
+                    }
                 }
             } footer: {
-                if let failure { Text(L10n.text("Couldn't refresh: %@", failure)) }
+                if let changeError { Text(changeError).foregroundStyle(.red) }
+                else if let failure { Text(L10n.text("Couldn't refresh: %@", failure)) }
                 else if let copy { Text(L10n.text("Sources: %lld · Live playlists: %lld", copy.sites.count, copy.lives.count)) }
             }
             if store.subscriptions.count > 1 {
@@ -1236,6 +1269,27 @@ private struct SubscriptionDetailView: View {
         .settingsForm(current.title)
         .confirmationDialog(L10n.text("Remove"), isPresented: $confirmsRemoval) {
             Button(L10n.text("Remove"), role: .destructive) { store.removeSubscription(current); dismiss() }
+        }
+        #if DEBUG
+        // `-qaPage subscription:<n> -qaAddressDraft <address> [-qaAddressCommit 1]`: an address typed, and used, without a keyboard.
+        .task {
+            guard let typed = UserDefaults.standard.string(forKey: "qaAddressDraft") else { return }
+            draft = typed
+            if UserDefaults.standard.bool(forKey: "qaAddressCommit") { changeAddress(current) }
+        }
+        #endif
+    }
+    private func changeAddress(_ current: SubscriptionEntry) {
+        guard !changing else { return }
+        changing = true; changeError = nil
+        // The entry keeps its place, so its new address is found there.
+        let index = store.subscriptions.firstIndex { $0.address == address }
+        Task {
+            if let error = await store.changeSubscriptionAddress(current, to: draft) { changeError = error }
+            else if let index, store.subscriptions.indices.contains(index) {
+                address = store.subscriptions[index].address; draft = address
+            }
+            changing = false
         }
     }
 }
@@ -2087,24 +2141,42 @@ struct TVSettingsSymbol: View {
 }
 
 /// One subscription: switch it on or off, move it (earlier subscriptions win duplicate sources), or remove it.
-private struct TVSubscriptionPage: View {
+struct TVSubscriptionPage: View {
     @Environment(Store.self) private var store
     @Environment(\.dismiss) private var dismiss
     let entry: SubscriptionEntry
     @State private var confirmsRemoval = false
+    /// The address this page shows: it follows a change made here (#982).
+    @State private var address: String
+    @State private var changeError: String?
+    init(entry: SubscriptionEntry) {
+        self.entry = entry
+        _address = State(initialValue: entry.address)
+    }
     var body: some View {
-        let current = store.subscriptions.first { $0.address == entry.address } ?? entry
-        let index = store.subscriptions.firstIndex { $0.address == entry.address } ?? 0
-        let failure = store.subscriptionErrors[entry.address]
-        let copy = store.documents[entry.address]
+        let current = store.subscriptions.first { $0.address == address } ?? entry
+        let index = store.subscriptions.firstIndex { $0.address == address } ?? 0
+        let failure = store.subscriptionErrors[address]
+        let copy = store.documents[address]
         TVSettingsSubpage(symbol: "list.bullet.rectangle", title: current.title, subtitle: current.address) {
             TVSettingsSection(title: L10n.text("Subscription"),
-                              footer: failure.map { L10n.text("Couldn't refresh: %@", $0) }
+                              footer: changeError ?? failure.map { L10n.text("Couldn't refresh: %@", $0) }
                                 ?? copy.map { L10n.text("Sources: %lld · Live playlists: %lld", $0.sites.count, $0.lives.count) }) {
                 TVSettingsToggle(title: L10n.text("Use This Subscription"),
                                  isOn: Binding(get: { current.enabled }, set: { on in Task { await store.setSubscription(current, enabled: on) } }))
                     .disabled(store.importing)
                 TVSettingsField(title: L10n.text("Name"), text: Binding(get: { current.name }, set: { store.renameSubscription(current, to: $0) }))
+                if !ImportedFiles.isImported(current.address) {
+                    // A mirror, or where the subscription moved (#982). The field hands over the text once, when its alert closes.
+                    TVSettingsField(title: L10n.text("Subscription URL"), text: Binding(get: { current.address }, set: { typed in
+                        changeError = nil
+                        Task {
+                            if let error = await store.changeSubscriptionAddress(current, to: typed) { changeError = error }
+                            else if store.subscriptions.indices.contains(index) { address = store.subscriptions[index].address }
+                        }
+                    }))
+                    .disabled(store.importing)
+                }
             }
             if store.subscriptions.count > 1 {
                 TVSettingsSection(title: L10n.text("Order")) {
