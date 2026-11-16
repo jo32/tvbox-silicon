@@ -47,12 +47,23 @@ struct DiscoverFollowButton: View {
     let item: TMDBCatalog.Item
     var body: some View {
         let following = store.followedShows.contains(item.id)
-        Button { store.followedShows.toggle(item) } label: {
-            Image(systemName: following ? "calendar.badge.checkmark" : "calendar.badge.plus").font(.system(size: 21))
-                .frame(width: 54, height: 54)
-                .glassSurface(.regular, in: Circle())
+        Button { withAnimation(.snappy(duration: 0.2)) { store.followedShows.toggle(item) } } label: {
+            // Words and a fill, not just a badge on the icon: whether the series is followed reads at a glance.
+            let label = HStack(spacing: 5) {
+                Image(systemName: following ? "checkmark" : "plus").font(.system(size: 14, weight: .bold))
+                Text(L10n.text(following ? "Following Show" : "Follow Show")).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+            }
+            .fixedSize()
+            .padding(.horizontal, 16)
+            .frame(height: 54)
+            if following {
+                label.foregroundStyle(.black).background(Capsule().fill(.white))
+            } else {
+                label.glassSurface(.regular, in: Capsule())
+            }
         }
         .buttonStyle(.plain)
+        .sensoryFeedback(.selection, trigger: following)
         .help(L10n.text(following ? "Unfollow Show" : "Follow Show"))
         .accessibilityLabel(L10n.text(following ? "Unfollow Show" : "Follow Show"))
         .accessibilityIdentifier("discover.detail.follow")
@@ -144,7 +155,7 @@ struct DiscoverAirCalendarView: View {
                 VStack(alignment: .leading, spacing: 26) {
                     header
                     ForEach(months, id: \.self) { month in DiscoverAirMonth(month: month, days: days, today: today) }
-                    followButton.buttonStyle(.bordered).controlSize(.large).frame(maxWidth: .infinity)
+                    followStyled.controlSize(.large).frame(maxWidth: .infinity)
                 }.padding(20)
             }
             .navigationTitle(L10n.text("Air Calendar"))
@@ -174,10 +185,16 @@ struct DiscoverAirCalendarView: View {
         }
     }
 
+    /// Solid while followed, as the title page's button is: the theme's accent can be too pale to tell the states apart.
+    @ViewBuilder private var followStyled: some View {
+        if store.followedShows.contains(show.id) { followButton.buttonStyle(.borderedProminent).tint(.primary).foregroundStyle(.background) }
+        else { followButton.buttonStyle(.bordered) }
+    }
+
     private var followButton: some View {
         let following = store.followedShows.contains(show.id)
         return Button { store.followedShows.toggle(show) } label: {
-            Label(L10n.text(following ? "Following Show" : "Follow Show"), systemImage: following ? "calendar.badge.checkmark" : "calendar.badge.plus")
+            Label(L10n.text(following ? "Following Show" : "Follow Show"), systemImage: following ? "checkmark" : "plus")
                 .frame(maxWidth: .infinity)
         }
         .accessibilityIdentifier("discover.airCalendar.follow")
