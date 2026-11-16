@@ -12,7 +12,7 @@ import UIKit
 // Settings › App Icon. iPhone and iPad switch to an alternate icon that ships in the app
 // (Config/iOS/Assets.xcassets/AppIcon-<name>), Apple TV to its wide version (Config/tvOS/Assets.xcassets, from
 // Design/make-tvos-icon.swift); the Mac has no alternate icons, so it draws the chosen one, or a
-// picture of the viewer's own, as its Dock icon while it runs. The artwork of each icon, for the picker and the Dock,
+// picture of the viewer's own, as its Dock icon while it runs, and sets it on the app itself for when it's closed. The artwork of each icon, for the picker and the Dock,
 // is AppIconArt-<name> in Config/AppIcons.xcassets. All of them come from Design/make-app-icons.swift.
 
 /// An icon the app ships with. Pocket (MediaPocketPurple) is the app's own; the rest are alternates.
@@ -131,11 +131,14 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
     func apply() {
         if current == nil, let custom {
             NSApp.applicationIconImage = custom.shaped ? custom.art : Self.dockImage(custom.art)
+            applyToBundle(NSApp.applicationIconImage, id: Self.customValue + Self.customStamp)
         } else if let current, current != .standard, let art = NSImage(named: current.art) {
             NSApp.applicationIconImage = Self.dockImage(art)
+            applyToBundle(NSApp.applicationIconImage, id: current.rawValue)
         } else {
             // The app's own icon, from its bundle.
             NSApp.applicationIconImage = nil
+            applyToBundle(nil, id: nil)
         }
         #if DEBUG
         // `-qaDockIcon <path>` writes the Dock icon to a PNG, as the Dock can't be seen from a QA run.
@@ -144,6 +147,36 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
             try? png.write(to: URL(fileURLWithPath: path))
         }
         #endif
+    }
+
+    /// The Dock draws `applicationIconImage` only while the app runs; once it quits, the Dock, Finder and Launchpad
+    /// show the icon of the app itself (#1135). So the chosen icon is set on the app too, as Finder's Get Info does it
+    /// (an `Icon\r` file in the bundle). An update replaces the bundle and the icon with it, so it's checked at every
+    /// launch, but written only when it's missing or another one was chosen.
+    private func applyToBundle(_ image: NSImage?, id: String?) {
+        let bundle = Bundle.main.bundleURL.path
+        let hasIcon = FileManager.default.fileExists(atPath: bundle + "/Icon\r")
+        let written = UserDefaults.standard.string(forKey: Self.bundleKey)
+        guard let id, let image else {
+            if hasIcon { NSWorkspace.shared.setIcon(nil, forFile: bundle, options: []) }
+            UserDefaults.standard.removeObject(forKey: Self.bundleKey)
+            return
+        }
+        guard !hasIcon || written != id else { return }
+        if NSWorkspace.shared.setIcon(image, forFile: bundle, options: []) {
+            UserDefaults.standard.set(id, forKey: Self.bundleKey)
+        } else {
+            // Such as an account that isn't an administrator, or an app opened from a disk image.
+            UserDefaults.standard.removeObject(forKey: Self.bundleKey)
+            failure = L10n.text("Yingxia can't change its own icon where it's installed, so the Dock shows this icon only while Yingxia is open.")
+        }
+    }
+    /// The icon last set on the app itself.
+    private static let bundleKey = "appIconOnBundle"
+    /// Tells one picture from the next, so a new one is set on the app too.
+    private static var customStamp: String {
+        let changed = (try? FileManager.default.attributesOfItem(atPath: customFile.path))?[.modificationDate] as? Date
+        return "-\(Int(changed?.timeIntervalSince1970 ?? 0))"
     }
 
     func choose(_ choice: AppIconChoice) async {
@@ -361,7 +394,7 @@ struct AppIconSettingsView: View {
 
     private var note: String {
         #if os(macOS)
-        L10n.text("The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Pocket.")
+        L10n.text("The Dock and Finder show the icon you pick, also while Yingxia is closed.")
         #elseif os(tvOS)
         // The top shelf image belongs to the app, not the icon.
         L10n.text("The icon on the Home Screen. When Yingxia sits in the top row, the picture above it stays Pocket.")

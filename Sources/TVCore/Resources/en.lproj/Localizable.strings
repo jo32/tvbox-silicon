@@ -2042,7 +2042,8 @@
 "A square picture works best. One with see-through corners, such as an icon made for the Mac, shows as it is." = "A square picture works best. One with see-through corners, such as an icon made for the Mac, shows as it is.";
 "Choose Picture…" = "Choose Picture…";
 "Remove Custom Picture" = "Remove Custom Picture";
-"The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Pocket." = "The Dock shows the icon you pick while Yingxia is open. Elsewhere, such as in Finder, the app keeps Pocket.";
+"The Dock and Finder show the icon you pick, also while Yingxia is closed." = "The Dock and Finder show the icon you pick, also while Yingxia is closed.";
+"Yingxia can't change its own icon where it's installed, so the Dock shows this icon only while Yingxia is open." = "Yingxia can't change its own icon where it's installed, so the Dock shows this icon only while Yingxia is open.";
 "The icon on your Home Screen. The system confirms the change with a short message." = "The icon on your Home Screen. The system confirms the change with a short message.";
 "The icon on the Home Screen. When Yingxia sits in the top row, the picture above it stays Pocket." = "The icon on the Home Screen. When Yingxia sits in the top row, the picture above it stays Pocket.";
 
