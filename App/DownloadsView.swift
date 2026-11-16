@@ -329,7 +329,7 @@ struct DownloadShow: Identifiable {
             let first = items[0]
             return DownloadShow(id: key, title: first.title, poster: first.poster, posterHeaders: first.posterHeaders,
                                 siteKey: first.source.siteKey, videoID: first.source.videoID, sourceName: first.source.siteName,
-                                items: items.sorted { $0.episode.localizedStandardCompare($1.episode) == .orderedAscending })
+                                items: DownloadItem.inEpisodeOrder(items))
         }
         // The id breaks ties, so shows of one name or size keep their places between updates.
         let sorted = shows.sorted { a, b in
