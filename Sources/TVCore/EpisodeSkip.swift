@@ -81,6 +81,31 @@ public struct EpisodeSkipSettings: Codable, Equatable, Sendable {
     public static func remove(scope: String, defaults: UserDefaults = .standard) {
         defaults.removeObject(forKey: "episodeSkip.v1." + scope)
     }
+
+    /// `scope` under a subscription's new address when it was saved under `old`; nil when it belongs to another one.
+    /// A subscription whose address the viewer changed (#982) keeps what was saved against its sources this way.
+    public static func rescope(_ scope: String, from old: URL, to new: URL) -> String? {
+        guard let parts = try? JSONDecoder().decode([String].self, from: Data(scope.utf8)), parts.count == 3,
+              parts[0] == old.absoluteString else { return nil }
+        return Self.scope(origin: new, source: parts[1], video: parts[2])
+    }
+
+    /// Saved scope keys with `old` moved to `new`, in their order, without repeats.
+    static func rescope(_ scopes: [String], from old: URL, to new: URL) -> [String] {
+        var seen = Set<String>()
+        return scopes.map { rescope($0, from: old, to: new) ?? $0 }.filter { seen.insert($0).inserted }
+    }
+
+    /// Moves the intro and outro times saved for a subscription's videos to its new address. Times already saved
+    /// under the new one stay.
+    public static func moveOrigin(from old: URL, to new: URL, defaults: UserDefaults = .standard) {
+        let prefix = "episodeSkip.v1."
+        for (key, value) in defaults.dictionaryRepresentation() where key.hasPrefix(prefix) {
+            guard let scope = rescope(String(key.dropFirst(prefix.count)), from: old, to: new) else { continue }
+            if defaults.object(forKey: prefix + scope) == nil { defaults.set(value, forKey: prefix + scope) }
+            defaults.removeObject(forKey: key)
+        }
+    }
 }
 
 /// Each segment is skipped once per play-through. Rewinding manually never traps the viewer

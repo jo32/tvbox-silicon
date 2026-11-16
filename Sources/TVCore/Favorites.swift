@@ -213,6 +213,30 @@ struct FavoriteDocument: Codable {
         persist()
     }
 
+    /// Shows and episodes saved from a subscription whose address changed (#982), under the new address.
+    public func moveOrigin(from old: URL, to new: URL) {
+        var changed = false
+        func move(_ video: FavoriteVideo) -> FavoriteVideo {
+            guard video.origin.absoluteString == old.absoluteString else { return video }
+            changed = true
+            var video = video
+            video.origin = new
+            return video
+        }
+        let next = items.map { item -> FavoriteItem in
+            switch item {
+            case .video(let video): return .video(move(video))
+            case .episode(var episode): episode.video = move(episode.video); return .episode(episode)
+            default: return item
+            }
+        }
+        guard changed else { return }
+        var seen = Set<String>()
+        items = next.filter { seen.insert($0.key).inserted }
+        persist()
+        onChange?()
+    }
+
     public func items(_ kind: FavoriteKind) -> [FavoriteItem] { items.filter { $0.kind == kind } }
 
     /// The kinds that have favorites, in the Favorites page's section order: what its filter offers.

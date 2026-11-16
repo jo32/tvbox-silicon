@@ -41,6 +41,14 @@ public struct PlaybackHistoryContext: Codable, Hashable, Sendable {
         officialPage = OfficialVideoPage.validated(episode.address)
     }
 
+    /// The same place under a subscription's new address (#982).
+    public func moved(to origin: URL) -> Self {
+        var context = PlaybackHistoryContext(origin: origin, sourceKey: sourceKey, sourceName: sourceName, videoID: videoID, videoName: videoName,
+                                             poster: poster, episodeID: episodeID, episodeName: episodeName, episodeFlag: episodeFlag)
+        context.year = year; context.officialPage = officialPage; context.posterHeaders = posterHeaders
+        return context
+    }
+
     /// Names survive list reordering. Never silently resume a different episode
     /// just because a source now gives it the saved numeric index.
     public func episode(in episodes: [Episode]) -> Episode? {
@@ -155,6 +163,18 @@ extension PlaybackHistoryEntry {
         for entry in entries where !kept.contains(entry.id) { clean(entry) }
         entries = next
         prioritizeCaches(); persist()
+    }
+
+    /// Continue Watching of a subscription whose address changed (#982), under the new address.
+    public func moveOrigin(from old: URL, to new: URL) {
+        guard entries.contains(where: { $0.context.origin.absoluteString == old.absoluteString }) else { return }
+        var seen = Set<String>()
+        entries = entries.map { entry in
+            guard entry.context.origin.absoluteString == old.absoluteString else { return entry }
+            return PlaybackHistoryEntry(context: entry.context.moved(to: new), position: entry.position,
+                                        duration: entry.duration, updatedAt: entry.updatedAt)
+        }.filter { seen.insert($0.id).inserted }
+        prioritizeCaches(); persist(); onChange?()
     }
 
     public func remove(_ id: String) { remove(Set([id])) }

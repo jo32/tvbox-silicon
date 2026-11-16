@@ -60,6 +60,16 @@ import Observation
         onChange?()
     }
 
+    /// Keys saved under a subscription's old address, moved to its new one (#982).
+    public func moveOrigin(from old: URL, to new: URL) {
+        let next = EpisodeSkipSettings.rescope(keys, from: old, to: new)
+        guard next != keys else { return }
+        keys = next
+        defaults.set(keys, forKey: Self.storageKey)
+        revision += 1
+        onChange?()
+    }
+
     /// The saved keys, in order, as iCloud sync compares them.
     public var savedKeys: [String] { keys }
     /// The list merged with other devices'.

@@ -104,6 +104,19 @@ import Observation
         return !PluginQueue.isBusy(error)
     }
 
+    /// The records of a subscription's sources, moved to its new address (#982). A newer record there stays.
+    public func moveOrigin(from old: URL, to new: URL) {
+        let prefix = old.absoluteString + "|"
+        let moved = records.filter { $0.key.hasPrefix(prefix) }
+        guard !moved.isEmpty else { return }
+        for (key, record) in moved {
+            records[key] = nil
+            let target = new.absoluteString + "|" + String(key.dropFirst(prefix.count))
+            if records[target] == nil { records[target] = record }
+        }
+        scheduleSave()
+    }
+
     private func update(_ key: String, _ change: (inout Record) -> Void) {
         var record = records[key] ?? Record()
         change(&record)
