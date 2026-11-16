@@ -340,6 +340,37 @@ private func resolver(_ providers: [any MusicStreamProvider], health: MusicHealt
     }
 }
 
+/// Several sources behind one channel, as the LX Music sources are: the first that isn't skipped gives its address.
+private struct SourcesProvider: MusicStreamAlternatives {
+    let id = MusicProviderID.lx
+    let platforms: Set<MusicPlatform> = [.qq]
+    /// Each source's name (its `upstream`) and the path of the address it gives.
+    let sources: [(name: String, path: String)]
+    func resolve(_ songID: String, platform: MusicPlatform, quality: MusicAudioQuality) async throws -> ResolvedMusicStream {
+        try await resolve(songID, platform: platform, track: nil, quality: quality, skipping: [])
+    }
+    func resolve(_ songID: String, platform: MusicPlatform, track: MusicTrack?, quality: MusicAudioQuality,
+                 skipping: Set<String>) async throws -> ResolvedMusicStream {
+        guard let source = sources.first(where: { !skipping.contains($0.name) }) else { throw MusicProviderError.noResource }
+        return ResolvedMusicStream(url: URL(string: "https://audio.test" + source.path)!, upstream: source.name)
+    }
+}
+
+@Test func lxSourcesAreAskedInTurnUntilOnePlays() async throws {
+    // Jay Chou's songs are only on QQ Music, so only the LX sources can find them. The first source's server is
+    // down, the second gives a 30-second preview, the third the song.
+    let track = qqTrack("晴天", ["周杰伦"], duration: 269.4, id: "0039MnYb0qxYhV")
+    let lx = SourcesProvider(sources: [("lx:down", "/gone"), ("lx:trial", "/mp3/30"), ("lx:full", "/mp3/269.4")])
+    let selection = try await resolver([lx]).select(track, preference: .high)
+    #expect(selection.candidate.provider == .lx && selection.stream.upstream == "lx:full")
+
+    // None plays: the reason is the last address turned down, not that no source answered.
+    let none = SourcesProvider(sources: [("lx:down", "/gone"), ("lx:trial", "/mp3/30")])
+    await #expect(throws: MusicProviderError.preview(30)) {
+        try await resolver([none]).select(track, preference: .high)
+    }
+}
+
 @Test func lossyPreferencesAskChannelsForLossyAudioAndNeverCallItDegraded() async throws {
     let track = qqTrack("晴天", ["周杰伦"], duration: 269.75, id: "q")
     let log = QualityLog()

@@ -291,7 +291,7 @@ public actor LXSourceRuntime {
 }
 
 /// The enabled LX sources as one channel: each source that covers the catalog is asked in turn.
-public struct LXMusicProvider: MusicStreamProvider {
+public struct LXMusicProvider: MusicStreamAlternatives {
     public let id = MusicProviderID.lx
     public let platforms: Set<MusicPlatform>
     let sources: [LXSource]
@@ -310,19 +310,27 @@ public struct LXMusicProvider: MusicStreamProvider {
     }
 
     public func resolve(_ songID: String, platform: MusicPlatform, track: MusicTrack?, quality: MusicAudioQuality) async throws -> ResolvedMusicStream {
+        try await resolve(songID, platform: platform, track: track, quality: quality, skipping: [])
+    }
+
+    /// The first address a source gives, leaving out the sources named in `skipping` (by `upstream`).
+    func resolve(_ songID: String, platform: MusicPlatform, track: MusicTrack?, quality: MusicAudioQuality,
+                 skipping: Set<String>) async throws -> ResolvedMusicStream {
         let key = LXSourceKey.key(platform)
         let info = LXSourceKey.musicInfo(songID: songID, platform: platform, track: track)
         var failure = MusicProviderError.noResource
-        for source in sources {
+        for source in sources where !skipping.contains(Self.upstream(source)) {
             guard let declared = source.sources[key],
                   let tier = LXSourceKey.quality(from: declared, for: quality) else { continue }
             try Task.checkCancellation()
             try await health.admit("lx")
             do {
                 let url = try await runtime.musicURL(source, library: library, key: key, quality: tier, musicInfo: info)
-                return ResolvedMusicStream(url: url, claimedQuality: tier, upstream: "lx:" + source.info.name)
+                return ResolvedMusicStream(url: url, claimedQuality: tier, upstream: Self.upstream(source))
             } catch { failure = MusicProviderError(error) }
         }
         throw failure
     }
+
+    static func upstream(_ source: LXSource) -> String { "lx:" + source.info.name }
 }
