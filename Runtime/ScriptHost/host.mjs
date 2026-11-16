@@ -501,16 +501,18 @@ async function startCatPaw() {
 // The app's cloud-drive sign-ins, for bundles that keep their own and sign in through a config center the app can't
 // show. Bundles of the wexfnw family take a drive's cookie at PUT /website/api/credential/<drive>/cookie as {value}, and
 // the Xunlei sign-in (its device and tokens) as their whole Xunlei config. The catpaw.douer.me bundle (豆儿) takes the
-// cookie at PUT /website/<drive>/cookie as {cookie} (#651). Each sign-in passes on once per change in the app, so the
-// bundle's own refreshes of it stay. Keep in step with NodeHost/main.mjs.
-const sharedDrives = { quark: 'quarkCookie', uc: 'ucCookie', baidu: 'baiduCookie' };
+// cookie at PUT /website/<drive>/cookie as {cookie} (#651). 115's address is its own in each (#1075). Each sign-in
+// passes on once per change in the app, so the bundle's own refreshes of it stay. Keep in step with NodeHost/main.mjs.
+const sharedDrives = { quark: 'quarkCookie', uc: 'ucCookie', baidu: 'baiduCookie', pan115: 'pan115Cookie' };
+// Drives shared since a bundle's layout was first told apart; a bundle that takes the others may lack these.
+const laterDrives = new Set(['pan115']);
 const cookieRoutes = [
-    { route: drive => `/website/api/credential/${drive}/cookie`, body: value => ({ value }), thunder: true },
-    { route: drive => `/website/${drive}/cookie`, body: value => ({ cookie: value }) },
+    { route: drive => `/website/api/credential/${drive}/cookie`, body: value => ({ value }), thunder: true, routes: { pan115: '/website/api/pan115/cookie' } },
+    { route: drive => `/website/${drive}/cookie`, body: value => ({ cookie: value }), routes: { pan115: '/website/115/cookie' } },
 ];
 function sharedSignIns(accounts, layout) {
     const shares = Object.entries(sharedDrives)
-        .map(([drive, key]) => ({ drive, route: layout.route(drive), value: String(accounts[key] || '').trim(), body: layout.body }));
+        .map(([drive, key]) => ({ drive, route: layout.routes?.[drive] ?? layout.route(drive), value: String(accounts[key] || '').trim(), body: layout.body, later: laterDrives.has(drive) }));
     // A bundle from before Xunlei sign-ins lacks this address; the other drives still pass.
     if (layout.thunder) shares.push({ drive: 'thunder', route: '/website/api/thunder/config', value: accounts.xunlei ? JSON.stringify(accounts.xunlei) : '', body: value => ({ value }), optional: true });
     return shares;
@@ -530,8 +532,8 @@ async function shareCatPawAccounts(port) {
     let changed = false;
     // The bundle's layout is the first that takes a cookie; until then each is tried in turn.
     for (const layout of catCookieLayout ? [catCookieLayout] : cookieRoutes) {
-        let missing = false;
-        for (const { drive, route, value, body, optional } of sharedSignIns(accounts, layout)) {
+        let missing = false, unsure = false;
+        for (const { drive, route, value, body, optional, later } of sharedSignIns(accounts, layout)) {
             if (!value || given[drive] === digest(value)) continue;
             const response = await fetch(`http://127.0.0.1:${port}${route}`, {
                 method: 'PUT', headers: { 'x-yingxia-host': '1', 'content-type': 'application/json' }, body: JSON.stringify(body(value)),
@@ -542,13 +544,17 @@ async function shareCatPawAccounts(port) {
             try { answer = JSON.parse(await response.text()); } catch { }
             if (!(response.ok && answer?.code === 0)) {
                 if (optional || (response.status !== 404 && answer?.code !== undefined)) continue;
+                // A later drive missing from a bundle whose layout is known is skipped; before that, it may be the
+                // other layout's, or a bundle without that drive, so the next layout is tried but the bundle keeps
+                // its accounts.
+                if (later) { if (!catCookieLayout) unsure = true; continue; }
                 missing = true; break;
             }
             catCookieLayout = layout;
             given[drive] = digest(value); changed = true; log('CATPAW_ACCOUNT', drive);
         }
-        if (!missing) break;
-        if (catCookieLayout || layout === cookieRoutes.at(-1)) { catTakesAccounts = false; break; }
+        if (!missing && !(unsure && !catCookieLayout)) break;
+        if (catCookieLayout || layout === cookieRoutes.at(-1)) { if (missing) catTakesAccounts = false; break; }
     }
     if (changed) writeJSON(givenFile, given);
 }

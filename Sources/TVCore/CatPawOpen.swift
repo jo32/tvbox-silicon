@@ -149,11 +149,11 @@ public struct CatPawSignIn: Sendable {
 
     /// The sign-in a bundle's error asks for, or nil. Only messages that send the viewer to the config center count
     /// ("请先去配置中心登录百度网盘"), or that ask for the drive's cookie again (the catpaw.douer.me bundle's "夸克登录状态失效，
-    /// 请重新配置 Cookie", #651), not a drive's other failures ("百度网盘分享已失效").
+    /// 请重新配置 Cookie", #651, and "请先在配置中填入115 Cookie", #1075), not a drive's other failures ("百度网盘分享已失效").
     public static func provider(for message: String) -> String? {
         if message.range(of: "UC TV Token", options: .caseInsensitive) != nil { return "ucToken" }
         guard message.contains("配置中心")
-                || message.range(of: #"配置\s*\S{0,4}\s*cookie"#, options: [.regularExpression, .caseInsensitive]) != nil else { return nil }
+                || message.range(of: #"配置\s*\S{0,8}\s*cookie"#, options: [.regularExpression, .caseInsensitive]) != nil else { return nil }
         let drives: [(name: String, provider: String)] = [
             ("夸克", "quark"), ("百度", "baidu"), ("115", "pan115"), ("天翼", "pan189"), ("光鸭", "guangya"), ("UC", "ucCookie"),
         ]

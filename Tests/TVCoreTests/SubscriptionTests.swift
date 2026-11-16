@@ -208,6 +208,8 @@ import Testing
     #expect(CatPawSignIn.provider(for: "还没有配置夸克 Cookie，请先去配置中心登录夸克") == "quark")
     #expect(CatPawSignIn.provider(for: "还没有配置 UC Cookie，请先去配置中心登录 UC 网盘") == "ucCookie")
     #expect(CatPawSignIn.provider(for: "115 Cookie 未配置或已失效，请前往配置中心配置") == "pan115")
+    // The catpaw.douer.me bundle (#1075).
+    #expect(CatPawSignIn.provider(for: "请先在配置中填入115 Cookie") == "pan115")
     #expect(CatPawSignIn.provider(for: "还没有配置光鸭 Token，请先去配置中心登录光鸭") == "guangya")
     #expect(CatPawSignIn.provider(for: "天翼自动登录需要短信验证，请到配置中心完成登录") == "pan189")
     // Drives the bundle signs in to with a form, not a code, and other failures.

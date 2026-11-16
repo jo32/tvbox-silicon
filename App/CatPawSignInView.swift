@@ -27,7 +27,12 @@ struct CatPawSignInView: View {
     var body: some View {
         if let ownSignIn {
             #if os(iOS)
-            WebSignInView(service: ownSignIn.webSignIn, signedIn: signedIn) { CloudQRLoginView(drive: ownSignIn.qrDrive, signedIn: signedIn) }
+            if let service = WebSignIn(rawValue: ownSignIn.rawValue) {
+                WebSignInView(service: service, signedIn: signedIn) { CloudQRLoginView(drive: ownSignIn.qrDrive, signedIn: signedIn) }
+            } else {
+                // 115 has no sign-in page here, only the code to scan with its app on another phone.
+                CloudQRLoginView(drive: ownSignIn.qrDrive, signedIn: signedIn)
+            }
             #else
             CloudQRLoginView(drive: ownSignIn.qrDrive, signedIn: signedIn)
             #endif
@@ -194,6 +199,7 @@ private extension CloudProvider {
         case "quark": self = .quark
         case "ucCookie": self = .uc
         case "baidu": self = .baidu
+        case "pan115": self = .pan115
         default: return nil
         }
     }
