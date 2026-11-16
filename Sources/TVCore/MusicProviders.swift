@@ -13,6 +13,14 @@ public protocol MusicStreamProvider: Sendable {
     func resolve(_ songID: String, platform: MusicPlatform, track: MusicTrack?, quality: MusicAudioQuality) async throws -> ResolvedMusicStream
 }
 
+/// A channel that asks several sources in turn (the LX Music sources). The address one source gives can still fail
+/// to play (its server is down) or be a 30-second preview, so the resolver asks again without the sources whose
+/// address it already turned down, named by `ResolvedMusicStream.upstream`.
+protocol MusicStreamAlternatives: MusicStreamProvider {
+    func resolve(_ songID: String, platform: MusicPlatform, track: MusicTrack?, quality: MusicAudioQuality,
+                 skipping: Set<String>) async throws -> ResolvedMusicStream
+}
+
 extension MusicStreamProvider {
     public func resolve(_ songID: String, platform: MusicPlatform, track: MusicTrack?, quality: MusicAudioQuality) async throws -> ResolvedMusicStream {
         try await resolve(songID, platform: platform, quality: quality)

@@ -451,14 +451,33 @@ public struct MusicResolver: Sendable {
         let key = MusicHealth.key(candidate.provider.rawValue, candidate.platform, .resolve)
         do {
             guard let provider = providers[candidate.provider] else { throw MusicProviderError.authRequired }
-            let stream = try await MusicHTTP.withTimeout(min(8, timeout)) {
+            let deadline = start.addingTimeInterval(timeout)
+            var stream = try await MusicHTTP.withTimeout(min(8, timeout)) {
                 try await provider.resolve(candidate.songID, platform: candidate.platform, track: track, quality: quality)
             }
             await health.record(key, error: nil)
-            let probe = try await prober.probe(stream, expected: track.duration)
-            if probe.completeness == .preview { throw MusicProviderError.preview(probe.duration ?? 0) }
-            if let expected = track.duration, let duration = probe.duration, duration > expected + MusicMatching.durationTolerance(expected) {
-                throw MusicProviderError.differentRecording(duration)
+            var probe: MusicProbeResult
+            // An address that doesn't play is the source's, not the channel's: a channel of several sources (LX
+            // Music) is asked again without it. A song only LX sources find (Jay Chou's, which NetEase, Kuwo and
+            // Migu don't carry) otherwise failed whenever the first source's server was down or gave a preview.
+            var skipped: Set<String> = []
+            while true {
+                do {
+                    probe = try await playable(stream, track: track)
+                    break
+                } catch {
+                    let failure = MusicProviderError(error)
+                    guard let alternatives = provider as? any MusicStreamAlternatives, let upstream = stream.upstream,
+                          failure != .cancelled, deadline.timeIntervalSinceNow > 1 else { throw failure }
+                    skipped.insert(upstream)
+                    Diagnostics.shared.record(.info, "music", "\(candidate.provider.rawValue) \(candidate.platform.rawValue) \(upstream) unplayable: \(failure.detail)")
+                    let left = deadline.timeIntervalSinceNow, tried = skipped
+                    // No source left, or none answers: the address that didn't play is the reason.
+                    guard let next = try? await MusicHTTP.withTimeout(min(8, left), {
+                        try await alternatives.resolve(candidate.songID, platform: candidate.platform, track: track, quality: quality, skipping: tried)
+                    }) else { throw failure }
+                    stream = next
+                }
             }
             await cache.put(cacheKey, .init(stream: stream, probe: probe))
             Diagnostics.shared.record(.info, "music", "\(candidate.provider.rawValue) \(candidate.platform.rawValue) host=\(stream.url.host() ?? "-") \(probe.format.label) \(probe.completeness.rawValue) in \(String(format: "%.1f", Date().timeIntervalSince(start)))s")
@@ -469,6 +488,16 @@ public struct MusicResolver: Sendable {
             Diagnostics.shared.record(.info, "music", "\(candidate.provider.rawValue) \(candidate.platform.rawValue) failed: \(failure.detail)")
             return (candidate, .failure(failure), Date().timeIntervalSince(start))
         }
+    }
+
+    /// What `stream` serves, when it is the whole song.
+    private func playable(_ stream: ResolvedMusicStream, track: MusicTrack) async throws -> MusicProbeResult {
+        let probe = try await prober.probe(stream, expected: track.duration)
+        if probe.completeness == .preview { throw MusicProviderError.preview(probe.duration ?? 0) }
+        if let expected = track.duration, let duration = probe.duration, duration > expected + MusicMatching.durationTolerance(expected) {
+            throw MusicProviderError.differentRecording(duration)
+        }
+        return probe
     }
 }
 
