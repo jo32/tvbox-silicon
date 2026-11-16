@@ -2109,3 +2109,13 @@
 "No Shows Followed" = "フォロー中の番組はありません";
 "Open a series in Discover and tap Follow Show to see when its new episodes air." = "発見でシリーズを開いて「フォロー」をタップすると、新しいエピソードの放送日がここに表示されます。";
 "Season %@" = "シーズン%@";
+"Unfollowed Show" = "フォローを解除しました";
+"New episodes show up in Following Calendar" = "新しいエピソードはフォロー中の番組に表示";
+"Previous Month" = "前の月";
+"Next Month" = "次の月";
+"Yesterday" = "昨日";
+"Last Week" = "先週";
+"This Week" = "今週";
+"Next Week" = "来週";
+"Aired" = "放送済み";
+"In %@ days" = "%@日後";

@@ -28,6 +28,8 @@ public struct AirSchedule: Codable, Hashable, Sendable {
     public let networks: [String]
     public let status: String?
     public let fetched: Date
+    /// TMDB's genres for the series ("剧情", "古装"), for the Following Calendar's cards; nil in schedules kept from before.
+    public var genres: [String]?
 
     /// The season as the app's language says it ("第 1 季"): TMDB's name only when it is a real title, since its generic
     /// "Season 1" comes in whatever language the schedule was fetched in.
@@ -51,6 +53,7 @@ public struct AirSchedule: Codable, Hashable, Sendable {
         self.init(showID: details.id, season: season.number, seasonName: season.name, total: count,
                   episodes: season.episodes.map { Episode(number: $0.number, airDate: $0.airDate) },
                   networks: details.networks, status: details.status, fetched: fetched)
+        genres = details.genres
     }
 
     /// The days with episodes, earliest first.
@@ -141,14 +144,16 @@ public struct AirSchedule: Codable, Hashable, Sendable {
         public var id: String { date }
     }
 
-    /// The followed shows' episodes from `today` for `days` days, by day.
-    public static func agenda(_ shows: [FollowedShow], schedules: [Int: AirSchedule], today: String, days: Int = 28) -> [AgendaDay] {
-        guard let start = date(today) else { return [] }
+    /// The followed shows' episodes from `today` (or from `first`, a day before it) for `days` days, by day.
+    public static func agenda(_ shows: [FollowedShow], schedules: [Int: AirSchedule], today: String, from first: String? = nil,
+                              days: Int = 28) -> [AgendaDay] {
+        let from = first ?? today
+        guard let start = date(from) else { return [] }
         let end = day(start.addingTimeInterval(Double(max(days, 1) - 1) * 86_400))
         var byDate: [String: [Upcoming]] = [:]
         for show in shows {
             guard let schedule = schedules[show.id] else { continue }
-            for value in schedule.days where value.date >= today && value.date <= end {
+            for value in schedule.days where value.date >= from && value.date <= end {
                 byDate[value.date, default: []].append(Upcoming(show: show, schedule: schedule, day: value))
             }
         }

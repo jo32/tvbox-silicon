@@ -2109,3 +2109,13 @@
 "No Shows Followed" = "還沒有追劇";
 "Open a series in Discover and tap Follow Show to see when its new episodes air." = "在發現裡打開一部劇，點「追劇」，它的新劇集播出日期會顯示在這裡。";
 "Season %@" = "第 %@ 季";
+"Unfollowed Show" = "已取消追劇";
+"New episodes show up in Following Calendar" = "新劇集會出現在追劇日曆";
+"Previous Month" = "上個月";
+"Next Month" = "下個月";
+"Yesterday" = "昨天";
+"Last Week" = "上週";
+"This Week" = "本週";
+"Next Week" = "下週";
+"Aired" = "已播出";
+"In %@ days" = "%@ 天後";

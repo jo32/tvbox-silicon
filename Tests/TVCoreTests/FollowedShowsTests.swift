@@ -118,3 +118,11 @@ private final class LockedBox<Value: Sendable>: @unchecked Sendable {
     #expect(AirSchedule.seasonTitle("", number: 2) == L10n.text("Season %@", "2"))
     #expect(AirSchedule.seasonTitle("少年歌行 风花雪月篇", number: 3) == "少年歌行 风花雪月篇")
 }
+
+@Test func followedShowsAgendaCanStartBeforeToday() throws {
+    let schedule = try #require(AirSchedule(details: details(1, seasons: [(1, 3)], season: 1, dates: ["2026-11-10", "2026-11-17", "2026-11-24"])))
+    let shows = [FollowedShow(item: show(1))]
+    #expect(AirSchedule.agenda(shows, schedules: [1: schedule], today: "2026-11-17", days: 14).map(\.date) == ["2026-11-17", "2026-11-24"])
+    #expect(AirSchedule.agenda(shows, schedules: [1: schedule], today: "2026-11-17", from: "2026-11-09", days: 21).map(\.date)
+        == ["2026-11-10", "2026-11-17", "2026-11-24"])
+}

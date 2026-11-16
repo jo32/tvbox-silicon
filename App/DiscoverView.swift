@@ -251,6 +251,7 @@ struct DiscoverView: View {
         .task { await model.load() }
         .task(id: doubanShown) { if doubanShown { await model.loadDouban() } }
         .task(id: store.followedShows.shows.map(\.id)) { if visible(.following) { await model.loadFollowing(store.followedShows.shows.map(\.id)) } }
+        .modifier(DiscoverToastHost())
         #if DEBUG
         .task { await qaFollowing() }
         #endif

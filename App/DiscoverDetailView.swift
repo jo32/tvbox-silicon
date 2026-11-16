@@ -41,7 +41,17 @@ struct DiscoverDetailView: View {
         }
         .task(id: seasonNumber) { await loadSeason() }
         .task(id: details?.id) { await loadAiring() }
+        #if DEBUG
+        .task(id: details?.id) {
+            // QA: -qaToggleFollow <seconds> follows or unfollows the series that long after its details load, for the toast.
+            let delay = UserDefaults.standard.double(forKey: "qaToggleFollow")
+            guard details != nil, delay > 0 else { return }
+            try? await Task.sleep(for: .seconds(delay))
+            if !Task.isCancelled { DiscoverFollowing.toggle(followItem, in: store) }
+        }
+        #endif
         .modifier(DiscoverAirCalendarPresentation(isPresented: $airCalendarShown, schedule: airing, show: followItem))
+        .modifier(DiscoverToastHost(active: !airCalendarShown))
         .sheet(isPresented: $overviewShown) {
             NavigationStack {
                 ScrollView {
@@ -233,7 +243,7 @@ struct DiscoverDetailView: View {
 
     private var episodes: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let airing { DiscoverAirCalendarRow(schedule: airing) { airCalendarShown = true } }
+            if let airing { DiscoverAirCalendarRow(schedule: airing) { DiscoverFollowing.present { airCalendarShown = true } } }
             Menu {
                 ForEach(seasons, id: \.number) { value in
                     Button { seasonNumber = value.number } label: {
@@ -426,7 +436,7 @@ struct DiscoverDetailView: View {
         airing = value?.isAiring(today: DiscoverFollowing.today) == true ? value : nil
         #if DEBUG
         // QA: -qaAirCalendar 1 opens the air calendar once it loads.
-        if airing != nil, UserDefaults.standard.bool(forKey: "qaAirCalendar") { airCalendarShown = true }
+        if airing != nil, UserDefaults.standard.bool(forKey: "qaAirCalendar") { DiscoverFollowing.present { airCalendarShown = true } }
         #endif
     }
 
@@ -669,7 +679,7 @@ extension DiscoverDetailView {
                         if item.mediaType == .tv {
                             let following = store.followedShows.contains(item.id)
                             tvIconButton(following ? "calendar.badge.checkmark" : "calendar.badge.plus", following ? "Unfollow Show" : "Follow Show",
-                                         "discover.detail.follow") { store.followedShows.toggle(followItem) }
+                                         "discover.detail.follow") { DiscoverFollowing.toggle(followItem, in: store) }
                         }
                         if airing != nil {
                             tvIconButton("calendar", "Air Calendar", "discover.detail.airCalendar") { airCalendarShown = true }
