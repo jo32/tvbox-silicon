@@ -57,7 +57,8 @@ struct CatalogPlaybackActions: View {
             #endif
             .accessibilityLabel(L10n.text("Playback Options"))
             .accessibilityIdentifier("player.catalogOptions")
-            .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).playerSheet() }
+            // Store handed in, as for every sheet over the player (`PlayerSheetPresentation`).
+            .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).playerSheet().environment(store) }
         }
     }
 }

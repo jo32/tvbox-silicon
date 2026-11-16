@@ -25,7 +25,20 @@ extension View {
     /// The episodes sheet, on a view that stays while the player's controls come and go: on the button itself, the
     /// sheet closed whenever its row did.
     func playerEpisodesSheet(isPresented: Binding<Bool>, channel: Channel) -> some View {
-        sheet(isPresented: isPresented) { PlayerEpisodesSheet(channel: channel).playerSheet() }
+        modifier(PlayerSheetPresentation(isPresented: isPresented) { PlayerEpisodesSheet(channel: channel).playerSheet() })
+    }
+}
+
+/// A sheet over the player with the store handed in: the iPad app on a Mac presents a sheet from inside the player's
+/// full-screen cover without the presenter's environment objects, and 选集 stopped the app there ("No Observable
+/// object of type Store found", #1163).
+struct PlayerSheetPresentation<Sheet: View>: ViewModifier {
+    @Binding var isPresented: Bool
+    @ViewBuilder let sheet: () -> Sheet
+    @Environment(Store.self) private var store
+
+    func body(content: Content) -> some View {
+        content.sheet(isPresented: $isPresented) { sheet().environment(store) }
     }
 }
 

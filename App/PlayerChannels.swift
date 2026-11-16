@@ -24,7 +24,7 @@ struct PlayerChannelsButton<Label: View>: View {
 extension View {
     /// The channel list, on a view that stays while the player's controls come and go, as the episodes sheet is.
     func playerChannelsSheet(isPresented: Binding<Bool>, channel: Channel, session: PlaybackSession) -> some View {
-        sheet(isPresented: isPresented) { PlayerChannelsSheet(channel: channel, session: session).playerSheet() }
+        modifier(PlayerSheetPresentation(isPresented: isPresented) { PlayerChannelsSheet(channel: channel, session: session).playerSheet() })
     }
 }
 
