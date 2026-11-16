@@ -16,8 +16,9 @@ import TVCore
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     #endif
     #if os(iOS) || os(macOS)
-    /// A link that asks to add a subscription, waiting for the viewer to agree (#167). Apple TV opens no links.
-    @State private var subscriptionLink: SubscriptionImportLink?
+    /// A link or an opened file that asks to add a subscription, waiting for the viewer to agree (#167, #983).
+    /// Apple TV opens no links or files.
+    @State private var subscriptionRequest: SubscriptionImportRequest?
     /// A live plugin source link (`yingxia://install-source`), opened in Live Plugins.
     @State private var pluginSourceLink: LivePluginSourceLink?
     #endif
@@ -79,20 +80,24 @@ import TVCore
                 #if os(iOS)
                 // Both links carry the app's one scheme, and only the action's host tells them apart.
                 .onOpenURL { url in
-                    if let link = DouyinHandoff.Link(url) { douyinHandoff = link }
-                    else if let link = SubscriptionImportLink(url) { subscriptionLink = link }
+                    // A .json, .m3u, .txt, .py or .js file from the share sheet or Open In (the document types in project.yml).
+                    if let file = OpenedSubscriptionFile(url) { subscriptionRequest = .file(file) }
+                    else if let link = DouyinHandoff.Link(url) { douyinHandoff = link }
+                    else if let link = SubscriptionImportLink(url) { subscriptionRequest = .link(link) }
                     else if let link = LivePluginSourceLink(url), store.extrasUnlocked { pluginSourceLink = link }
                 }
                 .sheet(item: $pluginSourceLink) { link in LivePluginSourceSheet(link: link).environment(store) }
                 .sheet(item: $douyinHandoff) { DouyinHandoffView(link: $0) }
-                .sheet(item: $subscriptionLink) { SubscriptionImportView(link: $0) }
+                .sheet(item: $subscriptionRequest) { SubscriptionImportView(request: $0) }
                 #elseif os(macOS)
                 .onOpenURL { url in
-                    if let link = SubscriptionImportLink(url) { subscriptionLink = link }
+                    // A file opened with Yingxia from Finder (the document types in project.yml).
+                    if let file = OpenedSubscriptionFile(url) { subscriptionRequest = .file(file) }
+                    else if let link = SubscriptionImportLink(url) { subscriptionRequest = .link(link) }
                     else if let link = LivePluginSourceLink(url), store.extrasUnlocked { pluginSourceLink = link }
                 }
                 .sheet(item: $pluginSourceLink) { link in LivePluginSourceSheet(link: link).environment(store) }
-                .sheet(item: $subscriptionLink) { SubscriptionImportView(link: $0) }
+                .sheet(item: $subscriptionRequest) { SubscriptionImportView(request: $0) }
                 // Without this, every link opened a second main window, and the sheet showed in both.
                 .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
                 #endif
@@ -194,8 +199,55 @@ struct LivePluginSourceSheet: View {
 }
 #endif
 
+/// What asks to add a subscription: a web page's link, or a file opened with the app.
+enum SubscriptionImportRequest: Identifiable {
+    case link(SubscriptionImportLink)
+    case file(OpenedSubscriptionFile)
+    var id: String {
+        switch self {
+        case .link(let link): "link " + link.id
+        case .file(let file): "file " + file.id
+        }
+    }
+}
+
+/// A file handed to the app by the share sheet, Open In or Finder (#983). It is copied at once: the permission to
+/// read it may not outlast this call, and Open In's own copy in Documents/Inbox shouldn't stay behind.
+struct OpenedSubscriptionFile: Identifiable {
+    let id = UUID().uuidString
+    let name: String
+    /// The copy in the temporary folder, under the file's own name, which the subscription is named after.
+    let copy: URL?
+    /// Why the file couldn't be read.
+    let failure: String?
+
+    init?(_ url: URL) {
+        guard url.isFileURL else { return nil }
+        name = url.lastPathComponent
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        let folder = URL.temporaryDirectory.appending(path: "OpenedFiles/" + id, directoryHint: .isDirectory)
+        do {
+            let data = try ImportedFiles.read(url)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let target = folder.appending(path: url.lastPathComponent)
+            try data.write(to: target, options: .atomic)
+            copy = target; failure = nil
+        } catch {
+            Diagnostics.shared.failure("subscription", "open file ext=\(url.pathExtension)", error)
+            copy = nil; failure = L10n.text("Import failed: %@", error.localizedDescription)
+        }
+        if url.pathComponents.suffix(3).first == "Inbox" { try? FileManager.default.removeItem(at: url) }
+    }
+
+    /// Removes the temporary copy; an added subscription keeps its own (`ImportedFiles`).
+    func discard() {
+        if let copy { try? FileManager.default.removeItem(at: copy.deletingLastPathComponent()) }
+    }
+}
+
 struct SubscriptionImportView: View {
-    let link: SubscriptionImportLink
+    let request: SubscriptionImportRequest
     @Environment(Store.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var adding = false
@@ -206,21 +258,29 @@ struct SubscriptionImportView: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 18) {
-                Image(systemName: "link.badge.plus")
+                Image(systemName: symbol)
                     .font(.system(size: 40)).foregroundStyle(Brand.accent)
                     .frame(maxWidth: .infinity)
                 Text(L10n.text("Add This Subscription?"))
                     .font(.title3.weight(.bold)).multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
                 VStack(alignment: .leading, spacing: 10) {
-                    field(L10n.text("Subscription URL"), link.address.absoluteString)
-                    if let name = link.name { field(L10n.text("Name"), name) }
+                    switch request {
+                    case .link(let link):
+                        field(L10n.text("Subscription URL"), link.address.absoluteString)
+                        if let name = link.name { field(L10n.text("Name"), name) }
+                    case .file(let file):
+                        field(L10n.text("File"), file.name)
+                    }
                 }
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentPanel(cornerRadius: 16)
-                Text(L10n.text("A page can only ask: Yingxia adds this subscription after you agree, never on its own."))
-                    .font(.footnote).foregroundStyle(.secondary)
+                // Gone once the result shows, which the half-height sheet then has room for.
+                if added == nil {
+                    Text(note)
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 if let failure {
                     Label(failure, systemImage: "exclamationmark.triangle.fill")
                         .font(.callout).foregroundStyle(Brand.amber)
@@ -245,13 +305,33 @@ struct SubscriptionImportView: View {
                     if added != nil { Button(L10n.text("Done")) { dismiss() }.fontWeight(.semibold) }
                     // Settings may be importing already, and the store takes one import at a time.
                     else if adding || store.importing { ProgressView() }
-                    else { Button(L10n.text("Add"), action: add).fontWeight(.semibold) }
+                    else { Button(L10n.text("Add"), action: add).fontWeight(.semibold).disabled(unreadable) }
                 }
             }
         }
         #if os(iOS)
         .presentationDetents([.medium, .large])
         #endif
+        .onAppear { if case .file(let file) = request, let reason = file.failure { failure = reason } }
+        .onDisappear { if case .file(let file) = request { file.discard() } }
+    }
+
+    /// An opened file that couldn't be read, which there is nothing to add from.
+    private var unreadable: Bool {
+        if case .file(let file) = request { return file.copy == nil }
+        return false
+    }
+
+    private var symbol: String {
+        if case .file = request { return "doc.badge.plus" }
+        return "link.badge.plus"
+    }
+
+    private var note: String {
+        switch request {
+        case .link: L10n.text("A page can only ask: Yingxia adds this subscription after you agree, never on its own.")
+        case .file: L10n.text("Yingxia keeps its own copy of this file. Later changes to the original don't reach the app; open it again to update it.")
+        }
     }
 
     private func field(_ title: String, _ value: String) -> some View {
@@ -264,7 +344,10 @@ struct SubscriptionImportView: View {
     private func add() {
         adding = true; failure = nil
         Task {
-            await store.importSubscription(address: link.address.absoluteString, name: link.name)
+            switch request {
+            case .link(let link): await store.importSubscription(address: link.address.absoluteString, name: link.name)
+            case .file(let file): if let copy = file.copy { await store.importSubscriptionFile(copy) }
+            }
             adding = false
             // Settings shows these too; here they say what did or did not arrive.
             if let error = store.importError { failure = error } else { added = store.notice ?? L10n.text("Done") }
