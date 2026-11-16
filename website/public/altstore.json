@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.23",
+          "buildVersion": "61",
+          "date": "2026-11-16",
+          "localizedDescription": "• 更多网盘\n• 飞牛 NAS 与媒体服务器\n• iPhone 和 iPad 播放器\n• 跳过片头片尾\n• 订阅与点播源\n• 小说：登录书源\n• 其他修复\n\n• More cloud drives\n• fnOS NAS and media servers\n• Player on iPhone and iPad\n• Intro and outro skipping\n• Subscriptions and sources\n• Novels: sign in to book sources\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.23/Yingxia-1.8.23-ios.ipa",
+          "size": 178364180,
+          "sha256": "ba5c3cc0843746977c3739e59526ce5fd4f939d71281167ce5a54403a1244beb",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.22",
           "buildVersion": "60",
           "date": "2026-11-15",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.19/Yingxia-1.8.19-ios.ipa",
           "size": 128610491,
           "sha256": "039d51da984ec9e5c68ec68f6aa6516d827b82e61be1ccb74cda3a31ee38c486",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.18",
-          "buildVersion": "56",
-          "date": "2026-11-12",
-          "localizedDescription": "• 搜索只显示匹配的结果\n• 离线缓存可以连续播放\n• 在视频页任意位置右滑返回\n• 来电或闹钟结束后音乐继续播放\n• 其他修复\n\n• Search shows what you searched for\n• Offline Cache plays on\n• Swipe back from anywhere on a video page\n• Music plays again after a call or an alarm\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.18/Yingxia-1.8.18-ios.ipa",
-          "size": 128572297,
-          "sha256": "2e0212b30f82934b460439101284338f8062e3822e4e3a5892eebfe10974aee0",
           "minOSVersion": "17.0"
         }
       ],
