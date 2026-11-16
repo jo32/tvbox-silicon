@@ -986,7 +986,8 @@
 "Added the AList server %@. Browse it in Cloud Files." = "AList サーバ %@ を追加しました。クラウドファイルで閲覧できます。";
 "Added %lld AList servers. Browse them in Cloud Files." = "AList サーバを %lld 台追加しました。クラウドファイルで閲覧できます。";
 "This address is now an AList server. Add it again to browse it in Cloud Files." = "このアドレスは現在 AList サーバです。追加し直すとクラウドファイルで閲覧できます。";
-"Sign in to Quark, UC or 115 under Cloud Drive Accounts to browse their files here." = "クラウドドライブのアカウントで Quark、UC または 115 にサインインすると、ここでファイルを閲覧できます。";
+"Sign in to Quark, UC, 115 or Baidu Netdisk under Cloud Drive Accounts to browse their files here." = "クラウドドライブのアカウントで Quark、UC、115 または Baidu Netdisk にサインインすると、ここでファイルを閲覧できます。";
+"This file no longer exists." = "このファイルはもう存在しません。";
 "Add an AList or OpenList server, a NAS's WebDAV share, or an Emby or Jellyfin server, by the address you open it at. Pasting an AList address, or a TVBox AList configuration, in Add Subscription adds servers too." = "AList・OpenList サーバ、NAS の WebDAV 共有、Emby・Jellyfin サーバは、開くときのアドレスで追加します。AList のアドレスや TVBox の AList 設定を「配信設定を追加」に貼り付けても追加できます。";
 "Edit Server" = "サーバを編集";
 "Remove Server" = "サーバを削除";

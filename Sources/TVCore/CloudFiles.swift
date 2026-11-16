@@ -1,9 +1,9 @@
 import Foundation
 
-/// A file or folder in Cloud Files: on a signed-in Quark, UC or 115 drive, an AList server, a WebDAV share
+/// A file or folder in Cloud Files: on a signed-in Quark, UC, 115 or Baidu Netdisk drive, an AList server, a WebDAV share
 /// or an Emby or Jellyfin server.
 public struct CloudFile: Identifiable, Hashable, Codable, Sendable {
-    /// Quark, UC, Emby and Jellyfin: the drive's file id. 115: a folder's id, a file's pick code. AList and WebDAV: the file's full path.
+    /// Quark, UC, Emby and Jellyfin: the drive's file id. 115: a folder's id, a file's pick code. Baidu Netdisk, AList and WebDAV: the file's full path.
     public let id: String
     public let name: String
     public let isFolder: Bool
@@ -47,7 +47,7 @@ public struct CloudFile: Identifiable, Hashable, Codable, Sendable {
 /// Where Cloud Files browses: a drive signed in under Cloud Drive Accounts, or a saved AList server, WebDAV
 /// share or Emby or Jellyfin server.
 public enum CloudFilesDrive: Hashable, Identifiable, Sendable {
-    case quark, uc, pan115, alist(AListServer)
+    case quark, uc, pan115, baidu, alist(AListServer)
     public var id: String { key }
     /// Names the drive in a file's address and in playback history.
     public var key: String {
@@ -55,6 +55,7 @@ public enum CloudFilesDrive: Hashable, Identifiable, Sendable {
         case .quark: "quark"
         case .uc: "uc"
         case .pan115: "pan115"
+        case .baidu: "baidu"
         case .alist(let server): "alist." + server.id
         }
     }
@@ -63,15 +64,16 @@ public enum CloudFilesDrive: Hashable, Identifiable, Sendable {
         case .quark: L10n.text("Quark")
         case .uc: "UC"
         case .pan115: L10n.text("115 Cloud")
+        case .baidu: L10n.text("Baidu Netdisk")
         case .alist(let server): server.name
         }
     }
-    /// Whether `file` plays from this drive: Quark and UC also transcode videos in containers that don't play
+    /// Whether `file` plays from this drive: Quark, UC and Baidu Netdisk also transcode videos in containers that don't play
     /// as they are; 115, an AList server, WebDAV share or media server hands over the file as it is. A playlist kept
     /// on 115 names segments it can't serve.
     public func plays(_ file: CloudFile) -> Bool {
         switch self {
-        case .quark, .uc: file.kind == .video || (file.kind == .audio && CloudFile.playsNatively(file.name))
+        case .quark, .uc, .baidu: file.kind == .video || (file.kind == .audio && CloudFile.playsNatively(file.name))
         case .pan115, .alist:
             file.isPlayable && (CloudFile.playsNatively(file.name) || (file.kind == .video && CloudFile.playsOriginal(file.name)))
                 && !(self == .pan115 && (file.name as NSString).pathExtension.lowercased() == "m3u8")
@@ -81,7 +83,8 @@ public enum CloudFilesDrive: Hashable, Identifiable, Sendable {
     /// The folder browsing starts in.
     public var root: String {
         if case .alist(let server) = self { return server.root }
-        return "0"
+        // Baidu Netdisk names folders by their path.
+        return self == .baidu ? "/" : "0"
     }
 }
 
@@ -110,13 +113,14 @@ public enum CloudFiles {
     /// Posted when a drive's account or a server is saved, so the app can add or remove its source.
     public static let drivesChanged = Notification.Name("CloudFilesDrivesChanged")
 
-    /// Signed-in Quark, UC and 115, then the saved AList servers.
+    /// Signed-in Quark, UC, 115 and Baidu Netdisk, then the saved AList servers.
     public static func drives() -> [CloudFilesDrive] {
         let accounts = (try? CloudDriveAccounts.load()) ?? CloudDriveAccounts()
         var drives: [CloudFilesDrive] = []
         if !accounts.quarkCookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { drives.append(.quark) }
         if !accounts.ucCookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { drives.append(.uc) }
         if accounts.pan115Cookie?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false { drives.append(.pan115) }
+        if accounts.baiduCookie?.contains("BDUSS") == true { drives.append(.baidu) }
         return drives + AListServers.load().map(CloudFilesDrive.alist)
     }
 
@@ -125,6 +129,7 @@ public enum CloudFiles {
         case "quark": return .quark
         case "uc": return .uc
         case "pan115": return .pan115
+        case "baidu": return .baidu
         default:
             guard key.hasPrefix("alist.") else { return nil }
             let id = String(key.dropFirst(6))
@@ -139,6 +144,7 @@ public enum CloudFiles {
         case .quark: files = try await QuarkFiles.quark.list(folder)
         case .uc: files = try await QuarkFiles.uc.list(folder)
         case .pan115: files = try await Pan115Files.shared.list(folder)
+        case .baidu: files = try await BaiduFiles.shared.list(folder)
         case .alist(let server) where server.isWebDAV: files = try await WebDAV.shared.list(server, path: folder)
         case .alist(let server) where server.isEmby: files = try await Emby.shared.list(server, id: folder)
         case .alist(let server): files = try await AList.shared.list(server, path: folder, password: password)
@@ -207,6 +213,7 @@ public enum CloudFiles {
         case .quark: return try await QuarkFiles.quark.original(id, name: name)
         case .uc: return try await QuarkFiles.uc.original(id, name: name)
         case .pan115: return try await Pan115Files.shared.link(id, name: name)
+        case .baidu: return try await BaiduFiles.shared.original(id, name: name)
         case .alist(let server) where server.isWebDAV: return try await WebDAV.shared.source(server, path: id, name: name)
         case .alist(let server) where server.isEmby: return try await Emby.shared.source(server, id: id, name: name)
         case .alist(let server): return try await AList.shared.link(server, path: id, name: name)
@@ -230,6 +237,7 @@ public enum CloudFiles {
         case .quark: return try await QuarkFiles.quark.stream(id, name: name)
         case .uc: return try await QuarkFiles.uc.stream(id, name: name)
         case .pan115: return try await Pan115Files.shared.stream(id, name: name)
+        case .baidu: return try await BaiduFiles.shared.stream(id, name: name)
         case .alist(let server) where server.isWebDAV: return try await WebDAV.shared.stream(server, path: id, name: name)
         case .alist(let server) where server.isEmby: return try await Emby.shared.stream(server, id: id, name: name)
         case .alist(let server): return try await AList.shared.stream(server, path: id, name: name)

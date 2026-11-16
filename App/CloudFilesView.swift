@@ -1,7 +1,7 @@
 import SwiftUI
 import TVCore
 
-/// Cloud Files: the Quark, UC and 115 drives signed in under Cloud Drive Accounts and the saved AList
+/// Cloud Files: the Quark, UC, 115 and Baidu Netdisk drives signed in under Cloud Drive Accounts and the saved AList
 /// servers, WebDAV shares and Emby or Jellyfin servers. Open folders and play their videos; the rest of the folder plays
 /// after the one chosen.
 struct CloudFilesView: View {
@@ -17,13 +17,13 @@ struct CloudFilesView: View {
     var body: some View {
         FilesList {
             FilesSection(title: L10n.text("Cloud Drives"),
-                         footer: signedIn.count < 3 ? L10n.text("Sign in to Quark, UC or 115 under Cloud Drive Accounts to browse their files here.") : nil) {
+                         footer: signedIn.count < 4 ? L10n.text("Sign in to Quark, UC, 115 or Baidu Netdisk under Cloud Drive Accounts to browse their files here.") : nil) {
                 ForEach(signedIn) { drive in
                     FolderLink(drive: drive, folder: drive.root, name: drive.name) {
                         FileRowLabel(symbol: drive.symbol, tint: drive.tint, title: drive.name, chevron: true)
                     }
                 }
-                if signedIn.count < 3 {
+                if signedIn.count < 4 {
                     RouteLink { CloudDriveView() } label: {
                         FileRowLabel(symbol: "person.crop.circle.badge.plus", tint: .gray, title: L10n.text("Cloud Drive Accounts"), chevron: true)
                     }
@@ -435,6 +435,7 @@ extension CloudFilesDrive {
         case .quark: CloudProvider.quark.symbol
         case .uc: CloudProvider.uc.symbol
         case .pan115: CloudProvider.pan115.symbol
+        case .baidu: CloudProvider.baidu.symbol
         case .alist(let server): server.isEmby ? "play.tv" : server.isWebDAV ? "externaldrive.connected.to.line.below" : "server.rack"
         }
     }
@@ -443,6 +444,7 @@ extension CloudFilesDrive {
         case .quark: CloudProvider.quark.tint
         case .uc: CloudProvider.uc.tint
         case .pan115: CloudProvider.pan115.tint
+        case .baidu: CloudProvider.baidu.tint
         case .alist: .teal
         }
     }
