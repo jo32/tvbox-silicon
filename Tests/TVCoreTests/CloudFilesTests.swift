@@ -270,7 +270,7 @@ import Testing
         let client = Emby(session: EmbyStub.session)
         let libraries = try await client.list(server, id: server.root)
         // Live TV isn't a folder of files.
-        #expect(libraries.map(\.name) == ["Shows"] && libraries[0].isFolder && libraries[0].id == "shows")
+        #expect(libraries.map(\.name) == ["Shows", "Films", "Home Videos"] && libraries[0].isFolder && libraries[0].id == "shows")
         #expect(libraries[0].artwork?.absoluteString == "http://emby.test/emby/Items/shows/Images/Primary?tag=t1&maxHeight=240")
         let episodes = CloudFile.arranged(try await client.list(server, id: "season"))
         #expect(episodes.map(\.name) == ["2. Pilot.mp4", "10. Finale.mkv", "Film (2024).mkv"])
@@ -288,6 +288,28 @@ import Testing
         await #expect(throws: TVError.self) {
             try await Emby(session: EmbyStub.session).check(AListServer(name: "Home", address: "http://emby.test/emby", username: "me", password: "no", kind: .emby))
         }
+    }
+
+    /// A film or series library lists every film or series in it, however its folders nest them, as the
+    /// server's own apps do; other libraries list folder by folder (#1063).
+    @Test func embyFilmAndSeriesLibrariesListAllTheirTitles() async throws {
+        EmbyStub.reset()
+        let server = AListServer(id: "e", name: "Home", address: "http://emby.test/emby", username: "me", password: "pw", kind: .emby)
+        let client = Emby(session: EmbyStub.session)
+        // Opened before the root (a page brought back), the libraries are looked up first, once.
+        let films = CloudFile.arranged(try await client.list(server, id: "films"))
+        #expect(films.map(\.name) == ["Arrival (2016).mkv", "Heat (1995).mp4"] && films[0].artwork != nil)
+        let wide = "EnableImageTypes=Primary&EnableUserData=false&Fields=Path,Container&ImageTypeLimit=1"
+        #expect(EmbyStub.calls.suffix(2) == ["GET /emby/Users/u1/Views tok-1",
+                                             "GET /emby/Users/u1/Items?\(wide)&IncludeItemTypes=Movie&ParentId=films&Recursive=true&SortBy=SortName tok-1"])
+        _ = try await client.list(server, id: "shows")
+        #expect(EmbyStub.calls.last == "GET /emby/Users/u1/Items?\(wide)&IncludeItemTypes=Series&ParentId=shows&Recursive=true&SortBy=SortName tok-1")
+        // Home videos, and a series' seasons, keep their folders.
+        _ = try await client.list(server, id: "home")
+        #expect(EmbyStub.calls.last == "GET /emby/Users/u1/Items?Fields=Path,Container&ParentId=home&SortBy=SortName tok-1")
+        _ = try await client.list(server, id: "crime")
+        #expect(EmbyStub.calls.last == "GET /emby/Users/u1/Items?Fields=Path,Container&ParentId=crime&SortBy=SortName tok-1")
+        #expect(EmbyStub.calls.filter { $0.contains("/Views") }.count == 1)
     }
 
     @Test func anEmbyFilePlaysAsTheServerStoresIt() async throws {
@@ -577,7 +599,15 @@ final class EmbyStub: URLProtocol, @unchecked Sendable {
             case _ where !signedIn: return (401, [:])
             case "/emby/Users/u1/Views":
                 return (200, ["Items": [["Id": "shows", "Name": "Shows", "IsFolder": true, "CollectionType": "tvshows", "ImageTags": ["Primary": "t1"]],
-                                        ["Id": "tv", "Name": "Live TV", "IsFolder": true, "CollectionType": "livetv"]]])
+                                        ["Id": "tv", "Name": "Live TV", "IsFolder": true, "CollectionType": "livetv"],
+                                        ["Id": "films", "Name": "Films", "IsFolder": true, "CollectionType": "movies"],
+                                        ["Id": "home", "Name": "Home Videos", "IsFolder": true, "CollectionType": "homevideos"]]])
+            case "/emby/Users/u1/Items" where url.query?.contains("ParentId=films") == true:
+                // Films in folders of their own (Crime/Heat/Heat.mp4): only a recursive listing reaches them.
+                guard url.query?.contains("Recursive=true") == true else { return (200, ["Items": [["Id": "crime", "Name": "Crime", "Type": "Folder", "IsFolder": true]]]) }
+                return (200, ["Items": [["Id": "m1", "Name": "Arrival", "Type": "Movie", "ProductionYear": 2016, "IsFolder": false, "Container": "mkv",
+                                         "ImageTags": ["Primary": "p1"]],
+                                        ["Id": "m2", "Name": "Heat", "Type": "Movie", "ProductionYear": 1995, "IsFolder": false, "Path": "/m/Crime/Heat/Heat.mp4"]]])
             case "/emby/Users/u1/Items" where url.query?.contains("ParentId=remote") == true:
                 return (200, ["Items": [["Id": "e3", "Name": "Remote", "Type": "Episode", "IndexNumber": 1, "IsFolder": false, "MediaType": "Video",
                                          "Path": "/media/Show/S01E01.strm"],
