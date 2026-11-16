@@ -1,6 +1,6 @@
 import Foundation
 
-/// A file or folder in Cloud Files: on a signed-in Quark, UC, 115 or Baidu Netdisk drive, an AList server, a WebDAV share
+/// A file or folder in Cloud Files: on a signed-in Quark, UC, 115, Baidu Netdisk, Tianyi Cloud or 123pan drive, an AList server, a WebDAV share
 /// or an Emby or Jellyfin server.
 public struct CloudFile: Identifiable, Hashable, Codable, Sendable {
     /// Quark, UC, Emby and Jellyfin: the drive's file id. 115: a folder's id, a file's pick code. Baidu Netdisk, AList and WebDAV: the file's full path.
@@ -47,7 +47,7 @@ public struct CloudFile: Identifiable, Hashable, Codable, Sendable {
 /// Where Cloud Files browses: a drive signed in under Cloud Drive Accounts, or a saved AList server, WebDAV
 /// share or Emby or Jellyfin server.
 public enum CloudFilesDrive: Hashable, Identifiable, Sendable {
-    case quark, uc, pan115, baidu, alist(AListServer)
+    case quark, uc, pan115, baidu, tianyi, pan123, alist(AListServer)
     public var id: String { key }
     /// Names the drive in a file's address and in playback history.
     public var key: String {
@@ -56,6 +56,8 @@ public enum CloudFilesDrive: Hashable, Identifiable, Sendable {
         case .uc: "uc"
         case .pan115: "pan115"
         case .baidu: "baidu"
+        case .tianyi: "tianyi"
+        case .pan123: "pan123"
         case .alist(let server): "alist." + server.id
         }
     }
@@ -65,6 +67,8 @@ public enum CloudFilesDrive: Hashable, Identifiable, Sendable {
         case .uc: "UC"
         case .pan115: L10n.text("115 Cloud")
         case .baidu: L10n.text("Baidu Netdisk")
+        case .tianyi: L10n.text("Tianyi Cloud")
+        case .pan123: L10n.text("123pan")
         case .alist(let server): server.name
         }
     }
@@ -74,7 +78,7 @@ public enum CloudFilesDrive: Hashable, Identifiable, Sendable {
     public func plays(_ file: CloudFile) -> Bool {
         switch self {
         case .quark, .uc, .baidu: file.kind == .video || (file.kind == .audio && CloudFile.playsNatively(file.name))
-        case .pan115, .alist:
+        case .pan115, .tianyi, .pan123, .alist:
             file.isPlayable && (CloudFile.playsNatively(file.name) || (file.kind == .video && CloudFile.playsOriginal(file.name)))
                 && !(self == .pan115 && (file.name as NSString).pathExtension.lowercased() == "m3u8")
         }
@@ -83,8 +87,12 @@ public enum CloudFilesDrive: Hashable, Identifiable, Sendable {
     /// The folder browsing starts in.
     public var root: String {
         if case .alist(let server) = self { return server.root }
+        switch self {
         // Baidu Netdisk names folders by their path.
-        return self == .baidu ? "/" : "0"
+        case .baidu: return "/"
+        case .tianyi: return TianyiFiles.root
+        default: return "0"
+        }
     }
 }
 
@@ -121,6 +129,8 @@ public enum CloudFiles {
         if !accounts.ucCookie.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { drives.append(.uc) }
         if accounts.pan115Cookie?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false { drives.append(.pan115) }
         if accounts.baiduCookie?.contains("BDUSS") == true { drives.append(.baidu) }
+        if accounts.tianyiToken?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false { drives.append(.tianyi) }
+        if accounts.pan123Token?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false { drives.append(.pan123) }
         return drives + AListServers.load().map(CloudFilesDrive.alist)
     }
 
@@ -130,6 +140,8 @@ public enum CloudFiles {
         case "uc": return .uc
         case "pan115": return .pan115
         case "baidu": return .baidu
+        case "tianyi": return .tianyi
+        case "pan123": return .pan123
         default:
             guard key.hasPrefix("alist.") else { return nil }
             let id = String(key.dropFirst(6))
@@ -145,6 +157,8 @@ public enum CloudFiles {
         case .uc: files = try await QuarkFiles.uc.list(folder)
         case .pan115: files = try await Pan115Files.shared.list(folder)
         case .baidu: files = try await BaiduFiles.shared.list(folder)
+        case .tianyi: files = try await TianyiFiles.shared.list(folder)
+        case .pan123: files = try await Pan123Files.shared.list(folder)
         case .alist(let server) where server.isWebDAV: files = try await WebDAV.shared.list(server, path: folder)
         case .alist(let server) where server.isEmby: files = try await Emby.shared.list(server, id: folder)
         case .alist(let server): files = try await AList.shared.list(server, path: folder, password: password)
@@ -214,6 +228,8 @@ public enum CloudFiles {
         case .uc: return try await QuarkFiles.uc.original(id, name: name)
         case .pan115: return try await Pan115Files.shared.link(id, name: name)
         case .baidu: return try await BaiduFiles.shared.original(id, name: name)
+        case .tianyi: return try await TianyiFiles.shared.link(id, name: name)
+        case .pan123: return try await Pan123Files.shared.link(id, name: name)
         case .alist(let server) where server.isWebDAV: return try await WebDAV.shared.source(server, path: id, name: name)
         case .alist(let server) where server.isEmby: return try await Emby.shared.source(server, id: id, name: name)
         case .alist(let server): return try await AList.shared.link(server, path: id, name: name)
@@ -238,6 +254,8 @@ public enum CloudFiles {
         case .uc: return try await QuarkFiles.uc.stream(id, name: name)
         case .pan115: return try await Pan115Files.shared.stream(id, name: name)
         case .baidu: return try await BaiduFiles.shared.stream(id, name: name)
+        case .tianyi: return try await TianyiFiles.shared.stream(id, name: name)
+        case .pan123: return try await Pan123Files.shared.stream(id, name: name)
         case .alist(let server) where server.isWebDAV: return try await WebDAV.shared.stream(server, path: id, name: name)
         case .alist(let server) where server.isEmby: return try await Emby.shared.stream(server, id: id, name: name)
         case .alist(let server): return try await AList.shared.stream(server, path: id, name: name)

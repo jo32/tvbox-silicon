@@ -13,6 +13,10 @@ public struct CloudDriveAccounts: Codable, Sendable {
     public var baiduCookie: String?
     /// 115 sign-in cookies, "UID=…; CID=…; SEID=…; KID=…"; older saves omit it.
     public var pan115Cookie: String?
+    /// Tianyi Cloud's access token from its TV app's code (`TianyiFiles`); older saves omit it.
+    public var tianyiToken: String?
+    /// 123pan's Bearer token from its web app's code (`Pan123Files`); older saves omit it.
+    public var pan123Token: String?
     /// Xunlei's sign-in (`XunleiSignIn`), which CatPawOpen bundles take; older saves omit it.
     public var xunlei: XunleiAccount?
     /// Wex-family preferences a sign-in through the plugin's own code wrote (OwnDriveSignIn.java), which
