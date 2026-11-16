@@ -32,6 +32,10 @@ struct SitesView: View {
     @State private var group: String?
     private static let groupKey = "sources.group"
     #endif
+    #if os(iOS)
+    /// Counts groups changed by a sideways swipe, for the haptic tick (#1052).
+    @State private var swipes = 0
+    #endif
     @State private var arranging = false
     @State private var choosingHidden = false
     init(pick: ((Site) -> Void)? = nil, pickable: [Site] = [], picked: String? = nil) {
@@ -88,6 +92,10 @@ struct SitesView: View {
                                         }
                                     }
                                 }
+                                #if os(iOS)
+                                // Swiping the sources sideways moves along the chips above (#1052). Not while picking.
+                                .background { if pick == nil, query.isEmpty, groups.count > 1 { groupSwipe(groups) } }
+                                #endif
                                 // Unfolds from under its header; folding only fades, as the groups below slide up.
                                 .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: -16)), removal: .opacity))
                             }
@@ -106,6 +114,9 @@ struct SitesView: View {
                 // Picking opens on the current choice rather than the top of a long page.
                 .defaultFocus($focusedSite, picked)
                 .onAppear { if pick != nil, let picked { proxy.scrollTo(picked, anchor: .center) } }
+                #if os(iOS)
+                .sensoryFeedback(.selection, trigger: swipes)
+                #endif
                 }
                 .sheet(isPresented: $arranging) { SourceOrderEditor(sites: sites, automatic: store.automaticSites(config)) }
                 .sheet(isPresented: $choosingHidden) { HiddenSourcesEditor() }
@@ -180,10 +191,7 @@ struct SitesView: View {
     private func groupChips(_ groups: [SourceGroup]) -> some View {
         let subscriptions = groups.filter { if case .subscription = $0.kind { true } else { false } }.map(\.id)
         return SourceStrip(items: groups.map { .init(id: $0.id, name: L10n.text($0.title), count: $0.sites.count) },
-                           selection: current(groups), select: { id in
-            group = id
-            if pick == nil { UserDefaults.standard.set(id, forKey: Self.groupKey) }
-        }, actions: pick != nil ? nil : { id in
+                           selection: current(groups), select: { choose($0) }, actions: pick != nil ? nil : { id in
             // A subscription's chip moves it along, as dragging its header did: earlier subscriptions win duplicates.
             let index = subscriptions.firstIndex(of: id)
             return AnyView(Group {
@@ -198,6 +206,25 @@ struct SitesView: View {
         .scrollClipDisabled()
         .accessibilityIdentifier("sources.groups")
     }
+
+    private func choose(_ id: String) {
+        group = id
+        if pick == nil { UserDefaults.standard.set(id, forKey: Self.groupKey) }
+    }
+
+    #if os(iOS)
+    /// A sideways swipe over the sources picks the next chip (leftwards) or the previous one (rightwards), in the
+    /// chips' order (#1052). On iOS 26 a swipe to the right on the first chip goes back, as it does on other pages.
+    private func groupSwipe(_ groups: [SourceGroup]) -> some View {
+        let ids = groups.map(\.id)
+        let index = ids.firstIndex(of: current(groups)) ?? 0
+        return GroupSwipe(canGo: { ids.indices.contains(index + $0) }, go: { step in
+            guard ids.indices.contains(index + step) else { return }
+            withAnimation(.snappy(duration: 0.3)) { choose(ids[index + step]) }
+            swipes += 1
+        }, back: { dismiss() })
+    }
+    #endif
 
     @ViewBuilder
     private func groupHeader(_ group: SourceGroup) -> some View {
@@ -248,6 +275,94 @@ struct SitesView: View {
         searchFold = []
     }
 }
+
+#if os(iOS)
+/// The Sources page's sideways swipe (#1052): a UIKit pan on the page's own scroll view, because a SwiftUI drag on the
+/// cards stopped the page scrolling (iOS 18 and later). It begins only for a clearly sideways swipe that starts on the
+/// cards, away from the left edge (Back) and from anything that scrolls sideways; once it begins, the card under the
+/// finger is not opened. Being a pan under the finger, it turns off iOS 26's swipe back from anywhere on the cards, so
+/// on the first chip a swipe to the right goes back itself.
+private struct GroupSwipe: UIViewRepresentable {
+    /// Whether there is a chip that way: +1 the next, -1 the previous.
+    var canGo: (Int) -> Bool
+    var go: (Int) -> Void
+    /// Leaves the page, as iOS 26's swipe back would.
+    var back: () -> Void
+
+    func makeUIView(context: Context) -> Anchor { Anchor() }
+    func updateUIView(_ anchor: Anchor, context: Context) { anchor.canGo = canGo; anchor.go = go; anchor.back = back }
+    static func dismantleUIView(_ anchor: Anchor, coordinator: ()) { anchor.detach() }
+
+    final class Anchor: UIView {
+        var canGo: (Int) -> Bool = { _ in false }
+        var go: (Int) -> Void = { _ in }
+        var back: () -> Void = {}
+        private weak var pan: UIPanGestureRecognizer?
+        private lazy var rules = Rules(anchor: self)
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            detach()
+            guard window != nil else { return }
+            var view = superview
+            while let current = view, !(current is UIScrollView) { view = current.superview }
+            guard let scroll = view else { return }
+            let pan = UIPanGestureRecognizer(target: self, action: #selector(swiped(_:)))
+            pan.delegate = rules
+            scroll.addGestureRecognizer(pan)
+            self.pan = pan
+        }
+
+        func detach() {
+            if let pan { pan.view?.removeGestureRecognizer(pan) }
+            pan = nil
+        }
+
+        /// Only marks out the cards; touches go to them.
+        override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { nil }
+
+        @objc private func swiped(_ pan: UIPanGestureRecognizer) {
+            guard pan.state == .ended, let window else { return }
+            let moved = pan.translation(in: window), speed = pan.velocity(in: window).x
+            guard abs(moved.x) > 2 * abs(moved.y), abs(moved.x) > 80 || (abs(moved.x) > 50 && abs(speed) > 600) else { return }
+            let step = moved.x < 0 ? 1 : -1
+            if canGo(step) {
+                go(step)
+            } else if step < 0, #available(iOS 26.0, *) {
+                // iOS 26 goes back on a swipe to the right from anywhere, but not where a pan of the page's own (this
+                // one) lies under the finger: past the first chip, the swipe does it instead.
+                back()
+            }
+        }
+    }
+
+    /// When the swipe may begin. Apart from the view, whose own `gestureRecognizerShouldBegin` is UIKit's.
+    final class Rules: NSObject, UIGestureRecognizerDelegate {
+        private weak var anchor: Anchor?
+        init(anchor: Anchor) { self.anchor = anchor }
+
+        func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
+            guard let anchor, let window = anchor.window, let pan = recognizer as? UIPanGestureRecognizer else { return false }
+            let velocity = pan.velocity(in: window)
+            guard abs(velocity.x) > 2 * abs(velocity.y), anchor.bounds.contains(pan.location(in: anchor)),
+                  pan.location(in: window).x > 32 else { return false }
+            // Every sideways swipe is taken, even past the last chip, so the card it ends on doesn't open.
+            return true
+        }
+
+        /// Not from a row that scrolls sideways (none on the page today, but a strip there would keep its own swipe).
+        func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            var view = touch.view
+            while let current = view, current !== recognizer.view {
+                if let scroll = current as? UIScrollView, scroll.contentSize.width > scroll.bounds.width + 1 { return false }
+                view = current.superview
+            }
+            return true
+        }
+
+    }
+}
+#endif
 
 #if !os(tvOS)
 /// The Sources page's search finds sources by name. Few remember a source's name, so this row takes the words to

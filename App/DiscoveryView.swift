@@ -1471,6 +1471,14 @@ struct ScrollStrip<Content: View>: View {
                 proxy.scrollTo(scrollTo, anchor: .center)
                 #endif
             }
+            #if os(iOS)
+            // A choice made away from the strip (swiping the Sources page, #1052) brings its chip into view; one
+            // already in view stays put.
+            .onChange(of: scrollTo) { _, id in
+                guard let id else { return }
+                withAnimation(.snappy(duration: 0.3)) { proxy.scrollTo(id) }
+            }
+            #endif
         }
     }
 
