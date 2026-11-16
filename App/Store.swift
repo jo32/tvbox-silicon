@@ -130,6 +130,10 @@ import TVCore
     @ObservationIgnored private var livePluginsObserver: NSObjectProtocol?
     /// The installed live plugins' platforms, shown in Live TV even without a subscription.
     private(set) var livePluginPlatforms = LivePlugins.shared.platforms
+    /// The installed live plugins and the LX Music sources, listed under Settings › Subscriptions with the subscriptions.
+    private(set) var livePlugins = LivePlugins.shared.installed
+    private(set) var lxSources = LXSourceLibrary.shared.sources
+    @ObservationIgnored private var lxSourcesObserver: NSObjectProtocol?
     /// Live TV's sources: the subscription's (with the plugins' platforms), or the plugins' alone.
     var liveSources: [LiveSource] { subscription?.lives ?? livePluginPlatforms.map(\.source) }
     @ObservationIgnored private var automaticCache: [Site]?
@@ -205,8 +209,12 @@ import TVCore
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.livePluginPlatforms = LivePlugins.shared.platforms
+                self.livePlugins = LivePlugins.shared.installed
                 self.rebuildSubscription(resetting: false)
             }
+        }
+        lxSourcesObserver = NotificationCenter.default.addObserver(forName: LXSourceLibrary.changed, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.lxSources = LXSourceLibrary.shared.sources }
         }
         searchModel.order = sourceOrder
         DownloadLibrary.shared.resolver = { [weak self] item in
@@ -390,8 +398,10 @@ import TVCore
             case .lxMusicSource(let script):
                 // An LX Music source plays music, so it joins Music's own sources (#1177). A file's copy has no address
                 // to fetch it again from.
+                let added = Set(LXSourceLibrary.shared.sources.map(\.id))
                 let source = try await LXSourceLibrary.shared.add(script: script, origin: ImportedFiles.isImported(url.absoluteString) ? nil : url)
-                notice = L10n.text("Added the LX Music source “%@”. Music plays songs through it; manage it in Music Settings › LX Music Sources.", source.info.name)
+                notice = added.contains(source.id) ? L10n.text("“%@” is already added.", source.info.name)
+                    : L10n.text("Added the LX Music source “%@”. Music plays songs through it; manage it in Music Settings › LX Music Sources.", source.info.name)
             case .alist(let servers):
                 // AList servers are browsed in Cloud Files, not merged as sources.
                 let saved = try AListServers.add(servers)

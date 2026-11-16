@@ -178,6 +178,148 @@ extension Store {
     }
 }
 
+/// What Settings › Subscriptions lists besides the subscriptions: comic and book source lists, LX Music sources and live
+/// plugins. Add Subscription adds most of them too, so each is managed and removed there as well: its row's menu, its page,
+/// or Remove Subscriptions with the subscriptions.
+enum SubscriptionExtra: Identifiable, Hashable {
+    case manga(URL)
+    case novel(URL)
+    case lxSource(LXSource)
+    case livePlugin(LivePlugins.Installed)
+
+    @MainActor static func all(_ store: Store) -> [SubscriptionExtra] {
+        MangaStore.shared.repositories.map(SubscriptionExtra.manga) + NovelStore.shared.lists.map { .novel($0.address) }
+            + store.lxSources.map(SubscriptionExtra.lxSource) + store.livePlugins.map(SubscriptionExtra.livePlugin)
+    }
+
+    /// Removes the subscriptions (by address) and the other entries (by `id`) among `keys`.
+    @MainActor static func remove(_ keys: Set<String>, from store: Store) {
+        let addresses = Set(store.subscriptions.map(\.address)).intersection(keys)
+        if !addresses.isEmpty { store.removeSubscriptions(addresses) }
+        all(store).filter { keys.contains($0.id) }.forEach { $0.remove() }
+    }
+
+    var id: String {
+        switch self {
+        case .manga(let url): "manga " + url.absoluteString
+        case .novel(let url): "novel " + url.absoluteString
+        case .lxSource(let source): "lx " + source.id
+        case .livePlugin(let plugin): "plugin " + plugin.pluginId
+        }
+    }
+    var title: String {
+        switch self {
+        case .manga(let url): MangaSources.title(of: url)
+        case .novel(let url): NovelSources.title(of: url)
+        case .lxSource(let source): source.info.name
+        case .livePlugin(let plugin): plugin.name
+        }
+    }
+    /// What it feeds, as a subscription's row shows its count, or Off.
+    var value: String {
+        switch self {
+        case .manga: L10n.text("Manga")
+        case .novel: L10n.text("Novels")
+        case .lxSource(let source): source.enabled ? L10n.text("Music") : L10n.text("Off")
+        case .livePlugin: L10n.text("Live Plugins")
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .manga: "books.vertical.fill"
+        case .novel: "text.book.closed.fill"
+        case .lxSource: "music.note"
+        case .livePlugin: "puzzlepiece.extension.fill"
+        }
+    }
+    var tint: Color {
+        switch self {
+        case .manga: .orange
+        case .novel: .green
+        case .lxSource(let source): source.enabled ? .pink : .gray
+        case .livePlugin: .purple
+        }
+    }
+    var lxSource: LXSource? {
+        switch self {
+        case .lxSource(let source): source
+        default: nil
+        }
+    }
+    var isOff: Bool { lxSource.map { !$0.enabled } ?? false }
+
+    @MainActor @ViewBuilder var page: some View {
+        switch self {
+        case .manga(let url): MangaRepositoryView(url: url)
+        case .novel(let url): NovelListView(url: url)
+        case .lxSource(let source): LXSourcePage(source: source)
+        case .livePlugin(let plugin): LivePluginPage(plugin: plugin)
+        }
+    }
+
+    @MainActor func remove() {
+        switch self {
+        case .manga(let url): MangaStore.shared.removeRepository(url)
+        case .novel(let url): NovelStore.shared.removeList(url)
+        case .lxSource(let source): LXSourceLibrary.shared.remove(source.id)
+        case .livePlugin(let plugin): LivePlugins.shared.uninstall(plugin.pluginId)
+        }
+    }
+}
+
+/// One LX Music source, opened from Settings › Subscriptions: on or off, what it plays, where it came from, and Remove.
+struct LXSourcePage: View {
+    let source: LXSource
+    @Environment(Store.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmsRemoval = false
+    var body: some View {
+        let current = store.lxSources.first { $0.id == source.id } ?? source
+        let enabled = Binding(get: { current.enabled }, set: { LXSourceLibrary.shared.setEnabled(source.id, $0) })
+        page(current, enabled: enabled)
+            .confirmationDialog(L10n.text("Remove “%@”", current.info.name), isPresented: $confirmsRemoval) {
+                Button(L10n.text("Remove"), role: .destructive) { LXSourceLibrary.shared.remove(source.id); dismiss() }
+            }
+    }
+
+    @ViewBuilder private func page(_ current: LXSource, enabled: Binding<Bool>) -> some View {
+        #if os(tvOS)
+        TVSettingsSubpage(symbol: "music.note", title: current.info.name, subtitle: current.origin?.absoluteString) {
+            TVSettingsSection(title: L10n.text("LX Music Sources"), footer: MusicLXSourcesModel.note) {
+                TVSettingsToggle(title: L10n.text("Use This Source"), detail: MusicLXSourcesModel.detail(current), isOn: enabled)
+            }
+            TVSettingsSection {
+                TVSettingsAction(title: L10n.text("Remove Source"), destructive: true) { confirmsRemoval = true }
+            }
+        }
+        #else
+        Form { Group {
+            Section {
+                Toggle(isOn: enabled) {
+                    FormLabel(symbol: "music.note", tint: current.enabled ? .pink : .gray, title: L10n.text("Use This Source"))
+                }
+                .settingsSwitch()
+            } footer: {
+                Text(MusicLXSourcesModel.detail(current))
+            }
+            if let origin = current.origin {
+                Section {
+                    LabeledContent(L10n.text("Address")) {
+                        Text(origin.absoluteString).lineLimit(3).multilineTextAlignment(.trailing).textSelection(.enabled)
+                    }
+                }
+            }
+            Section {
+                Button(L10n.text("Remove Source"), role: .destructive) { confirmsRemoval = true }
+            } footer: {
+                Text(MusicLXSourcesModel.note)
+            }
+        }.settingsRows() }
+        .settingsForm(current.info.name)
+        #endif
+    }
+}
+
 #if !os(tvOS)
 // MARK: Settings on iPhone, iPad and Mac
 // A native grouped form, as in the Settings app and System Settings: the app as the first card,
@@ -387,6 +529,8 @@ struct FormSettingsView: View {
     @State private var editingSources = false
     /// A subscription its menu asked to remove, waiting for the confirmation.
     @State private var removingSubscription: SubscriptionEntry?
+    /// A source list, LX Music source or live plugin its menu asked to remove, waiting for the confirmation.
+    @State private var removingExtra: SubscriptionExtra?
     private var hiddenSourceCount: Int {
         store.sourceGroups(includeHidden: false).first { $0.kind == .hidden }?.sites.count ?? 0
     }
@@ -452,15 +596,20 @@ struct FormSettingsView: View {
                             .tint(.red)
                     }
                 }
-                ForEach(MangaStore.shared.repositories, id: \.self) { url in
-                    FormLink(symbol: "books.vertical.fill", tint: .orange, title: MangaSources.title(of: url), value: L10n.text("Manga")) {
-                        MangaRepositoryView(url: url)
-                    }
-                }
-                ForEach(NovelStore.shared.lists) { list in
-                    FormLink(symbol: "text.book.closed.fill", tint: .green, title: NovelSources.title(of: list.address), value: L10n.text("Novels")) {
-                        NovelListView(url: list.address)
-                    }
+                // Source lists, LX Music sources and live plugins: added here too, so managed and removed here as well.
+                ForEach(SubscriptionExtra.all(store)) { extra in
+                    FormLink(symbol: extra.symbol, tint: extra.tint, title: extra.title, value: extra.value) { extra.page }
+                        .contextMenu {
+                            if let source = extra.lxSource {
+                                Button {
+                                    LXSourceLibrary.shared.setEnabled(source.id, !source.enabled)
+                                } label: {
+                                    Label(L10n.text(source.enabled ? "Turn Off" : "Turn On"), systemImage: source.enabled ? "pause.circle" : "play.circle")
+                                }
+                            }
+                            Button(role: .destructive) { removingExtra = extra } label: { Label(L10n.text("Remove"), systemImage: "trash") }
+                                .tint(.red)
+                        }
                 }
                 // Next to the subscriptions they come from: hiding a source that stopped working, and showing again
                 // one hidden by mistake (#669, #704). The same list as the Sources page's Edit.
@@ -484,7 +633,7 @@ struct FormSettingsView: View {
                     .tint(.primary)
                     .accessibilityIdentifier("settings.hiddenSources")
                 }
-                if store.subscriptions.count > 1 {
+                if store.subscriptions.count + SubscriptionExtra.all(store).count > 1 {
                     FormLink(symbol: "trash.fill", tint: .red, title: L10n.text("Remove Subscriptions")) { RemoveSubscriptionsView() }
                 }
                 #if os(iOS)
@@ -831,6 +980,12 @@ struct FormSettingsView: View {
                isPresented: Binding(get: { removingSubscription != nil }, set: { if !$0 { removingSubscription = nil } }),
                presenting: removingSubscription) { entry in
             Button(L10n.text("Remove"), role: .destructive) { store.removeSubscription(entry) }
+            Button(L10n.text("Cancel"), role: .cancel) {}
+        }
+        .alert(L10n.text("Remove “%@”", removingExtra?.title ?? ""),
+               isPresented: Binding(get: { removingExtra != nil }, set: { if !$0 { removingExtra = nil } }),
+               presenting: removingExtra) { extra in
+            Button(L10n.text("Remove"), role: .destructive) { extra.remove() }
             Button(L10n.text("Cancel"), role: .cancel) {}
         }
         #if os(iOS)
@@ -1301,41 +1456,47 @@ private struct RemoveSubscriptionsView: View {
     @State private var selection: Set<String> = []
     @State private var confirmsRemoval = false
     var body: some View {
-        let chosen = store.subscriptions.filter { selection.contains($0.address) }
-        let all = chosen.count == store.subscriptions.count
-        let off = store.subscriptions.filter { !$0.enabled }.map(\.address)
+        let extras = SubscriptionExtra.all(store)
+        let keys = store.subscriptions.map(\.address) + extras.map(\.id)
+        let count = keys.filter(selection.contains).count
+        let all = !keys.isEmpty && count == keys.count
+        let off = store.subscriptions.filter { !$0.enabled }.map(\.address) + extras.filter(\.isOff).map(\.id)
         Form { Group {
             Section {
-                Button(L10n.text(all ? "Deselect All" : "Select All")) { selection = all ? [] : Set(store.subscriptions.map(\.address)) }
+                Button(L10n.text(all ? "Deselect All" : "Select All")) { selection = all ? [] : Set(keys) }
                 if !off.isEmpty { Button(L10n.text("Select Turned-Off Subscriptions")) { selection = Set(off) } }
             }
             Section {
-                ForEach(store.subscriptions) { entry in
-                    let selected = selection.contains(entry.address)
-                    Button {
-                        if selected { selection.remove(entry.address) } else { selection.insert(entry.address) }
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(selected ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
-                            Text(entry.title).lineLimit(1).foregroundStyle(.primary)
-                            Spacer(minLength: 6)
-                            Text(store.subscriptionValue(entry)).lineLimit(1).foregroundStyle(.secondary)
-                        }
-                    }
-                    .formRowButton()
-                    .accessibilityAddTraits(selected ? [.isSelected] : [])
-                }
+                ForEach(store.subscriptions) { entry in row(entry.address, title: entry.title, value: store.subscriptionValue(entry)) }
+                // Source lists, LX Music sources and live plugins go with the subscriptions.
+                ForEach(extras) { extra in row(extra.id, title: extra.title, value: extra.value) }
             }
             Section {
-                Button(L10n.text("Remove %lld Subscriptions", chosen.count), role: .destructive) { confirmsRemoval = true }
-                    .disabled(chosen.isEmpty || store.importing)
+                Button(L10n.text("Remove %lld Subscriptions", count), role: .destructive) { confirmsRemoval = true }
+                    .disabled(count == 0 || store.importing)
             }
         }.settingsRows() }
         .settingsForm(L10n.text("Remove Subscriptions"))
-        .confirmationDialog(L10n.text("Remove %lld Subscriptions", chosen.count), isPresented: $confirmsRemoval) {
-            Button(L10n.text("Remove"), role: .destructive) { store.removeSubscriptions(Set(chosen.map(\.address))); dismiss() }
+        .confirmationDialog(L10n.text("Remove %lld Subscriptions", count), isPresented: $confirmsRemoval) {
+            Button(L10n.text("Remove"), role: .destructive) { SubscriptionExtra.remove(selection, from: store); dismiss() }
         }
+    }
+
+    private func row(_ key: String, title: String, value: String) -> some View {
+        let selected = selection.contains(key)
+        return Button {
+            if selected { selection.remove(key) } else { selection.insert(key) }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selected ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                Text(title).lineLimit(1).foregroundStyle(.primary)
+                Spacer(minLength: 6)
+                Text(value).lineLimit(1).foregroundStyle(.secondary)
+            }
+        }
+        .formRowButton()
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 }
 
@@ -1886,14 +2047,14 @@ struct TVSettingsView: View {
                 let failed = store.subscriptionErrors[entry.address] != nil
                 TVSettingsLink(title: entry.title, value: store.subscriptionValue(entry), warning: failed) { TVSubscriptionPage(entry: entry) }
             }
-            ForEach(MangaStore.shared.repositories, id: \.self) { url in
-                TVSettingsLink(title: MangaSources.title(of: url), value: L10n.text("Manga")) { MangaRepositoryView(url: url) }
-            }
-            ForEach(NovelStore.shared.lists) { list in
-                TVSettingsLink(title: NovelSources.title(of: list.address), value: L10n.text("Novels")) { NovelListView(url: list.address) }
+            // Source lists, LX Music sources and live plugins: each page removes its own, Remove Subscriptions several.
+            ForEach(SubscriptionExtra.all(store)) { extra in
+                TVSettingsLink(title: extra.title, value: extra.value) { extra.page }
             }
             TVSettingsLink(title: L10n.text("Add Subscription")) { TVAddSubscriptionPage() }
-            if store.subscriptions.count > 1 { TVSettingsLink(title: L10n.text("Remove Subscriptions")) { TVRemoveSubscriptionsPage() } }
+            if store.subscriptions.count + SubscriptionExtra.all(store).count > 1 {
+                TVSettingsLink(title: L10n.text("Remove Subscriptions")) { TVRemoveSubscriptionsPage() }
+            }
             if !store.subscriptions.isEmpty {
                 TVSettingsAction(title: L10n.text("Refresh All"),
                                  value: store.importing ? L10n.text("Importing…") : store.subscription.map { $0.importedAt.formatted(date: .abbreviated, time: .shortened) },
@@ -2201,36 +2362,42 @@ private struct TVRemoveSubscriptionsPage: View {
     @State private var selection: Set<String> = []
     @State private var confirmsRemoval = false
     var body: some View {
-        let chosen = store.subscriptions.filter { selection.contains($0.address) }
-        let all = chosen.count == store.subscriptions.count
-        let off = store.subscriptions.filter { !$0.enabled }.map(\.address)
+        let extras = SubscriptionExtra.all(store)
+        let keys = store.subscriptions.map(\.address) + extras.map(\.id)
+        let count = keys.filter(selection.contains).count
+        let all = !keys.isEmpty && count == keys.count
+        let off = store.subscriptions.filter { !$0.enabled }.map(\.address) + extras.filter(\.isOff).map(\.id)
         TVSettingsSubpage(symbol: "trash", title: L10n.text("Remove Subscriptions")) {
             TVSettingsSection {
-                TVSettingsAction(title: L10n.text(all ? "Deselect All" : "Select All")) { selection = all ? [] : Set(store.subscriptions.map(\.address)) }
+                TVSettingsAction(title: L10n.text(all ? "Deselect All" : "Select All")) { selection = all ? [] : Set(keys) }
                 if !off.isEmpty { TVSettingsAction(title: L10n.text("Select Turned-Off Subscriptions")) { selection = Set(off) } }
             }
             TVSettingsSection(title: L10n.text("Subscriptions")) {
-                ForEach(store.subscriptions) { entry in
-                    let selected = selection.contains(entry.address)
-                    Button {
-                        if selected { selection.remove(entry.address) } else { selection.insert(entry.address) }
-                    } label: {
-                        TVSettingsRowLabel(title: entry.title, value: store.subscriptionValue(entry)) {
-                            Image(systemName: selected ? "checkmark.circle.fill" : "circle").font(.system(size: 30))
-                        }
-                    }
-                    .glassRow()
-                    .accessibilityAddTraits(selected ? [.isSelected] : [])
-                }
+                ForEach(store.subscriptions) { entry in row(entry.address, title: entry.title, value: store.subscriptionValue(entry)) }
+                // Source lists, LX Music sources and live plugins go with the subscriptions.
+                ForEach(extras) { extra in row(extra.id, title: extra.title, value: extra.value) }
             }
             TVSettingsSection {
-                TVSettingsAction(title: L10n.text("Remove %lld Subscriptions", chosen.count), destructive: true) { confirmsRemoval = true }
-                    .disabled(chosen.isEmpty || store.importing)
+                TVSettingsAction(title: L10n.text("Remove %lld Subscriptions", count), destructive: true) { confirmsRemoval = true }
+                    .disabled(count == 0 || store.importing)
             }
         }
-        .confirmationDialog(L10n.text("Remove %lld Subscriptions", chosen.count), isPresented: $confirmsRemoval) {
-            Button(L10n.text("Remove"), role: .destructive) { store.removeSubscriptions(Set(chosen.map(\.address))); dismiss() }
+        .confirmationDialog(L10n.text("Remove %lld Subscriptions", count), isPresented: $confirmsRemoval) {
+            Button(L10n.text("Remove"), role: .destructive) { SubscriptionExtra.remove(selection, from: store); dismiss() }
         }
+    }
+
+    private func row(_ key: String, title: String, value: String) -> some View {
+        let selected = selection.contains(key)
+        return Button {
+            if selected { selection.remove(key) } else { selection.insert(key) }
+        } label: {
+            TVSettingsRowLabel(title: title, value: value) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle").font(.system(size: 30))
+            }
+        }
+        .glassRow()
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 }
 

@@ -690,9 +690,10 @@ struct MusicScrubber: View {
         busy = true; message = nil; failed = false
         Task {
             do {
+                let added = Set(sources.map(\.id))
                 let source = try await work()
                 sources = LXSourceLibrary.shared.sources
-                message = L10n.text("Added “%@”.", source.info.name)
+                message = added.contains(source.id) ? L10n.text("“%@” is already added.", source.info.name) : L10n.text("Added “%@”.", source.info.name)
             } catch { report(error) }
             busy = false
         }
@@ -733,18 +734,21 @@ struct MusicLXSourcesSection: View {
     var body: some View {
         Section {
             ForEach(model.sources) { source in
-                HStack {
-                    Toggle(isOn: model.enabled(source)) {
+                // The trash inside the switch's label: after the switch, it pushed the switch out of line with the channels'.
+                Toggle(isOn: model.enabled(source)) {
+                    HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(source.info.name)
                             Text(MusicLXSourcesModel.detail(source)).font(.caption).foregroundStyle(.secondary)
                         }
+                        Spacer(minLength: 8)
+                        Button(role: .destructive) { model.remove(source) } label: { Image(systemName: "trash") }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel(L10n.text("Remove “%@”", source.info.name))
                     }
-                    .settingsSwitch()
-                    Button(role: .destructive) { model.remove(source) } label: { Image(systemName: "trash") }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel(L10n.text("Remove “%@”", source.info.name))
                 }
+                .settingsSwitch()
+                .accessibilityAction(named: L10n.text("Remove “%@”", source.info.name)) { model.remove(source) }
             }
             HStack {
                 TextField(L10n.text("Source address"), text: $address)
@@ -835,9 +839,10 @@ struct MusicLXSourcesSection: View {
         busy = true; message = nil; failed = false
         Task {
             do {
+                let added = Set(items.map(\.id))
                 let item = try await work()
                 items = MusicExtensionLibrary.shared.extensions
-                message = L10n.text("Added “%@”.", item.name)
+                message = added.contains(item.id) ? L10n.text("“%@” is already added.", item.name) : L10n.text("Added “%@”.", item.name)
                 changed()
             } catch { report(error) }
             busy = false
@@ -882,19 +887,22 @@ struct MusicExtensionsSection: View {
     var body: some View {
         Section {
             ForEach(model.items) { item in
-                HStack {
-                    Toggle(isOn: model.enabled(item)) {
+                // The trash inside the switch's label, as for LX Music sources, so the switches line up.
+                Toggle(isOn: model.enabled(item)) {
+                    HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.name)
                             let detail = MusicExtensionsModel.detail(item)
                             if !detail.isEmpty { Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
                         }
+                        Spacer(minLength: 8)
+                        Button(role: .destructive) { model.remove(item) } label: { Image(systemName: "trash") }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel(L10n.text("Remove “%@”", item.name))
                     }
-                    .settingsSwitch()
-                    Button(role: .destructive) { model.remove(item) } label: { Image(systemName: "trash") }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel(L10n.text("Remove “%@”", item.name))
                 }
+                .settingsSwitch()
+                .accessibilityAction(named: L10n.text("Remove “%@”", item.name)) { model.remove(item) }
             }
             HStack {
                 TextField(L10n.text("Extension address"), text: $address)
