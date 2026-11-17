@@ -169,6 +169,9 @@ struct MobilePlayerView: View {
             nowPlaying.start(session)
             nowPlaying.update(title: channel.name, session: session)
             tvBrowser.start()
+            if let chosen = PlayerBrightness.chosen, let screen, brightnessBefore == nil {
+                brightnessBefore = screen.brightness; screen.brightness = chosen
+            }
         }
         .onDisappear {
             clock.detach(); nowPlaying.stop(); tvBrowser.stop()
@@ -313,7 +316,7 @@ struct MobilePlayerView: View {
             } else if leveling, var level {
                 level.value = PictureLevel.value(from: level.start, moved: moved.height, height: size.height)
                 self.level = level
-                if level.volume { systemVolume.set(level.value) } else { screen?.brightness = CGFloat(level.value) }
+                if level.volume { systemVolume.set(level.value) } else { screen?.brightness = CGFloat(level.value); PlayerBrightness.choose(level.value) }
             }
         case .ended:
             if swipeStart != nil {
@@ -1859,6 +1862,22 @@ private struct LockButtonStyle: ViewModifier {
                 .contentShape(Capsule())
         } else {
             content.chromeButton()
+        }
+    }
+}
+
+/// The brightness the viewer slid to in the player, put on again in the next video (#1174), until the app goes to the
+/// background: the system puts its own back then, and a later sitting starts from that. Leaving the player still puts
+/// the screen's own brightness back.
+@MainActor enum PlayerBrightness {
+    private(set) static var chosen: CGFloat?
+    private static var observer: NSObjectProtocol?
+
+    static func choose(_ value: Double) {
+        chosen = CGFloat(value)
+        guard observer == nil else { return }
+        observer = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { chosen = nil }
         }
     }
 }

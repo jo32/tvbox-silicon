@@ -704,26 +704,26 @@ import IOKit.pwr_mgt
         }
     }
     @ObservationIgnored private var subtitleClockInterval: Double?
-    /// The subtitle track picked in the player's menu, for the next episodes of the same title (#779).
-    @ObservationIgnored private var subtitleChoice: SubtitleChoice?
+    /// The subtitle track picked in the player's menu, for the next episodes of the same title (#779) and, kept across
+    /// launches, for other videos in its language (#1174).
+    @ObservationIgnored private var subtitleChoice = SubtitleChoice.saved()
     /// The title the playing item belongs to (`Channel.skipScope`).
     @ObservationIgnored private var subtitleScope: String?
 
     /// The viewer picked one of the item's own subtitle tracks, or Off (nil), in the player's menu.
     func choseSubtitle(_ option: AVMediaSelectionOption?) {
-        subtitleChoice = option.flatMap { option in
-            subtitleScope.map { SubtitleChoice(scope: $0, name: option.displayName, language: option.extendedLanguageTag) }
-        }
+        subtitleChoice = option.map { SubtitleChoice(scope: subtitleScope ?? "", name: $0.displayName, language: $0.extendedLanguageTag) }
+        SubtitleChoice.save(subtitleChoice)
     }
 
     /// Picks the remembered track in an item that is ready, once the system has made its own choice.
     /// Returns whether it found the track there.
     @discardableResult
     private func restoreSubtitleChoice(_ item: AVPlayerItem, channel: Channel) async -> Bool {
-        guard let choice = subtitleChoice, choice.scope == channel.skipScope,
+        guard let choice = subtitleChoice, choice.scope == channel.skipScope || choice.language != nil,
               let group = try? await item.asset.loadMediaSelectionGroup(for: .legible), subtitleChoice == choice else { return false }
         let options = group.options.filter { !$0.hasMediaCharacteristic(.containsOnlyForcedSubtitles) }
-        guard let index = choice.index(among: options.map { ($0.displayName, $0.extendedLanguageTag) }) else { return false }
+        guard let index = choice.index(among: options.map { ($0.displayName, $0.extendedLanguageTag) }, in: channel.skipScope) else { return false }
         if item.currentMediaSelection.selectedMediaOption(in: group) != options[index] { item.select(options[index], in: group) }
         return true
     }
