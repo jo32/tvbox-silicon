@@ -851,65 +851,70 @@ struct MobilePlayerView: View {
     /// Previous and Next Episode, small and at the right of the time above the seek bar. Beside ±10 and play, a tap
     /// that ran past +10 out of habit changed the episode. 选集 opens the episodes in a sheet (#524). Previous and Next
     /// sit at the two ends of the group, with the rest between: side by side, a tap meant for one changed the channel
-    /// the other way (#1113).
+    /// the other way (#1113). Full Screen is a button of its own in the corner, apart from the group, as in YouTube's
+    /// and Bilibili's players: between the episode buttons, a tap meant for it changed the episode (#1217, #1222).
+    /// At the top of a watch page the episodes are listed right under the picture, so the group leaves them out.
     @ViewBuilder private var stepButtons: some View {
-        let previous = store.step(back: true, from: channel, session: session)
-        let next = store.step(back: false, from: channel, session: session)
+        let previous = inline ? nil : store.step(back: true, from: channel, session: session)
+        let next = inline ? nil : store.step(back: false, from: channel, session: session)
         // On a watch page the episodes are on the page itself.
         let episodes = !inline && PlayerEpisodesSheet.offered(for: channel, in: store)
         let channels = !inline && PlayerChannelsSheet.offered(for: channel, session: session, in: store)
         let speeds = session.hasTimeline && !session.isLive
-        if speeds || previous != nil || next != nil || episodes || channels || toggleFullScreen != nil {
-            // One glass capsule, as the top row's buttons (`chromeGroup`).
-            HStack(spacing: 0) {
-                if let previous {
-                    Button { previous.go() } label: { Image(systemName: "backward.end.fill") }
-                        .buttonStyle(PlayerCircleStyle(size: 36))
-                        .disabled(previous.busy)
-                        .accessibilityLabel(previous.title(back: true))
-                }
-                if speeds { speedButton }
-                if episodes {
-                    PlayerEpisodesButton(channel: channel, isPresented: $showsEpisodes) {
-                        HStack(spacing: 6) {
-                            Image(systemName: PlayerEpisodesSheet.symbol)
-                            Text(L10n.text("Episodes"))
+        let grouped = speeds || previous != nil || next != nil || episodes || channels
+        if grouped || toggleFullScreen != nil {
+            HStack(spacing: 12) {
+                if grouped {
+                    // One glass capsule, as the top row's buttons (`chromeGroup`).
+                    HStack(spacing: 0) {
+                        if let previous {
+                            Button { previous.go() } label: { Image(systemName: "backward.end.fill") }
+                                .buttonStyle(PlayerCircleStyle(size: 36))
+                                .disabled(previous.busy)
+                                .accessibilityLabel(previous.title(back: true))
                         }
-                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
-                        .padding(.horizontal, 12).frame(height: 36)
-                        .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-                if channels {
-                    PlayerChannelsButton(channel: channel, session: session, isPresented: $showsChannels) {
-                        HStack(spacing: 6) {
-                            Image(systemName: PlayerChannelsSheet.symbol)
-                            Text(L10n.text("Channel List"))
+                        if speeds { speedButton }
+                        if episodes {
+                            PlayerEpisodesButton(channel: channel, isPresented: $showsEpisodes) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: PlayerEpisodesSheet.symbol)
+                                    Text(L10n.text("Episodes"))
+                                }
+                                .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                                .padding(.horizontal, 12).frame(height: 36)
+                                .contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
-                        .padding(.horizontal, 12).frame(height: 36)
-                        .contentShape(Capsule())
+                        if channels {
+                            PlayerChannelsButton(channel: channel, session: session, isPresented: $showsChannels) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: PlayerChannelsSheet.symbol)
+                                    Text(L10n.text("Channel List"))
+                                }
+                                .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                                .padding(.horizontal, 12).frame(height: 36)
+                                .contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        if let next {
+                            Button { next.go() } label: { Image(systemName: "forward.end.fill") }
+                                .buttonStyle(PlayerCircleStyle(size: 36))
+                                .disabled(next.busy)
+                                .accessibilityLabel(next.title(back: false))
+                        }
                     }
-                    .buttonStyle(.plain)
+                    .chromeGroup()
                 }
                 if let toggleFullScreen {
                     let full = layout == .pageFullScreen
-                    Button(action: toggleFullScreen) {
-                        Image(systemName: full ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                    }
-                    .buttonStyle(PlayerCircleStyle(size: 36))
-                    .accessibilityLabel(L10n.text(full ? "Exit Full Screen" : "Full Screen"))
-                    .accessibilityIdentifier("player.fullScreen")
-                }
-                if let next {
-                    Button { next.go() } label: { Image(systemName: "forward.end.fill") }
+                    Button(action: toggleFullScreen) { FullScreenGlyph(expanded: full).frame(width: 15, height: 15) }
                         .buttonStyle(PlayerCircleStyle(size: 36))
-                        .disabled(next.busy)
-                        .accessibilityLabel(next.title(back: false))
+                        .accessibilityLabel(L10n.text(full ? "Exit Full Screen" : "Full Screen"))
+                        .accessibilityIdentifier("player.fullScreen")
                 }
             }
-            .chromeGroup()
             .simultaneousGesture(TapGesture().onEnded { poke() })
         }
     }
@@ -1290,6 +1295,41 @@ private struct PlayerTopBar: SwiftUI.Layout {
 }
 
 /// A round glass button of the given size, for play and skip in the middle of the picture.
+/// Full Screen's mark: four corner brackets, as on most video players (⛶). Filling the screen, the corners turn inward.
+private struct FullScreenGlyph: View {
+    var expanded: Bool
+    var body: some View {
+        Corners(inward: expanded)
+            .stroke(.white, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+            .accessibilityHidden(true)
+    }
+
+    private struct Corners: Shape {
+        var inward: Bool
+        func path(in rect: CGRect) -> Path {
+            let arm = rect.width * 0.36
+            var path = Path()
+            for (x, y) in [(rect.minX, rect.minY), (rect.maxX, rect.minY), (rect.minX, rect.maxY), (rect.maxX, rect.maxY)] {
+                // Toward the middle along each side from the corner.
+                let dx: CGFloat = x == rect.minX ? 1 : -1
+                let dy: CGFloat = y == rect.minY ? 1 : -1
+                if inward {
+                    // The bend sits inside the square: ⌟ ⌞ ⌝ ⌜.
+                    let bend = CGPoint(x: x + dx * arm, y: y + dy * arm)
+                    path.move(to: CGPoint(x: x, y: bend.y))
+                    path.addLine(to: bend)
+                    path.addLine(to: CGPoint(x: bend.x, y: y))
+                } else {
+                    path.move(to: CGPoint(x: x, y: y + dy * arm))
+                    path.addLine(to: CGPoint(x: x, y: y))
+                    path.addLine(to: CGPoint(x: x + dx * arm, y: y))
+                }
+            }
+            return path
+        }
+    }
+}
+
 private struct PlayerCircleStyle: ButtonStyle {
     var size: CGFloat
     @Environment(\.isEnabled) private var enabled
