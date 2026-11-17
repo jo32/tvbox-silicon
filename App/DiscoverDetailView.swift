@@ -705,9 +705,12 @@ extension DiscoverDetailView {
         .frame(maxWidth: .infinity, minHeight: 950, alignment: .bottomLeading)
     }
 
+    /// One of the round buttons under Search Sources. Up to five share the column's 368 pt (Trailer, Overview,
+    /// Follow Show, Air Calendar, Search Catalog), so they keep little padding: with the usual 18 pt each one
+    /// needs about 76 pt and five overflow the column, wider than Search Sources above them.
     private func tvIconButton(_ symbol: String, _ label: String, _ identifier: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { Image(systemName: symbol).frame(maxWidth: .infinity) }
-            .buttonStyle(DiscoverTVActionStyle(height: 75, font: 30, corner: 24))
+            .buttonStyle(DiscoverTVActionStyle(height: 75, font: 30, corner: 24, padding: 6))
             .accessibilityLabel(L10n.text(label))
             .accessibilityIdentifier(identifier)
     }
@@ -955,6 +958,7 @@ struct DiscoverTVActionStyle: ButtonStyle {
     let height: CGFloat
     let font: CGFloat
     var corner: CGFloat?
+    var padding: CGFloat = 18
     func makeBody(configuration: Configuration) -> some View { Action(configuration: configuration, style: self) }
     private struct Action: View {
         let configuration: ButtonStyleConfiguration
@@ -965,7 +969,7 @@ struct DiscoverTVActionStyle: ButtonStyle {
             configuration.label
                 .font(.system(size: style.font, weight: .medium)).lineLimit(1)
                 .foregroundStyle(focused ? Color.black : Color.white)
-                .padding(.horizontal, 18).frame(height: style.height)
+                .padding(.horizontal, style.padding).frame(height: style.height)
                 .glassSurface(focused ? .regular.tint(.white.opacity(0.9)).interactive() : .regular.interactive(), in: shape)
                 .scaleEffect(configuration.isPressed ? 0.97 : focused ? 1.06 : 1)
                 .shadow(color: .black.opacity(focused ? 0.35 : 0), radius: 16, y: 10)
