@@ -1207,6 +1207,16 @@ struct PlaybackSettingsView: View {
                     .accessibilityIdentifier("settings.watchFullScreen")
                 }
             }
+            else if WatchPage.autoPlaysOnPad {
+                // iPad's page opens the player full screen, so only Play Automatically applies (#1168).
+                SettingsGroup(title: L10n.text("Video Page"), footer: L10n.text("With Play Automatically on, a video of one episode starts as soon as its page opens.")) {
+                    Toggle(isOn: $autoPlays) {
+                        FormLabel(symbol: "play.fill", tint: .pink, title: L10n.text("Play Automatically"))
+                    }
+                    .settingsSwitch()
+                    .accessibilityIdentifier("settings.watchAutoPlay")
+                }
+            }
             SettingsGroup(footer: SettingsNote.playbackInfo) {
                 FormLink(symbol: "captions.bubble.fill", tint: .orange, title: L10n.text("Subtitle Style")) { SubtitleStyleView() }
                 FormLink(symbol: "text.magnifyingglass", tint: .orange, title: L10n.text("Subtitle Sources")) { SubtitleSourcesView() }
