@@ -15,6 +15,8 @@ import TVCore
     private var doubanLoading = false
     /// This week's airing calendars (the Airing Today shelves). One that fails is just left out.
     private(set) var calendar: [TMDBCalendar.Kind: TMDBCalendar.Week] = [:]
+    /// The followed series' schedules (the Following Calendar shelf), by TMDB id: the kept copies at once, then fresh ones.
+    private(set) var following: [Int: AirSchedule] = [:]
     static let feeds: [TMDBCatalog.Feed] = [.featured, .trending, .nowPlaying, .onTheAir, .variety, .chinese, .animation, .topMovies, .topTelevision, .family, .kids, .netflix, .disney, .appleTV, .hbo, .warner, .universal, .paramount, .sony]
     func items(_ feed: TMDBCatalog.Feed) -> [TMDBCatalog.Item] { pages[feed]?.items ?? [] }
 
@@ -50,6 +52,14 @@ import TVCore
         }
     }
 
+    func loadFollowing(_ ids: [Int]) async {
+        guard !ids.isEmpty else { following = [:]; return }
+        let kept = await AirSchedules.shared.cached(ids)
+        if following.isEmpty { following = kept }
+        let fresh = await AirSchedules.shared.schedules(ids)
+        if !Task.isCancelled { following = kept.merging(fresh) { _, new in new } }
+    }
+
     func loadDouban(refresh: Bool = false) async {
         guard !doubanLoading else { return }
         doubanLoading = true
@@ -74,6 +84,7 @@ import TVCore
 /// Catalog layout: a 1.5:1 portrait hero, 17 pt gutters,
 /// 116 × 174 pt covers, and a wider landscape rail for the weekly trend list.
 struct DiscoverView: View {
+    @Environment(Store.self) private var store
     @State private var model = DiscoverModel()
     @State private var heroState = DiscoverHeroState()
     @State private var onScreen = false
@@ -239,6 +250,11 @@ struct DiscoverView: View {
         .onDisappear { onScreen = false }
         .task { await model.load() }
         .task(id: doubanShown) { if doubanShown { await model.loadDouban() } }
+        .task(id: store.followedShows.shows.map(\.id)) { if visible(.following) { await model.loadFollowing(store.followedShows.shows.map(\.id)) } }
+        .modifier(DiscoverToastHost())
+        #if DEBUG
+        .task { await qaFollowing() }
+        #endif
         .sheet(isPresented: $editing) {
             NavigationStack {
                 Form {
@@ -280,6 +296,7 @@ struct DiscoverView: View {
                 #endif
             }
         case .douban: doubanShelves
+        case .following: following
         case .airingAnime: airing(.anime)
         case .airingSeries: airing(.tv)
         case .nowPlaying: shelf(.nowPlaying)
@@ -292,6 +309,71 @@ struct DiscoverView: View {
         case .genres: genreCards
         case .rankings: rankings(width: width)
         case .companies: brands(model.collections?.companies ?? [], title: section.title, width: 197, studio: true)
+        }
+    }
+
+    #if DEBUG
+    /// QA: `-qaFollowShows 261315,…` follows those TMDB series; `-qaDiscoverOpen tv:<id>|following` opens that page.
+    private func qaFollowing() async {
+        let defaults = UserDefaults.standard
+        if let ids = defaults.string(forKey: "qaFollowShows"), !DiscoverQA.followSeeded {
+            DiscoverQA.followSeeded = true
+            // Unstructured, so the page being rebuilt at launch (the Mac's sidebar) doesn't cancel it halfway.
+            let followed = store.followedShows
+            await Task { @MainActor in
+                for id in ids.split(separator: ",").compactMap({ Int($0) }) where !followed.contains(id) {
+                    guard let value = try? await TMDBMatch.details(.tv, id: id, season: nil) else { continue }
+                    followed.follow(TMDBCatalog.Item(id: id, mediaType: .tv, name: value.name, originalName: value.originalName, year: value.year,
+                                                     overview: value.overview, poster: value.poster, backdrop: value.backdrop, rating: value.rating, genreIDs: []))
+                }
+            }.value
+        }
+        if let page = defaults.string(forKey: "qaDiscoverOpen"), !DiscoverQA.pageOpened {
+            DiscoverQA.pageOpened = true
+            if page == "following" { openRoute?(Route { AnyView(DiscoverFollowingView()) }) }
+            else if page.hasPrefix("tv:"), let id = Int(page.dropFirst(3)) {
+                let item = TMDBCatalog.Item(id: id, mediaType: .tv, name: "", originalName: "", year: nil, overview: "", poster: nil, backdrop: nil, rating: nil, genreIDs: [])
+                openRoute?(Route { AnyView(DiscoverDetailView(item: item)) })
+            }
+        }
+    }
+    #endif
+
+    /// The followed series (#1186), the next to air first, with when and which episodes; its heading opens the coming
+    /// weeks. Only once the viewer follows something.
+    @ViewBuilder private var following: some View {
+        let shows = store.followedShows.shows
+        if !shows.isEmpty {
+            let today = DiscoverFollowing.today
+            let entries = AirSchedule.upcoming(shows, schedules: model.following, today: today)
+            VStack(alignment: .leading, spacing: 0) {
+                #if os(tvOS)
+                sectionHeading(DiscoverSection.following.title)
+                DiscoverTVNativeShelf(entries: entries.map(DiscoverFollowing.entry), identifier: "following") { index in
+                    if let index {
+                        let show = entries[index].show
+                        openRoute?(Route { AnyView(DiscoverDetailView(item: show.catalogItem)) })
+                    } else {
+                        let schedules = model.following
+                        openRoute?(Route { AnyView(DiscoverFollowingView(initial: schedules)) })
+                    }
+                }.frame(height: DiscoverLayout.posterWidth * 1.5 + DiscoverLayout.captionHeight + 48)
+                #else
+                moreHeading(DiscoverSection.following.title, identifier: "discover.more.following") {
+                    DiscoverFollowingView(initial: model.following)
+                }
+                DiscoverRail(arrowCenter: 87) {
+                    LazyHStack(alignment: .top, spacing: DiscoverLayout.spacing) {
+                        ForEach(entries) { entry in
+                            DiscoverFollowingLink(show: entry.show) {
+                                DiscoverFollowingTile(show: entry.show, caption: DiscoverFollowing.caption(entry, today: today),
+                                                      highlight: entry.day?.date == today).frame(width: DiscoverLayout.posterWidth)
+                            }
+                        }
+                    }.padding(.horizontal, DiscoverLayout.gutter)
+                }
+                #endif
+            }
         }
     }
 
@@ -1535,15 +1617,16 @@ private extension TMDBCatalog.Feed {
 }
 
 #if DEBUG
-@MainActor private enum DiscoverQA { static var calendarOpened = false }
+@MainActor private enum DiscoverQA { static var calendarOpened = false, followSeeded = false, pageOpened = false }
 #endif
 
 private enum DiscoverSection: String, CaseIterable, Identifiable {
-    case hero, airingAnime, airingSeries, douban, nowPlaying, onTheAir, trending, collections, animation, people, networks, genres, rankings, companies
+    case hero, following, airingAnime, airingSeries, douban, nowPlaying, onTheAir, trending, collections, animation, people, networks, genres, rankings, companies
     var id: String { rawValue }
     var title: String {
         switch self {
         case .hero: L10n.text("Featured Titles")
+        case .following: L10n.text("Following Calendar")
         case .airingAnime: TMDBCalendar.Kind.anime.shelfTitle
         case .airingSeries: TMDBCalendar.Kind.tv.shelfTitle
         case .douban: L10n.text("Douban Hot Lists")

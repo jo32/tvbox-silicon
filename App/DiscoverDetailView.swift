@@ -19,6 +19,9 @@ struct DiscoverDetailView: View {
     @State private var searchShown = false
     @State private var still: DiscoverStill?
     @State private var episode: DiscoverEpisode?
+    /// The latest season's air dates while it airs (#1186).
+    @State private var airing: AirSchedule?
+    @State private var airCalendarShown = false
     #if os(tvOS)
     @State private var tvScrolled = false
     @State private var tvOverviewShown = false
@@ -37,6 +40,18 @@ struct DiscoverDetailView: View {
             if seasonNumber == nil { seasonNumber = seasons.first?.number }
         }
         .task(id: seasonNumber) { await loadSeason() }
+        .task(id: details?.id) { await loadAiring() }
+        #if DEBUG
+        .task(id: details?.id) {
+            // QA: -qaToggleFollow <seconds> follows or unfollows the series that long after its details load, for the toast.
+            let delay = UserDefaults.standard.double(forKey: "qaToggleFollow")
+            guard details != nil, delay > 0 else { return }
+            try? await Task.sleep(for: .seconds(delay))
+            if !Task.isCancelled { DiscoverFollowing.toggle(followItem, in: store) }
+        }
+        #endif
+        .modifier(DiscoverAirCalendarPresentation(isPresented: $airCalendarShown, schedule: airing, show: followItem))
+        .modifier(DiscoverToastHost(active: !airCalendarShown))
         .sheet(isPresented: $overviewShown) {
             NavigationStack {
                 ScrollView {
@@ -181,6 +196,7 @@ struct DiscoverDetailView: View {
                     }.buttonStyle(.plain).accessibilityLabel(L10n.text("Trailer"))
                         .accessibilityIdentifier("discover.detail.playTrailer")
                 }
+                if item.mediaType == .tv { DiscoverFollowButton(item: followItem) }
             }
             Button { overviewShown = true } label: {
                 Text(details?.overview ?? item.overview).font(.system(size: 12)).lineLimit(3)
@@ -227,6 +243,7 @@ struct DiscoverDetailView: View {
 
     private var episodes: some View {
         VStack(alignment: .leading, spacing: 14) {
+            if let airing { DiscoverAirCalendarRow(schedule: airing) { DiscoverFollowing.present { airCalendarShown = true } } }
             Menu {
                 ForEach(seasons, id: \.number) { value in
                     Button { seasonNumber = value.number } label: {
@@ -399,6 +416,30 @@ struct DiscoverDetailView: View {
         let locale = Locale(identifier: TMDBMatch.language)
         return details.countries.map { locale.localizedString(forRegionCode: $0) ?? $0 }.joined(separator: " / ")
     }
+    /// The page's details with what the list it came from had, for following the series.
+    private var followItem: TMDBCatalog.Item {
+        guard let details else { return item }
+        return TMDBCatalog.Item(id: item.id, mediaType: item.mediaType, name: details.name.isEmpty ? item.name : details.name,
+                                originalName: details.originalName, year: details.year ?? item.year,
+                                overview: details.overview.isEmpty ? item.overview : details.overview,
+                                poster: details.poster ?? item.poster, backdrop: details.backdrop ?? item.backdrop,
+                                rating: details.rating ?? item.rating, genreIDs: item.genreIDs, date: details.date ?? item.date)
+    }
+
+    /// The air calendar, for a series still airing or followed: one more request for its latest season, kept 12 hours.
+    private func loadAiring() async {
+        guard let details, details.mediaType == .tv else { return }
+        let current = ["Returning Series", "In Production", "Planned", "Pilot"].contains(details.status ?? "")
+        guard current || store.followedShows.contains(details.id) else { airing = nil; return }
+        let value = await AirSchedules.shared.schedule(details.id, details: details)
+        guard !Task.isCancelled else { return }
+        airing = value?.isAiring(today: DiscoverFollowing.today) == true ? value : nil
+        #if DEBUG
+        // QA: -qaAirCalendar 1 opens the air calendar once it loads.
+        if airing != nil, UserDefaults.standard.bool(forKey: "qaAirCalendar") { DiscoverFollowing.present { airCalendarShown = true } }
+        #endif
+    }
+
     private func loadSeason() async {
         guard let number = seasonNumber else { return }
         loadingSeason = true; seasonFailed = false; season = nil
@@ -635,6 +676,14 @@ extension DiscoverDetailView {
                             tvIconButton("play.rectangle", "Trailer", "discover.detail.playTrailer") { trailerShown = true }
                         }
                         tvIconButton("text.alignleft", "Overview", "discover.detail.overview") { tvOverviewShown = true }
+                        if item.mediaType == .tv {
+                            let following = store.followedShows.contains(item.id)
+                            tvIconButton(following ? "calendar.badge.checkmark" : "calendar.badge.plus", following ? "Unfollow Show" : "Follow Show",
+                                         "discover.detail.follow") { DiscoverFollowing.toggle(followItem, in: store) }
+                        }
+                        if airing != nil {
+                            tvIconButton("calendar", "Air Calendar", "discover.detail.airCalendar") { airCalendarShown = true }
+                        }
                         tvIconButton("text.magnifyingglass", "Search Catalog", "discover.detail.search") { searchShown = true }
                     }
                 }.frame(width: 368).focusSection()
