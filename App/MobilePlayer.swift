@@ -309,7 +309,8 @@ struct MobilePlayerView: View {
             hideChrome()
         case .moved(let moved, let size):
             if let swipeStart {
-                clock.scrub(to: PictureSeek.target(from: swipeStart, moved: moved.width, width: size.width, duration: clock.duration))
+                clock.scrub(to: PictureSeek.target(from: swipeStart, moved: moved.width, width: size.width, duration: clock.duration),
+                            secondsPerPoint: PictureSeek.secondsPerPoint(width: size.width, duration: clock.duration))
             } else if leveling, var level {
                 level.value = PictureLevel.value(from: level.start, moved: moved.height, height: size.height)
                 self.level = level
@@ -1172,7 +1173,7 @@ private struct SeekBar<Accessory: View>: View {
         .accessibilityValue(Self.format(value))
         .accessibilityIdentifier("player.seek")
         .accessibilityAdjustableAction { direction in
-            clock.seek(to: min(max(0, value + (direction == .increment ? 10 : -10)), duration))
+            clock.seek(to: min(max(0, value + (direction == .increment ? 10 : -10)), duration), tolerance: SeekTolerance.skip(10))
             sought()
         }
     }
@@ -1184,7 +1185,7 @@ private struct SeekBar<Accessory: View>: View {
             // to jump there first, and the picture lurched. A tap that doesn't slide still jumps (see `ended`).
             drag = (value, gesture.startLocation)
             hold(true)
-            clock.scrub(to: value)
+            clock.scrub(to: value, secondsPerPoint: duration / Double(width))
         }
         guard let begin = drag else { return }
         let away = abs(gesture.location.y - begin.location.y)
@@ -1196,14 +1197,14 @@ private struct SeekBar<Accessory: View>: View {
             return
         }
         let moved = Double((gesture.location.x - begin.location.x) / width) * duration * fineness
-        clock.scrub(to: min(max(0, begin.position + moved), duration))
+        clock.scrub(to: min(max(0, begin.position + moved), duration), secondsPerPoint: duration / Double(width) * fineness)
     }
 
     private func ended(_ gesture: DragGesture.Value) {
         guard drag != nil else { return }
         // A tap on the bar, with no slide, goes to that point.
         if hypot(gesture.translation.width, gesture.translation.height) < 6, width > 0, clock.duration > 0 {
-            clock.scrub(to: clock.duration * Double(min(max(0, gesture.startLocation.x / width), 1)))
+            clock.scrub(to: clock.duration * Double(min(max(0, gesture.startLocation.x / width), 1)), secondsPerPoint: clock.duration / Double(width))
         }
         drag = nil
         fineness = 1
@@ -1612,29 +1613,40 @@ struct PlayerStatusBadge: View {
     @ObservationIgnored private var generating = false
     @ObservationIgnored private var nextPreview: Double?
 
+    /// How much time one point of the drag moves (at its scrubbing speed): how close to the target the seek it ends
+    /// with has to land (`SeekTolerance.release`).
+    @ObservationIgnored private var scrubPrecision = 0.0
+
     /// While dragging, only the bar, the time and the preview follow the finger; the playing video is left alone
     /// until the finger lifts (Telegram).
-    func scrub(to seconds: Double) {
+    func scrub(to seconds: Double, secondsPerPoint: Double = 0) {
         scrubbing = seconds
+        if secondsPerPoint > 0 { scrubPrecision = secondsPerPoint }
         nextPreview = seconds
         makePreview()
     }
 
-    /// Let go: one exact seek to where the finger stopped.
+    /// Let go: one seek to where the finger stopped, landing on a keyframe near it (#1213). An exact one first read and
+    /// decoded the seconds before it, which a finger can't tell apart anyway: from a drive, seconds of waiting.
     func endScrub() {
         nextPreview = nil
         preview = nil
-        if let target = scrubbing { seek(to: target) }
+        let tolerance = SeekTolerance.release(secondsPerPoint: scrubPrecision)
+        scrubPrecision = 0
+        if let target = scrubbing { seek(to: target, tolerance: tolerance) }
     }
 
-    /// An exact seek; the bar stays at the target until it lands, rather than jumping back to the old position.
-    func seek(to seconds: Double) {
+    /// A seek landing up to `tolerance` seconds either side of `seconds` (exact at 0); the bar stays at the target
+    /// until it lands, rather than jumping back to the old position, then shows where it landed.
+    func seek(to seconds: Double, tolerance: Double = 0) {
         guard let player else { scrubbing = nil; return }
         scrubbing = seconds
-        player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+        let window = CMTime(seconds: max(0, tolerance), preferredTimescale: 600)
+        player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600), toleranceBefore: window, toleranceAfter: window) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.scrubbing == seconds else { return }
-                self.position = seconds
+                let landed = self.player?.currentTime().seconds ?? seconds
+                self.position = landed.isFinite ? max(0, landed) : seconds
                 self.scrubbing = nil
             }
         }

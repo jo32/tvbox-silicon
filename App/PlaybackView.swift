@@ -661,6 +661,8 @@ import IOKit.pwr_mgt
         queueObservation = player.observe(\.currentItem, options: [.new]) { [weak self] _, _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                // A new item starts its own clock: its start is no jump.
+                self.clockMark = nil
                 self.subtitles.follow(self.player.currentItem)
                 self.queueMoved()
             }
@@ -677,6 +679,16 @@ import IOKit.pwr_mgt
         delayObserver = NotificationCenter.default.addObserver(forName: SubtitleDelay.changed, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.followSubtitleDelay() }
         }
+        // Any jump, from our controls or from AVKit's own scrubber on the Mac and Apple TV (`resumeAfterJump`).
+        jumpObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.timeJumpedNotification, object: nil, queue: .main) { [weak self] note in
+            let jumped = (note.object as AnyObject?).map(ObjectIdentifier.init)
+            MainActor.assumeIsolated {
+                guard let self, let jumped, let item = self.player.currentItem, ObjectIdentifier(item) == jumped else { return }
+                let seconds = self.player.currentTime().seconds
+                if self.clockMark?.jumped(to: seconds, at: ProcessInfo.processInfo.systemUptime) == true { self.resumeAfterJump() }
+                self.markClock()
+            }
+        }
         externalSubtitles.cues = subtitles
         externalSubtitles.player = player
         externalSubtitles.changed = { [weak self] in self?.followSubtitleDelay() }
@@ -686,6 +698,42 @@ import IOKit.pwr_mgt
         followSubtitleDelay()
     }
     private var styleObserver: NSObjectProtocol?
+    @ObservationIgnored private var jumpObserver: NSObjectProtocol?
+    @ObservationIgnored private var jumpResume: Task<Void, Never>?
+    /// Where the clock was at the last jump notice or once-a-second sample: none before the first sample, so the
+    /// seek that restores a saved place (which has its own start, `restorePositionIfNeeded`) isn't taken for one.
+    @ObservationIgnored private var clockMark: SeekResume.Clock?
+    private func markClock() {
+        let seconds = player.currentTime().seconds
+        clockMark = seconds.isFinite
+            ? SeekResume.Clock(seconds: seconds, at: ProcessInfo.processInfo.systemUptime,
+                               rate: player.timeControlStatus == .playing ? Double(player.rate) : 0)
+            : nil
+    }
+    /// For a while after a jump (a seek: `SeekResume.Clock` tells a rate change apart), plays as soon as a few seconds
+    /// are in, rather than waiting for AVPlayer to predict the download will keep up (`SeekResume`, #1213). It looks
+    /// five times a second, only until the player is paused or the time is up; live streams keep to their edge.
+    private func resumeAfterJump() {
+        jumpResume?.cancel()
+        let active = generation
+        jumpResume = Task { @MainActor [weak self] in
+            let end = Date().addingTimeInterval(SeekResume.window)
+            while Date() < end {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard !Task.isCancelled, let self, self.generation == active, let item = self.player.currentItem,
+                      self.player.timeControlStatus != .paused else { return }
+                let reason = self.player.reasonForWaitingToPlay
+                guard self.player.timeControlStatus == .waitingToPlayAtSpecifiedRate, item.status == .readyToPlay,
+                      !item.duration.isIndefinite, reason == .toMinimizeStalls || reason == .evaluatingBufferingRate else { continue }
+                let now = self.player.currentTime()
+                let loaded = item.loadedTimeRanges.lazy.map(\.timeRangeValue).first { CMTimeRangeContainsTime($0, time: now) }
+                let ahead = loaded.map { CMTimeRangeGetEnd($0).seconds - now.seconds } ?? 0
+                guard SeekResume.shouldPlay(ahead: ahead, remaining: item.duration.seconds - now.seconds) else { continue }
+                Diagnostics.shared.record(.info, "player", "jump resume ahead=\(String(format: "%.1f", ahead))s")
+                self.player.playImmediately(atRate: self.player.rate)
+            }
+        }
+    }
     @ObservationIgnored private var delayObserver: NSObjectProtocol?
     /// Shows delayed subtitle lines at the player's clock (`SubtitleCues.advance`), only while a delay is set.
     @ObservationIgnored private var subtitleTimeObserver: Any?
@@ -847,6 +895,7 @@ import IOKit.pwr_mgt
         }
     }
     private func configure(_ channel: Channel, url: URL, generation activeGeneration: UUID) {
+        clockMark = nil
         #if !os(macOS)
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
@@ -1196,6 +1245,7 @@ import IOKit.pwr_mgt
         // Once the queue has moved on, `queueMoved` is about to take over the next episode.
         guard let item, player.currentItem === item else { return true }
         restorePositionIfNeeded(item)
+        if pendingResume == nil, !restoringPosition { markClock() }
         updateSkipping(item)
         throttleBoost(item)
         catchUpLive(item)

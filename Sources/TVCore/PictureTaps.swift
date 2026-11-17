@@ -87,6 +87,12 @@ public enum PictureSeek {
         guard width > 0, duration > 0, duration.isFinite, start.isFinite, x.isFinite else { return start }
         return min(max(0, start + x / width * min(duration, span)), duration)
     }
+
+    /// How much time one point of the slide moves.
+    public static func secondsPerPoint(width: Double, duration: Double) -> Double {
+        guard width > 0, duration > 0, duration.isFinite else { return 0 }
+        return min(duration, span) / width
+    }
 }
 
 /// Sliding up or down the picture sets the screen's brightness on its left half and the volume on its right (Bilibili,
