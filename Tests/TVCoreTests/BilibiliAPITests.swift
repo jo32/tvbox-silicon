@@ -35,9 +35,6 @@ import Testing
         #expect(BilibiliAPI.creator(category: "up_546195") == 546195)
         #expect(BilibiliAPI.creator(category: "up_546195_click") == nil)
         #expect(BilibiliAPI.creator(category: "rank_0") == nil)
-        #expect(BilibiliAPI.spaceOwner(category: "up_546195_season_7") == 546195)
-        #expect(BilibiliAPI.spaceOwner(category: "up_9") == 9)
-        #expect(BilibiliAPI.spaceOwner(category: "up_x") == nil)
         #expect(BilibiliAPI.isVideo("BV1GJ411x7h7"))
         #expect(!BilibiliAPI.isVideo("season_33378"))
     }

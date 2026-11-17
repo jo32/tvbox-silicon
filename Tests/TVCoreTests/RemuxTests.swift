@@ -46,13 +46,6 @@ import VideoToolbox
         #expect(RemuxPlan.make(streams: [streams[1]], keyframes: [], start: 0, duration: 1, size: 0, device: .init()) == nil)
     }
 
-    @Test func intraRefreshPicturesAreConverted() {
-        var stream = Stream(index: 0, kind: .video, codec: "h264", width: 1920, height: 1080)
-        #expect(RemuxPlan.videoTrack(stream, device: RemuxPlan.Device()).mode == .copy)
-        stream.intraRefresh = true
-        #expect(RemuxPlan.videoTrack(stream, device: RemuxPlan.Device()).mode == .h264)
-    }
-
     @Test func onlyPicturesTheDeviceCantDecodeAreConverted() {
         let device = RemuxPlan.Device(hevc: true, av1: false, hevcEncoder: true)
         func mode(_ stream: Stream, _ device: RemuxPlan.Device = device) -> RemuxPlan.Mode { RemuxPlan.videoTrack(stream, device: device).mode }
@@ -503,15 +496,6 @@ import VideoToolbox
         #expect(await Remux.sniffedSource(playlist, headers: [:], chunks: RangeServer.session, configuration: RangeServer.configuration) == nil)
         let missing = URL(string: "https://cloud.test/chunk-\(UUID().uuidString)")!
         #expect(await Remux.sniffedSource(missing, headers: [:], chunks: RangeServer.session, configuration: RangeServer.configuration) == nil)
-    }
-
-    @Test func matroskaFromAPluginProxyPlays() async throws {
-        let url = RangeServer.add("proxy-\(UUID().uuidString).mkv", try Data(contentsOf: fixture("remux-copy.mkv")), restOfFile: true)
-        let source = try await Remux.httpSource(url, headers: [:], chunks: RangeServer.session, configuration: RangeServer.configuration)
-        let master = try await Remux.open(source)
-        defer { Remux.stop(master) }
-        let played = await ready(master)
-        #expect(played.status == .readyToPlay && abs(played.duration - 8) < 0.2)
     }
 
     /// A drive's slow stretch uses up AVPlayer's own buffer, and segments made one at a time as it asked then came

@@ -79,10 +79,18 @@ private func catalog(play: String, click: String = "site-click", parses: [ParseS
 private let sniffError = "This source requires web video detection or additional parsing. Only resolved media URLs are supported."
 private let sniffTimeout = "Video detection timed out before a playable address appeared."
 
-@Test func jsonPlayURLUsesOnlyThatService() async throws {
-    let (client, sniffer, episode) = try catalog(play: "json")
+/// A json: play address, a named JSON parser, media in the page and a direct address resolve without the sniffer.
+@Test(arguments: [
+    ("json", "https://cdn.example/from-json.m3u8"),
+    ("named-json", "https://cdn.example/named.m3u8"),
+    ("embedded", "https://cdn.example/embedded.m3u8"),
+    ("direct", "https://cdn.example/direct.m3u8"),
+])
+func resolvedAddressesDoNotSniff(_ play: String, _ expected: String) async throws {
+    let parses = play == "named-json" ? [ParseService(name: "json", type: 1, url: "https://fixture.test/named-json?url=", headers: [:])] : []
+    let (client, sniffer, episode) = try catalog(play: play, parses: parses)
     let channel = try await client.playback(episode)
-    #expect(channel.url.absoluteString == "https://cdn.example/from-json.m3u8")
+    #expect(channel.url.absoluteString == expected)
     #expect(sniffer.urls.isEmpty)
 }
 
@@ -93,14 +101,6 @@ private let sniffTimeout = "Video detection timed out before a playable address 
     do { _ = try await client.playback(episode) } catch {
         #expect(error.localizedDescription == sniffError)
     }
-}
-
-@Test func namedJSONParserDoesNotSniff() async throws {
-    let parser = ParseService(name: "json", type: 1, url: "https://fixture.test/named-json?url=", headers: [:])
-    let (client, sniffer, episode) = try catalog(play: "named-json", parses: [parser])
-    let channel = try await client.playback(episode)
-    #expect(channel.url.absoluteString == "https://cdn.example/named.m3u8")
-    #expect(sniffer.urls.isEmpty)
 }
 
 @Test func namedWebParserSniffsItsOwnAddress() async throws {
@@ -145,13 +145,6 @@ private let sniffTimeout = "Video detection timed out before a playable address 
     #expect(sniffer.mostAtOnce == CatalogClient.superParseWebWidth)
 }
 
-@Test func embeddedMediaSkipsTheSniffer() async throws {
-    let (client, sniffer, episode) = try catalog(play: "embedded")
-    let channel = try await client.playback(episode)
-    #expect(channel.url.absoluteString == "https://cdn.example/embedded.m3u8")
-    #expect(sniffer.urls.isEmpty)
-}
-
 @Test func anEmptyPlayURLSniffsThePageAfterTheFastPathFails() async throws {
     let (client, sniffer, episode) = try catalog(play: "page", click: "")
     sniffer.answer = URL(string: "https://cdn.example/page.m3u8")
@@ -159,13 +152,6 @@ private let sniffTimeout = "Video detection timed out before a playable address 
     #expect(sniffer.urls == ["https://fixture.test/player.html"])
     #expect(sniffer.clicks == ["result-click"])
     #expect(channel.headers["Referer"] == "https://player.example/")
-}
-
-@Test func directMediaDoesNotSniff() async throws {
-    let (client, sniffer, episode) = try catalog(play: "direct")
-    let channel = try await client.playback(episode)
-    #expect(channel.url.absoluteString == "https://cdn.example/direct.m3u8")
-    #expect(sniffer.urls.isEmpty)
 }
 
 @Test func aSnifferThatFindsNothingReportsATimeout() async throws {

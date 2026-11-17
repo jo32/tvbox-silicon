@@ -30,6 +30,30 @@ private func episode(_ id: String, flag: String, name: String, episodeID: String
     #expect(Favorites(defaults: defaults).liveChannels.map(\.name) == ["First", "Second"])
 }
 
+/// Shows saved by the earlier list (`videoFavorites`, written by `VideoFavorite`) join Favorites once, newest first,
+/// without their episode addresses; one unfavorited afterwards stays removed.
+@Test @MainActor func showsFromTheEarlierListAreAdoptedOnce() throws {
+    let suite = "favorites." + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let site = Site(key: "movies", name: "Movies", type: 1, api: "https://api.example/movies", raw: ["key": .string("movies")])
+    let other = Site(key: "shows", name: "Shows", type: 1, api: "https://api.example/shows", raw: ["key": .string("shows")])
+    let video = Video(id: "42", name: "Series", poster: URL(string: "https://img.example/42.jpg"), year: "2024", remarks: "更新至10集",
+                      synopsis: "Plot", episodes: [Episode(id: "0-0", name: "第1集", address: "https://cdn.example/1.m3u8?sign=x", flag: "line")])
+    // Newest first, as the earlier list kept them.
+    let earlier = [VideoFavorite(origin: origin, site: other, video: video), VideoFavorite(origin: origin, site: site, video: video)]
+    defaults.set(try JSONEncoder().encode(earlier), forKey: "videoFavorites")
+
+    let favorites = Favorites(defaults: defaults)
+    let shows = favorites.items.compactMap { item -> FavoriteVideo? in if case .video(let show) = item { show } else { nil } }
+    #expect(shows.map(\.sourceKey) == ["shows", "movies"])
+    #expect(shows.allSatisfy { $0.videoName == "Series" && $0.year == "2024" && $0.poster == video.poster })
+    #expect(String(decoding: try #require(defaults.data(forKey: "favorites")), as: UTF8.self).contains("m3u8") == false)
+
+    favorites.toggle(.video(shows[0]))
+    #expect(Favorites(defaults: defaults).items.count == 1)
+}
+
 @Test @MainActor func togglingAFavoriteInsertsItFirstAndRemovesTheSameItem() throws {
     let suite = "favorites." + UUID().uuidString
     let defaults = try #require(UserDefaults(suiteName: suite))
