@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.24",
+          "buildVersion": "62",
+          "date": "2026-11-18",
+          "localizedDescription": "• 追剧\n• 选季\n• 洛雪音源\n• 起播和拖动更快\n• iPhone 和 iPad 播放器\n• 两个新图标\n• 其他修复\n\n• Follow series\n• Pick another season\n• LX Music sources\n• Faster start and seeking\n• Player on iPhone and iPad\n• Two new app icons\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.24/Yingxia-1.8.24-ios.ipa",
+          "size": 184383585,
+          "sha256": "40280296b7f65fd0756dca8f876e7cfb5a8ff9978d6dfda775a69e63466d91ff",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.23",
           "buildVersion": "61",
           "date": "2026-11-16",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.20/Yingxia-1.8.20-ios.ipa",
           "size": 129641477,
           "sha256": "40dd7de6345ddcdcf60b1afd2cd69031400b3cda9a71a33a1781eadc46218cd8",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.19",
-          "buildVersion": "57",
-          "date": "2026-11-13",
-          "localizedDescription": "• 推荐源由你选择\n• 搜索进度列表恢复显示\n• 长文件名选集更清楚\n• 连续播放更稳定\n• 其他修复\n\n• Recommended sources are your choice\n• Search progress is visible again\n• Tell video files apart\n• Smoother playback between episodes\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.19/Yingxia-1.8.19-ios.ipa",
-          "size": 128610491,
-          "sha256": "039d51da984ec9e5c68ec68f6aa6516d827b82e61be1ccb74cda3a31ee38c486",
           "minOSVersion": "17.0"
         }
       ],
