@@ -831,6 +831,7 @@
 "Unable to Load Songs" = "Unable to Load Songs";
 "Shuffle" = "Shuffle";
 "Skipped “%@”: %@" = "Skipped “%@”: %@";
+"No LX Music source could play it." = "No LX Music source could play it.";
 "Songs" = "Songs";
 "Albums" = "Albums";
 "Playlists" = "Playlists";
