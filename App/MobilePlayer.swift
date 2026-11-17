@@ -97,6 +97,9 @@ struct MobilePlayerView: View {
             PlayerLayerView(player: session.player, gravity: videoFill.gravity, pip: pip).playerBleed(!inline)
                 // Picture in Picture shows only the player's layer, so AVPlayer draws the subtitles there.
                 .onChange(of: pip.active) { _, active in session.subtitles.native = active }
+                // A connected display (USB-C, HDMI) takes the same Picture Size: Fill covers a monitor of another
+                // shape, as asked in #1151.
+                .onChange(of: videoFill, initial: true) { _, fill in ExternalDisplay.shared.gravity = fill.gravity }
             // The enhanced picture covers the layer's own, under everything else.
             EnhancedVideoSurface(enhancer: session.enhancer, fills: videoFill == .fill, stretches: videoFill == .stretch, bleeds: !inline)
             if showsDanmaku && !session.danmaku.isEmpty {
