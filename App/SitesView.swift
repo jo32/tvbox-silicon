@@ -3147,7 +3147,7 @@ struct VideoDetailView: View {
         // The clock and battery stay above the player, light on its black as iOS picks in either appearance (#514);
         // in Full Screen the player shows them with its controls (#901).
         .toolbar(.hidden, for: .navigationBar)
-        .background { EdgeSwipeBack(enabled: !fullScreen, pictureHeight: playerHeight) }
+        .background { EdgeSwipeBack(enabled: !fullScreen, pictureHeight: playerHeight, goBack: { dismiss() }) }
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
             store.watchPageScopes.formUnion(watchScopes)
@@ -3602,21 +3602,35 @@ enum WatchPage {
 /// It also comes before the picture's slide-to-seek and the episode row's scrolling, which would otherwise take a
 /// swipe that starts at the edge. On iOS 26 a swipe to the right from anywhere under the picture goes back too, as
 /// on the pages that keep their bar (#801).
+/// Before iOS 17.4 the swipe goes back as the page's Back button does, without following the finger: there, after
+/// the system's swipe left a page whose bar is hidden, the next page pushed never came in and the app stood still
+/// until it was sent to the background (#1209, #1144).
 struct EdgeSwipeBack: UIViewControllerRepresentable {
     /// Off in Full Screen, where the swipe would leave the page.
     var enabled: Bool
     /// The player at the top of the page. A swipe that starts on it belongs to the picture (slide to seek, the
     /// progress bar) unless it starts at the edge.
     var pictureHeight: CGFloat = 0
+    /// The page's Back, for the swipe before iOS 17.4.
+    var goBack: @MainActor () -> Void = {}
 
     func makeUIViewController(context: Context) -> Controller { Controller() }
     func updateUIViewController(_ controller: Controller, context: Context) {
-        controller.enabled = enabled; controller.pictureHeight = pictureHeight
+        controller.enabled = enabled; controller.pictureHeight = pictureHeight; controller.goBack = goBack
+    }
+
+    /// The system's swipe back, which follows the finger, leaves the navigation stack working after it pops a page
+    /// with a hidden bar from iOS 17.4 on. On iOS 17.2 nothing pushed after it came in (simulator, 2026-11-17).
+    static var followsFinger: Bool {
+        if #available(iOS 17.4, *) { true } else { false }
     }
 
     final class Controller: UIViewController, UIGestureRecognizerDelegate {
         var enabled = true
         var pictureHeight: CGFloat = 0
+        var goBack: @MainActor () -> Void = {}
+        /// Before iOS 17.4: a swipe from the left edge, which calls `goBack` when let go far or fast enough.
+        private var edgeSwipe: UIScreenEdgePanGestureRecognizer?
         private weak var recognizer: UIGestureRecognizer?
         private weak var previous: UIGestureRecognizerDelegate?
         /// iOS 26's swipe from anywhere on the page, which a hidden bar turns off as it does the edge's.
@@ -3632,6 +3646,14 @@ struct EdgeSwipeBack: UIViewControllerRepresentable {
 
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
+            guard EdgeSwipeBack.followsFinger else {
+                if edgeSwipe == nil, let stack = navigationController?.view {
+                    let swipe = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(edgeSwiped(_:)))
+                    swipe.edges = .left; swipe.delegate = self
+                    stack.addGestureRecognizer(swipe); edgeSwipe = swipe
+                }
+                return
+            }
             // Again after a swipe that was let go halfway, which brings the page back.
             if let pop = navigationController?.interactivePopGestureRecognizer, pop.delegate !== self {
                 recognizer = pop; previous = pop.delegate
@@ -3645,6 +3667,7 @@ struct EdgeSwipeBack: UIViewControllerRepresentable {
 
         override func viewWillDisappear(_ animated: Bool) {
             super.viewWillDisappear(animated)
+            if let edgeSwipe { edgeSwipe.view?.removeGestureRecognizer(edgeSwipe); self.edgeSwipe = nil }
             // The swipe already under way goes on; other pages get the system's own rules back.
             if let recognizer, recognizer.delegate === self { recognizer.delegate = previous }
             if let content, content.delegate === self { content.delegate = previousContent }
@@ -3653,6 +3676,12 @@ struct EdgeSwipeBack: UIViewControllerRepresentable {
         func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
             guard enabled, (navigationController?.viewControllers.count ?? 0) > 1 else { return false }
             return gestureRecognizer !== content || contentSwipeGoesBack(gestureRecognizer)
+        }
+
+        @objc private func edgeSwiped(_ swipe: UIScreenEdgePanGestureRecognizer) {
+            guard swipe.state == .ended, let view = swipe.view else { return }
+            let distance = swipe.translation(in: view).x, speed = swipe.velocity(in: view).x
+            if distance > 80 || (distance > 20 && speed > 400) { goBack() }
         }
 
         /// A swipe from anywhere goes back when it heads right, starts under the picture, and isn't on a row that
@@ -3679,7 +3708,7 @@ struct EdgeSwipeBack: UIViewControllerRepresentable {
 
         /// Only the edge's swipe comes first; the one from anywhere must not hold up the page's own scrolling.
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-            enabled && gestureRecognizer === recognizer && other is UIPanGestureRecognizer
+            enabled && (gestureRecognizer === recognizer || gestureRecognizer === edgeSwipe) && other is UIPanGestureRecognizer
         }
     }
 }
