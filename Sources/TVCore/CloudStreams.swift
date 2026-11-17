@@ -227,6 +227,11 @@ actor CloudByteStream {
     static let cacheChunks = 24
     /// Chunks fetched without a refusal before a stream a drive held to fewer connections tries one more.
     static let probeAfter = 64
+    /// In a burst (`burst`), a chunk is fetched in up to this many pieces at once.
+    static let piecesPerChunk = 4
+    /// A burst lasts until the reader has this many seconds of bytes ahead of it, or `burstLimit` passed.
+    static let burstSeconds: Double = 6
+    static let burstLimit: TimeInterval = 12
 
     nonisolated let counter = CloudCounter()
     nonisolated let host: String?
@@ -291,6 +296,14 @@ actor CloudByteStream {
     private var sinceRefusal = 0
     /// Whether `playableSampleEntries` retags the bytes: for AVPlayer's own MP4 reading, not for `Remux`.
     private var rewritesSampleEntries: Bool
+    /// When the stream opened or the player jumped elsewhere, until the reader has a few seconds of bytes ahead: it
+    /// reads on up to `ceiling` connections, and the chunks it starts come in pieces on several at once. Then it drops
+    /// back to `connections`. The picture comes sooner; a steady stream stays kind to the drive. Not for a stream held
+    /// to fewer connections (a bundle's proxy), nor once the drive refused one.
+    private var burst: Date?
+    private let burstable: Bool
+    /// Connections the pieces of chunks use besides each chunk's own.
+    private var pieceConnections = 0
 
     init(source: CloudStreams.Source, session: URLSession = CloudByteStream.session, parallel: Int = CloudByteStream.parallel,
          rewritesSampleEntries: Bool = true, refresh: @escaping @Sendable () async -> CloudStreams.Source?) {
@@ -300,6 +313,8 @@ actor CloudByteStream {
         ceiling = connections > 1 ? max(connections, CloudDevice.maxConnections) : 1
         self.rewritesSampleEntries = rewritesSampleEntries
         sourceLength = source.length
+        burstable = parallel >= CloudByteStream.parallel
+        burst = burstable ? Date() : nil
     }
 
     var length: Int { source.length }
@@ -358,6 +373,7 @@ actor CloudByteStream {
         else {
             if !readers.isEmpty { Diagnostics.shared.record(.debug, "cloud.stream", "reader at=\(index) others=\(readers)") }
             readers.append(index)
+            beginBurst()
             // Keep the two most recent positions (video and audio); a third means the user seeked.
             if readers.count > 2 {
                 readers.removeFirst(readers.count - 2)
@@ -369,6 +385,7 @@ actor CloudByteStream {
         }
         let start = offset - index * Self.chunkSize
         let bytes = try await available(index, from: start)
+        considerEndingBurst(at: index)
         // Not for a reader dropped while this one waited (the player jumped elsewhere): that would fetch again the
         // chunks the jump let go.
         if readers.contains(where: near) { prefetch(after: index) }
@@ -419,9 +436,87 @@ actor CloudByteStream {
         let last = min(chunks - 1, index + readAheadChunks)
         guard index < last else { return }
         for next in index + 1...last where cache[next] == nil && inflight[next] == nil {
-            guard inflight.count < connections else { break }
+            guard inflight.count + pieceConnections < budget else { break }
             _ = start(next)
         }
+    }
+
+    /// Connections reading at once: more in a burst.
+    private var budget: Int { burst == nil ? connections : max(connections, ceiling) }
+
+    private func beginBurst() {
+        guard burstable, !refusedEver else { return }
+        burst = Date()
+    }
+
+    /// A burst ends once the reader has `burstSeconds` of bytes ahead (three chunks before the bitrate is known) after
+    /// the player read the index, or when it ran `burstLimit`.
+    private func considerEndingBurst(at index: Int) {
+        guard let began = burst else { return }
+        let target = bytesPerSecond.map { Int($0 * Self.burstSeconds) } ?? 3 * Self.chunkSize
+        var ahead = 0, next = index + 1
+        while ahead < target, next < chunks, let data = cache[next] { ahead += data.count; next += 1 }
+        let elapsed = Date().timeIntervalSince(began)
+        guard progressive && (ahead >= target || next >= chunks) || elapsed > Self.burstLimit else { return }
+        burst = nil
+        Diagnostics.shared.record(.debug, "cloud.stream", "burst over after \(String(format: "%.1f", elapsed)) s ahead=\(ahead) connections=\(connections)")
+    }
+
+    /// The rest of chunk bytes `range` after its first piece, each piece on a connection of its own, while a burst has
+    /// connections to spare. Only once the address has served bytes: a drive that caps connections refuses one past its
+    /// limit, and before that a refusal reads as a dead link.
+    private func split(_ range: ClosedRange<Int>) -> [(range: Range<Int>, task: Task<Data?, Never>)] {
+        guard burst != nil, served, !refusedEver, range.count >= Self.chunkSize / 4 else { return [] }
+        let count = min(Self.piecesPerChunk, 1 + budget - inflight.count - pieceConnections)
+        guard count >= 2 else { return [] }
+        let size = (range.count + count - 1) / count
+        return (1..<count).compactMap { k in
+            let lower = range.lowerBound + k * size, upper = min(range.upperBound + 1, lower + size)
+            guard lower < upper else { return nil }
+            pieceConnections += 1
+            return (lower..<upper, Task { await self.piece(lower..<upper) })
+        }
+    }
+
+    /// Bytes `range` on a connection of their own, for a chunk fetched in pieces. Nil unless they all came: the chunk's
+    /// own connection then asks for them.
+    private func piece(_ range: Range<Int>) async -> Data? {
+        defer { pieceConnections -= 1 }
+        let current = source
+        var request = URLRequest(url: current.url)
+        current.headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        current.freshHeaders?(current.url).forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        request.setValue("bytes=\(range.lowerBound)-\(range.upperBound - 1)", forHTTPHeaderField: "Range")
+        request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
+        let (events, sink) = AsyncStream.makeStream(of: CloudFetch.Event.self)
+        let task = session.dataTask(with: request)
+        task.delegate = CloudFetch(sink)
+        var bytes = Data(), status = 0, flowing = false
+        bytes.reserveCapacity(range.count)
+        await withTaskCancellationHandler {
+            task.resume()
+            for await event in events {
+                switch event {
+                case .response(let response):
+                    status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                    let answer = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Range")?.firstMatch(of: /^bytes (\d+)-(\d+)\/(\d+)$/)
+                    flowing = status == 206 && answer.flatMap { Int($0.1) } == range.lowerBound && answer.flatMap { Int($0.2) } == range.upperBound - 1
+                    if !flowing { task.cancel() }
+                case .data(let data):
+                    guard flowing else { continue }
+                    bytes.append(data)
+                    counter.add(data.count)
+                case .done: continue
+                }
+            }
+        } onCancel: { task.cancel() }
+        // The drive objects to the extra connections (115 answers 403 past a few): no more bursts on this stream.
+        if [403, 429, 503].contains(status), !refusedEver {
+            refusedEver = true; burst = nil
+            Diagnostics.shared.record(.debug, "cloud.stream", "piece refused status=\(status); no more pieces")
+        }
+        guard flowing, !Task.isCancelled, bytes.count == range.count else { return nil }
+        return bytes
     }
 
     private func start(_ index: Int) -> Task<Data, Error> {
@@ -444,14 +539,18 @@ actor CloudByteStream {
         let first = index * Self.chunkSize, last = min(source.length, first + Self.chunkSize) - 1
         var attempt = 0, cut = 0, refusals = 0
         func received() -> Int { partial[index]?.download == id ? partial[index]?.bytes.count ?? 0 : 0 }
+        // In a burst the rest of the chunk comes in pieces on connections of their own while this one reads its start.
+        var pieces = split(first...last)
+        defer { for piece in pieces { piece.task.cancel() } }
         while true {
             try Task.checkCancellation()
             attempt += 1
             let current = source, from = first + received()
+            let stop = pieces.first.map { $0.range.lowerBound - 1 } ?? last
             var request = URLRequest(url: current.url)
             current.headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
             current.freshHeaders?(current.url).forEach { request.setValue($1, forHTTPHeaderField: $0) }
-            request.setValue("bytes=\(from)-\(last)", forHTTPHeaderField: "Range")
+            request.setValue("bytes=\(from)-\(stop)", forHTTPHeaderField: "Range")
             request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
             do {
                 let (events, sink) = AsyncStream.makeStream(of: CloudFetch.Event.self)
@@ -466,7 +565,7 @@ actor CloudByteStream {
                             status = (response as? HTTPURLResponse)?.statusCode ?? 0
                             let range = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Range")?.firstMatch(of: /^bytes (\d+)-(\d+)\/(\d+)$/)
                             end = range.flatMap { Int($0.2) }
-                            flowing = status == 206 && range.flatMap { Int($0.1) } == from && (end ?? .max) <= last
+                            flowing = status == 206 && range.flatMap { Int($0.1) } == from && (end ?? .max) <= stop
                             if flowing { served = true; firstBytes = firstBytes ?? Date() }
                         case .data(let data):
                             guard flowing else { if body.count < 4096 { body.append(data) }; continue }
@@ -490,7 +589,7 @@ actor CloudByteStream {
                     try await Task.sleep(for: .milliseconds(250 * refusals))
                     continue
                 }
-                let got = received()
+                var got = received()
                 guard flowing, let end, got > from - first else {
                     // A drive sometimes answers a range with no bytes, or fewer than it says: the next try gets them.
                     if status == 206, cut < 2 {
@@ -503,6 +602,18 @@ actor CloudByteStream {
                     throw TVError.http(status == 200 ? 416 : status)
                 }
                 rate.bytes += got - (from - first); growth.bytes += got - (from - first)
+                // This connection reached the next pieces: their bytes follow, or, for one that failed, this connection asks.
+                while let next = pieces.first, first + got >= next.range.lowerBound {
+                    pieces.removeFirst()
+                    let bytes = await withTaskCancellationHandler { await next.task.value } onCancel: { next.task.cancel() }
+                    try Task.checkCancellation()
+                    if let bytes, partial[index]?.download == id, first + received() == next.range.lowerBound {
+                        partial[index]?.bytes.append(bytes)
+                        rate.bytes += bytes.count; growth.bytes += bytes.count
+                        wake(index)
+                    }
+                    got = received()
+                }
                 // A drive that sends part of the range at a time, or a connection cut short: ask for the rest.
                 if first + got <= last { attempt = 0; continue }
                 if Date().timeIntervalSince(rate.since) >= 10 {
@@ -535,6 +646,7 @@ actor CloudByteStream {
     /// The drive refused chunk `index` while others were being read: read ahead on no more than those.
     private func refused(_ index: Int, status: Int, body: Data) {
         connections = max(1, min(connections - 1, inflight.count - 1))
+        burst = nil
         sinceRefusal = 0
         refusedEver = true; trial = nil
         let text = String(decoding: body.prefix(120), as: UTF8.self).replacingOccurrences(of: "\n", with: " ")
