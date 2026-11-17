@@ -3554,9 +3554,12 @@ struct VideoDetailView: View {
                               spacing: stills.isEmpty ? 8 : 14) {
                         ForEach(shownOrder(items)) { watchEpisodeCard($0, tile: tile, fill: true, info: stills[$0.id]) { showsAllEpisodes = false } }
                     }
+                    .scrollTargetLayout()
                 }
                 .padding(16)
             }
+            // At the episode playing or watched last, as the row on the page (#1173): a long series opened at episode 1.
+            .modifier(OpensAtEpisode(currentEpisodeID))
             .navigationTitle(L10n.text("Episodes"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -3569,6 +3572,17 @@ struct VideoDetailView: View {
     }
     #endif
 }
+
+#if os(iOS)
+/// Opens a scroll view of episodes at one of them (#1173). `scrollTo` from the sheet's onAppear, or its first task,
+/// came before the sheet had laid out its lazy grid and left it at the top. The position is this modifier's own
+/// state, so scrolling redraws only it, not the page behind the sheet.
+private struct OpensAtEpisode: ViewModifier {
+    @State private var position: Episode.ID?
+    init(_ episode: Episode.ID?) { _position = State(initialValue: episode) }
+    func body(content: Content) -> some View { content.scrollPosition(id: $position, anchor: .center) }
+}
+#endif
 
 #if os(iOS)
 /// iPhone: a video's page is a watch page, its player at the top (`VideoDetailView`). Not on iPhone Duo's inner
