@@ -58,6 +58,13 @@ struct NovelSourcesView: View {
                             Text(count(list)).foregroundStyle(.secondary).monospacedDigit()
                         }
                     }
+                    .contextMenu {
+                        Button(L10n.text("Remove Source List"), role: .destructive) { store.removeList(list.address) }
+                    }
+                }
+                .onDelete { offsets in
+                    let urls = offsets.map { store.lists[$0].address }
+                    for url in urls { store.removeList(url) }
                 }
             } header: {
                 HStack {

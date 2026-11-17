@@ -94,7 +94,18 @@ struct MangaSourcesView: View {
                 Section {
                     ForEach(store.repositories, id: \.self) { url in
                         RouteLink { MangaRepositoryView(url: url) } label: { Text(MangaSources.title(of: url)) }
+                        #if !os(tvOS)
+                        .contextMenu {
+                            Button(L10n.text("Remove Source List"), role: .destructive) { store.removeRepository(url) }
+                        }
+                        #endif
                     }
+                    #if !os(tvOS)
+                    .onDelete { offsets in
+                        let urls = offsets.map { store.repositories[$0] }
+                        for url in urls { store.removeRepository(url) }
+                    }
+                    #endif
                 } header: { Text(L10n.text("Install From")) } footer: {
                     Text(L10n.text("Comic sources are Venera scripts (venera-configs). Each one reads a website; the website's content is its own."))
                 }
