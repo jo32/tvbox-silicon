@@ -830,6 +830,7 @@
 "Unable to Load Songs" = "曲を読み込めません";
 "Shuffle" = "シャッフル";
 "Skipped “%@”: %@" = "「%@」をスキップしました：%@";
+"No LX Music source could play it." = "LX Music のソースでは再生できませんでした。";
 "Songs" = "曲";
 "Albums" = "アルバム";
 "Playlists" = "プレイリスト";

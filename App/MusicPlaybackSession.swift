@@ -379,7 +379,7 @@ typealias MusicTrack = TVCore.MusicTrack
                 self.start(selection, at: at, run: run)
             } catch {
                 guard self.generation == run else { return }
-                self.songFailed(MusicProviderError(error), run: run)
+                self.songFailed(MusicProviderError(error), run: run, channelsAsked: resolver.hasChannels)
             }
         }
     }
@@ -521,11 +521,13 @@ typealias MusicTrack = TVCore.MusicTrack
     }
 
     /// No channel could play the song: skip it while a queue goes on, otherwise stop and say why.
-    private func songFailed(_ error: MusicProviderError, run: UUID, message: String? = nil) {
+    private func songFailed(_ error: MusicProviderError, run: UUID, message: String? = nil, channelsAsked: Bool = true) {
         consecutiveFailures += 1
-        // With no channel at all, the next song fails the same way: stop and say so.
-        if error != .noChannels, let queue, queue.skipsAfterFailure(consecutive: consecutiveFailures), let title = track?.title {
-            notice = L10n.text("Skipped “%@”: %@", title, message ?? error.localizedDescription)
+        // With no channel at all, the next song fails the same way: stop and say so. LX Music sources that had nothing
+        // for this song may have the next one (#1206).
+        if let queue, queue.skipsAfterFailure(error, consecutive: consecutiveFailures, channelsAsked: channelsAsked), let title = track?.title {
+            let reason = error == .noChannels ? L10n.text("No LX Music source could play it.") : message ?? error.localizedDescription
+            notice = L10n.text("Skipped “%@”: %@", title, reason)
             Diagnostics.shared.record(.warning, "music", "skipped after: \(error.detail)")
             phase = .resolving
             Task { [weak self] in

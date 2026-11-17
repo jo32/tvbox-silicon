@@ -60,6 +60,13 @@ public struct MusicQueue: Codable, Equatable, Sendable {
     public static let failuresBeforeStopping = 3
     public func skipsAfterFailure(consecutive failures: Int) -> Bool { hasNext && failures < Self.failuresBeforeStopping }
 
+    /// The same for one failure. With no channel at all (`noChannels` and nothing was asked) every song fails the same
+    /// way, so the queue stops at once. When LX Music sources were asked and had nothing for this song, the next song may
+    /// well play: move on, and the limit above still stops a set of sources that are all down (#1206).
+    public func skipsAfterFailure(_ error: MusicProviderError, consecutive failures: Int, channelsAsked: Bool) -> Bool {
+        (error != .noChannels || channelsAsked) && skipsAfterFailure(consecutive: failures)
+    }
+
     /// "Previous" restarts the song once it has played a few seconds, as players do.
     public static let restartThreshold: Double = 3
 }

@@ -830,6 +830,7 @@
 "Unable to Load Songs" = "无法载入歌曲";
 "Shuffle" = "随机播放";
 "Skipped “%@”: %@" = "已跳过“%@”：%@";
+"No LX Music source could play it." = "洛雪音源都没能播放这首歌。";
 "Songs" = "歌曲";
 "Albums" = "专辑";
 "Playlists" = "歌单";

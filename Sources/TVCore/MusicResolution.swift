@@ -258,6 +258,8 @@ public struct MusicResolver: Sendable {
     /// Whether a subscription lists music channels. Without one only LX Music sources are asked, and when they find
     /// nothing the failure says what is missing rather than what the last source did (#979).
     var channelsListed = true
+    /// Whether any channel (a listed one, an LX Music source or a music extension) can be asked at all.
+    public var hasChannels: Bool { !providers.isEmpty }
 
     public init(routes: MusicRoutes = .current, providers: [any MusicStreamProvider], prober: MusicProber = MusicProber(), health: MusicHealth = .shared,
                 companions: MusicCompanionFinder? = nil, budget: TimeInterval = 15) {

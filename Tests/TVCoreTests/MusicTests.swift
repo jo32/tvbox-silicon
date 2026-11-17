@@ -695,6 +695,8 @@ private struct FakeCatalog: MusicCatalogSource {
     await #expect(throws: MusicProviderError.noChannels) {
         _ = try await nothing.select(qqTrack("晴天", ["周杰伦"], duration: 269), preference: .high)
     }
+    // #1206: the queue tells "LX Music sources had nothing" from "no channel at all".
+    #expect(unlisted.hasChannels && !nothing.hasChannels)
     // A listed channel that times out still says so.
     await #expect(throws: MusicProviderError.timeout) {
         _ = try await resolver([slow]).select(qqTrack("晴天", ["周杰伦"], duration: 269), preference: .high)
