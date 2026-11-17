@@ -10,6 +10,8 @@ actor GuangyaFiles {
     /// The web page's client, which also signs in TVs and other devices with a code its app approves.
     static let clientID = "aMe-8VSlkrbQXpUR"
     static let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+    /// The web page. Its download links serve only requests that come from it, as its API does.
+    static let referer = "https://www.guangyapan.com/"
     /// Files per listing request.
     static let pageSize = 100
 
@@ -78,7 +80,7 @@ actor GuangyaFiles {
               let url = URL(string: address) else {
             throw TVError.unsupported(L10n.text("%@ didn't return a link for this file. Try again.", self.name))
         }
-        let headers = ["User-Agent": Self.userAgent]
+        let headers = ["User-Agent": Self.userAgent, "Referer": Self.referer]
         return CloudStreams.Source(url: url, headers: headers, length: try await length(url, headers: headers), name: name)
     }
 
@@ -167,7 +169,7 @@ actor GuangyaFiles {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        request.setValue("https://www.guangyapan.com/", forHTTPHeaderField: "Referer")
+        request.setValue(referer, forHTTPHeaderField: "Referer")
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         return request
     }

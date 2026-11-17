@@ -39,6 +39,8 @@ import Testing
         #expect(saved.account == GuangyaAccount(accessToken: "new", refreshToken: "r2"))
         let link = try await drive.link("v1", name: "第1集.mkv")
         #expect(link.url.host() == "cdn.guangya.test" && link.length == 1_234_567)
+        // Its reads go out as the web page's, which the CDN wants before it serves a range.
+        #expect(link.headers["Referer"] == GuangyaFiles.referer && link.headers["User-Agent"] == GuangyaFiles.userAgent)
     }
 
     @Test func aSignInThatCantBeRefreshedAsksForANewOne() async throws {
@@ -76,7 +78,7 @@ final class GuangyaSaved: @unchecked Sendable {
 }
 
 /// Guangya's API and account service: the listing takes only the access token "new", which the refresh token "r1"
-/// gets; the download link answers its first byte.
+/// gets; the download link answers its first byte, but only to the web page (Referer), as Guangya's CDN does.
 final class GuangyaStub: URLProtocol, @unchecked Sendable {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var log: [String] = []
@@ -119,6 +121,7 @@ final class GuangyaStub: URLProtocol, @unchecked Sendable {
                 answer = ["access_token": "new", "refresh_token": "r2", "token_type": "Bearer", "expires_in": 7200]
             } else { status = 400; answer = ["error": "invalid_grant", "error_description": "Refresh token is invalid"] }
         default:
+            guard request.value(forHTTPHeaderField: "Referer") == GuangyaFiles.referer else { headers = ["Content-Type": "text/plain"]; break }
             status = request.value(forHTTPHeaderField: "Range") == "bytes=0-0" ? 206 : 200
             headers = ["Content-Range": "bytes 0-0/1234567", "Content-Type": "video/x-matroska"]
         }
