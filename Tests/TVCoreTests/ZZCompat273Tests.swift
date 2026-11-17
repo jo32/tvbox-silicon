@@ -118,9 +118,10 @@ import Testing
         return "plan=" + plan.tracks.map { "\($0.stream.codec)\($0.mode == .copy ? "" : ">\($0.mode)")\($0.toneMap ? "(sdr)" : "")\($0.dolbyVision == .drop ? "" : "(dv\($0.dolbyVision))")" }.joined(separator: ",") + " segs=\(plan.segments)"
     }
 
-    @Test func run() async throws {
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["COMPAT_DIR"] != nil && ProcessInfo.processInfo.environment["COMPAT_LOG"] != nil))
+    func run() async throws {
         let env = ProcessInfo.processInfo.environment
-        guard let dir = env["COMPAT_DIR"], let logPath = env["COMPAT_LOG"] else { return }
+        let dir = try #require(env["COMPAT_DIR"]), logPath = try #require(env["COMPAT_LOG"])
         let log = Log(logPath)
         if env["COMPAT_SDR"] == "1" { Remux.refusesHDR = true }
         let modes = (env["COMPAT_MODES"] ?? "file,exact,rest").split(separator: ",").map(String.init)

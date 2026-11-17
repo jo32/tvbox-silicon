@@ -43,34 +43,29 @@ private let ad = "https://ads.other.example/a/"
     #expect(!result.text.contains("/a/ad"))
 }
 
-@Test func anotherFolderOnTheSameHostCounts() throws {
-    let text = playlist([run(film, prefix: "seg", count: 40), run("https://cdn.film.example/promo/", prefix: "p", count: 2, discontinuity: true),
-                         run(film, prefix: "seg", count: 20, discontinuity: true)])
-    #expect(AdSkip.clean(text, origin: origin)?.runs == 1)
-}
-
-@Test func relativeAddressesAreJudgedWhereTheyPointTo() throws {
-    let text = playlist([run("", prefix: "seg", count: 50), run("../promo/", prefix: "p", count: 2, discontinuity: true), run("", prefix: "seg", count: 20, discontinuity: true)])
-    #expect(AdSkip.clean(text, origin: origin)?.runs == 1)
-}
-
-@Test func aPlaylistWithoutDiscontinuitiesIsLeftAlone() {
-    #expect(AdSkip.clean(playlist([run(film, prefix: "seg", count: 40), run(ad, prefix: "ad", count: 2)]), origin: origin) == nil)
-}
-
-@Test func aLivePlaylistIsLeftAlone() {
-    let text = playlist([run(ad, prefix: "ad", count: 2), run(film, prefix: "seg", count: 40, discontinuity: true)], ended: false)
-    #expect(AdSkip.clean(text, origin: origin) == nil)
-}
-
-@Test func aMasterPlaylistIsLeftAlone() {
-    #expect(AdSkip.clean("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nlow.m3u8\n#EXT-X-ENDLIST\n", origin: origin) == nil)
-}
-
-@Test func aLongForeignRunIsPartOfTheFilm() {
+/// Playlists that are not cut, each for its own reason.
+@Test(arguments: [
+    ("no discontinuities", playlist([run(film, prefix: "seg", count: 40), run(ad, prefix: "ad", count: 2)])),
+    ("live", playlist([run(ad, prefix: "ad", count: 2), run(film, prefix: "seg", count: 40, discontinuity: true)], ended: false)),
+    ("master", "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nlow.m3u8\n#EXT-X-ENDLIST\n"),
     // Ten minutes from elsewhere is not an ad.
-    let text = playlist([run(film, prefix: "seg", count: 100), run(ad, prefix: "ad", count: 70, discontinuity: true), run(film, prefix: "seg", count: 100, discontinuity: true)])
-    #expect(AdSkip.clean(text, origin: origin) == nil)
+    ("long foreign run", playlist([run(film, prefix: "seg", count: 100), run(ad, prefix: "ad", count: 70, discontinuity: true),
+                                   run(film, prefix: "seg", count: 100, discontinuity: true)])),
+    ("short video", playlist([run(ad, prefix: "ad", count: 1), run(film, prefix: "seg", count: 10, discontinuity: true)])),
+    ("run with its own key", playlist([run(film, prefix: "seg", count: 50),
+                                       run(ad, prefix: "ad", count: 1, discontinuity: true, extra: ["#EXT-X-KEY:METHOD=AES-128,URI=\"https://ads.other.example/k\""]),
+                                       run(film, prefix: "seg", count: 20, discontinuity: true)])),
+])
+func playlistsLeftAlone(_ reason: String, _ text: String) {
+    #expect(AdSkip.clean(text, origin: origin) == nil, "\(reason)")
+}
+
+/// Another folder on the film's host, and a relative address pointing there, are a run of their own.
+@Test(arguments: ["https://cdn.film.example/promo/", "../promo/"])
+func anotherFolderIsARunWhereverItIsNamed(_ promo: String) {
+    let base = promo.hasPrefix("..") ? "" : film
+    let text = playlist([run(base, prefix: "seg", count: 50), run(promo, prefix: "p", count: 2, discontinuity: true), run(base, prefix: "seg", count: 20, discontinuity: true)])
+    #expect(AdSkip.clean(text, origin: origin)?.runs == 1)
 }
 
 @Test func removingTooMuchLeavesTheWholePlaylist() {
@@ -81,17 +76,6 @@ private let ad = "https://ads.other.example/a/"
     #expect(AdSkip.clean(text, origin: origin) != nil) // 50 s of 260 s: under the share.
     let heavy = playlist([run(film, prefix: "seg", count: 12), run(ad, prefix: "ad", count: 3, discontinuity: true), run(film, prefix: "seg", count: 12, discontinuity: true), run(ad, prefix: "ad", count: 3, discontinuity: true)])
     #expect(AdSkip.clean(heavy, origin: origin) == nil) // 60 s of 300 s is a fifth.
-}
-
-@Test func aShortVideoIsLeftAlone() {
-    let text = playlist([run(ad, prefix: "ad", count: 1), run(film, prefix: "seg", count: 10, discontinuity: true)])
-    #expect(AdSkip.clean(text, origin: origin) == nil)
-}
-
-@Test func aRunWithItsOwnKeyIsNotCut() {
-    let key = "#EXT-X-KEY:METHOD=AES-128,URI=\"https://ads.other.example/k\""
-    let text = playlist([run(film, prefix: "seg", count: 50), run(ad, prefix: "ad", count: 1, discontinuity: true, extra: [key]), run(film, prefix: "seg", count: 20, discontinuity: true)])
-    #expect(AdSkip.clean(text, origin: origin) == nil)
 }
 
 @Test func hashNamedSegmentsOfOneFolderAreOneFamily() throws {
