@@ -174,6 +174,31 @@ struct CloudStreamsTests {
         await stream.clear()
     }
 
+    /// At the start and after a jump, the chunk the player waits for comes in pieces on several connections at once
+    /// (`burst`); its bytes still reach the reader in order. A stream held to fewer connections never does this.
+    @Test func aJumpReadsTheChunkThereInPieces() async throws {
+        let chunk = CloudByteStream.chunkSize
+        let size = chunk * 12 + 333
+        var bytes = Data(count: size)
+        bytes.withUnsafeMutableBytes { raw in for i in 0..<size { raw[i] = UInt8(truncatingIfNeeded: i &* 17 &+ i >> 12) } }
+        for parallel in [CloudByteStream.parallel, 2] {
+            let name = "burst-\(parallel)-\(UUID().uuidString).mp4"
+            let url = RangeServer.add(name, bytes)
+            let stream = CloudByteStream(source: .init(url: url, headers: [:], length: size, name: name), session: RangeServer.session, parallel: parallel) { nil }
+            #expect(try await stream.read(at: 0, count: 4) == bytes.prefix(4))
+            // The chunks read ahead from the start are in: the jump has connections to spare.
+            try await Task.sleep(for: .milliseconds(300))
+            var at = chunk * 9 + 10, copy = Data()
+            while at < chunk * 10 { let part = try await stream.read(at: at, count: chunk * 10 - at); copy.append(part); at += part.count }
+            #expect(copy == bytes[chunk * 9 + 10..<chunk * 10])
+            let inside = RangeServer.starts(name).filter { $0 > chunk * 9 && $0 < chunk * 10 }
+            if parallel == CloudByteStream.parallel { #expect(inside.count >= 2) } else { #expect(inside.isEmpty) }
+            // The last chunk, short, in pieces too.
+            #expect(try await stream.read(at: size - 5, count: 5) == bytes.suffix(5))
+            await stream.clear()
+        }
+    }
+
     @Test func theIndexIsFoundFromTheFirstBoxes() {
         func box(_ type: String, _ size: Int, large: Bool = false) -> Data {
             var data = Data()
@@ -348,6 +373,7 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) private static var active: [String: Int] = [:]
     nonisolated(unsafe) private static var refused: [String: Int] = [:]
     nonisolated(unsafe) private static var cancelled: [String: Int] = [:]
+    nonisolated(unsafe) private static var rangeStarts: [String: [Int]] = [:]
     /// Whether this request was answered, so a stop before that is a cancel.
     private var answered = false
     static let configuration: URLSessionConfiguration = {
@@ -368,6 +394,8 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
         }
         return URL(string: "https://cloud.test/\(name)")!
     }
+    /// Where each range asked of a file began.
+    static func starts(_ name: String) -> [Int] { lock.withLock { rangeStarts[name, default: []] } }
     /// How many requests a file was asked for.
     static func requests(_ name: String) -> Int { lock.withLock { counts[name, default: 0] } }
     /// How many requests a file with a connection limit refused.
@@ -403,6 +431,7 @@ final class RangeServer: URLProtocol, @unchecked Sendable {
            let first = Int(match.1), first < data.count {
             let last = toEnd ? data.count - 1 : Int(match.2) ?? data.count - 1
             range = first..<min(data.count, last + 1, fault?.cap.map { first + $0 } ?? Int.max); status = 206
+            Self.lock.withLock { Self.rangeStarts[name, default: []].append(first) }
         }
         if status == 206, let fault, fault.empty > 0 {
             let headers = ["Content-Length": "0", "Content-Range": "bytes \(range.lowerBound)-\(range.upperBound - 1)/\(data.count)"]

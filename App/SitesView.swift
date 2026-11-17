@@ -2123,6 +2123,8 @@ struct VideoDetailView: View {
     /// Full Screen at once (#1065).
     @AppStorage(WatchPage.autoPlayKey) private var autoPlays = true
     @AppStorage(WatchPage.fullScreenKey) private var startsFullScreen = false
+    /// iPad's Play Automatically started this page's video already: coming back to the page doesn't start it again.
+    @State private var autoPlayed = false
     /// Playback began on the page with Start in Full Screen on: Full Screen once the picture shows.
     @State private var fullScreenOnStart = false
     /// The source's config center, open in the app (`ConfigCenterView`).
@@ -2236,6 +2238,14 @@ struct VideoDetailView: View {
             // With Play Automatically off it waits on its cover too, for Play (#885).
             if continues, resume == nil, watchChannel == nil, store.resumingHistoryID == nil, activeEpisodes.count <= 1, autoPlays {
                 playWatchCover()
+            }
+            // iPad's page has no player of its own: Play Automatically opens a video of one episode in the player, as
+            // Play would, once per visit to the page (#1168).
+            if WatchPage.autoPlaysOnPad, !watchLayout, autoPlays, !autoPlayed, store.resumingHistoryID == nil, store.playing == nil,
+               activeEpisodes.count <= 1, let detail,
+               let first = watchHistory?.continuation(in: detail.episodes) ?? activeEpisodes.first ?? detail.episodes.first {
+                autoPlayed = true
+                startRequest { await play(first) }
             }
             #endif
             #if DEBUG
@@ -3405,6 +3415,7 @@ struct VideoDetailView: View {
                             Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
                             episodeOrderButton.glassOrFill(.regular.interactive(), Color.clear, in: Circle())
                             Spacer(minLength: 8)
+                            singleLineName
                             if SeasonsButton.offered(for: video, episodes: items.count, site: client.site) {
                                 SeasonsButton(video: video, client: client, capsule: true)
                             }
@@ -3422,6 +3433,11 @@ struct VideoDetailView: View {
                         }
                     } else if flags.count > 1 {
                         Text(L10n.text("Lines")).font(.headline)
+                    } else if flags.count == 1, !activeFlag.isEmpty {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(L10n.text("Lines")).font(.headline)
+                            singleLineName
+                        }
                     }
                     watchLines
                     if items.count > 1 {
@@ -3442,6 +3458,15 @@ struct VideoDetailView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// The only line's name (a drive such as 夸克 or 百度, usually), as the title page shows it: with several the strip
+    /// names them, and with one people couldn't tell which drive, or sign-in, a video needs until it played (#964).
+    @ViewBuilder private var singleLineName: some View {
+        if flags.count == 1, !activeFlag.isEmpty {
+            Text(SourceLabel(activeFlag).text).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                .accessibilityIdentifier("watch.lineName")
         }
     }
 
@@ -3601,6 +3626,12 @@ enum WatchPage {
 
     @MainActor static func applies(_ horizontal: UserInterfaceSizeClass?, _ vertical: UserInterfaceSizeClass?) -> Bool {
         UIDevice.current.userInterfaceIdiom == .phone && !(horizontal == .regular && vertical == .regular)
+    }
+
+    /// iPad, where Play Automatically opens the player full screen (#1168). Not the iPad app on a Mac, whose page
+    /// stays as the Mac app's.
+    @MainActor static var autoPlaysOnPad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad && !ProcessInfo.processInfo.isiOSAppOnMac
     }
 }
 
