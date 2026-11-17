@@ -28,6 +28,10 @@ import UIKit
     static let shared = ExternalDisplay()
 
     private weak var player: AVPlayer?
+    /// The player's Picture Size (Fit, Fill or Stretch), so a display of another shape can be filled too (#1151).
+    var gravity: AVLayerVideoGravity = .resizeAspect {
+        didSet { picture?.gravity = gravity }
+    }
     private var window: UIWindow?
     private var picture: ExternalDisplayViewController?
     private var sceneNotifications: [NSObjectProtocol] = []
@@ -77,6 +81,7 @@ import UIKit
             Diagnostics.shared.record(.info, "player", "external display connected \(Int(scene.screen.bounds.width))×\(Int(scene.screen.bounds.height))")
         }
         picture?.player = player
+        picture?.gravity = gravity
         window?.isHidden = false
     }
 
@@ -96,12 +101,16 @@ private final class ExternalDisplayViewController: UIViewController {
         set { display.playerLayer.player = newValue }
     }
 
+    var gravity: AVLayerVideoGravity {
+        get { display.playerLayer.videoGravity }
+        set { display.playerLayer.videoGravity = newValue }
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
         display.frame = view.bounds
         display.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        display.playerLayer.videoGravity = .resizeAspect
         view.addSubview(display)
     }
 }
