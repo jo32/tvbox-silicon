@@ -2876,6 +2876,9 @@ struct VideoDetailView: View {
                         Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
                         if items.count > 1 { episodeOrderButton }
                         #endif
+                        if SeasonsButton.offered(for: video, episodes: items.count, site: client.site) {
+                            SeasonsButton(video: video, client: client)
+                        }
                         Spacer(minLength: 8)
                         if flags.count == 1, !activeFlag.isEmpty {
                             Text(SourceLabel(activeFlag).text).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -3413,6 +3416,9 @@ struct VideoDetailView: View {
                             episodeOrderButton.glassOrFill(.regular.interactive(), Color.clear, in: Circle())
                             Spacer(minLength: 8)
                             singleLineName
+                            if SeasonsButton.offered(for: video, episodes: items.count, site: client.site) {
+                                SeasonsButton(video: video, client: client, capsule: true)
+                            }
                             if items.count > (compact ? 5 : 2) {
                                 Button { showsAllEpisodes = true } label: {
                                     HStack(spacing: 3) { Text(L10n.text("All")); Image(systemName: "chevron.right").font(.caption.weight(.semibold)) }
@@ -4522,3 +4528,185 @@ extension View {
     }
 }
 #endif
+
+// MARK: Other seasons (#1066)
+
+/// A series' other seasons on the same source, beside its episodes (#1066). Sources list each season as a title of its
+/// own, so the next one meant another search. Nothing is asked of the source until this is tapped; then one search of
+/// the title without its season lists the seasons it finds, and picking one opens its page.
+struct SeasonsButton: View {
+    let video: Video
+    let client: CatalogClient
+    /// On the iPhone's watch page: a glass capsule, as All beside it.
+    var capsule = false
+    @Environment(Store.self) private var store
+    @Environment(\.openRoute) private var openRoute
+    @State private var showsSeasons = false
+
+    /// Offered for a series (more than one episode) on a source that searches. Not Bilibili, whose seasons are its own
+    /// pages, nor a drive, whose folders list them.
+    static func offered(for video: Video, episodes: Int, site: Site) -> Bool {
+        episodes > 1 && site.searchable && !site.isBilibili && !site.isCloudFiles && !SeasonTitles.query(for: video.name).isEmpty
+    }
+
+    var body: some View {
+        Button { showsSeasons = true } label: {
+            #if os(tvOS)
+            HStack(spacing: 10) { Image(systemName: "square.stack"); Text(title) }
+            #else
+            let label = HStack(spacing: 3) { Text(title); Image(systemName: "chevron.down").font(.caption.weight(.semibold)) }
+                .font(.subheadline).foregroundStyle(.secondary)
+                .lineLimit(1).fixedSize()
+            #if os(iOS)
+            if capsule {
+                label.padding(.horizontal, 12).frame(minHeight: 32)
+                    .glassOrFill(.regular.interactive(), Color.clear, in: Capsule())
+                    .frame(minHeight: 44).contentShape(Rectangle())
+            } else {
+                label.frame(minHeight: 32).contentShape(Rectangle())
+            }
+            #else
+            label.frame(minHeight: 32).contentShape(Rectangle())
+            #endif
+            #endif
+        }
+        #if os(tvOS)
+        .glassPill()
+        #else
+        .buttonStyle(.plain)
+        #endif
+        .accessibilityLabel(L10n.text("Other Seasons"))
+        .accessibilityIdentifier("episodes.seasons")
+        #if DEBUG
+        // `-qaSeasons 1` opens the seasons a moment after the page.
+        .task { if UserDefaults.standard.bool(forKey: "qaSeasons") { try? await Task.sleep(for: .seconds(2)); showsSeasons = true } }
+        #endif
+        .sheet(isPresented: $showsSeasons) {
+            // Pushed on the page's own stack; with none to push on, inside the sheet.
+            SeasonsSheet(video: video, client: client, open: openRoute.map { openRoute in
+                { found in
+                    showsSeasons = false
+                    openRoute(Route { AnyView(CatalogDestination(video: found.video, client: client)) })
+                }
+            })
+            // Passed on by hand: an iPad app on a Mac lost the store in sheets (#1163).
+            .environment(store)
+        }
+    }
+
+    /// The season this title names (第 16 季), or 选季 when it names none.
+    private var title: String {
+        SeasonTitles.parse(video.name).season.map { L10n.text("Season %@", String($0)) } ?? L10n.text("Other Seasons")
+    }
+}
+
+/// The seasons found on the source, this one checked. One search when it opens, and one more for the next season by
+/// its own name when the first didn't bring it: some sources answer with only a few titles.
+private struct SeasonsSheet: View {
+    let video: Video
+    let client: CatalogClient
+    let open: ((SeasonTitles.Found) -> Void)?
+    @Environment(\.dismiss) private var dismiss
+    @State private var found: [SeasonTitles.Found]?
+    @State private var failed: String?
+    @State private var attempt = 0
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let found { list(found) }
+                else if let failed {
+                    VStack(spacing: 14) {
+                        Text(failed).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        Button(L10n.text("Try Again")) { self.failed = nil; attempt += 1 }
+                    }
+                    .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text(L10n.text("Searching…")).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .navigationTitle(L10n.text("Other Seasons"))
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { dismiss() } } }
+        }
+        #if os(iOS)
+        .environment(\.glassControls, true)
+        .presentationDetents([.medium, .large])
+        #elseif os(macOS)
+        .frame(minWidth: 380, minHeight: 360)
+        #endif
+        .task(id: attempt) { await search() }
+    }
+
+    private func list(_ found: [SeasonTitles.Found]) -> some View {
+        List {
+            Section {
+                ForEach(found) { item in
+                    let current = item.video.id == video.id
+                    Group {
+                        if current || open != nil {
+                            Button { if current { dismiss() } else { open?(item) } } label: { row(item, current: current) }
+                        } else {
+                            NavigationLink { CatalogDestination(video: item.video, client: client) } label: { row(item, current: false) }
+                        }
+                    }
+                    #if !os(tvOS)
+                    .buttonStyle(.plain)
+                    #endif
+                    .accessibilityAddTraits(current ? .isSelected : [])
+                }
+            } footer: {
+                if found.count < 2 { Text(L10n.text("No other seasons found on this source.")) }
+            }
+        }
+    }
+
+    private func row(_ item: SeasonTitles.Found, current: Bool) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(L10n.text("Season %@", String(item.season))).font(.headline)
+                Text(item.video.remarks.isEmpty ? item.video.name : "\(item.video.name) · \(item.video.remarks)")
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            if current { Image(systemName: "checkmark").foregroundStyle(Brand.accent) }
+        }
+        .contentShape(Rectangle())
+    }
+
+    private func search() async {
+        let own = SeasonTitles.parse(video.name)
+        do {
+            var results = try await client.list(category: nil, query: own.core, page: 1).videos
+            guard !Task.isCancelled else { return }
+            var seasons = SeasonTitles.seasons(of: video, among: results)
+            let next = (own.season ?? 1) + 1
+            if !seasons.contains(where: { $0.season == next }),
+               let query = own.season == nil ? own.core + "第二季" : SeasonTitles.renamed(video.name, season: next),
+               let more = try? await client.list(category: nil, query: query, page: 1).videos {
+                results += more
+                seasons = SeasonTitles.seasons(of: video, among: results)
+            }
+            guard !Task.isCancelled else { return }
+            Diagnostics.shared.record(.info, "seasons", "source=\(client.site.key) found=\(seasons.map(\.season))")
+            found = seasons
+            #if DEBUG
+            // `-qaSeasonsOpen <n>` then opens season n, as a tap on its row.
+            let wanted = UserDefaults.standard.integer(forKey: "qaSeasonsOpen")
+            if wanted > 0, let item = seasons.first(where: { $0.season == wanted }) {
+                try? await Task.sleep(for: .seconds(3))
+                if let open { open(item) }
+            }
+            #endif
+        } catch {
+            guard !Task.isCancelled else { return }
+            failed = error.localizedDescription
+        }
+    }
+}
