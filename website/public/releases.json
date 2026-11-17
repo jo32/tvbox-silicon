@@ -1,6 +1,125 @@
 {
   "releases": [
     {
+      "version": "1.8.24",
+      "build": 62,
+      "date": "2026-11-18",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "calendar.badge.plus",
+          "title": {
+            "en": "Follow series",
+            "zh-Hans": "追剧",
+            "zh-Hant": "追劇",
+            "ja": "シリーズをフォロー"
+          },
+          "detail": {
+            "en": "Open a series in Discover and tap Follow Show (on Apple TV, the calendar button beside Search Sources). The Following Calendar shelf in Discover shows which day brings which episodes, and a series still airing has an Air Calendar for the month. Air dates come from TMDB; a show it has no dates for says so.",
+            "zh-Hans": "在“发现”里打开一部剧，点“追剧”（Apple TV 上是搜索片源旁的日历按钮）。“发现”里的“追剧日历”会显示哪天更新哪几集，还在播出的剧也有当月的“播出日历”。播出日期来自 TMDB，没有日期的剧会如实显示。",
+            "zh-Hant": "在「探索」裡打開一部劇，點「追劇」（Apple TV 上是搜尋片源旁的日曆按鈕）。「探索」裡的「追劇日曆」會顯示哪天更新哪幾集，還在播出的劇也有當月的「播出日曆」。播出日期來自 TMDB，沒有日期的劇會如實顯示。",
+            "ja": "「見つける」でシリーズを開き「フォロー」をタップします（Apple TV ではソース検索の横のカレンダーボタン）。「見つける」の「フォロー中の番組」でどの日にどのエピソードが出るか分かり、放送中のシリーズにはその月の「放送カレンダー」もあります。放送日は TMDB のもので、日付のない番組はその旨を表示します。"
+          }
+        },
+        {
+          "symbol": "rectangle.stack",
+          "title": {
+            "en": "Pick another season",
+            "zh-Hans": "选季",
+            "zh-Hant": "選季",
+            "ja": "別のシーズンを選ぶ"
+          },
+          "detail": {
+            "en": "A video page with more than one episode has a season button beside Episodes. It finds the title's other seasons on the same source and opens the one you pick, so you no longer go back to search for each season.",
+            "zh-Hans": "多集的视频页在“选集”旁边有一个选季按钮。它会在同一个源里找到这部剧的其他季，点一下就能打开，不用再每季都回去搜索一遍。",
+            "zh-Hant": "多集的影片頁在「選集」旁邊有一個選季按鈕。它會在同一個源裡找到這部劇的其他季，點一下就能打開，不用再每季都回去搜尋一遍。",
+            "ja": "複数エピソードの動画ページでは、「エピソード」の横にシーズンボタンがあります。同じソースでその作品の他のシーズンを探し、選んだシーズンを開くので、シーズンごとに検索し直す必要がなくなりました。"
+          }
+        },
+        {
+          "symbol": "music.note",
+          "title": {
+            "en": "LX Music sources",
+            "zh-Hans": "洛雪音源",
+            "zh-Hant": "洛雪音源",
+            "ja": "LX Music ソース"
+          },
+          "detail": {
+            "en": "An LX Music source added with Settings › Add Subscription now joins Music's LX sources. Settings › Subscriptions lists LX sources, live plugins and source lists, so you can remove them there, and adding one twice no longer makes a copy. When one LX source's address doesn't play, the next one is asked, and a song no source has is skipped instead of stopping the queue.",
+            "zh-Hans": "用“设置 › 添加订阅”添加的洛雪音源，现在会加入音乐的洛雪音源。“设置 › 订阅”会列出洛雪音源、直播插件和源列表，可以在那里移除；重复添加也不会再多出一份。一个音源给的地址放不了时，会去问下一个音源；所有音源都没有的歌会自动跳过，不再停住播放队列。",
+            "zh-Hant": "用「設定 › 新增訂閱」新增的洛雪音源，現在會加入音樂的洛雪音源。「設定 › 訂閱」會列出洛雪音源、直播外掛和源列表，可以在那裡移除；重複新增也不會再多出一份。一個音源給的位址放不了時，會去問下一個音源；所有音源都沒有的歌會自動跳過，不再停住播放佇列。",
+            "ja": "「設定 › 配信設定を追加」で追加した LX Music ソースは、ミュージックの LX ソースに加わるようになりました。「設定 › 配信設定」に LX ソース、ライブプラグイン、ソースリストが並び、そこで削除できます。同じものを二度追加しても重複しません。あるソースのアドレスが再生できないときは次のソースに問い合わせ、どのソースにもない曲はキューを止めずにスキップします。"
+          }
+        },
+        {
+          "symbol": "bolt",
+          "title": {
+            "en": "Faster start and seeking",
+            "zh-Hans": "起播和拖动更快",
+            "zh-Hant": "起播和拖動更快",
+            "ja": "再生開始とシークがより速く"
+          },
+          "detail": {
+            "en": "Cloud-drive videos start sooner: the first seconds, and the seconds after a jump, load over many connections at once, then fewer once playing. Letting go of the seek bar lands on the nearest keyframe, and playback carries on as soon as 3 seconds are loaded.",
+            "zh-Hans": "网盘视频起播更快：开头和跳转后的几秒用多个连接同时加载，播起来后再减少。松开进度条时会落在最近的关键帧上，加载好 3 秒就继续播放。",
+            "zh-Hant": "網盤影片起播更快：開頭和跳轉後的幾秒用多個連線同時載入，播起來後再減少。放開進度條時會落在最近的關鍵影格上，載入好 3 秒就繼續播放。",
+            "ja": "クラウドドライブの動画がより早く始まります。最初の数秒とジャンプ直後は多くの接続で同時に読み込み、再生が始まると接続を減らします。シークバーを放すと最寄りのキーフレームに移り、3 秒分読み込めば再生を続けます。"
+          }
+        },
+        {
+          "symbol": "play.rectangle",
+          "title": {
+            "en": "Player on iPhone and iPad",
+            "zh-Hans": "iPhone 和 iPad 播放器",
+            "zh-Hant": "iPhone 和 iPad 播放器",
+            "ja": "iPhone と iPad のプレーヤー"
+          },
+          "detail": {
+            "en": "The subtitle track you pick, and the brightness you slide, carry over to the next video. Full Screen is a button of its own in the corner, away from Next Episode. A connected display follows the player's Picture Size. On iPad, Play Automatically opens a one-episode video in the player.",
+            "zh-Hans": "选好的字幕和滑动调节的亮度，下一个视频会继续沿用。“全屏”成了角落里单独的按钮，不再紧挨下一集。外接显示器会跟随播放器的“画面尺寸”。在 iPad 上，打开“自动播放”后，单集视频会直接进入播放器。",
+            "zh-Hant": "選好的字幕和滑動調節的亮度，下一部影片會繼續沿用。「全螢幕」成了角落裡單獨的按鈕，不再緊挨下一集。外接顯示器會跟隨播放器的「畫面尺寸」。在 iPad 上，打開「自動播放」後，單集影片會直接進入播放器。",
+            "ja": "選んだ字幕とスライドで調整した明るさが、次の動画でもそのまま使われます。「フルスクリーン」は「次のエピソード」から離れた角の単独ボタンになりました。接続したディスプレイはプレーヤーの「画面サイズ」に従います。iPad では「自動再生」がオンのとき、エピソードが 1 つの動画はそのままプレーヤーで開きます。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "app.badge",
+          "title": {
+            "en": "Two new app icons",
+            "zh-Hans": "两个新图标",
+            "zh-Hant": "兩個新圖像",
+            "ja": "新しいアイコン 2 つ"
+          },
+          "detail": {
+            "en": "Panda and Arc join Settings › App Icon on iPhone, iPad, Mac and Apple TV.",
+            "zh-Hans": "“设置 › 应用图标”新增“熊猫”和“Arc”，iPhone、iPad、Mac 和 Apple TV 都能用。",
+            "zh-Hant": "「設定 › App 圖像」新增「熊貓」和「Arc」，iPhone、iPad、Mac 和 Apple TV 都能用。",
+            "ja": "「設定 › アプリアイコン」に「パンダ」と「Arc」が加わりました。iPhone、iPad、Mac、Apple TV で使えます。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "A Live TV channel opened from favorites or search has its Channel List and Previous/Next Channel. On iPhone, All beside Episodes opens at the episode you're on, and a source with a single line names it. Guangya Cloud videos play again. Novel and comic source lists can be removed with a swipe or right-click. iPhones before iOS 17.4 no longer freeze after swiping back. The iPad app on a Mac no longer quits when Episodes opens. On Apple TV, a series page's buttons line up again.",
+            "zh-Hans": "从收藏或搜索结果打开的直播频道，也有“频道列表”和上一台、下一台。在 iPhone 上，“选集”旁的“全部”会定位到正在看的那一集，只有一条线路的源也会显示线路名。光鸭云盘的视频又能播放了。小说和漫画的源列表可以左滑或右键移除。iOS 17.4 以前的 iPhone 侧滑返回后不再卡住。在 Mac 上运行的 iPad 版打开选集时不再闪退。Apple TV 剧集页的按钮又对齐了。",
+            "zh-Hant": "從收藏或搜尋結果打開的直播頻道，也有「頻道列表」和上一台、下一台。在 iPhone 上，「選集」旁的「全部」會定位到正在看的那一集，只有一條線路的源也會顯示線路名。光鴨雲盤的影片又能播放了。小說和漫畫的源列表可以左滑或右鍵移除。iOS 17.4 以前的 iPhone 側滑返回後不再卡住。在 Mac 上執行的 iPad 版打開選集時不再閃退。Apple TV 劇集頁的按鈕又對齊了。",
+            "ja": "お気に入りや検索結果から開いたライブチャンネルにも「チャンネル一覧」と前後のチャンネル切り替えがあります。iPhone では「エピソード」横の「すべて」が視聴中のエピソードで開き、ラインが 1 つだけのソースもライン名を表示します。Guangya Cloud の動画が再び再生できます。小説とマンガのソースリストはスワイプか右クリックで削除できます。iOS 17.4 より前の iPhone で、スワイプで戻った後に固まらなくなりました。Mac で動かす iPad 版が「エピソード」を開いても終了しなくなりました。Apple TV のシリーズページのボタンが再び揃いました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.23",
       "build": 61,
       "date": "2026-11-16",
