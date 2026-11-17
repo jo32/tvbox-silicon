@@ -3402,6 +3402,7 @@ struct VideoDetailView: View {
                             Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
                             episodeOrderButton.glassOrFill(.regular.interactive(), Color.clear, in: Circle())
                             Spacer(minLength: 8)
+                            singleLineName
                             if items.count > (compact ? 5 : 2) {
                                 Button { showsAllEpisodes = true } label: {
                                     HStack(spacing: 3) { Text(L10n.text("All")); Image(systemName: "chevron.right").font(.caption.weight(.semibold)) }
@@ -3416,6 +3417,11 @@ struct VideoDetailView: View {
                         }
                     } else if flags.count > 1 {
                         Text(L10n.text("Lines")).font(.headline)
+                    } else if flags.count == 1, !activeFlag.isEmpty {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(L10n.text("Lines")).font(.headline)
+                            singleLineName
+                        }
                     }
                     watchLines
                     if items.count > 1 {
@@ -3436,6 +3442,15 @@ struct VideoDetailView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// The only line's name (a drive such as 夸克 or 百度, usually), as the title page shows it: with several the strip
+    /// names them, and with one people couldn't tell which drive, or sign-in, a video needs until it played (#964).
+    @ViewBuilder private var singleLineName: some View {
+        if flags.count == 1, !activeFlag.isEmpty {
+            Text(SourceLabel(activeFlag).text).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                .accessibilityIdentifier("watch.lineName")
         }
     }
 
