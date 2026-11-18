@@ -1,6 +1,95 @@
 {
   "releases": [
     {
+      "version": "1.8.25",
+      "build": 63,
+      "date": "2026-11-19",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "moon.zzz",
+          "title": {
+            "en": "Sleep Timer",
+            "zh-Hans": "定时关闭",
+            "zh-Hant": "定時關閉",
+            "ja": "スリープタイマー"
+          },
+          "detail": {
+            "en": "Fall asleep to music or an audiobook without losing your place. Choose Sleep Timer in Music's Now Playing menu or in the video player's settings: 15 to 90 minutes, End of Song or End of Episode. When time is up the sound fades out and playback pauses where it is, so you can go on from there. On iPhone, iPad, Mac and Apple TV.",
+            "zh-Hans": "听着音乐或有声书睡着，也不会找不到听到哪里。在音乐“正在播放”的菜单或视频播放器的设置里选“定时关闭”：15 到 90 分钟、“播完这首歌”或“播完这一集”。时间一到，声音会慢慢变小，然后停在当前位置，下次接着播。iPhone、iPad、Mac 和 Apple TV 都有。",
+            "zh-Hant": "聽著音樂或有聲書睡著，也不會找不到聽到哪裡。在音樂「正在播放」的選單或影片播放器的設定裡選「定時關閉」：15 到 90 分鐘、「播完這首歌」或「播完這一集」。時間一到，聲音會慢慢變小，然後停在目前位置，下次接著播。iPhone、iPad、Mac 和 Apple TV 都有。",
+            "ja": "音楽やオーディオブックを聴きながら眠っても、どこまで聴いたか分かります。ミュージックの「再生中」のメニューか、ビデオプレーヤーの設定で「スリープタイマー」を選びます。15〜90 分、「この曲の終わり」または「このエピソードの終わり」から選べます。時間になると音が小さくなり、その場所で一時停止するので、次はそこから続けられます。iPhone、iPad、Mac、Apple TV で使えます。"
+          }
+        },
+        {
+          "symbol": "arrow.up.arrow.down",
+          "title": {
+            "en": "Arrange subscriptions",
+            "zh-Hans": "调整订阅顺序",
+            "zh-Hant": "調整訂閱順序",
+            "ja": "配信設定を並べ替え"
+          },
+          "detail": {
+            "en": "Settings › Subscriptions › Arrange Subscriptions lists every subscription to drag into order. When two subscriptions have the same source, the higher one is used. A subscription's page also has Move to Top and Move to Bottom, on Apple TV too.",
+            "zh-Hans": "“设置 › 订阅 › 调整订阅顺序”会列出所有订阅，拖动即可排序。两个订阅有同一个源时，用排在前面的那个。订阅的页面也多了“移到最前”和“移到最后”，Apple TV 上也有。",
+            "zh-Hant": "「設定 › 訂閱 › 調整訂閱順序」會列出所有訂閱，拖動即可排序。兩個訂閱有同一個來源時，用排在前面的那個。訂閱的頁面也多了「移到最前」和「移到最後」，Apple TV 上也有。",
+            "ja": "「設定 › 配信設定 › 配信設定を並べ替え」で、すべての配信設定をドラッグして並べ替えられます。2 つの配信設定に同じソースがあるときは、上にあるほうが使われます。配信設定のページには「一番上へ移動」と「一番下へ移動」もあり、Apple TV でも使えます。"
+          }
+        },
+        {
+          "symbol": "book",
+          "title": {
+            "en": "Jump through long novels",
+            "zh-Hans": "长篇小说快速翻目录",
+            "zh-Hant": "長篇小說快速翻目錄",
+            "ja": "長い小説の目次をすばやく移動"
+          },
+          "detail": {
+            "en": "On iPhone and iPad, a novel's Contents with 80 or more chapters has a fast-scroll handle at the right edge. Drag it to move through the whole book; a bubble beside it shows the chapter's number and title.",
+            "zh-Hans": "在 iPhone 和 iPad 上，80 章以上的小说“目录”右侧有快速滚动条。拖动它就能在整本书里快速移动，旁边的气泡会显示章节号和标题。",
+            "zh-Hant": "在 iPhone 和 iPad 上，80 章以上的小說「目錄」右側有快速捲動條。拖動它就能在整本書裡快速移動，旁邊的氣泡會顯示章節號和標題。",
+            "ja": "iPhone と iPad では、80 章以上ある小説の「目次」の右端に高速スクロールのつまみが出ます。ドラッグすると本全体をすばやく移動でき、横の吹き出しに章の番号とタイトルが表示されます。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "server.rack",
+          "title": {
+            "en": "Emby and Jellyfin",
+            "zh-Hans": "Emby 和 Jellyfin",
+            "zh-Hant": "Emby 和 Jellyfin",
+            "ja": "Emby と Jellyfin"
+          },
+          "detail": {
+            "en": "Signing in works again after removing and re-adding an Emby server: Yingxia now counts as one device, so shared servers that limit devices no longer refuse it, and a refused password isn't tried over and over. If a server still refuses you, ask its owner to remove old Yingxia devices. Large film and series libraries load 50 titles at a time as you scroll, instead of timing out.",
+            "zh-Hans": "删除再重新添加 Emby 服务器后可以正常登录了：映匣现在只算一台设备，限制设备数的共享服务器不会再拒绝登录，密码被拒后也不会反复重试。如果仍被拒绝，请让服务器管理员删掉旧的映匣设备。很大的电影和剧集库会在滚动时每次加载 50 部，不再超时。",
+            "zh-Hant": "刪除再重新新增 Emby 伺服器後可以正常登入了：映匣現在只算一台裝置，限制裝置數的共享伺服器不會再拒絕登入，密碼被拒後也不會反覆重試。如果仍被拒絕，請讓伺服器管理員刪掉舊的映匣裝置。很大的電影和劇集庫會在捲動時每次載入 50 部，不再逾時。",
+            "ja": "Emby サーバーを削除して追加し直しても、正しくサインインできるようになりました。Yingxia は 1 台のデバイスとして数えられるので、デバイス数を制限する共有サーバーにも拒否されず、拒否されたパスワードを何度も試すこともありません。それでも拒否される場合は、サーバーの管理者に古い Yingxia のデバイスを削除してもらってください。大きな映画やシリーズのライブラリは、スクロールに合わせて 50 本ずつ読み込み、タイムアウトしなくなりました。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "On iPhone and iPad, music goes on to the next song while the app is in the background. 小雅 (Xiaoya) subscriptions open their video pages again. On iOS 17, MKV files with DTS or TrueHD sound play in stereo instead of saying the format isn't supported. With thousands of sources hidden, the app no longer gets closed while it starts. Hide or Show Sources shows the rest of each source's name. A Watch Now row's heading opens that category. On iPhone, All stays on the same line as Episodes. On iOS 17, tapping a tab after editing the tab bar no longer closes the app.",
+            "zh-Hans": "在 iPhone 和 iPad 上，App 在后台时音乐也会接着播下一首。小雅订阅的视频详情页又能打开了。在 iOS 17 上，音轨是 DTS 或 TrueHD 的 MKV 会以立体声播放，不再提示格式不支持。隐藏了几千个源时，App 启动时不会再被系统关掉。“隐藏或显示源”会显示每个源名称的其余部分。“现在观看”里每一行的标题可以打开那个分类。在 iPhone 上，“全部”和“选集”保持在同一行。在 iOS 17 上，编辑标签栏后点标签不再闪退。",
+            "zh-Hant": "在 iPhone 和 iPad 上，App 在背景時音樂也會接著播下一首。小雅訂閱的影片詳情頁又能打開了。在 iOS 17 上，音軌是 DTS 或 TrueHD 的 MKV 會以立體聲播放，不再提示格式不支援。隱藏了幾千個來源時，App 啟動時不會再被系統關掉。「隱藏或顯示來源」會顯示每個來源名稱的其餘部分。「立即觀看」裡每一列的標題可以打開那個分類。在 iPhone 上，「全部」和「選集」保持在同一行。在 iOS 17 上，編輯標籤列後點標籤不再閃退。",
+            "ja": "iPhone と iPad で、アプリがバックグラウンドにあっても音楽が次の曲へ進みます。小雅（Xiaoya）の配信設定で動画ページが再び開けます。iOS 17 で、DTS や TrueHD の音声の MKV がステレオで再生され、形式に対応していないと表示されなくなりました。数千のソースを非表示にしていても、起動中にアプリが終了されなくなりました。「ソースの表示と非表示」で各ソース名の残りの部分も表示されます。「今すぐ観る」の各列の見出しからそのカテゴリを開けます。iPhone で「すべて」と「エピソード」が同じ行に収まります。iOS 17 で、タブバーを編集した後にタブをタップしてもアプリが終了しなくなりました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.24",
       "build": 62,
       "date": "2026-11-18",
