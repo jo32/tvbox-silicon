@@ -26,7 +26,12 @@ typealias MusicTrack = TVCore.MusicTrack
     private(set) var queue: MusicQueue?
     var track: MusicTrack? { queue?.current }
     private(set) var selection: MusicPlaybackSelection?
-    private(set) var phase: Phase = .idle
+    private(set) var phase: Phase = .idle {
+        // Between songs nothing plays, and iOS suspends an app in the background within seconds of its sound
+        // stopping. Finding the next song often takes longer (channels that fail first), so the queue stopped until
+        // the app was opened again (#1301). Ask for time while a song is found or loads; sound keeps the app running.
+        didSet { if phase == .resolving || phase == .loading { grace.hold() } else { grace.release() } }
+    }
     /// Every channel tried for this song, with how it went.
     private(set) var attempts: [MusicAttempt] = []
     /// Diagnostics for the last failure; never holds addresses.
@@ -60,6 +65,7 @@ typealias MusicTrack = TVCore.MusicTrack
     let library: MusicLibrary
 
     let player = AVPlayer()
+    private let grace = BackgroundGrace(name: "Next song")
     private var generation = UUID()
     private var task: Task<Void, Never>?
     private var startWatch: Task<Void, Never>?
@@ -752,4 +758,29 @@ enum MusicRepeatMode: String {
         case .one: L10n.text("Repeat One")
         }
     }
+}
+
+/// Background time for work that must finish while the app is off screen and silent. Held until `release`, or until
+/// the system ends it (about 30 seconds).
+@MainActor final class BackgroundGrace {
+    #if !os(macOS)
+    private let name: String
+    private var task: UIBackgroundTaskIdentifier = .invalid
+    init(name: String) { self.name = name }
+    func hold() {
+        guard task == .invalid else { return }
+        task = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in
+            MainActor.assumeIsolated { self?.release() }
+        }
+    }
+    func release() {
+        guard task != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(task)
+        task = .invalid
+    }
+    #else
+    init(name: String) {}
+    func hold() {}
+    func release() {}
+    #endif
 }
