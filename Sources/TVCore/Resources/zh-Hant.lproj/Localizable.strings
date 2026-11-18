@@ -2123,3 +2123,7 @@
 "In %@ days" = "%@ 天後";
 "Other Seasons" = "選季";
 "No other seasons found on this source." = "這個片源沒有找到其他季。";
+
+/* Arrange Subscriptions (#1184) */
+"Arrange Subscriptions" = "調整訂閱順序";
+"Drag subscriptions to reorder them. When two subscriptions have the same source, the one higher up is used." = "拖曳訂閱即可調整順序。兩個訂閱有相同的來源時，使用排在前面的那個。";
