@@ -161,3 +161,19 @@ private actor FetchCancellationProbe {
     model.cancel()
     #expect(model.loaded && model.videos.first?.name == "returned")
 }
+
+/// Issue #1267: a Watch Now category heading opens the source on that category, with the chips Watch Now already has.
+@MainActor @Test func catalogOpenedOnACategoryKeepsSeededChips() async {
+    let model = CatalogBrowser()
+    model.seed(categories: [Category(id: "1", name: "真人剧"), Category(id: "2", name: "漫剧")])
+    await model.load(.list(category: "2", query: "", page: 1)) { request in
+        #expect(request == .list(category: "2", query: "", page: 1))
+        return page("comic")
+    }
+    #expect(model.category == "2")
+    #expect(model.categories.map(\.id) == ["1", "2"])
+    #expect(model.videos.first?.name == "comic")
+    // A loaded page keeps its own chips.
+    model.seed(categories: [])
+    #expect(model.categories.count == 2)
+}

@@ -1182,6 +1182,8 @@ struct SiteView: View {
     var folder: Video? = nil
     /// The source's home as another page already has it (Watch Now's recommendations): shown at once, then refreshed.
     var preview: (videos: [Video], categories: [TVCore.Category])? = nil
+    /// The category to open on (a Watch Now category row's heading) instead of the source's home.
+    var category: TVCore.Category? = nil
     private var canLoad: Bool { site.canBrowse(jarURL: jarURL) }
     private var isIndex: Bool { (site.raw["indexs"]?.int ?? 0) == 1 }
     @State private var browser = CatalogBrowser()
@@ -1330,10 +1332,18 @@ struct SiteView: View {
         // An UP主's space names them in its hero; a title over it only repeated it.
         .screenTitle(isBilibiliSpace ? "" : folder?.name ?? site.name, shown: showsTopTitle).task {
             store.searchModel.suspend()
-            if let preview, folder == nil, initialQuery.isEmpty { browser.seed(videos: preview.videos, categories: preview.categories) }
+            if let preview, folder == nil, initialQuery.isEmpty {
+                if category != nil { browser.seed(categories: preview.categories) }
+                else { browser.seed(videos: preview.videos, categories: preview.categories) }
+            }
             if canLoad && !browser.loaded {
                 if browser.request != .home {
                     await browser.load(browser.request, client: client)
+                } else if let category, folder == nil, initialQuery.isEmpty {
+                    // As choosing its chip does; the chips come from Watch Now, or from the home when it had none.
+                    let filters = CategoryFilter.initialChoices(category.filters)
+                    await browser.load(.list(category: category.id, query: "", page: 1, filters: filters), client: client)
+                    await browser.loadCategories(client: client)
                 } else if initialQuery.isEmpty {
                     await home()
                     #if DEBUG
