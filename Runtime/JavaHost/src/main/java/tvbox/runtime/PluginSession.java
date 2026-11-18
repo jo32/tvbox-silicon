@@ -59,12 +59,12 @@ public final class PluginSession {
         if (params.has("play")) {
             String required = params.optString("detailID", "");
             if (!required.isEmpty() && !required.equals(detailID) && !required.equals(detailVideoID)) {
-                String detail = content(() -> spider.detailContent(List.of(required)), false);
+                String detail = content(() -> spider.detailContent(ids(required)), false);
                 if (detail == null || detail.isBlank()) throw new IllegalStateException("The source returned no video details before playback");
                 detailID = required;
                 detailVideoID = videoID(detail);
             }
-            Operation play = () -> spider.playerContent(params.optString("flag"), params.getString("play"), List.of());
+            Operation play = () -> spider.playerContent(params.optString("flag"), params.getString("play"), new java.util.ArrayList<>());
             String result = content(play, false);
             // The plugin has no sign-in for this line's drive: it signs in itself (the app shows its code), then the line is asked again.
             String drive = bridge == null ? null : OwnDriveSignIn.missingDrive(result);
@@ -73,7 +73,7 @@ public final class PluginSession {
         }
         if (params.has("ids")) {
             String id = params.getString("ids");
-            String result = content(() -> spider.detailContent(List.of(id)), false);
+            String result = content(() -> spider.detailContent(ids(id)), false);
             detailID = id;
             detailVideoID = videoID(result);
             return result;
@@ -128,6 +128,10 @@ public final class PluginSession {
         }
         return new JSONObject().put("notices", new org.json.JSONArray(PluginNotices.take())).put("ui", PluginWindows.state()).toString();
     }
+
+    /** A list the plugin may change, as TVBox passes it: 小雅's AListSh rewrites ids.set(0, …) in detailContent, which
+     *  failed every detail page on an immutable List.of (#1298). */
+    static List<String> ids(String id) { return new java.util.ArrayList<>(List.of(id)); }
 
     /** The category's filter choices (`filters`, JSON text) as the spider's `extend` map. */
     static java.util.HashMap<String, String> extend(JSONObject params) throws org.json.JSONException {

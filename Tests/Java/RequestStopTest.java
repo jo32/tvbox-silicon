@@ -56,6 +56,11 @@ public final class RequestStopTest {
         var quick = new PluginSession(new QuickSpider());
         check(quick.request(new JSONObject().put("ids", "1")).contains("vod_id"), "Unstopped request failed");
 
+        // Plugins may change the lists they are given, as TVBox's are (小雅 AListSh sets ids[0], #1298).
+        var changing = new PluginSession(new ChangingSpider());
+        check(changing.request(new JSONObject().put("ids", "a")).contains("a!"), "A plugin that changes ids failed its detail");
+        check(changing.request(new JSONObject().put("flag", "f").put("play", "p").put("detailID", "b")).contains("vip"), "A plugin that changes its lists failed to play");
+
         // Android QR sign-ins the host cannot show are handed back to the app.
         Method drive = HttpDiagnostics.class.getDeclaredMethod("qrLoginDrive", String.class, String.class);
         drive.setAccessible(true);
@@ -339,6 +344,11 @@ public final class RequestStopTest {
                 try { android.os.SystemClock.sleep(500); } catch (Exception ignored) { }
             }
         }
+    }
+
+    public static final class ChangingSpider extends com.github.catvod.crawler.Spider {
+        @Override public String detailContent(List<String> ids) { ids.set(0, ids.get(0) + "!"); return "{\"list\":[{\"vod_id\":\"" + ids.get(0) + "\"}]}"; }
+        @Override public String playerContent(String flag, String id, List<String> vipFlags) { vipFlags.add("vip"); return "{\"url\":\"" + vipFlags.get(0) + "\"}"; }
     }
 
     public static final class QuickSpider extends com.github.catvod.crawler.Spider {
