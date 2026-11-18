@@ -42,6 +42,13 @@ public enum CloudFilesSource {
             let found = try await search(query, in: drive, page: page)
             return ["list": .array(found.files.map { .object(video($0, opensAsListing: false)) }), "pagecount": .number(Double(found.pages))]
         }
+        // An Emby or Jellyfin film or series library lists a page at a time (#1208).
+        if case .alist(let server) = drive, server.isEmby {
+            let folder = params["t"].flatMap(Entry.init)?.id ?? drive.root
+            let found = try await Emby.shared.page(server, id: folder, page: page, size: pageSize)
+            let files = CloudFile.arranged(found.files).filter { $0.isFolder || drive.plays($0) }
+            return ["class": .array([]), "list": .array(files.map { .object(video($0, opensAsListing: true)) }), "pagecount": .number(Double(found.pages))]
+        }
         // The home page is the drive's first folder; a folder lists in one page.
         guard page == 1 else { return ["list": .array([]), "pagecount": .number(1)] }
         let folder = params["t"].flatMap(Entry.init)?.id ?? drive.root
