@@ -312,6 +312,51 @@ import Testing
         #expect(EmbyStub.calls.filter { $0.contains("/Views") }.count == 1)
     }
 
+    /// A film library's page as a source lists 50 titles at a time, so a large library opens without waiting
+    /// on one answer for all of it (#1208); other folders list whole on their first page.
+    @Test func embyLibrariesOpenAPageAtATime() async throws {
+        EmbyStub.reset()
+        let server = AListServer(id: "e", name: "Home", address: "http://emby.test/emby", username: "me", password: "pw", kind: .emby)
+        let client = Emby(session: EmbyStub.session)
+        let second = try await client.page(server, id: "films", page: 2, size: 50)
+        #expect(second.pages == 3 && second.files.count == 2)
+        let wide = "EnableImageTypes=Primary&EnableUserData=false&Fields=Path,Container&ImageTypeLimit=1"
+        #expect(EmbyStub.calls.last == "GET /emby/Users/u1/Items?\(wide)&IncludeItemTypes=Movie&Limit=50&ParentId=films&Recursive=true&SortBy=SortName&StartIndex=50 tok-1")
+        let home = try await client.page(server, id: "home", page: 1, size: 50)
+        #expect(home.pages == 1 && EmbyStub.calls.last == "GET /emby/Users/u1/Items?Fields=Path,Container&ParentId=home&SortBy=SortName tok-1")
+        let after = try await client.page(server, id: "home", page: 2, size: 50)
+        #expect(after.files.isEmpty && after.pages == 1)
+        let roots = try await client.page(server, id: "/", page: 1, size: 50)
+        #expect(roots.files.map(\.name) == ["Shows", "Films", "Home Videos"] && roots.pages == 1)
+    }
+
+    /// Requests made together sign in once; an account the server turned away isn't asked again for a while,
+    /// unless the viewer tries it on the form, and every server sees the same device (#1253).
+    @Test func embySignsInOnceAndDoesNotHammerARefusal() async throws {
+        EmbyStub.reset()
+        let server = AListServer(id: "e", name: "Home", address: "http://emby.test/emby", username: "me", password: "pw", kind: .emby)
+        let client = Emby(session: EmbyStub.session)
+        async let a = client.list(server, id: "season")
+        async let b = client.list(server, id: "home")
+        async let c = client.list(server, id: "/")
+        _ = try await (a, b, c)
+        #expect(EmbyStub.calls.filter { $0.hasPrefix("POST") }.count == 1)
+
+        let wrong = AListServer(id: "w", name: "Home", address: "http://emby.test/emby", username: "me", password: "no", kind: .emby)
+        for _ in 0..<5 { _ = try? await client.list(wrong, id: "/") }
+        #expect(EmbyStub.calls.filter { $0.hasPrefix("POST") }.count == 2)
+        // Trying it on the form asks the server again; a corrected password signs in at once.
+        _ = try? await client.check(wrong)
+        #expect(EmbyStub.calls.filter { $0.hasPrefix("POST") }.count == 3)
+        var fixed = wrong; fixed.password = "pw"
+        _ = try await client.list(fixed, id: "/")
+        #expect(EmbyStub.calls.filter { $0.hasPrefix("POST") }.count == 4)
+
+        let other = AListServer(id: "o", name: "Other", address: "http://emby.test/emby", kind: .emby)
+        let device = { (server: AListServer) in Emby.headers(server, token: nil)["Authorization"]?.components(separatedBy: "DeviceId=").last?.prefix(45) }
+        #expect(device(server) == device(other) && Emby.deviceID.hasPrefix("yingxia-") && Emby.deviceID != "yingxia-e")
+    }
+
     @Test func anEmbyFilePlaysAsTheServerStoresIt() async throws {
         EmbyStub.reset()
         let server = AListServer(id: "e", name: "Home", address: "http://emby.test/emby", username: "me", password: "pw", kind: .emby)
@@ -607,7 +652,8 @@ final class EmbyStub: URLProtocol, @unchecked Sendable {
                 guard url.query?.contains("Recursive=true") == true else { return (200, ["Items": [["Id": "crime", "Name": "Crime", "Type": "Folder", "IsFolder": true]]]) }
                 return (200, ["Items": [["Id": "m1", "Name": "Arrival", "Type": "Movie", "ProductionYear": 2016, "IsFolder": false, "Container": "mkv",
                                          "ImageTags": ["Primary": "p1"]],
-                                        ["Id": "m2", "Name": "Heat", "Type": "Movie", "ProductionYear": 1995, "IsFolder": false, "Path": "/m/Crime/Heat/Heat.mp4"]]])
+                                        ["Id": "m2", "Name": "Heat", "Type": "Movie", "ProductionYear": 1995, "IsFolder": false, "Path": "/m/Crime/Heat/Heat.mp4"]],
+                              "TotalRecordCount": url.query?.contains("Limit=") == true ? 120 : 2])
             case "/emby/Users/u1/Items" where url.query?.contains("ParentId=remote") == true:
                 return (200, ["Items": [["Id": "e3", "Name": "Remote", "Type": "Episode", "IndexNumber": 1, "IsFolder": false, "MediaType": "Video",
                                          "Path": "/media/Show/S01E01.strm"],

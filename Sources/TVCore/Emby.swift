@@ -9,6 +9,12 @@ public actor Emby {
     public static let shared = Emby()
     private let session: URLSession
     private var signIns: [String: SignIn] = [:]
+    /// A sign-in under way, which the server's other requests wait for instead of each signing in.
+    private var signingIn: [String: Task<SignIn, Error>] = [:]
+    /// Accounts a server just turned away, by server, and until when requests don't ask it again: one
+    /// install asked twenty times in 13 seconds (#1253), what shared servers lock accounts out for.
+    private var refused: [String: (account: String, until: Date)] = [:]
+    static let refusalPause: TimeInterval = 60
     /// Each server's libraries by id, with the kind of item a library of their type lists (`itemTypes`).
     private var libraries: [String: [String: String]] = [:]
 
@@ -42,7 +48,8 @@ public actor Emby {
         return AListServer(name: name.isEmpty ? host : name, address: base, kind: .emby)
     }
 
-    /// Checks a server before it is saved: the account signs in and its libraries list.
+    /// Checks a server before it is saved: the account signs in, even one turned away a moment ago, and its
+    /// libraries list.
     public func check(_ server: AListServer) async throws {
         signIns[server.id] = try await signIn(server)
         _ = try await list(server, id: server.root)
@@ -54,6 +61,21 @@ public actor Emby {
     /// (#1063); other libraries (home videos, mixed content) list folder by folder.
     func list(_ server: AListServer, id: String) async throws -> [CloudFile] {
         if id == "/" { return try await views(server) }
+        return try await items(server, id: id).files
+    }
+
+    /// One page of a folder, for its page as a source: a film or series library's titles `size` at a time, so a
+    /// library of thousands opens at once rather than after one answer listing them all, which a slow server
+    /// didn't give within the time allowed (#1208). Other folders list whole, on their first page.
+    func page(_ server: AListServer, id: String, page: Int, size: Int) async throws -> (files: [CloudFile], pages: Int) {
+        if id != "/", libraries[server.id] == nil { _ = try? await views(server) }
+        guard id != "/", libraries[server.id]?[id] != nil else { return (page == 1 ? try await list(server, id: id) : [], 1) }
+        let found = try await items(server, id: id, start: (page - 1) * size, limit: size)
+        return (found.files, max(1, (found.total + size - 1) / size))
+    }
+
+    /// A folder's items, from `start` and at most `limit` of them when given, and how many it has in all.
+    private func items(_ server: AListServer, id: String, start: Int? = nil, limit: Int? = nil) async throws -> (files: [CloudFile], total: Int) {
         if libraries[server.id] == nil { _ = try? await views(server) }
         // Emby names an item's container only when asked; Jellyfin ignores the field and always does.
         var query = ["ParentId": id, "Fields": "Path,Container", "SortBy": "SortName"]
@@ -62,9 +84,10 @@ public actor Emby {
             // Only the poster is shown: the rest would make a library of thousands much larger.
             query["EnableImageTypes"] = "Primary"; query["ImageTypeLimit"] = "1"; query["EnableUserData"] = "false"
         }
-        let answer = try await call(server, query: query) { "/Users/\($0)/Items" }
-        let items = (answer as? [String: Any])?["Items"] as? [[String: Any]] ?? []
-        return items.compactMap { Self.file($0, server: server) }
+        if let start, let limit { query["StartIndex"] = String(start); query["Limit"] = String(limit) }
+        let answer = try await call(server, query: query) { "/Users/\($0)/Items" } as? [String: Any]
+        let files = (answer?["Items"] as? [[String: Any]] ?? []).compactMap { Self.file($0, server: server) }
+        return (files, (answer?["TotalRecordCount"] as? NSNumber)?.intValue ?? files.count)
     }
 
     /// The user's libraries, remembering which list their films or series as a whole.
@@ -168,11 +191,7 @@ public actor Emby {
     /// again, once, when the server no longer takes the token.
     private func call(_ server: AListServer, query: [String: String] = [:], retry: Bool = true,
                       _ path: (String) -> String) async throws -> Any {
-        let signIn: SignIn
-        if let saved = signIns[server.id] { signIn = saved } else {
-            signIn = try await self.signIn(server)
-            signIns[server.id] = signIn
-        }
+        let signIn = try await signedIn(server)
         guard var parts = URLComponents(string: server.address + path(signIn.user)) else { throw TVError.invalidURL }
         if !query.isEmpty { parts.queryItems = query.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) } }
         guard let url = parts.url else { throw TVError.invalidURL }
@@ -192,6 +211,24 @@ public actor Emby {
         return answer
     }
 
+    /// The server's sign-in: the one this run has, else one that requests made meanwhile share. An account the
+    /// server just turned away isn't tried again until `refusalPause` passes or the account is changed.
+    private func signedIn(_ server: AListServer) async throws -> SignIn {
+        if let saved = signIns[server.id] { return saved }
+        if let refusal = refused[server.id], refusal.account == Self.account(server), refusal.until > Date() {
+            throw TVError.unsupported(L10n.text("%@ didn't accept the user name and password.", server.name))
+        }
+        if let pending = signingIn[server.id] { return try await pending.value }
+        let task = Task { try await self.signIn(server) }
+        signingIn[server.id] = task
+        defer { signingIn[server.id] = nil }
+        let signIn = try await task.value
+        signIns[server.id] = signIn
+        return signIn
+    }
+
+    static func account(_ server: AListServer) -> String { [server.address, server.username, server.password].joined(separator: "\n") }
+
     private func signIn(_ server: AListServer) async throws -> SignIn {
         guard !server.username.isEmpty else { throw CloudFilesError.signInRequired(server.name) }
         guard let url = URL(string: server.address + "/Users/AuthenticateByName") else { throw TVError.invalidURL }
@@ -207,16 +244,18 @@ public actor Emby {
               let user = (answer?["User"] as? [String: Any])?["Id"] as? String else {
             Diagnostics.shared.record(.warning, "files", "emby sign-in status=\(status)")
             if status == 401 || status == 403 || (200..<300).contains(status) {
+                refused[server.id] = (Self.account(server), Date().addingTimeInterval(Self.refusalPause))
                 throw TVError.unsupported(L10n.text("%@ didn't accept the user name and password.", server.name))
             }
             throw TVError.http(status)
         }
+        refused[server.id] = nil
         return SignIn(token: token, user: user)
     }
 
     /// Who is asking, as both servers want it: Emby reads `X-Emby-Authorization`, Jellyfin
-    /// `Authorization`. The device id is the server's entry in Cloud Files, so the server keeps one
-    /// device for the app however often it signs in.
+    /// `Authorization`. The device id is the app's on this device (`deviceID`), so a server keeps one device
+    /// for it however often it signs in.
     static func headers(_ server: AListServer, token: String?) -> [String: String] {
         #if os(tvOS)
         let device = "Apple TV"
@@ -226,7 +265,7 @@ public actor Emby {
         let device = "Mac"
         #endif
         let version = ErrorReports.bundleValue("CFBundleShortVersionString")
-        var fields = [#"Client="Yingxia""#, #"Device="\#(device)""#, #"DeviceId="yingxia-\#(server.id)""#,
+        var fields = [#"Client="Yingxia""#, #"Device="\#(device)""#, #"DeviceId="\#(deviceID)""#,
                       #"Version="\#(version)""#]
         if let token { fields.append(#"Token="\#(token)""#) }
         let authorization = "MediaBrowser " + fields.joined(separator: ", ")
@@ -234,4 +273,15 @@ public actor Emby {
         if let token { headers["X-Emby-Token"] = token }
         return headers
     }
+
+    /// One device id for the app on this device, kept across launches. It was each server's entry in Cloud Files,
+    /// so removing a server and adding it back, and each try on the add form, was a new device to the server;
+    /// one that allows an account a few devices or sessions then turned the account away (#1253).
+    static let deviceID: String = {
+        let key = "embyDeviceID"
+        if let saved = UserDefaults.standard.string(forKey: key), !saved.isEmpty { return saved }
+        let id = "yingxia-" + UUID().uuidString.lowercased()
+        UserDefaults.standard.set(id, forKey: key)
+        return id
+    }()
 }
