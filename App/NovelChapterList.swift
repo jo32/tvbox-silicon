@@ -95,6 +95,9 @@ struct NovelChapterList: View {
     @State private var query = ""
     @State private var newestFirst = false
     @State private var scrolled = false
+    /// Where the list is (0 at the top, 1 at the bottom) and whether it moves, for the fast-scroll handle (#1199).
+    @State private var scrollProgress: Double = 0
+    @State private var scrollMoving = false
 
     private var count: Int { sections.reduce(0) { $0 + $1.rows.count } }
     #if os(tvOS)
@@ -244,6 +247,16 @@ struct NovelChapterList: View {
                 .frame(maxWidth: 820).frame(maxWidth: .infinity)
             }
             .catalogSearchable(text: $query, prompt: L10n.text("Search Chapters"))
+            #if os(iOS)
+            .modifier(NovelScrollTracking(progress: $scrollProgress, moving: $scrollMoving))
+            .overlay(alignment: .trailing) {
+                if count >= NovelChapterScrubber.minimumRows {
+                    NovelChapterScrubber(rows: shown.flatMap(\.rows), progress: scrollProgress, moving: scrollMoving, colors: colors) { index in
+                        proxy.scrollTo(index, anchor: .top)
+                    }
+                }
+            }
+            #endif
             .task(id: chapters.count) {
                 sections = NovelChapterNumbers.sections(chapters)
                 guard !scrolled, let current else { return }
@@ -362,6 +375,125 @@ struct NovelChapterList: View {
         .accessibilityLabel(isCurrent ? L10n.text("%@, last read", row.title) : row.title)
     }
 }
+
+#if os(iOS)
+/// Where a scroll view is and whether it moves; iOS 17 can't tell, and the handle then stays in view.
+private struct NovelScrollTracking: ViewModifier {
+    @Binding var progress: Double
+    @Binding var moving: Bool
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content
+                .onScrollGeometryChange(for: Double.self) { geometry in
+                    let range = geometry.contentSize.height - geometry.containerSize.height + geometry.contentInsets.top + geometry.contentInsets.bottom
+                    return range > 0 ? min(1, max(0, (geometry.contentOffset.y + geometry.contentInsets.top) / range)) : 0
+                } action: { _, value in progress = value }
+                .onScrollPhaseChange { _, phase in moving = phase != .idle }
+        } else {
+            content
+        }
+    }
+}
+
+/// A long table of contents' handle (#1199): at the right edge while the list moves, it drags through thousands of
+/// chapters at once, with the chapter under the finger beside it, as a phone's fast scroll does.
+private struct NovelChapterScrubber: View {
+    /// Shorter lists scroll well enough by themselves.
+    static let minimumRows = 80
+    let rows: [NovelChapterRow]
+    let progress: Double
+    let moving: Bool
+    let colors: NovelListColors
+    let jump: (Int) -> Void
+    @State private var dragging: Double?
+    @State private var shown = false
+    @State private var hide: Task<Void, Never>?
+    private let handle = CGSize(width: 6, height: 46)
+    private let space = "novelChapterScrubber"
+
+    private var tracksScroll: Bool { if #available(iOS 18, *) { true } else { false } }
+    private var visible: Bool { dragging != nil || shown || !tracksScroll }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let track = max(1, geometry.size.height - handle.height)
+            let y = track * (dragging ?? progress)
+            ZStack(alignment: .topTrailing) {
+                if let dragging, let row = row(at: dragging) {
+                    bubble(row)
+                        .frame(maxWidth: max(0, geometry.size.width - 90), alignment: .trailing)
+                        .offset(x: -40, y: min(max(0, y + handle.height / 2 - 22), geometry.size.height - 44))
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                }
+                Capsule()
+                    .fill(colors.text.opacity(dragging == nil ? 0.3 : 0.6))
+                    .frame(width: dragging == nil ? handle.width : handle.width + 3, height: handle.height)
+                    .frame(width: 44, height: handle.height + 16)
+                    .contentShape(Rectangle())
+                    .offset(y: y - 8)
+                    .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named(space))
+                        .onChanged { value in
+                            let fraction = min(1, max(0, (value.location.y - handle.height / 2) / track))
+                            if dragging == nil { hide?.cancel(); shown = true }
+                            dragging = fraction
+                            if let row = row(at: fraction) { jump(row.index) }
+                        }
+                        .onEnded { _ in
+                            withAnimation(.easeOut(duration: 0.2)) { dragging = nil }
+                            scheduleHide()
+                        })
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topTrailing)
+            .coordinateSpace(.named(space))
+        }
+        .padding(.vertical, 6)
+        .opacity(visible ? 1 : 0)
+        .allowsHitTesting(visible)
+        .animation(.easeOut(duration: 0.25), value: visible)
+        .sensoryFeedback(.selection, trigger: dragging.flatMap { row(at: $0)?.index })
+        .onChange(of: moving) { _, now in
+            if now { hide?.cancel(); shown = true } else { scheduleHide() }
+        }
+        #if DEBUG
+        // `-qaNovelScrub <0...1>` holds the handle there, as a finger would, for screenshots.
+        .task {
+            guard UserDefaults.standard.object(forKey: "qaNovelScrub") != nil else { return }
+            try? await Task.sleep(for: .seconds(2))
+            let fraction = UserDefaults.standard.double(forKey: "qaNovelScrub")
+            dragging = fraction
+            if let row = row(at: fraction) { jump(row.index) }
+        }
+        #endif
+        .accessibilityHidden(true)
+    }
+
+    private func row(at fraction: Double) -> NovelChapterRow? {
+        rows.isEmpty ? nil : rows[min(rows.count - 1, max(0, Int(fraction * Double(rows.count))))]
+    }
+
+    private func bubble(_ row: NovelChapterRow) -> some View {
+        HStack(spacing: 8) {
+            if let number = row.number { Text(number).font(.headline.monospacedDigit()) }
+            Text(row.title).font(.subheadline.weight(.medium)).lineLimit(1)
+        }
+        .foregroundStyle(colors.text)
+        .padding(.horizontal, 16).frame(height: 44)
+        .background { Capsule().fill(colors.background ?? Color(.secondarySystemBackground)) }
+        .overlay { Capsule().strokeBorder(colors.text.opacity(0.08)) }
+        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+    }
+
+    private func scheduleHide() {
+        hide?.cancel()
+        hide = Task {
+            try? await Task.sleep(for: .seconds(1.4))
+            guard !Task.isCancelled, !moving, dragging == nil else { return }
+            shown = false
+        }
+    }
+}
+#endif
 
 extension View {
     @ViewBuilder fileprivate func novelChapterButton() -> some View {
