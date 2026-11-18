@@ -526,6 +526,19 @@ import TVCore
         saveSubscriptionList()
         rebuildSubscription()
     }
+    /// Moves subscriptions to another place, as a drag in Arrange Subscriptions does (#1184).
+    func moveSubscriptions(fromOffsets source: IndexSet, toOffset destination: Int) {
+        let before = subscriptions.map(\.address)
+        subscriptions.move(fromOffsets: source, toOffset: destination)
+        guard subscriptions.map(\.address) != before else { return }
+        saveSubscriptionList()
+        rebuildSubscription()
+    }
+    /// Moves a subscription to the top or the bottom of the list.
+    func moveSubscription(_ entry: SubscriptionEntry, toTop: Bool) {
+        guard let index = subscriptions.firstIndex(where: { $0.address == entry.address }) else { return }
+        moveSubscriptions(fromOffsets: IndexSet(integer: index), toOffset: toTop ? 0 : subscriptions.count)
+    }
     /// Moves a subscription one place up (-1) or down (1); earlier subscriptions win duplicate sources.
     func moveSubscription(_ entry: SubscriptionEntry, by offset: Int) {
         guard let index = subscriptions.firstIndex(where: { $0.address == entry.address }),

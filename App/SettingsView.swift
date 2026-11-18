@@ -633,6 +633,10 @@ struct FormSettingsView: View {
                     .tint(.primary)
                     .accessibilityIdentifier("settings.hiddenSources")
                 }
+                // Dragging, rather than Move Up and Move Down on each one's page (#1184).
+                if store.subscriptions.count > 1 {
+                    FormLink(symbol: "arrow.up.arrow.down", tint: .indigo, title: L10n.text("Arrange Subscriptions")) { ArrangeSubscriptionsView() }
+                }
                 if store.subscriptions.count + SubscriptionExtra.all(store).count > 1 {
                     FormLink(symbol: "trash.fill", tint: .red, title: L10n.text("Remove Subscriptions")) { RemoveSubscriptionsView() }
                 }
@@ -1423,8 +1427,10 @@ struct SubscriptionDetailView: View {
             }
             if store.subscriptions.count > 1 {
                 Section(L10n.text("Order")) {
+                    if index > 1 { Button(L10n.text("Move to Top")) { store.moveSubscription(current, toTop: true) } }
                     if index > 0 { Button(L10n.text("Move Up")) { store.moveSubscription(current, by: -1) } }
                     if index < store.subscriptions.count - 1 { Button(L10n.text("Move Down")) { store.moveSubscription(current, by: 1) } }
+                    if index < store.subscriptions.count - 2 { Button(L10n.text("Move to Bottom")) { store.moveSubscription(current, toTop: false) } }
                 }
             }
             Section {
@@ -1460,6 +1466,38 @@ struct SubscriptionDetailView: View {
 }
 
 /// Removing many subscriptions at once: tick them, or take all or the switched-off ones, then remove.
+/// The subscriptions in their order, to drag into another (#1184). When two have the same source, the higher one's is used.
+struct ArrangeSubscriptionsView: View {
+    @Environment(Store.self) private var store
+    var body: some View {
+        List {
+            Section {
+                ForEach(store.subscriptions) { entry in
+                    HStack(spacing: 10) {
+                        FormLabel(symbol: "list.bullet.rectangle.fill", tint: entry.enabled ? .blue : .gray, title: entry.title).lineLimit(1)
+                        Spacer(minLength: 6)
+                        Text(store.subscriptionValue(entry)).lineLimit(1).foregroundStyle(.secondary)
+                    }
+                    #if os(iOS)
+                    .listRowBackground(Surface())
+                    #endif
+                }
+                .onMove { store.moveSubscriptions(fromOffsets: $0, toOffset: $1) }
+            } footer: {
+                Text(L10n.text("Drag subscriptions to reorder them. When two subscriptions have the same source, the one higher up is used."))
+            }
+        }
+        #if os(iOS)
+        .environment(\.editMode, .constant(.active))
+        .scrollContentBackground(.hidden)
+        .background { Backdrop() }
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .navigationTitle(L10n.text("Arrange Subscriptions"))
+        .accessibilityIdentifier("settings.arrangeSubscriptions")
+    }
+}
+
 private struct RemoveSubscriptionsView: View {
     @Environment(Store.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -2351,8 +2389,10 @@ struct TVSubscriptionPage: View {
             }
             if store.subscriptions.count > 1 {
                 TVSettingsSection(title: L10n.text("Order")) {
+                    if index > 1 { TVSettingsAction(title: L10n.text("Move to Top")) { store.moveSubscription(current, toTop: true) } }
                     if index > 0 { TVSettingsAction(title: L10n.text("Move Up")) { store.moveSubscription(current, by: -1) } }
                     if index < store.subscriptions.count - 1 { TVSettingsAction(title: L10n.text("Move Down")) { store.moveSubscription(current, by: 1) } }
+                    if index < store.subscriptions.count - 2 { TVSettingsAction(title: L10n.text("Move to Bottom")) { store.moveSubscription(current, toTop: false) } }
                 }
             }
             TVSettingsSection(title: L10n.text("Remove")) {

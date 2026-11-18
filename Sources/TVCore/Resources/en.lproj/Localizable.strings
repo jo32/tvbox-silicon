@@ -2124,6 +2124,10 @@
 "Other Seasons" = "Other Seasons";
 "No other seasons found on this source." = "No other seasons found on this source.";
 
+/* Arrange Subscriptions (#1184) */
+"Arrange Subscriptions" = "Arrange Subscriptions";
+"Drag subscriptions to reorder them. When two subscriptions have the same source, the one higher up is used." = "Drag subscriptions to reorder them. When two subscriptions have the same source, the one higher up is used.";
+
 /* Sleep Timer (#1157, #1198) */
 "Sleep Timer" = "Sleep Timer";
 "%d Minutes" = "%d Minutes";
