@@ -1052,8 +1052,9 @@ struct HiddenSourcesEditor: View {
                         .focusSection()
                         ForEach(group.sites) { site in
                             let shown = !isHidden(site)
+                            let label = SourceLabel(site.name)
                             Button { setHidden([site], shown) } label: {
-                                TVSettingsRowLabel(title: SourceLabel(site.name).parts[0], value: shown ? nil : L10n.text("Hidden")) {
+                                TVSettingsRowLabel(title: label.parts[0], detail: label.parts.count > 1 ? label.parts.dropFirst().joined(separator: " · ") : nil, value: shown ? nil : L10n.text("Hidden")) {
                                     Image(systemName: shown ? "checkmark.circle.fill" : "circle").font(.system(size: 30))
                                 }
                             }
@@ -1158,9 +1159,17 @@ private struct HiddenSourceRow: View {
             Image(systemName: shown ? "checkmark.circle.fill" : "circle").font(.title3)
                 .foregroundStyle(shown ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(.secondary))
             SourceIcon(site: site, label: label, size: 32).opacity(shown ? 1 : 0.45)
-            Text(label.parts[0]).font(.body.weight(.medium)).lineLimit(1)
-                .foregroundStyle(shown ? Color.primary : Color.secondary)
-            SourceHealthDot(status: store.health(of: site))
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(label.parts[0]).font(.body.weight(.medium)).lineLimit(1)
+                        .foregroundStyle(shown ? Color.primary : Color.secondary)
+                    SourceHealthDot(status: store.health(of: site))
+                }
+                // The rest of the name, as on the source's card: a subscription often lists many "漫剧" (#1262).
+                if label.parts.count > 1 {
+                    Text(label.parts.dropFirst().joined(separator: " · ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
             Spacer(minLength: 8)
             if !shown { Text(L10n.text("Hidden")).font(.caption).foregroundStyle(.secondary) }
         }
