@@ -2127,3 +2127,13 @@
 /* Arrange Subscriptions (#1184) */
 "Arrange Subscriptions" = "Arrange Subscriptions";
 "Drag subscriptions to reorder them. When two subscriptions have the same source, the one higher up is used." = "Drag subscriptions to reorder them. When two subscriptions have the same source, the one higher up is used.";
+
+/* Sleep Timer (#1157, #1198) */
+"Sleep Timer" = "Sleep Timer";
+"%d Minutes" = "%d Minutes";
+"1 Hour" = "1 Hour";
+"%d Hours" = "%d Hours";
+"End of Song" = "End of Song";
+"End of Episode" = "End of Episode";
+"Turn Off Sleep Timer" = "Turn Off Sleep Timer";
+"Until %@" = "Until %@";

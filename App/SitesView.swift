@@ -1052,8 +1052,9 @@ struct HiddenSourcesEditor: View {
                         .focusSection()
                         ForEach(group.sites) { site in
                             let shown = !isHidden(site)
+                            let label = SourceLabel(site.name)
                             Button { setHidden([site], shown) } label: {
-                                TVSettingsRowLabel(title: SourceLabel(site.name).parts[0], value: shown ? nil : L10n.text("Hidden")) {
+                                TVSettingsRowLabel(title: label.parts[0], detail: label.parts.count > 1 ? label.parts.dropFirst().joined(separator: " · ") : nil, value: shown ? nil : L10n.text("Hidden")) {
                                     Image(systemName: shown ? "checkmark.circle.fill" : "circle").font(.system(size: 30))
                                 }
                             }
@@ -1158,9 +1159,17 @@ private struct HiddenSourceRow: View {
             Image(systemName: shown ? "checkmark.circle.fill" : "circle").font(.title3)
                 .foregroundStyle(shown ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(.secondary))
             SourceIcon(site: site, label: label, size: 32).opacity(shown ? 1 : 0.45)
-            Text(label.parts[0]).font(.body.weight(.medium)).lineLimit(1)
-                .foregroundStyle(shown ? Color.primary : Color.secondary)
-            SourceHealthDot(status: store.health(of: site))
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(label.parts[0]).font(.body.weight(.medium)).lineLimit(1)
+                        .foregroundStyle(shown ? Color.primary : Color.secondary)
+                    SourceHealthDot(status: store.health(of: site))
+                }
+                // The rest of the name, as on the source's card: a subscription often lists many "漫剧" (#1262).
+                if label.parts.count > 1 {
+                    Text(label.parts.dropFirst().joined(separator: " · ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
             Spacer(minLength: 8)
             if !shown { Text(L10n.text("Hidden")).font(.caption).foregroundStyle(.secondary) }
         }
@@ -1182,6 +1191,8 @@ struct SiteView: View {
     var folder: Video? = nil
     /// The source's home as another page already has it (Watch Now's recommendations): shown at once, then refreshed.
     var preview: (videos: [Video], categories: [TVCore.Category])? = nil
+    /// The category to open on (a Watch Now category row's heading) instead of the source's home.
+    var category: TVCore.Category? = nil
     private var canLoad: Bool { site.canBrowse(jarURL: jarURL) }
     private var isIndex: Bool { (site.raw["indexs"]?.int ?? 0) == 1 }
     @State private var browser = CatalogBrowser()
@@ -1330,10 +1341,18 @@ struct SiteView: View {
         // An UP主's space names them in its hero; a title over it only repeated it.
         .screenTitle(isBilibiliSpace ? "" : folder?.name ?? site.name, shown: showsTopTitle).task {
             store.searchModel.suspend()
-            if let preview, folder == nil, initialQuery.isEmpty { browser.seed(videos: preview.videos, categories: preview.categories) }
+            if let preview, folder == nil, initialQuery.isEmpty {
+                if category != nil { browser.seed(categories: preview.categories) }
+                else { browser.seed(videos: preview.videos, categories: preview.categories) }
+            }
             if canLoad && !browser.loaded {
                 if browser.request != .home {
                     await browser.load(browser.request, client: client)
+                } else if let category, folder == nil, initialQuery.isEmpty {
+                    // As choosing its chip does; the chips come from Watch Now, or from the home when it had none.
+                    let filters = CategoryFilter.initialChoices(category.filters)
+                    await browser.load(.list(category: category.id, query: "", page: 1, filters: filters), client: client)
+                    await browser.loadCategories(client: client)
                 } else if initialQuery.isEmpty {
                     await home()
                     #if DEBUG
@@ -3411,8 +3430,9 @@ struct VideoDetailView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     if items.count > 1 {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(L10n.text("Episodes")).font(.headline)
-                            Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
+                            // One line each, ahead of the line's name, which truncates first when the row is short (#1260).
+                            Text(L10n.text("Episodes")).font(.headline).lineLimit(1).layoutPriority(1)
+                            Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary).lineLimit(1).layoutPriority(1)
                             episodeOrderButton.glassOrFill(.regular.interactive(), Color.clear, in: Circle())
                             Spacer(minLength: 8)
                             singleLineName
@@ -3421,8 +3441,10 @@ struct VideoDetailView: View {
                             }
                             if items.count > (compact ? 5 : 2) {
                                 Button { showsAllEpisodes = true } label: {
+                                    // On one line, like Seasons beside it: it wrapped to 全/部 beside a line's name (#1260).
                                     HStack(spacing: 3) { Text(L10n.text("All")); Image(systemName: "chevron.right").font(.caption.weight(.semibold)) }
                                         .font(.subheadline).foregroundStyle(.secondary)
+                                        .lineLimit(1).fixedSize()
                                         .padding(.horizontal, 12).frame(minHeight: 32)
                                         .glassOrFill(.regular.interactive(), Color.clear, in: Capsule())
                                         .frame(minHeight: 44).contentShape(Rectangle())

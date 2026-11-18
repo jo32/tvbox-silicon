@@ -96,6 +96,9 @@ typealias MusicTrack = TVCore.MusicTrack
     /// The first episode's stream, which the page that started the queue already resolved.
     private var givenStream: (track: String, channel: Channel)?
     private var pictureObservation: NSKeyValueObservation?
+    /// The Sleep Timer stopped playback at the end of a song: the next one is cued, and loads when Play is pressed.
+    private var cued = false
+    private var sleepObserver: NSObjectProtocol?
 
     init(library: MusicLibrary = .shared) {
         self.library = library
@@ -114,6 +117,12 @@ typealias MusicTrack = TVCore.MusicTrack
         rateObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
             let status = player.timeControlStatus
             Task { @MainActor [weak self] in self?.statusChanged(status) }
+        }
+        #if DEBUG
+        SleepTimer.shared.qaStart()
+        #endif
+        sleepObserver = NotificationCenter.default.addObserver(forName: SleepTimer.fired, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.sleepTimerFired() }
         }
         #if !os(macOS)
         // An alarm, a call or Siri pauses the player; it plays again when the system says it may (#803).
@@ -294,7 +303,9 @@ typealias MusicTrack = TVCore.MusicTrack
     func toggle() {
         switch phase {
         case .playing, .loading: pause()
-        case .paused: activateAudioSession(); player.play(); phase = .loading
+        case .paused:
+            if cued { cued = false; loadCurrent(at: nil); return }
+            activateAudioSession(); player.play(); phase = .loading
         case .failed: retry()
         case .idle, .resolving: break
         }
@@ -332,7 +343,7 @@ typealias MusicTrack = TVCore.MusicTrack
         generation = UUID()
         task?.cancel(); startWatch?.cancel(); lyricsTask?.cancel()
         tearDownItem()
-        queue = nil; selection = nil; attempts = []; phase = .idle; failureDetail = nil; notice = nil; presentsPlayer = false
+        queue = nil; selection = nil; attempts = []; phase = .idle; failureDetail = nil; notice = nil; presentsPlayer = false; cued = false
         sourceStream = nil; givenStream = nil
         position = 0; duration = nil; seekingTo = nil; lyrics = nil; lyricsFor = nil
         library.flush()
@@ -349,6 +360,7 @@ typealias MusicTrack = TVCore.MusicTrack
     private func loadCurrent(at resumeAt: Double?) {
         guard let track else { return }
         let run = UUID(); generation = run
+        cued = false
         task?.cancel(); startWatch?.cancel(); lyricsTask?.cancel()
         tearDownItem()
         selection = nil; attempts = []; failureDetail = nil; sourceStream = nil
@@ -510,6 +522,12 @@ typealias MusicTrack = TVCore.MusicTrack
 
     private func songEnded(run: UUID) {
         guard generation == run else { return }
+        // Sleep Timer, End of Song: stop here, with the next song ready to play in the morning.
+        if SleepTimer.shared.endsWithItem {
+            cueNext()
+            _ = SleepTimer.shared.itemEnded()
+            return
+        }
         if repeatMode == .one || repeatMode == .all && queue?.tracks.count == 1 {
             seek(to: 0); activateAudioSession(); player.play(); phase = .loading
             return
@@ -519,6 +537,35 @@ typealias MusicTrack = TVCore.MusicTrack
         seek(to: 0)
         saveResumePoint(force: true)
     }
+
+    /// Moves to the next song without playing it, or back to the start of the last one.
+    private func cueNext() {
+        guard canAdvance, var queue else {
+            phase = .paused; seek(to: 0); saveResumePoint(force: true)
+            return
+        }
+        if queue.advance() == nil { _ = queue.jump(to: 0) }
+        generation = UUID()
+        task?.cancel(); startWatch?.cancel(); lyricsTask?.cancel()
+        tearDownItem()
+        self.queue = queue
+        selection = nil; attempts = []; failureDetail = nil; sourceStream = nil
+        position = 0; duration = queue.current?.duration; seekingTo = nil
+        lyrics = nil; lyricsLoading = false; lyricsFor = nil
+        lastSavedPosition = 0
+        library.saveResumePoint(MusicResumePoint(queue: queue, position: 0))
+        phase = .paused
+        cued = true
+    }
+
+    /// The Sleep Timer ran out: the song fades away and pauses.
+    private func sleepTimerFired() {
+        guard phase == .playing || phase == .loading else { return }
+        SleepTimer.fadeOut(player) { [weak self] in self?.pause() }
+    }
+
+    /// What the Sleep Timer's "end" is here: a song, or a source's episode.
+    var sleepItem: SleepTimerItem { track?.source == nil ? .song : .episode }
 
     /// No channel could play the song: skip it while a queue goes on, otherwise stop and say why.
     private func songFailed(_ error: MusicProviderError, run: UUID, message: String? = nil, channelsAsked: Bool = true) {

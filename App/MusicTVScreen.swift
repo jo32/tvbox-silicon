@@ -108,6 +108,7 @@ private struct MusicNativePlayer: UIViewControllerRepresentable {
             let state = music.lyricsOffset == 0 ? L10n.text("Lyrics in sync") : String(format: "%+.1f s", music.lyricsOffset)
             items.append(UIMenu(title: state, image: UIImage(systemName: "timer"), children: timing))
         }
+        items.append(SleepTimer.shared.uiMenu(item: music.sleepItem))
         controller.transportBarCustomMenuItems = items
     }
 

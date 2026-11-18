@@ -2127,3 +2127,13 @@
 /* Arrange Subscriptions (#1184) */
 "Arrange Subscriptions" = "调整订阅顺序";
 "Drag subscriptions to reorder them. When two subscriptions have the same source, the one higher up is used." = "拖动订阅即可调整顺序。两个订阅有相同的源时，使用排在前面的那个。";
+
+/* Sleep Timer (#1157, #1198) */
+"Sleep Timer" = "定时关闭";
+"%d Minutes" = "%d 分钟";
+"1 Hour" = "1 小时";
+"%d Hours" = "%d 小时";
+"End of Song" = "播完这首歌";
+"End of Episode" = "播完这一集";
+"Turn Off Sleep Timer" = "关闭定时";
+"Until %@" = "%@ 停止播放";

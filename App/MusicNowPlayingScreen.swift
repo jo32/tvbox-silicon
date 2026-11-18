@@ -129,6 +129,7 @@ struct MusicNowPlayingScreen: View {
                     Button { showsChannels = true } label: { Label(L10n.text("Channels"), systemImage: "antenna.radiowaves.left.and.right") }
                 }
                 if let track = music.track { MusicDownloadMenuItems(tracks: [track]) }
+                SleepTimerMenu(item: music.sleepItem)
                 Button(role: .destructive) { music.stop() } label: { Label(L10n.text("Stop"), systemImage: "xmark") }
             } label: {
                 Image(systemName: "ellipsis").font(.body.weight(.bold))
@@ -141,6 +142,16 @@ struct MusicNowPlayingScreen: View {
 
     /// What is actually playing, one line, the same height in every state; tapping lists channels.
     private func quality(_ music: MusicPlaybackSession) -> some View {
+        HStack(spacing: 8) {
+            qualityButton(music)
+            SleepTimerBadge(item: music.sleepItem)
+        }
+        .animation(.smooth, value: SleepTimer.shared.isOn)
+        .frame(height: 26)
+        .padding(.top, 2)
+    }
+
+    private func qualityButton(_ music: MusicPlaybackSession) -> some View {
         Button { showsChannels = true } label: {
             Group {
                 if let failure = music.failure {
@@ -160,8 +171,6 @@ struct MusicNowPlayingScreen: View {
             .background(.white.opacity(music.selection == nil ? 0 : 0.1), in: Capsule())
         }
         .buttonStyle(.plain)
-        .frame(height: 26)
-        .padding(.top, 2)
     }
 
     private func transport(_ music: MusicPlaybackSession) -> some View {
