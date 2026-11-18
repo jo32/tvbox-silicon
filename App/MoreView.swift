@@ -298,6 +298,7 @@ private struct TabBarEditor: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var rows: [Row]
+    @State private var done = false
     private let slots: Int
     private let sidebar: Bool
     private let standard: PhoneTabs
@@ -367,6 +368,9 @@ private struct TabBarEditor: View {
         // A push would otherwise offer Back, which would drop the drags made here as silently as Done keeps
         // them: Cancel names that, as it did in the sheet this page replaces (#355).
         .navigationBarBackButtonHidden(true)
+        // Done saves once the page is gone: on iOS 17 a new tab set rebuilds the tab view (`RootView`), and doing
+        // that while this page was still on More's path brought it back, or crashed when it was mid-pop (#1231).
+        .onDisappear { if done { save(tabs) } }
         // The real tab bar covered Reset in the bottom toolbar, and a tap on it left the page mid-edit. The preview
         // above stands in for it; the iPad's sidebar has no tab bar to hide (#355).
         .toolbar(sidebar ? .automatic : .hidden, for: .tabBar)
@@ -375,7 +379,7 @@ private struct TabBarEditor: View {
                 Button(L10n.text("Cancel")) { dismiss() }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button(L10n.text("Done")) { save(tabs); dismiss() }.fontWeight(.semibold)
+                Button(L10n.text("Done")) { done = true; dismiss() }.fontWeight(.semibold)
             }
             ToolbarItem(placement: .bottomBar) {
                 Button(L10n.text("Reset")) { withAnimation(.smooth) { rows = Row.rows(standard, sidebar: sidebar) } }
