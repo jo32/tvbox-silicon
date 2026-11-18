@@ -335,7 +335,8 @@ import IOKit.pwr_mgt
         if player.timeControlStatus == .paused {
             if let item = player.currentItem, item.duration.seconds.isFinite,
                player.currentTime().seconds >= item.duration.seconds - 0.1 {
-                player.seek(to: .zero)
+                // Stopped at the end by the Sleep Timer with the next episode queued: Play goes on to it.
+                if upcoming != nil, player.items().count > 1 { player.advanceToNextItem() } else { player.seek(to: .zero) }
             }
             player.play()
         } else { player.pause() }
@@ -679,6 +680,15 @@ import IOKit.pwr_mgt
         delayObserver = NotificationCenter.default.addObserver(forName: SubtitleDelay.changed, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.followSubtitleDelay() }
         }
+        // The Sleep Timer (#1198): the sound fades and the video pauses; End of Episode holds the next episode back.
+        sleepObservers = [
+            NotificationCenter.default.addObserver(forName: SleepTimer.fired, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.sleepTimerFired() }
+            },
+            NotificationCenter.default.addObserver(forName: SleepTimer.changed, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.followSleepTimer() }
+            },
+        ]
         // Any jump, from our controls or from AVKit's own scrubber on the Mac and Apple TV (`resumeAfterJump`).
         jumpObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.timeJumpedNotification, object: nil, queue: .main) { [weak self] note in
             let jumped = (note.object as AnyObject?).map(ObjectIdentifier.init)
@@ -698,6 +708,7 @@ import IOKit.pwr_mgt
         followSubtitleDelay()
     }
     private var styleObserver: NSObjectProtocol?
+    private var sleepObservers: [NSObjectProtocol] = []
     @ObservationIgnored private var jumpObserver: NSObjectProtocol?
     @ObservationIgnored private var jumpResume: Task<Void, Never>?
     /// Where the clock was at the last jump notice or once-a-second sample: none before the first sample, so the
@@ -1194,6 +1205,12 @@ import IOKit.pwr_mgt
         endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.generation == activeGeneration else { return }
+                // Sleep Timer, End of Episode: stop here; a queued next episode waits for Play.
+                if SleepTimer.shared.endsWithItem {
+                    self.saveHistory(completed: true)
+                    _ = SleepTimer.shared.itemEnded()
+                    return
+                }
                 // The queue plays the next episode by itself; `queueMoved` takes over from here.
                 if self.upcoming != nil { return }
                 self.saveHistory(completed: true)
@@ -1701,7 +1718,7 @@ extension PlaybackSession {
             let queued = self.makeItem(next, url: prepared.url)
             guard self.player.canInsert(queued, after: item) else { return Self.release(next, prepared) }
             self.player.insert(queued, after: item)
-            self.player.actionAtItemEnd = .advance
+            self.player.actionAtItemEnd = SleepTimer.shared.endsWithItem ? .pause : .advance
             self.upcoming = Upcoming(channel: next, item: queued, prepared: prepared)
             Diagnostics.shared.record(.info, "player", "upcoming queued name=\(next.name) left=\(Int(length - item.currentTime().seconds))s")
             // The next episode starts past its intro when that is skipped, rather than jumping there once it plays.
@@ -1745,6 +1762,18 @@ extension PlaybackSession {
         CENCStreams.stop(channel.url)
         CloudStreams.stop(prepared.url)
         stopAdapter(prepared)
+    }
+
+    /// The Sleep Timer ran out: the sound fades away and the video pauses.
+    private func sleepTimerFired() {
+        guard player.rate != 0 else { return }
+        SleepTimer.fadeOut(player) { [weak self] in self?.player.pause() }
+    }
+
+    /// With End of Episode set, the player pauses at the end instead of moving on to the queued episode.
+    private func followSleepTimer() {
+        guard upcoming != nil else { return }
+        player.actionAtItemEnd = SleepTimer.shared.endsWithItem ? .pause : .advance
     }
 
     /// Plays the queued next episode now (the Next Episode button); false when none is queued yet.

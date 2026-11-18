@@ -2123,3 +2123,13 @@
 "In %@ days" = "%@日後";
 "Other Seasons" = "ほかのシーズン";
 "No other seasons found on this source." = "このソースにほかのシーズンは見つかりませんでした。";
+
+/* Sleep Timer (#1157, #1198) */
+"Sleep Timer" = "スリープタイマー";
+"%d Minutes" = "%d 分";
+"1 Hour" = "1 時間";
+"%d Hours" = "%d 時間";
+"End of Song" = "この曲の終わり";
+"End of Episode" = "このエピソードの終わり";
+"Turn Off Sleep Timer" = "スリープタイマーをオフ";
+"Until %@" = "%@ に停止";
