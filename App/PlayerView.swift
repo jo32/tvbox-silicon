@@ -1037,6 +1037,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             let enhances = VideoEnhancement.canUpscale || VideoEnhancement.canSmooth
             items.append(UIMenu(title: L10n.text("Picture"), image: UIImage(systemName: enhances ? "wand.and.sparkles" : "aspectratio"), children: options))
         }
+        items.append(SleepTimer.shared.uiMenu(item: .episode, offersEnd: !live))
         let info = info
         items.append(UIAction(title: L10n.text("Show Video Info"), image: UIImage(systemName: "info.circle"),
                               state: info.wrappedValue ? .on : .off) { _ in info.wrappedValue.toggle() })
@@ -1717,6 +1718,7 @@ private struct DesktopOptionsMenu: View, Equatable {
         @Bindable var session = session
         Menu {
             Toggle(L10n.text("Loop Playback"), isOn: $session.looping)
+            SleepTimerMenu(item: .episode, offersEnd: !session.isLive)
             Toggle(L10n.text("Fill Window"), isOn: $fillsFrame)
             Toggle(L10n.text("Float on Top"), isOn: $floats)
             Toggle(L10n.text("Show Video Info"), isOn: $showsPlaybackInfo)

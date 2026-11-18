@@ -2123,3 +2123,13 @@
 "In %@ days" = "%@ 天后";
 "Other Seasons" = "选季";
 "No other seasons found on this source." = "这个片源没有找到其他季。";
+
+/* Sleep Timer (#1157, #1198) */
+"Sleep Timer" = "定时关闭";
+"%d Minutes" = "%d 分钟";
+"1 Hour" = "1 小时";
+"%d Hours" = "%d 小时";
+"End of Song" = "播完这首歌";
+"End of Episode" = "播完这一集";
+"Turn Off Sleep Timer" = "关闭定时";
+"Until %@" = "%@ 停止播放";

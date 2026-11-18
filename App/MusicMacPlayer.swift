@@ -285,6 +285,7 @@ private struct MusicMacMenu: View {
                 if music.lyricsOffset != 0 { Button(L10n.text("Reset")) { music.resetLyricsOffset() } }
             }
             Divider()
+            SleepTimerMenu(item: music.sleepItem)
             Button(role: .destructive) { music.stop() } label: { Label(L10n.text("Stop"), systemImage: "xmark") }
         } label: {
             Image(systemName: "ellipsis").font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary)

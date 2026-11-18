@@ -228,6 +228,7 @@
 		862B4D7324AB9499E249FB15 /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52B784080CDE6CF171AEA5E7 /* DiscoverView.swift */; };
 		87B2F825565E0BAC988FC145 /* JNA-Apache2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 8320284C7FB9590C44BA7102 /* JNA-Apache2.txt */; };
 		88369D34534D9AF1BC424875 /* NovelDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7BE5A64DD9AFC394655A1A1 /* NovelDetailView.swift */; };
+		894AC5741A91B1259ACBCB2B /* SleepTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95BCE231D3EA9E4C6167CC1A /* SleepTimer.swift */; };
 		8A685170BCEDE3AE50C538DA /* Announcements.swift in Sources */ = {isa = PBXBuildFile; fileRef = F43A8E3DBB135075D0CF9D44 /* Announcements.swift */; };
 		8B6CF3203B7299225DC7E190 /* StyledSubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61C44303B4662294C11176AB /* StyledSubtitleOverlay.swift */; };
 		8D679E06C395B1B0CE1CF457 /* MusicMacPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73C9A2A4F2D8A180EBDF8C8E /* MusicMacPlayer.swift */; };
@@ -258,6 +259,7 @@
 		9AD1AE51475719ED2DE59664 /* libffi.txt in Resources */ = {isa = PBXBuildFile; fileRef = 06D9469858E5C5A118DED875 /* libffi.txt */; };
 		9CB04426B553A005BE74B1B8 /* AppIcons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5194EB255D269658DD7A81E3 /* AppIcons.xcassets */; };
 		9D695241F4A54C5335B16668 /* DiscoverTVLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDA3D261D268813DF5C90B82 /* DiscoverTVLayout.swift */; };
+		9D7AEE4CC3B1DB143903F31A /* SleepTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95BCE231D3EA9E4C6167CC1A /* SleepTimer.swift */; };
 		9DFF07E1B415DEBA91C79373 /* SubtitleTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13947E20489465F172C8B5B7 /* SubtitleTranslator.swift */; };
 		9EA22FB689805BA07AB44C4C /* MangaReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C41063DF832120F89C7509A /* MangaReaderView.swift */; };
 		9FD7B6E48A98DE1D6DDBC3E3 /* SubtitleStyleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D091093D028D2FD9AB72B79C /* SubtitleStyleView.swift */; };
@@ -401,6 +403,7 @@
 		FDB9BF271E35ADEFD6FD6568 /* DiscoverSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76143E60685F2F76994F90D7 /* DiscoverSearchView.swift */; };
 		FE1F5B1F52195DD4555479BE /* NovelDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7BE5A64DD9AFC394655A1A1 /* NovelDetailView.swift */; };
 		FEB5D1022E7D86A0839C0E79 /* MangaReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C41063DF832120F89C7509A /* MangaReaderView.swift */; };
+		FED79045E12FEA1B955DDEFD /* SleepTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95BCE231D3EA9E4C6167CC1A /* SleepTimer.swift */; };
 		FF2676E385636EBBCE5C2ED2 /* runtime-probe.jar in Resources */ = {isa = PBXBuildFile; fileRef = E19FE970E68D278C15E8DBF8 /* runtime-probe.jar */; };
 		FF51906A6F86833239C53A33 /* Capstone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 08B7C43C763200E67A22E365 /* Capstone-LLVM.txt */; };
 		FF931676C5626AB647CDCF03 /* MangaSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E5BAF6D854E7CE5DA362D0 /* MangaSourcesView.swift */; };
@@ -488,6 +491,7 @@
 		90D706229ED242AE96AE52F8 /* Updates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Updates.swift; sourceTree = "<group>"; };
 		90F5A2CC425C9574421FAE57 /* GatherMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatherMark.swift; sourceTree = "<group>"; };
 		91355F9A371572D91388ED36 /* DanmakuSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DanmakuSettingsView.swift; sourceTree = "<group>"; };
+		95BCE231D3EA9E4C6167CC1A /* SleepTimer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepTimer.swift; sourceTree = "<group>"; };
 		9644627CBD3EF1CE6A06E228 /* DateComparison.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateComparison.swift; sourceTree = "<group>"; };
 		995F5F0DB35FE66B4F90B4FF /* unidbg.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = unidbg.txt; sourceTree = "<group>"; };
 		9B2D3312926C619F1DD413B8 /* ExternalDisplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalDisplay.swift; sourceTree = "<group>"; };
@@ -719,6 +723,7 @@
 				2075419FEF0E1C161A31A9F0 /* RuntimeView.swift */,
 				B442C75C212445F3786397ED /* SettingsView.swift */,
 				75124CC2471CF95C1FFB168A /* SitesView.swift */,
+				95BCE231D3EA9E4C6167CC1A /* SleepTimer.swift */,
 				575633259B74E3A953F65F95 /* SourceAccountView.swift */,
 				DB900D01D10F44A858FB96D1 /* StateViews.swift */,
 				2D1010816125FBC3792AF838 /* Store.swift */,
@@ -1331,6 +1336,7 @@
 				3F2E64D0FAA75B78026F115A /* RuntimeView.swift in Sources */,
 				90F4C8847D5EE49C3388A326 /* SettingsView.swift in Sources */,
 				53F697A2DD9E8D5443E43646 /* SitesView.swift in Sources */,
+				9D7AEE4CC3B1DB143903F31A /* SleepTimer.swift in Sources */,
 				E731743F18835A55F6B3E44A /* SourceAccountView.swift in Sources */,
 				F5C1BA900848240FECE2EDAB /* StateViews.swift in Sources */,
 				1FAC6965CB4F8B33135C85C5 /* Store.swift in Sources */,
@@ -1447,6 +1453,7 @@
 				B5DCC83D47D5AEB70A55028D /* RuntimeView.swift in Sources */,
 				3DB703B04E4659AB8623A1A7 /* SettingsView.swift in Sources */,
 				B0AA965C1DB5AA7CF03E9415 /* SitesView.swift in Sources */,
+				FED79045E12FEA1B955DDEFD /* SleepTimer.swift in Sources */,
 				5180CF14DEC00EA95F9D45E2 /* SourceAccountView.swift in Sources */,
 				94BDD59683DA9F1DA27A1E9B /* StateViews.swift in Sources */,
 				4C65106175D517040E98330B /* Store.swift in Sources */,
@@ -1565,6 +1572,7 @@
 				D5140B80F4BA053665F4D30A /* RuntimeView.swift in Sources */,
 				26A1C218652FCEEE9FC60E0F /* SettingsView.swift in Sources */,
 				F8EB061662C5CB6EB47B41F2 /* SitesView.swift in Sources */,
+				894AC5741A91B1259ACBCB2B /* SleepTimer.swift in Sources */,
 				4C10AE29307F2F5C354403A3 /* SourceAccountView.swift in Sources */,
 				1CAC69ACFB8224802F9BFF18 /* StateViews.swift in Sources */,
 				BF897F1F4B399DAA732ED4ED /* Store.swift in Sources */,

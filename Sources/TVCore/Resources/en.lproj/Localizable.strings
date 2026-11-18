@@ -2123,3 +2123,13 @@
 "In %@ days" = "In %@ days";
 "Other Seasons" = "Other Seasons";
 "No other seasons found on this source." = "No other seasons found on this source.";
+
+/* Sleep Timer (#1157, #1198) */
+"Sleep Timer" = "Sleep Timer";
+"%d Minutes" = "%d Minutes";
+"1 Hour" = "1 Hour";
+"%d Hours" = "%d Hours";
+"End of Song" = "End of Song";
+"End of Episode" = "End of Episode";
+"Turn Off Sleep Timer" = "Turn Off Sleep Timer";
+"Until %@" = "Until %@";

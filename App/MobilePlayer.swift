@@ -804,6 +804,7 @@ struct MobilePlayerView: View {
                     .pickerStyle(.inline)
                 }
             }
+            SleepTimerMenu(item: .episode, offersEnd: !session.isLive)
             Picker(selection: $videoFill) {
                 ForEach(VideoFill.allCases, id: \.self) { Label($0.title, systemImage: $0.symbol).tag($0) }
             } label: { Label(L10n.text("Picture Size"), systemImage: "aspectratio") }
