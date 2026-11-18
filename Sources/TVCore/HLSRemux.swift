@@ -190,7 +190,7 @@ public enum HLSRemux {
             } else if raw.kind == Int32(TVMKindAudio), audio == nil, raw.channels > 0 {
                 let copy = ["aac", "ac3", "eac3"].contains(codec)
                 audio = TVMTrack(stream: index, mode: Int32(copy ? TVMModeCopy : TVMModeAAC), bitRate: 192_000,
-                                 channels: raw.channels >= 6 ? 6 : raw.channels == 1 ? 1 : 2, dolbyVision: 0, toneMap: 0, width: 0, height: 0,
+                                 channels: raw.channels >= 6 && RemuxPlan.surroundAAC ? 6 : raw.channels == 1 ? 1 : 2, dolbyVision: 0, toneMap: 0, width: 0, height: 0,
                                  deinterlace: 0)
                 output.audio = copy ? codec : "aac"
                 output.audioConverted = !copy

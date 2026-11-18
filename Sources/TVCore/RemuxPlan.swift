@@ -1,3 +1,4 @@
+import AudioToolbox
 import Foundation
 
 /// What a file AVPlayer can't open (MKV, AVI, FLV, ...) becomes for it: which streams are copied and which
@@ -128,7 +129,7 @@ struct RemuxPlan: Sendable, Equatable {
     static func make(streams: [Stream], keyframes: [Int64], start: Int64, duration: Int64, size: Int64, device: Device) -> RemuxPlan? {
         guard duration > 0, let video = streams.first(where: { $0.kind == .video && $0.width > 0 && $0.height > 0 }) else { return nil }
         var tracks = [videoTrack(video, device: device)]
-        tracks += streams.filter { $0.kind == .audio && $0.channels > 0 }.prefix(8).map(audioTrack)
+        tracks += streams.filter { $0.kind == .audio && $0.channels > 0 }.prefix(8).map { audioTrack($0) }
         tracks += streams.filter { $0.kind == .subtitle && ($0.isText || device.bitmapSubtitles && bitmapCodecs.contains($0.codec)) }
             .prefix(16).map { Track(stream: $0) }
         let bounds = segmentBounds(keyframes: keyframes, start: start, duration: duration, copied: tracks[0].mode == .copy)
@@ -174,14 +175,29 @@ struct RemuxPlan: Sendable, Equatable {
         return Int(min(max(bits, 1_500_000), 40_000_000))
     }
 
-    static func audioTrack(_ stream: Stream) -> Track {
+    static func audioTrack(_ stream: Stream, surround: Bool = surroundAAC) -> Track {
         var track = Track(stream: stream)
         if copiedAudio.contains(stream.codec), stream.channels <= 8, stream.codec != "aac" || copiedAAC.contains(stream.profile) { return track }
         track.mode = .aac
-        track.channels = stream.channels > 2 ? 6 : max(1, stream.channels)
+        track.channels = stream.channels > 2 ? (surround ? 6 : 2) : max(1, stream.channels)
         track.bitRate = track.channels == 6 ? 384_000 : track.channels == 2 ? 160_000 : 96_000
         return track
     }
+
+    /// Whether the system's AAC encoder takes 5.1. iOS 17's refuses it ("fmt?"), which failed every DTS and TrueHD
+    /// file there (#1299); those get stereo instead. Asked once: setting up a converter takes microseconds.
+    static let surroundAAC: Bool = {
+        var input = AudioStreamBasicDescription(mSampleRate: 48000, mFormatID: kAudioFormatLinearPCM,
+                                                mFormatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
+                                                mBytesPerPacket: 12, mFramesPerPacket: 1, mBytesPerFrame: 12, mChannelsPerFrame: 6,
+                                                mBitsPerChannel: 16, mReserved: 0)
+        var output = AudioStreamBasicDescription()
+        output.mSampleRate = 48000; output.mFormatID = kAudioFormatMPEG4AAC; output.mChannelsPerFrame = 6
+        var converter: AudioConverterRef?
+        guard AudioConverterNew(&input, &output, &converter) == noErr, let converter else { return false }
+        AudioConverterDispose(converter)
+        return true
+    }()
 
     /// Segments from keyframe to keyframe, at least 4 s long, when the file's index lists them all. A file
     /// whose index is missing or stops early (FLV, MPEG, a Matroska file without Cues) gets even segments: a

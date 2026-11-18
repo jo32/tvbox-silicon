@@ -42,6 +42,11 @@ import VideoToolbox
         #expect(plan.tracks.map(\.mode) == [.copy, .copy, .copy, .aac, .aac, .aac, .copy])
         #expect(plan.tracks.map(\.channels) == [0, 0, 0, 6, 2, 1, 0])
         #expect(plan.tracks[3].bitRate == 384_000 && plan.tracks[4].bitRate == 160_000)
+        // Where the AAC encoder refuses 5.1 (iOS 17: "fmt?"), surround is converted to stereo instead of failing (#1299).
+        #expect(RemuxPlan.surroundAAC)
+        let stereo = RemuxPlan.audioTrack(streams[3], surround: false)
+        #expect(stereo.mode == .aac && stereo.channels == 2 && stereo.bitRate == 160_000 && RemuxPlan.channels(stereo) == "2")
+        #expect(RemuxPlan.audioTrack(streams[2], surround: false).mode == .copy)
         // No picture, nothing to play.
         #expect(RemuxPlan.make(streams: [streams[1]], keyframes: [], start: 0, duration: 1, size: 0, device: .init()) == nil)
     }
