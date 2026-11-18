@@ -3,7 +3,12 @@ import Observation
 
 /// Subscription-qualified hides. The same key scheme as `PinnedSources`.
 @MainActor @Observable public final class HiddenSources {
-    private var keys: [String]
+    /// In the order they were hidden, as saved and synced.
+    private var keys: [String] { didSet { lookup = Set(keys) } }
+    /// The same keys for `contains`, which runs for every source when the app starts and lists or searches its
+    /// sources. Searching the list instead took seconds with thousands of sources hidden, long enough for iOS to
+    /// kill the app as it started (report 39eb8ea19c38).
+    private var lookup: Set<String>
     /// Bumps when a source is hidden or shown, so a cached source row can be reused until then.
     public private(set) var revision = 0
     private let defaults: UserDefaults
@@ -15,18 +20,20 @@ import Observation
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        keys = defaults.stringArray(forKey: Self.storageKey) ?? []
+        let saved = defaults.stringArray(forKey: Self.storageKey) ?? []
+        keys = saved
+        lookup = Set(saved)
     }
 
     private func key(_ site: Site, origin: URL) -> String {
         EpisodeSkipSettings.scope(origin: site.origin(or: origin), source: site.sourceKey, video: "")
     }
 
-    public func contains(_ site: Site, origin: URL) -> Bool { keys.contains(key(site, origin: origin)) }
+    public func contains(_ site: Site, origin: URL) -> Bool { lookup.contains(key(site, origin: origin)) }
 
     public func toggle(_ site: Site, origin: URL) {
         let key = key(site, origin: origin)
-        if keys.contains(key) { keys.removeAll { $0 == key } } else { keys.append(key) }
+        if lookup.contains(key) { keys.removeAll { $0 == key } } else { keys.append(key) }
         defaults.set(keys, forKey: Self.storageKey)
         revision += 1
         onChange?()
@@ -34,7 +41,7 @@ import Observation
 
     public func insert(_ site: Site, origin: URL) {
         let key = key(site, origin: origin)
-        guard !keys.contains(key) else { return }
+        guard !lookup.contains(key) else { return }
         keys.append(key)
         defaults.set(keys, forKey: Self.storageKey)
         revision += 1
@@ -46,9 +53,10 @@ import Observation
         let changed = Set(sites.map { key($0, origin: origin) })
         var next = keys
         if hidden {
+            var present = lookup
             for site in sites {
                 let key = key(site, origin: origin)
-                if !next.contains(key) { next.append(key) }
+                if present.insert(key).inserted { next.append(key) }
             }
         } else {
             next.removeAll { changed.contains($0) }
