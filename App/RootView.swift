@@ -290,6 +290,13 @@ struct RootView: View {
                         #endif
                 }
             }
+            #if os(iOS)
+            // iOS 17's classic tab bar crashes (SIGTRAP inside SwiftUI) on the first tap of a tab that the tab bar
+            // editor moved to another place, such as Global Search dragged to the front or Discover after Watch Now
+            // left the bar (#1231). A new tab bar for each tab set has nothing stale to tap. The set changes only
+            // when the viewer edits it, a section is hidden or shown, or the size class changes.
+            .id(tabs)
+            #endif
         }
     }
 
