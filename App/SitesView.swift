@@ -3411,8 +3411,9 @@ struct VideoDetailView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     if items.count > 1 {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(L10n.text("Episodes")).font(.headline)
-                            Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
+                            // One line each, ahead of the line's name, which truncates first when the row is short (#1260).
+                            Text(L10n.text("Episodes")).font(.headline).lineLimit(1).layoutPriority(1)
+                            Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary).lineLimit(1).layoutPriority(1)
                             episodeOrderButton.glassOrFill(.regular.interactive(), Color.clear, in: Circle())
                             Spacer(minLength: 8)
                             singleLineName
@@ -3421,8 +3422,10 @@ struct VideoDetailView: View {
                             }
                             if items.count > (compact ? 5 : 2) {
                                 Button { showsAllEpisodes = true } label: {
+                                    // On one line, like Seasons beside it: it wrapped to 全/部 beside a line's name (#1260).
                                     HStack(spacing: 3) { Text(L10n.text("All")); Image(systemName: "chevron.right").font(.caption.weight(.semibold)) }
                                         .font(.subheadline).foregroundStyle(.secondary)
+                                        .lineLimit(1).fixedSize()
                                         .padding(.horizontal, 12).frame(minHeight: 32)
                                         .glassOrFill(.regular.interactive(), Color.clear, in: Capsule())
                                         .frame(minHeight: 44).contentShape(Rectangle())
