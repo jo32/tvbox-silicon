@@ -52,6 +52,30 @@ private func source(_ key: String) -> Site {
     #expect(hidden.contains(b, origin: origin))
 }
 
+/// `contains` reads a set kept beside the saved list, so a launch with thousands of hidden sources doesn't search the
+/// list once per source (report 39eb8ea19c38). Synced and moved lists keep it in step.
+@Test @MainActor func hiddenLookupFollowsSyncAndMoves() throws {
+    let suite = "hidden.lookup." + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let hidden = HiddenSources(defaults: defaults)
+    let sites = (0..<3000).map { source("s\($0)") }
+    hidden.setHidden(Array(sites.prefix(2900)), origin: origin, hidden: true)
+    hidden.setHidden(Array(sites.prefix(10)), origin: origin, hidden: true)
+    #expect(hidden.savedKeys.count == 2900)
+    let visible = sites.filter { !hidden.contains($0, origin: origin) }
+    #expect(visible.map(\.key) == sites.suffix(100).map(\.key))
+    let synced = hidden.savedKeys
+    hidden.setHidden(sites, origin: origin, hidden: false)
+    #expect(!hidden.contains(sites[0], origin: origin))
+    hidden.adopt(synced)
+    #expect(hidden.contains(sites[0], origin: origin) && !hidden.contains(sites[2999], origin: origin))
+    let moved = URL(string: "https://two.example/a.json")!
+    hidden.moveOrigin(from: origin, to: moved)
+    #expect(hidden.contains(sites[0], origin: moved) && !hidden.contains(sites[0], origin: origin))
+    #expect(HiddenSources(defaults: defaults).contains(sites[1], origin: moved))
+}
+
 private struct Failure: Error {}
 
 /// Sources like those of Yingxia's own subscription.
