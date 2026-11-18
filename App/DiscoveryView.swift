@@ -1000,14 +1000,16 @@ struct RecommendationsView: View {
     }
 
     /// The source's page, opening on the picks already shown here; it refreshes them and swaps in a different answer.
-    private func sitePage(_ site: Site) -> Route {
+    /// With `category`, it opens on that category instead, as a category row's heading asks (#1267).
+    private func sitePage(_ site: Site, category: TVCore.Category? = nil) -> Route {
         let config = config
         var preview: (videos: [Video], categories: [TVCore.Category])?
         if model.site?.key == site.key, !model.busy {
             let videos = model.items.compactMap { item -> Video? in if case .detail(let video) = item.destination { video } else { nil } }
-            if !videos.isEmpty, videos.count == model.items.count { preview = (videos, model.categories) }
+            if category != nil { preview = ([], model.categories) }
+            else if !videos.isEmpty, videos.count == model.items.count { preview = (videos, model.categories) }
         }
-        return Route { AnyView(SiteView(site: site, origin: config.origin, jarURL: config.spiderURL, preview: preview)) }
+        return Route { AnyView(SiteView(site: site, origin: config.origin, jarURL: config.spiderURL, preview: preview, category: category)) }
     }
 
     /// Leaving this source drops its open category before the new home loads.
@@ -1179,7 +1181,7 @@ struct RecommendationsView: View {
                         .foregroundStyle(.secondary).padding(.horizontal, DiscoverLayout.gutter)
                 }
                 ForEach(model.categories.prefix(4)) { item in
-                    WatchNowTVCategoryRail(title: item.name, category: item.id, client: client, seeAll: page)
+                    WatchNowTVCategoryRail(title: item.name, category: item.id, client: client, seeAll: sitePage(loadedSite, category: item))
                 }
 
             } else if model.busy {
@@ -1198,7 +1200,7 @@ struct RecommendationsView: View {
 
     #if !os(tvOS)
     /// Watch Now on iPhone and the Mac: the picks as a row of covers under the source, then a row for each of its first four
-    /// categories, as on Apple TV. A category's heading opens the source's page.
+    /// categories, as on Apple TV. A category's heading opens that category on the source's page.
     private var phoneRails: some View {
         VStack(alignment: .leading, spacing: 30) {
             // One line: the source and its switch stand in for the heading (#997), with Refresh at the end.
@@ -1246,7 +1248,7 @@ struct RecommendationsView: View {
                         .font(.subheadline).foregroundStyle(.secondary).padding(.horizontal, DiscoverLayout.gutter)
                 }
                 ForEach(model.categories.prefix(4)) { item in
-                    WatchNowPhoneCategoryRail(title: item.name, category: item.id, client: client, seeAll: page)
+                    WatchNowPhoneCategoryRail(title: item.name, category: item.id, client: client, seeAll: sitePage(loadedSite, category: item))
                 }
             } else if model.busy {
                 WatchNowPhoneSkeletonRow().padding(.top, -16)

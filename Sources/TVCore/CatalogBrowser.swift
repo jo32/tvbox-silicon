@@ -77,6 +77,12 @@ import Observation
         seeded = true
     }
 
+    /// The category bar another page already has (Watch Now's rows), for a page that opens on one of its categories.
+    public func seed(categories: [Category]) {
+        guard !loaded, !busy, self.categories.isEmpty else { return }
+        self.categories = categories
+    }
+
     /// The category bar for a page that opened on a search: categories only come with the home
     /// answer, so fetch it without touching the videos on screen.
     public func loadCategories(client: CatalogClient) async {
