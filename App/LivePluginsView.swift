@@ -339,10 +339,15 @@ struct LivePluginPage: View {
     @State private var update: LivePlugins.Entry?
     @State private var busy = false
     @State private var failure: String?
+    /// The plugin has an account to show: it needs one, holds one, or can sign in here. Platforms that use no
+    /// account (Huya, YouTube) show none; Douyu doesn't need one but signs in for better picture.
+    @State private var account = false
 
     var body: some View {
         content
             .task {
+                account = plugin.requiresLogin || LivePluginAccounts.isSignedIn(plugin.pluginId)
+                if !account { account = await LivePlugins.shared.offersSignIn(plugin.pluginId) }
                 update = await LivePlugins.shared.updates().first { $0.installed.pluginId == plugin.pluginId }?.entry
             }
     }
@@ -354,7 +359,7 @@ struct LivePluginPage: View {
     @ViewBuilder private var content: some View {
         #if os(tvOS)
         TVSettingsSubpage(symbol: "puzzlepiece.extension", title: plugin.name, subtitle: details) {
-            LivePluginAccountSection(plugin: plugin)
+            if account { LivePluginAccountSection(plugin: plugin) }
             TVSettingsSection(footer: failure) {
                 if let update {
                     TVSettingsAction(title: L10n.text("Update to %@", update.version), busy: busy) { install(update) }
@@ -369,7 +374,7 @@ struct LivePluginPage: View {
                 LabeledContent(L10n.text("Version"), value: plugin.version)
                 if let host = plugin.source?.host() { LabeledContent(L10n.text("Source"), value: host) }
             }
-            LivePluginAccountSection(plugin: plugin)
+            if account { LivePluginAccountSection(plugin: plugin) }
             Section {
                 if let update {
                     Button { install(update) } label: {

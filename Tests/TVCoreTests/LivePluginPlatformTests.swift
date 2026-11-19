@@ -24,4 +24,25 @@ struct LivePluginPlatformTests {
         #expect(LivePlatform(plugin: installed("Douyu")).scheme == "douyu-plugin-live")
         #expect(LivePlatform(plugin: installed("9xiu")).scheme == "p9xiu-plugin-live")
     }
+
+    /// Douyu's plugin says it needs no account (`auth.required: false`) yet signs in on the web or by QR code for
+    /// better picture; its page must still offer that. Huya has no sign-in at all.
+    @Test func pluginsThatCanSignInOfferItEvenWhenNotRequired() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "live-plugins-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let plugins = LivePlugins(defaults: UserDefaults(suiteName: UUID().uuidString)!, folder: folder)
+        let manifests = [
+            "douyu": #"{"pluginId":"douyu","auth":{"required":false,"credentialKinds":["cookie"]},"loginFlow":{"kind":"webview","loginURL":"https://www.douyu.com/member/login","cookieDomains":["douyu.com"]},"loginChallenge":{"kind":"qrcode","minLoginChallengeProtocol":1,"functions":{"create":"createLoginChallenge","poll":"pollLoginChallenge"}}}"#,
+            "qronly": #"{"pluginId":"qronly","loginChallenge":{"kind":"qrcode","functions":{"create":"createLoginChallenge","poll":"pollLoginChallenge"}}}"#,
+            "huya": #"{"pluginId":"huya","auth":{"required":false}}"#,
+        ]
+        for (id, manifest) in manifests {
+            let directory = plugins.directory(id)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data(manifest.utf8).write(to: directory.appending(path: "manifest.json"))
+        }
+        #expect(await plugins.offersSignIn("douyu"))
+        #expect(await plugins.offersSignIn("qronly"))
+        #expect(await !plugins.offersSignIn("huya"))
+    }
 }
