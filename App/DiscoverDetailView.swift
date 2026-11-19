@@ -7,6 +7,7 @@ import AVKit
 struct DiscoverDetailView: View {
     @Environment(Store.self) private var store
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var appColorScheme
     let item: TMDBCatalog.Item
     @State private var model = DiscoverDetailModel()
     @State private var seasonNumber: Int?
@@ -22,10 +23,8 @@ struct DiscoverDetailView: View {
     /// The latest season's air dates while it airs (#1186).
     @State private var airing: AirSchedule?
     @State private var airCalendarShown = false
-    #if !os(tvOS)
-    /// The title on the viewer's sources, searched while the page is on screen; its episodes show under the studios.
+    /// The title on the viewer's sources, searched while the page is on screen.
     @State private var sources: DiscoverSources?
-    #endif
     #if os(tvOS)
     @State private var tvScrolled = false
     @State private var tvOverviewShown = false
@@ -33,6 +32,7 @@ struct DiscoverDetailView: View {
     private var details: TMDBMatch.Details? { model.details }
     private var dark: Bool { model.paint?.isDark ?? true }
     private var seasons: [TMDBMatch.SeasonSummary] { details?.seasons.filter { $0.number > 0 } ?? [] }
+    private var catalogSeason: Int? { seasonNumber ?? seasons.first?.number }
 
     var body: some View {
         page
@@ -41,10 +41,10 @@ struct DiscoverDetailView: View {
         .onDisappear { onScreen = false; stopSources() }
         .task(id: item.key) { await model.load(item) }
         .onChange(of: details?.id) { _, _ in
-            if seasonNumber == nil { seasonNumber = seasons.first?.number }
-            if sourcesPending { startSources() }
+            if sources == nil { startSources() }
         }
-        .task(id: seasonNumber) { await loadSeason() }
+        .onChange(of: store.subscription?.importedAt) { _, _ in startSources() }
+        .task(id: catalogSeason) { await loadSeason() }
         .task(id: details?.id) { await loadAiring() }
         #if DEBUG
         .task(id: details?.id) {
@@ -132,12 +132,11 @@ struct DiscoverDetailView: View {
                         if model.failed {
                             Button(L10n.text("Try Again")) { Task { await model.load(item) } }.padding(.horizontal, 20)
                         }
-                        if !seasons.isEmpty { episodes }
+                        discoverEpisodes
                         if let details {
                             if !details.cast.isEmpty { people(details.cast, title: L10n.text("Cast")) }
                             if details.crew.contains(where: { $0.profile != nil }) { people(details.crew, title: L10n.text("Crew")) }
                             if let studios = details.studios, !studios.isEmpty { studioRail(studios) }
-                            if let sources { DiscoverSourceEpisodes(sources: sources, item: item) }
                             if !details.genres.isEmpty { genreRail(details) }
                             if let images = details.stills, !images.isEmpty { stillRail(images) }
                             if details.trailer != nil { trailerCard }
@@ -250,43 +249,84 @@ struct DiscoverDetailView: View {
     /// The title's sources start searching when the page shows, with a subscription to search, and pause when it goes.
     /// A page opened with only the title's id (a link) has no name to search for until its details are in.
     private func startSources() {
-        #if !os(tvOS)
-        guard onScreen, store.subscription != nil else { return }
+        guard onScreen else { return }
+        guard store.subscription != nil else {
+            stopSources()
+            sources = nil
+            return
+        }
         let work = followItem
         guard !work.name.isEmpty else { return }
         let model = sources ?? DiscoverSources.of(work)
         if sources == nil { sources = model }
         model.start(store)
-        #endif
-    }
-    private var sourcesPending: Bool {
-        #if os(tvOS)
-        false
-        #else
-        sources == nil
-        #endif
     }
     private func stopSources() {
-        #if !os(tvOS)
         sources?.stop()
+    }
+
+    @ViewBuilder private var discoverEpisodes: some View {
+        #if !os(tvOS)
+        if let airing {
+            DiscoverAirCalendarRow(schedule: airing) { DiscoverFollowing.present { airCalendarShown = true } }
+        }
+        #endif
+        if let sources {
+            DiscoverSourceEpisodes(sources: sources, item: followItem, appColorScheme: appColorScheme, selectedSeason: $seasonNumber,
+                                   seasonControl: { number in seasons.isEmpty ? nil : AnyView(catalogSeasonMenu(number)) }) { number in
+                if number == nil || number == catalogSeason {
+                    catalogEpisodes(showsSeasonControl: number == nil)
+                }
+            }
+        } else {
+            catalogEpisodes()
+        }
+    }
+
+    @ViewBuilder private func catalogSeasonMenu(_ current: Int?) -> some View {
+        let title = seasons.first { $0.number == current }?.name ?? L10n.text("Seasons")
+        #if os(macOS)
+        DiscoverMacSeasonButton(title: title, seasons: seasons, current: current, appColorScheme: appColorScheme) { seasonNumber = $0 }
+            .accessibilityIdentifier("discover.detail.season")
+        #else
+        Menu {
+            ForEach(seasons, id: \.number) { value in
+                Button { seasonNumber = value.number } label: {
+                    if current == value.number { Label(value.name, systemImage: "checkmark") } else { Text(value.name) }
+                }
+            }
+        } label: {
+            #if os(tvOS)
+            HStack(spacing: 5) {
+                Text(title)
+                Image(systemName: "chevron.down").font(.caption.weight(.semibold))
+            }
+            #else
+            EpisodeDropdownLabel(title: title).fixedSize()
+            #endif
+        }
+        #if os(tvOS)
+        .menuStyle(.button).buttonStyle(DiscoverTVChipStyle(active: false))
+        #else
+        .buttonStyle(.plain)
+        #endif
+        .accessibilityIdentifier("discover.detail.season")
         #endif
     }
 
-    private var episodes: some View {
+    @ViewBuilder private func catalogEpisodes(showsSeasonControl: Bool = true) -> some View {
+        if !seasons.isEmpty {
+            #if os(tvOS)
+            tvEpisodes(showsSeasonControl: showsSeasonControl)
+            #else
+            episodes(showsSeasonControl: showsSeasonControl)
+            #endif
+        }
+    }
+
+    private func episodes(showsSeasonControl: Bool) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let airing { DiscoverAirCalendarRow(schedule: airing) { DiscoverFollowing.present { airCalendarShown = true } } }
-            Menu {
-                ForEach(seasons, id: \.number) { value in
-                    Button { seasonNumber = value.number } label: {
-                        if seasonNumber == value.number { Label(value.name, systemImage: "checkmark") } else { Text(value.name) }
-                    }
-                }
-            } label: {
-                HStack(spacing: 10) {
-                    Text(seasons.first { $0.number == seasonNumber }?.name ?? L10n.text("Seasons"))
-                    Image(systemName: "chevron.down").font(.system(size: 16, weight: .medium))
-                }.font(.system(size: 22, weight: .semibold)).padding(.horizontal, 20)
-            }.buttonStyle(.plain).accessibilityIdentifier("discover.detail.season")
+            if showsSeasonControl { catalogSeasonMenu(catalogSeason).padding(.horizontal, 20) }
             if loadingSeason { ProgressView().frame(maxWidth: .infinity).frame(height: 120) }
             else if seasonFailed { Button(L10n.text("Try Again")) { Task { await loadSeason() } }.padding(.horizontal, 20) }
             else if let season {
@@ -472,7 +512,7 @@ struct DiscoverDetailView: View {
     }
 
     private func loadSeason() async {
-        guard let number = seasonNumber else { return }
+        guard let number = catalogSeason else { return }
         loadingSeason = true; seasonFailed = false; season = nil
         defer { if !Task.isCancelled { loadingSeason = false } }
         do {
@@ -500,7 +540,50 @@ struct DiscoverDetailView: View {
     }
 }
 
-#if !os(tvOS)
+#if os(macOS)
+private struct DiscoverMacSeasonButton: View {
+    let title: String
+    let seasons: [TMDBMatch.SeasonSummary]
+    let current: Int?
+    let appColorScheme: ColorScheme
+    let choose: (Int) -> Void
+    @State private var showingSeasons = false
+
+    var body: some View {
+        Button { showingSeasons.toggle() } label: {
+            EpisodeDropdownLabel(title: title).fixedSize()
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showingSeasons) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(seasons, id: \.number) { season in
+                        Button {
+                            showingSeasons = false
+                            choose(season.number)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text(season.name)
+                                Spacer(minLength: 12)
+                                if season.number == current { Image(systemName: "checkmark").accessibilityHidden(true) }
+                            }
+                            .padding(.horizontal, 10).frame(minHeight: 30)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(season.number == current ? .isSelected : [])
+                    }
+                }
+                .padding(8)
+            }
+            .frame(width: 210, height: CGFloat(min(seasons.count, 8)) * 34 + 12)
+            .foregroundStyle(.primary)
+            .preferredColorScheme(appColorScheme)
+        }
+    }
+}
+#endif
+
 // MARK: The title on the viewer's sources
 
 /// Discover's title page looks for its title on the viewer's sources with a search of its own: the Search tab's
@@ -614,98 +697,190 @@ struct DiscoverDetailView: View {
     }
 }
 
-/// Between the studios and the genres: the title's episodes from the best of the viewer's sources (`DiscoverSources`),
-/// as a source's own page shows them (`VideoDetailView.embedded`).
-private struct DiscoverSourceEpisodes: View {
+/// One episode section uses source playback when available and catalog episodes while it searches.
+private struct DiscoverSourceEpisodes<CatalogEpisodes: View>: View {
     @Environment(Store.self) private var store
     let sources: DiscoverSources
     let item: TMDBCatalog.Item
+    let appColorScheme: ColorScheme
+    @Binding var selectedSeason: Int?
+    let seasonControl: (Int) -> AnyView?
+    @ViewBuilder let catalogEpisodes: (Int?) -> CatalogEpisodes
     @State private var changing = false
+
+    private var currentMatch: SourceTitleMatch.Candidate? {
+        guard let selectedSeason else { return sources.chosen }
+        if let chosen = sources.chosen, Self.season(of: chosen) == selectedSeason { return chosen }
+        return sources.finished ? sources.matches.first { Self.season(of: $0) == selectedSeason } : nil
+    }
+
+    private static func season(of match: SourceTitleMatch.Candidate) -> Int {
+        SeasonTitles.parse(match.video.name).season ?? 1
+    }
 
     var body: some View {
         Group {
-            if let chosen = sources.chosen, let config = store.subscription {
+            if let chosen = currentMatch, let config = store.subscription {
+                let number = Self.season(of: chosen)
                 VideoDetailView(video: chosen.video, client: CatalogClient(site: chosen.site, origin: config.origin, jarURL: config.spiderURL),
-                                embed: DetailEmbed(work: item) { changing = true })
+                                embed: DetailEmbed(work: item, season: number, seasonControl: seasonControl(number),
+                                                   catalogFallback: { AnyView(catalogEpisodes(number)) },
+                                                   changeSource: { changing = true }))
                     .id(chosen.id)
-            } else if sources.finished {
-                VStack(alignment: .leading, spacing: 12) {
-                    heading
-                    Text(L10n.text("None of your sources has this title.")).font(.subheadline).opacity(0.65)
-                    Button { store.searchVideos(item.name) } label: { Label(L10n.text("Search Sources"), systemImage: "magnifyingglass") }
-                        .controlButton()
-                        .accessibilityIdentifier("discover.sources.search")
-                }
-                .padding(.horizontal, 20)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
-                    heading
-                    HStack(spacing: 10) {
-                        ProgressView().appControlSize(.small)
-                        Text(L10n.text("Searching for sources…")).font(.subheadline).opacity(0.65)
+                    VStack(alignment: .leading, spacing: 12) {
+                        heading
+                        if sources.finished {
+                            Text(L10n.text(selectedSeason == nil ? "None of your sources has this title." : "None of your sources has this season."))
+                                .font(.subheadline).foregroundStyle(.secondary)
+                            Button {
+                                if sources.matches.isEmpty { store.searchVideos(item.name) } else { changing = true }
+                            } label: {
+                                Label(L10n.text(sources.matches.isEmpty ? "Search Sources" : "Change Source"), systemImage: "magnifyingglass")
+                            }
+                            #if os(tvOS)
+                            .glassPill()
+                            #else
+                            .controlButton()
+                            #endif
+                            .accessibilityIdentifier("discover.sources.search")
+                        } else {
+                            searchProgress.accessibilityIdentifier("discover.sources.searching")
+                        }
                     }
-                    .frame(minHeight: 44)
+                    .padding(.horizontal, horizontalInset)
+                    catalogEpisodes(nil)
                 }
-                .padding(.horizontal, 20)
-                .accessibilityIdentifier("discover.sources.searching")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        #if os(tvOS)
+        .fullScreenCover(isPresented: $changing) { picker.task { sources.start(store) } }
+        #else
         .sheet(isPresented: $changing) {
             // Passed on by hand: an iPad app on a Mac lost the store in sheets (#1163).
-            DiscoverSourcePicker(sources: sources).environment(store)
+            picker.preferredColorScheme(appColorScheme)
         }
+        #endif
+    }
+
+    private var picker: some View {
+        DiscoverSourcePicker(sources: sources, selected: currentMatch) { match in
+            sources.choose(match)
+            selectedSeason = Self.season(of: match)
+        }
+        .environment(store)
+    }
+
+    private var horizontalInset: CGFloat {
+        #if os(tvOS)
+        DiscoverLayout.gutter
+        #else
+        20
+        #endif
     }
 
     private var heading: some View {
-        Text(L10n.text("Episodes")).font(.system(size: 19, weight: .semibold))
+        Text(L10n.text("Episodes")).font(.title3.weight(.semibold))
+    }
+
+    @ViewBuilder private var searchProgress: some View {
+        let search = sources.search
+        if search.total > 0 {
+            ProgressView(value: Double(search.completed), total: Double(search.total)) {
+                Text(L10n.text("Searching for sources…")).font(.subheadline)
+            } currentValueLabel: {
+                Text(L10n.text("Searched %lld of %lld sources", search.completed, search.total))
+                    .font(.footnote).monospacedDigit()
+            }
+            .progressViewStyle(.linear)
+            if !search.activeSources.isEmpty {
+                let names = search.activeSources.map { SourceLabel($0.site.name).text }.joined(separator: " · ")
+                Text(L10n.text("Searching %@…", names))
+                    .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+            }
+        } else {
+            HStack(spacing: 10) {
+                ProgressView().appControlSize(.small)
+                Text(L10n.text("Searching for sources…")).font(.subheadline).foregroundStyle(.secondary)
+            }
+            .frame(minHeight: 44)
+        }
     }
 }
 
 /// Change Source: the results that are the title, as they arrive, the one showing checked. As a book's source picker.
 private struct DiscoverSourcePicker: View {
     let sources: DiscoverSources
+    let selected: SourceTitleMatch.Candidate?
+    let choose: (SourceTitleMatch.Candidate) -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(sources.matches) { match in
-                        Button { sources.choose(match); dismiss() } label: {
-                            NovelRow(symbol: match.id == sources.chosen?.id ? "checkmark.circle.fill" : "circle", title: SourceLabel(match.site.name).text,
-                                     detail: match.video.remarks.isEmpty ? match.video.year ?? "" : match.video.remarks, note: match.video.name)
-                        }
-                        .novelRowButton()
-                        .accessibilityIdentifier("discover.sources.option")
-                    }
-                    if !sources.finished {
-                        HStack(spacing: 10) {
-                            ProgressView().appControlSize(.small)
-                            Text(L10n.text("Searched %lld of %lld sources", sources.search.completed, sources.search.total))
-                                .font(.footnote).foregroundStyle(.secondary).monospacedDigit()
-                        }
-                        .padding(.top, 8)
-                    } else if sources.matches.isEmpty {
-                        Text(L10n.text("None of your sources has this title.")).foregroundStyle(.secondary)
-                    }
+        #if os(tvOS)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                HStack {
+                    Text(L10n.text("Change Source")).font(.title2.bold())
+                    Spacer()
+                    Button(L10n.text("Done")) { dismiss() }.glassPill()
                 }
-                .padding(16)
+                LazyVStack(spacing: 14) { options }
             }
+            .padding(.horizontal, DiscoverLayout.gutter).padding(.vertical, 48)
+        }
+        .background { Color.black.ignoresSafeArea() }
+        .preferredColorScheme(.dark)
+        #else
+        NavigationStack {
+            List { options }
             .navigationTitle(L10n.text("Change Source"))
             #if os(iOS)
+            .listStyle(.insetGrouped)
             .navigationBarTitleDisplayMode(.inline)
+            #else
+            .listStyle(.inset)
             #endif
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { dismiss() } } }
         }
+        .foregroundStyle(.primary)
+        .tint(.accentColor)
         #if os(iOS)
         .presentationDetents([.medium, .large])
+        .presentationBackground(Color(uiColor: .systemGroupedBackground))
         #else
         .frame(minWidth: 460, minHeight: 420)
         #endif
+        #endif
+    }
+
+    @ViewBuilder private var options: some View {
+        ForEach(sources.matches) { match in
+            let checked = match.id == selected?.id
+            Button { choose(match); dismiss() } label: {
+                NovelRow(symbol: checked ? "checkmark.circle.fill" : "circle", title: SourceLabel(match.site.name).text,
+                         detail: match.video.remarks.isEmpty ? match.video.year ?? "" : match.video.remarks, note: match.video.name)
+            }
+            #if os(tvOS)
+            .glassRow()
+            #else
+            .buttonStyle(.plain)
+            #endif
+            .accessibilityAddTraits(checked ? .isSelected : [])
+            .accessibilityIdentifier("discover.sources.option")
+        }
+        if !sources.finished {
+            HStack(spacing: 10) {
+                ProgressView().appControlSize(.small)
+                Text(L10n.text("Searched %lld of %lld sources", sources.search.completed, sources.search.total))
+                    .font(.footnote).foregroundStyle(.secondary).monospacedDigit()
+            }
+        } else if sources.matches.isEmpty {
+            Text(L10n.text("None of your sources has this title.")).foregroundStyle(.secondary)
+        }
     }
 }
-#endif
 
 private struct DiscoverDetailBackground: View {
     let model: DiscoverDetailModel
@@ -851,7 +1026,7 @@ extension DiscoverDetailView {
                 if model.failed {
                     Button(L10n.text("Try Again")) { Task { await model.load(item) } }.padding(.horizontal, Self.tvGutter)
                 }
-                if !seasons.isEmpty { tvEpisodes }
+                discoverEpisodes
                 if let details {
                     if !details.cast.isEmpty { tvPeople(details.cast, title: L10n.text("Cast")) }
                     if details.crew.contains(where: { $0.profile != nil }) { tvPeople(details.crew, title: L10n.text("Crew")) }
@@ -1010,20 +1185,9 @@ extension DiscoverDetailView {
         }.focusSection()
     }
 
-    private var tvEpisodes: some View {
+    private func tvEpisodes(showsSeasonControl: Bool) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Menu {
-                ForEach(seasons, id: \.number) { value in
-                    Button { seasonNumber = value.number } label: {
-                        if seasonNumber == value.number { Label(value.name, systemImage: "checkmark") } else { Text(value.name) }
-                    }
-                }
-            } label: {
-                Label(seasons.first { $0.number == seasonNumber }?.name ?? L10n.text("Seasons"), systemImage: "chevron.down")
-            }
-            .menuStyle(.button).buttonStyle(DiscoverTVChipStyle(active: false))
-            .padding(.horizontal, DiscoverLayout.gutter)
-            .accessibilityIdentifier("discover.detail.season")
+            if showsSeasonControl { catalogSeasonMenu(catalogSeason).padding(.horizontal, DiscoverLayout.gutter) }
             if loadingSeason { ProgressView().frame(maxWidth: .infinity).frame(height: 300) }
             else if seasonFailed { Button(L10n.text("Try Again")) { Task { await loadSeason() } }.padding(.horizontal, DiscoverLayout.gutter) }
             else if let season {

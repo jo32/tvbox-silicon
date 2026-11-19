@@ -2150,4 +2150,6 @@
 "Built-in platforms and a subscription's playlists can't be deleted, only hidden. A playlist added as its own subscription can be removed here." = "Built-in platforms and a subscription's playlists can't be deleted, only hidden. A playlist added as its own subscription can be removed here.";
 "This file hasn't reached this device. A small file added on another device syncs through iCloud; for a large one, use a web address instead." = "This file hasn't reached this device. A small file added on another device syncs through iCloud; for a large one, use a web address instead.";
 "Searching for sources…" = "Searching for sources…";
+"Searching %@…" = "Searching %@…";
 "None of your sources has this title." = "None of your sources has this title.";
+"None of your sources has this season." = "None of your sources has this season.";

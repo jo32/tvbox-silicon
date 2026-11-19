@@ -2150,4 +2150,6 @@
 "Built-in platforms and a subscription's playlists can't be deleted, only hidden. A playlist added as its own subscription can be removed here." = "內建直播平台和訂閱中的直播清單無法刪除，只能隱藏。單獨作為訂閱加入的直播清單可以在這裡移除。";
 "This file hasn't reached this device. A small file added on another device syncs through iCloud; for a large one, use a web address instead." = "此檔案尚未同步到這部裝置。在其他裝置上加入的小檔案會透過 iCloud 同步；較大的檔案請改用網址訂閱。";
 "Searching for sources…" = "正在搜尋片源…";
+"Searching %@…" = "正在搜尋 %@…";
 "None of your sources has this title." = "你的片源裡沒有找到這部作品。";
+"None of your sources has this season." = "你的片源裡沒有找到這一季。";

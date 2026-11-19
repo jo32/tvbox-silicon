@@ -931,6 +931,7 @@ struct TMDBEpisodeTile: View {
     var backdrops: [URL] = []
     /// One line under the picture, the name then TMDB's title: the player's compact Episodes tab.
     var oneLine = false
+    var showsOverview = false
     private var backdrop: URL? {
         guard !backdrops.isEmpty else { return nil }
         let number = max(info?.number ?? TMDBMatch.episodeNumber(name) ?? 1, 1)
@@ -971,6 +972,9 @@ struct TMDBEpisodeTile: View {
                 let caption = [detail, episodeTitle].compactMap { $0 }
                 Text(caption.isEmpty ? " " : caption.joined(separator: " · "))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(1).cardCaption()
+                if showsOverview, let overview = info?.overview, !overview.isEmpty {
+                    Text(overview).font(.caption).foregroundStyle(.secondary).lineLimit(2).cardCaption()
+                }
             }
         }
         .frame(width: width, alignment: .leading)

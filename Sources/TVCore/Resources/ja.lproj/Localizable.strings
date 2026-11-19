@@ -2150,4 +2150,6 @@
 "Built-in platforms and a subscription's playlists can't be deleted, only hidden. A playlist added as its own subscription can be removed here." = "内蔵の配信サービスと配信設定に含まれる再生リストは削除できず、非表示にのみできます。単独の配信設定として追加した再生リストはここで削除できます。";
 "This file hasn't reached this device. A small file added on another device syncs through iCloud; for a large one, use a web address instead." = "このファイルはまだこのデバイスに届いていません。ほかのデバイスで追加した小さなファイルは iCloud で同期されます。大きなファイルは URL で追加してください。";
 "Searching for sources…" = "配信元を検索中…";
+"Searching %@…" = "%@ を検索中…";
 "None of your sources has this title." = "どの配信元にもこの作品はありません。";
+"None of your sources has this season." = "どの配信元にもこのシーズンはありません。";

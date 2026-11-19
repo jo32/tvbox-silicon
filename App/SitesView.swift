@@ -2157,9 +2157,9 @@ struct VideoDetailView: View {
     let client: CatalogClient
     /// Opened from Continue Watching: on an iPhone the page resumes it at once.
     var resume: PlaybackHistoryEntry? = nil
-    #if !os(tvOS)
     /// Discover's title page shows only the episodes, in its own rows (`embedded`).
     var embed: DetailEmbed? = nil
+    #if !os(tvOS)
     /// The episode row's All sheet, and where the row is scrolled to.
     @State private var showsAllEpisodes = false
     @State private var episodeScroll: Episode.ID?
@@ -2257,11 +2257,7 @@ struct VideoDetailView: View {
     }
 
     var body: some View {
-        #if os(tvOS)
-        fullPage
-        #else
         if let embed { embedded(embed) } else { fullPage }
-        #endif
     }
 
     private var fullPage: some View {
@@ -3485,14 +3481,19 @@ extension VideoDetailView {
                 VStack(alignment: .leading, spacing: 12) {
                     if items.count > 1 || embed != nil {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            // One line each, ahead of the line's name, which truncates first when the row is short (#1260).
+                            // Keep the heading and count on one line when the source or line name is long (#1260).
                             Text(L10n.text("Episodes")).font(episodesFont).lineLimit(1).layoutPriority(1)
                             Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary).lineLimit(1).layoutPriority(1)
                             if items.count > 1 { episodeOrderButton.glassOrFill(.regular.interactive(), Color.clear, in: Circle()) }
                             Spacer(minLength: 8)
-                            singleLineName
-                            if let embed { changeSourceButton(embed) }
-                            if SeasonsButton.offered(for: video, episodes: items.count, site: client.site) {
+                            if let embed {
+                                changeSourceButton(embed)
+                            } else {
+                                singleLineName
+                            }
+                            if let seasonControl = embed?.seasonControl {
+                                seasonControl
+                            } else if SeasonsButton.offered(for: video, episodes: items.count, site: client.site) {
                                 SeasonsButton(video: video, client: client, capsule: true)
                             }
                             if items.count > (compact ? 5 : 2) {
@@ -3552,17 +3553,14 @@ extension VideoDetailView {
     /// Discover's title page heads its rows a little larger than the watch page does.
     private var episodesFont: Font { embed == nil ? .headline : .system(size: 19, weight: .semibold) }
 
-    /// Change Source, between the order button and the seasons, as a capsule like them.
+    /// The current source opens the picker from the episode header.
     private func changeSourceButton(_ embed: DetailEmbed) -> some View {
-        Button(action: embed.changeSource) {
-            Text(L10n.text("Change Source"))
-                .font(.subheadline).foregroundStyle(.secondary)
-                .lineLimit(1).fixedSize()
-                .padding(.horizontal, 12).frame(minHeight: 32)
-                .glassOrFill(.regular.interactive(), Color.clear, in: Capsule())
-                .frame(minHeight: 44).contentShape(Rectangle())
+        let sourceName = SourceLabel(client.site.name).parts.first ?? client.site.name
+        return Button(action: embed.changeSource) {
+            EpisodeDropdownLabel(title: sourceName)
         }
         .buttonStyle(.plain)
+        .accessibilityHint(L10n.text("Change Source"))
         .accessibilityIdentifier("discover.sources.change")
     }
 
@@ -3573,17 +3571,10 @@ extension VideoDetailView {
                 Text(L10n.text("Episodes")).font(episodesFont).lineLimit(1)
                 Spacer(minLength: 8)
                 changeSourceButton(embed)
+                embed.seasonControl
             }
             embeddedSource
         }
-    }
-
-    /// Which source's video the episodes are: its name, the video's title and its remarks or year.
-    private var embeddedSource: some View {
-        Text([SourceLabel(client.site.name).text, video.name, video.remarks.isEmpty ? video.year ?? "" : video.remarks]
-            .filter { !$0.isEmpty }.joined(separator: " · "))
-            .font(.footnote).foregroundStyle(.secondary).lineLimit(1)
-            .accessibilityIdentifier("discover.sources.current")
     }
 
     /// The only line's name (a drive such as 夸克 or 百度, usually), as the title page shows it: with several the strip
@@ -3614,7 +3605,7 @@ extension VideoDetailView {
     /// TMDB's episodes for picture tiles (`TMDBLookup.episodeTiles`); otherwise none, and the episodes keep their small
     /// cards.
     private func watchStills(_ items: [Episode]) -> [Episode.ID: TMDBMatch.EpisodeInfo] {
-        tmdb.episodeTiles(items)
+        embed == nil ? tmdb.episodeTiles(items) : tmdb.episodes(items)
     }
 
     /// The width of the small tiles when every name is short (第1集, 01, 4K国语), or nil for two-line cards. The tiles
@@ -3662,7 +3653,7 @@ extension VideoDetailView {
         } label: {
             if let info {
                 TMDBEpisodeTile(name: episodeTitle(episode), info: info, detail: detail, current: current, loading: loadingEpisode == episode.id,
-                                width: fill ? nil : 168, backdrops: tmdb.episodeBackdrops)
+                                width: fill ? nil : 168, backdrops: tmdb.episodeBackdrops, showsOverview: embed != nil)
                     .overlay(alignment: .topTrailing) { if saved?.status == .completed { DownloadedBadge().padding(4) } }
             } else {
             HStack(spacing: 6) {
@@ -3743,14 +3734,46 @@ extension VideoDetailView {
         #endif
     }
 
+}
+#endif
+
+#if !os(tvOS)
+struct EpisodeDropdownLabel: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Text(title).lineLimit(1)
+            Image(systemName: "chevron.down").font(.caption.weight(.semibold)).accessibilityHidden(true)
+        }
+        .font(.subheadline).foregroundStyle(.secondary)
+        .padding(.horizontal, 12)
+        #if os(macOS)
+        .frame(minWidth: 76, minHeight: 32)
+        #else
+        .frame(minHeight: 32)
+        #endif
+        .glassOrFill(.regular.interactive(), Color.clear, in: Capsule())
+        .frame(minHeight: 44).contentShape(Rectangle())
+    }
+}
+#endif
+
+extension VideoDetailView {
     /// Discover's title page (`DetailEmbed`): the source's episodes in the page's own rows. An episode opens the player,
     /// as on iPad, and plays as on this page: history, resume, lines, quality and the source's sign-ins are the same.
     @ViewBuilder func embedded(_ embed: DetailEmbed) -> some View {
         VStack(alignment: .leading, spacing: 12) {
+            #if os(tvOS)
+            tvEmbeddedEpisodes(embed)
+            #else
             if detail != nil {
                 watchEpisodes
             } else {
                 embeddedHeading(embed)
+            }
+            #endif
+            if detail == nil {
                 if let error, !busy {
                     ErrorState(title: L10n.text("Unable to load video details"),
                                message: L10n.text("Try again, or choose another source to keep watching."),
@@ -3763,15 +3786,31 @@ extension VideoDetailView {
                     .accessibilityElement(children: .ignore).accessibilityLabel(L10n.text("Loading video details…"))
                 }
             }
+            if detail?.episodes.isEmpty != false {
+                #if os(tvOS)
+                embed.catalogFallback().padding(.horizontal, -DiscoverLayout.gutter)
+                #else
+                embed.catalogFallback().padding(.horizontal, -rowInset)
+                #endif
+            }
             playbackBanner
         }
+        #if os(tvOS)
+        .padding(.horizontal, DiscoverLayout.gutter)
+        #else
         .padding(.horizontal, rowInset)
+        #endif
         .frame(maxWidth: .infinity, alignment: .leading)
         // Its buttons are Liquid Glass, as on the watch page.
         .environment(\.glassControls, true)
         .task { if detail == nil { await loadDetail() } }
         .task(id: detail?.id) { await embeddedTMDB(embed) }
         .onDisappear { requestTask?.cancel() }
+        #if os(tvOS)
+        .fullScreenCover(item: $bundleSignIn) { pending in
+            CatPawSignInView(client: client, provider: pending.provider) { retryAfterSignIn() }
+        }
+        #else
         .sheet(isPresented: $showsAllEpisodes) { allEpisodes }
         #if os(iOS)
         .sheet(isPresented: $showsConfigCenter) { ConfigCenterView { await configCenterAddress() } }
@@ -3779,6 +3818,7 @@ extension VideoDetailView {
         .sheet(item: $bundleSignIn) { pending in
             CatPawSignInView(client: client, provider: pending.provider) { retryAfterSignIn() }
         }
+        #endif
         .confirmationDialog(L10n.text("Choose quality"), isPresented: $choosingQuality, titleVisibility: .visible) {
             if let plan = pendingPlan, let episode = pendingEpisode {
                 ForEach(plan.choices) { choice in
@@ -3789,11 +3829,74 @@ extension VideoDetailView {
         .onChange(of: choosingQuality) { _, open in if !open && !busy { loadingEpisode = nil } }
     }
 
+    /// The video's title and its remarks or year as supplied by the selected source.
+    private var embeddedSource: some View {
+        Text([video.name, video.remarks.isEmpty ? video.year ?? "" : video.remarks]
+            .filter { !$0.isEmpty }.joined(separator: " · "))
+            .font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+            .accessibilityIdentifier("discover.sources.current")
+    }
+
+    #if os(tvOS)
+    private func tvEmbeddedEpisodes(_ embed: DetailEmbed) -> some View {
+        let items = activeEpisodes
+        let metadata = tmdb.episodes(items)
+        let current = watchHistory?.context.episode(in: items)?.id
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 16) {
+                if items.count > 1 {
+                    episodeOrderButton(count: items.count)
+                } else {
+                    Text(L10n.text("Episodes")).font(.title3.weight(.semibold))
+                }
+                Spacer()
+                Button(action: embed.changeSource) {
+                    HStack(spacing: 8) {
+                        Text(SourceLabel(client.site.name).parts.first ?? client.site.name).lineLimit(1)
+                        Image(systemName: "chevron.down").accessibilityHidden(true)
+                    }
+                }
+                .glassPill()
+                .accessibilityHint(L10n.text("Change Source"))
+                .accessibilityIdentifier("discover.sources.change")
+                if let seasonControl = embed.seasonControl {
+                    seasonControl
+                } else if SeasonsButton.offered(for: video, episodes: items.count, site: client.site) {
+                    SeasonsButton(video: video, client: client)
+                }
+            }
+            .focusSection()
+            embeddedSource
+            flagPicker
+            if !items.isEmpty {
+                ScrollView(.horizontal) {
+                    LazyHStack(alignment: .top, spacing: 32) {
+                        ForEach(shownOrder(items)) { episode in
+                            Button { startRequest { await play(episode) } } label: {
+                                TMDBEpisodeTile(name: episodeTitle(episode), info: metadata[episode.id], detail: episodeDetails[episode.id],
+                                                current: episode.id == current, loading: episode.id == loadingEpisode, width: 360,
+                                                backdrops: tmdb.episodeBackdrops, showsOverview: true)
+                            }
+                            .tmdbCardButton()
+                            .accessibilityIdentifier("discover.sources.episode")
+                        }
+                    }
+                    .padding(.vertical, 24)
+                }
+                .scrollClipDisabled()
+                .focusSection()
+            } else if let detail {
+                noEpisodes(detail)
+            }
+        }
+    }
+    #endif
+
     /// Discover's page knows the work, so the stills come from its season this title names, without the matcher.
     /// A movie has no stills to show.
     private func embeddedTMDB(_ embed: DetailEmbed) async {
-        guard embed.work.mediaType == .tv, let detail, detail.episodes.count > 1 else { return }
-        await tmdb.known(.tv, id: embed.work.id, season: SeasonTitles.parse(video.name).season ?? 1)
+        guard embed.work.mediaType == .tv, let detail, !detail.episodes.isEmpty else { return }
+        await tmdb.known(.tv, id: embed.work.id, season: embed.season)
     }
 }
 
@@ -3801,10 +3904,12 @@ extension VideoDetailView {
 struct DetailEmbed {
     /// The title the page is about, so TMDB's stills need no lookup.
     let work: TMDBCatalog.Item
+    let season: Int
+    let seasonControl: AnyView?
+    let catalogFallback: () -> AnyView
     /// Change Source in the episodes' heading.
     let changeSource: () -> Void
 }
-#endif
 
 #if !os(tvOS)
 /// Opens a scroll view of episodes at one of them (#1173). `scrollTo` from the sheet's onAppear, or its first task,
@@ -4739,7 +4844,7 @@ extension View {
 struct SeasonsButton: View {
     let video: Video
     let client: CatalogClient
-    /// On the iPhone's watch page: a glass capsule, as All beside it.
+    /// In the episode header, match the glass capsule used by All.
     var capsule = false
     @Environment(Store.self) private var store
     @Environment(\.openRoute) private var openRoute
@@ -4756,20 +4861,13 @@ struct SeasonsButton: View {
             #if os(tvOS)
             HStack(spacing: 10) { Image(systemName: "square.stack"); Text(title) }
             #else
-            let label = HStack(spacing: 3) { Text(title); Image(systemName: "chevron.down").font(.caption.weight(.semibold)) }
-                .font(.subheadline).foregroundStyle(.secondary)
-                .lineLimit(1).fixedSize()
-            #if os(iOS)
             if capsule {
-                label.padding(.horizontal, 12).frame(minHeight: 32)
-                    .glassOrFill(.regular.interactive(), Color.clear, in: Capsule())
-                    .frame(minHeight: 44).contentShape(Rectangle())
+                EpisodeDropdownLabel(title: title).fixedSize()
             } else {
-                label.frame(minHeight: 32).contentShape(Rectangle())
+                HStack(spacing: 3) { Text(title); Image(systemName: "chevron.down").font(.caption.weight(.semibold)) }
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .lineLimit(1).fixedSize().frame(minHeight: 32).contentShape(Rectangle())
             }
-            #else
-            label.frame(minHeight: 32).contentShape(Rectangle())
-            #endif
             #endif
         }
         #if os(tvOS)
