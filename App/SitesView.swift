@@ -2157,13 +2157,18 @@ struct VideoDetailView: View {
     let client: CatalogClient
     /// Opened from Continue Watching: on an iPhone the page resumes it at once.
     var resume: PlaybackHistoryEntry? = nil
+    #if !os(tvOS)
+    /// Discover's title page shows only the episodes, in its own rows (`embedded`).
+    var embed: DetailEmbed? = nil
+    /// The episode row's All sheet, and where the row is scrolled to.
+    @State private var showsAllEpisodes = false
+    @State private var episodeScroll: Episode.ID?
+    #endif
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var fullScreen = false
     /// Full Screen came from turning the phone sideways, so turning it upright again returns to the page.
     @State private var turnedFullScreen = false
-    @State private var showsAllEpisodes = false
-    @State private var episodeScroll: Episode.ID?
     /// The page's player shows its picture (or an error); until then the page's cover stays over it.
     @State private var playerStarted = false
     /// The page's player, whose wait the cover tells about.
@@ -2252,6 +2257,14 @@ struct VideoDetailView: View {
     }
 
     var body: some View {
+        #if os(tvOS)
+        fullPage
+        #else
+        if let embed { embedded(embed) } else { fullPage }
+        #endif
+    }
+
+    private var fullPage: some View {
         Group {
             #if os(iOS)
             if watchLayout { watchBody } else { pageBody }
@@ -3174,15 +3187,6 @@ struct VideoDetailView: View {
     // MARK: iPhone watch page
 
     private var watchLayout: Bool { WatchPage.applies(sizeClass, verticalSizeClass) }
-    /// What plays at the top of the page: one of this video's episodes.
-    private var watchChannel: Channel? {
-        store.playing.flatMap { watchScopes.contains($0.historyContext?.id ?? "") ? $0 : nil }
-    }
-    /// The episode playing, else the one watched last: marked in the list, which scrolls to it.
-    private var currentEpisodeID: Episode.ID? {
-        guard let episodes = detail?.episodes else { return nil }
-        return (watchChannel?.historyContext ?? watchHistory?.context)?.episode(in: episodes)?.id
-    }
 
     /// As in Bilibili's app: the player at the top, under the status bar, and the title, actions, synopsis and
     /// episodes scrolling below it. Full Screen grows the same player over the page, so playback carries on.
@@ -3446,11 +3450,32 @@ struct VideoDetailView: View {
         .padding(.leading, -7)
     }
 
+    #endif
+}
+
+#if !os(tvOS)
+// MARK: Episode row
+
+/// The iPhone watch page's 选集 row. Discover's title page shows it too (`DetailEmbed`), on iPad and the Mac as well.
+extension VideoDetailView {
+    /// What plays at the top of the page: one of this video's episodes.
+    private var watchChannel: Channel? {
+        store.playing.flatMap { watchScopes.contains($0.historyContext?.id ?? "") ? $0 : nil }
+    }
+    /// The episode playing, else the one watched last: marked in the list, which scrolls to it.
+    private var currentEpisodeID: Episode.ID? {
+        guard let episodes = detail?.episodes else { return nil }
+        return (watchChannel?.historyContext ?? watchHistory?.context)?.episode(in: episodes)?.id
+    }
+
     /// As in Bilibili's 选集: one row of episodes that scrolls sideways to the one playing, and All for the full list.
-    /// A video with one episode has no row (its only episode is the video); several lines still show to choose from.
+    /// A video with one episode has no row on the watch page (its only episode is the video); several lines still show
+    /// to choose from. On Discover's title page the row is the only way to play, so it always shows, under a heading
+    /// with Change Source.
     @ViewBuilder private var watchEpisodes: some View {
         if let detail {
             if detail.episodes.isEmpty {
+                if let embed { embeddedHeading(embed) }
                 noEpisodes(detail)
             } else {
                 let items = activeEpisodes
@@ -3458,14 +3483,15 @@ struct VideoDetailView: View {
                 let compact = tile != nil
                 let stills = watchStills(items)
                 VStack(alignment: .leading, spacing: 12) {
-                    if items.count > 1 {
+                    if items.count > 1 || embed != nil {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             // One line each, ahead of the line's name, which truncates first when the row is short (#1260).
-                            Text(L10n.text("Episodes")).font(.headline).lineLimit(1).layoutPriority(1)
+                            Text(L10n.text("Episodes")).font(episodesFont).lineLimit(1).layoutPriority(1)
                             Text("\(items.count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary).lineLimit(1).layoutPriority(1)
-                            episodeOrderButton.glassOrFill(.regular.interactive(), Color.clear, in: Circle())
+                            if items.count > 1 { episodeOrderButton.glassOrFill(.regular.interactive(), Color.clear, in: Circle()) }
                             Spacer(minLength: 8)
                             singleLineName
+                            if let embed { changeSourceButton(embed) }
                             if SeasonsButton.offered(for: video, episodes: items.count, site: client.site) {
                                 SeasonsButton(video: video, client: client, capsule: true)
                             }
@@ -3483,6 +3509,7 @@ struct VideoDetailView: View {
                                 .accessibilityIdentifier("watch.allEpisodes")
                             }
                         }
+                        if embed != nil { embeddedSource }
                     } else if flags.count > 1 {
                         Text(L10n.text("Lines")).font(.headline)
                     } else if flags.count == 1, !activeFlag.isEmpty {
@@ -3492,25 +3519,71 @@ struct VideoDetailView: View {
                         }
                     }
                     watchLines
-                    if items.count > 1 {
-                        // scrollPosition rather than ScrollViewReader: scrollTo also scrolls the page's vertical
-                        // scroll view, which pushed the title under the player.
-                        ScrollView(.horizontal) {
-                            LazyHStack(alignment: .top, spacing: stills.isEmpty ? 8 : 12) { ForEach(shownOrder(items)) { watchEpisodeCard($0, tile: tile, info: stills[$0.id]) } }
-                                .scrollTargetLayout()
-                                .padding(.horizontal, 16)
-                        }
-                        .scrollIndicators(.never)
-                        .scrollPosition(id: $episodeScroll, anchor: .center)
-                        // Edge to edge, unclipped: the tiles' glass shadow ran past the row and was cut off in a band (#293).
-                        .scrollClipDisabled()
-                        .padding(.horizontal, -16)
-                        .onAppear { episodeScroll = currentEpisodeID }
-                        .onChange(of: currentEpisodeID) { _, id in if let id { withAnimation { episodeScroll = id } } }
-                    }
+                    if items.count > 1 || embed != nil { episodeRow(items, tile: tile, stills: stills) }
                 }
             }
         }
+    }
+
+    /// The row itself, edge to edge. On the Mac, whose mouse wheel doesn't scroll sideways, a `ScrollStrip` with arrows.
+    @ViewBuilder private func episodeRow(_ items: [Episode], tile: CGFloat?, stills: [Episode.ID: TMDBMatch.EpisodeInfo]) -> some View {
+        let cards = LazyHStack(alignment: .top, spacing: stills.isEmpty ? 8 : 12) { ForEach(shownOrder(items)) { watchEpisodeCard($0, tile: tile, info: stills[$0.id]) } }
+            .scrollTargetLayout()
+            .padding(.horizontal, rowInset)
+        #if os(macOS)
+        ScrollStrip(scrollTo: currentEpisodeID, overlayArrows: true) { cards }
+            .padding(.horizontal, -rowInset)
+        #else
+        // scrollPosition rather than ScrollViewReader: scrollTo also scrolls the page's vertical
+        // scroll view, which pushed the title under the player.
+        ScrollView(.horizontal) { cards }
+            .scrollIndicators(.never)
+            .scrollPosition(id: $episodeScroll, anchor: .center)
+            // Edge to edge, unclipped: the tiles' glass shadow ran past the row and was cut off in a band (#293).
+            .scrollClipDisabled()
+            .padding(.horizontal, -rowInset)
+            .onAppear { episodeScroll = currentEpisodeID }
+            .onChange(of: currentEpisodeID) { _, id in if let id { withAnimation { episodeScroll = id } } }
+        #endif
+    }
+
+    /// The page's margin, which the row and the lines run past to the screen's edges.
+    private var rowInset: CGFloat { embed == nil ? 16 : 20 }
+    /// Discover's title page heads its rows a little larger than the watch page does.
+    private var episodesFont: Font { embed == nil ? .headline : .system(size: 19, weight: .semibold) }
+
+    /// Change Source, between the order button and the seasons, as a capsule like them.
+    private func changeSourceButton(_ embed: DetailEmbed) -> some View {
+        Button(action: embed.changeSource) {
+            Text(L10n.text("Change Source"))
+                .font(.subheadline).foregroundStyle(.secondary)
+                .lineLimit(1).fixedSize()
+                .padding(.horizontal, 12).frame(minHeight: 32)
+                .glassOrFill(.regular.interactive(), Color.clear, in: Capsule())
+                .frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("discover.sources.change")
+    }
+
+    /// The heading while the details load or when they failed or have no episodes: Change Source stays in reach.
+    private func embeddedHeading(_ embed: DetailEmbed) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(L10n.text("Episodes")).font(episodesFont).lineLimit(1)
+                Spacer(minLength: 8)
+                changeSourceButton(embed)
+            }
+            embeddedSource
+        }
+    }
+
+    /// Which source's video the episodes are: its name, the video's title and its remarks or year.
+    private var embeddedSource: some View {
+        Text([SourceLabel(client.site.name).text, video.name, video.remarks.isEmpty ? video.year ?? "" : video.remarks]
+            .filter { !$0.isEmpty }.joined(separator: " · "))
+            .font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+            .accessibilityIdentifier("discover.sources.current")
     }
 
     /// The only line's name (a drive such as 夸克 or 百度, usually), as the title page shows it: with several the strip
@@ -3533,8 +3606,8 @@ struct VideoDetailView: View {
                 if let same, same.id != currentEpisodeID { startRequest { await play(same) } }
             }
             // Edge to edge and unclipped, like the episodes, so the strip doesn't cut the chips' glass shadow (#293).
-            .contentMargins(.horizontal, 16, for: .scrollContent).scrollClipDisabled()
-            .padding(.horizontal, -16)
+            .contentMargins(.horizontal, rowInset, for: .scrollContent).scrollClipDisabled()
+            .padding(.horizontal, -rowInset)
         }
     }
 
@@ -3557,8 +3630,13 @@ struct VideoDetailView: View {
             let units = title.unicodeScalars.reduce(0) { $0 + ($1.isASCII ? 1 : 2) }
             if units > widestUnits { widest = title; widestUnits = units }
         }
+        #if os(macOS)
+        let font = NSFont.systemFont(ofSize: NSFont.preferredFont(forTextStyle: .subheadline).pointSize, weight: .semibold)
+        let small = NSFont.monospacedDigitSystemFont(ofSize: NSFont.preferredFont(forTextStyle: .caption2).pointSize, weight: .regular)
+        #else
         let font = UIFont.systemFont(ofSize: UIFont.preferredFont(forTextStyle: .subheadline).pointSize, weight: .semibold)
         let small = UIFont.monospacedDigitSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .caption2).pointSize, weight: .regular)
+        #endif
         let text = max((widest as NSString).size(withAttributes: [.font: font]).width,
                        (widestDetail as NSString).size(withAttributes: [.font: small]).width)
         // 8 points of padding on each side, and a little room for the bold of the episode playing.
@@ -3575,7 +3653,8 @@ struct VideoDetailView: View {
         let saved = download(episode)
         let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
         let detail = episodeDetails[episode.id]
-        return Button {
+        // DiscoverButton: on the Mac the card under the pointer gets the mouse-up that ends a drag of the row.
+        return DiscoverButton {
             chosen?()
             // The episode already playing keeps playing.
             guard !(current && watchChannel != nil) else { return }
@@ -3644,19 +3723,90 @@ struct VideoDetailView: View {
             // At the episode playing or watched last, as the row on the page (#1173): a long series opened at episode 1.
             .modifier(OpensAtEpisode(currentEpisodeID))
             .navigationTitle(L10n.text("Episodes"))
+            #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            #endif
             .toolbar {
+                #if os(iOS)
                 ToolbarItem(placement: .topBarLeading) { episodeOrderButton }
+                #else
+                ToolbarItem(placement: .automatic) { episodeOrderButton }
+                #endif
                 ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { showsAllEpisodes = false } }
             }
         }
         .environment(\.glassControls, true)
+        #if os(iOS)
         .presentationDetents([.medium, .large])
+        #else
+        .frame(minWidth: 560, minHeight: 480)
+        #endif
     }
-    #endif
+
+    /// Discover's title page (`DetailEmbed`): the source's episodes in the page's own rows. An episode opens the player,
+    /// as on iPad, and plays as on this page: history, resume, lines, quality and the source's sign-ins are the same.
+    @ViewBuilder func embedded(_ embed: DetailEmbed) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if detail != nil {
+                watchEpisodes
+            } else {
+                embeddedHeading(embed)
+                if let error, !busy {
+                    ErrorState(title: L10n.text("Unable to load video details"),
+                               message: L10n.text("Try again, or choose another source to keep watching."),
+                               details: error, retry: { startRequest { await loadDetail() } })
+                } else {
+                    HStack(spacing: 8) {
+                        ForEach(0..<4, id: \.self) { _ in SkeletonBlock(cornerRadius: 10).frame(width: 150, height: 54) }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading).clipped()
+                    .accessibilityElement(children: .ignore).accessibilityLabel(L10n.text("Loading video details…"))
+                }
+            }
+            playbackBanner
+        }
+        .padding(.horizontal, rowInset)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Its buttons are Liquid Glass, as on the watch page.
+        .environment(\.glassControls, true)
+        .task { if detail == nil { await loadDetail() } }
+        .task(id: detail?.id) { await embeddedTMDB(embed) }
+        .onDisappear { requestTask?.cancel() }
+        .sheet(isPresented: $showsAllEpisodes) { allEpisodes }
+        #if os(iOS)
+        .sheet(isPresented: $showsConfigCenter) { ConfigCenterView { await configCenterAddress() } }
+        #endif
+        .sheet(item: $bundleSignIn) { pending in
+            CatPawSignInView(client: client, provider: pending.provider) { retryAfterSignIn() }
+        }
+        .confirmationDialog(L10n.text("Choose quality"), isPresented: $choosingQuality, titleVisibility: .visible) {
+            if let plan = pendingPlan, let episode = pendingEpisode {
+                ForEach(plan.choices) { choice in
+                    Button(choice.name) { startRequest { await resolve(plan, choice: choice, episode: episode) } }
+                }
+            }
+        }
+        .onChange(of: choosingQuality) { _, open in if !open && !busy { loadingEpisode = nil } }
+    }
+
+    /// Discover's page knows the work, so the stills come from its season this title names, without the matcher.
+    /// A movie has no stills to show.
+    private func embeddedTMDB(_ embed: DetailEmbed) async {
+        guard embed.work.mediaType == .tv, let detail, detail.episodes.count > 1 else { return }
+        await tmdb.known(.tv, id: embed.work.id, season: SeasonTitles.parse(video.name).season ?? 1)
+    }
 }
 
-#if os(iOS)
+/// What Discover's title page asks of the video page whose episodes it shows (`DiscoverSourceEpisodes`).
+struct DetailEmbed {
+    /// The title the page is about, so TMDB's stills need no lookup.
+    let work: TMDBCatalog.Item
+    /// Change Source in the episodes' heading.
+    let changeSource: () -> Void
+}
+#endif
+
+#if !os(tvOS)
 /// Opens a scroll view of episodes at one of them (#1173). `scrollTo` from the sheet's onAppear, or its first task,
 /// came before the sheet had laid out its lazy grid and left it at the top. The position is this modifier's own
 /// state, so scrolling redraws only it, not the page behind the sheet.

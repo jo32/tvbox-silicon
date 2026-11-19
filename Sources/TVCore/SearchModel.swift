@@ -52,6 +52,9 @@ import Observation
     private var excluded: @MainActor (Site) -> Bool = { _ in false }
     /// The viewer's source order; while it is on, it replaces `SourceStrategy`'s.
     public var order: SourceOrder?
+    /// Told of each source's answer as it arrives, for a page that reads the answers once each instead of on every redraw
+    /// (Discover's title page, `DiscoverSources`).
+    @ObservationIgnored public var onResult: (@MainActor (SearchSourceResult) -> Void)?
     public init(http: HTTPClient = HTTPClient()) { self.http = http }
 
     public var failures: [SearchSourceResult] { results.filter { $0.error != nil } }
@@ -272,6 +275,7 @@ import Observation
         activeSources.removeAll { $0.id == result.id }
         completed += 1
         results.append(result)
+        onResult?(result)
     }
 }
 
