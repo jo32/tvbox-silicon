@@ -36,6 +36,14 @@ enum NovelChapterNumbers {
         return sections
     }
 
+    /// The most digits a row's number has, for the column the numbers line up in. Worked out with the sections, once: each
+    /// row asked for it and walked every chapter, so a long table of contents took chapters² steps to lay out, and
+    /// opening one of 1,760 chapters at the one being read held the iPhone's main thread until the system stopped the
+    /// app (#1327).
+    static func longestNumber(_ sections: [NovelChapterSection]) -> Int {
+        sections.lazy.flatMap(\.rows).compactMap(\.number).map(\.count).max() ?? 0
+    }
+
     /// "第一千零二十章" → 1020, "第12章" → 12.
     static func value(of kicker: String) -> Int? {
         let body = kicker.dropFirst().dropLast()
@@ -92,6 +100,7 @@ struct NovelChapterList: View {
     let open: (Int) -> Void
 
     @State private var sections: [NovelChapterSection] = []
+    @State private var longestNumber = 0
     @State private var query = ""
     @State private var newestFirst = false
     @State private var scrolled = false
@@ -106,8 +115,7 @@ struct NovelChapterList: View {
     private let digitWidth: CGFloat = 8.5
     #endif
     private var numberWidth: CGFloat {
-        let longest = sections.lazy.flatMap(\.rows).compactMap(\.number).map(\.count).max() ?? 0
-        return longest == 0 ? 0 : CGFloat(max(2, longest)) * digitWidth + 4
+        longestNumber == 0 ? 0 : CGFloat(max(2, longestNumber)) * digitWidth + 4
     }
 
     /// The sections as shown: searched and in the chosen order.
@@ -194,6 +202,7 @@ struct NovelChapterList: View {
             .padding(.leading, 80).padding(.trailing, 40)
             .task(id: chapters.count) {
                 sections = NovelChapterNumbers.sections(chapters)
+                longestNumber = NovelChapterNumbers.longestNumber(sections)
                 guard !scrolled, let current else { return }
                 scrolled = true
                 await Task.yield()
@@ -259,6 +268,7 @@ struct NovelChapterList: View {
             #endif
             .task(id: chapters.count) {
                 sections = NovelChapterNumbers.sections(chapters)
+                longestNumber = NovelChapterNumbers.longestNumber(sections)
                 guard !scrolled, let current else { return }
                 scrolled = true
                 await Task.yield()
@@ -516,6 +526,7 @@ struct NovelChapterGrid: View {
     let open: (Int) -> Void
 
     @State private var sections: [NovelChapterSection] = []
+    @State private var longestNumber = 0
     @State private var query = ""
     @State private var newestFirst = false
     @State private var searching = false
@@ -523,8 +534,7 @@ struct NovelChapterGrid: View {
 
     private var count: Int { sections.reduce(0) { $0 + $1.rows.count } }
     private var numberWidth: CGFloat {
-        let longest = sections.lazy.flatMap(\.rows).compactMap(\.number).map(\.count).max() ?? 0
-        return longest == 0 ? 0 : CGFloat(max(2, longest)) * 8 + 4
+        longestNumber == 0 ? 0 : CGFloat(max(2, longestNumber)) * 8 + 4
     }
     private var shown: [NovelChapterSection] {
         let needle = query.trimmingCharacters(in: .whitespaces)
@@ -569,6 +579,7 @@ struct NovelChapterGrid: View {
         }
         .task(id: chapters.count) {
             sections = NovelChapterNumbers.sections(chapters)
+            longestNumber = NovelChapterNumbers.longestNumber(sections)
             #if DEBUG
             // `-qaNovelChapterSearch <text>` opens the search with that text.
             if let text = UserDefaults.standard.string(forKey: "qaNovelChapterSearch") { searching = true; query = text }
@@ -685,12 +696,12 @@ struct NovelChapterTVGrid: View {
     let open: (Int) -> Void
 
     @State private var sections: [NovelChapterSection] = []
+    @State private var longestNumber = 0
     @State private var newestFirst = false
 
     private var count: Int { sections.reduce(0) { $0 + $1.rows.count } }
     private var numberWidth: CGFloat {
-        let longest = sections.lazy.flatMap(\.rows).compactMap(\.number).map(\.count).max() ?? 0
-        return longest == 0 ? 0 : CGFloat(max(2, longest)) * 15 + 6
+        longestNumber == 0 ? 0 : CGFloat(max(2, longestNumber)) * 15 + 6
     }
     private var shown: [NovelChapterSection] {
         newestFirst ? sections.reversed().map { var section = $0; section.rows.reverse(); return section } : sections
@@ -733,7 +744,10 @@ struct NovelChapterTVGrid: View {
             }
         }
         .tvFocusSection()
-        .task(id: chapters.count) { sections = NovelChapterNumbers.sections(chapters) }
+        .task(id: chapters.count) {
+            sections = NovelChapterNumbers.sections(chapters)
+            longestNumber = NovelChapterNumbers.longestNumber(sections)
+        }
     }
 
     private func label(_ row: NovelChapterRow) -> some View {
