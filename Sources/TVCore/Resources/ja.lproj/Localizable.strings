@@ -615,6 +615,7 @@
 "Unpin source" = "固定を解除";
 "Pinned Group" = "固定";
 "Hide Source" = "ソースを隠す";
+"Open Subscription" = "元の配信設定を開く";
 "Unhide Source" = "再表示";
 "Search This Source" = "このソースで検索";
 "Manage Sources" = "配信ソースを管理";

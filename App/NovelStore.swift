@@ -114,15 +114,22 @@ import TVCore
 
     // MARK: Lists and sources
 
-    func addList(_ url: URL, data: Data) throws {
-        try NovelSources.shared.add(url, data: data)
+    func addList(_ url: URL, data: Data, name: String? = nil) throws {
+        try NovelSources.shared.add(url, data: data, name: name)
         reloadSources()
     }
     func removeList(_ url: URL) { NovelSources.shared.remove(url); reloadSources() }
+    /// A list's name in rows and titles: the viewer's own (#1099), else what its address gives.
+    func title(of url: URL) -> String { lists.first { $0.address == url }.map(NovelSources.title(of:)) ?? NovelSources.title(of: url) }
+    func renameList(_ url: URL, to name: String) {
+        NovelSources.shared.rename(url, to: name)
+        lists = NovelSources.shared.lists
+    }
     func offer(_ offers: [NovelSourceOffer]) { NovelSources.shared.offer(offers); reloadSources() }
     /// Downloads an offered list and adds it.
     func add(_ offer: NovelSourceOffer) async throws {
-        try await NovelSources.shared.refresh(offer.address)
+        // The page's label for it, unless it only repeats the address's.
+        try await NovelSources.shared.refresh(offer.address, name: offer.name == NovelSources.title(of: offer.address) ? nil : offer.name)
         reloadSources()
     }
     /// Downloads every list again; one that fails keeps its last copy.

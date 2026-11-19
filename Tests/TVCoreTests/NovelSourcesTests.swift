@@ -95,3 +95,14 @@ import Testing
                                                      "https://lists.example/sources/rel.json"])
     #expect(NovelSourceIndex.offers(inPage: Data(#"{"sites":[]}"#.utf8), origin: URL(string: "https://x")!).isEmpty)
 }
+
+/// A list's own name (#1099): lists saved before it had one still load, and rows use the name over the address's.
+@Test func novelSourceListsKeepTheirOwnName() throws {
+    let saved = Data(#"[{"address":"https://example.com/shu/yuan.json","count":3,"updated":0}]"#.utf8)
+    var list = try #require(try JSONDecoder().decode([NovelSourceList].self, from: saved).first)
+    #expect(list.name == nil)
+    #expect(NovelSources.title(of: list) == "example.com · yuan")
+    list.name = "王二小"
+    let again = try JSONDecoder().decode(NovelSourceList.self, from: JSONEncoder().encode(list))
+    #expect(NovelSources.title(of: again) == "王二小")
+}

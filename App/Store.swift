@@ -392,7 +392,8 @@ import TVCore
                 notice = L10n.text("Added a Venera comic source list (%lld sources). Choose the ones to install in Comic Sources.", count)
             case .novelSources(let count, let data):
                 // Book source lists feed Novels (and show it); they are listed under Subscriptions too.
-                try NovelStore.shared.addList(url, data: data)
+                let title = (address == nil ? subscriptionName : (name ?? "")).trimmingCharacters(in: .whitespacesAndNewlines)
+                try NovelStore.shared.addList(url, data: data, name: title)
                 notice = L10n.text("Added a Legado book source list (%lld sources). Search and read in Novels.", count)
             case .novelIndex(let offers):
                 // A page of lists (or a Legado subscription source that opens one): Book Sources offers them one by one.
