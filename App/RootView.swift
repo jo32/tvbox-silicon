@@ -86,11 +86,11 @@ struct RootView: View {
         #endif
     }
     #if os(tvOS)
-    /// tvOS 17 has no sidebar, only the tab bar along the top, and selecting its eighth or a later tab does
+    /// tvOS 17 and 18 have the tab bar along the top (see `tabView`), and selecting its eighth or a later tab does
     /// nothing. Past its seventh place, the bar ends in More with the rest, as on iPhone.
     private static let topBarSlots = 7
     private var tvMore: [AppSection] {
-        if #available(tvOS 18, *) { return [] }
+        if #available(tvOS 26, *) { return [] }
         return sections.count > Self.topBarSlots ? Array(sections.dropFirst(Self.topBarSlots - 1)) : []
     }
     #endif
@@ -212,7 +212,7 @@ struct RootView: View {
                 store.section = previous == .nowPlaying ? .music : previous
                 store.music.presentsPlayer = true
             }
-            // tvOS 17: a section in More opens there, whether a button or the Now Playing tab moved it in.
+            // tvOS 17 and 18: a section in More opens there, whether a button or the Now Playing tab moved it in.
             .onChange(of: store.section) { _, section in openInMore(section) }
             .onChange(of: tvMore) { _, more in
                 if more.isEmpty && store.section == .more { store.section = morePath.isEmpty ? .home : moreSection }
@@ -255,7 +255,7 @@ struct RootView: View {
     /// player handle their own, and Back from a page still moves to the sidebar (#404). An empty handler would keep the
     /// press too, so on Watch Now there is none (`nil`) and Back leaves as usual. The modifier stays in place rather than
     /// in an `if`: swapping views would rebuild the tab view and every section's state with it when moving to or from
-    /// Watch Now. tvOS 17's tab bar with More is left as it was.
+    /// Watch Now. The tab bar with More on tvOS 17 and 18 is left as it was.
     @ViewBuilder private var rootTabs: some View {
         #if os(tvOS)
         tabView.onExitCommand(perform: store.section == .home || !tvMore.isEmpty ? nil : { store.section = .home })
@@ -266,7 +266,7 @@ struct RootView: View {
 
     @ViewBuilder private var tabView: some View {
         @Bindable var store = store
-        if #available(iOS 18, tvOS 18, *) {
+        if #available(iOS 18, tvOS 26, *) {
             TabView(selection: $store.section) {
                 ForEach(tabs) { item in
                     // The page is the section's own: iOS 18 keeps a tab's page by its place in the bar, so a section the
@@ -281,7 +281,9 @@ struct RootView: View {
             .tabViewStyle(.sidebarAdaptable)
         } else {
             // tvOS 17 and iOS 17 have no Tab or sidebar: the classic tab bar, along the top on Apple TV and at the
-            // bottom on iPad too.
+            // bottom on iPad too. tvOS 18 gets it as well: its sidebar, which our sections are too many to fit in a bar
+            // along the top, can't be reached from a page: once focus left it, neither Back nor Left brought it back, so
+            // the viewer was stuck in that section (#1315). tvOS 26 fixed that.
             TabView(selection: $store.section) {
                 ForEach(tabs) { item in
                     tabPage(item).tabItem { tabLabel(item) }.tag(item)
@@ -352,7 +354,7 @@ struct RootView: View {
 
     @ViewBuilder private func sectionRoot(_ section: AppSection) -> some View {
         if section == .more {
-            // Only the phone's tab bar and tvOS 17's have a More tab.
+            // Only the phone's tab bar and the tab bar on tvOS 17 and 18 have a More tab.
             #if os(iOS)
             MoreView()
             #elseif os(tvOS)
@@ -412,7 +414,7 @@ extension EnvironmentValues {
 }
 
 #if os(tvOS)
-/// tvOS 17's More tab: the sections that did not fit in its tab bar.
+/// The More tab on tvOS 17 and 18: the sections that did not fit in the tab bar.
 private struct TVMoreView: View {
     let sections: [AppSection]
     var body: some View {

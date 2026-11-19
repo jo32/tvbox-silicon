@@ -747,13 +747,13 @@ private struct SearchActivityList: View {
 #if os(tvOS)
 /// Puts `field` in the row of the collapsed sidebar's button, just after it. The system draws that button (the section's
 /// symbol and name) at the top left and gives no way to add to its row, so a hidden copy of the name, at the button's
-/// font and insets as tvOS 27 draws it, takes its width. tvOS 17 has the tab bar along the top instead: the field
-/// goes in the navigation bar under it.
+/// font and insets as tvOS 27 draws it, takes its width. tvOS 17 and 18 have the tab bar along the top instead
+/// (`RootView.tabView`): the field goes in the navigation bar under it.
 private struct BesideSidebarButton<Field: View>: ViewModifier {
     let title: String
     @ViewBuilder let field: Field
     func body(content: Content) -> some View {
-        if #available(tvOS 18, *) {
+        if #available(tvOS 26, *) {
             content.overlay(alignment: .topLeading) {
                 HStack(spacing: 32) {
                     Text(title).font(.system(size: 31, weight: .medium)).lineLimit(1).fixedSize()
