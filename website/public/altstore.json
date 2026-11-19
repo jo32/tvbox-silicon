@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.26",
+          "buildVersion": "64",
+          "date": "2026-11-20",
+          "localizedDescription": "• 发现页自动找片源\n• 整理直播\n• 订阅按类型分开\n• 直播插件可以登录\n• 其他修复\n\n• Discover finds it on your sources\n• Tidy up Live TV\n• Subscriptions sorted by kind\n• Sign in to live plugins\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.26/Yingxia-1.8.26-ios.ipa",
+          "size": 184765358,
+          "sha256": "9f9265033d4446dedc16fcf5ce7dd1ea5dac01844915ce71aaa49580552067b5",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.25",
           "buildVersion": "63",
           "date": "2026-11-19",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.22/Yingxia-1.8.22-ios.ipa",
           "size": 178050981,
           "sha256": "58cd71d52bfd9e83abbb7e57f6010d0dfc6f1e62de4923b115a3ebd4631b6fb6",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.21",
-          "buildVersion": "59",
-          "date": "2026-11-15",
-          "localizedDescription": "• 直播：在播放器里换台，看正在播出的节目\n• 更多直播频道能播放，画面更清晰\n• 全新图标，另有十款可选\n• 更整洁的来源页面\n• 弹幕匹配更准确\n• 其他修复\n\n• Live TV: channels in the player, and what's on\n• More live channels play, and look sharp\n• A new icon, and ten more to choose from\n• A tidier Sources page\n• Danmaku finds more shows\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.21/Yingxia-1.8.21-ios.ipa",
-          "size": 156030437,
-          "sha256": "5cceabb0e5a9a04e1b4bcd9b5872ca008353dc1ff0fac65d08d265cfb4e1a080",
           "minOSVersion": "17.0"
         }
       ],
