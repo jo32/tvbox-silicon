@@ -25,6 +25,32 @@ import VideoToolbox
         #expect(CloudFile.playsOriginal("a.mkv") && CloudFile.playsOriginal("a.mp4") && !CloudFile.playsOriginal("a.ape"))
     }
 
+    @Test func segmentsHandOutTheirBytesInBoundedReads() async throws {
+        let segment = RemuxSegment()
+        let pieces = (0..<100).map { piece in Data((0..<40_000).map { UInt8(truncatingIfNeeded: $0 * 7 + piece) }) }
+        let whole = pieces.reduce(into: Data()) { $0.append($1) }
+        // A reader waiting for bytes gets them as they are written.
+        let waiting = Task { try await segment.next(after: 0, cancelled: { false }) }
+        try await Task.sleep(for: .milliseconds(50))
+        segment.append(pieces[0])
+        let early = try await waiting.value
+        #expect(early == pieces[0])
+        for piece in pieces.dropFirst() { segment.append(piece) }
+        segment.finish()
+        #expect(segment.count == whole.count)
+        #expect(segment.bytes == whole)
+        // A segment made ahead is read in bounded parts, never copied whole, from wherever a request starts.
+        for start in [0, 12_345, 40_000, whole.count - 1] {
+            var offset = start, read = Data()
+            while let bytes = try await segment.next(after: offset, cancelled: { false }) {
+                #expect(bytes.count <= RemuxSegment.readSize + 40_000)
+                read.append(bytes)
+                offset += bytes.count
+            }
+            #expect(read == whole[start...])
+        }
+    }
+
     @Test func whatAppleDevicesDecodeIsCopied() throws {
         let streams = [
             Stream(index: 0, kind: .video, codec: "h264", width: 1920, height: 1080, frameRate: 23.976),

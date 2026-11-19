@@ -657,8 +657,14 @@ private let remuxCue: TVMCueFunction = { context, track, start, end, text, size 
 /// One track's segment: its bytes as they are written, and the requests that read them.
 final class RemuxSegment: @unchecked Sendable {
     enum State { case waiting, producing, done, failed }
+    /// About the most a read hands out at once. A segment of a high-bitrate video runs to tens of MB, and one grown
+    /// in a single buffer and copied whole for each read could not be allocated on a phone short of memory
+    /// (Data traps 10614fb85d7d, 0ca7453db52f, bab57b807cf7).
+    static let readSize = 1 << 20
     private let lock = NSLock()
-    private var data = Data()
+    /// The bytes in the pieces they were written in, so a segment never grows by copying into a bigger buffer.
+    private var pieces: [Data] = []
+    private var total = 0
     private var waiters: [CheckedContinuation<Void, Never>] = []
     private var _state = State.waiting
     private var _readers = 0
@@ -671,13 +677,14 @@ final class RemuxSegment: @unchecked Sendable {
     }
     var readers: Int { lock.withLock { _readers } }
     var served: Bool { lock.withLock { _served } }
-    var count: Int { lock.withLock { data.count } }
-    var bytes: Data { lock.withLock { data } }
+    var count: Int { lock.withLock { total } }
+    /// All the bytes in one buffer: for small segments only (an initialization segment, subtitles).
+    var bytes: Data { lock.withLock { joined(from: 0, most: .max) } }
 
     func join() { lock.withLock { _readers += 1 } }
     func leave() { lock.withLock { _readers -= 1 } }
 
-    func append(_ bytes: Data) { wake { data.append(bytes) } }
+    func append(_ bytes: Data) { wake { pieces.append(bytes); total += bytes.count } }
     func finish() { wake { _state = .done } }
     func fail() { wake { _state = .failed } }
     /// Wakes the readers, so one whose request was cancelled can stop.
@@ -692,13 +699,28 @@ final class RemuxSegment: @unchecked Sendable {
         for waiter in waiting { waiter.resume() }
     }
 
-    /// The bytes after `offset` once there are any; nil at the end. Throws when the segment failed.
+    /// The bytes from `offset` on, whole pieces until about `most` of them. Call with the lock held.
+    private func joined(from offset: Int, most: Int) -> Data {
+        var index = 0, start = 0
+        while index < pieces.count, start + pieces[index].count <= offset { start += pieces[index].count; index += 1 }
+        guard index < pieces.count else { return Data() }
+        let first = pieces[index]
+        if offset == start, first.count >= min(most, total - start) { return first }
+        var out = Data(capacity: min(most, total - offset) + first.count)
+        out.append(first[(first.startIndex + offset - start)...])
+        index += 1
+        while index < pieces.count, out.count < most { out.append(pieces[index]); index += 1 }
+        return out
+    }
+
+    /// The bytes after `offset` once there are any, at most about `readSize` at a time; nil at the end. Throws when
+    /// the segment failed.
     func next(after offset: Int, cancelled: @Sendable () -> Bool) async throws -> Data? {
         while true {
             if cancelled() { throw CancellationError() }
             enum Step { case bytes(Data), end, failed, wait }
             let step: Step = lock.withLock {
-                if data.count > offset { return .bytes(data.subdata(in: offset..<data.count)) }
+                if total > offset { return .bytes(joined(from: offset, most: Self.readSize)) }
                 switch _state {
                 case .done: _served = true; return .end
                 case .failed: return .failed
@@ -712,7 +734,7 @@ final class RemuxSegment: @unchecked Sendable {
             case .wait:
                 await withCheckedContinuation { continuation in
                     let ready = lock.withLock { () -> Bool in
-                        if data.count > offset || _state == .done || _state == .failed { return true }
+                        if total > offset || _state == .done || _state == .failed { return true }
                         waiters.append(continuation)
                         return false
                     }
