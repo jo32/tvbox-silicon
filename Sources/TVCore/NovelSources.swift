@@ -5,6 +5,8 @@ public struct NovelSourceList: Codable, Hashable, Sendable, Identifiable {
     public var address: URL
     public var count: Int
     public var updated: Date
+    /// The viewer's name for it (#1099); nil shows `NovelSources.title(of:)` of the address.
+    public var name: String? = nil
     public var id: URL { address }
 }
 
@@ -80,16 +82,18 @@ public final class NovelSources: @unchecked Sendable {
 
     // MARK: Lists
 
-    /// Adds (or replaces) a list from data already downloaded from `address`. Throws when it isn't one.
+    /// Adds (or replaces) a list from data already downloaded from `address`. Throws when it isn't one. A list added again
+    /// keeps the name the viewer gave it, unless `name` gives another.
     @discardableResult
-    public func add(_ address: URL, data: Data) throws -> NovelSourceList {
+    public func add(_ address: URL, data: Data, name: String? = nil) throws -> NovelSourceList {
         guard let sources = NovelSource.list(from: data), !sources.isEmpty else {
             throw TVError.unsupported(L10n.text("This address is not a Legado book source list."))
         }
         try FileManager.default.createDirectory(at: Self.folder, withIntermediateDirectories: true)
         try data.write(to: Self.file(address), options: .atomic)
-        let list = NovelSourceList(address: address, count: sources.count, updated: Date())
+        var list = NovelSourceList(address: address, count: sources.count, updated: Date(), name: Self.cleaned(name))
         lock.withLock {
+            if list.name == nil { list.name = listed.first { $0.address == address }?.name }
             sourcesByList[address] = sources
             if let index = listed.firstIndex(where: { $0.address == address }) { listed[index] = list } else { listed.append(list) }
             save()
@@ -109,9 +113,24 @@ public final class NovelSources: @unchecked Sendable {
 
     /// Downloads a list again.
     @discardableResult
-    public func refresh(_ address: URL) async throws -> NovelSourceList {
+    public func refresh(_ address: URL, name: String? = nil) async throws -> NovelSourceList {
         let (data, _) = try await HTTPClient().get(address, headers: ["User-Agent": HTTPClient.subscriptionUserAgent], limit: HTTPClient.subscriptionLimit)
-        return try add(address, data: data)
+        return try add(address, data: data, name: name)
+    }
+
+    /// Names a list (#1099); an empty name goes back to the one its address gives. Only the list's row changes, so no
+    /// `changedNotification`, which would make the Novels section work out every source again.
+    public func rename(_ address: URL, to name: String) {
+        lock.withLock {
+            guard let index = listed.firstIndex(where: { $0.address == address }), listed[index].name != Self.cleaned(name) else { return }
+            listed[index].name = Self.cleaned(name)
+            save()
+        }
+    }
+
+    private static func cleaned(_ name: String?) -> String? {
+        guard let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return trimmed
     }
 
     public func remove(_ address: URL) {
@@ -135,7 +154,10 @@ public final class NovelSources: @unchecked Sendable {
         DispatchQueue.main.async { NotificationCenter.default.post(name: Self.changedNotification, object: nil) }
     }
 
-    /// A list's name for rows: its file name, or its host.
+    /// A list's name for rows: the one the viewer gave it, else what its address gives.
+    public static func title(of list: NovelSourceList) -> String { list.name ?? title(of: list.address) }
+
+    /// A list's name from its address: its file name, or its host.
     public static func title(of url: URL) -> String {
         let name = url.deletingPathExtension().lastPathComponent
         if !name.isEmpty, name != "/", name.count <= 40 { return (url.host().map { $0 + " · " } ?? "") + name }

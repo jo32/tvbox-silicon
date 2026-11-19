@@ -18,7 +18,7 @@ struct NovelSourcesView: View {
         SettingsPage(title: L10n.text("Book Sources"), symbol: "text.book.closed", subtitle: about) {
             SettingsGroup(title: L10n.text("Source Lists"), footer: store.lists.isEmpty ? L10n.text("No book source lists yet.") : nil) {
                 ForEach(store.lists) { list in
-                    TVSettingsLink(title: NovelSources.title(of: list.address), value: count(list)) { NovelListView(url: list.address) }
+                    TVSettingsLink(title: NovelSources.title(of: list), value: count(list)) { NovelListView(url: list.address) }
                 }
             }
             if !store.lists.isEmpty {
@@ -51,7 +51,7 @@ struct NovelSourcesView: View {
                     RouteLink { NovelListView(url: list.address) } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(NovelSources.title(of: list.address)).lineLimit(1)
+                                Text(NovelSources.title(of: list)).lineLimit(1)
                                 Text(L10n.text("Updated %@", list.updated.formatted(date: .abbreviated, time: .shortened))).font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
@@ -151,7 +151,14 @@ struct NovelListView: View {
     @State private var filter = ""
     @State private var working = false
     @State private var message: String?
+    /// The Name field's text, saved when it's submitted or the page closes rather than per keystroke.
+    @State private var name: String
     @Environment(\.dismiss) private var dismiss
+
+    init(url: URL) {
+        self.url = url
+        _name = State(initialValue: NovelStore.shared.lists.first { $0.address == url }?.name ?? "")
+    }
 
     private var sources: [NovelSource] {
         _ = store.sources
@@ -174,7 +181,12 @@ struct NovelListView: View {
 
     var body: some View {
         #if os(tvOS)
-        TVSettingsSubpage(symbol: "text.book.closed", title: NovelSources.title(of: url), subtitle: L10n.text("%lld sources", sources.count)) {
+        TVSettingsSubpage(symbol: "text.book.closed", title: store.title(of: url), subtitle: L10n.text("%lld sources", sources.count)) {
+            // Like a subscription's: a name of the viewer's own instead of the address's (#1099).
+            SettingsGroup {
+                TVSettingsField(title: L10n.text("Name"), text: Binding(get: { name }, set: { name = $0; store.renameList(url, to: $0) }), prose: true,
+                                emptyValue: NovelSources.title(of: url))
+            }
             SettingsGroup(footer: message) {
                 TVSettingsAction(title: L10n.text("Turn All On")) { store.setEnabled(true, sources.map(\.key)) }
                 TVSettingsAction(title: L10n.text("Turn All Off")) { store.setEnabled(false, sources.map(\.key)) }
@@ -200,6 +212,14 @@ struct NovelListView: View {
         }
         #else
         List {
+            // Like a subscription's: a name of the viewer's own instead of the address's (#1099). Empty shows that one.
+            Section {
+                LabeledContent(L10n.text("Name")) {
+                    TextField(L10n.text("Name"), text: $name, prompt: Text(NovelSources.title(of: url)))
+                        .labelsHidden().multilineTextAlignment(.trailing)
+                        .onSubmit { store.renameList(url, to: name) }
+                }
+            }
             Section {
                 HStack {
                     Button(L10n.text("Turn All On")) { store.setEnabled(true, sources.map(\.key)) }
@@ -241,7 +261,8 @@ struct NovelListView: View {
             }
         }
         .searchable(text: $filter, prompt: Text(L10n.text("Filter sources")))
-        .screenTitle(NovelSources.title(of: url))
+        .screenTitle(store.title(of: url))
+        .onDisappear { store.renameList(url, to: name) }
         #endif
     }
 

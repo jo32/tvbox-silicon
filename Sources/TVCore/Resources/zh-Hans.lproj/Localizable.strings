@@ -615,6 +615,7 @@
 "Unpin source" = "取消置顶";
 "Pinned Group" = "置顶";
 "Hide Source" = "隐藏源";
+"Open Subscription" = "打开所属订阅";
 "Unhide Source" = "取消隐藏";
 "Search This Source" = "在此源中搜索";
 "Manage Sources" = "管理点播源";

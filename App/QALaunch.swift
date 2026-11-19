@@ -394,6 +394,9 @@ enum QALaunch {
                     SubscriptionDetailView(entry: entry)
                     #endif
                 }
+            // `-qaPage novel-list:<n>`: Settings › Book Sources › the nth list (from 0).
+            case "novel-list":
+                if let list = NovelStore.shared.lists.dropFirst(Int(parts.dropFirst().first ?? "") ?? 0).first { NovelListView(url: list.address) }
             case "logs": DiagnosticsView()
             case "feedback": FeedbackView()
             #if os(tvOS)
@@ -484,7 +487,7 @@ enum QALaunch {
 
     static func overrides(_ section: AppSection) -> Bool {
         guard section == self.section, let page else { return false }
-        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "subscription", "arrange-subscriptions", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "app-icon", "color-theme", "cloud-login", "cloud-accounts", "subtitle-style", "danmaku-style", "book-sources", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add", "up", "comments", "chapters", "live-plugins", "live-plugin", "live-plugin-sign-in", "live-plugin-qr"].contains(page.split(separator: ":").first.map(String.init) ?? "")
+        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "subscription", "novel-list", "arrange-subscriptions", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "app-icon", "color-theme", "cloud-login", "cloud-accounts", "subtitle-style", "danmaku-style", "book-sources", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add", "up", "comments", "chapters", "live-plugins", "live-plugin", "live-plugin-sign-in", "live-plugin-qr"].contains(page.split(separator: ":").first.map(String.init) ?? "")
     }
 }
 

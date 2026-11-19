@@ -38,6 +38,9 @@ struct SitesView: View {
     #endif
     @State private var arranging = false
     @State private var choosingHidden = false
+    @Environment(\.openRoute) private var openRoute
+    /// A subscription's page opened from a source's menu, outside a stack that takes `openRoute`.
+    @State private var openedSubscription: Route?
     init(pick: ((Site) -> Void)? = nil, pickable: [Site] = [], picked: String? = nil) {
         self.pick = pick
         self.pickable = pickable
@@ -88,6 +91,12 @@ struct SitesView: View {
                                                 PinSourceButton(site: site, origin: config.origin)
                                                 HideSourceButton(site: site, origin: config.origin)
                                                 if store.sourceOrder.enabled { MoveSourceButtons(site: site, sites: sites) }
+                                                if let entry = store.subscriptionEntry(of: site) {
+                                                    Button { openSubscription(entry) } label: {
+                                                        Label(L10n.text("Open Subscription"), systemImage: "list.bullet.rectangle")
+                                                    }
+                                                    .accessibilityIdentifier("source.subscription." + site.key)
+                                                }
                                             }
                                         }
                                     }
@@ -119,6 +128,7 @@ struct SitesView: View {
                 #endif
                 }
                 .sheet(isPresented: $arranging) { SourceOrderEditor(sites: sites, automatic: store.automaticSites(config)) }
+                .navigationDestination(item: $openedSubscription) { $0.build() }
                 .sheet(isPresented: $choosingHidden) { HiddenSourcesEditor() }
                 #if DEBUG
                 // `-qaArrangeSources 1` opens the editor for screenshots.
@@ -169,6 +179,19 @@ struct SitesView: View {
         .onChange(of: query) { _, new in
             if new.isEmpty { searchFold = [] }
         }
+    }
+
+    /// The page of the subscription a source came from (#1064): a source that stopped working is turned off or removed
+    /// with its subscription there, without going to Settings and finding it.
+    private func openSubscription(_ entry: SubscriptionEntry) {
+        let route = Route {
+            #if os(tvOS)
+            return AnyView(TVSubscriptionPage(entry: entry))
+            #else
+            return AnyView(SubscriptionDetailView(entry: entry))
+            #endif
+        }
+        if let openRoute { openRoute(route) } else { openedSubscription = route }
     }
 
     #if os(tvOS)
@@ -422,6 +445,13 @@ private extension Array where Element == SourceGroup {
 }
 
 extension Store {
+    /// The switched-on subscription a source came from; nil for the built-in ones. A source two subscriptions share is
+    /// the first one's, as on the Sources page.
+    func subscriptionEntry(of site: Site) -> SubscriptionEntry? {
+        guard !site.isBuiltIn, let origin = site.provenance?.origin else { return nil }
+        return subscriptions.first { $0.enabled && documents[$0.address]?.origin == origin }
+    }
+
     /// How a source has been answering lately; see `SourceHealth`.
     func health(of site: Site) -> SourceHealth.Status {
         subscription.map { SourceHealth.shared.status(site, origin: $0.origin) } ?? .unknown
