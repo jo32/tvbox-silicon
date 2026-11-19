@@ -21,11 +21,10 @@ struct LivePluginAccountSection: View {
     @State private var device = false
     @State private var deviceSignIn = false
 
+    // Shown only for plugins with an account (`LivePluginPage` decides): this view's `.task` reads the sign-ins,
+    // and a view that hid itself until they were read never ran it, so Douyu's sign-in never showed.
     var body: some View {
-        Group {
-            // Platforms that use no account (Huya, YouTube) show none.
-            if flow != nil || qr != nil || device || plugin.requiresLogin || signedIn { content }
-        }
+        content
             .task { await refresh(check: true) }
             .onReceive(NotificationCenter.default.publisher(for: LivePluginAccounts.changed).receive(on: RunLoop.main)) { note in
                 if note.object as? String == plugin.pluginId { Task { await refresh(check: true) } }

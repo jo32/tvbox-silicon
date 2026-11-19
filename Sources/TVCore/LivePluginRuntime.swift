@@ -893,6 +893,14 @@ extension LivePlugins {
         return LivePluginLoginFlow(flow)
     }
 
+    /// Whether the plugin can sign in here: on its platform's page, by QR code or by device code. A plugin
+    /// whose platform doesn't need an account can still have one (Douyu, for better picture).
+    public func offersSignIn(_ id: String) async -> Bool {
+        if await loginFlow(id) != nil { return true }
+        if await qrLogin(id) != nil { return true }
+        return await signsInByDeviceCode(id)
+    }
+
     /// Asks the plugin whether the saved cookie still signs in (`validateCredential`); nil when it can't tell.
     public func checkSignIn(_ id: String) async -> Bool? {
         guard LivePluginAccounts.isSignedIn(id), await LivePluginRuntime.shared.has(id, "validateCredential") else { return nil }
