@@ -117,6 +117,17 @@ import TVCore
     /// A video the page won't look up (AI-generated, a short drama): the page stops waiting for TMDB.
     func skip() { phase = .off }
 
+    /// A work the page already knows (Discover's title page shows a source's episodes): its details for that season,
+    /// without asking the Worker or keeping a choice for the video.
+    func known(_ type: TMDBMatch.MediaType, id: Int, season: Int?) async {
+        let tag = "known:\(type.rawValue):\(id):\(season ?? 0)"
+        guard key != tag else { return }
+        key = tag
+        await load(type, id: id, season: season)
+        // Cancelled with the page, or failed: the next visit asks again.
+        if details == nil { key = nil }
+    }
+
     /// "None of These": the page goes back to the source's own details, and stays so for this video.
     func reject() async {
         guard let key else { return }

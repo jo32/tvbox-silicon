@@ -22,6 +22,10 @@ struct DiscoverDetailView: View {
     /// The latest season's air dates while it airs (#1186).
     @State private var airing: AirSchedule?
     @State private var airCalendarShown = false
+    #if !os(tvOS)
+    /// The title on the viewer's sources, searched while the page is on screen; its episodes show under the studios.
+    @State private var sources: DiscoverSources?
+    #endif
     #if os(tvOS)
     @State private var tvScrolled = false
     @State private var tvOverviewShown = false
@@ -33,11 +37,12 @@ struct DiscoverDetailView: View {
     var body: some View {
         page
         .modifier(DiscoverSearchPresentation(isPresented: $searchShown))
-        .onAppear { onScreen = true }
-        .onDisappear { onScreen = false }
+        .onAppear { onScreen = true; startSources() }
+        .onDisappear { onScreen = false; stopSources() }
         .task(id: item.key) { await model.load(item) }
         .onChange(of: details?.id) { _, _ in
             if seasonNumber == nil { seasonNumber = seasons.first?.number }
+            if sourcesPending { startSources() }
         }
         .task(id: seasonNumber) { await loadSeason() }
         .task(id: details?.id) { await loadAiring() }
@@ -132,6 +137,7 @@ struct DiscoverDetailView: View {
                             if !details.cast.isEmpty { people(details.cast, title: L10n.text("Cast")) }
                             if details.crew.contains(where: { $0.profile != nil }) { people(details.crew, title: L10n.text("Crew")) }
                             if let studios = details.studios, !studios.isEmpty { studioRail(studios) }
+                            if let sources { DiscoverSourceEpisodes(sources: sources, item: item) }
                             if !details.genres.isEmpty { genreRail(details) }
                             if let images = details.stills, !images.isEmpty { stillRail(images) }
                             if details.trailer != nil { trailerCard }
@@ -239,6 +245,31 @@ struct DiscoverDetailView: View {
                 .foregroundStyle(dark ? Color.black : Color.white)
                 .background(dark ? Color.white : Color.black, in: Capsule())
         }.buttonStyle(.plain).accessibilityIdentifier("discover.findSources")
+    }
+
+    /// The title's sources start searching when the page shows, with a subscription to search, and pause when it goes.
+    /// A page opened with only the title's id (a link) has no name to search for until its details are in.
+    private func startSources() {
+        #if !os(tvOS)
+        guard onScreen, store.subscription != nil else { return }
+        let work = followItem
+        guard !work.name.isEmpty else { return }
+        let model = sources ?? DiscoverSources.of(work)
+        if sources == nil { sources = model }
+        model.start(store)
+        #endif
+    }
+    private var sourcesPending: Bool {
+        #if os(tvOS)
+        false
+        #else
+        sources == nil
+        #endif
+    }
+    private func stopSources() {
+        #if !os(tvOS)
+        sources?.stop()
+        #endif
     }
 
     private var episodes: some View {
@@ -468,6 +499,213 @@ struct DiscoverDetailView: View {
         } catch { if !Task.isCancelled { failed = true } }
     }
 }
+
+#if !os(tvOS)
+// MARK: The title on the viewer's sources
+
+/// Discover's title page looks for its title on the viewer's sources with a search of its own: the Search tab's
+/// results, history and tab stay as they were. The best match's episodes show on the page, the other matches under
+/// Change Source. One per title for the session, so coming back to a title doesn't search again.
+@MainActor @Observable final class DiscoverSources {
+    let search = SearchModel()
+    /// The results that are the title, best first (`SourceTitleMatch.ranked`).
+    private(set) var matches: [SourceTitleMatch.Candidate] = []
+    /// The one whose episodes show: the best match, or the one chosen under Change Source.
+    private(set) var chosen: SourceTitleMatch.Candidate?
+    /// Every source asked has answered.
+    private(set) var finished = false
+    @ObservationIgnored private let keyword: String
+    @ObservationIgnored private let wanted: SourceTitleMatch.Wanted
+    @ObservationIgnored private var found: [SourceTitleMatch.Candidate] = []
+    /// The Watch Now row's order, by source key: the best match comes from the source highest in it.
+    @ObservationIgnored private var order: [String: Int] = [:]
+    @ObservationIgnored private var subscription: String?
+    /// Answers still being matched off the main thread.
+    @ObservationIgnored private var pending = 0
+    @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var grace: Task<Void, Never>?
+
+    private static var kept: [String: DiscoverSources] = [:]
+    private static var recent: [String] = []
+
+    /// The title's sources; the last dozen titles opened keep theirs.
+    static func of(_ item: TMDBCatalog.Item) -> DiscoverSources {
+        recent.removeAll { $0 == item.key }
+        recent.append(item.key)
+        if let sources = kept[item.key] { return sources }
+        let sources = DiscoverSources(item)
+        kept[item.key] = sources
+        if recent.count > 12 { kept[recent.removeFirst()] = nil }
+        return sources
+    }
+
+    private init(_ item: TMDBCatalog.Item) {
+        keyword = item.name
+        wanted = SourceTitleMatch.Wanted(names: [item.name, item.originalName], year: item.year)
+    }
+
+    /// The page is on screen: the first time it searches; later it carries on a search the page left unfinished.
+    func start(_ store: Store) {
+        guard let config = store.subscription else { return }
+        let identity = "\(config.origin)|\(config.importedAt.timeIntervalSince1970)"
+        if subscription != identity {
+            subscription = identity
+            generation += 1; pending = 0
+            grace?.cancel(); grace = nil
+            found = []; matches = []; chosen = nil; finished = false
+            search.reset()
+        }
+        order = Dictionary(store.recommendationSites(config).enumerated().map { ($1.key, $0) }) { first, _ in first }
+        search.order = store.sourceOrder
+        search.onResult = { [weak self] in self?.absorb($0) }
+        if search.keyword.isEmpty {
+            let hidden = store.hiddenSources
+            search.search(keyword, config: config) { hidden.contains($0, origin: config.origin) }
+            // Answered from the model's own cache, the results are in already.
+            search.results.forEach(absorb)
+        } else if search.suspended {
+            search.resumeSuspended(config: config)
+        }
+        settle()
+    }
+
+    /// The page left: the search pauses (the sources that answered keep their results), and so does the wait to choose.
+    func stop() {
+        search.suspend()
+        grace?.cancel(); grace = nil
+    }
+
+    func choose(_ candidate: SourceTitleMatch.Candidate) {
+        grace?.cancel(); grace = nil
+        chosen = candidate
+    }
+
+    private func absorb(_ result: SearchSourceResult) {
+        guard let videos = result.page?.videos, !videos.isEmpty else { settle(); return }
+        let site = result.site, wanted = wanted, generation = generation
+        pending += 1
+        Task {
+            // Normalizing titles (traditional to simplified, widths) runs off the main thread, once per answer.
+            let more = await Task.detached(priority: .userInitiated) { SourceTitleMatch.candidates(videos, site: site, wanted: wanted) }.value
+            guard generation == self.generation else { return }
+            pending -= 1
+            if !more.isEmpty {
+                found += more
+                matches = SourceTitleMatch.ranked(found, sourceOrder: order)
+            }
+            settle()
+        }
+    }
+
+    /// The best match shows once nothing can beat it (the title itself, from its year), once every source answered, or
+    /// four seconds after the first match, so a slow source doesn't hold the page up. Then it stays: a better match
+    /// that comes later goes under Change Source rather than swapping the episodes under the viewer.
+    private func settle() {
+        let done = pending == 0 && !search.suspended && search.completed >= search.total
+        if finished != done { finished = done }
+        guard chosen == nil, let best = matches.first else { return }
+        if done || best.decisive { choose(best); return }
+        guard grace == nil else { return }
+        grace = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled, let self, self.chosen == nil, let best = self.matches.first else { return }
+            self.choose(best)
+        }
+    }
+}
+
+/// Between the studios and the genres: the title's episodes from the best of the viewer's sources (`DiscoverSources`),
+/// as a source's own page shows them (`VideoDetailView.embedded`).
+private struct DiscoverSourceEpisodes: View {
+    @Environment(Store.self) private var store
+    let sources: DiscoverSources
+    let item: TMDBCatalog.Item
+    @State private var changing = false
+
+    var body: some View {
+        Group {
+            if let chosen = sources.chosen, let config = store.subscription {
+                VideoDetailView(video: chosen.video, client: CatalogClient(site: chosen.site, origin: config.origin, jarURL: config.spiderURL),
+                                embed: DetailEmbed(work: item) { changing = true })
+                    .id(chosen.id)
+            } else if sources.finished {
+                VStack(alignment: .leading, spacing: 12) {
+                    heading
+                    Text(L10n.text("None of your sources has this title.")).font(.subheadline).opacity(0.65)
+                    Button { store.searchVideos(item.name) } label: { Label(L10n.text("Search Sources"), systemImage: "magnifyingglass") }
+                        .controlButton()
+                        .accessibilityIdentifier("discover.sources.search")
+                }
+                .padding(.horizontal, 20)
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    heading
+                    HStack(spacing: 10) {
+                        ProgressView().appControlSize(.small)
+                        Text(L10n.text("Searching for sources…")).font(.subheadline).opacity(0.65)
+                    }
+                    .frame(minHeight: 44)
+                }
+                .padding(.horizontal, 20)
+                .accessibilityIdentifier("discover.sources.searching")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .sheet(isPresented: $changing) {
+            // Passed on by hand: an iPad app on a Mac lost the store in sheets (#1163).
+            DiscoverSourcePicker(sources: sources).environment(store)
+        }
+    }
+
+    private var heading: some View {
+        Text(L10n.text("Episodes")).font(.system(size: 19, weight: .semibold))
+    }
+}
+
+/// Change Source: the results that are the title, as they arrive, the one showing checked. As a book's source picker.
+private struct DiscoverSourcePicker: View {
+    let sources: DiscoverSources
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    ForEach(sources.matches) { match in
+                        Button { sources.choose(match); dismiss() } label: {
+                            NovelRow(symbol: match.id == sources.chosen?.id ? "checkmark.circle.fill" : "circle", title: SourceLabel(match.site.name).text,
+                                     detail: match.video.remarks.isEmpty ? match.video.year ?? "" : match.video.remarks, note: match.video.name)
+                        }
+                        .novelRowButton()
+                        .accessibilityIdentifier("discover.sources.option")
+                    }
+                    if !sources.finished {
+                        HStack(spacing: 10) {
+                            ProgressView().appControlSize(.small)
+                            Text(L10n.text("Searched %lld of %lld sources", sources.search.completed, sources.search.total))
+                                .font(.footnote).foregroundStyle(.secondary).monospacedDigit()
+                        }
+                        .padding(.top, 8)
+                    } else if sources.matches.isEmpty {
+                        Text(L10n.text("None of your sources has this title.")).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(16)
+            }
+            .navigationTitle(L10n.text("Change Source"))
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L10n.text("Done")) { dismiss() } } }
+        }
+        #if os(iOS)
+        .presentationDetents([.medium, .large])
+        #else
+        .frame(minWidth: 460, minHeight: 420)
+        #endif
+    }
+}
+#endif
 
 private struct DiscoverDetailBackground: View {
     let model: DiscoverDetailModel
