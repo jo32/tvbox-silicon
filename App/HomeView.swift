@@ -109,7 +109,7 @@ struct HomeView: View {
             || (showsPinnedSources && !store.pinnedSources.isEmpty)
             || showsRecommendations
             || (showsFavorites && !store.favorites.items.isEmpty)
-            || (showsLiveTV && !config.lives.isEmpty)
+            || (showsLiveTV && !store.liveSources.isEmpty)
     }
 
     @ViewBuilder private var sections: some View {
@@ -121,7 +121,7 @@ struct HomeView: View {
                 }
                 if showsRecommendations { RecommendationsView(config: config) }
                 if showsFavorites, !store.favorites.items.isEmpty { favorites }
-                if showsLiveTV, !config.lives.isEmpty { playlists(config).id("live") }
+                if showsLiveTV, !store.liveSources.isEmpty { playlists(config).id("live") }
                 if !(showsContinueWatching || showsPinnedSources || showsRecommendations || showsFavorites || showsLiveTV) { allHidden }
             } else {
                 welcome
@@ -148,7 +148,7 @@ struct HomeView: View {
             if showsFavorites, !store.favorites.items.isEmpty {
                 loadingSection(HomeSection.favorites.title, action: { openSection(.favorites) }) { cardRow }
             }
-            if showsLiveTV, !config.lives.isEmpty {
+            if showsLiveTV, !store.liveSources.isEmpty {
                 loadingSection(HomeSection.liveTV.title, action: { openSection(.live) }) { ChannelSkeletonGrid(count: 3) }
             }
         }
@@ -320,7 +320,7 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: Layout.headerSpacing) {
             SectionHeader(title: L10n.text("Live TV")) { openSection(.live) }
             // Every platform, then one row of playlists.
-            LiveSourceGrid(sources: config.lives.filter(\.isBuiltIn) + config.lives.filter { !$0.isBuiltIn }.prefix(3), titled: false)
+            LiveSourceGrid(sources: store.liveSources.filter(\.isBuiltIn) + store.liveSources.filter { !$0.isBuiltIn }.prefix(3), titled: false)
         }
     }
 

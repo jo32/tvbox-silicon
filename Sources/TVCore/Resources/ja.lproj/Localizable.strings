@@ -1386,7 +1386,6 @@
 "More Charts" = "その他のランキング";
 "Add from File…" = "ファイルから追加…";
 "A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider." = "TVBox JSON 配信設定、M3U / TXT ライブ再生リスト、または Python（.py）か JavaScript（.js）のスパイダー 1 つ。";
-"This file is on the device it was added on, not on this one. Files don't sync to other devices; use a web address instead." = "このファイルは追加したデバイスにあり、このデバイスにはありません。ファイルはほかのデバイスに同期されないため、URL で追加してください。";
 "This source needs %@, a file next to its config. Only the config file itself was added, so add the config by its web address instead." = "このソースには設定ファイルの隣にある %@ が必要ですが、追加されたのは設定ファイルだけです。設定を URL で追加してください。";
 "LX Music Sources" = "LX Music カスタムソース";
 "LX Music Source" = "LX Music ソース";
@@ -2137,3 +2136,15 @@
 "End of Episode" = "このエピソードの終わり";
 "Turn Off Sleep Timer" = "スリープタイマーをオフ";
 "Until %@" = "%@ に停止";
+"Hide or Show Live TV" = "ライブ TV の表示・非表示";
+"All Live TV Is Hidden" = "ライブ TV はすべて非表示です";
+"Show platforms and playlists again in Hide or Show Live TV." = "「ライブ TV の表示・非表示」で、配信サービスと再生リストをもう一度表示できます。";
+"Remove the playlist %@?" = "再生リスト %@ を削除しますか？";
+"Remove Playlist" = "再生リストを削除";
+"It was added as a subscription of its own, so the subscription is removed too." = "単独の配信設定として追加されたため、その配信設定も削除されます。";
+"Hide" = "非表示にする";
+"Ticked platforms and playlists show in Live TV and Watch Now." = "チェックした配信サービスと再生リストが「ライブ TV」と「今すぐ観る」に表示されます。";
+"An M3U or TXT address, or a subscription with live playlists." = "M3U・TXT の URL、またはライブ再生リストを含む配信設定。";
+"Add Live Playlist" = "ライブ再生リストを追加";
+"Built-in platforms and a subscription's playlists can't be deleted, only hidden. A playlist added as its own subscription can be removed here." = "内蔵の配信サービスと配信設定に含まれる再生リストは削除できず、非表示にのみできます。単独の配信設定として追加した再生リストはここで削除できます。";
+"This file hasn't reached this device. A small file added on another device syncs through iCloud; for a large one, use a web address instead." = "このファイルはまだこのデバイスに届いていません。ほかのデバイスで追加した小さなファイルは iCloud で同期されます。大きなファイルは URL で追加してください。";

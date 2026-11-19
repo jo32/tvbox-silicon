@@ -94,7 +94,7 @@ public enum ImportedFiles {
     }
 
     /// The copy behind an address on the reserved host: one file, straight in the folder.
-    private static func file(for url: URL) -> URL? {
+    static func file(for url: URL) -> URL? {
         guard url.host()?.lowercased() == host else { return nil }
         let parts = url.pathComponents.filter { $0 != "/" }
         guard parts.count == 1, let name = parts.first, !name.hasPrefix(".") else { return directory.appending(path: ".missing") }
@@ -114,9 +114,10 @@ public enum ImportedFiles {
     }
 
     /// What a file's address says when its copy isn't here. The subscription list follows the viewer to their other
-    /// devices through iCloud and a file's copy doesn't, so this is nearly always a file added on another device (#842).
+    /// devices through iCloud, and a file's copy only when it is small (`syncedTexts`, #1235), so this is nearly always a
+    /// large file, or one still on its way, added on another device (#842).
     public static var missingMessage: String {
-        L10n.text("This file is on the device it was added on, not on this one. Files don't sync to other devices; use a web address instead.")
+        L10n.text("This file hasn't reached this device. A small file added on another device syncs through iCloud; for a large one, use a web address instead.")
     }
 
     /// An address on the reserved host whose copy isn't on this device.

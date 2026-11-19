@@ -20,6 +20,8 @@ import TVCore
     let playbackDefaults: UserDefaults
     let pinnedSources: PinnedSources
     let hiddenSources: HiddenSources
+    /// Live platforms and playlists the viewer turned off (#601, #837).
+    let hiddenLiveSources: HiddenLiveSources
     let sourceOrder: SourceOrder
     /// Keeps the viewer's library the same on their other devices; nil for tests and QA's isolated data.
     let cloudSync: CloudSync?
@@ -136,8 +138,18 @@ import TVCore
     private(set) var livePlugins = LivePlugins.shared.installed
     private(set) var lxSources = LXSourceLibrary.shared.sources
     @ObservationIgnored private var lxSourcesObserver: NSObjectProtocol?
-    /// Live TV's sources: the subscription's (with the plugins' platforms), or the plugins' alone.
-    var liveSources: [LiveSource] { subscription?.lives ?? livePluginPlatforms.map(\.source) }
+    /// Every live source, hidden ones too: the subscription's (with the plugins' platforms), or the plugins' alone.
+    var allLiveSources: [LiveSource] { subscription?.lives ?? livePluginPlatforms.map(\.source) }
+    /// Live TV's sources: the ones the viewer hasn't hidden.
+    var liveSources: [LiveSource] { allLiveSources.filter { !hiddenLiveSources.contains($0) } }
+    /// The live playlists among `sources` by the subscription that lists them (#815).
+    func livePlaylistGroups(_ sources: [LiveSource]) -> [LivePlaylistGroup] {
+        LivePlaylistGroup.make(sources, subscriptions: subscriptions.filter(\.enabled).compactMap { entry in documents[entry.address].map { (entry, $0) } })
+    }
+    /// The subscription that is just this playlist, which removing the playlist removes.
+    func playlistSubscription(_ source: LiveSource) -> SubscriptionEntry? {
+        subscriptions.first { entry in documents[entry.address].map { $0.isPlaylistOnly && $0.lives.contains { $0.url == source.url } } == true }
+    }
     @ObservationIgnored private var automaticCache: [Site]?
     @ObservationIgnored private var orderedCache: [Site]?
     @ObservationIgnored private var recommendationCache: [Site]?
@@ -171,6 +183,7 @@ import TVCore
         #endif
         pinnedSources = PinnedSources(defaults: playbackDefaults)
         hiddenSources = HiddenSources(defaults: playbackDefaults)
+        hiddenLiveSources = HiddenLiveSources(defaults: playbackDefaults)
         #if os(macOS) || os(iOS)
         WebSniff.install(WKWebSniffer())
         #endif
@@ -615,21 +628,31 @@ import TVCore
         guard persistsChanges else { return }
         defaults.set(try? JSONEncoder().encode(subscriptions), forKey: "subscriptions")
         cloudSync?.changed("subscriptions")
+        cloudSync?.changed("importedFiles")
     }
     /// Favorites, Continue Watching, subscriptions and the viewer's pins, hides and order follow them to their other
     /// devices. Continue Watching changes every few seconds while a video plays, so it waits longer between writes.
     private func setUpCloudSync() {
         guard let sync = cloudSync else { return }
         let favorites = favorites, history = playbackHistory, pinned = pinnedSources, hidden = hiddenSources, order = sourceOrder
+        let hiddenLive = hiddenLiveSources
         let followed = followedShows
         sync.register("favorites", current: { favorites.syncValues }, apply: { favorites.adopt($0) })
         sync.register("followedShows", current: { followed.syncValues }, apply: { followed.adopt($0) })
         sync.register("history", delay: .seconds(30), current: { Dictionary(history.entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }) },
                       apply: { history.adopt($0.map(\.value)) })
         sync.register("subscriptions", current: { [weak self] in self?.syncedSubscriptions ?? [:] }, apply: { [weak self] in self?.adoptSubscriptions($0) })
+        // After the list, so a file arrives in the same merge as the subscription that names it (#1235).
+        sync.register("importedFiles", current: { [weak self] in ImportedFiles.syncedTexts(for: self?.subscriptions.map(\.address) ?? []) },
+                      apply: { [weak self] items in
+                          guard ImportedFiles.adopt(Dictionary(items.map { ($0.id, $0.value) }, uniquingKeysWith: { first, _ in first })) else { return }
+                          Task { await self?.restoreSubscription() }
+                      })
         sync.register("pinnedSources", current: { CloudSync.ranks(pinned.savedKeys) }, apply: { pinned.adopt(CloudSync.ordered($0)) })
         sync.register("hiddenSources", current: { Dictionary(hidden.savedKeys.map { ($0, true) }, uniquingKeysWith: { first, _ in first }) },
                       apply: { hidden.adopt($0.sorted { ($0.stamp, $0.id) < ($1.stamp, $1.id) }.map(\.id)) })
+        sync.register("hiddenLiveSources", current: { Dictionary(hiddenLive.savedKeys.map { ($0, true) }, uniquingKeysWith: { first, _ in first }) },
+                      apply: { hiddenLive.adopt($0.sorted { ($0.stamp, $0.id) < ($1.stamp, $1.id) }.map(\.id)) })
         sync.register("sourceOrder", current: { CloudSync.ranks(order.savedKeys) }, apply: { order.adopt(CloudSync.ordered($0)) })
         // Only "on" is an item: a new device's default (off) is no change, so it can't switch the order off everywhere.
         sync.register("sourceOrderOn", current: { order.enabled ? ["on": true] : [:] }, apply: { if order.enabled == $0.isEmpty { order.enabled = !$0.isEmpty } })
@@ -638,6 +661,7 @@ import TVCore
         history.onChange = { sync.changed("history") }
         pinned.onChange = { sync.changed("pinnedSources") }
         hidden.onChange = { sync.changed("hiddenSources") }
+        hiddenLive.onChange = { sync.changed("hiddenLiveSources") }
         order.onChange = { sync.changed("sourceOrder"); sync.changed("sourceOrderOn") }
     }
     private var syncedSubscriptions: [String: SyncedSubscription] {
@@ -652,6 +676,7 @@ import TVCore
         for entry in subscriptions where !kept.contains(entry.address) {
             documents[entry.address] = nil; subscriptionErrors[entry.address] = nil
             try? FileManager.default.removeItem(at: Self.file(for: entry))
+            ImportedFiles.remove(entry.address)
         }
         subscriptions = next
         saveSubscriptionList()

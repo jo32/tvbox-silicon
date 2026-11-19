@@ -1386,7 +1386,6 @@
 "More Charts" = "More Charts";
 "Add from File…" = "Add from File…";
 "A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider." = "A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider.";
-"This file is on the device it was added on, not on this one. Files don't sync to other devices; use a web address instead." = "This file is on the device it was added on, not on this one. Files don't sync to other devices; use a web address instead.";
 "This source needs %@, a file next to its config. Only the config file itself was added, so add the config by its web address instead." = "This source needs %@, a file next to its config. Only the config file itself was added, so add the config by its web address instead.";
 "LX Music Sources" = "LX Music Sources";
 "LX Music Source" = "LX Music Source";
@@ -2137,3 +2136,15 @@
 "End of Episode" = "End of Episode";
 "Turn Off Sleep Timer" = "Turn Off Sleep Timer";
 "Until %@" = "Until %@";
+"Hide or Show Live TV" = "Hide or Show Live TV";
+"All Live TV Is Hidden" = "All Live TV Is Hidden";
+"Show platforms and playlists again in Hide or Show Live TV." = "Show platforms and playlists again in Hide or Show Live TV.";
+"Remove the playlist %@?" = "Remove the playlist %@?";
+"Remove Playlist" = "Remove Playlist";
+"It was added as a subscription of its own, so the subscription is removed too." = "It was added as a subscription of its own, so the subscription is removed too.";
+"Hide" = "Hide";
+"Ticked platforms and playlists show in Live TV and Watch Now." = "Ticked platforms and playlists show in Live TV and Watch Now.";
+"An M3U or TXT address, or a subscription with live playlists." = "An M3U or TXT address, or a subscription with live playlists.";
+"Add Live Playlist" = "Add Live Playlist";
+"Built-in platforms and a subscription's playlists can't be deleted, only hidden. A playlist added as its own subscription can be removed here." = "Built-in platforms and a subscription's playlists can't be deleted, only hidden. A playlist added as its own subscription can be removed here.";
+"This file hasn't reached this device. A small file added on another device syncs through iCloud; for a large one, use a web address instead." = "This file hasn't reached this device. A small file added on another device syncs through iCloud; for a large one, use a web address instead.";
