@@ -1386,7 +1386,6 @@
 "More Charts" = "更多榜单";
 "Add from File…" = "从文件添加…";
 "A TVBox JSON subscription, an M3U or TXT live playlist, or one Python (.py) or JavaScript (.js) spider." = "TVBox JSON 订阅、M3U / TXT 直播列表，或单个 Python（.py）或 JavaScript（.js）爬虫。";
-"This file is on the device it was added on, not on this one. Files don't sync to other devices; use a web address instead." = "此文件在添加它的设备上，不在本设备上。本地文件不会同步到其他设备，请改用网址订阅。";
 "This source needs %@, a file next to its config. Only the config file itself was added, so add the config by its web address instead." = "此来源需要配置文件旁边的 %@，但添加时只导入了配置文件本身。请改用网址添加此配置。";
 "LX Music Sources" = "洛雪音乐自定义源";
 "LX Music Source" = "洛雪音源";
@@ -2137,3 +2136,15 @@
 "End of Episode" = "播完这一集";
 "Turn Off Sleep Timer" = "关闭定时";
 "Until %@" = "%@ 停止播放";
+"Hide or Show Live TV" = "隐藏或显示直播";
+"All Live TV Is Hidden" = "直播已全部隐藏";
+"Show platforms and playlists again in Hide or Show Live TV." = "可在“隐藏或显示直播”中重新显示直播平台和直播列表。";
+"Remove the playlist %@?" = "要移除直播列表 %@ 吗？";
+"Remove Playlist" = "移除直播列表";
+"It was added as a subscription of its own, so the subscription is removed too." = "它是作为单独的订阅添加的，所以该订阅也会一并移除。";
+"Hide" = "隐藏";
+"Ticked platforms and playlists show in Live TV and Watch Now." = "勾选的直播平台和直播列表会显示在“直播”和“现在观看”中。";
+"An M3U or TXT address, or a subscription with live playlists." = "M3U 或 TXT 地址，或者包含直播列表的订阅。";
+"Add Live Playlist" = "添加直播列表";
+"Built-in platforms and a subscription's playlists can't be deleted, only hidden. A playlist added as its own subscription can be removed here." = "内置直播平台和订阅中的直播列表无法删除，只能隐藏。单独作为订阅添加的直播列表可以在这里移除。";
+"This file hasn't reached this device. A small file added on another device syncs through iCloud; for a large one, use a web address instead." = "此文件尚未同步到这台设备。在其他设备上添加的小文件会通过 iCloud 同步；较大的文件请改用网址订阅。";

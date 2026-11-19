@@ -90,11 +90,11 @@ struct WatchNowTVPage: View {
             }
             .id("favorites")
         }
-        if sections.contains(.liveTV), !config.lives.isEmpty {
+        if sections.contains(.liveTV), !store.liveSources.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
                 WatchNowTVHeading(title: L10n.text("Live TV"))
                 // Every platform, then one row of playlists.
-                LiveSourceGrid(sources: config.lives.filter(\.isBuiltIn) + config.lives.filter { !$0.isBuiltIn }.prefix(3), titled: false)
+                LiveSourceGrid(sources: store.liveSources.filter(\.isBuiltIn) + store.liveSources.filter { !$0.isBuiltIn }.prefix(3), titled: false)
                     .padding(.horizontal, DiscoverLayout.gutter).padding(.vertical, 24)
                     .focusSection()
             }

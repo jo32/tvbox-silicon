@@ -527,6 +527,7 @@ struct FormSettingsView: View {
     #endif
     /// `HiddenSourcesEditor`, opened from the subscriptions.
     @State private var editingSources = false
+    @State private var editingLive = false
     /// A subscription its menu asked to remove, waiting for the confirmation.
     @State private var removingSubscription: SubscriptionEntry?
     /// A source list, LX Music source or live plugin its menu asked to remove, waiting for the confirmation.
@@ -632,6 +633,25 @@ struct FormSettingsView: View {
                     // A row like the subscriptions above it, not the accent the form gives a button.
                     .tint(.primary)
                     .accessibilityIdentifier("settings.hiddenSources")
+                }
+                // The same for Live TV: the built-in platforms aren't in any subscription that can be removed (#837).
+                if !store.allLiveSources.isEmpty {
+                    let hidden = store.allLiveSources.filter(store.hiddenLiveSources.contains).count
+                    Button { editingLive = true } label: {
+                        HStack(spacing: 8) {
+                            FormLabel(symbol: "tv.fill", tint: .red, title: L10n.text("Hide or Show Live TV")).lineLimit(1).layoutPriority(1)
+                                .foregroundStyle(.primary)
+                            Spacer(minLength: 0)
+                            if hidden > 0 { Text(L10n.text("%lld hidden", hidden)).lineLimit(1).foregroundStyle(.secondary) }
+                            #if os(iOS)
+                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
+                            #endif
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .formRowButton()
+                    .tint(.primary)
+                    .accessibilityIdentifier("settings.hiddenLive")
                 }
                 // Dragging, rather than Move Up and Move Down on each one's page (#1184).
                 if store.subscriptions.count > 1 {
@@ -978,6 +998,7 @@ struct FormSettingsView: View {
         }
         .settingsForm(L10n.text("Settings"))
         .sheet(isPresented: $editingSources) { HiddenSourcesEditor() }
+        .sheet(isPresented: $editingLive) { LiveSourcesEditor() }
         // An alert rather than a dialog: a dialog on the row never appeared after a swipe, and on the page it pointed
         // at the top of Settings.
         .alert(L10n.text("Remove “%@”", removingSubscription?.title ?? ""),
@@ -1289,7 +1310,7 @@ struct PrivacySettingsView: View {
 
 /// Adding a subscription: the address, a shortcut to the default one, and Add in the toolbar.
 /// Closes itself once the import succeeds; a failure stays here under the field.
-private struct AddSubscriptionSheet: View {
+struct AddSubscriptionSheet: View {
     @Environment(Store.self) private var store
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focused: Bool
@@ -2100,6 +2121,10 @@ struct TVSettingsView: View {
                 TVSettingsLink(title: extra.title, value: extra.value) { extra.page }
             }
             TVSettingsLink(title: L10n.text("Add Subscription")) { TVAddSubscriptionPage() }
+            if !store.allLiveSources.isEmpty {
+                let hidden = store.allLiveSources.filter(store.hiddenLiveSources.contains).count
+                TVSettingsLink(title: L10n.text("Hide or Show Live TV"), value: hidden > 0 ? L10n.text("%lld hidden", hidden) : nil) { LiveSourcesEditor() }
+            }
             if store.subscriptions.count + SubscriptionExtra.all(store).count > 1 {
                 TVSettingsLink(title: L10n.text("Remove Subscriptions")) { TVRemoveSubscriptionsPage() }
             }
@@ -2452,7 +2477,7 @@ private struct TVRemoveSubscriptionsPage: View {
 }
 
 /// Adding a subscription: the address, then add it or fill in the default one.
-private struct TVAddSubscriptionPage: View {
+struct TVAddSubscriptionPage: View {
     @Environment(Store.self) private var store
     @Environment(\.dismiss) private var dismiss
     var body: some View {

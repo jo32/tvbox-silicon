@@ -4,6 +4,9 @@ import TVCore
 struct LiveView: View {
     @Environment(Store.self) private var store
     @State private var query = ""
+    #if !os(tvOS)
+    @State private var editing = false
+    #endif
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     var body: some View {
         Group {
@@ -11,7 +14,16 @@ struct LiveView: View {
                 ScrollView {
                     Group {
                         if trimmed.isEmpty {
-                            LiveSourceGrid(sources: sources)
+                            VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
+                                LiveSourceGrid(sources: sources, grouped: true)
+                                #if os(tvOS)
+                                // No toolbar on Apple TV: the way to hide a platform or bring one back is where the list ends.
+                                RouteLink { LiveSourcesEditor() } label: {
+                                    Label(L10n.text("Hide or Show Live TV"), systemImage: "eye.slash")
+                                }
+                                .buttonStyle(.bordered)
+                                #endif
+                            }
                         } else {
                             LiveSearchResults(query: trimmed, sources: sources)
                         }
@@ -22,6 +34,19 @@ struct LiveView: View {
                 // `-qaSection live -qaQuery <text>` shows the Live tab's search.
                 .task { if QALaunch.page == nil, let text = UserDefaults.standard.string(forKey: "qaQuery") { query = text } }
                 #endif
+            } else if !store.allLiveSources.isEmpty {
+                // Everything was hidden: say so, rather than asking for a subscription the viewer already has.
+                #if os(tvOS)
+                VStack(spacing: 40) {
+                    EmptyResults(symbol: "eye.slash", title: L10n.text("All Live TV Is Hidden"),
+                                 message: L10n.text("Show platforms and playlists again in Hide or Show Live TV."))
+                    RouteLink { LiveSourcesEditor() } label: { Text(L10n.text("Hide or Show Live TV")) }.buttonStyle(.bordered)
+                }
+                #else
+                EmptyPage(symbol: "eye.slash", title: L10n.text("All Live TV Is Hidden"),
+                          message: L10n.text("Show platforms and playlists again in Hide or Show Live TV."),
+                          action: L10n.text("Hide or Show Live TV"), actionSymbol: "eye", perform: { editing = true })
+                #endif
             } else {
                 EmptyPage(symbol: AppSection.live.icon, title: L10n.text("Connect a Live Subscription"),
                           message: L10n.text("In Settings, add a TVBox subscription with live playlists, an M3U or TXT live playlist, or live plugins."),
@@ -30,18 +55,39 @@ struct LiveView: View {
         }
         .screenBackdrop()
         .tabTitle(L10n.text("Live TV"))
+        #if !os(tvOS)
+        .toolbar {
+            // Hiding a platform, bringing one back, and adding or removing a playlist (#601, #837).
+            if !store.allLiveSources.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(L10n.text("Edit")) { editing = true }.accessibilityIdentifier("live.edit")
+                }
+            }
+        }
+        .sheet(isPresented: $editing) { LiveSourcesEditor() }
+        #if DEBUG
+        // `-qaEditLive 1` opens Hide or Show Live TV for screenshots.
+        .task { if UserDefaults.standard.bool(forKey: "qaEditLive") { try? await Task.sleep(for: .seconds(2)); editing = true } }
+        #endif
+        #endif
     }
 }
 
 /// Live sources as the Live tab and Home show them: the built-in platforms as a row of brand cards
-/// showing a room that is live now, then the subscription's playlists as launcher tiles.
+/// showing a room that is live now, then the subscription's playlists as launcher tiles. Touching and holding
+/// one hides it, or removes a playlist that was added on its own (#601, #837).
 struct LiveSourceGrid: View {
+    @Environment(Store.self) private var store
     let sources: [LiveSource]
     /// Section titles; Home's Live TV section has its own header and leaves them out.
     var titled = true
+    /// The playlists in one section per subscription (#815), as the Live tab shows them.
+    var grouped = false
+    @State private var removing: (source: LiveSource, entry: SubscriptionEntry)?
     var body: some View {
         let platforms = sources.compactMap(\.platform)
         let playlists = sources.filter { !$0.isBuiltIn }
+        let groups = grouped ? store.livePlaylistGroups(playlists) : []
         VStack(alignment: .leading, spacing: titled ? Layout.sectionSpacing : Layout.cardSpacing) {
             if !platforms.isEmpty {
                 VStack(alignment: .leading, spacing: Layout.headerSpacing) {
@@ -49,20 +95,49 @@ struct LiveSourceGrid: View {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: Layout.tileMin), spacing: Layout.cardSpacing)], spacing: Layout.cardSpacing) {
                         ForEach(platforms) { platform in
                             RouteLink { LivePlatformView(platform: platform) } label: { LivePlatformCard(platform: platform) }.tileButton()
+                                .contextMenu { hideButton(platform.source) }
                         }
                     }
                 }.tvFocusSection()
             }
-            if !playlists.isEmpty {
-                VStack(alignment: .leading, spacing: Layout.headerSpacing) {
-                    if titled { SectionHeader(title: L10n.text("Live Playlists")) }
-                    LazyVGrid(columns: Layout.cardColumns, spacing: Layout.cardSpacing) {
-                        ForEach(playlists) { source in
-                            RouteLink { ChannelListView(source: source) } label: { LiveSourceCard(source: source) }.tileButton()
-                        }
-                    }
-                }.tvFocusSection()
+            // One subscription's playlists keep the one heading they always had.
+            if groups.count > 1 {
+                ForEach(groups) { group in playlistSection(group.title ?? L10n.text("Live Playlists"), group.sources) }
+            } else if !playlists.isEmpty {
+                playlistSection(L10n.text("Live Playlists"), groups.first?.sources ?? playlists)
             }
+        }
+        .confirmationDialog(removing.map { L10n.text("Remove the playlist %@?", $0.entry.title) } ?? "",
+                            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
+            Button(L10n.text("Remove Playlist"), role: .destructive) { if let removing { store.removeSubscription(removing.entry) } }
+            Button(L10n.text("Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.text("It was added as a subscription of its own, so the subscription is removed too."))
+        }
+    }
+
+    private func playlistSection(_ title: String, _ playlists: [LiveSource]) -> some View {
+        VStack(alignment: .leading, spacing: Layout.headerSpacing) {
+            if titled { SectionHeader(title: title) }
+            LazyVGrid(columns: Layout.cardColumns, spacing: Layout.cardSpacing) {
+                ForEach(playlists) { source in
+                    RouteLink { ChannelListView(source: source) } label: { LiveSourceCard(source: source) }.tileButton()
+                        .contextMenu {
+                            hideButton(source)
+                            if let entry = store.playlistSubscription(source) {
+                                Button(role: .destructive) { removing = (source, entry) } label: {
+                                    Label(L10n.text("Remove Playlist"), systemImage: "trash")
+                                }
+                            }
+                        }
+                }
+            }
+        }.tvFocusSection()
+    }
+
+    private func hideButton(_ source: LiveSource) -> some View {
+        Button { withAnimation(.smooth) { store.hiddenLiveSources.setHidden([source], hidden: true) } } label: {
+            Label(L10n.text("Hide"), systemImage: "eye.slash")
         }
     }
 }
@@ -800,4 +875,187 @@ struct ChannelCard: View {
         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
         .contentPanel()
     }
+}
+
+/// Every live platform and playlist with a tick: ticked ones show in Live TV, Watch Now and live search (#601, #783, #837).
+/// The built-in platforms and a subscription's playlists can't be deleted on their own, so they are hidden; a playlist
+/// added as its own subscription can be removed, and another one added, from here.
+struct LiveSourcesEditor: View {
+    @Environment(Store.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var removing: SubscriptionEntry?
+    #if os(iOS)
+    @State private var adding = false
+    #endif
+    #if !os(tvOS)
+    @State private var choosesFile = false
+    #endif
+
+    private var platforms: [LiveSource] { store.allLiveSources.filter(\.isBuiltIn) }
+    private var groups: [LivePlaylistGroup] { store.livePlaylistGroups(store.allLiveSources) }
+    private var sections: [(id: String, title: String, sources: [LiveSource])] {
+        (platforms.isEmpty ? [] : [("platforms", L10n.text("Live Platforms"), platforms)])
+            + groups.map { ($0.id.isEmpty ? "playlists" : $0.id, $0.title ?? L10n.text("Live Playlists"), $0.sources) }
+    }
+    private func shown(_ source: LiveSource) -> Bool { !store.hiddenLiveSources.contains(source) }
+    private func setHidden(_ sources: [LiveSource], _ hidden: Bool) {
+        withAnimation(.smooth) { store.hiddenLiveSources.setHidden(sources, hidden: hidden) }
+    }
+    private var removeTitle: String { removing.map { L10n.text("Remove the playlist %@?", $0.title) } ?? "" }
+    private var removingShown: Binding<Bool> { Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }) }
+
+    var body: some View {
+        #if os(tvOS)
+        TVSettingsSubpage(symbol: "eye.slash", title: L10n.text("Hide or Show Live TV"),
+                          subtitle: L10n.text("Ticked platforms and playlists show in Live TV and Watch Now.")) {
+            ForEach(sections, id: \.id) { section in
+                TVSettingsSection(title: section.title) {
+                    ForEach(section.sources) { source in
+                        let isShown = shown(source)
+                        Button { setHidden([source], isShown) } label: {
+                            TVSettingsRowLabel(title: source.name, value: isShown ? nil : L10n.text("Hidden")) {
+                                Image(systemName: isShown ? "checkmark.circle.fill" : "circle").font(.system(size: 30))
+                            }
+                        }
+                        .glassRow()
+                        .accessibilityAddTraits(isShown ? [.isSelected] : [])
+                        .contextMenu {
+                            if let entry = store.playlistSubscription(source) {
+                                Button(role: .destructive) { removing = entry } label: { Label(L10n.text("Remove Playlist"), systemImage: "trash") }
+                            }
+                        }
+                    }
+                }
+            }
+            TVSettingsSection(footer: L10n.text("An M3U or TXT address, or a subscription with live playlists.")) {
+                TVSettingsLink(title: L10n.text("Add Live Playlist")) { TVAddSubscriptionPage() }
+            }
+        }
+        .confirmationDialog(removeTitle, isPresented: removingShown, titleVisibility: .visible) { removeActions } message: { removeMessage }
+        #else
+        NavigationStack {
+            List {
+                Section {
+                    Text(L10n.text("Ticked platforms and playlists show in Live TV and Watch Now."))
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        #if os(iOS)
+                        .listRowBackground(Surface())
+                        #endif
+                } footer: {
+                    Text(L10n.text("Built-in platforms and a subscription's playlists can't be deleted, only hidden. A playlist added as its own subscription can be removed here."))
+                }
+                ForEach(sections, id: \.id) { section in
+                    let hidden = section.sources.filter { !shown($0) }
+                    Section {
+                        ForEach(section.sources) { source in row(source) }
+                    } header: {
+                        HStack(spacing: 12) {
+                            Text(section.title).lineLimit(1)
+                            Spacer(minLength: 8)
+                            Button(L10n.text("Show All")) { setHidden(section.sources, false) }.disabled(hidden.isEmpty)
+                            Button(L10n.text("Hide All")) { setHidden(section.sources, true) }.disabled(hidden.count == section.sources.count)
+                        }
+                        .buttonStyle(.borderless)
+                        .textCase(nil)
+                    }
+                }
+                addSection
+            }
+            #if os(iOS)
+            .scrollContentBackground(.hidden)
+            .background { Backdrop() }
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .navigationTitle(L10n.text("Hide or Show Live TV"))
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L10n.text("Done")) { dismiss() }.fontWeight(.semibold).accessibilityIdentifier("live.edit.done")
+                }
+            }
+            .confirmationDialog(removeTitle, isPresented: removingShown, titleVisibility: .visible) { removeActions } message: { removeMessage }
+            .fileImporter(isPresented: $choosesFile, allowedContentTypes: SubscriptionFile.types) { result in
+                if case .success(let file) = result { Task { await store.importSubscriptionFile(file) } }
+            }
+            #if os(iOS)
+            .sheet(isPresented: $adding) { AddSubscriptionSheet() }
+            #endif
+        }
+        #if os(macOS)
+        .frame(width: 480, height: 600)
+        #endif
+        #endif
+    }
+
+    @ViewBuilder private var removeActions: some View {
+        Button(L10n.text("Remove Playlist"), role: .destructive) { if let removing { store.removeSubscription(removing) } }
+        Button(L10n.text("Cancel"), role: .cancel) {}
+    }
+    private var removeMessage: some View { Text(L10n.text("It was added as a subscription of its own, so the subscription is removed too.")) }
+
+    #if !os(tvOS)
+    private func row(_ source: LiveSource) -> some View {
+        let isShown = shown(source)
+        let entry = store.playlistSubscription(source)
+        return Button { setHidden([source], isShown) } label: {
+            HStack(spacing: 12) {
+                Image(systemName: isShown ? "checkmark.circle.fill" : "circle").font(.title3)
+                    .foregroundStyle(isShown ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(.secondary))
+                Group {
+                    if let platform = source.platform { LivePlatformMark(platform: platform, size: 32) }
+                    else { MonogramIcon(seed: source.name, label: SourceLabel(source.name), size: 32) }
+                }
+                .opacity(isShown ? 1 : 0.45)
+                Text(source.name).font(.body.weight(.medium)).lineLimit(1)
+                    .foregroundStyle(isShown ? Color.primary : Color.secondary)
+                Spacer(minLength: 8)
+                if !isShown { Text(L10n.text("Hidden")).font(.caption).foregroundStyle(.secondary) }
+            }
+            .padding(.vertical, 3)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isShown ? [.isSelected] : [])
+        .swipeActions {
+            if let entry {
+                Button(role: .destructive) { removing = entry } label: { Label(L10n.text("Remove Playlist"), systemImage: "trash") }
+            }
+        }
+        .contextMenu {
+            if let entry {
+                Button(role: .destructive) { removing = entry } label: { Label(L10n.text("Remove Playlist"), systemImage: "trash") }
+            }
+        }
+        #if os(iOS)
+        .listRowBackground(Surface())
+        #endif
+    }
+
+    @ViewBuilder private var addSection: some View {
+        @Bindable var store = store
+        Section {
+            #if os(iOS)
+            Button { adding = true } label: { Label(L10n.text("Add Live Playlist"), systemImage: "plus") }
+                .listRowBackground(Surface())
+            #else
+            TextField(L10n.text("Subscription URL (TVBox JSON, M3U or TXT)"), text: $store.subscriptionAddress)
+                .autocorrectionDisabled()
+                .onSubmit(add)
+            Button(L10n.text("Add Live Playlist"), action: add)
+                .disabled(store.importing || store.subscriptionAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            #endif
+            Button { choosesFile = true } label: { Label(L10n.text("Add from File…"), systemImage: "doc.badge.plus") }
+                .disabled(store.importing)
+                #if os(iOS)
+                .listRowBackground(Surface())
+                #endif
+        } footer: {
+            if let error = store.importError { Text(error).foregroundStyle(Brand.amber) }
+            else { Text(L10n.text("An M3U or TXT address, or a subscription with live playlists.")) }
+        }
+    }
+
+    private func add() {
+        Task { await store.importSubscription() }
+    }
+    #endif
 }
