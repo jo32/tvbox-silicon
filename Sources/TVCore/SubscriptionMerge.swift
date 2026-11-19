@@ -151,9 +151,32 @@ public enum SubscriptionImport: Sendable {
     case lxMusicSource(String)
 }
 
+extension Subscription {
+    /// The request headers written after an added address, as TVBox writes them after a channel's:
+    /// `https://…/iptv.m3u?…|User-Agent=qqlive`. Some playlists answer, and their channels play, only for one user agent,
+    /// and a bare playlist has no `ua` field to name it. The address keeps them (its `|` encoded as `%7C`), so a refresh
+    /// sends them again. Only header names count: a `|` in the address's own query stays part of it.
+    static func headerSuffix(_ url: URL) -> (url: URL, headers: [String: String]) {
+        let text = url.absoluteString
+        guard let bar = text.range(of: "%7C", options: [.caseInsensitive, .backwards]),
+              let base = URL(string: String(text[..<bar.lowerBound])) else { return (url, [:]) }
+        var headers: [String: String] = [:]
+        for pair in text[bar.upperBound...].split(separator: "&") {
+            let kv = pair.split(separator: "=", maxSplits: 1).map { $0.removingPercentEncoding ?? String($0) }
+            guard kv.count == 2, let name = headerNames[kv[0].lowercased()] else { return (url, [:]) }
+            headers[name] = kv[1]
+        }
+        return headers.isEmpty ? (url, [:]) : (base, headers)
+    }
+    private static let headerNames = ["user-agent": "User-Agent", "ua": "User-Agent", "referer": "Referer", "referrer": "Referer",
+                                      "origin": "Origin", "cookie": "Cookie"]
+}
+
 extension HTTPClient {
-    public func subscriptionImport(_ url: URL) async throws -> SubscriptionImport {
-        let (data, finalURL) = try await get(url, headers: ["User-Agent": Self.subscriptionUserAgent], limit: Self.subscriptionLimit)
+    public func subscriptionImport(_ address: URL) async throws -> SubscriptionImport {
+        let (url, headers) = Subscription.headerSuffix(address)
+        let (data, finalURL) = try await get(url, headers: ["User-Agent": Self.subscriptionUserAgent].merging(headers) { $1 },
+                                             limit: Self.subscriptionLimit)
         if let bundle = CatPawOpen.bundle(data, at: finalURL) { return .subscription(try await CatPawOpen.subscription(bundle: bundle, origin: finalURL, http: self)) }
         if let count = MangaSources.listedCount(data) { return .comicSources(count) }
         if let sources = NovelSource.list(from: data) { return .novelSources(sources.count, data) }
@@ -162,7 +185,7 @@ extension HTTPClient {
         if let entries = Subscription.directory(data, origin: finalURL) { return .directory(entries) }
         let offers = NovelSourceIndex.offers(inPage: data, origin: finalURL)
         if !offers.isEmpty { return .novelIndex(offers) }
-        do { return .subscription(try await Subscription.parse(data, origin: finalURL).sniffingScripts(http: self)) }
+        do { return .subscription(try await Subscription.parse(data, origin: finalURL, headers: headers).sniffingScripts(http: self)) }
         catch {
             // An LX Music source isn't a subscription, but people add one here to play music (#1177).
             if let script = LXSourceLibrary.script(in: data) { return .lxMusicSource(script) }
