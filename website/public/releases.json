@@ -1,6 +1,110 @@
 {
   "releases": [
     {
+      "version": "1.8.26",
+      "build": 64,
+      "date": "2026-11-20",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "sparkle.magnifyingglass",
+          "title": {
+            "en": "Discover finds it on your sources",
+            "zh-Hans": "发现页自动找片源",
+            "zh-Hant": "探索頁自動找片源",
+            "ja": "「見つける」でソースを自動検索"
+          },
+          "detail": {
+            "en": "Open a title in Discover and Yingxia searches your sources for it by itself. The best match's episodes show right on the page, with its lines, stills and the episode you watched last; tap one to play. Change Source lists every source that has the title. On iPhone, iPad, Mac and Apple TV.",
+            "zh-Hans": "在“发现”里打开一部作品，映匣会自动在你的片源里搜索它。最匹配的片源的选集直接显示在页面上，带线路、剧照和上次看到的一集，点一下就能播放。“换源”会列出所有有这部作品的片源。iPhone、iPad、Mac 和 Apple TV 都有。",
+            "zh-Hant": "在「探索」裡打開一部作品，映匣會自動在你的片源裡搜尋它。最符合的片源的選集直接顯示在頁面上，帶線路、劇照和上次看到的一集，點一下就能播放。「換源」會列出所有有這部作品的片源。iPhone、iPad、Mac 和 Apple TV 都有。",
+            "ja": "「見つける」で作品を開くと、映匣があなたのソースから自動で探します。いちばん合うソースのエピソードがページにそのまま表示され、回線、場面写真、前回見たエピソードも分かります。タップすると再生します。「ソースを切り替え」には、その作品があるすべてのソースが並びます。iPhone、iPad、Mac、Apple TV で使えます。"
+          }
+        },
+        {
+          "symbol": "eye.slash",
+          "title": {
+            "en": "Tidy up Live TV",
+            "zh-Hans": "整理直播",
+            "zh-Hant": "整理直播",
+            "ja": "ライブ TV を整理"
+          },
+          "detail": {
+            "en": "Hide any live platform or playlist: touch and hold it in Live TV, or open Hide or Show Live TV from Live TV's Edit button or Settings › Subscriptions. Playlists are grouped by the subscription they came from, and what you hide syncs through iCloud. Playlists added from a file now sync to your other devices too.",
+            "zh-Hans": "任何直播平台或播放列表都可以隐藏：在“直播”里长按它，或者从“直播”的“编辑”按钮、“设置 › 订阅”打开“隐藏或显示直播”。播放列表按所属订阅分组，隐藏的内容会通过 iCloud 同步。从文件添加的播放列表现在也会同步到你的其他设备。",
+            "zh-Hant": "任何直播平台或播放清單都可以隱藏：在「直播」裡長按它，或從「直播」的「編輯」按鈕、「設定 › 訂閱」打開「隱藏或顯示直播」。播放清單按所屬訂閱分組，隱藏的內容會透過 iCloud 同步。從檔案加入的播放清單現在也會同步到你的其他裝置。",
+            "ja": "ライブ配信のプラットフォームやプレイリストを非表示にできます。「ライブ TV」で長押しするか、「ライブ TV」の「編集」ボタンや「設定 › 配信設定」から「ライブ TV の表示・非表示」を開きます。プレイリストは元の配信設定ごとにまとまり、非表示にした項目は iCloud で同期されます。ファイルから追加したプレイリストも、ほかのデバイスに同期されるようになりました。"
+          }
+        },
+        {
+          "symbol": "list.bullet.rectangle",
+          "title": {
+            "en": "Subscriptions sorted by kind",
+            "zh-Hans": "订阅按类型分开",
+            "zh-Hant": "訂閱按類型分開",
+            "ja": "配信設定を種類別に"
+          },
+          "detail": {
+            "en": "Settings › Subscriptions now has a section for each kind: TVBox subscriptions, Live Plugins, Music, Manga and Novels. A source's menu has Open Subscription to go to the subscription it came from. When a playlist needs its own user agent, a subscription address can end with |User-Agent=….",
+            "zh-Hans": "“设置 › 订阅”现在按类型分区：TVBox 订阅、直播插件、音乐、漫画和小说。片源的菜单里多了“打开所属订阅”，可以直接跳到它来自的订阅。播放列表需要指定 User-Agent 时，订阅地址后面可以加上 |User-Agent=…。",
+            "zh-Hant": "「設定 › 訂閱」現在按類型分區：TVBox 訂閱、直播外掛、音樂、漫畫和小說。片源的選單裡多了「開啟所屬訂閱」，可以直接跳到它來自的訂閱。播放清單需要指定 User-Agent 時，訂閱網址後面可以加上 |User-Agent=…。",
+            "ja": "「設定 › 配信設定」が種類ごとに分かれました：TVBox の配信設定、ライブプラグイン、ミュージック、漫画、小説。ソースのメニューの「元の配信設定を開く」で、そのソースの配信設定へすぐ移動できます。プレイリストに専用のユーザーエージェントが必要なときは、アドレスの最後に |User-Agent=… を付けられます。"
+          }
+        },
+        {
+          "symbol": "person.crop.circle.badge.checkmark",
+          "title": {
+            "en": "Sign in to live plugins",
+            "zh-Hans": "直播插件可以登录",
+            "zh-Hant": "直播外掛可以登入",
+            "ja": "ライブプラグインにサインイン"
+          },
+          "detail": {
+            "en": "Live plugins that offer an account, such as Douyu, now show Sign In on their page in Settings › Live Plugins even when watching needs no account, so you can sign in for better quality.",
+            "zh-Hans": "像斗鱼这样可以登录的直播插件，即使不登录也能看，现在也会在“设置 › 直播插件”的插件页面显示“登录”，登录后可以看更高画质。",
+            "zh-Hant": "像斗魚這樣可以登入的直播外掛，即使不登入也能看，現在也會在「設定 › 直播外掛」的外掛頁面顯示「登入」，登入後可以看更高畫質。",
+            "ja": "斗魚のようにアカウントを使えるライブプラグインは、サインインしなくても見られる場合でも、「設定 › ライブプラグイン」のプラグインのページに「サインイン」が表示されるようになりました。サインインすると高画質で見られます。"
+          }
+        },
+        {
+          "symbol": "appletv",
+          "title": {
+            "en": "Apple TV on tvOS 18",
+            "zh-Hans": "tvOS 18 上的 Apple TV",
+            "zh-Hant": "tvOS 18 上的 Apple TV",
+            "ja": "tvOS 18 の Apple TV"
+          },
+          "detail": {
+            "en": "On tvOS 18, Back and Left couldn't reach the sidebar, so you were stuck in the first section you opened. tvOS 18 now has the tab bar along the top, with More for the other sections, as on tvOS 17. tvOS 26 and later keep the sidebar.",
+            "zh-Hans": "在 tvOS 18 上，返回键和左键回不到侧边栏，进了一个页面就出不来。现在 tvOS 18 和 tvOS 17 一样，在顶部显示标签栏，其他页面放在“更多”里。tvOS 26 及以后仍然使用侧边栏。",
+            "zh-Hant": "在 tvOS 18 上，返回鍵和左鍵回不到側邊欄，進了一個頁面就出不來。現在 tvOS 18 和 tvOS 17 一樣，在頂部顯示標籤列，其他頁面放在「更多」裡。tvOS 26 及以後仍然使用側邊欄。",
+            "ja": "tvOS 18 では「戻る」や左ボタンでサイドバーに戻れず、最初に開いたページから抜け出せませんでした。tvOS 18 でも tvOS 17 と同じく上部にタブバーを表示し、そのほかのページは「その他」にまとめます。tvOS 26 以降はサイドバーのままです。"
+          },
+          "platforms": [
+            "tvos"
+          ]
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "Long tables of contents in Novels open at the chapter you're reading without freezing the app. Apple TV's Offline Cache can select shows when only one or two are cached. Fewer crashes when an iPhone short of memory plays large MKV files.",
+            "zh-Hans": "小说的长目录现在会直接打开到正在读的章节，不再卡住应用。Apple TV 的“离线缓存”只缓存了一两部时也能选中了。手机内存紧张时播放大的 MKV 文件，闪退更少了。",
+            "zh-Hant": "小說的長目錄現在會直接打開到正在讀的章節，不再卡住 App。Apple TV 的「離線快取」只快取了一兩部時也能選取了。手機記憶體緊張時播放大的 MKV 檔案，閃退更少了。",
+            "ja": "小説の長い目次が、アプリを止めずに読んでいる章で開くようになりました。Apple TV の「オフラインキャッシュ」は、キャッシュが 1〜2 本だけでも選べるようになりました。メモリが少ない iPhone で大きな MKV ファイルを再生したときのクラッシュが減りました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.25",
       "build": 63,
       "date": "2026-11-19",
