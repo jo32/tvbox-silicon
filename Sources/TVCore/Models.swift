@@ -274,7 +274,8 @@ public struct Subscription: Codable, Sendable {
         guard let text = raw["spider"]?.string?.components(separatedBy: ";md5;").first else { return nil }
         return try? WebAddress.resolve(text, relativeTo: origin)
     }
-    public static func parse(_ data: Data, origin: URL) throws -> Subscription {
+    /// `headers` are the ones written after the added address (`url|User-Agent=…`); a bare playlist's channels take them.
+    public static func parse(_ data: Data, origin: URL, headers: [String: String] = [:]) throws -> Subscription {
         let raw: [String: JSONValue]
         do { raw = try SubscriptionDocument.decode(data) } catch {
             // A lone Python or JavaScript spider imports as a subscription that holds just that source.
@@ -282,7 +283,7 @@ public struct Subscription: Codable, Sendable {
             // A bare M3U / TXT live playlist imports as a subscription that holds just that playlist.
             guard isLivePlaylist(data, origin: origin) else { throw error }
             return Subscription(origin: origin, importedAt: Date(), sites: [],
-                                lives: [LiveSource(name: L10n.text("Live TV"), url: origin)], raw: [:])
+                                lives: [LiveSource(name: L10n.text("Live TV"), url: origin, headers: headers)], raw: [:])
         }
         if raw["sites"] == nil, raw["lives"] == nil,
            raw["urls"] != nil || raw["storeHouse"] != nil {

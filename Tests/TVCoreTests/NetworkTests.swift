@@ -342,6 +342,30 @@ private final class OfflineProtocol: URLProtocol, @unchecked Sendable {
     let (browserData, _) = try await client().get(url)
     #expect(String(decoding: browserData, as: UTF8.self).contains("Landing page"))
 }
+/// Mursor's iptv.m3u answers, and its channels play, only for the user agent `qqlive`; a bare playlist has no `ua` field,
+/// so people write it after the address as TVBox does after a channel's.
+@Test func addressHeadersReachABarePlaylistAndItsChannels() async throws {
+    let address = try WebAddress.resolve(typed: "https://example.com/headers?id=1&sign=a|User-Agent=Custom")
+    guard case .subscription(let config) = try await client().subscriptionImport(address) else { Issue.record("not a subscription"); return }
+    let live = try #require(config.lives.first)
+    #expect(live.url.absoluteString == "https://example.com/headers?id=1&sign=a")
+    #expect(live.headers == ["User-Agent": "Custom"])
+    #expect(try await client().channels(live).first?.headers["User-Agent"] == "Custom")
+    // The address keeps its suffix, so a refresh from the stored address sends it again.
+    guard case .subscription(let again) = try await client().subscriptionImport(WebAddress.resolve(address.absoluteString)) else {
+        Issue.record("refresh lost the headers"); return
+    }
+    #expect(again.lives.first?.headers == ["User-Agent": "Custom"])
+    #expect(Subscription.headerSuffix(URL(string: "https://example.com/a.m3u?b=Mozilla%7Cua=Mozilla%2F5.0%20(X)&Referer=https://r.example/")!).headers
+            == ["User-Agent": "Mozilla/5.0 (X)", "Referer": "https://r.example/"])
+    // A `|` that belongs to the query is left alone.
+    for text in ["https://example.com/a.m3u?ids=1%7C2", "https://example.com/a.m3u?q=a%7Cb=c", "https://example.com/headers"] {
+        let url = URL(string: text)!
+        let (same, headers) = Subscription.headerSuffix(url)
+        #expect(same == url && headers.isEmpty)
+    }
+    await #expect(throws: (any Error).self) { try await client().subscriptionImport(URL(string: "https://example.com/headers")!) }
+}
 @Test func pythonSpidersBehindShortLinksRunAsPython() async throws {
     guard case .subscription(let config) = try await client().subscriptionImport(URL(string: "https://example.com/short-links")!) else {
         Issue.record("not a subscription"); return
