@@ -350,6 +350,38 @@ final class TVNavigationUITests: XCTestCase {
                       "Down never reached the downloaded episodes; focus went \(trail.joined(separator: " > "))")
     }
 
+    /// Down from the storage card reaches a show when fewer are cached than fit in a row (#1324). It moved to the sort
+    /// buttons at the right and stopped there, with no show under them; Up still goes back the same way.
+    func testRemoteReachesASingleCachedShow() throws {
+        let app = XCUIApplication()
+        // Episode 1 arrives at once (Scripts/qa-server.py): one film, one card at the left.
+        app.launchArguments = ["-qaSection", "downloads", "-qaIsolatedData", "1", "-qaDownload", "qa-downloads:1:1",
+                               "-qaSubscription", "http://127.0.0.1:8776/downloads-config.json",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        if app.buttons["OK"].waitForExistence(timeout: 20) { remote.press(.select); sleep(2) }
+        let card = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Play '")).firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 60), "The episode was never cached")
+        sleep(3)
+        let focused = app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+        remote.press(.right); sleep(1)
+        var trail: [String] = []
+        for _ in 0..<4 where !card.hasFocus {
+            remote.press(.down); usleep(800_000)
+            trail.append(focused.exists ? focused.label : "-")
+        }
+        let shot = XCTAttachment(screenshot: app.screenshot()); shot.lifetime = .keepAlways; add(shot)
+        XCTAssertTrue(card.hasFocus, "Down never reached the cached show; focus went \(trail.joined(separator: " > "))")
+        // Up goes to the sort buttons above the shows, then to the storage card.
+        let top = card.frame.minY
+        remote.press(.up); sleep(1)
+        XCTAssertTrue(!card.hasFocus && focused.frame.maxY <= top && !focused.label.hasPrefix("Storage"),
+                      "Up from the show did not reach the sort buttons: \(focused.label)")
+        remote.press(.up); sleep(1)
+        XCTAssertTrue(focused.label.hasPrefix("Storage"), "Up from the sort buttons did not reach the storage card: \(focused.label)")
+    }
+
     /// Up from anywhere in Global Search's results reaches the search field beside the sidebar button. The field was
     /// 560 points wide at the left, nothing sat above most of the results, and once a search had run the field could
     /// not be reached to search again.

@@ -76,13 +76,17 @@ struct DownloadsView: View {
                 if !pending.isEmpty { queue(pending) }
                 if !shows.isEmpty {
                     VStack(alignment: .leading, spacing: Layout.headerSpacing) {
-                        downloadedHeader(count: shows.count)
+                        // Sections of their own, as on a show's page: with fewer shows than columns nothing lay under
+                        // the sort buttons at the right, so Down from them stopped there and the shows couldn't be
+                        // reached (#1324).
+                        downloadedHeader(count: shows.count).tvFocusSection()
                         // Not lazy: the remote only moves focus to views that exist, and below a download queue
                         // as tall as the screen a lazy grid had built none, so Down stopped at the queue.
                         EpisodeGrid(minimum: DownloadMetrics.cardMin, spacing: Layout.gridSpacing, rowSpacing: Layout.gridRowSpacing).callAsFunction {
                             ForEach(shows) { show in card(show) }
                         }
-                    }.tvFocusSection()
+                        .tvFocusSection()
+                    }
                 }
             }.pageContainer()
         }
