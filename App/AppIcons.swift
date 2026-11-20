@@ -21,6 +21,7 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
     case pocket = "MediaPocketPurple", grayPocket = "MediaPocketGray", layers = "MediaLayers", play = "PlayTriangle"
     case seal = "SealMusic", shiba = "ShibaManga", cat = "CatCinema", friends = "AnimalTrio"
     case panda = "Panda", arc = "Arc"
+    case lumen = "Lumen"
     case classic = "Classic", aurora = "Aurora", porcelain = "Porcelain", obsidian = "Obsidian", azure = "Azure"
     case daybreak = "Daybreak", iris = "Iris", lagoon = "Lagoon", roseQuartz = "RoseQuartz", citrus = "Citrus", cosmic = "Cosmic"
 
@@ -39,6 +40,7 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
         case .friends: L10n.text("Friends")
         case .panda: L10n.text("Panda")
         case .arc: L10n.text("Arc")
+        case .lumen: L10n.text("Lumen")
         case .classic: L10n.text("Classic")
         case .aurora: L10n.text("Aurora")
         case .porcelain: L10n.text("Porcelain")
