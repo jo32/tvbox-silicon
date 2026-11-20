@@ -1692,9 +1692,12 @@ struct DiagnosticsView: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            // One ViewThatFits, never one inside another: the nested pair made iOS 27 lay the page out
+            // forever, so opening it froze the app (#1370, #1378).
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top) { heading; Spacer(minLength: 24); actions }
-                VStack(alignment: .leading, spacing: 16) { heading; actions }
+                HStack(alignment: .top) { heading; Spacer(minLength: 24); actionRow }
+                VStack(alignment: .leading, spacing: 16) { heading; actionRow }
+                VStack(alignment: .leading, spacing: 16) { heading; VStack(alignment: .leading, spacing: 8) { actionButtons }.appControlSize(.regular) }
             }
             VStack(spacing: 0) {
                 filters.padding(16)
@@ -1741,11 +1744,8 @@ struct DiagnosticsView: View {
             Text(L10n.text("Inspect plugin requests and errors.")).font(.subheadline).foregroundStyle(.secondary)
         }
     }
-    private var actions: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 8) { actionButtons }
-            VStack(alignment: .leading, spacing: 8) { actionButtons }
-        }.appControlSize(.regular)
+    private var actionRow: some View {
+        HStack(spacing: 8) { actionButtons }.appControlSize(.regular)
     }
     @ViewBuilder private var actionButtons: some View {
             Button { live.toggle() } label: {
