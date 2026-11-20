@@ -760,7 +760,10 @@ private struct DiscoverSourceEpisodes<CatalogEpisodes: View>: View {
         #else
         .sheet(isPresented: $changing) {
             // Passed on by hand: an iPad app on a Mac lost the store in sheets (#1163).
-            picker.preferredColorScheme(appColorScheme)
+            // The page draws in its art's look (white text, dark scheme) and the sheet inherits both, while its
+            // background follows the app: on iOS 17 and 18 the sources were white on white (#1355, #1356).
+            // `Color.primary`, not `.primary`: that is the inherited style's first level, the page's white.
+            picker.foregroundStyle(Color.primary).environment(\.colorScheme, appColorScheme).preferredColorScheme(appColorScheme)
         }
         #endif
     }
