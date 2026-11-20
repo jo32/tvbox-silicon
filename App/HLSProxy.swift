@@ -115,9 +115,15 @@ actor HLSProxy {
             if let playlist = String(data: raw, encoding: .utf8), playlist.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("#EXTM3U") {
                 mime = "application/vnd.apple.mpegurl"
                 var text = playlist
-                if AdSkip.enabled, let cleaned = AdSkip.clean(playlist, origin: response.url ?? url) {
-                    Diagnostics.shared.record(.info, "player", "ads removed runs=\(cleaned.runs) seconds=\(Int(cleaned.seconds)) host=\(cleaned.host)")
-                    text = cleaned.text
+                if AdSkip.enabled {
+                    if let cleaned = AdSkip.clean(playlist, origin: response.url ?? url) {
+                        Diagnostics.shared.record(.info, "player", "ads removed runs=\(cleaned.runs) seconds=\(Int(cleaned.seconds)) host=\(cleaned.host)")
+                        text = cleaned.text
+                    } else if let prefixed = AdPrefix.strip(playlist, origin: response.url ?? url) {
+                        Diagnostics.shared.record(.info, "player",
+                            "ads removed prefix segments=\(prefixed.segments) seconds=\(Int(prefixed.seconds)) main=\(prefixed.mainPath)")
+                        text = prefixed.text
+                    }
                 }
                 data = Data(rewrite(text, origin: response.url ?? url).utf8)
             } else { data = MediaPayload.transportStream(raw); if data.count != raw.count { mime = "video/mp2t" } }

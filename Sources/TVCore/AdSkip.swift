@@ -127,8 +127,18 @@ public enum AdSkip {
                   let next = await fetch(address) else { return nil }
             (text, origin) = next
         }
-        guard let result = clean(text, origin: origin) else { return nil }
-        Diagnostics.shared.record(.info, "player", "ads found runs=\(result.runs) seconds=\(Int(result.seconds)) host=\(result.host)")
-        return LiveRepair.address(url, headers: headers, skipsAds: true)
+        if let result = clean(text, origin: origin) {
+            Diagnostics.shared.record(.info, "player", "ads found runs=\(result.runs) seconds=\(Int(result.seconds)) host=\(result.host)")
+            return LiveRepair.address(url, headers: headers, skipsAds: true)
+        }
+        // A source whose ads are their own directory rather than their own run. Only
+        // `LiveRepair.rewrite` can cut those, and it is only reached when this returns an
+        // address — without this branch the prefix rule would never see a direct stream.
+        if let prefixed = AdPrefix.strip(text, origin: origin) {
+            Diagnostics.shared.record(.info, "player",
+                "ad prefix segments=\(prefixed.segments) seconds=\(Int(prefixed.seconds)) main=\(prefixed.mainPath)")
+            return LiveRepair.address(url, headers: headers, skipsAds: true)
+        }
+        return nil
     }
 }

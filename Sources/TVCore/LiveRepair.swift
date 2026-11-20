@@ -95,9 +95,15 @@ public enum LiveRepair {
     static func rewrite(_ text: String, origin: URL, skipsAds: Bool = false) -> String {
         let master = text.contains("#EXT-X-STREAM-INF")
         var text = text
-        if skipsAds, !master, let cleaned = AdSkip.clean(text, origin: origin) {
-            Diagnostics.shared.record(.info, "player", "ads removed runs=\(cleaned.runs) seconds=\(Int(cleaned.seconds)) host=\(cleaned.host)")
-            text = cleaned.text
+        if skipsAds, !master {
+            if let cleaned = AdSkip.clean(text, origin: origin) {
+                Diagnostics.shared.record(.info, "player", "ads removed runs=\(cleaned.runs) seconds=\(Int(cleaned.seconds)) host=\(cleaned.host)")
+                text = cleaned.text
+            } else if let prefixed = AdPrefix.strip(text, origin: origin) {
+                Diagnostics.shared.record(.info, "player",
+                    "ads removed prefix segments=\(prefixed.segments) seconds=\(Int(prefixed.seconds)) main=\(prefixed.mainPath)")
+                text = prefixed.text
+            }
         }
         func resolve(_ value: String) -> String {
             guard let url = URL(string: value, relativeTo: origin)?.absoluteURL else { return value }
