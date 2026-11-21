@@ -1,6 +1,95 @@
 {
   "releases": [
     {
+      "version": "1.8.27",
+      "build": 65,
+      "date": "2026-11-21",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "person.crop.circle",
+          "title": {
+            "en": "A Yingxia account",
+            "zh-Hans": "映匣账号",
+            "zh-Hant": "映匣帳號",
+            "ja": "映匣アカウント"
+          },
+          "detail": {
+            "en": "Sign in with Telegram in Settings › Account. On Apple TV, scan the code with your iPhone. The same account works on every device, and your card shows your points and the feedback you've sent, with what became of each message.",
+            "zh-Hans": "在“设置 › 账号”里通过 Telegram 登录。在 Apple TV 上，用 iPhone 扫码即可。同一个账号在所有设备上通用，会员卡上显示你的积分和你发过的反馈，以及每条反馈的处理结果。",
+            "zh-Hant": "在「設定 › 帳號」裡使用 Telegram 登入。在 Apple TV 上，用 iPhone 掃描 QR 碼即可。同一個帳號在所有裝置上通用，會員卡上顯示你的積分和你傳過的意見，以及每則意見的處理結果。",
+            "ja": "「設定 › アカウント」から Telegram でサインインできます。Apple TV では iPhone でコードをスキャンします。同じアカウントをすべてのデバイスで使え、カードにはポイントと、送ったフィードバックとそれぞれの結果が表示されます。"
+          }
+        },
+        {
+          "symbol": "star.circle.fill",
+          "title": {
+            "en": "Points for helping Yingxia",
+            "zh-Hans": "帮映匣变好，赚积分",
+            "zh-Hant": "幫映匣變好，賺積分",
+            "ja": "映匣に協力してポイント"
+          },
+          "detail": {
+            "en": "Signed in, you earn points: 1 a day for using Yingxia, 1 for each feedback message (up to 3 a day, from Settings › Send Feedback or /feedback in the Telegram group), 50 when a bug you reported is fixed, 100 when an idea of yours is built, and 500 for each merged pull request. How Points Work, on the Account and Send Feedback pages, explains the rules.",
+            "zh-Hans": "登录后就能赚积分：每天使用映匣 1 分，每条反馈 1 分（每天最多 3 条，可以在“设置 › 反馈问题”或 Telegram 群里用 /feedback 发送），你报告的问题被修复 50 分，你的建议被采纳 100 分，每个合并的 PR 500 分。“账号”和“反馈问题”页面上的“积分规则”有详细说明。",
+            "zh-Hant": "登入後就能賺積分：每天使用映匣 1 分，每則意見 1 分（每天最多 3 則，可以在「設定 › 意見回饋」或 Telegram 群組裡用 /feedback 傳送），你回報的問題被修復 50 分，你的建議被採納 100 分，每個合併的 PR 500 分。「帳號」和「意見回饋」頁面上的「積分規則」有詳細說明。",
+            "ja": "サインインするとポイントがたまります。映匣を使うと 1 日 1 ポイント、フィードバック 1 件ごとに 1 ポイント（1 日 3 件まで。「設定 › フィードバックを送信」または Telegram グループの /feedback から）、報告した不具合が直ると 50 ポイント、アイデアが採用されると 100 ポイント、マージされたプルリクエストごとに 500 ポイントです。「アカウント」と「フィードバックを送信」の「ポイントの仕組み」で詳しく説明しています。"
+          }
+        },
+        {
+          "symbol": "scissors",
+          "title": {
+            "en": "Fewer ads in videos",
+            "zh-Hans": "视频里的广告更少了",
+            "zh-Hant": "影片裡的廣告更少了",
+            "ja": "動画の広告がさらに減りました"
+          },
+          "detail": {
+            "en": "More of the ads that sources splice into their videos are cut before playback: ads shown again at every break, ads between encrypted parts of the film, and ads stored apart from the film.",
+            "zh-Hans": "片源插进视频里的广告，现在有更多会在播放前被剪掉：每次插播都重复的同一段广告、夹在加密正片中间的广告，以及和正片分开存放的广告。",
+            "zh-Hant": "片源插進影片裡的廣告，現在有更多會在播放前被剪掉：每次插播都重複的同一段廣告、夾在加密正片中間的廣告，以及和正片分開存放的廣告。",
+            "ja": "ソースが動画に差し込んだ広告を、再生前にさらに多く取り除くようになりました。毎回同じものが流れる広告、暗号化された本編の間の広告、本編とは別の場所に置かれた広告も対象です。"
+          }
+        },
+        {
+          "symbol": "music.note",
+          "title": {
+            "en": "Now Playing fills the screen",
+            "zh-Hans": "“正在播放”全屏显示",
+            "zh-Hant": "「正在播放」全螢幕顯示",
+            "ja": "「再生中」が全画面に"
+          },
+          "detail": {
+            "en": "On iPhone with iOS 26 and later, Music's Now Playing opens full screen from the mini player, as in Apple Music, with no light corners at the top. Swipe down to close it.",
+            "zh-Hans": "在 iOS 26 及以后的 iPhone 上，音乐的“正在播放”会从迷你播放器展开成全屏，和 Apple Music 一样，顶部两角不再露出白边。向下轻扫即可关闭。",
+            "zh-Hant": "在 iOS 26 及以後的 iPhone 上，音樂的「正在播放」會從迷你播放器展開成全螢幕，和 Apple Music 一樣，頂部兩角不再露出白邊。向下滑動即可關閉。",
+            "ja": "iOS 26 以降の iPhone では、ミュージックの「再生中」がミニプレーヤーから全画面で開きます。Apple Music と同じで、上の角が白く見えることもなくなりました。下にスワイプすると閉じます。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "When a source refuses the next episode's address prepared in advance, Yingxia asks the source again instead of failing on every try. On iPhone and iPad with iOS 17 or 18 in light mode, Change Source and All Episodes in Discover show their text again. Diagnostic Logs no longer freezes the app on iOS 27.",
+            "zh-Hans": "片源拒绝了提前准备好的下一集地址时，映匣会重新向片源获取，不会再每次都播放失败。在 iOS 17 或 18、浅色模式的 iPhone 和 iPad 上，“发现”里的“换源”和全部选集又能看到文字了。在 iOS 27 上打开“诊断日志”不会再卡死应用。",
+            "zh-Hant": "片源拒絕了提前準備好的下一集網址時，映匣會重新向片源取得，不會再每次都播放失敗。在 iOS 17 或 18、淺色模式的 iPhone 和 iPad 上，「探索」裡的「換源」和全部選集又能看到文字了。在 iOS 27 上打開「診斷日誌」不會再讓 App 卡住。",
+            "ja": "ソースが事前に用意した次のエピソードのアドレスを拒否したとき、毎回失敗せずにソースに取得し直すようになりました。ライトモードの iOS 17 / 18 の iPhone と iPad で、「見つける」の「ソースを切り替え」と全エピソードの文字が見えるようになりました。iOS 27 で「診断ログ」を開いてもアプリが固まらなくなりました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.26",
       "build": 64,
       "date": "2026-11-20",
