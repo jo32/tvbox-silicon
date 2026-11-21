@@ -16,14 +16,18 @@ import TVCore
     /// The music extensions' library groups come after the catalogs' shelves.
     let musicBrowse = MusicBrowseModel(sources: MusicBrowseModel.defaultSources() + [MusicExtensionCatalog()])
     let recommendationModel = RecommendationModel()
-    let playbackHistory: PlaybackHistory
-    let playbackDefaults: UserDefaults
-    let pinnedSources: PinnedSources
-    let hiddenSources: HiddenSources
+    /// The profile whose library is open (#1456). Everything below that is a `private(set) var` is that profile's, and
+    /// `openProfile(_:)` replaces it with another's.
+    private(set) var profile: Profile
+    private(set) var playbackHistory: PlaybackHistory
+    private(set) var playbackDefaults: UserDefaults
+    private(set) var pinnedSources: PinnedSources
+    private(set) var hiddenSources: HiddenSources
     /// Live platforms and playlists the viewer turned off (#601, #837).
-    let hiddenLiveSources: HiddenLiveSources
-    let sourceOrder: SourceOrder
-    /// Keeps the viewer's library the same on their other devices; nil for tests and QA's isolated data.
+    private(set) var hiddenLiveSources: HiddenLiveSources
+    private(set) var sourceOrder: SourceOrder
+    /// Keeps the viewer's library the same on their other devices; nil for tests and QA's isolated data. Only the main
+    /// profile's library syncs: it is suspended while another profile is open.
     let cloudSync: CloudSync?
     /// The history entry being resumed; another entry, or leaving the page, replaces or cancels it.
     private(set) var resumingHistoryID: String?
@@ -40,9 +44,9 @@ import TVCore
     var subscriptionErrors: [String: String] = [:]
     /// The last good copy of each subscription, by address.
     private(set) var documents: [String: Subscription] = [:]
-    let favorites: Favorites
+    private(set) var favorites: Favorites
     /// The series followed from Discover (追剧, #1186).
-    let followedShows: FollowedShows
+    private(set) var followedShows: FollowedShows
     var importing = false
     var error: String?
     /// Why the last subscription import failed. It shows under the address field, not in the app-wide alert: on
@@ -124,7 +128,12 @@ import TVCore
         if NovelStore.shared.lists.isEmpty { hidden.append(.novels) }
         return hidden
     }
-    private let defaults: UserDefaults
+    /// The open profile's defaults: the main defaults for the main profile.
+    private var defaults: UserDefaults
+    /// The main defaults, which QA's switches are read from.
+    private let baseDefaults: UserDefaults
+    /// Where the open profile keeps its subscription copies; nil for the main profile's usual place.
+    private var profileFolder: URL?
     private let http = HTTPClient()
     /// Rebuilt source rows are expensive (every source is classified and copied) and Watch Now reads
     /// them many times while drawing one frame. The stamp is the inputs, so a later frame reuses the row.
@@ -160,62 +169,56 @@ import TVCore
         let entries = subscriptions.map { "\($0.address)=\($0.enabled)" }.joined(separator: "\n")
         return "\(subscription?.origin.absoluteString ?? "")|\(imported)|\(subscription?.sites.count ?? 0)|\(entries)|\(pinnedSources.revision)|\(hiddenSources.revision)|\(sourceOrder.revision)"
     }
-    private var persistsChanges: Bool {
+    private var persistsChanges: Bool { !Self.isolated(baseDefaults) }
+    /// QA's `-qaIsolatedData` runs, which save nothing of the library.
+    private static func isolated(_ defaults: UserDefaults) -> Bool {
         #if DEBUG
-        return !defaults.bool(forKey: "qaIsolatedData")
+        return defaults.bool(forKey: "qaIsolatedData")
         #else
-        return true
+        return false
         #endif
+    }
+    /// Where a profile's library lives: the main defaults and the shared history for the main profile (QA's isolated
+    /// data keeps the player's apart), the profile's own suite and folder for the others.
+    private static func library(for profile: Profile, base: UserDefaults)
+        -> (defaults: UserDefaults, playback: UserDefaults, history: PlaybackHistory, folder: URL?) {
+        if !profile.isMain, let folder = Profiles.shared.folder(for: profile) {
+            let defaults = Profiles.shared.defaults(for: profile)
+            return (defaults, defaults, PlaybackHistory(file: folder.appending(path: "playback-history-v1.json"), defaults: defaults), folder)
+        }
+        if isolated(base) {
+            let player = UserDefaults(suiteName: "com.tvbox.yingxia.qa.player") ?? base
+            return (base, player, PlaybackHistory(file: URL.cachesDirectory.appending(path: "qa-player-history.json"), defaults: player), nil)
+        }
+        return (base, base, .shared, nil)
     }
     init(defaults: UserDefaults = .standard) {
         #if os(macOS)
         if defaults === UserDefaults.standard { Self.adoptPreviousBundleDefaults(defaults) }
         #endif
-        self.defaults = defaults
-        #if DEBUG
-        playbackDefaults = defaults.bool(forKey: "qaIsolatedData")
-            ? UserDefaults(suiteName: "com.tvbox.yingxia.qa.player") ?? defaults : defaults
-        playbackHistory = defaults.bool(forKey: "qaIsolatedData")
-            ? PlaybackHistory(file: URL.cachesDirectory.appending(path: "qa-player-history.json"), defaults: playbackDefaults) : .shared
-        #else
-        playbackDefaults = defaults
-        playbackHistory = .shared
-        #endif
-        pinnedSources = PinnedSources(defaults: playbackDefaults)
-        hiddenSources = HiddenSources(defaults: playbackDefaults)
-        hiddenLiveSources = HiddenLiveSources(defaults: playbackDefaults)
+        baseDefaults = defaults
+        // Tests and QA's isolated data stay in the main profile.
+        let profile = defaults === UserDefaults.standard && !Self.isolated(defaults) ? Profiles.shared.current : Profile.main
+        self.profile = profile
+        let library = Self.library(for: profile, base: defaults)
+        self.defaults = library.defaults
+        playbackDefaults = library.playback
+        playbackHistory = library.history
+        profileFolder = library.folder
+        pinnedSources = PinnedSources(defaults: library.playback)
+        hiddenSources = HiddenSources(defaults: library.playback)
+        hiddenLiveSources = HiddenLiveSources(defaults: library.playback)
         #if os(macOS) || os(iOS)
         WebSniff.install(WKWebSniffer())
         #endif
-        sourceOrder = SourceOrder(defaults: playbackDefaults)
-        cloudSync = defaults === UserDefaults.standard && !defaults.bool(forKey: "qaIsolatedData") ? CloudSync() : nil
-        favorites = Favorites(defaults: defaults)
-        followedShows = FollowedShows(defaults: defaults)
-        autoPlayNext = defaults.object(forKey: "autoPlayNextEpisode") == nil || defaults.bool(forKey: "autoPlayNextEpisode")
-        guideAddresses = defaults.dictionary(forKey: "liveGuideAddresses") as? [String: String] ?? [:]
-        let saved = defaults.data(forKey: "subscriptions").flatMap { try? JSONDecoder().decode([SubscriptionEntry].self, from: $0) }
-        var entries = saved ?? [], copies: [String: Subscription] = [:]
-        for entry in entries {
-            if let data = try? Data(contentsOf: Self.file(for: entry)),
-               let value = try? JSONDecoder().decode(Subscription.self, from: data) { copies[entry.address] = value }
-        }
-        // Builds before several subscriptions kept one, in subscription.json, and before that in defaults.
-        let legacyAddress = saved == nil ? defaults.string(forKey: "subscriptionAddress") : nil
-        let legacy = legacyAddress == nil ? nil : (try? Data(contentsOf: Self.legacyFile)) ?? defaults.data(forKey: "subscription")
-        if let legacyAddress {
-            entries = [SubscriptionEntry(address: legacyAddress)]
-            copies[legacyAddress] = legacy.flatMap { try? JSONDecoder().decode(Subscription.self, from: $0) }
-        }
-        subscriptions = entries
-        documents = copies
+        sourceOrder = SourceOrder(defaults: library.playback)
+        cloudSync = defaults === UserDefaults.standard && !Self.isolated(defaults) ? CloudSync() : nil
+        favorites = Favorites(defaults: library.defaults)
+        followedShows = FollowedShows(defaults: library.defaults)
+        autoPlayNext = library.defaults.object(forKey: "autoPlayNextEpisode") == nil || library.defaults.bool(forKey: "autoPlayNextEpisode")
+        guideAddresses = library.defaults.dictionary(forKey: "liveGuideAddresses") as? [String: String] ?? [:]
         subscriptionAddress = ""
-        if persistsChanges, let legacyAddress {
-            if let legacy, copies[legacyAddress] != nil { try? Self.save(legacy, to: Self.file(for: entries[0])) }
-            saveSubscriptionList()
-            try? FileManager.default.removeItem(at: Self.legacyFile)
-            defaults.removeObject(forKey: "subscription")
-        }
-        rebuildSubscription(resetting: false)
+        loadSubscriptions(resetting: false)
         // Signing in to a drive or adding a server adds its source; signing out or removing one takes it away.
         cloudDrivesObserver = NotificationCenter.default.addObserver(forName: CloudFiles.drivesChanged, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshCloudFilesSources() }
@@ -240,8 +243,89 @@ import TVCore
         // Songs that were downloading when the app quit carry on.
         MusicDownloadLibrary.shared.wake()
         setUpListening()
-        setUpCloudSync()
+        if profile.isMain { setUpCloudSync() } else { cloudSync?.isSuspended = true }
     }
+    /// Reads the open profile's subscription list and the saved copy of each, then merges them.
+    private func loadSubscriptions(resetting: Bool) {
+        let saved = defaults.data(forKey: "subscriptions").flatMap { try? JSONDecoder().decode([SubscriptionEntry].self, from: $0) }
+        var entries = saved ?? [], copies: [String: Subscription] = [:]
+        for entry in entries {
+            if let data = try? Data(contentsOf: file(for: entry)),
+               let value = try? JSONDecoder().decode(Subscription.self, from: data) { copies[entry.address] = value }
+        }
+        // Builds before several subscriptions kept one, in subscription.json, and before that in defaults.
+        let legacyAddress = saved == nil && profile.isMain ? defaults.string(forKey: "subscriptionAddress") : nil
+        let legacy = legacyAddress == nil ? nil : (try? Data(contentsOf: Self.legacyFile)) ?? defaults.data(forKey: "subscription")
+        if let legacyAddress {
+            entries = [SubscriptionEntry(address: legacyAddress)]
+            copies[legacyAddress] = legacy.flatMap { try? JSONDecoder().decode(Subscription.self, from: $0) }
+        }
+        subscriptions = entries
+        documents = copies
+        subscriptionErrors = [:]
+        if persistsChanges, let legacyAddress {
+            if let legacy, copies[legacyAddress] != nil { try? Self.save(legacy, to: file(for: entries[0])) }
+            saveSubscriptionList()
+            try? FileManager.default.removeItem(at: Self.legacyFile)
+            defaults.removeObject(forKey: "subscription")
+        }
+        rebuildSubscription(resetting: resetting)
+    }
+    // MARK: Profiles (#1456)
+
+    /// Whether another profile can open now: not while a subscription loads into this one, nor in tests or QA's
+    /// isolated data.
+    var switchesProfiles: Bool { !importing && baseDefaults === UserDefaults.standard && !Self.isolated(baseDefaults) }
+
+    /// Opens another profile's library in place of this one. What plays stops first, so its place is saved to the
+    /// profile it belongs to; RootView is rebuilt for the new profile, so no page of the last one stays on screen.
+    func openProfile(_ target: Profile) {
+        guard target.id != profile.id, switchesProfiles else { return }
+        music.stop()
+        playing = nil
+        cancelEpisodeSelection(); cancelResume()
+        nextAheadTask?.task.cancel(); nextAheadTask = nil; nextAhead = nil
+        liveLineup = nil; liveGuide = nil; playbackCatalog = nil; filesFolder = nil; watchPageScopes = []; episodeError = nil
+        // The main profile's last changes go up before iCloud stops listening to it.
+        if profile.isMain { cloudSync?.flushPending() }
+        Profiles.shared.select(target)
+        profile = Profiles.shared.current
+        let library = Self.library(for: profile, base: baseDefaults)
+        defaults = library.defaults
+        playbackDefaults = library.playback
+        playbackHistory = library.history
+        profileFolder = library.folder
+        pinnedSources = PinnedSources(defaults: library.playback)
+        hiddenSources = HiddenSources(defaults: library.playback)
+        hiddenLiveSources = HiddenLiveSources(defaults: library.playback)
+        sourceOrder = SourceOrder(defaults: library.playback)
+        favorites = Favorites(defaults: library.defaults)
+        followedShows = FollowedShows(defaults: library.defaults)
+        searchModel.order = sourceOrder
+        autoPlayNext = library.defaults.object(forKey: "autoPlayNextEpisode") == nil || library.defaults.bool(forKey: "autoPlayNextEpisode")
+        guideAddresses = library.defaults.dictionary(forKey: "liveGuideAddresses") as? [String: String] ?? [:]
+        subscriptionAddress = ""; subscriptionName = ""; error = nil; notice = nil; importError = nil
+        // The new lists' revisions can match the old ones', so the cached rows go by hand.
+        rememberSiteLists("")
+        loadSubscriptions(resetting: true)
+        section = .home
+        if profile.isMain { setUpCloudSync() }
+        cloudSync?.isSuspended = !profile.isMain
+        Diagnostics.shared.record(.info, "profile", "opened \(profile.isMain ? "main" : "other") profile")
+        Task { await restoreSubscription() }
+    }
+
+    /// Picks up a new name for the open profile.
+    func profileRenamed() {
+        if let renamed = Profiles.shared.all.first(where: { $0.id == profile.id }), renamed != profile { profile = renamed }
+    }
+
+    /// Removes the app's copy of an imported file, unless another profile lists it too.
+    private func removeImportedFile(_ address: String) {
+        guard ImportedFiles.isImported(address), !Profiles.shared.lists(address, besides: profile) else { return }
+        ImportedFiles.remove(address)
+    }
+
     // MARK: Listening sources (#289)
 
     /// The music player's queue for an episode of a listening source: the episodes of its line, from it on. Nil for
@@ -351,8 +435,8 @@ import TVCore
         #endif
     }
     private static var legacyFile: URL { subscriptionDirectory.appending(path: "subscription.json") }
-    private static func file(for entry: SubscriptionEntry) -> URL {
-        subscriptionDirectory.appending(path: "subscriptions").appending(path: entry.cacheName)
+    private func file(for entry: SubscriptionEntry) -> URL {
+        (profileFolder ?? Self.subscriptionDirectory).appending(path: "subscriptions").appending(path: entry.cacheName)
     }
     private static func save(_ data: Data, to file: URL) throws {
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -449,7 +533,7 @@ import TVCore
         let address = url.absoluteString, known = subscriptions.contains { $0.address == address }
         await importSubscription(address: address)
         // A file that added no subscription of its own leaves no copy behind.
-        if !known, !subscriptions.contains(where: { $0.address == address }) { ImportedFiles.remove(address) }
+        if !known, !subscriptions.contains(where: { $0.address == address }) { removeImportedFile(address) }
     }
     /// Fetches every enabled subscription again; one that fails keeps its last good copy.
     func refreshSubscriptions() async {
@@ -507,7 +591,7 @@ import TVCore
         moved.address = url.absoluteString
         subscriptions[index] = moved
         documents[entry.address] = nil; subscriptionErrors[entry.address] = nil
-        if persistsChanges { try? FileManager.default.removeItem(at: Self.file(for: entry)) }
+        if persistsChanges { try? FileManager.default.removeItem(at: file(for: entry)) }
         keep(value, for: moved)
         // Another subscription answering from the same place keeps what was saved there.
         if let old, old.absoluteString != value.origin.absoluteString,
@@ -535,7 +619,7 @@ import TVCore
         subscriptions.removeAll { addresses.contains($0.address) }
         for entry in removed {
             documents[entry.address] = nil; subscriptionErrors[entry.address] = nil
-            if persistsChanges { try? FileManager.default.removeItem(at: Self.file(for: entry)); ImportedFiles.remove(entry.address) }
+            if persistsChanges { try? FileManager.default.removeItem(at: file(for: entry)); removeImportedFile(entry.address) }
         }
         saveSubscriptionList()
         rebuildSubscription()
@@ -623,7 +707,7 @@ import TVCore
     private func keep(_ value: Subscription, for entry: SubscriptionEntry) {
         documents[entry.address] = value
         subscriptionErrors[entry.address] = nil
-        if persistsChanges, let data = try? JSONEncoder().encode(value) { try? Self.save(data, to: Self.file(for: entry)) }
+        if persistsChanges, let data = try? JSONEncoder().encode(value) { try? Self.save(data, to: file(for: entry)) }
     }
     private func saveSubscriptionList() {
         guard persistsChanges else { return }
@@ -676,8 +760,8 @@ import TVCore
         let kept = Set(next.map(\.address))
         for entry in subscriptions where !kept.contains(entry.address) {
             documents[entry.address] = nil; subscriptionErrors[entry.address] = nil
-            try? FileManager.default.removeItem(at: Self.file(for: entry))
-            ImportedFiles.remove(entry.address)
+            try? FileManager.default.removeItem(at: file(for: entry))
+            removeImportedFile(entry.address)
         }
         subscriptions = next
         saveSubscriptionList()

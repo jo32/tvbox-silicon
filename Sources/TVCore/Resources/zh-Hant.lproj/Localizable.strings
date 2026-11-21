@@ -2246,3 +2246,12 @@
 "Your feedback points and Pro time are deleted with it, and can't be brought back." = "意見積分和 Pro 時長會一併刪除，且無法復原。";
 "You've already redeemed this code." = "你已兌換過此兌換碼。";
 "You've been signed out. Sign in again." = "你已登出，請重新登入。";
+"Profiles" = "使用者";
+"Main Profile" = "主要使用者";
+"Profile" = "使用者";
+"Add Profile" = "新增使用者";
+"Rename Profile" = "重新命名使用者";
+"Delete Profile" = "刪除使用者";
+"Delete “%@”?" = "要刪除「%@」嗎？";
+"Its subscriptions, favorites, Continue Watching and search history are deleted from this device." = "它的訂閱、收藏、繼續觀看和搜尋記錄會從這部裝置上刪除。";
+"Each profile has its own subscriptions, favorites, Continue Watching, followed shows and search history. Only the main profile syncs with iCloud; downloads, accounts and settings are shared." = "每位使用者都有自己的訂閱、收藏、繼續觀看、追劇和搜尋記錄。只有主要使用者透過 iCloud 同步；離線快取、帳號和設定在各使用者間共用。";

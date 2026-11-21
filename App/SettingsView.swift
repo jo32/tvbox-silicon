@@ -768,13 +768,21 @@ struct FormSettingsView: View {
             }
 
             Section {
-                Toggle(isOn: $syncsWithICloud) {
-                    FormLabel(symbol: "icloud.fill", tint: .blue, title: L10n.text("iCloud Sync"))
+                FormLink(symbol: "person.2.fill", tint: .teal, title: L10n.text("Profiles"), value: store.profile.title) { ProfilesView() }
+            }
+            .id("settings.profiles")
+
+            // Only the main profile's library syncs (#1456).
+            if store.profile.isMain {
+                Section {
+                    Toggle(isOn: $syncsWithICloud) {
+                        FormLabel(symbol: "icloud.fill", tint: .blue, title: L10n.text("iCloud Sync"))
+                    }
+                    .settingsSwitch()
+                    .onChange(of: syncsWithICloud) { _, on in store.cloudSync?.setEnabled(on) }
+                } footer: {
+                    Text(SettingsNote.iCloud)
                 }
-                .settingsSwitch()
-                .onChange(of: syncsWithICloud) { _, on in store.cloudSync?.setEnabled(on) }
-            } footer: {
-                Text(SettingsNote.iCloud)
             }
 
             #if os(iOS)
@@ -2064,9 +2072,15 @@ struct TVSettingsView: View {
                 }
                 TVSettingsLink(title: L10n.text("Cloud Drive Accounts"), value: cloudSummary) { CloudDriveView() }
             }
-            TVSettingsSection(footer: L10n.text("Keeps favorites, Continue Watching, subscriptions, and the sources you pinned, hid or ordered the same on your devices signed in to the same iCloud account. Accounts, passwords and downloads stay on each device.")) {
-                TVSettingsToggle(title: L10n.text("iCloud Sync"), isOn: $syncsWithICloud)
-                    .onChange(of: syncsWithICloud) { _, on in store.cloudSync?.setEnabled(on) }
+            TVSettingsSection {
+                TVSettingsLink(title: L10n.text("Profiles"), value: store.profile.title) { ProfilesView() }
+            }
+            // Only the main profile's library syncs (#1456).
+            if store.profile.isMain {
+                TVSettingsSection(footer: L10n.text("Keeps favorites, Continue Watching, subscriptions, and the sources you pinned, hid or ordered the same on your devices signed in to the same iCloud account. Accounts, passwords and downloads stay on each device.")) {
+                    TVSettingsToggle(title: L10n.text("iCloud Sync"), isOn: $syncsWithICloud)
+                        .onChange(of: syncsWithICloud) { _, on in store.cloudSync?.setEnabled(on) }
+                }
             }
             TVSettingsSection {
                 TVSettingsLink(title: L10n.text("Watch Now")) { WatchNowSettingsView() }
@@ -2696,3 +2710,77 @@ enum MacLanguage {
     }
 }
 #endif
+
+// MARK: Profiles (#1456)
+
+/// Settings › Profiles: one library per person on a shared device. Choosing a profile opens it at once, on Watch Now;
+/// its menu (a long press, or a right click on the Mac) renames or deletes it.
+struct ProfilesView: View {
+    @Environment(Store.self) private var store
+    @State private var profiles = Profiles.shared
+    @State private var adding = false
+    @State private var renaming: Profile?
+    @State private var removing: Profile?
+    @State private var name = ""
+
+    var body: some View {
+        SettingsPage(title: L10n.text("Profiles"), symbol: "person.2") {
+            SettingsGroup(footer: L10n.text("Each profile has its own subscriptions, favorites, Continue Watching, followed shows and search history. Only the main profile syncs with iCloud; downloads, accounts and settings are shared.")) {
+                ForEach(profiles.all) { profile in
+                    row(profile)
+                        .contextMenu {
+                            Button { name = profile.name; renaming = profile } label: { Label(L10n.text("Rename Profile"), systemImage: "pencil") }
+                            if !profile.isMain {
+                                Button(role: .destructive) { removing = profile } label: { Label(L10n.text("Delete Profile"), systemImage: "trash") }
+                                    .disabled(profile.id == store.profile.id)
+                            }
+                        }
+                }
+            }
+            SettingsGroup {
+                SettingsActionRow(title: L10n.text("Add Profile")) { name = ""; adding = true }
+            }
+        }
+        .alert(L10n.text("Add Profile"), isPresented: $adding) {
+            TextField(L10n.text("Name"), text: $name)
+            Button(L10n.text("Cancel"), role: .cancel) {}
+            Button(L10n.text("Add")) { profiles.add(named: name) }
+        }
+        .alert(L10n.text("Rename Profile"), isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField(L10n.text("Name"), text: $name)
+            Button(L10n.text("Cancel"), role: .cancel) {}
+            Button(L10n.text("Save")) { if let renaming { profiles.rename(renaming, to: name); store.profileRenamed() } }
+        }
+        .alert(L10n.text("Delete “%@”?", removing?.title ?? ""), isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
+            Button(L10n.text("Cancel"), role: .cancel) {}
+            Button(L10n.text("Delete Profile"), role: .destructive) { if let removing { profiles.remove(removing) } }
+        } message: {
+            Text(L10n.text("Its subscriptions, favorites, Continue Watching and search history are deleted from this device."))
+        }
+    }
+
+    /// Selecting a row opens that profile; the open one has the checkmark.
+    private func row(_ profile: Profile) -> some View {
+        let open = profile.id == store.profile.id
+        return Button { store.openProfile(profile) } label: {
+            #if os(tvOS)
+            TVSettingsRowLabel(title: profile.title) {
+                Image(systemName: "checkmark").font(.system(size: 26, weight: .semibold)).opacity(open ? 1 : 0)
+            }
+            #else
+            LabeledContent {
+                if open { Image(systemName: "checkmark").fontWeight(.semibold).foregroundStyle(systemAccent) }
+            } label: {
+                FormLabel(symbol: profile.isMain ? "person.crop.circle.fill" : "person.crop.circle", tint: profile.isMain ? .blue : .teal, title: profile.title)
+            }
+            #endif
+        }
+        #if os(tvOS)
+        .glassRow()
+        #else
+        .formRowButton()
+        #endif
+        .disabled(!open && !store.switchesProfiles)
+        .accessibilityAddTraits(open ? .isSelected : [])
+    }
+}

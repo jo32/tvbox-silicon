@@ -31,7 +31,8 @@ struct GlobalSearchView: View {
     /// are cut to one line under a poster (#426).
     @AppStorage("searchResultsAsList") private var showsList = false
     #endif
-    @AppStorage("videoSearchHistory") private var historyData = Data()
+    /// The open profile's searches (#1456).
+    @AppStorage("videoSearchHistory", store: Profiles.shared.currentDefaults) private var historyData = Data()
     #if os(tvOS)
     /// Titles iQiyi suggests for the draft, and 360kan's chart for an empty field (`SearchSuggestions`).
     @State private var suggested: [String] = []

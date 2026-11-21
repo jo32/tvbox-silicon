@@ -193,6 +193,15 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
     /// On unless the viewer turned it off in Settings.
     public var isEnabled: Bool { defaults.object(forKey: Self.enabledKey) as? Bool ?? true }
 
+    /// Set while a profile other than the main one is open (#1456): only the main profile's library syncs, so nothing
+    /// goes up or comes down meanwhile. Cleared, whatever changed on either side merges, as when sync is turned back on.
+    public var isSuspended = false {
+        didSet {
+            guard isSuspended != oldValue else { return }
+            if isSuspended { cancelPending() } else if started, isEnabled { cloud.synchronize(); flush() }
+        }
+    }
+
     /// `current` is what this device holds now, by id; `apply` replaces it with the merged result.
     /// `delay` is how long a change waits for the next one before it goes up.
     public func register<Value: Codable & Equatable & Sendable>(_ key: String, delay: Duration = .seconds(3),
@@ -214,7 +223,7 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
             }
         }
         started = true
-        guard isEnabled else { return }
+        guard isEnabled, !isSuspended else { return }
         cloud.synchronize()
         flush()
     }
@@ -225,14 +234,14 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
     /// merge of every kind on the main thread. Before `start()` it does nothing: the first merge waits for the
     /// saved subscriptions to load.
     public func refresh() {
-        guard started, isEnabled else { return }
+        guard started, isEnabled, !isSuspended else { return }
         cloud.synchronize()
     }
 
     /// Something changed on this device; it goes up after its kind's pause.
     public func changed(_ key: String) {
         let key = "sync." + key
-        guard isEnabled, pending[key] == nil, let delay = channels[key]?.delay else { return }
+        guard isEnabled, !isSuspended, pending[key] == nil, let delay = channels[key]?.delay else { return }
         pending[key] = Task { [weak self] in
             try? await Task.sleep(for: delay)
             guard let self, !Task.isCancelled else { return }
@@ -255,7 +264,7 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
 
     /// Merges the given cloud keys (every kind when nil) both ways.
     func flush(_ keys: Set<String>? = nil, now: Date = Date()) {
-        guard isEnabled else { return }
+        guard isEnabled, !isSuspended else { return }
         for key in order where keys?.contains(key) ?? true { channels[key]?.flush(cloud, now: now) }
     }
 
