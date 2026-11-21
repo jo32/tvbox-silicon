@@ -28,7 +28,9 @@ const issues = [
   { number: 1304, title: "Remember the last source", state: "open", labels: [{ name: "feedback" }], updated_at: "2026-11-15T00:00:00Z" },
 ];
 const read = (request) => new Promise((resolve) => { let data = ""; request.on("data", (chunk) => (data += chunk)); request.on("end", () => resolve(data)); });
-createServer((request, response) => response.end(JSON.stringify({ keys: [jwk] }))).listen(APPLE);
+// Apple's real keys too, so a real Sign in with Apple on a simulator or device also works against this server.
+const appleKeys = await fetch("https://appleid.apple.com/auth/keys").then((response) => response.json()).then((body) => body.keys).catch(() => []);
+createServer((request, response) => response.end(JSON.stringify({ keys: [jwk, ...appleKeys] }))).listen(APPLE);
 createServer(async (request, response) => { await read(request); response.end('{"ok":true,"result":true}'); }).listen(TELEGRAM);
 createServer((request, response) => {
   const single = /\/issues\/(\d+)$/.exec(request.url.split("?")[0]);
