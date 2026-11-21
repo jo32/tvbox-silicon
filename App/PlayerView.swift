@@ -73,7 +73,8 @@ struct PlaybackView: View {
                                  exitWhileWaiting: session.showsPicture ? nil : { dismiss() }, episodes: episodeChoices, channels: channelChoices,
                                  lines: session.lines.indices.map { L10n.text("Line %@", "\($0 + 1)") }, line: session.line,
                                  chooseLine: { session.choose(line: $0) }, transportBar: transportBar,
-                                 titleRow: AnyView(TVPlayerTitleRow(channel: channel, session: session, transportBar: transportBar).environment(store))).ignoresSafeArea()
+                                 titleRow: AnyView(TVPlayerTitleRow(channel: channel, session: session, transportBar: transportBar).environment(store)),
+                                 findDanmaku: danmakuFinder).ignoresSafeArea()
                     .onAppear { playbackSpeed = session.player.defaultRate }
             }
             // Until the picture starts, AVKit's player keeps the Back press to itself, so a stream that never
@@ -207,6 +208,13 @@ struct PlaybackView: View {
     #if os(tvOS)
     private func episodeAction(_ step: PlayerStep?) -> EpisodeAction? {
         step.map { EpisodeAction(name: $0.name, busy: $0.busy, channel: $0.channel, play: $0.go) }
+    }
+
+    /// Finding danmaku by hand from the player's Danmaku menu (#1089). None for live channels: their comments are the room's.
+    private var danmakuFinder: (() -> AnyView)? {
+        guard !session.isLive else { return nil }
+        let model = session.catalogDanmaku, name = channel.name
+        return { AnyView(CatalogDanmakuSettingsView(model: model, channelName: name)) }
     }
 
     /// The video's lines and episodes for the player's Episodes menu and info-panel tab: nil for one episode.
@@ -817,6 +825,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     var transportBar: TransportBarVisibility? = nil
     /// The title's logo and the video's tags, over the transport bar while it shows (#758).
     var titleRow: AnyView? = nil
+    /// The danmaku picker (#1089), last in the Danmaku menu, which it brings even before any comments load.
+    var findDanmaku: (() -> AnyView)? = nil
     final class Coordinator: NSObject, UIGestureRecognizerDelegate, @preconcurrency AVPlayerViewControllerDelegate {
         var host: UIHostingController<AnyView>?; var listed = ""; var criteria: DisplayCriteriaKeeper?
         var exit: (() -> Void)?
@@ -917,6 +927,12 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         }
         let binding = $showsDanmaku
         var items: [UIMenuElement] = []
+        var find: [UIMenuElement] = []
+        if let findDanmaku, !live {
+            find.append(UIAction(title: L10n.text("Find Danmaku…"), image: UIImage(systemName: "magnifyingglass")) { [weak controller] _ in
+                if let controller { Self.present(UIHostingController(rootView: findDanmaku()), over: controller) }
+            })
+        }
         if !comments.isEmpty {
             let area = danmakuArea
             let areas = DanmakuArea.allCases.map { option in
@@ -940,7 +956,9 @@ private struct NativePlayerView: UIViewControllerRepresentable {
                 UIMenu(title: L10n.text("Text Size"), image: UIImage(systemName: "textformat.size"), children: sizes),
                 UIMenu(title: L10n.text("Opacity"), image: UIImage(systemName: "circle.lefthalf.filled"), children: opacities),
                 UIMenu(title: L10n.text("Scroll Speed"), image: UIImage(systemName: "speedometer"), children: speeds),
-            ]))
+            ] + find))
+        } else if !find.isEmpty {
+            items.append(UIMenu(title: L10n.text("Danmaku"), image: UIImage(systemName: DanmakuPreference.symbol), children: find))
         }
         if qualities.count > 1 {
             let choose = choose

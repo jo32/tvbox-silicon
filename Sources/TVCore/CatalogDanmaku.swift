@@ -373,8 +373,8 @@ public struct DanmakuAuthorizationRequired: LocalizedError, Sendable {
     }
 }
 
-/// Automatic matching and manual searches send only titles and IDs. Video URLs,
-/// subscription URLs, headers and credentials are never sent to this service.
+/// Automatic matching and manual searches send only titles and IDs, and a public official episode page to a server
+/// added by hand (`comments(page:)`). Stream URLs, subscription URLs, headers and credentials are never sent.
 public struct CatalogDanmakuClient: Sendable {
     public static let defaultServer = "https://api.dandanplay.net"
     public static let legacyDefaultServer = "https://danmaku-api.152468.xyz"
@@ -435,6 +435,20 @@ public struct CatalogDanmakuClient: Sendable {
         guard let id = Self.identifier(episode.id) else { throw unsupported() }
         return try CatalogDanmakuParser.parse(await request("comment/" + id, query: [
             .init(name: "withRelated", value: "true"), .init(name: "chConvert", value: "0"), .init(name: "format", value: "json")]))
+    }
+
+    /// Comments for an official episode page, from a server that reads pages itself (danmu_api's `comment?url=`, #1408).
+    /// Plain Dandanplay-compatible servers answer 404.
+    public func comments(page: URL) async throws -> [CatalogDanmakuComment] {
+        try CatalogDanmakuParser.parse(await request("comment", query: [
+            .init(name: "url", value: page.absoluteString), .init(name: "format", value: "json")], timeout: 35))
+    }
+
+    /// A title search with a shorter wait, to see that a server being added answers as Dandanplay does.
+    public func check() async throws {
+        guard try object(await request("search/anime", query: [.init(name: "keyword", value: "test")], timeout: 20))["animes"] is [Any] else {
+            throw unsupported()
+        }
     }
 
     private static func text(_ value: Any?) -> String? { (value as? String) ?? (value as? NSNumber)?.stringValue }
