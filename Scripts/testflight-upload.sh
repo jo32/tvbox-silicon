@@ -16,6 +16,8 @@
 # --no-upload stops after the export (to check the archives). Output: build/testflight/<version>-<build>/.
 # Signs in iCloud key-value storage (Config/iCloud.entitlements, for iCloud sync) by default; the App IDs and the
 # App Store profiles must have the iCloud capability, or the export fails. ICLOUD=0 builds without it.
+# APPLE_SIGN_IN=1 also signs in Sign in with Apple (Settings › Account); the App IDs and profiles need that capability
+# first. Without it the app still signs in with Telegram.
 # TF_PLATFORMS="tvOS" (or "iOS") uploads one platform, for a release of one app only.
 set -euo pipefail
 
@@ -25,11 +27,15 @@ UPLOAD=1
 [ "${2:-}" = "--no-upload" ] && UPLOAD=0
 [[ $BUILD =~ ^[0-9]+$ ]] || { echo "build must be a number: $BUILD" >&2; exit 1; }
 ICLOUD=${ICLOUD:-1}
-case $ICLOUD in
-  1) ICLOUD_SETTING=ICLOUD_ENTITLEMENTS=Config/iCloud.entitlements ;;
-  0) ICLOUD_SETTING= ;;
-  *) echo "ICLOUD must be 1 or 0: $ICLOUD" >&2; exit 1 ;;
+APPLE_SIGN_IN=${APPLE_SIGN_IN:-0}
+case $ICLOUD$APPLE_SIGN_IN in
+  10) ICLOUD_SETTING=ICLOUD_ENTITLEMENTS=Config/iCloud.entitlements ;;
+  11) ICLOUD_SETTING=ICLOUD_ENTITLEMENTS=Config/iCloud-AppleSignIn.entitlements ;;
+  01) ICLOUD_SETTING=ICLOUD_ENTITLEMENTS=Config/AppleSignIn.entitlements ;;
+  00) ICLOUD_SETTING= ;;
+  *) echo "ICLOUD and APPLE_SIGN_IN must be 1 or 0: $ICLOUD $APPLE_SIGN_IN" >&2; exit 1 ;;
 esac
+APPLE_SIGN_IN_SETTING=APPLE_SIGN_IN=$([ "$APPLE_SIGN_IN" = 1 ] && echo YES || echo NO)
 
 TEAM=WWNM49L69R
 DISTRIBUTION=8871E484354649A0272A1FD042C4EBDAF5989C28 # Apple Distribution: Dailin Jiang
@@ -73,7 +79,7 @@ for platform in ${TF_PLATFORMS:-iOS tvOS}; do
       -derivedDataPath "build/testflight/DerivedData-$platform" -archivePath "$archive" \
       -allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER" \
       DEVELOPMENT_TEAM=$TEAM MARKETING_VERSION="$TESTFLIGHT_VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
-      ${ICLOUD_SETTING:+"$ICLOUD_SETTING"} \
+      ${ICLOUD_SETTING:+"$ICLOUD_SETTING"} "$APPLE_SIGN_IN_SETTING" \
       'SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) APPSTORE' >"$OUT/$platform-archive.log" 2>&1; then
     grep -E 'error:|BUILD FAILED|ARCHIVE FAILED' "$OUT/$platform-archive.log" | tail -20
     echo "archive failed, log: $OUT/$platform-archive.log" >&2

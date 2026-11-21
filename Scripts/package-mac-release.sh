@@ -84,6 +84,8 @@ if [ -n "$PROFILE" ]; then
   KVS=$(pb ':com.apple.developer.ubiquity-kvstore-identifier' Config/iCloud.entitlements)
   KVS=${KVS/\$\(TeamIdentifierPrefix\)/$TEAM.}
   ALLOWED_KVS=$(pb ':Entitlements:com.apple.developer.ubiquity-kvstore-identifier' "$PROFILE_PLIST")
+  # Sign in with Apple (Settings › Account) when the profile has it; Info.plist's YingxiaAppleSignIn tells the app.
+  SIWA=$(pb ':Entitlements:com.apple.developer.applesignin:0' "$PROFILE_PLIST")
   problems=()
   APP_ID=$(pb ':Entitlements:com.apple.application-identifier' "$PROFILE_PLIST")
   [ "${APP_ID:-$(pb ':Entitlements:application-identifier' "$PROFILE_PLIST")}" = "$TEAM.$BUNDLE" ] || problems+=("not for $BUNDLE")
@@ -114,6 +116,12 @@ if [ -n "$PROFILE" ]; then
 </dict>
 </plist>
 ENT
+  if [ -n "$SIWA" ]; then
+    /usr/libexec/PlistBuddy -c 'Add :com.apple.developer.applesignin array' -c "Add :com.apple.developer.applesignin:0 string $SIWA" "$APP_ENT"
+    /usr/libexec/PlistBuddy -c 'Set :YingxiaAppleSignIn YES' "$UNIVERSAL/Contents/Info.plist" 2>/dev/null \
+      || /usr/libexec/PlistBuddy -c 'Add :YingxiaAppleSignIn string YES' "$UNIVERSAL/Contents/Info.plist"
+    echo "Sign in with Apple on"
+  fi
   cp "$PROFILE" "$UNIVERSAL/Contents/embedded.provisionprofile"
   APP_SIGN=(--entitlements "$APP_ENT")
   echo "iCloud sync on: $KVS"

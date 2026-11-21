@@ -1,0 +1,39 @@
+{
+  "$schema": "../../website/node_modules/wrangler/config-schema.json",
+  "name": "yingxia-accounts",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "routes": [{ "pattern": "yingxia-accounts.getmegaportal.com", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
+  "d1_databases": [
+    // People, sign-ins, sessions, codes and Pro time (schema.sql). Made with: wrangler d1 create yingxia-accounts
+    { "binding": "DB", "database_name": "yingxia-accounts", "database_id": "86a2394e-62c8-424f-8fce-9e50975ae5ff" },
+    // The error-reports database (Services/error-reports), only read: which install sent which feedback issue.
+    { "binding": "REPORTS", "database_name": "yingxia-reports", "database_id": "1f9e0251-3a96-43ad-ad9a-bd818932aec0" }
+  ],
+  "ratelimits": [
+    // Per IP address: signing in and starting a Telegram sign-in.
+    { "name": "LIMITER", "namespace_id": "4201", "simple": { "limit": 20, "period": 60 } },
+    // Per person: tries at a redeem code, in the app and in the bot.
+    { "name": "REDEEM_LIMITER", "namespace_id": "4202", "simple": { "limit": 5, "period": 60 } }
+  ],
+  "vars": {
+    "FEEDBACK_REPO": "jo32/tvbox-silicon",
+    "APPLE_AUDIENCES": "com.jo32.yingxia.ios,com.jo32.yingxia.tv,com.jo32.yingxia.macos",
+    "APPLE_TEAM_ID": "WWNM49L69R",
+    "TELEGRAM_BOT": "yingxia_sup_bot",
+    // Points per feedback message sent and per message adopted; Pro days an adopted one gives (0 = none).
+    "POINTS_SENT": "1",
+    "POINTS_ADOPTED": "10",
+    "REWARD_DAYS": "0",
+    // The admin pages' origins, comma-separated (CORS for /v1/admin/*).
+    "ADMIN_ORIGINS": ""
+  },
+  // The bot is @yingxia_sup_bot, whose Worker (jo32/yx-tg) passes account commands here.
+  // Secrets (wrangler secret put …): ADMIN_TOKEN, ENTITLEMENT_KEY, TELEGRAM_WEBHOOK_SECRET (= yx-tg's ACCOUNTS_SECRET),
+  // GITHUB_TOKEN (read-only is enough), and optionally APPLE_KEY_ID + APPLE_PRIVATE_KEY (revokes Apple sign-ins on deletion).
+  // Every 15 minutes: copy new feedback, read its status on GitHub.
+  "triggers": { "crons": ["*/15 * * * *"] },
+  "observability": { "enabled": false }
+}

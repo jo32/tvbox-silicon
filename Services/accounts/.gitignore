@@ -1,0 +1,5 @@
+# Local test state and secrets (test/run.sh, test/serve.mjs, wrangler dev).
+.dev.vars
+.wrangler/
+test/.state/
+test/.qa-state/

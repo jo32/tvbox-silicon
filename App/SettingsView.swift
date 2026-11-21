@@ -570,6 +570,9 @@ struct FormSettingsView: View {
         Form { Group {
             heroSection
 
+            // Who is signed in: their feedback points, and Pro.
+            Section { AccountSettingsRow() }
+
             // Right under the app, so a problem or an idea is never more than one click away.
             #if os(iOS)
             // Two tiles side by side, so the way to the developer reads as a place, not two more rows.
@@ -2031,6 +2034,7 @@ struct TVSettingsView: View {
             TVSettingsHero()
         } list: {
             if !updates.available.isEmpty { updateSection }
+            TVSettingsSection { AccountSettingsRow() }
             // First in the list, beside the app: a problem or an idea is one press away.
             TVSettingsSection {
                 TVSettingsLink(title: L10n.text("Send Feedback")) { FeedbackView() }
