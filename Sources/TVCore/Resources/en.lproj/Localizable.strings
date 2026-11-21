@@ -1617,6 +1617,14 @@
 "Migu" = "Migu";
 "Dandanplay" = "Dandanplay";
 "Scroll Speed" = "Scroll Speed";
+"Compact" = "Compact";
+"Standard" = "Standard";
+"Relaxed" = "Relaxed";
+"Wide" = "Wide";
+"Density" = "Density";
+"Fewer" = "Fewer";
+"Fewest" = "Fewest";
+"Fewer and Fewest hide a comment repeated within a few seconds and let fewer comments start scrolling each second." = "Fewer and Fewest hide a comment repeated within a few seconds and let fewer comments start scrolling each second.";
 "Scrolling Comments" = "Scrolling Comments";
 "Top Comments" = "Top Comments";
 "Bottom Comments" = "Bottom Comments";

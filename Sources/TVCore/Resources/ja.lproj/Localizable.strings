@@ -1617,6 +1617,14 @@
 "Migu" = "Migu";
 "Dandanplay" = "Dandanplay";
 "Scroll Speed" = "スクロール速度";
+"Compact" = "狭め";
+"Standard" = "標準";
+"Relaxed" = "ゆったり";
+"Wide" = "広め";
+"Density" = "密度";
+"Fewer" = "少なめ";
+"Fewest" = "最少";
+"Fewer and Fewest hide a comment repeated within a few seconds and let fewer comments start scrolling each second." = "「少なめ」と「最少」では、数秒以内に繰り返された同じコメントを隠し、1秒間に流れ始めるコメントを減らします。";
 "Scrolling Comments" = "スクロールコメント";
 "Top Comments" = "上部コメント";
 "Bottom Comments" = "下部コメント";

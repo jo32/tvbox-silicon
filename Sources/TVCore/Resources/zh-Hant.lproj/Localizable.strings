@@ -1617,6 +1617,14 @@
 "Migu" = "咪咕影片";
 "Dandanplay" = "彈彈play";
 "Scroll Speed" = "彈幕速度";
+"Compact" = "緊湊";
+"Standard" = "標準";
+"Relaxed" = "寬鬆";
+"Wide" = "很寬";
+"Density" = "彈幕密度";
+"Fewer" = "較少";
+"Fewest" = "最少";
+"Fewer and Fewest hide a comment repeated within a few seconds and let fewer comments start scrolling each second." = "「較少」和「最少」會隱藏幾秒內重複的相同彈幕，並減少每秒開始捲動的彈幕數量。";
 "Scrolling Comments" = "滾動彈幕";
 "Top Comments" = "頂部彈幕";
 "Bottom Comments" = "底部彈幕";
