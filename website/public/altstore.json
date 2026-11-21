@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.27",
+          "buildVersion": "65",
+          "date": "2026-11-21",
+          "localizedDescription": "• 映匣账号\n• 帮映匣变好，赚积分\n• 视频里的广告更少了\n• “正在播放”全屏显示\n• 其他修复\n\n• A Yingxia account\n• Points for helping Yingxia\n• Fewer ads in videos\n• Now Playing fills the screen\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.27/Yingxia-1.8.27-ios.ipa",
+          "size": 185065395,
+          "sha256": "3db7ec3168f89e87d9377f3fde59a0c3048ca8a2a61c2f4ade835980141841f5",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.26",
           "buildVersion": "64",
           "date": "2026-11-20",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.23/Yingxia-1.8.23-ios.ipa",
           "size": 178364180,
           "sha256": "ba5c3cc0843746977c3739e59526ce5fd4f939d71281167ce5a54403a1244beb",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.22",
-          "buildVersion": "60",
-          "date": "2026-11-15",
-          "localizedDescription": "• 配色主题\n• 全新应用图标，Apple TV 也能换\n• 更清爽的播放器\n• 云盘视频起播、跳转更快\n• 其他修复\n\n• Color themes\n• New app icons, on Apple TV too\n• A calmer player\n• Cloud drive videos start and seek faster\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.22/Yingxia-1.8.22-ios.ipa",
-          "size": 178050981,
-          "sha256": "58cd71d52bfd9e83abbb7e57f6010d0dfc6f1e62de4923b115a3ebd4631b6fb6",
           "minOSVersion": "17.0"
         }
       ],
