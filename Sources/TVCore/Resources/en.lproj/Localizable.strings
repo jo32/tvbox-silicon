@@ -2246,3 +2246,16 @@
 "Your feedback points and Pro time are deleted with it, and can't be brought back." = "Your feedback points and Pro time are deleted with it, and can't be brought back.";
 "You've already redeemed this code." = "You've already redeemed this code.";
 "You've been signed out. Sign in again." = "You've been signed out. Sign in again.";
+"Built-in Danmaku Services" = "Built-in Danmaku Services";
+"Servers are asked in order until one has comments. Add a Dandanplay-compatible server, such as a self-hosted danmu_api, by its root or an API prefix ending in /api/v2; a token in the path is supported. Each one is tested when added. Official episode pages from the source are sent to servers you add, to fetch their comments. Addresses are saved only on this device." = "Servers are asked in order until one has comments. Add a Dandanplay-compatible server, such as a self-hosted danmu_api, by its root or an API prefix ending in /api/v2; a token in the path is supported. Each one is tested when added. Official episode pages from the source are sent to servers you add, to fetch their comments. Addresses are saved only on this device.";
+"Paste an episode link from iQIYI, Tencent Video, Youku, Mango TV or Bilibili." = "Paste an episode link from iQIYI, Tencent Video, Youku, Mango TV or Bilibili.";
+"No comments were found for this link." = "No comments were found for this link.";
+"Search On" = "Search On";
+"Episode page address" = "Episode page address";
+"Load from Link" = "Load from Link";
+"Episode Link" = "Episode Link";
+"Paste the episode's page from iQIYI, Tencent Video, Youku, Mango TV or Bilibili. The link is sent to the selected danmaku service to fetch its comments." = "Paste the episode's page from iQIYI, Tencent Video, Youku, Mango TV or Bilibili. The link is sent to the selected danmaku service to fetch its comments.";
+"Add Built-in Services" = "Add Built-in Services";
+"Danmaku Servers" = "Danmaku Servers";
+"Add another server to move or remove this one." = "Add another server to move or remove this one.";
+"Find Danmaku…" = "Find Danmaku…";
