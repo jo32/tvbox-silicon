@@ -7,16 +7,17 @@ import { grant } from "./pro";
 import { User } from "./session";
 import { DAY, Env, now, number } from "./util";
 
-export type Status = "open" | "adopted" | "closed" | "declined" | "duplicate";
+export type Status = "open" | "fixed" | "adopted" | "closed" | "declined" | "duplicate";
 
-// What became of an issue. Adopted only when the developer says so with a label: `fixed` (a bug fixed) or `adopted`
-// (an idea taken), since adopting is worth many points; closed as completed without one is just closed. Declined:
+// What became of an issue. Fixed or adopted only when the developer says so with a label: `fixed` (a reported bug
+// fixed) or `adopted` (a suggested idea taken), since those are worth many points; closed as completed without one is just closed. Declined:
 // closed as not planned, or labeled invalid / wontfix / spam. Labels win over the state, and duplicate over all.
 export function statusOf(issue: any): Status {
   const labels = new Set((issue?.labels ?? []).map((label: any) => String(typeof label === "string" ? label : label?.name ?? "").toLowerCase()));
   if (labels.has("duplicate") || issue?.state_reason === "duplicate") return "duplicate";
   if (labels.has("invalid") || labels.has("wontfix") || labels.has("spam")) return "declined";
-  if (labels.has("fixed") || labels.has("adopted")) return "adopted";
+  if (labels.has("adopted")) return "adopted";
+  if (labels.has("fixed")) return "fixed";
   if (issue?.state === "closed") return issue.state_reason === "not_planned" ? "declined" : "closed";
   return "open";
 }
@@ -74,13 +75,13 @@ export async function copyNew(env: Env) {
   }
 }
 
-// Records an issue's status; the first time it is adopted, its sender may get Pro days (REWARD_DAYS).
+// Records an issue's status; the first time it is fixed or adopted, its sender may get Pro days (REWARD_DAYS).
 async function record(env: Env, issue: any) {
   const status = statusOf(issue);
   const row = await env.DB.prepare("UPDATE feedback_issues SET status = ?, title = ?, updated = ? WHERE issue = ? RETURNING user_id")
     .bind(status, String(issue.title ?? "").slice(0, 200), now(), issue.number).first<{ user_id: string }>();
   const days = number(env.REWARD_DAYS, 0);
-  if (row && status === "adopted" && days > 0) await grant(env, row.user_id, "reward", `issue:${issue.number}`, Math.trunc(days), "github");
+  if (row && (status === "fixed" || status === "adopted") && days > 0) await grant(env, row.user_id, "reward", `issue:${issue.number}`, Math.trunc(days), "github");
 }
 
 // Reads what changed on GitHub since the last run, then any copied issue that has no status yet.
@@ -126,14 +127,15 @@ export async function syncUnknown(env: Env, limit: number, userID?: string) {
 
 export async function stats(env: Env, user: User) {
   const counts = await env.DB.prepare(
-    "SELECT COUNT(*) AS sent, COALESCE(SUM(status = 'adopted'), 0) AS adopted, COALESCE(SUM(status IN ('declined', 'duplicate')), 0) AS declined FROM feedback_issues WHERE user_id = ?",
-  ).bind(user.id).first<{ sent: number; adopted: number; declined: number }>();
+    "SELECT COUNT(*) AS sent, COALESCE(SUM(status = 'fixed'), 0) AS fixed, COALESCE(SUM(status = 'adopted'), 0) AS adopted, COALESCE(SUM(status IN ('declined', 'duplicate')), 0) AS declined FROM feedback_issues WHERE user_id = ?",
+  ).bind(user.id).first<{ sent: number; fixed: number; adopted: number; declined: number }>();
   const recent = await env.DB.prepare("SELECT issue, title, status, sent FROM feedback_issues WHERE user_id = ? ORDER BY sent DESC LIMIT 20")
     .bind(user.id).all<{ issue: number; title: string; status: Status | null; sent: number }>();
   const sent = counts?.sent ?? 0;
   const adopted = counts?.adopted ?? 0;
   return {
     sent,
+    fixed: counts?.fixed ?? 0,
     adopted,
     declined: counts?.declined ?? 0,
     points: (await points(env, user.id)).total,

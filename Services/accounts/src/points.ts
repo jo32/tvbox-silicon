@@ -2,7 +2,8 @@
 // - each day the app is open while signed in: POINTS_DAILY (an install gives one account its day);
 // - each feedback message, from the app or /feedback in the Telegram group: POINTS_SENT, at most SENT_PER_DAY a day,
 //   none for duplicates or declined ones;
-// - each one the developer adopts (labeled `fixed` or `adopted` on GitHub): POINTS_ADOPTED;
+// - each reported bug the developer fixes (labeled `fixed` on GitHub): POINTS_FIXED;
+// - each suggested idea the developer adopts (labeled `adopted`): POINTS_ADOPTED;
 // - each merged pull request (src/prs.ts): POINTS_PR;
 // - plus or minus what the admin set by hand.
 // The total is counted again from those rows every time, so there's no running number to drift or to tamper with.
@@ -19,7 +20,8 @@ export function rules(env: Env) {
     daily: number(env.POINTS_DAILY, 1),
     sent: number(env.POINTS_SENT, 1),
     sentPerDay: SENT_PER_DAY,
-    adopted: number(env.POINTS_ADOPTED, 30),
+    fixed: number(env.POINTS_FIXED, 50),
+    adopted: number(env.POINTS_ADOPTED, 100),
     pullRequest: number(env.POINTS_PR, 500),
   };
 }
@@ -29,7 +31,8 @@ export interface Points {
   total: number;
   days: number; // days the app was used
   sent: number; // feedback messages that earned their point
-  adopted: number;
+  fixed: number; // reported bugs fixed
+  adopted: number; // suggested ideas adopted
   pullRequests: number;
   adjusted: number; // points the admin added (or took away)
   rules: Rules;
@@ -41,13 +44,14 @@ export async function points(env: Env, userID: string): Promise<Points> {
       (SELECT COUNT(*) FROM active_days WHERE user_id = ?1) AS days,
       (SELECT COALESCE(SUM(MIN(n, ${SENT_PER_DAY})), 0) FROM (SELECT COUNT(*) AS n FROM feedback_issues
         WHERE user_id = ?1 AND COALESCE(status, 'open') NOT IN ('declined', 'duplicate') GROUP BY (sent + ${DAY_OFFSET}) / 86400)) AS sent,
+      (SELECT COUNT(*) FROM feedback_issues WHERE user_id = ?1 AND status = 'fixed') AS fixed,
       (SELECT COUNT(*) FROM feedback_issues WHERE user_id = ?1 AND status = 'adopted') AS adopted,
       (SELECT COUNT(*) FROM pull_requests WHERE user_id = ?1 AND excluded = 0) AS pullRequests,
       (SELECT COALESCE(SUM(points), 0) FROM point_adjustments WHERE user_id = ?1) AS adjusted`,
-  ).bind(userID).first<{ days: number; sent: number; adopted: number; pullRequests: number; adjusted: number }>();
+  ).bind(userID).first<{ days: number; sent: number; fixed: number; adopted: number; pullRequests: number; adjusted: number }>();
   const rule = rules(env);
-  const counts = { days: row?.days ?? 0, sent: row?.sent ?? 0, adopted: row?.adopted ?? 0, pullRequests: row?.pullRequests ?? 0, adjusted: row?.adjusted ?? 0 };
-  const total = counts.days * rule.daily + counts.sent * rule.sent + counts.adopted * rule.adopted + counts.pullRequests * rule.pullRequest + counts.adjusted;
+  const counts = { days: row?.days ?? 0, sent: row?.sent ?? 0, fixed: row?.fixed ?? 0, adopted: row?.adopted ?? 0, pullRequests: row?.pullRequests ?? 0, adjusted: row?.adjusted ?? 0 };
+  const total = counts.days * rule.daily + counts.sent * rule.sent + counts.fixed * rule.fixed + counts.adopted * rule.adopted + counts.pullRequests * rule.pullRequest + counts.adjusted;
   return { total, ...counts, rules: rule };
 }
 

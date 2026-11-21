@@ -33,7 +33,7 @@ public struct Account: Codable, Sendable, Equatable {
         public struct Issue: Codable, Sendable, Equatable, Identifiable {
             public var number: Int
             public var title: String
-            /// open, adopted, declined or duplicate.
+            /// open, fixed (a reported bug), adopted (a suggested idea), closed, declined or duplicate.
             public var status: String
             public var sent: Double
             public var id: Int { number }
@@ -54,22 +54,59 @@ public struct Account: Codable, Sendable, Equatable {
             public var daily: Int
             public var sent: Int
             public var sentPerDay: Int
+            /// A reported bug the developer fixed (the `fixed` label).
+            public var fixed: Int
+            /// A suggested idea the developer adopted (the `adopted` label).
             public var adopted: Int
             public var pullRequest: Int
             /// The server's own (Services/accounts/wrangler.jsonc), for explaining points before an account or a server
             /// has sent any.
-            public static let standard = Rules(daily: 1, sent: 1, sentPerDay: 3, adopted: 30, pullRequest: 500)
+            public static let standard = Rules(daily: 1, sent: 1, sentPerDay: 3, fixed: 50, adopted: 100, pullRequest: 500)
+
+            public init(daily: Int, sent: Int, sentPerDay: Int, fixed: Int, adopted: Int, pullRequest: Int) {
+                self.daily = daily; self.sent = sent; self.sentPerDay = sentPerDay
+                self.fixed = fixed; self.adopted = adopted; self.pullRequest = pullRequest
+            }
+
+            /// A server from before fixed bugs had their own rule paid them as adopted.
+            public init(from decoder: any Decoder) throws {
+                let values = try decoder.container(keyedBy: CodingKeys.self)
+                daily = try values.decode(Int.self, forKey: .daily)
+                sent = try values.decode(Int.self, forKey: .sent)
+                sentPerDay = try values.decode(Int.self, forKey: .sentPerDay)
+                adopted = try values.decode(Int.self, forKey: .adopted)
+                fixed = try values.decodeIfPresent(Int.self, forKey: .fixed) ?? adopted
+                pullRequest = try values.decode(Int.self, forKey: .pullRequest)
+            }
         }
         public var total: Int
         /// Days the app was open while signed in.
         public var days: Int
         /// Feedback messages that earned their point: at most `sentPerDay` a day, never duplicates or declined ones.
         public var sent: Int
+        /// Reported bugs the developer fixed; a server from before this rule counts them in `adopted`.
+        public var fixed: Int
+        /// Suggested ideas the developer adopted.
         public var adopted: Int
         public var pullRequests: Int
         /// Added (or taken away) by the developer.
         public var adjusted: Int
         public var rules: Rules
+
+        public init(from decoder: any Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            total = try values.decode(Int.self, forKey: .total)
+            days = try values.decode(Int.self, forKey: .days)
+            sent = try values.decode(Int.self, forKey: .sent)
+            fixed = try values.decodeIfPresent(Int.self, forKey: .fixed) ?? 0
+            adopted = try values.decode(Int.self, forKey: .adopted)
+            pullRequests = try values.decode(Int.self, forKey: .pullRequests)
+            adjusted = try values.decode(Int.self, forKey: .adjusted)
+            rules = try values.decode(Rules.self, forKey: .rules)
+        }
+
+        /// What fixed bugs and adopted ideas brought together.
+        public var feedbackEarned: Int { fixed * rules.fixed + adopted * rules.adopted }
     }
 
     /// A merged pull request that counts for the person.

@@ -66,6 +66,17 @@ private func signed(_ json: String, by key: Curve25519.Signing.PrivateKey) throw
     #expect(older.points == nil)
 }
 
+@Test func fixedBugsAndAdoptedIdeasEarnTheirOwnPoints() throws {
+    let points = try JSONDecoder().decode(Account.Points.self, from: Data(
+        #"{"total":201,"days":0,"sent":1,"fixed":2,"adopted":1,"pullRequests":0,"adjusted":0,"rules":{"daily":1,"sent":1,"sentPerDay":3,"fixed":50,"adopted":100,"pullRequest":500}}"#.utf8))
+    #expect(points.fixed == 2 && points.rules.fixed == 50 && points.feedbackEarned == 200)
+    // A server from before the split counted fixed bugs as adopted, at the one rate it sent.
+    let older = try JSONDecoder().decode(Account.Points.self, from: Data(
+        #"{"total":31,"days":0,"sent":1,"adopted":1,"pullRequests":0,"adjusted":0,"rules":{"daily":1,"sent":1,"sentPerDay":3,"adopted":30,"pullRequest":500}}"#.utf8))
+    #expect(older.fixed == 0 && older.rules.fixed == 30 && older.feedbackEarned == 30)
+    #expect(Account.Points.Rules.standard.fixed == 50 && Account.Points.Rules.standard.adopted == 100)
+}
+
 @Test func everyRedeemRefusalHasItsOwnMessage() {
     let reasons = ["not_found", "revoked", "expired", "used_up", "already_redeemed"]
     let messages = Set(reasons.map { AccountService.Failure.code($0).errorDescription ?? "" })

@@ -1,7 +1,7 @@
 import SwiftUI
 import TVCore
 
-/// How points work, for everyone, signed in or not: the four ways to earn and what each is worth, what gets feedback
+/// How points work, for everyone, signed in or not: the ways to earn and what each is worth, what gets feedback
 /// adopted, the line that makes a pull request count, and fair play. The numbers are the server's when it has sent
 /// them, the standard ones otherwise. Opened from Settings › Account and from Send Feedback.
 struct PointsGuideView: View {
@@ -15,7 +15,7 @@ struct PointsGuideView: View {
     private var claim: String { "Yingxia account: \(accounts.account?.id ?? "u_…")" }
 
     private struct Rule: Identifiable {
-        enum Kind { case daily, feedback, adopted, pullRequest }
+        enum Kind { case daily, feedback, fixed, adopted, pullRequest }
         let kind: Kind
         let symbol: String
         let tint: Color
@@ -32,8 +32,11 @@ struct PointsGuideView: View {
             Rule(kind: .feedback, symbol: "paperplane.fill", tint: Color(red: 0.45, green: 0.55, blue: 1), title: L10n.text("Feedback Sent"),
                  detail: L10n.text("Each message sent from Settings › Send Feedback, or with /feedback in the Telegram group (sign in with that Telegram account). Up to %lld a day; duplicates and invalid ones don't count.", rules.sentPerDay),
                  points: rules.sent),
-            Rule(kind: .adopted, symbol: "checkmark.seal.fill", tint: .green, title: L10n.text("Feedback Adopted"),
-                 detail: L10n.text("When the developer fixes the problem or builds the idea you sent. The clearer the report, the likelier: your device, the build, the source, the steps, and a screenshot or video."),
+            Rule(kind: .fixed, symbol: "ladybug.fill", tint: .green, title: L10n.text("Bug Fixed"),
+                 detail: L10n.text("When the developer fixes a problem you reported. The clearer the report, the likelier: your device, the build, the source, the steps, and a screenshot or video."),
+                 points: rules.fixed),
+            Rule(kind: .adopted, symbol: "checkmark.seal.fill", tint: .teal, title: L10n.text("Idea Adopted"),
+                 detail: L10n.text("When the developer builds a feature you suggested."),
                  points: rules.adopted),
             Rule(kind: .pullRequest, symbol: "arrow.triangle.merge", tint: Color(red: 0.75, green: 0.5, blue: 1), title: L10n.text("Merged Pull Requests"),
                  detail: L10n.text("Yingxia's code is on GitHub. Put this line in your pull request's description; each merged pull request counts once."),
@@ -204,8 +207,8 @@ struct PointsGuideView: View {
     #endif
 }
 
-/// "Daily +1 · feedback +1 · adopted +30 · PR +500", for rows that open the guide.
+/// "Daily +1 · feedback +1 · fixed +50 · adopted +100 · PR +500", for rows that open the guide.
 @MainActor func pointsSummary() -> String {
     let rules = AccountStore.shared.account?.points?.rules ?? .standard
-    return L10n.text("Daily +%lld · feedback +%lld · adopted +%lld · PR +%lld", rules.daily, rules.sent, rules.adopted, rules.pullRequest)
+    return L10n.text("Daily +%lld · feedback +%lld · fixed +%lld · adopted +%lld · PR +%lld", rules.daily, rules.sent, rules.fixed, rules.adopted, rules.pullRequest)
 }

@@ -115,7 +115,7 @@ export async function admin(request: Request, env: Env, path: string): Promise<R
       `SELECT u.id, u.name, u.created, u.pro_until AS proUntil,
         (SELECT GROUP_CONCAT(provider || ':' || label, ' ') FROM identities WHERE user_id = u.id) AS identities,
         (SELECT COUNT(*) FROM feedback_issues WHERE user_id = u.id) AS sent,
-        (SELECT COUNT(*) FROM feedback_issues WHERE user_id = u.id AND status = 'adopted') AS adopted
+        (SELECT COUNT(*) FROM feedback_issues WHERE user_id = u.id AND status IN ('fixed', 'adopted')) AS adopted
        FROM users u${where.length ? " WHERE " + where.join(" AND ") : ""} ORDER BY ${url.searchParams.get("sort") === "adopted" ? "adopted DESC," : ""} u.created DESC LIMIT ? OFFSET ?`,
     ).bind(...values, limit, offset).all();
     return json({ users: rows.results, limit, offset });
@@ -202,7 +202,7 @@ export async function admin(request: Request, env: Env, path: string): Promise<R
       `SELECT (SELECT COUNT(*) FROM users) AS users, (SELECT COUNT(*) FROM users WHERE pro_until > ?) AS pro,
         (SELECT COUNT(*) FROM users WHERE created > ?) AS newThisWeek,
         (SELECT COUNT(*) FROM codes) AS codes, (SELECT COALESCE(SUM(used), 0) FROM codes) AS redeemed,
-        (SELECT COUNT(*) FROM feedback_issues) AS feedback, (SELECT COUNT(*) FROM feedback_issues WHERE status = 'adopted') AS adopted,
+        (SELECT COUNT(*) FROM feedback_issues) AS feedback, (SELECT COUNT(*) FROM feedback_issues WHERE status IN ('fixed', 'adopted')) AS adopted,
         (SELECT COUNT(*) FROM pull_requests WHERE user_id IS NOT NULL AND excluded = 0) AS pullRequests,
         (SELECT COUNT(*) FROM pull_requests WHERE user_id IS NULL AND excluded = 0) AS pullRequestsUnmatched,
         (SELECT COUNT(*) FROM active_days WHERE day = (CAST(strftime('%s', 'now') AS INTEGER) + 28800) / 86400) AS activeToday`,

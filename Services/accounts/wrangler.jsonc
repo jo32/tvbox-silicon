@@ -27,7 +27,8 @@
     // request; Pro days an adopted message gives (0 = none). Pull requests by PR_EXCLUDE never earn points.
     "POINTS_DAILY": "1",
     "POINTS_SENT": "1",
-    "POINTS_ADOPTED": "30",
+    "POINTS_FIXED": "50",
+    "POINTS_ADOPTED": "100",
     "POINTS_PR": "500",
     "REWARD_DAYS": "0",
     "PR_EXCLUDE": "jo32",
