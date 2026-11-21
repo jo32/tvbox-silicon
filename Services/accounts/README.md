@@ -28,10 +28,13 @@ From this folder, with `W=../../website/node_modules/.bin/wrangler`:
 
 1. `$W d1 create yingxia-accounts`. Put its id in `wrangler.jsonc`, then run
    `$W d1 execute yingxia-accounts --remote --file schema.sql`.
-2. Create the bot with @BotFather (`/newbot`). Put its username, without the @, in `TELEGRAM_BOT` in `wrangler.jsonc`.
+2. The bot is the Yingxia group helper, [@yingxia_sup_bot](https://t.me/yingxia_sup_bot) (`TELEGRAM_BOT` in
+   `wrangler.jsonc`). Its Worker, `yx-tg` (repository jo32/yx-tg), keeps Telegram's webhook and the bot's token. In
+   private chats it passes `/start <code>`, `/redeem` and `/me` to `/v1/telegram/webhook` here through a service
+   binding and sends the `{text}` this Worker answers. This Worker never calls Telegram.
 3. Add the secrets:
-   - `$W secret put TELEGRAM_BOT_TOKEN`: the token BotFather gave.
-   - `$W secret put TELEGRAM_WEBHOOK_SECRET`: any random string, e.g. `openssl rand -hex 24`.
+   - `$W secret put TELEGRAM_WEBHOOK_SECRET`: a random string, e.g. `openssl rand -hex 24`. yx-tg sends it; set the
+     same value there as `ACCOUNTS_SECRET`.
    - `$W secret put ADMIN_TOKEN`: a long random string the admin pages send.
    - `$W secret put ENTITLEMENT_KEY < ~/.config/yingxia/accounts-entitlement.key`: on the M5. Its public half is
      `ProEntitlement.publicKey` in `Sources/TVCore/Account.swift`. If you replace the key, change both.
@@ -40,9 +43,7 @@ From this folder, with `W=../../website/node_modules/.bin/wrangler`:
    - Optional: `APPLE_KEY_ID` and `APPLE_PRIVATE_KEY`, a Sign in with Apple key (.p8) from the developer site. With
      them, deleting an account also revokes the person's Apple sign-in, as App Review asks.
 4. `$W deploy`
-5. Point the bot at the Worker:
-   `curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" https://yingxia-accounts.getmegaportal.com/v1/admin/telegram/setup`
-6. `curl https://yingxia-accounts.getmegaportal.com/v1/health` should show `true` for everything you set.
+5. `curl https://yingxia-accounts.getmegaportal.com/v1/health` should show `true` for everything you set.
 
 Sign in with Apple also needs the capability on the App IDs `com.jo32.yingxia.ios`, `.tv` and `.macos`, and
 regenerated profiles. After that:
@@ -71,7 +72,6 @@ Every call sends `Authorization: Bearer <ADMIN_TOKEN>`. Browsers may call it fro
 | `POST /v1/admin/users/<id>/pro` | `{days: 30}` adds days, `{days: null}` = lifetime, `{until: 0}` ends Pro, `{until: t}` sets the end. Optional `note`. | the person, as above |
 | `DELETE /v1/admin/users/<id>` | | `{deleted}` |
 | `GET /v1/admin/stats` | | `{users, pro, newThisWeek, codes, redeemed, feedback, adopted}` |
-| `POST /v1/admin/telegram/setup` | | Telegram's answer to setWebhook |
 
 Codes are case-insensitive and ignore spaces and dashes. O reads as 0, and I and L read as 1. Generated codes look
 like `7KQ2-M9XD-4TRB-WN3H`.

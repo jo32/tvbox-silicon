@@ -66,7 +66,7 @@ async function appleSignIn(request: Request, env: Env): Promise<Response> {
 }
 
 async function telegramStart(request: Request, env: Env): Promise<Response> {
-  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_BOT) return error(503, "no_telegram");
+  if (!env.TELEGRAM_WEBHOOK_SECRET || !env.TELEGRAM_BOT) return error(503, "no_telegram");
   if (await limited(request, env)) return error(429, "too_many");
   const body = await parse(request);
   if (body instanceof Response) return body;
@@ -136,7 +136,7 @@ const health = async (_request: Request, env: Env) =>
     ok: true,
     apple: env.APPLE_AUDIENCES.split(",").length,
     appleRevoke: Boolean(env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY),
-    telegram: Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_WEBHOOK_SECRET),
+    telegram: Boolean(env.TELEGRAM_BOT && env.TELEGRAM_WEBHOOK_SECRET),
     entitlement: Boolean(env.ENTITLEMENT_KEY),
     github: Boolean(env.GITHUB_TOKEN),
     admin: Boolean(env.ADMIN_TOKEN),

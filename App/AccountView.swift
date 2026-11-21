@@ -11,6 +11,7 @@ struct AccountView: View {
     @State private var code = ""
     @State private var confirmsDeletion = false
     @State private var appleRequest = AppleSignInRequest()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         SettingsPage(title: L10n.text("Account"), symbol: "person.crop.circle",
@@ -36,7 +37,8 @@ struct AccountView: View {
             }
             #endif
         }
-        .task(id: accounts.telegramLogin?.code) {
+        // Again when the app comes back (from Telegram, after tapping Start): check at once.
+        .task(id: "\(accounts.telegramLogin?.code ?? "")|\(scenePhase == .active)") {
             guard accounts.telegramLogin != nil else { return }
             do { try await accounts.waitForTelegram() } catch is CancellationError {} catch { show(error) }
         }

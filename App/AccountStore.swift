@@ -106,7 +106,16 @@ import TVCore
     func waitForTelegram() async throws {
         while let login = telegramLogin, !Task.isCancelled {
             if Date().timeIntervalSince1970 > login.expires { telegramLogin = nil; throw AccountService.Failure.expired }
-            if let signIn = try await AccountService.pollTelegram(code: login.code, token: AccountKeychain.token()) {
+            // A check that fails on the way (no network, or the app suspended while the person is in Telegram) isn't the
+            // end: keep waiting until the code expires.
+            let signIn: AccountService.SignIn?
+            do {
+                signIn = try await AccountService.pollTelegram(code: login.code, token: AccountKeychain.token())
+            } catch AccountService.Failure.failed, AccountService.Failure.unavailable, AccountService.Failure.tooMany {
+                try await Task.sleep(for: .seconds(2))
+                continue
+            }
+            if let signIn {
                 guard telegramLogin?.code == login.code else { return }
                 telegramLogin = nil
                 finish(signIn)

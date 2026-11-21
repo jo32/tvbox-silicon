@@ -43,7 +43,7 @@ mkdirSync(STATE, { recursive: true });
 const entitlement = execFileSync("cat", [`${process.env.HOME}/.config/yingxia/accounts-entitlement.key`]).toString().trim();
 writeFileSync(".dev.vars", [
   `APPLE_API=http://127.0.0.1:${APPLE}`, `TELEGRAM_API=http://127.0.0.1:${TELEGRAM}`, `GITHUB_API=http://127.0.0.1:${GITHUB}`,
-  "ADMIN_TOKEN=admin-secret", "TELEGRAM_BOT_TOKEN=1:qa", "TELEGRAM_WEBHOOK_SECRET=hook-secret", "TELEGRAM_BOT=yingxia_sup_bot",
+  "ADMIN_TOKEN=admin-secret", "TELEGRAM_WEBHOOK_SECRET=hook-secret", "TELEGRAM_BOT=yingxia_sup_bot",
   `ENTITLEMENT_KEY=${entitlement}`, "REWARD_DAYS=0",
 ].join("\n") + "\n");
 const d1 = (database, args) => execFileSync(WRANGLER, ["d1", "execute", database, "--local", "--persist-to", STATE, ...args], { stdio: "pipe" });

@@ -22,14 +22,12 @@ export interface Env {
   // Secrets.
   ADMIN_TOKEN?: string;
   ENTITLEMENT_KEY?: string; // Ed25519 private key, PKCS#8, base64
-  TELEGRAM_BOT_TOKEN?: string;
-  TELEGRAM_WEBHOOK_SECRET?: string;
+  TELEGRAM_WEBHOOK_SECRET?: string; // shared with the bot's Worker (yx-tg ACCOUNTS_SECRET)
   GITHUB_TOKEN?: string;
   APPLE_KEY_ID?: string; // Sign in with Apple key: lets account deletion revoke Apple's token
   APPLE_PRIVATE_KEY?: string; // its .p8, PEM
-  // Local tests only (.dev.vars): stand-ins for Apple, Telegram and GitHub.
+  // Local tests only (.dev.vars): stand-ins for Apple and GitHub.
   APPLE_API?: string;
-  TELEGRAM_API?: string;
   GITHUB_API?: string;
 }
 

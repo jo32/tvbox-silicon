@@ -5,7 +5,6 @@
 import { stats } from "./feedback";
 import { createCodes, grant } from "./pro";
 import { erase, identities, User } from "./session";
-import { setup } from "./telegram";
 import { DAY, Env, error, json, LIFETIME, list, now, parse, same } from "./util";
 
 export function cors(request: Request, env: Env): Record<string, string> {
@@ -152,13 +151,6 @@ export async function admin(request: Request, env: Env, path: string): Promise<R
         (SELECT COUNT(*) FROM feedback_issues) AS feedback, (SELECT COUNT(*) FROM feedback_issues WHERE status = 'adopted') AS adopted`,
     ).bind(time, time - 7 * DAY).first();
     return json(counts);
-  }
-
-  if (path === "/v1/admin/telegram/setup" && method === "POST") {
-    if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_WEBHOOK_SECRET) return error(503, "no_telegram_token");
-    // Telegram only calls https addresses.
-    const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
-    return json(await setup(env, local ? url.origin : `https://${url.host}`));
   }
 
   return error(404, "not_found");

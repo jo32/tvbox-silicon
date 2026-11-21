@@ -1,7 +1,8 @@
-// Telegram: signing in through the bot (works on every device, the Apple TV too, by QR code), and the bot's own
-// commands: /redeem <code>, /me. The app asks for a one-time code, opens t.me/<bot>?start=<code>; the person taps
-// Start; Telegram sends the bot "/start <code>" here (the webhook), which ties their Telegram user to the code; the app,
-// asking every few seconds, then gets its session.
+// Telegram: signing in through the bot (works on every device, the Apple TV too, by QR code), and the bot's account
+// commands: /redeem <code>, /me. The bot is the Yingxia group helper, @yingxia_sup_bot (repository jo32/yx-tg): it
+// keeps Telegram's webhook and passes private "/start <code>", /redeem and /me here, then sends the text we answer.
+// The app asks for a one-time code, opens t.me/<bot>?start=<code>; the person taps Start; the bot passes
+// "/start <code>" here, which ties their Telegram user to the code; the app, asking every few seconds, gets its session.
 
 import { stats } from "./feedback";
 import { isPro, redeem, RedeemFailure } from "./pro";
@@ -9,13 +10,6 @@ import { addIdentity, display, Identity, User, userFor } from "./session";
 import { base64url, bytes, DAY, Env, now, same } from "./util";
 
 export const LOGIN_SECONDS = 600;
-
-const api = (env: Env, method: string, body: unknown) =>
-  fetch(`${env.TELEGRAM_API ?? "https://api.telegram.org"}/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
 
 // `linkUser`: someone signed in with Apple adding Telegram, so both reach the same account.
 export async function startLogin(env: Env, install: string, platform: string, linkUser: string | null) {
@@ -57,9 +51,8 @@ const REDEEM_TEXT: Record<RedeemFailure, [string, string]> = {
   already_redeemed: ["You've already redeemed this code.", "你已兑换过此兑换码。"],
 };
 
-async function reply(env: Env, chat: number, text: string) {
-  await api(env, "sendMessage", { chat_id: chat, text, disable_web_page_preview: true });
-}
+// The bot sends this text back to the person (null: nothing to say).
+const answer = (text: string | null) => Response.json({ text });
 
 function identity(from: any): Identity {
   const name = display([from.first_name, from.last_name].filter(Boolean).join(" "));
@@ -67,16 +60,17 @@ function identity(from: any): Identity {
 }
 const telegramUser = (env: Env, from: any) => userFor(env, identity(from));
 
-// POST /v1/telegram/webhook. Telegram sends the secret set with setWebhook (POST /v1/admin/telegram/setup).
+// POST /v1/telegram/webhook: a Telegram update the bot (yx-tg) passes on, with the secret both Workers share
+// (TELEGRAM_WEBHOOK_SECRET here, ACCOUNTS_SECRET there). Answers {text}: what the bot should reply.
 export async function webhook(request: Request, env: Env): Promise<Response> {
-  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_WEBHOOK_SECRET) return new Response(null, { status: 503 });
+  if (!env.TELEGRAM_WEBHOOK_SECRET) return new Response(null, { status: 503 });
   if (!same(request.headers.get("x-telegram-bot-api-secret-token") ?? "", env.TELEGRAM_WEBHOOK_SECRET)) return new Response(null, { status: 401 });
   const update: any = await request.json().catch(() => null);
   const message = update?.message;
   const from = message?.from;
   const chat = message?.chat?.id;
-  // Only private chats with a person; anything else is acknowledged and ignored, or Telegram keeps resending it.
-  if (!message || !from || from.is_bot || message.chat?.type !== "private" || typeof message.text !== "string") return new Response("ok");
+  // Only private chats with a person.
+  if (!message || !from || from.is_bot || message.chat?.type !== "private" || typeof message.text !== "string") return answer(null);
   const [command, ...rest] = message.text.trim().split(/\s+/);
   const argument = rest.join(" ");
   const name = command.toLowerCase().replace(/@.*$/, "");
@@ -85,78 +79,47 @@ export async function webhook(request: Request, env: Env): Promise<Response> {
     const login = await env.DB.prepare("SELECT created, user_id, link_user FROM telegram_logins WHERE code = ?").bind(argument)
       .first<{ created: number; user_id: string | null; link_user: string | null }>();
     if (!login || login.created < now() - LOGIN_SECONDS) {
-      await reply(env, chat, say(from, "This sign-in link has expired. Start again in the app.", "此登录链接已过期，请在 App 中重新开始。"));
-      return new Response("ok");
+      return answer(say(from, "This sign-in link has expired. Start again in the app.", "此登录链接已过期，请在 App 中重新开始。"));
     }
     let user: User | null;
     if (login.link_user) {
       user = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(login.link_user).first<User>();
       if (!user || !(await addIdentity(env, user, identity(from)))) {
-        await reply(env, chat, say(from,
+        return answer(say(from,
           "This Telegram account already belongs to another Yingxia account. Sign out in the app and sign in with Telegram instead.",
           "此 Telegram 账号已关联另一个映匣账户。请在 App 中退出登录，再使用 Telegram 登录。"));
-        return new Response("ok");
       }
     } else {
       user = await telegramUser(env, from);
     }
     await env.DB.prepare("UPDATE telegram_logins SET user_id = ? WHERE code = ?").bind(user.id, argument).run();
-    await reply(env, chat, say(from, "You're signed in to Yingxia. Go back to the app.", "你已登录映匣，请返回 App。"));
-    return new Response("ok");
+    return answer(say(from, "You're signed in to Yingxia. Go back to the app.", "你已登录映匣，请返回 App。"));
   }
 
   if (name === "/redeem") {
     const user = await telegramUser(env, from);
     if (!(await env.REDEEM_LIMITER.limit({ key: `tg:${from.id}` })).success) {
-      await reply(env, chat, say(from, "Too many tries. Wait a minute.", "尝试次数过多，请稍等一分钟。"));
-      return new Response("ok");
+      return answer(say(from, "Too many tries. Wait a minute.", "尝试次数过多，请稍等一分钟。"));
     }
     const result = await redeem(env, user, argument, "telegram");
-    if (typeof result === "string") {
-      await reply(env, chat, say(from, ...REDEEM_TEXT[result]));
-    } else {
-      user.pro_until = result.proUntil;
-      await reply(env, chat, say(from,
-        `Code redeemed. ${proLine(from, user)}.\nSign in to Yingxia with Telegram (Settings › Account) to use it in the app.`,
-        `兑换成功。${proLine(from, user)}。\n在映匣中使用 Telegram 登录（设置 › 账户）即可在 App 中使用。`));
-    }
-    return new Response("ok");
+    if (typeof result === "string") return answer(say(from, ...REDEEM_TEXT[result]));
+    user.pro_until = result.proUntil;
+    return answer(say(from,
+      `Code redeemed. ${proLine(from, user)}.\nSign in to Yingxia with Telegram (Settings › Account) to use it in the app.`,
+      `兑换成功。${proLine(from, user)}。\n在映匣中通过 Telegram 登录（设置 › 账号）即可在 App 中使用。`));
   }
 
   if (name === "/me" || name === "/status") {
     const user = await telegramUser(env, from);
     const counts = await stats(env, user);
-    await reply(env, chat, say(from,
+    return answer(say(from,
       `${proLine(from, user)}\nFeedback: ${counts.sent} sent, ${counts.adopted} adopted, ${counts.points} points`,
       `${proLine(from, user)}\n反馈：已发送 ${counts.sent} 条，已采纳 ${counts.adopted} 条，积分 ${counts.points}`));
-    return new Response("ok");
   }
 
-  await reply(env, chat, say(from,
+  return answer(say(from,
     "Yingxia account bot.\n/redeem <code> — redeem a Pro code\n/me — your Pro status and feedback\nTo sign in, choose Sign in with Telegram in the app's Settings › Account.",
-    "映匣账户机器人。\n/redeem <兑换码> — 兑换 Pro\n/me — 查看 Pro 状态和反馈\n登录请在 App 的 设置 › 账户 中选择“使用 Telegram 登录”。"));
-  return new Response("ok");
-}
-
-// Points Telegram at the webhook and lists the bot's commands. Run once after deploying (POST /v1/admin/telegram/setup).
-export async function setup(env: Env, origin: string) {
-  const hook = await api(env, "setWebhook", {
-    url: `${origin}/v1/telegram/webhook`,
-    secret_token: env.TELEGRAM_WEBHOOK_SECRET,
-    allowed_updates: ["message"],
-    drop_pending_updates: true,
-  });
-  const commands = [
-    { command: "redeem", description: "Redeem a Pro code" },
-    { command: "me", description: "Your Pro status and feedback" },
-  ];
-  const zhCommands = [
-    { command: "redeem", description: "兑换 Pro 兑换码" },
-    { command: "me", description: "查看 Pro 状态和反馈" },
-  ];
-  await api(env, "setMyCommands", { commands });
-  await api(env, "setMyCommands", { commands: zhCommands, language_code: "zh" });
-  return { webhook: await hook.json() };
+    "映匣账号：\n/redeem <兑换码> — 兑换 Pro\n/me — 查看 Pro 状态和反馈\n登录请在 App 的 设置 › 账号 中选择“通过 Telegram 登录”。"));
 }
 
 // Old, unfinished sign-ins.

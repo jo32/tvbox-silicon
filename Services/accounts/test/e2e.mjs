@@ -71,7 +71,6 @@ writeFileSync(".dev.vars", [
   `TELEGRAM_API=http://127.0.0.1:${TELEGRAM}`,
   `GITHUB_API=http://127.0.0.1:${GITHUB}`,
   `ADMIN_TOKEN=admin-secret`,
-  `TELEGRAM_BOT_TOKEN=123:abc`,
   `TELEGRAM_WEBHOOK_SECRET=hook-secret`,
   `TELEGRAM_BOT=YingxiaTestBot`,
   `GITHUB_TOKEN=gh-test`,
@@ -113,9 +112,14 @@ async function call(method, path, body, token, headers = {}) {
   return { status: response.status, json, headers: response.headers };
 }
 const admin = (method, path, body) => call(method, path, body, "admin-secret");
-const hook = (text, from = { id: 777, first_name: "Tele", username: "tele_user", language_code: "en" }, secret = "hook-secret") =>
-  call("POST", "/v1/telegram/webhook", { update_id: 1, message: { message_id: 1, from, chat: { id: from.id, type: "private" }, text } }, null, { "x-telegram-bot-api-secret-token": secret });
-const lastTelegram = () => telegramSent.filter((item) => item.method === "sendMessage").at(-1)?.body.text ?? "";
+// The bot's Worker (yx-tg) passing on an update; it sends the {text} we answer.
+let botSaid = "";
+const hook = async (text, from = { id: 777, first_name: "Tele", username: "tele_user", language_code: "en" }, secret = "hook-secret") => {
+  const response = await call("POST", "/v1/telegram/webhook", { update_id: 1, message: { message_id: 1, from, chat: { id: from.id, type: "private" }, text } }, null, { "x-telegram-bot-api-secret-token": secret });
+  botSaid = response.json?.text ?? "";
+  return response;
+};
+const lastTelegram = () => botSaid;
 
 try {
   const health = await call("GET", "/v1/health");
@@ -236,9 +240,7 @@ try {
   check(preflight.status === 204 && preflight.headers.get("access-control-allow-origin") === "https://admin.example", "CORS lets the admin pages call");
   const foreign = await fetch(`${BASE}/v1/admin/codes`, { method: "OPTIONS", headers: { origin: "https://evil.example" } });
   check(!foreign.headers.get("access-control-allow-origin"), "CORS refuses other origins");
-  const setup = await admin("POST", "/v1/admin/telegram/setup");
-  const hookCall = telegramSent.find((item) => item.method === "setWebhook");
-  check(setup.status === 200 && hookCall?.body.url === "https://yingxia-accounts.getmegaportal.com/v1/telegram/webhook" && hookCall.body.secret_token === "hook-secret", "admin sets the bot's webhook", hookCall);
+  check(telegramSent.length === 0, "the accounts Worker never calls Telegram itself (the bot's Worker sends)", telegramSent);
 
   // Signing out and deleting the account.
   const second = (await call("POST", "/v1/auth/apple", { identityToken: identityToken({ sub: "apple-1" }), install: INSTALL, platform: "ios" })).json.token;
