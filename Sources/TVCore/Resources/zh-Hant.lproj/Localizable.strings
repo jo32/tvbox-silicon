@@ -2276,3 +2276,15 @@
 "Danmaku Servers" = "彈幕伺服器";
 "Add another server to move or remove this one." = "加入其他伺服器後才能移動或移除此伺服器。";
 "Find Danmaku…" = "尋找彈幕…";
+"TVs (DLNA)" = "電視（DLNA 投放）";
+"Searching for TVs…" = "正在搜尋電視…";
+"Search for TVs Again" = "重新搜尋電視";
+"This video plays only on this device and can't be sent to a TV." = "這部影片只能在本機播放，無法投放到電視。";
+"Back 10 Seconds" = "倒轉 10 秒";
+"Forward 10 Seconds" = "快轉 10 秒";
+"Volume Down" = "調低音量";
+"Volume Up" = "調高音量";
+"Keep Yingxia open while the TV plays this video." = "電視播放期間請保持映匣開啟。";
+"%@ refused the video." = "%@ 拒絕播放這部影片。";
+"%@ refused the video (%@)." = "%@ 拒絕播放這部影片（%@）。";
+"%@ didn't respond. Make sure it is on and on the same network." = "%@ 沒有回應。請確認它已開機，而且與本裝置在同一個網路中。";

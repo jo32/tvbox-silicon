@@ -2276,3 +2276,15 @@
 "Danmaku Servers" = "弾幕サーバー";
 "Add another server to move or remove this one." = "このサーバーを移動または削除するには、別のサーバーを追加してください。";
 "Find Danmaku…" = "弾幕を探す…";
+"TVs (DLNA)" = "テレビ（DLNA）";
+"Searching for TVs…" = "テレビを検索中…";
+"Search for TVs Again" = "テレビを再検索";
+"This video plays only on this device and can't be sent to a TV." = "このビデオはこのデバイスでのみ再生でき、テレビには送信できません。";
+"Back 10 Seconds" = "10秒戻る";
+"Forward 10 Seconds" = "10秒進む";
+"Volume Down" = "音量を下げる";
+"Volume Up" = "音量を上げる";
+"Keep Yingxia open while the TV plays this video." = "テレビで再生している間は映匣を開いたままにしてください。";
+"%@ refused the video." = "%@ がビデオの再生を拒否しました。";
+"%@ refused the video (%@)." = "%@ がビデオの再生を拒否しました（%@）。";
+"%@ didn't respond. Make sure it is on and on the same network." = "%@ から応答がありません。電源が入っていて、同じネットワークにあることを確認してください。";
