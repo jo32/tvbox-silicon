@@ -3727,6 +3727,7 @@ extension VideoDetailView {
             }
         }
         .environment(\.glassControls, true)
+        .modifier(AppColorScheme(scheme: embed?.appColorScheme))
         #if os(iOS)
         .presentationDetents([.medium, .large])
         #else
@@ -3909,9 +3910,25 @@ struct DetailEmbed {
     let catalogFallback: () -> AnyView
     /// Change Source in the episodes' heading.
     let changeSource: () -> Void
+    /// The app's light or dark look. The page draws in its art's own (white text on dark art), and its sheets
+    /// inherited that while their background follows the app: All Episodes went white on white at full height.
+    let appColorScheme: ColorScheme
 }
 
 #if !os(tvOS)
+/// A sheet from a page that forced its own light or dark look gets the app's back (`DetailEmbed.appColorScheme`).
+/// `Color.primary`, not `.primary`: that is the inherited style's first level, the page's white.
+private struct AppColorScheme: ViewModifier {
+    let scheme: ColorScheme?
+    func body(content: Content) -> some View {
+        if let scheme {
+            content.foregroundStyle(Color.primary).environment(\.colorScheme, scheme).preferredColorScheme(scheme)
+        } else {
+            content
+        }
+    }
+}
+
 /// Opens a scroll view of episodes at one of them (#1173). `scrollTo` from the sheet's onAppear, or its first task,
 /// came before the sheet had laid out its lazy grid and left it at the top. The position is this modifier's own
 /// state, so scrolling redraws only it, not the page behind the sheet.

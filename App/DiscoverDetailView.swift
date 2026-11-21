@@ -725,7 +725,7 @@ private struct DiscoverSourceEpisodes<CatalogEpisodes: View>: View {
                 VideoDetailView(video: chosen.video, client: CatalogClient(site: chosen.site, origin: config.origin, jarURL: config.spiderURL),
                                 embed: DetailEmbed(work: item, season: number, seasonControl: seasonControl(number),
                                                    catalogFallback: { AnyView(catalogEpisodes(number)) },
-                                                   changeSource: { changing = true }))
+                                                   changeSource: { changing = true }, appColorScheme: appColorScheme))
                     .id(chosen.id)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
