@@ -26,6 +26,10 @@ settings:
     DEVELOPMENT_TEAM: ''
     # Config/iCloud.entitlements once the App IDs and profiles have iCloud (Sources/TVCore/CloudSync.swift).
     ICLOUD_ENTITLEMENTS: ''
+    # YES once the App IDs and profiles have Sign in with Apple, with an entitlements file that has it
+    # (Config/AppleSignIn.entitlements or Config/iCloud-AppleSignIn.entitlements as ICLOUD_ENTITLEMENTS). Info.plist's
+    # YingxiaAppleSignIn tells the app (App/AccountStore.swift); Telegram sign-in works without it.
+    APPLE_SIGN_IN: 'NO'
 packages:
   # Symlinks to the root Package.swift, Sources, Vendor and Tests. Xcode walks every file under a
   # local package before building, so pointing it at the repo root made it scan build/ (minutes).

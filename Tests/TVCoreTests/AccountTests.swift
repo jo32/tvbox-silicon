@@ -1,0 +1,59 @@
+import CryptoKit
+import Foundation
+import Testing
+@testable import TVCore
+
+private func base64URL(_ data: Data) -> String {
+    data.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
+}
+
+private func signed(_ json: String, by key: Curve25519.Signing.PrivateKey) throws -> Account.Entitlement {
+    let payload = Data(json.utf8)
+    return Account.Entitlement(payload: base64URL(payload), signature: base64URL(try key.signature(for: payload)))
+}
+
+@Test func entitlementOfTheServerSaysWhenProEnds() throws {
+    let key = Curve25519.Signing.PrivateKey()
+    let publicKey = key.publicKey.rawRepresentation.base64EncodedString()
+    let entitlement = try signed(#"{"v":1,"user":"u_ABC","until":1900000000,"issued":1800000000}"#, by: key)
+    #expect(ProEntitlement.until(entitlement, user: "u_ABC", key: publicKey) == Date(timeIntervalSince1970: 1_900_000_000))
+    // Someone else's, or never Pro.
+    #expect(ProEntitlement.until(entitlement, user: "u_OTHER", key: publicKey) == nil)
+    let none = try signed(#"{"v":1,"user":"u_ABC","until":0,"issued":1800000000}"#, by: key)
+    #expect(ProEntitlement.until(none, user: "u_ABC", key: publicKey) == nil)
+}
+
+@Test func entitlementNotSignedByTheServerIsIgnored() throws {
+    let server = Curve25519.Signing.PrivateKey()
+    let forger = Curve25519.Signing.PrivateKey()
+    let publicKey = server.publicKey.rawRepresentation.base64EncodedString()
+    let forged = try signed(#"{"v":1,"user":"u_ABC","until":1900000000,"issued":1800000000}"#, by: forger)
+    #expect(ProEntitlement.until(forged, user: "u_ABC", key: publicKey) == nil)
+    // A real signature over a changed payload.
+    var edited = try signed(#"{"v":1,"user":"u_ABC","until":1900000000,"issued":1800000000}"#, by: server)
+    edited.payload = base64URL(Data(#"{"v":1,"user":"u_ABC","until":4000000000,"issued":1800000000}"#.utf8))
+    #expect(ProEntitlement.until(edited, user: "u_ABC", key: publicKey) == nil)
+    // The app's own key is a valid Ed25519 key.
+    #expect(try Curve25519.Signing.PublicKey(rawRepresentation: Data(base64Encoded: ProEntitlement.publicKey)!).rawRepresentation.count == 32)
+}
+
+@Test func accountDecodesWhatTheServerSends() throws {
+    let json = #"""
+    {"id":"u_4H90N92HX5RCQ8Z568P5","name":"Ann","identities":[{"provider":"apple","label":"a@privaterelay.appleid.com","created":1795239984},
+    {"provider":"telegram","label":"@ann","created":1795239990}],"pro":{"active":true,"until":1797831984,"lifetime":false},
+    "entitlement":{"payload":"eyJ2IjoxfQ","signature":"c2ln"},"feedback":{"sent":3,"adopted":2,"declined":1,"points":23,"rewardDays":0,
+    "issues":[{"number":104,"title":"Picture in picture","status":"adopted","sent":1795240000}]},"telegramBot":"YingxiaBot"}
+    """#
+    let account = try JSONDecoder().decode(Account.self, from: Data(json.utf8))
+    #expect(account.displayName == "Ann")
+    #expect(account.has("telegram") && account.has("apple"))
+    #expect(account.feedback.points == 23 && account.feedback.issues.first?.status == "adopted")
+    let signedOut = try JSONDecoder().decode(Account.self, from: Data(json.replacingOccurrences(of: #""entitlement":{"payload":"eyJ2IjoxfQ","signature":"c2ln"}"#, with: #""entitlement":null"#).utf8))
+    #expect(signedOut.entitlement == nil)
+}
+
+@Test func everyRedeemRefusalHasItsOwnMessage() {
+    let reasons = ["not_found", "revoked", "expired", "used_up", "already_redeemed"]
+    let messages = Set(reasons.map { AccountService.Failure.code($0).errorDescription ?? "" })
+    #expect(messages.count == reasons.count && !messages.contains(""))
+}
