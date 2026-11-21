@@ -191,7 +191,10 @@ try {
   check((await hook(`/start ${start.json.code}`)).status === 200 && /signed in/.test(lastTelegram()), "the bot confirms the sign-in", lastTelegram());
   const tg = await call("POST", "/v1/auth/telegram/poll", { code: start.json.code });
   check(tg.status === 200 && tg.json.token && tg.json.account.identities[0].label === "@tele_user", "polling then gives a session for the Telegram account", tg.json);
-  check((await call("POST", "/v1/auth/telegram/poll", { code: start.json.code })).status === 410, "the sign-in code works once");
+  // The app's check is often cut off on its way back from Telegram: asking again with the same code still signs in.
+  const repeated = await call("POST", "/v1/auth/telegram/poll", { code: start.json.code });
+  check(repeated.status === 200 && repeated.json.token && repeated.json.token !== tg.json.token && repeated.json.account.id === tg.json.account.id,
+    "a lost answer: the same code signs in again until it expires", repeated.json);
   check(tg.json.account.feedback.sent === 1 && tg.json.account.feedback.issues[0].number === 103, "the TV install's feedback counts for the Telegram account", tg.json.account.feedback);
   const tgToken = tg.json.token;
 
