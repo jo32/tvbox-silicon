@@ -160,7 +160,9 @@ struct MobilePlayerView: View {
                     .opacity(chromeVisible && inline ? 0 : 1)
                     .animation(.smooth(duration: 0.25), value: chromeVisible)
             }
-            controls.opacity(chromeVisible && !locked ? 1 : 0).allowsHitTesting(chromeVisible && !locked && !settling)
+            // Faded out, the controls take no touches (a view at opacity 0 isn't hit). Hit testing isn't turned off as they
+            // fade: on iOS 17 that closes a menu opened from them, so the Subtitles menu shut 3 s after the last tap (#1449).
+            controls.opacity(chromeVisible && !locked ? 1 : 0).allowsHitTesting(!locked && !settling)
             if !inline { lockButton }
         }
         // In with a fade; out at once, so the first frame replaces the wait with no pause or crossfade.
