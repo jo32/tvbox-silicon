@@ -1,4 +1,5 @@
 import AuthenticationServices
+import StoreKit
 import SwiftUI
 import TVCore
 
@@ -13,6 +14,7 @@ import TVCore
     private(set) var telegramLogin: AccountService.TelegramLogin?
     private(set) var busy = false
     private var refreshed: Date?
+    private var sandboxAppTransaction: Bool?
 
     private static let cacheKey = "account.cached"
     private static let ownsKeychainKey = "account.ownsKeychain"
@@ -34,13 +36,23 @@ import TVCore
 
     var signedIn: Bool { account != nil }
 
-    /// App Store and TestFlight builds can't unlock anything with codes (App Review guideline 3.1.1), so they never
-    /// show Pro or the code field; everywhere else (the Mac download, sideloaded builds) does.
-    static var proAvailable: Bool { !Distribution.isAppStore }
+    /// TestFlight, the Mac download, and sideloaded builds support Pro and in-app code redemption.
+    var proAvailable: Bool {
+        !Distribution.isAppStore || Distribution.isTestFlight || sandboxAppTransaction == true
+    }
 
-    /// When Pro ends, from the signed entitlement: nil when not Pro (or an App Store build).
+    /// TestFlight can lack a receipt, so also check the verified StoreKit app transaction.
+    func checkAppTransaction() async {
+        #if APPSTORE
+        guard !Distribution.isTestFlight, sandboxAppTransaction == nil,
+              case .verified(let transaction)? = try? await AppTransaction.shared else { return }
+        sandboxAppTransaction = transaction.environment == .sandbox
+        #endif
+    }
+
+    /// When Pro ends, from the signed entitlement.
     var proUntil: Date? {
-        guard Self.proAvailable, let account, let entitlement = account.entitlement,
+        guard proAvailable, let account, let entitlement = account.entitlement,
               let until = ProEntitlement.until(entitlement, user: account.id), until > Date() else { return nil }
         return until
     }

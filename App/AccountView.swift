@@ -3,7 +3,7 @@ import SwiftUI
 import TVCore
 
 /// Settings › Account: sign in with Apple or Telegram. Signed in, a member card leads (black and gold for Pro), then the
-/// redeem code field (not in App Store builds), how points are earned as tiles, the person's feedback and merged pull
+/// redeem code field in supported builds, how points are earned as tiles, the person's feedback and merged pull
 /// requests, their account ID for pull requests, the ways they sign in, Sign Out and Delete Account. On Apple TV the
 /// card takes the left column.
 struct AccountView: View {
@@ -20,7 +20,7 @@ struct AccountView: View {
             if let account = accounts.account {
                 cardSection(account)
                 messages
-                if AccountStore.proAvailable, !accounts.isLifetime { redeemSection(account) }
+                if accounts.proAvailable, !accounts.isLifetime { redeemSection(account) }
                 earnSection(account)
                 // Without the tiles (a server from before points; Apple TV lists rules as rows), a row of its own.
                 #if os(tvOS)
@@ -38,9 +38,13 @@ struct AccountView: View {
                 messages
             }
         }
-        .task {
-            await accounts.refresh()
+        .task(id: scenePhase == .active) {
+            guard scenePhase == .active else { return }
+            await accounts.refresh(force: true)
             await accounts.markActiveDay()
+        }
+        .task { await accounts.checkAppTransaction() }
+        .task {
             #if DEBUG
             // `-qaAccountTelegram 1`: starts a Telegram sign-in without a tap (and without leaving for Telegram).
             if UserDefaults.standard.bool(forKey: "qaAccountTelegram"), !accounts.signedIn, accounts.telegramLogin == nil {
@@ -84,7 +88,7 @@ struct AccountView: View {
     // MARK: Signed out
 
     @ViewBuilder private var signedOutSection: some View {
-        SettingsGroup(footer: AccountStore.proAvailable
+        SettingsGroup(footer: accounts.proAvailable
                       ? L10n.text("Feedback you send counts toward points, more for each message the developer adopts, and you can redeem Pro codes. Feedback this device sent in the last 30 days counts too.")
                       : L10n.text("Feedback you send counts toward points, more for each message the developer adopts. Feedback this device sent in the last 30 days counts too.")) {
             #if os(tvOS)
@@ -192,8 +196,7 @@ struct AccountView: View {
     // MARK: Signed in
 
     private func memberCard(_ account: Account) -> MemberCard {
-        let tier: MemberCard.Tier = AccountStore.proAvailable && accounts.isPro
-            ? .pro(until: accounts.isLifetime ? nil : accounts.proUntil) : .member
+        let tier: MemberCard.Tier = accounts.isPro ? .pro(until: accounts.isLifetime ? nil : accounts.proUntil) : .member
         return MemberCard(name: account.displayName, providers: account.identities.map(\.provider),
                           points: account.points?.total ?? account.feedback.points, tier: tier,
                           memberSince: account.identities.map(\.created).min().map { Date(timeIntervalSince1970: $0) })
@@ -603,11 +606,12 @@ struct AccountSettingsRow: View {
             #endif
         }
         .task { await accounts.refresh() }
+        .task { await accounts.checkAppTransaction() }
     }
 
     private var subtitle: String {
         guard let account = accounts.account else {
-            return AccountStore.proAvailable ? L10n.text("Feedback points and Pro codes") : L10n.text("Feedback points")
+            return accounts.proAvailable ? L10n.text("Feedback points and Pro codes") : L10n.text("Feedback points")
         }
         let points = L10n.text("%lld points", account.feedback.points)
         return accounts.isPro ? "\(L10n.text("Pro")) · \(points)" : points

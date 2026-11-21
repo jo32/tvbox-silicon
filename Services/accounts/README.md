@@ -30,8 +30,8 @@ It does five things:
   counted again from these rows each time, never kept as a running number.
 - **Pro.** Pro comes from redeem codes made by the admin pages. People redeem them in the app (Settings › Account) or
   with the Telegram bot (`/redeem CODE`). Pro also comes from rewards, or from the admin by hand. The app keeps an
-  Ed25519-signed entitlement, so Pro also works offline. App Store and TestFlight builds never show Pro or the code
-  field (App Review guideline 3.1.1).
+  Ed25519-signed entitlement, so Pro also works offline. TestFlight, direct Mac downloads, and sideloaded builds
+  show Pro status and support in-app code redemption.
 - **An admin API** for the admin pages, described below.
 
 The app's side is `Sources/TVCore/Account.swift`, `App/AccountStore.swift` and `App/AccountView.swift`.
