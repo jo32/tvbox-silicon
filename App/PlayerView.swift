@@ -789,6 +789,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     @AppStorage(DanmakuStyle.fontSizeKey) private var danmakuFontSize = DanmakuStyle.standardFontSize
     @AppStorage(DanmakuStyle.opacityKey) private var danmakuOpacity = DanmakuStyle.standardOpacity
     @AppStorage(DanmakuStyle.speedKey) private var danmakuSpeed = DanmakuStyle.standardSpeed
+    @AppStorage(DanmakuStyle.spacingKey) private var danmakuSpacing = DanmakuStyle.standardSpacing
+    @AppStorage(DanmakuDensity.key) private var danmakuDensity = DanmakuDensity.standard
     /// Subtitle files beside the video (#576); the item's own are in AVKit's Subtitles menu.
     var external: ExternalSubtitles? = nil
     /// The source's opening or ending credits playing now, offered as AVKit's Skip button (#256).
@@ -934,12 +936,21 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             let speeds = DanmakuStyle.speeds(including: danmakuSpeed).map { option in
                 UIAction(title: DanmakuStyle.speedTitle(option), state: abs(option - current) < 0.001 ? .on : .off) { _ in speed.wrappedValue = option }
             }
+            let spacing = $danmakuSpacing, density = $danmakuDensity, currentSpacing = DanmakuStyle.lineSpacing(danmakuSpacing)
+            let spacings = DanmakuStyle.spacings.map { option in
+                UIAction(title: DanmakuStyle.spacingTitle(option), state: option == currentSpacing ? .on : .off) { _ in spacing.wrappedValue = option }
+            }
+            let densities = DanmakuDensity.allCases.map { option in
+                UIAction(title: option.title, state: option == danmakuDensity ? .on : .off) { _ in density.wrappedValue = option }
+            }
             items.append(UIMenu(title: L10n.text("Danmaku"), image: UIImage(systemName: DanmakuPreference.symbol), children: [
                 UIAction(title: L10n.text("Show Danmaku"), state: showsDanmaku ? .on : .off) { _ in binding.wrappedValue.toggle() },
                 UIMenu(title: L10n.text("Danmaku Area"), image: UIImage(systemName: "rectangle.tophalf.inset.filled"), children: areas),
                 UIMenu(title: L10n.text("Text Size"), image: UIImage(systemName: "textformat.size"), children: sizes),
                 UIMenu(title: L10n.text("Opacity"), image: UIImage(systemName: "circle.lefthalf.filled"), children: opacities),
                 UIMenu(title: L10n.text("Scroll Speed"), image: UIImage(systemName: "speedometer"), children: speeds),
+                UIMenu(title: L10n.text("Line Spacing"), image: UIImage(systemName: "arrow.up.and.down"), children: spacings),
+                UIMenu(title: L10n.text("Density"), image: UIImage(systemName: "line.3.horizontal.decrease"), children: densities),
             ]))
         }
         if qualities.count > 1 {

@@ -27,6 +27,8 @@ struct DanmakuSettings: DynamicProperty {
     @AppStorage(DanmakuStyle.bottomKey) var bottom = true
     @AppStorage(DanmakuFilter.colorsKey) var colors = true
     @AppStorage(DanmakuFilter.wordsKey) var storedWords = ""
+    @AppStorage(DanmakuStyle.spacingKey) var spacing = DanmakuStyle.standardSpacing
+    @AppStorage(DanmakuDensity.key) var density = DanmakuDensity.standard
 
     var words: [String] { DanmakuFilter.words(storedWords) }
 
@@ -46,16 +48,21 @@ struct DanmakuSettings: DynamicProperty {
     var isStandard: Bool {
         area == .standard && fontSize == DanmakuStyle.standardFontSize && opacity == DanmakuStyle.standardOpacity
             && speed == DanmakuStyle.standardSpeed && scrolling && top && bottom && colors
+            && DanmakuStyle.lineSpacing(spacing) == DanmakuStyle.standardSpacing && density == .standard
     }
 
     func reset() {
         area = .standard; fontSize = DanmakuStyle.standardFontSize; opacity = DanmakuStyle.standardOpacity
         speed = DanmakuStyle.standardSpeed; scrolling = true; top = true; bottom = true; colors = true
+        spacing = DanmakuStyle.standardSpacing; density = .standard
     }
 
     static var colorsNote: String { L10n.text("Turn off Colored Comments to draw every comment in white, which stays readable over bright pictures.") }
     static var wordsNote: String {
         L10n.text("Comments containing any of these words are hidden in every video. Put a pattern between slashes, like /^哈+$/, to match it as a regular expression.")
+    }
+    static var densityNote: String {
+        L10n.text("Fewer and Fewest hide a comment repeated within a few seconds and let fewer comments start scrolling each second.")
     }
     static var appliesNote: String { L10n.text("Applies to comments in every video, including one that is playing.") }
 }
@@ -67,6 +74,7 @@ struct DanmakuPreview: View {
     @AppStorage(DanmakuArea.key) private var area = DanmakuArea.standard
     @AppStorage(DanmakuStyle.fontSizeKey) private var fontSize = DanmakuStyle.standardFontSize
     @AppStorage(DanmakuStyle.opacityKey) private var opacity = DanmakuStyle.standardOpacity
+    @AppStorage(DanmakuStyle.spacingKey) private var spacing = DanmakuStyle.standardSpacing
     @State private var start = Date()
     @State private var showsArea = false
     @State private var appeared = false
@@ -79,7 +87,7 @@ struct DanmakuPreview: View {
             ZStack(alignment: .topLeading) {
                 SubtitleScene()
                 if showsArea {
-                    let frame = DanmakuEngine.areaFrame(in: Self.screen, area: area, textScale: DanmakuStyle.textScale(fontSize))
+                    let frame = DanmakuEngine.areaFrame(in: Self.screen, area: area, textScale: DanmakuStyle.textScale(fontSize), spacing: spacing)
                     let shrink = size.width / Self.screen.width
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Brand.amber.opacity(0.12))
@@ -179,8 +187,20 @@ private struct FormDanmakuSettingsPage: View {
                             Image(systemName: "hare.fill")
                         }
                     }
+                    Picker(selection: Binding(get: { DanmakuStyle.lineSpacing(settings.spacing) }, set: { settings.spacing = $0 })) {
+                        ForEach(DanmakuStyle.spacings, id: \.self) { Text(DanmakuStyle.spacingTitle($0)).tag($0) }
+                    } label: {
+                        FormLabel(symbol: "arrow.up.and.down", tint: .orange, title: L10n.text("Line Spacing"))
+                    }
+                    Picker(selection: settings.$density) {
+                        ForEach(DanmakuDensity.allCases, id: \.self) { Text($0.title).tag($0) }
+                    } label: {
+                        FormLabel(symbol: "line.3.horizontal.decrease", tint: .teal, title: L10n.text("Density"))
+                    }
                 } header: {
                     Text(L10n.text("Display"))
+                } footer: {
+                    Text(DanmakuSettings.densityNote)
                 }
                 Section {
                     Toggle(isOn: settings.$scrolling) {
@@ -310,7 +330,7 @@ private struct TVDanmakuSettingsPage: View {
             .frame(maxHeight: .infinity)
             ScrollView {
                 VStack(alignment: .leading, spacing: 48) {
-                    TVSettingsSection(title: L10n.text("Display")) {
+                    TVSettingsSection(title: L10n.text("Display"), footer: DanmakuSettings.densityNote) {
                         TVSettingsAction(title: L10n.text("Danmaku Area"), value: settings.area.title) { settings.area = settings.area.next }
                         TVSettingsAction(title: L10n.text("Text Size"), value: DanmakuStyle.sizeTitle(settings.fontSize)) {
                             settings.fontSize = Self.sizes.first { $0 > settings.fontSize + 0.01 } ?? Self.sizes[0]
@@ -322,6 +342,10 @@ private struct TVDanmakuSettingsPage: View {
                             let speeds = settings.speeds
                             settings.speed = speeds[(settings.speedIndex + 1) % speeds.count]
                         }
+                        TVSettingsAction(title: L10n.text("Line Spacing"), value: DanmakuStyle.spacingTitle(settings.spacing)) {
+                            settings.spacing = DanmakuStyle.nextSpacing(after: settings.spacing)
+                        }
+                        TVSettingsAction(title: L10n.text("Density"), value: settings.density.title) { settings.density = settings.density.next }
                     }
                     TVSettingsSection(title: L10n.text("Comment Types"), footer: DanmakuSettings.colorsNote) {
                         TVSettingsToggle(title: L10n.text("Scrolling Comments"), isOn: settings.$scrolling)
