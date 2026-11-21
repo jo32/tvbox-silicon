@@ -2,9 +2,10 @@ import AuthenticationServices
 import SwiftUI
 import TVCore
 
-/// Settings › Account: sign in with Apple or Telegram; then Pro and its redeem code field (not in App Store builds),
-/// points and how they're earned, the person's feedback and merged pull requests, their account ID for pull requests,
-/// other ways to sign in, Sign Out and Delete Account.
+/// Settings › Account: sign in with Apple or Telegram. Signed in, a member card leads (black and gold for Pro), then the
+/// redeem code field (not in App Store builds), how points are earned as tiles, the person's feedback and merged pull
+/// requests, their account ID for pull requests, the ways they sign in, Sign Out and Delete Account. On Apple TV the
+/// card takes the left column.
 struct AccountView: View {
     @State private var accounts = AccountStore.shared
     @State private var error: String?
@@ -15,16 +16,15 @@ struct AccountView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        SettingsPage(title: L10n.text("Account"), symbol: "person.crop.circle",
-                     subtitle: accounts.account?.displayName ?? L10n.text("Sign in to count your feedback")) {
+        page {
             if let account = accounts.account {
-                profile(account)
-                if AccountStore.proAvailable { proSection(account) }
-                pointsSection(account)
+                cardSection(account)
+                messages
+                if AccountStore.proAvailable, !accounts.isLifetime { redeemSection(account) }
+                earnSection(account)
                 feedbackSection(account)
                 contributeSection(account)
                 if accounts.telegramLogin != nil { telegramSection } else { methodsSection(account) }
-                messages
                 endSection
             } else {
                 if accounts.telegramLogin != nil { telegramSection } else { signedOutSection }
@@ -52,6 +52,20 @@ struct AccountView: View {
         } message: {
             Text(L10n.text("Your feedback points and Pro time are deleted with it, and can't be brought back."))
         }
+        #endif
+    }
+
+    /// Settings' page; on Apple TV, once signed in, with the member card on the left.
+    @ViewBuilder private func page<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        #if os(tvOS)
+        if let account = accounts.account {
+            TVSettingsSubpage(title: L10n.text("Account"), hero: { memberCard(account) }, content: content)
+        } else {
+            SettingsPage(title: L10n.text("Account"), symbol: "person.crop.circle", subtitle: L10n.text("Sign in to count your feedback"), content: content)
+        }
+        #else
+        SettingsPage(title: L10n.text("Account"), symbol: "person.crop.circle",
+                     subtitle: accounts.account?.displayName ?? L10n.text("Sign in to count your feedback"), content: content)
         #endif
     }
 
@@ -170,25 +184,39 @@ struct AccountView: View {
 
     // MARK: Signed in
 
-    private func profile(_ account: Account) -> some View {
-        SettingsGroup {
-            SettingsRow(symbol: "person.crop.circle.fill", tint: Brand.indigo, title: account.displayName,
-                        subtitle: account.identities.map(identityText).joined(separator: "\n"))
+    private func memberCard(_ account: Account) -> MemberCard {
+        let tier: MemberCard.Tier = AccountStore.proAvailable && accounts.isPro
+            ? .pro(until: accounts.isLifetime ? nil : accounts.proUntil) : .member
+        return MemberCard(name: account.displayName, providers: account.identities.map(\.provider),
+                          points: account.points?.total ?? account.feedback.points, tier: tier,
+                          memberSince: account.identities.map(\.created).min().map { Date(timeIntervalSince1970: $0) })
+    }
+
+    @ViewBuilder private func cardSection(_ account: Account) -> some View {
+        #if !os(tvOS)
+        Section {
+            memberCard(account)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
         }
+        #endif
     }
 
     private func identityText(_ identity: Account.Identity) -> String {
-        let method = identity.provider == "apple" ? L10n.text("Apple") : L10n.text("Telegram")
-        return identity.label.isEmpty || identity.label == "Apple" ? method : "\(method) · \(identity.label)"
+        identity.provider == "apple" ? L10n.text("Apple") : L10n.text("Telegram")
     }
 
-    @ViewBuilder private func proSection(_ account: Account) -> some View {
-        SettingsGroup(title: L10n.text("Yingxia Pro"),
+    private func identityDetail(_ identity: Account.Identity) -> String? {
+        identity.label.isEmpty || identity.label == "Apple" ? nil : identity.label
+    }
+
+    /// A code adds Pro time; in gold, the page's one way to Pro.
+    @ViewBuilder private func redeemSection(_ account: Account) -> some View {
+        SettingsGroup(title: L10n.text("Redeem Code"),
                       footer: account.feedback.rewardDays > 0
                         ? L10n.text("Each message the developer adopts also gives %lld days of Pro.", account.feedback.rewardDays) : nil) {
-            SettingsRow(symbol: "crown.fill", tint: Brand.amber, title: L10n.text("Pro")) {
-                Text(proValue).foregroundStyle(accounts.isPro ? .primary : .secondary)
-            }
             #if os(tvOS)
             TVSettingsField(title: L10n.text("Redeem Code"), text: $code, emptyValue: L10n.text("Enter a code"))
             if !code.isEmpty {
@@ -196,6 +224,7 @@ struct AccountView: View {
             }
             #else
             HStack(spacing: 12) {
+                Image(systemName: "ticket.fill").foregroundStyle(MemberCard.gold).font(.system(size: 17))
                 TextField(L10n.text("Redeem Code"), text: $code, prompt: Text(verbatim: "XXXX-XXXX-XXXX-XXXX"))
                     .autocorrectionDisabled()
                     #if os(iOS)
@@ -204,16 +233,12 @@ struct AccountView: View {
                     .font(.body.monospaced())
                     .onSubmit(redeem)
                 Button(L10n.text("Redeem"), action: redeem)
-                    .settingsButton(prominent: true)
+                    .buttonStyle(GoldButtonStyle())
                     .disabled(code.trimmingCharacters(in: .whitespaces).count < 6 || accounts.busy)
             }
+            .padding(.vertical, 2)
             #endif
         }
-    }
-
-    private var proValue: String {
-        guard let until = accounts.proUntil else { return L10n.text("Not active") }
-        return accounts.isLifetime ? L10n.text("Lifetime") : L10n.text("Pro until %@", until.formatted(date: .abbreviated, time: .omitted))
     }
 
     private func redeem() {
@@ -236,14 +261,55 @@ struct AccountView: View {
 
     /// The total, then each way to earn with its rule and what it brought, so people see what's worth doing: adopted
     /// feedback and merged code count far more than volume.
+    @ViewBuilder private func earnSection(_ account: Account) -> some View {
+        #if os(tvOS)
+        pointsSection(account)
+        #else
+        if let points = account.points {
+            let rules = points.rules
+            let tiles = [
+                EarnTile(symbol: "calendar", tint: .orange, title: L10n.text("Daily Use"),
+                         detail: L10n.text("+%lld a day you open Yingxia · %lld days", rules.daily, points.days), earned: points.days * rules.daily),
+                EarnTile(symbol: "paperplane.fill", tint: Color(red: 0.45, green: 0.55, blue: 1), title: L10n.text("Feedback Sent"),
+                         detail: L10n.text("+%lld each, up to %lld a day · %lld counted", rules.sent, rules.sentPerDay, points.sent),
+                         earned: points.sent * rules.sent),
+                EarnTile(symbol: "checkmark.seal.fill", tint: .green, title: L10n.text("Feedback Adopted"),
+                         detail: L10n.text("+%lld each · %lld adopted", rules.adopted, points.adopted), earned: points.adopted * rules.adopted),
+                EarnTile(symbol: "arrow.triangle.merge", tint: Color(red: 0.75, green: 0.5, blue: 1), title: L10n.text("Merged Pull Requests"),
+                         detail: L10n.text("+%lld each · %lld merged", rules.pullRequest, points.pullRequests),
+                         earned: points.pullRequests * rules.pullRequest),
+            ]
+            SettingsGroup(title: L10n.text("How You Earn Points"),
+                          footer: L10n.text("Duplicate or invalid feedback earns nothing. Feedback with your device, build, the source and clear steps is the most likely to be adopted. Feedback sent with /feedback in the Telegram group counts too, for the Telegram account you sign in with.")) {
+                // Four across where they fit (iPad, Mac), otherwise two by two.
+                ViewThatFits(in: .horizontal) {
+                    Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+                        GridRow { ForEach(0..<4, id: \.self) { tiles[$0] } }
+                    }
+                    .frame(minWidth: 620)
+                    Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+                        GridRow { tiles[0]; tiles[1] }
+                        GridRow { tiles[2]; tiles[3] }
+                    }
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
+            if points.adjusted != 0 {
+                SettingsGroup {
+                    pointsRow(symbol: "slider.horizontal.3", tint: .gray, title: L10n.text("Set by the Developer"), rule: nil, earned: points.adjusted)
+                }
+            }
+        }
+        #endif
+    }
+
+    #if os(tvOS)
     @ViewBuilder private func pointsSection(_ account: Account) -> some View {
         if let points = account.points {
             let rules = points.rules
             SettingsGroup(title: L10n.text("Points"),
                           footer: L10n.text("Duplicate or invalid feedback earns nothing. Feedback with your device, build, the source and clear steps is the most likely to be adopted. Feedback sent with /feedback in the Telegram group counts too, for the Telegram account you sign in with.")) {
-                SettingsRow(symbol: "star.circle.fill", tint: Brand.amber, title: L10n.text("Total Points")) {
-                    Text(points.total.formatted()).font(.body.weight(.semibold)).monospacedDigit()
-                }
                 pointsRow(symbol: "calendar.circle.fill", tint: .orange, title: L10n.text("Daily Use"),
                           rule: L10n.text("+%lld a day you open Yingxia · %lld days", rules.daily, points.days), earned: points.days * rules.daily)
                 pointsRow(symbol: "paperplane.circle.fill", tint: Brand.indigo, title: L10n.text("Feedback Sent"),
@@ -260,6 +326,7 @@ struct AccountView: View {
             }
         }
     }
+    #endif
 
     private func pointsRow(symbol: String, tint: Color, title: String, rule: String?, earned: Int) -> some View {
         SettingsRow(symbol: symbol, tint: tint, title: title, subtitle: rule) {
@@ -283,7 +350,7 @@ struct AccountView: View {
                       footer: L10n.text("Put “Yingxia account: %@” in the description of your pull request on GitHub, or your Telegram @username. Each one merged earns %lld points.",
                                         account.id, account.points?.rules.pullRequest ?? 500)) {
             ForEach(account.pullRequests ?? []) { pull in
-                pullRequestRow(pull)
+                pullRequestRow(pull, points: account.points?.rules.pullRequest ?? 500)
             }
             SettingsRow(symbol: "number.circle.fill", tint: .gray, title: L10n.text("Account ID")) {
                 HStack(spacing: 10) {
@@ -311,9 +378,11 @@ struct AccountView: View {
     }
     #endif
 
-    @ViewBuilder private func pullRequestRow(_ pull: Account.PullRequest) -> some View {
+    @ViewBuilder private func pullRequestRow(_ pull: Account.PullRequest, points: Int) -> some View {
         let label = SettingsRow(symbol: "arrow.triangle.merge", tint: .purple, title: pull.title.isEmpty ? "#\(pull.number)" : pull.title,
-                                subtitle: "#\(pull.number) · \(L10n.text("Pull request: merged"))")
+                                subtitle: "#\(pull.number) · \(L10n.text("Pull request: merged"))") {
+            StatusPill(text: "+\(points.formatted())", tint: Color(red: 0.75, green: 0.5, blue: 1))
+        }
         #if os(tvOS)
         label
         #else
@@ -326,9 +395,13 @@ struct AccountView: View {
     }
 
     @ViewBuilder private func issueRow(_ issue: Account.Feedback.Issue) -> some View {
+        let day = Date(timeIntervalSince1970: issue.sent).formatted(date: .abbreviated, time: .omitted)
+        // No title yet (GitHub not asked): the number leads, so it isn't said twice.
         let label = SettingsRow(symbol: statusSymbol(issue.status), tint: statusTint(issue.status),
-                                title: issue.title.isEmpty ? "#\(issue.number)" : issue.title,
-                                subtitle: "#\(issue.number) · \(statusText(issue.status))")
+                                title: issue.title.isEmpty ? L10n.text("Feedback #%lld", issue.number) : issue.title,
+                                subtitle: issue.title.isEmpty ? day : "#\(issue.number) · \(day)") {
+            StatusPill(text: statusText(issue.status), tint: statusTint(issue.status))
+        }
         #if os(tvOS)
         label
         #else
@@ -368,8 +441,16 @@ struct AccountView: View {
     @ViewBuilder private func methodsSection(_ account: Account) -> some View {
         let addsApple = !account.has("apple") && AppleSignInSupport.available
         let addsTelegram = !account.has("telegram")
-        if addsApple || addsTelegram {
-            SettingsGroup(footer: L10n.text("Add another way to sign in, so the same account works on every device.")) {
+        SettingsGroup(title: L10n.text("Sign-in Methods"),
+                      footer: addsApple || addsTelegram ? L10n.text("Add another way to sign in, so the same account works on every device.") : nil) {
+            ForEach(account.identities) { identity in
+                SettingsRow(symbol: identity.provider == "apple" ? "apple.logo" : "paperplane.fill",
+                            tint: identity.provider == "apple" ? .gray : AccountColors.telegram,
+                            title: identityText(identity), subtitle: identityDetail(identity)) {
+                    Image(systemName: "checkmark").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
+                }
+            }
+            if addsApple || addsTelegram {
                 #if os(tvOS)
                 if addsApple { TVSettingsAction(title: L10n.text("Add Sign in with Apple"), busy: accounts.busy) { signInWithApple() } }
                 if addsTelegram { TVSettingsAction(title: L10n.text("Add Telegram"), busy: accounts.busy) { startTelegram() } }
@@ -457,7 +538,7 @@ private struct SignInButton: View {
     private var background: Color {
         switch kind {
         case .apple: colorScheme == .dark ? .white : .black
-        case .telegram: Color(red: 0x22 / 255, green: 0x9E / 255, blue: 0xD9 / 255)
+        case .telegram: AccountColors.telegram
         }
     }
 

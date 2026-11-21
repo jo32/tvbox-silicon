@@ -66,6 +66,7 @@
 		255C64CDFFBEE99EEEA11AA6 /* JNA-Apache2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 8320284C7FB9590C44BA7102 /* JNA-Apache2.txt */; };
 		26A1C218652FCEEE9FC60E0F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B442C75C212445F3786397ED /* SettingsView.swift */; };
 		2750CF15FA8542E4C8196B3B /* MusicMacPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73C9A2A4F2D8A180EBDF8C8E /* MusicMacPlayer.swift */; };
+		275BDA8CFC2A2E03B4CEC397 /* MemberCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6858B2841CFD277A56DB119C /* MemberCard.swift */; };
 		277D741E2A86C06612A8034A /* CloudQRLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E78573DE76BCF27CABBB20F3 /* CloudQRLoginView.swift */; };
 		2780772DC63EC57AB830CAD0 /* LivePluginSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79ABEF8CC3883B021CEF3CEE /* LivePluginSignIn.swift */; };
 		2813CE0358963C61D7865EF7 /* DiscoverSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76143E60685F2F76994F90D7 /* DiscoverSearchView.swift */; };
@@ -108,6 +109,7 @@
 		3AD83F67CC5F45C57E1021D3 /* MusicMacMiniPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF5CB8DD12A92056BFD50444 /* MusicMacMiniPlayer.swift */; };
 		3BD1DFEF3A75B43935EB2185 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C911ACB6C027C8F9A096409 /* RootView.swift */; };
 		3BE24A3F4D4DED139056CC1B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 3C95AF876ECA5A35824263D7 /* PrivacyInfo.xcprivacy */; };
+		3C61E485B73CBA13B9C441D3 /* MemberCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6858B2841CFD277A56DB119C /* MemberCard.swift */; };
 		3C881605253C551AFF6652EA /* DiscoverCalendarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6941C03B313E9FC30883FFE /* DiscoverCalendarView.swift */; };
 		3DB703B04E4659AB8623A1A7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B442C75C212445F3786397ED /* SettingsView.swift */; };
 		3E10E4E62E4E47143AEA71B9 /* WatchNowTV.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB076E674CF0D07EFFAE17DA /* WatchNowTV.swift */; };
@@ -165,6 +167,7 @@
 		5CAE176F68875F1B290E66AA /* PlayerEpisodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6411E1972F52DCE8C5E117F7 /* PlayerEpisodes.swift */; };
 		5CB8BD265BA21805A9BF8CD9 /* SubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1212366D71C455D6EAE5E4 /* SubtitleOverlay.swift */; };
 		5E064141ADA8E6A4E7A97D0B /* EpisodeSkipSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B451E5612B33CF005EEAAE08 /* EpisodeSkipSettingsView.swift */; };
+		5E0A739AAF2AA786DBC9E023 /* MemberCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6858B2841CFD277A56DB119C /* MemberCard.swift */; };
 		5F05B8FEB75498291DBE83CB /* TVCore in Frameworks */ = {isa = PBXBuildFile; productRef = 150E7485ED76FF29A84D7C1D /* TVCore */; };
 		5F2A9E2F9145EE979E5AA1F0 /* WebSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367AD12D73554C3C3667315D /* WebSignInView.swift */; };
 		5FD01522B8D935B4CF540C64 /* CatPawSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688641B892E4732AFEB875A3 /* CatPawSignInView.swift */; };
@@ -471,6 +474,7 @@
 		6411E1972F52DCE8C5E117F7 /* PlayerEpisodes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerEpisodes.swift; sourceTree = "<group>"; };
 		66DF697EACE4307031398E5A /* MusicTVScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicTVScreen.swift; sourceTree = "<group>"; };
 		675EA4CF000337C94DF5B1D3 /* LiveRoomsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveRoomsView.swift; sourceTree = "<group>"; };
+		6858B2841CFD277A56DB119C /* MemberCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberCard.swift; sourceTree = "<group>"; };
 		6876ACF1E9D9F80BBC4F22C4 /* PlaybackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackView.swift; sourceTree = "<group>"; };
 		688641B892E4732AFEB875A3 /* CatPawSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatPawSignInView.swift; sourceTree = "<group>"; };
 		6FF91FA9A33437C335253F10 /* MangaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaView.swift; sourceTree = "<group>"; };
@@ -697,6 +701,7 @@
 				A0E5BAF6D854E7CE5DA362D0 /* MangaSourcesView.swift */,
 				C05256E7BDC34745BDE22193 /* MangaStore.swift */,
 				6FF91FA9A33437C335253F10 /* MangaView.swift */,
+				6858B2841CFD277A56DB119C /* MemberCard.swift */,
 				08D7BF6713A8519BEED17EE3 /* MobilePlayer.swift */,
 				31D1816B8ED53D49478FD843 /* MoreView.swift */,
 				3F678BCB59DDEA3AD1329B11 /* MusicDownloadsView.swift */,
@@ -1312,6 +1317,7 @@
 				A125C19021DB4DC7DFADCBDA /* MangaSourcesView.swift in Sources */,
 				D7ABE3CCA68742E00CE3AB6D /* MangaStore.swift in Sources */,
 				2C6D239842DA86D6B4908569 /* MangaView.swift in Sources */,
+				5E0A739AAF2AA786DBC9E023 /* MemberCard.swift in Sources */,
 				74CAE612DB09FB67343FE8B4 /* MobilePlayer.swift in Sources */,
 				3ED898D04E49F78F4DD57109 /* MoreView.swift in Sources */,
 				556C5D64B9A97EFB038F0747 /* MusicDownloadsView.swift in Sources */,
@@ -1431,6 +1437,7 @@
 				FF931676C5626AB647CDCF03 /* MangaSourcesView.swift in Sources */,
 				C205444953E700EF5D4FBFA4 /* MangaStore.swift in Sources */,
 				097AD9094FA7E5DAD5E5391A /* MangaView.swift in Sources */,
+				3C61E485B73CBA13B9C441D3 /* MemberCard.swift in Sources */,
 				633726D6D289775DF1910809 /* MobilePlayer.swift in Sources */,
 				545F29F3323EB776FED1A94E /* MoreView.swift in Sources */,
 				C8FF9AAC3D77145A907102ED /* MusicDownloadsView.swift in Sources */,
@@ -1552,6 +1559,7 @@
 				7BD36EB4555214FD392DAFEE /* MangaSourcesView.swift in Sources */,
 				C346F634AB0A855E298A759D /* MangaStore.swift in Sources */,
 				545262EEE6798D31D5522FF5 /* MangaView.swift in Sources */,
+				275BDA8CFC2A2E03B4CEC397 /* MemberCard.swift in Sources */,
 				7F3C4D27F233572323FAA9A4 /* MobilePlayer.swift in Sources */,
 				0120B7D5C3369E0579B5D973 /* MoreView.swift in Sources */,
 				C505C16C48F9D001FF7BF6AE /* MusicDownloadsView.swift in Sources */,

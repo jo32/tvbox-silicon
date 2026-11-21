@@ -2155,6 +2155,12 @@
 "None of your sources has this season." = "你的片源里没有找到这一季。";
 
 // Settings › Account (App/AccountView.swift)
+"Member" = "会员";
+"Valid Until" = "有效期至";
+"Member Since" = "加入于";
+"How You Earn Points" = "积分怎么来";
+"Sign-in Methods" = "登录方式";
+"Feedback #%lld" = "反馈 #%lld";
 "Total Points" = "总积分";
 "Daily Use" = "每天使用";
 "+%lld a day you open Yingxia · %lld days" = "每天打开映匣 +%lld · 已 %lld 天";

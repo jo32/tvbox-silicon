@@ -2155,6 +2155,12 @@
 "None of your sources has this season." = "None of your sources has this season.";
 
 // Settings › Account (App/AccountView.swift)
+"Member" = "Member";
+"Valid Until" = "Valid Until";
+"Member Since" = "Member Since";
+"How You Earn Points" = "How You Earn Points";
+"Sign-in Methods" = "Sign-in Methods";
+"Feedback #%lld" = "Feedback #%lld";
 "Total Points" = "Total Points";
 "Daily Use" = "Daily Use";
 "+%lld a day you open Yingxia · %lld days" = "+%lld a day you open Yingxia · %lld days";

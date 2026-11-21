@@ -2155,6 +2155,12 @@
 "None of your sources has this season." = "どの配信元にもこのシーズンはありません。";
 
 // Settings › Account (App/AccountView.swift)
+"Member" = "メンバー";
+"Valid Until" = "有効期限";
+"Member Since" = "入会日";
+"How You Earn Points" = "ポイントの貯め方";
+"Sign-in Methods" = "サインイン方法";
+"Feedback #%lld" = "フィードバック #%lld";
 "Total Points" = "合計ポイント";
 "Daily Use" = "毎日の利用";
 "+%lld a day you open Yingxia · %lld days" = "映匣を開いた日ごとに +%lld · %lld日";
