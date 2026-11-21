@@ -1,9 +1,10 @@
 import Foundation
 
 /// Ad segments that a source splices into a video's HLS playlist (#567). They come as their own run of segments between
-/// `#EXT-X-DISCONTINUITY` tags, from another host, folder or file-name pattern than the film. Only the playlist text is
-/// changed; segments still load from the CDN. A wrong cut would remove real video, so the rule is narrow and anything
-/// it doesn't clearly recognize is left exactly as it was.
+/// `#EXT-X-DISCONTINUITY` tags, from another host, folder or file-name pattern than the film. Some sources show the same
+/// ad at every break, and some mark it `#EXT-X-KEY:METHOD=NONE` between encrypted parts of the film. Only the playlist
+/// text is changed; segments still load from the CDN. A wrong cut would remove real video, so the rule is narrow and
+/// anything it doesn't clearly recognize is left exactly as it was.
 public enum AdSkip {
     public static let key = "player.skipAds"
     public static var enabled: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
@@ -12,8 +13,8 @@ public enum AdSkip {
     static let longestRun = 60.0
     /// ... all the runs removed are this share of the video at most ...
     static let largestShare = 0.10
-    /// ... there are no more than this many ...
-    static let mostRuns = 4
+    /// ... they are no more than this many different ads (one shown at every break counts once) ...
+    static let mostAds = 4
     /// ... and the video is at least this long (a short clip's intro is part of it).
     static let shortestVideo = 180.0
 
@@ -70,21 +71,28 @@ public enum AdSkip {
         guard runs.count > 1 else { return nil }
 
         var removed: [Range<Int>] = []
+        var ads: Set<String> = []
         for run in runs {
             let length = segments[run].reduce(0) { $0 + $1.duration }
             var share: [String: Double] = [:]
             for segment in segments[run] { share[family(segment.url), default: 0] += segment.duration }
             guard let own = share.max(by: { $0.value < $1.value })?.key, own != film, length <= longestRun else { continue }
             removed.append(run)
+            ads.insert(own)
         }
         let seconds = removed.reduce(0.0) { $0 + segments[$1].reduce(0) { $0 + $1.duration } }
-        guard !removed.isEmpty, removed.count <= mostRuns, removed.count < runs.count, seconds <= total * largestShare else { return nil }
-        // Keys, init sections, byte ranges and the like inside a removed run could be what the rest relies on.
+        guard !removed.isEmpty, ads.count <= mostAds, removed.count < runs.count, seconds <= total * largestShare else { return nil }
+        let dropped = Set(removed.flatMap { Array($0) })
+        // Init sections, byte ranges and the like inside a removed run could be what the rest relies on. A key is only
+        // left behind when the segment that plays next sets its own, so the film is decrypted exactly as before.
         for run in removed {
-            for segment in segments[run] where segment.tags.contains(where: { !$0.hasPrefix("#EXTINF:") }) { return nil }
+            let tags = segments[run].flatMap { $0.tags }.filter { !$0.hasPrefix("#EXTINF:") }
+            guard !tags.isEmpty else { continue }
+            guard tags.allSatisfy({ $0.hasPrefix("#EXT-X-KEY:") }) else { return nil }
+            if let next = segments.indices[run.upperBound...].first(where: { !dropped.contains($0) }),
+               !segments[next].tags.contains(where: { $0.hasPrefix("#EXT-X-KEY:") }) { return nil }
         }
 
-        let dropped = Set(removed.flatMap { Array($0) })
         var lines = header
         var first = true
         for (index, segment) in segments.enumerated() where !dropped.contains(index) {
