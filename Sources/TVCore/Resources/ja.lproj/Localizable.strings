@@ -2155,6 +2155,8 @@
 "None of your sources has this season." = "どの配信元にもこのシーズンはありません。";
 
 // Settings › Account (App/AccountView.swift)
+"Pro until %@" = "%@まで";
+"Feedback status: open" = "未対応";
 "Accounts aren't available right now. Please try again later." = "現在アカウントを利用できません。しばらくしてからもう一度お試しください。";
 "Add another way to sign in, so the same account works on every device." = "別のサインイン方法を追加すると、どのデバイスでも同じアカウントを使えます。";
 "Add Sign in with Apple" = "Appleでサインインを追加";

@@ -2155,6 +2155,8 @@
 "None of your sources has this season." = "你的片源裡沒有找到這一季。";
 
 // Settings › Account (App/AccountView.swift)
+"Pro until %@" = "有效期至 %@";
+"Feedback status: open" = "處理中";
 "Accounts aren't available right now. Please try again later." = "帳戶服務暫時無法使用，請稍後再試。";
 "Add another way to sign in, so the same account works on every device." = "加入另一種登入方式，在所有裝置上使用同一個帳戶。";
 "Add Sign in with Apple" = "加入「使用 Apple 登入」";
