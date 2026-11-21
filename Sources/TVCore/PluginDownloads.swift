@@ -68,6 +68,14 @@ actor PluginDownloads {
             return data
         } catch { pending[key] = nil; throw error }
     }
+    /// The viewer just added the script at `url` again, and this is what came down for it: it is the plugin from now on.
+    /// Without this, the next request ran the older stored copy first and only refreshed it for the time after (#1431).
+    func store(_ data: Data, for url: URL) {
+        guard ImportedFiles.file(for: url) == nil else { return }
+        let meta = Metadata(sha256: PluginChecksum.sha256(data), etag: nil, modified: nil, expires: Date().addingTimeInterval(lifetime))
+        save(data, metadata: meta, url: url)
+        cached[url] = Cached(data: data, expires: meta.expires, used: Date())
+    }
     private func report(_ key: String, _ stage: PluginPreparation.Stage, _ received: Int64 = 0, _ expected: Int64? = nil) {
         guard var flight = pending[key] else { return }
         flight.latest = (stage, received, expected); pending[key] = flight

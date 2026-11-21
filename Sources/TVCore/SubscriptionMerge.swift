@@ -173,10 +173,12 @@ extension Subscription {
 }
 
 extension HTTPClient {
-    public func subscriptionImport(_ address: URL) async throws -> SubscriptionImport {
+    /// `fresh`: the viewer added the address by hand, so it reads what the address holds now, and a lone spider's script
+    /// becomes the one its source runs. Adding a script again is how people get its new version (#1431).
+    public func subscriptionImport(_ address: URL, fresh: Bool = false) async throws -> SubscriptionImport {
         let (url, headers) = Subscription.headerSuffix(address)
         let (data, finalURL) = try await get(url, headers: ["User-Agent": Self.subscriptionUserAgent].merging(headers) { $1 },
-                                             limit: Self.subscriptionLimit)
+                                             fresh: fresh, limit: Self.subscriptionLimit)
         if let bundle = CatPawOpen.bundle(data, at: finalURL) { return .subscription(try await CatPawOpen.subscription(bundle: bundle, origin: finalURL, http: self)) }
         if let count = MangaSources.listedCount(data) { return .comicSources(count) }
         if let sources = NovelSource.list(from: data) { return .novelSources(sources.count, data) }
@@ -185,7 +187,11 @@ extension HTTPClient {
         if let entries = Subscription.directory(data, origin: finalURL) { return .directory(entries) }
         let offers = NovelSourceIndex.offers(inPage: data, origin: finalURL)
         if !offers.isEmpty { return .novelIndex(offers) }
-        do { return .subscription(try await Subscription.parse(data, origin: finalURL, headers: headers).sniffingScripts(http: self)) }
+        do {
+            let subscription = try await Subscription.parse(data, origin: finalURL, headers: headers).sniffingScripts(http: self)
+            if fresh, subscription.isSingleSpider { await PluginDownloads.shared.store(data, for: finalURL) }
+            return .subscription(subscription)
+        }
         catch {
             // An LX Music source isn't a subscription, but people add one here to play music (#1177).
             if let script = LXSourceLibrary.script(in: data) { return .lxMusicSource(script) }

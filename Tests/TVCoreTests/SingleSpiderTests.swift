@@ -20,6 +20,10 @@ import Testing
     #expect(site.key == "蝴蝶" && site.name == "蝴蝶影视" && site.type == 3)
     #expect(site.api == origin.absoluteString && site.runtime == .python && site.detectedRuntime == nil)
     #expect(try site.scriptURL(origin: config.origin) == origin)
+    #expect(config.isSingleSpider)
+    let listing = try Subscription.parse(Data(#"{"sites":[{"key":"a","name":"A","type":3,"api":"https://example.com/py/a.py"}]}"#.utf8),
+                                         origin: URL(string: "https://example.com/config.json")!)
+    #expect(!listing.isSingleSpider)
     // Saved and loaded again, it is the same source.
     let saved = try JSONDecoder().decode(Subscription.self, from: JSONEncoder().encode(config))
     #expect(saved.sites.first?.runtime == .python && saved.raw["sites"]?.array?.count == 1)

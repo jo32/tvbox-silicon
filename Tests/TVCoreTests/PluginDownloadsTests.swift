@@ -215,3 +215,18 @@ private final class TransferSamples: @unchecked Sendable {
         #expect(throws: Never.self) { try PluginDownloads.refuseWebPageScript(Data(script.utf8)) }
     }
 }
+
+// Adding a script's address again hands the store what came down for it: from then on that runs, at once and after a
+// relaunch, not the older stored copy first (#1431).
+@Test func aScriptAddedAgainReplacesTheStoredCopy() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: "plugins-\(UUID())", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let http = downloadHTTP()
+    let url = URL(string: "https://example.com/\(UUID()).py")!
+    let cache = PluginDownloads(directory: directory)
+    #expect(try await cache.data(at: url, http: http) == Data("plugin".utf8))
+    await cache.store(Data("plugin-v2".utf8), for: url)
+    #expect(try await cache.data(at: url, http: http) == Data("plugin-v2".utf8))
+    #expect(try await PluginDownloads(directory: directory).data(at: url, http: http) == Data("plugin-v2".utf8))
+    #expect(DownloadProtocol.counts.count(url.absoluteString) == 1)
+}

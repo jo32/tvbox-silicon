@@ -21,6 +21,8 @@ extension Site {
 }
 
 extension Subscription {
+    /// A lone spider added by its own address (`singleSpider`): the subscription's file is the script its source runs.
+    var isSingleSpider: Bool { sites.count == 1 && sites[0].api == origin.absoluteString && raw["spider"] == nil }
     /// A lone spider script, a Python `base.spider` class or a CatVod JavaScript spider, added as
     /// a subscription of its own that holds just that source, as a TVBox configuration would list
     /// it: type 3, with the script's address as its api. Nil when `data` is neither.
