@@ -5,9 +5,11 @@
 import { admin, cors } from "./admin";
 import { exchange, revoke, verify } from "./apple";
 import { copyInstall, copyNew, stats, syncStatuses, syncUnknown } from "./feedback";
+import { cleanInstallDays, markDay, points } from "./points";
 import { entitlement, isPro, redeem } from "./pro";
+import { pullRequestsOf, syncPullRequests } from "./prs";
 import { addIdentity, authenticate, bearer, display, erase, identities, session, User, userFor } from "./session";
-import { cleanLogins, loginResult, startLogin, webhook } from "./telegram";
+import { cleanLogins, loginResult, startLogin, telegramFeedback, webhook } from "./telegram";
 import { address, Env, error, isInstall, json, LIFETIME, now, parse, PLATFORMS, sha256, text } from "./util";
 
 // What the app shows on Settings › Account, and keeps (the entitlement) to know it is Pro offline.
@@ -21,8 +23,21 @@ async function account(env: Env, given: User) {
     pro: { active: isPro(user), until: user.pro_until ?? null, lifetime: (user.pro_until ?? 0) >= LIFETIME },
     entitlement: await entitlement(env, user),
     feedback: await stats(env, user),
+    points: await points(env, user.id),
+    pullRequests: await pullRequestsOf(env, user.id),
     telegramBot: env.TELEGRAM_BOT,
   };
+}
+
+// After a sign-in: what the install sent before, and what GitHub says of it. Best effort: it must never cost the
+// sign-in itself (a Telegram code is already used up by then).
+async function afterSignIn(env: Env, user: User, install: string) {
+  try {
+    if (install) await copyInstall(env, user, install);
+    await syncUnknown(env, 10, user.id);
+  } catch (problem) {
+    console.error(`after sign-in: ${problem}`);
+  }
 }
 
 const installOf = (body: any) => {
@@ -60,8 +75,7 @@ async function appleSignIn(request: Request, env: Env): Promise<Response> {
   }
   const user = await userFor(env, identity);
   const token = await session(env, user, install, platform);
-  if (install) await copyInstall(env, user, install);
-  await syncUnknown(env, 10, user.id);
+  await afterSignIn(env, user, install);
   return json({ token, account: await account(env, user) });
 }
 
@@ -94,8 +108,7 @@ async function telegramPoll(request: Request, env: Env): Promise<Response> {
     if (!(signedIn instanceof Response) && signedIn.user.id === result.user.id) return json({ account: await account(env, result.user) });
   }
   const token = await session(env, result.user, result.install, result.platform);
-  if (result.install) await copyInstall(env, result.user, result.install);
-  await syncUnknown(env, 10, result.user.id);
+  await afterSignIn(env, result.user, result.install);
   return json({ token, account: await account(env, result.user) });
 }
 
@@ -110,8 +123,17 @@ async function me(request: Request, env: Env): Promise<Response> {
     await erase(env, signedIn.user.id);
     return json({ deleted: true });
   }
-  await syncUnknown(env, 5, signedIn.user.id);
+  await syncUnknown(env, 5, signedIn.user.id).catch((problem) => console.error(`sync: ${problem}`));
   return json(await account(env, signedIn.user));
+}
+
+// The app is open (once a day while signed in): today's point for the session's install, then the account.
+async function activeDay(request: Request, env: Env): Promise<Response> {
+  const signedIn = await authenticate(request, env);
+  if (signedIn instanceof Response) return signedIn;
+  const row = await env.DB.prepare("SELECT install FROM sessions WHERE hash = ?").bind(signedIn.hash).first<{ install: string }>();
+  const counted = await markDay(env, signedIn.user.id, row?.install ?? "");
+  return json({ counted, account: await account(env, signedIn.user) });
 }
 
 async function redeemCode(request: Request, env: Env): Promise<Response> {
@@ -149,8 +171,10 @@ const ROUTES: Record<string, Record<string, (request: Request, env: Env) => Prom
   "/v1/auth/telegram/poll": { POST: telegramPoll },
   "/v1/me": { GET: me, DELETE: me },
   "/v1/me/redeem": { POST: redeemCode },
+  "/v1/me/day": { POST: activeDay },
   "/v1/sign-out": { POST: signOut },
   "/v1/telegram/webhook": { POST: webhook },
+  "/v1/telegram/feedback": { POST: telegramFeedback },
 };
 
 export default {
@@ -170,10 +194,13 @@ export default {
     if (!handle) return new Response(null, { status: 405, headers: { allow: Object.keys(route).join(", ") } });
     return handle(request, env);
   },
-  // Every 15 minutes: copy new feedback of signed-in installs, read what GitHub says about it, drop stale sign-ins.
+  // Every 15 minutes: copy new feedback of signed-in installs, read what GitHub says about it and about merged pull
+  // requests, drop stale sign-ins.
   async scheduled(_controller, env) {
     await copyNew(env);
     await syncStatuses(env);
+    await syncPullRequests(env);
+    await cleanInstallDays(env);
     await cleanLogins(env);
     await env.DB.prepare("DELETE FROM sessions WHERE expires < ?").bind(now()).run();
   },

@@ -103,6 +103,10 @@ import TVCore
                 #endif
                 // A launch that ends while active, without passing through here, crashed or was ended.
                 .onChange(of: scenePhase, initial: true) { _, phase in ErrorReports.shared.onScreen(phase == .active) }
+                // A day of use earns a point while signed in (Settings › Account).
+                .onChange(of: scenePhase, initial: true) { _, phase in
+                    if phase == .active { Task { await AccountStore.shared.markActiveDay() } }
+                }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background {
                         Task { _ = await Diagnostics.shared.snapshot(); ErrorReports.shared.save() }

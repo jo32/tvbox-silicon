@@ -52,6 +52,20 @@ private func signed(_ json: String, by key: Curve25519.Signing.PrivateKey) throw
     #expect(signedOut.entitlement == nil)
 }
 
+@Test func accountDecodesPointsAndPullRequests() throws {
+    let json = #"""
+    {"id":"u_4H90N92HX5RCQ8Z568P5","name":"Ann","identities":[],"pro":{"active":false,"until":null,"lifetime":false},"entitlement":null,
+    "feedback":{"sent":1,"adopted":1,"declined":0,"points":1601,"rewardDays":0,"issues":[]},
+    "points":{"total":1601,"days":0,"sent":1,"adopted":1,"pullRequests":3,"adjusted":0,"rules":{"daily":1,"sent":1,"sentPerDay":3,"adopted":100,"pullRequest":500}},
+    "pullRequests":[{"number":1290,"title":"Sleep timer","merged":1795239984}]}
+    """#
+    let account = try JSONDecoder().decode(Account.self, from: Data(json.utf8))
+    #expect(account.points?.total == 1601 && account.points?.rules.pullRequest == 500 && account.pullRequests?.first?.number == 1290)
+    // A server from before points: the account still decodes.
+    let older = try JSONDecoder().decode(Account.self, from: Data(json.replacingOccurrences(of: #""points":{"total""#, with: #""unused":{"total""#).utf8))
+    #expect(older.points == nil)
+}
+
 @Test func everyRedeemRefusalHasItsOwnMessage() {
     let reasons = ["not_found", "revoked", "expired", "used_up", "already_redeemed"]
     let messages = Set(reasons.map { AccountService.Failure.code($0).errorDescription ?? "" })

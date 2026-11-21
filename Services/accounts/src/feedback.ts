@@ -2,20 +2,22 @@
 // The error-reports Worker keeps install → issue for 30 days only, so the rows are copied here: when an install signs
 // in (what it sent before) and every 15 minutes (what was sent since). GitHub tells what became of each issue.
 
+import { points } from "./points";
 import { grant } from "./pro";
 import { User } from "./session";
 import { DAY, Env, now, number } from "./util";
 
-export type Status = "open" | "adopted" | "declined" | "duplicate";
+export type Status = "open" | "adopted" | "closed" | "declined" | "duplicate";
 
-// What became of an issue. Adopted: labeled `fixed`, or closed as completed. Declined: closed as not planned, or
-// labeled invalid / wontfix / spam. Labels win over the state, so a closed duplicate never counts as adopted.
+// What became of an issue. Adopted only when the developer says so with a label: `fixed` (a bug fixed) or `adopted`
+// (an idea taken), since adopting is worth many points; closed as completed without one is just closed. Declined:
+// closed as not planned, or labeled invalid / wontfix / spam. Labels win over the state, and duplicate over all.
 export function statusOf(issue: any): Status {
   const labels = new Set((issue?.labels ?? []).map((label: any) => String(typeof label === "string" ? label : label?.name ?? "").toLowerCase()));
   if (labels.has("duplicate") || issue?.state_reason === "duplicate") return "duplicate";
   if (labels.has("invalid") || labels.has("wontfix") || labels.has("spam")) return "declined";
-  if (labels.has("fixed")) return "adopted";
-  if (issue?.state === "closed") return issue.state_reason === "not_planned" ? "declined" : "adopted";
+  if (labels.has("fixed") || labels.has("adopted")) return "adopted";
+  if (issue?.state === "closed") return issue.state_reason === "not_planned" ? "declined" : "closed";
   return "open";
 }
 
@@ -111,7 +113,11 @@ export async function syncUnknown(env: Env, limit: number, userID?: string) {
     .bind(...(userID ? [userID] : []), limit).all<{ issue: number }>();
   for (const row of rows.results) {
     const response = await github(env, `/issues/${row.issue}`);
-    if (response.ok) await record(env, await response.json());
+    if (response.ok) {
+      // Only the issue that was asked for (an odd answer must not be written down as it).
+      const issue: any = await response.json().catch(() => null);
+      if (issue?.number === row.issue) await record(env, issue);
+    }
     else if (response.status === 404 || response.status === 410) {
       await env.DB.prepare("UPDATE feedback_issues SET status = 'declined', updated = ? WHERE issue = ?").bind(now(), row.issue).run();
     }
@@ -130,7 +136,7 @@ export async function stats(env: Env, user: User) {
     sent,
     adopted,
     declined: counts?.declined ?? 0,
-    points: sent * number(env.POINTS_SENT, 1) + adopted * number(env.POINTS_ADOPTED, 10),
+    points: (await points(env, user.id)).total,
     rewardDays: number(env.REWARD_DAYS, 0),
     issues: recent.results.map((row) => ({ number: row.issue, title: row.title, status: row.status ?? "open", sent: row.sent })),
   };

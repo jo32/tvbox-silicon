@@ -13,10 +13,15 @@ export interface Env {
   APPLE_TEAM_ID: string;
   // The bot people sign in and redeem with, without the @.
   TELEGRAM_BOT: string;
-  // Points for each message sent and each one adopted, and the Pro days an adopted one gives (0 = none).
+  // Points (src/points.ts): a day of use, a message sent, one adopted, a merged pull request. And the Pro days an
+  // adopted message gives (0 = none).
+  POINTS_DAILY: string;
   POINTS_SENT: string;
   POINTS_ADOPTED: string;
+  POINTS_PR: string;
   REWARD_DAYS: string;
+  // GitHub logins whose pull requests never earn points (the repository's owners), comma-separated.
+  PR_EXCLUDE: string;
   // Origins of the admin pages, comma-separated, for CORS.
   ADMIN_ORIGINS: string;
   // Secrets.

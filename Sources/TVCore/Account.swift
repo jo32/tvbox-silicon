@@ -47,12 +47,47 @@ public struct Account: Codable, Sendable, Equatable {
         public var issues: [Issue]
     }
 
+    /// Points (Services/accounts/src/points.ts): what the person's help is worth, with the rules so the app can explain
+    /// them. They reward feedback and code that get used far more than volume.
+    public struct Points: Codable, Sendable, Equatable {
+        public struct Rules: Codable, Sendable, Equatable {
+            public var daily: Int
+            public var sent: Int
+            public var sentPerDay: Int
+            public var adopted: Int
+            public var pullRequest: Int
+            /// The server's own (Services/accounts/wrangler.jsonc), for explaining points before an account or a server
+            /// has sent any.
+            public static let standard = Rules(daily: 1, sent: 1, sentPerDay: 3, adopted: 100, pullRequest: 500)
+        }
+        public var total: Int
+        /// Days the app was open while signed in.
+        public var days: Int
+        /// Feedback messages that earned their point: at most `sentPerDay` a day, never duplicates or declined ones.
+        public var sent: Int
+        public var adopted: Int
+        public var pullRequests: Int
+        /// Added (or taken away) by the developer.
+        public var adjusted: Int
+        public var rules: Rules
+    }
+
+    /// A merged pull request that counts for the person.
+    public struct PullRequest: Codable, Sendable, Equatable, Identifiable {
+        public var number: Int
+        public var title: String
+        public var merged: Double
+        public var id: Int { number }
+    }
+
     public var id: String
     public var name: String
     public var identities: [Identity]
     public var pro: Pro
     public var entitlement: Entitlement?
     public var feedback: Feedback
+    public var points: Points?
+    public var pullRequests: [PullRequest]?
     public var telegramBot: String?
 
     public func has(_ provider: String) -> Bool { identities.contains { $0.provider == provider } }
@@ -116,6 +151,7 @@ public enum AccountService {
 
     private struct SignInBody: Decodable { let token: String?; let account: Account }
     private struct RedeemBody: Decodable { let days: Int?; let account: Account }
+    private struct DayBody: Decodable { let counted: Bool; let account: Account }
     private struct ErrorBody: Decodable { let error: String }
 
     private static func call(_ path: String, method: String = "POST", body: [String: String]? = nil, token: String? = nil,
@@ -176,6 +212,13 @@ public enum AccountService {
     public static func account(token: String) async throws -> Account {
         let (data, _) = try await call("v1/me", method: "GET", token: token)
         return try JSONDecoder().decode(Account.self, from: data)
+    }
+
+    /// The app is open today: the day's point. The server counts a day once per account, and gives each device's day to
+    /// one account only.
+    public static func markActiveDay(token: String) async throws -> Account {
+        let (data, _) = try await call("v1/me/day", body: [:], token: token)
+        return try JSONDecoder().decode(DayBody.self, from: data).account
     }
 
     public static func redeem(code: String, token: String) async throws -> (days: Int?, account: Account) {

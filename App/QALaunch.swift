@@ -326,6 +326,12 @@ enum QALaunch {
         } else if section == self.section, page == "account" {
             // `-qaPage account`: Settings › Account; `-qaAccounts <url>` for a local server (Services/accounts/test/serve.mjs).
             AccountView()
+        } else if section == self.section, page == "points" {
+            // `-qaPage points`: How Points Work.
+            PointsGuideView()
+        } else if section == self.section, page == "feedback" {
+            // `-qaPage feedback`: Send Feedback, with or without a subscription.
+            FeedbackView()
         } else if section == self.section, let page, let config = store.subscription {
             let parts = page.split(separator: ":", maxSplits: 2).map(String.init)
             switch parts.first {
@@ -401,7 +407,6 @@ enum QALaunch {
             case "novel-list":
                 if let list = NovelStore.shared.lists.dropFirst(Int(parts.dropFirst().first ?? "") ?? 0).first { NovelListView(url: list.address) }
             case "logs": DiagnosticsView()
-            case "feedback": FeedbackView()
             #if os(tvOS)
             case "telegram": TelegramGroupView()
             #endif
@@ -490,7 +495,7 @@ enum QALaunch {
 
     static func overrides(_ section: AppSection) -> Bool {
         guard section == self.section, let page else { return false }
-        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "subscription", "novel-list", "arrange-subscriptions", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "app-icon", "color-theme", "account", "cloud-login", "cloud-accounts", "subtitle-style", "danmaku-style", "book-sources", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add", "up", "comments", "chapters", "live-plugins", "live-plugin", "live-plugin-sign-in", "live-plugin-qr"].contains(page.split(separator: ":").first.map(String.init) ?? "")
+        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "subscription", "novel-list", "arrange-subscriptions", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "app-icon", "color-theme", "account", "points", "cloud-login", "cloud-accounts", "subtitle-style", "danmaku-style", "book-sources", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add", "up", "comments", "chapters", "live-plugins", "live-plugin", "live-plugin-sign-in", "live-plugin-qr"].contains(page.split(separator: ":").first.map(String.init) ?? "")
     }
 }
 

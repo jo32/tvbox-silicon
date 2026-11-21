@@ -58,9 +58,9 @@ CREATE TABLE IF NOT EXISTS telegram_logins (
 CREATE TABLE IF NOT EXISTS feedback_issues (
   issue INTEGER PRIMARY KEY,
   user_id TEXT NOT NULL,
-  install TEXT NOT NULL,
+  install TEXT NOT NULL,        -- the app's install ID, or 'telegram' for /feedback in the Telegram group
   sent INTEGER NOT NULL,        -- unix seconds
-  status TEXT,                  -- open, adopted, declined, duplicate; null until read from GitHub
+  status TEXT,                  -- open, adopted, closed, declined, duplicate; null until read from GitHub
   title TEXT NOT NULL DEFAULT '',
   updated INTEGER NOT NULL DEFAULT 0
 );
@@ -101,3 +101,50 @@ CREATE TABLE IF NOT EXISTS marks (
   name TEXT PRIMARY KEY,
   value INTEGER NOT NULL
 );
+
+-- Points (src/points.ts). A day the app was open while signed in: one point each. Days start at midnight UTC+8.
+CREATE TABLE IF NOT EXISTS active_days (
+  user_id TEXT NOT NULL,
+  day INTEGER NOT NULL,         -- days since 1970-01-01 in UTC+8
+  install TEXT NOT NULL,
+  PRIMARY KEY (user_id, day)
+);
+-- Which account each install gave its day to: one only, so one device can't earn for many accounts.
+CREATE TABLE IF NOT EXISTS install_days (
+  install TEXT NOT NULL,
+  day INTEGER NOT NULL,
+  user_id TEXT NOT NULL,
+  PRIMARY KEY (install, day)
+);
+
+-- Merged pull requests by other people (src/prs.ts), and the account each counts for.
+CREATE TABLE IF NOT EXISTS pull_requests (
+  number INTEGER PRIMARY KEY,
+  author TEXT NOT NULL,         -- GitHub login
+  author_id INTEGER NOT NULL,   -- GitHub user ID (a login can be renamed)
+  title TEXT NOT NULL DEFAULT '',
+  merged INTEGER NOT NULL,      -- unix seconds
+  claim TEXT NOT NULL DEFAULT '', -- what its description names: an account ID, @telegram or an email
+  user_id TEXT,                 -- who it counts for; null until someone matches
+  how TEXT NOT NULL DEFAULT '', -- id, telegram, email, github (the author's remembered account) or admin
+  excluded INTEGER NOT NULL DEFAULT 0 -- labeled no-points, or excluded by the admin
+);
+CREATE INDEX IF NOT EXISTS pull_requests_user ON pull_requests(user_id);
+
+-- GitHub users whose merged pull requests count for an account: learned from a matched claim, or set by the admin.
+CREATE TABLE IF NOT EXISTS github_logins (
+  login_id INTEGER PRIMARY KEY,
+  login TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  how TEXT NOT NULL
+);
+
+-- Points the admin added or took away by hand.
+CREATE TABLE IF NOT EXISTS point_adjustments (
+  id INTEGER PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  points INTEGER NOT NULL,
+  note TEXT NOT NULL DEFAULT '',
+  at INTEGER NOT NULL           -- unix seconds
+);
+CREATE INDEX IF NOT EXISTS point_adjustments_user ON point_adjustments(user_id);

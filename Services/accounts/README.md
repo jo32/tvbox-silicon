@@ -1,15 +1,32 @@
 # Yingxia accounts
 
 Worker `yingxia-accounts` at `https://yingxia-accounts.getmegaportal.com`, with its own D1 database `yingxia-accounts`.
-It does four things:
+It does five things:
 
 - **Sign-in.** Sign in with Apple, where the build has the entitlement, and Telegram through a bot, which works on
   every device; Apple TV shows a QR code. One person can add both.
 - **Feedback that counts.** Feedback sent from Settings › Send Feedback while signed in counts for the person. So does
-  feedback the same install sent in the 30 days before it signed in. GitHub decides whether a message was
-  **adopted** (labeled `fixed`, or closed as completed) or declined (closed as not planned, or labeled
-  `duplicate`, `invalid`, `wontfix` or `spam`). Points = sent × `POINTS_SENT` + adopted × `POINTS_ADOPTED`.
-  `REWARD_DAYS` > 0 also gives that many Pro days for each adopted message, once per issue.
+  feedback the same install sent in the 30 days before it signed in, and `/feedback` sent in the Telegram group (the
+  bot passes it on, keyed by Telegram user ID). GitHub decides whether a message was **adopted** (labeled `fixed` or
+  `adopted`: closing alone isn't enough), just closed, or declined (closed as not planned, or labeled `duplicate`,
+  `invalid`, `wontfix` or `spam`). `REWARD_DAYS` > 0 also gives that many Pro days for each adopted message, once per
+  issue.
+- **Points**, which reward feedback and code that get used far more than volume (`src/points.ts`):
+
+  | For | Points | Limits |
+  |---|---|---|
+  | each day the app is open, signed in | `POINTS_DAILY` (1) | once a day per account; each device gives its day to one account |
+  | each feedback message | `POINTS_SENT` (1) | 3 a day; none for duplicates or declined ones |
+  | each adopted message | `POINTS_ADOPTED` (100) | only by the `fixed` / `adopted` label; once per issue |
+  | each merged pull request | `POINTS_PR` (500) | see below |
+
+  A merged pull request counts for the account its description names on a line `Yingxia account: <ID>` (the ID is
+  in Settings › Account; `.github/pull_request_template.md` asks for it), or the person's Telegram `@username`, or
+  the email of their Sign in with Apple. Once a GitHub user's claim has matched, their later pull requests count for
+  the same account without it. Never counted: pull requests by `PR_EXCLUDE` (the owner) and bots, ones labeled
+  `no-points`, claims inside HTML comments, and claims that fit more than one account. The admin can hand a pull
+  request to someone, take it out, or add and take away points (below). Days start at midnight UTC+8. The total is
+  counted again from these rows each time, never kept as a running number.
 - **Pro.** Pro comes from redeem codes made by the admin pages. People redeem them in the app (Settings › Account) or
   with the Telegram bot (`/redeem CODE`). Pro also comes from rewards, or from the admin by hand. The app keeps an
   Ed25519-signed entitlement, so Pro also works offline. App Store and TestFlight builds never show Pro or the code
@@ -71,7 +88,10 @@ Every call sends `Authorization: Bearer <ADMIN_TOKEN>`. Browsers may call it fro
 | `GET /v1/admin/users/<id>` | | `{id, name, proUntil, lifetime, identities, feedback, grants, installs}` |
 | `POST /v1/admin/users/<id>/pro` | `{days: 30}` adds days, `{days: null}` = lifetime, `{until: 0}` ends Pro, `{until: t}` sets the end. Optional `note`. | the person, as above |
 | `DELETE /v1/admin/users/<id>` | | `{deleted}` |
-| `GET /v1/admin/stats` | | `{users, pro, newThisWeek, codes, redeemed, feedback, adopted}` |
+| `POST /v1/admin/users/<id>/points` | `{points: n, note}`; negative takes away | the person, as above, with `points` and `adjustments` |
+| `GET /v1/admin/pull-requests` | `?unmatched=1` (nobody's yet), `&limit&offset` | `{pullRequests: [{number, author, title, merged, claim, user, name, how, excluded}]}` |
+| `POST /v1/admin/pull-requests/<n>` | `{user: "u_…"}` (also remembers its author), `{user: null}`, `{excluded: true}`, or `{auto: true}` to match by its description again | the pull request |
+| `GET /v1/admin/stats` | | `{users, pro, newThisWeek, codes, redeemed, feedback, adopted, pullRequests, pullRequestsUnmatched, activeToday}` |
 
 Codes are case-insensitive and ignore spaces and dashes. O reads as 0, and I and L read as 1. Generated codes look
 like `7KQ2-M9XD-4TRB-WN3H`.
@@ -90,6 +110,7 @@ curl -X POST https://yingxia-accounts.getmegaportal.com/v1/admin/codes \
 - `POST /v1/auth/telegram`: `{install, platform}` → `{code, url, expires}`.
 - `POST /v1/auth/telegram/poll`: `{code}` → 202 while waiting, then `{token, account}`.
 - `GET /v1/me` → the account. `DELETE /v1/me` deletes it.
+- `POST /v1/me/day`: the app is open today → `{counted, account}`. The app sends it once a day when it becomes active.
 - `POST /v1/me/redeem`: `{code}` → `{days, account}`. On a 404 or 409 the reason is `not_found`, `revoked`,
   `expired`, `used_up` or `already_redeemed`.
 - `POST /v1/sign-out`.
