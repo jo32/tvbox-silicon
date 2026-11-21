@@ -1053,6 +1053,11 @@ struct PosterCard: View {
     let poster: URL?
     let headers: [String: String]
     let remarks: String
+    /// Shown while there is no cover.
+    var symbol = "film"
+    init(name: String, poster: URL?, headers: [String: String] = [:], remarks: String = "", symbol: String = "film") {
+        self.name = name; self.poster = poster; self.headers = headers; self.remarks = remarks; self.symbol = symbol
+    }
     init(video: Video) {
         name = video.name; poster = video.poster; headers = video.posterHeaders; remarks = video.remarks
     }
@@ -1063,7 +1068,7 @@ struct PosterCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit)
-                .overlay { PosterImage(url: poster, headers: headers) }
+                .overlay { PosterImage(url: poster, headers: headers, symbol: symbol) }
                 .posterClip(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .coverOverlay(alignment: .bottomLeading) {
                     if !remarks.isEmpty {
