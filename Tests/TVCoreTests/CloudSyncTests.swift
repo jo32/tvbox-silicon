@@ -100,6 +100,22 @@ import Testing
     #expect(cloud.values["sync.names"] != nil)
 }
 
+/// Another profile than the main one is open (#1456): its library neither goes up nor takes the cloud's, and the main
+/// library merges once it is back.
+@Test @MainActor func suspendedNothingIsSentOrTakenUntilResumed() {
+    let cloud = MemoryCloud()
+    let phone = Device(cloud, names: ["a": "Alpha"]), tv = Device(cloud, names: ["b": "Beta"])
+    tv.sync.flush()
+    phone.sync.isSuspended = true
+    phone.sync.start()
+    phone.sync.flush()
+    phone.sync.changed("names")
+    phone.sync.receive(reason: nil, keys: ["sync.names"])
+    #expect(phone.names == ["a": "Alpha"] && cloud.values["sync.names"].flatMap { CloudSync.decode(CloudSyncLedger<String>.self, from: $0) }?.values == ["b": "Beta"])
+    phone.sync.isSuspended = false
+    #expect(phone.names == ["a": "Alpha", "b": "Beta"])
+}
+
 @Test @MainActor func anotherICloudAccountGetsThisDevicesItemsInsteadOfRemovals() {
     let cloud = MemoryCloud()
     let phone = Device(cloud, names: ["a": "Alpha"])

@@ -130,6 +130,10 @@ enum QALaunch {
             }
             await store.importSubscription(address: subscription)
         }
+        // `-qaOpenProfile <name>` opens that profile, adding it first if there is none by that name; `main` is the main one.
+        if let name = UserDefaults.standard.string(forKey: "qaOpenProfile") {
+            store.openProfile(name == "main" ? .main : Profiles.shared.all.first { $0.name == name } ?? Profiles.shared.add(named: name))
+        }
         if QASweep.enabled, let config = store.subscription { Task.detached(priority: .utility) { await QASweep.run(config) } }
         // `-qaSeedHistory <source key>:<video id>` records that video's first episode as part watched, for Watch Now's
         // Up Next and Continue Watching.
@@ -323,6 +327,9 @@ enum QALaunch {
             appIconPage
         } else if section == self.section, page == "color-theme" {
             ColorThemeSettingsView()
+        } else if section == self.section, page == "profiles" {
+            // `-qaPage profiles`: Settings › Profiles (#1456).
+            ProfilesView()
         } else if section == self.section, page == "account" {
             // `-qaPage account`: Settings › Account; `-qaAccounts <url>` for a local server (Services/accounts/test/serve.mjs).
             AccountView()
@@ -493,7 +500,7 @@ enum QALaunch {
 
     static func overrides(_ section: AppSection) -> Bool {
         guard section == self.section, let page else { return false }
-        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "subscription", "novel-list", "arrange-subscriptions", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "app-icon", "color-theme", "account", "points", "cloud-login", "cloud-accounts", "subtitle-style", "danmaku-style", "book-sources", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add", "up", "comments", "chapters", "live-plugins", "live-plugin", "live-plugin-sign-in", "live-plugin-qr"].contains(page.split(separator: ":").first.map(String.init) ?? "")
+        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "subscription", "novel-list", "arrange-subscriptions", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "app-icon", "color-theme", "profiles", "account", "points", "cloud-login", "cloud-accounts", "subtitle-style", "danmaku-style", "book-sources", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add", "up", "comments", "chapters", "live-plugins", "live-plugin", "live-plugin-sign-in", "live-plugin-qr"].contains(page.split(separator: ":").first.map(String.init) ?? "")
     }
 }
 

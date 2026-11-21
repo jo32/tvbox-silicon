@@ -319,8 +319,8 @@ struct DiscoverSearchGroup {
     var groups: [TMDBCatalog.SearchKind: DiscoverSearchGroup] = [:]
     var loading = false
     var failed = false
-    var history: [String] = UserDefaults.standard.stringArray(forKey: "discover.search.keywords") ?? []
-    var opened: [TMDBCatalog.Item] = (UserDefaults.standard.data(forKey: "discover.search.opened").flatMap { try? JSONDecoder().decode([TMDBCatalog.Item].self, from: $0) }) ?? []
+    var history: [String] = Profiles.shared.currentDefaults.stringArray(forKey: "discover.search.keywords") ?? []
+    var opened: [TMDBCatalog.Item] = (Profiles.shared.currentDefaults.data(forKey: "discover.search.opened").flatMap { try? JSONDecoder().decode([TMDBCatalog.Item].self, from: $0) }) ?? []
     private var generation = 0
     var isEmpty: Bool { groups.values.allSatisfy { $0.count == 0 } }
     func load(_ request: DiscoverSearchRequest) async {
@@ -368,15 +368,15 @@ struct DiscoverSearchGroup {
     func remember(_ keyword: String) {
         guard !keyword.isEmpty else { return }
         history.removeAll { $0.caseInsensitiveCompare(keyword) == .orderedSame }; history.insert(String(keyword.prefix(100)), at: 0)
-        history = Array(history.prefix(12)); UserDefaults.standard.set(history, forKey: "discover.search.keywords")
+        history = Array(history.prefix(12)); Profiles.shared.currentDefaults.set(history, forKey: "discover.search.keywords")
     }
-    func clearHistory() { history = []; UserDefaults.standard.removeObject(forKey: "discover.search.keywords") }
+    func clearHistory() { history = []; Profiles.shared.currentDefaults.removeObject(forKey: "discover.search.keywords") }
     func rememberOpened(_ item: TMDBCatalog.Item) {
         opened.removeAll { $0.key == item.key }; opened.insert(item, at: 0); opened = Array(opened.prefix(12)); saveOpened()
     }
     func clearOpened() { opened = []; saveOpened() }
     func removeOpened(_ item: TMDBCatalog.Item) { opened.removeAll { $0.key == item.key }; saveOpened() }
-    private func saveOpened() { UserDefaults.standard.set(try? JSONEncoder().encode(opened), forKey: "discover.search.opened") }
+    private func saveOpened() { Profiles.shared.currentDefaults.set(try? JSONEncoder().encode(opened), forKey: "discover.search.opened") }
 }
 #if os(macOS)
 /// The Mac's catalog search, a page in the window rather than the iPhone's full-screen sheet: the search field sits in

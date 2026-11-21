@@ -2254,6 +2254,15 @@
 "Your feedback points and Pro time are deleted with it, and can't be brought back." = "Your feedback points and Pro time are deleted with it, and can't be brought back.";
 "You've already redeemed this code." = "You've already redeemed this code.";
 "You've been signed out. Sign in again." = "You've been signed out. Sign in again.";
+"Profiles" = "Profiles";
+"Main Profile" = "Main Profile";
+"Profile" = "Profile";
+"Add Profile" = "Add Profile";
+"Rename Profile" = "Rename Profile";
+"Delete Profile" = "Delete Profile";
+"Delete “%@”?" = "Delete “%@”?";
+"Its subscriptions, favorites, Continue Watching and search history are deleted from this device." = "Its subscriptions, favorites, Continue Watching and search history are deleted from this device.";
+"Each profile has its own subscriptions, favorites, Continue Watching, followed shows and search history. Only the main profile syncs with iCloud; downloads, accounts and settings are shared." = "Each profile has its own subscriptions, favorites, Continue Watching, followed shows and search history. Only the main profile syncs with iCloud; downloads, accounts and settings are shared.";
 "Built-in Danmaku Services" = "Built-in Danmaku Services";
 "Servers are asked in order until one has comments. Add a Dandanplay-compatible server, such as a self-hosted danmu_api, by its root or an API prefix ending in /api/v2; a token in the path is supported. Each one is tested when added. Official episode pages from the source are sent to servers you add, to fetch their comments. Addresses are saved only on this device." = "Servers are asked in order until one has comments. Add a Dandanplay-compatible server, such as a self-hosted danmu_api, by its root or an API prefix ending in /api/v2; a token in the path is supported. Each one is tested when added. Official episode pages from the source are sent to servers you add, to fetch their comments. Addresses are saved only on this device.";
 "Paste an episode link from iQIYI, Tencent Video, Youku, Mango TV or Bilibili." = "Paste an episode link from iQIYI, Tencent Video, Youku, Mango TV or Bilibili.";

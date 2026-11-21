@@ -39,6 +39,8 @@ import TVCore
         WindowGroup {
             // Store, Updates and Announcements go in last, below: sheets attached here show outside RootView.
             RootView()
+                // Opening another profile starts every page again, so none of the last profile's stays on screen (#1456).
+                .id(store.profile.id)
                 #if !os(tvOS)
                 // tvOS draws plain buttons and section links in the tint, so it keeps the neutral default.
                 .modifier(ThemeTint())

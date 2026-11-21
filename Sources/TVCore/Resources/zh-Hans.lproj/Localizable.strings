@@ -2254,6 +2254,15 @@
 "Your feedback points and Pro time are deleted with it, and can't be brought back." = "反馈积分和 Pro 时长会一起删除，且无法恢复。";
 "You've already redeemed this code." = "你已兑换过此兑换码。";
 "You've been signed out. Sign in again." = "你已退出登录，请重新登录。";
+"Profiles" = "用户";
+"Main Profile" = "主用户";
+"Profile" = "用户";
+"Add Profile" = "添加用户";
+"Rename Profile" = "重命名用户";
+"Delete Profile" = "删除用户";
+"Delete “%@”?" = "要删除“%@”吗？";
+"Its subscriptions, favorites, Continue Watching and search history are deleted from this device." = "它的订阅、收藏、继续观看和搜索记录会从这台设备上删除。";
+"Each profile has its own subscriptions, favorites, Continue Watching, followed shows and search history. Only the main profile syncs with iCloud; downloads, accounts and settings are shared." = "每个用户都有自己的订阅、收藏、继续观看、追剧和搜索记录。只有主用户通过 iCloud 同步；离线缓存、账号和设置在各用户间共用。";
 "Built-in Danmaku Services" = "内置弹幕服务";
 "Servers are asked in order until one has comments. Add a Dandanplay-compatible server, such as a self-hosted danmu_api, by its root or an API prefix ending in /api/v2; a token in the path is supported. Each one is tested when added. Official episode pages from the source are sent to servers you add, to fetch their comments. Addresses are saved only on this device." = "按顺序询问各服务器，直到某个服务器有弹幕。可添加兼容弹弹play 的服务器（如自建的 danmu_api），填写根地址或以 /api/v2 结尾的 API 前缀；支持路径中的 token。添加时会先测试。为获取弹幕，片源提供的官方剧集页面会发送给你添加的服务器。地址仅保存在本设备上。";
 "Paste an episode link from iQIYI, Tencent Video, Youku, Mango TV or Bilibili." = "请粘贴爱奇艺、腾讯视频、优酷、芒果TV 或哔哩哔哩的剧集链接。";

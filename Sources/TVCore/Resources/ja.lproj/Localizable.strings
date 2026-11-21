@@ -2254,6 +2254,15 @@
 "Your feedback points and Pro time are deleted with it, and can't be brought back." = "フィードバックポイントとProの期間も削除され、元に戻せません。";
 "You've already redeemed this code." = "このコードはすでに引き換え済みです。";
 "You've been signed out. Sign in again." = "サインアウトされました。もう一度サインインしてください。";
+"Profiles" = "プロフィール";
+"Main Profile" = "メインプロフィール";
+"Profile" = "プロフィール";
+"Add Profile" = "プロフィールを追加";
+"Rename Profile" = "プロフィール名を変更";
+"Delete Profile" = "プロフィールを削除";
+"Delete “%@”?" = "「%@」を削除しますか？";
+"Its subscriptions, favorites, Continue Watching and search history are deleted from this device." = "このプロフィールのサブスクリプション、お気に入り、視聴中の作品、検索履歴がこのデバイスから削除されます。";
+"Each profile has its own subscriptions, favorites, Continue Watching, followed shows and search history. Only the main profile syncs with iCloud; downloads, accounts and settings are shared." = "プロフィールごとに、サブスクリプション、お気に入り、視聴中の作品、フォロー中の番組、検索履歴が分かれます。iCloud で同期するのはメインプロフィールだけです。ダウンロード、アカウント、設定は共通です。";
 "Built-in Danmaku Services" = "内蔵の弾幕サービス";
 "Servers are asked in order until one has comments. Add a Dandanplay-compatible server, such as a self-hosted danmu_api, by its root or an API prefix ending in /api/v2; a token in the path is supported. Each one is tested when added. Official episode pages from the source are sent to servers you add, to fetch their comments. Addresses are saved only on this device." = "サーバーは上から順に、コメントが見つかるまで問い合わせます。Dandanplay 互換のサーバー（自分で運用する danmu_api など）を、ルートまたは /api/v2 で終わる API プレフィックスで追加します。パス内のトークンにも対応します。追加時に接続を確認します。追加したサーバーには、コメントを取得するためソースが示す公式エピソードページが送信されます。アドレスはこのデバイスにのみ保存されます。";
 "Paste an episode link from iQIYI, Tencent Video, Youku, Mango TV or Bilibili." = "iQIYI、Tencent Video、Youku、Mango TV、Bilibili のエピソードリンクを貼り付けてください。";
