@@ -2276,3 +2276,7 @@
 "Danmaku Servers" = "弹幕服务器";
 "Add another server to move or remove this one." = "添加其他服务器后才能移动或移除此服务器。";
 "Find Danmaku…" = "查找弹幕…";
+"Listen" = "收听";
+"This book's source is no longer in your book sources." = "这本书的书源已不在你的书源中。";
+"The chapter has no audio." = "这一章没有音频。";
+"This audio needs a request the player cannot make." = "这段音频需要播放器无法发出的请求。";

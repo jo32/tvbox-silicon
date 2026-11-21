@@ -22,6 +22,8 @@ public enum NovelLibrary {
         public var chapterCount: Int
         /// How far into the chapter, 0–1.
         public var position: Double
+        /// For an audiobook, where in the chapter listening stopped, in seconds (#1130).
+        public var seconds: Double?
         public var updated: Date
         /// One shelf entry per title and author, whichever source it is read from.
         public var id: String { book.match }

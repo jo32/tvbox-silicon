@@ -162,11 +162,11 @@ import TVCore
     }
 
     /// Where reading stopped. Reading a book puts it on the shelf, most recent first.
-    func record(_ book: NovelBook, chapter: NovelChapter, count: Int, position: Double) {
+    func record(_ book: NovelBook, chapter: NovelChapter, count: Int, position: Double, seconds: Double? = nil) {
         var entry = shelfBook(book) ?? NovelLibrary.ShelfBook(book: book)
         entry.book = book
         entry.chapterIndex = chapter.index; entry.chapterTitle = chapter.title; entry.chapterCount = count
-        entry.position = min(1, max(0, position)); entry.updated = Date()
+        entry.position = min(1, max(0, position)); entry.seconds = seconds; entry.updated = Date()
         shelf.removeAll { $0.id == entry.id }
         shelf.insert(entry, at: 0)
         saveShelf()
@@ -278,10 +278,20 @@ extension Color {
 struct NovelCover: View {
     let book: NovelBook
     var body: some View {
-        if let request = book.coverRequest {
-            PosterImage(url: request.url, headers: request.headers, symbol: "book.closed")
-        } else {
-            NovelPlainCover(title: book.name, author: book.author)
+        Group {
+            if let request = book.coverRequest {
+                PosterImage(url: request.url, headers: request.headers, symbol: "book.closed")
+            } else {
+                NovelPlainCover(title: book.name, author: book.author)
+            }
+        }
+        // An audiobook (#1130) is told from the text of the same title by a headphones mark.
+        .overlay(alignment: .bottomTrailing) {
+            if book.isAudio {
+                Image(systemName: "headphones").font(.caption.weight(.bold)).foregroundStyle(.white)
+                    .padding(6).background(.black.opacity(0.55), in: Circle()).padding(6)
+                    .accessibilityHidden(true)
+            }
         }
     }
 }

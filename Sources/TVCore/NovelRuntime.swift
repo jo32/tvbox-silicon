@@ -72,6 +72,11 @@ public actor NovelRuntime {
         return NovelContent(title: content.title.isEmpty ? chapter.title : content.title, paragraphs: content.paragraphs)
     }
 
+    /// Where an audio source's chapter plays from (#1130): the sound's address and the headers it wants.
+    public func audio(_ source: NovelSource, book: NovelBook, chapter: NovelChapter) async throws -> NovelAudio {
+        try decode(NovelAudio.self, try await readingCall(source, "audio", [Self.object(book), Self.object(chapter)], budget: 45))
+    }
+
     // MARK: Signing in (Legado's SourceLoginDialog), in the source's reading runtime
 
     public func signInForm(_ source: NovelSource) async throws -> NovelSignInForm {

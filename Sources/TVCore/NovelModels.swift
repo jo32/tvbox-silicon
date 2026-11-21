@@ -18,6 +18,8 @@ public struct NovelSource: Codable, Hashable, Sendable, Identifiable {
     public var explorable: Bool
     /// Whether the list itself marks it as switched off (`enabled: false`).
     public var disabledByList: Bool
+    /// An audio source (`bookSourceType` 1, 听书): its chapters are sounds, which play in the music player (#1130).
+    public var isAudio: Bool
     /// Whether it signs in: with a form (`loginUi`), or on a web page (`loginUrl` an address). A login script
     /// with no form has nothing to ask, as in Legado.
     public var signsIn: Bool
@@ -31,9 +33,10 @@ public struct NovelSource: Codable, Hashable, Sendable, Identifiable {
         guard let key = Self.string(object["bookSourceUrl"])?.trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty,
               JSONSerialization.isValidJSONObject(object),
               let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else { return nil }
-        // 0 = text. Audio (1), image (2) and file (3) sources aren't read here.
-        if let type = object["bookSourceType"] as? NSNumber, type.intValue != 0 { return nil }
-        if let type = Self.string(object["bookSourceType"]), let value = Int(type), value != 0 { return nil }
+        // 0 = text, 1 = audio. Image (2) and file (3) sources aren't read here.
+        let type = (object["bookSourceType"] as? NSNumber)?.intValue ?? Self.string(object["bookSourceType"]).flatMap { Int($0) } ?? 0
+        guard type == 0 || type == 1 else { return nil }
+        isAudio = type == 1
         self.key = key
         name = Self.string(object["bookSourceName"]).flatMap { $0.isEmpty ? nil : $0 } ?? key
         group = Self.string(object["bookSourceGroup"]) ?? ""
@@ -87,12 +90,15 @@ public struct NovelBook: Codable, Hashable, Sendable, Identifiable {
     public var tocURL: String
     /// Legado's `book.variable`: what a source keeps with the book (`book.putVariable`, `@put`).
     public var variables: [String: String]
+    /// From an audio source (听书, #1130): its chapters play in the music player.
+    public var isAudio: Bool
     public var id: String { sourceKey + "@" + url }
 
     public init(sourceKey: String, url: String, name: String, author: String = "", kind: String = "", intro: String = "", cover: String = "",
-                lastChapter: String = "", wordCount: String = "", tocURL: String = "", variables: [String: String] = [:]) {
+                lastChapter: String = "", wordCount: String = "", tocURL: String = "", variables: [String: String] = [:], isAudio: Bool = false) {
         self.sourceKey = sourceKey; self.url = url; self.name = name; self.author = author; self.kind = kind; self.intro = intro
         self.cover = cover; self.lastChapter = lastChapter; self.wordCount = wordCount; self.tocURL = tocURL; self.variables = variables
+        self.isAudio = isAudio
     }
 
     public init(from decoder: any Decoder) throws {
@@ -101,6 +107,7 @@ public struct NovelBook: Codable, Hashable, Sendable, Identifiable {
         sourceKey = text(.sourceKey); url = text(.url); name = text(.name); author = text(.author); kind = text(.kind)
         intro = text(.intro); cover = text(.cover); lastChapter = text(.lastChapter); wordCount = text(.wordCount); tocURL = text(.tocURL)
         variables = ((try? c.decodeIfPresent([String: String].self, forKey: .variables)) ?? nil) ?? [:]
+        isAudio = ((try? c.decodeIfPresent(Bool.self, forKey: .isAudio)) ?? nil) ?? false
     }
 
     /// The cover's address and the headers its source asks for: Legado writes them as `url,{"headers":{…}}`.
@@ -122,8 +129,9 @@ public struct NovelBook: Codable, Hashable, Sendable, Identifiable {
         return (url, headers)
     }
 
-    /// The same title by the same author, whichever source lists it: how search merges results.
-    public var match: String { Self.normalized(name) + "|" + Self.normalized(author) }
+    /// The same title by the same author, whichever source lists it: how search merges results. An audiobook is
+    /// another book than the text of the same title, on the shelf too.
+    public var match: String { Self.normalized(name) + "|" + Self.normalized(author) + (isAudio ? "|audio" : "") }
 
     static func normalized(_ text: String) -> String {
         text.lowercased().filter { !$0.isWhitespace && !$0.isPunctuation && !$0.isSymbol }

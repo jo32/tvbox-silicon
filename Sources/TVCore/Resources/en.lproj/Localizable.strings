@@ -2276,3 +2276,7 @@
 "Danmaku Servers" = "Danmaku Servers";
 "Add another server to move or remove this one." = "Add another server to move or remove this one.";
 "Find Danmaku…" = "Find Danmaku…";
+"Listen" = "Listen";
+"This book's source is no longer in your book sources." = "This book's source is no longer in your book sources.";
+"The chapter has no audio." = "The chapter has no audio.";
+"This audio needs a request the player cannot make." = "This audio needs a request the player cannot make.";
