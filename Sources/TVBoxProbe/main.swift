@@ -1192,7 +1192,7 @@ extension Probe {
         do { chapters = try await runtime.chapters(source, book: book) } catch { return ("toc-error", short(error)) }
         guard let first = chapters.first(where: { !$0.isVolume }) else { return ("toc-empty", "") }
         let sound: NovelAudio
-        do { sound = try await runtime.audio(source, book: book, chapter: first) } catch { return ("audio-error", "\(book.name) \(chapters.count)ch: \(short(error))") }
+        do { sound = try await NovelListening.playable(runtime.audio(source, book: book, chapter: first)) } catch { return ("audio-error", "\(book.name) \(chapters.count)ch: \(short(error))") }
         guard let url = URL(string: sound.url) else { return ("audio-badurl", sound.url) }
         var request = URLRequest(url: url, timeoutInterval: 15)
         for (name, value) in sound.headers { request.setValue(value, forHTTPHeaderField: name) }

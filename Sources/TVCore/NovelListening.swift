@@ -47,12 +47,21 @@ public enum NovelListening {
         guard let source = sources.all.first(where: { $0.key == item.book.sourceKey }) else {
             throw TVError.unsupported(L10n.text("This book's source is no longer in your book sources."))
         }
-        let sound = try await runtime.audio(source, book: item.book, chapter: item.chapter)
+        let sound = try await playable(runtime.audio(source, book: item.book, chapter: item.chapter))
         guard let url = URL(string: sound.url) ?? sound.url.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed).flatMap(URL.init(string:)) else {
             throw TVError.unsupported(L10n.text("The chapter has no audio."))
         }
         // No history context: an audiobook's place goes to the Novels shelf, and a stream with a picture stays here.
         return Channel(name: item.book.name + " · " + item.chapter.title, group: source.name, url: url, headers: sound.headers)
+    }
+}
+
+extension NovelListening {
+    /// What the player is given for a chapter's sound: a Ximalaya track page (what its sources' chapters now name)
+    /// becomes the web player's address for that track.
+    public static func playable(_ sound: NovelAudio) async throws -> NovelAudio {
+        guard let track = XimalayaAudio.track(in: sound.url) else { return sound }
+        return NovelAudio(url: try await XimalayaAudio.sound(track: track).absoluteString, headers: [:])
     }
 }
 
