@@ -48,7 +48,12 @@ struct MusicNowPlayingScreen: View {
         .padding(.horizontal, 28).padding(.top, 30).padding(.bottom, 6)
         .foregroundStyle(.white)
         .tint(.white)
-        .background { sheetBackdrop.ignoresSafeArea() }
+        .background {
+            ZStack {
+                sheetFill
+                if Self.shapesOwnSheet { MusicNowPlayingSheetPlate(radius: Self.sheetTopRadius).allowsHitTesting(false) }
+            }
+        }
         .environment(\.colorScheme, .dark)
         .presentationDragIndicator(.visible)
         .presentationBackground { if Self.shapesOwnSheet { Color.clear } else { backdrop } }
@@ -78,18 +83,23 @@ struct MusicNowPlayingScreen: View {
         LinearGradient(colors: [tint.blend(with: .black, by: 0.2), tint.blend(with: .black, by: 0.62)], startPoint: .top, endPoint: .bottom)
     }
 
-    /// On an iPhone, iOS 26 and later round the bottom corners of a full-height sheet too, not quite as the display rounds
-    /// its own, so the page behind showed as a light edge around the bottom of this dark sheet (#797). There the sheet
-    /// has no corners or background of its own, and the backdrop rounds the top ones as the system did.
+    /// On an iPhone, iOS 26 and later round the bottom corners of a full-height sheet on a radius that is not the
+    /// display's, so the page behind showed as a light edge (#797). The system corner radius stays off. The backdrop
+    /// rounds only the top, and the sheet container is masked to that same outline so its own fill cannot show past it.
     private static let shapesOwnSheet: Bool = {
         if #available(iOS 26, *) { UIDevice.current.userInterfaceIdiom == .phone } else { false }
     }()
 
-    @ViewBuilder private var sheetBackdrop: some View {
+    /// The top radius a phone sheet used before iOS 26 rounded the bottom as well.
+    private static let sheetTopRadius: CGFloat = 38
+
+    @ViewBuilder private var sheetFill: some View {
         if Self.shapesOwnSheet {
-            backdrop.clipShape(.rect(topLeadingRadius: 38, topTrailingRadius: 38, style: .continuous))
-        } else {
             backdrop
+                .ignoresSafeArea()
+                .clipShape(.rect(topLeadingRadius: Self.sheetTopRadius, topTrailingRadius: Self.sheetTopRadius, style: .continuous))
+        } else {
+            backdrop.ignoresSafeArea()
         }
     }
 
@@ -229,6 +239,82 @@ struct MusicNowPlayingScreen: View {
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.text(label))
         .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+/// The sheet container keeps a rectangular fill. The player's top corners are rounded, so that fill is cleared and the
+/// container is masked to the same top radius; otherwise the fill shows in the cutouts.
+private struct MusicNowPlayingSheetPlate: UIViewRepresentable {
+    var radius: CGFloat
+    func makeUIView(context: Context) -> Plate {
+        let view = Plate()
+        view.radius = radius
+        return view
+    }
+    func updateUIView(_ view: Plate, context: Context) { view.radius = radius }
+
+    final class Plate: UIView {
+        var radius: CGFloat = 38
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            isUserInteractionEnabled = false
+            backgroundColor = .clear
+            isOpaque = false
+        }
+        required init?(coder: NSCoder) { nil }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard window != nil else { return }
+            DispatchQueue.main.async { [weak self] in self?.shapeContainer() }
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            shapeContainer()
+        }
+
+        private func shapeContainer() {
+            guard let presented = presentedSheetView else { return }
+            roundTop(presented)
+            var current = presented.superview
+            var remaining = 3
+            while let view = current, remaining > 0, !(view is UIWindow) {
+                view.backgroundColor = .clear
+                view.isOpaque = false
+                remaining -= 1
+                if NSStringFromClass(type(of: view)).contains("DropShadow") {
+                    roundTop(view)
+                    break
+                }
+                current = view.superview
+            }
+        }
+
+        private func roundTop(_ view: UIView) {
+            view.backgroundColor = .clear
+            view.isOpaque = false
+            view.layer.cornerRadius = radius
+            view.layer.cornerCurve = .continuous
+            view.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+            view.layer.masksToBounds = true
+        }
+
+        private var presentedSheetView: UIView? {
+            var responder: UIResponder? = self
+            while let next = responder {
+                if let controller = next as? UIViewController {
+                    var current: UIViewController? = controller
+                    while let candidate = current {
+                        if let presented = candidate.sheetPresentationController?.presentedView { return presented }
+                        current = candidate.parent
+                    }
+                    return controller.view
+                }
+                responder = next.next
+            }
+            return nil
+        }
     }
 }
 
