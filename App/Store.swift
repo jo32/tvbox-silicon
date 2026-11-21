@@ -384,7 +384,7 @@ import TVCore
         if let link = URL(string: typed), let inner = NovelSources.importAddress(link) { typed = inner.absoluteString }
         do {
             let url = try WebAddress.resolve(typed: typed)
-            switch try await http.subscriptionImport(url) {
+            switch try await http.subscriptionImport(url, fresh: true) {
             case .subscription(let value):
                 let title = (address == nil ? subscriptionName : (name ?? "")).trimmingCharacters(in: .whitespacesAndNewlines)
                 let entry = SubscriptionEntry(address: url.absoluteString, name: title)
@@ -489,7 +489,7 @@ import TVCore
             guard !subscriptions.contains(where: { $0.address == url.absoluteString }) else {
                 return L10n.text("Another subscription already uses this address.")
             }
-            guard case .subscription(let fetched) = try await http.subscriptionImport(url) else {
+            guard case .subscription(let fetched) = try await http.subscriptionImport(url, fresh: true) else {
                 return L10n.text("This address doesn't hold a subscription. Add it as a new one instead.")
             }
             value = fetched
