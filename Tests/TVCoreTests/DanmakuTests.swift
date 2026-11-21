@@ -212,4 +212,42 @@ struct DanmakuSettingsTests {
     @Test func titlesForTheSettingsPage() {
         #expect(DanmakuStyle.speedTitle(1.25) == "1.25×" && DanmakuStyle.speedTitle(9) == "2×")
     }
+
+    @Test func lineSpacingSetsTheLanes() {
+        // Nothing moves for anyone who never chose: the standard is the 1.35 lanes always had.
+        #expect(DanmakuStyle.lineSpacing(DanmakuStyle.standardSpacing) == 1.35)
+        #expect(DanmakuStyle.lineSpacing(9) == 2.1 && DanmakuStyle.lineSpacing(.nan) == 1.35 && DanmakuStyle.lineSpacing(1.2) == 1.15)
+        #expect(DanmakuStyle.nextSpacing(after: 1.35) == 1.7 && DanmakuStyle.nextSpacing(after: 2.1) == 1.15)
+        // Wider spacing: fewer, taller lanes over the same picture.
+        #expect(DanmakuLayout(width: 1000, height: 600, laneHeight: 20 * 1.35).scrollLanes == 16)
+        #expect(DanmakuLayout(width: 1000, height: 600, laneHeight: 20 * 2.1).scrollLanes == 10)
+    }
+
+    @Test func densityHidesRepeatsAndBusySeconds() {
+        let spam = [0.0, 2, 4, 6, 11].map { Danmaku(time: $0, position: .scroll, text: "前方高能") }
+        #expect(DanmakuDensity.standard.thin(spam) == spam && DanmakuFilter().apply(spam) == spam)
+        // The same words show again once the last shown one is five seconds old (ten for Fewest).
+        #expect(DanmakuDensity.fewer.thin(spam).map(\.time) == [0, 6, 11])
+        #expect(DanmakuDensity.fewest.thin(spam).map(\.time) == [0, 11])
+        // Case, width and spacing don't make it new.
+        let wide = [Danmaku(time: 0, position: .scroll, text: "GG"), Danmaku(time: 1, position: .top, text: "ｇｇ ")]
+        #expect(DanmakuDensity.fewer.thin(wide).count == 1)
+        // A burst of ten different scrolling comments in one second, and two pinned ones, which are not counted.
+        let burst = (0..<10).map { Danmaku(time: 10 + Double($0) / 10, position: .scroll, text: "c\($0)") }
+            + [Danmaku(time: 10.95, position: .top, text: "top"), Danmaku(time: 10.96, position: .bottom, text: "bottom")]
+        #expect(DanmakuDensity.fewer.thin(burst).filter { $0.position == .scroll }.count == 4)
+        #expect(DanmakuDensity.fewest.thin(burst).filter { $0.position == .scroll }.count == 2)
+        #expect(DanmakuDensity.fewest.thin(burst).filter { $0.position != .scroll }.count == 2)
+        // Each comment's fate depends only on earlier ones, so a live track still only grows at the end.
+        let track = (spam + burst).sorted { $0.time < $1.time }
+        let all = DanmakuDensity.fewer.thin(track)
+        for count in 1...track.count {
+            let part = DanmakuDensity.fewer.thin(Array(track.prefix(count)))
+            #expect(Array(all.prefix(part.count)) == part)
+        }
+        // Blocked words go first, so they don't use up a second's share.
+        let blocked = DanmakuFilter(words: ["c0", "c1"], density: .fewest).apply(burst)
+        #expect(blocked.filter { $0.position == .scroll }.map(\.text) == ["c2", "c3"])
+        #expect(DanmakuDensity.fewest.next == .standard)
+    }
 }

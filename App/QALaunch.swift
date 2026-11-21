@@ -454,9 +454,7 @@ enum QALaunch {
             case "live-plugin-qr":
                 if let plugin = parts.dropFirst().first.flatMap({ LivePlugins.shared.installed($0) }) { QALivePluginQR(plugin: plugin) }
             case "danmaku-list": QADanmakuList()
-            #if !os(tvOS)
             case "danmaku-settings": QADanmakuSettings()
-            #endif
             // `-qaPage cloud-login:<quark|uc|baidu|aliyun|pan115|tianyi|pan123|guangya>`; `cloud-accounts` shows the accounts page.
             case "cloud-login": CloudQRLoginView(drive: parts.dropFirst().first.flatMap(CloudDriveQRLogin.Drive.init(rawValue:)) ?? .quark) {}
             case "cloud-accounts": CloudDriveView()
@@ -667,19 +665,23 @@ enum QASweep {
 
 private extension Int { var nonZero: Int? { self == 0 ? nil : self } }
 
-#if !os(tvOS)
 /// `-qaPage danmaku-settings`: the player's Danmaku sheet over a page's player, which makes only its own views dark.
+/// On Apple TV it covers the screen, as the player's Danmaku menu presents it (#1089).
 private struct QADanmakuSettings: View {
     @State private var model = CatalogDanmakuModel()
     var body: some View {
+        #if os(tvOS)
+        Color.black.ignoresSafeArea()
+            .fullScreenCover(isPresented: .constant(true)) { CatalogDanmakuSettingsView(model: model, channelName: "仙逆 · 第01集") }
+        #else
         Color.black.ignoresSafeArea()
             .sheet(isPresented: .constant(true)) {
                 CatalogDanmakuSettingsView(model: model, channelName: "仙逆 · 第01集").playerSheet()
             }
             .environment(\.colorScheme, .dark)
+        #endif
     }
 }
-#endif
 
 /// `-qaPage danmaku-list`: the player's 弹幕 tab with sample comments, to check the focused row.
 private struct QADanmakuList: View {

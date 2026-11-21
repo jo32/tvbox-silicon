@@ -210,6 +210,23 @@ public enum DanmakuStyle {
     public static func speeds(including current: Double) -> [Double] {
         choices([0.5, 0.75, 1, 1.25, 1.5, 2], clampedSpeed(current)).sorted()
     }
+    /// Lane height as a multiple of the text size (行距, #1218): Compact, Standard, Relaxed and Wide. 1.35 is how
+    /// comments were always spaced, so nobody's comments move until they choose another.
+    public static let spacingKey = "danmakuLineSpacing", standardSpacing = 1.35
+    public static let spacings = [1.15, 1.35, 1.7, 2.1]
+    /// The choice nearest a stored spacing; the lanes are drawn from it.
+    public static func lineSpacing(_ stored: Double) -> Double {
+        guard stored.isFinite else { return standardSpacing }
+        return spacings.min { abs($0 - stored) < abs($1 - stored) } ?? standardSpacing
+    }
+    public static func spacingTitle(_ stored: Double) -> String {
+        let titles = [L10n.text("Compact"), L10n.text("Standard"), L10n.text("Relaxed"), L10n.text("Wide")]
+        return titles[spacings.firstIndex(of: lineSpacing(stored)) ?? 1]
+    }
+    /// The spacing after this one, for a row that steps through them with each press.
+    public static func nextSpacing(after stored: Double) -> Double {
+        spacings[((spacings.firstIndex(of: lineSpacing(stored)) ?? 0) + 1) % spacings.count]
+    }
     /// A size as a share of the standard one, as Subtitle Style shows its size: 100% is the standard size.
     public static func sizeTitle(_ fontSize: Double) -> String { percent(fontSize / standardFontSize) }
     public static func percent(_ value: Double) -> String { value.formatted(.percent.precision(.fractionLength(0))) }
@@ -231,6 +248,65 @@ public enum DanmakuStyle {
     }
 }
 
+/// How many comments get as far as the lanes (弹幕密度, #1218). Standard keeps every one, and only the lanes thin busy
+/// moments. Fewer and Fewest also hide a comment whose words were shown a few seconds before (a wall of the same
+/// 哈哈哈), and let only a few scrolling comments start in any one second. Worked out with `DanmakuFilter` when a
+/// track loads, never per frame. A comment's fate depends only on the ones before it, so a live track still only
+/// grows at the end. Stored under `key`.
+public enum DanmakuDensity: Int, CaseIterable, Sendable {
+    case standard = 0, fewer = 1, fewest = 2
+    public static let key = "danmakuDensity"
+    public var title: String {
+        switch self {
+        case .standard: L10n.text("Standard")
+        case .fewer: L10n.text("Fewer")
+        case .fewest: L10n.text("Fewest")
+        }
+    }
+    /// The choice after this one, for a row that steps through them with each press.
+    public var next: DanmakuDensity { Self.allCases[((Self.allCases.firstIndex(of: self) ?? 0) + 1) % Self.allCases.count] }
+    /// Seconds before the same words may show again.
+    var repeatWindow: Double {
+        switch self {
+        case .standard: 0
+        case .fewer: 5
+        case .fewest: 10
+        }
+    }
+    /// Scrolling comments that may start within any one second. Top and bottom ones are few and often matter.
+    var perSecond: Int {
+        switch self {
+        case .standard: .max
+        case .fewer: 4
+        case .fewest: 2
+        }
+    }
+
+    /// `comments` in time order, without the ones this density hides.
+    public func thin(_ comments: [Danmaku]) -> [Danmaku] {
+        guard self != .standard else { return comments }
+        var shown: [String: Double] = [:]
+        var starts: [Double] = [], oldest = 0
+        var kept: [Danmaku] = []
+        kept.reserveCapacity(comments.count)
+        for comment in comments {
+            // The same words in other case, width or spacing are a repeat too.
+            let words = comment.text.folding(options: [.caseInsensitive, .widthInsensitive], locale: nil)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if let last = shown[words], comment.time - last < repeatWindow { continue }
+            if comment.position == .scroll {
+                while oldest < starts.count, comment.time - starts[oldest] >= 1 { oldest += 1 }
+                guard starts.count - oldest < perSecond else { continue }
+                starts.append(comment.time)
+            }
+            // Only a shown comment restarts the wait, so a long run of one phrase still shows now and then.
+            shown[words] = comment.time
+            kept.append(comment)
+        }
+        return kept
+    }
+}
+
 /// Which comments are drawn besides the kinds `DanmakuStyle` turns off (弹幕屏蔽): by colour and by blocked words.
 /// Like the style, it applies to every track; each choice is stored under its own key.
 public struct DanmakuFilter: Hashable, Sendable {
@@ -240,9 +316,11 @@ public struct DanmakuFilter: Hashable, Sendable {
     /// Comments containing any of these are hidden. An entry between slashes (`/^哈+$/`) is a regular expression,
     /// as on Bilibili; an invalid one is matched as plain text.
     public var words: [String]
+    /// Fewer comments in busy moments (#1218), counted once blocked words are out.
+    public var density: DanmakuDensity
 
-    public init(colors: Bool = true, words: [String] = []) {
-        self.colors = colors; self.words = words
+    public init(colors: Bool = true, words: [String] = [], density: DanmakuDensity = .standard) {
+        self.colors = colors; self.words = words; self.density = density
     }
 
     /// The stored list: one entry per line.
@@ -261,11 +339,12 @@ public struct DanmakuFilter: Hashable, Sendable {
             }
             return { text in text.range(of: word, options: [.caseInsensitive, .widthInsensitive]) != nil }
         }
-        return comments.compactMap { comment in
+        let shown: [Danmaku] = colors && blocked.isEmpty ? comments : comments.compactMap { comment -> Danmaku? in
             guard !blocked.contains(where: { $0(comment.text) }) else { return nil }
             guard !colors, comment.color != 0xFFFFFF else { return comment }
             return Danmaku(time: comment.time, position: comment.position, color: 0xFFFFFF, scale: comment.scale, text: comment.text)
         }
+        return density.thin(shown)
     }
 }
 

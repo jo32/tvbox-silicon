@@ -27,6 +27,8 @@ struct DanmakuSettings: DynamicProperty {
     @AppStorage(DanmakuStyle.bottomKey) var bottom = true
     @AppStorage(DanmakuFilter.colorsKey) var colors = true
     @AppStorage(DanmakuFilter.wordsKey) var storedWords = ""
+    @AppStorage(DanmakuStyle.spacingKey) var spacing = DanmakuStyle.standardSpacing
+    @AppStorage(DanmakuDensity.key) var density = DanmakuDensity.standard
 
     var words: [String] { DanmakuFilter.words(storedWords) }
 
@@ -46,16 +48,21 @@ struct DanmakuSettings: DynamicProperty {
     var isStandard: Bool {
         area == .standard && fontSize == DanmakuStyle.standardFontSize && opacity == DanmakuStyle.standardOpacity
             && speed == DanmakuStyle.standardSpeed && scrolling && top && bottom && colors
+            && DanmakuStyle.lineSpacing(spacing) == DanmakuStyle.standardSpacing && density == .standard
     }
 
     func reset() {
         area = .standard; fontSize = DanmakuStyle.standardFontSize; opacity = DanmakuStyle.standardOpacity
         speed = DanmakuStyle.standardSpeed; scrolling = true; top = true; bottom = true; colors = true
+        spacing = DanmakuStyle.standardSpacing; density = .standard
     }
 
     static var colorsNote: String { L10n.text("Turn off Colored Comments to draw every comment in white, which stays readable over bright pictures.") }
     static var wordsNote: String {
         L10n.text("Comments containing any of these words are hidden in every video. Put a pattern between slashes, like /^哈+$/, to match it as a regular expression.")
+    }
+    static var densityNote: String {
+        L10n.text("Fewer and Fewest hide a comment repeated within a few seconds and let fewer comments start scrolling each second.")
     }
     static var appliesNote: String { L10n.text("Applies to comments in every video, including one that is playing.") }
 }
@@ -67,6 +74,7 @@ struct DanmakuPreview: View {
     @AppStorage(DanmakuArea.key) private var area = DanmakuArea.standard
     @AppStorage(DanmakuStyle.fontSizeKey) private var fontSize = DanmakuStyle.standardFontSize
     @AppStorage(DanmakuStyle.opacityKey) private var opacity = DanmakuStyle.standardOpacity
+    @AppStorage(DanmakuStyle.spacingKey) private var spacing = DanmakuStyle.standardSpacing
     @State private var start = Date()
     @State private var showsArea = false
     @State private var appeared = false
@@ -79,7 +87,7 @@ struct DanmakuPreview: View {
             ZStack(alignment: .topLeading) {
                 SubtitleScene()
                 if showsArea {
-                    let frame = DanmakuEngine.areaFrame(in: Self.screen, area: area, textScale: DanmakuStyle.textScale(fontSize))
+                    let frame = DanmakuEngine.areaFrame(in: Self.screen, area: area, textScale: DanmakuStyle.textScale(fontSize), spacing: spacing)
                     let shrink = size.width / Self.screen.width
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Brand.amber.opacity(0.12))
@@ -179,8 +187,20 @@ private struct FormDanmakuSettingsPage: View {
                             Image(systemName: "hare.fill")
                         }
                     }
+                    Picker(selection: Binding(get: { DanmakuStyle.lineSpacing(settings.spacing) }, set: { settings.spacing = $0 })) {
+                        ForEach(DanmakuStyle.spacings, id: \.self) { Text(DanmakuStyle.spacingTitle($0)).tag($0) }
+                    } label: {
+                        FormLabel(symbol: "arrow.up.and.down", tint: .orange, title: L10n.text("Line Spacing"))
+                    }
+                    Picker(selection: settings.$density) {
+                        ForEach(DanmakuDensity.allCases, id: \.self) { Text($0.title).tag($0) }
+                    } label: {
+                        FormLabel(symbol: "line.3.horizontal.decrease", tint: .teal, title: L10n.text("Density"))
+                    }
                 } header: {
                     Text(L10n.text("Display"))
+                } footer: {
+                    Text(DanmakuSettings.densityNote)
                 }
                 Section {
                     Toggle(isOn: settings.$scrolling) {
@@ -296,6 +316,7 @@ private struct TVDanmakuSettingsPage: View {
     @AppStorage(DanmakuService.serverKey) private var server = CatalogDanmakuClient.defaultServer
     @AppStorage(DanmakuService.officialLookupKey) private var officialLookup = true
     @State private var failure: String?
+    @State private var servers = DanmakuService.servers()
     private static let sizes: [Double] = [16, 18, 20, 22, 26, 30, 36]
     private static let opacities: [Double] = [0.3, 0.5, 0.7, 0.85, 1]
 
@@ -310,7 +331,7 @@ private struct TVDanmakuSettingsPage: View {
             .frame(maxHeight: .infinity)
             ScrollView {
                 VStack(alignment: .leading, spacing: 48) {
-                    TVSettingsSection(title: L10n.text("Display")) {
+                    TVSettingsSection(title: L10n.text("Display"), footer: DanmakuSettings.densityNote) {
                         TVSettingsAction(title: L10n.text("Danmaku Area"), value: settings.area.title) { settings.area = settings.area.next }
                         TVSettingsAction(title: L10n.text("Text Size"), value: DanmakuStyle.sizeTitle(settings.fontSize)) {
                             settings.fontSize = Self.sizes.first { $0 > settings.fontSize + 0.01 } ?? Self.sizes[0]
@@ -322,6 +343,10 @@ private struct TVDanmakuSettingsPage: View {
                             let speeds = settings.speeds
                             settings.speed = speeds[(settings.speedIndex + 1) % speeds.count]
                         }
+                        TVSettingsAction(title: L10n.text("Line Spacing"), value: DanmakuStyle.spacingTitle(settings.spacing)) {
+                            settings.spacing = DanmakuStyle.nextSpacing(after: settings.spacing)
+                        }
+                        TVSettingsAction(title: L10n.text("Density"), value: settings.density.title) { settings.density = settings.density.next }
                     }
                     TVSettingsSection(title: L10n.text("Comment Types"), footer: DanmakuSettings.colorsNote) {
                         TVSettingsToggle(title: L10n.text("Scrolling Comments"), isOn: settings.$scrolling)
@@ -341,9 +366,11 @@ private struct TVDanmakuSettingsPage: View {
                             let all = DanmakuProvider.allCases
                             save(source: all[((all.firstIndex(of: source) ?? 0) + 1) % all.count])
                         }
-                        TVSettingsField(title: L10n.text("Danmaku server URL"), text: Binding(get: { server }, set: { save(server: $0) }))
+                        TVSettingsLink(title: L10n.text("Danmaku Servers"), value: servers.count == 1 ? DanmakuService.title(for: servers[0]) : servers.count.formatted()) {
+                            TVDanmakuServersPage()
+                        }
                     }
-                    if !DanmakuService.isCustomServer(server) {
+                    if servers.contains(CatalogDanmakuClient.defaultServer) {
                         TVSettingsSection(footer: DanmakuService.officialLookupNote) {
                             TVSettingsToggle(title: L10n.text("Find official episodes for dmku"), isOn: $officialLookup)
                         }
@@ -363,6 +390,7 @@ private struct TVDanmakuSettingsPage: View {
         .padding(.horizontal, Layout.gutter)
         .screenBackdrop()
         .screenTitle("")
+        .onReceive(NotificationCenter.default.publisher(for: DanmakuService.changed)) { _ in servers = DanmakuService.servers() }
     }
 
     private var source: DanmakuProvider { DanmakuProvider(rawValue: preferredSource) ?? .automatic }
@@ -374,6 +402,81 @@ private struct TVDanmakuSettingsPage: View {
         } catch {
             failure = error.localizedDescription
         }
+    }
+}
+
+/// The danmaku servers on the TV (#1408): one row types a new address, which is tested before it is added; each server
+/// opens its own page to move or remove it.
+private struct TVDanmakuServersPage: View {
+    @State private var servers = DanmakuService.servers()
+    @State private var draft = ""
+    @State private var checking = false
+    @State private var failure: String?
+
+    var body: some View {
+        TVSettingsSubpage(symbol: "server.rack", title: L10n.text("Danmaku Servers")) {
+            TVSettingsSection(footer: failure ?? DanmakuService.serversNote) {
+                TVSettingsField(title: L10n.text("Add Server"), text: $draft, emptyValue: "")
+                    .disabled(checking)
+                    .onChange(of: draft) { _, typed in add(typed) }
+                if !servers.contains(CatalogDanmakuClient.defaultServer) {
+                    TVSettingsAction(title: L10n.text("Add Built-in Services")) {
+                        change { try DanmakuService.save(servers: servers + [CatalogDanmakuClient.defaultServer]) }
+                    }
+                }
+            }
+            TVSettingsSection(title: L10n.text("Order")) {
+                if checking { TVSettingsAction(title: L10n.text("Add Server"), busy: true) {}.disabled(true) }
+                ForEach(Array(servers.enumerated()), id: \.element) { index, server in
+                    TVSettingsLink(title: DanmakuService.title(for: server), value: (index + 1).formatted()) { TVDanmakuServerPage(address: server) }
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: DanmakuService.changed)) { _ in servers = DanmakuService.servers() }
+    }
+
+    private func add(_ typed: String) {
+        guard !typed.isEmpty else { return }
+        draft = ""
+        checking = true; failure = nil
+        Task {
+            do {
+                let added = try await DanmakuService.check(typed)
+                try DanmakuService.save(servers: DanmakuService.servers() + [added])
+            } catch {
+                failure = error.localizedDescription
+            }
+            checking = false
+        }
+    }
+    private func change(_ edit: () throws -> Void) {
+        do { try edit(); failure = nil } catch { failure = error.localizedDescription }
+    }
+}
+
+/// One danmaku server: move it in the order, or remove it.
+private struct TVDanmakuServerPage: View {
+    let address: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var servers = DanmakuService.servers()
+
+    var body: some View {
+        let index = servers.firstIndex(of: address) ?? 0
+        TVSettingsSubpage(symbol: "server.rack", title: DanmakuService.title(for: address)) {
+            if servers.count > 1 {
+                TVSettingsSection(title: L10n.text("Order")) {
+                    if index > 1 { TVSettingsAction(title: L10n.text("Move to Top")) { try? DanmakuService.move(address, to: 0) } }
+                    if index > 0 { TVSettingsAction(title: L10n.text("Move Up")) { try? DanmakuService.move(address, to: index - 1) } }
+                    if index < servers.count - 1 { TVSettingsAction(title: L10n.text("Move Down")) { try? DanmakuService.move(address, to: index + 1) } }
+                }
+                TVSettingsSection(title: L10n.text("Remove")) {
+                    TVSettingsAction(title: L10n.text("Remove"), destructive: true) { try? DanmakuService.remove(address); dismiss() }
+                }
+            } else {
+                TVSettingsSection(footer: L10n.text("Add another server to move or remove this one.")) { EmptyView() }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: DanmakuService.changed)) { _ in servers = DanmakuService.servers() }
     }
 }
 
