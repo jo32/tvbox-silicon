@@ -49,6 +49,8 @@ struct RootView: View {
     @AppStorage(PhoneTabs.storageKey) private var storedTabs = ""
     /// The size classes the tab set is built for, a moment behind the window's: see `followsSizeClasses`.
     @State private var tabSizeClasses: TabSizeClasses?
+    /// Now Playing zooms out of the mini player on an iPhone (`musicNowPlaying`).
+    @Namespace private var nowPlayingZoom
     #endif
     #if os(macOS)
     /// Pushed pages in the detail column. Cleared on section change: the stack keeps them when its root is replaced.
@@ -227,7 +229,7 @@ struct RootView: View {
             .environment(\.sectionsInMore, phoneTabs ? inMore : [])
             .musicAccessory(enabled: store.music.showsStrip(videoPlaying: store.playing != nil) && phoneTabs)
             // Opened from the mini player; swiping down closes it, as in Music.
-            .sheet(isPresented: Binding(get: { store.music.presentsPlayer }, set: { store.music.presentsPlayer = $0 })) { MusicNowPlayingScreen() }
+            .musicNowPlaying(isPresented: Binding(get: { store.music.presentsPlayer }, set: { store.music.presentsPlayer = $0 }), zoom: nowPlayingZoom)
             .onChange(of: store.section) { _, section in
                 if phoneTabs && inMore.contains(section) {
                     moreSection = section; morePath = NavigationPath([section])

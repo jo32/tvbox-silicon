@@ -70,6 +70,7 @@ struct MusicMiniPlayer: View {
         .padding(.leading, 10).padding(.trailing, inline ? 4 : 8)
         .frame(maxHeight: .infinity)
         .contentShape(.rect)
+        .modifier(NowPlayingZoomSource())
         .onTapGesture { music.presentsPlayer = true }
         // A swipe across the strip closes it too, as the × does.
         .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { drag in
