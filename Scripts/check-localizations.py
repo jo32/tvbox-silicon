@@ -25,7 +25,8 @@ for language in languages:
     tables[language] = dict(rows)
 source = tables["en"]
 # Context-specific lookup keys intentionally differ from their visible English labels.
-english_labels = {"Filter Type": "Type", "Filter Genre": "Genre", "Catalog Series": "TV Shows"}
+english_labels = {"Filter Type": "Type", "Filter Genre": "Genre", "Catalog Series": "TV Shows",
+                  "Chinese Script": "Script", "Original Text": "Original"}
 for language, table in tables.items():
     assert table.keys() == source.keys(), f"Mismatched keys: {language}"
     for key, value in table.items():

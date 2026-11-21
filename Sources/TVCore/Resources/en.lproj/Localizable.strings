@@ -2276,3 +2276,20 @@
 "Danmaku Servers" = "Danmaku Servers";
 "Add another server to move or remove this one." = "Add another server to move or remove this one.";
 "Find Danmaku…" = "Find Danmaku…";
+
+/* Novel reader: layout, script, page curl, background (#1430, #1007, #1437, #1265) */
+"Paragraph Spacing" = "Paragraph Spacing";
+"Side Margins" = "Side Margins";
+"Top & Bottom" = "Top & Bottom";
+"Chinese Script" = "Script";
+"Original Text" = "Original";
+"Traditional" = "Traditional";
+"Simplified" = "Simplified";
+"Page Turn" = "Page Turn";
+"Slide" = "Slide";
+"Curl" = "Curl";
+"Background Image" = "Background Image";
+"Choose Image…" = "Choose Image…";
+"Change Image…" = "Change Image…";
+"Image Opacity" = "Image Opacity";
+"This picture can't be used." = "This picture can't be used.";

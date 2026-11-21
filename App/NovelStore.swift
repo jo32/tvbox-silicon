@@ -32,24 +32,67 @@ import TVCore
     var theme: NovelTheme { didSet { UserDefaults.standard.set(theme.rawValue, forKey: "novel.theme") } }
     var appearance: NovelAppearance { didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "novel.appearance") } }
     var pageTurn: NovelPageTurn { didSet { UserDefaults.standard.set(pageTurn.rawValue, forKey: "novel.pageTurn") } }
+    /// Space after each paragraph as a multiple of the font size (#1430).
+    var paragraphSpacing: Double { didSet { UserDefaults.standard.set(paragraphSpacing, forKey: "novel.paragraphSpacing") } }
+    /// Space above and below the text, in points, on top of the bands for the title and the page count (#1430).
+    var verticalMargin: Double { didSet { UserDefaults.standard.set(verticalMargin, forKey: "novel.verticalMargin") } }
+    /// iPhone and iPad: pages turn with a curl as in Books (仿真翻页, #1437/#1452) instead of sliding.
+    var curl: Bool { didSet { UserDefaults.standard.set(curl, forKey: "novel.curl") } }
+    /// The script chapters are shown in (#1007).
+    var script: NovelScript { didSet { UserDefaults.standard.set(script.rawValue, forKey: "novel.script") } }
+    /// How strongly the background picture shows through the page colour (#1265).
+    var backgroundOpacity: Double { didSet { UserDefaults.standard.set(backgroundOpacity, forKey: "novel.backgroundOpacity") } }
+    /// The picture behind the page, decoded off the main thread when the reader first opens; nil when none is set.
+    private(set) var backgroundImage: CGImage?
+    @ObservationIgnored private var backgroundLoaded = false
 
     static let lineHeightRange: ClosedRange<Double> = 1.3...2.4
+    static let paragraphSpacingRange: ClosedRange<Double> = 0...1.6
+    static let backgroundOpacityRange: ClosedRange<Double> = 0.1...1
     #if os(tvOS)
     static let fontRange: ClosedRange<Double> = 26...56
     private static let defaultFont = 36.0
     static let marginRange: ClosedRange<Double> = 60...260
     private static let defaultMargin = 140.0
+    static let verticalMarginRange: ClosedRange<Double> = 0...200
     #elseif os(macOS)
     static let fontRange: ClosedRange<Double> = 13...36
     private static let defaultFont = 19.0
     static let marginRange: ClosedRange<Double> = 24...140
     private static let defaultMargin = 64.0
+    static let verticalMarginRange: ClosedRange<Double> = 0...160
     #else
     static let fontRange: ClosedRange<Double> = 13...34
     private static let defaultFont = 19.0
     static let marginRange: ClosedRange<Double> = 10...56
     private static let defaultMargin = 26.0
+    static let verticalMarginRange: ClosedRange<Double> = 0...80
     #endif
+
+    /// Reads the saved background picture once, off the main thread.
+    func loadBackground() async {
+        guard !backgroundLoaded else { return }
+        backgroundLoaded = true
+        backgroundImage = await Task.detached(priority: .userInitiated) { NovelBackgroundImage.load() }.value
+    }
+
+    /// Keeps a downscaled copy of a picked picture and shows it; false when the data isn't an image.
+    func setBackground(_ data: Data) async -> Bool {
+        let image: CGImage? = await Task.detached(priority: .userInitiated) {
+            guard let jpeg = NovelBackgroundImage.prepare(data), (try? NovelBackgroundImage.save(jpeg)) != nil else { return nil }
+            return NovelBackgroundImage.decode(jpeg)
+        }.value
+        guard let image else { return false }
+        backgroundLoaded = true
+        backgroundImage = image
+        return true
+    }
+
+    func removeBackground() {
+        NovelBackgroundImage.remove()
+        backgroundLoaded = true
+        backgroundImage = nil
+    }
 
     private init() {
         let defaults = UserDefaults.standard
@@ -65,6 +108,13 @@ import TVCore
         theme = NovelTheme(rawValue: defaults.string(forKey: "novel.theme") ?? "") ?? .sepia
         appearance = NovelAppearance(rawValue: defaults.string(forKey: "novel.appearance") ?? "") ?? .automatic
         pageTurn = NovelPageTurn(rawValue: defaults.string(forKey: "novel.pageTurn") ?? "") ?? .pages
+        let paragraph = defaults.object(forKey: "novel.paragraphSpacing") as? Double ?? NovelTypeStyle.standardParagraphSpacing
+        paragraphSpacing = Self.paragraphSpacingRange.contains(paragraph) ? paragraph : NovelTypeStyle.standardParagraphSpacing
+        verticalMargin = min(Self.verticalMarginRange.upperBound, max(0, defaults.double(forKey: "novel.verticalMargin")))
+        curl = defaults.bool(forKey: "novel.curl")
+        script = NovelScript(rawValue: defaults.string(forKey: "novel.script") ?? "") ?? .original
+        let opacity = defaults.object(forKey: "novel.backgroundOpacity") as? Double ?? 0.35
+        backgroundOpacity = Self.backgroundOpacityRange.contains(opacity) ? opacity : 0.35
         recompute()
         NotificationCenter.default.addObserver(forName: NovelSources.changedNotification, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { NovelStore.shared.reloadSources() }
