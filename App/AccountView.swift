@@ -293,7 +293,8 @@ struct AccountView: View {
                          detail: L10n.text("+%lld each, up to %lld a day · %lld counted", rules.sent, rules.sentPerDay, points.sent),
                          earned: points.sent * rules.sent),
                 EarnTile(symbol: "checkmark.seal.fill", tint: .green, title: L10n.text("Feedback Adopted"),
-                         detail: L10n.text("+%lld each · %lld adopted", rules.adopted, points.adopted), earned: points.adopted * rules.adopted),
+                         detail: L10n.text("Bug fixed +%lld · idea +%lld · %lld counted", rules.fixed, rules.adopted, points.fixed + points.adopted),
+                         earned: points.feedbackEarned),
                 EarnTile(symbol: "arrow.triangle.merge", tint: Color(red: 0.75, green: 0.5, blue: 1), title: L10n.text("Merged Pull Requests"),
                          detail: L10n.text("+%lld each · %lld merged", rules.pullRequest, points.pullRequests),
                          earned: points.pullRequests * rules.pullRequest),
@@ -349,7 +350,8 @@ struct AccountView: View {
                           rule: L10n.text("+%lld each, up to %lld a day · %lld counted", rules.sent, rules.sentPerDay, points.sent),
                           earned: points.sent * rules.sent)
                 pointsRow(symbol: "checkmark.seal.fill", tint: .green, title: L10n.text("Feedback Adopted"),
-                          rule: L10n.text("+%lld each · %lld adopted", rules.adopted, points.adopted), earned: points.adopted * rules.adopted)
+                          rule: L10n.text("Bug fixed +%lld · idea +%lld · %lld counted", rules.fixed, rules.adopted, points.fixed + points.adopted),
+                          earned: points.feedbackEarned)
                 pointsRow(symbol: "arrow.triangle.merge", tint: .purple, title: L10n.text("Merged Pull Requests"),
                           rule: L10n.text("+%lld each · %lld merged", rules.pullRequest, points.pullRequests),
                           earned: points.pullRequests * rules.pullRequest)
@@ -448,6 +450,7 @@ struct AccountView: View {
 
     private func statusText(_ status: String) -> String {
         switch status {
+        case "fixed": L10n.text("Fixed")
         case "adopted": L10n.text("Adopted")
         case "declined": L10n.text("Not planned")
         case "duplicate": L10n.text("Duplicate")
@@ -457,7 +460,7 @@ struct AccountView: View {
     }
     private func statusSymbol(_ status: String) -> String {
         switch status {
-        case "adopted": "checkmark.circle.fill"
+        case "fixed", "adopted": "checkmark.circle.fill"
         case "declined", "duplicate": "minus.circle.fill"
         case "closed": "checkmark.circle"
         default: "circle.dotted"
@@ -465,7 +468,7 @@ struct AccountView: View {
     }
     private func statusTint(_ status: String) -> Color {
         switch status {
-        case "adopted": .green
+        case "fixed", "adopted": .green
         case "declined", "duplicate", "closed": .gray
         default: .blue
         }

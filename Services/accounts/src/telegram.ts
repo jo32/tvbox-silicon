@@ -55,15 +55,15 @@ function pointsLines(from: any, counted: Points) {
   const r = counted.rules;
   const adjusted = counted.adjusted ? say(from, `\n· adjusted by the developer: ${counted.adjusted > 0 ? "+" : ""}${counted.adjusted}`, `\n· 作者调整：${counted.adjusted > 0 ? "+" : ""}${counted.adjusted}`) : "";
   return say(from,
-    `Points: ${counted.total}\n· ${counted.days} days of use: +${counted.days * r.daily}\n· ${counted.sent} feedback sent: +${counted.sent * r.sent}\n· ${counted.adopted} adopted: +${counted.adopted * r.adopted}\n· ${counted.pullRequests} merged pull requests: +${counted.pullRequests * r.pullRequest}${adjusted}`,
-    `积分：${counted.total}\n· 使用 ${counted.days} 天：+${counted.days * r.daily}\n· 反馈 ${counted.sent} 条：+${counted.sent * r.sent}\n· 被采纳 ${counted.adopted} 条：+${counted.adopted * r.adopted}\n· 合并 PR ${counted.pullRequests} 个：+${counted.pullRequests * r.pullRequest}${adjusted}`);
+    `Points: ${counted.total}\n· ${counted.days} days of use: +${counted.days * r.daily}\n· ${counted.sent} feedback sent: +${counted.sent * r.sent}\n· ${counted.fixed} bugs fixed: +${counted.fixed * r.fixed}\n· ${counted.adopted} ideas adopted: +${counted.adopted * r.adopted}\n· ${counted.pullRequests} merged pull requests: +${counted.pullRequests * r.pullRequest}${adjusted}`,
+    `积分：${counted.total}\n· 使用 ${counted.days} 天：+${counted.days * r.daily}\n· 反馈 ${counted.sent} 条：+${counted.sent * r.sent}\n· 问题被修复 ${counted.fixed} 条：+${counted.fixed * r.fixed}\n· 建议被采纳 ${counted.adopted} 条：+${counted.adopted * r.adopted}\n· 合并 PR ${counted.pullRequests} 个：+${counted.pullRequests * r.pullRequest}${adjusted}`);
 }
 
 // How points work, everywhere the bot talks about them.
 export function rulesText(from: any, r: Rules) {
   return say(from,
-    `How points work: +${r.daily} each day you open Yingxia signed in; +${r.sent} for each feedback message (up to ${r.sentPerDay} a day; duplicates and invalid ones don't count); +${r.adopted} when the developer adopts it; +${r.pullRequest} for each merged pull request (write "Yingxia account: <your account ID or Telegram @username>" in its description).\nFeedback with your device, build, the source and clear steps is the most likely to be adopted.`,
-    `积分规则：登录后每天打开映匣 +${r.daily}；每条反馈 +${r.sent}（每天最多 ${r.sentPerDay} 条，重复或无效的不算）；被作者采纳 +${r.adopted}；PR 合并 +${r.pullRequest}（在 PR 描述里写“映匣账号：你的账号 ID 或 Telegram @用户名”）。\n写清设备、build 号、用的源和复现步骤的反馈最容易被采纳。`);
+    `How points work: +${r.daily} each day you open Yingxia signed in; +${r.sent} for each feedback message (up to ${r.sentPerDay} a day; duplicates and invalid ones don't count); +${r.fixed} when the developer fixes a bug you reported, +${r.adopted} when they adopt an idea you suggested; +${r.pullRequest} for each merged pull request (write "Yingxia account: <your account ID or Telegram @username>" in its description).\nFeedback with your device, build, the source and clear steps is the most likely to be adopted.`,
+    `积分规则：登录后每天打开映匣 +${r.daily}；每条反馈 +${r.sent}（每天最多 ${r.sentPerDay} 条，重复或无效的不算）；问题被修复 +${r.fixed}，建议被采纳 +${r.adopted}；PR 合并 +${r.pullRequest}（在 PR 描述里写“映匣账号：你的账号 ID 或 Telegram @用户名”）。\n写清设备、build 号、用的源和复现步骤的反馈最容易被采纳。`);
 }
 
 // The bot sends this text back to the person (null: nothing to say).
@@ -154,12 +154,12 @@ export async function telegramFeedback(request: Request, env: Env): Promise<Resp
   const r = rules(env);
   if (await earnsSentPoint(env, user.id, issue, sent)) {
     return answer(say(from,
-      `This feedback earned you ${r.sent} point, and ${r.adopted} more if it's adopted. Send /me to @${env.TELEGRAM_BOT} to see your points.`,
-      `这条反馈 +${r.sent} 积分，被采纳后再 +${r.adopted}。私聊 @${env.TELEGRAM_BOT} 发 /me 查看积分。`));
+      `This feedback earned you ${r.sent} point, and ${r.fixed} more if it's a bug that gets fixed, or ${r.adopted} if it's an idea that gets adopted. Send /me to @${env.TELEGRAM_BOT} to see your points.`,
+      `这条反馈 +${r.sent} 积分；问题被修复再 +${r.fixed}，建议被采纳再 +${r.adopted}。私聊 @${env.TELEGRAM_BOT} 发 /me 查看积分。`));
   }
   return answer(say(from,
-    `You've had today's ${r.sentPerDay} feedback points; this one still earns ${r.adopted} if it's adopted.`,
-    `今天的反馈积分已满（每天 ${r.sentPerDay} 条），这条被采纳后仍会 +${r.adopted}。`));
+    `You've had today's ${r.sentPerDay} feedback points; this one still earns ${r.fixed} if it's a bug that gets fixed, or ${r.adopted} if it's an idea that gets adopted.`,
+    `今天的反馈积分已满（每天 ${r.sentPerDay} 条），这条问题被修复仍会 +${r.fixed}，建议被采纳仍会 +${r.adopted}。`));
 }
 
 // Old, unfinished sign-ins.

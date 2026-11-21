@@ -322,7 +322,7 @@ private struct FeedbackPage: View {
         return RouteLink { PointsGuideView(offersFeedback: false) } label: {
             HStack(spacing: 6) {
                 Image(systemName: "star.circle.fill").foregroundStyle(MemberCard.gold)
-                Text(L10n.text("Earn points: +%lld for each message, +%lld when adopted", rules.sent, rules.adopted))
+                Text(L10n.text("Earn points: +%lld a message, +%lld when fixed, +%lld when adopted", rules.sent, rules.fixed, rules.adopted))
                 Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
             }
             .font(compact ? .footnote.weight(.medium) : .callout.weight(.medium))

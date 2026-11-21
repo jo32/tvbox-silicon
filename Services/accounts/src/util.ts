@@ -17,6 +17,7 @@ export interface Env {
   // adopted message gives (0 = none).
   POINTS_DAILY: string;
   POINTS_SENT: string;
+  POINTS_FIXED: string;
   POINTS_ADOPTED: string;
   POINTS_PR: string;
   REWARD_DAYS: string;

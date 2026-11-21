@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS feedback_issues (
   user_id TEXT NOT NULL,
   install TEXT NOT NULL,        -- the app's install ID, or 'telegram' for /feedback in the Telegram group
   sent INTEGER NOT NULL,        -- unix seconds
-  status TEXT,                  -- open, adopted, closed, declined, duplicate; null until read from GitHub
+  status TEXT,                  -- open, fixed, adopted, closed, declined, duplicate; null until read from GitHub
   title TEXT NOT NULL DEFAULT '',
   updated INTEGER NOT NULL DEFAULT 0
 );

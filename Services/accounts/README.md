@@ -17,7 +17,8 @@ It does five things:
   |---|---|---|
   | each day the app is open, signed in | `POINTS_DAILY` (1) | once a day per account; each device gives its day to one account |
   | each feedback message | `POINTS_SENT` (1) | 3 a day; none for duplicates or declined ones |
-  | each adopted message | `POINTS_ADOPTED` (100) | only by the `fixed` / `adopted` label; once per issue |
+  | each reported bug that's fixed | `POINTS_FIXED` (50) | only by the `fixed` label; once per issue |
+  | each suggested idea that's adopted | `POINTS_ADOPTED` (100) | only by the `adopted` label (it wins over `fixed`); once per issue |
   | each merged pull request | `POINTS_PR` (500) | see below |
 
   A merged pull request counts for the account its description names on a line `Yingxia account: <ID>` (the ID is
