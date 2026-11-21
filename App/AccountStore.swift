@@ -59,6 +59,26 @@ import TVCore
     private func finish(_ signIn: AccountService.SignIn) {
         if let token = signIn.token { AccountKeychain.save(token) }
         keep(signIn.account)
+        Task { await markActiveDay() }
+    }
+
+    private static let activeDayKey = "account.activeDay"
+
+    /// Once a day while signed in (TVBoxApp calls it whenever the app becomes active): the day's point. The server
+    /// counts each day once anyway; this only saves asking again. A day starts at midnight UTC+8, as on the server.
+    func markActiveDay() async {
+        guard let token = AccountKeychain.token(), let account else { return }
+        let today = "\(account.id):\(Int((Date().timeIntervalSince1970 + 8 * 3600) / 86400))"
+        guard UserDefaults.standard.string(forKey: Self.activeDayKey) != today else { return }
+        do {
+            keep(try await AccountService.markActiveDay(token: token))
+            refreshed = Date()
+            UserDefaults.standard.set(today, forKey: Self.activeDayKey)
+        } catch AccountService.Failure.signedOut {
+            signedOutLocally()
+        } catch {
+            // Offline: try again next time the app comes back.
+        }
     }
 
     private func signedOutLocally() {

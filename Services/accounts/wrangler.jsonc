@@ -23,17 +23,21 @@
     "APPLE_AUDIENCES": "com.jo32.yingxia.ios,com.jo32.yingxia.tv,com.jo32.yingxia.macos",
     "APPLE_TEAM_ID": "WWNM49L69R",
     "TELEGRAM_BOT": "yingxia_sup_bot",
-    // Points per feedback message sent and per message adopted; Pro days an adopted one gives (0 = none).
+    // Points (src/points.ts) for a day of use, a feedback message (at most 3 a day), an adopted one, a merged pull
+    // request; Pro days an adopted message gives (0 = none). Pull requests by PR_EXCLUDE never earn points.
+    "POINTS_DAILY": "1",
     "POINTS_SENT": "1",
-    "POINTS_ADOPTED": "10",
+    "POINTS_ADOPTED": "100",
+    "POINTS_PR": "500",
     "REWARD_DAYS": "0",
+    "PR_EXCLUDE": "jo32",
     // The admin pages' origins, comma-separated (CORS for /v1/admin/*).
     "ADMIN_ORIGINS": ""
   },
   // The bot is @yingxia_sup_bot, whose Worker (jo32/yx-tg) passes account commands here.
   // Secrets (wrangler secret put …): ADMIN_TOKEN, ENTITLEMENT_KEY, TELEGRAM_WEBHOOK_SECRET (= yx-tg's ACCOUNTS_SECRET),
   // GITHUB_TOKEN (read-only is enough), and optionally APPLE_KEY_ID + APPLE_PRIVATE_KEY (revokes Apple sign-ins on deletion).
-  // Every 15 minutes: copy new feedback, read its status on GitHub.
+  // Every 15 minutes: copy new feedback, read its status and merged pull requests on GitHub.
   "triggers": { "crons": ["*/15 * * * *"] },
   "observability": { "enabled": false }
 }

@@ -31,10 +31,13 @@ const entitlement = generateKeyPairSync("ed25519");
 
 const telegramSent = [];
 const issues = new Map([
-  [101, { number: 101, title: "Crash when searching", state: "closed", state_reason: "completed", labels: [{ name: "feedback" }], updated_at: "2026-11-01T00:00:00Z" }],
+  [101, { number: 101, title: "Crash when searching", state: "closed", state_reason: "completed", labels: [{ name: "feedback" }, { name: "fixed" }], updated_at: "2026-11-01T00:00:00Z" }],
   [102, { number: 102, title: "Same as 101", state: "closed", state_reason: "not_planned", labels: [{ name: "feedback" }, { name: "duplicate" }], updated_at: "2026-11-01T00:00:00Z" }],
   [103, { number: 103, title: "Add sleep timer", state: "open", state_reason: null, labels: [{ name: "feedback" }], updated_at: "2026-11-01T00:00:00Z" }],
 ]);
+
+// Pull requests the GitHub stand-in lists (filled in once the test knows the account IDs).
+const pulls = [];
 
 const read = (request) => new Promise((resolve) => { let data = ""; request.on("data", (chunk) => (data += chunk)); request.on("end", () => resolve(data)); });
 const servers = [
@@ -54,11 +57,14 @@ const servers = [
     const url = new URL(request.url, "http://x");
     const single = /\/issues\/(\d+)$/.exec(url.pathname);
     if (single) {
+      // 299: GitHub answering without the issue; nothing may break on it.
+      if (single[1] === "299") return response.end("{}");
       const issue = issues.get(Number(single[1]));
       if (!issue) { response.statusCode = 404; return response.end("{}"); }
       return response.end(JSON.stringify(issue));
     }
     if (url.pathname.endsWith("/issues")) return response.end(JSON.stringify([...issues.values()]));
+    if (url.pathname.endsWith("/pulls")) return response.end(JSON.stringify(pulls));
     response.statusCode = 404; response.end();
   }).listen(GITHUB),
 ];
@@ -120,6 +126,9 @@ const hook = async (text, from = { id: 777, first_name: "Tele", username: "tele_
   return response;
 };
 const lastTelegram = () => botSaid;
+// The bot's Worker telling about a /feedback from the Telegram group that became `issue`.
+const tgFeedback = (from, issue, secret = "hook-secret") =>
+  call("POST", "/v1/telegram/feedback", { from, issue, sent: Math.floor(Date.now() / 1000) }, null, { "x-telegram-bot-api-secret-token": secret });
 
 try {
   const health = await call("GET", "/v1/health");
@@ -137,7 +146,10 @@ try {
   const account = apple1.json.account;
   check(account.name === "Ann" && account.identities[0].provider === "apple" && account.identities[0].label === "a@privaterelay.appleid.com", "the account has the name and Apple identity", account);
   check(account.feedback.sent === 2 && account.feedback.adopted === 1 && account.feedback.declined === 1, "feedback sent before signing in counts (2 sent, 1 adopted, 1 duplicate)", account.feedback);
-  check(account.feedback.points === 2 * 1 + 1 * 10, "points = sent × 1 + adopted × 10", account.feedback.points);
+  // 101 (adopted) earns its sent point and 100; 102, a duplicate, earns nothing.
+  check(account.points.sent === 1 && account.points.adopted === 1 && account.points.total === 1 + 100 && account.feedback.points === 101,
+    "points: +1 a message (not duplicates), +100 adopted", account.points);
+  check(account.points.rules.daily === 1 && account.points.rules.sentPerDay === 3 && account.points.rules.pullRequest === 500, "the rules come with the account", account.points.rules);
   check(account.pro.active === true && account.pro.until > t + 6 * 86400, "REWARD_DAYS=7 gave Pro for the adopted issue", account.pro);
   const again = await call("POST", "/v1/auth/apple", { identityToken: identityToken({ sub: "apple-1" }), install: INSTALL, platform: "ios" });
   check(again.json.account.id === account.id && again.json.account.name === "Ann", "signing in again reaches the same account and keeps the name");
@@ -208,6 +220,51 @@ try {
   await hook(`/start ${steal.json.code}`);
   check(/already belongs/.test(lastTelegram()), "a Telegram account of someone else can't be added", lastTelegram());
 
+  // Points for a day of use: once a day per account, and one account per device a day.
+  const day1 = await call("POST", "/v1/me/day", undefined, token);
+  check(day1.status === 200 && day1.json.counted === true && day1.json.account.points.days === 1, "opening the app counts the day", day1.json);
+  const day2 = await call("POST", "/v1/me/day", undefined, token);
+  check(day2.json.counted === false && day2.json.account.points.days === 1, "the day counts once", day2.json);
+  check((await call("POST", "/v1/me/day")).status === 401, "a day needs a session");
+  const sibling = await call("POST", "/v1/auth/apple", { identityToken: identityToken({ sub: "apple-2" }), install: INSTALL, platform: "ios" });
+  const day3 = await call("POST", "/v1/me/day", undefined, sibling.json.token);
+  check(day3.json.counted === false && day3.json.account.points.days === 0, "another account signed in on the same device doesn't get that day", day3.json);
+  await call("POST", "/v1/auth/apple", { identityToken: identityToken({ sub: "apple-1" }), install: INSTALL, platform: "ios" }); // the device is Ann's again
+
+  // /feedback in the Telegram group, passed on by the bot: a point each, 3 a day, each issue once.
+  const fan = { id: 4242, first_name: "群友", username: "qun_you", language_code: "zh-hans" };
+  check((await tgFeedback(fan, 201, "wrong")).status === 401, "the bot's feedback call needs the secret");
+  const said = [];
+  for (const issue of [201, 202, 203, 204]) said.push((await tgFeedback(fan, issue)).json?.text ?? "");
+  check(said.slice(0, 3).every((text) => /\+1 积分，被采纳后再 \+100/.test(text)) && /已满/.test(said[3]), "group feedback earns a point, 3 a day, and says so", said);
+  check((await tgFeedback(fan, 201)).json?.text === null, "the same issue counts once");
+  check((await tgFeedback({ ...fan, id: 4343, username: "other" }, 202)).json?.text === null, "and for one person only");
+  await tgFeedback({ ...fan, id: 4545, username: "odd" }, 299);
+  const odd = await call("POST", "/v1/auth/telegram", { install: OTHER, platform: "ios" });
+  await hook(`/start ${odd.json.code}`, { id: 4545, first_name: "Odd", username: "odd", language_code: "en" });
+  const oddIn = await call("POST", "/v1/auth/telegram/poll", { code: odd.json.code });
+  check(oddIn.status === 200 && oddIn.json.token && oddIn.json.account.feedback.issues[0]?.number === 299,
+    "signing in works even when GitHub answers oddly about the person's feedback (and group feedback shows in the app)", oddIn.json);
+  for (const [number, extra] of [[201, { labels: [{ name: "feedback" }, { name: "adopted" }] }], [202, { state: "closed", state_reason: "completed" }],
+    [203, { labels: [{ name: "feedback" }, { name: "spam" }] }], [204, {}]]) {
+    issues.set(number, { number, title: `Group ${number}`, state: "open", labels: [{ name: "feedback" }], updated_at: new Date().toISOString(), ...extra });
+  }
+
+  // Merged pull requests, as GitHub lists them.
+  const pr = (number, login, id, body, extra = {}) => ({ number, title: `PR ${number}`, user: { login, id, type: "User" }, body, labels: [],
+    merged_at: "2026-11-20T00:00:00Z", updated_at: new Date().toISOString(), ...extra });
+  pulls.push(
+    pr(501, "alice", 11, `Fixes the crash.\n\nYingxia account: ${account.id}`),
+    pr(502, "alice", 11, "Another fix, without the account line."),
+    pr(503, "bob", 12, "映匣账号：@tele_user"),
+    pr(504, "jo32", 1, `Yingxia account: ${account.id}`),
+    pr(505, "dependabot[bot]", 2, `Yingxia account: ${account.id}`, { user: { login: "dependabot[bot]", id: 2, type: "Bot" } }),
+    pr(506, "carol", 13, `Yingxia account: ${account.id}`, { labels: [{ name: "no-points" }] }),
+    pr(507, "dave", 14, `Yingxia account: ${account.id}`, { merged_at: null }),
+    pr(508, "erin", 15, "<!-- Yingxia account: your account ID -->\nA fix."),
+    pr(509, "frank", 16, "Yingxia account:\ntele_user found this bug."),
+  );
+
   // The 15-minute job: new feedback from a signed-in install, and GitHub adopting it.
   d1("yingxia-reports", ["--command", `INSERT INTO feedback (received, install, platform, app, issue) VALUES (${t + 5}, '${INSTALL}', 'ios', '1.8', 104)`]);
   issues.set(104, { number: 104, title: "Picture in picture", state: "open", labels: [{ name: "feedback" }, { name: "fixed" }], updated_at: new Date().toISOString() });
@@ -215,6 +272,14 @@ try {
   check(job.ok, "the scheduled job runs", job.status);
   const after = (await call("GET", "/v1/me", undefined, token)).json;
   check(after.feedback.sent === 3 && after.feedback.adopted === 2, "new feedback is copied and its `fixed` label counts as adopted", after.feedback);
+  check(after.points.pullRequests === 2 && after.pullRequests.map((item) => item.number).sort().join() === "501,502",
+    "a merged pull request counts for the account its description names, and its author's later ones too", after.pullRequests);
+  check(after.points.total === after.points.days + after.points.sent + 2 * 100 + 2 * 500, "the total adds up", after.points);
+  const tgAfter = (await call("GET", "/v1/me", undefined, tgToken)).json;
+  check(tgAfter.points.pullRequests === 1, "a pull request naming a Telegram @username counts for that account", tgAfter.points);
+  await hook("/me", fan);
+  check(/被采纳 1 条：\+100/.test(lastTelegram()) && /反馈 3 条：\+3/.test(lastTelegram()) && /积分规则/.test(lastTelegram()),
+    "adopted only by label (closed isn't enough), spam loses its point, and /me explains the rules", lastTelegram());
 
   // Admin pages.
   const codes = await admin("GET", "/v1/admin/codes?batch=launch");
@@ -234,8 +299,18 @@ try {
   check(manual.json.proUntil === null, "admin can end someone's Pro", manual.json.proUntil);
   const given = await admin("POST", `/v1/admin/users/${tg.json.account.id}/pro`, { days: 10, note: "gift" });
   check(given.json.proUntil > t + 9 * 86400 && given.json.grants.some((item) => item.kind === "admin"), "admin can give Pro days", given.json);
+  const unmatched = await admin("GET", "/v1/admin/pull-requests?unmatched=1");
+  check(unmatched.json.pullRequests.map((item) => item.number).sort().join() === "508,509", "admin sees merged pull requests nobody matched (a claim in a comment, or an empty claim line, doesn't count)", unmatched.json);
+  const listed = (await admin("GET", "/v1/admin/pull-requests")).json.pullRequests;
+  check(listed.some((item) => item.number === 506 && item.excluded === 1) && !listed.some((item) => [504, 505, 507].includes(item.number)),
+    "the owner's, bots' and unmerged pull requests never count; no-points is kept but excluded", listed);
+  const handed = await admin("POST", "/v1/admin/pull-requests/508", { user: tg.json.account.id });
+  check(handed.json.user === tg.json.account.id && handed.json.how === "admin", "admin gives a pull request to an account", handed.json);
+  const adjusted = await admin("POST", `/v1/admin/users/${tg.json.account.id}/points`, { points: -50, note: "test" });
+  check(adjusted.json.points.pullRequests === 2 && adjusted.json.points.adjusted === -50 && adjusted.json.adjustments.length === 1, "admin adds or takes away points", adjusted.json.points);
+  check((await admin("POST", `/v1/admin/users/${tg.json.account.id}/points`, { points: 0 })).status === 400, "zero points is refused");
   const stats = await admin("GET", "/v1/admin/stats");
-  check(stats.json.users >= 3 && stats.json.adopted === 2, "admin stats", stats.json);
+  check(stats.json.users >= 3 && stats.json.adopted === 3 && stats.json.pullRequests === 4 && stats.json.pullRequestsUnmatched === 1 && stats.json.activeToday === 1, "admin stats", stats.json);
   const preflight = await fetch(`${BASE}/v1/admin/codes`, { method: "OPTIONS", headers: { origin: "https://admin.example" } });
   check(preflight.status === 204 && preflight.headers.get("access-control-allow-origin") === "https://admin.example", "CORS lets the admin pages call");
   const foreign = await fetch(`${BASE}/v1/admin/codes`, { method: "OPTIONS", headers: { origin: "https://evil.example" } });
@@ -249,6 +324,8 @@ try {
   const gone = await call("DELETE", "/v1/me", undefined, token);
   check(gone.status === 200 && revoked.includes("apple-refresh-1"), "deleting the account revokes Apple's token", revoked);
   check((await call("GET", "/v1/me", undefined, token)).status === 401, "and the session is gone");
+  const orphan = (await admin("GET", "/v1/admin/pull-requests")).json.pullRequests.find((item) => item.number === 501);
+  check(orphan && orphan.user === null, "a deleted account's pull requests no longer count for anyone", orphan);
   const fresh = await call("POST", "/v1/auth/apple", { identityToken: identityToken({ sub: "apple-1" }), install: INSTALL, platform: "ios" });
   check(fresh.json.account.id !== account.id && fresh.json.account.pro.active === false, "signing in after deletion starts a new account", fresh.json.account);
 } catch (problem) {

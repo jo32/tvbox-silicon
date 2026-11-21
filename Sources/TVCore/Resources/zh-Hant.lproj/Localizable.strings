@@ -2155,6 +2155,24 @@
 "None of your sources has this season." = "你的片源裡沒有找到這一季。";
 
 // Settings › Account (App/AccountView.swift)
+"Total Points" = "總積分";
+"Daily Use" = "每天使用";
+"+%lld a day you open Yingxia · %lld days" = "每天打開映匣 +%lld · 已 %lld 天";
+"Feedback Sent" = "傳送意見";
+"+%lld each, up to %lld a day · %lld counted" = "每則 +%lld，每天最多 %lld 則 · 已計 %lld 則";
+"Feedback Adopted" = "意見被採納";
+"+%lld each · %lld adopted" = "每則 +%lld · 已採納 %lld 則";
+"Merged Pull Requests" = "合併的 PR";
+"+%lld each · %lld merged" = "每個 +%lld · 已合併 %lld 個";
+"Set by the Developer" = "作者調整";
+"Duplicate or invalid feedback earns nothing. Feedback with your device, build, the source and clear steps is the most likely to be adopted. Feedback sent with /feedback in the Telegram group counts too, for the Telegram account you sign in with." = "重複或無效的意見不計分。寫清楚裝置、build 號、使用的源和重現步驟的意見最容易被採納。在 Telegram 群組裡用 /feedback 傳送的意見也算，計入你登入用的 Telegram 帳號。";
+"Contribute Code" = "貢獻程式碼";
+"Put “Yingxia account: %@” in the description of your pull request on GitHub, or your Telegram @username. Each one merged earns %lld points." = "在 GitHub 的 PR 描述裡寫上「Yingxia account: %@」（或你的 Telegram @使用者名稱）。每合併一個 +%lld 積分。";
+"Account ID" = "帳號 ID";
+"Copy Account ID" = "拷貝帳號 ID";
+"Account ID copied." = "已拷貝帳號 ID。";
+"Pull request: merged" = "已合併";
+"Feedback status: closed" = "已關閉";
 "Pro until %@" = "有效期至 %@";
 "Feedback status: open" = "處理中";
 "Accounts aren't available right now. Please try again later." = "帳戶服務暫時無法使用，請稍後再試。";

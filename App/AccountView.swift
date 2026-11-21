@@ -2,8 +2,9 @@ import AuthenticationServices
 import SwiftUI
 import TVCore
 
-/// Settings › Account: sign in with Apple or Telegram; then the feedback that counts for the person (sent, adopted,
-/// points), Pro and its redeem code field (not in App Store builds), other ways to sign in, Sign Out and Delete Account.
+/// Settings › Account: sign in with Apple or Telegram; then Pro and its redeem code field (not in App Store builds),
+/// points and how they're earned, the person's feedback and merged pull requests, their account ID for pull requests,
+/// other ways to sign in, Sign Out and Delete Account.
 struct AccountView: View {
     @State private var accounts = AccountStore.shared
     @State private var error: String?
@@ -19,7 +20,9 @@ struct AccountView: View {
             if let account = accounts.account {
                 profile(account)
                 if AccountStore.proAvailable { proSection(account) }
+                pointsSection(account)
                 feedbackSection(account)
+                contributeSection(account)
                 if accounts.telegramLogin != nil { telegramSection } else { methodsSection(account) }
                 messages
                 endSection
@@ -30,6 +33,7 @@ struct AccountView: View {
         }
         .task {
             await accounts.refresh()
+            await accounts.markActiveDay()
             #if DEBUG
             // `-qaAccountTelegram 1`: starts a Telegram sign-in without a tap (and without leaving for Telegram).
             if UserDefaults.standard.bool(forKey: "qaAccountTelegram"), !accounts.signedIn, accounts.telegramLogin == nil {
@@ -228,23 +232,97 @@ struct AccountView: View {
         }
     }
 
-    @ViewBuilder private func feedbackSection(_ account: Account) -> some View {
-        let feedback = account.feedback
-        SettingsGroup(title: L10n.text("Your Feedback"),
-                      footer: L10n.text("Messages sent from Settings › Send Feedback while signed in count here. Each one earns points, and many more when the developer adopts it.")) {
-            SettingsRow(symbol: "star.circle.fill", tint: Brand.amber, title: L10n.text("Points")) {
-                Text(feedback.points.formatted()).font(.body.weight(.semibold)).monospacedDigit()
-            }
-            SettingsRow(symbol: "paperplane.circle.fill", tint: Brand.indigo, title: L10n.text("Sent")) {
-                Text(feedback.sent.formatted()).monospacedDigit().foregroundStyle(.secondary)
-            }
-            SettingsRow(symbol: "checkmark.seal.fill", tint: .green, title: L10n.text("Adopted")) {
-                Text(feedback.adopted.formatted()).monospacedDigit().foregroundStyle(.secondary)
-            }
-            ForEach(feedback.issues) { issue in
-                issueRow(issue)
+    // MARK: Points
+
+    /// The total, then each way to earn with its rule and what it brought, so people see what's worth doing: adopted
+    /// feedback and merged code count far more than volume.
+    @ViewBuilder private func pointsSection(_ account: Account) -> some View {
+        if let points = account.points {
+            let rules = points.rules
+            SettingsGroup(title: L10n.text("Points"),
+                          footer: L10n.text("Duplicate or invalid feedback earns nothing. Feedback with your device, build, the source and clear steps is the most likely to be adopted. Feedback sent with /feedback in the Telegram group counts too, for the Telegram account you sign in with.")) {
+                SettingsRow(symbol: "star.circle.fill", tint: Brand.amber, title: L10n.text("Total Points")) {
+                    Text(points.total.formatted()).font(.body.weight(.semibold)).monospacedDigit()
+                }
+                pointsRow(symbol: "calendar.circle.fill", tint: .orange, title: L10n.text("Daily Use"),
+                          rule: L10n.text("+%lld a day you open Yingxia · %lld days", rules.daily, points.days), earned: points.days * rules.daily)
+                pointsRow(symbol: "paperplane.circle.fill", tint: Brand.indigo, title: L10n.text("Feedback Sent"),
+                          rule: L10n.text("+%lld each, up to %lld a day · %lld counted", rules.sent, rules.sentPerDay, points.sent),
+                          earned: points.sent * rules.sent)
+                pointsRow(symbol: "checkmark.seal.fill", tint: .green, title: L10n.text("Feedback Adopted"),
+                          rule: L10n.text("+%lld each · %lld adopted", rules.adopted, points.adopted), earned: points.adopted * rules.adopted)
+                pointsRow(symbol: "arrow.triangle.merge", tint: .purple, title: L10n.text("Merged Pull Requests"),
+                          rule: L10n.text("+%lld each · %lld merged", rules.pullRequest, points.pullRequests),
+                          earned: points.pullRequests * rules.pullRequest)
+                if points.adjusted != 0 {
+                    pointsRow(symbol: "slider.horizontal.3", tint: .gray, title: L10n.text("Set by the Developer"), rule: nil, earned: points.adjusted)
+                }
             }
         }
+    }
+
+    private func pointsRow(symbol: String, tint: Color, title: String, rule: String?, earned: Int) -> some View {
+        SettingsRow(symbol: symbol, tint: tint, title: title, subtitle: rule) {
+            Text(verbatim: earned > 0 ? "+\(earned.formatted())" : earned.formatted()).monospacedDigit().foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder private func feedbackSection(_ account: Account) -> some View {
+        if !account.feedback.issues.isEmpty {
+            SettingsGroup(title: L10n.text("Your Feedback")) {
+                ForEach(account.feedback.issues) { issue in
+                    issueRow(issue)
+                }
+            }
+        }
+    }
+
+    /// Merged pull requests that count, and the account ID to put in a pull request's description.
+    @ViewBuilder private func contributeSection(_ account: Account) -> some View {
+        SettingsGroup(title: L10n.text("Contribute Code"),
+                      footer: L10n.text("Put “Yingxia account: %@” in the description of your pull request on GitHub, or your Telegram @username. Each one merged earns %lld points.",
+                                        account.id, account.points?.rules.pullRequest ?? 500)) {
+            ForEach(account.pullRequests ?? []) { pull in
+                pullRequestRow(pull)
+            }
+            SettingsRow(symbol: "number.circle.fill", tint: .gray, title: L10n.text("Account ID")) {
+                HStack(spacing: 10) {
+                    Text(verbatim: account.id).font(.footnote.monospaced()).foregroundStyle(.secondary)
+                    #if !os(tvOS)
+                    Button { copyAccountID(account.id) } label: { Image(systemName: "doc.on.doc") }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel(L10n.text("Copy Account ID"))
+                    #endif
+                }
+            }
+        }
+    }
+
+    #if !os(tvOS)
+    private func copyAccountID(_ id: String) {
+        #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(id, forType: .string)
+        #else
+        UIPasteboard.general.string = id
+        #endif
+        error = nil
+        notice = L10n.text("Account ID copied.")
+    }
+    #endif
+
+    @ViewBuilder private func pullRequestRow(_ pull: Account.PullRequest) -> some View {
+        let label = SettingsRow(symbol: "arrow.triangle.merge", tint: .purple, title: pull.title.isEmpty ? "#\(pull.number)" : pull.title,
+                                subtitle: "#\(pull.number) · \(L10n.text("Pull request: merged"))")
+        #if os(tvOS)
+        label
+        #else
+        if let url = URL(string: "https://github.com/jo32/tvbox-silicon/pull/\(pull.number)") {
+            Link(destination: url) { label.contentShape(Rectangle()) }.buttonStyle(.plain)
+        } else {
+            label
+        }
+        #endif
     }
 
     @ViewBuilder private func issueRow(_ issue: Account.Feedback.Issue) -> some View {
@@ -267,6 +345,7 @@ struct AccountView: View {
         case "adopted": L10n.text("Adopted")
         case "declined": L10n.text("Not planned")
         case "duplicate": L10n.text("Duplicate")
+        case "closed": L10n.text("Feedback status: closed")
         default: L10n.text("Feedback status: open")
         }
     }
@@ -274,13 +353,14 @@ struct AccountView: View {
         switch status {
         case "adopted": "checkmark.circle.fill"
         case "declined", "duplicate": "minus.circle.fill"
+        case "closed": "checkmark.circle"
         default: "circle.dotted"
         }
     }
     private func statusTint(_ status: String) -> Color {
         switch status {
         case "adopted": .green
-        case "declined", "duplicate": .gray
+        case "declined", "duplicate", "closed": .gray
         default: .blue
         }
     }

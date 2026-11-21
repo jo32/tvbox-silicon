@@ -2155,6 +2155,24 @@
 "None of your sources has this season." = "どの配信元にもこのシーズンはありません。";
 
 // Settings › Account (App/AccountView.swift)
+"Total Points" = "合計ポイント";
+"Daily Use" = "毎日の利用";
+"+%lld a day you open Yingxia · %lld days" = "映匣を開いた日ごとに +%lld · %lld日";
+"Feedback Sent" = "送ったフィードバック";
+"+%lld each, up to %lld a day · %lld counted" = "1件 +%lld、1日 %lld 件まで · %lld 件";
+"Feedback Adopted" = "採用されたフィードバック";
+"+%lld each · %lld adopted" = "1件 +%lld · %lld 件採用";
+"Merged Pull Requests" = "マージされた PR";
+"+%lld each · %lld merged" = "1件 +%lld · %lld 件マージ";
+"Set by the Developer" = "開発者による調整";
+"Duplicate or invalid feedback earns nothing. Feedback with your device, build, the source and clear steps is the most likely to be adopted. Feedback sent with /feedback in the Telegram group counts too, for the Telegram account you sign in with." = "重複や無効なフィードバックにはポイントが付きません。デバイス、ビルド番号、使ったソース、再現手順をはっきり書いたフィードバックほど採用されやすくなります。Telegram グループで /feedback から送ったものも、サインインに使う Telegram アカウントに加算されます。";
+"Contribute Code" = "コードで貢献";
+"Put “Yingxia account: %@” in the description of your pull request on GitHub, or your Telegram @username. Each one merged earns %lld points." = "GitHub のプルリクエストの説明に「Yingxia account: %@」（または Telegram の @ユーザー名）と書いてください。マージされるごとに +%lld ポイント。";
+"Account ID" = "アカウント ID";
+"Copy Account ID" = "アカウント ID をコピー";
+"Account ID copied." = "アカウント ID をコピーしました。";
+"Pull request: merged" = "マージ済み";
+"Feedback status: closed" = "クローズ";
 "Pro until %@" = "%@まで";
 "Feedback status: open" = "未対応";
 "Accounts aren't available right now. Please try again later." = "現在アカウントを利用できません。しばらくしてからもう一度お試しください。";

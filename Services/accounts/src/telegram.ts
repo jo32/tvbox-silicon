@@ -1,10 +1,10 @@
-// Telegram: signing in through the bot (works on every device, the Apple TV too, by QR code), and the bot's account
-// commands: /redeem <code>, /me. The bot is the Yingxia group helper, @yingxia_sup_bot (repository jo32/yx-tg): it
+// Telegram: signing in through the bot (works on every device, the Apple TV too, by QR code), the bot's account
+// commands (/redeem <code>, /me), and points for /feedback sent in the Telegram group. The bot is the Yingxia group helper, @yingxia_sup_bot (repository jo32/yx-tg): it
 // keeps Telegram's webhook and passes private "/start <code>", /redeem and /me here, then sends the text we answer.
 // The app asks for a one-time code, opens t.me/<bot>?start=<code>; the person taps Start; the bot passes
 // "/start <code>" here, which ties their Telegram user to the code; the app, asking every few seconds, gets its session.
 
-import { stats } from "./feedback";
+import { earnsSentPoint, Points, points, Rules, rules } from "./points";
 import { isPro, redeem, RedeemFailure } from "./pro";
 import { addIdentity, display, Identity, User, userFor } from "./session";
 import { base64url, bytes, DAY, Env, now, same } from "./util";
@@ -50,6 +50,21 @@ const REDEEM_TEXT: Record<RedeemFailure, [string, string]> = {
   used_up: ["This code has already been used.", "此兑换码已被使用。"],
   already_redeemed: ["You've already redeemed this code.", "你已兑换过此兑换码。"],
 };
+
+function pointsLines(from: any, counted: Points) {
+  const r = counted.rules;
+  const adjusted = counted.adjusted ? say(from, `\n· adjusted by the developer: ${counted.adjusted > 0 ? "+" : ""}${counted.adjusted}`, `\n· 作者调整：${counted.adjusted > 0 ? "+" : ""}${counted.adjusted}`) : "";
+  return say(from,
+    `Points: ${counted.total}\n· ${counted.days} days of use: +${counted.days * r.daily}\n· ${counted.sent} feedback sent: +${counted.sent * r.sent}\n· ${counted.adopted} adopted: +${counted.adopted * r.adopted}\n· ${counted.pullRequests} merged pull requests: +${counted.pullRequests * r.pullRequest}${adjusted}`,
+    `积分：${counted.total}\n· 使用 ${counted.days} 天：+${counted.days * r.daily}\n· 反馈 ${counted.sent} 条：+${counted.sent * r.sent}\n· 被采纳 ${counted.adopted} 条：+${counted.adopted * r.adopted}\n· 合并 PR ${counted.pullRequests} 个：+${counted.pullRequests * r.pullRequest}${adjusted}`);
+}
+
+// How points work, everywhere the bot talks about them.
+export function rulesText(from: any, r: Rules) {
+  return say(from,
+    `How points work: +${r.daily} each day you open Yingxia signed in; +${r.sent} for each feedback message (up to ${r.sentPerDay} a day; duplicates and invalid ones don't count); +${r.adopted} when the developer adopts it; +${r.pullRequest} for each merged pull request (write "Yingxia account: <your account ID or Telegram @username>" in its description).\nFeedback with your device, build, the source and clear steps is the most likely to be adopted.`,
+    `积分规则：登录后每天打开映匣 +${r.daily}；每条反馈 +${r.sent}（每天最多 ${r.sentPerDay} 条，重复或无效的不算）；被作者采纳 +${r.adopted}；PR 合并 +${r.pullRequest}（在 PR 描述里写“映匣账号：你的账号 ID 或 Telegram @用户名”）。\n写清设备、build 号、用的源和复现步骤的反馈最容易被采纳。`);
+}
 
 // The bot sends this text back to the person (null: nothing to say).
 const answer = (text: string | null) => Response.json({ text });
@@ -109,17 +124,42 @@ export async function webhook(request: Request, env: Env): Promise<Response> {
       `兑换成功。${proLine(from, user)}。\n在映匣中通过 Telegram 登录（设置 › 账号）即可在 App 中使用。`));
   }
 
-  if (name === "/me" || name === "/status") {
+  if (name === "/me" || name === "/status" || name === "/points") {
     const user = await telegramUser(env, from);
-    const counts = await stats(env, user);
-    return answer(say(from,
-      `${proLine(from, user)}\nFeedback: ${counts.sent} sent, ${counts.adopted} adopted, ${counts.points} points`,
-      `${proLine(from, user)}\n反馈：已发送 ${counts.sent} 条，已采纳 ${counts.adopted} 条，积分 ${counts.points}`));
+    const counted = await points(env, user.id);
+    return answer(`${proLine(from, user)}\n${pointsLines(from, counted)}\n\n${rulesText(from, counted.rules)}`);
   }
 
   return answer(say(from,
-    "Yingxia account bot.\n/redeem <code> — redeem a Pro code\n/me — your Pro status and feedback\nTo sign in, choose Sign in with Telegram in the app's Settings › Account.",
-    "映匣账号：\n/redeem <兑换码> — 兑换 Pro\n/me — 查看 Pro 状态和反馈\n登录请在 App 的 设置 › 账号 中选择“通过 Telegram 登录”。"));
+    "Yingxia account bot.\n/redeem <code> — redeem a Pro code\n/me — your points and Pro status\nTo sign in, choose Sign in with Telegram in the app's Settings › Account.",
+    "映匣账号：\n/redeem <兑换码> — 兑换 Pro\n/me — 查看积分和 Pro 状态\n登录请在 App 的 设置 › 账号 中选择“通过 Telegram 登录”。"));
+}
+
+// POST /v1/telegram/feedback, from the bot's Worker with the shared secret: {from, issue, sent} once a /feedback in
+// the Telegram group became GitHub issue `issue`. It counts for that Telegram user's account (keyed by their user ID,
+// which unlike a @username can't be changed or taken over), made now if they have none, as /redeem and /me do; signing
+// in to the app with the same Telegram shows it. Answers {text}: what it earned, for the bot's reply.
+export async function telegramFeedback(request: Request, env: Env): Promise<Response> {
+  if (!env.TELEGRAM_WEBHOOK_SECRET) return new Response(null, { status: 503 });
+  if (!same(request.headers.get("x-telegram-bot-api-secret-token") ?? "", env.TELEGRAM_WEBHOOK_SECRET)) return new Response(null, { status: 401 });
+  const body: any = await request.json().catch(() => null);
+  const from = body?.from;
+  const issue = Number(body?.issue);
+  if (!from || typeof from.id !== "number" || from.is_bot || !Number.isInteger(issue) || issue <= 0) return new Response(null, { status: 400 });
+  const user = await telegramUser(env, from);
+  const sent = Math.min(Math.trunc(Number(body?.sent)) || now(), now());
+  const added = await env.DB.prepare("INSERT OR IGNORE INTO feedback_issues (issue, user_id, install, sent) VALUES (?, ?, 'telegram', ?)")
+    .bind(issue, user.id, sent).run();
+  if (!added.meta.changes) return answer(null);
+  const r = rules(env);
+  if (await earnsSentPoint(env, user.id, issue, sent)) {
+    return answer(say(from,
+      `This feedback earned you ${r.sent} point, and ${r.adopted} more if it's adopted. Send /me to @${env.TELEGRAM_BOT} to see your points.`,
+      `这条反馈 +${r.sent} 积分，被采纳后再 +${r.adopted}。私聊 @${env.TELEGRAM_BOT} 发 /me 查看积分。`));
+  }
+  return answer(say(from,
+    `You've had today's ${r.sentPerDay} feedback points; this one still earns ${r.adopted} if it's adopted.`,
+    `今天的反馈积分已满（每天 ${r.sentPerDay} 条），这条被采纳后仍会 +${r.adopted}。`));
 }
 
 // Old, unfinished sign-ins.

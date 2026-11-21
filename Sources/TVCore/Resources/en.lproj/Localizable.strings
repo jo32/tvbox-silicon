@@ -2155,6 +2155,24 @@
 "None of your sources has this season." = "None of your sources has this season.";
 
 // Settings › Account (App/AccountView.swift)
+"Total Points" = "Total Points";
+"Daily Use" = "Daily Use";
+"+%lld a day you open Yingxia · %lld days" = "+%lld a day you open Yingxia · %lld days";
+"Feedback Sent" = "Feedback Sent";
+"+%lld each, up to %lld a day · %lld counted" = "+%lld each, up to %lld a day · %lld counted";
+"Feedback Adopted" = "Feedback Adopted";
+"+%lld each · %lld adopted" = "+%lld each · %lld adopted";
+"Merged Pull Requests" = "Merged Pull Requests";
+"+%lld each · %lld merged" = "+%lld each · %lld merged";
+"Set by the Developer" = "Set by the Developer";
+"Duplicate or invalid feedback earns nothing. Feedback with your device, build, the source and clear steps is the most likely to be adopted. Feedback sent with /feedback in the Telegram group counts too, for the Telegram account you sign in with." = "Duplicate or invalid feedback earns nothing. Feedback with your device, build, the source and clear steps is the most likely to be adopted. Feedback sent with /feedback in the Telegram group counts too, for the Telegram account you sign in with.";
+"Contribute Code" = "Contribute Code";
+"Put “Yingxia account: %@” in the description of your pull request on GitHub, or your Telegram @username. Each one merged earns %lld points." = "Put “Yingxia account: %@” in the description of your pull request on GitHub, or your Telegram @username. Each one merged earns %lld points.";
+"Account ID" = "Account ID";
+"Copy Account ID" = "Copy Account ID";
+"Account ID copied." = "Account ID copied.";
+"Pull request: merged" = "Merged";
+"Feedback status: closed" = "Closed";
 "Pro until %@" = "Until %@";
 "Feedback status: open" = "Open";
 "Accounts aren't available right now. Please try again later." = "Accounts aren't available right now. Please try again later.";

@@ -64,6 +64,9 @@ const post = async (path, data, token) => (await fetch(BASE + path, { method: "P
 const signIn = await post("/v1/auth/apple", { identityToken, install: INSTALL, platform: "ios", name: "Jo QA" });
 const codes = await post("/v1/admin/codes", { count: 2, days: 30, batch: "qa" }, "admin-secret");
 await post("/v1/me/redeem", { code: codes.codes[0].code }, signIn.token);
+// Points to show: today's use, and a merged pull request that names the account.
+await post("/v1/me/day", {}, signIn.token);
+d1("yingxia-accounts", ["--command", `INSERT INTO pull_requests (number, author, author_id, title, merged, claim, user_id, how) VALUES (1290, 'qa-dev', 77, 'Sleep timer for music', ${t}, '${signIn.account.id}', '${signIn.account.id}', 'id')`]);
 const fresh = await post("/v1/auth/apple", { identityToken: `${b64({ alg: "RS256", kid: "qa" })}.x.y` });
 console.log(JSON.stringify({ token: signIn.token, unusedCode: codes.codes[1].code, account: signIn.account.feedback, fresh: fresh.error }));
 createServer(async (request, response) => {

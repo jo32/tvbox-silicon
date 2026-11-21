@@ -110,6 +110,10 @@ export async function erase(env: Env, userID: string) {
     env.DB.prepare("DELETE FROM identities WHERE user_id = ?").bind(userID),
     env.DB.prepare("DELETE FROM installs WHERE user_id = ?").bind(userID),
     env.DB.prepare("DELETE FROM feedback_issues WHERE user_id = ?").bind(userID),
+    env.DB.prepare("DELETE FROM active_days WHERE user_id = ?").bind(userID),
+    env.DB.prepare("DELETE FROM point_adjustments WHERE user_id = ?").bind(userID),
+    env.DB.prepare("DELETE FROM github_logins WHERE user_id = ?").bind(userID),
+    env.DB.prepare("UPDATE pull_requests SET user_id = NULL, how = '' WHERE user_id = ?").bind(userID),
     // Grants stay under a name that no longer leads to anyone: a code's uses are counted from them, and an
     // adopted issue's reward is given once, so deleting and signing in again can't reuse either.
     env.DB.prepare("UPDATE grants SET user_id = 'deleted:' || user_id WHERE user_id = ?").bind(userID),
