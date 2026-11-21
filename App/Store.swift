@@ -905,10 +905,12 @@ import TVCore
     }
 
     /// The stream resolved ahead for `episode`, waiting for one still on its way; nil when there is none, or it is too
-    /// old to trust.
+    /// old to trust. It is handed out once: when its address then fails (a video server refusing it with HTTP 403),
+    /// the end of the episode, Next or the episode list asks the source again instead of getting the same address (#1413).
     private func nextAhead(for episode: Episode) async -> Channel? {
         if let pending = nextAheadTask, pending.episode == episode { await pending.task.value }
         guard let ahead = nextAhead, ahead.episode == episode, Date().timeIntervalSince(ahead.at) < Self.nextAheadLifetime else { return nil }
+        nextAhead = nil
         return ahead.resolved
     }
 
