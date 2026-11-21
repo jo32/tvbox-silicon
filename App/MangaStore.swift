@@ -9,6 +9,9 @@ import TVCore
     private(set) var repositories: [URL] = MangaSources.shared.repositories
     private(set) var favorites: [MangaLibrary.Favorite] = MangaLibrary.load("favorites.json", as: [MangaLibrary.Favorite].self) ?? []
     private(set) var history: [MangaLibrary.Progress] = MangaLibrary.load("history.json", as: [MangaLibrary.Progress].self) ?? []
+    /// New chapters of the favorites (#1105).
+    private(set) var updates = MangaLibrary.load("updates.json", as: MangaUpdates.self) ?? MangaUpdates()
+    private var checkingUpdates = false
     /// Shown on the page that started it: a message from a source (UI.showMessage).
     var notice: String?
     /// Until when a site makes requests wait (拷贝漫画's "too many requests").
@@ -68,6 +71,8 @@ import TVCore
         MangaLibrary.save(history, as: "history.json")
         // A favorite's cover and title follow what the source last showed.
         if let index = favorites.firstIndex(where: { $0.id == progress.id }) { favorites[index].comic = progress.comic; MangaLibrary.save(favorites, as: "favorites.json") }
+        // The reader lists the chapters: what came out is seen.
+        saw(progress.chapterCount, of: progress.comic)
     }
     func forget(_ progress: MangaLibrary.Progress) {
         history.removeAll { $0.id == progress.id }
@@ -79,6 +84,43 @@ import TVCore
     func setMode(_ mode: MangaReaderMode, for comic: MangaComic) {
         modes[comic.identity] = mode == readerMode ? nil : mode.rawValue
         UserDefaults.standard.set(modes, forKey: "manga.readerModes")
+    }
+
+    // MARK: New chapters (#1105)
+
+    /// Chapters a favorite gained since the viewer last saw its list.
+    func newChapters(_ comic: MangaComic) -> Int { updates.newChapters(comic.identity) }
+
+    /// The favorites, those with new chapters first.
+    var favoritesByUpdates: [MangaLibrary.Favorite] {
+        let new = favorites.filter { updates.newChapters($0.id) > 0 }
+        return new.isEmpty ? favorites : new + favorites.filter { updates.newChapters($0.id) == 0 }
+    }
+
+    /// The viewer saw the comic's `count` chapters: on its page, or in the reader.
+    func saw(_ count: Int, of comic: MangaComic) {
+        guard isFavorite(comic), count > 0, updates.seen[comic.identity] != count || (updates.latest[comic.identity] ?? 0) < count else { return }
+        updates.saw(count, of: comic.identity)
+        MangaLibrary.save(updates, as: "updates.json")
+    }
+
+    /// Asks each favorite's source for its chapters, one comic after another, at most every six hours. Started when
+    /// the Manga page shows; it carries on if the viewer leaves, so a check that began isn't wasted.
+    func checkUpdates() {
+        guard !checkingUpdates, updates.due(), !favorites.isEmpty else { return }
+        if let throttledUntil, throttledUntil > Date() { return }
+        checkingUpdates = true
+        let installed = Set(sources.map(\.key)), comics = favorites.prefix(40).map(\.comic).filter { installed.contains($0.sourceKey) }
+        Task(priority: .utility) {
+            for comic in comics {
+                guard let details = try? await MangaRuntime.shared.details(comic.sourceKey, id: comic.id, fresh: true) else { continue }
+                updates.found(details.chapters.count, for: comic.identity)
+            }
+            updates.checked = Date()
+            updates.keep(Set(favorites.map(\.id)))
+            MangaLibrary.save(updates, as: "updates.json")
+            checkingUpdates = false
+        }
     }
 
     // MARK: Sources
