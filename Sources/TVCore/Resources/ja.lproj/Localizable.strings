@@ -2276,3 +2276,10 @@
 "Danmaku Servers" = "弾幕サーバー";
 "Add another server to move or remove this one." = "このサーバーを移動または削除するには、別のサーバーを追加してください。";
 "Find Danmaku…" = "弾幕を探す…";
+"Add Bookmark" = "ブックマークを追加";
+"Remove Bookmark" = "ブックマークを削除";
+"Bookmarks" = "ブックマーク";
+"No Bookmarks" = "ブックマークなし";
+"Show" = "表示";
+"Use the bookmark button at the top of the page to mark your place." = "ページ上部のブックマークボタンで、読んでいる場所を記録できます。";
+"Couldn’t read this book from %@: %@" = "%@ からこの本を読み込めませんでした：%@";

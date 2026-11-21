@@ -45,6 +45,12 @@ struct NovelDetailView: View {
         page
             .task(id: book.id) { await load() }
             .task(id: current.cover) { await loadHeroCover() }
+            // The reader changed the source (#1450): the page follows, so Continue opens the copy the place belongs to.
+            .onChange(of: entry?.book.id) { _, _ in
+                guard let saved = entry?.book, saved.sourceKey != book.sourceKey else { return }
+                if !alternatives.contains(where: { $0.id == book.id }) { alternatives.insert(book, at: 0) }
+                book = saved; details = nil; chapters = []; heroCover = nil
+            }
             #if os(macOS)
             .onChange(of: reading?.id) { _, _ in
                 if let reading { openRoute?(Route { AnyView(NovelReaderView(reading: reading)) }); self.reading = nil }

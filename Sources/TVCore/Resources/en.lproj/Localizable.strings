@@ -2276,3 +2276,10 @@
 "Danmaku Servers" = "Danmaku Servers";
 "Add another server to move or remove this one." = "Add another server to move or remove this one.";
 "Find Danmaku…" = "Find Danmaku…";
+"Add Bookmark" = "Add Bookmark";
+"Remove Bookmark" = "Remove Bookmark";
+"Bookmarks" = "Bookmarks";
+"No Bookmarks" = "No Bookmarks";
+"Show" = "Show";
+"Use the bookmark button at the top of the page to mark your place." = "Use the bookmark button at the top of the page to mark your place.";
+"Couldn’t read this book from %@: %@" = "Couldn’t read this book from %@: %@";

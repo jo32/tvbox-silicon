@@ -2276,3 +2276,10 @@
 "Danmaku Servers" = "彈幕伺服器";
 "Add another server to move or remove this one." = "加入其他伺服器後才能移動或移除此伺服器。";
 "Find Danmaku…" = "尋找彈幕…";
+"Add Bookmark" = "加入書籤";
+"Remove Bookmark" = "移除書籤";
+"Bookmarks" = "書籤";
+"No Bookmarks" = "沒有書籤";
+"Show" = "顯示";
+"Use the bookmark button at the top of the page to mark your place." = "用頁面頂端的書籤按鈕標記讀到的位置。";
+"Couldn’t read this book from %@: %@" = "無法從 %@ 讀取這本書：%@";
