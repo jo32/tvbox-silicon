@@ -146,9 +146,9 @@ try {
   const account = apple1.json.account;
   check(account.name === "Ann" && account.identities[0].provider === "apple" && account.identities[0].label === "a@privaterelay.appleid.com", "the account has the name and Apple identity", account);
   check(account.feedback.sent === 2 && account.feedback.adopted === 1 && account.feedback.declined === 1, "feedback sent before signing in counts (2 sent, 1 adopted, 1 duplicate)", account.feedback);
-  // 101 (adopted) earns its sent point and 100; 102, a duplicate, earns nothing.
-  check(account.points.sent === 1 && account.points.adopted === 1 && account.points.total === 1 + 100 && account.feedback.points === 101,
-    "points: +1 a message (not duplicates), +100 adopted", account.points);
+  // 101 (adopted) earns its sent point and 30; 102, a duplicate, earns nothing.
+  check(account.points.sent === 1 && account.points.adopted === 1 && account.points.total === 1 + 30 && account.feedback.points === 31,
+    "points: +1 a message (not duplicates), +30 adopted", account.points);
   check(account.points.rules.daily === 1 && account.points.rules.sentPerDay === 3 && account.points.rules.pullRequest === 500, "the rules come with the account", account.points.rules);
   check(account.pro.active === true && account.pro.until > t + 6 * 86400, "REWARD_DAYS=7 gave Pro for the adopted issue", account.pro);
   const again = await call("POST", "/v1/auth/apple", { identityToken: identityToken({ sub: "apple-1" }), install: INSTALL, platform: "ios" });
@@ -236,7 +236,7 @@ try {
   check((await tgFeedback(fan, 201, "wrong")).status === 401, "the bot's feedback call needs the secret");
   const said = [];
   for (const issue of [201, 202, 203, 204]) said.push((await tgFeedback(fan, issue)).json?.text ?? "");
-  check(said.slice(0, 3).every((text) => /\+1 积分，被采纳后再 \+100/.test(text)) && /已满/.test(said[3]), "group feedback earns a point, 3 a day, and says so", said);
+  check(said.slice(0, 3).every((text) => /\+1 积分，被采纳后再 \+30/.test(text)) && /已满/.test(said[3]), "group feedback earns a point, 3 a day, and says so", said);
   check((await tgFeedback(fan, 201)).json?.text === null, "the same issue counts once");
   check((await tgFeedback({ ...fan, id: 4343, username: "other" }, 202)).json?.text === null, "and for one person only");
   await tgFeedback({ ...fan, id: 4545, username: "odd" }, 299);
@@ -274,11 +274,11 @@ try {
   check(after.feedback.sent === 3 && after.feedback.adopted === 2, "new feedback is copied and its `fixed` label counts as adopted", after.feedback);
   check(after.points.pullRequests === 2 && after.pullRequests.map((item) => item.number).sort().join() === "501,502",
     "a merged pull request counts for the account its description names, and its author's later ones too", after.pullRequests);
-  check(after.points.total === after.points.days + after.points.sent + 2 * 100 + 2 * 500, "the total adds up", after.points);
+  check(after.points.total === after.points.days + after.points.sent + 2 * 30 + 2 * 500, "the total adds up", after.points);
   const tgAfter = (await call("GET", "/v1/me", undefined, tgToken)).json;
   check(tgAfter.points.pullRequests === 1, "a pull request naming a Telegram @username counts for that account", tgAfter.points);
   await hook("/me", fan);
-  check(/被采纳 1 条：\+100/.test(lastTelegram()) && /反馈 3 条：\+3/.test(lastTelegram()) && /积分规则/.test(lastTelegram()),
+  check(/被采纳 1 条：\+30/.test(lastTelegram()) && /反馈 3 条：\+3/.test(lastTelegram()) && /积分规则/.test(lastTelegram()),
     "adopted only by label (closed isn't enough), spam loses its point, and /me explains the rules", lastTelegram());
 
   // Admin pages.

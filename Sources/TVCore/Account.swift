@@ -58,7 +58,7 @@ public struct Account: Codable, Sendable, Equatable {
             public var pullRequest: Int
             /// The server's own (Services/accounts/wrangler.jsonc), for explaining points before an account or a server
             /// has sent any.
-            public static let standard = Rules(daily: 1, sent: 1, sentPerDay: 3, adopted: 100, pullRequest: 500)
+            public static let standard = Rules(daily: 1, sent: 1, sentPerDay: 3, adopted: 30, pullRequest: 500)
         }
         public var total: Int
         /// Days the app was open while signed in.

@@ -19,7 +19,7 @@ export function rules(env: Env) {
     daily: number(env.POINTS_DAILY, 1),
     sent: number(env.POINTS_SENT, 1),
     sentPerDay: SENT_PER_DAY,
-    adopted: number(env.POINTS_ADOPTED, 100),
+    adopted: number(env.POINTS_ADOPTED, 30),
     pullRequest: number(env.POINTS_PR, 500),
   };
 }

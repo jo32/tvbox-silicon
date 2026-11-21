@@ -204,7 +204,7 @@ struct PointsGuideView: View {
     #endif
 }
 
-/// "Daily +1 · feedback +1 · adopted +100 · PR +500", for rows that open the guide.
+/// "Daily +1 · feedback +1 · adopted +30 · PR +500", for rows that open the guide.
 @MainActor func pointsSummary() -> String {
     let rules = AccountStore.shared.account?.points?.rules ?? .standard
     return L10n.text("Daily +%lld · feedback +%lld · adopted +%lld · PR +%lld", rules.daily, rules.sent, rules.adopted, rules.pullRequest)
