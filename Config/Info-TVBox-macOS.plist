@@ -86,5 +86,7 @@
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>YingxiaAppleSignIn</key>
+	<string>$(APPLE_SIGN_IN)</string>
 </dict>
 </plist>

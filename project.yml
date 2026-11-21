@@ -66,6 +66,8 @@ targetTemplates:
         NSBonjourServices: [_yingxia._tcp]
         UILaunchScreen: {}
         UIBackgroundModes: [audio]
+        # Whether this build signs in with Apple (App/AccountStore.swift): the APPLE_SIGN_IN setting.
+        YingxiaAppleSignIn: $(APPLE_SIGN_IN)
 targets:
   TVBox-macOS:
     templates: [SharedApp]

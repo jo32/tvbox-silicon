@@ -116,5 +116,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>YingxiaAppleSignIn</key>
+	<string>$(APPLE_SIGN_IN)</string>
 </dict>
 </plist>
