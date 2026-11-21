@@ -191,9 +191,8 @@ enum AppleSignInSupport {
     }()
 }
 
-#if os(tvOS)
-/// Sign in with Apple on Apple TV, where Apple's button can't take focus like the rest of Settings: a plain row runs
-/// the request, and the system asks on the TV or on a nearby iPhone.
+/// Sign in with Apple without Apple's button: Settings draws its own (Apple TV rows can't use Apple's, and on iPhone,
+/// iPad and Mac the Apple and Telegram buttons share one look). On Apple TV the system asks on the TV or a nearby iPhone.
 @MainActor final class AppleSignInRequest: NSObject {
     private var continuation: CheckedContinuation<AppleCredential, Error>?
     private var controller: ASAuthorizationController?
@@ -226,7 +225,10 @@ extension AppleSignInRequest: @preconcurrency ASAuthorizationControllerDelegate,
         complete(.failure(error))
     }
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        #if os(macOS)
+        NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first ?? ASPresentationAnchor()
+        #else
         UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first ?? ASPresentationAnchor()
+        #endif
     }
 }
-#endif

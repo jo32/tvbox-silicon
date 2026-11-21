@@ -10,9 +10,7 @@ struct AccountView: View {
     @State private var notice: String?
     @State private var code = ""
     @State private var confirmsDeletion = false
-    #if os(tvOS)
     @State private var appleRequest = AppleSignInRequest()
-    #endif
 
     var body: some View {
         SettingsPage(title: L10n.text("Account"), symbol: "person.crop.circle",
@@ -64,45 +62,32 @@ struct AccountView: View {
                       : L10n.text("Feedback you send counts toward points, more for each message the developer adopts. Feedback this device sent in the last 30 days counts too.")) {
             #if os(tvOS)
             if AppleSignInSupport.available {
-                TVSettingsAction(title: L10n.text("Sign in with Apple"), busy: accounts.busy) { signInWithAppleOnTV() }
+                TVSettingsAction(title: L10n.text("Sign in with Apple"), busy: accounts.busy) { signInWithApple() }
             }
             TVSettingsAction(title: L10n.text("Sign in with Telegram"), busy: accounts.busy) { startTelegram() }
             #else
-            if AppleSignInSupport.available { appleButton(.signIn) }
-            Button { startTelegram() } label: {
-                Label(L10n.text("Sign in with Telegram"), systemImage: "paperplane.fill")
-                    .font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 34)
-            }
-            .buttonStyle(.borderedProminent).tint(Brand.cyan)
-            .disabled(accounts.busy)
+            signInButtons(apple: AppleSignInSupport.available, telegram: true)
             #endif
         }
     }
 
     #if !os(tvOS)
-    private func appleButton(_ label: SignInWithAppleButton.Label) -> some View {
-        SignInWithAppleButton(label) { request in
-            request.requestedScopes = [.fullName, .email]
-        } onCompletion: { result in
-            switch result {
-            case .success(let authorization):
-                guard let credential = AppleCredential(authorization) else { return show(AccountService.Failure.rejected) }
-                Task { await signIn(credential) }
-            case .failure(let failure):
-                if !AppleCredential.cancelled(failure) { show(failure) }
-            }
+    /// Apple and Telegram in one look, in one row (no line between them).
+    private func signInButtons(apple: Bool, telegram: Bool) -> some View {
+        VStack(spacing: 12) {
+            if apple { SignInButton(kind: .apple, title: L10n.text("Sign in with Apple")) { signInWithApple() } }
+            if telegram { SignInButton(kind: .telegram, title: L10n.text("Sign in with Telegram")) { startTelegram() } }
         }
-        .modifier(AppleButtonStyle())
-        .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 44)
+        .padding(.vertical, 4)
         .disabled(accounts.busy)
     }
-    #else
-    private func signInWithAppleOnTV() {
+    #endif
+
+    private func signInWithApple() {
         Task {
             do { await signIn(try await appleRequest.run()) } catch { if !AppleCredential.cancelled(error) { show(error) } }
         }
     }
-    #endif
 
     private func signIn(_ credential: AppleCredential) async {
         error = nil
@@ -304,11 +289,10 @@ struct AccountView: View {
         if addsApple || addsTelegram {
             SettingsGroup(footer: L10n.text("Add another way to sign in, so the same account works on every device.")) {
                 #if os(tvOS)
-                if addsApple { TVSettingsAction(title: L10n.text("Add Sign in with Apple"), busy: accounts.busy) { signInWithAppleOnTV() } }
+                if addsApple { TVSettingsAction(title: L10n.text("Add Sign in with Apple"), busy: accounts.busy) { signInWithApple() } }
                 if addsTelegram { TVSettingsAction(title: L10n.text("Add Telegram"), busy: accounts.busy) { startTelegram() } }
                 #else
-                if addsApple { appleButton(.continue) }
-                if addsTelegram { SettingsActionRow(title: L10n.text("Add Telegram")) { startTelegram() } }
+                signInButtons(apple: addsApple, telegram: addsTelegram)
                 #endif
             }
         }
@@ -353,11 +337,56 @@ struct AccountView: View {
 }
 
 #if !os(tvOS)
-/// Apple's button in black on a light page and white on a dark one, as Apple's guidelines ask.
-private struct AppleButtonStyle: ViewModifier {
+/// A sign-in button: Apple and Telegram share the shape, height, type and icon layout. Apple's keeps what its
+/// guidelines ask of a custom button (the Apple logo, "Sign in with Apple", black on a light page and white on a dark
+/// one); Telegram's is Telegram blue.
+private struct SignInButton: View {
+    enum Kind { case apple, telegram }
+    let kind: Kind
+    let title: String
+    let action: () -> Void
     @Environment(\.colorScheme) private var colorScheme
-    func body(content: Content) -> some View {
-        content.signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black).id(colorScheme)
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: kind == .apple ? "apple.logo" : "paperplane.fill")
+                    .font(.system(size: kind == .apple ? 19 : 16, weight: .semibold))
+                    .frame(width: 22)
+                Text(title).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .font(.system(size: Self.fontSize, weight: .semibold))
+            .foregroundStyle(foreground)
+            .frame(maxWidth: .infinity, minHeight: Self.height)
+            .background(background, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(Pressed())
+        .opacity(isEnabled ? 1 : 0.5)
+    }
+
+    #if os(macOS)
+    private static let height: CGFloat = 40, fontSize: CGFloat = 15
+    #else
+    private static let height: CGFloat = 50, fontSize: CGFloat = 17
+    #endif
+
+    private var background: Color {
+        switch kind {
+        case .apple: colorScheme == .dark ? .white : .black
+        case .telegram: Color(red: 0x22 / 255, green: 0x9E / 255, blue: 0xD9 / 255)
+        }
+    }
+
+    private var foreground: Color {
+        kind == .apple && colorScheme == .dark ? .black : .white
+    }
+
+    private struct Pressed: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label.opacity(configuration.isPressed ? 0.7 : 1)
+        }
     }
 }
 #endif

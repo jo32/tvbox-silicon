@@ -22,7 +22,7 @@
     "FEEDBACK_REPO": "jo32/tvbox-silicon",
     "APPLE_AUDIENCES": "com.jo32.yingxia.ios,com.jo32.yingxia.tv,com.jo32.yingxia.macos",
     "APPLE_TEAM_ID": "WWNM49L69R",
-    "TELEGRAM_BOT": "REPLACE_WITH_BOT_USERNAME",
+    "TELEGRAM_BOT": "yingxia_sup_bot",
     // Points per feedback message sent and per message adopted; Pro days an adopted one gives (0 = none).
     "POINTS_SENT": "1",
     "POINTS_ADOPTED": "10",
