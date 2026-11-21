@@ -60,6 +60,12 @@ public actor MusicHealth {
 
     public func failing(_ key: String, now: Date = Date()) -> Bool { coolingUntil(key, now: now) != nil }
 
+    /// The latest cooldown among keys starting with `prefix` (such as one LX source's, for every catalog), for showing
+    /// which source isn't answering; nil when none is cooling down.
+    public func coolingUntil(prefix: String, now: Date = Date()) -> Date? {
+        records.filter { $0.key.hasPrefix(prefix) }.compactMap(\.value.cooldownUntil).filter { $0 > now }.max()
+    }
+
     /// Records an answer: `error` nil for success.
     public func record(_ key: String, error: MusicProviderError?, now: Date = Date()) {
         var record = records[key] ?? Record()

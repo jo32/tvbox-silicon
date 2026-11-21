@@ -832,6 +832,8 @@
 "Unable to Load Songs" = "Unable to Load Songs";
 "Shuffle" = "Shuffle";
 "Skipped “%@”: %@" = "Skipped “%@”: %@";
+"Music channels are busy. Trying again in %@ seconds." = "Music channels are busy. Trying again in %@ seconds.";
+"Not answering lately, so other sources are asked first until %@." = "Not answering lately, so other sources are asked first until %@.";
 "No LX Music source could play it." = "No LX Music source could play it.";
 "Songs" = "Songs";
 "Albums" = "Albums";

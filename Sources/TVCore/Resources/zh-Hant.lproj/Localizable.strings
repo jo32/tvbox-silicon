@@ -831,6 +831,8 @@
 "Unable to Load Songs" = "無法載入歌曲";
 "Shuffle" = "隨機播放";
 "Skipped “%@”: %@" = "已略過「%@」：%@";
+"Music channels are busy. Trying again in %@ seconds." = "音樂渠道繁忙，%@ 秒後再試。";
+"Not answering lately, so other sources are asked first until %@." = "最近沒有回應，%@ 之前會先用其他音源。";
 "No LX Music source could play it." = "洛雪音源都沒能播放這首歌。";
 "Songs" = "歌曲";
 "Albums" = "專輯";
