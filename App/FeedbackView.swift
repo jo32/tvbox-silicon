@@ -106,6 +106,7 @@ struct FeedbackView: View {
                 TVSettingsField(title: L10n.text("Message"), text: $message, prose: true)
                 TVSettingsAction(title: sending ? sendingTitle : L10n.text("Send"), busy: sending, action: send)
                     .disabled(sending || empty)
+                SettingsLinkRow(symbol: "star.circle.fill", tint: Brand.amber, title: L10n.text("How Points Work")) { PointsGuideView(offersFeedback: false) }
             }
             // Typing a dozen lines with the remote is no way to edit them: the TV shows the details
             // and sends them or not.
@@ -271,6 +272,7 @@ private struct FeedbackPage: View {
         ScrollView {
             VStack(spacing: compact ? 22 : 28) {
                 header
+                pointsLink.padding(.top, compact ? -10 : -14)
                 if let sent {
                     thanks(sent).transition(.scale(scale: 0.97).combined(with: .opacity))
                 } else {
@@ -312,6 +314,23 @@ private struct FeedbackPage: View {
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
+    }
+
+    /// What feedback earns, opening How Points Work.
+    private var pointsLink: some View {
+        let rules = AccountStore.shared.account?.points?.rules ?? .standard
+        return RouteLink { PointsGuideView(offersFeedback: false) } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "star.circle.fill").foregroundStyle(MemberCard.gold)
+                Text(L10n.text("Earn points: +%lld for each message, +%lld when adopted", rules.sent, rules.adopted))
+                Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
+            }
+            .font(compact ? .footnote.weight(.medium) : .callout.weight(.medium))
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(Self.fill, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private var form: some View {

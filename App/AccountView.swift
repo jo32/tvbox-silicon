@@ -22,12 +22,19 @@ struct AccountView: View {
                 messages
                 if AccountStore.proAvailable, !accounts.isLifetime { redeemSection(account) }
                 earnSection(account)
+                // Without the tiles (a server from before points; Apple TV lists rules as rows), a row of its own.
+                #if os(tvOS)
+                guideSection
+                #else
+                if account.points == nil { guideSection }
+                #endif
                 feedbackSection(account)
                 contributeSection(account)
                 if accounts.telegramLogin != nil { telegramSection } else { methodsSection(account) }
                 endSection
             } else {
                 if accounts.telegramLogin != nil { telegramSection } else { signedOutSection }
+                guideSection
                 messages
             }
         }
@@ -259,6 +266,18 @@ struct AccountView: View {
 
     // MARK: Points
 
+    /// The way to the whole explanation, signed in or not, and whatever the server sent.
+    private var guideSection: some View {
+        SettingsGroup {
+            #if os(tvOS)
+            SettingsLinkRow(symbol: "star.circle.fill", tint: Brand.amber, title: L10n.text("How Points Work")) { PointsGuideView(offersSignIn: false) }
+            #else
+            SettingsLinkRow(symbol: "star.circle.fill", tint: Brand.amber, title: L10n.text("How Points Work"),
+                            subtitle: pointsSummary()) { PointsGuideView(offersSignIn: false) }
+            #endif
+        }
+    }
+
     /// The total, then each way to earn with its rule and what it brought, so people see what's worth doing: adopted
     /// feedback and merged code count far more than volume.
     @ViewBuilder private func earnSection(_ account: Account) -> some View {
@@ -279,8 +298,7 @@ struct AccountView: View {
                          detail: L10n.text("+%lld each · %lld merged", rules.pullRequest, points.pullRequests),
                          earned: points.pullRequests * rules.pullRequest),
             ]
-            SettingsGroup(title: L10n.text("How You Earn Points"),
-                          footer: L10n.text("Duplicate or invalid feedback earns nothing. Feedback with your device, build, the source and clear steps is the most likely to be adopted. Feedback sent with /feedback in the Telegram group counts too, for the Telegram account you sign in with.")) {
+            Section {
                 // Four across where they fit (iPad, Mac), otherwise two by two.
                 ViewThatFits(in: .horizontal) {
                     Grid(horizontalSpacing: 12, verticalSpacing: 12) {
@@ -294,6 +312,21 @@ struct AccountView: View {
                 }
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
+            } header: {
+                // The whole explanation, one tap from the tiles.
+                HStack {
+                    Text(L10n.text("How You Earn Points"))
+                    Spacer()
+                    RouteLink { PointsGuideView(offersSignIn: false) } label: {
+                        HStack(spacing: 3) {
+                            Text(L10n.text("How Points Work"))
+                            Image(systemName: "chevron.right").font(.caption2.weight(.bold))
+                        }
+                        .foregroundStyle(MemberCard.goldGlow)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             if points.adjusted != 0 {
                 SettingsGroup {

@@ -2155,6 +2155,17 @@
 "None of your sources has this season." = "None of your sources has this season.";
 
 // Settings › Account (App/AccountView.swift)
+"How Points Work" = "How Points Work";
+"Points reward feedback and code that really help Yingxia." = "Points reward feedback and code that really help Yingxia.";
+"Open Yingxia while signed in, once a day. Each device counts for one account a day." = "Open Yingxia while signed in, once a day. Each device counts for one account a day.";
+"Each message sent from Settings › Send Feedback, or with /feedback in the Telegram group (sign in with that Telegram account). Up to %lld a day; duplicates and invalid ones don't count." = "Each message sent from Settings › Send Feedback, or with /feedback in the Telegram group (sign in with that Telegram account). Up to %lld a day; duplicates and invalid ones don't count.";
+"When the developer fixes the problem or builds the idea you sent. The clearer the report, the likelier: your device, the build, the source, the steps, and a screenshot or video." = "When the developer fixes the problem or builds the idea you sent. The clearer the report, the likelier: your device, the build, the source, the steps, and a screenshot or video.";
+"Yingxia's code is on GitHub. Put this line in your pull request's description; each merged pull request counts once." = "Yingxia's code is on GitHub. Put this line in your pull request's description; each merged pull request counts once.";
+"Sign in to get the account ID for your pull requests." = "Sign in to get the account ID for your pull requests.";
+"Fair Play" = "Fair Play";
+"Points are counted again from the records every time. Duplicates, spam or several accounts on one device earn nothing more, and points gained unfairly are taken away." = "Points are counted again from the records every time. Duplicates, spam or several accounts on one device earn nothing more, and points gained unfairly are taken away.";
+"Daily +%lld · feedback +%lld · adopted +%lld · PR +%lld" = "Daily +%lld · feedback +%lld · adopted +%lld · PR +%lld";
+"Earn points: +%lld for each message, +%lld when adopted" = "Earn points: +%lld for each message, +%lld when adopted";
 "Member" = "Member";
 "Valid Until" = "Valid Until";
 "Member Since" = "Member Since";

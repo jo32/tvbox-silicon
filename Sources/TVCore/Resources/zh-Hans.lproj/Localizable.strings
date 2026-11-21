@@ -2155,6 +2155,17 @@
 "None of your sources has this season." = "你的片源里没有找到这一季。";
 
 // Settings › Account (App/AccountView.swift)
+"How Points Work" = "积分规则";
+"Points reward feedback and code that really help Yingxia." = "积分奖励真正帮到映匣的反馈和代码。";
+"Open Yingxia while signed in, once a day. Each device counts for one account a day." = "登录后每天打开映匣即可获得。每台设备每天只给一个账号计分。";
+"Each message sent from Settings › Send Feedback, or with /feedback in the Telegram group (sign in with that Telegram account). Up to %lld a day; duplicates and invalid ones don't count." = "通过“设置 › 反馈问题”发送的每条反馈，或在 Telegram 群里用 /feedback 发送的反馈（用同一个 Telegram 账号登录）。每天最多 %lld 条，重复或无效的不计分。";
+"When the developer fixes the problem or builds the idea you sent. The clearer the report, the likelier: your device, the build, the source, the steps, and a screenshot or video." = "当开发者修好你报告的问题，或做出你提的想法时获得。写得越清楚越容易被采纳：设备、build 号、用的源、复现步骤，再附上截图或视频。";
+"Yingxia's code is on GitHub. Put this line in your pull request's description; each merged pull request counts once." = "映匣的代码在 GitHub 上。在 PR 描述里写上这一行，每个合并的 PR 计一次。";
+"Sign in to get the account ID for your pull requests." = "登录后即可获得用于 PR 的账号 ID。";
+"Fair Play" = "公平规则";
+"Points are counted again from the records every time. Duplicates, spam or several accounts on one device earn nothing more, and points gained unfairly are taken away." = "积分每次都按记录重新计算。重复、刷屏或一台设备多个账号都不会多得分，不正当获得的积分会被扣除。";
+"Daily +%lld · feedback +%lld · adopted +%lld · PR +%lld" = "每天 +%lld · 反馈 +%lld · 采纳 +%lld · PR +%lld";
+"Earn points: +%lld for each message, +%lld when adopted" = "赚积分：每条反馈 +%lld，被采纳 +%lld";
 "Member" = "会员";
 "Valid Until" = "有效期至";
 "Member Since" = "加入于";
