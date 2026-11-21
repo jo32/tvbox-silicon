@@ -209,7 +209,7 @@ struct AccountView: View {
 
     private var proValue: String {
         guard let until = accounts.proUntil else { return L10n.text("Not active") }
-        return accounts.isLifetime ? L10n.text("Lifetime") : L10n.text("Until %@", until.formatted(date: .abbreviated, time: .omitted))
+        return accounts.isLifetime ? L10n.text("Lifetime") : L10n.text("Pro until %@", until.formatted(date: .abbreviated, time: .omitted))
     }
 
     private func redeem() {
@@ -267,7 +267,7 @@ struct AccountView: View {
         case "adopted": L10n.text("Adopted")
         case "declined": L10n.text("Not planned")
         case "duplicate": L10n.text("Duplicate")
-        default: L10n.text("Open")
+        default: L10n.text("Feedback status: open")
         }
     }
     private func statusSymbol(_ status: String) -> String {
