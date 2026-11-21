@@ -30,6 +30,9 @@ settings:
     # (Config/AppleSignIn.entitlements or Config/iCloud-AppleSignIn.entitlements as ICLOUD_ENTITLEMENTS). Info.plist's
     # YingxiaAppleSignIn tells the app (App/AccountStore.swift); Telegram sign-in works without it.
     APPLE_SIGN_IN: 'NO'
+    # Debug builds only: another accounts server baked in, e.g. Services/accounts/test/serve.mjs on the Mac's LAN address
+    # for a phone (ACCOUNTS_SERVER=http://192.168.1.2:8790). Release builds ignore it.
+    ACCOUNTS_SERVER: ''
 packages:
   # Symlinks to the root Package.swift, Sources, Vendor and Tests. Xcode walks every file under a
   # local package before building, so pointing it at the repo root made it scan build/ (minutes).
@@ -68,6 +71,7 @@ targetTemplates:
         UIBackgroundModes: [audio]
         # Whether this build signs in with Apple (App/AccountStore.swift): the APPLE_SIGN_IN setting.
         YingxiaAppleSignIn: $(APPLE_SIGN_IN)
+        YingxiaAccountsServer: $(ACCOUNTS_SERVER)
 targets:
   TVBox-macOS:
     templates: [SharedApp]

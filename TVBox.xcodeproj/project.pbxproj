@@ -1630,6 +1630,7 @@
 		335F9F0CE5B41C3830EBD4E1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ACCOUNTS_SERVER = "";
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				APPLE_SIGN_IN = NO;
 				CLANG_ANALYZER_NONNULL = YES;
@@ -1815,6 +1816,7 @@
 		C612EA0D9437F6A8C12E3650 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ACCOUNTS_SERVER = "";
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				APPLE_SIGN_IN = NO;
 				CLANG_ANALYZER_NONNULL = YES;

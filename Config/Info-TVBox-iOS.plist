@@ -116,6 +116,8 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>YingxiaAccountsServer</key>
+	<string>$(ACCOUNTS_SERVER)</string>
 	<key>YingxiaAppleSignIn</key>
 	<string>$(APPLE_SIGN_IN)</string>
 </dict>

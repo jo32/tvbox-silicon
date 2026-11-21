@@ -64,10 +64,12 @@ public struct Account: Codable, Sendable, Equatable {
 public enum AccountService {
     public static let address = URL(string: "https://yingxia-accounts.getmegaportal.com")!
 
-    /// Debug builds take another server with `-qaAccounts <url>`.
+    /// Debug builds take another server with `-qaAccounts <url>`, or the one built in with `ACCOUNTS_SERVER=<url>`.
     static var base: URL {
         #if DEBUG
         if let text = UserDefaults.standard.string(forKey: "qaAccounts"), let url = URL(string: text) { return url }
+        if let text = Bundle.main.object(forInfoDictionaryKey: "YingxiaAccountsServer") as? String, !text.isEmpty,
+           let url = URL(string: text) { return url }
         #endif
         return address
     }
