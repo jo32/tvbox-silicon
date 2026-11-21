@@ -2254,3 +2254,16 @@
 "Your feedback points and Pro time are deleted with it, and can't be brought back." = "意見積分和 Pro 時長會一併刪除，且無法復原。";
 "You've already redeemed this code." = "你已兌換過此兌換碼。";
 "You've been signed out. Sign in again." = "你已登出，請重新登入。";
+"Built-in Danmaku Services" = "內建彈幕服務";
+"Servers are asked in order until one has comments. Add a Dandanplay-compatible server, such as a self-hosted danmu_api, by its root or an API prefix ending in /api/v2; a token in the path is supported. Each one is tested when added. Official episode pages from the source are sent to servers you add, to fetch their comments. Addresses are saved only on this device." = "依序詢問各伺服器，直到某個伺服器有彈幕。可加入相容彈彈play 的伺服器（如自架的 danmu_api），填寫根位址或以 /api/v2 結尾的 API 前綴；支援路徑中的 token。加入時會先測試。為取得彈幕，片源提供的官方劇集頁面會傳送給你加入的伺服器。位址僅儲存在本裝置上。";
+"Paste an episode link from iQIYI, Tencent Video, Youku, Mango TV or Bilibili." = "請貼上愛奇藝、騰訊視頻、優酷、芒果TV 或嗶哩嗶哩的劇集連結。";
+"No comments were found for this link." = "此連結沒有找到彈幕。";
+"Search On" = "搜尋伺服器";
+"Episode page address" = "劇集頁面位址";
+"Load from Link" = "從連結載入";
+"Episode Link" = "劇集連結";
+"Paste the episode's page from iQIYI, Tencent Video, Youku, Mango TV or Bilibili. The link is sent to the selected danmaku service to fetch its comments." = "貼上愛奇藝、騰訊視頻、優酷、芒果TV 或嗶哩嗶哩的劇集頁面。連結會傳送給所選的彈幕服務以取得彈幕。";
+"Add Built-in Services" = "加入內建服務";
+"Danmaku Servers" = "彈幕伺服器";
+"Add another server to move or remove this one." = "加入其他伺服器後才能移動或移除此伺服器。";
+"Find Danmaku…" = "尋找彈幕…";

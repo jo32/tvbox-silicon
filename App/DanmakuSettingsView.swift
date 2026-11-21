@@ -316,6 +316,7 @@ private struct TVDanmakuSettingsPage: View {
     @AppStorage(DanmakuService.serverKey) private var server = CatalogDanmakuClient.defaultServer
     @AppStorage(DanmakuService.officialLookupKey) private var officialLookup = true
     @State private var failure: String?
+    @State private var servers = DanmakuService.servers()
     private static let sizes: [Double] = [16, 18, 20, 22, 26, 30, 36]
     private static let opacities: [Double] = [0.3, 0.5, 0.7, 0.85, 1]
 
@@ -365,9 +366,11 @@ private struct TVDanmakuSettingsPage: View {
                             let all = DanmakuProvider.allCases
                             save(source: all[((all.firstIndex(of: source) ?? 0) + 1) % all.count])
                         }
-                        TVSettingsField(title: L10n.text("Danmaku server URL"), text: Binding(get: { server }, set: { save(server: $0) }))
+                        TVSettingsLink(title: L10n.text("Danmaku Servers"), value: servers.count == 1 ? DanmakuService.title(for: servers[0]) : servers.count.formatted()) {
+                            TVDanmakuServersPage()
+                        }
                     }
-                    if !DanmakuService.isCustomServer(server) {
+                    if servers.contains(CatalogDanmakuClient.defaultServer) {
                         TVSettingsSection(footer: DanmakuService.officialLookupNote) {
                             TVSettingsToggle(title: L10n.text("Find official episodes for dmku"), isOn: $officialLookup)
                         }
@@ -387,6 +390,7 @@ private struct TVDanmakuSettingsPage: View {
         .padding(.horizontal, Layout.gutter)
         .screenBackdrop()
         .screenTitle("")
+        .onReceive(NotificationCenter.default.publisher(for: DanmakuService.changed)) { _ in servers = DanmakuService.servers() }
     }
 
     private var source: DanmakuProvider { DanmakuProvider(rawValue: preferredSource) ?? .automatic }
@@ -398,6 +402,81 @@ private struct TVDanmakuSettingsPage: View {
         } catch {
             failure = error.localizedDescription
         }
+    }
+}
+
+/// The danmaku servers on the TV (#1408): one row types a new address, which is tested before it is added; each server
+/// opens its own page to move or remove it.
+private struct TVDanmakuServersPage: View {
+    @State private var servers = DanmakuService.servers()
+    @State private var draft = ""
+    @State private var checking = false
+    @State private var failure: String?
+
+    var body: some View {
+        TVSettingsSubpage(symbol: "server.rack", title: L10n.text("Danmaku Servers")) {
+            TVSettingsSection(footer: failure ?? DanmakuService.serversNote) {
+                TVSettingsField(title: L10n.text("Add Server"), text: $draft, emptyValue: "")
+                    .disabled(checking)
+                    .onChange(of: draft) { _, typed in add(typed) }
+                if !servers.contains(CatalogDanmakuClient.defaultServer) {
+                    TVSettingsAction(title: L10n.text("Add Built-in Services")) {
+                        change { try DanmakuService.save(servers: servers + [CatalogDanmakuClient.defaultServer]) }
+                    }
+                }
+            }
+            TVSettingsSection(title: L10n.text("Order")) {
+                if checking { TVSettingsAction(title: L10n.text("Add Server"), busy: true) {}.disabled(true) }
+                ForEach(Array(servers.enumerated()), id: \.element) { index, server in
+                    TVSettingsLink(title: DanmakuService.title(for: server), value: (index + 1).formatted()) { TVDanmakuServerPage(address: server) }
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: DanmakuService.changed)) { _ in servers = DanmakuService.servers() }
+    }
+
+    private func add(_ typed: String) {
+        guard !typed.isEmpty else { return }
+        draft = ""
+        checking = true; failure = nil
+        Task {
+            do {
+                let added = try await DanmakuService.check(typed)
+                try DanmakuService.save(servers: DanmakuService.servers() + [added])
+            } catch {
+                failure = error.localizedDescription
+            }
+            checking = false
+        }
+    }
+    private func change(_ edit: () throws -> Void) {
+        do { try edit(); failure = nil } catch { failure = error.localizedDescription }
+    }
+}
+
+/// One danmaku server: move it in the order, or remove it.
+private struct TVDanmakuServerPage: View {
+    let address: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var servers = DanmakuService.servers()
+
+    var body: some View {
+        let index = servers.firstIndex(of: address) ?? 0
+        TVSettingsSubpage(symbol: "server.rack", title: DanmakuService.title(for: address)) {
+            if servers.count > 1 {
+                TVSettingsSection(title: L10n.text("Order")) {
+                    if index > 1 { TVSettingsAction(title: L10n.text("Move to Top")) { try? DanmakuService.move(address, to: 0) } }
+                    if index > 0 { TVSettingsAction(title: L10n.text("Move Up")) { try? DanmakuService.move(address, to: index - 1) } }
+                    if index < servers.count - 1 { TVSettingsAction(title: L10n.text("Move Down")) { try? DanmakuService.move(address, to: index + 1) } }
+                }
+                TVSettingsSection(title: L10n.text("Remove")) {
+                    TVSettingsAction(title: L10n.text("Remove"), destructive: true) { try? DanmakuService.remove(address); dismiss() }
+                }
+            } else {
+                TVSettingsSection(footer: L10n.text("Add another server to move or remove this one.")) { EmptyView() }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: DanmakuService.changed)) { _ in servers = DanmakuService.servers() }
     }
 }
 

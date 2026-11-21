@@ -207,6 +207,22 @@ public struct DanmakuResolver: Sendable {
         var mapping = saved
         do {
             let client = try CatalogDanmakuClient(address: dandanServer, transport: http, credentials: dandanCredentials)
+            // The source named the episode's official page: a server that reads pages itself (danmu_api) is asked for
+            // exactly that episode before a title search, which can take another season of the same name (#1408).
+            if mapping == nil, !savedOnly, let page = sourcePage(context) {
+                do {
+                    let comments = try await client.comments(page: page)
+                    try Task.checkCancellation()
+                    if !comments.isEmpty {
+                        return keep(AutomaticDanmakuResult(comments: comments, track: context.videoName + " · " + context.episodeName,
+                            source: Self.pageSource(page), state: "loaded"), context: context, ticket: ticket)
+                    }
+                } catch {
+                    // A server without `comment?url=` answers 404, or a list it can't parse: search by title instead.
+                    if error is CancellationError || error is DanmakuAuthorizationRequired || error is DandanplayLimitReached
+                        || Self.serverFailed(error) { throw error }
+                }
+            }
             if mapping == nil {
                 if savedOnly { return AutomaticDanmakuResult(comments: [], track: "", source: "", state: "unmatched") }
                 mapping = try await customMapping(context, client: client)
@@ -245,6 +261,46 @@ public struct DanmakuResolver: Sendable {
             keep(mapping, in: &mappings, key: key, ticket: ticket)
             return customNegative(context, state: "unavailable", ticket: ticket)
         }
+    }
+
+    /// The episode's official page from the source, when it is one of the platforms the viewer prefers.
+    private func sourcePage(_ context: PlaybackHistoryContext) -> URL? {
+        guard let page = context.officialPage.flatMap({ OfficialVideoPage.validated($0.absoluteString) }) else { return nil }
+        return preferredSource == .automatic || DanmakuProvider(source: CatalogDanmakuMatcher.episodeSource(title: "", url: page)) == preferredSource ? page : nil
+    }
+    private static func pageSource(_ page: URL) -> String {
+        let platform = DanmakuProvider(source: CatalogDanmakuMatcher.episodeSource(title: "", url: page))
+        return platform == .automatic ? page.host() ?? "" : platform.title
+    }
+
+    /// Comments for an episode page the viewer pasted (#1089): a server added by hand reads it itself
+    /// (`comment?url=`, any page it supports); the built-in services send an official page to dmku, then the backup.
+    public func comments(page address: String) async throws -> AutomaticDanmakuResult {
+        let text = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        let comments: [CatalogDanmakuComment], page: URL, source: String
+        if isCustomServer {
+            guard let link = OfficialVideoPage.validated(text) ?? Self.pastedPage(text) else { throw TVError.invalidURL }
+            page = link
+            comments = try await CatalogDanmakuClient(address: dandanServer, transport: http, credentials: dandanCredentials).comments(page: page)
+            source = Self.pageSource(page)
+        } else {
+            guard let link = OfficialVideoPage.validated(text) else {
+                throw TVError.unsupported(L10n.text("Paste an episode link from iQIYI, Tencent Video, Youku, Mango TV or Bilibili."))
+            }
+            page = link
+            let found = try await pageComments(page, provider: "pasted", ticket: cache.ticket())
+            comments = found.comments; source = found.server + " · " + Self.pageSource(page)
+        }
+        try Task.checkCancellation()
+        return AutomaticDanmakuResult(comments: comments, track: (page.host() ?? "") + page.path, source: source,
+                                      state: comments.isEmpty ? "unmatched" : "loaded")
+    }
+    /// A pasted web address without its sign-in or fragment.
+    static func pastedPage(_ text: String) -> URL? {
+        guard var parts = URLComponents(string: text), ["http", "https"].contains(parts.scheme?.lowercased() ?? ""),
+              parts.host?.isEmpty == false else { return nil }
+        parts.user = nil; parts.password = nil; parts.fragment = nil
+        return parts.url
     }
 
     private func customNegative(_ context: PlaybackHistoryContext, state: String, ttl: TimeInterval? = nil,
@@ -352,34 +408,7 @@ public struct DanmakuResolver: Sendable {
             guard let mapping, let track = mapping.track(for: context), let page = track.page,
                   let safe = OfficialVideoPage.validated(page.absoluteString) else { return Outcome(mapping: mapping, responded: true) }
             stage = "comments"
-            // dmku first; the backup only when dmku fails or has no comments for the page.
-            var servers = [("dmku", dmkuServer, [URLQueryItem(name: "ac", value: "dm"), .init(name: "url", value: safe.absoluteString)])]
-            if let backupServer {
-                servers.append((backupServer.host() ?? "backup", backupServer, [.init(name: "type", value: "json"), .init(name: "id", value: safe.absoluteString)]))
-            }
-            var comments: [CatalogDanmakuComment] = [], source = "dmku", failure: Error = URLError(.cannotConnectToHost), answered = false
-            for (name, server, query) in servers {
-                // A server that just failed is skipped for a while, and the next one asked at once.
-                if cache.data(for: Self.pauseKey(server), kind: .lookup) != nil {
-                    Diagnostics.shared.record(.debug, "danmaku", "provider=\(provider) server=\(name) skipped=paused")
-                    continue
-                }
-                var url = URLComponents(url: server, resolvingAgainstBaseURL: false)!
-                url.queryItems = query
-                do {
-                    comments = try CatalogDanmakuParser.parse(await http.send(URLRequest(url: url.url!, timeoutInterval: 35)))
-                    source = name; answered = true
-                    if !comments.isEmpty { break }
-                } catch {
-                    if error is CancellationError { throw error }
-                    failure = error
-                    if Self.serverFailed(error), !Task.isCancelled {
-                        cache.store(Data([1]), for: Self.pauseKey(server), kind: .lookup, ttl: Self.serverPause, ticket: ticket)
-                    }
-                    Diagnostics.shared.record(.debug, "danmaku", "provider=\(provider) server=\(name) failed=\((error as NSError).domain):\((error as NSError).code)")
-                }
-            }
-            if !answered { throw failure }
+            let (comments, source) = try await pageComments(safe, provider: provider, ticket: ticket)
             try Task.checkCancellation()
             Diagnostics.shared.record(.debug, "danmaku", "provider=\(provider) server=\(source) comments=\(comments.count) seconds=\(Int(Date().timeIntervalSince(started)))")
             return Outcome(result: AutomaticDanmakuResult(comments: comments, track: mapping.title + " · " + track.title,
@@ -392,6 +421,37 @@ public struct DanmakuResolver: Sendable {
             // The page was found: keep it for the next episode, and say its comments couldn't be fetched.
             return stage == "comments" ? Outcome(mapping: mapping, unreachable: true) : Outcome()
         }
+    }
+    /// An official page's comments: dmku first; the backup only when dmku fails or has no comments for the page.
+    private func pageComments(_ safe: URL, provider: String, ticket: MediaCache.Ticket) async throws -> (comments: [CatalogDanmakuComment], server: String) {
+        var servers = [("dmku", dmkuServer, [URLQueryItem(name: "ac", value: "dm"), .init(name: "url", value: safe.absoluteString)])]
+        if let backupServer {
+            servers.append((backupServer.host() ?? "backup", backupServer, [.init(name: "type", value: "json"), .init(name: "id", value: safe.absoluteString)]))
+        }
+        var comments: [CatalogDanmakuComment] = [], source = "dmku", failure: Error = URLError(.cannotConnectToHost), answered = false
+        for (name, server, query) in servers {
+            // A server that just failed is skipped for a while, and the next one asked at once.
+            if cache.data(for: Self.pauseKey(server), kind: .lookup) != nil {
+                Diagnostics.shared.record(.debug, "danmaku", "provider=\(provider) server=\(name) skipped=paused")
+                continue
+            }
+            var url = URLComponents(url: server, resolvingAgainstBaseURL: false)!
+            url.queryItems = query
+            do {
+                comments = try CatalogDanmakuParser.parse(await http.send(URLRequest(url: url.url!, timeoutInterval: 35)))
+                source = name; answered = true
+                if !comments.isEmpty { break }
+            } catch {
+                if error is CancellationError { throw error }
+                failure = error
+                if Self.serverFailed(error), !Task.isCancelled {
+                    cache.store(Data([1]), for: Self.pauseKey(server), kind: .lookup, ttl: Self.serverPause, ticket: ticket)
+                }
+                Diagnostics.shared.record(.debug, "danmaku", "provider=\(provider) server=\(name) failed=\((error as NSError).domain):\((error as NSError).code)")
+            }
+        }
+        if !answered { throw failure }
+        return (comments, source)
     }
     private func dandan(_ context: PlaybackHistoryContext, cached: DanmakuMapping?) async -> Outcome {
         do {
@@ -415,6 +475,36 @@ public struct DanmakuResolver: Sendable {
             Diagnostics.shared.record(.debug, "danmaku", "provider=dandan limit reached; not asked for \(Int(DandanplayPause.length / 60)) min")
             return Outcome()
         } catch { return Outcome() }
+    }
+}
+
+/// The viewer's danmaku servers in order (#1408): each is asked until one has comments. Each keeps its own caches and
+/// matches; a show picked by hand on one of them asks that one first, so its next episodes follow the pick.
+public struct DanmakuChain: Sendable {
+    public let resolvers: [DanmakuResolver]
+    public init(_ resolvers: [DanmakuResolver]) { self.resolvers = resolvers.isEmpty ? [DanmakuResolver()] : resolvers }
+    public var primary: DanmakuResolver { resolvers[0] }
+    public func hasPick(for context: PlaybackHistoryContext) -> Bool { resolvers.contains { $0.hasPick(for: context) } }
+    public func forget(_ context: PlaybackHistoryContext) { for resolver in resolvers { resolver.forget(context) } }
+    public func forgetPick(_ context: PlaybackHistoryContext) { for resolver in resolvers { resolver.forgetPick(context) } }
+    public func forgetUnreachableServers() { for resolver in resolvers { resolver.forgetUnreachableServers() } }
+    /// `first` (the source's own comments) goes with the first server, as before there was a list. With one server its
+    /// answer is returned as it is; with more, "unavailable" when any of them couldn't be asked.
+    public func resolve(_ context: PlaybackHistoryContext, ticket: MediaCache.Ticket? = nil,
+                        first: (@Sendable (PlaybackHistoryContext) async -> AutomaticDanmakuResult?)? = nil,
+                        savedOnly: Bool = false) async throws -> AutomaticDanmakuResult {
+        let ticket = ticket ?? primary.cache.ticket()
+        let picked = resolvers.filter { $0.hasPick(for: context) }
+        let ordered = picked + resolvers.filter { resolver in !picked.contains { $0.dandanServer == resolver.dandanServer } }
+        var unavailable = false
+        for resolver in ordered {
+            try Task.checkCancellation()
+            let result = try await resolver.resolve(context, ticket: ticket,
+                first: resolver.dandanServer == primary.dandanServer ? first : nil, savedOnly: savedOnly)
+            if !result.comments.isEmpty || resolvers.count == 1 { return result }
+            unavailable = unavailable || result.state == "unavailable"
+        }
+        return AutomaticDanmakuResult(comments: [], track: "", source: "", state: unavailable ? "unavailable" : "unmatched")
     }
 }
 
