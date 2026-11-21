@@ -19,14 +19,15 @@ export async function startLogin(env: Env, install: string, platform: string, li
   return { code, url: `https://t.me/${env.TELEGRAM_BOT}?start=${code}`, expires: now() + LOGIN_SECONDS };
 }
 
-// The person the bot has seen for `code`, or "pending" / "expired".
+// The person the bot has seen for `code`, or "pending" / "expired". Once seen, the code keeps giving that person until
+// it expires: the app's check is often cut off as it comes back from Telegram (the answer is lost, though the sign-in
+// happened here), and the next check must still sign it in rather than say the link expired. Old codes go in cleanLogins.
 export async function loginResult(env: Env, code: string): Promise<{ user: User; install: string; platform: string } | "pending" | "expired"> {
   const row = await env.DB.prepare("SELECT * FROM telegram_logins WHERE code = ?").bind(code)
     .first<{ code: string; install: string; platform: string; created: number; user_id: string | null }>();
   if (!row || row.created < now() - LOGIN_SECONDS) return "expired";
   if (!row.user_id) return "pending";
   const user = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(row.user_id).first<User>();
-  await env.DB.prepare("DELETE FROM telegram_logins WHERE code = ?").bind(code).run();
   return user ? { user, install: row.install, platform: row.platform } : "expired";
 }
 
