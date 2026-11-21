@@ -2155,6 +2155,8 @@
 "None of your sources has this season." = "None of your sources has this season.";
 
 // Settings › Account (App/AccountView.swift)
+"Pro until %@" = "Until %@";
+"Feedback status: open" = "Open";
 "Accounts aren't available right now. Please try again later." = "Accounts aren't available right now. Please try again later.";
 "Add another way to sign in, so the same account works on every device." = "Add another way to sign in, so the same account works on every device.";
 "Add Sign in with Apple" = "Add Sign in with Apple";
