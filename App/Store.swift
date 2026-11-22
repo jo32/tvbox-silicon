@@ -1060,6 +1060,10 @@ import TVCore
         cancelEpisodeSelection()
         let request = episodeRequest
         resolvingEpisode = episode; episodeError = nil
+        // The episode playing, on another line (one too slow to watch, say): it goes on from here, not from the start (#1300).
+        PlaybackSession.current?.saveHistory()
+        let resume = channel.historyContext.flatMap { context in playbackHistory.entries.first { $0.id == context.id } }
+            .flatMap { $0.context.episodeID == channel.historyContext?.episodeID ? $0.resumePosition(for: episode, among: catalog.video.episodes) : nil }
         episodeTask = Task { [weak self] in
             guard let self else { return }
             defer { if self.episodeRequest == request { self.resolvingEpisode = nil; self.episodeTask = nil } }
@@ -1068,7 +1072,7 @@ import TVCore
                 let resolved: Channel
                 if let ahead = await self.nextAhead(for: episode) { resolved = ahead } else { resolved = try await catalog.client.playback(episode) }
                 guard !Task.isCancelled, self.episodeRequest == request, self.playing == channel else { return }
-                self.playing = self.catalogChannel(resolved, video: catalog.video, episode: episode, client: catalog.client)
+                self.playing = self.catalogChannel(resolved, video: catalog.video, episode: episode, client: catalog.client, resumePosition: resume)
             } catch {
                 guard !Task.isCancelled, self.episodeRequest == request, self.playing == channel else { return }
                 Diagnostics.shared.failure("catalog", "episode \(catalog.client.reportContext) flag=\(episode.flag)", error)

@@ -200,10 +200,17 @@ private protocol EnhancementEngine: AnyObject, Sendable {
         onDisplayChange?()
     }
 
-    /// Not while AirPlay shows the video elsewhere, the device is hot, or it is saving power.
+    /// Not while AirPlay shows the video elsewhere, the device is hot, or it is saving power. A phone or iPad is held in
+    /// the hand: there the machine-learning frames stop as soon as it gets warm (`fair`), rather than once the system
+    /// already slows it down (`serious`), which a hand feels as a hot phone (#1428, #1384).
     private func allowed(_ player: AVPlayer) -> Bool {
         if player.isExternalPlaybackActive { return false }
-        if ProcessInfo.processInfo.thermalState.rawValue >= ProcessInfo.ThermalState.serious.rawValue { return false }
+        #if os(iOS)
+        let warm = ProcessInfo.ThermalState.fair
+        #else
+        let warm = ProcessInfo.ThermalState.serious
+        #endif
+        if ProcessInfo.processInfo.thermalState.rawValue >= warm.rawValue { return false }
         #if !os(tvOS)
         if ProcessInfo.processInfo.isLowPowerModeEnabled { return false }
         #endif

@@ -142,3 +142,28 @@ private func historyContext(video: String = "series", episode: String = "1", sou
     #expect(posted.keepingPoster(list).poster == own)
     #expect(bare.keepingPoster(nil).poster == nil)
 }
+
+@Test func theSameEpisodeOnAnotherLineGoesOnFromWhereItWas() {
+    let entry = PlaybackHistoryEntry(context: historyContext(episode: "2"), position: 1200, duration: 2700,
+                                     updatedAt: Date(timeIntervalSince1970: 0))
+    let line = [Episode(id: "0-1", name: "Episode 1", address: "a1", flag: "line"), Episode(id: "0-2", name: "Episode 2", address: "a2", flag: "line")]
+    // The same name on another line (#1300); below, the same number under another name.
+    let sameName = [Episode(id: "1-1", name: "Episode 1", address: "b1", flag: "other"), Episode(id: "1-2", name: "Episode 2", address: "b2", flag: "other")]
+    #expect(entry.resumePosition(for: sameName[1], among: line + sameName) == 1200)
+    #expect(entry.resumePosition(for: sameName[0], among: line + sameName) == nil, "another episode starts at 0")
+    let numbered = PlaybackHistoryEntry(context: PlaybackHistoryContext(origin: URL(string: "https://example.com/sub.json")!, sourceKey: "source",
+        sourceName: "Movies", videoID: "series", videoName: "Series", episodeID: "0-2", episodeName: "第01集", episodeFlag: "line"),
+        position: 600, duration: 2700, updatedAt: Date(timeIntervalSince1970: 0))
+    let other = [Episode(id: "1-1", name: "第1集", address: "c1", flag: "other"), Episode(id: "1-2", name: "第2集", address: "c2", flag: "other")]
+    #expect(numbered.resumePosition(for: other[0], among: other) == 600)
+    #expect(numbered.resumePosition(for: other[1], among: other) == nil)
+    // A film: each line's only video, whatever the lines call it.
+    let film = PlaybackHistoryEntry(context: PlaybackHistoryContext(origin: URL(string: "https://example.com/sub.json")!, sourceKey: "source",
+        sourceName: "Movies", videoID: "film", videoName: "Film", episodeID: "0", episodeName: "HD中字", episodeFlag: "line"),
+        position: 4500, duration: 9000, updatedAt: Date(timeIntervalSince1970: 0))
+    let lines = [Episode(id: "0", name: "HD中字", address: "f1", flag: "line"), Episode(id: "1", name: "正片", address: "f2", flag: "other")]
+    #expect(film.resumePosition(for: lines[1], among: lines) == 4500)
+    // Two videos called the same on the other line: which one is unknown, so it starts at 0.
+    let twice = [Episode(id: "2-1", name: "Episode 2", address: "d1", flag: "third"), Episode(id: "2-2", name: "Episode 2", address: "d2", flag: "third")]
+    #expect(entry.resumePosition(for: twice[0], among: line + twice) == nil)
+}

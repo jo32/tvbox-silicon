@@ -19,6 +19,8 @@ import IOKit.pwr_mgt
     var skipDefaults = UserDefaults.standard
     private var historyContext: PlaybackHistoryContext?
     private var pendingResume: Double?
+    /// Where the item was asked to open (`seekAhead`), until it is ready.
+    @ObservationIgnored private var soughtAhead: Double?
     private var restoringPosition = false
     private(set) var restoredPosition: Double?
     private(set) var requestedResumePosition: Double?
@@ -703,6 +705,26 @@ import IOKit.pwr_mgt
                 self.markClock()
             }
         }
+        #if !os(macOS)
+        // Leaving the app pauses the video, and soon after the system suspends the app, which closes its connections and
+        // the loopback servers some videos play through: coming back, the video loaded all over again (#1388). The app
+        // stays awake for the half minute the system allows, so a quick look at another app comes back to it as it was.
+        backgroundObservers = [
+            NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.player.currentItem != nil else { return }
+                    self.backgroundGrace.hold()
+                }
+            },
+            NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.backgroundGrace.release() }
+            },
+        ]
+        #endif
+        // How warm the device gets while something plays, in the log, so a report of heat says what was on (#1428).
+        thermalObserver = NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.recordThermalState() }
+        }
         externalSubtitles.cues = subtitles
         externalSubtitles.player = player
         externalSubtitles.changed = { [weak self] in self?.followSubtitleDelay() }
@@ -713,6 +735,22 @@ import IOKit.pwr_mgt
     }
     private var styleObserver: NSObjectProtocol?
     private var sleepObservers: [NSObjectProtocol] = []
+    @ObservationIgnored private var backgroundObservers: [NSObjectProtocol] = []
+    @ObservationIgnored private let backgroundGrace = BackgroundGrace(name: "Video")
+    @ObservationIgnored private var thermalObserver: NSObjectProtocol?
+    private func recordThermalState() {
+        guard player.currentItem != nil else { return }
+        let state = switch ProcessInfo.processInfo.thermalState {
+        case .nominal: "nominal"
+        case .fair: "fair"
+        case .serious: "serious"
+        case .critical: "critical"
+        @unknown default: "unknown"
+        }
+        let seconds = player.currentTime().seconds
+        Diagnostics.shared.record(.info, "player", "thermal=\(state) at=\(seconds.isFinite ? Int(seconds) : -1)s playing=\(player.timeControlStatus == .playing) "
+            + "smoothing=\(enhancer.status.smoothing) upscaling=\(enhancer.status.upscaling) danmaku=\(!danmaku.isEmpty)")
+    }
     @ObservationIgnored private var jumpObserver: NSObjectProtocol?
     @ObservationIgnored private var jumpResume: Task<Void, Never>?
     /// Where the clock was at the last jump notice or once-a-second sample: none before the first sample, so the
@@ -946,7 +984,7 @@ import IOKit.pwr_mgt
         let qaSpeed = UserDefaults.standard.float(forKey: "qaSpeed")
         if qaSpeed > 0 { player.defaultRate = qaSpeed }
         #endif
-        if pendingResume == nil { player.play() }
+        if pendingResume == nil { player.play() } else { seekAhead() }
         #if DEBUG
         // `-qaSeek <seconds>` starts playback there, for screenshots.
         let qaSeek = UserDefaults.standard.double(forKey: "qaSeek")
@@ -1232,6 +1270,8 @@ import IOKit.pwr_mgt
                 guard let self, self.generation == activeGeneration else { return }
                 self.buffering = waiting
                 self.paused = paused
+                // No plugin conversion ahead of time while a video plays or loads: it ran a core flat out (#1428).
+                PluginConversionAhead.playbackChanged(!paused)
                 #if os(macOS)
                 self.displayAwake.hold(!paused)
                 #endif
@@ -1240,8 +1280,11 @@ import IOKit.pwr_mgt
                 if playing, !self.showsPicture {
                     Task { @MainActor [weak self] in
                         try? await Task.sleep(for: .milliseconds(350))
-                        guard let self, self.generation == activeGeneration, self.player.timeControlStatus == .playing else { return }
+                        guard let self, self.generation == activeGeneration, self.player.timeControlStatus == .playing, !self.showsPicture else { return }
                         self.showsPicture = true
+                        // How long the viewer waited, and from where it plays: a slow resume shows up in a report (#1455).
+                        let seconds = self.player.currentTime().seconds
+                        Diagnostics.shared.record(.info, "player", "picture after=\(String(format: "%.2f", Date().timeIntervalSince(self.openedAt) - 0.35))s at=\(seconds.isFinite ? Int(seconds) : -1)s")
                     }
                 }
             }
@@ -1394,6 +1437,7 @@ import IOKit.pwr_mgt
         HDRDisplay.reset()
         #endif
         if playing != nil { ErrorReports.shared.stoppedPlaying() }
+        PluginConversionAhead.playbackChanged(false)
         playing = nil
         catalogDanmaku.clear()
         externalSubtitles.stop()
@@ -1443,7 +1487,7 @@ import IOKit.pwr_mgt
         historyContext = channel.historyContext
         requestedResumePosition = channel.resumePosition
         pendingResume = channel.resumePosition.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
-        restoringPosition = false; restoredPosition = nil; checkingPicture = false
+        restoringPosition = false; restoredPosition = nil; checkingPicture = false; soughtAhead = nil
         skipScope = channel.skipScope
         skipSettings = skipScope.map { EpisodeSkipSettings.load(scope: $0, defaults: skipDefaults) } ?? EpisodeSkipSettings()
         skipPass = EpisodeSkipPass(); seekingSegment = false
@@ -1465,16 +1509,25 @@ import IOKit.pwr_mgt
         // A live stream (a sports line a source lists as an episode) has no duration, so there is no place to
         // return to. Waiting for one left "loading" on and the player paused for good (#683, #717): play it from its live edge.
         if item.duration.isIndefinite {
-            pendingResume = nil; loading = false
+            pendingResume = nil; soughtAhead = nil; loading = false
             if !editingSkip { player.play() }
             return
         }
         guard let target = PlaybackHistoryEntry.resumeTarget(requested, duration: item.duration.seconds) else { return }
+        let activeGeneration = generation
+        // The item opened at the saved place (`seekAhead`) and is there: it plays from where it already loaded.
+        let ahead = soughtAhead; soughtAhead = nil
+        let landed = player.currentTime().seconds
+        if let ahead, abs(ahead - target) < 0.5, landed.isFinite, landed >= target - 10.5, landed <= target + 0.5 {
+            pendingResume = nil; loading = false
+            restoredPosition = landed
+            Diagnostics.shared.record(.info, "player", "history resume requested=\(requested) restored=\(landed) opened there")
+            Task { await self.playRestored(item, generation: activeGeneration) }
+            return
+        }
         restoringPosition = true
         let pattern: Duration.TimeFormatStyle.Pattern = target >= 3600 ? .hourMinuteSecond : .minuteSecond
         note(L10n.text("Jumping to %@", Duration.seconds(Int(target)).formatted(.time(pattern: pattern))))
-        let activeGeneration = generation
-        let drive = (item.asset as? AVURLAsset)?.url
         // Up to 10 s early, at the keyframe before the saved place: the player shows it without first reading and
         // decoding the frames up to the exact second (half a second and more from a cloud drive).
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: CMTime(seconds: 10, preferredTimescale: 600),
@@ -1488,14 +1541,42 @@ import IOKit.pwr_mgt
                 }
                 self.restoredPosition = self.player.currentTime().seconds
                 Diagnostics.shared.record(.info, "player", "history resume requested=\(requested) restored=\(self.restoredPosition ?? -1)")
-                // A drive bringing in several times what the video needs: play now, without AVPlayer's wait for a
-                // cushion first (1–1.5 s). It still waits if the bytes fall behind later.
-                let quick = if let drive { await CloudStreams.keepsUp(drive) } else { false }
-                guard self.generation == activeGeneration else { return }
-                if !self.editingSkip { quick ? self.player.playImmediately(atRate: self.player.defaultRate) : self.player.play() }
-                self.saveHistory()
+                await self.playRestored(item, generation: activeGeneration)
             }
         }
+    }
+
+    /// A saved place is asked for as the item opens (#1455), so AVPlayer's first requests are for the video there.
+    /// Seeking only once the item was ready had it load the start first, then throw that away and load the saved place:
+    /// two waits where a fresh open has one. `restorePositionIfNeeded` checks it landed, and seeks again if not.
+    private func seekAhead() {
+        guard let target = pendingResume, target.isFinite, target > 0, !Self.oldResume else { return }
+        soughtAhead = target
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: CMTime(seconds: 10, preferredTimescale: 600),
+                    toleranceAfter: .zero)
+    }
+
+    /// Plays from the restored place. A drive bringing in several times what the video needs plays now, without
+    /// AVPlayer's wait for a cushion first (1–1.5 s); anything else plays once a few seconds are in, as after a jump
+    /// (`SeekResume`, #1213), rather than when AVPlayer predicts the whole download will keep up. Both still wait if
+    /// the bytes fall behind later.
+    private func playRestored(_ item: AVPlayerItem, generation activeGeneration: UUID) async {
+        let drive = (item.asset as? AVURLAsset)?.url
+        let quick = if let drive { await CloudStreams.keepsUp(drive) } else { false }
+        guard generation == activeGeneration else { return }
+        if !editingSkip {
+            if quick { player.playImmediately(atRate: player.defaultRate) } else { player.play(); if !Self.oldResume { resumeAfterJump() } }
+        }
+        saveHistory()
+    }
+
+    /// `-qaOldResume 1`: resumes as before #1455 (open at the start, seek once ready, AVPlayer's own wait), to measure.
+    private static var oldResume: Bool {
+        #if DEBUG
+        UserDefaults.standard.bool(forKey: "qaOldResume")
+        #else
+        false
+        #endif
     }
 }
 

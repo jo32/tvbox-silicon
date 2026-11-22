@@ -37,6 +37,15 @@ import Testing
     #expect(!hot.allowsWork, "the device is hot")
     var tight = free; tight.availableMemory = 300 << 20
     #expect(!tight.allowsWork, "memory is short")
+    var watching = free; watching.playing = true
+    #expect(!watching.allowsWork, "a video plays")
+}
+
+@Test func aPlayingVideoKeepsConversionAheadAway() {
+    PluginConversionAhead.playbackChanged(true)
+    #expect(PluginConversionAhead.current().playing)
+    PluginConversionAhead.playbackChanged(false)
+    #expect(!PluginConversionAhead.current().playing)
 }
 
 @Test func aRunningPluginRequestKeepsConversionAheadAway() {
