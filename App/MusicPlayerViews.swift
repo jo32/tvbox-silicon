@@ -69,6 +69,7 @@ struct MusicNowPlaying: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showsChannels = false
     @State private var showsLyrics = false
+    @State private var showsSkip = false
     @State private var scrubbing: Double?
     #if os(tvOS)
     private let art: CGFloat = 96
@@ -124,6 +125,9 @@ struct MusicNowPlaying: View {
         .tvFocusSection()
         .sheet(isPresented: $showsChannels) { MusicChannelsView() }
         .sheet(isPresented: $showsLyrics) { MusicLyricsView() }
+        #if !os(tvOS)
+        .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: music, book: true) }
+        #endif
         #if DEBUG
         // `-qaMusicLyrics 1` opens the lyrics once they load, for screenshots.
         .onChange(of: music.lyrics) { _, lyrics in
@@ -248,6 +252,10 @@ struct MusicNowPlaying: View {
             } else {
                 Button { showsChannels = true } label: { Label(L10n.text("Channels"), systemImage: "antenna.radiowaves.left.and.right") }
             }
+            #if !os(tvOS)
+            // A book's intro and outro, for all its chapters (#1486); never a song's.
+            if music.canSkip { SkipTimesMenuButton(session: music) { showsSkip = true } }
+            #endif
             if let track = music.track { MusicDownloadMenuItems(tracks: [track]) }
             Button(role: .destructive) { music.stop() } label: { Label(L10n.text("Stop"), systemImage: "xmark") }
         } label: { Image(systemName: "ellipsis") }
