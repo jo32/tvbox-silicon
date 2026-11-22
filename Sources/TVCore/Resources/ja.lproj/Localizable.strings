@@ -2279,6 +2279,23 @@
 "Danmaku Servers" = "弾幕サーバー";
 "Add another server to move or remove this one." = "このサーバーを移動または削除するには、別のサーバーを追加してください。";
 "Find Danmaku…" = "弾幕を探す…";
+
+/* Novel reader: layout, script, page curl, background (#1430, #1007, #1437, #1265) */
+"Paragraph Spacing" = "段落の間隔";
+"Side Margins" = "左右の余白";
+"Top & Bottom" = "上下の余白";
+"Chinese Script" = "簡繁変換";
+"Original Text" = "原文";
+"Traditional" = "繁体字";
+"Simplified" = "簡体字";
+"Page Turn" = "ページめくり";
+"Slide" = "スライド";
+"Curl" = "めくり";
+"Background Image" = "背景画像";
+"Choose Image…" = "画像を選択…";
+"Change Image…" = "画像を変更…";
+"Image Opacity" = "画像の不透明度";
+"This picture can't be used." = "この画像は使用できません。";
 "Add Bookmark" = "ブックマークを追加";
 "Remove Bookmark" = "ブックマークを削除";
 "Bookmarks" = "ブックマーク";

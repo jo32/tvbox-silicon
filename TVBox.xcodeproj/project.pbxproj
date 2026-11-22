@@ -36,6 +36,7 @@
 		14E05DC952FB2705E645EAE6 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B7E929CDDC1F085C6B55693 /* HomeView.swift */; };
 		14FA5947D5B1472F7AF31530 /* DownloadsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B45CB8261D922949ADBDBE15 /* DownloadsView.swift */; };
 		15D2081ED3FCCB08A5ED506A /* Keystone-GPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 084C8344E2997DB3ED8FE974 /* Keystone-GPL2.txt */; };
+		15D48D9954A60C37F7E0B4A9 /* NovelCurlPager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D31855DC36A1B684385C847 /* NovelCurlPager.swift */; };
 		15E3F2F86594F2B8A9CF0175 /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181C983C0018A97F2A086298 /* DiscoveryView.swift */; };
 		162B1A15D6DE2E5CA89C444C /* CloudPosterViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F975966BD8829710491AF56 /* CloudPosterViews.swift */; };
 		16517407D53F4E6410E93AC7 /* BilibiliMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A2914C1B5B5ABA5F4B25A7 /* BilibiliMark.swift */; };
@@ -206,6 +207,7 @@
 		6F182F91BDACFBFC8E6B3B0E /* DetailAurora.swift in Sources */ = {isa = PBXBuildFile; fileRef = A920E1FB27BD2A7B4B5E7EAE /* DetailAurora.swift */; };
 		6F3F7DE9D8CB73FC2C1592D9 /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181C983C0018A97F2A086298 /* DiscoveryView.swift */; };
 		6FB75A9CED5DEEB931AD0C9A /* MusicRemoteControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58E59EDBC7BE62078557E781 /* MusicRemoteControl.swift */; };
+		702A98ADFF112DDE2E511770 /* NovelCurlPager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D31855DC36A1B684385C847 /* NovelCurlPager.swift */; };
 		708C9C339893A13DE74FE7F8 /* SubtitleSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30744245D01C4D31B1F3ABD8 /* SubtitleSourcesView.swift */; };
 		7142A1BCD94E8F10E0C623B5 /* PlayerEpisodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6411E1972F52DCE8C5E117F7 /* PlayerEpisodes.swift */; };
 		722A5C4D2DC5223EB611AC0A /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5938F1806109304A4FB816CF /* Sparkle */; };
@@ -261,6 +263,7 @@
 		95DBEFF5A38344018BDA9B97 /* TVPlayerEpisodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B482395E1DB3E0C2FF8CDC6 /* TVPlayerEpisodes.swift */; };
 		963C1AD1D27CD834FFDF0273 /* DiscoverSearchFilters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 356AA3CFC2271101141EF964 /* DiscoverSearchFilters.swift */; };
 		96FE538997506DEE3A88A64D /* ExternalSubtitles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75B036EC33AB3F0991E78CDD /* ExternalSubtitles.swift */; };
+		975A50B5AB0C263051ECCF82 /* NovelCurlPager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D31855DC36A1B684385C847 /* NovelCurlPager.swift */; };
 		97DFD3224F5E543A2BE6EDE0 /* PlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CB1FA4BB4990588B428781E /* PlayerView.swift */; };
 		97EB7EDFE8BA6C35B6197AFF /* DiscoverSearchFilters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 356AA3CFC2271101141EF964 /* DiscoverSearchFilters.swift */; };
 		982EF0148420E135FF05E244 /* SubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1212366D71C455D6EAE5E4 /* SubtitleOverlay.swift */; };
@@ -461,6 +464,7 @@
 		367AD12D73554C3C3667315D /* WebSignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSignInView.swift; sourceTree = "<group>"; };
 		3A398E8AF0C7E4C94787F4B3 /* Keystone-LLVM.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Keystone-LLVM.txt"; sourceTree = "<group>"; };
 		3C95AF876ECA5A35824263D7 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		3D31855DC36A1B684385C847 /* NovelCurlPager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelCurlPager.swift; sourceTree = "<group>"; };
 		3D442D4FB2D2EB656FBBCB2C /* MusicMacBrowse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicMacBrowse.swift; sourceTree = "<group>"; };
 		3F678BCB59DDEA3AD1329B11 /* MusicDownloadsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicDownloadsView.swift; sourceTree = "<group>"; };
 		46C4D3FABE1C6E7A7B63BA62 /* CatalogPlaybackActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogPlaybackActions.swift; sourceTree = "<group>"; };
@@ -732,6 +736,7 @@
 				66DF697EACE4307031398E5A /* MusicTVScreen.swift */,
 				235375CC2420B76124FCEBC2 /* MusicView.swift */,
 				0C0D362A48D8B9F9A3B8A537 /* NovelChapterList.swift */,
+				3D31855DC36A1B684385C847 /* NovelCurlPager.swift */,
 				D7BE5A64DD9AFC394655A1A1 /* NovelDetailView.swift */,
 				DF046FB7D8F99B3EC47C9069 /* NovelQA.swift */,
 				CD3EB3627A26DB28A92F4EEF /* NovelReaderView.swift */,
@@ -1351,6 +1356,7 @@
 				1B07B20D202CF846C1709988 /* MusicTVScreen.swift in Sources */,
 				B85FBE9366F3D7487A517779 /* MusicView.swift in Sources */,
 				3723B970A266B1CA72C8B634 /* NovelChapterList.swift in Sources */,
+				702A98ADFF112DDE2E511770 /* NovelCurlPager.swift in Sources */,
 				FE1F5B1F52195DD4555479BE /* NovelDetailView.swift in Sources */,
 				05ADD9BDB518BD383F27577C /* NovelQA.swift in Sources */,
 				16536616AB5925EE972A79C5 /* NovelReaderView.swift in Sources */,
@@ -1474,6 +1480,7 @@
 				F2B94D8E8A07F399F14CF5EC /* MusicTVScreen.swift in Sources */,
 				82933DAB592E786763C7D05B /* MusicView.swift in Sources */,
 				0F4EBFBF5C0C210639242A86 /* NovelChapterList.swift in Sources */,
+				975A50B5AB0C263051ECCF82 /* NovelCurlPager.swift in Sources */,
 				88369D34534D9AF1BC424875 /* NovelDetailView.swift in Sources */,
 				4B5EB0D44B643E8439A44818 /* NovelQA.swift in Sources */,
 				2FC4E061F678727D6DB5BE10 /* NovelReaderView.swift in Sources */,
@@ -1599,6 +1606,7 @@
 				2A9680486C1F040EA193F12E /* MusicTVScreen.swift in Sources */,
 				8DC762240D57D529EF917F2E /* MusicView.swift in Sources */,
 				2A1BE1BF0F10B82679B38DF0 /* NovelChapterList.swift in Sources */,
+				15D48D9954A60C37F7E0B4A9 /* NovelCurlPager.swift in Sources */,
 				0C0C1635A470DA8991B733D8 /* NovelDetailView.swift in Sources */,
 				F619534F102FC9D165F900C9 /* NovelQA.swift in Sources */,
 				F1D2A97815E73E3453B5FF46 /* NovelReaderView.swift in Sources */,

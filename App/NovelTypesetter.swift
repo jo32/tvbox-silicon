@@ -19,6 +19,12 @@ struct NovelTypeStyle: Hashable {
     var text: Color
     /// Bumped when a downloaded font arrives, so pages set in the fallback are set again.
     var fontsReady: Int
+    /// Space after each paragraph, as a multiple of the font size (#1430).
+    var paragraphSpacing: Double = Self.standardParagraphSpacing
+    /// The script the chapters were converted to (#1007): not used in setting the text, but a change sets the pages again.
+    var script: NovelScript = .original
+
+    static let standardParagraphSpacing = 0.4
 
     func bodyFont() -> NovelPlatformFont { font.platformFont(size: fontSize, bold: false) }
     func headingFont() -> NovelPlatformFont { font.platformFont(size: fontSize * 1.45, bold: true) }
@@ -74,7 +80,7 @@ struct NovelTypeStyle: Hashable {
         paragraph.firstLineHeadIndent = fontSize * 2
         paragraph.minimumLineHeight = line
         paragraph.maximumLineHeight = line
-        paragraph.paragraphSpacing = fontSize * 0.4
+        paragraph.paragraphSpacing = fontSize * paragraphSpacing
         paragraph.hyphenationFactor = 0.8
         result.append(NSAttributedString(string: Self.paragraphs(content).joined(separator: "\n"), attributes: [
             .font: body, .foregroundColor: color, .paragraphStyle: paragraph,

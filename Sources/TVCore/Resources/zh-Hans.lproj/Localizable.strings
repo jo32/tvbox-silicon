@@ -2279,6 +2279,23 @@
 "Danmaku Servers" = "弹幕服务器";
 "Add another server to move or remove this one." = "添加其他服务器后才能移动或移除此服务器。";
 "Find Danmaku…" = "查找弹幕…";
+
+/* Novel reader: layout, script, page curl, background (#1430, #1007, #1437, #1265) */
+"Paragraph Spacing" = "段间距";
+"Side Margins" = "左右边距";
+"Top & Bottom" = "上下边距";
+"Chinese Script" = "简繁转换";
+"Original Text" = "原文";
+"Traditional" = "繁体";
+"Simplified" = "简体";
+"Page Turn" = "翻页方式";
+"Slide" = "滑动";
+"Curl" = "仿真";
+"Background Image" = "背景图片";
+"Choose Image…" = "选择图片…";
+"Change Image…" = "更换图片…";
+"Image Opacity" = "图片不透明度";
+"This picture can't be used." = "无法使用这张图片。";
 "Add Bookmark" = "添加书签";
 "Remove Bookmark" = "删除书签";
 "Bookmarks" = "书签";
