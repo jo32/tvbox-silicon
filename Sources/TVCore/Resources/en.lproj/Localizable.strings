@@ -2324,3 +2324,9 @@
 "%d new" = "%d new";
 "Battery" = "Battery";
 "Battery, charging" = "Battery, charging";
+"Intro %@" = "Intro %@";
+"Outro %@" = "Outro %@";
+"Nothing is skipped until you set where the intro ends or the outro starts. Play to that place and tap Use current position." = "Nothing is skipped until you set where the intro ends or the outro starts. Play to that place and tap Use current position.";
+"Times apply to this book and all its chapters. Automatic skipping is a global switch. The outro is remembered as time remaining." = "Times apply to this book and all its chapters. Automatic skipping is a global switch. The outro is remembered as time remaining.";
+"Each series and audiobook keeps its own times. While one plays, open the menu in the playback controls, choose Skip intro / outro, and pick Intro Ends Here when the intro ends." = "Each series and audiobook keeps its own times. While one plays, open the menu in the playback controls, choose Skip intro / outro, and pick Intro Ends Here when the intro ends.";
+"Each series and audiobook keeps its own times. While one plays, choose Skip intro / outro in the player's settings menu, or in an audiobook's More menu." = "Each series and audiobook keeps its own times. While one plays, choose Skip intro / outro in the player's settings menu, or in an audiobook's More menu.";

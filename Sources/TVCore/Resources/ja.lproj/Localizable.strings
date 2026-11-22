@@ -2324,3 +2324,9 @@
 "%d new" = "新着 %d 話";
 "Battery" = "バッテリー";
 "Battery, charging" = "バッテリー、充電中";
+"Intro %@" = "オープニング %@";
+"Outro %@" = "エンディング %@";
+"Nothing is skipped until you set where the intro ends or the outro starts. Play to that place and tap Use current position." = "オープニングの終わりかエンディングの始まりを設定するまで、何もスキップされません。その位置まで再生して「現在の再生位置を使用」をタップしてください。";
+"Times apply to this book and all its chapters. Automatic skipping is a global switch. The outro is remembered as time remaining." = "時間はこの本の全章で共有します。自動スキップの切り替えは全作品共通です。エンディングは残り時間で記憶します。";
+"Each series and audiobook keeps its own times. While one plays, open the menu in the playback controls, choose Skip intro / outro, and pick Intro Ends Here when the intro ends." = "作品とオーディオブックごとに時間を記憶します。再生中に再生コントロールのメニューを開いて「オープニング・エンディングをスキップ」を選び、オープニングが終わったら「オープニングはここまで」を選びます。";
+"Each series and audiobook keeps its own times. While one plays, choose Skip intro / outro in the player's settings menu, or in an audiobook's More menu." = "作品とオーディオブックごとに時間を記憶します。再生中にプレーヤーの設定メニューで「オープニング・エンディングをスキップ」を選びます。オーディオブックは「その他」メニューにあります。";

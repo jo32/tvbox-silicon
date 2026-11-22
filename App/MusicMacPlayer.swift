@@ -11,6 +11,7 @@ struct MusicMacBar: View {
     @Environment(\.openWindow) private var openWindow
     @State private var showsVolume = false
     @State private var showsChannels = false
+    @State private var showsSkip = false
     #if DEBUG
     private static var qaOpened = false
     #endif
@@ -27,7 +28,7 @@ struct MusicMacBar: View {
             }
             song(music)
             HStack(spacing: 0) {
-                MusicMacMenu(showsChannels: $showsChannels)
+                MusicMacMenu(showsChannels: $showsChannels, showsSkip: $showsSkip)
                 MusicMacButton(symbol: "quote.bubble", label: "Lyrics", size: 13) { open(.lyrics) }
                 MusicMacButton(symbol: "list.bullet", label: "Up Next", size: 13) { open(.queue) }
                 MusicMacRoutePicker(player: music.player).frame(width: 30, height: 30).help(L10n.text("AirPlay"))
@@ -43,6 +44,7 @@ struct MusicMacBar: View {
         .frame(maxWidth: 720)
         .padding(.horizontal, Layout.gutter).padding(.bottom, 12)
         .sheet(isPresented: $showsChannels) { MusicChannelsView() }
+        .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: store.music, book: true) }
         #if DEBUG
         // `-qaNowPlaying lyrics|queue` opens Now Playing on that panel once, for screenshots. Once:
         // every page has its own bar.
@@ -263,6 +265,7 @@ struct MusicMacPlayButton: View {
 private struct MusicMacMenu: View {
     @Environment(Store.self) private var store
     @Binding var showsChannels: Bool
+    @Binding var showsSkip: Bool
     var body: some View {
         let music = store.music
         Menu {
@@ -277,6 +280,8 @@ private struct MusicMacMenu: View {
             } else {
                 Button { showsChannels = true } label: { Label(L10n.text("Channels"), systemImage: "antenna.radiowaves.left.and.right") }
             }
+            // A book's intro and outro, for all its chapters (#1486); never a song's.
+            if music.canSkip { SkipTimesMenuButton(session: music) { showsSkip = true } }
             if let track = music.track { MusicDownloadMenuItems(tracks: [track]) }
             if music.lyrics?.synced == true {
                 Divider()
@@ -337,6 +342,7 @@ struct MusicMacNowPlaying: View {
     @Environment(Store.self) private var store
     @State private var tint = Color(white: 0.22)
     @State private var showsChannels = false
+    @State private var showsSkip = false
     @AppStorage("musicShowsTranslation") private var showsTranslation = true
 
     var body: some View {
@@ -382,6 +388,7 @@ struct MusicMacNowPlaying: View {
         }
         .onChange(of: music.track == nil) { _, gone in if gone { music.presentsPlayer = false } }
         .sheet(isPresented: $showsChannels) { MusicChannelsView() }
+        .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: store.music, book: true) }
     }
 
     /// The cover's colour, then the cover itself blurred to a wash over it.
@@ -418,7 +425,7 @@ struct MusicMacNowPlaying: View {
                 Text(Self.byline(music.track)).font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            MusicMacMenu(showsChannels: $showsChannels)
+            MusicMacMenu(showsChannels: $showsChannels, showsSkip: $showsSkip)
                 .background(.white.opacity(0.14), in: Circle())
         }
     }

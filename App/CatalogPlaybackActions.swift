@@ -7,25 +7,23 @@ import TVCore
 struct CatalogPlaybackActions: View {
     let channel: Channel
     let session: PlaybackSession
+    /// Skip Intro / Outro here, for the player without a settings menu (the Mac's in-window one).
+    var offersSkip = false
     @Environment(Store.self) private var store
     @State private var showsSkip = false
 
     var body: some View {
-        if channel.historyContext != nil {
+        // Nothing to offer (a drive's file has no next episode to play on, and no chapters): no empty menu.
+        if channel.historyContext != nil,
+           offersSkip || store.catalog(for: channel) != nil || !session.chapters.isEmpty || store.episodeError != nil {
             Menu {
                 if store.catalog(for: channel) != nil {
                     Toggle(L10n.text("Auto-play next episode"), isOn: Binding(
                         get: { store.autoPlayNext }, set: { store.autoPlayNext = $0 }))
                 }
-                Toggle(L10n.text("Automatically skip intro and outro"), isOn: Binding(
-                    get: { session.skipSettings.enabled },
-                    set: { value in
-                        var settings = session.skipSettings
-                        settings.enabled = value
-                        session.applySkipSettings(settings)
-                    }))
-                Button(L10n.text("Skip intro / outro")) { showsSkip = true }
-                    .accessibilityIdentifier("player.skip")
+                // The players with a settings menu have Skip Intro / Outro there (#1488); a lone switch here, on with no
+                // times set, skipped nothing and looked broken (#1405).
+                if offersSkip { SkipTimesMenuButton(session: session) { showsSkip = true } }
                 if !session.chapters.isEmpty {
                     Menu {
                         ForEach(Array(session.chapters.enumerated()), id: \.offset) { _, chapter in

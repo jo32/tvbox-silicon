@@ -499,6 +499,10 @@ extension View {
 private enum SettingsNote {
     static var playbackInfo: String { L10n.text("Shows the video's format, resolution, frame rate and bitrate in a corner of the player.") }
     static var danmaku: String { L10n.text("Bilibili's bullet comments, drawn over the video. You can also switch them in the player.") }
+    /// Where a title's intro and outro times are set: in the player, not here (#1284, #1488).
+    static var introOutro: String {
+        L10n.text("Each series and audiobook keeps its own times. While one plays, choose Skip intro / outro in the player's settings menu, or in an audiobook's More menu.")
+    }
     static var tmdb: String {
         L10n.text("Shows cast, artwork and episode details from TMDB on video pages. Sends the video's title, its details from the source and the source's name to Yingxia's lookup service, never your accounts or subscription addresses.")
     }
@@ -541,6 +545,7 @@ struct FormSettingsView: View {
     @AppStorage(BilibiliCastController.key) private var receivesCasts = true
     @AppStorage(PlayOnController.key) private var receivesPlayOn = true
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
+    @State private var skipsIntros = false
     /// The language picked here, "" for the system's.
     @State private var language = MacLanguage.launched
     #endif
@@ -885,6 +890,13 @@ struct FormSettingsView: View {
                     FormLabel(symbol: "info.circle.fill", tint: .blue, title: L10n.text("Show Video Info"), subtitle: SettingsNote.playbackInfo)
                 }
                 .settingsSwitch()
+                // Where people look for it first (#1488): the switch, and where each title's times are set.
+                Toggle(isOn: $skipsIntros) {
+                    FormLabel(symbol: "arrow.right.to.line", tint: .mint, title: L10n.text("Automatically skip intro and outro"), subtitle: SettingsNote.introOutro)
+                }
+                .settingsSwitch()
+                .onAppear { skipsIntros = EpisodeSkipSettings.isAutomatic(defaults: store.playbackDefaults) }
+                .onChange(of: skipsIntros) { _, on in EpisodeSkipSettings.setAutomatic(on, defaults: store.playbackDefaults) }
                 FormLink(symbol: "captions.bubble.fill", tint: .orange, title: L10n.text("Subtitle Style")) { SubtitleStyleView() }
                 FormLink(symbol: "text.magnifyingglass", tint: .orange, title: L10n.text("Subtitle Sources")) { SubtitleSourcesView() }
                 FormLink(symbol: "play.fill", tint: Brand.indigo, title: L10n.text("Play a URL")) { PlayURLView() }
@@ -1232,8 +1244,20 @@ struct PlaybackSettingsView: View {
     @AppStorage(AdSkip.key) private var skipsAds = true
     @AppStorage(WatchPage.autoPlayKey) private var autoPlays = true
     @AppStorage(WatchPage.fullScreenKey) private var startsFullScreen = false
+    /// The profile's switch for intros and outros, kept with its times rather than in the app's own defaults.
+    @State private var skipsIntros = false
     var body: some View {
         SettingsPage(title: L10n.text("Playback"), symbol: "slider.horizontal.below.rectangle") {
+            // Where people look for it first (#1488): the switch, and where each title's times are set.
+            SettingsGroup(footer: SettingsNote.introOutro) {
+                Toggle(isOn: $skipsIntros) {
+                    FormLabel(symbol: "arrow.right.to.line", tint: .mint, title: L10n.text("Automatically skip intro and outro"))
+                }
+                .settingsSwitch()
+                .accessibilityIdentifier("settings.skipIntros")
+                .onAppear { skipsIntros = EpisodeSkipSettings.isAutomatic(defaults: store.playbackDefaults) }
+                .onChange(of: skipsIntros) { _, on in EpisodeSkipSettings.setAutomatic(on, defaults: store.playbackDefaults) }
+            }
             // Few groups with short rows: one card per switch, each with its own long note, read as a stack of
             // fragments, and a long title pushed the switch's row to two lines.
             SettingsGroup(title: L10n.text("Gestures"), footer: L10n.text("Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go.")
@@ -2049,6 +2073,7 @@ struct TVSettingsView: View {
     @AppStorage(ErrorReports.key) private var sendsErrorReports = true
     @AppStorage(TMDBMatch.key) private var looksUpTMDB = true
     @AppStorage(CloudSync.enabledKey) private var syncsWithICloud = true
+    @State private var skipsIntros = false
 
     var body: some View {
         TVSettingsLayout {
@@ -2114,6 +2139,12 @@ struct TVSettingsView: View {
                         if on { PlayOnController.shared.start(store) } else { PlayOnController.shared.stop() }
                     }
                 TVSettingsLink(title: L10n.text("Play a URL")) { TVPlayURLPage() }
+            }
+            // Where people look for it first (#1284): the switch, and where each title's times are set.
+            TVSettingsSection(footer: L10n.text("Each series and audiobook keeps its own times. While one plays, open the menu in the playback controls, choose Skip intro / outro, and pick Intro Ends Here when the intro ends.")) {
+                TVSettingsToggle(title: L10n.text("Automatically skip intro and outro"), isOn: $skipsIntros)
+                    .onAppear { skipsIntros = EpisodeSkipSettings.isAutomatic(defaults: store.playbackDefaults) }
+                    .onChange(of: skipsIntros) { _, on in EpisodeSkipSettings.setAutomatic(on, defaults: store.playbackDefaults) }
             }
             TVSettingsSection(footer: L10n.text("Shows the video's format, resolution, frame rate and bitrate in a corner of the player.")) {
                 TVSettingsLink(title: L10n.text("Subtitle Style")) { SubtitleStyleView() }

@@ -11,7 +11,7 @@ typealias MusicTrack = TVCore.MusicTrack
 /// length. A song no channel can play is skipped, until several in a row fail. Songs that play go
 /// into the history, and where listening is gets saved, to continue later.
 /// A new song, or Stop, cancels everything for the old one, so a late answer never plays.
-@MainActor @Observable final class MusicPlaybackSession {
+@MainActor @Observable final class MusicPlaybackSession: SkipTimesEditing {
     enum Phase: Equatable {
         case idle
         /// Finding a channel.
@@ -106,6 +106,17 @@ typealias MusicTrack = TVCore.MusicTrack
     private var pictureObservation: NSKeyValueObservation?
     /// The Sleep Timer stopped playback at the end of a song: the next one is cued, and loads when Play is pressed.
     private var cued = false
+
+    // MARK: Intro and outro (#1486)
+
+    /// Where intro and outro times are kept: the profile's, set by the store.
+    @ObservationIgnored var skipDefaults: @MainActor () -> UserDefaults = { .standard }
+    /// The intro and outro of the book playing (an audiobook's, or a TVBox listening source's, which the video player
+    /// shares for the same title); none for a song.
+    private(set) var skipSettings = EpisodeSkipSettings()
+    private var skipPass = EpisodeSkipPass()
+    private var editingSkip = false
+    private var resumeAfterEditing = false
     private var sleepObserver: NSObjectProtocol?
 
     init(library: MusicLibrary = .shared) {
@@ -383,6 +394,8 @@ typealias MusicTrack = TVCore.MusicTrack
         cache = MusicStreamCache(); recovery = MusicRecovery()
         requestedAt = Date()
         phase = .resolving
+        skipSettings = track.source.map { EpisodeSkipSettings.load(scope: $0.context.id, defaults: skipDefaults()) } ?? EpisodeSkipSettings()
+        skipPass = EpisodeSkipPass()
         if let source = track.source { loadSource(source, track: track, at: resumeAt, run: run); return }
         let resolver = MusicResolver(preferences: preferences), preference = preferences.quality, cache = cache
         // A downloaded song plays from its file, with no channel to find.
@@ -542,6 +555,7 @@ typealias MusicTrack = TVCore.MusicTrack
             return
         }
         if repeatMode == .one || repeatMode == .all && queue?.tracks.count == 1 {
+            skipPass = EpisodeSkipPass()
             seek(to: 0); activateAudioSession(); player.play(); phase = .loading
             return
         }
@@ -686,6 +700,54 @@ typealias MusicTrack = TVCore.MusicTrack
         position = time.seconds
         if let itemDuration = player.currentItem?.duration.seconds, itemDuration.isFinite, itemDuration > 0 { duration = itemDuration }
         saveResumePoint(force: false)
+        skipIfDue(time.seconds)
+    }
+
+    /// The book's intro skipped as a chapter starts, and its outro as the end: the next chapter, as when one ends.
+    /// Once each per chapter, so going back into either plays it (`EpisodeSkipPass`). Only while sound plays: not
+    /// before a saved place is reached, nor during a seek.
+    private func skipIfDue(_ time: Double) {
+        guard skipSettings.enabled, skipSettings.hasTimes, sourceStream != nil, phase == .playing, !editingSkip,
+              let length = player.currentItem?.duration.seconds else { return }
+        guard let target = skipPass.target(time: time, duration: length, playing: player.rate > 0, settings: skipSettings) else { return }
+        if target < length - 1 {
+            Diagnostics.shared.record(.info, "music", "skip intro from=\(Int(time)) to=\(Int(target))")
+            seek(to: target)
+        } else {
+            Diagnostics.shared.record(.info, "music", "skip outro at=\(Int(time))")
+            songEnded(run: generation)
+        }
+    }
+
+    /// Whether the book playing keeps intro and outro times: a source's, not a song.
+    var canSkip: Bool { track?.source != nil && sourceStream != nil }
+    var skipPosition: Double { position }
+    var skipDuration: Double { duration ?? 0 }
+
+    func beginEditingSkip() {
+        editingSkip = true
+        resumeAfterEditing = isPlaying
+        if resumeAfterEditing { pause() }
+    }
+
+    func endEditingSkip() {
+        editingSkip = false
+        if resumeAfterEditing { toggle() }
+        resumeAfterEditing = false
+    }
+
+    /// Saves the book's times, for all its chapters.
+    func applySkipSettings(_ settings: EpisodeSkipSettings) {
+        guard let source = track?.source else { return }
+        settings.save(scope: source.context.id, defaults: skipDefaults())
+        skipSettings = settings
+        skipPass = EpisodeSkipPass()
+    }
+
+    /// The intro ends, or the outro starts, where the sound is now (Apple TV, which has no keyboard for a time).
+    func markSkip(intro: Bool) {
+        guard let settings = skipSettings.marking(intro: intro, at: currentSeconds, duration: skipDuration) else { return }
+        applySkipSettings(settings)
     }
 
     /// Saves where listening is every few seconds of playback, and at once on pause and stop.

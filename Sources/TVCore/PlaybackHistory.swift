@@ -76,6 +76,22 @@ public struct PlaybackHistoryEntry: Identifiable, Codable, Hashable, Sendable {
         return resumePosition
     }
 
+    /// Where `episode` starts when the viewer picks it from the video's `episodes`: as `resumePosition(for:)`, and also
+    /// when it is this entry's episode on another of the video's lines (#1300), so a line too slow to watch, left for
+    /// another, goes on from where it was instead of from the start. The same episode on another line has the same
+    /// name there, else the same number (第01集, 第1集, 01); a film is each line's only video.
+    public func resumePosition(for episode: Episode, among episodes: [Episode]) -> Double? {
+        if let same = resumePosition(for: episode) { return same }
+        guard resumePosition > 1, episode.flag != context.episodeFlag else { return nil }
+        let line = episodes.filter { $0.flag == episode.flag }
+        guard line.contains(episode) else { return nil }
+        if episode.name == context.episodeName { return line.filter { $0.name == episode.name }.count == 1 ? resumePosition : nil }
+        if let number = CatalogDanmakuMatcher.episodeNumber(episode.name), number == CatalogDanmakuMatcher.episodeNumber(context.episodeName) {
+            return line.filter { CatalogDanmakuMatcher.episodeNumber($0.name) == number }.count == 1 ? resumePosition : nil
+        }
+        return line.count == 1 && episodes.filter { $0.flag == context.episodeFlag }.count <= 1 ? resumePosition : nil
+    }
+
     /// What Continue plays on the video's page: the episode watched last, or, once that one is finished, the next
     /// one on its line. Nil when the details no longer list it or a finished episode was the line's last, so
     /// Play starts the line instead.

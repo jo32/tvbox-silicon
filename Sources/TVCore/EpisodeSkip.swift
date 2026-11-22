@@ -20,6 +20,20 @@ public struct EpisodeSkipSettings: Codable, Equatable, Sendable {
         return nil
     }
 
+    /// Whether this title has an intro or an outro to skip. Switched on without either, nothing is skipped (#1405).
+    public var hasTimes: Bool { introEnd > 0 || outroLength > 0 }
+
+    /// What the players' menus say beside Skip Intro / Outro (#1488): Off, Not Set, or the times, the outro as the time
+    /// left when it starts ("Intro 01:30 · Outro −02:00"), which holds for every episode.
+    public var summary: String {
+        guard enabled else { return L10n.text("Off") }
+        guard hasTimes else { return L10n.text("Not set") }
+        var parts: [String] = []
+        if introEnd > 0 { parts.append(L10n.text("Intro %@", Self.formatTime(introEnd))) }
+        if outroLength > 0 { parts.append(L10n.text("Outro %@", "−" + Self.formatTime(outroLength))) }
+        return parts.joined(separator: " · ")
+    }
+
     /// These settings with the intro ending, or the outro starting, at `position`, and switched on: what Apple TV's
     /// "Intro Ends Here" saves, where there is no keyboard for a time (#808). Nil where the rules above refuse it.
     public func marking(intro: Bool, at position: Double, duration: Double) -> Self? {
@@ -60,8 +74,18 @@ public struct EpisodeSkipSettings: Codable, Equatable, Sendable {
     public static func load(scope: String, defaults: UserDefaults = .standard) -> Self {
         // Do not migrate a global time into every work: it belongs to an unknown previous film.
         var value = defaults.data(forKey: "episodeSkip.v1." + scope).flatMap { try? JSONDecoder().decode(Self.self, from: $0) } ?? Self()
-        value.enabled = defaults.object(forKey: "episodeSkip.auto.v2") as? Bool ?? loadGlobal(defaults: defaults).enabled
+        value.enabled = isAutomatic(defaults: defaults)
         return value
+    }
+
+    /// The one switch for every title (Settings › Playback, and each title's sheet): on, the times saved for a title,
+    /// and the credits a source marks, are skipped.
+    public static func isAutomatic(defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: "episodeSkip.auto.v2") as? Bool ?? loadGlobal(defaults: defaults).enabled
+    }
+
+    public static func setAutomatic(_ on: Bool, defaults: UserDefaults = .standard) {
+        defaults.set(on, forKey: "episodeSkip.auto.v2")
     }
 
     public static func loadGlobal(defaults: UserDefaults = .standard) -> Self {

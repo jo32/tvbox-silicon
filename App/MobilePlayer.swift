@@ -48,6 +48,7 @@ struct MobilePlayerView: View {
     @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
     @State private var showsDanmakuList = false
     @State private var showsDanmakuSettings = false
+    @State private var showsSkip = false
     @State private var showsEpisodes = false
     @State private var showsChannels = false
     /// Devices with Yingxia open, for the Play On button; and the one the video was sent to.
@@ -238,6 +239,7 @@ struct MobilePlayerView: View {
         .sheet(isPresented: $showsDanmakuSettings) {
             CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet().environment(store)
         }
+        .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).playerSheet().environment(store) }
     }
 
     /// What the Lock Screen's Now Playing shows, besides the position the system runs on from the rate.
@@ -837,6 +839,8 @@ struct MobilePlayerView: View {
                     .pickerStyle(.inline)
                 }
             }
+            // A series' intro and outro (#1488), here with the player's other settings, on the video page too.
+            if session.canSkip, !session.isLive { SkipTimesMenuButton(session: session) { showsSkip = true } }
             SleepTimerMenu(item: .episode, offersEnd: !session.isLive)
             Picker(selection: $videoFill) {
                 ForEach(VideoFill.allCases, id: \.self) { Label($0.title, systemImage: $0.symbol).tag($0) }
@@ -1154,9 +1158,9 @@ private struct SeekBar<Accessory: View>: View {
     @State private var width: CGFloat = 0
 
     var body: some View {
-        // Every display frame while it plays, as AVKit's bar does; paused, held or hidden, only when the clock changes.
+        // While it plays, as often as the handle moves (`frameInterval`); paused, held or hidden, only when the clock changes.
         let follows = moving && clock.scrubbing == nil
-        TimelineView(.animation(paused: !follows)) { _ in
+        TimelineView(.animation(minimumInterval: Self.frameInterval(duration: clock.duration, width: width), paused: !follows)) { _ in
             bar(clock.scrubbing ?? (follows ? clock.currentPosition : clock.position))
         }
         // Outside the bar, which is one accessibility element. Gone while scrubbing, when the time grows with the
@@ -1166,6 +1170,14 @@ private struct SeekBar<Accessory: View>: View {
         }
         .animation(.easeOut(duration: 0.15), value: drag == nil)
         .sensoryFeedback(.selection, trigger: fineness)
+    }
+
+    /// How often the playing bar is drawn: each time its handle moves about half a point, at most 60 times a second, and
+    /// at least twice a second for the time beside it. A film's handle moves a tenth of a point a second, and the bar
+    /// was drawn on every frame of a 120 Hz screen while the controls showed (#1428).
+    static func frameInterval(duration: Double, width: CGFloat) -> Double {
+        guard duration.isFinite, duration > 0, width > 0 else { return 0.5 }
+        return min(0.5, max(1.0 / 60, duration / Double(width) / 2))
     }
 
     private func bar(_ position: Double) -> some View {

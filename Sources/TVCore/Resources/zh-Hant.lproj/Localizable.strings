@@ -2324,3 +2324,9 @@
 "%d new" = "更新 %d 話";
 "Battery" = "電池";
 "Battery, charging" = "電池，正在充電";
+"Intro %@" = "片頭 %@";
+"Outro %@" = "片尾 %@";
+"Nothing is skipped until you set where the intro ends or the outro starts. Play to that place and tap Use current position." = "還沒有設定片頭結束或片尾開始的位置，所以不會跳過任何內容。播放到那個位置，再點「使用目前播放位置」。";
+"Times apply to this book and all its chapters. Automatic skipping is a global switch. The outro is remembered as time remaining." = "時間用於這本書的所有章節，自動跳過開關為全域開關。片尾按剩餘時長記憶。";
+"Each series and audiobook keeps its own times. While one plays, open the menu in the playback controls, choose Skip intro / outro, and pick Intro Ends Here when the intro ends." = "每部劇和每本有聲書各自記住時間。播放時打開播放控制裡的選單，選擇「跳過片頭片尾」，在片頭結束時選「片頭到此結束」。";
+"Each series and audiobook keeps its own times. While one plays, choose Skip intro / outro in the player's settings menu, or in an audiobook's More menu." = "每部劇和每本有聲書各自記住時間。播放時在播放器的設定選單裡選擇「跳過片頭片尾」；有聲書在「更多」選單裡。";

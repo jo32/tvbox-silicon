@@ -301,7 +301,7 @@ struct PlaybackView: View {
                 Image(systemName: PlayerChannelsSheet.symbol).font(.headline).frame(width: 22, height: 22)
             }
             .chromeButton()
-            CatalogPlaybackActions(channel: channel, session: session)
+            CatalogPlaybackActions(channel: channel, session: session, offersSkip: true)
             if session.qualities.count > 1 {
                 Menu {
                     QualityPicker(session: session)
@@ -998,28 +998,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         let skipSource = skipSource
         let skips = skip.map { [UIAction(title: $0.kind == .intro ? L10n.text("Skip Intro") : L10n.text("Skip Outro"), image: UIImage(systemName: "forward.fill")) { _ in skipSource() }] } ?? []
         if controller.contextualActions.map(\.title) != skips.map(\.title) { controller.contextualActions = skips }
-        if let skipping, !live {
-            // No keyboard for a time here: the intro ends, or the outro starts, where the picture is. Each shows what
-            // it holds, or where it may be set.
-            let setSkipping = setSkipping, markSkip = markSkip
-            var options: [UIMenuElement] = [
-                UIAction(title: L10n.text("Automatically skip intro and outro"), state: skipping.enabled ? .on : .off) { _ in
-                    var value = skipping; value.enabled.toggle(); setSkipping(value)
-                },
-                UIAction(title: L10n.text("Intro Ends Here"),
-                         subtitle: skipping.introEnd > 0 ? EpisodeSkipSettings.formatTime(skipping.introEnd) : L10n.text("In the first five minutes")) { _ in markSkip(true) },
-                UIAction(title: L10n.text("Outro Starts Here"),
-                         subtitle: skipping.outroLength > 0 ? L10n.text("%@ before the end", EpisodeSkipSettings.formatTime(skipping.outroLength))
-                            : L10n.text("In the last ten minutes")) { _ in markSkip(false) },
-            ]
-            if skipping.introEnd > 0 || skipping.outroLength > 0 {
-                options.append(UIAction(title: L10n.text("Clear Intro and Outro"), image: UIImage(systemName: "xmark")) { _ in
-                    setSkipping(EpisodeSkipSettings(enabled: skipping.enabled))
-                })
-            }
-            // Not forward.end: beside Next Episode's forward.end.fill it read as a second Next button.
-            items.append(UIMenu(title: L10n.text("Skip intro / outro"), image: UIImage(systemName: "arrow.right.to.line"), children: options))
-        }
+        if let skipping, !live { items.append(SkipTimesMenu.make(skipping, set: setSkipping, mark: markSkip)) }
         if !live {
             let setSpeed = setSpeed, speed = speed
             let options = Self.speeds.map { rate in UIAction(title: Self.speedLabel(rate), state: rate == speed ? .on : .off) { _ in setSpeed(rate) } }
@@ -1552,6 +1531,7 @@ private struct DesktopPlaybackView: View {
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
     @State private var showsDanmakuList = false
     @State private var showsDanmakuSettings = false
+    @State private var showsSkip = false
     @State private var showsEpisodes = false
     @State private var showsChannels = false
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
@@ -1657,6 +1637,7 @@ private struct DesktopPlaybackView: View {
         .sheet(isPresented: $showsDanmakuSettings) {
             CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet()
         }
+        .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).environment(store) }
         .onDisappear { idle.detach(); tvBrowser.stop(); CastController.shared.detach() }
         .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, search: $searchesSubtitles, subtitles: session.externalSubtitles)
         // A subtitle file dropped on the video shows on it (#576).
@@ -1735,7 +1716,7 @@ private struct DesktopPlaybackView: View {
 
     private var optionsMenu: some View {
         DesktopOptionsMenu(channel: channel, session: session, window: window, hasDanmaku: !session.danmaku.isEmpty, fillsFrame: $fillsFrame, floats: $floats,
-                           showsDanmakuList: $showsDanmakuList, showsDanmakuSettings: $showsDanmakuSettings,
+                           showsDanmakuList: $showsDanmakuList, showsDanmakuSettings: $showsDanmakuSettings, showsSkip: $showsSkip,
                            importsSubtitleFile: $importsSubtitleFile, asksSubtitleAddress: $asksSubtitleAddress, searchesSubtitles: $searchesSubtitles)
             .equatable()
     }
@@ -1761,6 +1742,7 @@ private struct DesktopOptionsMenu: View, Equatable {
     @Binding var floats: Bool
     @Binding var showsDanmakuList: Bool
     @Binding var showsDanmakuSettings: Bool
+    @Binding var showsSkip: Bool
     @Binding var importsSubtitleFile: Bool
     @Binding var asksSubtitleAddress: Bool
     @Binding var searchesSubtitles: Bool
@@ -1779,6 +1761,8 @@ private struct DesktopOptionsMenu: View, Equatable {
         @Bindable var session = session
         Menu {
             Toggle(L10n.text("Loop Playback"), isOn: $session.looping)
+            // A series' intro and outro (#1488), with the player's other settings.
+            if session.canSkip, !session.isLive { SkipTimesMenuButton(session: session) { showsSkip = true } }
             SleepTimerMenu(item: .episode, offersEnd: !session.isLive)
             Toggle(L10n.text("Fill Window"), isOn: $fillsFrame)
             Toggle(L10n.text("Float on Top"), isOn: $floats)
