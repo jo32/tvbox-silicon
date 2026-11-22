@@ -38,6 +38,7 @@
 		15D2081ED3FCCB08A5ED506A /* Keystone-GPL2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 084C8344E2997DB3ED8FE974 /* Keystone-GPL2.txt */; };
 		15D48D9954A60C37F7E0B4A9 /* NovelCurlPager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D31855DC36A1B684385C847 /* NovelCurlPager.swift */; };
 		15E3F2F86594F2B8A9CF0175 /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181C983C0018A97F2A086298 /* DiscoveryView.swift */; };
+		162B1A15D6DE2E5CA89C444C /* CloudPosterViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F975966BD8829710491AF56 /* CloudPosterViews.swift */; };
 		16517407D53F4E6410E93AC7 /* BilibiliMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A2914C1B5B5ABA5F4B25A7 /* BilibiliMark.swift */; };
 		16536616AB5925EE972A79C5 /* NovelReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD3EB3627A26DB28A92F4EEF /* NovelReaderView.swift */; };
 		17CDC06DD8AD8CE47973B982 /* TVBoxApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A2BB58B1720E9D6D85F93F4 /* TVBoxApp.swift */; };
@@ -102,6 +103,7 @@
 		36A9745531EE811E77BFBFBE /* NovelSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 190385A01FCD240DDB5AD4EA /* NovelSourcesView.swift */; };
 		3723B970A266B1CA72C8B634 /* NovelChapterList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C0D362A48D8B9F9A3B8A537 /* NovelChapterList.swift */; };
 		37B3CD8A4542A1B2304DBB75 /* CatalogDanmakuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C093554D3863FDB5D2E832B5 /* CatalogDanmakuView.swift */; };
+		37B73ED3D45A1F126E98B375 /* CloudPosterViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F975966BD8829710491AF56 /* CloudPosterViews.swift */; };
 		38089AAF28B91679EFEA5F70 /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52B784080CDE6CF171AEA5E7 /* DiscoverView.swift */; };
 		38395AAE5193EB91CF33602A /* DiscoverDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28110209CF4DBB819A2F3C74 /* DiscoverDetailView.swift */; };
 		38BF027CC7866E805A20DDD1 /* StyledSubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61C44303B4662294C11176AB /* StyledSubtitleOverlay.swift */; };
@@ -240,6 +242,7 @@
 		862B4D7324AB9499E249FB15 /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52B784080CDE6CF171AEA5E7 /* DiscoverView.swift */; };
 		87B2F825565E0BAC988FC145 /* JNA-Apache2.txt in Resources */ = {isa = PBXBuildFile; fileRef = 8320284C7FB9590C44BA7102 /* JNA-Apache2.txt */; };
 		88369D34534D9AF1BC424875 /* NovelDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7BE5A64DD9AFC394655A1A1 /* NovelDetailView.swift */; };
+		8841F62611BD2311301226B8 /* DLNACast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F68C0AEB59EAE147CCA0EBC /* DLNACast.swift */; };
 		894AC5741A91B1259ACBCB2B /* SleepTimer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95BCE231D3EA9E4C6167CC1A /* SleepTimer.swift */; };
 		8A685170BCEDE3AE50C538DA /* Announcements.swift in Sources */ = {isa = PBXBuildFile; fileRef = F43A8E3DBB135075D0CF9D44 /* Announcements.swift */; };
 		8B6CF3203B7299225DC7E190 /* StyledSubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61C44303B4662294C11176AB /* StyledSubtitleOverlay.swift */; };
@@ -282,6 +285,7 @@
 		A125C19021DB4DC7DFADCBDA /* MangaSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E5BAF6D854E7CE5DA362D0 /* MangaSourcesView.swift */; };
 		A149AE9D183C5FB64D411761 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ADB3063A14E368A71892DCEE /* Assets.xcassets */; };
 		A1DE1070F1A8B76CC5EE65C0 /* SubtitleSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30744245D01C4D31B1F3ABD8 /* SubtitleSourcesView.swift */; };
+		A2D1248EED140C8F92416156 /* DLNACast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F68C0AEB59EAE147CCA0EBC /* DLNACast.swift */; };
 		A6A01A74BB02107B9B37DF21 /* MangaQA.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0894F8B5758D4C02A76BCD8E /* MangaQA.swift */; };
 		A6CF37D3E8E26FD498A15CD1 /* JavaHost in Resources */ = {isa = PBXBuildFile; fileRef = F1B927CC6ECB2F8BDFB22287 /* JavaHost */; };
 		A75BCD1DBB7A45ED27CEBA63 /* DiscoverBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */; };
@@ -301,6 +305,7 @@
 		B46BA76AB9687CE1727B05D9 /* unidbg.txt in Resources */ = {isa = PBXBuildFile; fileRef = 995F5F0DB35FE66B4F90B4FF /* unidbg.txt */; };
 		B5B9BEFC49D2638D3A92F9C0 /* MusicNowPlayingScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0131105AAF88C36366936A /* MusicNowPlayingScreen.swift */; };
 		B5DCC83D47D5AEB70A55028D /* RuntimeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2075419FEF0E1C161A31A9F0 /* RuntimeView.swift */; };
+		B5FD9C25661DB2D0930B2A3B /* CloudPosterViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F975966BD8829710491AF56 /* CloudPosterViews.swift */; };
 		B60CAF5EDCF535BBCFB484FF /* PlayerChannels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4764F84335D39C05AED00CE9 /* PlayerChannels.swift */; };
 		B6C486D931AC62E81A8D4E76 /* MangaQA.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0894F8B5758D4C02A76BCD8E /* MangaQA.swift */; };
 		B7C3291A656E2548E80F1E4B /* ApplePython.c in Sources */ = {isa = PBXBuildFile; fileRef = E740CFD276F4B76892EB0AF1 /* ApplePython.c */; };
@@ -313,6 +318,7 @@
 		BB831CF3D63240DF89E53C9F /* releases.json in Resources */ = {isa = PBXBuildFile; fileRef = 73945256FDDE0952A22BF98C /* releases.json */; };
 		BBFB3628886EBD871DD46499 /* TVPlayerEpisodes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B482395E1DB3E0C2FF8CDC6 /* TVPlayerEpisodes.swift */; };
 		BC4E3C9C3181FF25AA7E06F9 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C911ACB6C027C8F9A096409 /* RootView.swift */; };
+		BDD8564E5166B979B3600E6D /* DLNACast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F68C0AEB59EAE147CCA0EBC /* DLNACast.swift */; };
 		BE6FB2873A21222464CED1D8 /* BilibiliMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0A2914C1B5B5ABA5F4B25A7 /* BilibiliMark.swift */; };
 		BEFFC109286C99EB1495F6DD /* ColorThemes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFD150AEEA34722E2F2F7E83 /* ColorThemes.swift */; };
 		BF24E0090C85FF457201F1CA /* NovelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 597A8F41A0CB8104B10C12EC /* NovelStore.swift */; };
@@ -435,6 +441,7 @@
 		08B7C43C763200E67A22E365 /* Capstone-LLVM.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Capstone-LLVM.txt"; sourceTree = "<group>"; };
 		08D7BF6713A8519BEED17EE3 /* MobilePlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePlayer.swift; sourceTree = "<group>"; };
 		0C0D362A48D8B9F9A3B8A537 /* NovelChapterList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelChapterList.swift; sourceTree = "<group>"; };
+		0F68C0AEB59EAE147CCA0EBC /* DLNACast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DLNACast.swift; sourceTree = "<group>"; };
 		11C204B56A5D9FB9E63F4671 /* NovelTypesetter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelTypesetter.swift; sourceTree = "<group>"; };
 		13947E20489465F172C8B5B7 /* SubtitleTranslator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleTranslator.swift; sourceTree = "<group>"; };
 		181C983C0018A97F2A086298 /* DiscoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveryView.swift; sourceTree = "<group>"; };
@@ -517,6 +524,7 @@
 		9BD8F5818C392424F43FF0C9 /* FavoriteControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoriteControls.swift; sourceTree = "<group>"; };
 		9C911ACB6C027C8F9A096409 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		9D10D9BAFE11E31196C70422 /* MusicNowPlayingPanels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicNowPlayingPanels.swift; sourceTree = "<group>"; };
+		9F975966BD8829710491AF56 /* CloudPosterViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPosterViews.swift; sourceTree = "<group>"; };
 		A0E5BAF6D854E7CE5DA362D0 /* MangaSourcesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaSourcesView.swift; sourceTree = "<group>"; };
 		A0E8559808CF7D11225EB30B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A3012FC04D8DAD058B1A5168 /* ThirdPartyNotices.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ThirdPartyNotices.txt; sourceTree = "<group>"; };
@@ -666,6 +674,7 @@
 				688641B892E4732AFEB875A3 /* CatPawSignInView.swift */,
 				CEE19E104EAA6C4F620B8E53 /* CloudDriveView.swift */,
 				4A0D2EAF4F07329DAB40B97D /* CloudFilesView.swift */,
+				9F975966BD8829710491AF56 /* CloudPosterViews.swift */,
 				E78573DE76BCF27CABBB20F3 /* CloudQRLoginView.swift */,
 				AFD150AEEA34722E2F2F7E83 /* ColorThemes.swift */,
 				26F144846346C7C8F52CE20C /* DanmakuServiceSettingsView.swift */,
@@ -685,6 +694,7 @@
 				EDA3D261D268813DF5C90B82 /* DiscoverTVLayout.swift */,
 				52B784080CDE6CF171AEA5E7 /* DiscoverView.swift */,
 				181C983C0018A97F2A086298 /* DiscoveryView.swift */,
+				0F68C0AEB59EAE147CCA0EBC /* DLNACast.swift */,
 				AB7347843C885A97DFE397DD /* DouyinAccountView.swift */,
 				B45CB8261D922949ADBDBE15 /* DownloadsView.swift */,
 				B451E5612B33CF005EEAAE08 /* EpisodeSkipSettingsView.swift */,
@@ -1284,8 +1294,10 @@
 				762AAE7DEDF6675A62474B19 /* CatalogPlaybackActions.swift in Sources */,
 				C6D7579CAFFAB9B441C0703C /* CloudDriveView.swift in Sources */,
 				8EB254B55B70CF8A923D1CD0 /* CloudFilesView.swift in Sources */,
+				37B73ED3D45A1F126E98B375 /* CloudPosterViews.swift in Sources */,
 				91C07692EFFEE27619AA9FF3 /* CloudQRLoginView.swift in Sources */,
 				BB38C5CFD612604156A97463 /* ColorThemes.swift in Sources */,
+				BDD8564E5166B979B3600E6D /* DLNACast.swift in Sources */,
 				F74139021653CFA0E17CE123 /* DanmakuServiceSettingsView.swift in Sources */,
 				E9F0900B56C80C647D87FD3E /* DanmakuSettingsView.swift in Sources */,
 				ED3BFF07859A99C455624644 /* DanmakuView.swift in Sources */,
@@ -1406,8 +1418,10 @@
 				FC0F00688179660407FD70E1 /* CatalogPlaybackActions.swift in Sources */,
 				D10B5A0245BDE1A5E05A6BD7 /* CloudDriveView.swift in Sources */,
 				1D82C5470FDA73053EAD6398 /* CloudFilesView.swift in Sources */,
+				B5FD9C25661DB2D0930B2A3B /* CloudPosterViews.swift in Sources */,
 				277D741E2A86C06612A8034A /* CloudQRLoginView.swift in Sources */,
 				54A96B89DA4D05725C0D0DB1 /* ColorThemes.swift in Sources */,
+				A2D1248EED140C8F92416156 /* DLNACast.swift in Sources */,
 				3F7AA2351B3C009CDDE41C4F /* DanmakuServiceSettingsView.swift in Sources */,
 				41FB20C693CBD87C569DCC18 /* DanmakuSettingsView.swift in Sources */,
 				2EF5CCF1BA71B68F4DCF2F71 /* DanmakuView.swift in Sources */,
@@ -1530,8 +1544,10 @@
 				78CE336AE6714726DFDFDB43 /* CatalogPlaybackActions.swift in Sources */,
 				59953BBDD74AED0A292F7079 /* CloudDriveView.swift in Sources */,
 				BA97CE75C2E0DF21635E17EA /* CloudFilesView.swift in Sources */,
+				162B1A15D6DE2E5CA89C444C /* CloudPosterViews.swift in Sources */,
 				31D893FEF33876FD07BB58BA /* CloudQRLoginView.swift in Sources */,
 				BEFFC109286C99EB1495F6DD /* ColorThemes.swift in Sources */,
+				8841F62611BD2311301226B8 /* DLNACast.swift in Sources */,
 				14C397640E05A3FA9CE444D8 /* DanmakuServiceSettingsView.swift in Sources */,
 				FA6CC845EF0E0E913AA393E8 /* DanmakuSettingsView.swift in Sources */,
 				C10EEC4D7AED0BE564BF2246 /* DanmakuView.swift in Sources */,

@@ -88,6 +88,15 @@ public enum CloudFilesSource {
     /// A file is one episode. A folder's are the files in it that play here, then each subfolder's as a line.
     static func details(_ entry: Entry, in drive: CloudFilesDrive) async throws -> [String: JSONValue] {
         var fields: [String: JSONValue] = ["vod_id": .string(entry.token), "vod_name": .string(title(entry.file))]
+        // The title its name gives, for the page and for its TMDB lookup (#1220, #1333): "The.Silent.Storm.2026.S01.2160p"
+        // is The Silent Storm · Season 1, from 2026. The name itself stays in the remarks, where the lookup reads it too.
+        let name = MediaName(entry.name, isFile: !entry.isFolder)
+        if name.isTitle {
+            let season = name.season.map { L10n.text("Season %@", String($0)) }
+            fields["vod_name"] = .string([name.title, season].compactMap { $0 }.joined(separator: " "))
+            fields["vod_remarks"] = .string(title(entry.file))
+            if let year = name.year { fields["vod_year"] = .string(String(year)) }
+        }
         guard entry.isFolder else {
             fields["vod_play_from"] = .string(lineName(drive.name)); fields["vod_play_url"] = .string(episode(entry.file))
             return fields
@@ -120,6 +129,30 @@ public enum CloudFilesSource {
                          drive: CloudFilesDrive) -> [(name: String, files: [CloudFile])] {
         ([(name: name, files: files)] + subfolders).map { line in (name: line.name, files: line.files.filter { !$0.isFolder && drive.plays($0) }) }
             .filter { !$0.files.isEmpty }
+    }
+
+    /// A drive's folder or video as a title of its source: a folder's page lists its videos, then each subfolder's as a line,
+    /// and finds the title on TMDB (#880).
+    public static func titleVideo(_ file: CloudFile, poster: URL? = nil) -> Video {
+        Video(id: Entry(file).token, name: title(file), poster: poster ?? file.artwork)
+    }
+
+    /// The folder or file a listed title of a drive's source is, with the artwork its drive keeps.
+    public static func file(of video: Video) -> CloudFile? {
+        Entry(video.id).map { CloudFile(id: $0.id, name: $0.name, isFolder: $0.isFolder, artwork: video.poster) }
+    }
+
+    /// The source a drive's titles open from, in Cloud Files too: WebDAV shares aren't among the subscription's sources.
+    public static func client(_ drive: CloudFilesDrive, origin: URL) -> CatalogClient {
+        CatalogClient(site: site(drive), origin: origin)
+    }
+
+    /// The drive a source of Cloud Files browses.
+    public static func drive(of site: Site) -> CloudFilesDrive? { drive(sourceKey: site.key) }
+
+    /// The drive behind a source key that history or favorites kept.
+    public static func drive(sourceKey: String) -> CloudFilesDrive? {
+        sourceKey.hasPrefix(keyPrefix) ? CloudFiles.drive(key: String(sourceKey.dropFirst(keyPrefix.count))) : nil
     }
 
     static func episode(_ file: CloudFile) -> String { lineName(title(file)) + "$" + Entry(file).token }

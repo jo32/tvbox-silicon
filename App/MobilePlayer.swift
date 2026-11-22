@@ -53,6 +53,16 @@ struct MobilePlayerView: View {
     /// Devices with Yingxia open, for the Play On button; and the one the video was sent to.
     @State private var tvBrowser = PlayOnBrowser()
     @State private var playingOn: String?
+
+    /// Stops the TV and carries on here from where it reached (#749).
+    private func playHereFromTV() {
+        Task {
+            let reached = await CastController.shared.stop()
+            playingOn = nil
+            if let reached, reached > 0, !session.isLive { await session.player.seek(to: CMTime(seconds: reached, preferredTimescale: 600)) }
+            if session.paused { session.togglePlayback() }
+        }
+    }
     /// Touching and holding the picture plays faster while the finger is down, or after sliding down kept it.
     @State private var boost: SpeedBoost?
     @State private var holding = false
@@ -145,9 +155,13 @@ struct MobilePlayerView: View {
             levelLabel
             episodeFailureLabel
             if let playingOn {
-                PlayOnPlaceholder(receiver: playingOn) {
-                    self.playingOn = nil
-                    if session.paused { session.togglePlayback() }
+                if CastController.shared.device?.name == playingOn {
+                    CastPanel { playHereFromTV() }
+                } else {
+                    PlayOnPlaceholder(receiver: playingOn) {
+                        self.playingOn = nil
+                        if session.paused { session.togglePlayback() }
+                    }
                 }
             }
             // While the controls show it moves below their top row; on a watch page, too small for both, they take
@@ -174,16 +188,22 @@ struct MobilePlayerView: View {
             nowPlaying.start(session)
             nowPlaying.update(title: channel.name, session: session)
             tvBrowser.start()
+            CastController.shared.refresh()
             if let chosen = PlayerBrightness.chosen, let screen, brightnessBefore == nil {
                 brightnessBefore = screen.brightness; screen.brightness = chosen
             }
         }
         .onDisappear {
-            clock.detach(); nowPlaying.stop(); tvBrowser.stop()
+            clock.detach(); nowPlaying.stop(); tvBrowser.stop(); CastController.shared.detach()
             if let brightnessBefore { screen?.brightness = brightnessBefore }
         }
         // Played here again (the Lock Screen, say): the other device no longer has it to itself.
-        .onChange(of: session.paused) { _, paused in if !paused { playingOn = nil } }
+        .onChange(of: session.paused) { _, paused in
+            guard !paused else { return }
+            playingOn = nil
+            // Played here again (the Lock Screen, say): the TV stops, as Play Here would.
+            if CastController.shared.device != nil { Task { await CastController.shared.stop() } }
+        }
         .onChange(of: nowPlayingState, initial: true) { nowPlaying.update(title: channel.name, session: session) }
         .onChange(of: nowPlayingArtwork, initial: true) { _, artwork in nowPlaying.show(artwork, session: session) }
         // Pausing ends the faster speed in the session; another episode or quality plays at the chosen one.
@@ -684,7 +704,7 @@ struct MobilePlayerView: View {
     private var toolbar: some View {
         HStack(spacing: 0) {
             // With Yingxia found on an Apple TV or Mac, one menu holds those and AirPlay.
-            if tvBrowser.receivers.isEmpty {
+            if tvBrowser.receivers.isEmpty && CastController.shared.devices.isEmpty {
                 AirPlayButton()
                     .frame(width: 44, height: 44)
                     .contentShape(Circle())

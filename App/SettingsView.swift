@@ -281,6 +281,8 @@ struct LXSourcePage: View {
     @Environment(Store.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var confirmsRemoval = false
+    /// Until when this source is asked after the others, having failed or timed out lately (#1374).
+    @State private var coolingUntil: Date?
     var body: some View {
         let current = store.lxSources.first { $0.id == source.id } ?? source
         let enabled = Binding(get: { current.enabled }, set: { LXSourceLibrary.shared.setEnabled(source.id, $0) })
@@ -288,13 +290,22 @@ struct LXSourcePage: View {
             .confirmationDialog(L10n.text("Remove “%@”", current.info.name), isPresented: $confirmsRemoval) {
                 Button(L10n.text("Remove"), role: .destructive) { LXSourceLibrary.shared.remove(source.id); dismiss() }
             }
+            .task { coolingUntil = await MusicHealth.shared.coolingUntil(prefix: LXMusicProvider.upstream(source) + "|") }
+    }
+
+    /// What the source's row says: its version and catalogs, and whether it has stopped answering lately.
+    private func detail(_ current: LXSource) -> String {
+        let base = MusicLXSourcesModel.detail(current)
+        guard let coolingUntil else { return base }
+        let status = L10n.text("Not answering lately, so other sources are asked first until %@.", coolingUntil.formatted(date: .omitted, time: .shortened))
+        return base.isEmpty ? status : base + "\n" + status
     }
 
     @ViewBuilder private func page(_ current: LXSource, enabled: Binding<Bool>) -> some View {
         #if os(tvOS)
         TVSettingsSubpage(symbol: "music.note", title: current.info.name, subtitle: current.origin?.absoluteString) {
             TVSettingsSection(title: L10n.text("LX Music Sources"), footer: MusicLXSourcesModel.note) {
-                TVSettingsToggle(title: L10n.text("Use This Source"), detail: MusicLXSourcesModel.detail(current), isOn: enabled)
+                TVSettingsToggle(title: L10n.text("Use This Source"), detail: detail(current), isOn: enabled)
             }
             TVSettingsSection {
                 TVSettingsAction(title: L10n.text("Remove Source"), destructive: true) { confirmsRemoval = true }
@@ -308,7 +319,7 @@ struct LXSourcePage: View {
                 }
                 .settingsSwitch()
             } footer: {
-                Text(MusicLXSourcesModel.detail(current))
+                Text(detail(current))
             }
             if let origin = current.origin {
                 Section {

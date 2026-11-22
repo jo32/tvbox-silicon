@@ -189,7 +189,7 @@ struct MusicNowPlayingScreen: View {
                 }
             }
             Spacer()
-            control("forward.fill", size: 30, label: "Next") { music.next() }.disabled(music.queue?.hasNext != true)
+            control("forward.fill", size: 30, label: "Next") { music.next() }.disabled(!music.canAdvance)
             Spacer()
         }
         .frame(height: 84)

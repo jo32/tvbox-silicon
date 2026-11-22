@@ -390,10 +390,17 @@ enum QALaunch {
                 if let index = Int(parts.dropFirst().first ?? ""), config.lives.indices.contains(index) {
                     ChannelListView(source: config.lives[index])
                 }
-            // `-qaPage folder:<quark|uc|alist|drive key>:<folder>` opens that Cloud Files folder.
+            // `-qaPage folder:<quark|uc|alist|drive key>:<folder>` opens that Cloud Files folder; `-qaFilesPosters 1` as posters.
             case "folder":
                 if parts.count == 3, let drive = filesDrive(parts[1]) {
-                    CloudFolderView(drive: drive, folder: parts[2], name: folderName(parts[2], drive))
+                    CloudFolderView(drive: drive, folder: parts[2], name: folderName(parts[2], drive),
+                                    inheritsPosters: UserDefaults.standard.bool(forKey: "qaFilesPosters"))
+                }
+            // `-qaPage files-title:<quark|uc|alist|drive key>:<folder>` opens that folder as a title, as its poster does (#880).
+            case "files-title":
+                if parts.count == 3, let drive = filesDrive(parts[1]) {
+                    VideoDetailView(video: CloudFilesSource.titleVideo(CloudFile(id: parts[2], name: folderName(parts[2], drive), isFolder: true)),
+                                    client: CloudFilesSource.client(drive, origin: config.origin))
                 }
             case "alist-add": QASheet { AListServerForm(server: AListServer(name: "", address: "")) {} }
             case "runtime": RuntimeView()
@@ -500,7 +507,7 @@ enum QALaunch {
 
     static func overrides(_ section: AppSection) -> Bool {
         guard section == self.section, let page else { return false }
-        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "subscription", "novel-list", "arrange-subscriptions", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "app-icon", "color-theme", "profiles", "account", "points", "cloud-login", "cloud-accounts", "subtitle-style", "danmaku-style", "book-sources", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "alist-add", "up", "comments", "chapters", "live-plugins", "live-plugin", "live-plugin-sign-in", "live-plugin-qr"].contains(page.split(separator: ":").first.map(String.init) ?? "")
+        return ["site", "setting", "detail", "open-detail", "channels", "runtime", "subscription", "novel-list", "arrange-subscriptions", "logs", "feedback", "telegram", "cache", "playback", "privacy", "licenses", "app-icon", "color-theme", "profiles", "account", "points", "cloud-login", "cloud-accounts", "subtitle-style", "danmaku-style", "book-sources", "drive-sign-in", "bilibili-account", "douyin-account", "douyin-login", "douyin-handoff", "bilibili-live", "live", "danmaku-list", "danmaku-settings", "web-sign-in", "plugin-sign-in", "catpaw-sign-in", "folder", "files-title", "alist-add", "up", "comments", "chapters", "live-plugins", "live-plugin", "live-plugin-sign-in", "live-plugin-qr"].contains(page.split(separator: ":").first.map(String.init) ?? "")
     }
 }
 

@@ -9,6 +9,8 @@ import TVCore
 /// - `-qaNovelOpen <source key>|<book url>|<name>` opens a book's page; with `-qaNovelRead 1` it reads on;
 ///   `-qaNovelChrome 1` keeps the reader bars up; `-qaNovelTheme <NovelTheme>` sets the page colour;
 ///   `-qaNovelTurns <n>` turns n pages; `-qaNovelPanel text|theme|contents` opens a reader panel;
+///   `-qaNovelMark 1` bookmarks the page, `-qaNovelSwitch <source name>` reads on from that source's copy, and
+///   `-qaNovelPanel bookmarks|sources` opens the bookmarks list or Change Source (#1450, #1452);
 ///   `-qaNovelJumps 300,20,187` lets go of the chapter slider at those places, 4 s apart; `-qaNovelTOC 1` opens the
 ///   book's table of contents.
 /// - `-qaNovelAutoScroll <delay>` (iOS) scrolls the page up and down for 20 s like a finger and writes the late frames

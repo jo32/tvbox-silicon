@@ -24,6 +24,7 @@ struct NovelDetailView: View {
     @State private var expanded = false
     @State private var heroCover: CGImage?
     @Environment(\.openRoute) private var openRoute
+    @Environment(Store.self) private var appStore
     #if os(macOS)
     @State private var macPastHero = false
     #endif
@@ -45,6 +46,12 @@ struct NovelDetailView: View {
         page
             .task(id: book.id) { await load() }
             .task(id: current.cover) { await loadHeroCover() }
+            // The reader changed the source (#1450): the page follows, so Continue opens the copy the place belongs to.
+            .onChange(of: entry?.book.id) { _, _ in
+                guard let saved = entry?.book, saved.sourceKey != book.sourceKey else { return }
+                if !alternatives.contains(where: { $0.id == book.id }) { alternatives.insert(book, at: 0) }
+                book = saved; details = nil; chapters = []; heroCover = nil
+            }
             #if os(macOS)
             .onChange(of: reading?.id) { _, _ in
                 if let reading { openRoute?(Route { AnyView(NovelReaderView(reading: reading)) }); self.reading = nil }
@@ -88,6 +95,12 @@ struct NovelDetailView: View {
 
     private func read(at index: Int, position: Double) {
         guard !chapters.isEmpty else { return }
+        // An audiobook's chapters play in the music player (#1130); Continue picks up at the second it stopped.
+        if current.isAudio {
+            let seconds = position > 0 && entry?.chapterIndex == index ? entry?.seconds : nil
+            appStore.listen(to: current, chapters: chapters, from: index, at: seconds)
+            return
+        }
         reading = NovelReading(book: current, chapters: chapters, chapter: min(index, chapters.count - 1), position: position)
     }
 
@@ -119,7 +132,8 @@ struct NovelDetailView: View {
         return parts.joined(separator: " · ")
     }
 
-    private var readTitle: String { entry?.started == true ? L10n.text("Continue") : L10n.text("Read") }
+    private var readTitle: String { entry?.started == true ? L10n.text("Continue") : current.isAudio ? L10n.text("Listen") : L10n.text("Read") }
+    private var readSymbol: String { current.isAudio ? "headphones" : "book.fill" }
     private var progressText: String? { entry.flatMap { $0.started ? NovelProgressText.short($0) : nil } }
 
     /// The table of contents and the source, as rows under the intro.
@@ -257,7 +271,7 @@ struct NovelDetailView: View {
         return VStack(alignment: .leading, spacing: 18) {
             Button(action: readOn) {
                 HStack(spacing: 7) {
-                    Image(systemName: "book.fill")
+                    Image(systemName: readSymbol)
                     Text(readTitle)
                     if let progressText { Text(progressText).fontWeight(.medium).opacity(0.55) }
                 }
@@ -304,7 +318,7 @@ struct NovelDetailView: View {
             HStack(spacing: 12) {
                 Button(action: readOn) {
                     HStack(spacing: 7) {
-                        Image(systemName: "book.fill")
+                        Image(systemName: readSymbol)
                         Text(readTitle)
                         if let progressText { Text(progressText).fontWeight(.medium).opacity(0.55) }
                     }
@@ -399,7 +413,7 @@ struct NovelDetailView: View {
         return VStack(alignment: .leading, spacing: 18) {
             Button(action: readOn) {
                 HStack(spacing: 8) {
-                    Image(systemName: "book.fill")
+                    Image(systemName: readSymbol)
                     Text(readTitle)
                     if let progressText { Text(progressText).fontWeight(.medium).opacity(0.7) }
                 }
@@ -469,7 +483,7 @@ struct NovelDetailView: View {
         let shelved = entry != nil
         return VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 20) {
-                Button(action: readOn) { Label(readTitle, systemImage: "book.fill").lineLimit(1).padding(.horizontal, 10) }
+                Button(action: readOn) { Label(readTitle, systemImage: readSymbol).lineLimit(1).padding(.horizontal, 10) }
                     .controlButton(prominent: true)
                     .disabled(chapters.isEmpty)
                     .accessibilityIdentifier("novel.read")
@@ -543,6 +557,7 @@ struct NovelTOCView: View {
     @State private var store = NovelStore.shared
     @State private var reading: NovelReading?
     @Environment(\.openRoute) private var openRoute
+    @Environment(Store.self) private var appStore
 
     private var last: Int? { store.shelfBook(book).flatMap { $0.started ? $0.chapterIndex : nil } }
 
@@ -561,6 +576,10 @@ struct NovelTOCView: View {
 
     private func open(_ index: Int) {
         let saved = store.shelfBook(book)
+        if book.isAudio {
+            appStore.listen(to: book, chapters: chapters, from: index, at: saved?.chapterIndex == index ? saved?.seconds : nil)
+            return
+        }
         let position = saved?.chapterIndex == index ? saved?.position ?? 0 : 0
         reading = NovelReading(book: book, chapters: chapters, chapter: index, position: position)
     }

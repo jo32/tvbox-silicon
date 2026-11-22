@@ -278,6 +278,23 @@ function mapView(value) {
     for (const [k, fn] of Object.entries(methods)) Object.defineProperty(map, k, { value: fn, enumerable: false, configurable: true, writable: true });
     return map;
 }
+/// Java's text for a JSON value, as Rhino shows the maps and lists Legado's JsonPath gives scripts: `{id=1, name=x}`.
+function javaText(value) {
+    if (value == null) return 'null';
+    if (Array.isArray(value)) return '[' + value.map(javaText).join(', ') + ']';
+    if (typeof value === 'object') return '{' + Object.entries(value).map(([k, v]) => k + '=' + javaText(v)).join(', ') + '}';
+    return String(value);
+}
+/// A JSON object handed to a script as `result` (a list item, say) is a Java map there: `String(result)` reads
+/// `{id=123, ...}`, which sources match against (`String(result).match(/id=(\d+)/)`).
+function javaShaped(value) {
+    if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype && Object.isExtensible(value)
+        && !Object.prototype.hasOwnProperty.call(value, 'toString')) {
+        // In place and not enumerable: keys, JSON and a map view's own methods (`mapView`) stay as they were.
+        Object.defineProperty(value, 'toString', { value() { return javaText(this); }, enumerable: false, configurable: true, writable: true });
+    }
+    return value;
+}
 function headerMap(hasLoginHeader = true) {
     const map = {};
     let header = S?.header;
@@ -320,7 +337,7 @@ class Book extends RuleData {
     toNovel() {
         return { sourceKey: S.bookSourceUrl, url: String(this.bookUrl ?? ''), name: String(this.name ?? ''), author: String(this.author ?? ''), kind: String(this.kind ?? ''),
             intro: String(this.intro ?? ''), cover: String(this.coverUrl ?? ''), lastChapter: String(this.latestChapterTitle ?? ''), wordCount: String(this.wordCount ?? ''),
-            tocURL: String(this.tocUrl ?? ''), variables: stringMap(this.variableMap) };
+            tocURL: String(this.tocUrl ?? ''), variables: stringMap(this.variableMap), isAudio: Number(S.bookSourceType) === 1 };
     }
 }
 class Chapter extends RuleData {
@@ -1250,6 +1267,7 @@ class Analyzer {
     }
 
     evalJS(code, result) {
+        result = javaShaped(result);
         const scope = {
             java: this, cookie, cache, source, book: this.book, result, baseUrl: this.baseUrl, chapter: this.chapter, title: this.chapter?.title ?? null,
             src: this.content, nextChapterUrl: this.nextChapterUrl, rssArticle: null, fromBookInfo: false,
@@ -1722,6 +1740,29 @@ function chapterContent(book, chapter, nextChapterUrl) {
     return text;
 }
 
+/// An audio source's chapter (`bookSourceType` 1): its content rule gives the sound's address, as Legado's
+/// AudioPlay reads it: unformatted, and with the `url,{options}` of any rule URL (headers, a JS step).
+function chapterAudio(book, chapter) {
+    const rule = ruleOf('ruleContent');
+    const page = chapter.getAbsoluteURL();
+    let address = chapter.url;
+    if (rule.content && String(rule.content).trim()) {
+        const response = performChecked(buildRequest(page, { baseUrl: book.tocUrl, ruleData: book, chapter }), { book, chapter });
+        const an = new Analyzer({ ruleData: book, chapter });
+        an.setContent(response.body(), page);
+        an.setRedirectUrl(response.url());
+        address = an.getString(rule.content, undefined, false, false);
+    }
+    address = String(address ?? '').trim();
+    if (address.includes('&amp;')) address = unescapeHtml(address);
+    if (!address) fail('The chapter has no audio.');
+    const request = buildRequest(address, { baseUrl: page, ruleData: book, chapter });
+    if (request.method !== 'GET' || request.webView) fail('This audio needs a request the player cannot make.');
+    const url = request.encodedQuery != null ? request.urlNoQuery + '?' + request.encodedQuery : request.url;
+    if (!/^https?:/i.test(url)) fail('The chapter has no audio.');
+    return { url, headers: stringMap(request.headers) };
+}
+
 let exploreKindsKept = null;
 function exploreKinds() {
     if (exploreKindsKept) return exploreKindsKept;
@@ -2041,7 +2082,7 @@ const globalScript = code => rhinoSyntax(String(code)).replace(/^(let|const)(\s+
 function load(text) {
     const json = typeof text === 'string' ? JSON.parse(text) : text;
     if (!json || typeof json !== 'object' || !json.bookSourceUrl) fail('This is not a Legado book source.');
-    if (json.bookSourceType != null && Number(json.bookSourceType) !== 0) fail('This is not a text book source.');
+    if (json.bookSourceType != null && ![0, 1].includes(Number(json.bookSourceType))) fail('This is not a text book source.');
     resetSourceState();
     S = json; source = makeSource(json);
     globalThis.source = source;
@@ -2112,6 +2153,14 @@ globalThis.__legado = {
         keepBook(book);
         const paragraphs = String(text).split(/\r?\n/).map(line => line.replace(/<img[^>]*>/gi, '').replace(/^[\s　 ]+|[\s　 ]+$/g, '')).filter(Boolean);
         return { title: String(chapter.title ?? ''), paragraphs, variables: stringMap(chapter.variableMap) };
+    }, budget),
+    audio: (value, chapterValue, budget) => run(() => {
+        const book = bookFrom(value);
+        if (!book.tocUrl) book.tocUrl = book.bookUrl;
+        const chapter = chapterFrom(chapterValue, book);
+        const sound = chapterAudio(book, chapter);
+        keepBook(book);
+        return { url: sound.url, headers: sound.headers, title: String(chapter.title ?? '') };
     }, budget),
     loginForm: budget => run(() => signInForm(), budget),
     login: (values, budget) => run(() => signIn(values), budget),

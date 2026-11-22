@@ -72,6 +72,11 @@ public actor NovelRuntime {
         return NovelContent(title: content.title.isEmpty ? chapter.title : content.title, paragraphs: content.paragraphs)
     }
 
+    /// Where an audio source's chapter plays from (#1130): the sound's address and the headers it wants.
+    public func audio(_ source: NovelSource, book: NovelBook, chapter: NovelChapter) async throws -> NovelAudio {
+        try decode(NovelAudio.self, try await readingCall(source, "audio", [Self.object(book), Self.object(chapter)], budget: 45))
+    }
+
     // MARK: Signing in (Legado's SourceLoginDialog), in the source's reading runtime
 
     public func signInForm(_ source: NovelSource) async throws -> NovelSignInForm {
@@ -429,7 +434,12 @@ final class NovelHTTP: NSObject, URLSessionDataDelegate, @unchecked Sendable {
             return Self.reply(["code": 0, "failed": "Not a web address: \(String((options["url"] as? String ?? "").prefix(200)))"])
         }
         let timeout = min(30, max(1, (options["timeout"] as? Double ?? 15000) / 1000))
-        var request = URLRequest(url: url, timeoutInterval: timeout)
+        // Ximalaya's retired track list goes to the one still answering; pages past an album's end need no request.
+        if let answer = XimalayaAudio.localAnswer(requested: url) {
+            return Self.reply(["url": url.absoluteString, "code": 200, "headers": ["content-type": "application/json"], "base64": answer.base64EncodedString(), "cookies": [:]])
+        }
+        let target = XimalayaAudio.request(for: url) ?? url
+        var request = URLRequest(url: target, timeoutInterval: timeout)
         let method = (options["method"] as? String ?? "GET").uppercased()
         request.httpMethod = method
         for (field, value) in options["headers"] as? [String: Any] ?? [:] {
@@ -452,10 +462,13 @@ final class NovelHTTP: NSObject, URLSessionDataDelegate, @unchecked Sendable {
         guard let response = result.1 as? HTTPURLResponse else { return Self.reply(["code": 0, "failed": "Network request to \(url.host ?? "") failed"]) }
         var headers: [String: String] = [:]
         for (name, value) in response.allHeaderFields { headers["\(name)".lowercased()] = "\(value)" }
-        let final = response.url ?? url
+        // A rewritten request answers as the address the source asked for, which its rules may read (`baseUrl`).
+        let final = target == url ? response.url ?? url : url
         var cookies: [String: String] = [:]
         for cookie in session.configuration.httpCookieStorage?.cookies(for: final) ?? [] { cookies[cookie.name] = cookie.value }
-        return Self.reply(["url": final.absoluteString, "code": response.statusCode, "headers": headers, "base64": (result.0 ?? Data()).base64EncodedString(), "cookies": cookies])
+        var body = result.0 ?? Data()
+        if response.statusCode == 200, let adapted = XimalayaAudio.adapt(body, requested: url) { body = adapted }
+        return Self.reply(["url": final.absoluteString, "code": response.statusCode, "headers": headers, "base64": body.base64EncodedString(), "cookies": cookies])
     }
 
     private static func reply(_ value: [String: Any]) -> String {

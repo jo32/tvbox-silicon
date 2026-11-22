@@ -338,6 +338,17 @@ import TVCore
         return AudioSources.queue(video: catalog.video, from: episode, site: catalog.client.site, origin: catalog.client.origin)
     }
 
+    /// Plays an audiobook's chapters from `index` in the music player (#1130), at `seconds` into that chapter.
+    func listen(to book: NovelBook, chapters: [NovelChapter], from index: Int, at seconds: Double?) {
+        let queue = NovelListening.queue(book: book, chapters: chapters, from: index)
+        guard !queue.tracks.isEmpty else { return }
+        Diagnostics.shared.record(.info, "music", "audiobook queue=\(queue.tracks.count)")
+        music.play(queue, at: seconds.flatMap { $0 > 1 ? $0 : nil })
+        #if os(iOS)
+        music.presentsPlayer = true
+        #endif
+    }
+
     /// Plays the queue from the channel's stream, where this chapter stopped last time.
     private func listen(_ queue: MusicQueue, from channel: Channel) {
         var position = channel.resumePosition
@@ -364,6 +375,12 @@ import TVCore
             return try await self.resolveListening(source)
         }
         music.recordSource = { [weak self] source, position, duration in
+            // An audiobook's place goes to the Novels shelf (#1130).
+            if let item = NovelListening.item(source) {
+                NovelStore.shared.record(item.book, chapter: item.chapter, count: item.count,
+                                         position: duration > 0 ? position / duration : 0, seconds: position)
+                return
+            }
             self?.playbackHistory.record(source.context, position: position, duration: duration)
         }
         music.handOffSource = { [weak self] stream, position, picture, covered in
@@ -385,6 +402,7 @@ import TVCore
 
     /// A chapter's stream from its source, as Continue Watching gets an episode's.
     private func resolveListening(_ source: MusicSourceEpisode) async throws -> Channel {
+        if let item = NovelListening.item(source) { return try await NovelListening.channel(for: item) }
         let context = source.context
         guard let client = historyClient(PlaybackHistoryEntry(context: context, position: 0, duration: 0, updatedAt: Date())) else {
             throw TVError.unsupported(L10n.text("This history source is no longer in the current subscription. Restore that subscription to continue."))
@@ -1080,10 +1098,13 @@ import TVCore
     /// The source a watched title came from. Any enabled subscription can hold it: it is found by its own origin
     /// and original key. Nil for Cloud Files, and once the source is gone.
     func historyClient(_ entry: PlaybackHistoryEntry) -> CatalogClient? {
-        guard entry.context.sourceKey != CloudFiles.sourceKey, let config = subscription,
-              let site = config.sites.first(where: { $0.origin(or: config.origin) == entry.context.origin && $0.sourceKey == entry.context.sourceKey })
-        else { return nil }
-        return CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL).applying(config)
+        guard entry.context.sourceKey != CloudFiles.sourceKey else { return nil }
+        if let config = subscription,
+           let site = config.sites.first(where: { $0.origin(or: config.origin) == entry.context.origin && $0.sourceKey == entry.context.sourceKey }) {
+            return CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL).applying(config)
+        }
+        // A title of a drive that isn't among the subscription's sources: a WebDAV share's, opened from Cloud Files' posters.
+        return CloudFilesSource.drive(sourceKey: entry.context.sourceKey).map { CloudFilesSource.client($0, origin: entry.context.origin) }
     }
 
     func resumeHistory(_ entry: PlaybackHistoryEntry) async {

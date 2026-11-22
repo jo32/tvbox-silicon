@@ -212,26 +212,33 @@ import TVCore
     }
 
     /// Where reading stopped. Reading a book puts it on the shelf, most recent first.
-    func record(_ book: NovelBook, chapter: NovelChapter, count: Int, position: Double) {
+    func record(_ book: NovelBook, chapter: NovelChapter, count: Int, position: Double, seconds: Double? = nil) {
         var entry = shelfBook(book) ?? NovelLibrary.ShelfBook(book: book)
         entry.book = book
         entry.chapterIndex = chapter.index; entry.chapterTitle = chapter.title; entry.chapterCount = count
-        entry.position = min(1, max(0, position)); entry.updated = Date()
+        entry.position = min(1, max(0, position)); entry.seconds = seconds; entry.updated = Date()
         shelf.removeAll { $0.id == entry.id }
         shelf.insert(entry, at: 0)
         saveShelf()
     }
 
-    /// Reads the shelf's book from another source from now on, keeping the place by chapter title.
+    /// Reads the shelf's book from another source from now on, keeping the place and the bookmarks by chapter title.
     func switchSource(of old: NovelBook, to book: NovelBook, chapters: [NovelChapter]) {
-        guard var entry = shelfBook(old) else { return }
-        entry.book = book
-        let title = NovelChapterTitle.key(entry.chapterTitle)
-        if let match = chapters.first(where: { NovelChapterTitle.key($0.title) == title }) ?? (chapters.indices.contains(entry.chapterIndex) ? chapters[entry.chapterIndex] : nil) {
-            entry.chapterIndex = match.index; entry.chapterTitle = match.title
-        }
-        entry.chapterCount = chapters.count
-        if let index = shelf.firstIndex(where: { $0.id == entry.id }) { shelf[index] = entry }
+        if NovelLibrary.switchSource(&shelf, from: old, to: book, chapters: chapters) { saveShelf() }
+    }
+
+    // MARK: Bookmarks (#1452)
+
+    func bookmarks(_ book: NovelBook) -> [NovelBookmark] { shelfBook(book)?.bookmarks ?? [] }
+    /// Marks a place. Reading has already put the book on the shelf.
+    func addBookmark(_ bookmark: NovelBookmark, to book: NovelBook) {
+        guard let index = shelf.firstIndex(where: { $0.id == book.match }) else { return }
+        shelf[index].mark(bookmark)
+        saveShelf()
+    }
+    func removeBookmark(_ id: NovelBookmark.ID, from book: NovelBook) {
+        guard let index = shelf.firstIndex(where: { $0.id == book.match }) else { return }
+        shelf[index].bookmarks.removeAll { $0.id == id }
         saveShelf()
     }
 
@@ -240,7 +247,7 @@ import TVCore
 
 enum NovelChapterTitle {
     /// A chapter title without spaces and punctuation, to find the same chapter in another source's list.
-    static func key(_ title: String) -> String { title.lowercased().filter { $0.isLetter || $0.isNumber } }
+    static func key(_ title: String) -> String { NovelChapterMatch.key(title) }
 }
 
 /// Turning pages, or one long column to scroll.
@@ -328,10 +335,20 @@ extension Color {
 struct NovelCover: View {
     let book: NovelBook
     var body: some View {
-        if let request = book.coverRequest {
-            PosterImage(url: request.url, headers: request.headers, symbol: "book.closed")
-        } else {
-            NovelPlainCover(title: book.name, author: book.author)
+        Group {
+            if let request = book.coverRequest {
+                PosterImage(url: request.url, headers: request.headers, symbol: "book.closed")
+            } else {
+                NovelPlainCover(title: book.name, author: book.author)
+            }
+        }
+        // An audiobook (#1130) is told from the text of the same title by a headphones mark.
+        .overlay(alignment: .bottomTrailing) {
+            if book.isAudio {
+                Image(systemName: "headphones").font(.caption.weight(.bold)).foregroundStyle(.white)
+                    .padding(6).background(.black.opacity(0.55), in: Circle()).padding(6)
+                    .accessibilityHidden(true)
+            }
         }
     }
 }
