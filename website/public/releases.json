@@ -1,6 +1,175 @@
 {
   "releases": [
     {
+      "version": "1.8.28",
+      "build": 66,
+      "date": "2026-11-22",
+      "links": {
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "pip",
+          "title": {
+            "en": "Keep watching in Picture in Picture",
+            "zh-Hans": "画中画里继续看",
+            "zh-Hant": "子母畫面裡繼續看",
+            "ja": "ピクチャ・イン・ピクチャで見ながら操作"
+          },
+          "detail": {
+            "en": "On iPhone and iPad, starting Picture in Picture now closes the player, so you can browse Yingxia while the video plays in its small window; the window's return button brings the player back. Save Frame in the player's options menu saves the picture to Photos, without controls, danmaku or subtitles. On the Mac it goes to Pictures.",
+            "zh-Hans": "在 iPhone 和 iPad 上，开启画中画后播放页会自动收起，视频在小窗里继续播放，你可以接着浏览映匣；点小窗里的返回按钮就能回到播放页。播放器选项菜单里新增“截图”，把当前画面存到“照片”，不带控制按钮、弹幕和字幕。在 Mac 上会存到“图片”文件夹。",
+            "zh-Hant": "在 iPhone 和 iPad 上，開啟子母畫面後播放頁會自動收起，影片在小視窗裡繼續播放，你可以接著瀏覽映匣；點小視窗裡的返回按鈕就能回到播放頁。播放器選項選單裡新增「截圖」，把目前的畫面存到「照片」，不含控制按鈕、彈幕和字幕。在 Mac 上會存到「圖片」資料夾。",
+            "ja": "iPhone と iPad では、ピクチャ・イン・ピクチャを始めるとプレーヤーが閉じ、小さなウインドウで再生を続けたまま映匣を操作できます。ウインドウの戻るボタンでプレーヤーに戻ります。プレーヤーのオプションメニューの「フレームを保存」で、今の画面を写真に保存できます（操作ボタン・弾幕・字幕は入りません）。Mac では「ピクチャ」フォルダに保存されます。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "play.circle",
+          "title": {
+            "en": "Smoother, cooler playback",
+            "zh-Hans": "播放更顺，手机更凉",
+            "zh-Hant": "播放更順，手機更涼",
+            "ja": "よりなめらかで熱くなりにくい再生"
+          },
+          "detail": {
+            "en": "Continue Watching starts right at your place instead of loading the start first, and a quick look at another app no longer reloads the video. Switching to another line keeps your place. Touch-and-hold speed starts and stops without a stall, and can be turned off in Settings › Playback › Touch and Hold Speed. Films with DTS or TrueHD sound are no longer quieter than others, styled and picture subtitles in MKV files come on time, and iPhones and iPads do less work while a video plays, so they stay cooler.",
+            "zh-Hans": "“继续观看”会直接从上次的位置开始，不再先加载开头；切到别的应用看一眼再回来，视频不会重新加载。换线路时会接着当前进度播放。长按倍速的开始和结束不再卡顿，也可以在“设置 › 播放 › 长按倍速”里关闭。带 DTS 或 TrueHD 音轨的影片不再比其他视频小声，MKV 里的特效字幕和图形字幕也能准时出现；iPhone 和 iPad 播放时做的工作更少，机身更凉。",
+            "zh-Hant": "「繼續觀看」會直接從上次的位置開始，不再先載入開頭；切到別的 App 看一眼再回來，影片不會重新載入。換線路時會接著目前進度播放。長按倍速的開始和結束不再卡頓，也可以在「設定 › 播放 › 長按倍速」裡關閉。帶 DTS 或 TrueHD 音軌的影片不再比其他影片小聲，MKV 裡的特效字幕和圖形字幕也能準時出現；iPhone 和 iPad 播放時做的工作更少，機身更涼。",
+            "ja": "「視聴を続ける」は最初の部分を読み込まずに前回の位置からすぐ始まり、ほかのアプリを少し見て戻っても動画が読み込み直されなくなりました。別の再生ラインに切り替えても続きから再生します。長押しの倍速は止まらずに切り替わり、「設定 › 再生 › 長押しの再生速度」でオフにもできます。DTS や TrueHD 音声の映画がほかより小さく聞こえることはなくなり、MKV のスタイル付き字幕や画像字幕もタイミングどおりに表示されます。iPhone と iPad は再生中の処理が減り、熱くなりにくくなりました。"
+          }
+        },
+        {
+          "symbol": "forward.end",
+          "title": {
+            "en": "Skip intro and outro, easy to find",
+            "zh-Hans": "跳过片头片尾，一找就到",
+            "zh-Hant": "跳過片頭片尾，一找就到",
+            "ja": "オープニング・エンディングのスキップが見つけやすく"
+          },
+          "detail": {
+            "en": "The player's menu now has Skip intro / outro, showing whether it's on and the times set, and it tells you when it's on with no times. Settings › Playback has Automatically skip intro and outro. Audiobooks can skip a book's intro and outro too, in every chapter.",
+            "zh-Hans": "播放器菜单里新增“跳过片头片尾”，直接显示是否开启和设置的时间；开启了却没设时间时会提醒你。“设置 › 播放”里有“自动跳过片头片尾”。有声书也能跳过片头片尾，整本书的每一章都生效。",
+            "zh-Hant": "播放器選單裡新增「跳過片頭片尾」，直接顯示是否開啟和設定的時間；開啟了卻沒設時間時會提醒你。「設定 › 播放」裡有「自動跳過片頭片尾」。有聲書也能跳過片頭片尾，整本書的每一章都生效。",
+            "ja": "プレーヤーのメニューに「オープニング・エンディングをスキップ」が加わり、オンかどうかと設定した時間が表示されます。オンなのに時間が未設定のときはお知らせします。「設定 › 再生」には「オープニングとエンディングを自動スキップ」があります。オーディオブックでも、本ごとにすべての章でスキップできます。"
+          }
+        },
+        {
+          "symbol": "person.2",
+          "title": {
+            "en": "Profiles for everyone at home",
+            "zh-Hans": "家里每个人都有自己的用户",
+            "zh-Hant": "家裡每個人都有自己的使用者",
+            "ja": "家族それぞれのプロフィール"
+          },
+          "detail": {
+            "en": "Settings › Profiles gives each person on a shared device their own subscriptions, favorites, Continue Watching and search history. Your library today becomes the Main Profile and stays as it is; only the Main Profile syncs with iCloud.",
+            "zh-Hans": "“设置 › 用户”可以让共用一台设备的每个人拥有自己的订阅、收藏、继续观看和搜索记录。你现在的内容就是“主用户”，保持不变；只有主用户会通过 iCloud 同步。",
+            "zh-Hant": "「設定 › 使用者」可以讓共用一台裝置的每個人擁有自己的訂閱、收藏、繼續觀看和搜尋紀錄。你現在的內容就是「主要使用者」，保持不變；只有主要使用者會透過 iCloud 同步。",
+            "ja": "「設定 › プロフィール」で、1 台のデバイスを共有する人それぞれが自分の登録、お気に入り、視聴を続ける、検索履歴を持てます。今のライブラリは「メインプロフィール」としてそのまま残り、iCloud で同期されるのはメインプロフィールだけです。"
+          }
+        },
+        {
+          "symbol": "tv.and.mediabox",
+          "title": {
+            "en": "Cast to your TV",
+            "zh-Hans": "投屏到电视",
+            "zh-Hant": "投放到電視",
+            "ja": "テレビにキャスト"
+          },
+          "detail": {
+            "en": "The player's Play On menu now lists TVs and boxes that take DLNA casts. Pick one and the video plays on the TV, with pause, seek and volume on your iPhone, iPad or Mac. Keep Yingxia open while the TV plays. Some older TVs may not show up on iPhone and iPad yet.",
+            "zh-Hans": "播放器的“在其他设备上播放”菜单里，现在会列出支持 DLNA 投屏的电视和盒子。选一台，视频就会在电视上播放，暂停、拖动进度和音量都能在 iPhone、iPad 或 Mac 上控制。电视播放时请让映匣保持打开。部分较旧的电视暂时可能不会出现在 iPhone 和 iPad 的列表里。",
+            "zh-Hant": "播放器的「在其他裝置上播放」選單裡，現在會列出支援 DLNA 投放的電視和盒子。選一台，影片就會在電視上播放，暫停、拖動進度和音量都能在 iPhone、iPad 或 Mac 上控制。電視播放時請讓映匣保持開啟。部分較舊的電視暫時可能不會出現在 iPhone 和 iPad 的列表裡。",
+            "ja": "プレーヤーの「ほかのデバイスで再生」メニューに、DLNA キャストに対応したテレビやボックスが表示されるようになりました。選ぶとテレビで再生され、一時停止・シーク・音量は iPhone、iPad、Mac で操作できます。テレビで再生中は映匣を開いたままにしてください。古いテレビの一部は、iPhone と iPad ではまだ表示されないことがあります。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "square.grid.3x2",
+          "title": {
+            "en": "Posters for your drive's films",
+            "zh-Hans": "网盘影片以海报显示",
+            "zh-Hant": "網盤影片以海報顯示",
+            "ja": "クラウドの映画をポスターで"
+          },
+          "detail": {
+            "en": "In Cloud Files, a folder of films or series can Show as Posters, with posters, titles and years found even for names like The.Last.of.Us.S02.2160p. Opening one gives a normal title page with episode names and stills. Works for cloud drives, AList and NAS shares over WebDAV.",
+            "zh-Hans": "在“网盘文件”里，放影片或剧集的文件夹可以“以海报显示”，像 The.Last.of.Us.S02.2160p 这样的文件名也能认出海报、片名和年份。点开就是正常的影片详情页，带分集名称和剧照。支持网盘、AList 和通过 WebDAV 访问的 NAS。",
+            "zh-Hant": "在「網盤檔案」裡，放影片或劇集的資料夾可以「以海報顯示」，像 The.Last.of.Us.S02.2160p 這樣的檔名也能認出海報、片名和年份。點開就是正常的影片詳情頁，帶分集名稱和劇照。支援網盤、AList 和透過 WebDAV 存取的 NAS。",
+            "ja": "「クラウドファイル」で、映画やシリーズのフォルダを「ポスターで表示」できます。The.Last.of.Us.S02.2160p のような名前からもポスター、タイトル、年を見つけます。開くと、エピソード名と場面写真付きの通常の作品ページになります。クラウドドライブ、AList、WebDAV の NAS で使えます。"
+          }
+        },
+        {
+          "symbol": "book",
+          "title": {
+            "en": "Novels your way, and audiobooks",
+            "zh-Hans": "小说随心读，还能听书",
+            "zh-Hant": "小說隨心讀，還能聽書",
+            "ja": "小説を好みの見た目で、オーディオブックも"
+          },
+          "detail": {
+            "en": "The novel reader adds Paragraph Spacing, Top & Bottom margins, a Background Image, Traditional or Simplified Chinese, and on iPhone and iPad a page curl. Bookmarks keep your place, and Change Source in the reader moves to another source at the same chapter. Legado audio sources now play as audiobooks in the music player and pick up mid-chapter.",
+            "zh-Hans": "小说阅读器新增段间距、上下边距、背景图片、繁简转换，iPhone 和 iPad 上还有仿真翻页。可以加书签，在阅读页里直接换源，并停在同一章。Legado 的听书源现在能在音乐播放器里收听，下次从章节中间接着听。",
+            "zh-Hant": "小說閱讀器新增段間距、上下邊距、背景圖片、繁簡轉換，iPhone 和 iPad 上還有仿真翻頁。可以加書籤，在閱讀頁裡直接換源，並停在同一章。Legado 的聽書源現在能在音樂播放器裡收聽，下次從章節中間接著聽。",
+            "ja": "小説リーダーに段落の間隔、上下の余白、背景画像、繁体字・簡体字の切り替え、iPhone と iPad ではめくりのページ送りが加わりました。ブックマークで場所を残せ、リーダーの中で同じ章のまま別のソースに切り替えられます。Legado の音声ソースはミュージックプレーヤーでオーディオブックとして再生でき、章の途中から続きを聴けます。"
+          }
+        },
+        {
+          "symbol": "text.bubble",
+          "title": {
+            "en": "Danmaku your way",
+            "zh-Hans": "弹幕随你调",
+            "zh-Hant": "彈幕隨你調",
+            "ja": "弾幕を好みに"
+          },
+          "detail": {
+            "en": "Settings › Danmaku adds Line Spacing and Density (Fewer and Fewest hide repeats and busy moments), also in the player's danmaku menu. Danmaku Servers lets you add your own danmu_api servers, asked in order. On Apple TV, Find Danmaku… in the player picks the right show and episode by hand.",
+            "zh-Hans": "“设置 › 弹幕”新增行距和弹幕密度（“较少”和“最少”会隐藏重复和过密的弹幕），播放器的弹幕菜单里也能调。“弹幕服务器”可以添加你自己的 danmu_api 服务器，按顺序查找。在 Apple TV 上，播放器里的“查找弹幕…”可以手动选对剧集和集数。",
+            "zh-Hant": "「設定 › 彈幕」新增行距和彈幕密度（「較少」和「最少」會隱藏重複和過密的彈幕），播放器的彈幕選單裡也能調。「彈幕伺服器」可以加入你自己的 danmu_api 伺服器，依順序查找。在 Apple TV 上，播放器裡的「尋找彈幕…」可以手動選對劇集和集數。",
+            "ja": "「設定 › 弾幕コメント」に行間と密度（「少なめ」「最少」で重複や混み合うコメントを隠します）が加わり、プレーヤーの弾幕メニューでも変えられます。「弾幕サーバー」で自分の danmu_api サーバーを追加でき、順番に問い合わせます。Apple TV では、プレーヤーの「弾幕を探す…」で作品とエピソードを手で選べます。"
+          }
+        },
+        {
+          "symbol": "books.vertical",
+          "title": {
+            "en": "Manga spreads, music that keeps going",
+            "zh-Hans": "漫画双页，音乐不断",
+            "zh-Hant": "漫畫雙頁，音樂不斷",
+            "ja": "漫画は見開き、音楽は止まらずに"
+          },
+          "detail": {
+            "en": "Manga shows two facing pages when the screen is wider than tall, turns pages without a flash, and marks favorites that have new chapters. Music waits out a source's request limit instead of skipping songs, asks failing sources last, and has Repeat and Shuffle on iPhone, iPad, Apple TV and the Lock Screen.",
+            "zh-Hans": "漫画在横屏时显示双页，翻页不再闪一下，收藏的漫画有新章节会标出来。音乐遇到音源请求次数用完时会等待，不再跳过歌曲，连续失败的音源放到最后再试；iPhone、iPad、Apple TV 和锁屏上都有循环和随机播放。",
+            "zh-Hant": "漫畫在橫向時顯示雙頁，翻頁不再閃一下，收藏的漫畫有新章節會標出來。音樂遇到音源請求次數用完時會等待，不再跳過歌曲，連續失敗的音源放到最後再試；iPhone、iPad、Apple TV 和鎖定畫面上都有循環和隨機播放。",
+            "ja": "漫画は画面が横長のとき見開きで表示し、ページをめくってもちらつかず、新しい章があるお気に入りに印が付きます。ミュージックはソースのリクエスト上限に達しても曲を飛ばさずに待ち、失敗が続くソースは最後に回します。iPhone、iPad、Apple TV、ロック画面でリピートとシャッフルが使えます。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "On iPhone and iPad with iOS 17, the Subtitles, Audio and Quality menus no longer close by themselves. Player menus stay open while you choose, Video Info fades with the controls, the Back button is easier to hit, the Dynamic Island no longer pops up when the controls show, and the battery level matches the system's. Long series get pages of 100 episodes and open at the episode playing. Adding a Python source again runs its new version. On Apple TV, Subtitle Files has its own icon, apart from the Subtitles and Audio button.",
+            "zh-Hans": "在 iOS 17 的 iPhone 和 iPad 上，字幕、音轨和画质菜单不会再自己关掉。选择时播放器菜单会保持打开，视频信息会跟着控制栏一起隐藏，返回按钮更容易点到，显示控制栏时灵动岛不再弹出，电量也和系统显示一致。集数很多的剧会按每页 100 集分页，并打开到正在播放的那一集。重新添加 Python 源会运行新版本。在 Apple TV 上，“字幕文件”换了自己的图标，不再和字幕与音频按钮长得一样。",
+            "zh-Hant": "在 iOS 17 的 iPhone 和 iPad 上，字幕、音軌和畫質選單不會再自己關掉。選擇時播放器選單會保持開啟，影片資訊會跟著控制列一起隱藏，返回按鈕更容易點到，顯示控制列時動態島不再彈出，電量也和系統顯示一致。集數很多的劇會按每頁 100 集分頁，並開到正在播放的那一集。重新加入 Python 源會執行新版本。在 Apple TV 上，「字幕檔案」換了自己的圖示，不再和字幕與音訊按鈕長得一樣。",
+            "ja": "iOS 17 の iPhone と iPad で、字幕・音声・画質のメニューが勝手に閉じなくなりました。選んでいる間はプレーヤーのメニューが開いたままになり、ビデオ情報はコントロールと一緒に消え、戻るボタンが押しやすくなり、コントロール表示時に Dynamic Island が出なくなり、バッテリー残量もシステムと同じになりました。話数の多いシリーズは 100 話ずつのページに分かれ、再生中の話から開きます。Python ソースを追加し直すと新しい版が動きます。Apple TV では「字幕ファイル」に専用のアイコンが付き、字幕と音声のボタンと区別できます。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.27",
       "build": 65,
       "date": "2026-11-21",
