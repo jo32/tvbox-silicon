@@ -9,4 +9,4 @@ with. Leave it empty if you don't want points.
 映匣积分：合并后，下面写的映匣账号会得到 500 积分。账号 ID 在 App 的「设置 › 账号」里（u_ 开头），用 Telegram
 登录的也可以写 @用户名。不需要积分可以留空。
 -->
-Yingxia account: 
+Yingxia account: u_D3FHXXF0YJ5B06HPW12D
