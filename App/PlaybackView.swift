@@ -620,17 +620,30 @@ import IOKit.pwr_mgt
     private func applyBoost() {
         boost = throttle.map { Float($0.rate) }
         boostWanted = throttle.flatMap { $0.limited ? Float($0.wanted) : nil }
-        if player.rate != 0 { player.rate = boost ?? player.defaultRate }
+        guard player.rate != 0 else { return }
+        let rate = boost ?? player.defaultRate
+        // With video buffered ahead, straight on at the new speed (#1457): a plain `rate` lets AVPlayer first wait
+        // to judge whether the download keeps up at it, which would hold the picture and sound as a hold begins
+        // or ends. A buffer that runs out still stops to buffer, and the throttle then steps the speed down.
+        if player.timeControlStatus == .playing, bufferedAhead() >= 1 { player.playImmediately(atRate: rate) }
+        else { player.rate = rate }
+    }
+    /// Seconds of video loaded past the playhead.
+    private func bufferedAhead() -> Double {
+        guard let item = player.currentItem else { return 0 }
+        let now = player.currentTime()
+        let buffered = item.loadedTimeRanges.lazy.map(\.timeRangeValue).first { CMTimeRangeContainsTime($0, time: now) }
+        return buffered.map { CMTimeRangeGetEnd($0).seconds - now.seconds } ?? 0
     }
     private func clearBoost() { throttle = nil; boost = nil; boostWanted = nil }
     /// Once a second while a hold plays faster than normal: slower before the buffered video runs out, and faster
     /// again while the download keeps up.
     private func throttleBoost(_ item: AVPlayerItem) {
         guard var throttle, throttle.wanted > 1, player.rate != 0, item.status == .readyToPlay else { return }
-        let now = player.currentTime()
-        let buffered = item.loadedTimeRanges.lazy.map(\.timeRangeValue).first { CMTimeRangeContainsTime($0, time: now) }
-        let ahead = buffered.map { CMTimeRangeGetEnd($0).seconds - now.seconds } ?? 0
-        throttle.update(ahead: ahead, waiting: player.timeControlStatus == .waitingToPlayAtSpecifiedRate)
+        let ahead = bufferedAhead()
+        // Only a buffer that ran out counts: AVPlayer also waits a moment to judge a new speed (#796).
+        let stalled = player.timeControlStatus == .waitingToPlayAtSpecifiedRate && player.reasonForWaitingToPlay == .toMinimizeStalls
+        throttle.update(ahead: ahead, waiting: stalled)
         let changed = throttle.rate != self.throttle?.rate
         self.throttle = throttle
         guard changed else { return }

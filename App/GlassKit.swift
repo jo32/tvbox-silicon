@@ -1390,10 +1390,11 @@ private struct TVPanelStyle: ButtonStyle {
 #endif
 
 extension View {
-    /// A round icon button in the player's top bar.
-    @ViewBuilder func chromeButton() -> some View {
+    /// A round icon button in the player's top bar. `reach`: on iPhone and iPad, points around the circle that take
+    /// its taps too, with the layout unchanged.
+    @ViewBuilder func chromeButton(reach: CGFloat = 0) -> some View {
         #if os(iOS)
-        buttonStyle(ChromeButtonStyle())
+        buttonStyle(ChromeButtonStyle(reach: reach))
         #elseif os(macOS)
         modifier(MacChromeButton())
         #else
@@ -1484,6 +1485,7 @@ extension View {
 /// 44-point glass circles: `ContentControlStyle` ignores the border shape, so its "circles" were
 /// capsules too wide for a phone's player bar.
 private struct ChromeButtonStyle: ButtonStyle {
+    var reach: CGFloat = 0
     @Environment(\.isEnabled) private var enabled
     @Environment(\.chromeGrouped) private var grouped
     func makeBody(configuration: Configuration) -> some View {
@@ -1493,7 +1495,9 @@ private struct ChromeButtonStyle: ButtonStyle {
             // In a button group the group's capsule is the glass; a pressed button lights up inside it.
             .background { if grouped { Circle().fill(.white.opacity(configuration.isPressed ? 0.2 : 0)) } }
             .glassSurface(grouped ? .identity : .regular.interactive(), in: Circle())
-            .contentShape(Circle())
+            .padding(reach)
+            .contentShape(reach > 0 ? AnyShape(Rectangle()) : AnyShape(Circle()))
+            .padding(-reach)
             .opacity(enabled ? (configuration.isPressed ? 0.72 : 1) : 0.38)
     }
 }

@@ -83,12 +83,16 @@ struct PlaybackView: View {
                 Color.clear.loadingFocus(takeFocus: true) { dismiss() }
                     .accessibilityIdentifier("player.waiting")
             }
-            // In the title-safe corner, over the picture and clear of the transport bar.
-            if showsPlaybackInfo && session.error == nil && session.showsPicture {
-                PlaybackInfoPanel(session: session)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .transition(.opacity)
+            // In the title-safe corner, over the picture and clear of the transport bar; with the transport bar, so
+            // the picture is the viewer's again when it goes (#1446).
+            Group {
+                if showsPlaybackInfo && session.error == nil && session.showsPicture && transportBar.visible {
+                    PlaybackInfoPanel(session: session)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .transition(.opacity)
+                }
             }
+            .animation(.easeInOut(duration: 0.3), value: transportBar.visible)
             #elseif os(iOS)
             MobilePlayerView(channel: channel, session: session, showsDanmaku: $showsDanmaku, upscalesVideo: $upscalesVideo, smoothsVideo: $smoothsVideo,
                              waiting: waitContent, chromeVisible: chromeVisible, toggleChrome: toggleChrome, poke: poke, hold: holdChrome,
@@ -395,7 +399,13 @@ struct PlaybackView: View {
         #endif
         hideTask = Task {
             try? await Task.sleep(for: .seconds(delay))
-            if !Task.isCancelled { withAnimation(.smooth(duration: 0.3)) { showsChrome = false } }
+            guard !Task.isCancelled else { return }
+            #if os(iOS)
+            // Not from under a menu opened from them (#1500): it hung over a bare picture, the glass button it grows
+            // out of and back into faded beneath it. They go a few seconds after it closes.
+            if OpenMenu.showing { return scheduleHide() }
+            #endif
+            withAnimation(.smooth(duration: 0.3)) { showsChrome = false }
         }
     }
 
@@ -1281,7 +1291,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         arrowWait = Task { [weak self] in
             try? await Task.sleep(for: .seconds(KeyHold.delay))
             guard !Task.isCancelled, let self, self.arrow.wait() else { return }
-            let chosen = UserDefaults.standard.object(forKey: SpeedBoost.key) as? Double
+            // The touch-and-hold speed; its Off (#1149) is for the picture, and the key still plays at the standard one.
+            let chosen = (UserDefaults.standard.object(forKey: SpeedBoost.key) as? Double).flatMap { SpeedBoost.isOn($0) ? $0 : nil }
             self.session?.setBoost(Float(SpeedBoost(rate: chosen ?? SpeedBoost.standard).rate))
         }
     }
@@ -1557,14 +1568,17 @@ private struct DesktopPlaybackView: View {
                 SubtitleOverlay(cues: session.subtitles, fills: fillsFrame).ignoresSafeArea()
                 SourceSkipButton(session: session)
                 DesktopBoostLabel(session: session)
-                // Under the title bar's buttons and AVKit's row of controls below them (macOS 26), so it stays put while
-                // they come and go.
-                if showsPlaybackInfo && session.error == nil && session.showsPicture && playingOn == nil {
-                    PlaybackInfoPanel(session: session)
-                        .padding(.leading, 16).padding(.top, 96)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .transition(.opacity)
+                // Under the title bar's buttons and AVKit's row of controls below them (macOS 26), and with them: it
+                // goes when they do, so the picture is the viewer's again (#1446).
+                Group {
+                    if showsPlaybackInfo && session.error == nil && session.showsPicture && playingOn == nil && showsChrome {
+                        PlaybackInfoPanel(session: session)
+                            .padding(.leading, 16).padding(.top, 96)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .transition(.opacity)
+                    }
                 }
+                .animation(.easeOut(duration: 0.2), value: showsChrome)
                 if let error = session.error {
                     ErrorState(title: L10n.text("Can't play this right now"), message: error, details: "", symbol: session.errorSymbol,
                                retry: { startCatalogPlayback(session, channel: channel, store: store) })

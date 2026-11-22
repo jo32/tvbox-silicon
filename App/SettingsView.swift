@@ -1263,7 +1263,9 @@ struct PlaybackSettingsView: View {
             SettingsGroup(title: L10n.text("Gestures"), footer: L10n.text("Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go.")
                           + " " + L10n.text("Slide up or down on the left of the video to change the brightness, or on the right to change the volume.")
                           + " " + L10n.text("Double-tap the left or right of the video to skip forward or back. Turn this off and a double tap plays or pauses instead.")) {
+                // Off for those who'd rather a hold did nothing (#1149).
                 Picker(selection: $holdSpeed) {
+                    Text(L10n.text("Off")).tag(SpeedBoost.off)
                     ForEach(SpeedBoost.startRates, id: \.self) { Text($0.formatted(.number.precision(.fractionLength(0...2))) + "×").tag($0) }
                 } label: {
                     FormLabel(symbol: "forward.fill", tint: .orange, title: L10n.text("Touch and Hold Speed"))
