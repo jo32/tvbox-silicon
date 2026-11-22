@@ -172,16 +172,23 @@ import TVCore
         saveShelf()
     }
 
-    /// Reads the shelf's book from another source from now on, keeping the place by chapter title.
+    /// Reads the shelf's book from another source from now on, keeping the place and the bookmarks by chapter title.
     func switchSource(of old: NovelBook, to book: NovelBook, chapters: [NovelChapter]) {
-        guard var entry = shelfBook(old) else { return }
-        entry.book = book
-        let title = NovelChapterTitle.key(entry.chapterTitle)
-        if let match = chapters.first(where: { NovelChapterTitle.key($0.title) == title }) ?? (chapters.indices.contains(entry.chapterIndex) ? chapters[entry.chapterIndex] : nil) {
-            entry.chapterIndex = match.index; entry.chapterTitle = match.title
-        }
-        entry.chapterCount = chapters.count
-        if let index = shelf.firstIndex(where: { $0.id == entry.id }) { shelf[index] = entry }
+        if NovelLibrary.switchSource(&shelf, from: old, to: book, chapters: chapters) { saveShelf() }
+    }
+
+    // MARK: Bookmarks (#1452)
+
+    func bookmarks(_ book: NovelBook) -> [NovelBookmark] { shelfBook(book)?.bookmarks ?? [] }
+    /// Marks a place. Reading has already put the book on the shelf.
+    func addBookmark(_ bookmark: NovelBookmark, to book: NovelBook) {
+        guard let index = shelf.firstIndex(where: { $0.id == book.match }) else { return }
+        shelf[index].mark(bookmark)
+        saveShelf()
+    }
+    func removeBookmark(_ id: NovelBookmark.ID, from book: NovelBook) {
+        guard let index = shelf.firstIndex(where: { $0.id == book.match }) else { return }
+        shelf[index].bookmarks.removeAll { $0.id == id }
         saveShelf()
     }
 
@@ -190,7 +197,7 @@ import TVCore
 
 enum NovelChapterTitle {
     /// A chapter title without spaces and punctuation, to find the same chapter in another source's list.
-    static func key(_ title: String) -> String { title.lowercased().filter { $0.isLetter || $0.isNumber } }
+    static func key(_ title: String) -> String { NovelChapterMatch.key(title) }
 }
 
 /// Turning pages, or one long column to scroll.
