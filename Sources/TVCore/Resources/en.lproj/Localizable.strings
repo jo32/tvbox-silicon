@@ -382,6 +382,7 @@
 "Hide Details" = "Hide Details";
 "Show as List" = "Show as List";
 "Show as Grid" = "Show as Grid";
+"Show as Posters" = "Show as Posters";
 "%lld of %lld sources responded" = "%lld of %lld sources responded";
 "First-time setup can take a few minutes. Keep the app open." = "First-time setup can take a few minutes. Keep the app open.";
 "This source requires Android features that the plugin runtime does not support yet." = "This source requires Android features that the plugin runtime does not support yet.";

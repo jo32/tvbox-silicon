@@ -1324,6 +1324,9 @@ struct SiteView: View {
                                         Button { store.searchVideos(video.name) } label: { PosterCard(video: video) }.cardButton()
                                     } else if landscape {
                                         RouteLink { CatalogDestination(video: video, client: client) } label: { BilibiliVideoTile(video: video, width: nil) }.cardButton()
+                                    } else if site.isCloudFiles, let file = CloudFilesSource.file(of: video) {
+                                        // A drive's folders and videos with the posters their names find (#880).
+                                        CloudPosterLink(file: file, client: client, parent: folder?.name) { CatalogDestination(video: video, client: client) }
                                     } else {
                                         RouteLink { CatalogDestination(video: video, client: client) } label: { PosterCard(video: video) }.cardButton()
                                     }
