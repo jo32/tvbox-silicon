@@ -15,6 +15,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <fcntl.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -373,6 +374,8 @@ typedef struct Track {
     SwrContext *resampler;
     AVChannelLayout resamplerLayout;
     int resamplerFormat, resamplerRate;
+    /// More channels go in than the encoder takes: the resampler mixes in floating point, `soften` makes it 16-bit.
+    int folding;
     AVAudioFifo *fifo;
     struct SwsContext *scaler;
     AVFrame *scaled;
@@ -1092,6 +1095,20 @@ static int drain_audio(TVMCursor *cursor, Track *track, int final) {
     return final ? encode_audio(cursor, track, NULL) : 0;
 }
 
+/// Floating-point samples to 16-bit, in place. Below -1 dBFS they pass unchanged; above, the curve bends so that no
+/// level, however far over, reaches full scale: a fold's rare overs are rounded off instead of clipped.
+static void soften(uint8_t *samples, int count) {
+    const float *in = (const float *)samples;
+    int16_t *out = (int16_t *)samples;
+    const float knee = 0.891f;
+    // Each 16-bit sample lands on bytes of a float already read.
+    for (int i = 0; i < count; i++) {
+        float level = in[i], size = fabsf(level);
+        if (size > knee) level = copysignf(knee + (1 - knee) * tanhf((size - knee) / (1 - knee)), level);
+        out[i] = (int16_t)lrintf(level * 32767.0f);
+    }
+}
+
 static int feed_audio(TVMCursor *cursor, Track *track, AVFrame *frame) {
     int status;
     if (!track->encoder && (status = open_audio_encoder(track, &track->encoder)) < 0) return status;
@@ -1100,9 +1117,14 @@ static int feed_audio(TVMCursor *cursor, Track *track, AVFrame *frame) {
                              av_channel_layout_compare(&frame->ch_layout, &track->resamplerLayout)))
         swr_free(&track->resampler);
     if (!track->resampler) {
-        // More than two channels become 5.1 (DTS and TrueHD 7.1 fold their back channels in); fewer stay.
-        status = swr_alloc_set_opts2(&track->resampler, &encoder->ch_layout, encoder->sample_fmt, encoder->sample_rate,
-                                     &frame->ch_layout, frame->format, frame->sample_rate, 0, NULL);
+        // More than two channels become 5.1 (DTS and TrueHD 7.1 fold their back channels in), or stereo where the
+        // encoder takes no more; fewer stay. Mixing into 16-bit, FFmpeg scales the whole mix down so that every
+        // channel folded together peaking at once still fits: 4.6 dB quieter for 7.1 into 5.1, 7.7 dB for 5.1 into
+        // stereo, the dialogue in the centre with it (#1406). Mixes never peak in every channel at once, so a fold
+        // keeps the levels as mixed: in floating point, where FFmpeg doesn't scale, and `soften` rounds off overs.
+        track->folding = frame->ch_layout.nb_channels > encoder->ch_layout.nb_channels;
+        status = swr_alloc_set_opts2(&track->resampler, &encoder->ch_layout, track->folding ? AV_SAMPLE_FMT_FLT : encoder->sample_fmt,
+                                     encoder->sample_rate, &frame->ch_layout, frame->format, frame->sample_rate, 0, NULL);
         if (status < 0 || (status = swr_init(track->resampler)) < 0) { swr_free(&track->resampler); return status; }
         track->resamplerFormat = frame->format;
         track->resamplerRate = frame->sample_rate;
@@ -1123,9 +1145,11 @@ static int feed_audio(TVMCursor *cursor, Track *track, AVFrame *frame) {
     int capacity = swr_get_out_samples(track->resampler, frame->nb_samples);
     if (capacity <= 0) return 0;
     uint8_t **samples = NULL;
-    status = av_samples_alloc_array_and_samples(&samples, NULL, encoder->ch_layout.nb_channels, capacity, encoder->sample_fmt, 0);
+    status = av_samples_alloc_array_and_samples(&samples, NULL, encoder->ch_layout.nb_channels, capacity,
+                                                track->folding ? AV_SAMPLE_FMT_FLT : encoder->sample_fmt, 0);
     if (status < 0) return status;
     int converted = swr_convert(track->resampler, samples, capacity, (const uint8_t **)frame->extended_data, frame->nb_samples);
+    if (converted > 0 && track->folding) soften(samples[0], converted * encoder->ch_layout.nb_channels);
     if (converted > 0) av_audio_fifo_write(track->fifo, (void **)samples, converted);
     av_freep(&samples[0]);
     av_freep(&samples);
