@@ -1133,8 +1133,17 @@ import TVCore
         do {
             // Plugin/API sources resolve an episode again. Direct-file APIs must refresh
             // their detail first so an expiring media address never becomes a resume shortcut.
-            var video = try await client.detail(entry.context.videoID, cached: site.type == 3 || site.type == 4)
-            guard var episode = entry.context.episode(in: video.episodes) else {
+            let useCache = site.type == 3 || site.type == 4
+            var video = try await client.detail(entry.context.videoID, cached: useCache)
+            var matched = entry.context.episode(in: video.episodes)
+            if matched == nil, useCache {
+                // A six-hour detail snapshot can hold an episode list the source has since changed.
+                // A fresh search finds it, so ask the source again before giving up.
+                try Task.checkCancellation()
+                video = try await client.detail(entry.context.videoID)
+                matched = entry.context.episode(in: video.episodes)
+            }
+            guard var episode = matched else {
                 throw TVError.unsupported(L10n.text("The saved episode is no longer available from this source. Choose an episode again."))
             }
             let channel: Channel
