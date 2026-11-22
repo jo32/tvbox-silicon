@@ -101,12 +101,16 @@ struct PlaybackView: View {
                 Color.clear.loadingFocus(takeFocus: true) { dismiss() }
                     .accessibilityIdentifier("player.waiting")
             }
-            // In the title-safe corner, over the picture and clear of the transport bar.
-            if showsPlaybackInfo && session.error == nil && session.showsPicture {
-                PlaybackInfoPanel(session: session)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .transition(.opacity)
+            // In the title-safe corner, over the picture and clear of the transport bar; with the transport bar, so
+            // the picture is the viewer's again when it goes (#1446).
+            Group {
+                if showsPlaybackInfo && session.error == nil && session.showsPicture && transportBar.visible {
+                    PlaybackInfoPanel(session: session)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .transition(.opacity)
+                }
             }
+            .animation(.easeInOut(duration: 0.3), value: transportBar.visible)
             #elseif os(iOS)
             MobilePlayerView(channel: channel, session: session, pip: pip, showsDanmaku: $showsDanmaku, upscalesVideo: $upscalesVideo, smoothsVideo: $smoothsVideo,
                              waiting: waitContent, chromeVisible: chromeVisible, toggleChrome: toggleChrome, poke: poke, hold: holdChrome,
@@ -337,7 +341,7 @@ struct PlaybackView: View {
                 Image(systemName: PlayerChannelsSheet.symbol).font(.headline).frame(width: 22, height: 22)
             }
             .chromeButton()
-            CatalogPlaybackActions(channel: channel, session: session)
+            CatalogPlaybackActions(channel: channel, session: session, offersSkip: true)
             if session.qualities.count > 1 {
                 Menu {
                     QualityPicker(session: session)
@@ -435,7 +439,13 @@ struct PlaybackView: View {
         #endif
         hideTask = Task {
             try? await Task.sleep(for: .seconds(delay))
-            if !Task.isCancelled { withAnimation(.smooth(duration: 0.3)) { showsChrome = false } }
+            guard !Task.isCancelled else { return }
+            #if os(iOS)
+            // Not from under a menu opened from them (#1500): it hung over a bare picture, the glass button it grows
+            // out of and back into faded beneath it. They go a few seconds after it closes.
+            if OpenMenu.showing { return scheduleHide() }
+            #endif
+            withAnimation(.smooth(duration: 0.3)) { showsChrome = false }
         }
     }
 
@@ -1028,28 +1038,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         let skipSource = skipSource
         let skips = skip.map { [UIAction(title: $0.kind == .intro ? L10n.text("Skip Intro") : L10n.text("Skip Outro"), image: UIImage(systemName: "forward.fill")) { _ in skipSource() }] } ?? []
         if controller.contextualActions.map(\.title) != skips.map(\.title) { controller.contextualActions = skips }
-        if let skipping, !live {
-            // No keyboard for a time here: the intro ends, or the outro starts, where the picture is. Each shows what
-            // it holds, or where it may be set.
-            let setSkipping = setSkipping, markSkip = markSkip
-            var options: [UIMenuElement] = [
-                UIAction(title: L10n.text("Automatically skip intro and outro"), state: skipping.enabled ? .on : .off) { _ in
-                    var value = skipping; value.enabled.toggle(); setSkipping(value)
-                },
-                UIAction(title: L10n.text("Intro Ends Here"),
-                         subtitle: skipping.introEnd > 0 ? EpisodeSkipSettings.formatTime(skipping.introEnd) : L10n.text("In the first five minutes")) { _ in markSkip(true) },
-                UIAction(title: L10n.text("Outro Starts Here"),
-                         subtitle: skipping.outroLength > 0 ? L10n.text("%@ before the end", EpisodeSkipSettings.formatTime(skipping.outroLength))
-                            : L10n.text("In the last ten minutes")) { _ in markSkip(false) },
-            ]
-            if skipping.introEnd > 0 || skipping.outroLength > 0 {
-                options.append(UIAction(title: L10n.text("Clear Intro and Outro"), image: UIImage(systemName: "xmark")) { _ in
-                    setSkipping(EpisodeSkipSettings(enabled: skipping.enabled))
-                })
-            }
-            // Not forward.end: beside Next Episode's forward.end.fill it read as a second Next button.
-            items.append(UIMenu(title: L10n.text("Skip intro / outro"), image: UIImage(systemName: "arrow.right.to.line"), children: options))
-        }
+        if let skipping, !live { items.append(SkipTimesMenu.make(skipping, set: setSkipping, mark: markSkip)) }
         if !live {
             let setSpeed = setSpeed, speed = speed
             let options = Self.speeds.map { rate in UIAction(title: Self.speedLabel(rate), state: rate == speed ? .on : .off) { _ in setSpeed(rate) } }
@@ -1342,7 +1331,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         arrowWait = Task { [weak self] in
             try? await Task.sleep(for: .seconds(KeyHold.delay))
             guard !Task.isCancelled, let self, self.arrow.wait() else { return }
-            let chosen = UserDefaults.standard.object(forKey: SpeedBoost.key) as? Double
+            // The touch-and-hold speed; its Off (#1149) is for the picture, and the key still plays at the standard one.
+            let chosen = (UserDefaults.standard.object(forKey: SpeedBoost.key) as? Double).flatMap { SpeedBoost.isOn($0) ? $0 : nil }
             self.session?.setBoost(Float(SpeedBoost(rate: chosen ?? SpeedBoost.standard).rate))
         }
     }
@@ -1583,6 +1573,7 @@ private struct DesktopPlaybackView: View {
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
     @State private var showsDanmakuList = false
     @State private var showsDanmakuSettings = false
+    @State private var showsSkip = false
     @State private var showsEpisodes = false
     @State private var showsChannels = false
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
@@ -1620,14 +1611,17 @@ private struct DesktopPlaybackView: View {
                 SourceSkipButton(session: session)
                 DesktopBoostLabel(session: session)
                 FrameSaverNotice(saver: frames, top: 60)
-                // Under the title bar's buttons and AVKit's row of controls below them (macOS 26), so it stays put while
-                // they come and go.
-                if showsPlaybackInfo && session.error == nil && session.showsPicture && playingOn == nil {
-                    PlaybackInfoPanel(session: session)
-                        .padding(.leading, 16).padding(.top, 96)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .transition(.opacity)
+                // Under the title bar's buttons and AVKit's row of controls below them (macOS 26), and with them: it
+                // goes when they do, so the picture is the viewer's again (#1446).
+                Group {
+                    if showsPlaybackInfo && session.error == nil && session.showsPicture && playingOn == nil && showsChrome {
+                        PlaybackInfoPanel(session: session)
+                            .padding(.leading, 16).padding(.top, 96)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .transition(.opacity)
+                    }
                 }
+                .animation(.easeOut(duration: 0.2), value: showsChrome)
                 if let error = session.error {
                     ErrorState(title: L10n.text("Can't play this right now"), message: error, details: "", symbol: session.errorSymbol,
                                retry: { startCatalogPlayback(session, channel: channel, store: store) })
@@ -1686,6 +1680,7 @@ private struct DesktopPlaybackView: View {
         .sheet(isPresented: $showsDanmakuSettings) {
             CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet()
         }
+        .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).environment(store) }
         .onDisappear { idle.detach(); tvBrowser.stop(); CastController.shared.detach() }
         .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, search: $searchesSubtitles, subtitles: session.externalSubtitles)
         // A subtitle file dropped on the video shows on it (#576).
@@ -1764,7 +1759,7 @@ private struct DesktopPlaybackView: View {
 
     private var optionsMenu: some View {
         DesktopOptionsMenu(channel: channel, session: session, window: window, frames: frames, hasDanmaku: !session.danmaku.isEmpty, fillsFrame: $fillsFrame, floats: $floats,
-                           showsDanmakuList: $showsDanmakuList, showsDanmakuSettings: $showsDanmakuSettings,
+                           showsDanmakuList: $showsDanmakuList, showsDanmakuSettings: $showsDanmakuSettings, showsSkip: $showsSkip,
                            importsSubtitleFile: $importsSubtitleFile, asksSubtitleAddress: $asksSubtitleAddress, searchesSubtitles: $searchesSubtitles)
             .equatable()
     }
@@ -1791,6 +1786,7 @@ private struct DesktopOptionsMenu: View, Equatable {
     @Binding var floats: Bool
     @Binding var showsDanmakuList: Bool
     @Binding var showsDanmakuSettings: Bool
+    @Binding var showsSkip: Bool
     @Binding var importsSubtitleFile: Bool
     @Binding var asksSubtitleAddress: Bool
     @Binding var searchesSubtitles: Bool
@@ -1809,6 +1805,8 @@ private struct DesktopOptionsMenu: View, Equatable {
         @Bindable var session = session
         Menu {
             Toggle(L10n.text("Loop Playback"), isOn: $session.looping)
+            // A series' intro and outro (#1488), with the player's other settings.
+            if session.canSkip, !session.isLive { SkipTimesMenuButton(session: session) { showsSkip = true } }
             SleepTimerMenu(item: .episode, offersEnd: !session.isLive)
             Toggle(L10n.text("Fill Window"), isOn: $fillsFrame)
             Toggle(L10n.text("Float on Top"), isOn: $floats)

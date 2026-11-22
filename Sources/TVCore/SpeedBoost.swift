@@ -9,6 +9,10 @@ public struct SpeedBoost: Equatable, Sendable {
     /// The speeds a hold can start at: normal speed only on the way between slower and faster.
     public static let startRates = rates.filter { $0 != 1 }
     public static let standard = 2.0
+    /// The setting's Off (#1149): touching and holding the picture does nothing, for those who'd rather it didn't.
+    public static let off = 0.0
+    /// Whether a hold plays faster at the speed chosen in Settings.
+    public static func isOn(_ rate: Double) -> Bool { rate.isFinite && rate > 0 }
     /// Sideways distance, in points, from one rate to the next.
     public static let step = 50.0
     /// Downward distance, in points, that keeps the speed.
@@ -50,8 +54,9 @@ extension SpeedBoost {
         private var mark: Double?
         private var samples = 0
 
-        /// Slower when the buffer would last fewer seconds than this at the current speed.
-        public static let low = 4.0
+        /// Slower when the buffer would last fewer seconds than this at the current speed: the buffered video is used
+        /// up first, rather than the speed given up early (#796).
+        public static let low = 3.0
         /// Faster only when it would last half as long again at the next speed.
         public static let roomy = 6.0
         /// Seconds the buffer has to hold up at one speed before the next one is tried.
@@ -65,7 +70,8 @@ extension SpeedBoost {
 
         public var limited: Bool { rate < wanted }
 
-        /// `ahead`: seconds of video buffered past the playhead; `waiting`: playback stopped to buffer.
+        /// `ahead`: seconds of video buffered past the playhead; `waiting`: playback stopped because the buffer ran
+        /// out, not the moment AVPlayer takes to judge a new speed, which said nothing about the connection (#796).
         public mutating func update(ahead: Double, waiting: Bool) {
             guard wanted > 1, ahead.isFinite else { return }
             let steps = SpeedBoost.rates.filter { $0 >= 1 && $0 <= wanted }

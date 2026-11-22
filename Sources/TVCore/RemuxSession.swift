@@ -54,6 +54,9 @@ final class RemuxSession: @unchecked Sendable {
     private var translationFailed = false
     private struct Translation { var source: Int, language: Locale.Language, translator: any SubtitleTranslating }
     private var codecs: [Int: String] = [:]
+    /// Where the item's clock starts on the file's: the picture's first frame. AVPlayer counts a repackaged stream's
+    /// time from its video, not from the file's start, which is earlier when the sound (or a subtitle) starts before
+    /// the picture: libass and bitmap subtitles timed from the file's start showed that much late (#1422).
     private var startTime: Int64 = 0
     /// The ASS/SSA tracks the player draws itself through libass (#576 M3), by track: their raw events, header and
     /// the file's fonts, kept as segments are made. Set before the stream is served.
@@ -121,7 +124,7 @@ final class RemuxSession: @unchecked Sendable {
     }
 
     /// Adds subtitle files as subtitles of the stream, before it is served. Their cues count from the start
-    /// of the picture, which is where the file's clock starts.
+    /// of the picture, which is where the item's clock starts (`startTime`).
     func add(_ files: [SubtitleFile.Track]) {
         guard !files.isEmpty else { return }
         condition.lock()
@@ -292,7 +295,7 @@ final class RemuxSession: @unchecked Sendable {
         self.input = input
         format = String(cString: tvm_format(input))
         var streams: [RemuxPlan.Stream] = []
-        var video: Int32 = -1
+        var video: Int32 = -1, videoStart: Int64 = -1
         // ASS headers by stream, and the attachments that are fonts: copied while the input holds them.
         var headers: [Int: Data] = [:], fonts: [StyledSubtitleFont] = [], fontBytes = 0
         // A Blu-ray's clips name no languages; its playlist names them by PID (#884).
@@ -302,7 +305,7 @@ final class RemuxSession: @unchecked Sendable {
             guard tvm_stream(input, index, &raw) == 0 else { continue }
             var stream = Self.stream(raw, index: Int(index))
             if stream.language.isEmpty, let language = languages[stream.pid] { stream.language = language }
-            if stream.kind == .video, video < 0, stream.width > 0 { video = index }
+            if stream.kind == .video, video < 0, stream.width > 0 { video = index; videoStart = raw.startTime }
             streams.append(stream)
             if stream.kind == .subtitle, ["ass", "ssa"].contains(stream.codec), let bytes = raw.extradata, raw.extradataSize > 0 {
                 headers[Int(index)] = Data(bytes: bytes, count: Int(raw.extradataSize))
@@ -360,7 +363,7 @@ final class RemuxSession: @unchecked Sendable {
         }
         guard let cursor = tvm_cursor_create(input, &tracks, Int32(tracks.count), Self.offset) else { throw TVError.unsupported("remux cursor") }
         self.cursor = cursor
-        startTime = tvm_start_time(input)
+        startTime = videoStart >= 0 ? videoStart : tvm_start_time(input)
         for (index, track) in plan.tracks.enumerated() where track.kind == .video || track.kind == .audio {
             let segment = RemuxSegment()
             writing = [index: segment]
@@ -564,7 +567,7 @@ final class RemuxSession: @unchecked Sendable {
             }
             return
         }
-        // The raw event for libass, on the item's clock (which starts where the file's does).
+        // The raw event for libass, on the item's clock (which starts where the picture does).
         if let events = styled[track] {
             let ends = end > start ? end : start + 4_000_000
             events.add(text, start: start - startTime, end: ends - startTime)

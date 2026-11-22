@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import Combine
 import CoreText
 import TVCore
 
@@ -11,12 +12,18 @@ struct DanmakuOverlay: View {
     var opacity = 0.9
     var revision = ""
     @State private var jumps = 0
+    /// The clock runs: paused or waiting for the download, the comments stand still and nothing needs drawing again.
+    @State private var running = true
 
     var body: some View {
-        DanmakuCanvas(comments: comments, revision: revision, opacity: opacity, jumps: jumps) { player.currentTime().seconds }
+        DanmakuCanvas(comments: comments, revision: revision, opacity: opacity, jumps: jumps, running: running) { player.currentTime().seconds }
             .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.timeJumpedNotification)) { notification in
                 guard let item = notification.object as? AVPlayerItem, item === player.currentItem else { return }
                 jumps += 1
+            }
+            .onReceive(player.publisher(for: \.timeControlStatus).receive(on: RunLoop.main)) { status in
+                let next = status == .playing
+                if next != running { running = next }
             }
     }
 }
@@ -31,6 +38,8 @@ struct DanmakuCanvas: View {
     /// Changes when the player says its time jumped: that catches small seeks that look like ordinary frames. AVPlayer
     /// also says so when only its rate changes (play, a held speed boost and its release), which the engine tells apart.
     var jumps = 0
+    /// Whether the clock moves. While it stands still the comments are drawn once, not on every frame (#1428).
+    var running = true
     let clock: () -> Double
     @AppStorage(DanmakuArea.key) private var area = DanmakuArea.standard
     @AppStorage(DanmakuStyle.fontSizeKey) private var fontSize = DanmakuStyle.standardFontSize
@@ -52,7 +61,8 @@ struct DanmakuCanvas: View {
     private var filter: DanmakuFilter { DanmakuFilter(colors: colors, words: DanmakuFilter.words(blockedWords), density: density) }
 
     var body: some View {
-        TimelineView(.animation) { timeline in
+        // At most 60 times a second: on a 120 Hz screen the comments looked no different, and drew twice as often.
+        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !running)) { timeline in
             Canvas { context, size in
                 // Reading the timeline's date makes every tick a new drawing; the clock itself is the caller's.
                 _ = timeline.date

@@ -42,6 +42,13 @@ import Testing
     #expect(SpeedBoost(rate: .nan).rate == SpeedBoost.standard)
 }
 
+@Test func holdSpeedCanBeOff() {
+    #expect(!SpeedBoost.isOn(SpeedBoost.off))
+    #expect(!SpeedBoost.isOn(.nan))
+    #expect(SpeedBoost.isOn(SpeedBoost.standard) && SpeedBoost.isOn(0.5))
+    #expect(!SpeedBoost.startRates.contains(SpeedBoost.off))
+}
+
 @Test func holdsStartSlowerOrFasterButNotAtNormalSpeed() {
     #expect(SpeedBoost.startRates == [0.5, 1.5, 2, 2.5, 3, 4])
     #expect(SpeedBoost.startRates.contains(SpeedBoost.standard))
@@ -52,10 +59,12 @@ import Testing
     #expect(throttle.rate == 4 && !throttle.limited)
     throttle.update(ahead: 60, waiting: false)
     #expect(throttle.rate == 4)
-    // 15 s of video lasts under 4 s at 4×: one step at a time, down to normal speed at the slowest.
-    throttle.update(ahead: 15, waiting: false)
-    #expect(throttle.rate == 3 && throttle.limited)
+    // 11 s of video lasts under 3 s at 4×: one step at a time, down to normal speed at the slowest.
+    throttle.update(ahead: 13, waiting: false)
+    #expect(throttle.rate == 4)
     throttle.update(ahead: 11, waiting: false)
+    #expect(throttle.rate == 3 && throttle.limited)
+    throttle.update(ahead: 8, waiting: false)
     #expect(throttle.rate == 2.5)
     throttle.update(ahead: 9, waiting: true)
     #expect(throttle.rate == 2)
@@ -76,7 +85,7 @@ import Testing
     // Shrinking at 2.5×: it stays there, and steps down before running out.
     for ahead in [15.0, 14.5, 14, 13.5, 13, 12.5] { throttle.update(ahead: ahead, waiting: false) }
     #expect(throttle.rate == 2.5)
-    throttle.update(ahead: 9, waiting: false)
+    throttle.update(ahead: 7, waiting: false)
     #expect(throttle.rate == 2)
     // Never past the speed asked for.
     for _ in 0..<30 { throttle.update(ahead: 120, waiting: false) }

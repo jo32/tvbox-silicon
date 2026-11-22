@@ -16,6 +16,7 @@ struct MusicNowPlayingScreen: View {
     @State private var panel: Panel?
     @State private var tint = Color(white: 0.24)
     @State private var showsChannels = false
+    @State private var showsSkip = false
     @Namespace private var cover
 
     var body: some View {
@@ -74,6 +75,7 @@ struct MusicNowPlayingScreen: View {
         }
         #endif
         .sheet(isPresented: $showsChannels) { MusicChannelsView() }
+        .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: music, book: true).preferredColorScheme(.dark) }
     }
 
     private var backdrop: some View {
@@ -128,6 +130,8 @@ struct MusicNowPlayingScreen: View {
                 } else {
                     Button { showsChannels = true } label: { Label(L10n.text("Channels"), systemImage: "antenna.radiowaves.left.and.right") }
                 }
+                // A book's intro and outro, for all its chapters (#1486); never a song's.
+                if music.canSkip { SkipTimesMenuButton(session: music) { showsSkip = true } }
                 if let track = music.track { MusicDownloadMenuItems(tracks: [track]) }
                 SleepTimerMenu(item: music.sleepItem)
                 Button(role: .destructive) { music.stop() } label: { Label(L10n.text("Stop"), systemImage: "xmark") }

@@ -44,6 +44,9 @@ struct DiscoverDetailView: View {
             if sources == nil { startSources() }
         }
         .onChange(of: store.subscription?.importedAt) { _, _ in startSources() }
+        // A video playing over the page (the player covers it without the page going away) pauses the search for the
+        // title's other sources until it closes: their plugins ran flat out under the video and warmed the phone (#1428).
+        .onChange(of: store.playing == nil) { _, idle in if idle { startSources() } else { stopSources() } }
         .task(id: catalogSeason) { await loadSeason() }
         .task(id: details?.id) { await loadAiring() }
         #if DEBUG
@@ -246,10 +249,11 @@ struct DiscoverDetailView: View {
         }.buttonStyle(.plain).accessibilityIdentifier("discover.findSources")
     }
 
-    /// The title's sources start searching when the page shows, with a subscription to search, and pause when it goes.
+    /// The title's sources start searching when the page shows, with a subscription to search, and pause when it goes
+    /// or a video plays over it.
     /// A page opened with only the title's id (a link) has no name to search for until its details are in.
     private func startSources() {
-        guard onScreen else { return }
+        guard onScreen, store.playing == nil else { return }
         guard store.subscription != nil else {
             stopSources()
             sources = nil
