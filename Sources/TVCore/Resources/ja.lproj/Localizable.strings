@@ -831,6 +831,8 @@
 "Unable to Load Songs" = "曲を読み込めません";
 "Shuffle" = "シャッフル";
 "Skipped “%@”: %@" = "「%@」をスキップしました：%@";
+"Music channels are busy. Trying again in %@ seconds." = "音楽チャンネルが混み合っています。%@秒後にもう一度試します。";
+"Not answering lately, so other sources are asked first until %@." = "最近応答がないため、%@まではほかのソースを先に使います。";
 "No LX Music source could play it." = "LX Music のソースでは再生できませんでした。";
 "Songs" = "曲";
 "Albums" = "アルバム";

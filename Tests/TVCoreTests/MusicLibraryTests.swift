@@ -262,3 +262,25 @@ private struct PagedSongs: MusicCatalogSource {
     queue.append([d])
     #expect(queue.tracks == [a, c, b, d] && queue.index == 0)
 }
+
+/// #1309: a song every channel turned down only for their request budgets waits for them instead of being skipped.
+/// #1281: with the whole queue repeating, the last song's failure moves on to the first.
+@Test func budgetWaitsAndRepeatAllAfterFailures() {
+    let now = Date()
+    #expect(MusicQueue.budgetWait(after: .rateLimited(until: now.addingTimeInterval(10)), retries: 0, now: now) == 11)
+    #expect(MusicQueue.budgetWait(after: .rateLimited(until: nil), retries: 1, now: now) == 31)
+    #expect(MusicQueue.budgetWait(after: .rateLimited(until: now.addingTimeInterval(-5)), retries: 0, now: now) == 2)
+    // Too long to hold the queue for, asked twice already, or not a budget at all: the usual skip.
+    #expect(MusicQueue.budgetWait(after: .rateLimited(until: now.addingTimeInterval(600)), retries: 0, now: now) == nil)
+    #expect(MusicQueue.budgetWait(after: .rateLimited(until: now.addingTimeInterval(10)), retries: 2, now: now) == nil)
+    #expect(MusicQueue.budgetWait(after: .timeout, retries: 0, now: now) == nil)
+    #expect(MusicQueue.budgetWait(after: .noChannels, retries: 0, now: now) == nil)
+
+    let tracks = (1...3).map { song("S\($0)", "\($0)") }
+    let last = MusicQueue(tracks: tracks, start: 2)
+    #expect(!last.skipsAfterFailure(.noResource, consecutive: 1, channelsAsked: true))
+    #expect(last.skipsAfterFailure(.noResource, consecutive: 1, channelsAsked: true, wraps: true))
+    #expect(!last.skipsAfterFailure(.noResource, consecutive: 3, channelsAsked: true, wraps: true))
+    #expect(!MusicQueue(tracks: [tracks[0]]).skipsAfterFailure(consecutive: 0, wraps: true))
+    #expect(MusicRepeatMode.off.next == .all && MusicRepeatMode.all.next == .one && MusicRepeatMode.one.next == .off)
+}

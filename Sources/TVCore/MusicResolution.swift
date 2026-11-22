@@ -355,23 +355,29 @@ public struct MusicResolver: Sendable {
             attempts.append(MusicAttempt(candidate: candidate, outcome: .skipped(found.isEmpty ? .timeout : .cancelled), seconds: 0))
         }
         let usable = Self.usable(found, for: preference)
+        var widerFailure: MusicProviderError?
         // Every channel failed: the same recording in another catalog may have one that works.
         if usable.isEmpty, let companions, deadline.timeIntervalSinceNow > 2,
            let wider = await companions.find(track), wider.ids.count > track.ids.count {
             var rest = self; rest.budget = deadline.timeIntervalSinceNow
             let tried = Set(attempts.map(\.candidate.id)).union(excluding)
-            if var selection = try? await rest.select(wider, preference: preference, excluding: tried, cache: cache) {
+            do {
+                var selection = try await rest.select(wider, preference: preference, excluding: tried, cache: cache)
                 selection.attempts = attempts.filter { attempt in if case .skipped = attempt.outcome { false } else { true } } + selection.attempts
                 return selection
-            }
+            } catch { widerFailure = MusicProviderError(error) }
         }
         guard let best = usable.min(by: { Self.better($0, than: $1, preference: preference) }) else {
             if !found.isEmpty { throw MusicProviderError.notLossless }
-            if !channelsListed { throw MusicProviderError.noChannels }
-            throw Self.summary(attempts.compactMap { attempt in
+            let failures = attempts.compactMap { attempt -> MusicProviderError? in
                 if case .failed(let error) = attempt.outcome { return error }
                 return nil
-            }, budgetSpent: !queue.isEmpty)
+            }
+            // A channel that only ran out of requests answers again soon: say so, so the player waits rather than
+            // skipping, here or in the other catalog's channels (#1309).
+            if let limited = Self.soonestLimit(failures + [widerFailure].compactMap { $0 }) { throw limited }
+            if !channelsListed { throw MusicProviderError.noChannels }
+            throw Self.summary(failures, budgetSpent: !queue.isEmpty)
         }
         return selection(track, best, degraded: preference.wantsLossless && !best.probe.format.isLossless, attempts: attempts, untried: queue)
     }
@@ -429,6 +435,16 @@ public struct MusicResolver: Sendable {
     }
 
     /// The failure that best explains why nothing played.
+    /// The rate limit that ends first among `errors`, or nil when no channel was limited.
+    static func soonestLimit(_ errors: [MusicProviderError]) -> MusicProviderError? {
+        let limits = errors.compactMap { error -> Date?? in
+            if case .rateLimited(let until) = error { return .some(until) }
+            return nil
+        }
+        guard !limits.isEmpty else { return nil }
+        return .rateLimited(until: limits.compactMap { $0 }.min())
+    }
+
     static func summary(_ errors: [MusicProviderError], budgetSpent: Bool) -> MusicProviderError {
         let ranked: [(MusicProviderError) -> Bool] = [
             { if case .network = $0 { true } else { false } },

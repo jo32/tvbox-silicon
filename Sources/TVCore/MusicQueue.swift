@@ -58,17 +58,53 @@ public struct MusicQueue: Codable, Equatable, Sendable {
     /// After a song that would not play, move on, unless several in a row failed: then the
     /// channels are down, and skipping on would only spend requests.
     public static let failuresBeforeStopping = 3
-    public func skipsAfterFailure(consecutive failures: Int) -> Bool { hasNext && failures < Self.failuresBeforeStopping }
+    /// `wraps` when the whole queue repeats: the last song's failure moves on to the first.
+    public func skipsAfterFailure(consecutive failures: Int, wraps: Bool = false) -> Bool {
+        (hasNext || wraps && tracks.count > 1) && failures < Self.failuresBeforeStopping
+    }
 
     /// The same for one failure. With no channel at all (`noChannels` and nothing was asked) every song fails the same
     /// way, so the queue stops at once. When LX Music sources were asked and had nothing for this song, the next song may
     /// well play: move on, and the limit above still stops a set of sources that are all down (#1206).
-    public func skipsAfterFailure(_ error: MusicProviderError, consecutive failures: Int, channelsAsked: Bool) -> Bool {
-        (error != .noChannels || channelsAsked) && skipsAfterFailure(consecutive: failures)
+    public func skipsAfterFailure(_ error: MusicProviderError, consecutive failures: Int, channelsAsked: Bool, wraps: Bool = false) -> Bool {
+        (error != .noChannels || channelsAsked) && skipsAfterFailure(consecutive: failures, wraps: wraps)
+    }
+
+    /// A song that channels turned down only because their request budgets ran out plays once the budgets free up, a few
+    /// seconds to a few minutes later. Skipping it, as before, spent three songs in a row on the same wait and then
+    /// stopped the queue (#1309). How long to wait before asking again, or nil to treat it as any other failure: the
+    /// wait would be too long, or the song already waited `budgetRetries` times.
+    public static let longestBudgetWait: TimeInterval = 90
+    public static let budgetRetries = 2
+    public static func budgetWait(after error: MusicProviderError, retries: Int, now: Date = Date()) -> TimeInterval? {
+        guard case .rateLimited(let until) = error, retries < budgetRetries else { return nil }
+        // A channel that gave no time is asked again after half a minute.
+        let wait = max(2, (until ?? now.addingTimeInterval(30)).timeIntervalSince(now) + 1)
+        return wait <= longestBudgetWait ? wait : nil
     }
 
     /// "Previous" restarts the song once it has played a few seconds, as players do.
     public static let restartThreshold: Double = 3
+}
+
+/// Whether the queue plays once, again from the top, or the same song again; stored by the player.
+public enum MusicRepeatMode: String, CaseIterable, Sendable {
+    case off, all, one
+    public var next: MusicRepeatMode {
+        switch self {
+        case .off: .all
+        case .all: .one
+        case .one: .off
+        }
+    }
+    public var symbol: String { self == .one ? "repeat.1" : "repeat" }
+    public var label: String {
+        switch self {
+        case .off: L10n.text("Repeat Off")
+        case .all: L10n.text("Repeat All")
+        case .one: L10n.text("Repeat One")
+        }
+    }
 }
 
 /// Where listening stopped, to continue from: the queue and the second within its current song.
