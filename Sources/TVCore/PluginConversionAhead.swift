@@ -7,7 +7,7 @@ import UIKit
 /// Converts classes a subscription's JAR sources are likely to need while the app sits idle, so the first
 /// visit to a source has less left to convert (issue #274). Conversion is heavy on the interpreted JVM, so
 /// it runs only when nothing else wants the device: the app in front, no plugin request for a while, no
-/// plugin proxy serving video, not in Low Power Mode, not hot, and memory to spare. It works a few classes
+/// plugin proxy serving video, no video playing (#1428), not in Low Power Mode, not hot, and memory to spare. It works a few classes
 /// at a time on a utility-priority thread and checks again between batches. Each archive is prepared once
 /// per app build, at most `limit` classes (see `ConvertAhead.java` for which ones).
 ///
@@ -26,10 +26,12 @@ public actor PluginConversionAhead {
         var availableMemory: Int
         /// Seconds since the last plugin request ended; 0 while one runs.
         var idle: TimeInterval
+        /// A video plays or loads: the device decodes it, and the viewer holds a phone that warms up.
+        var playing = false
 
         var allowsWork: Bool {
             active && !lowPower && thermal.rawValue < ProcessInfo.ThermalState.serious.rawValue
-                && availableMemory >= 600 * 1024 * 1024 && idle >= 30
+                && availableMemory >= 600 * 1024 * 1024 && idle >= 30 && !playing
         }
     }
 
@@ -42,6 +44,7 @@ public actor PluginConversionAhead {
     /// Plugin requests running now, and when the last one started or ended.
     private static let activity = OSAllocatedUnfairLock(initialState: (running: 0, last: ContinuousClock.now))
     private static let foreground = OSAllocatedUnfairLock(initialState: true)
+    private static let playback = OSAllocatedUnfairLock(initialState: false)
     private var task: Task<Void, Never>?
     private var observers: [NSObjectProtocol] = []
     private static let doneKey = "pluginConversionAheadDone"
@@ -49,6 +52,8 @@ public actor PluginConversionAhead {
     /// A plugin request started. Cheap: called on every request.
     static func requestStarted() { activity.withLock { $0 = ($0.running + 1, .now) } }
     static func requestEnded() { activity.withLock { $0 = (max(0, $0.running - 1), .now) } }
+    /// The video player started (true) or stopped (false) playing or loading; a batch already running finishes.
+    public static func playbackChanged(_ playing: Bool) { playback.withLock { $0 = playing } }
 
     /// Prepares the archives of these sources from now on, replacing earlier work.
     public func schedule(sites: [Site], origin: URL, spider: URL?) {
@@ -138,7 +143,7 @@ public actor PluginConversionAhead {
         let (running, last) = activity.withLock { $0 }
         let idle = running > 0 ? 0 : Double(last.duration(to: .now).components.seconds)
         return Conditions(active: foreground.withLock { $0 }, lowPower: info.isLowPowerModeEnabled, thermal: info.thermalState,
-                          availableMemory: available, idle: idle)
+                          availableMemory: available, idle: idle, playing: playback.withLock { $0 })
     }
 
     private func observeAppState() {

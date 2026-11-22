@@ -3166,9 +3166,10 @@ struct VideoDetailView: View {
     private var watchHistory: PlaybackHistoryEntry? {
         store.playbackHistory.entries.first { watchScopes.contains($0.context.id) }
     }
-    /// Where an episode stopped last time, when it is the one watched last; any other starts at 0.
+    /// Where an episode stopped last time, when it is the one watched last, on its line or another (#1300); any other
+    /// starts at 0.
     private func resumePosition(for episode: Episode) -> Double? {
-        watchHistory?.resumePosition(for: episode)
+        watchHistory?.resumePosition(for: episode, among: currentVideo().episodes)
     }
     /// The line of the episode playing, else of the one watched last, while the details still have it: the page opens
     /// on that line so the episode shows in its list, not on the first line (#362).
