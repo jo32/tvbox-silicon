@@ -2322,6 +2322,9 @@
 "%@ refused the video (%@)." = "%@ 拒絕播放這部影片（%@）。";
 "%@ didn't respond. Make sure it is on and on the same network." = "%@ 沒有回應。請確認它已開機，而且與本裝置在同一個網路中。";
 "%d new" = "更新 %d 話";
+"Save Frame" = "截圖";
+"Saved to Pictures" = "已儲存到「圖片」檔案夾";
+"Couldn't save this frame" = "無法儲存此畫面";
 "Battery" = "電池";
 "Battery, charging" = "電池，正在充電";
 "Intro %@" = "片頭 %@";

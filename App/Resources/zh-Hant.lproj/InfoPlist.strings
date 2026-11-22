@@ -1,4 +1,4 @@
 "CFBundleDisplayName" = "映匣";
 "CFBundleName" = "映匣";
 "NSLocalNetworkUsageDescription" = "連接你設定的區域網路媒體與訂閱服務，並找到你其他裝置上的映匣。";
-"NSPhotoLibraryAddUsageDescription" = "將登入 QR 碼儲存到照片，以便用本機上的 App 掃描。";
+"NSPhotoLibraryAddUsageDescription" = "將你從影片中擷取的畫面和登入 QR 碼儲存到照片。";

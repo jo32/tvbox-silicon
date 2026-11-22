@@ -1,4 +1,4 @@
 "CFBundleDisplayName" = "映匣";
 "CFBundleName" = "映匣";
 "NSLocalNetworkUsageDescription" = "設定したローカルネットワークのメディアや配信設定サービスに接続し、ほかのデバイスの映匣を見つけます。";
-"NSPhotoLibraryAddUsageDescription" = "ログイン用のコードを写真に保存し、このスマートフォンのアプリでスキャンできるようにします。";
+"NSPhotoLibraryAddUsageDescription" = "動画から保存したフレームやログイン用のコードを写真に追加します。";

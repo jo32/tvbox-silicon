@@ -2322,6 +2322,9 @@
 "%@ refused the video (%@)." = "%@ 拒绝播放这个视频（%@）。";
 "%@ didn't respond. Make sure it is on and on the same network." = "%@ 没有回应。请确认它已开机，并且与本设备在同一网络中。";
 "%d new" = "更新 %d 话";
+"Save Frame" = "截图";
+"Saved to Pictures" = "已存入“图片”文件夹";
+"Couldn't save this frame" = "无法保存此画面";
 "Battery" = "电池";
 "Battery, charging" = "电池，正在充电";
 "Intro %@" = "片头 %@";

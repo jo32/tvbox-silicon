@@ -2165,6 +2165,8 @@ struct VideoDetailView: View {
     #if !os(tvOS)
     /// The episode row's All sheet, and where the row is scrolled to.
     @State private var showsAllEpisodes = false
+    /// The page of a long series the All sheet shows (#1464); nil for the one with the episode being watched.
+    @State private var episodePage: Int?
     @State private var episodeScroll: Episode.ID?
     #endif
     #if os(iOS)
@@ -3501,7 +3503,7 @@ extension VideoDetailView {
                                 SeasonsButton(video: video, client: client, capsule: true)
                             }
                             if items.count > (compact ? 5 : 2) {
-                                Button { showsAllEpisodes = true } label: {
+                                Button { episodePage = nil; showsAllEpisodes = true } label: {
                                     // On one line, like Seasons beside it: it wrapped to 全/部 beside a line's name (#1260).
                                     HStack(spacing: 3) { Text(L10n.text("All")); Image(systemName: "chevron.right").font(.caption.weight(.semibold)) }
                                         .font(.subheadline).foregroundStyle(.secondary)
@@ -3594,7 +3596,7 @@ extension VideoDetailView {
     @ViewBuilder private var watchLines: some View {
         if flags.count > 1 {
             SourceStrip(items: flags.map { .init(id: $0, name: $0.isEmpty ? L10n.text("Play") : $0) }, selection: activeFlag) { flag in
-                selectedFlag = flag
+                selectedFlag = flag; episodePage = nil
                 guard watchChannel != nil, let episodes = detail?.episodes else { return }
                 let playing = episodes.first { $0.id == currentEpisodeID }
                 let same = episodes.first { $0.flag == flag && $0.name == playing?.name } ?? episodes.first { $0.flag == flag }
@@ -3703,20 +3705,32 @@ extension VideoDetailView {
         let items = activeEpisodes
         let tile = compactTileWidth(items)
         let stills = watchStills(items)
+        // A long series in pages of 50 or 100, opening at the one with the episode being watched (#1464).
+        let pages = EpisodePages.pages(count: items.count)
+        let current = currentEpisodeID.flatMap { id in items.firstIndex { $0.id == id } }
+        let page = pages.isEmpty ? nil : min(episodePage ?? EpisodePages.page(holding: current, in: pages), pages.count - 1)
+        let shown = page.map { Array(items[pages[$0]]) } ?? items
         return NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     watchLines
+                    if let page {
+                        EpisodePageTabs(pages: pages, selection: page, reversed: reversesEpisodes) { episodePage = $0 }
+                            .contentMargins(.horizontal, 16, for: .scrollContent).scrollClipDisabled()
+                            .padding(.horizontal, -16)
+                    }
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: stills.isEmpty ? tile ?? 150 : 160), spacing: stills.isEmpty ? 8 : 12, alignment: .top)],
                               spacing: stills.isEmpty ? 8 : 14) {
-                        ForEach(shownOrder(items)) { watchEpisodeCard($0, tile: tile, fill: true, info: stills[$0.id]) { showsAllEpisodes = false } }
+                        ForEach(shownOrder(shown)) { watchEpisodeCard($0, tile: tile, fill: true, info: stills[$0.id]) { showsAllEpisodes = false } }
                     }
                     .scrollTargetLayout()
                 }
                 .padding(16)
             }
             // At the episode playing or watched last, as the row on the page (#1173): a long series opened at episode 1.
+            // Another page opens at its top.
             .modifier(OpensAtEpisode(currentEpisodeID))
+            .id(page ?? -1)
             .navigationTitle(L10n.text("Episodes"))
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -3936,7 +3950,7 @@ private struct AppColorScheme: ViewModifier {
 /// Opens a scroll view of episodes at one of them (#1173). `scrollTo` from the sheet's onAppear, or its first task,
 /// came before the sheet had laid out its lazy grid and left it at the top. The position is this modifier's own
 /// state, so scrolling redraws only it, not the page behind the sheet.
-private struct OpensAtEpisode: ViewModifier {
+struct OpensAtEpisode: ViewModifier {
     @State private var position: Episode.ID?
     init(_ episode: Episode.ID?) { _position = State(initialValue: episode) }
     func body(content: Content) -> some View { content.scrollPosition(id: $position, anchor: .center) }
