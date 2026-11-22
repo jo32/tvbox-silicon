@@ -725,8 +725,6 @@ struct MobilePlayerView: View {
             // With Yingxia found on an Apple TV or Mac, one menu holds those and AirPlay.
             if tvBrowser.receivers.isEmpty && CastController.shared.devices.isEmpty {
                 AirPlayButton()
-                    .frame(width: 44, height: 44)
-                    .contentShape(Circle())
             } else {
                 PlayOnButton(channel: channel, session: session, browser: tvBrowser) { receiver in
                     session.player.pause()
@@ -755,7 +753,8 @@ struct MobilePlayerView: View {
                 Button { showsDanmakuList = true } label: { Label(L10n.text("Danmaku List"), systemImage: "list.bullet.rectangle") }
                     .disabled(session.danmaku.isEmpty)
             } label: {
-                Image(systemName: DanmakuPreference.symbol).font(.headline).frame(width: 22, height: 22)
+                // A wide, tall mark: a size down it sits level with AirPlay and the options beside it.
+                Image(systemName: DanmakuPreference.symbol).font(.system(size: 16, weight: .semibold)).frame(width: 22, height: 22)
             }
             .chromeButton()
             .accessibilityLabel(L10n.text("Danmaku"))
@@ -962,7 +961,11 @@ struct MobilePlayerView: View {
                 }
                 if let toggleFullScreen {
                     let full = layout == .pageFullScreen
-                    Button(action: toggleFullScreen) { FullScreenGlyph(expanded: full).frame(width: 15, height: 15) }
+                    // The system's own full-screen arrows, as AVKit and Photos show them; filling the screen, they point inward.
+                    Button(action: toggleFullScreen) {
+                        Image(systemName: full ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
                         .buttonStyle(PlayerCircleStyle(size: 36))
                         .accessibilityLabel(L10n.text(full ? "Exit Full Screen" : "Full Screen"))
                         .accessibilityIdentifier("player.fullScreen")
@@ -1366,41 +1369,6 @@ private struct PlayerTopBar: SwiftUI.Layout {
 }
 
 /// A round glass button of the given size, for play and skip in the middle of the picture.
-/// Full Screen's mark: four corner brackets, as on most video players (⛶). Filling the screen, the corners turn inward.
-private struct FullScreenGlyph: View {
-    var expanded: Bool
-    var body: some View {
-        Corners(inward: expanded)
-            .stroke(.white, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-            .accessibilityHidden(true)
-    }
-
-    private struct Corners: Shape {
-        var inward: Bool
-        func path(in rect: CGRect) -> Path {
-            let arm = rect.width * 0.36
-            var path = Path()
-            for (x, y) in [(rect.minX, rect.minY), (rect.maxX, rect.minY), (rect.minX, rect.maxY), (rect.maxX, rect.maxY)] {
-                // Toward the middle along each side from the corner.
-                let dx: CGFloat = x == rect.minX ? 1 : -1
-                let dy: CGFloat = y == rect.minY ? 1 : -1
-                if inward {
-                    // The bend sits inside the square: ⌟ ⌞ ⌝ ⌜.
-                    let bend = CGPoint(x: x + dx * arm, y: y + dy * arm)
-                    path.move(to: CGPoint(x: x, y: bend.y))
-                    path.addLine(to: bend)
-                    path.addLine(to: CGPoint(x: bend.x, y: y))
-                } else {
-                    path.move(to: CGPoint(x: x, y: y + dy * arm))
-                    path.addLine(to: CGPoint(x: x, y: y))
-                    path.addLine(to: CGPoint(x: x + dx * arm, y: y))
-                }
-            }
-            return path
-        }
-    }
-}
-
 private struct PlayerCircleStyle: ButtonStyle {
     var size: CGFloat
     @Environment(\.isEnabled) private var enabled
@@ -1419,15 +1387,19 @@ private struct PlayerCircleStyle: ButtonStyle {
     }
 }
 
-/// The system's AirPlay button, which presents the route picker itself.
-private struct AirPlayButton: UIViewRepresentable {
-    func makeUIView(context: Context) -> AVRoutePickerView {
-        let view = AVRoutePickerView()
-        view.prioritizesVideoDevices = true
-        view.tintColor = .white
-        return view
+/// AirPlay, drawn like the buttons beside it: the system's own button (AVRoutePickerView) drew its mark bigger and heavier,
+/// so it stays out of sight and this one opens its picker, as Play On's menu does.
+private struct AirPlayButton: View {
+    @State private var airPlay = AirPlayPicker()
+    var body: some View {
+        Button(action: airPlay.present) {
+            Image(systemName: "airplay.video").font(.airPlayGlyph).frame(width: 22, height: 22)
+        }
+        .chromeButton()
+        .background { AirPlayPickerView(picker: airPlay).opacity(0.02).allowsHitTesting(false) }
+        .accessibilityLabel(L10n.text("AirPlay"))
+        .accessibilityIdentifier("player.airPlay")
     }
-    func updateUIView(_ view: AVRoutePickerView, context: Context) {}
 }
 
 /// The picture's own gestures, in UIKit: taps, a touch and hold followed while the finger moves, slides and a pinch.

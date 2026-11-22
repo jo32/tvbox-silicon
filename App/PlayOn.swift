@@ -221,7 +221,7 @@ struct PlayOnButton: View {
             #else
             Group {
                 if sending != nil { ProgressView().tint(.white) }
-                else { Image(systemName: "airplay.video").font(.headline) }
+                else { Image(systemName: "airplay.video").font(.airPlayGlyph) }
             }
             .frame(width: 22, height: 22)
             #endif
@@ -330,6 +330,11 @@ struct PlayOnButton: View {
 #if os(iOS)
 /// The system's AirPlay picker, opened from a menu item: AVRoutePickerView has no call for that, so this
 /// taps its button.
+extension Font {
+    /// AirPlay's mark in the player's bar. Its filled screen at .headline, like the symbols beside it, looked bigger and heavier.
+    static let airPlayGlyph = Font.system(size: 15, weight: .semibold)
+}
+
 @MainActor final class AirPlayPicker {
     fileprivate let view: AVRoutePickerView = {
         let view = AVRoutePickerView()
@@ -343,7 +348,7 @@ struct PlayOnButton: View {
     }
 }
 
-private struct AirPlayPickerView: UIViewRepresentable {
+struct AirPlayPickerView: UIViewRepresentable {
     let picker: AirPlayPicker
     func makeUIView(context: Context) -> AVRoutePickerView { picker.view }
     func updateUIView(_ view: AVRoutePickerView, context: Context) {}
