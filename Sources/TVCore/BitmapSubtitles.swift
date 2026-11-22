@@ -72,7 +72,7 @@ public final class BitmapSubtitleTrack: @unchecked Sendable {
         }
     }
 
-    /// A decoded packet, on the item's clock (`offset` is the file's start time).
+    /// A decoded packet, on the item's clock (`offset` is where that starts on the file's: the picture's first frame).
     func add(_ subtitle: TVMBitmapSubtitle, offset: Int64) {
         var subtitle = subtitle
         let canvas = subtitle.canvasWidth > 0 && subtitle.canvasHeight > 0
