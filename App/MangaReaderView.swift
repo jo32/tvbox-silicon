@@ -24,6 +24,12 @@ import TVCore
     var mode: MangaReaderMode { didSet { MangaStore.shared.setMode(mode, for: comic) } }
     /// Page shapes (width / height) once known, so the column doesn't jump as pages load.
     var aspects: [String: CGFloat] = [:]
+    /// The width the paged reader decodes pages for, in pixels; its next pages are decoded ahead at it.
+    @ObservationIgnored var pagedWidth: CGFloat = 0
+    /// Pages decoded for the paged reader, the latest last: a page turned to shows at once rather than its placeholder
+    /// for a moment, which flashed on every turn (#1280). A few pages, and at most `decodedBytes`.
+    @ObservationIgnored private var decoded: [(key: String, image: CGImage)] = []
+    private static let decodedBytes = 160 << 20, decodedCount = 8
     private var saved = Date.distantPast
     private var released = Date.distantPast
 
@@ -104,8 +110,16 @@ import TVCore
         let pages = currentPages, chapter = position.chapter
         let ahead = pages.dropFirst(position.page + 1).prefix(mode.paged ? 4 : 6)
         let source = comic.sourceKey, comicID = comic.id, chapterID = chapters.indices.contains(chapter) ? chapters[chapter].id : nil
-        for url in ahead {
-            Task(priority: .utility) { _ = try? await MangaImages.shared.data(source: source, url: url, kind: .page, comic: comicID, chapter: chapterID) }
+        // The paged reader's next pages are decoded too, so turning to them shows them at once (#1280).
+        let width = mode.paged ? pagedWidth : 0
+        for (offset, url) in ahead.enumerated() {
+            Task(priority: .utility) {
+                guard let data = try? await MangaImages.shared.data(source: source, url: url, kind: .page, comic: comicID, chapter: chapterID),
+                      width > 0, offset < 3, decodedPage(url, width: width) == nil else { return }
+                guard let image = await Task.detached(priority: .utility, operation: { MangaImages.bitmap(data, width: width) }).value else { return }
+                aspects[url] = CGFloat(image.width) / CGFloat(max(image.height, 1))
+                keepDecoded(image, url: url, width: width)
+            }
         }
         if position.page >= pages.count - 3, !mode.paged { Task { await loadNext() } }
     }
@@ -119,6 +133,24 @@ import TVCore
     }
 
     func chapterID(_ chapter: Int) -> String? { chapters.indices.contains(chapter) ? chapters[chapter].id : nil }
+
+    func decodedPage(_ url: String, width: CGFloat) -> CGImage? {
+        let key = Self.decodedKey(url, width)
+        return decoded.last { $0.key == key }?.image
+    }
+
+    func keepDecoded(_ image: CGImage, url: String, width: CGFloat) {
+        let key = Self.decodedKey(url, width)
+        decoded.removeAll { $0.key == key }
+        decoded.append((key, image))
+        var bytes = decoded.reduce(0) { $0 + $1.image.bytesPerRow * $1.image.height }
+        while decoded.count > 1, decoded.count > Self.decodedCount || bytes > Self.decodedBytes {
+            bytes -= decoded[0].image.bytesPerRow * decoded[0].image.height
+            decoded.removeFirst()
+        }
+    }
+
+    private static func decodedKey(_ url: String, _ width: CGFloat) -> String { "\(Int(width))|\(url)" }
 }
 
 /// Reads a comic full screen: vertical scroll (webtoons) or one page at a time in either direction.
@@ -212,8 +244,18 @@ struct MangaPageImage: View {
     let url: String
     /// The width to decode for, in pixels.
     let pixelWidth: CGFloat
+    /// A page of the paged reader: it fills the screen, and is kept decoded for turning back to it.
     var fitsScreen = false
+    /// Where in its frame the page sits: facing pages meet in the middle.
+    var alignment: Alignment = .center
     @State private var image: CGImage?
+
+    init(model: MangaReaderModel, chapter: Int, index: Int, url: String, pixelWidth: CGFloat, fitsScreen: Bool = false, alignment: Alignment = .center) {
+        self.model = model; self.chapter = chapter; self.index = index; self.url = url; self.pixelWidth = pixelWidth
+        self.fitsScreen = fitsScreen; self.alignment = alignment
+        // A page decoded ahead shows at once: a new page used to flash its placeholder first (#1280).
+        _image = State(initialValue: fitsScreen ? model.decodedPage(url, width: pixelWidth) : nil)
+    }
     @State private var failure: String?
     @State private var attempt = 0
 
@@ -236,12 +278,13 @@ struct MangaPageImage: View {
                     }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: fitsScreen ? .infinity : nil)
+        .frame(maxWidth: .infinity, maxHeight: fitsScreen ? .infinity : nil, alignment: alignment)
         .task(id: "\(url)#\(attempt)#\(Int(pixelWidth))") { await load() }
     }
 
     private func load() async {
         guard pixelWidth > 0 else { return }
+        if fitsScreen, let decoded = model.decodedPage(url, width: pixelWidth) { image = decoded; return }
         do {
             let data = try await MangaImages.shared.data(source: model.comic.sourceKey, url: url, kind: .page, comic: model.comic.id, chapter: model.chapterID(chapter))
             let width = pixelWidth
@@ -249,6 +292,7 @@ struct MangaPageImage: View {
             guard !Task.isCancelled else { return }
             if let decoded {
                 model.aspects[url] = CGFloat(decoded.width) / CGFloat(max(decoded.height, 1))
+                if fitsScreen { model.keepDecoded(decoded, url: url, width: pixelWidth) }
                 image = decoded
             } else { failure = L10n.text("This page could not be shown.") }
         } catch is CancellationError {
@@ -382,56 +426,78 @@ private struct MangaChapterEnd: View {
 
 // MARK: - Paged
 
-/// One page at a time. Taps on the sides turn pages (the leading side goes back, mirrored for right-to-left),
-/// the middle shows the controls; the remote's arrows and the keyboard's turn them too.
+/// One page at a time, or two side by side in a landscape view (#1437, #1216). Taps on the sides turn pages (the leading
+/// side goes back, mirrored for right-to-left), the middle shows the controls; the remote's arrows and the keyboard's turn
+/// them too.
 struct MangaPagedReader: View {
     let model: MangaReaderModel
     @Environment(\.displayScale) private var scale
     @Environment(\.mangaToggleChrome) private var toggleChrome
+    /// The first page of what is on screen; the chapter's page count for its end.
     @State private var page = 0
     #if os(tvOS)
     @FocusState private var focused: Bool
     #endif
 
+    init(model: MangaReaderModel) {
+        self.model = model
+        _page = State(initialValue: model.position.page)
+    }
+
     private var rtl: Bool { model.mode == .rightToLeft }
     private var count: Int { model.currentPages.count }
 
+    /// What shows at a time, in reading order: facing pages in a landscape view, else each page alone.
+    private func spreads(twoUp: Bool) -> [[Int]] {
+        let pages = model.currentPages
+        guard twoUp else { return pages.indices.map { [$0] } }
+        return MangaSpreads.spreads(count: pages.count) { MangaSpreads.isWide(aspect: model.aspects[pages[$0]].map(Double.init)) }
+    }
+
+    /// The first page of the spread holding `page`; the end stays the end.
+    private func start(_ page: Int, _ spreads: [[Int]]) -> Int {
+        page < count ? spreads.first { $0.contains(page) }?.first ?? page : count
+    }
+
     var body: some View {
         GeometryReader { proxy in
-            let pixelWidth = min(max(proxy.size.width, proxy.size.height) * scale, 3000)
+            let twoUp = MangaSpreads.fitsTwo(width: proxy.size.width, height: proxy.size.height)
+            let spreads = spreads(twoUp: twoUp)
+            // Decoded for zooming in: as wide as the screen's longer side, or half of it for each of two pages.
+            let pixelWidth = min(max(proxy.size.width / (twoUp ? 2 : 1), proxy.size.height) * scale, 3000)
             Group {
                 #if os(iOS)
                 TabView(selection: $page) {
-                    ForEach(Array(model.currentPages.enumerated()), id: \.offset) { index, url in
+                    ForEach(spreads, id: \.self) { spread in
                         // The page takes its own taps: a SwiftUI overlay over it would swallow the pinch.
-                        MangaZoomablePage(tapped: tapped) { MangaPageImage(model: model, chapter: model.position.chapter, index: index, url: url, pixelWidth: pixelWidth, fitsScreen: true) }
-                            .tag(index)
+                        MangaZoomablePage(tapped: { tapped($0, spreads) }) { spreadView(spread, pixelWidth: pixelWidth) }
+                            .tag(spread[0])
                     }
                     MangaPagedEnd(model: model)
-                        .overlay { tapZones(proxy.size).environment(\.layoutDirection, .leftToRight) }
+                        .overlay { tapZones(proxy.size, spreads).environment(\.layoutDirection, .leftToRight) }
                         .tag(count)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .environment(\.layoutDirection, rtl ? .rightToLeft : .leftToRight)
                 #else
                 ZStack {
-                    if page < count {
-                        MangaPageImage(model: model, chapter: model.position.chapter, index: page, url: model.currentPages[page], pixelWidth: pixelWidth, fitsScreen: true)
-                            .id("\(model.position.chapter)-\(page)")
+                    if page < count, let spread = spreads.first(where: { $0.contains(page) }) {
+                        spreadView(spread, pixelWidth: pixelWidth)
+                            .id("\(model.position.chapter)-\(spread)")
                             .transition(.opacity)
                     } else { MangaPagedEnd(model: model) }
-                    // The next page decodes out of sight, so turning shows it at once.
-                    if page + 1 < count {
-                        MangaPageImage(model: model, chapter: model.position.chapter, index: page + 1, url: model.currentPages[page + 1], pixelWidth: pixelWidth, fitsScreen: true)
+                    // The next pages decode out of sight, so turning shows them at once.
+                    if let next = spreads.first(where: { $0[0] > page }) {
+                        spreadView(next, pixelWidth: pixelWidth)
                             .opacity(0).allowsHitTesting(false).accessibilityHidden(true)
                     }
                 }
                 #if os(macOS)
-                .overlay { tapZones(proxy.size) }
+                .overlay { tapZones(proxy.size, spreads) }
                 .focusable().focusEffectDisabled()
-                .onKeyPress(.leftArrow) { turn(rtl ? 1 : -1); return .handled }
-                .onKeyPress(.rightArrow) { turn(rtl ? -1 : 1); return .handled }
-                .onKeyPress(.space) { turn(1); return .handled }
+                .onKeyPress(.leftArrow) { turn(rtl ? 1 : -1, spreads); return .handled }
+                .onKeyPress(.rightArrow) { turn(rtl ? -1 : 1, spreads); return .handled }
+                .onKeyPress(.space) { turn(1, spreads); return .handled }
                 #else
                 .focusable().focused($focused)
                 .onAppear { focused = true }
@@ -439,8 +505,8 @@ struct MangaPagedReader: View {
                     // Left is the previous page and Right the next in every reading mode, as on any TV list: pages fade
                     // here rather than slide, and a remote's Left going forward in right-to-left comics read as backwards.
                     switch direction {
-                    case .left: turn(-1)
-                    case .right: turn(1)
+                    case .left: turn(-1, spreads)
+                    case .right: turn(1, spreads)
                     case .down: Task { if model.hasNext { await model.open(model.position.chapter + 1) } }
                     case .up: Task { if model.hasPrevious { await model.open(model.position.chapter - 1) } }
                     default: break
@@ -452,39 +518,62 @@ struct MangaPagedReader: View {
                 #endif
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
+            .onChange(of: pixelWidth, initial: true) { _, width in model.pagedWidth = width }
+            // A turn of the device pairs pages differently, or a page turned out to be a spread itself: the page on screen
+            // stays, in the spread that now holds it.
+            .onChange(of: spreads, initial: true) { _, spreads in
+                let first = start(page, spreads)
+                if first != page { page = first }
+            }
+            .onChange(of: model.target) { _, target in
+                guard let target else { return }
+                page = start(target.page, spreads)
+                model.target = nil
+            }
         }
         .ignoresSafeArea()
-        .onAppear { page = model.position.page }
         .onChange(of: page) { _, value in
             if value < count { model.seen(.init(chapter: model.position.chapter, page: value)) }
             else if model.hasNext { Task { await model.open(model.position.chapter + 1) } }
         }
-        .onChange(of: model.target) { _, target in
-            guard let target else { return }
-            page = target.page
-            model.target = nil
+    }
+
+    /// One page filling the screen, or two facing pages meeting in the middle: in a right-to-left comic the first is on
+    /// the right. Laid out left to right whatever the reading direction, which the pages' order already says.
+    @ViewBuilder private func spreadView(_ spread: [Int], pixelWidth: CGFloat) -> some View {
+        let pages = model.currentPages, chapter = model.position.chapter
+        if spread.count == 2, spread.allSatisfy({ $0 < pages.count }) {
+            let shown = rtl ? [spread[1], spread[0]] : spread
+            HStack(spacing: 0) {
+                MangaPageImage(model: model, chapter: chapter, index: shown[0], url: pages[shown[0]], pixelWidth: pixelWidth, fitsScreen: true, alignment: .trailing)
+                MangaPageImage(model: model, chapter: chapter, index: shown[1], url: pages[shown[1]], pixelWidth: pixelWidth, fitsScreen: true, alignment: .leading)
+            }
+            .environment(\.layoutDirection, .leftToRight)
+        } else if let index = spread.first, index < pages.count {
+            MangaPageImage(model: model, chapter: chapter, index: index, url: pages[index], pixelWidth: pixelWidth, fitsScreen: true)
         }
     }
 
-    private func turn(_ step: Int) {
-        let next = page + step
+    private func turn(_ step: Int, _ spreads: [[Int]]) {
+        let at = page < count ? spreads.firstIndex { $0.contains(page) } ?? 0 : spreads.count
+        let next = at + step
         if next < 0 {
             if model.hasPrevious { Task { await model.open(model.position.chapter - 1, page: -1) } }
             return
         }
-        guard next <= count else { return }
-        withAnimation(.smooth(duration: 0.18)) { page = next }
+        guard next <= spreads.count else { return }
+        withAnimation(.smooth(duration: 0.18)) { page = next < spreads.count ? spreads[next][0] : count }
     }
 
     #if !os(tvOS)
     /// A tap `across` the screen (0 left, 1 right): a third on each side turns the page; the middle shows the controls.
-    private func tapped(_ across: CGFloat) {
-        if across < 0.3 { turn(rtl ? 1 : -1) } else if across > 0.7 { turn(rtl ? -1 : 1) } else { toggleChrome?() }
+    private func tapped(_ across: CGFloat, _ spreads: [[Int]]) {
+        if across < 0.3 { turn(rtl ? 1 : -1, spreads) } else if across > 0.7 { turn(rtl ? -1 : 1, spreads) } else { toggleChrome?() }
     }
 
-    private func tapZones(_ size: CGSize) -> some View {
+    private func tapZones(_ size: CGSize, _ spreads: [[Int]]) -> some View {
         Color.clear.contentShape(Rectangle())
-            .onTapGesture(coordinateSpace: .local) { point in tapped(point.x / max(size.width, 1)) }
+            .onTapGesture(coordinateSpace: .local) { point in tapped(point.x / max(size.width, 1), spreads) }
     }
     #endif
 }
