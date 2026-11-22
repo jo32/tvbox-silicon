@@ -69,34 +69,66 @@ struct MusicUpNext: View {
         let music = store.music
         let queue = music.queue
         let upcoming = queue.map { queue in Array(queue.tracks.enumerated()).filter { $0.offset > queue.index } } ?? []
-        if upcoming.isEmpty {
-            EmptyResults(symbol: "list.bullet", title: L10n.text("Nothing Up Next"),
-                         message: L10n.text("Play a song from search results, an album or a playlist, and the songs after it play next."), fills: true)
-        } else {
-            ScrollView(showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    Text(L10n.text("Up Next")).font(.headline).padding(.bottom, 6)
-                    ForEach(upcoming, id: \.offset) { index, track in
-                        Button { music.jump(to: index) } label: {
-                            HStack(spacing: 12) {
-                                MusicArtwork(url: track.artwork, size: 44)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(track.title).font(.body.weight(.medium)).lineLimit(1)
-                                    Text(track.artistLine).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                if let duration = track.duration {
-                                    Text(MusicTime.text(duration)).font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
-                                }
-                            }
-                            .padding(.vertical, 6)
-                            .contentShape(.rect)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.vertical, 12)
+        VStack(alignment: .leading, spacing: 0) {
+            header(music)
+            if upcoming.isEmpty {
+                EmptyResults(symbol: "list.bullet", title: L10n.text("Nothing Up Next"),
+                             message: L10n.text("Play a song from search results, an album or a playlist, and the songs after it play next."), fills: true)
+            } else {
+                list(upcoming, music: music)
             }
+        }
+    }
+
+    /// "Up Next" with Shuffle and Repeat beside it, as in Music (#1281). Repeat One applies even to a single song.
+    private func header(_ music: MusicPlaybackSession) -> some View {
+    HStack(spacing: 10) {
+        Text(L10n.text("Up Next")).font(.headline)
+        Spacer()
+        mode("shuffle", label: L10n.text("Shuffle"), on: music.shuffled) { music.toggleShuffle() }
+            .disabled((music.queue?.tracks.count ?? 0) < 2)
+        mode(music.repeatMode.symbol, label: music.repeatMode.label, on: music.repeatMode != .off) { music.cycleRepeat() }
+    }
+    .padding(.top, 12).padding(.bottom, 6)
+}
+
+private func mode(_ symbol: String, label: String, on: Bool, action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+        Image(systemName: symbol)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(on ? Color.black : Color.white)
+            .frame(width: 46, height: 30)
+            .background(Capsule().fill(on ? Color.white.opacity(0.9) : Color.white.opacity(0.14)))
+            .contentShape(.capsule)
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(label)
+    .accessibilityAddTraits(on ? .isSelected : [])
+}
+
+private func list(_ upcoming: [(offset: Int, element: MusicTrack)], music: MusicPlaybackSession) -> some View {
+        ScrollView(showsIndicators: false) {
+            LazyVStack(alignment: .leading, spacing: 2) {
+                ForEach(upcoming, id: \.offset) { index, track in
+                    Button { music.jump(to: index) } label: {
+                        HStack(spacing: 12) {
+                            MusicArtwork(url: track.artwork, size: 44)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(track.title).font(.body.weight(.medium)).lineLimit(1)
+                                Text(track.artistLine).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            if let duration = track.duration {
+                                Text(MusicTime.text(duration)).font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 6)
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.bottom, 12)
         }
     }
 }

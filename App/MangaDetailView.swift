@@ -83,9 +83,10 @@ struct MangaDetailView: View {
         do {
             let loaded = try await MangaRuntime.shared.details(comic.sourceKey, id: comic.id, fresh: fresh)
             details = loaded
+            store.saw(loaded.chapters.count, of: comic)
             if let index = store.progress(comic).flatMap({ progress in loaded.groups.firstIndex { $0.chapters.contains { $0.id == progress.chapterID } } }) { group = index }
             #if DEBUG
-            if UserDefaults.standard.bool(forKey: "qaMangaRead"), reading == nil { read(at: max(0, UserDefaults.standard.integer(forKey: "qaMangaChapter")), page: 0) }
+            if UserDefaults.standard.bool(forKey: "qaMangaRead"), reading == nil { read(at: max(0, UserDefaults.standard.integer(forKey: "qaMangaChapter")), page: UserDefaults.standard.integer(forKey: "qaMangaStartPage")) }
             #endif
         } catch { failure = error.mangaMessage }
     }

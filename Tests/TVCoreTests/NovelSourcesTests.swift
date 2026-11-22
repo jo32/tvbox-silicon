@@ -2,11 +2,11 @@ import Foundation
 import Testing
 @testable import TVCore
 
-/// A Legado book source list is recognised as one (and only text sources are kept); other JSON is not.
+/// A Legado book source list is recognised as one (text and audio sources are kept, image and file ones not); other JSON is not.
 @Test func novelSourceListIsRecognised() throws {
     let list = """
     [{"bookSourceUrl":"https://a.example","bookSourceName":"A","bookSourceGroup":"精品","searchUrl":"/s?q={{key}}","ruleSearch":{"bookList":"class.item"}},
-     {"bookSourceUrl":"https://b.example","bookSourceName":"B","bookSourceType":1,"searchUrl":"/s","ruleSearch":{}},
+     {"bookSourceUrl":"https://b.example","bookSourceName":"B","bookSourceType":2,"searchUrl":"/s","ruleSearch":{}},
      {"bookSourceUrl":"https://c.example","bookSourceName":"C","enabled":false,"exploreUrl":"玄幻::/c/1","ruleToc":{}},
      {"bookSourceUrl":"https://a.example","bookSourceName":"A again","searchUrl":"/s","ruleSearch":{}}]
     """

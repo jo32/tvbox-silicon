@@ -37,12 +37,16 @@ extension Store {
         var count: Int
         var seeking: Bool
         var video: Bool
+        var repeatMode: MusicRepeatMode
+        var shuffled: Bool
+        var advances: Bool
     }
 
     private var state: State {
         let music = store.music
         return State(track: music.track?.id, phase: music.phase, duration: music.duration, index: music.queue?.index,
-                     count: music.queue?.tracks.count ?? 0, seeking: music.seekingTo != nil, video: store.playing != nil)
+                     count: music.queue?.tracks.count ?? 0, seeking: music.seekingTo != nil, video: store.playing != nil,
+                     repeatMode: music.repeatMode, shuffled: music.shuffled, advances: music.canAdvance)
     }
 
     private func observe() {
@@ -65,7 +69,13 @@ extension Store {
         }
         if !active { active = true; addTargets() }
         let commands = MPRemoteCommandCenter.shared()
-        commands.nextTrackCommand.isEnabled = music.queue?.hasNext == true
+        commands.nextTrackCommand.isEnabled = music.canAdvance
+        commands.changeRepeatModeCommand.currentRepeatType = switch music.repeatMode {
+        case .off: .off
+        case .all: .all
+        case .one: .one
+        }
+        commands.changeShuffleModeCommand.currentShuffleType = music.shuffled ? .items : .off
         commands.previousTrackCommand.isEnabled = true
 
         var info: [String: Any] = [
@@ -128,10 +138,26 @@ extension Store {
         on(commands.pauseCommand) { music, _ in music.pause(); return .success }
         on(commands.togglePlayPauseCommand) { music, _ in music.toggle(); return .success }
         on(commands.nextTrackCommand) { music, _ in
-            guard music.queue?.hasNext == true else { return .noSuchContent }
+            guard music.canAdvance else { return .noSuchContent }
             music.next(); return .success
         }
         on(commands.previousTrackCommand) { music, _ in music.previous(); return .success }
+        // The car's and the Lock Screen's repeat and shuffle buttons (#1281).
+        on(commands.changeRepeatModeCommand) { music, event in
+            guard let event = event as? MPChangeRepeatModeCommandEvent else { return .commandFailed }
+            let mode: MusicRepeatMode = switch event.repeatType {
+            case .one: .one
+            case .all: .all
+            default: .off
+            }
+            music.setRepeat(mode)
+            return .success
+        }
+        on(commands.changeShuffleModeCommand) { music, event in
+            guard let event = event as? MPChangeShuffleModeCommandEvent else { return .commandFailed }
+            music.setShuffle(event.shuffleType != .off)
+            return .success
+        }
         on(commands.changePlaybackPositionCommand) { music, event in
             guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
             music.seek(to: event.positionTime); return .success

@@ -272,6 +272,8 @@ import IOKit.pwr_mgt
     private(set) var muted = false
     private(set) var quality: Int?
     private var playing: Channel?
+    /// What plays now, its live room or plugin address already resolved: what a TV is sent (#749).
+    var castChannel: Channel? { playing }
     /// The episode plays from a download on this device, which no server or connection holds up.
     private var savedDownload = false
     private var automatic: URL?

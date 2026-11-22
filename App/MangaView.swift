@@ -19,7 +19,10 @@ struct MangaView: View {
                                           route: Route { AnyView(MangaLibraryView(kind: .history)) })
                         }
                         if !store.favorites.isEmpty {
-                            MangaShelfRow(title: L10n.text("Favorites"), comics: store.favorites.prefix(30).map(\.comic), showsSource: store.sources.count > 1,
+                            // Those with new chapters first, saying how many (#1105).
+                            let favorites = store.favoritesByUpdates.prefix(30)
+                            MangaShelfRow(title: L10n.text("Favorites"), comics: favorites.map(\.comic),
+                                          captions: MangaProgressText.updates(favorites.map(\.comic)), showsSource: store.sources.count > 1,
                                           route: Route { AnyView(MangaLibraryView(kind: .favorites)) })
                         }
                         if store.sources.isEmpty {
@@ -51,6 +54,7 @@ struct MangaView: View {
             }
         }
         #endif
+        .onAppear { store.checkUpdates() }
         #if DEBUG
         .task { await MangaQA.start(openRoute: openRoute) }
         #endif
@@ -93,12 +97,13 @@ private struct MangaSourceBar: View {
             SectionHeader(title: L10n.text("Comic Sources")).padding(.horizontal, Layout.gutter)
             ChipRow {
                 HStack(spacing: 10) {
+                    #if os(tvOS)
+                    // First, where it is seen: after the sources it was off the screen with several installed (#1276).
+                    RouteLink { MangaSearchView() } label: { Label(L10n.text("Search"), systemImage: "magnifyingglass") }.mangaPill()
+                    #endif
                     ForEach(store.sources) { source in
                         Chip(title: source.name, selected: source.key == store.currentSource?.key) { store.selectedSource = source.key }
                     }
-                    #if os(tvOS)
-                    RouteLink { MangaSearchView() } label: { Label(L10n.text("Search"), systemImage: "magnifyingglass") }.mangaPill()
-                    #endif
                 }
             }
             .padding(.horizontal, Layout.gutter)
@@ -542,8 +547,8 @@ struct MangaLibraryView: View {
             LazyVGrid(columns: MangaLayout.columns, alignment: .leading, spacing: Layout.gridRowSpacing) {
                 switch kind {
                 case .favorites:
-                    ForEach(store.favorites) { favorite in
-                        MangaComicLink(comic: favorite.comic, showsSource: true)
+                    ForEach(store.favoritesByUpdates) { favorite in
+                        MangaComicLink(comic: favorite.comic, caption: MangaProgressText.updates([favorite.comic])[favorite.id], showsSource: true)
                             .contextMenu { Button(L10n.text("Remove from Favorites"), systemImage: "heart.slash", role: .destructive) { store.toggleFavorite(favorite.comic) } }
                     }
                 case .history:
@@ -572,6 +577,15 @@ enum MangaProgressText {
     static func short(_ progress: MangaLibrary.Progress) -> String {
         let page = L10n.text("p. %d", progress.page + 1)
         return progress.chapterTitle.isEmpty ? page : "\(progress.chapterTitle) · \(page)"
+    }
+    /// "3 new" under the favorites that have new chapters, by comic.
+    @MainActor static func updates(_ comics: [MangaComic]) -> [String: String] {
+        var captions: [String: String] = [:]
+        for comic in comics {
+            let count = MangaStore.shared.newChapters(comic)
+            if count > 0 { captions[comic.identity] = L10n.text("%d new", count) }
+        }
+        return captions
     }
 }
 

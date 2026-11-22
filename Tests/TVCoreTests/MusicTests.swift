@@ -707,3 +707,42 @@ private struct FakeCatalog: MusicCatalogSource {
     let selection = try await playing.select(qqTrack("晴天", ["周杰伦"], duration: 269), preference: .high)
     #expect(selection.candidate.provider == .lx)
 }
+
+/// #1309: LX sources out of requests made a queue skip three songs and stop on "no music channels". The limit is the
+/// reason, with when it ends, even when it was the other catalog's channel that ran out.
+@Test func channelsOutOfRequestsSayWhenTheyAnswerAgain() async throws {
+    let until = Date().addingTimeInterval(20)
+    let track = qqTrack("倒强", ["五月天"], duration: 271.2, id: "qqmid")
+    let limited = FakeProvider(id: .vkeys, platforms: [.qq]) { _ in throw MusicProviderError.rateLimited(until: until) }
+    var direct = resolver([limited]); direct.channelsListed = false
+    await #expect(throws: MusicProviderError.rateLimited(until: until)) { try await direct.select(track, preference: .high) }
+
+    let slow = FakeProvider(id: .vkeys, platforms: [.qq]) { _ in throw MusicProviderError.timeout }
+    let gd = FakeProvider(id: .gdstudio, platforms: [.netease]) { _ in throw MusicProviderError.rateLimited(until: until) }
+    let netease = FakeCatalog(platform: .netease) { _ in [neteaseTrack("倒强", ["五月天"], duration: 271.0, id: "386175")] }
+    var wider = MusicResolver(routes: .test, providers: [slow, gd], prober: MusicProber(transport: audioTransport(), inspector: nil),
+                              health: MusicHealth(file: nil), companions: MusicCompanionFinder(catalogs: [netease]))
+    wider.channelsListed = false
+    await #expect(throws: MusicProviderError.rateLimited(until: until)) { try await wider.select(track, preference: .high) }
+}
+
+/// #1374: an LX source that keeps failing for a catalog is asked after the others until it cools down, and its first
+/// answer puts it back in the listener's order.
+@Test func failingLXSourcesAreAskedLast() async throws {
+    let health = MusicHealth(file: nil)
+    func source(_ name: String) -> LXSource { LXSource(info: LXSourceInfo(name: name), sources: ["tx": ["128k"]], origin: nil) }
+    let first = source("first"), second = source("second"), third = source("third")
+    let provider = try #require(LXMusicProvider(sources: [first, second, third], health: health))
+    #expect(await provider.ordered(for: .qq).map(\.info.name) == ["first", "second", "third"])
+    let key = LXMusicProvider.healthKey(first, .qq)
+    await health.record(key, error: .timeout)
+    #expect(await provider.ordered(for: .qq).map(\.info.name) == ["first", "second", "third"])
+    await health.record(key, error: .timeout)
+    #expect(await provider.ordered(for: .qq).map(\.info.name) == ["second", "third", "first"])
+    // Only for that catalog, and shown on the source's page.
+    #expect(await provider.ordered(for: .netease).map(\.info.name) == ["first", "second", "third"])
+    #expect(await health.coolingUntil(prefix: LXMusicProvider.upstream(first) + "|") != nil)
+    #expect(await health.coolingUntil(prefix: LXMusicProvider.upstream(second) + "|") == nil)
+    await health.record(key, error: nil)
+    #expect(await provider.ordered(for: .qq).map(\.info.name) == ["first", "second", "third"])
+}

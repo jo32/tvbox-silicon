@@ -22,6 +22,8 @@ public enum NovelLibrary {
         public var chapterCount: Int
         /// How far into the chapter, 0–1.
         public var position: Double
+        /// For an audiobook, where in the chapter listening stopped, in seconds (#1130).
+        public var seconds: Double?
         public var updated: Date
         /// Places the viewer marked (#1452), in reading order.
         public var bookmarks: [NovelBookmark]
