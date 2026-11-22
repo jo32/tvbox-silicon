@@ -1144,7 +1144,9 @@ private struct NativePlayerView: UIViewControllerRepresentable {
                 children.append(UIAction(title: L10n.text("ASS styling and effects show as plain text."), attributes: [.disabled]) { _ in })
             }
         }
-        return UIMenu(title: L10n.text("Subtitle Files"), image: UIImage(systemName: external.selected == nil ? "captions.bubble" : "captions.bubble.fill"), children: children)
+        // A file icon, not a speech bubble: AVKit's own Subtitles and Audio button at the end of the bar is a bubble,
+        // and two alike sent people into this one looking for the audio tracks.
+        return UIMenu(title: L10n.text("Subtitle Files"), image: UIImage(systemName: external.selected == nil ? "doc.text" : "doc.text.fill"), children: children)
     }
 
     /// Asks for a subtitle file's address (an SRT, WebVTT or ASS file, or a ZIP archive). The text field takes the
