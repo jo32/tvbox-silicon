@@ -821,7 +821,7 @@
 "No Lyrics" = "歌詞なし";
 "Neither catalog has lyrics for this song." = "どちらのカタログにもこの曲の歌詞はありません。";
 "Lyrics from %@" = "歌詞：%@";
-"Song, album or playlist" = "曲、アルバム、プレイリスト";
+"Song, artist, album or playlist" = "曲、アーティスト、アルバム、プレイリスト";
 "Recently Played" = "最近再生した曲";
 "Continue Playing" = "再生を続ける";
 "Stopped at %@" = "%@ で停止";

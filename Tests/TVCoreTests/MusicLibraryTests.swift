@@ -201,6 +201,33 @@ private struct FakeSongs: MusicCatalogSource {
     #expect(MusicMatching.byArtist([qing], query: " ").isEmpty)
 }
 
+@Test func pinyinNamesAChineseArtist() {
+    func track(_ id: String, _ title: String, _ artists: [String]) -> MusicTrack {
+        var track = song(title, id); track.artists = artists; return track
+    }
+    let poem = track("1", "父亲写的散文诗", ["许飞"]), dj = track("2", "Bad and Boujee (XUFEIH remix)", ["XUFEIH"])
+    let eason = track("3", "富士山下", ["陈奕迅"])
+    // The whole name in pinyin, with or without a space, wins over a Latin name that only starts with it.
+    #expect(MusicMatching.byArtist([dj, poem, eason], query: "xufei") == [poem])
+    #expect(MusicMatching.byArtist([dj, poem, eason], query: "Xu Fei") == [poem])
+    #expect(MusicMatching.byArtist([dj, poem, eason], query: "chenyixun") == [eason])
+    // Han characters still compare as characters, and Latin names as letters.
+    #expect(MusicMatching.byArtist([dj, poem], query: "许飞") == [poem])
+    #expect(MusicMatching.byArtist([dj, poem], query: "xufeih") == [dj])
+    #expect(MusicMatching.rank([dj, poem], query: "xufei") == [poem, dj])
+    #expect(MusicMatching.score(poem, query: "xufei") == MusicMatching.score(poem, query: "许飞"))
+    #expect(MusicMatching.pinyin("Taylor Swift") == nil)
+
+    func album(_ title: String, _ owner: String) -> MusicCollection {
+        MusicCollection(kind: .album, platform: .qq, collectionID: title, title: title, subtitle: owner)
+    }
+    let feature = album("Wind String (ft. Xufei Gao & Yetong Gu)", "Wasabi Spectrum"), own = album("少年去游荡", "许飞")
+    let named = album("许飞", "许飞"), other = album("许飞的歌", "某人")
+    #expect(MusicCollections.rank([feature, own], query: "xufei") == [own, feature])
+    // The artist's own albums before another's album with the name in its title; one titled the query stays first.
+    #expect(MusicCollections.rank([other, own, named], query: "许飞") == [named, own, other])
+}
+
 /// One page of songs per call, by page number.
 private struct PagedSongs: MusicCatalogSource {
     let platform: MusicPlatform

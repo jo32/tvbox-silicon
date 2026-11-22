@@ -43,7 +43,7 @@ struct MusicView: View {
             .pageContainer()
         }
         .screenBackdrop()
-        .catalogSearchable(text: $query, prompt: L10n.text("Song, album or playlist"))
+        .catalogSearchable(text: $query, prompt: L10n.text("Song, artist, album or playlist"))
         .onChange(of: query) { _, text in
             if text.trimmingCharacters(in: .whitespacesAndNewlines) != autoPlayQuery { autoPlayQuery = nil }
             #if os(tvOS)

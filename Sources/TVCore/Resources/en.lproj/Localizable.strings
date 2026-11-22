@@ -822,7 +822,7 @@
 "No Lyrics" = "No Lyrics";
 "Neither catalog has lyrics for this song." = "Neither catalog has lyrics for this song.";
 "Lyrics from %@" = "Lyrics from %@";
-"Song, album or playlist" = "Song, album or playlist";
+"Song, artist, album or playlist" = "Song, artist, album or playlist";
 "Recently Played" = "Recently Played";
 "Continue Playing" = "Continue Playing";
 "Stopped at %@" = "Stopped at %@";

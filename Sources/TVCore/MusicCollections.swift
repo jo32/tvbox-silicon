@@ -59,7 +59,9 @@ public enum MusicCollections {
     /// A playlist can hold thousands of songs; a queue this long is plenty to play through.
     public static let trackLimit = 500
 
-    /// Best first: the title the query names, then an artist or creator it names; ties keep catalog order.
+    /// Best first: the title the query names, then the artist or creator who is the whole query (by name, or by pinyin
+    /// typed in Latin letters: "xufei" is 许飞), then titles holding the query, then an owner the query mentions;
+    /// ties keep catalog order. An artist's own albums come before someone else's titled "… ft. Xufei Gao".
     public static func rank(_ collections: [MusicCollection], query: String) -> [MusicCollection] {
         let core = MusicMatching.coreQuery(query)
         let scores: [Int] = collections.map { collection in
@@ -68,8 +70,9 @@ public enum MusicCollections {
             var score = 0
             if title == core { score = 100 }
             else if !title.isEmpty && core.contains(title) && !owner.isEmpty && core.contains(owner) { score = 110 }
+            else if !core.isEmpty && MusicMatching.names(core, artist: collection.subtitle ?? "", whole: true) { score = 70 }
             else if !title.isEmpty && (core.contains(title) || title.contains(core)) { score = 60 }
-            else if !owner.isEmpty && core.contains(owner) { score = 40 }
+            else if MusicMatching.mentions(core, artist: collection.subtitle ?? "") { score = 40 }
             return score
         }
         let order: [Int] = collections.indices.sorted { (a: Int, b: Int) -> Bool in scores[a] == scores[b] ? a < b : scores[a] > scores[b] }

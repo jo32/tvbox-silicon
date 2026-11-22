@@ -22,6 +22,43 @@ public enum MusicMatching {
         return String(String.UnicodeScalarView(folded.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }))
     }
 
+    /// A Chinese name as its pinyin, normalized ("许飞" → "xufei", "陈奕迅" → "chenyixun"), so a name typed in Latin
+    /// letters finds the artist. Nil for a name with no Han characters: its letters compare as they are.
+    static func pinyin(_ name: String) -> String? {
+        guard name.unicodeScalars.contains(where: { (0x3400...0x9FFF).contains($0.value) }) else { return nil }
+        if let known = spellings.object(forKey: name as NSString) { return known as String }
+        let latin = name.applyingTransform(.mandarinToLatin, reverse: false)?.applyingTransform(.stripDiacritics, reverse: false)
+        let spelled = latin.map(normalize) ?? ""
+        spellings.setObject(spelled as NSString, forKey: name as NSString)
+        return spelled
+    }
+    /// Results repeat their artists many times over.
+    nonisolated(unsafe) private static let spellings = NSCache<NSString, NSString>()
+
+    /// A query typed without Han characters ("xufei", "xu fei"), normalized; it can name an artist by pinyin.
+    static func latinQuery(_ normalizedQuery: String) -> Bool {
+        !normalizedQuery.isEmpty && normalizedQuery.unicodeScalars.allSatisfy(\.isASCII)
+    }
+
+    /// Whether `query` (normalized) names `artist`: the whole name, or its pinyin when the query is in Latin letters.
+    static func names(_ query: String, artist: String, whole: Bool) -> Bool {
+        let name = normalize(artist)
+        guard !name.isEmpty else { return false }
+        func fits(_ candidate: String) -> Bool { whole ? candidate == query : candidate.contains(query) }
+        if fits(name) { return true }
+        guard latinQuery(query), let spelled = pinyin(artist), !spelled.isEmpty else { return false }
+        return fits(spelled)
+    }
+
+    /// Whether `query` (normalized) holds the artist's name, or its pinyin when typed in Latin letters.
+    static func mentions(_ query: String, artist: String) -> Bool {
+        let name = normalize(artist)
+        guard !name.isEmpty else { return false }
+        if query.contains(name) { return true }
+        guard latinQuery(query), let spelled = pinyin(artist), spelled.count > 1 else { return false }
+        return query.contains(spelled)
+    }
+
     /// The version a title names. Only bracketed parts and a dash suffix count, so "Live Forever" stays an original.
     public static func tags(in title: String) -> Set<MusicVersionTag> {
         var found = Set<MusicVersionTag>()
@@ -109,8 +146,10 @@ public enum MusicMatching {
             else if artists.contains(where: { core == title + $0 || core == $0 + title }) { score = 110 }
             else if core.contains(title) && artists.contains(where: { core.contains($0) }) { score = 105 }
             else if core.contains(title) { score = 60 }
+            // The artist is the whole query: their songs before others' with the name in the title ("XUFEIH remix").
+            else if track.artists.contains(where: { names(core, artist: $0, whole: true) }) { score = 55 }
             else if title.contains(core) { score = 50 }
-            else if artists.contains(where: { core.contains($0) }) { score = 30 }
+            else if track.artists.contains(where: { mentions(core, artist: $0) }) { score = 30 }
         }
         score += track.tags == wanted ? 20 : -15 * track.tags.symmetricDifference(wanted).count
         if track.ids.count > 1 { score += 5 }
@@ -127,12 +166,13 @@ public enum MusicMatching {
     }
 
     /// An artist search's songs: those by the artist the query names, in the catalogs' order, which is by popularity
-    /// (#649). Part of a name ("Taylor" for "Taylor Swift") counts only when no artist is the whole query.
+    /// (#649). Part of a name ("Taylor" for "Taylor Swift") counts only when no artist is the whole query. A Chinese
+    /// name can be typed in pinyin: "xufei" or "xu fei" finds 许飞.
     public static func byArtist(_ tracks: [MusicTrack], query: String) -> [MusicTrack] {
         let name = normalize(query)
         guard !name.isEmpty else { return [] }
-        let whole = tracks.filter { $0.artists.contains { normalize($0) == name } }
-        return whole.isEmpty ? tracks.filter { $0.artists.contains { normalize($0).contains(name) } } : whole
+        let whole = tracks.filter { $0.artists.contains { names(name, artist: $0, whole: true) } }
+        return whole.isEmpty ? tracks.filter { $0.artists.contains { names(name, artist: $0, whole: false) } } : whole
     }
 
     /// The one track a query clearly means, to play without asking: it names that title (and the
