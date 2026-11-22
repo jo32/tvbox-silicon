@@ -118,6 +118,10 @@ private struct MusicNativePlayer: UIViewControllerRepresentable {
             let state = music.lyricsOffset == 0 ? L10n.text("Lyrics in sync") : String(format: "%+.1f s", music.lyricsOffset)
             items.append(UIMenu(title: state, image: UIImage(systemName: "timer"), children: timing))
         }
+        // A book's intro and outro, for all its chapters (#1486); never a song's.
+        if music.canSkip {
+            items.append(SkipTimesMenu.make(music.skipSettings, set: { music.applySkipSettings($0) }, mark: { music.markSkip(intro: $0) }))
+        }
         items.append(SleepTimer.shared.uiMenu(item: music.sleepItem))
         controller.transportBarCustomMenuItems = items
     }

@@ -2322,3 +2322,9 @@
 "%@ refused the video (%@)." = "%@ 拒绝播放这个视频（%@）。";
 "%@ didn't respond. Make sure it is on and on the same network." = "%@ 没有回应。请确认它已开机，并且与本设备在同一网络中。";
 "%d new" = "更新 %d 话";
+"Intro %@" = "片头 %@";
+"Outro %@" = "片尾 %@";
+"Nothing is skipped until you set where the intro ends or the outro starts. Play to that place and tap Use current position." = "还没有设置片头结束或片尾开始的位置，所以不会跳过任何内容。播放到那个位置，再点“使用当前播放位置”。";
+"Times apply to this book and all its chapters. Automatic skipping is a global switch. The outro is remembered as time remaining." = "时间用于这本书的所有章节，自动跳过开关为全局开关。片尾按剩余时长记忆。";
+"Each series and audiobook keeps its own times. While one plays, open the menu in the playback controls, choose Skip intro / outro, and pick Intro Ends Here when the intro ends." = "每部剧和每本有声书各自记住时间。播放时打开播放控制里的菜单，选择“跳过片头片尾”，在片头结束时选“片头到此结束”。";
+"Each series and audiobook keeps its own times. While one plays, choose Skip intro / outro in the player's settings menu, or in an audiobook's More menu." = "每部剧和每本有声书各自记住时间。播放时在播放器的设置菜单里选择“跳过片头片尾”；有声书在“更多”菜单里。";

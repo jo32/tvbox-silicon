@@ -370,6 +370,8 @@ import TVCore
     /// The music player gets a source's streams from here, saves where a book is in the playback history, and hands
     /// an episode with a picture, or one it can't play, to the video player.
     private func setUpListening() {
+        // A book's intro and outro times are the profile's, as a series' are (#1486).
+        music.skipDefaults = { [weak self] in self?.playbackDefaults ?? .standard }
         music.resolveSource = { [weak self] source in
             guard let self else { throw CancellationError() }
             return try await self.resolveListening(source)

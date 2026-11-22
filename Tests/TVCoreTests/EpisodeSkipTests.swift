@@ -114,3 +114,14 @@ import Testing
     #expect(EpisodeSkipPass().outroCountdown(time: 2576, duration: 2700, settings: EpisodeSkipSettings(introEnd: 90, outroLength: 120)) == nil)
     #expect(EpisodeSkipPass().outroCountdown(time: 2696, duration: 2700, settings: EpisodeSkipSettings(enabled: true, introEnd: 90)) == nil)
 }
+
+@Test func theMenuSaysWhatIsSkipped() {
+    // Switched on without times skips nothing, and the menu says so rather than "On" (#1405).
+    #expect(EpisodeSkipSettings(enabled: true).summary == L10n.text("Not set"))
+    #expect(!EpisodeSkipSettings(enabled: true).hasTimes)
+    #expect(EpisodeSkipSettings(enabled: false, introEnd: 90, outroLength: 120).summary == L10n.text("Off"))
+    let both = EpisodeSkipSettings(enabled: true, introEnd: 90, outroLength: 120)
+    #expect(both.hasTimes)
+    #expect(both.summary == L10n.text("Intro %@", "01:30") + " · " + L10n.text("Outro %@", "−02:00"))
+    #expect(EpisodeSkipSettings(enabled: true, outroLength: 45).summary == L10n.text("Outro %@", "−00:45"))
+}

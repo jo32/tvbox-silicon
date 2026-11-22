@@ -5,7 +5,7 @@ import TVCore
 import IOKit.pwr_mgt
 #endif
 
-@MainActor @Observable final class PlaybackSession {
+@MainActor @Observable final class PlaybackSession: SkipTimesEditing {
     /// A queue, so the next episode can wait behind this one and play straight on.
     let player: AVQueuePlayer
     /// Upscaling and 60 fps smoothing, drawn over AVKit's picture when switched on in Settings.
@@ -157,6 +157,8 @@ import IOKit.pwr_mgt
 
     /// Whether this video keeps skip times: one from a source, not a live channel or a lone address.
     var canSkip: Bool { skipScope != nil }
+    var skipPosition: Double { position }
+    var skipDuration: Double { duration }
 
     /// The intro ends, or the outro starts, where the picture is now (#808): Apple TV has no keyboard for a time.
     /// A place the rules refuse (an intro past five minutes, say) changes nothing.
