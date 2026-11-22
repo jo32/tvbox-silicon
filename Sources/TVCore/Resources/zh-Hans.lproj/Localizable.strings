@@ -2279,4 +2279,16 @@
 "Danmaku Servers" = "弹幕服务器";
 "Add another server to move or remove this one." = "添加其他服务器后才能移动或移除此服务器。";
 "Find Danmaku…" = "查找弹幕…";
+"TVs (DLNA)" = "电视（DLNA 投屏）";
+"Searching for TVs…" = "正在搜索电视…";
+"Search for TVs Again" = "重新搜索电视";
+"This video plays only on this device and can't be sent to a TV." = "这个视频只能在本机播放，无法投屏到电视。";
+"Back 10 Seconds" = "后退 10 秒";
+"Forward 10 Seconds" = "前进 10 秒";
+"Volume Down" = "调低音量";
+"Volume Up" = "调高音量";
+"Keep Yingxia open while the TV plays this video." = "电视播放期间请保持映匣打开。";
+"%@ refused the video." = "%@ 拒绝播放这个视频。";
+"%@ refused the video (%@)." = "%@ 拒绝播放这个视频（%@）。";
+"%@ didn't respond. Make sure it is on and on the same network." = "%@ 没有回应。请确认它已开机，并且与本设备在同一网络中。";
 "%d new" = "更新 %d 话";

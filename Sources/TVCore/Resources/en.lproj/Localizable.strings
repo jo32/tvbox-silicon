@@ -2279,4 +2279,16 @@
 "Danmaku Servers" = "Danmaku Servers";
 "Add another server to move or remove this one." = "Add another server to move or remove this one.";
 "Find Danmaku…" = "Find Danmaku…";
+"TVs (DLNA)" = "TVs (DLNA)";
+"Searching for TVs…" = "Searching for TVs…";
+"Search for TVs Again" = "Search for TVs Again";
+"This video plays only on this device and can't be sent to a TV." = "This video plays only on this device and can't be sent to a TV.";
+"Back 10 Seconds" = "Back 10 Seconds";
+"Forward 10 Seconds" = "Forward 10 Seconds";
+"Volume Down" = "Volume Down";
+"Volume Up" = "Volume Up";
+"Keep Yingxia open while the TV plays this video." = "Keep Yingxia open while the TV plays this video.";
+"%@ refused the video." = "%@ refused the video.";
+"%@ refused the video (%@)." = "%@ refused the video (%@).";
+"%@ didn't respond. Make sure it is on and on the same network." = "%@ didn't respond. Make sure it is on and on the same network.";
 "%d new" = "%d new";
