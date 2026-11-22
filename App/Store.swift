@@ -1080,10 +1080,13 @@ import TVCore
     /// The source a watched title came from. Any enabled subscription can hold it: it is found by its own origin
     /// and original key. Nil for Cloud Files, and once the source is gone.
     func historyClient(_ entry: PlaybackHistoryEntry) -> CatalogClient? {
-        guard entry.context.sourceKey != CloudFiles.sourceKey, let config = subscription,
-              let site = config.sites.first(where: { $0.origin(or: config.origin) == entry.context.origin && $0.sourceKey == entry.context.sourceKey })
-        else { return nil }
-        return CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL).applying(config)
+        guard entry.context.sourceKey != CloudFiles.sourceKey else { return nil }
+        if let config = subscription,
+           let site = config.sites.first(where: { $0.origin(or: config.origin) == entry.context.origin && $0.sourceKey == entry.context.sourceKey }) {
+            return CatalogClient(site: site, origin: config.origin, jarURL: config.spiderURL).applying(config)
+        }
+        // A title of a drive that isn't among the subscription's sources: a WebDAV share's, opened from Cloud Files' posters.
+        return CloudFilesSource.drive(sourceKey: entry.context.sourceKey).map { CloudFilesSource.client($0, origin: entry.context.origin) }
     }
 
     func resumeHistory(_ entry: PlaybackHistoryEntry) async {

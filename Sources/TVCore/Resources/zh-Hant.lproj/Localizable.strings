@@ -381,6 +381,7 @@
 "Hide Details" = "收起詳細資訊";
 "Show as List" = "以列表顯示";
 "Show as Grid" = "以網格顯示";
+"Show as Posters" = "以海報顯示";
 "%lld of %lld sources responded" = "%lld / %lld 個來源已回應";
 "First-time setup can take a few minutes. Keep the app open." = "首次準備可能需要幾分鐘，請保持 App 開啟。";
 "This source requires Android features that the plugin runtime does not support yet." = "此來源依賴外掛執行環境尚未支援的 Android 功能。";
@@ -831,6 +832,8 @@
 "Unable to Load Songs" = "無法載入歌曲";
 "Shuffle" = "隨機播放";
 "Skipped “%@”: %@" = "已略過「%@」：%@";
+"Music channels are busy. Trying again in %@ seconds." = "音樂渠道繁忙，%@ 秒後再試。";
+"Not answering lately, so other sources are asked first until %@." = "最近沒有回應，%@ 之前會先用其他音源。";
 "No LX Music source could play it." = "洛雪音源都沒能播放這首歌。";
 "Songs" = "歌曲";
 "Albums" = "專輯";
@@ -2288,3 +2291,4 @@
 "%@ refused the video." = "%@ 拒絕播放這部影片。";
 "%@ refused the video (%@)." = "%@ 拒絕播放這部影片（%@）。";
 "%@ didn't respond. Make sure it is on and on the same network." = "%@ 沒有回應。請確認它已開機，而且與本裝置在同一個網路中。";
+"%d new" = "更新 %d 話";

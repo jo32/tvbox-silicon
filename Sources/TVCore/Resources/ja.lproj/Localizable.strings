@@ -381,6 +381,7 @@
 "Hide Details" = "詳細を隠す";
 "Show as List" = "リスト表示";
 "Show as Grid" = "グリッド表示";
+"Show as Posters" = "ポスターで表示";
 "%lld of %lld sources responded" = "%lld / %lld ソースが応答";
 "First-time setup can take a few minutes. Keep the app open." = "初回の準備には数分かかることがあります。アプリを開いたままにしてください。";
 "This source requires Android features that the plugin runtime does not support yet." = "この配信ソースは、プラグイン実行環境で未対応のAndroid機能を必要とします。";
@@ -831,6 +832,8 @@
 "Unable to Load Songs" = "曲を読み込めません";
 "Shuffle" = "シャッフル";
 "Skipped “%@”: %@" = "「%@」をスキップしました：%@";
+"Music channels are busy. Trying again in %@ seconds." = "音楽チャンネルが混み合っています。%@秒後にもう一度試します。";
+"Not answering lately, so other sources are asked first until %@." = "最近応答がないため、%@まではほかのソースを先に使います。";
 "No LX Music source could play it." = "LX Music のソースでは再生できませんでした。";
 "Songs" = "曲";
 "Albums" = "アルバム";
@@ -2288,3 +2291,4 @@
 "%@ refused the video." = "%@ がビデオの再生を拒否しました。";
 "%@ refused the video (%@)." = "%@ がビデオの再生を拒否しました（%@）。";
 "%@ didn't respond. Make sure it is on and on the same network." = "%@ から応答がありません。電源が入っていて、同じネットワークにあることを確認してください。";
+"%d new" = "新着 %d 話";

@@ -84,16 +84,24 @@ struct CloudFolderView: View {
     let drive: CloudFilesDrive
     let folder: String
     let name: String
+    /// Opened from a poster layout: shows posters too, until the viewer picks the list here (#880).
+    var inheritsPosters = false
     @State private var files: [CloudFile]?
     @State private var failure: Error?
+    @State private var posters: Bool?
     @State private var asksPassword = false
     @State private var password = ""
 
     var body: some View {
         Group {
-            if let files, !files.isEmpty {
+            if let files, !files.isEmpty, showsPosters, Self.hasTitles(files, drive) {
+                posterGrid(files)
+            } else if let files, !files.isEmpty {
                 FilesList {
                     FilesSection(title: nil, footer: nil) {
+                        #if os(tvOS)
+                        if Self.hasTitles(files, drive) { layoutButton.glassRow() }
+                        #endif
                         ForEach(files) { row($0, in: files) }
                     }
                 }
@@ -127,6 +135,10 @@ struct CloudFolderView: View {
         .screenTitle(name)
         #if os(tvOS)
         .onExitCommand { dismiss() }
+        #else
+        .toolbar {
+            if let files, Self.hasTitles(files, drive) { ToolbarItem(placement: .primaryAction) { layoutButton } }
+        }
         #endif
         .task { if files == nil { await load() } }
         .alert(L10n.text("Folder Password"), isPresented: $asksPassword) {
@@ -134,6 +146,56 @@ struct CloudFolderView: View {
             Button(L10n.text("Cancel"), role: .cancel) {}
             Button(L10n.text("Open")) { Task { await load(password: password) } }
         } message: { Text(L10n.text("Enter the password for %@.", name)) }
+    }
+
+    // MARK: Posters (#880, #1465)
+
+    private var showsPosters: Bool { posters ?? CloudFilesLayout.posters(drive, folder: folder) ?? inheritsPosters }
+
+    /// Whether the folder holds anything a poster suits: a folder, or a video that plays here.
+    static func hasTitles(_ files: [CloudFile], _ drive: CloudFilesDrive) -> Bool {
+        files.contains { $0.isFolder || ($0.kind == .video && drive.plays($0)) }
+    }
+
+    private var layoutButton: some View {
+        let shown = showsPosters
+        return Button {
+            posters = !shown
+            CloudFilesLayout.set(!shown, drive, folder: folder)
+        } label: {
+            #if os(tvOS)
+            FileRowLabel(symbol: shown ? "list.bullet" : "square.grid.2x2", tint: .indigo,
+                         title: L10n.text(shown ? "Show as List" : "Show as Posters"))
+            #else
+            Label(L10n.text(shown ? "Show as List" : "Show as Posters"), systemImage: shown ? "list.bullet" : "square.grid.2x2")
+            #endif
+        }
+        .accessibilityIdentifier("files.layout")
+    }
+
+    /// The folder's folders and videos as posters; its other files stay in the list.
+    private func posterGrid(_ files: [CloudFile]) -> some View {
+        let shown = files.filter { $0.isFolder || ($0.kind == .video && drive.plays($0)) }
+        let client = CloudFilesSource.client(drive, origin: store.subscription?.origin ?? URL(string: "\(CloudFiles.scheme)://\(drive.key)")!)
+        return ScrollView {
+            VStack(alignment: .leading, spacing: Layout.headerSpacing) {
+                #if os(tvOS)
+                layoutButton.controlButton()
+                #endif
+                LazyVGrid(columns: Layout.posterColumns, spacing: Layout.gridRowSpacing) {
+                    ForEach(shown) { file in
+                        CloudPosterLink(file: file, client: client, parent: name, play: file.isFolder ? nil : { play(file, in: files) }) {
+                            CloudFolderView(drive: drive, folder: file.id, name: file.name, inheritsPosters: true)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: Layout.maxWidth).frame(maxWidth: .infinity)
+            .padding(.horizontal, Layout.gutter).padding(.vertical, 16)
+        }
+        #if os(iOS)
+        .refreshable { await load() }
+        #endif
     }
 
     @ViewBuilder private func row(_ file: CloudFile, in files: [CloudFile]) -> some View {

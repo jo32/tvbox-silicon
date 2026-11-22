@@ -382,6 +382,7 @@
 "Hide Details" = "Hide Details";
 "Show as List" = "Show as List";
 "Show as Grid" = "Show as Grid";
+"Show as Posters" = "Show as Posters";
 "%lld of %lld sources responded" = "%lld of %lld sources responded";
 "First-time setup can take a few minutes. Keep the app open." = "First-time setup can take a few minutes. Keep the app open.";
 "This source requires Android features that the plugin runtime does not support yet." = "This source requires Android features that the plugin runtime does not support yet.";
@@ -832,6 +833,8 @@
 "Unable to Load Songs" = "Unable to Load Songs";
 "Shuffle" = "Shuffle";
 "Skipped “%@”: %@" = "Skipped “%@”: %@";
+"Music channels are busy. Trying again in %@ seconds." = "Music channels are busy. Trying again in %@ seconds.";
+"Not answering lately, so other sources are asked first until %@." = "Not answering lately, so other sources are asked first until %@.";
 "No LX Music source could play it." = "No LX Music source could play it.";
 "Songs" = "Songs";
 "Albums" = "Albums";
@@ -2288,3 +2291,4 @@
 "%@ refused the video." = "%@ refused the video.";
 "%@ refused the video (%@)." = "%@ refused the video (%@).";
 "%@ didn't respond. Make sure it is on and on the same network." = "%@ didn't respond. Make sure it is on and on the same network.";
+"%d new" = "%d new";

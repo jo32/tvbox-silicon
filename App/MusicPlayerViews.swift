@@ -214,7 +214,7 @@ struct MusicNowPlaying: View {
             }
             if inQueue {
                 Button { music.next() } label: { Image(systemName: "forward.fill") }
-                    .controlButton().disabled(music.queue?.hasNext != true).accessibilityLabel(L10n.text("Next"))
+                    .controlButton().disabled(!music.canAdvance).accessibilityLabel(L10n.text("Next"))
             }
             #if os(tvOS)
             if !inQueue {
