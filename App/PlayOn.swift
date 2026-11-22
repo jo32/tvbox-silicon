@@ -179,15 +179,30 @@ struct PlayOnButton: View {
     @Environment(Store.self) private var store
     @State private var sending: String?
     @State private var failure: (receiver: String, message: String)?
+    private var cast: CastController { .shared }
     #if os(iOS)
     @State private var airPlay = AirPlayPicker()
     #endif
 
     var body: some View {
         Menu {
-            Section(L10n.text("Play On")) {
-                ForEach(browser.receivers) { receiver in
-                    Button { send(to: receiver) } label: { Label(receiver.name, systemImage: Self.symbol(receiver.kind)) }
+            if !browser.receivers.isEmpty {
+                Section(L10n.text("Play On")) {
+                    ForEach(browser.receivers) { receiver in
+                        Button { send(to: receiver) } label: { Label(receiver.name, systemImage: Self.symbol(receiver.kind)) }
+                    }
+                }
+            }
+            // TVs and boxes that take DLNA casts (#749).
+            if !cast.devices.isEmpty {
+                Section(L10n.text("TVs (DLNA)")) {
+                    ForEach(cast.devices) { device in
+                        Button { send(to: device) } label: { Label(device.name, systemImage: "tv") }
+                    }
+                    Button { cast.refresh(force: true) } label: {
+                        Label(cast.searching ? L10n.text("Searching for TVs…") : L10n.text("Search for TVs Again"), systemImage: "arrow.clockwise")
+                    }
+                    .disabled(cast.searching)
                 }
             }
             #if os(iOS)
@@ -241,6 +256,16 @@ struct PlayOnButton: View {
                 send(to: receiver)
             }
         }
+        // `-qaCast <TV name>`: casts to the DLNA TV of exactly that name (never "any": real TVs and speakers answer too) once a search finds it, once per launch, after `-qaPlayOnDelay`.
+        .onChange(of: cast.devices, initial: true) { _, devices in
+            guard let wanted = UserDefaults.standard.string(forKey: "qaCast"), !Self.qaSent,
+                  let device = devices.first(where: { $0.name == wanted }) else { return }
+            Self.qaSent = true
+            Task {
+                try? await Task.sleep(for: .seconds(UserDefaults.standard.double(forKey: "qaPlayOnDelay")))
+                send(to: device)
+            }
+        }
         #if os(iOS)
         // `-qaAirPlay 1`: opens the AirPlay picker from here a few seconds in.
         .task {
@@ -256,10 +281,31 @@ struct PlayOnButton: View {
     #endif
 
     #if os(macOS)
-    /// An Apple TV while every device found is one; a screen once a Mac is among them.
-    private var symbol: String { browser.receivers.allSatisfy { $0.kind == .tv } ? "appletv" : "play.tv" }
+    /// An Apple TV while every device found is one; a screen once a Mac or a DLNA TV is among them.
+    private var symbol: String { cast.devices.isEmpty && browser.receivers.allSatisfy { $0.kind == .tv } ? "appletv" : "play.tv" }
     #endif
     private static func symbol(_ kind: PlayOn.Kind) -> String { kind == .tv ? "appletv" : "display" }
+
+    /// Casts to a DLNA TV from where it plays here, then pauses here (#749).
+    private func send(to device: DLNADevice) {
+        let playing = session.castChannel ?? channel
+        let position = session.isLive ? nil : session.player.currentTime().seconds
+        // The show and the episode, unless the episode's name already says which show.
+        let show = store.catalog(for: channel)?.video.name ?? ""
+        let title = show.isEmpty || playing.name.contains(show) ? (playing.name.isEmpty ? show : playing.name)
+            : playing.name.isEmpty ? show : show + " · " + playing.name
+        sending = device.name
+        Task {
+            defer { sending = nil }
+            do {
+                try await cast.cast(playing, title: title, from: position, to: device)
+                sent(device.name)
+            } catch {
+                Diagnostics.shared.failure("cast", "send model=\(device.model)", error)
+                failure = (device.name, error.localizedDescription)
+            }
+        }
+    }
 
     private func send(to receiver: PlayOnBrowser.Receiver) {
         let position = session.isLive ? nil : session.player.currentTime().seconds

@@ -342,18 +342,45 @@ public struct LXMusicProvider: MusicStreamAlternatives {
         let key = LXSourceKey.key(platform)
         let info = LXSourceKey.musicInfo(songID: songID, platform: platform, track: track)
         var failure = MusicProviderError.noResource
-        for source in sources where !skipping.contains(Self.upstream(source)) {
+        for source in await ordered(for: platform) where !skipping.contains(Self.upstream(source)) {
             guard let declared = source.sources[key],
                   let tier = LXSourceKey.quality(from: declared, for: quality) else { continue }
             try Task.checkCancellation()
             try await health.admit("lx")
+            let healthKey = Self.healthKey(source, platform), started = Date()
             do {
                 let url = try await runtime.musicURL(source, library: library, key: key, quality: tier, musicInfo: info)
+                await health.record(healthKey, error: nil)
                 return ResolvedMusicStream(url: url, claimedQuality: tier, upstream: Self.upstream(source))
-            } catch { failure = MusicProviderError(error) }
+            } catch {
+                failure = MusicProviderError(error)
+                // The channel's time ran out while this source was still thinking: that is this source's timeout, and the
+                // sources after it never got a turn.
+                let slow = failure == .cancelled && Date().timeIntervalSince(started) >= Self.slowAnswer
+                await health.record(healthKey, error: slow ? .timeout : failure)
+                if failure == .cancelled { throw failure }
+            }
         }
         throw failure
     }
 
-    static func upstream(_ source: LXSource) -> String { "lx:" + source.info.name }
+    public static func upstream(_ source: LXSource) -> String { "lx:" + source.info.name }
+
+    /// One source's own record for one catalog, so a source that keeps failing or timing out is asked after the others
+    /// for a while (#1374), as a channel is: two failures in a row start a cooldown of a minute that doubles up to
+    /// half an hour, and its first answer clears it.
+    public static func healthKey(_ source: LXSource, _ platform: MusicPlatform) -> String {
+        MusicHealth.key(upstream(source), platform, .resolve)
+    }
+    /// A source cut off after this long was the slow one, not the listener skipping.
+    static let slowAnswer: TimeInterval = 6
+
+    /// The sources in the listener's order, those cooling down after the others.
+    func ordered(for platform: MusicPlatform) async -> [LXSource] {
+        var ready: [LXSource] = [], cooling: [LXSource] = []
+        for source in sources {
+            if await health.failing(Self.healthKey(source, platform)) { cooling.append(source) } else { ready.append(source) }
+        }
+        return ready + cooling
+    }
 }

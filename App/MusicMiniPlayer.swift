@@ -58,7 +58,7 @@ struct MusicMiniPlayer: View {
                         .contentTransition(.symbolEffect(.replace))
                 }
                 if !inline {
-                    button("forward.fill", label: "Next") { music.next() }.disabled(music.queue?.hasNext != true)
+                    button("forward.fill", label: "Next") { music.next() }.disabled(!music.canAdvance)
                     // Closes the strip without opening Now Playing first; Continue Playing keeps the song.
                     button("xmark", label: "Stop") { music.stop() }.font(.body).foregroundStyle(.secondary)
                 }

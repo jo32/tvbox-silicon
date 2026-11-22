@@ -6,7 +6,7 @@ import TVCore
 /// - `-qaMangaRepo 1` adds Venera's source list; `-qaMangaInstall <url,url>` installs those sources first.
 /// - `-qaMangaSource <key>` picks the source the page browses; `-qaMangaMode vertical|leftToRight|rightToLeft` the reader.
 /// - `-qaMangaPage sources|repo|search|results` opens that page (`-qaMangaQuery <text>` searches; results: one source's).
-/// - `-qaMangaOpen <source>@<comic id>` opens a comic; with `-qaMangaRead 1 [-qaMangaChapter <n>]` it reads; `-qaMangaChrome 1` keeps the reader bars up.
+/// - `-qaMangaOpen <source>@<comic id>` opens a comic; with `-qaMangaRead 1 [-qaMangaChapter <n>] [-qaMangaStartPage <n>]` it reads; `-qaMangaChrome 1` keeps the reader bars up.
 /// - `-qaMangaScrollTop 1` scrolls the vertical reader up to its Previous Chapter button after it opens.
 /// - `-qaMangaHTTPLog 1` (or MANGA_HTTP_LOG=1 for TVBoxProbe) logs each source request's status as `[mangahttp]`.
 @MainActor enum MangaQA {

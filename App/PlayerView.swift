@@ -1547,6 +1547,16 @@ private struct DesktopPlaybackView: View {
     /// Devices with Yingxia open, for the Play On button; and the one the video was sent to.
     @State private var tvBrowser = PlayOnBrowser()
     @State private var playingOn: String?
+
+    /// Stops the TV and carries on here from where it reached (#749).
+    private func playHereFromTV() {
+        Task {
+            let reached = await CastController.shared.stop()
+            playingOn = nil
+            if let reached, reached > 0, !session.isLive { await session.player.seek(to: CMTime(seconds: reached, preferredTimescale: 600)) }
+            if session.paused { session.togglePlayback() }
+        }
+    }
     @State private var importsSubtitleFile = false
     @State private var asksSubtitleAddress = false
     @State private var searchesSubtitles = false
@@ -1584,9 +1594,13 @@ private struct DesktopPlaybackView: View {
                 }
                 if let playingOn {
                     Color.black
-                    PlayOnPlaceholder(receiver: playingOn) {
-                        self.playingOn = nil
-                        if session.paused { session.togglePlayback() }
+                    if CastController.shared.device?.name == playingOn {
+                        CastPanel { playHereFromTV() }
+                    } else {
+                        PlayOnPlaceholder(receiver: playingOn) {
+                            self.playingOn = nil
+                            if session.paused { session.togglePlayback() }
+                        }
                     }
                 }
             }
@@ -1613,9 +1627,13 @@ private struct DesktopPlaybackView: View {
             }
         }
         .onChange(of: showsChrome) { _, value in setTrafficLights(visible: value) }
-        .onAppear { floats = window.level == .floating; idle.attach(window); tvBrowser.start() }
+        .onAppear { floats = window.level == .floating; idle.attach(window); tvBrowser.start(); CastController.shared.refresh() }
         // Played here again (Space, say): the other device no longer has it to itself.
-        .onChange(of: session.paused) { _, paused in if !paused { playingOn = nil } }
+        .onChange(of: session.paused) { _, paused in
+            guard !paused else { return }
+            playingOn = nil
+            if CastController.shared.device != nil { Task { await CastController.shared.stop() } }
+        }
         .playerEpisodesSheet(isPresented: $showsEpisodes, channel: channel)
         .playerChannelsSheet(isPresented: $showsChannels, channel: channel, session: session)
         .sheet(isPresented: $showsDanmakuList) {
@@ -1625,7 +1643,7 @@ private struct DesktopPlaybackView: View {
         .sheet(isPresented: $showsDanmakuSettings) {
             CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet()
         }
-        .onDisappear { idle.detach(); tvBrowser.stop() }
+        .onDisappear { idle.detach(); tvBrowser.stop(); CastController.shared.detach() }
         .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, search: $searchesSubtitles, subtitles: session.externalSubtitles)
         // A subtitle file dropped on the video shows on it (#576).
         .dropDestination(for: URL.self) { urls, _ in
@@ -1672,7 +1690,7 @@ private struct DesktopPlaybackView: View {
                         .playerBarButton()
                 }
                 .buttonStyle(.plain)
-                if !tvBrowser.receivers.isEmpty {
+                if !tvBrowser.receivers.isEmpty || !CastController.shared.devices.isEmpty {
                     PlayOnButton(channel: channel, session: session, browser: tvBrowser) { receiver in
                         session.player.pause()
                         playingOn = receiver

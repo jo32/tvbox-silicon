@@ -72,10 +72,20 @@ private struct MusicNativePlayer: UIViewControllerRepresentable {
         var items: [UIMenuElement] = []
         if let queue = music.queue, queue.tracks.count > 1 {
             let previous = queue.hasPrevious ? queue.tracks[queue.index - 1].title : nil
-            let next = queue.hasNext ? queue.tracks[queue.index + 1].title : nil
+            // With the whole queue repeating, the last song is followed by the first.
+            let next = queue.hasNext ? queue.tracks[queue.index + 1].title : music.canAdvance ? queue.tracks.first?.title : nil
             items.append(UIAction(title: L10n.text("Previous"), subtitle: previous, image: UIImage(systemName: "backward.end.fill")) { _ in music.previous() })
             items.append(UIAction(title: L10n.text("Next"), subtitle: next, image: UIImage(systemName: "forward.end.fill"),
                                   attributes: next == nil ? [.disabled] : []) { _ in music.next() })
+        }
+        if let queue = music.queue, !queue.tracks.isEmpty {
+            let repeats = MusicRepeatMode.allCases.map { mode in
+                UIAction(title: mode.label, state: music.repeatMode == mode ? .on : .off) { _ in music.setRepeat(mode) } as UIMenuElement
+            }
+            items.append(UIMenu(title: music.repeatMode.label, image: UIImage(systemName: music.repeatMode.symbol), children: repeats))
+            if queue.tracks.count > 1 {
+                items.append(UIAction(title: L10n.text("Shuffle"), image: UIImage(systemName: "shuffle"), state: music.shuffled ? .on : .off) { _ in music.toggleShuffle() })
+            }
         }
         if let lyrics = music.lyrics, !lyrics.lines.isEmpty {
             let binding = $showsLyrics

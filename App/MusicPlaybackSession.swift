@@ -79,6 +79,8 @@ typealias MusicTrack = TVCore.MusicTrack
     private var observers: [NSObjectProtocol] = []
     private var timeObserver: Any?
     private var consecutiveFailures = 0
+    /// The song that waited for channels' request budgets, and how often (#1309).
+    private var budgetWaits: (track: String, count: Int)?
     /// When the song was asked for, and when its current stream was set, for the time-to-sound log.
     private var requestedAt = Date()
     private var streamSetAt: Date?
@@ -225,10 +227,15 @@ typealias MusicTrack = TVCore.MusicTrack
 
     var canAdvance: Bool { queue?.hasNext == true || repeatMode == .all && (queue?.tracks.count ?? 0) > 1 }
 
-    func cycleRepeat() {
-        repeatMode = repeatMode.next
-        UserDefaults.standard.set(repeatMode.rawValue, forKey: "musicRepeat")
+    func cycleRepeat() { setRepeat(repeatMode.next) }
+
+    func setRepeat(_ mode: MusicRepeatMode) {
+        repeatMode = mode
+        UserDefaults.standard.set(mode.rawValue, forKey: "musicRepeat")
     }
+
+    /// For the Lock Screen and the car, which say which they want rather than toggling.
+    func setShuffle(_ on: Bool) { if on != shuffled { toggleShuffle() } }
 
     /// Shuffles the songs after this one, or puts them back in their order.
     func toggleShuffle() {
@@ -575,10 +582,27 @@ typealias MusicTrack = TVCore.MusicTrack
 
     /// No channel could play the song: skip it while a queue goes on, otherwise stop and say why.
     private func songFailed(_ error: MusicProviderError, run: UUID, message: String? = nil, channelsAsked: Bool = true) {
+        // Channels out of requests answer again within a minute or so: ask again for this song then, rather than
+        // skipping songs that would fail the same way until the queue stops (#1309). Not a failure of the song.
+        if let id = track?.id {
+            let waited = budgetWaits?.track == id ? budgetWaits?.count ?? 0 : 0
+            if let wait = MusicQueue.budgetWait(after: error, retries: waited) {
+                budgetWaits = (id, waited + 1)
+                notice = L10n.text("Music channels are busy. Trying again in %@ seconds.", String(Int(wait.rounded(.up))))
+                Diagnostics.shared.record(.info, "music", "waiting \(Int(wait.rounded(.up)))s for request budgets")
+                phase = .resolving
+                Task { [weak self] in
+                    try? await Task.sleep(for: .seconds(wait))
+                    guard let self, self.generation == run else { return }
+                    self.loadCurrent(at: nil)
+                }
+                return
+            }
+        }
         consecutiveFailures += 1
         // With no channel at all, the next song fails the same way: stop and say so. LX Music sources that had nothing
         // for this song may have the next one (#1206).
-        if let queue, queue.skipsAfterFailure(error, consecutive: consecutiveFailures, channelsAsked: channelsAsked), let title = track?.title {
+        if let queue, queue.skipsAfterFailure(error, consecutive: consecutiveFailures, channelsAsked: channelsAsked, wraps: repeatMode == .all), let title = track?.title {
             let reason = error == .noChannels ? L10n.text("No LX Music source could play it.") : message ?? error.localizedDescription
             notice = L10n.text("Skipped “%@”: %@", title, reason)
             Diagnostics.shared.record(.warning, "music", "skipped after: \(error.detail)")
@@ -683,7 +707,7 @@ typealias MusicTrack = TVCore.MusicTrack
                 Diagnostics.shared.record(.info, "music", String(format: "sound after %.1fs (stream %.1fs) at %.0fs", Date().timeIntervalSince(requestedAt), Date().timeIntervalSince(set), position))
             }
             if !recordedPlay, let track {
-                recordedPlay = true; consecutiveFailures = 0; notice = nil
+                recordedPlay = true; consecutiveFailures = 0; budgetWaits = nil; notice = nil
                 // A source's episodes are kept under their book in the playback history instead.
                 if let collection = queue?.collection { library.recordPlay(collection) } else if track.source == nil { library.recordPlay(track) }
             }
@@ -741,24 +765,6 @@ typealias MusicTrack = TVCore.MusicTrack
 
 enum MusicNowPlayingPanel: Hashable { case lyrics, queue }
 
-enum MusicRepeatMode: String {
-    case off, all, one
-    var next: MusicRepeatMode {
-        switch self {
-        case .off: .all
-        case .all: .one
-        case .one: .off
-        }
-    }
-    var symbol: String { self == .one ? "repeat.1" : "repeat" }
-    var label: String {
-        switch self {
-        case .off: L10n.text("Repeat Off")
-        case .all: L10n.text("Repeat All")
-        case .one: L10n.text("Repeat One")
-        }
-    }
-}
 
 /// Background time for work that must finish while the app is off screen and silent. Held until `release`, or until
 /// the system ends it (about 30 seconds).
