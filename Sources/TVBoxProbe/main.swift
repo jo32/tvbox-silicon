@@ -198,6 +198,12 @@ import TVCore
             for line in try await NovelRuntime.benchmark(sources, sessions: args.count > 3 ? Int(args[3]) ?? 16 : 16) { print(line) }
             return
         }
+        if args[1] == "--novel-audio", args.count >= 3 {
+            // --novel-audio <list> [keyword]: each audio (听书) source searched, its first chapter's sound found and fetched.
+            setvbuf(stdout, nil, _IONBF, 0)
+            try await novelAudioCheck(args[2], keyword: args.count > 3 ? args[3] : "凡人修仙传")
+            return
+        }
         if args[1] == "--novel-read", args.count >= 5 {
             // --novel-read <list> <source key or name> <keyword>: one Legado source, verbosely.
             setvbuf(stdout, nil, _IONBF, 0)
@@ -1144,6 +1150,58 @@ extension Probe {
         let reachable = stages.filter { !$0.key.contains("/") }.values.reduce(0, +)
         print(String(format: "ok %d of %d (%.0f%%); of the %d whose site answers from here: %.0f%%", stages["ok"] ?? 0, sources.count, Double(stages["ok"] ?? 0) * 100 / Double(max(sources.count, 1)),
                      reachable, Double(stages["ok"] ?? 0) * 100 / Double(max(reachable, 1))))
+    }
+
+    static func novelAudioCheck(_ list: String, keyword: String) async throws {
+        novelProfiles()
+        let sources = try await novelList(list).filter(\.isAudio)
+        print("\(sources.count) audio sources; checking with \(keyword)")
+        var stages: [String: Int] = [:]
+        await withTaskGroup(of: (NovelSource, String, String).self) { group in
+            for source in sources {
+                group.addTask {
+                    let result = await novelAudioRun(source, keyword: keyword)
+                    await NovelRuntime.shared.reset(source.key)
+                    let site = await novelReach(source)
+                    return (source, result.stage == "ok" || site == "up" ? result.stage : result.stage + "/" + site, result.line)
+                }
+            }
+            for await (source, stage, line) in group {
+                stages[stage, default: 0] += 1
+                print("\(stage.padding(toLength: 18, withPad: " ", startingAt: 0)) \(source.name) <\(source.key.prefix(50))> \(line)")
+            }
+        }
+        print("summary:", stages.sorted { $0.value > $1.value }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))
+    }
+
+    static func novelAudioRun(_ source: NovelSource, keyword: String) async -> (stage: String, line: String) {
+        let runtime = NovelRuntime.shared
+        func short(_ error: Error) -> String { error.localizedDescription.replacingOccurrences(of: "\n", with: " ").prefix(140).description }
+        guard source.searchable else { return ("no-search", "") }
+        var books: [NovelBook] = []
+        do { books = try await runtime.search(source, keyword: keyword, page: 1) } catch { return ("search-error", short(error)) }
+        let object = (try? JSONSerialization.jsonObject(with: Data(source.json.utf8))) as? [String: Any]
+        let rules = (object?["ruleSearch"] as? [String: Any]) ?? ((object?["ruleSearch"] as? String).flatMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) } as? [String: Any])
+        if books.isEmpty, let check = (rules?["checkKeyWord"] as? String)?.trimmingCharacters(in: .whitespaces), !check.isEmpty, check != keyword {
+            do { books = try await runtime.search(source, keyword: check, page: 1) } catch { return ("search-error", short(error)) }
+        }
+        guard let picked = books.first else { return ("search-empty", "") }
+        var book = picked
+        do { book = try await runtime.details(source, book: picked) } catch { return ("info-error", short(error)) }
+        let chapters: [NovelChapter]
+        do { chapters = try await runtime.chapters(source, book: book) } catch { return ("toc-error", short(error)) }
+        guard let first = chapters.first(where: { !$0.isVolume }) else { return ("toc-empty", "") }
+        let sound: NovelAudio
+        do { sound = try await NovelListening.playable(runtime.audio(source, book: book, chapter: first)) } catch { return ("audio-error", "\(book.name) \(chapters.count)ch: \(short(error))") }
+        guard let url = URL(string: sound.url) else { return ("audio-badurl", sound.url) }
+        var request = URLRequest(url: url, timeoutInterval: 15)
+        for (name, value) in sound.headers { request.setValue(value, forHTTPHeaderField: name) }
+        request.setValue("bytes=0-4095", forHTTPHeaderField: "Range")
+        guard let (data, response) = try? await URLSession.shared.data(for: request), let http = response as? HTTPURLResponse else { return ("fetch-failed", sound.url) }
+        let type = http.value(forHTTPHeaderField: "Content-Type") ?? "?"
+        let head = data.prefix(4).map { String(format: "%02x", $0) }.joined()
+        let audio = type.hasPrefix("audio") || type.contains("mpegurl") || type.contains("octet") || ["494433", "fff"].contains { head.hasPrefix($0) } || head.hasPrefix("0000")
+        return (http.statusCode < 400 && audio ? "ok" : "not-audio", "\(book.name) \(chapters.count)ch \(http.statusCode) \(type) \(head) \(sound.url.prefix(90))")
     }
 
     /// --novel-read <list> <source key or name> <keyword>: one source, verbosely.

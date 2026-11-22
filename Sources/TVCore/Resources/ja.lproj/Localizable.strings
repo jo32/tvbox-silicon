@@ -2279,6 +2279,12 @@
 "Danmaku Servers" = "弾幕サーバー";
 "Add another server to move or remove this one." = "このサーバーを移動または削除するには、別のサーバーを追加してください。";
 "Find Danmaku…" = "弾幕を探す…";
+"Listen" = "聴く";
+"This book's source is no longer in your book sources." = "この本のソースは書籍ソースにもうありません。";
+"The chapter has no audio." = "この章には音声がありません。";
+"This audio needs a request the player cannot make." = "この音声にはプレーヤーが送れないリクエストが必要です。";
+"Ximalaya didn't give this chapter's audio. Try again later." = "喜馬拉雅からこの章の音声を取得できませんでした。しばらくしてからもう一度お試しください。";
+"This chapter is paid on Ximalaya and can't be played here." = "この章は喜馬拉雅の有料コンテンツのため、ここでは再生できません。";
 "TVs (DLNA)" = "テレビ（DLNA）";
 "Searching for TVs…" = "テレビを検索中…";
 "Search for TVs Again" = "テレビを再検索";
