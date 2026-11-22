@@ -1,6 +1,10 @@
 import SwiftUI
 import AVKit
 import VideoToolbox
+import CoreImage
+#if os(iOS)
+import Photos
+#endif
 import TVCore
 
 struct PlaybackView: View {
@@ -11,7 +15,21 @@ struct PlaybackView: View {
     #endif
     @Environment(\.dismiss) private var dismiss
     @Environment(Store.self) private var store
+    #if os(iOS)
+    @State private var session: PlaybackSession
+    @State private var pip: PictureInPicture
+
+    /// A video still playing in Picture in Picture after its player closed comes back to the new player as it is.
+    init(channel: Channel, watch: WatchPlayback? = nil) {
+        self.channel = channel
+        self.watch = watch
+        let parked = FloatingPlayback.shared.parked(for: channel)
+        _session = State(initialValue: parked?.session ?? PlaybackSession())
+        _pip = State(initialValue: parked?.pip ?? PictureInPicture())
+    }
+    #else
     @State private var session = PlaybackSession()
+    #endif
     @State private var showsChrome = true
     @State private var hideTask: Task<Void, Never>?
     #if os(iOS)
@@ -90,7 +108,7 @@ struct PlaybackView: View {
                     .transition(.opacity)
             }
             #elseif os(iOS)
-            MobilePlayerView(channel: channel, session: session, showsDanmaku: $showsDanmaku, upscalesVideo: $upscalesVideo, smoothsVideo: $smoothsVideo,
+            MobilePlayerView(channel: channel, session: session, pip: pip, showsDanmaku: $showsDanmaku, upscalesVideo: $upscalesVideo, smoothsVideo: $smoothsVideo,
                              waiting: waitContent, chromeVisible: chromeVisible, toggleChrome: toggleChrome, poke: poke, hold: holdChrome,
                              close: exit, layout: playerLayout, toggleFullScreen: watch.map { _ in toggleFullScreen })
             #else
@@ -154,11 +172,28 @@ struct PlaybackView: View {
         #endif
         #endif
         .onAppear {
-            startCatalogPlayback(session, channel: channel, store: store); showOnStart()
             #if os(iOS)
+            if FloatingPlayback.shared.take(session) {
+                // Back from Picture in Picture: the video plays on where it is.
+                startCatalogPlayback(session, channel: channel, store: store, resuming: true)
+            } else {
+                FloatingPlayback.shared.end()
+                startCatalogPlayback(session, channel: channel, store: store)
+            }
+            showOnStart()
             ExternalDisplay.shared.attach(session.player)
+            #else
+            startCatalogPlayback(session, channel: channel, store: store); showOnStart()
             #endif
         }
+        #if os(iOS)
+        // Picture in Picture started: the player screen goes, and the video plays on in the window over the app.
+        .onChange(of: pip.floating) { _, floating in
+            guard floating, session.error == nil else { return }
+            FloatingPlayback.shared.park(channel, session: session, pip: pip, store: store)
+            if let watch { watch.leave() } else { dismiss() }
+        }
+        #endif
         #if DEBUG && os(iOS)
         // `-qaWatchFullScreen <seconds>`: a watch page's player goes full screen after that long, for screenshots.
         .task(id: watch != nil) {
@@ -176,7 +211,12 @@ struct PlaybackView: View {
         .onChange(of: showsDanmaku) { _, value in session.catalogDanmaku.enabled = value }
         .onChange(of: session.catalogDanmaku.enabled) { _, value in showsDanmaku = value }
         .onDisappear {
-            hideTask?.cancel(); store.cancelEpisodeSelection(); session.stop()
+            hideTask?.cancel(); store.cancelEpisodeSelection()
+            #if os(iOS)
+            if !FloatingPlayback.shared.holds(session) { session.stop() }
+            #else
+            session.stop()
+            #endif
             #if os(iOS)
             ExternalDisplay.shared.detach(session.player)
             PlayerOrientation.release()
@@ -1538,6 +1578,8 @@ private struct DesktopPlaybackView: View {
     @State private var fillsFrame = false
     @State private var floats = false
     @State private var idle = ChromeIdle()
+    /// Save Frame in the options (#1342).
+    @State private var frames = FrameSaver()
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
     @State private var showsDanmakuList = false
     @State private var showsDanmakuSettings = false
@@ -1577,6 +1619,7 @@ private struct DesktopPlaybackView: View {
                 SubtitleOverlay(cues: session.subtitles, fills: fillsFrame).ignoresSafeArea()
                 SourceSkipButton(session: session)
                 DesktopBoostLabel(session: session)
+                FrameSaverNotice(saver: frames, top: 60)
                 // Under the title bar's buttons and AVKit's row of controls below them (macOS 26), so it stays put while
                 // they come and go.
                 if showsPlaybackInfo && session.error == nil && session.showsPicture && playingOn == nil {
@@ -1720,7 +1763,7 @@ private struct DesktopPlaybackView: View {
     }
 
     private var optionsMenu: some View {
-        DesktopOptionsMenu(channel: channel, session: session, window: window, hasDanmaku: !session.danmaku.isEmpty, fillsFrame: $fillsFrame, floats: $floats,
+        DesktopOptionsMenu(channel: channel, session: session, window: window, frames: frames, hasDanmaku: !session.danmaku.isEmpty, fillsFrame: $fillsFrame, floats: $floats,
                            showsDanmakuList: $showsDanmakuList, showsDanmakuSettings: $showsDanmakuSettings,
                            importsSubtitleFile: $importsSubtitleFile, asksSubtitleAddress: $asksSubtitleAddress, searchesSubtitles: $searchesSubtitles)
             .equatable()
@@ -1741,6 +1784,7 @@ private struct DesktopOptionsMenu: View, Equatable {
     let channel: Channel
     let session: PlaybackSession
     let window: PlaybackWindow
+    let frames: FrameSaver
     /// Whether there are comments at all, not the comments: those change with every message.
     let hasDanmaku: Bool
     @Binding var fillsFrame: Bool
@@ -1758,7 +1802,7 @@ private struct DesktopOptionsMenu: View, Equatable {
 
     /// The bindings and settings reach the menu by themselves; only these decide what it is built from.
     nonisolated static func == (a: Self, b: Self) -> Bool {
-        a.session === b.session && a.window === b.window && a.hasDanmaku == b.hasDanmaku && a.channel == b.channel
+        a.session === b.session && a.window === b.window && a.frames === b.frames && a.hasDanmaku == b.hasDanmaku && a.channel == b.channel
     }
 
     var body: some View {
@@ -1788,6 +1832,9 @@ private struct DesktopOptionsMenu: View, Equatable {
                     .accessibilityIdentifier("player.danmakuSettings")
                 Button(L10n.text("Danmaku List…")) { showsDanmakuList = true }.disabled(!hasDanmaku)
             }
+            // The frame on screen, to the Pictures folder at the video's own size (#1342).
+            Button(L10n.text("Save Frame")) { frames.save(session.player, title: channel.name) }
+                .accessibilityIdentifier("player.saveFrame")
             Divider()
             Button(L10n.text("Enter / Exit Full Screen")) { window.toggleFullScreen(nil) }
             Button(L10n.text("Retry")) { startCatalogPlayback(session, channel: channel, store: store) }
@@ -1970,7 +2017,9 @@ extension Store {
 }
 
 /// Shared setup leaves the native AVKit controls and Bilibili resolution intact.
-@MainActor private func startCatalogPlayback(_ session: PlaybackSession, channel: Channel, store: Store) {
+/// `resuming`: the session already plays the channel (back from Picture in Picture), and only its links to the store are
+/// made again.
+@MainActor private func startCatalogPlayback(_ session: PlaybackSession, channel: Channel, store: Store, resuming: Bool = false) {
     session.history = store.playbackHistory
     // The video page's TMDB match names the video for subtitle sources (#576 M2).
     session.externalSubtitles.tmdbKey = { [weak store] channel in
@@ -1979,7 +2028,7 @@ extension Store {
     session.skipDefaults = store.playbackDefaults
     session.catalogDanmaku.enabled = UserDefaults.standard.object(forKey: DanmakuPreference.key) == nil
         || UserDefaults.standard.bool(forKey: DanmakuPreference.key)
-    session.start(channel)
+    if !resuming { session.start(channel) }
     session.onPlaybackEnded = { [weak store] in
         guard let store, store.autoPlayNext else { return }
         if let file = store.nextFile(after: channel) { store.playing = file }
@@ -2380,6 +2429,170 @@ struct PlayerChaptersView: View {
             }
         }
         .frame(width: 320)
+    }
+}
+#endif
+
+#if !os(tvOS)
+/// Save Frame in the player's options (#1342, #1332): the frame on screen at the video's own size, to Photos on iPhone and
+/// iPad and to the Pictures folder on the Mac, for a wallpaper, say. It is taken from the decoded picture, not the
+/// screen, so the controls, danmaku and subtitles stay out of it, and an HDR frame is saved as HDR.
+@MainActor @Observable final class FrameSaver {
+    enum Outcome: Equatable {
+        case saved(String)
+        case failed(String)
+    }
+    private(set) var busy = false
+    /// Said over the picture for a moment.
+    private(set) var outcome: Outcome?
+    @ObservationIgnored private var clearTask: Task<Void, Never>?
+
+    func save(_ player: AVPlayer, title: String) {
+        guard !busy, let item = player.currentItem else { return }
+        busy = true
+        let position = item.currentTime().seconds
+        Task {
+            var result = Outcome.failed(L10n.text("Couldn't save this frame"))
+            if let frame = await Self.frame(of: item, paused: player.rate == 0) {
+                nonisolated(unsafe) let pixels = frame
+                let encoded = await Task.detached(priority: .userInitiated) { Self.encode(pixels) }.value
+                if let encoded { result = await Self.keep(encoded.data, named: Self.fileName(title, at: position, type: encoded.type)) }
+            }
+            busy = false
+            show(result)
+        }
+    }
+
+    private func show(_ result: Outcome) {
+        withAnimation(.easeOut(duration: 0.2)) { outcome = result }
+        clearTask?.cancel()
+        clearTask = Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.3)) { outcome = nil }
+        }
+    }
+
+    /// The frame showing now, from an output added for this one ask and taken off again. A paused video decodes nothing
+    /// new for it, so the same moment is asked for once more.
+    private static func frame(of item: AVPlayerItem, paused: Bool) async -> CVPixelBuffer? {
+        let output = AVPlayerItemVideoOutput(outputSettings: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange,
+            // The source's own colors and range (HDR too), not a conversion to HD video's.
+            AVVideoAllowWideColorKey: true,
+        ])
+        item.add(output)
+        defer { item.remove(output) }
+        for attempt in 0..<20 {
+            if let buffer = output.copyPixelBuffer(forItemTime: item.currentTime(), itemTimeForDisplay: nil) { return buffer }
+            if attempt == 2, paused { await item.seek(to: item.currentTime(), toleranceBefore: .zero, toleranceAfter: .zero) }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return nil
+    }
+
+    /// HEIF in the frame's own color space: 10 bits for HDR (PQ or HLG), else 8. JPEG where HEIF can't be written.
+    nonisolated private static func encode(_ buffer: CVPixelBuffer) -> (data: Data, type: String)? {
+        let image = CIImage(cvPixelBuffer: buffer)
+        let context = CIContext()
+        let transfer = CVBufferCopyAttachment(buffer, kCVImageBufferTransferFunctionKey, nil) as? String
+        let hdr: CFString? = transfer == kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ as String ? CGColorSpace.itur_2100_PQ
+            : transfer == kCVImageBufferTransferFunction_ITU_R_2100_HLG as String ? CGColorSpace.itur_2100_HLG : nil
+        if let hdr, let space = CGColorSpace(name: hdr), let data = try? context.heif10Representation(of: image, colorSpace: space, options: [:]) {
+            return (data, "heic")
+        }
+        let space = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        let quality = [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.95]
+        if let data = context.heifRepresentation(of: image, format: .RGBA8, colorSpace: space, options: quality) { return (data, "heic") }
+        return context.jpegRepresentation(of: image, colorSpace: space, options: quality).map { ($0, "jpg") }
+    }
+
+    /// `Title 12.34.heic`: the video's name and where in it the frame is.
+    private static func fileName(_ title: String, at seconds: Double, type: String) -> String {
+        let name = title.components(separatedBy: CharacterSet(charactersIn: "/:\\")).joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        guard seconds.isFinite, seconds >= 0 else { return "\(name.isEmpty ? "Yingxia" : name).\(type)" }
+        let whole = Int(seconds)
+        let time = whole >= 3600 ? String(format: "%d.%02d.%02d", whole / 3600, whole / 60 % 60, whole % 60) : String(format: "%d.%02d", whole / 60, whole % 60)
+        return "\(name.isEmpty ? "Yingxia" : name) \(time).\(type)"
+    }
+
+    #if os(iOS)
+    private static func keep(_ data: Data, named name: String) async -> Outcome {
+        let access = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        guard access == .authorized || access == .limited else { return .failed(L10n.text("Allow Yingxia to add photos in Settings, then try again.")) }
+        do {
+            try await addToPhotos(data, named: name)
+            return .saved(L10n.text("Saved to Photos"))
+        } catch {
+            return .failed(L10n.text("Couldn't save this frame"))
+        }
+    }
+
+    /// Photos runs the change on its own queue: the closure must not belong to the main actor.
+    nonisolated private static func addToPhotos(_ data: Data, named name: String) async throws {
+        try await PHPhotoLibrary.shared().performChanges {
+            let options = PHAssetResourceCreationOptions()
+            options.originalFilename = name
+            PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: options)
+        }
+    }
+    #else
+    private static func keep(_ data: Data, named name: String) async -> Outcome {
+        guard let folder = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first else {
+            return .failed(L10n.text("Couldn't save this frame"))
+        }
+        var url = folder.appending(path: name)
+        let stem = url.deletingPathExtension().lastPathComponent, type = url.pathExtension
+        var copy = 2
+        while FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+            url = folder.appending(path: "\(stem) \(copy).\(type)"); copy += 1
+        }
+        do {
+            try data.write(to: url, options: .atomic)
+            return .saved(L10n.text("Saved to Pictures"))
+        } catch {
+            return .failed(L10n.text("Couldn't save this frame"))
+        }
+    }
+    #endif
+}
+
+/// What Save Frame did, over the picture for a moment.
+struct FrameSaverNotice: View {
+    let saver: FrameSaver
+    var top: CGFloat = 24
+
+    var body: some View {
+        Group {
+            if let outcome = saver.outcome {
+                let (text, symbol) = switch outcome {
+                case .saved(let text): (text, "checkmark.circle.fill")
+                case .failed(let text): (text, "exclamationmark.triangle.fill")
+                }
+                Label(text, systemImage: symbol)
+                    .font(.subheadline.weight(.semibold)).lineLimit(2).multilineTextAlignment(.center)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .glassSurface(.regular, in: Capsule())
+                    .environment(\.colorScheme, .dark)
+                    .padding(.horizontal, 24)
+                    .padding(.top, top)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("player.frameSaved")
+            }
+        }
+        #if os(iOS)
+        .sensoryFeedback(trigger: saver.outcome) { _, new in
+            switch new {
+            case .saved?: .success
+            case .failed?: .error
+            case nil: nil
+            }
+        }
+        #endif
     }
 }
 #endif

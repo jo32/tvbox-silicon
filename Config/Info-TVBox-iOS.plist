@@ -79,7 +79,7 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Connect to the local media and subscription services you configure, and find Yingxia on your other devices.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Saves a sign-in code to Photos, so the app on this phone can scan it.</string>
+	<string>Adds frames you save from videos, and sign-in codes, to Photos.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

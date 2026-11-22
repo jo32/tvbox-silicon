@@ -2322,3 +2322,6 @@
 "%@ refused the video (%@)." = "%@ refused the video (%@).";
 "%@ didn't respond. Make sure it is on and on the same network." = "%@ didn't respond. Make sure it is on and on the same network.";
 "%d new" = "%d new";
+"Save Frame" = "Save Frame";
+"Saved to Pictures" = "Saved to Pictures";
+"Couldn't save this frame" = "Couldn't save this frame";

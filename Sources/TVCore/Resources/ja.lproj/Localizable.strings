@@ -2322,3 +2322,6 @@
 "%@ refused the video (%@)." = "%@ がビデオの再生を拒否しました（%@）。";
 "%@ didn't respond. Make sure it is on and on the same network." = "%@ から応答がありません。電源が入っていて、同じネットワークにあることを確認してください。";
 "%d new" = "新着 %d 話";
+"Save Frame" = "フレームを保存";
+"Saved to Pictures" = "「ピクチャ」に保存しました";
+"Couldn't save this frame" = "このフレームを保存できませんでした";

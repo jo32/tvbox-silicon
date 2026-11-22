@@ -51,6 +51,8 @@ struct PlayerEpisodesSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var tmdb = TMDBLookup()
     @State private var selectedFlag: String?
+    /// The page of a long series shown (#1464); nil for the one with the episode playing.
+    @State private var page: Int?
     /// The same 倒序 as the video's page.
     @AppStorage("episodesReversed") private var reversesEpisodes = false
     /// The viewer chose an episode here: the sheet closes once it plays.
@@ -106,35 +108,44 @@ struct PlayerEpisodesSheet: View {
         let current = playing.historyContext?.episode(in: episodes)
         let flag = selectedFlag.flatMap { flags.contains($0) ? $0 : nil } ?? current?.flag ?? flags.first ?? ""
         let items = episodes.filter { $0.flag == flag }
+        // A long series in pages of 50 or 100, opening at the one with the episode playing (#1464).
+        let pages = EpisodePages.pages(count: items.count)
+        let index = current.flatMap { current in items.firstIndex { $0.id == current.id } }
+        let shownPage = pages.isEmpty ? nil : min(page ?? EpisodePages.page(holding: index, in: pages), pages.count - 1)
         // TMDB's stills when its season lines up with most of the episodes and it has pictures, as on the page. While
         // TMDB hasn't answered, tiles with the episodes' numbers, also as on the page, so its stills fade into the same
         // tiles: even the answer this device kept arrives a moment after the sheet opens, and rows turning into tiles
         // then drew every tile at a row's width, shrinking, over the others.
         let tiles = !tmdb.episodeTiles(items).isEmpty || (tmdbPending(catalog) && items.count <= 60)
-        return ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    header(catalog, count: items.count)
-                    if flags.count > 1 {
-                        SourceStrip(items: flags.map { .init(id: $0, name: $0.isEmpty ? L10n.text("Play") : $0) }, selection: flag) {
-                            selectedFlag = $0
-                        }
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                header(catalog, count: items.count)
+                if flags.count > 1 {
+                    SourceStrip(items: flags.map { .init(id: $0, name: $0.isEmpty ? L10n.text("Play") : $0) }, selection: flag) {
+                        selectedFlag = $0; page = nil
+                    }
+                    .contentMargins(.horizontal, 16, for: .scrollContent).scrollClipDisabled()
+                    .padding(.horizontal, -16)
+                }
+                if let shownPage {
+                    EpisodePageTabs(pages: pages, selection: shownPage, reversed: reversesEpisodes) { page = $0 }
                         .contentMargins(.horizontal, 16, for: .scrollContent).scrollClipDisabled()
                         .padding(.horizontal, -16)
-                    }
-                    if let error = store.episodeError {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .font(.footnote).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    grid(items, tiles: tiles, labels: catalog.labels, details: catalog.details, current: current?.id)
                 }
-                .padding(16)
+                if let error = store.episodeError {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                grid(shownPage.map { Array(items[pages[$0]]) } ?? items, tiles: tiles, labels: catalog.labels, details: catalog.details, current: current?.id)
             }
-            .onAppear { if let id = current?.id { proxy.scrollTo(id, anchor: .center) } }
-            // The layout changed under the episode playing (TMDB had nothing to show): back to it.
-            .onChange(of: tiles) { _, _ in if let id = current?.id { proxy.scrollTo(id, anchor: .center) } }
+            .padding(16)
         }
+        // At the episode playing, as the page's All sheet opens (#1173): `scrollTo` from onAppear came before the lazy
+        // grid was laid out and left a long series at episode 1 (#1380). A new layout under it (TMDB had nothing to
+        // show) or another line opens at it again.
+        .modifier(OpensAtEpisode(current?.id))
+        .id("\(flag)|\(tiles)|\(shownPage ?? -1)")
     }
 
     /// The title and how many episodes the line has, with 倒序 beside them as on the video's page.
@@ -200,6 +211,7 @@ struct PlayerEpisodesSheet: View {
                 .contextMenu { if labels[episode.id] != nil { Text(episode.name) } }
             }
         }
+        .scrollTargetLayout()
         // Tiles that turn into rows or cards change at once: morphing, each tile shrank or grew across the others.
         .animation(nil, value: showsStills)
     }
@@ -226,6 +238,23 @@ struct PlayerEpisodesSheet: View {
                                         source: TMDBMatch.SourceRef(key: site.key, name: site.name))
         guard !TMDBMatch.labeledNotOnTMDB(request) else { tmdb.skip(); return }
         await tmdb.run(key: key, request: request)
+    }
+}
+
+/// The pages of a long series (#1464) as a row of tabs, in the list's order: 1–50, 51–100…
+struct EpisodePageTabs: View {
+    let pages: [Range<Int>]
+    let selection: Int
+    /// 倒序: the last page first.
+    let reversed: Bool
+    let select: (Int) -> Void
+
+    var body: some View {
+        let order = reversed ? Array(pages.indices.reversed()) : Array(pages.indices)
+        SourceStrip(items: order.map { .init(id: String($0), name: EpisodePages.title(pages[$0])) }, selection: String(selection)) {
+            if let index = Int($0) { select(index) }
+        }
+        .accessibilityIdentifier("episodes.pages")
     }
 }
 

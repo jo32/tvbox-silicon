@@ -11,6 +11,9 @@ import TVCore
 struct MobilePlayerView: View {
     let channel: Channel
     let session: PlaybackSession
+    /// The player screen's: it goes with the session when the video carries on in Picture in Picture after the screen
+    /// closes (`FloatingPlayback`).
+    let pip: PictureInPicture
     @Binding var showsDanmaku: Bool
     @Binding var upscalesVideo: Bool
     @Binding var smoothsVideo: Bool
@@ -32,13 +35,14 @@ struct MobilePlayerView: View {
     @Environment(Store.self) private var store
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @State private var pip = PictureInPicture()
     @State private var clock = PlayerClock()
     @State private var tracks = MediaTracks()
     @State private var importsSubtitleFile = false
     @State private var asksSubtitleAddress = false
     @State private var searchesSubtitles = false
     @State private var nowPlaying = VideoNowPlaying()
+    /// Save Frame in the options (#1342).
+    @State private var frames = FrameSaver()
     /// Fit, Fill or Stretch; kept for the next video, as other players do.
     @AppStorage(VideoFill.key) private var videoFill = VideoFill.fit
     /// The time and battery in the full-screen controls (#996).
@@ -154,6 +158,8 @@ struct MobilePlayerView: View {
             swipeLabel
             levelLabel
             episodeFailureLabel
+            FrameSaverNotice(saver: frames, top: inline ? (chromeVisible ? 58 : 10) : chromeVisible ? 112 : 24)
+                .animation(.easeOut(duration: 0.2), value: chromeVisible)
             if let playingOn {
                 if CastController.shared.device?.name == playingOn {
                     CastPanel { playHereFromTV() }
@@ -832,6 +838,10 @@ struct MobilePlayerView: View {
             } label: { Label(L10n.text("Picture Size"), systemImage: "aspectratio") }
             .pickerStyle(.menu)
             .accessibilityIdentifier("player.videoFill")
+            // The frame on screen, to Photos at the video's own size (#1342, #1332).
+            Button { frames.save(session.player, title: channel.name) } label: { Label(L10n.text("Save Frame"), systemImage: "camera") }
+                .disabled(!session.showsPicture || frames.busy || playingOn != nil)
+                .accessibilityIdentifier("player.saveFrame")
             Toggle(L10n.text("Show Video Info"), isOn: $showsPlaybackInfo)
             if !inline && !(horizontalSizeClass == .compact && verticalSizeClass == .regular) {
                 Toggle(L10n.text("Show Time and Battery"), isOn: $showsStatus)
@@ -1476,22 +1486,26 @@ private struct PictureGestures: UIViewRepresentable {
     }
 }
 
-/// The picture in an AVPlayerLayer, which Picture in Picture takes over while it runs.
+/// The view of an AVPlayerLayer.
+final class PlayerLayerUIView: UIView {
+    override class var layerClass: AnyClass { AVPlayerLayer.self }
+    var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+}
+
+/// The picture in an AVPlayerLayer, which Picture in Picture takes over while it runs. A player screen opened again
+/// for a video still floating in Picture in Picture takes the layer it left: the window returns into it.
 private struct PlayerLayerView: UIViewRepresentable {
     let player: AVPlayer
     let gravity: AVLayerVideoGravity
     let pip: PictureInPicture
-    final class LayerView: UIView {
-        override class var layerClass: AnyClass { AVPlayerLayer.self }
-        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
-    }
-    func makeUIView(context: Context) -> LayerView {
-        let view = LayerView()
+    func makeUIView(context: Context) -> PlayerLayerUIView {
+        if let kept = pip.layerView, kept.superview == nil, kept.playerLayer.player === player { return kept }
+        let view = PlayerLayerUIView()
         view.playerLayer.player = player
-        pip.attach(view.playerLayer)
+        pip.attach(view)
         return view
     }
-    func updateUIView(_ view: LayerView, context: Context) {
+    func updateUIView(_ view: PlayerLayerUIView, context: Context) {
         if view.playerLayer.player !== player { view.playerLayer.player = player }
         view.playerLayer.videoGravity = gravity
     }
@@ -1596,11 +1610,17 @@ struct PlayerStatusBadge: View {
     let supported = AVPictureInPictureController.isPictureInPictureSupported()
     private(set) var possible = false
     private(set) var active = false
+    /// The window is up (from its start until it closes): the player screen can go, and the video plays on in it.
+    private(set) var floating = false
+    /// The view of the layer the window shows, kept for a player screen opened again while it floats.
+    @ObservationIgnored private(set) var layerView: PlayerLayerUIView?
     @ObservationIgnored private var controller: AVPictureInPictureController?
     @ObservationIgnored private var observation: NSKeyValueObservation?
 
-    func attach(_ layer: AVPlayerLayer) {
+    func attach(_ view: PlayerLayerUIView) {
         guard supported else { return }
+        let layer = view.playerLayer
+        if controller?.isPictureInPictureActive != true { layerView = view }
         if let controller {
             // A new layer for the same player: Picture in Picture follows the one on screen.
             if controller.contentSource?.playerLayer !== layer, !controller.isPictureInPictureActive {
@@ -1624,15 +1644,110 @@ struct PlayerStatusBadge: View {
         if controller.isPictureInPictureActive { controller.stopPictureInPicture() } else { controller.startPictureInPicture() }
     }
 
+    /// Brings the video back from the window into its player.
+    func stop() {
+        if controller?.isPictureInPictureActive == true { controller?.stopPictureInPicture() }
+    }
+
     nonisolated func pictureInPictureControllerWillStartPictureInPicture(_ controller: AVPictureInPictureController) {
         Task { @MainActor [weak self] in self?.active = true }
     }
+    nonisolated func pictureInPictureControllerDidStartPictureInPicture(_ controller: AVPictureInPictureController) {
+        Task { @MainActor [weak self] in self?.floating = true }
+    }
     nonisolated func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {
-        Task { @MainActor [weak self] in self?.active = false }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            active = false; floating = false
+            FloatingPlayback.shared.stopped(self)
+        }
+    }
+    /// The window's button that returns to the app: the player screen opens again if it was closed.
+    nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController,
+                                               restoreUserInterfaceForPictureInPictureStopWithCompletionHandler completionHandler: @escaping (Bool) -> Void) {
+        nonisolated(unsafe) let done = completionHandler
+        Task { @MainActor [weak self] in
+            guard let self else { return done(true) }
+            FloatingPlayback.shared.restore(self) { done($0) }
+        }
     }
     nonisolated func pictureInPictureController(_ controller: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
         let detail = Diagnostics.describe(error)
         Task { @MainActor in Diagnostics.shared.record(.warning, "player", "Picture in Picture failed: \(detail)") }
+    }
+}
+
+/// A video playing on in Picture in Picture after its player screen closed, as in the TV app (#1239, #1442): starting
+/// Picture in Picture takes the player screen away, so the app is there to use under the window, and the window's
+/// button that returns to the app opens the player again where the video is. Closing the window ends the video, and so
+/// does another video starting.
+@MainActor final class FloatingPlayback {
+    static let shared = FloatingPlayback()
+    struct Parked {
+        let channel: Channel
+        let session: PlaybackSession
+        let pip: PictureInPicture
+    }
+    private(set) var parked: Parked?
+    private weak var store: Store?
+    /// The window's return to the app, waiting for the player screen to open.
+    private var restoring: ((Bool) -> Void)?
+
+    /// The player screen is closing while its window floats: the session plays on in it.
+    func park(_ channel: Channel, session: PlaybackSession, pip: PictureInPicture, store: Store) {
+        if let parked, parked.session !== session { end() }
+        parked = Parked(channel: channel, session: session, pip: pip)
+        self.store = store
+        // Nothing comes next by itself while no player is open: the next episode would open the player over the app.
+        session.onPlaybackEnded = nil; session.onAdvance = nil; session.upcomingEpisode = nil; session.playsOn = { false }
+    }
+
+    func holds(_ session: PlaybackSession) -> Bool { parked?.session === session }
+
+    /// The video floating, for a player screen opening on `channel`.
+    func parked(for channel: Channel) -> Parked? { parked?.channel == channel ? parked : nil }
+
+    /// A player screen opened with the floating session: it is the screen's again. False for any other session.
+    func take(_ session: PlaybackSession) -> Bool {
+        guard let parked, parked.session === session else { return false }
+        self.parked = nil
+        // Opened from the app rather than the window's button: the video comes back from the window.
+        if restoring == nil { parked.pip.stop() }
+        finishRestoring()
+        return true
+    }
+
+    /// The window's return button: the player opens again on the video. With the player still open there's nothing to do.
+    func restore(_ pip: PictureInPicture, done: @escaping (Bool) -> Void) {
+        guard let parked, parked.pip === pip, let store else { return done(true) }
+        restoring?(true)
+        restoring = done
+        store.playing = parked.channel
+        // The window waits for the answer: it is given once the player is up, or after a moment whatever happened.
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            self?.finishRestoring()
+        }
+    }
+
+    private func finishRestoring() {
+        restoring?(true)
+        restoring = nil
+    }
+
+    /// The window closed. Without a player to return to, the video ends there.
+    func stopped(_ pip: PictureInPicture) {
+        guard let parked, parked.pip === pip, restoring == nil else { return }
+        end()
+    }
+
+    /// Ends the floating video, if any.
+    func end() {
+        guard let parked else { return }
+        self.parked = nil
+        finishRestoring()
+        parked.pip.stop()
+        parked.session.stop()
     }
 }
 
