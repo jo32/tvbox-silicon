@@ -249,6 +249,21 @@ After building the macOS target into `build/Verify-mac`, `bash Scripts/test-play
 
 Host regression checks: `Scripts/test-java-host.sh` and `python3 Scripts/test-script-host.py`. Run these after preparing the corresponding runtimes.
 
+### iPad hardware keyboard
+
+The iPad player accepts Space to play/pause, Left/Right to seek 10 seconds, Shift-Left/Right to seek 60 seconds,
+Up/Down to adjust system volume, and M to toggle mute. Holding Right temporarily uses the
+touch-and-hold speed (2× when that setting is Off); releasing restores the chosen playback speed without seeking.
+The active player takes keyboard focus automatically. Text fields, sheets, menus, system shortcuts, Picture in Picture
+and casting keep their own input. Locking the player disables these shortcuts. Leaving the player, changing videos,
+pausing, losing focus or leaving the foreground cancels a pending or active hold. Live streams do not seek or boost.
+
+`PlaybackKeyboardTests` checks repeat handling, seek increments, hold/release and interrupted keys.
+The iPad `LibraryUITests` keyboard cases exercise playback, seeking, mute, text entry in a sheet, and focus restoration
+against the local QA video (`Scripts/test-library-ui.sh <iPad simulator UUID>`).
+The existing Back button's Escape shortcut is unchanged. Escape did not dispatch in the headless simulator,
+including with the new responder disabled; it still needs hardware validation, alongside system volume and held keys.
+
 ### Runtime diagnostic logs
 
 Open Settings → Diagnostic Logs, or choose View Logs on the JAR runtime page. The log viewer filters by level and keyword, can pause live refresh, refreshes manually, and exports; on Mac it can also open the log folder directly. The page shows the latest 1,000 entries from the current run; exports include the history retained on disk.

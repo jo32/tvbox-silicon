@@ -43,11 +43,14 @@ targets:
     sources:
       - path: ../../App
       - path: ../../Config/iOS/Assets.xcassets
+      - path: ../../Runtime/AppleRuntime/Native/ApplePython.c
       - path: RuntimeUnavailable.c
     dependencies:
       - package: TVCore
     settings:
       SWIFT_VERSION: '6.0'
+      # Match the production app's SwiftUI actor-check setting (project.yml).
+      OTHER_SWIFT_FLAGS: $(inherited) -Xfrontend -disable-dynamic-actor-isolation
       PRODUCT_BUNDLE_IDENTIFIER: com.tvbox.yingxia.qa.library
       TARGETED_DEVICE_FAMILY: '1,2'
       ENABLE_DEBUG_DYLIB: NO

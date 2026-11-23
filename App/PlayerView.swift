@@ -133,6 +133,10 @@ struct PlaybackView: View {
                         .accessibilityValue("\(session.danmaku.count)")
                     Text("Playback position").accessibilityIdentifier("player.qa.position")
                         .accessibilityValue("\(session.position)")
+                    Text("Playback paused").accessibilityIdentifier("player.qa.paused")
+                        .accessibilityValue(session.paused ? "true" : "false")
+                    Text("Playback muted").accessibilityIdentifier("player.qa.muted")
+                        .accessibilityValue(session.muted ? "true" : "false")
                 }
                 .font(.caption2).foregroundStyle(.white)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)

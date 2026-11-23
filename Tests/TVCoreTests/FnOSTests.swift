@@ -39,7 +39,10 @@ import Testing
 
         // A library: films, series and folders; live channels aren't files.
         let films = CloudFile.arranged(try await client.list(server, id: "mdb:lib1"))
-        #expect(films.map(\.name) == ["Home", "庆余年", "Arrival (2016).mp4"] && films.map(\.id) == ["Directory:fv_1", "TV:tv1", "Movie:m1"])
+        // Finder ordering depends on the Mac's language; Chinese can sort before Latin names.
+        #expect(films.count == 3 && films.prefix(2).allSatisfy(\.isFolder))
+        #expect(Dictionary(uniqueKeysWithValues: films.map { ($0.id, $0.name) })
+                == ["Directory:fv_1": "Home", "TV:tv1": "庆余年", "Movie:m1": "Arrival (2016).mp4"])
         #expect(films.allSatisfy { $0.isFolder || CloudFilesDrive.alist(server).plays($0) })
         let body = try #require(FnOSStub.lastBody)
         #expect(body["ancestor_guid"] as? String == "lib1" && body["parent_guid"] == nil && body["page"] as? Int == 1)

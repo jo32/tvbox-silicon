@@ -26,7 +26,11 @@ for language in languages:
 source = tables["en"]
 # Context-specific lookup keys intentionally differ from their visible English labels.
 english_labels = {"Filter Type": "Type", "Filter Genre": "Genre", "Catalog Series": "TV Shows",
-                  "Chinese Script": "Script", "Original Text": "Original"}
+                  "Chinese Script": "Script", "Original Text": "Original", "Following Show": "Following",
+                  "Following Calendar": "My Shows", "Episode %@ / %@": "Ep %@ of %@", "Unfollowed Show": "Unfollowed",
+                  "New episodes show up in Following Calendar": "New episodes show up in My Shows",
+                  "Pull request: merged": "Merged", "Feedback status: closed": "Closed", "Feedback status: open": "Open",
+                  "Pro until %@": "Until %@"}
 for language, table in tables.items():
     assert table.keys() == source.keys(), f"Mismatched keys: {language}"
     for key, value in table.items():
@@ -37,6 +41,8 @@ for language, table in tables.items():
 for folder in (root / "App", root / "Sources/TVCore"):
     for path in folder.glob("*.swift"):
         for literal in re.findall(r'L10n.text\(("(?:[^"\\]|\\.)*")', path.read_text()):
+            # Swift spells Unicode escapes as \u{201C}; normalize them before JSON decodes the quoted literal.
+            literal = re.sub(r'\\u\{([0-9a-fA-F]+)\}', lambda match: json.dumps(chr(int(match[1], 16)))[1:-1], literal)
             key = json.loads(literal)
             assert key in source, f"Missing localization: {path.name}: {key}"
 print(f"Verified {len(source)} keys in {len(languages)} languages, including format arguments and Swift references.")

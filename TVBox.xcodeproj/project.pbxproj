@@ -126,6 +126,7 @@
 		3ED898D04E49F78F4DD57109 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31D1816B8ED53D49478FD843 /* MoreView.swift */; };
 		3F2E64D0FAA75B78026F115A /* RuntimeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2075419FEF0E1C161A31A9F0 /* RuntimeView.swift */; };
 		3F7AA2351B3C009CDDE41C4F /* DanmakuServiceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F144846346C7C8F52CE20C /* DanmakuServiceSettingsView.swift */; };
+		41947E313A2EF1F270864F02 /* MobilePlayerKeyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25859CA4F71FAAD347B667B7 /* MobilePlayerKeyboard.swift */; };
 		41FB20C693CBD87C569DCC18 /* DanmakuSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91355F9A371572D91388ED36 /* DanmakuSettingsView.swift */; };
 		455119517E0FFF07B799E98C /* MusicPlayerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2CD4FD12F4DD3AAE1F8592A /* MusicPlayerViews.swift */; };
 		45ECD9E8EE6888748AC6D46E /* ThirdPartyNotices.txt in Resources */ = {isa = PBXBuildFile; fileRef = A3012FC04D8DAD058B1A5168 /* ThirdPartyNotices.txt */; };
@@ -183,6 +184,7 @@
 		633726D6D289775DF1910809 /* MobilePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08D7BF6713A8519BEED17EE3 /* MobilePlayer.swift */; };
 		635ADE133C7284D6EF1677C8 /* OpenJDK.txt in Resources */ = {isa = PBXBuildFile; fileRef = BD71FD8B3E72803C426D91CC /* OpenJDK.txt */; };
 		6448A88D8C564A2130BC0E1C /* SubtitleStyleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D091093D028D2FD9AB72B79C /* SubtitleStyleView.swift */; };
+		66C02BCC212FB53FC37DBDB3 /* MobilePlayerKeyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25859CA4F71FAAD347B667B7 /* MobilePlayerKeyboard.swift */; };
 		67E6A7CC3D496FB46C963AC7 /* FeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 559683A9A4BDFA11A4A9FE67 /* FeedbackView.swift */; };
 		68952BF47707079971D26F5A /* DiscoverDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28110209CF4DBB819A2F3C74 /* DiscoverDetailView.swift */; };
 		68DA47E6E8C42E446AC17E45 /* SubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE1212366D71C455D6EAE5E4 /* SubtitleOverlay.swift */; };
@@ -282,6 +284,7 @@
 		9FD7B6E48A98DE1D6DDBC3E3 /* SubtitleStyleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D091093D028D2FD9AB72B79C /* SubtitleStyleView.swift */; };
 		A02125568B4CAB3B33994198 /* DiscoverBrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846F0B59129DEB3329D2C5DD /* DiscoverBrowseView.swift */; };
 		A0219F9153C87470719727CC /* DiscoverFollowing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51C2CCCBC2CD58D4D132DE14 /* DiscoverFollowing.swift */; };
+		A08A0C19F92F97F51356A06C /* MobilePlayerKeyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25859CA4F71FAAD347B667B7 /* MobilePlayerKeyboard.swift */; };
 		A125C19021DB4DC7DFADCBDA /* MangaSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E5BAF6D854E7CE5DA362D0 /* MangaSourcesView.swift */; };
 		A149AE9D183C5FB64D411761 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = ADB3063A14E368A71892DCEE /* Assets.xcassets */; };
 		A1DE1070F1A8B76CC5EE65C0 /* SubtitleSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30744245D01C4D31B1F3ABD8 /* SubtitleSourcesView.swift */; };
@@ -451,6 +454,7 @@
 		226C6E62CA6E50C8609C1EF3 /* PlayOn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayOn.swift; sourceTree = "<group>"; };
 		2278608DE7AE2FEA27EB51C9 /* TVBox-macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "TVBox-macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		235375CC2420B76124FCEBC2 /* MusicView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicView.swift; sourceTree = "<group>"; };
+		25859CA4F71FAAD347B667B7 /* MobilePlayerKeyboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePlayerKeyboard.swift; sourceTree = "<group>"; };
 		26F144846346C7C8F52CE20C /* DanmakuServiceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DanmakuServiceSettingsView.swift; sourceTree = "<group>"; };
 		28110209CF4DBB819A2F3C74 /* DiscoverDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverDetailView.swift; sourceTree = "<group>"; };
 		2A16B4FE6CB6B1946969D5BE /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
@@ -721,6 +725,7 @@
 				6FF91FA9A33437C335253F10 /* MangaView.swift */,
 				6858B2841CFD277A56DB119C /* MemberCard.swift */,
 				08D7BF6713A8519BEED17EE3 /* MobilePlayer.swift */,
+				25859CA4F71FAAD347B667B7 /* MobilePlayerKeyboard.swift */,
 				31D1816B8ED53D49478FD843 /* MoreView.swift */,
 				3F678BCB59DDEA3AD1329B11 /* MusicDownloadsView.swift */,
 				3D442D4FB2D2EB656FBBCB2C /* MusicMacBrowse.swift */,
@@ -1341,6 +1346,7 @@
 				2C6D239842DA86D6B4908569 /* MangaView.swift in Sources */,
 				5E0A739AAF2AA786DBC9E023 /* MemberCard.swift in Sources */,
 				74CAE612DB09FB67343FE8B4 /* MobilePlayer.swift in Sources */,
+				A08A0C19F92F97F51356A06C /* MobilePlayerKeyboard.swift in Sources */,
 				3ED898D04E49F78F4DD57109 /* MoreView.swift in Sources */,
 				556C5D64B9A97EFB038F0747 /* MusicDownloadsView.swift in Sources */,
 				E8A225058F954A38DDAE052A /* MusicMacBrowse.swift in Sources */,
@@ -1465,6 +1471,7 @@
 				097AD9094FA7E5DAD5E5391A /* MangaView.swift in Sources */,
 				3C61E485B73CBA13B9C441D3 /* MemberCard.swift in Sources */,
 				633726D6D289775DF1910809 /* MobilePlayer.swift in Sources */,
+				41947E313A2EF1F270864F02 /* MobilePlayerKeyboard.swift in Sources */,
 				545F29F3323EB776FED1A94E /* MoreView.swift in Sources */,
 				C8FF9AAC3D77145A907102ED /* MusicDownloadsView.swift in Sources */,
 				3A6251EF1A83DCA0F38A1235 /* MusicMacBrowse.swift in Sources */,
@@ -1591,6 +1598,7 @@
 				545262EEE6798D31D5522FF5 /* MangaView.swift in Sources */,
 				275BDA8CFC2A2E03B4CEC397 /* MemberCard.swift in Sources */,
 				7F3C4D27F233572323FAA9A4 /* MobilePlayer.swift in Sources */,
+				66C02BCC212FB53FC37DBDB3 /* MobilePlayerKeyboard.swift in Sources */,
 				0120B7D5C3369E0579B5D973 /* MoreView.swift in Sources */,
 				C505C16C48F9D001FF7BF6AE /* MusicDownloadsView.swift in Sources */,
 				7C7B124A35FE1D0AA83DCE0B /* MusicMacBrowse.swift in Sources */,

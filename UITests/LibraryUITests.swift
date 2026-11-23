@@ -1,6 +1,56 @@
 import XCTest
 
 final class LibraryUITests: XCTestCase {
+    #if os(iOS)
+    @MainActor func testHardwareKeyboardPlaybackControls() {
+        continueAfterFailure = false
+        let app = launch(extra: ["-qaResetHistory", "1", "-qaResetPlayerSettings", "1", "-qaStartAt", "90", "-qaPlayerControls", "0"])
+        let position = app.staticTexts["player.qa.position"]
+        let paused = app.staticTexts["player.qa.paused"]
+        let muted = app.staticTexts["player.qa.muted"]
+        wait(position, "value.doubleValue >= %@.doubleValue", "90")
+        app.typeKey(.space, modifierFlags: [])
+        wait(paused, "value == %@", "true")
+        app.buttons["player.lock"].tap()
+        app.typeKey(.space, modifierFlags: [])
+        XCTAssertEqual(paused.value as? String, "true")
+        app.buttons["player.lock"].tap()
+        let start = Double(position.value as? String ?? "") ?? 0
+        app.typeKey(.rightArrow, modifierFlags: [])
+        wait(position, "value.doubleValue >= %@.doubleValue", String(start + 9))
+        app.typeKey(.leftArrow, modifierFlags: [.shift])
+        wait(position, "value.doubleValue <= %@.doubleValue", String(start - 49))
+        app.typeKey("m", modifierFlags: [])
+        wait(muted, "value == %@", "true")
+        app.typeKey("m", modifierFlags: [])
+        wait(muted, "value == %@", "false")
+        app.typeKey(.space, modifierFlags: [])
+        wait(paused, "value == %@", "false")
+    }
+
+    @MainActor func testHardwareKeyboardLeavesSheetTextEntryAlone() {
+        continueAfterFailure = false
+        let app = launch(extra: ["-qaResetHistory", "1", "-qaResetPlayerSettings", "1", "-qaStartAt", "90"])
+        let paused = app.staticTexts["player.qa.paused"]
+        let muted = app.staticTexts["player.qa.muted"]
+        wait(app.staticTexts["player.qa.position"], "value.doubleValue >= %@.doubleValue", "90")
+        app.typeKey(.space, modifierFlags: [])
+        wait(paused, "value == %@", "true")
+        app.buttons["player.options"].tap(); app.buttons["player.skip"].tap()
+        let intro = app.textFields["player.skip.intro"]
+        XCTAssertTrue(intro.waitForExistence(timeout: 10))
+        intro.tap()
+        intro.typeText("01:30 m")
+        app.typeKey(.leftArrow, modifierFlags: [])
+        XCTAssertEqual(intro.value as? String, "01:30 m")
+        app.buttons["取消"].tap()
+        wait(paused, "value == %@", "true")
+        wait(muted, "value == %@", "false")
+        app.typeKey(.space, modifierFlags: [])
+        wait(paused, "value == %@", "false")
+    }
+    #endif
+
     @MainActor private func launch(_ section: String = "history", page: String? = "play-source:qa-standard", extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-qaSection", section, "-qaSubscription", "http://127.0.0.1:8776/config.json", "-qaIsolatedData", "1",

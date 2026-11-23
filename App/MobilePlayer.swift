@@ -35,6 +35,7 @@ struct MobilePlayerView: View {
     @Environment(Store.self) private var store
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
     @State private var clock = PlayerClock()
     @State private var tracks = MediaTracks()
     @State private var importsSubtitleFile = false
@@ -70,6 +71,7 @@ struct MobilePlayerView: View {
     }
     /// Touching and holding the picture plays faster while the finger is down, or after sliding down kept it.
     @State private var boost: SpeedBoost?
+    @State private var keyboardBoost = false
     @State private var holding = false
     @AppStorage(SpeedBoost.key) private var holdSpeed = SpeedBoost.standard
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
@@ -94,6 +96,7 @@ struct MobilePlayerView: View {
     /// The system's volume slider, on screen only around a slide, which keeps the system's own volume overlay away.
     @State private var systemVolume = MusicVolumeSlider.SystemSlider()
     @State private var mountsVolume = false
+    @State private var keyboardVolume: Double?
     /// The screen's brightness before the first slide changed it, put back when the player closes.
     @State private var brightnessBefore: CGFloat?
     /// Full screen, the controls and every touch on the picture can be locked, so a hand on the screen doesn't skip or
@@ -153,6 +156,7 @@ struct MobilePlayerView: View {
             .accessibilityHidden(true)
             if mountsVolume {
                 MusicVolumeSlider.HiddenVolumeView(system: systemVolume).frame(width: 1, height: 1).opacity(0.01).allowsHitTesting(false)
+                    .onAppear { if let keyboardVolume { systemVolume.set(keyboardVolume) } }
             }
             boostLabel
             skippedLabel
@@ -215,7 +219,7 @@ struct MobilePlayerView: View {
         .onChange(of: nowPlayingState, initial: true) { nowPlaying.update(title: channel.name, session: session) }
         .onChange(of: nowPlayingArtwork, initial: true) { _, artwork in nowPlaying.show(artwork, session: session) }
         // Pausing ends the faster speed in the session; another episode or quality plays at the chosen one.
-        .onChange(of: session.boost == nil) { _, ended in if ended { boost = nil } }
+        .onChange(of: session.boost == nil) { _, ended in if ended { boost = nil; keyboardBoost = false } }
         .onChange(of: clock.item) { endBoost() }
         .onChange(of: store.resolvingEpisode?.name) { _, name in
             if let name { askedEpisode = name; showEpisodeFailure(nil) }
@@ -235,6 +239,9 @@ struct MobilePlayerView: View {
         .statusBarHidden(!inline)
         // A failure, or a watch page's player back from full screen, has controls to reach.
         .onChange(of: session.error != nil || inline) { _, unlock in if unlock { setLocked(false) } }
+        .modifier(MobilePlayerKeyboard(enabled: keyboardEnabled, canPlay: showsTransport,
+                                       canSeek: seekable, canBoost: boosts && !holding, item: clock.item.map(ObjectIdentifier.init),
+                                       action: keyboardAction))
         .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, search: $searchesSubtitles, subtitles: session.externalSubtitles)
         .playerEpisodesSheet(isPresented: $showsEpisodes, channel: channel)
         .playerChannelsSheet(isPresented: $showsChannels, channel: channel, session: session)
@@ -246,6 +253,48 @@ struct MobilePlayerView: View {
             CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet().environment(store)
         }
         .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).playerSheet().environment(store) }
+    }
+
+    // MARK: Hardware keyboard
+
+    private var keyboardEnabled: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad && scenePhase == .active && !locked && !pip.active && playingOn == nil
+            && !importsSubtitleFile && !asksSubtitleAddress && !searchesSubtitles && !showsEpisodes && !showsChannels
+            && !showsDanmakuList && !showsDanmakuSettings && !showsSkip
+    }
+
+    private func keyboardAction(_ action: PlaybackKeyboard.Action) {
+        switch action {
+        case .playPause: session.togglePlayback(); poke()
+        case .seek(let seconds): session.skip(seconds); poke()
+        case .mute: session.player.isMuted.toggle(); poke()
+        case .beginBoost:
+            guard boosts, !holding else { return }
+            let started = SpeedBoost(rate: SpeedBoost.isOn(holdSpeed) ? holdSpeed : SpeedBoost.standard)
+            keyboardBoost = true
+            boost = started
+            session.setBoost(Float(started.rate))
+            hideChrome()
+        case .endBoost: if keyboardBoost { endBoost() }
+        case .volume(let delta):
+            // Use the same system volume as a swipe, including the first press before MPVolumeView is mounted.
+            let current = level.flatMap { $0.volume ? $0.value : nil } ?? Double(AVAudioSession.sharedInstance().outputVolume)
+            let value = min(1, max(0, current + delta))
+            keyboardVolume = value
+            mountsVolume = true
+            systemVolume.set(value)
+            session.player.isMuted = false
+            level = (true, current, value)
+            hideChrome()
+            levelTask?.cancel()
+            levelTask = Task {
+                try? await Task.sleep(for: .seconds(0.8))
+                guard !Task.isCancelled else { return }
+                level = nil; mountsVolume = false; keyboardVolume = nil
+            }
+        case .waitForHold: break
+        }
+        nowPlaying.update(title: channel.name, session: session)
     }
 
     /// What the Lock Screen's Now Playing shows, besides the position the system runs on from the rate.
@@ -338,6 +387,7 @@ struct MobilePlayerView: View {
         case .began(let slide):
             let volume = slide == .volume
             guard volume || screen != nil else { return }
+            keyboardVolume = nil
             let start = volume ? Double(AVAudioSession.sharedInstance().outputVolume) : Double(screen?.brightness ?? 0)
             if !volume, brightnessBefore == nil { brightnessBefore = screen?.brightness }
             levelTask?.cancel()
@@ -554,6 +604,7 @@ struct MobilePlayerView: View {
         switch phase {
         case .began:
             guard boosts, !locked, SpeedBoost.isOn(holdSpeed) else { return }
+            keyboardBoost = false
             // A new hold replaces a kept speed: it ends with the finger unless slid down again.
             let started = SpeedBoost(rate: holdSpeed)
             boost = started; holding = true
@@ -574,7 +625,7 @@ struct MobilePlayerView: View {
     }
 
     private func endBoost() {
-        boost = nil; holding = false
+        boost = nil; holding = false; keyboardBoost = false
         session.setBoost(nil)
     }
 

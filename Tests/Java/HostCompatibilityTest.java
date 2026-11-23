@@ -91,7 +91,7 @@ public class HostCompatibilityTest {
         }
         try (var loader = new PluginClassLoader(jar.toString(), folder.toString(), HostCompatibilityTest.class.getClassLoader())) {
             check(loader.loadClass("org.slf4j.impl.StaticLoggerBinder").getClassLoader() == loader, "The host's slf4j replaced the plugin's own");
-            check(loader.loadClass("org.slf4j.impl.SimpleLoggerFactory").getClassLoader() != loader, "A plugin without that class lost the host's");
+            check(loader.loadClass("org.slf4j.simple.SimpleLoggerFactory").getClassLoader() != loader, "A plugin without that class lost the host's");
         } finally {
             try (var paths = java.nio.file.Files.walk(folder)) {
                 for (var path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) java.nio.file.Files.deleteIfExists(path);
