@@ -49,6 +49,22 @@ export async function copyInstall(env: Env, user: User, install: string) {
   return rows.results.length;
 }
 
+// What this person's signed-in installs sent in the last two days, when their account is read: a message counts
+// as soon as the app asks, not only after the next 15-minute run of `copyNew` (#1564, #1558, #1559).
+export async function copyRecent(env: Env, user: User) {
+  const installs = await env.DB.prepare("SELECT install FROM installs WHERE user_id = ? LIMIT 50").bind(user.id).all<{ install: string }>();
+  const list = installs.results.map((row) => row.install.toUpperCase());
+  if (!list.length) return 0;
+  const rows = await env.REPORTS.prepare(
+    `SELECT install, issue, received FROM feedback WHERE received > ? AND upper(install) IN (${list.map(() => "?").join(",")})`,
+  ).bind(now() - 2 * DAY, ...list).all<{ install: string; issue: number; received: number }>();
+  if (!rows.results.length) return 0;
+  await env.DB.batch(rows.results.map((row) =>
+    env.DB.prepare("INSERT OR IGNORE INTO feedback_issues (issue, user_id, install, sent) VALUES (?, ?, ?, ?)")
+      .bind(row.issue, user.id, row.install.toUpperCase(), row.received)));
+  return rows.results.length;
+}
+
 // Feedback sent since the last run by installs that are signed in.
 export async function copyNew(env: Env) {
   let from = await mark(env, "reports");
