@@ -82,7 +82,10 @@ import Testing
         let url = try await drive.stream("big", name: "夫妇.mp4")
         #expect(url.scheme == CloudStreams.scheme)
         #expect(QuarkStub.calls == ["/1/clouddrive/file/download", "/1/clouddrive/file/v2/play"])
+        // The player's Subtitles menu says the copy has none of the file's subtitles (#1343).
+        #expect(CloudStreams.isDriveCopy(url))
         CloudStreams.stop(url)
+        #expect(!CloudStreams.isDriveCopy(url))
         // A song has no transcoded copy, so the refusal is the viewer's to read.
         await #expect(throws: TVError.self) { try await drive.stream("big", name: "歌.mp3") }
     }
@@ -98,6 +101,7 @@ import Testing
         #expect(CloudStreams.playlistHeaders(for: url)?["Cookie"]?.contains("__pus=abc") == true)
         #expect(CloudStreams.playlistHeaders(for: url)?["Referer"] == "https://pan.quark.cn/")
         #expect(try #require(CloudStreams.asset(for: url)).url == url)
+        #expect(CloudStreams.isDriveCopy(url))
         CloudStreams.stop(url)
         #expect(CloudStreams.playlistHeaders(for: url) == nil && CloudStreams.asset(for: url) == nil)
     }

@@ -78,8 +78,8 @@ actor QuarkFiles {
         let copy = try await transcoded(id, name: name)
         Diagnostics.shared.record(.info, "files", "\(service) transcoded copy \(copy.source.length) bytes playlist=\(copy.playlist)")
         // Most transcoded copies are HLS (`format: m3u8`): a playlist of segments, not the bytes of one file.
-        if copy.playlist { return CloudStreams.registerPlaylist(copy.source.url, headers: copy.source.headers) }
-        return CloudStreams.register(copy.source) { [self] in try? await transcoded(id, name: name).source }
+        if copy.playlist { return CloudStreams.markCopy(CloudStreams.registerPlaylist(copy.source.url, headers: copy.source.headers)) }
+        return CloudStreams.markCopy(CloudStreams.register(copy.source) { [self] in try? await transcoded(id, name: name).source })
     }
 
     func original(_ id: String, name: String) async throws -> CloudStreams.Source {
