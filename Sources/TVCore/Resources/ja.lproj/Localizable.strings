@@ -2334,3 +2334,8 @@
 "Each series and audiobook keeps its own times. While one plays, open the menu in the playback controls, choose Skip intro / outro, and pick Intro Ends Here when the intro ends." = "作品とオーディオブックごとに時間を記憶します。再生中に再生コントロールのメニューを開いて「オープニング・エンディングをスキップ」を選び、オープニングが終わったら「オープニングはここまで」を選びます。";
 "Each series and audiobook keeps its own times. While one plays, choose Skip intro / outro in the player's settings menu, or in an audiobook's More menu." = "作品とオーディオブックごとに時間を記憶します。再生中にプレーヤーの設定メニューで「オープニング・エンディングをスキップ」を選びます。オーディオブックは「その他」メニューにあります。";
 "The drive plays only a compressed copy of this video for this account, without its own subtitles. Use Search Online to add some." = "このアカウントではドライブがこの動画の圧縮コピーしか再生させないため、動画の字幕は含まれません。「オンラインで検索」で字幕を追加できます。";
+"Telegram returned a page Yingxia can't read." = "Telegram が読み取れないページを返しました。";
+"This Telegram post is no longer in the channel's public preview." = "この Telegram 投稿はチャンネルの公開プレビューにありません。";
+"This Telegram post has no playable video." = "この Telegram 投稿には再生できる動画がありません。";
+"Telegram post" = "Telegram 投稿";
+"Latest" = "最新";
