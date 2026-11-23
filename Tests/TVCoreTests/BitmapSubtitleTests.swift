@@ -27,7 +27,7 @@ import Testing
     @Test func cuesLastUntilTheNextOne() {
         let track = BitmapSubtitleTrack(name: "PGS", videoSize: CGSize(width: 1920, height: 1080))
         let image = BitmapSubtitleTrack.image([UInt8](repeating: 255, count: 4 * 4 * 4), width: 4, height: 4)!
-        let picture = BitmapSubtitleTrack.Picture(rect: CGRect(x: 10, y: 10, width: 4, height: 4), image: image)
+        let picture = BitmapSubtitleTrack.Picture(rect: CGRect(x: 10, y: 10, width: 4, height: 4), image: image)!
         let canvas = CGSize(width: 1920, height: 1080)
         track.add(.init(start: 1_000_000, end: nil, canvas: canvas, pictures: [picture]))
         track.add(.init(start: 2_000_000, end: nil, canvas: canvas, pictures: []))
@@ -43,6 +43,45 @@ import Testing
         let vob = BitmapSubtitleTrack(name: "VobSub", videoSize: canvas)
         vob.add(.init(start: 1_000_000, end: 1_200_000, canvas: canvas, pictures: [picture]))
         #expect(vob.cues(at: 1_100_000).count == 1 && vob.cues(at: 1_300_000).isEmpty)
+    }
+
+    /// A line's picture: a band of white text with a black outline on a transparent box, as PGS draws it.
+    private static func line(width: Int = 1200, height: Int = 90) -> Data {
+        var pixels = Data(count: width * height * 4)
+        for y in 30..<60 { for x in stride(from: 100, to: width - 100, by: 1) where x % 7 < 4 {
+            let offset = (y * width + x) * 4
+            let white: UInt8 = y > 32 && y < 58 ? 255 : 0
+            pixels[offset] = white; pixels[offset + 1] = white; pixels[offset + 2] = white; pixels[offset + 3] = 255
+        } }
+        return pixels
+    }
+
+    @Test func picturesAreKeptSmallAndDrawnAsTheyWere() throws {
+        let pixels = Self.line()
+        let picture = BitmapSubtitleTrack.Picture(rect: CGRect(x: 360, y: 950, width: 1200, height: 90), pixels: pixels)
+        #expect(picture.packed.count * 10 < pixels.count, "\(picture.packed.count) of \(pixels.count)")
+        let image = try #require(picture.image)
+        #expect(image.width == 1200 && image.height == 90)
+        #expect(image.dataProvider?.data as Data? == pixels)
+    }
+
+    /// #1383: AVPlayer reads subtitle segments far ahead; their pictures must not push out the line on screen.
+    @Test func picturesFarAheadGiveWayToTheLineOnScreen() {
+        let canvas = CGSize(width: 1920, height: 1080)
+        let picture = BitmapSubtitleTrack.Picture(rect: CGRect(x: 360, y: 950, width: 1200, height: 90), pixels: Self.line())
+        let one = picture.packed.count + 64
+        let track = BitmapSubtitleTrack(name: "PGS", videoSize: canvas, budget: one * 20)
+        for second in 0..<10 { track.add(.init(start: Int64(second) * 5_000_000, end: nil, canvas: canvas, pictures: [picture])) }
+        #expect(track.cues(at: 46_000_000).count == 1)
+        // Forty lines from much later in the film arrive while the tenth line is on screen.
+        for second in 0..<40 { track.add(.init(start: 3_000_000_000 + Int64(second) * 5_000_000, end: nil, canvas: canvas, pictures: [picture])) }
+        #expect(track.count == 20)
+        #expect(track.cues(at: 46_000_000).count == 1)
+        #expect(track.cues(at: 41_000_000).count == 1)
+        // Without a playhead yet, the earliest go first, as before.
+        let fresh = BitmapSubtitleTrack(name: "PGS", videoSize: canvas, budget: one * 2)
+        for second in 0..<3 { fresh.add(.init(start: Int64(second) * 5_000_000, end: nil, canvas: canvas, pictures: [picture])) }
+        #expect(fresh.count == 2 && fresh.cues(at: 1_000_000).isEmpty)
     }
 
     @Test func remuxedMatroskaDecodesPGSAndVobSub() async throws {
