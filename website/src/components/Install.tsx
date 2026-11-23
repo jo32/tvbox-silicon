@@ -2,7 +2,7 @@ import { SFSymbol } from "./SFSymbol";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { useI18n } from "../i18n/I18nProvider";
 import { INSTALL, type InstallCopy, type Mode, type Platform, type Sideload } from "../i18n/install-strings";
-import { AGENTS, CIDER, DOWNLOADS, ILOADER, IMPACTOR, INSTALL_GUIDE, INSTALL_SKILL, MAC_INTEL_DOWNLOAD, SIDELOADLY, TESTFLIGHT, TESTFLIGHT_APP } from "./controls";
+import { AGENTS, BOT, CIDER, DOWNLOADS, ILOADER, IMPACTOR, INSTALL_GUIDE, INSTALL_SKILL, MAC_INTEL_DOWNLOAD, SIDELOADLY, TESTFLIGHT, TESTFLIGHT_APP, TF_SLOTS } from "./controls";
 import { AppleTVIcon, IPhoneIPadIcon, MacIcon } from "./icons-devices";
 import { Device } from "./Device";
 import { IPadWatchNow, IPhoneWatchNow, MacWatchNow } from "./mock-apple";
@@ -205,7 +205,10 @@ export function Install() {
         <div className={sideload && !testflight ? "how split" : "how"} ref={howRef}>
           <h3 className="how-title">{copy.how}</h3>
           {testflight ? (
-            <TestFlightPanel copy={copy} platform={platform} onDevice={onDevice} />
+            <>
+              <TestFlightPanel copy={copy} platform={platform} onDevice={onDevice} />
+              {platform === "ios" && <TestFlightSlots copy={copy} />}
+            </>
           ) : (
             <>
               {/* Sideloads show the steps on the left and the selected mode's card beside them. */}
@@ -365,6 +368,43 @@ function TestFlightPanel({ copy, platform, onDevice }: { copy: InstallCopy; plat
           <a className="link-blue" href={TESTFLIGHT_APP} target="_blank" rel="noreferrer">
             {copy.tf.app} <SFSymbol name="chevron.right" />
           </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Yingxia Beta's places today, for iPhone and iPad: the public beta is full, so new testers ask the bot. */
+function TestFlightSlots({ copy }: { copy: InstallCopy }) {
+  const [slots, setSlots] = useState<{ left: number; total: number } | null>(null);
+  useEffect(() => {
+    let live = true;
+    const load = () =>
+      fetch(TF_SLOTS)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((value) => { if (live && typeof value?.left === "number") setSlots({ left: value.left, total: value.total }); })
+        .catch(() => {});
+    load();
+    const timer = window.setInterval(load, 60_000);
+    return () => { live = false; window.clearInterval(timer); };
+  }, []);
+  const text = copy.tf.slots;
+  return (
+    <div className="tf-slots">
+      <div className="tf-slots-count" aria-live="polite">
+        <span className="tf-slots-n">{slots ? slots.left : "–"}</span>
+        <span className="tf-slots-of">{slots ? `/ ${slots.total}` : "\u00a0"}</span>
+        <span className="tf-slots-label">{text.left}</span>
+      </div>
+      <div className="tf-slots-text">
+        <h4>{text.t}</h4>
+        <p>{text.b}</p>
+        {slots?.left === 0 && <p className="tf-slots-full">{text.full}</p>}
+        <div className="tf-actions">
+          <a className="btn-blue" href={BOT} target="_blank" rel="noreferrer">
+            {text.bot}
+          </a>
+          <code className="tf-slots-cmd">/tf you@icloud.com</code>
         </div>
       </div>
     </div>

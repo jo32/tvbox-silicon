@@ -32,6 +32,11 @@ export const TESTFLIGHT = {
   tv: "https://testflight.apple.com/join/SSgWEwSr",
 } as const;
 
+/** Yingxia Beta's places: the public beta above is full, so new testers ask the bot (/tf <email>) for an invitation
+ * to Yingxia Beta. Places open every day; the accounts Worker (Services/accounts) says how many are left. */
+export const TF_SLOTS = "https://yingxia-accounts.getmegaportal.com/v1/tf/slots";
+export const BOT = "https://t.me/yingxia_sup_bot";
+
 /** Apple's TestFlight app on the App Store (the same listing for iPhone, iPad and Apple TV). */
 export const TESTFLIGHT_APP = "https://apps.apple.com/app/testflight/id899247664";
 

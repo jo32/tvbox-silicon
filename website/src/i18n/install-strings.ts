@@ -56,6 +56,8 @@ export interface InstallCopy {
     app: string;
     steps: Record<Sideload, Step[]>;
     keep: { t: string; b: string; days: string; daysLabel: string; devices: string; devicesLabel: string };
+    /** Yingxia Beta's daily places (iPhone and iPad). */
+    slots: { t: string; b: string; left: string; full: string; bot: string };
   };
 }
 
@@ -168,6 +170,7 @@ export const INSTALL: Record<Lang, InstallCopy> = {
         ],
       },
       keep: { t: "Updates come to you", b: "TestFlight tells you when a new build is out. Turn on Automatic Updates and it installs the new build for you, well before the old one expires.", days: "90 days", daysLabel: "Each beta build", devices: "30", devicesLabel: "Devices per Apple Account" },
+      slots: { t: "New testers: Yingxia Beta", b: "The public beta is full, so new testers join Yingxia Beta, the same app under another name. 100 places open every day at 20:00 (UTC+8). Send /tf with your iCloud or Gmail address to the Yingxia bot on Telegram, confirm the code it emails you, and Apple sends you the invitation.", left: "places left today", full: "Today's places are taken. New ones open at 20:00 (UTC+8).", bot: "Open the bot" },
     },
   },
   ja: {
@@ -278,6 +281,7 @@ export const INSTALL: Record<Lang, InstallCopy> = {
         ],
       },
       keep: { t: "アップデートは自動で", b: "新しいビルドが出ると TestFlight が知らせてくれます。自動アップデートをオンにすれば、古いビルドの期限が切れる前に新しいビルドが自動でインストールされます。", days: "90 日", daysLabel: "各ベータビルドの有効期間", devices: "30", devicesLabel: "Apple アカウントあたりのデバイス数" },
+      slots: { t: "新しいテスター：Yingxia Beta", b: "公開ベータは満員のため、新しいテスターは同じアプリの別名版 Yingxia Beta に参加します。毎日 20:00（UTC+8）に 100 枠が開きます。Telegram の Yingxia ボットに iCloud か Gmail のアドレスを付けて /tf を送り、メールで届くコードを確認すると、Apple から招待が届きます。", left: "今日の残り枠", full: "今日の枠はすべて埋まりました。次の枠は 20:00（UTC+8）に開きます。", bot: "ボットを開く" },
     },
   },
   ko: {
@@ -388,6 +392,7 @@ export const INSTALL: Record<Lang, InstallCopy> = {
         ],
       },
       keep: { t: "업데이트는 자동으로", b: "새 빌드가 나오면 TestFlight가 알려 줍니다. 자동 업데이트를 켜 두면 이전 빌드가 만료되기 전에 새 빌드를 알아서 설치합니다.", days: "90일", daysLabel: "베타 빌드별 사용 기간", devices: "30", devicesLabel: "Apple 계정당 기기 수" },
+      slots: { t: "새 테스터: Yingxia Beta", b: "공개 베타가 가득 차서 새 테스터는 같은 앱의 다른 이름인 Yingxia Beta에 참여합니다. 매일 20:00(UTC+8)에 100자리가 열립니다. 텔레그램의 Yingxia 봇에 iCloud 또는 Gmail 주소와 함께 /tf를 보내고 이메일로 받은 코드를 확인하면 Apple이 초대장을 보냅니다.", left: "오늘 남은 자리", full: "오늘 자리는 모두 찼습니다. 다음 자리는 20:00(UTC+8)에 열립니다.", bot: "봇 열기" },
     },
   },
   "zh-Hant": {
@@ -498,6 +503,7 @@ export const INSTALL: Record<Lang, InstallCopy> = {
         ],
       },
       keep: { t: "自動保持最新", b: "有新版本時 TestFlight 會通知你；開啟自動更新後，會在舊版本到期前自動安裝新版本。", days: "90 天", daysLabel: "每個測試版本的可用期限", devices: "30", devicesLabel: "每個 Apple 帳號可安裝的裝置數" },
+      slots: { t: "新測試者：映匣 Beta", b: "公開測試已滿，新測試者會加入映匣 Beta，也就是同一個 App 的另一個名字。每天 20:00（UTC+8）開放 100 個名額。在 Telegram 給映匣機器人發送 /tf 加上你的 iCloud 或 Gmail 地址，確認郵件裡的驗證碼後，Apple 就會寄出邀請。", left: "今天剩餘名額", full: "今天的名額已經發完，下一批在 20:00（UTC+8）開放。", bot: "打開機器人" },
     },
   },
 };
