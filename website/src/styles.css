@@ -281,21 +281,15 @@ h1, h2, h3, h4, p { margin: 0; }
 .tf-here { margin-top: 4px; font-size: 15px; line-height: 1.5; color: var(--muted); }
 .tf-actions { margin-top: 28px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; }
 :lang(ja) .tf-steps h4, :lang(ko) .tf-steps h4, :lang(zh-Hant) .tf-steps h4 { letter-spacing: 0; }
-/* Yingxia Beta's places today, under the iPhone & iPad panel: the count lines up with the QR code above. */
-.tf-slots { max-width: 1000px; margin: 20px auto 0; display: grid; grid-template-columns: 280px minmax(0, 1fr); align-items: center; gap: 72px; padding: 44px 64px; border-radius: 32px; background: var(--card); animation: showcase-in 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s both; }
-.tf-slots-count { display: flex; flex-direction: column; align-items: center; text-align: center; }
-.tf-slots-n { font-size: 72px; font-weight: 700; line-height: 1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
-.tf-slots-of { margin-top: 6px; font-size: 17px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.tf-slots-label { margin-top: 10px; font-size: 15px; font-weight: 600; }
-.tf-slots-text h4 { font-size: 21px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.3; }
-.tf-slots-text p { margin-top: 8px; font-size: 15px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
-.tf-slots-text p.tf-slots-full { color: #b64400; font-weight: 500; }
-.tf-slots .tf-actions { margin-top: 22px; }
+/* iPhone & iPad: today's Yingxia Beta places where the QR code would be. */
+.tf-slots-count { min-width: 232px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.tf-slots-n { font-size: 88px; font-weight: 700; line-height: 1; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+.tf-slots-of { margin-top: 8px; font-size: 17px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tf-slots-label { margin-top: 12px; font-size: 17px; font-weight: 600; }
+.tf-slots-full { margin-top: 4px; font-size: 15px; line-height: 1.5; font-weight: 500; color: #b64400; }
 .tf-slots-cmd { font: 500 15px/1 ui-monospace, "SF Mono", Menlo, monospace; padding: 10px 14px; border-radius: 12px; background: #fff; color: #1d1d1f; }
-:lang(ja) .tf-slots-text h4, :lang(ko) .tf-slots-text h4, :lang(zh-Hant) .tf-slots-text h4 { letter-spacing: 0; }
 @media (max-width: 860px) {
   .tf-panel { grid-template-columns: minmax(0, 1fr); gap: 40px; padding: 40px 20px 32px; border-radius: 28px; }
-  .tf-slots { grid-template-columns: minmax(0, 1fr); gap: 24px; padding: 32px 20px; border-radius: 28px; }
   .tf-code { width: 200px; height: 200px; }
 }
 

@@ -13,7 +13,7 @@ export function render(lang: Lang): string {
   );
 }
 
-export { DOWNLOADS, INSTALL_GUIDE, MAC_DOWNLOAD, MAC_INTEL_DOWNLOAD, REPO, TESTFLIGHT } from "./components/controls";
+export { BOT, DOWNLOADS, INSTALL_GUIDE, MAC_DOWNLOAD, MAC_INTEL_DOWNLOAD, REPO, TESTFLIGHT } from "./components/controls";
 export { INSTALL } from "./i18n/install-strings";
 export { LANGS, LOCALES } from "./i18n/strings";
 export { LANG_PATH, SITE_URL } from "./site";
