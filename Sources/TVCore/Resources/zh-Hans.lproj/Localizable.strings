@@ -821,7 +821,7 @@
 "No Lyrics" = "没有歌词";
 "Neither catalog has lyrics for this song." = "两个曲库都没有这首歌的歌词。";
 "Lyrics from %@" = "歌词来自 %@";
-"Song, album or playlist" = "歌曲、专辑或歌单";
+"Song, artist, album or playlist" = "歌曲、歌手、专辑或歌单";
 "Recently Played" = "最近播放";
 "Continue Playing" = "继续播放";
 "Stopped at %@" = "停在 %@";
