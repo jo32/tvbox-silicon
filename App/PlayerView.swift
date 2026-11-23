@@ -84,7 +84,7 @@ struct PlaybackView: View {
                                  next: episodeAction(store.step(back: false, from: channel, session: session)), waiting: waitContent,
                                  enhancer: session.enhancer, upscale: $upscalesVideo, smooth: $smoothsVideo, info: $showsPlaybackInfo,
                                  speed: playbackSpeed, setSpeed: { playbackSpeed = $0; session.setSpeed($0) }, fills: $fillsScreen, danmakuArea: $danmakuArea,
-                                 external: session.externalSubtitles, skip: session.skipOffer, skipSource: { session.skipSourceSegment() },
+                                 external: session.externalSubtitles, ownSubtitles: session.hasOwnSubtitles, skip: session.skipOffer, skipSource: { session.skipSourceSegment() },
                                  skipping: session.canSkip ? session.skipSettings : nil, setSkipping: { session.applySkipSettings($0) },
                                  markSkip: { session.markSkip(intro: $0) },
                                  chapters: session.chapters,
@@ -855,6 +855,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     @AppStorage(DanmakuDensity.key) private var danmakuDensity = DanmakuDensity.standard
     /// Subtitle files beside the video (#576); the item's own are in AVKit's Subtitles menu.
     var external: ExternalSubtitles? = nil
+    /// The item has subtitle tracks of its own: Subtitle Files says where they are (#1524).
+    var ownSubtitles = false
     /// The source's opening or ending credits playing now, offered as AVKit's Skip button (#256).
     var skip: PlaybackSkip? = nil
     var skipSource: @MainActor () -> Void = {}
@@ -1038,7 +1040,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             items.append(UIMenu(title: L10n.text("Audio"), image: UIImage(systemName: "speaker.wave.2"), children: options))
         }
         // Always there (but for live): adding a file by its address starts here (#576).
-        if let external, !live { items.append(Self.subtitleFilesMenu(external, presenter: controller)) }
+        if let external, !live { items.append(Self.subtitleFilesMenu(external, ownSubtitles: ownSubtitles, presenter: controller)) }
         let skipSource = skipSource
         let skips = skip.map { [UIAction(title: $0.kind == .intro ? L10n.text("Skip Intro") : L10n.text("Skip Outro"), image: UIImage(systemName: "forward.fill")) { _ in skipSource() }] } ?? []
         if controller.contextualActions.map(\.title) != skips.map(\.title) { controller.contextualActions = skips }
@@ -1109,7 +1111,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
 
     /// Off and the files, then the chosen one's timing, frame rate and encoding. A file comes from the source (a drive's
     /// folder), a subtitle source, or an address typed with the remote or an iPhone's keyboard; there is no file panel here.
-    private static func subtitleFilesMenu(_ external: ExternalSubtitles, presenter: UIViewController) -> UIMenu {
+    private static func subtitleFilesMenu(_ external: ExternalSubtitles, ownSubtitles: Bool, presenter: UIViewController) -> UIMenu {
         var files: [UIMenuElement] = [UIAction(title: L10n.text("Off"), state: external.selected == nil ? .on : .off) { _ in external.select(nil) }]
         for entry in external.entries {
             switch entry.state {
@@ -1121,7 +1123,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
                 files.append(UIAction(title: L10n.text("%@: Try Again", entry.title), subtitle: reason) { _ in external.retry(entry.id) })
             }
         }
-        var children: [UIMenuElement] = [UIMenu(options: .displayInline, children: files)]
+        // The video's own subtitles are in AVKit's Subtitles menu, not here: looking here, people took them for missing (#1524).
+        var children: [UIMenuElement] = [UIMenu(title: ownSubtitles ? L10n.text(Self.ownSubtitlesNote) : "", options: .displayInline, children: files)]
         if external.hasSources || external.onlineState != .idle { children.append(onlineMenu(external)) }
         children.append(UIAction(title: L10n.text("Add Subtitles from Address…"), image: UIImage(systemName: "link")) { [weak presenter] _ in
             if let presenter { askAddress(external, from: presenter) }
@@ -1152,6 +1155,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         // and two alike sent people into this one looking for the audio tracks.
         return UIMenu(title: L10n.text("Subtitle Files"), image: UIImage(systemName: external.selected == nil ? "doc.text" : "doc.text.fill"), children: children)
     }
+
+    static let ownSubtitlesNote = "The video's own subtitles are under the speech bubble button."
 
     /// Asks for a subtitle file's address (an SRT, WebVTT or ASS file, or a ZIP archive). The text field takes the
     /// remote's keyboard, dictation, or a nearby iPhone's keyboard, which the system offers by itself.

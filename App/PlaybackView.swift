@@ -266,6 +266,8 @@ import IOKit.pwr_mgt
     /// one playing. Empty when AVFoundation offers the choice itself, or there is none.
     private(set) var audioChoices: [UngroupedAudio.Choice] = []
     private(set) var audioChoice: CMPersistentTrackID?
+    /// The item has subtitle tracks of its own (shown in AVKit's Subtitles menu, not with the subtitle files).
+    private(set) var hasOwnSubtitles = false
     /// A live stream: played at the live edge, without scrubbing.
     private(set) var isLive = false
     /// The item is ready and has a finite duration, so there is a timeline to scrub. A live stream that
@@ -1183,7 +1185,7 @@ import IOKit.pwr_mgt
     /// Follows the episode's item (ready, failed, ended), the player's state, and the transfer, for this playback.
     private func watch(_ item: AVPlayerItem, channel: Channel, url: URL, generation activeGeneration: UUID) {
         self.item = item
-        audioChoices = []; audioChoice = nil; liveReadyAt = nil
+        audioChoices = []; audioChoice = nil; hasOwnSubtitles = false; liveReadyAt = nil
         subtitleScope = channel.skipScope
         hasTimeline = item.status == .readyToPlay && item.duration.isNumeric
         observation = item.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
@@ -1206,6 +1208,12 @@ import IOKit.pwr_mgt
                         guard let self, self.generation == activeGeneration, self.item === item else { return }
                         self.audioChoices = choices
                         self.audioChoice = choices.isEmpty ? nil : UngroupedAudio.playing(item)
+                    }
+                    Task { [weak self] in
+                        let group = try? await item.asset.loadMediaSelectionGroup(for: .legible)
+                        let own = group?.options.contains { !$0.hasMediaCharacteristic(.containsOnlyForcedSubtitles) } ?? false
+                        guard let self, self.generation == activeGeneration, self.item === item else { return }
+                        self.hasOwnSubtitles = own
                     }
                     Task { [weak self] in
                         // The track picked in the last episode, in place of a subtitle file that came on by itself.
