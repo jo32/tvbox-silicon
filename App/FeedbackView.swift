@@ -188,6 +188,8 @@ struct FeedbackView: View {
                 attachments = []
                 message = ""
                 context = freshContext
+                // The message's point shows at once (#1564), not after the account's next refresh.
+                await AccountStore.shared.refresh(force: true)
             } catch {
                 // The pictures and videos stay for another try; the log is read again then.
                 if let log { Feedback.discard([log]) }

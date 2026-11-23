@@ -270,6 +270,9 @@ try {
 
   // The 15-minute job: new feedback from a signed-in install, and GitHub adopting it.
   d1("yingxia-reports", ["--command", `INSERT INTO feedback (received, install, platform, app, issue) VALUES (${t + 5}, '${INSTALL}', 'ios', '1.8', 104)`]);
+  const early = (await call("GET", "/v1/me", undefined, token)).json;
+  check(early.feedback.sent === 3 && early.feedback.issues.some((item) => item.number === 104),
+    "a message counts as soon as the account is read, before the 15-minute job", early.feedback);
   issues.set(104, { number: 104, title: "Picture in picture", state: "open", labels: [{ name: "feedback" }, { name: "fixed" }], updated_at: new Date().toISOString() });
   const job = await fetch(`${BASE}/__scheduled?cron=*/15+*+*+*+*`);
   check(job.ok, "the scheduled job runs", job.status);

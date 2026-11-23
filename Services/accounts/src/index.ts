@@ -4,7 +4,7 @@
 
 import { admin, cors } from "./admin";
 import { exchange, revoke, verify } from "./apple";
-import { copyInstall, copyNew, stats, syncStatuses, syncUnknown } from "./feedback";
+import { copyInstall, copyNew, copyRecent, stats, syncStatuses, syncUnknown } from "./feedback";
 import { cleanInstallDays, markDay, points } from "./points";
 import { entitlement, isPro, redeem } from "./pro";
 import { pullRequestsOf, syncPullRequests } from "./prs";
@@ -123,6 +123,7 @@ async function me(request: Request, env: Env): Promise<Response> {
     await erase(env, signedIn.user.id);
     return json({ deleted: true });
   }
+  await copyRecent(env, signedIn.user).catch((problem) => console.error(`recent feedback: ${problem}`));
   await syncUnknown(env, 5, signedIn.user.id).catch((problem) => console.error(`sync: ${problem}`));
   return json(await account(env, signedIn.user));
 }
