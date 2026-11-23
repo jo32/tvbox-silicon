@@ -4,22 +4,22 @@ import TVCore
 
 /// A video page's TMDB details (`TMDBMatch`): what this device already knows shows at once; otherwise the lookup runs
 /// while the page is open and its steps show, since a title nobody opened before takes some seconds.
-@MainActor @Observable final class TMDBLookup {
+@MainActor final class TMDBLookup: ObservableObject {
     enum Phase: Equatable {
         case idle, looking, matched, ambiguous, notFound, failed, off
     }
-    private(set) var phase: Phase = .idle
+    @Published private(set) var phase: Phase = .idle
     /// The latest step worth showing: "thinking" between steps keeps the one before.
-    private(set) var step: TMDBMatch.Step = .starting
-    private(set) var details: TMDBMatch.Details? { didSet { refreshDouban() } }
+    @Published private(set) var step: TMDBMatch.Step = .starting
+    @Published private(set) var details: TMDBMatch.Details? { didSet { refreshDouban() } }
     /// Douban's score for the matched work, when Wikidata links it to one (#505).
-    private(set) var douban: DoubanRating.Score?
-    private var doubanFor: String?
-    private(set) var answer: TMDBMatch.Answer?
+    @Published private(set) var douban: DoubanRating.Score?
+    @Published private var doubanFor: String?
+    @Published private(set) var answer: TMDBMatch.Answer?
     /// The viewer chose the work (or "none of these") for this video.
-    private(set) var chosen = false
-    private var key: String?
-    private var request: TMDBMatch.Request?
+    @Published private(set) var chosen = false
+    @Published private var key: String?
+    @Published private var request: TMDBMatch.Request?
 
     /// TMDB's facts line with Douban's score after TMDB's.
     var facts: String { details?.facts(douban: douban) ?? "" }
@@ -32,7 +32,7 @@ import TVCore
         let (id, type) = (details.id, details.mediaType)
         Task {
             let score = await DoubanRating.score(tmdbID: id, mediaType: type)
-            if doubanFor == tag { withAnimation(.smooth(duration: 0.3)) { douban = score } }
+            if doubanFor == tag { withAnimation(.easeInOut(duration: 0.3)) { douban = score } }
         }
     }
 
@@ -75,7 +75,7 @@ import TVCore
             guard let fresh = try? await TMDBMatch.details(match.mediaType, id: match.id, season: match.season),
                   self.key == key, !chosen, fresh != details else { return }
             let answer = await TMDBMatchStore.shared.update(fresh, for: key)
-            withAnimation(.smooth(duration: 0.35)) {
+            withAnimation(.easeInOut(duration: 0.35)) {
                 details = fresh
                 if let answer { self.answer = answer }
             }
@@ -92,11 +92,11 @@ import TVCore
             let answer = try await TMDBMatch.lookup(request) { step in
                 Task { @MainActor [weak self] in
                     guard let self, step != .thinking || self.step == .starting else { return }
-                    withAnimation(.smooth(duration: 0.25)) { self.step = step }
+                    withAnimation(.easeInOut(duration: 0.25)) { self.step = step }
                 }
             }
             await TMDBMatchStore.shared.save(answer, for: key)
-            withAnimation(.smooth(duration: 0.35)) { show(answer) }
+            withAnimation(.easeInOut(duration: 0.35)) { show(answer) }
         } catch {
             guard !Task.isCancelled, !(error is CancellationError), (error as? URLError)?.code != .cancelled else { phase = .idle; return }
             // Not a failure of the page: it just shows the source's own details.
@@ -133,14 +133,14 @@ import TVCore
         guard let key else { return }
         chosen = true
         await TMDBMatchStore.shared.choose(.none, for: key)
-        withAnimation(.smooth(duration: 0.3)) { details = nil; phase = .notFound }
+        withAnimation(.easeInOut(duration: 0.3)) { details = nil; phase = .notFound }
     }
 
     private func load(_ type: TMDBMatch.MediaType, id: Int, season: Int?) async {
         phase = .looking; step = .loading
         do {
             let value = try await TMDBMatch.details(type, id: id, season: season)
-            withAnimation(.smooth(duration: 0.35)) { details = value; phase = .matched }
+            withAnimation(.easeInOut(duration: 0.35)) { details = value; phase = .matched }
         } catch {
             guard !Task.isCancelled else { return }
             Diagnostics.shared.record(.warning, "tmdb", "details failed: \(error.localizedDescription)")
@@ -292,7 +292,7 @@ struct TMDBChoices: View {
                 .padding(.vertical, TMDBMetrics.focusRoom)
             }
             .scrollIndicators(.never)
-            .scrollClipDisabled()
+            .compatScrollClipDisabled()
         }
         .padding(14)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -383,7 +383,7 @@ struct TMDBPeopleRow: View {
                 .padding(.vertical, TMDBMetrics.focusRoom)
             }
             .scrollIndicators(.never)
-            .scrollClipDisabled()
+            .compatScrollClipDisabled()
         }
     }
 
@@ -455,7 +455,7 @@ struct TMDBGenreRow: View {
                 .padding(.vertical, TMDBMetrics.focusRoom)
             }
             .scrollIndicators(.never)
-            .scrollClipDisabled()
+            .compatScrollClipDisabled()
         }
     }
 
@@ -527,7 +527,7 @@ struct TMDBRelatedRow: View {
                 .padding(.vertical, TMDBMetrics.focusRoom)
             }
             .scrollIndicators(.never)
-            .scrollClipDisabled()
+            .compatScrollClipDisabled()
         }
     }
 }

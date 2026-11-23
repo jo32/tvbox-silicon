@@ -141,9 +141,7 @@ struct DiscoverPersonView: View {
         .background(alignment: .top) {
             DiscoverPosterWall(urls: wallPosters, color: color)
                 .frame(height: min(width * 0.88, 430) + 270)
-                .visualEffect { view, proxy in
-                    view.offset(y: min(0, -proxy.frame(in: .scrollView).minY * 0.16))
-                }
+
         }
     }
     private func timeline(_ work: TMDBCatalog.PersonWork, marker: Bool, last: Bool) -> some View {
@@ -208,7 +206,7 @@ extension DiscoverPersonView {
     var tvPage: some View {
         // The header has nothing to focus; reaching the chips scrolls it back into view, as Up does in Rex.
         ScrollViewReader { proxy in
-            tvScroll.onChange(of: tvChip) { _, chip in
+            tvScroll.compatOnChange(of: tvChip) { _, chip in
                 guard chip != nil else { return }
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) { proxy.scrollTo("tvTop", anchor: .top) }
             }
@@ -241,7 +239,7 @@ extension DiscoverPersonView {
                 .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: contribution)
             }
         }
-        .scrollClipDisabled()
+        .compatScrollClipDisabled()
         .background(color.ignoresSafeArea())
         .ignoresSafeArea(edges: .top)
         .toolbar(.hidden, for: .navigationBar)

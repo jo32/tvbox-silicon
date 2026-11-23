@@ -5,7 +5,7 @@ import TVCore
 /// 30-point section headers, horizontal 136-point cards and circular people rails.
 struct DiscoverSearchView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var model = DiscoverSearchModel()
+    @StateObject private var model = DiscoverSearchModel()
     @State private var path = NavigationPath()
     @State private var query = ""
     @State private var feed: TMDBCatalog.SearchFeed = .popular
@@ -65,7 +65,7 @@ struct DiscoverSearchView: View {
         .environment(\.openRoute, RouteOpener { path.append($0) })
         .tint(.primary)
         .task(id: request) { expanded.removeAll(); await model.load(request) }
-        .onChange(of: path.count) { _, value in if value > 0 { focused = false; filterSection = nil } }
+        .compatOnChange(of: path.count) { _, value in if value > 0 { focused = false; filterSection = nil } }
     }
 
     private var topChrome: some View {
@@ -99,7 +99,7 @@ struct DiscoverSearchView: View {
                             .accessibilityLabel(L10n.text("Reset Filters")).accessibilityIdentifier("discover.search.resetFilters")
                     }
                 } }.padding(.horizontal, 16)
-            }.scrollIndicators(.hidden).scrollClipDisabled().frame(height: 38)
+            }.scrollIndicators(.hidden).compatScrollClipDisabled().frame(height: 38)
         }.padding(.top, 16).padding(.bottom, 5)
     }
     private func filterChip(_ section: DiscoverFilterSection) -> some View {
@@ -315,13 +315,13 @@ struct DiscoverSearchGroup {
     var count: Int { items.count + people.count }
     var hasMore: Bool { page < totalPages }
 }
-@MainActor @Observable final class DiscoverSearchModel {
-    var groups: [TMDBCatalog.SearchKind: DiscoverSearchGroup] = [:]
-    var loading = false
-    var failed = false
-    var history: [String] = Profiles.shared.currentDefaults.stringArray(forKey: "discover.search.keywords") ?? []
+@MainActor final class DiscoverSearchModel: ObservableObject {
+    @Published var groups: [TMDBCatalog.SearchKind: DiscoverSearchGroup] = [:]
+    @Published var loading = false
+    @Published var failed = false
+    @Published var history: [String] = Profiles.shared.currentDefaults.stringArray(forKey: "discover.search.keywords") ?? []
     var opened: [TMDBCatalog.Item] = (Profiles.shared.currentDefaults.data(forKey: "discover.search.opened").flatMap { try? JSONDecoder().decode([TMDBCatalog.Item].self, from: $0) }) ?? []
-    private var generation = 0
+    @Published private var generation = 0
     var isEmpty: Bool { groups.values.allSatisfy { $0.count == 0 } }
     func load(_ request: DiscoverSearchRequest) async {
         generation += 1
@@ -383,7 +383,7 @@ struct DiscoverSearchGroup {
 /// the toolbar, each filter opens in a popover, and results fill grids.
 struct DiscoverMacSearchView: View {
     @Environment(\.openRoute) private var openRoute
-    @State private var model = DiscoverSearchModel()
+    @StateObject private var model = DiscoverSearchModel()
     @State private var query = ""
     @State private var searching = true
     @State private var feed: TMDBCatalog.SearchFeed = .popular
@@ -418,9 +418,9 @@ struct DiscoverMacSearchView: View {
         }
         .background { DiscoverSearchAtmosphere() }
         .navigationTitle(L10n.text("Search Catalog"))
-        .searchable(text: $query, isPresented: $searching, placement: .toolbar, prompt: Text(L10n.text("Search")))
+        .compatSearchable(text: $query, isPresented: $searching)
         .onSubmit(of: .search) { model.remember(keyword) }
-        .onChange(of: query) { _, value in if value.count > 100 { query = String(value.prefix(100)) } }
+        .compatOnChange(of: query) { _, value in if value.count > 100 { query = String(value.prefix(100)) } }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
@@ -614,8 +614,8 @@ private struct DiscoverSearchInput: View {
     var body: some View {
         TextField(L10n.text("Search"), text: $text)
             .font(.system(size: 16)).focused($hasFocus).autocorrectionDisabled().onSubmit(submit)
-            .onChange(of: focused) { _, value in hasFocus = value }
-            .onChange(of: hasFocus) { _, value in focused = value }
+            .compatOnChange(of: focused) { _, value in hasFocus = value }
+            .compatOnChange(of: hasFocus) { _, value in focused = value }
             .accessibilityIdentifier("discover.search.input")
     }
 }

@@ -4,7 +4,7 @@ import TVCore
 /// The Novels section: the bookshelf, then a book source's explore lists. Search looks through every source at once,
 /// as Legado does, and joins the same book from several sources into one result.
 struct NovelView: View {
-    @State private var store = NovelStore.shared
+    @StateObject private var store = NovelStore.shared
     @Environment(\.openRoute) private var openRoute
 
     var body: some View {
@@ -98,7 +98,7 @@ private struct NovelWelcome: View {
 /// One source's explore lists (`exploreUrl`): its categories as chips, the chosen one as a grid.
 struct NovelExploreBrowse: View {
     let source: NovelSource
-    @State private var store = NovelStore.shared
+    @StateObject private var store = NovelStore.shared
     @State private var kinds: [NovelExploreKind]?
     @State private var failure: String?
     @State private var selected = ""
@@ -254,7 +254,7 @@ struct NovelBookGrid: View {
 
 /// Searches every switched-on source, a few at a time; the same book from several sources is one result.
 struct NovelSearchView: View {
-    @State private var store = NovelStore.shared
+    @StateObject private var store = NovelStore.shared
     @State private var query = ""
     @State private var submitted = ""
     @State private var hits: [NovelSearchHit] = []
@@ -308,7 +308,7 @@ struct NovelSearchView: View {
         #if !os(tvOS)
         .toolbar { ToolbarItem { scopeMenu } }
         #endif
-        .onChange(of: store.searchGroup) { _, _ in if !submitted.isEmpty { submittedFromMemory = false; round += 1 } }
+        .compatOnChange(of: store.searchGroup) { _, _ in if !submitted.isEmpty { submittedFromMemory = false; round += 1 } }
         .task(id: "\(submitted)#\(round)") { await search() }
         .onAppear {
             if submitted.isEmpty, !store.lastSearch.keyword.isEmpty {
@@ -419,7 +419,7 @@ struct NovelSearchView: View {
 // MARK: - Shelf
 
 struct NovelShelfView: View {
-    @State private var store = NovelStore.shared
+    @StateObject private var store = NovelStore.shared
     var body: some View {
         ScrollView {
             LazyVGrid(columns: NovelLayout.columns, alignment: .leading, spacing: Layout.gridRowSpacing) {

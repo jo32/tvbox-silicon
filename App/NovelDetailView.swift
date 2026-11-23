@@ -16,7 +16,7 @@ struct NovelReading: Identifiable {
 struct NovelDetailView: View {
     @State private var book: NovelBook
     @State private var alternatives: [NovelBook]
-    @State private var store = NovelStore.shared
+    @StateObject private var store = NovelStore.shared
     @State private var details: NovelBook?
     @State private var chapters: [NovelChapter] = []
     @State private var failure: String?
@@ -24,7 +24,7 @@ struct NovelDetailView: View {
     @State private var expanded = false
     @State private var heroCover: CGImage?
     @Environment(\.openRoute) private var openRoute
-    @Environment(Store.self) private var appStore
+    @EnvironmentObject private var appStore: Store
     #if os(macOS)
     @State private var macPastHero = false
     #endif
@@ -47,13 +47,13 @@ struct NovelDetailView: View {
             .task(id: book.id) { await load() }
             .task(id: current.cover) { await loadHeroCover() }
             // The reader changed the source (#1450): the page follows, so Continue opens the copy the place belongs to.
-            .onChange(of: entry?.book.id) { _, _ in
+            .compatOnChange(of: entry?.book.id) { _, _ in
                 guard let saved = entry?.book, saved.sourceKey != book.sourceKey else { return }
                 if !alternatives.contains(where: { $0.id == book.id }) { alternatives.insert(book, at: 0) }
                 book = saved; details = nil; chapters = []; heroCover = nil
             }
             #if os(macOS)
-            .onChange(of: reading?.id) { _, _ in
+            .compatOnChange(of: reading?.id) { _, _ in
                 if let reading { openRoute?(Route { AnyView(NovelReaderView(reading: reading)) }); self.reading = nil }
             }
             #else
@@ -473,7 +473,7 @@ struct NovelDetailView: View {
             }
             .padding(.bottom, 60)
         }
-        .scrollClipDisabled()
+        .compatScrollClipDisabled()
         .background(Color.black.ignoresSafeArea())
         .environment(\.colorScheme, .dark)
         .animation(.smooth(duration: 0.3), value: chapters.isEmpty)
@@ -554,10 +554,10 @@ extension View {
 struct NovelTOCView: View {
     let book: NovelBook
     let chapters: [NovelChapter]
-    @State private var store = NovelStore.shared
+    @StateObject private var store = NovelStore.shared
     @State private var reading: NovelReading?
     @Environment(\.openRoute) private var openRoute
-    @Environment(Store.self) private var appStore
+    @EnvironmentObject private var appStore: Store
 
     private var last: Int? { store.shelfBook(book).flatMap { $0.started ? $0.chapterIndex : nil } }
 
@@ -566,7 +566,7 @@ struct NovelTOCView: View {
             .background { Backdrop() }
             .screenTitle(L10n.text("Contents"))
             #if os(macOS)
-            .onChange(of: reading?.id) { _, _ in
+            .compatOnChange(of: reading?.id) { _, _ in
                 if let reading { openRoute?(Route { AnyView(NovelReaderView(reading: reading)) }); self.reading = nil }
             }
             #else
@@ -592,7 +592,7 @@ struct NovelSourcePicker: View {
     let book: NovelBook
     let alternatives: [NovelBook]
     let pick: (NovelBook) -> Void
-    @State private var store = NovelStore.shared
+    @StateObject private var store = NovelStore.shared
     @State private var found: [NovelBook] = []
     @State private var searching = false
     @State private var searched = 0

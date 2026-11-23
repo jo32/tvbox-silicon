@@ -21,14 +21,14 @@ import AVKit
 #if os(tvOS) || os(macOS)
 /// Plays what Yingxia on another device sends (PlayOn): a catalog episode through this device's own copy
 /// of its source, so Next and the episode list work here too, else the stream as the sender had it.
-@MainActor @Observable final class PlayOnController {
+@MainActor final class PlayOnController: ObservableObject {
     static let shared = PlayOnController()
     static let key = "playOnReceives"
     static var enabled: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
     /// What is being opened and who sent it, shown until the player opens.
-    private(set) var incoming: (title: String, sender: String)?
-    @ObservationIgnored private weak var store: Store?
-    @ObservationIgnored private var task: Task<Void, Never>?
+    @Published private(set) var incoming: (title: String, sender: String)?
+    private weak var store: Store?
+    private var task: Task<Void, Never>?
 
     func start(_ store: Store) {
         self.store = store
@@ -176,7 +176,7 @@ struct PlayOnButton: View {
     let browser: PlayOnBrowser
     /// The receiver took it: the name it goes by.
     let sent: (String) -> Void
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var sending: String?
     @State private var failure: (receiver: String, message: String)?
     private var cast: CastController { .shared }
@@ -247,7 +247,7 @@ struct PlayOnButton: View {
         #if DEBUG
         // `-qaPlayOn <name or *>`: sends to that device once it shows up, once per launch, after
         // `-qaPlayOnDelay <seconds>` of playback.
-        .onChange(of: browser.receivers, initial: true) { _, receivers in
+        .compatOnChange(of: browser.receivers, initial: true) { _, receivers in
             guard let wanted = UserDefaults.standard.string(forKey: "qaPlayOn"), !Self.qaSent,
                   let receiver = receivers.first(where: { $0.name == wanted || wanted == "*" }) else { return }
             Self.qaSent = true
@@ -257,7 +257,7 @@ struct PlayOnButton: View {
             }
         }
         // `-qaCast <TV name>`: casts to the DLNA TV of exactly that name (never "any": real TVs and speakers answer too) once a search finds it, once per launch, after `-qaPlayOnDelay`.
-        .onChange(of: cast.devices, initial: true) { _, devices in
+        .compatOnChange(of: cast.devices, initial: true) { _, devices in
             guard let wanted = UserDefaults.standard.string(forKey: "qaCast"), !Self.qaSent,
                   let device = devices.first(where: { $0.name == wanted }) else { return }
             Self.qaSent = true

@@ -1,13 +1,14 @@
+import Combine
 import SwiftUI
 import TVCore
 
 /// The program guide of a live playlist (#802): what's on each channel now and next. An XMLTV file loads once for the
 /// whole playlist; a per-channel address (DIYP) is asked for each channel as it shows on screen.
-@MainActor @Observable final class LiveGuide {
+@MainActor final class LiveGuide: ObservableObject {
     let address: GuideAddress
-    private(set) var guide: ProgramGuide?
-    private(set) var perChannel: [String: [Programme]] = [:]
-    @ObservationIgnored private var asked = Set<String>()
+    @Published private(set) var guide: ProgramGuide?
+    @Published private(set) var perChannel: [String: [Programme]] = [:]
+    private var asked = Set<String>()
 
     init(address: GuideAddress) { self.address = address }
 
@@ -56,13 +57,29 @@ struct ProgrammeTimes: TimelineSchedule {
     func entries(from start: Date, mode: TimelineScheduleMode) -> [Date] { [start] + ends.filter { $0 > start } }
 }
 
+/// `@EnvironmentObject` 不接受 Optional，這層把可為 nil 的 LiveGuide 放進環境，並轉送它的變更。
+@MainActor final class LiveGuideHolder: ObservableObject {
+    @Published var value: LiveGuide? {
+        didSet {
+            cancellation = nil
+            if let value {
+                cancellation = value.objectWillChange
+                    .receive(on: DispatchQueue.main)
+                    .sink { [weak self] _ in self?.objectWillChange.send() }
+            }
+        }
+    }
+    private var cancellation: AnyCancellable?
+    init(_ value: LiveGuide?) { self.value = value }
+}
+
 /// What's on the channel now, as a line under its name; `otherwise` (or nothing) without a guide or a programme.
 struct NowOnText: View {
     let channel: Channel
     var otherwise: String? = nil
-    @Environment(LiveGuide.self) private var guide: LiveGuide?
+    @EnvironmentObject private var guide: LiveGuideHolder
     var body: some View {
-        let schedule = guide?.schedule(for: channel) ?? []
+        let schedule = guide.value?.schedule(for: channel) ?? []
         Group {
             if schedule.isEmpty {
                 if let otherwise { Text(otherwise) }
@@ -72,7 +89,7 @@ struct NowOnText: View {
                 }
             }
         }
-        .task(id: channel.name) { await guide?.fetch(channel) }
+        .task(id: channel.name) { await guide.value?.fetch(channel) }
     }
 }
 
@@ -80,9 +97,9 @@ struct NowOnText: View {
 /// channel. Nothing without a guide.
 struct NowAndNext: View {
     let channel: Channel
-    @Environment(LiveGuide.self) private var guide: LiveGuide?
+    @EnvironmentObject private var guide: LiveGuideHolder
     var body: some View {
-        let schedule = guide?.schedule(for: channel) ?? []
+        let schedule = guide.value?.schedule(for: channel) ?? []
         Group {
             if !schedule.isEmpty {
                 TimelineView(.everyMinute) { context in
@@ -98,7 +115,7 @@ struct NowAndNext: View {
                 }
             }
         }
-        .task(id: channel.name) { await guide?.fetch(channel) }
+        .task(id: channel.name) { await guide.value?.fetch(channel) }
     }
 
     private func line(_ label: String, _ programme: Programme, emphasis: Bool) -> some View {
@@ -117,7 +134,7 @@ struct GuideAddressAlert: ViewModifier {
     /// The address the playlist gives itself, shown as the field's placeholder.
     let automatic: String?
     let saved: () -> Void
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var text = ""
 
     func body(content: Content) -> some View {
@@ -138,6 +155,6 @@ struct GuideAddressAlert: ViewModifier {
             } message: {
                 Text(L10n.text("An XMLTV file (.xml or .xml.gz), or an address with {name} for each channel. Leave it empty to use the playlist's own guide."))
             }
-            .onChange(of: isPresented) { _, shown in if shown { text = store.guideAddresses[source.url.absoluteString] ?? "" } }
+            .compatOnChange(of: isPresented) { _, shown in if shown { text = store.guideAddresses[source.url.absoluteString] ?? "" } }
     }
 }

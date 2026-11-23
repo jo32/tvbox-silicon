@@ -1,6 +1,5 @@
 import Foundation
 import Network
-import Observation
 
 /// Sends what plays in Yingxia to Yingxia on another device on the same network, as AirPlay does:
 /// from an iPhone, iPad or Mac to an Apple TV or a Mac.
@@ -167,7 +166,7 @@ public final class PlayOnReceiver: @unchecked Sendable {
 }
 
 /// The sending side: the devices with Yingxia open on this network, and sending to one.
-@MainActor @Observable public final class PlayOnBrowser {
+@MainActor public final class PlayOnBrowser: ObservableObject {
     public struct Receiver: Identifiable, Hashable, Sendable {
         public let name: String
         public let kind: PlayOn.Kind
@@ -175,8 +174,8 @@ public final class PlayOnReceiver: @unchecked Sendable {
         public var id: String { name }
     }
 
-    public private(set) var receivers: [Receiver] = []
-    @ObservationIgnored private var browser: NWBrowser?
+    @Published public private(set) var receivers: [Receiver] = []
+    private var browser: NWBrowser?
 
     public init() {}
 

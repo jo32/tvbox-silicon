@@ -77,7 +77,7 @@ struct CloudFilesView: View {
 /// One folder of a drive: its folders, then its files. Videos and songs play; the others are listed
 /// so the folder reads as it does on the drive.
 struct CloudFolderView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     #if os(tvOS)
     @Environment(\.dismiss) private var dismiss
     #endif

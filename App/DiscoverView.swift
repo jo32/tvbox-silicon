@@ -2,21 +2,21 @@ import SwiftUI
 import TVCore
 
 /// Catalog browsing is independent of the subscription; opening a title can search the viewer's sources.
-@MainActor @Observable private final class DiscoverModel {
-    private(set) var pages: [TMDBCatalog.Feed: TMDBCatalog.Page] = [:]
-    private(set) var failures = Set<TMDBCatalog.Feed>()
-    private(set) var collections: TMDBCatalog.Collections?
-    private(set) var collectionsFailed = false
-    private(set) var loading = false
+@MainActor private final class DiscoverModel: ObservableObject {
+    @Published private(set) var pages: [TMDBCatalog.Feed: TMDBCatalog.Page] = [:]
+    @Published private(set) var failures = Set<TMDBCatalog.Feed>()
+    @Published private(set) var collections: TMDBCatalog.Collections?
+    @Published private(set) var collectionsFailed = false
+    @Published private(set) var loading = false
     /// The featured charts answered once, with titles or not: until then the carousel doesn't fall back to trending.
-    private(set) var featuredAnswered = false
+    @Published private(set) var featuredAnswered = false
     /// Douban's hot lists, only fetched while their section is shown. A list that fails is just left out.
-    private(set) var douban: [DoubanCatalog.Feed: [DoubanCatalog.Item]] = [:]
-    private var doubanLoading = false
+    @Published private(set) var douban: [DoubanCatalog.Feed: [DoubanCatalog.Item]] = [:]
+    @Published private var doubanLoading = false
     /// This week's airing calendars (the Airing Today shelves). One that fails is just left out.
-    private(set) var calendar: [TMDBCalendar.Kind: TMDBCalendar.Week] = [:]
+    @Published private(set) var calendar: [TMDBCalendar.Kind: TMDBCalendar.Week] = [:]
     /// The followed series' schedules (the Following Calendar shelf), by TMDB id: the kept copies at once, then fresh ones.
-    private(set) var following: [Int: AirSchedule] = [:]
+    @Published private(set) var following: [Int: AirSchedule] = [:]
     static let feeds: [TMDBCatalog.Feed] = [.featured, .trending, .nowPlaying, .onTheAir, .variety, .chinese, .animation, .topMovies, .topTelevision, .family, .kids, .netflix, .disney, .appleTV, .hbo, .warner, .universal, .paramount, .sony]
     func items(_ feed: TMDBCatalog.Feed) -> [TMDBCatalog.Item] { pages[feed]?.items ?? [] }
 
@@ -84,9 +84,9 @@ import TVCore
 /// Catalog layout: a 1.5:1 portrait hero, 17 pt gutters,
 /// 116 × 174 pt covers, and a wider landscape rail for the weekly trend list.
 struct DiscoverView: View {
-    @Environment(Store.self) private var store
-    @State private var model = DiscoverModel()
-    @State private var heroState = DiscoverHeroState()
+    @EnvironmentObject private var store: Store
+    @StateObject private var model = DiscoverModel()
+    @StateObject private var heroState = DiscoverHeroState()
     @State private var onScreen = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var editing = false
@@ -677,7 +677,7 @@ struct DiscoverView: View {
                         DiscoverTVCollection(feed: feed, items: Array(model.items(feed).prefix(10)))
                     }
                 }.padding(.horizontal, DiscoverLayout.gutter).padding(.vertical, 24)
-            }.scrollClipDisabled().focusSection()
+            }.compatScrollClipDisabled().focusSection()
             #else
             DiscoverRail {
                 HStack(spacing: 13) {
@@ -696,14 +696,14 @@ struct DiscoverView: View {
 
 /// Interaction state is read only by the hero and its background. A scroll offset or page
 /// change must not re-evaluate all of the poster rails and their navigation destinations.
-@MainActor @Observable private final class DiscoverHeroState {
-    var id: String?
-    var scrollY: CGFloat = 0
-    var details: [String: TMDBMatch.Details] = [:]
-    var paints: [String: DiscoverPaint] = [:]
-    var firstKey: String?
-    var pageProgress: CGFloat = 0
-    var dragging = false
+@MainActor private final class DiscoverHeroState: ObservableObject {
+    @Published var id: String?
+    @Published var scrollY: CGFloat = 0
+    @Published var details: [String: TMDBMatch.Details] = [:]
+    @Published var paints: [String: DiscoverPaint] = [:]
+    @Published var firstKey: String?
+    @Published var pageProgress: CGFloat = 0
+    @Published var dragging = false
     var paint: DiscoverPaint? { paints[id ?? firstKey ?? ""] ?? paints[firstKey ?? ""] }
     var trailer: TMDBMatch.Trailer? { details[id ?? firstKey ?? ""]?.trailer }
 }
@@ -838,10 +838,10 @@ private struct DiscoverHeroCarousel: View {
                         .buttonStyle(.plain).id(item.key)
                         .accessibilityIdentifier("discover.hero.\(item.key)")
                     }
-                }.scrollTargetLayout()
+                }.compatScrollTargetLayout()
             }
             .scrollTargetBehavior(.paging)
-            .scrollPosition(id: Binding(get: { state.id ?? items.first?.key }, set: { state.id = $0 }))
+            .compatScrollPosition(id: Binding(get: { state.id ?? items.first?.key }, set: { state.id = $0 }))
             .scrollIndicators(.hidden)
             #endif
             #if os(iOS)
@@ -1204,7 +1204,7 @@ private struct DiscoverTVCollection: View {
                     }
                 }.padding(28)
             }
-            .scrollClipDisabled()
+            .compatScrollClipDisabled()
             .frame(width: 855, height: 276)
             .background(Color(red: 0.11, green: 0.11, blue: 0.12).opacity(0.38))
         }
@@ -1315,7 +1315,7 @@ struct DiscoverTVGrid<Chips: View, Footer: View>: View {
             .frame(width: Self.width).frame(maxWidth: .infinity)
             .padding(.bottom, 80)
         }
-        .scrollClipDisabled()
+        .compatScrollClipDisabled()
         .ignoresSafeArea(edges: .top)
         .toolbar(.hidden, for: .navigationBar)
     }
@@ -1341,7 +1341,7 @@ private struct DiscoverTVRow<Content: View>: View {
         ScrollView(.horizontal) {
             LazyHStack(spacing: DiscoverLayout.spacing) { content() }
                 .padding(.horizontal, DiscoverLayout.gutter).padding(.vertical, 24)
-        }.scrollClipDisabled().focusSection()
+        }.compatScrollClipDisabled().focusSection()
     }
 }
 
@@ -1781,7 +1781,7 @@ private struct DoubanListView: View {
             }
         }
         #if os(tvOS)
-        .scrollClipDisabled()
+        .compatScrollClipDisabled()
         .ignoresSafeArea(edges: .top)
         .toolbar(.hidden, for: .navigationBar)
         #else
@@ -1827,7 +1827,7 @@ private struct DoubanListView: View {
 /// A Douban title opens as the TMDB title of the same kind, name and year, with its seasons, cast and Search
 /// Sources. Without one it keeps Douban's card, and Search Sources looks for it by its Douban name.
 private struct DoubanTitleView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let item: DoubanCatalog.Item
     @State private var match: TMDBCatalog.Item?
     @State private var looked = false

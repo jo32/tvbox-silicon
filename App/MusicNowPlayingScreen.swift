@@ -11,7 +11,7 @@ import TVCore
 /// two copies cross-faded instead, so the cover went see-through in flight.
 struct MusicNowPlayingScreen: View {
     enum Panel: Hashable { case lyrics, queue }
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
     @State private var panel: Panel?
     @State private var tint = Color(white: 0.24)
@@ -64,7 +64,7 @@ struct MusicNowPlayingScreen: View {
                 _ = await PosterPalette.image(next)
             }
         }
-        .onChange(of: music.track == nil) { _, gone in if gone { dismiss() } }
+        .compatOnChange(of: music.track == nil) { _, gone in if gone { dismiss() } }
         #if DEBUG
         .onAppear {
             switch UserDefaults.standard.string(forKey: "qaNowPlaying") {

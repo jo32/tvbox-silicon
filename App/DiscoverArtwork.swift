@@ -245,8 +245,8 @@ struct DiscoverBackdrop: View {
         #endif
         .discoverFullBleed()
         .accessibilityHidden(true)
-        .onChange(of: trailer?.key) { _, _ in videoReady = false }
-        .onChange(of: playsTrailer) { _, plays in if !plays { videoReady = false } }
+        .compatOnChange(of: trailer?.key) { _, _ in videoReady = false }
+        .compatOnChange(of: playsTrailer) { _, plays in if !plays { videoReady = false } }
         #endif
     }
 }

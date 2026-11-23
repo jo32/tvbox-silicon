@@ -384,7 +384,7 @@ private struct TVDanmakuSettingsPage: View {
                 .glassRowInsets()
                 .padding(.vertical, 40)
             }
-            .scrollClipDisabled()
+            .compatScrollClipDisabled()
             .tvFocusSection()
         }
         .padding(.horizontal, Layout.gutter)
@@ -418,7 +418,7 @@ private struct TVDanmakuServersPage: View {
             TVSettingsSection(footer: failure ?? DanmakuService.serversNote) {
                 TVSettingsField(title: L10n.text("Add Server"), text: $draft, emptyValue: "")
                     .disabled(checking)
-                    .onChange(of: draft) { _, typed in add(typed) }
+                    .compatOnChange(of: draft) { _, typed in add(typed) }
                 if !servers.contains(CatalogDanmakuClient.defaultServer) {
                     TVSettingsAction(title: L10n.text("Add Built-in Services")) {
                         change { try DanmakuService.save(servers: servers + [CatalogDanmakuClient.defaultServer]) }
@@ -489,7 +489,7 @@ private struct TVDanmakuWordsPage: View {
         TVSettingsSubpage(symbol: "nosign", title: L10n.text("Blocked Words"), subtitle: DanmakuSettings.wordsNote) {
             TVSettingsSection {
                 TVSettingsField(title: L10n.text("Add Blocked Word"), text: $draft, prose: true, emptyValue: "")
-                    .onChange(of: draft) { _, word in
+                    .compatOnChange(of: draft) { _, word in
                         guard !word.isEmpty else { return }
                         settings.add(word)
                         draft = ""

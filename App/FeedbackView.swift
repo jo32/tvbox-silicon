@@ -19,7 +19,7 @@ enum Support {
 /// TV, which has none to pick), and the diagnostic log goes with it unless the viewer turns it off; they
 /// are uploaded when it is sent (Feedback.Attachment), with the progress in the composer.
 struct FeedbackView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var kind = Feedback.Kind.bug
     @State private var message = ""
     @State private var context = ""
@@ -457,7 +457,7 @@ private struct FeedbackPage: View {
                      matching: .any(of: [.images, .videos]), preferredItemEncoding: .current) { attachLabel }
             .buttonStyle(.borderless)
             .disabled(room <= 0 || sending)
-            .onChange(of: picked) { _, items in
+            .compatOnChange(of: picked) { _, items in
                 guard !items.isEmpty else { return }
                 picked = []
                 add(items.map { item -> @Sendable () async throws -> URL? in { try await item.loadTransferable(type: PickedFile.self)?.url } })
@@ -826,7 +826,7 @@ private extension View {
     /// The page's buttons: capsules on iPhone and iPad, like the app's other buttons there.
     @ViewBuilder func feedbackButton(_ size: ControlSize) -> some View {
         #if os(iOS)
-        appControlSize(size).buttonBorderShape(.capsule)
+        appControlSize(size).compatButtonBorderShape(.capsule)
         #else
         appControlSize(size)
         #endif

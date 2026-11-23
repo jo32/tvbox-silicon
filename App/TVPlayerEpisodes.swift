@@ -7,11 +7,11 @@ import TVCore
 /// player. Drawn like the Danmaku tab beside it: white plates on a dark panel, no glass over the moving picture.
 struct TVPlayerEpisodesPanel: View {
     let channel: Channel
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var selectedFlag: String?
     @FocusState private var focus: Focus?
     /// The show's TMDB match, as the details page kept it: the episodes' stills.
-    @State private var tmdb = TMDBLookup()
+    @StateObject private var tmdb = TMDBLookup()
 
     private enum Focus: Hashable { case line(String), episode(Episode.ID) }
 
@@ -76,7 +76,7 @@ struct TVPlayerEpisodesPanel: View {
                             }
                             .padding(.trailing, 48).padding(.vertical, 8)
                         }
-                        .scrollClipDisabled()
+                        .compatScrollClipDisabled()
                         // Up and Down move between the rows from anywhere, not only to a button straight above or below.
                         .focusSection()
                         .onAppear { proxy.scrollTo(flag, anchor: .center) }
@@ -109,10 +109,10 @@ struct TVPlayerEpisodesPanel: View {
                     }
                     .padding(.horizontal, 40).padding(.top, 10).padding(.bottom, 2)
                 }
-                .scrollClipDisabled()
+                .compatScrollClipDisabled()
                 .focusSection()
                 .onAppear { if let id = current?.id, items.contains(where: { $0.id == id }) { proxy.scrollTo(id, anchor: .center) } }
-                .onChange(of: flag) { _, _ in
+                .compatOnChange(of: flag) { _, _ in
                     if let first = items.first(where: { $0.id == current?.id }) ?? items.first { proxy.scrollTo(first.id, anchor: .leading) }
                 }
             }
@@ -155,7 +155,7 @@ private struct TVEpisodePlateStyle: ButtonStyle {
 /// the picture like the Episodes tab.
 struct TVPlayerChannelsPanel: View {
     let channel: Channel
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var selectedGroup: String?
 
     /// The channel playing now, which may have changed while the panel was open.
@@ -191,7 +191,7 @@ struct TVPlayerChannelsPanel: View {
                         }
                         .padding(.horizontal, 40).padding(.vertical, 8)
                     }
-                    .scrollClipDisabled()
+                    .compatScrollClipDisabled()
                     .focusSection()
                     .onAppear { proxy.scrollTo(group, anchor: .center) }
                 }
@@ -219,10 +219,10 @@ struct TVPlayerChannelsPanel: View {
                     }
                     .padding(.horizontal, 40).padding(.vertical, 10)
                 }
-                .scrollClipDisabled()
+                .compatScrollClipDisabled()
                 .focusSection()
                 .onAppear { proxy.scrollTo(playing.id, anchor: .center) }
-                .onChange(of: group) { _, _ in if let first = items.first { proxy.scrollTo(first.id, anchor: .leading) } }
+                .compatOnChange(of: group) { _, _ in if let first = items.first { proxy.scrollTo(first.id, anchor: .leading) } }
             }
         }
         .padding(.vertical, 20)

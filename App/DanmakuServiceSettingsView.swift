@@ -112,7 +112,7 @@ struct DanmakuServiceSettings: View {
             } header: { Text(L10n.text("Danmaku Display")) }
         }
         }
-        .onChange(of: address) { _, _ in failure = nil; saved = false }
+        .compatOnChange(of: address) { _, _ in failure = nil; saved = false }
         .onReceive(NotificationCenter.default.publisher(for: DanmakuService.changed)) { _ in servers = DanmakuService.servers() }
     }
 

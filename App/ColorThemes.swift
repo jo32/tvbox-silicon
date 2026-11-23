@@ -1,4 +1,3 @@
-import Observation
 import SwiftUI
 import TVCore
 #if os(macOS)
@@ -358,15 +357,15 @@ struct ThemeRGB: Equatable, Sendable {
 }
 
 /// The theme in use. Views that read `Brand.accent` and the other themed colours redraw when it changes.
-@Observable final class ColorThemes: @unchecked Sendable {
+final class ColorThemes: @unchecked Sendable, ObservableObject {
     static let shared = ColorThemes()
     static let key = "colorTheme"
     static let customKey = "colorThemeCustom"
 
-    private(set) var current: ColorTheme
+    @Published private(set) var current: ColorTheme
     /// Custom's colours by element, as picked; the rest are Violet's.
-    private(set) var custom: [CustomThemeElement: ThemeRGB]
-    private(set) var customPalette: ThemePalette
+    @Published private(set) var custom: [CustomThemeElement: ThemeRGB]
+    @Published private(set) var customPalette: ThemePalette
 
     private init() {
         let defaults = UserDefaults.standard
@@ -475,7 +474,7 @@ struct ThemedFormBackground: ViewModifier {
 // MARK: Settings › Color Theme
 
 struct ColorThemeSettingsView: View {
-    @State private var themes = ColorThemes.shared
+    @StateObject private var themes = ColorThemes.shared
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {

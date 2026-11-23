@@ -2,7 +2,7 @@ import SwiftUI
 import TVCore
 
 struct LiveView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var query = ""
     #if !os(tvOS)
     @State private var editing = false
@@ -77,7 +77,7 @@ struct LiveView: View {
 /// showing a room that is live now, then the subscription's playlists as launcher tiles. Touching and holding
 /// one hides it, or removes a playlist that was added on its own (#601, #837).
 struct LiveSourceGrid: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let sources: [LiveSource]
     /// Section titles; Home's Live TV section has its own header and leaves them out.
     var titled = true
@@ -190,7 +190,7 @@ struct LiveSourceCard: View {
 
 struct ChannelListView: View {
     let source: LiveSource
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
     @State private var channels: [Channel] = []
     @State private var query = ""
@@ -200,7 +200,11 @@ struct ChannelListView: View {
     @State private var error: String?
     /// The guide the playlist's header names, and the guide in use (#802).
     @State private var playlistGuide: String?
-    @State private var guide: LiveGuide?
+    @StateObject private var guideHolder = ObservableHolder<LiveGuide>()
+    private var guide: LiveGuide? {
+        get { guideHolder.value }
+        nonmutating set { guideHolder.value = newValue }
+    }
     @State private var editingGuide = false
     private var waiting: Bool { channels.isEmpty && error == nil && (loading || !loaded) }
     private var groups: [String] { Array(Set(channels.map(\.group))).sorted() }
@@ -212,7 +216,7 @@ struct ChannelListView: View {
         TVChannelGuide(source: source, channels: channels, query: $query, group: $group,
                        loading: waiting, refreshing: loading, error: error,
                        reload: { Task { await load() } }, editGuide: { editingGuide = true })
-            .environment(guide)
+            .environmentObject(LiveGuideHolder(guide))
             .modifier(GuideAddressAlert(isPresented: $editingGuide, source: source, automatic: source.guide ?? playlistGuide, saved: applyGuide))
             .task(id: source.id) { if !loaded { await load() } }
         #else
@@ -256,7 +260,7 @@ struct ChannelListView: View {
             Button { editingGuide = true } label: { Image(systemName: "calendar") }.accessibilityLabel(L10n.text("Program Guide"))
             Button { Task { await load() } } label: { Image(systemName: "arrow.clockwise") }.disabled(loading).accessibilityLabel(L10n.text("Refresh"))
         }
-        .environment(guide)
+        .environmentObject(LiveGuideHolder(guide))
         .modifier(GuideAddressAlert(isPresented: $editingGuide, source: source, automatic: source.guide ?? playlistGuide, saved: applyGuide))
         .task(id: source.id) { if !loaded { await load() } }
         #endif
@@ -320,7 +324,7 @@ private struct TVChannelGuide: View {
     let error: String?
     let reload: () -> Void
     let editGuide: () -> Void
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focusedChannel: String?
     @State private var showingSearch = false
@@ -375,7 +379,7 @@ private struct TVChannelGuide: View {
                             category(value.isEmpty ? L10n.text("Ungrouped") : value, value: value)
                         }
                     }.padding(4)
-                }.scrollClipDisabled().tvFocusSection()
+                }.compatScrollClipDisabled().tvFocusSection()
             }
 
             if loading {
@@ -402,7 +406,7 @@ private struct TVChannelGuide: View {
                                     .focused($focusedChannel, equals: channel.id)
                             }
                         }.padding(4)
-                    }.scrollClipDisabled().tvFocusSection()
+                    }.compatScrollClipDisabled().tvFocusSection()
                 }
             }
         }
@@ -522,7 +526,7 @@ private struct TVGuideCategoryStyle: ButtonStyle {
 #endif
 
 struct FavoritesView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     /// The kind the chips show alone, e.g. only live channels (#480); empty shows every kind.
     @AppStorage("favoritesFilter") private var filterKind = ""
     /// The chosen kind while there are favorites of it; else everything, so the page is never empty.
@@ -659,7 +663,7 @@ struct FavoritesView: View {
 
 /// Opens a saved film on its detail page, or reports that the source is gone.
 struct FavoriteVideoOpener<Label: View>: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.stripDrag) private var drag
     private let video: FavoriteVideo
     private let label: Label
@@ -732,7 +736,7 @@ private struct FavoriteFilmCard: View {
 
 /// A saved episode. Playing it does not remove the film favorite, and the heart removes only this episode.
 private struct FavoriteEpisodeCard: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let episode: FavoriteEpisode
     @State private var hovering = false
     private var heartRevealed: Bool {
@@ -785,7 +789,7 @@ private struct FavoriteEpisodeCard: View {
 
 /// A saved cloud file, using the same panel as a channel card and the file row's label.
 private struct FavoriteCloudRow: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let file: FavoriteCloudFile
 
     var body: some View {
@@ -842,7 +846,7 @@ struct ChannelLogo: View {
 }
 
 struct ChannelCard: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.stripDrag) private var drag
     let channel: Channel
     /// How the card plays its channel, when it is one of a list to switch through (#1010).
@@ -867,7 +871,7 @@ struct ChannelCard: View {
             Button { if drag?.active != true { store.toggleFavorite(channel) } } label: {
                 Image(systemName: favorite ? "heart.fill" : "heart")
                     .font(.title3).foregroundStyle(favorite ? Brand.rose : .secondary)
-                    .frame(width: 44, height: 44).contentTransition(.symbolEffect(.replace))
+                    .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(favorite ? L10n.text("Remove %@ from favorites", channel.name) : L10n.text("Add %@ to favorites", channel.name))
@@ -881,7 +885,7 @@ struct ChannelCard: View {
 /// The built-in platforms and a subscription's playlists can't be deleted on their own, so they are hidden; a playlist
 /// added as its own subscription can be removed, and another one added, from here.
 struct LiveSourcesEditor: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
     @State private var removing: SubscriptionEntry?
     #if os(iOS)
@@ -1031,7 +1035,7 @@ struct LiveSourcesEditor: View {
     }
 
     @ViewBuilder private var addSection: some View {
-        @Bindable var store = store
+        @ObservedObject var store = store
         Section {
             #if os(iOS)
             Button { adding = true } label: { Label(L10n.text("Add Live Playlist"), systemImage: "plus") }

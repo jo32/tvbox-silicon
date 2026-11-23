@@ -4,7 +4,7 @@ options:
   developmentLanguage: en
   knownRegions: [en, zh-Hans, zh-Hant, ja]
   deploymentTarget:
-    macOS: '15.0'
+    macOS: '13.0'
     iOS: '17.0'
     tvOS: '17.0'
 settings:

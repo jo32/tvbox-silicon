@@ -14,10 +14,10 @@ struct PlaybackView: View {
     var watch: WatchPlayback? = nil
     #endif
     @Environment(\.dismiss) private var dismiss
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     #if os(iOS)
-    @State private var session: PlaybackSession
-    @State private var pip: PictureInPicture
+    @StateObject private var session: PlaybackSession
+    @StateObject private var pip: PictureInPicture
 
     /// A video still playing in Picture in Picture after its player closed comes back to the new player as it is.
     init(channel: Channel, watch: WatchPlayback? = nil) {
@@ -28,7 +28,7 @@ struct PlaybackView: View {
         _pip = State(initialValue: parked?.pip ?? PictureInPicture())
     }
     #else
-    @State private var session = PlaybackSession()
+    @StateObject private var session = PlaybackSession()
     #endif
     @State private var showsChrome = true
     @State private var hideTask: Task<Void, Never>?
@@ -48,7 +48,7 @@ struct PlaybackView: View {
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     @State private var playbackSpeed: Float = 1
     @State private var fillsScreen = false
-    @State private var transportBar = TransportBarVisibility()
+    @StateObject private var transportBar = TransportBarVisibility()
     #endif
     #if os(macOS)
     @State private var importsSubtitleFile = false
@@ -174,7 +174,7 @@ struct PlaybackView: View {
         .onContinuousHover { _ in poke() }
         #if os(iOS)
         // The controls stay up while paused and start their countdown again on play.
-        .onChange(of: session.paused) { _, paused in if paused { hideTask?.cancel() } else if showsChrome { scheduleHide() } }
+        .compatOnChange(of: session.paused) { _, paused in if paused { hideTask?.cancel() } else if showsChrome { scheduleHide() } }
         #else
         .simultaneousGesture(TapGesture().onEnded { poke() })
         #endif
@@ -196,7 +196,7 @@ struct PlaybackView: View {
         }
         #if os(iOS)
         // Picture in Picture started: the player screen goes, and the video plays on in the window over the app.
-        .onChange(of: pip.floating) { _, floating in
+        .compatOnChange(of: pip.floating) { _, floating in
             guard floating, session.error == nil else { return }
             FloatingPlayback.shared.park(channel, session: session, pip: pip, store: store)
             if let watch { watch.leave() } else { dismiss() }
@@ -211,13 +211,13 @@ struct PlaybackView: View {
             if !Task.isCancelled { toggleFullScreen() }
         }
         #endif
-        .onChange(of: channel) { _, channel in startCatalogPlayback(session, channel: channel, store: store); showOnStart(opening: false) }
+        .compatOnChange(of: channel) { _, channel in startCatalogPlayback(session, channel: channel, store: store); showOnStart(opening: false) }
         #if os(iOS)
-        .onChange(of: session.showsPicture || session.error != nil, initial: true) { _, started in watch?.started(started) }
+        .compatOnChange(of: session.showsPicture || session.error != nil, initial: true) { _, started in watch?.started(started) }
         .onAppear { watch?.opened(session) }
         #endif
-        .onChange(of: showsDanmaku) { _, value in session.catalogDanmaku.enabled = value }
-        .onChange(of: session.catalogDanmaku.enabled) { _, value in showsDanmaku = value }
+        .compatOnChange(of: showsDanmaku) { _, value in session.catalogDanmaku.enabled = value }
+        .compatOnChange(of: session.catalogDanmaku.enabled) { _, value in showsDanmaku = value }
         .onDisappear {
             hideTask?.cancel(); store.cancelEpisodeSelection()
             #if os(iOS)
@@ -233,7 +233,7 @@ struct PlaybackView: View {
         #if os(iOS)
         // Opening iPhone Duo moves the app to the inner display, which ignores orientations: drop a
         // landscape lock so the outer display isn't left in landscape when it closes again.
-        .onChange(of: horizontalSizeClass == .regular && verticalSizeClass == .regular) { _, large in
+        .compatOnChange(of: horizontalSizeClass == .regular && verticalSizeClass == .regular) { _, large in
             if large { PlayerOrientation.release() }
         }
         #endif
@@ -1494,10 +1494,10 @@ private struct NativePlayerView: UIViewControllerRepresentable {
 
 /// Auto-hiding chrome driven by real pointer movement and key presses (not hover
 /// phases, which AVPlayerView's own overlay and layout passes keep re-firing).
-@MainActor @Observable private final class ChromeIdle {
-    var visible = true
-    private var task: Task<Void, Never>?
-    private var monitor: Any?
+@MainActor private final class ChromeIdle: ObservableObject {
+    @Published var visible = true
+    @Published private var task: Task<Void, Never>?
+    @Published private var monitor: Any?
     private weak var window: NSWindow?
 
     func attach(_ window: NSWindow) {
@@ -1568,19 +1568,19 @@ private struct DesktopPlaybackRoot: View {
     let session: PlaybackSession
     let window: PlaybackWindow
     let store: Store
-    var body: some View { DesktopPlaybackView(channel: channel, session: session, window: window).environment(store) }
+    var body: some View { DesktopPlaybackView(channel: channel, session: session, window: window).environmentObject(store) }
 }
 
 private struct DesktopPlaybackView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let channel: Channel
-    @Bindable var session: PlaybackSession
+    @ObservedObject var session: PlaybackSession
     let window: PlaybackWindow
     @State private var fillsFrame = false
     @State private var floats = false
-    @State private var idle = ChromeIdle()
+    @StateObject private var idle = ChromeIdle()
     /// Save Frame in the options (#1342).
-    @State private var frames = FrameSaver()
+    @StateObject private var frames = FrameSaver()
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
     @State private var showsDanmakuList = false
     @State private var showsDanmakuSettings = false
@@ -1589,7 +1589,7 @@ private struct DesktopPlaybackView: View {
     @State private var showsChannels = false
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     /// Devices with Yingxia open, for the Play On button; and the one the video was sent to.
-    @State private var tvBrowser = PlayOnBrowser()
+    @StateObject private var tvBrowser = PlayOnBrowser()
     @State private var playingOn: String?
 
     /// Stops the TV and carries on here from where it reached (#749).
@@ -1658,10 +1658,10 @@ private struct DesktopPlaybackView: View {
         }
         .preferredColorScheme(.dark)
         .ignoresSafeArea()
-        .onChange(of: showsDanmaku) { _, value in session.catalogDanmaku.enabled = value }
-        .onChange(of: session.catalogDanmaku.enabled) { _, value in showsDanmaku = value }
-        .onChange(of: floats) { _, value in window.level = value ? .floating : .normal }
-        .onChange(of: fillsFrame, initial: true) { _, value in window.fillsFrame = value }
+        .compatOnChange(of: showsDanmaku) { _, value in session.catalogDanmaku.enabled = value }
+        .compatOnChange(of: session.catalogDanmaku.enabled) { _, value in showsDanmaku = value }
+        .compatOnChange(of: floats) { _, value in window.level = value ? .floating : .normal }
+        .compatOnChange(of: fillsFrame, initial: true) { _, value in window.fillsFrame = value }
         // Each picture that appears (the next episode too) shapes the window; the size arrives a moment after it.
         .task(id: session.showsPicture) {
             guard session.showsPicture else { return }
@@ -1674,10 +1674,10 @@ private struct DesktopPlaybackView: View {
                 if Task.isCancelled { return }
             }
         }
-        .onChange(of: showsChrome) { _, value in setTrafficLights(visible: value) }
+        .compatOnChange(of: showsChrome) { _, value in setTrafficLights(visible: value) }
         .onAppear { floats = window.level == .floating; idle.attach(window); tvBrowser.start(); CastController.shared.refresh() }
         // Played here again (Space, say): the other device no longer has it to itself.
-        .onChange(of: session.paused) { _, paused in
+        .compatOnChange(of: session.paused) { _, paused in
             guard !paused else { return }
             playingOn = nil
             if CastController.shared.device != nil { Task { await CastController.shared.stop() } }
@@ -1691,7 +1691,7 @@ private struct DesktopPlaybackView: View {
         .sheet(isPresented: $showsDanmakuSettings) {
             CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet()
         }
-        .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).environment(store) }
+        .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).environmentObject(store) }
         .onDisappear { idle.detach(); tvBrowser.stop(); CastController.shared.detach() }
         .subtitleImport(files: $importsSubtitleFile, address: $asksSubtitleAddress, search: $searchesSubtitles, subtitles: session.externalSubtitles)
         // A subtitle file dropped on the video shows on it (#576).
@@ -1786,7 +1786,7 @@ private struct DesktopPlaybackView: View {
 /// live room every chat message evaluates the player's body again; built again with it, an open menu shut the submenu
 /// under the pointer, so Quality, Text Size and the others flickered and couldn't be picked (#846).
 private struct DesktopOptionsMenu: View, Equatable {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let channel: Channel
     let session: PlaybackSession
     let window: PlaybackWindow
@@ -1813,7 +1813,7 @@ private struct DesktopOptionsMenu: View, Equatable {
     }
 
     var body: some View {
-        @Bindable var session = session
+        @ObservedObject var session = session
         Menu {
             Toggle(L10n.text("Loop Playback"), isOn: $session.looping)
             // A series' intro and outro (#1488), with the player's other settings.
@@ -2185,8 +2185,8 @@ struct PlayerTitleLogo: View {
     let channel: Channel
     /// A phone held upright: a smaller logo.
     var compact = false
-    @Environment(Store.self) private var store
-    @State private var tmdb = TMDBLookup()
+    @EnvironmentObject private var store: Store
+    @StateObject private var tmdb = TMDBLookup()
     @State private var aspect: CGFloat?
 
     var body: some View {
@@ -2226,8 +2226,8 @@ struct PlayerTitleLogo: View {
 
 #if os(tvOS)
 /// Whether AVKit's transport bar shows, as its delegate is told: the title row over it shows only then.
-@MainActor @Observable final class TransportBarVisibility {
-    var visible = false
+@MainActor final class TransportBarVisibility: ObservableObject {
+    @Published var visible = false
 }
 
 /// Over the transport bar while it shows, as on iPhone (#758, #520): the title's logo on the left, beside the scrubber's
@@ -2399,7 +2399,7 @@ struct PlayerChaptersView: View {
                 }
                 .padding(.horizontal, 80).padding(.vertical, 28)
             }
-            .scrollClipDisabled()
+            .compatScrollClipDisabled()
             .defaultFocus($focused, playing ?? 0)
             .task {
                 now = player.currentTime().seconds.isFinite ? player.currentTime().seconds : 0
@@ -2446,15 +2446,15 @@ struct PlayerChaptersView: View {
 /// Save Frame in the player's options (#1342, #1332): the frame on screen at the video's own size, to Photos on iPhone and
 /// iPad and to the Pictures folder on the Mac, for a wallpaper, say. It is taken from the decoded picture, not the
 /// screen, so the controls, danmaku and subtitles stay out of it, and an HDR frame is saved as HDR.
-@MainActor @Observable final class FrameSaver {
+@MainActor final class FrameSaver: ObservableObject {
     enum Outcome: Equatable {
         case saved(String)
         case failed(String)
     }
-    private(set) var busy = false
+    @Published private(set) var busy = false
     /// Said over the picture for a moment.
-    private(set) var outcome: Outcome?
-    @ObservationIgnored private var clearTask: Task<Void, Never>?
+    @Published private(set) var outcome: Outcome?
+    private var clearTask: Task<Void, Never>?
 
     func save(_ player: AVPlayer, title: String) {
         guard !busy, let item = player.currentItem else { return }

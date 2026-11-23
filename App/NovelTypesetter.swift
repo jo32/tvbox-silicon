@@ -169,11 +169,11 @@ enum NovelFontChoice: String, CaseIterable, Identifiable {
 }
 
 /// Downloads the system's optional Chinese book faces on demand.
-@MainActor @Observable final class NovelFonts {
+@MainActor final class NovelFonts: ObservableObject {
     static let shared = NovelFonts()
     /// Changes as each font arrives.
-    private(set) var generation = 0
-    private(set) var downloading: Set<NovelFontChoice> = []
+    @Published private(set) var generation = 0
+    @Published private(set) var downloading: Set<NovelFontChoice> = []
 
     func prepare(_ choice: NovelFontChoice) {
         guard !choice.isInstalled, !downloading.contains(choice) else { return }

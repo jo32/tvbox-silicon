@@ -1,5 +1,4 @@
 import Foundation
-import Observation
 
 public enum FavoriteKind: String, Codable, Sendable, CaseIterable {
     case live, video, episode, music, cloud
@@ -150,13 +149,13 @@ struct FavoriteDocument: Codable {
     var items: [FavoriteItem]
 }
 
-@MainActor @Observable public final class Favorites {
-    public private(set) var items: [FavoriteItem] = []
-    public private(set) var persistenceError: String?
+@MainActor public final class Favorites: ObservableObject {
+    @Published public private(set) var items: [FavoriteItem] = []
+    @Published public private(set) var persistenceError: String?
     private let defaults: UserDefaults
     private static let storageKey = "favorites"
     /// Called after the viewer changes the list (not after `adopt`), for iCloud sync.
-    @ObservationIgnored public var onChange: (@MainActor () -> Void)?
+    public var onChange: (@MainActor () -> Void)?
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults

@@ -1,19 +1,18 @@
 import Foundation
-import Observation
 
 /// Subscription-qualified hides. The same key scheme as `PinnedSources`.
-@MainActor @Observable public final class HiddenSources {
+@MainActor public final class HiddenSources: ObservableObject {
     /// In the order they were hidden, as saved and synced.
-    private var keys: [String] { didSet { lookup = Set(keys) } }
+    @Published private var keys: [String] { didSet { lookup = Set(keys) } }
     /// The same keys for `contains`, which runs for every source when the app starts and lists or searches its
     /// sources. Searching the list instead took seconds with thousands of sources hidden, long enough for iOS to
     /// kill the app as it started (report 39eb8ea19c38).
-    private var lookup: Set<String>
+    @Published private var lookup: Set<String>
     /// Bumps when a source is hidden or shown, so a cached source row can be reused until then.
-    public private(set) var revision = 0
+    @Published public private(set) var revision = 0
     private let defaults: UserDefaults
     /// Called after the list changes here (not after `adopt`), for iCloud sync.
-    @ObservationIgnored public var onChange: (@MainActor () -> Void)?
+    public var onChange: (@MainActor () -> Void)?
     private static let storageKey = "hiddenSources.v1"
     private static let builtInRestoreKey = "hiddenSources.builtInRestore.v1"
     private static let autoRestoreKey = "hiddenSources.autoRestore.v1"

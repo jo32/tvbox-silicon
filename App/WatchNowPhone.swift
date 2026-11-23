@@ -5,11 +5,11 @@ import TVCore
 /// Watch Now on iPhone and the Mac, laid out as Discover is there: what you were watching last fills the top of the screen over its
 /// own cover, which tints the page, and every section below is a row of covers under a heading that opens all of it.
 struct WatchNowPhonePage: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     private var openSection = SectionOpener()
     let config: Subscription
     let sections: Set<HomeSection>
-    @State private var hero = WatchNowHeroState()
+    @StateObject private var hero = WatchNowHeroState()
     /// Scrolled past the hero: the bar is over the app's own background again.
     @State private var pastHero = false
 
@@ -181,7 +181,7 @@ private struct WatchNowPhoneBackdrop: View {
 /// Up Next: a page for each of the newest titles not finished yet, with its logo or name, where you are in it and
 /// Resume. A swipe moves between them, as Discover's hero.
 private struct WatchNowPhoneHero: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.openRoute) private var openRoute
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -224,10 +224,10 @@ private struct WatchNowPhoneHero: View {
                         page(entry).frame(width: width, height: height).id(entry.id)
                     }
                 }
-                .scrollTargetLayout()
+                .compatScrollTargetLayout()
             }
             .scrollTargetBehavior(.paging)
-            .scrollPosition(id: Binding(get: { selectedID }, set: { id in
+            .compatScrollPosition(id: Binding(get: { selectedID }, set: { id in
                 guard let id, id != state.selected else { return }
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) { state.selected = id }
             }))
@@ -433,7 +433,7 @@ struct WatchNowPhoneSkeletonRow: View {
 /// A favorite in the Favorites row: videos and episodes by their cover; channels, songs and drive files on a plate the
 /// same size, with their logo, artwork or symbol. Press and hold removes it.
 private struct WatchNowPhoneFavorite: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let item: FavoriteItem
 
     var body: some View {
@@ -496,7 +496,7 @@ private struct WatchNowPhoneFavorite: View {
 
 /// A row of a source's category on Watch Now: its first page, kept in `WatchNowRows` as on Apple TV.
 struct WatchNowPhoneCategoryRail: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let title: String
     let category: String
     let client: CatalogClient

@@ -675,7 +675,7 @@ private extension Int { var nonZero: Int? { self == 0 ? nil : self } }
 /// `-qaPage danmaku-settings`: the player's Danmaku sheet over a page's player, which makes only its own views dark.
 /// On Apple TV it covers the screen, as the player's Danmaku menu presents it (#1089).
 private struct QADanmakuSettings: View {
-    @State private var model = CatalogDanmakuModel()
+    @StateObject private var model = CatalogDanmakuModel()
     var body: some View {
         #if os(tvOS)
         Color.black.ignoresSafeArea()

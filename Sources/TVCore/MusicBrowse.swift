@@ -1,5 +1,4 @@
 import Foundation
-import Observation
 
 /// One shelf on the Music page with nothing searched, as Discover has for video: charts, playlists or
 /// albums. Shelves with the same `id` from different catalogs show as one row, their items taking turns.
@@ -69,14 +68,14 @@ public enum MusicBrowse {
 /// The shelves, fetched when the Music page first shows with nothing searched and kept for the session.
 /// A catalog that failed is asked again the next time the page shows; all of them after a few hours,
 /// since charts change daily. Each catalog's shelves show as soon as it answers.
-@MainActor @Observable public final class MusicBrowseModel {
-    public private(set) var sections: [MusicBrowseSection] = []
-    public private(set) var loading = false
+@MainActor public final class MusicBrowseModel: ObservableObject {
+    @Published public private(set) var sections: [MusicBrowseSection] = []
+    @Published public private(set) var loading = false
     /// A catalog failed last time; its shelves are missing.
-    public private(set) var incomplete = false
+    @Published public private(set) var incomplete = false
     private let sources: [any MusicBrowseSource]
-    private var answers: [Int: [MusicBrowseSection]] = [:]
-    private var loadedAt: Date?
+    @Published private var answers: [Int: [MusicBrowseSection]] = [:]
+    @Published private var loadedAt: Date?
     static let lifetime: TimeInterval = 6 * 60 * 60
 
     public init(sources: [any MusicBrowseSource]? = nil) {

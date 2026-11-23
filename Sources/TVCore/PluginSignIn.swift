@@ -1,12 +1,11 @@
 import Foundation
-import Observation
 
 /// A drive sign-in a plugin is waiting for: Quark, UC, Baidu Netdisk or Aliyun Drive, or a drive a Wex-family
 /// plugin signs in to through its own config center (OwnDriveSignIn.java). The plugin signs in itself
 /// and saves the account; it only needs someone to scan its QR code, which this host can't show
 /// in an Android dialog. The plugin runtime leaves the code in the source's session folder
 /// (`login-prompt.json`, see LoginPrompt.java) and the app shows it while the request runs.
-@MainActor @Observable public final class PluginSignIn {
+@MainActor public final class PluginSignIn: ObservableObject {
     public static let shared = PluginSignIn()
     nonisolated static let fileName = "login-prompt.json"
     /// Left for the plugin runtime when the app signed in for it (LoginPrompt.java); cleared when the request ends.
@@ -50,9 +49,9 @@ import Observation
         #endif
     }
 
-    public private(set) var prompt: Prompt?
+    @Published public private(set) var prompt: Prompt?
     /// Codes the viewer closed; the same code is not shown again.
-    private var dismissed: Set<String> = []
+    @Published private var dismissed: Set<String> = []
 
     public func dismiss() {
         if let prompt { dismissed.insert(prompt.id) }

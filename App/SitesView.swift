@@ -3,7 +3,7 @@ import SwiftUI
 import TVCore
 
 struct SitesView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
     /// Choosing a source for something else (Watch Now's recommendations): only `pickable` sources are listed, the
     /// `picked` one is checked, and Select hands the source back and returns instead of opening it.
@@ -117,8 +117,7 @@ struct SitesView: View {
                         }
                         #endif
                     }.pageContainer()
-                    // Starting or clearing a search swaps the whole page at once: never as a fade.
-                    .transaction(value: query) { $0.animation = nil }
+
                 }
                 // Picking opens on the current choice rather than the top of a long page.
                 .defaultFocus($focusedSite, picked)
@@ -128,7 +127,7 @@ struct SitesView: View {
                 #endif
                 }
                 .sheet(isPresented: $arranging) { SourceOrderEditor(sites: sites, automatic: store.automaticSites(config)) }
-                .navigationDestination(item: $openedSubscription) { $0.build() }
+                .compatNavigationDestination(item: $openedSubscription) { $0.build() }
                 .sheet(isPresented: $choosingHidden) { HiddenSourcesEditor() }
                 #if DEBUG
                 // `-qaArrangeSources 1` opens the editor for screenshots.
@@ -173,10 +172,10 @@ struct SitesView: View {
                 prepared = true
             }
         }
-        .onChange(of: store.section) { _, new in
+        .compatOnChange(of: store.section) { _, new in
             if new != .sites { prepared = false }
         }
-        .onChange(of: query) { _, new in
+        .compatOnChange(of: query) { _, new in
             if new.isEmpty { searchFold = [] }
         }
     }
@@ -226,7 +225,7 @@ struct SitesView: View {
                 }
             })
         })
-        .scrollClipDisabled()
+        .compatScrollClipDisabled()
         .accessibilityIdentifier("sources.groups")
     }
 
@@ -392,7 +391,7 @@ private struct GroupSwipe: UIViewRepresentable {
 /// Search, which looks through every source for the video (#974).
 private struct SearchVideosRow: View {
     let query: String
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     var body: some View {
         Button { store.searchVideos(query) } label: {
             HStack(spacing: 14) {
@@ -499,7 +498,7 @@ struct SourceHealthDot: View {
 /// ("不卡", "秒播") and engine a quiet second line, so a page of sources reads like a launcher
 /// rather than a wall of identical badges. Use with `tileButton()`: on tvOS the card lights up itself.
 struct SiteCard: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.isFocused) private var isFocused
     let site: Site
     /// A source the viewer hid, shown only while hidden sources are revealed.
@@ -628,7 +627,7 @@ struct MonogramIcon: View {
 }
 
 struct PinSourceButton: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let site: Site
     let origin: URL
     var body: some View {
@@ -640,7 +639,7 @@ struct PinSourceButton: View {
 }
 
 struct HideSourceButton: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let site: Site
     let origin: URL
     var body: some View {
@@ -654,7 +653,7 @@ struct HideSourceButton: View {
 /// Over a hidden source's own page: it says so, and Unhide Source brings it back. Hiding is a single tap in the page's
 /// toolbar or a source's menu, so a mistaken one is undone where it happened rather than on another page (#704).
 struct HiddenSourceBanner: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.horizontalSizeClass) private var sizeClass
     let site: Site
     let origin: URL
@@ -693,7 +692,7 @@ struct HiddenSourceBanner: View {
 
 /// Context-menu moves within the viewer's own source order.
 struct MoveSourceButtons: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let site: Site
     let sites: [Site]
     var body: some View {
@@ -711,7 +710,7 @@ struct MoveSourceButtons: View {
 /// The Sources page's header: the switch for the viewer's own order (`SourceOrder`), the top of
 /// that order at a glance, and the way into arranging it.
 struct SourceOrderCard: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let sites: [Site]
     let arrange: () -> Void
     private var enabled: Binding<Bool> {
@@ -817,7 +816,7 @@ struct SourceRankBadge: View {
 
 /// One source in the order editor: its place, icon, name and health.
 private struct SourceOrderRow: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let site: Site
     let rank: Int
     #if os(tvOS)
@@ -856,7 +855,7 @@ private struct SourceOrderRow: View {
 /// The viewer's source order as a list to drag into place. tvOS has no dragging: there, choose a
 /// source, then where it goes; each move is saved at once.
 struct SourceOrderEditor: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
     @State private var sites: [Site]
     /// What Reset goes back to.
@@ -1031,7 +1030,7 @@ struct HideSourcesCard: View {
 /// Hiding or showing many sources at once: a ticked source is shown; Show All and Hide All take a whole group.
 /// Sources stay in their own group here, hidden or not, and each change is saved at once.
 struct HiddenSourcesEditor: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
 
     private func isHidden(_ site: Site) -> Bool {
@@ -1180,7 +1179,7 @@ struct HiddenSourcesEditor: View {
 /// One source in `HiddenSourcesEditor`: a tick while it is shown, its icon and name, and the health dot the
 /// source cards show, so the ones that stopped working stand out.
 private struct HiddenSourceRow: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let site: Site
     let shown: Bool
     var body: some View {
@@ -1211,7 +1210,7 @@ private struct HiddenSourceRow: View {
 #endif
 
 struct SiteView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
     let site: Site
     let origin: URL
@@ -1225,7 +1224,7 @@ struct SiteView: View {
     var category: TVCore.Category? = nil
     private var canLoad: Bool { site.canBrowse(jarURL: jarURL) }
     private var isIndex: Bool { (site.raw["indexs"]?.int ?? 0) == 1 }
-    @State private var browser = CatalogBrowser()
+    @StateObject private var browser = CatalogBrowser()
     @State private var query = ""
     /// The Bilibili login this page loaded with; signing in or out reloads it with the account's lists.
     @State private var bilibiliLogin = BilibiliAccount.load().cookie
@@ -1362,7 +1361,7 @@ struct SiteView: View {
                     PinSourceButton(site: site, origin: origin)
                     HideSourceButton(site: site, origin: origin)
                 }
-                .environment(store)
+                .environmentObject(store)
             }
         }
         .screenBackdrop()
@@ -1521,7 +1520,7 @@ struct CategoryFilterBar: View {
                 }
             }.padding(.vertical, 16)
         }
-        .scrollIndicators(.hidden).scrollClipDisabled().focusSection()
+        .scrollIndicators(.hidden).compatScrollClipDisabled().focusSection()
         .accessibilityIdentifier("site.filters")
         #else
         ScrollView(.horizontal) {
@@ -1538,7 +1537,7 @@ struct CategoryFilterBar: View {
                 }
             }
         }
-        .scrollIndicators(.hidden).scrollClipDisabled().frame(height: 38)
+        .scrollIndicators(.hidden).compatScrollClipDisabled().frame(height: 38)
         .tint(.primary)
         .accessibilityIdentifier("site.filters")
         #endif
@@ -2155,7 +2154,7 @@ private typealias PlatformImage = UIImage
 struct VideoDetailView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dismiss) private var dismiss
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let video: Video
     let client: CatalogClient
     /// Opened from Continue Watching: on an iPhone the page resumes it at once.
@@ -2177,7 +2176,7 @@ struct VideoDetailView: View {
     /// The page's player shows its picture (or an error); until then the page's cover stays over it.
     @State private var playerStarted = false
     /// The page's player, whose wait the cover tells about.
-    @State private var playerSession: PlaybackSession?
+    @StateObject private var playerSession: PlaybackSession?
     /// Settings › Playback: a video of one episode plays as its page opens (#885), and a video started on its page goes
     /// Full Screen at once (#1065).
     @AppStorage(WatchPage.autoPlayKey) private var autoPlays = true
@@ -2232,7 +2231,7 @@ struct VideoDetailView: View {
     /// How many episodes were just queued, shown briefly under the header.
     @State private var queuedNotice: Int?
     /// TMDB's details for the video (TMDBViews.swift). The page shows the source's own until they are in, then fades them in.
-    @State private var tmdb = TMDBLookup()
+    @StateObject private var tmdb = TMDBLookup()
     private var flags: [String] {
         var seen = Set<String>()
         return (detail?.episodes ?? []).map(\.flag).filter { seen.insert($0).inserted }
@@ -2318,7 +2317,7 @@ struct VideoDetailView: View {
         }
         .onDisappear { requestTask?.cancel() }
         .task(id: detail?.id) { await startTMDB() }
-        .onChange(of: choosingQuality) { _, open in if !open && !busy { loadingEpisode = nil } }
+        .compatOnChange(of: choosingQuality) { _, open in if !open && !busy { loadingEpisode = nil } }
         #if os(iOS)
         .sheet(isPresented: $showsConfigCenter) { ConfigCenterView { await configCenterAddress() } }
         #endif
@@ -3222,7 +3221,7 @@ struct VideoDetailView: View {
             PlayerOrientation.holdPortrait(true)
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
         }
-        .onChange(of: watchScopes) { old, new in
+        .compatOnChange(of: watchScopes) { old, new in
             store.watchPageScopes.subtract(old.subtracting(new)); store.watchPageScopes.formUnion(new)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
@@ -3237,7 +3236,7 @@ struct VideoDetailView: View {
             turnedFullScreen = false
             PlayerOrientation.holdPortrait(false)
         }
-        .onChange(of: watchChannel == nil) { _, ended in
+        .compatOnChange(of: watchChannel == nil) { _, ended in
             playerStarted = false
             if ended { playerSession = nil }
             if ended && fullScreen { setFullScreen(landscape: false) }
@@ -3247,7 +3246,7 @@ struct VideoDetailView: View {
         // Start in Full Screen: once the picture shows, so the phone turns for a picture wider than tall and stays
         // upright for a portrait one, as the Full Screen button does. Another episode starting in the page's player
         // (Next, auto-play) leaves the page as the viewer left it.
-        .onChange(of: playerStarted) { _, started in
+        .compatOnChange(of: playerStarted) { _, started in
             guard started, fullScreenOnStart else { return }
             fullScreenOnStart = false
             guard !fullScreen, let session = playerSession, session.error == nil else { return }
@@ -3535,7 +3534,7 @@ extension VideoDetailView {
     /// The row itself, edge to edge. On the Mac, whose mouse wheel doesn't scroll sideways, a `ScrollStrip` with arrows.
     @ViewBuilder private func episodeRow(_ items: [Episode], tile: CGFloat?, stills: [Episode.ID: TMDBMatch.EpisodeInfo]) -> some View {
         let cards = LazyHStack(alignment: .top, spacing: stills.isEmpty ? 8 : 12) { ForEach(shownOrder(items)) { watchEpisodeCard($0, tile: tile, info: stills[$0.id]) } }
-            .scrollTargetLayout()
+            .compatScrollTargetLayout()
             .padding(.horizontal, rowInset)
         #if os(macOS)
         ScrollStrip(scrollTo: currentEpisodeID, overlayArrows: true) { cards }
@@ -3545,12 +3544,12 @@ extension VideoDetailView {
         // scroll view, which pushed the title under the player.
         ScrollView(.horizontal) { cards }
             .scrollIndicators(.never)
-            .scrollPosition(id: $episodeScroll, anchor: .center)
+            .compatScrollPosition(id: $episodeScroll, anchor: .center)
             // Edge to edge, unclipped: the tiles' glass shadow ran past the row and was cut off in a band (#293).
-            .scrollClipDisabled()
+            .compatScrollClipDisabled()
             .padding(.horizontal, -rowInset)
             .onAppear { episodeScroll = currentEpisodeID }
-            .onChange(of: currentEpisodeID) { _, id in if let id { withAnimation { episodeScroll = id } } }
+            .compatOnChange(of: currentEpisodeID) { _, id in if let id { withAnimation { episodeScroll = id } } }
         #endif
     }
 
@@ -3603,7 +3602,7 @@ extension VideoDetailView {
                 if let same, same.id != currentEpisodeID { startRequest { await play(same) } }
             }
             // Edge to edge and unclipped, like the episodes, so the strip doesn't cut the chips' glass shadow (#293).
-            .contentMargins(.horizontal, rowInset, for: .scrollContent).scrollClipDisabled()
+            .compatContentMargins(.horizontal, rowInset, for: .scrollContent).compatScrollClipDisabled()
             .padding(.horizontal, -rowInset)
         }
     }
@@ -3716,14 +3715,14 @@ extension VideoDetailView {
                     watchLines
                     if let page {
                         EpisodePageTabs(pages: pages, selection: page, reversed: reversesEpisodes) { episodePage = $0 }
-                            .contentMargins(.horizontal, 16, for: .scrollContent).scrollClipDisabled()
+                            .compatContentMargins(.horizontal, 16, for: .scrollContent).compatScrollClipDisabled()
                             .padding(.horizontal, -16)
                     }
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: stills.isEmpty ? tile ?? 150 : 160), spacing: stills.isEmpty ? 8 : 12, alignment: .top)],
                               spacing: stills.isEmpty ? 8 : 14) {
                         ForEach(shownOrder(shown)) { watchEpisodeCard($0, tile: tile, fill: true, info: stills[$0.id]) { showsAllEpisodes = false } }
                     }
-                    .scrollTargetLayout()
+                    .compatScrollTargetLayout()
                 }
                 .padding(16)
             }
@@ -3845,7 +3844,7 @@ extension VideoDetailView {
                 }
             }
         }
-        .onChange(of: choosingQuality) { _, open in if !open && !busy { loadingEpisode = nil } }
+        .compatOnChange(of: choosingQuality) { _, open in if !open && !busy { loadingEpisode = nil } }
     }
 
     /// The video's title and its remarks or year as supplied by the selected source.
@@ -3902,7 +3901,7 @@ extension VideoDetailView {
                     }
                     .padding(.vertical, 24)
                 }
-                .scrollClipDisabled()
+                .compatScrollClipDisabled()
                 .focusSection()
             } else if let detail {
                 noEpisodes(detail)
@@ -3953,7 +3952,7 @@ private struct AppColorScheme: ViewModifier {
 struct OpensAtEpisode: ViewModifier {
     @State private var position: Episode.ID?
     init(_ episode: Episode.ID?) { _position = State(initialValue: episode) }
-    func body(content: Content) -> some View { content.scrollPosition(id: $position, anchor: .center) }
+    func body(content: Content) -> some View { content.compatScrollPosition(id: $position, anchor: .center) }
 }
 #endif
 
@@ -4282,7 +4281,7 @@ extension VideoDetailView {
                 }
                 .padding(.bottom, 90)
             }
-            .scrollClipDisabled()
+            .compatScrollClipDisabled()
             .modifier(DiscoverTVScrolled(scrolled: $tvScrolled))
             .background {
                 if let backdrop = tmdb.details?.backdrop {
@@ -4296,7 +4295,7 @@ extension VideoDetailView {
             .animation(.smooth(duration: 0.45), value: tmdb.details)
             .animation(.smooth(duration: 0.3), value: tmdb.phase)
             // Coming back up from the rows, the hero comes back whole, not just as far as the focused button.
-            .onChange(of: playFocused || tvHeroFocus != nil) { _, inHero in
+            .compatOnChange(of: playFocused || tvHeroFocus != nil) { _, inHero in
                 if inHero { withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo("hero", anchor: .top) } }
             }
             .fullScreenCover(isPresented: $showsTVSynopsis) { tvSynopsisScreen }
@@ -4864,9 +4863,12 @@ struct MacHeroSynopsis: View {
 extension View {
     /// Tells the page when its hero has scrolled away, so the toolbar can take the title.
     func macHeroScroll(heroHeight: CGFloat, past: Binding<Bool>) -> some View {
-        onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > heroHeight - 140 } action: { _, value in
-            past.wrappedValue = value
+        if #available(macOS 15, *) {
+            return onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y + $0.contentInsets.top > heroHeight - 140 } action: { _, value in
+                past.wrappedValue = value
+            }
         }
+        return self
     }
 }
 #endif
@@ -4881,7 +4883,7 @@ struct SeasonsButton: View {
     let client: CatalogClient
     /// In the episode header, match the glass capsule used by All.
     var capsule = false
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.openRoute) private var openRoute
     @State private var showsSeasons = false
 
@@ -4925,7 +4927,7 @@ struct SeasonsButton: View {
                 }
             })
             // Passed on by hand: an iPad app on a Mac lost the store in sheets (#1163).
-            .environment(store)
+            .environmentObject(store)
         }
     }
 

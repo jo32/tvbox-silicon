@@ -240,7 +240,7 @@ struct NovelChapterList: View {
                     if query.isEmpty { header(proxy) }
                     let shown = shown
                     if shown.isEmpty, !query.isEmpty {
-                        ContentUnavailableView.search(text: query).padding(.top, 40)
+                        VStack(spacing: 6) { Image(systemName: "magnifyingglass"); Text(query).font(.footnote) }.foregroundStyle(.secondary).padding(.top, 40)
                     }
                     ForEach(shown) { section in
                         if let title = section.title { volume(title) }
@@ -462,7 +462,7 @@ private struct NovelChapterScrubber: View {
         .allowsHitTesting(visible)
         .animation(.easeOut(duration: 0.25), value: visible)
         .sensoryFeedback(.selection, trigger: dragging.flatMap { row(at: $0)?.index })
-        .onChange(of: moving) { _, now in
+        .compatOnChange(of: moving) { _, now in
             if now { hide?.cancel(); shown = true } else { scheduleHide() }
         }
         #if DEBUG
@@ -555,7 +555,7 @@ struct NovelChapterGrid: View {
             heading
             let shown = shown
             if shown.isEmpty, !query.isEmpty {
-                ContentUnavailableView.search(text: query).frame(maxWidth: .infinity).padding(.vertical, 30)
+                VStack(spacing: 6) { Image(systemName: "magnifyingglass"); Text(query).font(.footnote) }.foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.vertical, 30)
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 14, alignment: .leading)], alignment: .leading, spacing: 0) {
                 ForEach(shown) { section in
@@ -595,7 +595,7 @@ struct NovelChapterGrid: View {
                 Button { withAnimation(.smooth(duration: 0.4)) { newestFirst.toggle() } } label: {
                     Image(systemName: newestFirst ? "arrow.down" : "arrow.up")
                         .font(.subheadline.weight(.bold))
-                        .contentTransition(.symbolEffect(.replace))
+                        
                         .frame(width: 30, height: 30)
                         .glassOrFill(.regular.interactive(), Color.primary.opacity(0.07), in: Circle())
                         .contentShape(Circle())
@@ -712,7 +712,7 @@ struct NovelChapterTVGrid: View {
             HStack {
                 Button { withAnimation(.smooth) { newestFirst.toggle() } } label: {
                     HStack(spacing: 12) {
-                        Image(systemName: newestFirst ? "arrow.down" : "arrow.up").contentTransition(.symbolEffect(.replace))
+                        Image(systemName: newestFirst ? "arrow.down" : "arrow.up")
                         Text(L10n.text("Chapters"))
                         Text("\(count)").monospacedDigit().foregroundStyle(.secondary)
                     }

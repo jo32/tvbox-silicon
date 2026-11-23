@@ -9,7 +9,7 @@ struct CatalogPlaybackActions: View {
     let session: PlaybackSession
     /// Skip Intro / Outro here, for the player without a settings menu (the Mac's in-window one).
     var offersSkip = false
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var showsSkip = false
 
     var body: some View {
@@ -56,7 +56,7 @@ struct CatalogPlaybackActions: View {
             .accessibilityLabel(L10n.text("Playback Options"))
             .accessibilityIdentifier("player.catalogOptions")
             // Store handed in, as for every sheet over the player (`PlayerSheetPresentation`).
-            .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).playerSheet().environment(store) }
+            .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).playerSheet().environmentObject(store) }
         }
     }
 }

@@ -1,5 +1,4 @@
 import Foundation
-import Observation
 
 /// Settings → Watch Now: History and Continue Watching add the file's size and picture quality to an episode's
 /// number, read from its file name ("第1集 · 5.4GB · 2160p", #595). Off by default.
@@ -125,16 +124,16 @@ extension PlaybackHistoryEntry {
 
 /// Shared by the library and player, bounded and atomically persisted outside
 /// UserDefaults so a growing history does not hit its size limit.
-@MainActor @Observable public final class PlaybackHistory {
+@MainActor public final class PlaybackHistory: ObservableObject {
     public static let shared = PlaybackHistory()
     public static let limit = 200
-    public private(set) var entries: [PlaybackHistoryEntry] = []
-    public private(set) var persistenceError: String?
+    @Published public private(set) var entries: [PlaybackHistoryEntry] = []
+    @Published public private(set) var persistenceError: String?
     private let file: URL
     private let cache: MediaCache
     private let defaults: UserDefaults
     /// Called after the history changes here (not after `adopt`), for iCloud sync.
-    @ObservationIgnored public var onChange: (@MainActor () -> Void)?
+    public var onChange: (@MainActor () -> Void)?
 
     public init(file: URL? = nil, cache: MediaCache = .shared, defaults: UserDefaults = .standard) {
         self.cache = cache; self.defaults = defaults

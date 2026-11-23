@@ -2,7 +2,7 @@ import SwiftUI
 import TVCore
 
 struct RuntimeView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var busy = false
     @State private var report: JarReport?
     @State private var probe: JarReport?

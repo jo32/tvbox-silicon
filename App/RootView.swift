@@ -35,9 +35,9 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 }
 
 struct RootView: View {
-    @Environment(Store.self) private var store
-    @Environment(Updates.self) private var updates
-    @Environment(Announcements.self) private var announcements
+    @EnvironmentObject private var store: Store
+    @EnvironmentObject private var updates: Updates
+    @EnvironmentObject private var announcements: Announcements
     @Environment(\.horizontalSizeClass) private var sizeClass
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -105,7 +105,7 @@ struct RootView: View {
         return busy
     }
     var body: some View {
-        @Bindable var store = store
+        @ObservedObject var store = store
         Group {
             #if os(macOS)
             NavigationSplitView(columnVisibility: $columns) {
@@ -119,8 +119,8 @@ struct RootView: View {
                     .environment(\.openRoute, RouteOpener { detailPath.append($0) })
                     .overlay { ThemedTitleBand() }
             }
-            .onChange(of: store.section) { detailPath = NavigationPath() }
-            .onChange(of: store.hidesSidebar) { _, hide in
+            .compatOnChange(of: store.section) { detailPath = NavigationPath() }
+            .compatOnChange(of: store.hidesSidebar) { _, hide in
                 if hide { columnsBefore = columns }
                 withAnimation(.smooth(duration: 0.3)) { columns = hide ? .detailOnly : columnsBefore }
             }
@@ -129,12 +129,12 @@ struct RootView: View {
             }
             .background { NowPlayingWindowChrome(active: hidesToolbar, store: store) }
             .background { MusicMiniPlayerTrigger() }
-            .onChange(of: store.music.presentsPlayer && store.music.track != nil) { _, show in
+            .compatOnChange(of: store.music.presentsPlayer && store.music.track != nil) { _, show in
                 // Hiding the toolbar moves the page under it. The player slides up over the window
                 // first and the toolbar goes once it is covered; closing brings the toolbar back
                 // before the player slides away.
                 if show {
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.92)) { nowPlayingShown = true } completion: {
+                    compatWithAnimation(.spring(response: 0.45, dampingFraction: 0.92)) { nowPlayingShown = true } completion: {
                         if nowPlayingShown { hidesToolbar = true }
                     }
                 } else {
@@ -148,7 +148,7 @@ struct RootView: View {
             platformTabs
             #endif
         }
-        .onChange(of: store.section) { _, section in
+        .compatOnChange(of: store.section) { _, section in
             if section != .search { store.searchModel.suspend() }
         }
         // A Baidu or Aliyun line waiting for its plugin's sign-in code to be scanned.
@@ -161,7 +161,7 @@ struct RootView: View {
         // A video and a song never play over each other. The song stops rather than pausing, so its strip
         // doesn't stay over the video and every page after it (#289); where it was stays saved, and
         // Music's Continue Playing picks it up.
-        .onChange(of: store.playing) { _, channel in if channel != nil { store.music.stop() } }
+        .compatOnChange(of: store.playing) { _, channel in if channel != nil { store.music.stop() } }
         .modifier(PlayerPresentation(playing: $store.playing))
         #if os(tvOS) || os(macOS)
         // What another device sent, while it opens.
@@ -209,40 +209,40 @@ struct RootView: View {
             .musicSidebarHeader()
             // Now Playing is not a page: choosing it opens the full-screen player over the section
             // the viewer was in. The sidebar selects on a click, not on focus, so passing it opens nothing.
-            .onChange(of: store.section) { previous, section in
+            .compatOnChange(of: store.section) { previous, section in
                 guard section == .nowPlaying else { return }
                 store.section = previous == .nowPlaying ? .music : previous
                 store.music.presentsPlayer = true
             }
             // tvOS 17 and 18: a section in More opens there, whether a button or the Now Playing tab moved it in.
-            .onChange(of: store.section) { _, section in openInMore(section) }
-            .onChange(of: tvMore) { _, more in
+            .compatOnChange(of: store.section) { _, section in openInMore(section) }
+            .compatOnChange(of: tvMore) { _, more in
                 if more.isEmpty && store.section == .more { store.section = morePath.isEmpty ? .home : moreSection }
                 else { openInMore(store.section) }
             }
             #endif
             #if os(iOS)
             .minimizesTabBarOnScroll(collapsesTabBar)
-            .onChange(of: TabSizeClasses(horizontal: sizeClass, vertical: verticalSizeClass), initial: true) { _, now in
+            .compatOnChange(of: TabSizeClasses(horizontal: sizeClass, vertical: verticalSizeClass), initial: true) { _, now in
                 followsSizeClasses(now)
             }
             .environment(\.sectionsInMore, phoneTabs ? inMore : [])
             .musicAccessory(enabled: store.music.showsStrip(videoPlaying: store.playing != nil) && phoneTabs)
             // Opened from the mini player; swiping down closes it, as in Music.
             .musicNowPlaying(isPresented: Binding(get: { store.music.presentsPlayer }, set: { store.music.presentsPlayer = $0 }), zoom: nowPlayingZoom)
-            .onChange(of: store.section) { _, section in
+            .compatOnChange(of: store.section) { _, section in
                 if phoneTabs && inMore.contains(section) {
                     moreSection = section; morePath = NavigationPath([section])
                     store.section = .more
                 }
             }
             // Closing iPhone Duo narrows the side bar back to four: a section that just left it opens inside More.
-            .onChange(of: barSlots) { _, _ in
+            .compatOnChange(of: barSlots) { _, _ in
                 if phoneTabs && inMore.contains(store.section) {
                     moreSection = store.section; morePath = NavigationPath([store.section]); store.section = .more
                 }
             }
-            .onChange(of: phoneTabs) { _, phone in
+            .compatOnChange(of: phoneTabs) { _, phone in
                 if !phone && store.section == .more { store.section = morePath.isEmpty ? .settings : moreSection }
                 else if phone && inMore.contains(store.section) {
                     moreSection = store.section; morePath = NavigationPath([store.section]); store.section = .more
@@ -267,7 +267,7 @@ struct RootView: View {
     }
 
     @ViewBuilder private var tabView: some View {
-        @Bindable var store = store
+        @ObservedObject var store = store
         if #available(iOS 18, tvOS 26, *) {
             TabView(selection: $store.section) {
                 ForEach(tabs) { item in
@@ -403,7 +403,7 @@ extension EnvironmentValues {
 /// selected. One the phone keeps in More is pushed onto the page's own stack, so Back returns to the page: selecting it
 /// moved the app to the More tab with the section on top, and Back from there landed on More's list (#700).
 @MainActor struct SectionOpener: DynamicProperty {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.openRoute) private var openRoute
     @Environment(\.sectionsInMore) private var inMore
     func callAsFunction(_ section: AppSection) {
@@ -441,14 +441,14 @@ private struct PlayerSlot: Identifiable {
 #endif
 
 private struct PlayerPresentation: ViewModifier {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Binding var playing: Channel?
     #if os(macOS)
     @State private var playerWindow = PlayerWindowController()
     #endif
     func body(content: Content) -> some View {
         #if os(macOS)
-        content.onChange(of: playing, initial: true) { _, channel in
+        content.compatOnChange(of: playing, initial: true) { _, channel in
             if let channel {
                 playerWindow.present(channel, store: store) { playing = nil }
             } else {
@@ -473,8 +473,8 @@ private struct PlayerPresentation: ViewModifier {
 #if os(macOS)
 /// Content-first sidebar: grouped rows, neutral selection, and ⌘1–⌘8 to switch sections.
 private struct MacSidebar: View {
-    @Environment(Store.self) private var store
-    @Environment(Updates.self) private var updates
+    @EnvironmentObject private var store: Store
+    @EnvironmentObject private var updates: Updates
     private var groups: [(title: String, items: [AppSection])] {
         let groups: [(title: String, items: [AppSection])] = [(L10n.text("Browse"), [.home, .discover, .search, .live, .music, .manga, .novels, .sites, .files]),
                                                              (L10n.text("Library"), [.history, .favorites, .downloads, .settings])]
@@ -627,20 +627,20 @@ extension EnvironmentValues {
 
 /// A tab's stack, with its own path so pages can be pushed from code (`openRoute`).
 private struct RouteStack<Root: View>: View {
-    @State private var stack = RoutePath()
+    @StateObject private var stack = RoutePath()
     private let root: Root
     init(@ViewBuilder root: () -> Root) { self.root = root() }
     var body: some View {
-        @Bindable var stack = stack
+        @ObservedObject var stack = stack
         NavigationStack(path: $stack.path) { root.routeDestinations() }
             .environment(\.openRoute, stack.opener)
     }
 }
 
 /// A stack's path, and the one `openRoute` that pushes onto it for the stack's whole life.
-@MainActor @Observable private final class RoutePath {
-    var path = NavigationPath()
-    @ObservationIgnored private(set) lazy var opener = RouteOpener { [weak self] in self?.path.append($0) }
+@MainActor private final class RoutePath: ObservableObject {
+    @Published var path = NavigationPath()
+    private(set) lazy var opener = RouteOpener { [weak self] in self?.path.append($0) }
 }
 
 /// Pushes a page onto a stack's path (`openRoute`). An object rather than a closure: SwiftUI can't compare closures,

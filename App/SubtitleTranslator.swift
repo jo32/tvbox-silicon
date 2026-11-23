@@ -47,16 +47,16 @@ struct OnDeviceSubtitleTranslator: SubtitleTranslating {
 /// The repackager's requests, in order, for the session the player's view holds (`subtitleTranslation()`). A session
 /// translates one pair of languages, so a request in another pair starts a new one once this one has nothing left.
 @available(iOS 18.0, macOS 15.0, *)
-@MainActor @Observable final class SubtitleTranslationQueue {
+@MainActor final class SubtitleTranslationQueue: ObservableObject {
     static let shared = SubtitleTranslationQueue()
     /// The pair the view's session translates; nil until the first request.
-    private(set) var configuration: TranslationSession.Configuration?
-    @ObservationIgnored private var jobs: [Job] = []
-    @ObservationIgnored private var wake: CheckedContinuation<Void, Never>?
-    @ObservationIgnored private var serving = false
+    @Published private(set) var configuration: TranslationSession.Configuration?
+    private var jobs: [Job] = []
+    private var wake: CheckedContinuation<Void, Never>?
+    private var serving = false
     /// Pairs that failed lately (a language download declined, say), with when: their requests fail at once for a
     /// while instead of asking again for every segment.
-    @ObservationIgnored private var failed: [String: Date] = [:]
+    private var failed: [String: Date] = [:]
     private static let pause: TimeInterval = 120
 
     private struct Job: Sendable {
@@ -155,7 +155,7 @@ struct OnDeviceSubtitleTranslator: SubtitleTranslating {
 
 @available(iOS 18.0, macOS 15.0, *)
 private struct SubtitleTranslationHost: ViewModifier {
-    @State private var queue = SubtitleTranslationQueue.shared
+    @StateObject private var queue = SubtitleTranslationQueue.shared
     func body(content: Content) -> some View {
         content.translationTask(queue.configuration) { @Sendable [queue] session in await queue.serve(session) }
     }

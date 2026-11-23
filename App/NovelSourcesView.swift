@@ -6,7 +6,7 @@ import WebKit
 
 /// Settings › Book Sources: the subscribed Legado lists, and how many of their sources are on.
 struct NovelSourcesView: View {
-    @State private var store = NovelStore.shared
+    @StateObject private var store = NovelStore.shared
     @State private var refreshing = false
     @State private var adding: Set<URL> = []
     @State private var offerErrors: [URL: String] = [:]
@@ -110,7 +110,7 @@ struct NovelSourcesView: View {
             } else if adding.contains(offer.address) {
                 ProgressView().appControlSize(.small)
             } else {
-                Button(L10n.text("Add")) { add(offer) }.buttonStyle(.bordered).buttonBorderShape(.capsule)
+                Button(L10n.text("Add")) { add(offer) }.buttonStyle(.bordered).compatButtonBorderShape(.roundedRectangle)
             }
         }
     }
@@ -147,7 +147,7 @@ struct NovelSourcesView: View {
 /// One list's sources, each switched on or off; search and explore use the ones that are on.
 struct NovelListView: View {
     let url: URL
-    @State private var store = NovelStore.shared
+    @StateObject private var store = NovelStore.shared
     @State private var filter = ""
     @State private var working = false
     @State private var message: String?
@@ -360,7 +360,7 @@ struct NovelSignInView: View {
             Picker(row.name, selection: binding(row.name)) {
                 ForEach(row.chars, id: \.self) { Text($0).tag($0) }
             }
-            .onChange(of: values[row.name]) { old, new in
+            .compatOnChange(of: values[row.name]) { old, new in
                 // A toggle's script runs when it changes, as a tap on it does in Legado.
                 if row.type == "toggle", old != nil, old != new, let action = row.action { press(action) }
             }

@@ -1,19 +1,18 @@
 import Foundation
-import Observation
 
 /// The viewer's own source order. While it is on, it replaces the automatic one (`SourceStrategy`):
 /// the Sources page lists sources in it, and search asks sources and lists their matches in it, top first.
 /// Keys are subscription-qualified like `PinnedSources`, so the order survives re-imports.
-@MainActor @Observable public final class SourceOrder {
-    public var enabled: Bool {
+@MainActor public final class SourceOrder: ObservableObject {
+    @Published public var enabled: Bool {
         didSet { defaults.set(enabled, forKey: "sourceOrder.enabled"); revision += 1; onChange?() }
     }
-    private var keys: [String]
+    @Published private var keys: [String]
     /// Bumps when the saved order or its switch changes, so a cached source row can be reused until then.
-    public private(set) var revision = 0
+    @Published public private(set) var revision = 0
     private let defaults: UserDefaults
     /// Called after the list changes here (not after `adopt`), for iCloud sync.
-    @ObservationIgnored public var onChange: (@MainActor () -> Void)?
+    public var onChange: (@MainActor () -> Void)?
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         enabled = defaults.bool(forKey: "sourceOrder.enabled")

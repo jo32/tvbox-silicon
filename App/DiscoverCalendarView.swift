@@ -71,7 +71,7 @@ struct DiscoverCalendarView: View {
             .padding(.bottom, 80)
             .frame(minHeight: proxy.size.height, alignment: .top)
         }
-        .scrollClipDisabled()
+        .compatScrollClipDisabled()
         }
         .ignoresSafeArea(edges: .top)
         .toolbar(.hidden, for: .navigationBar)
@@ -295,7 +295,7 @@ struct DiscoverAiringLink<Label: View>: View {
 /// An anime without a TMDB ID opens as the TMDB series of the same name. Without one it keeps the calendar's
 /// card, and Search Sources looks for it by name.
 struct DiscoverAiringTitleView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let item: TMDBCalendar.Item
     @State private var match: TMDBCatalog.Item?
     @State private var looked = false
@@ -343,7 +343,7 @@ struct DiscoverAiringTitleView: View {
 /// Search Sources (Add Subscription without one) as the detail page draws it: a white capsule, or the TV's
 /// action button.
 struct DiscoverFindSourcesButton: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let title: String
     var body: some View {
         Button {

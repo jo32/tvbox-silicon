@@ -8,7 +8,7 @@ extension View {
 }
 
 private struct MusicPlayerInset: ViewModifier {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.horizontalSizeClass) private var sizeClass
     func body(content: Content) -> some View {
         #if os(tvOS) || os(macOS)
@@ -43,11 +43,11 @@ private struct MusicPlayerInset: ViewModifier {
 /// A spinner while a channel is found, bars while sound plays.
 /// In a fixed square: the symbols differ in width, and a row would shift as they change.
 struct MusicActivityMark: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     var body: some View {
         Group {
             if store.music.busy { ProgressView().appControlSize(.small) }
-            else if store.music.phase == .playing { Image(systemName: "waveform").foregroundStyle(Brand.accent).symbolEffect(.variableColor.iterative) }
+            else if store.music.phase == .playing { Image(systemName: "waveform").foregroundStyle(Brand.accent)}
             else if store.music.failure != nil { Image(systemName: "exclamationmark.circle").foregroundStyle(Brand.amber) }
             else { Image(systemName: "speaker.wave.2.fill").foregroundStyle(.secondary) }
         }
@@ -65,7 +65,7 @@ enum MusicTime {
 
 /// The player panel: the song, the line being sung, progress, the format actually read, controls.
 struct MusicNowPlaying: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showsChannels = false
     @State private var showsLyrics = false
@@ -130,7 +130,7 @@ struct MusicNowPlaying: View {
         #endif
         #if DEBUG
         // `-qaMusicLyrics 1` opens the lyrics once they load, for screenshots.
-        .onChange(of: music.lyrics) { _, lyrics in
+        .compatOnChange(of: music.lyrics) { _, lyrics in
             if lyrics != nil, UserDefaults.standard.bool(forKey: "qaMusicLyrics") { showsLyrics = true }
         }
         #endif
@@ -286,7 +286,7 @@ struct MusicNowPlaying: View {
 /// The song's lyrics, following playback: the line being sung is highlighted and kept in view,
 /// with its translation under it. Tapping a line plays from there.
 struct MusicLyricsView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     #if os(tvOS)
     private let size: CGFloat = 38, translationSize: CGFloat = 26
     #else
@@ -323,7 +323,7 @@ struct MusicLyricsView: View {
 /// The lines themselves. The line being sung is kept in the middle through the scroll view's
 /// own position binding; scrolling by hand works, and the next line brings the view back.
 struct MusicLyricLines: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let lyrics: MusicLyrics
     let current: Int?
     let size: CGFloat
@@ -364,14 +364,14 @@ struct MusicLyricLines: View {
                 }
                 Text(L10n.text("Lyrics from %@", lyrics.platform.name)).font(.caption).foregroundStyle(.tertiary).padding(.top, 12)
             }
-            .scrollTargetLayout()
+            .compatScrollTargetLayout()
             .padding(.horizontal, Layout.gutter * 1.5).padding(.vertical, 40)
         }
-        .scrollPosition(id: $scrolled, anchor: .center)
+        .compatScrollPosition(id: $scrolled, anchor: .center)
         // Once the lines are laid out: set as the view appeared, the position was dropped, and
         // reopening the player left the lyrics at the top until the next line.
         .task { try? await Task.sleep(for: .milliseconds(60)); scrolled = current }
-        .onChange(of: current) { _, index in
+        .compatOnChange(of: current) { _, index in
             guard let index else { return }
             withAnimation(.smooth(duration: 0.45)) { scrolled = index }
         }
@@ -380,7 +380,7 @@ struct MusicLyricLines: View {
 
 /// Every channel tried for the song, what each served, and a way to switch.
 struct MusicChannelsView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -447,7 +447,7 @@ struct MusicChannelsView: View {
 
 /// Quality preference and the channels to use.
 struct MusicSettingsView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
 
     /// The channels the recommended sources list, each with the services it plays from; none are part of the app.
     private static var channels: [CloudMusic.Channel] { CloudMusic.current?.channels ?? [] }
@@ -459,7 +459,7 @@ struct MusicSettingsView: View {
     private static var channelNotes: [String] { CloudMusic.current?.notes ?? [] }
 
     var body: some View {
-        @Bindable var music = store.music
+        @ObservedObject var music = store.music
         #if os(tvOS)
         // A page like Settings' own, over the whole screen: a tvOS sheet is a small card that cut the
         // channels off. Quality steps through its choices; Menu closes the page.
@@ -577,7 +577,7 @@ private struct MusicSheet<Content: View>: View {
 
 /// Moves the lyrics earlier or later against the audio, in half seconds, remembered per song.
 struct MusicLyricsTiming: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     var body: some View {
         let music = store.music
         HStack(spacing: 12) {
@@ -601,7 +601,7 @@ struct MusicLyricsTiming: View {
 /// A thin bar that thickens while dragged, with elapsed and remaining time under it, as in Music.
 /// The position follows the finger and holds at the target until the seek lands.
 struct MusicScrubber: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var dragging: Double?
 
     var body: some View {
@@ -647,11 +647,11 @@ struct MusicScrubber: View {
 
 /// The LX Music custom sources in Music Settings: add one by address (or from a file on iPhone, iPad and
 /// Mac), turn each on or off, remove it. Adding runs the script once to read which catalogs it covers.
-@MainActor @Observable final class MusicLXSourcesModel {
-    private(set) var sources: [LXSource] = LXSourceLibrary.shared.sources
-    private(set) var busy = false
-    var message: String?
-    var failed = false
+@MainActor final class MusicLXSourcesModel: ObservableObject {
+    @Published private(set) var sources: [LXSource] = LXSourceLibrary.shared.sources
+    @Published private(set) var busy = false
+    @Published var message: String?
+    @Published var failed = false
 
     static var note: String {
         L10n.text("Scripts made for LX Music's custom sources. They are asked for a song's audio after the channels above, for QQ Music, NetEase Cloud Music, Kuwo and Migu songs. Yingxia includes none: add only sources you trust.")
@@ -715,7 +715,7 @@ struct MusicScrubber: View {
 
 #if os(tvOS)
 struct MusicLXSourcesSection: View {
-    @State private var model = MusicLXSourcesModel()
+    @StateObject private var model = MusicLXSourcesModel()
     @State private var address = ""
     var body: some View {
         TVSettingsSection(title: L10n.text("LX Music Sources"), footer: [model.message, MusicLXSourcesModel.note].compactMap { $0 }.joined(separator: "\n\n")) {
@@ -726,7 +726,7 @@ struct MusicLXSourcesSection: View {
             // Apple TV has no files to pick: sources come from an address.
             TVSettingsField(title: L10n.text("Add from Address"), text: $address)
                 .disabled(model.busy)
-                .onChange(of: address) { _, text in
+                .compatOnChange(of: address) { _, text in
                     guard !text.isEmpty else { return }
                     model.add(address: text)
                     address = ""
@@ -736,7 +736,7 @@ struct MusicLXSourcesSection: View {
 }
 #else
 struct MusicLXSourcesSection: View {
-    @State private var model = MusicLXSourcesModel()
+    @StateObject private var model = MusicLXSourcesModel()
     @State private var address = ""
     @State private var importing = false
     var body: some View {
@@ -792,11 +792,11 @@ struct MusicLXSourcesSection: View {
 /// The music extensions in Music Settings (Listenify-format scripts such as allfm.js): add one by address (or
 /// from a file on iPhone, iPad and Mac), turn each on or off, remove it. Their lists show on the Music page,
 /// which reloads their shelves after a change; their songs show in Music search.
-@MainActor @Observable final class MusicExtensionsModel {
-    private(set) var items: [MusicExtension] = MusicExtensionLibrary.shared.extensions
-    private(set) var busy = false
-    var message: String?
-    var failed = false
+@MainActor final class MusicExtensionsModel: ObservableObject {
+    @Published private(set) var items: [MusicExtension] = MusicExtensionLibrary.shared.extensions
+    @Published private(set) var busy = false
+    @Published var message: String?
+    @Published var failed = false
     /// Called after a change, to refresh the Music page's shelves.
     var changed: () -> Void = {}
 
@@ -865,8 +865,8 @@ struct MusicLXSourcesSection: View {
 
 #if os(tvOS)
 struct MusicExtensionsSection: View {
-    @Environment(Store.self) private var store
-    @State private var model = MusicExtensionsModel()
+    @EnvironmentObject private var store: Store
+    @StateObject private var model = MusicExtensionsModel()
     @State private var address = ""
     var body: some View {
         TVSettingsSection(title: L10n.text("Music Extensions"), footer: [model.message, MusicExtensionsModel.note].compactMap { $0 }.joined(separator: "\n\n")) {
@@ -877,7 +877,7 @@ struct MusicExtensionsSection: View {
             // Apple TV has no files to pick: extensions come from an address.
             TVSettingsField(title: L10n.text("Add from Address"), text: $address)
                 .disabled(model.busy)
-                .onChange(of: address) { _, text in
+                .compatOnChange(of: address) { _, text in
                     guard !text.isEmpty else { return }
                     model.add(address: text)
                     address = ""
@@ -888,8 +888,8 @@ struct MusicExtensionsSection: View {
 }
 #else
 struct MusicExtensionsSection: View {
-    @Environment(Store.self) private var store
-    @State private var model = MusicExtensionsModel()
+    @EnvironmentObject private var store: Store
+    @StateObject private var model = MusicExtensionsModel()
     @State private var address = ""
     @State private var importing = false
     var body: some View {

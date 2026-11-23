@@ -32,18 +32,18 @@ struct MobilePlayerView: View {
     /// On a watch page: Full Screen, or back to the page.
     var toggleFullScreen: (() -> Void)? = nil
 
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.scenePhase) private var scenePhase
-    @State private var clock = PlayerClock()
-    @State private var tracks = MediaTracks()
+    @StateObject private var clock = PlayerClock()
+    @StateObject private var tracks = MediaTracks()
     @State private var importsSubtitleFile = false
     @State private var asksSubtitleAddress = false
     @State private var searchesSubtitles = false
     @State private var nowPlaying = VideoNowPlaying()
     /// Save Frame in the options (#1342).
-    @State private var frames = FrameSaver()
+    @StateObject private var frames = FrameSaver()
     /// Fit, Fill or Stretch; kept for the next video, as other players do.
     @AppStorage(VideoFill.key) private var videoFill = VideoFill.fit
     /// The time and battery in the full-screen controls (#996).
@@ -57,7 +57,7 @@ struct MobilePlayerView: View {
     @State private var showsEpisodes = false
     @State private var showsChannels = false
     /// Devices with Yingxia open, for the Play On button; and the one the video was sent to.
-    @State private var tvBrowser = PlayOnBrowser()
+    @StateObject private var tvBrowser = PlayOnBrowser()
     @State private var playingOn: String?
 
     /// Stops the TV and carries on here from where it reached (#749).
@@ -114,10 +114,10 @@ struct MobilePlayerView: View {
         ZStack {
             PlayerLayerView(player: session.player, gravity: videoFill.gravity, pip: pip).playerBleed(!inline)
                 // Picture in Picture shows only the player's layer, so AVPlayer draws the subtitles there.
-                .onChange(of: pip.active) { _, active in session.subtitles.native = active }
+                .compatOnChange(of: pip.active) { _, active in session.subtitles.native = active }
                 // A connected display (USB-C, HDMI) takes the same Picture Size: Fill covers a monitor of another
                 // shape, as asked in #1151.
-                .onChange(of: videoFill, initial: true) { _, fill in ExternalDisplay.shared.gravity = fill.gravity }
+                .compatOnChange(of: videoFill, initial: true) { _, fill in ExternalDisplay.shared.gravity = fill.gravity }
             // The enhanced picture covers the layer's own, under everything else.
             EnhancedVideoSurface(enhancer: session.enhancer, fills: videoFill == .fill, stretches: videoFill == .stretch, bleeds: !inline)
             if showsDanmaku && !session.danmaku.isEmpty {
@@ -210,21 +210,21 @@ struct MobilePlayerView: View {
             if let brightnessBefore { screen?.brightness = brightnessBefore }
         }
         // Played here again (the Lock Screen, say): the other device no longer has it to itself.
-        .onChange(of: session.paused) { _, paused in
+        .compatOnChange(of: session.paused) { _, paused in
             guard !paused else { return }
             playingOn = nil
             // Played here again (the Lock Screen, say): the TV stops, as Play Here would.
             if CastController.shared.device != nil { Task { await CastController.shared.stop() } }
         }
-        .onChange(of: nowPlayingState, initial: true) { nowPlaying.update(title: channel.name, session: session) }
-        .onChange(of: nowPlayingArtwork, initial: true) { _, artwork in nowPlaying.show(artwork, session: session) }
+        .compatOnChange(of: nowPlayingState, initial: true) { nowPlaying.update(title: channel.name, session: session) }
+        .compatOnChange(of: nowPlayingArtwork, initial: true) { _, artwork in nowPlaying.show(artwork, session: session) }
         // Pausing ends the faster speed in the session; another episode or quality plays at the chosen one.
-        .onChange(of: session.boost == nil) { _, ended in if ended { boost = nil; keyboardBoost = false } }
-        .onChange(of: clock.item) { endBoost() }
-        .onChange(of: store.resolvingEpisode?.name) { _, name in
+        .compatOnChange(of: session.boost == nil) { _, ended in if ended { boost = nil; keyboardBoost = false } }
+        .compatOnChange(of: clock.item) { endBoost() }
+        .compatOnChange(of: store.resolvingEpisode?.name) { _, name in
             if let name { askedEpisode = name; showEpisodeFailure(nil) }
         }
-        .onChange(of: store.episodeError) { _, reason in showEpisodeFailure(reason) }
+        .compatOnChange(of: store.episodeError) { _, reason in showEpisodeFailure(reason) }
         .sensoryFeedback(trigger: boost) { old, new in
             guard let new else { return nil }
             guard let old else { return .impact(weight: .light) }
@@ -238,7 +238,7 @@ struct MobilePlayerView: View {
         // the status bar above it.
         .statusBarHidden(!inline)
         // A failure, or a watch page's player back from full screen, has controls to reach.
-        .onChange(of: session.error != nil || inline) { _, unlock in if unlock { setLocked(false) } }
+        .compatOnChange(of: session.error != nil || inline) { _, unlock in if unlock { setLocked(false) } }
         .modifier(MobilePlayerKeyboard(enabled: keyboardEnabled, canPlay: showsTransport,
                                        canSeek: seekable, canBoost: boosts && !holding, item: clock.item.map(ObjectIdentifier.init),
                                        action: keyboardAction))
@@ -1599,7 +1599,7 @@ struct PlayerStatusBadge: View {
     static let key = "player.showsTimeAndBattery"
     /// In the buttons' glass capsule, or bare on the title's row.
     var grouped = true
-    @State private var battery = PlayerBattery()
+    @StateObject private var battery = PlayerBattery()
 
     var body: some View {
         HStack(spacing: 6) {
@@ -1646,12 +1646,12 @@ private struct BatteryGauge: View {
     }
 }
 
-@MainActor @Observable final class PlayerBattery {
+@MainActor final class PlayerBattery: ObservableObject {
     /// 0 to 1; nil where the device has no battery to report.
-    private(set) var level: Double?
-    private(set) var charging = false
-    @ObservationIgnored private var observers: [NSObjectProtocol] = []
-    @ObservationIgnored private var enabledMonitoring = false
+    @Published private(set) var level: Double?
+    @Published private(set) var charging = false
+    private var observers: [NSObjectProtocol] = []
+    private var enabledMonitoring = false
 
     func start() {
         guard observers.isEmpty else { return }
@@ -1687,16 +1687,16 @@ private struct BatteryGauge: View {
 }
 
 /// Picture in Picture for the player layer: the button, and carrying on in a floating window when the app is left.
-@MainActor @Observable final class PictureInPicture: NSObject, AVPictureInPictureControllerDelegate {
+@MainActor final class PictureInPicture: NSObject, ObservableObject, AVPictureInPictureControllerDelegate {
     let supported = AVPictureInPictureController.isPictureInPictureSupported()
-    private(set) var possible = false
-    private(set) var active = false
+    @Published private(set) var possible = false
+    @Published private(set) var active = false
     /// The window is up (from its start until it closes): the player screen can go, and the video plays on in it.
-    private(set) var floating = false
+    @Published private(set) var floating = false
     /// The view of the layer the window shows, kept for a player screen opened again while it floats.
-    @ObservationIgnored private(set) var layerView: PlayerLayerUIView?
-    @ObservationIgnored private var controller: AVPictureInPictureController?
-    @ObservationIgnored private var observation: NSKeyValueObservation?
+    private(set) var layerView: PlayerLayerUIView?
+    private var controller: AVPictureInPictureController?
+    private var observation: NSKeyValueObservation?
 
     func attach(_ view: PlayerLayerUIView) {
         guard supported else { return }
@@ -1833,19 +1833,19 @@ private struct BatteryGauge: View {
 }
 
 /// The playing item's position and duration, four times a second while it plays.
-@MainActor @Observable final class PlayerClock {
-    private(set) var position: Double = 0
+@MainActor final class PlayerClock: ObservableObject {
+    @Published private(set) var position: Double = 0
     /// Zero until the item has a finite duration.
-    private(set) var duration: Double = 0
-    private(set) var item: AVPlayerItem?
+    @Published private(set) var duration: Double = 0
+    @Published private(set) var item: AVPlayerItem?
     /// Where the seek bar is held, until the precise seek it ends with lands.
-    private(set) var scrubbing: Double?
+    @Published private(set) var scrubbing: Double?
     /// Where the loaded part around the position ends: the seek bar shows it ahead of the played part (#900).
-    private(set) var buffered: Double = 0
-    @ObservationIgnored private weak var player: AVPlayer?
-    @ObservationIgnored private var token: Any?
+    @Published private(set) var buffered: Double = 0
+    private weak var player: AVPlayer?
+    private var token: Any?
     /// The item's loaded ranges, which grow while it is paused too.
-    @ObservationIgnored private var loading: NSKeyValueObservation?
+    private var loading: NSKeyValueObservation?
 
     func attach(_ player: AVPlayer) {
         detach()
@@ -1870,17 +1870,17 @@ private struct BatteryGauge: View {
     }
 
     /// The frame the seek bar shows above its handle while dragged; nil until one is made, or where none can be.
-    private(set) var preview: CGImage?
-    @ObservationIgnored private var generator: AVAssetImageGenerator?
-    @ObservationIgnored private var generatorItem: ObjectIdentifier?
+    @Published private(set) var preview: CGImage?
+    private var generator: AVAssetImageGenerator?
+    private var generatorItem: ObjectIdentifier?
     /// An item AVFoundation made no frame from (an HLS stream, say): no more tries for it.
-    @ObservationIgnored private var previewless: ObjectIdentifier?
-    @ObservationIgnored private var generating = false
-    @ObservationIgnored private var nextPreview: Double?
+    private var previewless: ObjectIdentifier?
+    private var generating = false
+    private var nextPreview: Double?
 
     /// How much time one point of the drag moves (at its scrubbing speed): how close to the target the seek it ends
     /// with has to land (`SeekTolerance.release`).
-    @ObservationIgnored private var scrubPrecision = 0.0
+    private var scrubPrecision = 0.0
 
     /// While dragging, only the bar, the time and the preview follow the finger; the playing video is left alone
     /// until the finger lifts (Telegram).
@@ -1977,7 +1977,7 @@ private struct BatteryGauge: View {
 }
 
 /// The item's audio tracks and subtitles, for the options menu.
-@MainActor @Observable final class MediaTracks {
+@MainActor final class MediaTracks: ObservableObject {
     struct Group {
         let group: AVMediaSelectionGroup
         let options: [AVMediaSelectionOption]
@@ -1995,11 +1995,11 @@ private struct BatteryGauge: View {
         }
         func name(_ option: AVMediaSelectionOption) -> String { names[option] ?? option.displayName }
     }
-    private(set) var audio: Group?
-    private(set) var legible: Group?
+    @Published private(set) var audio: Group?
+    @Published private(set) var legible: Group?
     /// Bumped by a selection, so the menus show the new choice.
-    private var revision = 0
-    @ObservationIgnored private weak var item: AVPlayerItem?
+    @Published private var revision = 0
+    private weak var item: AVPlayerItem?
 
     func load(_ item: AVPlayerItem?) async {
         self.item = item; audio = nil; legible = nil

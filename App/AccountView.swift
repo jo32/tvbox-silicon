@@ -7,7 +7,7 @@ import TVCore
 /// requests, their account ID for pull requests, the ways they sign in, Sign Out and Delete Account. On Apple TV the
 /// card takes the left column.
 struct AccountView: View {
-    @State private var accounts = AccountStore.shared
+    @StateObject private var accounts = AccountStore.shared
     @State private var error: String?
     @State private var notice: String?
     @State private var code = ""
@@ -595,7 +595,7 @@ private struct SignInButton: View {
 
 /// The row on Settings that opens the Account page: the name when signed in, otherwise what signing in is for.
 struct AccountSettingsRow: View {
-    @State private var accounts = AccountStore.shared
+    @StateObject private var accounts = AccountStore.shared
     var body: some View {
         Group {
             #if os(tvOS)

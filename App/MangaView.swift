@@ -3,7 +3,7 @@ import TVCore
 
 /// The Manga section: what the viewer is reading and saved, then the chosen Venera source's explore pages.
 struct MangaView: View {
-    @State private var store = MangaStore.shared
+    @StateObject private var store = MangaStore.shared
     @Environment(\.openRoute) private var openRoute
 
     var body: some View {
@@ -91,7 +91,7 @@ private struct MangaWelcome: View {
 
 /// The installed sources as chips; the chosen one fills the page under it.
 private struct MangaSourceBar: View {
-    @State private var store = MangaStore.shared
+    @StateObject private var store = MangaStore.shared
     var body: some View {
         VStack(alignment: .leading, spacing: Layout.headerSpacing) {
             SectionHeader(title: L10n.text("Comic Sources")).padding(.horizontal, Layout.gutter)
@@ -438,7 +438,7 @@ struct MangaRankingView: View {
 
 /// Searches every installed source at once: one shelf per source, best first.
 struct MangaSearchView: View {
-    @State private var store = MangaStore.shared
+    @StateObject private var store = MangaStore.shared
     @State private var query = ""
     @State private var submitted = ""
     var body: some View {
@@ -541,7 +541,7 @@ struct MangaSourceResults: View {
 struct MangaLibraryView: View {
     enum Kind { case favorites, history }
     let kind: Kind
-    @State private var store = MangaStore.shared
+    @StateObject private var store = MangaStore.shared
     var body: some View {
         ScrollView {
             LazyVGrid(columns: MangaLayout.columns, alignment: .leading, spacing: Layout.gridRowSpacing) {
@@ -626,7 +626,7 @@ struct MangaFlow: SwiftUI.Layout {
 #if !os(tvOS)
 /// The switch beside the source, as Watch Now's: another installed source (they are managed in Settings).
 private struct MangaSourceSwitch: View {
-    @State private var store = MangaStore.shared
+    @StateObject private var store = MangaStore.shared
     var body: some View {
         Menu {
             Picker(L10n.text("Comic Sources"), selection: Binding(get: { store.currentSource?.key ?? "" }, set: { store.selectedSource = $0 })) {

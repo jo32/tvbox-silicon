@@ -10,7 +10,7 @@ import TVCore
 ///
 /// With automatic installs on (the default), Sparkle downloads new versions in the background and puts them
 /// in place when the app quits; the sheet's button then just relaunches.
-@MainActor @Observable final class MacUpdater: NSObject {
+@MainActor final class MacUpdater: NSObject, ObservableObject {
     enum Phase: Equatable {
         case idle
         case checking
@@ -23,27 +23,27 @@ import TVCore
         case failed(String)
     }
 
-    private(set) var phase: Phase = .idle
+    @Published private(set) var phase: Phase = .idle
     /// Downloads updates in the background and installs them on quit.
-    var automaticallyInstalls: Bool {
+    @Published var automaticallyInstalls: Bool {
         didSet { if updater.automaticallyDownloadsUpdates != automaticallyInstalls { updater.automaticallyDownloadsUpdates = automaticallyInstalls } }
     }
     var canCancel: Bool { cancellation != nil }
 
-    @ObservationIgnored private var updater: SPUUpdater!
-    @ObservationIgnored private let feed: URL
-    @ObservationIgnored private let defaults: UserDefaults
+    private var updater: SPUUpdater!
+    private let feed: URL
+    private let defaults: UserDefaults
     /// Someone pressed Install: say yes to each of Sparkle's questions until the app relaunches.
-    @ObservationIgnored private var installRequested = false
-    @ObservationIgnored private var cancellation: (() -> Void)?
+    private var installRequested = false
+    private var cancellation: (() -> Void)?
     /// Installs an update Sparkle downloaded on its own, without asking again.
-    @ObservationIgnored private var installNow: (() -> Void)?
+    private var installNow: (() -> Void)?
     /// Closes the release sheet: macOS doesn't quit an app while a sheet is open, so the relaunch waits for it.
-    @ObservationIgnored var closeSheet: (() -> Void)?
-    @ObservationIgnored private var terminationRetries = 0
+    var closeSheet: (() -> Void)?
+    private var terminationRetries = 0
     /// Sparkle has told the installer to relaunch: from here on, quitting the app installs the update and reopens it.
-    @ObservationIgnored private var relaunching = false
-    @ObservationIgnored private var relaunchWatchdog: Task<Void, Never>?
+    private var relaunching = false
+    private var relaunchWatchdog: Task<Void, Never>?
     private static let pendingKey = "pendingUpdateRelaunch"
 
     /// Nil in App Store builds, which the App Store updates, and in debug builds, whose update would replace

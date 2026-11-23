@@ -9,7 +9,7 @@ struct PlayerChannelsButton<Label: View>: View {
     let session: PlaybackSession
     @Binding var isPresented: Bool
     @ViewBuilder let label: () -> Label
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
 
     var body: some View {
         if PlayerChannelsSheet.offered(for: channel, session: session, in: store) {
@@ -33,7 +33,7 @@ extension View {
 struct PlayerChannelsSheet: View {
     let channel: Channel
     let session: PlaybackSession
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
     @State private var group: String?
     /// The viewer chose a channel here: the sheet closes once it plays.
@@ -52,7 +52,7 @@ struct PlayerChannelsSheet: View {
     var body: some View {
         NavigationStack {
             content
-                .environment(store.guide(for: playing))
+                .environmentObject(LiveGuideHolder(store.guide(for: playing)))
                 .navigationTitle(store.lineup(for: playing)?.title ?? playing.name)
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
@@ -68,7 +68,7 @@ struct PlayerChannelsSheet: View {
         #else
         .frame(minWidth: 520, idealWidth: 620, minHeight: 460, idealHeight: 560)
         #endif
-        .onChange(of: store.playing) { _, _ in if picked { dismiss() } }
+        .compatOnChange(of: store.playing) { _, _ in if picked { dismiss() } }
     }
 
     private var content: some View {
@@ -89,7 +89,7 @@ struct PlayerChannelsSheet: View {
                                         selection: "\(session.line)") { id in
                                 if let index = Int(id) { session.choose(line: index) }
                             }
-                            .contentMargins(.horizontal, 16, for: .scrollContent).scrollClipDisabled()
+                            .compatContentMargins(.horizontal, 16, for: .scrollContent).compatScrollClipDisabled()
                             .padding(.horizontal, -16)
                         }
                     }
@@ -97,7 +97,7 @@ struct PlayerChannelsSheet: View {
                         SourceStrip(items: groups.map { .init(id: $0, name: $0.isEmpty ? L10n.text("Ungrouped") : $0) }, selection: shown) {
                             group = $0
                         }
-                        .contentMargins(.horizontal, 16, for: .scrollContent).scrollClipDisabled()
+                        .compatContentMargins(.horizontal, 16, for: .scrollContent).compatScrollClipDisabled()
                         .padding(.horizontal, -16)
                     }
                 }
@@ -111,7 +111,7 @@ struct PlayerChannelsSheet: View {
                     .padding(.horizontal, 16).padding(.bottom, 16).padding(.top, 4)
                 }
                 .onAppear { proxy.scrollTo(playing.id, anchor: .center) }
-                .onChange(of: shown) { _, _ in
+                .compatOnChange(of: shown) { _, _ in
                     if items.contains(where: { $0.id == playing.id }) { proxy.scrollTo(playing.id, anchor: .center) }
                     else if let first = items.first { proxy.scrollTo(first.id, anchor: .top) }
                 }

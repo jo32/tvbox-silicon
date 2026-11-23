@@ -3,7 +3,7 @@ import TVCore
 
 /// The reading state: loaded chapters (vertical mode reads on from one into the next), where the viewer is,
 /// prefetching ahead, and the saved progress.
-@MainActor @Observable final class MangaReaderModel {
+@MainActor final class MangaReaderModel: ObservableObject {
     struct Chapter: Identifiable {
         let index: Int
         let pages: [String]
@@ -15,23 +15,23 @@ import TVCore
 
     let comic: MangaComic
     let chapters: [MangaChapter]
-    private(set) var loaded: [Chapter] = []
-    var position: Position
+    @Published private(set) var loaded: [Chapter] = []
+    @Published var position: Position
     /// Where to scroll or page to; the views clear it once there.
-    var target: Position?
-    private(set) var failure: String?
-    private(set) var loadingNext = false
-    var mode: MangaReaderMode { didSet { MangaStore.shared.setMode(mode, for: comic) } }
+    @Published var target: Position?
+    @Published private(set) var failure: String?
+    @Published private(set) var loadingNext = false
+    @Published var mode: MangaReaderMode { didSet { MangaStore.shared.setMode(mode, for: comic) } }
     /// Page shapes (width / height) once known, so the column doesn't jump as pages load.
-    var aspects: [String: CGFloat] = [:]
+    @Published var aspects: [String: CGFloat] = [:]
     /// The width the paged reader decodes pages for, in pixels; its next pages are decoded ahead at it.
-    @ObservationIgnored var pagedWidth: CGFloat = 0
+    var pagedWidth: CGFloat = 0
     /// Pages decoded for the paged reader, the latest last: a page turned to shows at once rather than its placeholder
     /// for a moment, which flashed on every turn (#1280). A few pages, and at most `decodedBytes`.
-    @ObservationIgnored private var decoded: [(key: String, image: CGImage)] = []
+    private var decoded: [(key: String, image: CGImage)] = []
     private static let decodedBytes = 160 << 20, decodedCount = 8
-    private var saved = Date.distantPast
-    private var released = Date.distantPast
+    @Published private var saved = Date.distantPast
+    @Published private var released = Date.distantPast
 
     init(_ reading: MangaReading) {
         comic = reading.comic
@@ -155,18 +155,18 @@ import TVCore
 
 /// Reads a comic full screen: vertical scroll (webtoons) or one page at a time in either direction.
 struct MangaReaderView: View {
-    @State private var model: MangaReaderModel
+    @StateObject private var model: MangaReaderModel
     @State private var chrome = true
     @State private var showsChapters = false
     @Environment(\.dismiss) private var dismiss
     #if os(macOS)
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     #endif
     private let start: MangaReading
 
     init(reading: MangaReading) {
         start = reading
-        _model = State(initialValue: MangaReaderModel(reading))
+        _model = StateObject(wrappedValue: MangaReaderModel(reading))
     }
 
     var body: some View {
@@ -341,9 +341,7 @@ struct MangaVerticalReader: View {
             #else
             column(proxy.size, top: top)
                 #if os(macOS)
-                .simultaneousGesture(MagnifyGesture()
-                    .onChanged { value in pinch = value.magnification }
-                    .onEnded { value in zoom = min(4, max(1, zoom * value.magnification)); pinch = 1 })
+
                 .onTapGesture(count: 2) { withAnimation(.smooth) { zoom = zoom > 1 ? 1 : 2 } }
                 .onTapGesture { toggleChrome?() }
                 #endif
@@ -387,7 +385,7 @@ struct MangaVerticalReader: View {
                 }
                 .frame(width: width)
             }
-            .onChange(of: model.target) { _, target in
+            .compatOnChange(of: model.target) { _, target in
                 guard let target else { return }
                 reader.scrollTo(target, anchor: .top)
                 model.target = nil
@@ -494,10 +492,10 @@ struct MangaPagedReader: View {
                 }
                 #if os(macOS)
                 .overlay { tapZones(proxy.size, spreads) }
-                .focusable().focusEffectDisabled()
-                .onKeyPress(.leftArrow) { turn(rtl ? 1 : -1, spreads); return .handled }
-                .onKeyPress(.rightArrow) { turn(rtl ? -1 : 1, spreads); return .handled }
-                .onKeyPress(.space) { turn(1, spreads); return .handled }
+                .focusable().compatFocusEffectDisabled()
+                .compatOnKeyPress(.leftArrow) { turn(rtl ? 1 : -1, spreads) }
+                .compatOnKeyPress(.rightArrow) { turn(rtl ? -1 : 1, spreads) }
+                .compatOnKeyPress(.space) { turn(1, spreads) }
                 #else
                 .focusable().focused($focused)
                 .onAppear { focused = true }
@@ -518,21 +516,21 @@ struct MangaPagedReader: View {
                 #endif
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
-            .onChange(of: pixelWidth, initial: true) { _, width in model.pagedWidth = width }
+            .compatOnChange(of: pixelWidth, initial: true) { _, width in model.pagedWidth = width }
             // A turn of the device pairs pages differently, or a page turned out to be a spread itself: the page on screen
             // stays, in the spread that now holds it.
-            .onChange(of: spreads, initial: true) { _, spreads in
+            .compatOnChange(of: spreads, initial: true) { _, spreads in
                 let first = start(page, spreads)
                 if first != page { page = first }
             }
-            .onChange(of: model.target) { _, target in
+            .compatOnChange(of: model.target) { _, target in
                 guard let target else { return }
                 page = start(target.page, spreads)
                 model.target = nil
             }
         }
         .ignoresSafeArea()
-        .onChange(of: page) { _, value in
+        .compatOnChange(of: page) { _, value in
             if value < count { model.seen(.init(chapter: model.position.chapter, page: value)) }
             else if model.hasNext { Task { await model.open(model.position.chapter + 1) } }
         }

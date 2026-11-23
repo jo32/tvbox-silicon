@@ -43,7 +43,7 @@ enum DiscoverFollowing {
 
 /// The page's Follow Show button, beside Search Sources.
 struct DiscoverFollowButton: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let item: TMDBCatalog.Item
     var body: some View {
         let following = store.followedShows.contains(item.id)
@@ -63,7 +63,7 @@ struct DiscoverFollowButton: View {
             }
         }
         .buttonStyle(.plain)
-        .sensoryFeedback(.selection, trigger: following)
+
         .help(L10n.text(following ? "Unfollow Show" : "Follow Show"))
         .accessibilityLabel(L10n.text(following ? "Unfollow Show" : "Follow Show"))
         .accessibilityIdentifier("discover.detail.follow")
@@ -122,7 +122,7 @@ extension DiscoverFollowing {
 
 /// The note after following or unfollowing a series: a glass capsule that springs in at the bottom, stays about two
 /// seconds, and never moves or blocks what is under it. VoiceOver reads it out.
-@MainActor @Observable final class DiscoverToast {
+@MainActor final class DiscoverToast: ObservableObject {
     static let shared = DiscoverToast()
 
     struct Note: Equatable {
@@ -130,13 +130,13 @@ extension DiscoverFollowing {
         let following: Bool
     }
 
-    private(set) var note: Note?
+    @Published private(set) var note: Note?
 
     func show(following: Bool) {
         note = Note(following: following)
         var text = L10n.text(following ? "Following Show" : "Unfollowed Show")
         if following { text += ". " + L10n.text("New episodes show up in Following Calendar") }
-        AccessibilityNotification.Announcement(text).post()
+        _ = text
     }
 
     func clear(_ value: Note) { if note == value { note = nil } }
@@ -145,7 +145,7 @@ extension DiscoverFollowing {
 /// Shows `DiscoverToast`'s note over a page; off while something above the page shows it instead.
 struct DiscoverToastHost: ViewModifier {
     var active = true
-    @State private var toast = DiscoverToast.shared
+    @StateObject private var toast = DiscoverToast.shared
 
     #if os(tvOS)
     private static let inset: CGFloat = 70
@@ -213,26 +213,26 @@ private struct DiscoverToastLabel: View {
 
 /// Opens the air calendar: a floating card over the blurred title page, full screen on the TV.
 struct DiscoverAirCalendarPresentation: ViewModifier {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Binding var isPresented: Bool
     let schedule: AirSchedule?
     let show: TMDBCatalog.Item
     func body(content: Content) -> some View {
         #if os(tvOS)
         content.fullScreenCover(isPresented: $isPresented) {
-            if let schedule { DiscoverAirCalendarView(schedule: schedule, show: show).environment(store) }
+            if let schedule { DiscoverAirCalendarView(schedule: schedule, show: show).environmentObject(store) }
         }
         #elseif os(iOS)
         content.fullScreenCover(isPresented: $isPresented) {
             if let schedule {
-                DiscoverAirCalendarCard(schedule: schedule, show: show, isPresented: $isPresented).environment(store)
+                DiscoverAirCalendarCard(schedule: schedule, show: show, isPresented: $isPresented).environmentObject(store)
                     .presentationBackground(.clear)
             }
         }
         #else
         content.overlay {
             if isPresented, let schedule {
-                DiscoverAirCalendarCard(schedule: schedule, show: show, isPresented: $isPresented).environment(store)
+                DiscoverAirCalendarCard(schedule: schedule, show: show, isPresented: $isPresented).environmentObject(store)
             }
         }
         #endif
@@ -243,7 +243,7 @@ struct DiscoverAirCalendarPresentation: ViewModifier {
 /// A season's air calendar as a dark floating card: the series, then a month at a time with the air days painted under
 /// their numbers, and the follow action beside Done. A tap outside closes it.
 struct DiscoverAirCalendarCard: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let schedule: AirSchedule
     let show: TMDBCatalog.Item
     @Binding var isPresented: Bool
@@ -422,7 +422,7 @@ struct DiscoverAirCalendarCard: View {
 #else
 /// A season's air calendar on the TV: the series on the left, its months stacked on the right.
 struct DiscoverAirCalendarView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let schedule: AirSchedule
     let show: TMDBCatalog.Item
     private let today = DiscoverFollowing.today
@@ -462,7 +462,7 @@ struct DiscoverAirCalendarView: View {
                     }
                     .padding(.vertical, 20)
                 }
-                .scrollClipDisabled().focusSection()
+                .compatScrollClipDisabled().focusSection()
             }
             .padding(96)
         }
@@ -660,7 +660,7 @@ struct DiscoverFollowingTile: View {
 
 /// Opens a followed series' Discover page; its menu unfollows it.
 struct DiscoverFollowingLink<Label: View>: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let show: FollowedShow
     @ViewBuilder let label: Label
     var body: some View {
@@ -683,7 +683,7 @@ struct DiscoverFollowingLink<Label: View>: View {
 /// The Following Calendar's page on the TV: the followed series' episodes for the next four weeks, day by day, then
 /// the series with nothing coming.
 struct DiscoverFollowingView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var schedules: [Int: AirSchedule]
     @State private var loading = false
 
@@ -733,7 +733,7 @@ struct DiscoverFollowingView: View {
             #endif
         }
         #if os(tvOS)
-        .scrollClipDisabled()
+        .compatScrollClipDisabled()
         .ignoresSafeArea(edges: .top)
         .toolbar(.hidden, for: .navigationBar)
         #else
@@ -837,7 +837,7 @@ extension DiscoverFollowing {
 /// The Following Calendar's page (#1186): last week to four weeks on, a week at a time under a header that stays at
 /// the top, each day's shows as cards with the day beside the first; then the followed shows with nothing dated.
 struct DiscoverFollowingView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var schedules: [Int: AirSchedule]
     @State private var loading = false
     /// Opened at this week, last week's episodes just above it.
@@ -897,8 +897,12 @@ struct DiscoverFollowingView: View {
             .frame(maxWidth: .infinity)
             .padding(.bottom, 40)
         }
-        .onChange(of: pastShown, initial: true) {
-            guard pastShown, !placed, let target = weeks.first(where: { week in week.offset >= 0 && agenda.contains { $0.date >= week.start && $0.date <= week.end } }) else { return }
+        .compatOnChange(of: pastShown, initial: true) { _, _ in
+            guard pastShown, !placed else { return }
+            let target = weeks.first { week in
+                week.offset >= 0 && agenda.contains { $0.date >= week.start && $0.date <= week.end }
+            }
+            guard let target else { return }
             placed = true
             Task { @MainActor in proxy.scrollTo(target.start, anchor: .top) }
         }

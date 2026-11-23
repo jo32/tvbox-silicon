@@ -13,14 +13,7 @@ struct GatherMark: View {
             if reduceMotion {
                 GatherMarkFrame(time: GatherTimeline.duration)
             } else {
-                KeyframeAnimator(initialValue: 0.0, trigger: plays) { time in
-                    GatherMarkFrame(time: time)
-                } keyframes: { _ in
-                    KeyframeTrack {
-                        MoveKeyframe(0.0)
-                        LinearKeyframe(GatherTimeline.duration, duration: GatherTimeline.duration)
-                    }
-                }
+                GatherMarkFrame(time: GatherTimeline.duration)
             }
         }
         .aspectRatio(1, contentMode: .fit)

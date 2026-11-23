@@ -5,7 +5,7 @@ import TVCore
 /// Stops playback after a while, or when the song or episode playing ends, for people who listen as they fall
 /// asleep (#1157, #1198). One timer for the whole app: music and the video player both obey it. When the time
 /// is up the sound fades out over a few seconds and playback pauses where it is, to continue in the morning.
-@MainActor @Observable final class SleepTimer {
+@MainActor final class SleepTimer: ObservableObject {
     enum Mode: Equatable {
         case off
         /// Pauses at this moment.
@@ -24,13 +24,13 @@ import TVCore
     /// How long the sound takes to fade out.
     static let fadeLength: Double = 6
 
-    private(set) var mode: Mode = .off
-    @ObservationIgnored private var task: Task<Void, Never>?
+    @Published private(set) var mode: Mode = .off
+    private var task: Task<Void, Never>?
 
     var isOn: Bool { mode != .off }
     var endsWithItem: Bool { mode == .endOfItem }
     /// The minutes picked last, which the menu ticks while they run.
-    private(set) var minutes: Int?
+    @Published private(set) var minutes: Int?
 
     func start(minutes: Int) {
         set(.at(Date().addingTimeInterval(Double(minutes) * 60)), minutes: minutes)

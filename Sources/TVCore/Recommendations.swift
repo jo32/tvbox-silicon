@@ -1,5 +1,4 @@
 import Foundation
-import Observation
 
 public struct PosterResource: Hashable, Sendable {
     public let url: URL
@@ -69,24 +68,24 @@ public struct Recommendation: Identifiable, Hashable, Sendable {
     }
 }
 
-@MainActor @Observable public final class RecommendationModel {
-    public private(set) var items: [Recommendation] = []
+@MainActor public final class RecommendationModel: ObservableObject {
+    @Published public private(set) var items: [Recommendation] = []
     /// The source's own categories, browsable beside its recommendations.
-    public private(set) var categories: [Category] = []
-    public private(set) var site: Site?
-    public private(set) var busy = false
-    public private(set) var error: String?
+    @Published public private(set) var categories: [Category] = []
+    @Published public private(set) var site: Site?
+    @Published public private(set) var busy = false
+    @Published public private(set) var error: String?
     /// Counts resets that dropped a load or what it showed. A view keys its load on it, so a subscription rebuilt
     /// while the home was loading (built-in sources fetched at launch) loads it again rather than staying blank (#810).
-    public private(set) var resets = 0
+    @Published public private(set) var resets = 0
     private struct Cached {
         let items: [Recommendation]
         let categories: [Category]
         let date: Date
     }
-    private var cache: [String: Cached] = [:]
-    private var identity: String?
-    private var generation = UUID()
+    @Published private var cache: [String: Cached] = [:]
+    @Published private var identity: String?
+    @Published private var generation = UUID()
     public init() {}
 
     public func reset() {

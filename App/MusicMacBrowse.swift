@@ -201,7 +201,7 @@ struct MusicCollectionsPage: View {
         .screenBackdrop()
         #if os(macOS)
         .navigationTitle(title)
-        .toolbar(removing: .title)
+        .compatToolbarRemovingTitle()
         #else
         .screenTitle(title)
         .musicPlayerInset()
@@ -222,7 +222,7 @@ private struct MusicSongGrid: View {
         ScrollStrip(overlayArrows: true) {
             HStack(alignment: .top, spacing: 26) {
                 ForEach(columns.indices, id: \.self) { column in
-                    self.column(columns[column]).containerRelativeFrame(.horizontal, count: 3, spacing: 26)
+                    self.column(columns[column])
                 }
             }
         }
@@ -249,7 +249,7 @@ private struct MusicSongGrid: View {
 
 /// A song in the grid: cover, title and artist; on the Mac its menu too, on Apple TV a long press.
 private struct MusicSongCell: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let track: MusicTrack
     var divider = true
     let action: () -> Void
@@ -311,7 +311,6 @@ private struct MusicPlayingBadge: View {
             RoundedRectangle(cornerRadius: 5, style: .continuous).fill(.black.opacity(0.42))
             Image(systemName: current ? "waveform" : "play.fill")
                 .font(.system(size: 13, weight: .bold)).foregroundStyle(.white)
-                .symbolEffect(.variableColor.iterative, isActive: current)
         }
         .accessibilityHidden(true)
     }
@@ -320,7 +319,7 @@ private struct MusicPlayingBadge: View {
 #if os(macOS)
 /// A song's "…": play it next, or after everything queued.
 struct MusicTrackMenu: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let tracks: [MusicTrack]
     var body: some View {
         Menu {
@@ -374,7 +373,7 @@ struct MusicSongTable: View {
 }
 
 private struct MusicSongTableRow: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let index: Int
     let track: MusicTrack
     let numbered: Bool
@@ -427,7 +426,7 @@ private struct MusicSongTableRow: View {
 
 /// Every song a search found, as a table.
 struct MusicSongsPage: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let title: String
     let tracks: [MusicTrack]
     var body: some View {
@@ -440,14 +439,14 @@ struct MusicSongsPage: View {
         }
         .screenBackdrop()
         .navigationTitle(title)
-        .toolbar(removing: .title)
+        .compatToolbarRemovingTitle()
     }
 }
 
 /// An album's or playlist's head: the cover large, the title, who made it, what it is, then Shuffle,
 /// Play and Add to Up Next.
 struct MusicCollectionHeader: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let collection: MusicCollection
     let tracks: [MusicTrack]
 

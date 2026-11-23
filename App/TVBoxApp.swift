@@ -4,12 +4,12 @@ import TVCore
 @main struct TVBoxApp: App {
     @Environment(\.scenePhase) private var scenePhase
     #if os(iOS)
-    @State private var store = Store.shared
+    @StateObject private var store = Store.shared
     #else
-    @State private var store = Store()
+    @StateObject private var store = Store()
     #endif
-    @State private var updates = Updates()
-    @State private var announcements = Announcements()
+    @StateObject private var updates = Updates()
+    @StateObject private var announcements = Announcements()
     #if os(iOS)
     /// An Apple TV's Douyin code, scanned with the Camera.
     @State private var douyinHandoff: DouyinHandoff.Link?
@@ -70,7 +70,7 @@ import TVCore
                 }
                 #if os(tvOS) || os(macOS)
                 .task { BilibiliCastController.shared.start(store) }
-                .onChange(of: store.extrasUnlocked) { _, unlocked in if unlocked { BilibiliCastController.shared.start(store) } }
+                .compatOnChange(of: store.extrasUnlocked) { _, unlocked in if unlocked { BilibiliCastController.shared.start(store) } }
                 #endif
                 #if os(tvOS) || os(macOS)
                 .task { PlayOnController.shared.start(store) }
@@ -88,7 +88,7 @@ import TVCore
                     else if let link = SubscriptionImportLink(url) { subscriptionRequest = .link(link) }
                     else if let link = LivePluginSourceLink(url), store.extrasUnlocked { pluginSourceLink = link }
                 }
-                .sheet(item: $pluginSourceLink) { link in LivePluginSourceSheet(link: link).environment(store) }
+                .sheet(item: $pluginSourceLink) { link in LivePluginSourceSheet(link: link).environmentObject(store) }
                 .sheet(item: $douyinHandoff) { DouyinHandoffView(link: $0) }
                 .sheet(item: $subscriptionRequest) { SubscriptionImportView(request: $0) }
                 #elseif os(macOS)
@@ -98,18 +98,18 @@ import TVCore
                     else if let link = SubscriptionImportLink(url) { subscriptionRequest = .link(link) }
                     else if let link = LivePluginSourceLink(url), store.extrasUnlocked { pluginSourceLink = link }
                 }
-                .sheet(item: $pluginSourceLink) { link in LivePluginSourceSheet(link: link).environment(store) }
+                .sheet(item: $pluginSourceLink) { link in LivePluginSourceSheet(link: link).environmentObject(store) }
                 .sheet(item: $subscriptionRequest) { SubscriptionImportView(request: $0) }
                 // Without this, every link opened a second main window, and the sheet showed in both.
                 .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
                 #endif
                 // A launch that ends while active, without passing through here, crashed or was ended.
-                .onChange(of: scenePhase, initial: true) { _, phase in ErrorReports.shared.onScreen(phase == .active) }
+                .compatOnChange(of: scenePhase, initial: true) { _, phase in ErrorReports.shared.onScreen(phase == .active) }
                 // A day of use earns a point while signed in (Settings › Account).
-                .onChange(of: scenePhase, initial: true) { _, phase in
+                .compatOnChange(of: scenePhase, initial: true) { _, phase in
                     if phase == .active { Task { await AccountStore.shared.markActiveDay() } }
                 }
-                .onChange(of: scenePhase) { _, phase in
+                .compatOnChange(of: scenePhase) { _, phase in
                     if phase == .background {
                         Task { _ = await Diagnostics.shared.snapshot(); ErrorReports.shared.save() }
                         store.cloudSync?.flushPending()
@@ -144,7 +144,7 @@ import TVCore
                 #endif
                 // Outside every modifier above, so the import and Douyin sheets get them too: on RootView alone, a
                 // yingxia://import link stopped the app ("No Observable object of type Store found", TestFlight 49-51).
-                .environment(store).environment(updates).environment(announcements)
+                .environmentObject(store).environmentObject(updates).environmentObject(announcements)
         }
         #if os(macOS)
         .defaultSize(width: 1240, height: 820)
@@ -160,17 +160,9 @@ import TVCore
         #if os(macOS)
         // The music mini player, floating over other apps at the bottom right; also in the Window menu.
         Window(L10n.text("Mini Player"), id: MusicMacMiniPlayer.windowID) {
-            MusicMacMiniPlayer().environment(store).modifier(ThemeTint())
+            MusicMacMiniPlayer().environmentObject(store).modifier(ThemeTint())
         }
-        .windowStyle(.plain)
-        .windowLevel(.floating)
         .windowResizability(.contentSize)
-        .restorationBehavior(.disabled)
-        .defaultWindowPlacement { content, context in
-            let size = content.sizeThatFits(.unspecified)
-            let screen = context.defaultDisplay.visibleRect
-            return WindowPlacement(CGPoint(x: screen.maxX - size.width - 20, y: screen.maxY - size.height - 20), size: size)
-        }
         .keyboardShortcut("m", modifiers: [.command, .shift])
         #endif
     }
@@ -254,7 +246,7 @@ struct OpenedSubscriptionFile: Identifiable {
 
 struct SubscriptionImportView: View {
     let request: SubscriptionImportRequest
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
     @State private var adding = false
     @State private var failure: String?

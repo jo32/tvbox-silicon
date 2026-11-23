@@ -6,10 +6,10 @@ import TVCore
 /// artwork, which tints the page, and every section below is a row of covers that lift under focus, with captions that
 /// move down with them.
 struct WatchNowTVPage: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let config: Subscription
     let sections: Set<HomeSection>
-    @State private var hero = WatchNowHeroState()
+    @StateObject private var hero = WatchNowHeroState()
 
     /// The newest titles not finished yet, for the hero.
     private var upNext: [PlaybackHistoryEntry] {
@@ -44,7 +44,7 @@ struct WatchNowTVPage: View {
                     .coordinateSpace(name: "watchNowScroll")
                     .modifier(DiscoverScrollObserver(offset: Binding(get: { hero.scrollY }, set: { hero.scrollY = $0 })))
                     .scrollIndicators(.hidden)
-                    .scrollClipDisabled()
+                    .compatScrollClipDisabled()
                     #if DEBUG
                     // `-qaScroll <row>` (continue, recommendations, favorites, live) scrolls there, for screenshots.
                     .task { if let target = QALaunch.scrollTarget { try? await Task.sleep(for: .seconds(8)); reader.scrollTo(target, anchor: .top) } }
@@ -120,7 +120,7 @@ private struct WatchNowTVBackdrop: View {
 /// Up Next: the title's logo or name, where you are in it, Resume and its page; the dots move between the newest
 /// titles not finished yet, and Select on one resumes it.
 private struct WatchNowTVHero: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.openHistoryDetails) private var openDetails
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let entries: [PlaybackHistoryEntry]
@@ -191,7 +191,7 @@ private struct WatchNowTVHero: View {
         }
         .focusSection()
         .defaultFocus($focus, .resume)
-        .onChange(of: focus) { _, value in
+        .compatOnChange(of: focus) { _, value in
             guard case .page(let index) = value, entries.indices.contains(index) else { return }
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.3)) { state.selected = entries[index].id }
         }
@@ -345,9 +345,9 @@ struct WatchNowTVRow<Content: View>: View {
             .padding(.leading, seeAll != nil && !revealed ? gutter - DiscoverLayout.spacing - 1 : gutter)
             .padding(.trailing, gutter).padding(.vertical, 24)
         }
-        .scrollClipDisabled().scrollIndicators(.hidden)
+        .compatScrollClipDisabled().scrollIndicators(.hidden)
         .focusSection()
-        .onChange(of: seeAllFocused) { _, focused in
+        .compatOnChange(of: seeAllFocused) { _, focused in
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { revealed = focused }
         }
     }
@@ -447,7 +447,7 @@ struct WatchNowTVPlateStyle: ButtonStyle {
 /// A favorite in the Favorites row: videos and episodes by their cover; channels, songs and drive files on a plate
 /// with their logo, artwork or symbol, the same size. Press and hold removes it.
 private struct WatchNowTVFavorite: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let item: FavoriteItem
 
     var body: some View {
@@ -513,7 +513,7 @@ private struct WatchNowTVFavorite: View {
 /// A row of a source's category on Watch Now: its first page. Rows come and go as the page scrolls (it is lazy), so
 /// what they loaded is kept in `WatchNowRows`: scrolling back shows it at once instead of loading it again.
 struct WatchNowTVCategoryRail: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let title: String
     let category: String
     let client: CatalogClient
@@ -556,11 +556,11 @@ struct WatchNowTVCategoryRail: View {
 
 /// The hero's selection and artwork, read only by the hero and the backdrop: scrolling and paging must not evaluate the
 /// rows again.
-@MainActor @Observable final class WatchNowHeroState {
-    var selected: String?
-    var scrollY: CGFloat = 0
-    var paints: [String: DiscoverPaint] = [:]
-    var details: [String: TMDBMatch.Details] = [:]
+@MainActor final class WatchNowHeroState: ObservableObject {
+    @Published var selected: String?
+    @Published var scrollY: CGFloat = 0
+    @Published var paints: [String: DiscoverPaint] = [:]
+    @Published var details: [String: TMDBMatch.Details] = [:]
     var paint: DiscoverPaint? { selected.flatMap { paints[$0] } }
 
     /// Artwork for each title, two at a time, the shown one first: on Apple TV the TMDB backdrop this device already has
@@ -614,11 +614,11 @@ struct WatchNowTVCategoryRail: View {
 
 /// Watch Now's category rows, kept for the app's life. A row older than ten minutes loads again when it comes on
 /// screen, showing the old covers until the new ones arrive; a load runs to the end even if the row scrolls away. Apple TV and iPhone share it.
-@MainActor @Observable final class WatchNowRows {
+@MainActor final class WatchNowRows: ObservableObject {
     static let shared = WatchNowRows()
     struct Row { var videos: [Video]; var date: Date }
-    private(set) var rows: [String: Row] = [:]
-    @ObservationIgnored private var loading: Set<String> = []
+    @Published private(set) var rows: [String: Row] = [:]
+    private var loading: Set<String> = []
 
     static func key(category: String, client: CatalogClient) -> String { "\(client.origin)|\(client.site.key)|\(category)" }
 

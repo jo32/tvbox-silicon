@@ -9,7 +9,7 @@ import BackgroundTasks
 
 /// Downloaded episodes, the download queue, and how much space they take.
 struct DownloadsView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var deleting: DownloadShow?
     /// Videos or songs, once there are songs; videos first unless only songs are saved.
     @State private var kind = Kind.videos
@@ -37,7 +37,7 @@ struct DownloadsView: View {
         .screenBackdrop()
         .tabTitle(L10n.text("Offline Cache"))
         .task { await library.measure() }
-        .onChange(of: library.items.filter { $0.status == .completed }.count) { Task { await library.measure() } }
+        .compatOnChange(of: library.items.filter { $0.status == .completed }.count) { Task { await library.measure() } }
         #if os(macOS)
         // Space in one line under the window title, as Finder's status bar has it: beside a whole disk the
         // downloads were a sliver on a bar that was nearly all "Other".
@@ -639,16 +639,16 @@ extension View {
 /// device however old it is, so it shows offline too; or the work the viewer picked on that page. A show never looked
 /// up is looked up once with what its download knows, one show at a time while the page is open. Shows TMDB doesn't
 /// have, and sources it doesn't cover (short dramas, Bilibili), keep the source's cover.
-@MainActor @Observable final class DownloadArtwork {
+@MainActor final class DownloadArtwork: ObservableObject {
     static let shared = DownloadArtwork()
     struct Entry {
         let details: TMDBMatch.Details
         let numbering: TMDBMatch.Numbering
         let offset: Int
     }
-    private(set) var entries: [String: Entry] = [:]
+    @Published private(set) var entries: [String: Entry] = [:]
     /// Shows looked at in this run of the app, found or not.
-    @ObservationIgnored private var tried: Set<String> = []
+    private var tried: Set<String> = []
 
     func details(for show: DownloadShow) -> TMDBMatch.Details? { entries[show.tmdbKey]?.details }
 
@@ -675,7 +675,7 @@ extension View {
             let key = show.tmdbKey
             tried.insert(key)
             if let entry = await Self.resolve(show) {
-                withAnimation(.smooth(duration: 0.35)) { entries[key] = entry }
+                withAnimation(.easeInOut(duration: 0.35)) { entries[key] = entry }
             } else if Task.isCancelled {
                 // The page closed during the lookup: try again when it opens.
                 tried.remove(key)
@@ -809,7 +809,7 @@ private struct DownloadShowArt: View {
 /// saved episodes as tiles with TMDB's stills and titles, in the source's order or, with 倒序, the other way round.
 struct DownloadShowPage: View {
     let id: String
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
     @AppStorage("downloads.episodesReversed") private var reversed = false
     @State private var deleting = false
@@ -825,7 +825,7 @@ struct DownloadShowPage: View {
         .screenBackdrop()
         .screenTitle(show.map { artwork.details(for: $0)?.name ?? $0.title } ?? "")
         // Its last episode deleted: back to Downloads.
-        .onChange(of: show == nil) { _, gone in if gone { dismiss() } }
+        .compatOnChange(of: show == nil) { _, gone in if gone { dismiss() } }
         .task { if let show { await artwork.load([show]) } }
         .confirmationDialog(L10n.text("Delete all cached episodes of %@?", show?.title ?? ""), isPresented: $deleting, titleVisibility: .visible) {
             Button(L10n.text("Delete Cached Items"), role: .destructive) {
@@ -1127,7 +1127,7 @@ struct DownloadPicker: View {
                     .padding(16)
                     .onGeometryChange(for: CGFloat.self, of: \.size.height) { listHeight = $0 }
             }
-            .scrollBounceBehavior(.basedOnSize)
+            
             .frame(height: min(max(listHeight, 56), 380))
             Divider()
             HStack(spacing: 10) {

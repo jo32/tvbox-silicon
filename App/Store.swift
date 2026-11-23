@@ -1,7 +1,7 @@
 import SwiftUI
 import TVCore
 
-@MainActor @Observable final class Store {
+@MainActor final class Store: ObservableObject {
     let searchModel = SearchModel()
     /// Song search and the music player; both outlive the Music page, so a song keeps playing elsewhere in the app.
     /// The Mac and Apple TV list every kind at once, in rows; a phone or iPad starts on songs.
@@ -18,52 +18,52 @@ import TVCore
     let recommendationModel = RecommendationModel()
     /// The profile whose library is open (#1456). Everything below that is a `private(set) var` is that profile's, and
     /// `openProfile(_:)` replaces it with another's.
-    private(set) var profile: Profile
-    private(set) var playbackHistory: PlaybackHistory
-    private(set) var playbackDefaults: UserDefaults
-    private(set) var pinnedSources: PinnedSources
-    private(set) var hiddenSources: HiddenSources
+    @Published private(set) var profile: Profile
+    @Published private(set) var playbackHistory: PlaybackHistory
+    @Published private(set) var playbackDefaults: UserDefaults
+    @Published private(set) var pinnedSources: PinnedSources
+    @Published private(set) var hiddenSources: HiddenSources
     /// Live platforms and playlists the viewer turned off (#601, #837).
-    private(set) var hiddenLiveSources: HiddenLiveSources
-    private(set) var sourceOrder: SourceOrder
+    @Published private(set) var hiddenLiveSources: HiddenLiveSources
+    @Published private(set) var sourceOrder: SourceOrder
     /// Keeps the viewer's library the same on their other devices; nil for tests and QA's isolated data. Only the main
     /// profile's library syncs: it is suspended while another profile is open.
     let cloudSync: CloudSync?
     /// The history entry being resumed; another entry, or leaving the page, replaces or cancels it.
-    private(set) var resumingHistoryID: String?
-    private var resumeTask: Task<Void, Never>?
+    @Published private(set) var resumingHistoryID: String?
+    @Published private var resumeTask: Task<Void, Never>?
     /// Every enabled subscription merged in list order, plus configured cloud drives.
-    var subscription: Subscription?
+    @Published var subscription: Subscription?
     /// The address being typed in to add a subscription.
-    var subscriptionAddress: String
+    @Published var subscriptionAddress: String
     /// What to call the subscription being added; empty shows where it lives instead.
-    var subscriptionName = ""
+    @Published var subscriptionName = ""
     /// Every subscription the viewer added, in the order they merge.
-    var subscriptions: [SubscriptionEntry] = []
+    @Published var subscriptions: [SubscriptionEntry] = []
     /// Why a subscription last failed to refresh, by address; its last good copy stays in use.
-    var subscriptionErrors: [String: String] = [:]
+    @Published var subscriptionErrors: [String: String] = [:]
     /// The last good copy of each subscription, by address.
-    private(set) var documents: [String: Subscription] = [:]
-    private(set) var favorites: Favorites
+    @Published private(set) var documents: [String: Subscription] = [:]
+    @Published private(set) var favorites: Favorites
     /// The series followed from Discover (追剧, #1186).
-    private(set) var followedShows: FollowedShows
-    var importing = false
-    var error: String?
+    @Published private(set) var followedShows: FollowedShows
+    @Published var importing = false
+    @Published var error: String?
     /// Why the last subscription import failed. It shows under the address field, not in the app-wide alert: on
     /// iPhone and iPad that alert closed the Add Subscription sheet over it and took the viewer out of the form (#357).
-    var importError: String?
-    var notice: String?
+    @Published var importError: String?
+    @Published var notice: String?
     var playing: Channel? {
         // An episode of a listening source (audiobooks, radio, songs) plays in the music player instead (#289).
         didSet { if let channel = playing, let queue = listeningQueue(for: channel) { playing = nil; listen(queue, from: channel) } }
     }
     /// Set while a listening source's episode goes to the video player on purpose.
-    @ObservationIgnored private var playsAsVideo = false
+    private var playsAsVideo = false
     /// The channels the live channel playing was picked from, in order (its playlist, or the favorites): the player's
     /// Previous and Next Channel and its channel list go through them (#1010).
-    var liveLineup: LiveLineup?
+    @Published var liveLineup: LiveLineup?
     /// The program guide of the playlist `liveLineup` is (#802).
-    private(set) var liveGuide: LiveGuide?
+    @Published private(set) var liveGuide: LiveGuide?
     /// Plays a live channel picked from `lineup`, with its playlist's guide.
     func watch(_ channel: Channel, in lineup: LiveLineup, guide: LiveGuide? = nil) {
         liveLineup = lineup
@@ -88,34 +88,34 @@ import TVCore
     }
     /// The videos whose iPhone watch page is on screen (`PlaybackHistoryContext.id`): their episodes play at the top
     /// of the page instead of in the full-screen player.
-    var watchPageScopes: Set<String> = []
+    @Published var watchPageScopes: Set<String> = []
     func playsInWatchPage(_ channel: Channel?) -> Bool {
         guard let scope = channel?.historyContext?.id else { return false }
         return watchPageScopes.contains(scope)
     }
-    var playbackCatalog: PlaybackCatalog?
+    @Published var playbackCatalog: PlaybackCatalog?
     /// The Cloud Files folder the playing file came from; its next file plays after it.
-    var filesFolder: CloudFilesFolder?
-    var resolvingEpisode: Episode?
-    var episodeError: String?
+    @Published var filesFolder: CloudFilesFolder?
+    @Published var resolvingEpisode: Episode?
+    @Published var episodeError: String?
     var autoPlayNext: Bool {
         didSet { if persistsChanges { defaults.set(autoPlayNext, forKey: "autoPlayNextEpisode") } }
     }
-    private var episodeRequest = UUID()
-    private var episodeTask: Task<Void, Never>?
+    @Published private var episodeRequest = UUID()
+    @Published private var episodeTask: Task<Void, Never>?
     /// The next episode's stream, resolved while a short episode plays (#1021, #900): Next, the end of the episode and
     /// the queue start it without asking the source again, so the cover no longer waits on the source each time.
-    @ObservationIgnored private var nextAhead: (episode: Episode, resolved: Channel, at: Date)?
-    @ObservationIgnored private var nextAheadTask: (episode: Episode, task: Task<Void, Never>)?
+    private var nextAhead: (episode: Episode, resolved: Channel, at: Date)?
+    private var nextAheadTask: (episode: Episode, task: Task<Void, Never>)?
     /// Signed links expire: one resolved longer ago than this is asked for again.
     static let nextAheadLifetime: TimeInterval = 5 * 60
     /// Episodes this long or shorter (short dramas, clips) have the next one resolved while they play. A longer one's
     /// is resolved 30 seconds before its end for the queue, as before.
     static let nextAheadLength: Double = 10 * 60
-    var section: AppSection = .home
+    @Published var section: AppSection = .home
     /// The Mac sidebar folds away while the manga reader fills the window, and comes back when it closes.
     /// macOS 26 floats the sidebar over the page, so it covered the left part of every comic page.
-    var hidesSidebar = false
+    @Published var hidesSidebar = false
     /// Unlock additional sections once an enabled subscription has sources or live playlists.
     var extrasUnlocked: Bool {
         subscriptions.contains { $0.enabled && documents[$0.address].map { !$0.sites.isEmpty || !$0.lives.isEmpty } == true }
@@ -129,24 +129,24 @@ import TVCore
         return hidden
     }
     /// The open profile's defaults: the main defaults for the main profile.
-    private var defaults: UserDefaults
+    @Published private var defaults: UserDefaults
     /// The main defaults, which QA's switches are read from.
     private let baseDefaults: UserDefaults
     /// Where the open profile keeps its subscription copies; nil for the main profile's usual place.
-    private var profileFolder: URL?
+    @Published private var profileFolder: URL?
     private let http = HTTPClient()
     /// Rebuilt source rows are expensive (every source is classified and copied) and Watch Now reads
     /// them many times while drawing one frame. The stamp is the inputs, so a later frame reuses the row.
     /// Not observed: views fill these while drawing, and a write would draw every reader again.
-    @ObservationIgnored private var siteListStamp = ""
-    @ObservationIgnored private var cloudDrivesObserver: NSObjectProtocol?
-    @ObservationIgnored private var livePluginsObserver: NSObjectProtocol?
+    private var siteListStamp = ""
+    private var cloudDrivesObserver: NSObjectProtocol?
+    private var livePluginsObserver: NSObjectProtocol?
     /// The installed live plugins' platforms, shown in Live TV even without a subscription.
-    private(set) var livePluginPlatforms = LivePlugins.shared.platforms
+    @Published private(set) var livePluginPlatforms = LivePlugins.shared.platforms
     /// The installed live plugins and the LX Music sources, listed under Settings › Subscriptions with the subscriptions.
-    private(set) var livePlugins = LivePlugins.shared.installed
-    private(set) var lxSources = LXSourceLibrary.shared.sources
-    @ObservationIgnored private var lxSourcesObserver: NSObjectProtocol?
+    @Published private(set) var livePlugins = LivePlugins.shared.installed
+    @Published private(set) var lxSources = LXSourceLibrary.shared.sources
+    private var lxSourcesObserver: NSObjectProtocol?
     /// Every live source, hidden ones too: the subscription's (with the plugins' platforms), or the plugins' alone.
     var allLiveSources: [LiveSource] { subscription?.lives ?? livePluginPlatforms.map(\.source) }
     /// Live TV's sources: the ones the viewer hasn't hidden.
@@ -159,10 +159,10 @@ import TVCore
     func playlistSubscription(_ source: LiveSource) -> SubscriptionEntry? {
         subscriptions.first { entry in documents[entry.address].map { $0.isPlaylistOnly && $0.lives.contains { $0.url == source.url } } == true }
     }
-    @ObservationIgnored private var automaticCache: [Site]?
-    @ObservationIgnored private var orderedCache: [Site]?
-    @ObservationIgnored private var recommendationCache: [Site]?
-    @ObservationIgnored private var groupsCache: [Bool: [SourceGroup]] = [:]
+    private var automaticCache: [Site]?
+    private var orderedCache: [Site]?
+    private var recommendationCache: [Site]?
+    private var groupsCache: [Bool: [SourceGroup]] = [:]
     /// What the cached rows were built from: the merged subscription, which subscriptions are on, and the viewer's pins, hides, and order.
     private func currentSiteListStamp() -> String {
         let imported = subscription?.importedAt.timeIntervalSince1970 ?? 0

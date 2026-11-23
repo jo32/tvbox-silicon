@@ -3,7 +3,7 @@ import TVCore
 
 /// Watched titles, newest first: resume where you left off, or select titles to remove.
 struct PlaybackHistoryView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @State private var query = ""
     @State private var managing = false
     @State private var selected = Set<String>()
@@ -33,7 +33,7 @@ struct PlaybackHistoryView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { if managing { selectionBar.transition(.move(edge: .bottom).combined(with: .opacity)) } }
         .animation(.smooth(duration: 0.25), value: managing)
         #endif
-        .onChange(of: history.entries.isEmpty) { _, empty in if empty { managing = false; selected.removeAll() } }
+        .compatOnChange(of: history.entries.isEmpty) { _, empty in if empty { managing = false; selected.removeAll() } }
         #if DEBUG
         // `-qaManageHistory 1` opens the page already managing, with the first two titles selected.
         .onAppear {
@@ -184,7 +184,7 @@ enum HistoryFormat {
 /// A watched title as a poster card, with progress along the poster's foot. Continue Watching shows
 /// the episode; the History page (`details`) adds the source and where playback resumes.
 struct HistoryCard: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.stripDrag) private var drag
     @Environment(\.openHistoryDetails) private var openDetails
     #if os(iOS)
@@ -324,7 +324,7 @@ struct HistoryCard: View {
                         Image(systemName: selection ? "checkmark.circle.fill" : "circle")
                             .font(.title2).symbolRenderingMode(.palette)
                             .foregroundStyle(selection ? Brand.onAccent : .white, selection ? Brand.accent : .black.opacity(0.35))
-                            .contentTransition(.symbolEffect(.replace))
+                            
                             .padding(8)
                     }
                 }
@@ -387,7 +387,7 @@ private struct HistoryDetailsDestination: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.openHistoryDetails) { if let openRoute { openRoute($0) } else { route = $0 } }
-            .navigationDestination(item: $route) { route in
+            .compatNavigationDestination(item: $route) { route in
                 #if os(macOS)
                 route.build().musicBar()
                 #else

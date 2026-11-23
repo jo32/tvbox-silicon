@@ -5,11 +5,11 @@ import AVKit
 /// Catalog detail uses the same independent, full-bleed paint layer as the home hero.
 /// Available actions use Yingxia's source search and system share sheet.
 struct DiscoverDetailView: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var appColorScheme
     let item: TMDBCatalog.Item
-    @State private var model = DiscoverDetailModel()
+    @StateObject private var model = DiscoverDetailModel()
     @State private var seasonNumber: Int?
     @State private var season: TMDBMatch.Season?
     @State private var loadingSeason = false
@@ -24,7 +24,11 @@ struct DiscoverDetailView: View {
     @State private var airing: AirSchedule?
     @State private var airCalendarShown = false
     /// The title on the viewer's sources, searched while the page is on screen.
-    @State private var sources: DiscoverSources?
+    @StateObject private var sourcesHolder = ObservableHolder<DiscoverSources>()
+    private var sources: DiscoverSources? {
+        get { sourcesHolder.value }
+        nonmutating set { sourcesHolder.value = newValue }
+    }
     #if os(tvOS)
     @State private var tvScrolled = false
     @State private var tvOverviewShown = false
@@ -40,13 +44,13 @@ struct DiscoverDetailView: View {
         .onAppear { onScreen = true; startSources() }
         .onDisappear { onScreen = false; stopSources() }
         .task(id: item.key) { await model.load(item) }
-        .onChange(of: details?.id) { _, _ in
+        .compatOnChange(of: details?.id) { _, _ in
             if sources == nil { startSources() }
         }
-        .onChange(of: store.subscription?.importedAt) { _, _ in startSources() }
+        .compatOnChange(of: store.subscription?.importedAt) { _, _ in startSources() }
         // A video playing over the page (the player covers it without the page going away) pauses the search for the
         // title's other sources until it closes: their plugins ran flat out under the video and warmed the phone (#1428).
-        .onChange(of: store.playing == nil) { _, idle in if idle { startSources() } else { stopSources() } }
+        .compatOnChange(of: store.playing == nil) { _, idle in if idle { startSources() } else { stopSources() } }
         .task(id: catalogSeason) { await loadSeason() }
         .task(id: details?.id) { await loadAiring() }
         #if DEBUG
@@ -110,7 +114,7 @@ struct DiscoverDetailView: View {
         // The movie player, full screen: SwiftUI's VideoPlayer in a sheet had no full screen, Fill or speed (#300).
         .fullScreenCover(isPresented: $trailerShown) {
             // Store handed in, as for every full-screen cover: the iPad app on a Mac leaves environment objects behind.
-            if let trailer = details?.trailer { DiscoverMobileTrailerScreen(trailer: trailer, title: details?.name ?? item.name).environment(store) }
+            if let trailer = details?.trailer { DiscoverMobileTrailerScreen(trailer: trailer, title: details?.name ?? item.name).environmentObject(store) }
         }
         #else
         .sheet(isPresented: $trailerShown) {
@@ -526,12 +530,12 @@ struct DiscoverDetailView: View {
     }
 }
 
-@MainActor @Observable private final class DiscoverDetailModel {
-    var details: TMDBMatch.Details?
-    var paint: DiscoverPaint?
-    var loading = true
-    var failed = false
-    var scrollY: CGFloat = 0
+@MainActor private final class DiscoverDetailModel: ObservableObject {
+    @Published var details: TMDBMatch.Details?
+    @Published var paint: DiscoverPaint?
+    @Published var loading = true
+    @Published var failed = false
+    @Published var scrollY: CGFloat = 0
     func load(_ item: TMDBCatalog.Item) async {
         loading = true; failed = false
         defer { loading = false }
@@ -593,24 +597,24 @@ private struct DiscoverMacSeasonButton: View {
 /// Discover's title page looks for its title on the viewer's sources with a search of its own: the Search tab's
 /// results, history and tab stay as they were. The best match's episodes show on the page, the other matches under
 /// Change Source. One per title for the session, so coming back to a title doesn't search again.
-@MainActor @Observable final class DiscoverSources {
+@MainActor final class DiscoverSources: ObservableObject {
     let search = SearchModel()
     /// The results that are the title, best first (`SourceTitleMatch.ranked`).
-    private(set) var matches: [SourceTitleMatch.Candidate] = []
+    @Published private(set) var matches: [SourceTitleMatch.Candidate] = []
     /// The one whose episodes show: the best match, or the one chosen under Change Source.
-    private(set) var chosen: SourceTitleMatch.Candidate?
+    @Published private(set) var chosen: SourceTitleMatch.Candidate?
     /// Every source asked has answered.
-    private(set) var finished = false
-    @ObservationIgnored private let keyword: String
-    @ObservationIgnored private let wanted: SourceTitleMatch.Wanted
-    @ObservationIgnored private var found: [SourceTitleMatch.Candidate] = []
+    @Published private(set) var finished = false
+    private let keyword: String
+    private let wanted: SourceTitleMatch.Wanted
+    private var found: [SourceTitleMatch.Candidate] = []
     /// The Watch Now row's order, by source key: the best match comes from the source highest in it.
-    @ObservationIgnored private var order: [String: Int] = [:]
-    @ObservationIgnored private var subscription: String?
+    private var order: [String: Int] = [:]
+    private var subscription: String?
     /// Answers still being matched off the main thread.
-    @ObservationIgnored private var pending = 0
-    @ObservationIgnored private var generation = 0
-    @ObservationIgnored private var grace: Task<Void, Never>?
+    private var pending = 0
+    private var generation = 0
+    private var grace: Task<Void, Never>?
 
     private static var kept: [String: DiscoverSources] = [:]
     private static var recent: [String] = []
@@ -703,7 +707,7 @@ private struct DiscoverMacSeasonButton: View {
 
 /// One episode section uses source playback when available and catalog episodes while it searches.
 private struct DiscoverSourceEpisodes<CatalogEpisodes: View>: View {
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     let sources: DiscoverSources
     let item: TMDBCatalog.Item
     let appColorScheme: ColorScheme
@@ -777,7 +781,7 @@ private struct DiscoverSourceEpisodes<CatalogEpisodes: View>: View {
             sources.choose(match)
             selectedSeason = Self.season(of: match)
         }
-        .environment(store)
+        .environmentObject(store)
     }
 
     private var horizontalInset: CGFloat {
@@ -968,18 +972,18 @@ private struct DiscoverMobileTrailerScreen: View {
 struct DiscoverSearchPresentation: ViewModifier {
     @Binding var isPresented: Bool
     @Environment(\.openRoute) private var openRoute
-    @Environment(Store.self) private var store
+    @EnvironmentObject private var store: Store
     func body(content: Content) -> some View {
         #if os(iOS)
         // Store handed in: the iPad app on a Mac presents a full-screen cover without the presenter's environment objects.
-        content.fullScreenCover(isPresented: $isPresented) { DiscoverSearchView().environment(store) }
+        content.fullScreenCover(isPresented: $isPresented) { DiscoverSearchView().environmentObject(store) }
             // Search Sources on a detail page opened from here switches to the Search tab, which is behind this
             // full-screen sheet: close it so the source results show instead of the catalog search.
-            .onChange(of: store.section) { if isPresented { isPresented = false } }
+            .compatOnChange(of: store.section) { if isPresented { isPresented = false } }
         #else
         // A page of its own (Back returns), rather than the iPhone's full-screen sheet: on the Mac with the toolbar's
         // search field, on the TV laid out for the remote.
-        content.onChange(of: isPresented) { _, shown in
+        content.compatOnChange(of: isPresented) { _, shown in
             guard shown else { return }
             isPresented = false
             #if os(macOS)
@@ -1043,7 +1047,7 @@ extension DiscoverDetailView {
                 }
             }.padding(.bottom, 90)
         }
-        .scrollClipDisabled()
+        .compatScrollClipDisabled()
         // Only crossing the hero's edge matters. A per-frame offset re-rendered the page on every scroll step, and a
         // sheet's presentation fed back into it until the watchdog killed the app.
         .modifier(DiscoverTVScrolled(scrolled: $tvScrolled))
@@ -1188,7 +1192,7 @@ extension DiscoverDetailView {
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: spacing) { content() }
                     .padding(.horizontal, DiscoverLayout.gutter).padding(.vertical, 24)
-            }.scrollClipDisabled()
+            }.compatScrollClipDisabled()
         }.focusSection()
     }
 
