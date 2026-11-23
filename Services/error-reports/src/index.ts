@@ -101,9 +101,11 @@ async function receive(request: Request, env: Env): Promise<Response> {
 }
 
 const FEEDBACK_MAX = 5000;
-// In any 24 hours: per install, and for everyone together, so a flood can't bury the repository.
+// In any 24 hours: per install, and for everyone together, so a flood can't bury the repository. Since feedback
+// earns points (11-21) there are more than 50 real messages a day: at 50, everyone after the 50th was turned away
+// (#1581, #1485). The per-install cap keeps one person from using it up.
 const FEEDBACK_PER_INSTALL = 5;
-const FEEDBACK_PER_DAY = 50;
+const FEEDBACK_PER_DAY = 300;
 // FEEDBACK_LIMITER's, in wrangler.jsonc.
 const FEEDBACK_PER_MINUTE = 2;
 
