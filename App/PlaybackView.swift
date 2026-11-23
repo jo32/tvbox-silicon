@@ -281,6 +281,8 @@ import IOKit.pwr_mgt
     /// The episode plays from a download on this device, which no server or connection holds up.
     private var savedDownload = false
     private var automatic: URL?
+    /// The drive plays its transcoded copy, which has none of the file's subtitles (#1343).
+    var playsDriveCopy: Bool { automatic.map(CloudStreams.isDriveCopy) ?? false }
     /// The live room playing (at the quality chosen), when it opens again with a fresh address (`LiveReopen`), and
     /// when its stream last became ready.
     private var liveRoom: Channel?

@@ -1,4 +1,5 @@
 import Foundation
+import os
 import AVFoundation
 
 /// Cloud-drive files streamed straight from the CDN address the plugin resolved. AVPlayer asks
@@ -32,6 +33,15 @@ public enum CloudStreams {
                          refresh: @escaping @Sendable () async -> Source?) -> URL {
         CloudStreamStore.shared.add(CloudByteStream(source: source, session: session, parallel: parallel, refresh: refresh))
     }
+
+    /// Whether `url` plays a drive's transcoded copy rather than the file (Quark and UC give free accounts no large
+    /// originals): lower in resolution, and without the file's subtitles or other sound tracks (#1343, #1345).
+    public static func isDriveCopy(_ url: URL) -> Bool { copies.withLock { $0.contains(url) } }
+    static func markCopy(_ url: URL) -> URL {
+        copies.withLock { _ = $0.insert(url) }
+        return url
+    }
+    private static let copies = OSAllocatedUnfairLock<Set<URL>>(initialState: [])
 
     /// A drive's own HLS copy (Quark's and UC's transcoded videos), which AVPlayer reads itself. Its playlist and
     /// segments want the account's headers: without the cookies the CDN refuses every request (HTTP 412).
@@ -93,6 +103,7 @@ public enum CloudStreams {
     }
 
     public static func stop(_ url: URL) {
+        copies.withLock { _ = $0.remove(url) }
         CloudPlaylists.shared.remove(url)
         CloudResourceLoader.shared.cancel(url)
         if let stream = CloudStreamStore.shared.stream(url) { Task { await stream.clear() } }
