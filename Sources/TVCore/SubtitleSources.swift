@@ -30,14 +30,27 @@ public actor SubtitleSourceLibrary {
 
     private let folder: URL
     private let credentials: any SubtitleCredentialStore
+    /// An added script's bytes from its address, again, when tvOS cleared the copy kept.
+    private let fetch: @Sendable (URL) async throws -> Data
     private var saved: [SubtitleSourceItem]
     private var providers: [String: SubtitleScriptProvider] = [:]
     private var loadedBuiltIns = false
 
-    public init(folder: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                    .appendingPathComponent("SubtitleSources", isDirectory: true),
-                credentials: any SubtitleCredentialStore = KeychainSubtitleCredentials()) {
+    /// Where the list and the added scripts are kept. tvOS lets an app write only to Caches: in Application
+    /// Support, adding a script failed on a real Apple TV (#1350; the Simulator allows it).
+    static var defaultFolder: URL {
+        #if os(tvOS)
+        URL.cachesDirectory.appending(path: "SubtitleSources", directoryHint: .isDirectory)
+        #else
+        URL.applicationSupportDirectory.appending(path: "SubtitleSources", directoryHint: .isDirectory)
+        #endif
+    }
+
+    public init(folder: URL? = nil, credentials: any SubtitleCredentialStore = KeychainSubtitleCredentials(),
+                fetch: (@Sendable (URL) async throws -> Data)? = nil) {
+        let folder = folder ?? Self.defaultFolder
         self.folder = folder; self.credentials = credentials
+        self.fetch = fetch ?? { try await SubtitleFile.download($0, headers: [:], session: .shared, limit: SubtitleSourceLibrary.largestScript) }
         saved = (try? JSONDecoder().decode([SubtitleSourceItem].self, from: Data(contentsOf: folder.appendingPathComponent("sources.json")))) ?? []
     }
 
@@ -119,7 +132,9 @@ public actor SubtitleSourceLibrary {
     public func provider(_ id: String) async throws -> SubtitleScriptProvider {
         if let running = providers[id] { return running }
         let script: String?
-        if Self.builtIns.contains(id) { script = ScriptAssets.bundled("assets://subtitles/sources/\(id).js") } else { script = try? String(contentsOf: file(id), encoding: .utf8) }
+        if Self.builtIns.contains(id) { script = ScriptAssets.bundled("assets://subtitles/sources/\(id).js") }
+        else if let kept = try? String(contentsOf: file(id), encoding: .utf8) { script = kept }
+        else { script = await refetched(id) }
         guard let script else { throw SubtitleProviderError.incompatible(L10n.text("The source's script is missing.")) }
         let provider = try await SubtitleScriptProvider.load(script: script, label: id)
         if let started = providers[id] { return started }
@@ -143,6 +158,14 @@ public actor SubtitleSourceLibrary {
             }
         }
         if changed { save() }
+    }
+
+    /// An added script whose kept copy is gone (tvOS clears Caches when it needs room), fetched again from its address.
+    private func refetched(_ id: String) async -> String? {
+        guard let origin = saved.first(where: { $0.id == id })?.origin, let data = try? await fetch(origin) else { return nil }
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try? data.write(to: file(id), options: .atomic)
+        return String(decoding: data, as: UTF8.self)
     }
 
     private func file(_ id: String) -> URL { folder.appendingPathComponent(id + ".js") }
