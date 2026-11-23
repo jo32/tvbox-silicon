@@ -16,7 +16,7 @@ struct DiscoverPaint: @unchecked Sendable {
 
 actor DiscoverPainter {
     static let shared = DiscoverPainter()
-    private let context = CIContext(options: [.cacheIntermediates: false])
+    private lazy var context = CIContext(options: [.cacheIntermediates: false])
     private var cache: [String: DiscoverPaint] = [:]
     private var order: [String] = []
     private var pending: [String: Task<DiscoverPaint?, Never>] = [:]
@@ -55,6 +55,13 @@ actor DiscoverPainter {
                 kCGImageSourceShouldCacheImmediately: true,
               ] as CFDictionary) else { return nil }
         let rgb = palette(decoded)
+        #if os(iOS)
+        // On Mac, Core Image can leave Metal's shared archive locked when the iOS app is suspended.
+        if ProcessInfo.processInfo.isiOSAppOnMac {
+            guard let result = Self.renderWithCoreGraphics(decoded, tint: rgb, soft: soft) else { return nil }
+            return DiscoverPaint(image: result, red: rgb.0, green: rgb.1, blue: rgb.2)
+        }
+        #endif
         let image = CIImage(cgImage: decoded)
         let rect = image.extent
         let blurred = image.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: rect.width * (soft ? 0.09 : 0.055)]).cropped(to: rect)
@@ -74,6 +81,48 @@ actor DiscoverPainter {
         let composited = fade.composited(over: progressive)
         guard let result = context.createCGImage(composited, from: rect) else { return nil }
         return DiscoverPaint(image: result, red: rgb.0, green: rgb.1, blue: rgb.2)
+    }
+
+    private static func renderWithCoreGraphics(_ image: CGImage, tint: (Double, Double, Double), soft: Bool) -> CGImage? {
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        func bitmap(width: Int, height: Int) -> CGContext? {
+            CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                      space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        }
+
+        let width = image.width, height = image.height
+        let rect = CGRect(x: 0, y: 0, width: width, height: height)
+        // Downsample before enlarging to soften the artwork without creating a Core Image context.
+        let smallWidth = min(width, soft ? 10 : 16)
+        let smallHeight = max(1, (height * smallWidth + width / 2) / width)
+        guard let small = bitmap(width: smallWidth, height: smallHeight),
+              let output = bitmap(width: width, height: height) else { return nil }
+        small.interpolationQuality = .high
+        small.draw(image, in: CGRect(x: 0, y: 0, width: smallWidth, height: smallHeight))
+        guard let blurred = small.makeImage() else { return nil }
+        output.interpolationQuality = .high
+
+        func gradient(_ bottom: CGColor, _ top: CGColor, from lower: CGFloat, to upper: CGFloat) {
+            guard let ramp = CGGradient(colorsSpace: colorSpace, colors: [bottom, top] as CFArray, locations: [0, 1]) else { return }
+            output.drawLinearGradient(ramp, start: CGPoint(x: 0, y: rect.height * lower),
+                                      end: CGPoint(x: 0, y: rect.height * upper),
+                                      options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
+        }
+
+        if soft {
+            output.draw(blurred, in: rect)
+        } else {
+            output.draw(image, in: rect)
+            output.beginTransparencyLayer(auxiliaryInfo: nil)
+            output.draw(blurred, in: rect)
+            output.setBlendMode(.destinationIn)
+            gradient(CGColor(gray: 1, alpha: 1), CGColor(gray: 1, alpha: 0), from: 0.38, to: 0.62)
+            output.endTransparencyLayer()
+        }
+
+        let color = CGColor(srgbRed: tint.0, green: tint.1, blue: tint.2, alpha: 1)
+        gradient(color, color.copy(alpha: 0) ?? color, from: 0.015, to: 0.52)
+        return output.makeImage()
     }
 
     private func palette(_ image: CGImage) -> (Double, Double, Double) {
