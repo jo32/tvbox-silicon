@@ -1,4 +1,5 @@
 import SwiftUI
+import Accelerate
 import CoreImage
 import ImageIO
 import TVCore
@@ -92,14 +93,8 @@ actor DiscoverPainter {
 
         let width = image.width, height = image.height
         let rect = CGRect(x: 0, y: 0, width: width, height: height)
-        // Downsample before enlarging to soften the artwork without creating a Core Image context.
-        let smallWidth = min(width, soft ? 10 : 16)
-        let smallHeight = max(1, (height * smallWidth + width / 2) / width)
-        guard let small = bitmap(width: smallWidth, height: smallHeight),
+        guard let blurred = Self.blurred(image, sigma: soft ? 0.09 : 0.055, space: colorSpace),
               let output = bitmap(width: width, height: height) else { return nil }
-        small.interpolationQuality = .high
-        small.draw(image, in: CGRect(x: 0, y: 0, width: smallWidth, height: smallHeight))
-        guard let blurred = small.makeImage() else { return nil }
         output.interpolationQuality = .high
 
         func gradient(_ bottom: CGColor, _ top: CGColor, from lower: CGFloat, to upper: CGFloat) {
@@ -123,6 +118,33 @@ actor DiscoverPainter {
         let color = CGColor(srgbRed: tint.0, green: tint.1, blue: tint.2, alpha: 1)
         gradient(color, color.copy(alpha: 0) ?? color, from: 0.015, to: 0.52)
         return output.makeImage()
+    }
+
+    /// Core Image's Gaussian blur, on the CPU: a copy small enough to be quick, blurred with four box passes (as good as a
+    /// Gaussian at this size), which the full-size draw then enlarges smoothly. Without the blur, a copy that small
+    /// enlarged into visible squares. `sigma` is a fraction of the width, like the Core Image radius above.
+    private static func blurred(_ image: CGImage, sigma: Double, space: CGColorSpace) -> CGImage? {
+        let width = min(image.width, 192)
+        let height = max(1, Int((Double(image.height) * Double(width) / Double(image.width)).rounded()))
+        let rowBytes = width * 4
+        guard let small = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: rowBytes,
+                                    space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let pixels = small.data, let scratch = malloc(rowBytes * height) else { return nil }
+        defer { free(scratch) }
+        small.interpolationQuality = .high
+        small.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        // n passes of a box w pixels wide spread a pixel as far as a Gaussian with the variance n(w^2 - 1)/12.
+        let deviation = Double(width) * sigma
+        let box = UInt32((3 * deviation * deviation + 1).squareRoot().rounded()) | 1
+        var picture = vImage_Buffer(data: pixels, height: vImagePixelCount(height), width: vImagePixelCount(width), rowBytes: rowBytes)
+        var spare = vImage_Buffer(data: scratch, height: vImagePixelCount(height), width: vImagePixelCount(width), rowBytes: rowBytes)
+        for _ in 0..<2 {
+            // Edge-extended, as `clampedToExtent()` is for Core Image; every channel is blurred alike, alpha included.
+            guard vImageBoxConvolve_ARGB8888(&picture, &spare, nil, 0, 0, box, box, nil, vImage_Flags(kvImageEdgeExtend)) == kvImageNoError,
+                  vImageBoxConvolve_ARGB8888(&spare, &picture, nil, 0, 0, box, box, nil, vImage_Flags(kvImageEdgeExtend)) == kvImageNoError
+            else { return nil }
+        }
+        return small.makeImage()
     }
 
     private func palette(_ image: CGImage) -> (Double, Double, Double) {
