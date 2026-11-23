@@ -148,3 +148,35 @@ CREATE TABLE IF NOT EXISTS point_adjustments (
   at INTEGER NOT NULL           -- unix seconds
 );
 CREATE INDEX IF NOT EXISTS point_adjustments_user ON point_adjustments(user_id);
+
+-- TestFlight places (src/tf.ts). Each day at TF_OPEN_HOUR (UTC+8) TF_DAILY places in Yingxia Beta open; unused ones
+-- don't carry over. `day` counts days since 1970 from that hour.
+CREATE TABLE IF NOT EXISTS tf_slots (
+  day INTEGER PRIMARY KEY,
+  total INTEGER NOT NULL,
+  used INTEGER NOT NULL DEFAULT 0
+);
+
+-- An invitation someone asked for with /tf in the bot: pending while the emailed code is unconfirmed, then invited.
+-- Lifetime Pro people get Yingxia Pro (no place needed), everyone else Yingxia Beta. The daily cleanup reports
+-- removed testers (state removed); they may ask again TF_AGAIN_DAYS later.
+CREATE TABLE IF NOT EXISTS tf_invites (
+  id TEXT PRIMARY KEY,
+  app TEXT NOT NULL,            -- beta or pro
+  telegram TEXT NOT NULL,       -- Telegram user ID
+  user_id TEXT,                 -- their Yingxia account
+  email TEXT NOT NULL,          -- as typed, lower case: Apple sends the invitation here
+  canonical TEXT NOT NULL,      -- one spelling per mailbox: +tags dropped, Gmail dots dropped, me.com/mac.com as icloud.com
+  code_hash TEXT,               -- sha256(id + code) until confirmed
+  code_sent INTEGER NOT NULL,   -- unix seconds
+  tries INTEGER NOT NULL DEFAULT 0,
+  state TEXT NOT NULL,          -- pending, replaced, invited, removed
+  invited INTEGER,
+  tester TEXT,                  -- App Store Connect betaTester ID
+  removed INTEGER,
+  slot_day INTEGER
+);
+CREATE INDEX IF NOT EXISTS tf_invites_canonical ON tf_invites(canonical, app);
+CREATE INDEX IF NOT EXISTS tf_invites_telegram ON tf_invites(telegram, app);
+CREATE INDEX IF NOT EXISTS tf_invites_tester ON tf_invites(tester);
+CREATE INDEX IF NOT EXISTS tf_invites_sent ON tf_invites(code_sent);

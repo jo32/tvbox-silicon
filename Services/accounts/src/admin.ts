@@ -7,6 +7,7 @@ import { points } from "./points";
 import { assign, pullRequestsOf } from "./prs";
 import { createCodes, grant } from "./pro";
 import { erase, identities, User } from "./session";
+import { tfAdmin } from "./tf";
 import { DAY, Env, error, json, LIFETIME, list, now, parse, same } from "./util";
 
 export function cors(request: Request, env: Env): Record<string, string> {
@@ -50,6 +51,7 @@ export async function admin(request: Request, env: Env, path: string): Promise<R
   const url = new URL(request.url);
   const method = request.method;
   let match: RegExpExecArray | null;
+  if (path.startsWith("/v1/admin/tf/")) return tfAdmin(request, env, path);
 
   // Codes: make, list, revoke.
   if (path === "/v1/admin/codes" && method === "POST") {

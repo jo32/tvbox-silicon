@@ -72,6 +72,37 @@ regenerated profiles. After that:
 Until then the app only offers Telegram. Sideloaded builds are re-signed with someone else's profile, so they always
 offer Telegram only.
 
+## TestFlight invitations (/tf)
+
+Yingxia's own TestFlight is full, so two copies of the app take new testers by email invitation (src/tf.ts):
+
+- **Yingxia Beta** (app 6838344462): `TF_DAILY` places (100) open every day at `TF_OPEN_HOUR` (20:00, UTC+8). Unused
+  places don't carry over. `GET /v1/tf/slots` (public, CORS `*`) answers `{day, total, used, left, opens}` for the
+  website; the bot announces them in the group.
+- **Yingxia Pro** (app 6838347717): lifetime Pro people, no daily limit. Redeeming a lifetime code in the bot points to
+  `/tf`.
+
+In a private chat with the bot, `/tf name@icloud.com` emails a 6-digit code (30 minutes, 5 tries); `/tf 123456`
+confirms it, takes a place and has App Store Connect add the address to the app's external group, which makes Apple
+send the invitation. Only `TF_DOMAINS` are taken (Apple account addresses and Gmail). One invitation per mailbox
+(+tags, Gmail dots and me.com/mac.com folded together) and per Telegram account in each app. A code needs a minute
+after the last one, at most 5 a day per person and per mailbox, 1,000 a day in all.
+
+The daily cleanup on the M5 (`build/tfprune/tfdaily.py`) removes Beta testers who stopped using it and reports them
+(`POST /v1/admin/tf/removed`); they may ask again after `TF_AGAIN_DAYS` (7). Admin routes, with the admin token:
+
+- `GET /v1/admin/tf/invites?app=beta|pro`: invited testers (`tester` is the App Store Connect betaTester ID).
+- `POST /v1/admin/tf/removed` `{testers: [id, ...]}`: the cleanup removed them.
+- `GET /v1/admin/tf/pro-accounts`: Pro accounts and their last active day.
+
+Setup:
+
+1. Cloudflare dashboard › Compute › Email Service › Email Sending › Onboard Domain: `getmegaportal.com` (the codes
+   come from `TF_FROM`, yingxia@getmegaportal.com). Email Sending needs the Workers Paid plan.
+2. An App Store Connect API key with the App Manager role (on the M5: key 8FL38XXYFU):
+   `$W secret put ASC_KEY_ID` and `$W secret put ASC_PRIVATE_KEY < ~/.appstoreconnect/private_keys/AuthKey_<id>.p8`.
+3. `$W d1 execute yingxia-accounts --remote --file schema.sql` (adds `tf_slots` and `tf_invites`), then deploy.
+
 ## Admin API
 
 Every call sends `Authorization: Bearer <ADMIN_TOKEN>`. Browsers may call it from the origins in `ADMIN_ORIGINS`
