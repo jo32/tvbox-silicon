@@ -46,14 +46,33 @@ struct PointsGuideView: View {
 
     var body: some View {
         #if os(tvOS)
+        // Every rule is a focusable row, as on the licences page: the remote can move through them,
+        // the scroll view follows focus, and Back stays with the NavigationStack.
         SettingsPage(title: L10n.text("How Points Work"), symbol: "star.circle", subtitle: L10n.text("Points reward feedback and code that really help Yingxia.")) {
-            SettingsGroup(footer: L10n.text("Points are counted again from the records every time. Duplicates, spam or several accounts on one device earn nothing more, and points gained unfairly are taken away.")) {
+            SettingsGroup {
                 ForEach(items) { item in
-                    SettingsRow(symbol: item.symbol, tint: item.tint, title: item.title,
-                                subtitle: item.kind == .pullRequest ? "\(item.detail)\n\(claim)" : item.detail) {
-                        Text(verbatim: "+\(item.points.formatted())").font(.system(size: 30, weight: .semibold, design: .rounded)).foregroundStyle(item.tint)
+                    Button {} label: {
+                        HStack(spacing: 18) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(item.title).font(.system(size: 29, weight: .medium)).lineLimit(2)
+                                Text(item.kind == .pullRequest ? "\(item.detail)\n\(claim)" : item.detail)
+                                    .font(.system(size: 23)).foregroundStyle(.secondary).lineLimit(3)
+                            }
+                            Spacer(minLength: 32)
+                            Text(verbatim: "+\(item.points.formatted())")
+                                .font(.system(size: 30, weight: .semibold, design: .rounded)).foregroundStyle(item.tint)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
                     }
+                    .buttonStyle(RuleRowStyle())
                 }
+                Button {} label: {
+                    Text(L10n.text("Points are counted again from the records every time. Duplicates, spam or several accounts on one device earn nothing more, and points gained unfairly are taken away."))
+                        .font(.system(size: 22)).foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(RuleRowStyle())
             }
         }
         #else
@@ -203,6 +222,24 @@ struct PointsGuideView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay { Self.shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 1) }
+    }
+    #endif
+
+    #if os(tvOS)
+    /// Read-only rows take focus for the remote, but are not buttons the viewer can press: a rounded
+    /// glass row, as on the licences page, rather than a Capsule with a pressed state.
+    private struct RuleRowStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View { Plate(configuration: configuration) }
+        private struct Plate: View {
+            let configuration: ButtonStyleConfiguration
+            @Environment(\.isFocused) private var focused
+            var body: some View {
+                configuration.label
+                    .padding(.horizontal, 28).padding(.vertical, 14)
+                    .glassSurface(focused ? .regular.tint(.white.opacity(0.12)) : .identity, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .animation(.easeOut(duration: 0.15), value: focused)
+            }
+        }
     }
     #endif
 }
