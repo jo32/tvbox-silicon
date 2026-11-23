@@ -56,6 +56,26 @@ struct SettingsRow<Trailing: View>: View {
     }
 }
 
+#if os(tvOS)
+/// A row that is only read, as on the licences page and How Points Work. A tvOS page needs something the remote can focus:
+/// with nothing focused, the arrows do nothing and Back leaves the app. So each row is a button that does nothing, showing
+/// focus as a glass row does but in a rounded rectangle (a capsule around a tall paragraph looked odd) and with no
+/// pressed state, so it doesn't look like something to press.
+struct TVReadingRowStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { Plate(configuration: configuration) }
+    private struct Plate: View {
+        let configuration: ButtonStyleConfiguration
+        @Environment(\.isFocused) private var focused
+        var body: some View {
+            configuration.label
+                .padding(.horizontal, 28).padding(.vertical, 14)
+                .glassSurface(focused ? .regular.tint(.white.opacity(0.12)) : .identity, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .animation(.easeOut(duration: 0.15), value: focused)
+        }
+    }
+}
+#endif
+
 extension SettingsRow where Trailing == EmptyView {
     init(symbol: String, tint: Color = .gray, title: String, subtitle: String? = nil) {
         self.init(symbol: symbol, tint: tint, title: title, subtitle: subtitle) { EmptyView() }
@@ -1685,7 +1705,7 @@ struct LicensesView: View {
                         Text(paragraph.replacingOccurrences(of: "\n", with: " ")).font(.system(size: 24)).foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .buttonStyle(ParagraphStyle())
+                    .buttonStyle(TVReadingRowStyle())
                 }
             }
         }
@@ -1704,22 +1724,6 @@ struct LicensesView: View {
         }
         #endif
     }
-    #if os(tvOS)
-    /// A glass row's focus, in a rounded rectangle: a capsule around a tall paragraph looked odd.
-    private struct ParagraphStyle: ButtonStyle {
-        func makeBody(configuration: Configuration) -> some View { Plate(configuration: configuration) }
-        private struct Plate: View {
-            let configuration: ButtonStyleConfiguration
-            @Environment(\.isFocused) private var focused
-            var body: some View {
-                configuration.label
-                    .padding(.horizontal, 28).padding(.vertical, 14)
-                    .glassSurface(focused ? .regular.tint(.white.opacity(0.12)) : .identity, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-                    .animation(.easeOut(duration: 0.15), value: focused)
-            }
-        }
-    }
-    #endif
 }
 
 struct DiagnosticsView: View {
