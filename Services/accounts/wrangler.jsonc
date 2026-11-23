@@ -33,11 +33,27 @@
     "REWARD_DAYS": "0",
     "PR_EXCLUDE": "jo32",
     // The admin pages' origins, comma-separated (CORS for /v1/admin/*).
-    "ADMIN_ORIGINS": ""
+    "ADMIN_ORIGINS": "",
+    // TestFlight invitations through the bot's /tf (src/tf.ts): TF_DAILY places in Yingxia Beta open every day at
+    // TF_OPEN_HOUR (UTC+8); lifetime Pro people get Yingxia Pro. Accepted mail domains; days before someone the cleanup
+    // removed may ask again; the apps and their external groups ("Cloud Drive Browsing"); the codes' sender.
+    "TF_DAILY": "100",
+    "TF_OPEN_HOUR": "20",
+    "TF_DOMAINS": "icloud.com,me.com,mac.com,gmail.com,googlemail.com",
+    "TF_AGAIN_DAYS": "7",
+    "TF_BETA_APP": "6838344462",
+    "TF_BETA_GROUP": "b4477339-1186-4f71-9fec-e887f160af07",
+    "TF_PRO_APP": "6838347717",
+    "TF_PRO_GROUP": "a9f39cc2-71e0-45ee-9ada-77590ed40ff0",
+    "TF_FROM": "yingxia@getmegaportal.com",
+    "ASC_ISSUER": "cc097225-575e-4c18-837b-b44d6f57024f"
   },
+  // Cloudflare Email Sending: the /tf codes. getmegaportal.com must be onboarded (Compute › Email Service).
+  "send_email": [{ "name": "EMAIL" }],
   // The bot is @yingxia_sup_bot, whose Worker (jo32/yx-tg) passes account commands here.
   // Secrets (wrangler secret put …): ADMIN_TOKEN, ENTITLEMENT_KEY, TELEGRAM_WEBHOOK_SECRET (= yx-tg's ACCOUNTS_SECRET),
   // GITHUB_TOKEN (read-only is enough), and optionally APPLE_KEY_ID + APPLE_PRIVATE_KEY (revokes Apple sign-ins on deletion).
+  // ASC_KEY_ID + ASC_PRIVATE_KEY: an App Store Connect API key (App Manager) that invites the /tf testers.
   // Every 15 minutes: copy new feedback, read its status and merged pull requests on GitHub.
   "triggers": { "crons": ["*/15 * * * *"] },
   "observability": { "enabled": false }

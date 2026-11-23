@@ -10,6 +10,7 @@ import { entitlement, isPro, redeem } from "./pro";
 import { pullRequestsOf, syncPullRequests } from "./prs";
 import { addIdentity, authenticate, bearer, display, erase, identities, session, User, userFor } from "./session";
 import { cleanLogins, loginResult, startLogin, telegramFeedback, webhook } from "./telegram";
+import { cleanInvites, slotsRoute } from "./tf";
 import { address, Env, error, isInstall, json, LIFETIME, now, parse, PLATFORMS, sha256, text } from "./util";
 
 // What the app shows on Settings › Account, and keeps (the entitlement) to know it is Pro offline.
@@ -163,6 +164,7 @@ const health = async (_request: Request, env: Env) =>
     entitlement: Boolean(env.ENTITLEMENT_KEY),
     github: Boolean(env.GITHUB_TOKEN),
     admin: Boolean(env.ADMIN_TOKEN),
+    testflight: Boolean(env.ASC_KEY_ID && env.ASC_PRIVATE_KEY && (env.EMAIL || env.EMAIL_API)),
   });
 
 const ROUTES: Record<string, Record<string, (request: Request, env: Env) => Promise<Response>>> = {
@@ -175,6 +177,7 @@ const ROUTES: Record<string, Record<string, (request: Request, env: Env) => Prom
   "/v1/me/day": { POST: activeDay },
   "/v1/sign-out": { POST: signOut },
   "/v1/telegram/webhook": { POST: webhook },
+  "/v1/tf/slots": { GET: slotsRoute },
   "/v1/telegram/feedback": { POST: telegramFeedback },
 };
 
@@ -203,6 +206,7 @@ export default {
     await syncPullRequests(env);
     await cleanInstallDays(env);
     await cleanLogins(env);
+    await cleanInvites(env);
     await env.DB.prepare("DELETE FROM sessions WHERE expires < ?").bind(now()).run();
   },
 } satisfies ExportedHandler<Env>;

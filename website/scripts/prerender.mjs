@@ -25,7 +25,7 @@ await build({
   },
 });
 
-const { render, LANGS, LOCALES, LANG_PATH, SITE_URL, INSTALL, DOWNLOADS, MAC_DOWNLOAD, MAC_INTEL_DOWNLOAD, INSTALL_GUIDE, REPO, TESTFLIGHT } = await import(
+const { render, LANGS, LOCALES, LANG_PATH, SITE_URL, INSTALL, DOWNLOADS, MAC_DOWNLOAD, MAC_INTEL_DOWNLOAD, INSTALL_GUIDE, REPO, TESTFLIGHT, BOT } = await import(
   pathToFileURL(join(ssrOut, "entry-server.js")).href
 );
 
@@ -138,7 +138,7 @@ ${FAQ.map((n) => `- **${en[`q${n}.q`]}** ${en[`q${n}.a`]}`).join("\n")}
 
 ## TestFlight (recommended for iPhone, iPad and Apple TV)
 
-${["ios", "tv"].map((p) => `- [${install.title[p]} on TestFlight](${TESTFLIGHT[p]}): ${install.tf.tag}. ${install.tf.steps[p].map((s) => s.b).join(" ")}`).join("\n")}
+${["ios", "tv"].map((p) => `- [${install.title[p]} on TestFlight](${p === "ios" ? BOT : TESTFLIGHT[p]}): ${install.tf.tag}. ${install.tf.steps[p].map((s) => s.b).join(" ")}`).join("\n")}
 
 ## Download (version ${VERSION})
 

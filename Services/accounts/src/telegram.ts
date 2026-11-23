@@ -1,13 +1,14 @@
 // Telegram: signing in through the bot (works on every device, the Apple TV too, by QR code), the bot's account
-// commands (/redeem <code>, /me), and points for /feedback sent in the Telegram group. The bot is the Yingxia group helper, @yingxia_sup_bot (repository jo32/yx-tg): it
-// keeps Telegram's webhook and passes private "/start <code>", /redeem and /me here, then sends the text we answer.
+// commands (/redeem <code>, /me, /tf for TestFlight: src/tf.ts), and points for /feedback sent in the Telegram group. The bot is the Yingxia group helper, @yingxia_sup_bot (repository jo32/yx-tg): it
+// keeps Telegram's webhook and passes private "/start <code>", /redeem, /me and /tf here, then sends the text we answer.
 // The app asks for a one-time code, opens t.me/<bot>?start=<code>; the person taps Start; the bot passes
 // "/start <code>" here, which ties their Telegram user to the code; the app, asking every few seconds, gets its session.
 
 import { earnsSentPoint, Points, points, Rules, rules } from "./points";
 import { isPro, redeem, RedeemFailure } from "./pro";
 import { addIdentity, display, Identity, User, userFor } from "./session";
-import { base64url, bytes, DAY, Env, now, same } from "./util";
+import { tfCommand } from "./tf";
+import { base64url, bytes, DAY, Env, LIFETIME, now, same, say } from "./util";
 
 export const LOGIN_SECONDS = 600;
 
@@ -30,10 +31,6 @@ export async function loginResult(env: Env, code: string): Promise<{ user: User;
   const user = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(row.user_id).first<User>();
   return user ? { user, install: row.install, platform: row.platform } : "expired";
 }
-
-// Chinese for people whose Telegram is in Chinese, English for everyone else.
-const zh = (from: any) => String(from?.language_code ?? "").toLowerCase().startsWith("zh");
-const say = (from: any, english: string, chinese: string) => (zh(from) ? chinese : english);
 
 const date = (seconds: number) => new Date(seconds * 1000).toISOString().slice(0, 10);
 
@@ -120,9 +117,21 @@ export async function webhook(request: Request, env: Env): Promise<Response> {
     const result = await redeem(env, user, argument, "telegram");
     if (typeof result === "string") return answer(say(from, ...REDEEM_TEXT[result]));
     user.pro_until = result.proUntil;
+    const testFlight = result.proUntil >= LIFETIME
+      ? ["\nLifetime Pro includes Yingxia Pro on TestFlight: send /tf with your Apple account or Gmail address to get an invitation.",
+         "\n永久 Pro 可以加入映匣 Pro 的 TestFlight：发送 /tf 加上你的 Apple 账号邮箱或 Gmail 获取邀请。"]
+      : ["", ""];
     return answer(say(from,
-      `Code redeemed. ${proLine(from, user)}.\nSign in to Yingxia with Telegram (Settings › Account) to use it in the app.`,
-      `兑换成功。${proLine(from, user)}。\n在映匣中通过 Telegram 登录（设置 › 账号）即可在 App 中使用。`));
+      `Code redeemed. ${proLine(from, user)}.\nSign in to Yingxia with Telegram (Settings › Account) to use it in the app.${testFlight[0]}`,
+      `兑换成功。${proLine(from, user)}。\n在映匣中通过 Telegram 登录（设置 › 账号）即可在 App 中使用。${testFlight[1]}`));
+  }
+
+  if (name === "/tf" || name === "/testflight") {
+    // Guesses at the emailed code are limited like redeem codes; asking for codes has its own limits (src/tf.ts).
+    if (/^\d{6}$/.test(argument.trim()) && !(await env.REDEEM_LIMITER.limit({ key: `tf:${from.id}` })).success) {
+      return answer(say(from, "Too many tries. Wait a minute.", "尝试次数过多，请稍等一分钟。"));
+    }
+    return answer(await tfCommand(env, from, await telegramUser(env, from), argument));
   }
 
   if (name === "/me" || name === "/status" || name === "/points") {
@@ -132,8 +141,8 @@ export async function webhook(request: Request, env: Env): Promise<Response> {
   }
 
   return answer(say(from,
-    "Yingxia account bot.\n/redeem <code> — redeem a Pro code\n/me — your points and Pro status\nTo sign in, choose Sign in with Telegram in the app's Settings › Account.",
-    "映匣账号：\n/redeem <兑换码> — 兑换 Pro\n/me — 查看积分和 Pro 状态\n登录请在 App 的 设置 › 账号 中选择“通过 Telegram 登录”。"));
+    "Yingxia account bot.\n/redeem <code> — redeem a Pro code\n/me — your points and Pro status\n/tf <email> — a TestFlight invitation\nTo sign in, choose Sign in with Telegram in the app's Settings › Account.",
+    "映匣账号：\n/redeem <兑换码> — 兑换 Pro\n/me — 查看积分和 Pro 状态\n/tf <邮箱> — 申请 TestFlight 邀请\n登录请在 App 的 设置 › 账号 中选择“通过 Telegram 登录”。"));
 }
 
 // POST /v1/telegram/feedback, from the bot's Worker with the shared secret: {from, issue, sent} once a /feedback in

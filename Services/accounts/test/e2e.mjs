@@ -1,4 +1,5 @@
-// End-to-end test of the accounts Worker on `wrangler dev`, with stand-ins for Apple, Telegram and GitHub.
+// End-to-end test of the accounts Worker on `wrangler dev`, with stand-ins for Apple, Telegram, GitHub, App Store
+// Connect and the mail sender.
 // Run: test/run.sh (from Services/accounts). Needs Node 20+.
 
 import { createServer } from "node:http";
@@ -7,7 +8,7 @@ import { spawn, execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 
 const WRANGLER = process.env.WRANGLER;
-const PORT = 8790, APPLE = 8791, TELEGRAM = 8792, GITHUB = 8793;
+const PORT = 8790, APPLE = 8791, TELEGRAM = 8792, GITHUB = 8793, ASC = 18781, MAIL = 18782;
 const BASE = `http://127.0.0.1:${PORT}`;
 const STATE = "test/.state";
 let failures = 0;
@@ -39,6 +40,22 @@ const issues = new Map([
 // Pull requests the GitHub stand-in lists (filled in once the test knows the account IDs).
 const pulls = [];
 
+// App Store Connect: the API key the Worker signs with, the testers it knows (one already in the team), the requests.
+const ascKey = generateKeyPairSync("ec", { namedCurve: "P-256" });
+const ascTesters = new Map([["old.tester@me.com", "tester-old"]]);
+const ascCalls = [];
+let ascDown = false;
+function ascAuthorized(header) {
+  const [head, claims, signature] = (/^Bearer (.+)$/.exec(header ?? "")?.[1] ?? "").split(".");
+  if (!signature) return false;
+  const h = JSON.parse(Buffer.from(head, "base64url")), c = JSON.parse(Buffer.from(claims, "base64url"));
+  return h.alg === "ES256" && h.kid === "ASCKEY1" && c.aud === "appstoreconnect-v1" && c.iss === "cc097225-575e-4c18-837b-b44d6f57024f" &&
+    c.exp > Date.now() / 1000 && verifySignature("sha256", Buffer.from(`${head}.${claims}`), { key: ascKey.publicKey, dsaEncoding: "ieee-p1363" }, Buffer.from(signature, "base64url"));
+}
+// Mail: what the Worker sent, newest last.
+const mails = [];
+const codeFor = (to) => /\b(\d{6})\b/.exec([...mails].reverse().find((mail) => mail.to === to)?.text ?? "")?.[1];
+
 const read = (request) => new Promise((resolve) => { let data = ""; request.on("data", (chunk) => (data += chunk)); request.on("end", () => resolve(data)); });
 const servers = [
   createServer(async (request, response) => {
@@ -67,6 +84,32 @@ const servers = [
     if (url.pathname.endsWith("/pulls")) return response.end(JSON.stringify(pulls));
     response.statusCode = 404; response.end();
   }).listen(GITHUB),
+  createServer(async (request, response) => {
+    const body = JSON.parse((await read(request)) || "null");
+    const url = new URL(request.url, "http://x");
+    ascCalls.push({ method: request.method, path: url.pathname, query: url.search, body });
+    const send = (status, value) => { response.statusCode = status; response.end(value === undefined ? "" : JSON.stringify(value)); };
+    if (!ascAuthorized(request.headers.authorization)) return send(401, { errors: [{ detail: "bad token" }] });
+    if (ascDown) return send(500, { errors: [{ detail: "down" }] });
+    if (request.method === "POST" && url.pathname === "/v1/betaTesters") {
+      const email = body.data.attributes.email;
+      if (ascTesters.has(email)) return send(409, { errors: [{ detail: "exists" }] });
+      const id = `tester-${ascTesters.size + 1}`;
+      ascTesters.set(email, id);
+      return send(201, { data: { type: "betaTesters", id } });
+    }
+    if (request.method === "GET" && url.pathname === "/v1/betaTesters") {
+      const id = ascTesters.get(url.searchParams.get("filter[email]"));
+      return send(200, { data: id ? [{ type: "betaTesters", id }] : [] });
+    }
+    if (request.method === "POST" && /^\/v1\/betaGroups\/[^/]+\/relationships\/betaTesters$/.test(url.pathname)) return send(204);
+    if (request.method === "POST" && url.pathname === "/v1/betaTesterInvitations") return send(201, { data: { type: "betaTesterInvitations", id: "inv-1" } });
+    send(404, {});
+  }).listen(ASC),
+  createServer(async (request, response) => {
+    mails.push(JSON.parse(await read(request)));
+    response.end("{}");
+  }).listen(MAIL),
 ];
 
 rmSync(STATE, { recursive: true, force: true });
@@ -85,6 +128,11 @@ writeFileSync(".dev.vars", [
   `ENTITLEMENT_KEY=${entitlement.privateKey.export({ format: "der", type: "pkcs8" }).toString("base64")}`,
   `REWARD_DAYS=7`,
   `ADMIN_ORIGINS=https://admin.example`,
+  `ASC_API=http://127.0.0.1:${ASC}`,
+  `ASC_KEY_ID=ASCKEY1`,
+  `ASC_PRIVATE_KEY=${ascKey.privateKey.export({ format: "pem", type: "pkcs8" }).replace(/\n/g, "")}`,
+  `EMAIL_API=http://127.0.0.1:${MAIL}`,
+  `TF_DAILY=3`,
 ].join("\n") + "\n");
 
 const d1 = (database, args) => execFileSync(WRANGLER, ["d1", "execute", database, "--local", "--persist-to", STATE, ...args], { stdio: "pipe" });
@@ -132,7 +180,7 @@ const tgFeedback = (from, issue, secret = "hook-secret") =>
 
 try {
   const health = await call("GET", "/v1/health");
-  check(health.status === 200 && health.json.entitlement && health.json.telegram && health.json.appleRevoke, "health shows everything configured", health.json);
+  check(health.status === 200 && health.json.entitlement && health.json.telegram && health.json.appleRevoke && health.json.testflight, "health shows everything configured", health.json);
 
   // Sign in with Apple.
   check((await call("POST", "/v1/auth/apple", { identityToken: "a.b.c", install: INSTALL, platform: "ios" })).status === 401, "a forged Apple token is refused");
@@ -322,6 +370,98 @@ try {
   const foreign = await fetch(`${BASE}/v1/admin/codes`, { method: "OPTIONS", headers: { origin: "https://evil.example" } });
   check(!foreign.headers.get("access-control-allow-origin"), "CORS refuses other origins");
   check(telegramSent.length === 0, "the accounts Worker never calls Telegram itself (the bot's Worker sends)", telegramSent);
+
+  // TestFlight invitations with /tf: 3 places a day in these tests.
+  const tfUser = (id, language_code = "en") => ({ id, first_name: `T${id}`, language_code });
+  const tfSlots = async () => (await call("GET", "/v1/tf/slots")).json;
+  const opening = await fetch(`${BASE}/v1/tf/slots`);
+  const places = await opening.json();
+  check(places.total === 3 && places.left === 3 && places.opens > t && places.opens <= t + 86400 && opening.headers.get("access-control-allow-origin") === "*",
+    "the website can read today's places (CORS for anyone)", places);
+  check(new Date((places.opens + 8 * 3600) * 1000).getUTCHours() === 20, "places open at 20:00 UTC+8", places.opens);
+  await hook("/tf", tfUser(901));
+  check(/Yingxia Beta/.test(lastTelegram()) && /3 left/.test(lastTelegram()), "/tf alone explains it and shows the places left", lastTelegram());
+  await hook("/tf not-an-address", tfUser(901));
+  check(/isn't an email address/.test(lastTelegram()), "a non-address is refused", lastTelegram());
+  await hook("/tf someone@outlook.com", tfUser(901));
+  check(/only Apple account addresses/.test(lastTelegram()) && mails.length === 0, "only Apple and Gmail addresses are taken", lastTelegram());
+  await hook("/tf First.Last+tv@GoogleMail.com", tfUser(901));
+  const code901 = codeFor("first.last+tv@googlemail.com");
+  check(code901 && /We emailed a 6-digit code/.test(lastTelegram()) && mails.at(-1).from === "yingxia@getmegaportal.com" && /YingxiaTestBot/.test(mails.at(-1).text),
+    "an address gets a 6-digit code by email", [lastTelegram(), mails.at(-1)]);
+  check(ascCalls.length === 0 && (await tfSlots()).left === 3, "nothing is invited and no place is taken before the code");
+  await hook(`/tf ${code901 === "000000" ? "111111" : "000000"}`, tfUser(901));
+  check(/isn't right. 4 tries left/.test(lastTelegram()), "a wrong code says how many tries are left", lastTelegram());
+  await hook(`/tf ${code901}`, tfUser(901));
+  const made901 = ascCalls.find((item) => item.method === "POST" && item.path === "/v1/betaTesters");
+  check(/^Done\. Apple will email a TestFlight invitation to Yingxia Beta to first\.last\+tv@googlemail\.com/.test(lastTelegram()) &&
+    made901?.body.data.attributes.email === "first.last+tv@googlemail.com" &&
+    made901.body.data.relationships.betaGroups.data[0].id === "b4477339-1186-4f71-9fec-e887f160af07",
+    "the right code invites the address to Yingxia Beta's group, signed with the API key", [lastTelegram(), made901]);
+  check((await tfSlots()).left === 2, "and takes one place");
+  await hook(`/tf ${code901}`, tfUser(901));
+  check(/No valid code/.test(lastTelegram()), "a code works once", lastTelegram());
+  await hook("/tf other@icloud.com", tfUser(901));
+  check(/already have an invitation to Yingxia Beta, sent to fi\*\*\*@googlemail\.com/.test(lastTelegram()), "one invitation per Telegram account", lastTelegram());
+  await hook("/tf firstlast@gmail.com", tfUser(902, "zh-hans"));
+  check(/这个邮箱已经收到过映匣 Beta的邀请/.test(lastTelegram()), "one per mailbox, whatever the dots, +tag or Gmail domain (in Chinese for Chinese)", lastTelegram());
+
+  // Tries run out.
+  await hook("/tf guesser@gmail.com", tfUser(907));
+  for (let i = 0; i < 4; i++) await hook(`/tf ${codeFor("guesser@gmail.com") === "999999" ? "999998" : "999999"}`, tfUser(907));
+  check(/1 try left/.test(lastTelegram()), "five tries for a code", lastTelegram());
+
+  // Someone already in the team (Yingxia's own TestFlight): added to the group, and this app's invitation sent.
+  await hook("/tf Old.Tester@me.com", tfUser(903));
+  await hook("/tf old.tester@icloud.com", tfUser(903));
+  check(/just sent/.test(lastTelegram()), "a second code needs a minute's wait", lastTelegram());
+  const before903 = ascCalls.length;
+  await hook(`/tf ${codeFor("old.tester@me.com")}`, tfUser(903));
+  const calls903 = ascCalls.slice(before903).map((item) => `${item.method} ${item.path}`);
+  check(/^Done/.test(lastTelegram()) && calls903.join() === "POST /v1/betaTesters,GET /v1/betaTesters,POST /v1/betaGroups/b4477339-1186-4f71-9fec-e887f160af07/relationships/betaTesters,POST /v1/betaTesterInvitations" &&
+    ascCalls.at(-1).body.data.relationships.app.data.id === "6838344462", "a tester Apple already knows is added to the group and invited to this app", [lastTelegram(), calls903]);
+
+  // App Store Connect failing: the place comes back and the code still works.
+  await hook("/tf third@icloud.com", tfUser(904));
+  const code904 = codeFor("third@icloud.com");
+  ascDown = true;
+  await hook(`/tf ${code904}`, tfUser(904));
+  ascDown = false;
+  check(/couldn't be sent right now/.test(lastTelegram()) && (await tfSlots()).left === 1, "when Apple fails, the place is given back", lastTelegram());
+  await hook(`/tf ${code904}`, tfUser(904));
+  check(/^Done/.test(lastTelegram()) && (await tfSlots()).left === 0, "and the same code works again", lastTelegram());
+  await hook("/tf fourth@gmail.com", tfUser(905));
+  check(/all taken\. New places open every day at 20:00 \(UTC\+8\), in \d+ (h|min)/.test(lastTelegram()) && !codeFor("fourth@gmail.com"),
+    "when today's places are gone, no code is sent and it says when new ones open", lastTelegram());
+
+  // Lifetime Pro: Yingxia Pro, no place needed. Redeeming a lifetime code in the bot points to /tf.
+  await admin("POST", "/v1/admin/codes", { codes: ["FOREVER-TF"], days: null });
+  await hook("/redeem FOREVER-TF", tfUser(906));
+  check(/Lifetime Pro includes Yingxia Pro on TestFlight: send \/tf/.test(lastTelegram()), "redeeming lifetime Pro in the bot tells about /tf", lastTelegram());
+  await hook("/tf", tfUser(906));
+  check(/lifetime Pro, which includes Yingxia Pro/.test(lastTelegram()), "/tf tells lifetime Pro people about Yingxia Pro", lastTelegram());
+  await hook("/tf pro.person@icloud.com", tfUser(906));
+  await hook(`/tf ${codeFor("pro.person@icloud.com")}`, tfUser(906));
+  const madePro = ascCalls.filter((item) => item.method === "POST" && item.path === "/v1/betaTesters").at(-1);
+  check(/^Done\. Apple will email a TestFlight invitation to Yingxia Pro/.test(lastTelegram()) && madePro.body.data.attributes.email === "pro.person@icloud.com" &&
+    madePro.body.data.relationships.betaGroups.data[0].id === "a9f39cc2-71e0-45ee-9ada-77590ed40ff0", "lifetime Pro is invited to Yingxia Pro, even with no Beta places left", [lastTelegram(), madePro]);
+  check(!/Places are limited/.test(lastTelegram()), "Yingxia Pro isn't cleaned up");
+
+  // The daily cleanup: lists Beta invitations, reports removed testers; they may ask again a week later.
+  check((await call("GET", "/v1/admin/tf/invites?app=beta")).status === 401, "the cleanup's API needs the admin token");
+  const invited = (await admin("GET", "/v1/admin/tf/invites?app=beta")).json.invites;
+  check(invited.length === 3 && invited.every((item) => item.tester && item.invited && item.pro === 0), "the cleanup sees the Beta invitations", invited);
+  const proInvited = (await admin("GET", "/v1/admin/tf/invites?app=pro")).json.invites;
+  check(proInvited.length === 1 && proInvited[0].pro === 1, "and the Pro ones, marked Pro", proInvited);
+  const proAccounts = (await admin("GET", "/v1/admin/tf/pro-accounts")).json.accounts;
+  check(proAccounts.length >= 1 && proAccounts.every((item) => "last" in item), "the cleanup sees Pro accounts and their last active day", proAccounts);
+  const removed = await admin("POST", "/v1/admin/tf/removed", { testers: ["tester-old", "tester-unknown"] });
+  check(removed.json.removed === 1, "removed testers are marked", removed.json);
+  await hook("/tf old.tester@icloud.com", tfUser(903));
+  check(/removed on \d{4}-\d\d-\d\d because it wasn't used for 7 days\. You can ask again from \d{4}-\d\d-\d\d/.test(lastTelegram()), "someone removed waits 7 days to ask again", lastTelegram());
+  d1("yingxia-accounts", ["--command", `UPDATE tf_invites SET removed = removed - 8 * 86400 WHERE tester = 'tester-old'`]);
+  await hook("/tf old.tester@icloud.com", tfUser(903));
+  check(/all taken/.test(lastTelegram()), "after 7 days they may ask again (today's places permitting)", lastTelegram());
 
   // Signing out and deleting the account.
   const second = (await call("POST", "/v1/auth/apple", { identityToken: identityToken({ sub: "apple-1" }), install: INSTALL, platform: "ios" })).json.token;

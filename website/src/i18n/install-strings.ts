@@ -56,6 +56,9 @@ export interface InstallCopy {
     app: string;
     steps: Record<Sideload, Step[]>;
     keep: { t: string; b: string; days: string; daysLabel: string; devices: string; devicesLabel: string };
+    /** iPhone and iPad: the public link is full, so people ask the bot for an invitation to Yingxia Beta, whose places
+     * open daily. `ask` is the button under the title, `bot` the panel's. */
+    slots: { left: string; full: string; bot: string; ask: string };
   };
 }
 
@@ -152,14 +155,14 @@ export const INSTALL: Record<Lang, InstallCopy> = {
       tag: "Public beta · TestFlight",
       join: "Join the beta",
       t: "Scan to join the beta",
-      here: { ios: "Tap the button to open the invite in TestFlight. If TestFlight isn't installed yet, get it from the App Store first.", tv: "If this device uses the same Apple Account as your Apple TV, open the invite here and tap Accept in TestFlight, then install on the TV." },
+      here: { ios: "Tap the button to open the Yingxia bot in Telegram. If TestFlight isn't installed yet, get it from the App Store first.", tv: "If this device uses the same Apple Account as your Apple TV, open the invite here and tap Accept in TestFlight, then install on the TV." },
       open: "Open the invite",
       app: "Get TestFlight",
       steps: {
         ios: [
           { t: "Get TestFlight", b: "Install TestFlight, Apple's free app for beta apps, from the App Store on your iPhone or iPad." },
-          { t: "Open the invite", b: "Scan the code with the Camera, or tap Join the beta on the iPhone or iPad itself." },
-          { t: "Accept and install", b: "In TestFlight, tap Accept, then Install. Open Yingxia and add your subscription." },
+          { t: "Ask the bot", b: "Send /tf with your iCloud or Gmail address to the Yingxia bot on Telegram, then send it the 6-digit code it emails you. 100 places open every day at 20:00 (UTC+8)." },
+          { t: "Accept and install", b: "Apple emails you an invitation to Yingxia Beta. Open it on your iPhone or iPad, tap Accept in TestFlight, then Install." },
         ],
         tv: [
           { t: "Get TestFlight on both", b: "Install TestFlight from the App Store on your Apple TV and on an iPhone or iPad. Both need the same Apple Account. TestFlight on Apple TV needs tvOS 18 or later." },
@@ -168,6 +171,7 @@ export const INSTALL: Record<Lang, InstallCopy> = {
         ],
       },
       keep: { t: "Updates come to you", b: "TestFlight tells you when a new build is out. Turn on Automatic Updates and it installs the new build for you, well before the old one expires.", days: "90 days", daysLabel: "Each beta build", devices: "30", devicesLabel: "Devices per Apple Account" },
+      slots: { left: "places left today", full: "Today's places are taken. New ones open at 20:00 (UTC+8).", bot: "Open the bot", ask: "Get an invitation" },
     },
   },
   ja: {
@@ -262,14 +266,14 @@ export const INSTALL: Record<Lang, InstallCopy> = {
       tag: "パブリックベータ · TestFlight",
       join: "ベータに参加",
       t: "スキャンしてベータに参加",
-      here: { ios: "ボタンをタップすると TestFlight で招待が開きます。TestFlight が未インストールなら、先に App Store から入手してください。", tv: "このデバイスが Apple TV と同じ Apple アカウントなら、ここで招待を開いて TestFlight で承認し、テレビでインストールします。" },
+      here: { ios: "ボタンをタップすると Telegram で Yingxia ボットが開きます。TestFlight が未インストールなら、先に App Store から入手してください。", tv: "このデバイスが Apple TV と同じ Apple アカウントなら、ここで招待を開いて TestFlight で承認し、テレビでインストールします。" },
       open: "招待を開く",
       app: "TestFlight を入手",
       steps: {
         ios: [
-          { t: "TestFlight を入手", b: "Apple の無料ベータ版アプリ TestFlight を、iPhone または iPad の App Store からインストールします。" },
-          { t: "招待を開く", b: "カメラでコードを読み取るか、iPhone・iPad 本体で「ベータに参加」をタップします。" },
-          { t: "承認してインストール", b: "TestFlight で「承認」、続けて「インストール」をタップ。映匣を開いてサブスクリプションを追加します。" },
+          { t: "TestFlight を入手", b: "iPhone または iPad の App Store から、Apple の無料ベータ版アプリ TestFlight をインストールします。" },
+          { t: "ボットに申し込む", b: "Telegram の Yingxia ボットに iCloud か Gmail のアドレスを付けて /tf を送り、メールで届く 6 桁のコードを送り返します。毎日 20:00（UTC+8）に 100 枠が開きます。" },
+          { t: "承認してインストール", b: "Apple から Yingxia Beta への招待メールが届きます。iPhone または iPad で開き、TestFlight で「承認」、続いて「インストール」をタップします。" },
         ],
         tv: [
           { t: "両方に TestFlight を入手", b: "Apple TV と iPhone または iPad に、App Store から TestFlight をインストールします。どちらも同じ Apple アカウントが必要です。Apple TV の TestFlight には tvOS 18 以降が必要です。" },
@@ -278,6 +282,7 @@ export const INSTALL: Record<Lang, InstallCopy> = {
         ],
       },
       keep: { t: "アップデートは自動で", b: "新しいビルドが出ると TestFlight が知らせてくれます。自動アップデートをオンにすれば、古いビルドの期限が切れる前に新しいビルドが自動でインストールされます。", days: "90 日", daysLabel: "各ベータビルドの有効期間", devices: "30", devicesLabel: "Apple アカウントあたりのデバイス数" },
+      slots: { left: "今日の残り枠", full: "今日の枠はすべて埋まりました。次の枠は 20:00（UTC+8）に開きます。", bot: "ボットを開く", ask: "招待を受け取る" },
     },
   },
   ko: {
@@ -372,14 +377,14 @@ export const INSTALL: Record<Lang, InstallCopy> = {
       tag: "공개 베타 · TestFlight",
       join: "베타 참여하기",
       t: "스캔해서 베타 참여",
-      here: { ios: "버튼을 탭하면 TestFlight에서 초대가 열립니다. TestFlight가 없다면 먼저 App Store에서 받으세요.", tv: "이 기기가 Apple TV와 같은 Apple 계정이라면 여기서 초대를 열어 TestFlight에서 수락한 뒤 TV에서 설치하세요." },
+      here: { ios: "버튼을 탭하면 텔레그램에서 Yingxia 봇이 열립니다. TestFlight가 없다면 먼저 App Store에서 받으세요.", tv: "이 기기가 Apple TV와 같은 Apple 계정이라면 여기서 초대를 열어 TestFlight에서 수락한 뒤 TV에서 설치하세요." },
       open: "초대 열기",
       app: "TestFlight 받기",
       steps: {
         ios: [
-          { t: "TestFlight 받기", b: "Apple의 무료 베타 앱 TestFlight를 iPhone이나 iPad의 App Store에서 설치합니다." },
-          { t: "초대 열기", b: "카메라로 코드를 스캔하거나, iPhone·iPad에서 ‘베타 참여하기’를 탭합니다." },
-          { t: "수락하고 설치", b: "TestFlight에서 ‘수락’, 이어서 ‘설치’를 탭합니다. Yingxia를 열고 구독을 추가하세요." },
+          { t: "TestFlight 받기", b: "iPhone 또는 iPad의 App Store에서 Apple의 무료 베타 앱인 TestFlight를 설치하세요." },
+          { t: "봇에게 신청하기", b: "텔레그램의 Yingxia 봇에 iCloud 또는 Gmail 주소와 함께 /tf를 보낸 뒤, 이메일로 받은 6자리 코드를 보내세요. 매일 20:00(UTC+8)에 100자리가 열립니다." },
+          { t: "수락하고 설치하기", b: "Apple이 Yingxia Beta 초대 이메일을 보냅니다. iPhone 또는 iPad에서 열고 TestFlight에서 수락을 탭한 다음 설치를 탭하세요." },
         ],
         tv: [
           { t: "두 기기에 TestFlight 받기", b: "Apple TV와 iPhone 또는 iPad에 App Store에서 TestFlight를 설치합니다. 두 기기 모두 같은 Apple 계정이어야 합니다. Apple TV용 TestFlight는 tvOS 18 이상이 필요합니다." },
@@ -388,6 +393,7 @@ export const INSTALL: Record<Lang, InstallCopy> = {
         ],
       },
       keep: { t: "업데이트는 자동으로", b: "새 빌드가 나오면 TestFlight가 알려 줍니다. 자동 업데이트를 켜 두면 이전 빌드가 만료되기 전에 새 빌드를 알아서 설치합니다.", days: "90일", daysLabel: "베타 빌드별 사용 기간", devices: "30", devicesLabel: "Apple 계정당 기기 수" },
+      slots: { left: "오늘 남은 자리", full: "오늘 자리는 모두 찼습니다. 다음 자리는 20:00(UTC+8)에 열립니다.", bot: "봇 열기", ask: "초대 받기" },
     },
   },
   "zh-Hant": {
@@ -482,14 +488,14 @@ export const INSTALL: Record<Lang, InstallCopy> = {
       tag: "公開測試版 · TestFlight",
       join: "加入測試",
       t: "掃描加入測試",
-      here: { ios: "點按按鈕即可在 TestFlight 打開邀請。如果還沒安裝 TestFlight，請先從 App Store 取得。", tv: "如果這台裝置與 Apple TV 使用同一個 Apple 帳號，就在這裡打開邀請、在 TestFlight 點「接受」，再到電視上安裝。" },
+      here: { ios: "點按按鈕即可在 Telegram 打開映匣機器人。如果還沒安裝 TestFlight，請先從 App Store 取得。", tv: "如果這台裝置與 Apple TV 使用同一個 Apple 帳號，就在這裡打開邀請、在 TestFlight 點「接受」，再到電視上安裝。" },
       open: "打開邀請",
       app: "取得 TestFlight",
       steps: {
         ios: [
           { t: "取得 TestFlight", b: "在 iPhone 或 iPad 的 App Store 安裝 Apple 免費的測試版 App：TestFlight。" },
-          { t: "打開邀請", b: "用相機掃描條碼，或直接在 iPhone、iPad 上點「加入測試」。" },
-          { t: "接受並安裝", b: "在 TestFlight 點「接受」，再點「安裝」。打開映匣，加入你的訂閱。" },
+          { t: "向機器人申請", b: "在 Telegram 給映匣機器人發送 /tf 加上你的 iCloud 或 Gmail 地址，再把郵件裡的 6 位驗證碼發給它。每天 20:00（UTC+8）開放 100 個名額。" },
+          { t: "接受並安裝", b: "Apple 會寄來映匣 Beta 的邀請。在 iPhone 或 iPad 上打開，在 TestFlight 點「接受」，再點「安裝」。" },
         ],
         tv: [
           { t: "兩台都裝 TestFlight", b: "在 Apple TV 和 iPhone 或 iPad 上，從 App Store 安裝 TestFlight，兩台都要登入同一個 Apple 帳號。Apple TV 上的 TestFlight 需要 tvOS 18 以上。" },
@@ -498,6 +504,7 @@ export const INSTALL: Record<Lang, InstallCopy> = {
         ],
       },
       keep: { t: "自動保持最新", b: "有新版本時 TestFlight 會通知你；開啟自動更新後，會在舊版本到期前自動安裝新版本。", days: "90 天", daysLabel: "每個測試版本的可用期限", devices: "30", devicesLabel: "每個 Apple 帳號可安裝的裝置數" },
+      slots: { left: "今天剩餘名額", full: "今天的名額已經發完，下一批在 20:00（UTC+8）開放。", bot: "打開機器人", ask: "取得邀請" },
     },
   },
 };

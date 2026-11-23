@@ -2,7 +2,7 @@
 // (APPLE_KEY_ID + APPLE_PRIVATE_KEY) the authorization code also becomes a refresh token, which account deletion revokes,
 // as App Review asks (guideline 5.1.1(v)).
 
-import { base64url, Env, list, now, unbase64 } from "./util";
+import { Env, jwtES256, list, now, unbase64 } from "./util";
 
 const ISSUER = "https://appleid.apple.com";
 const api = (env: Env) => env.APPLE_API ?? ISSUER;
@@ -55,13 +55,8 @@ const configured = (env: Env) => Boolean(env.APPLE_KEY_ID && env.APPLE_PRIVATE_K
 
 // The client secret Apple's token endpoints take: a short-lived ES256 JWT signed with the Sign in with Apple key.
 async function clientSecret(env: Env, client: string) {
-  const pem = env.APPLE_PRIVATE_KEY!.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "");
-  const key = await crypto.subtle.importKey("pkcs8", unbase64(pem), { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
-  const encode = (value: unknown) => base64url(new TextEncoder().encode(JSON.stringify(value)));
   const time = now();
-  const body = `${encode({ alg: "ES256", kid: env.APPLE_KEY_ID })}.${encode({ iss: env.APPLE_TEAM_ID, iat: time, exp: time + 300, aud: ISSUER, sub: client })}`;
-  const signature = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, new TextEncoder().encode(body));
-  return `${body}.${base64url(signature)}`;
+  return jwtES256(env.APPLE_PRIVATE_KEY!, { kid: env.APPLE_KEY_ID }, { iss: env.APPLE_TEAM_ID, iat: time, exp: time + 300, aud: ISSUER, sub: client });
 }
 
 // The refresh token for an authorization code, so it can be revoked later. Null without a key or when Apple refuses.

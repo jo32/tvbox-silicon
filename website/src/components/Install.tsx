@@ -2,7 +2,7 @@ import { SFSymbol } from "./SFSymbol";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { useI18n } from "../i18n/I18nProvider";
 import { INSTALL, type InstallCopy, type Mode, type Platform, type Sideload } from "../i18n/install-strings";
-import { AGENTS, CIDER, DOWNLOADS, ILOADER, IMPACTOR, INSTALL_GUIDE, INSTALL_SKILL, MAC_INTEL_DOWNLOAD, SIDELOADLY, TESTFLIGHT, TESTFLIGHT_APP } from "./controls";
+import { AGENTS, BOT, CIDER, DOWNLOADS, ILOADER, IMPACTOR, INSTALL_GUIDE, INSTALL_SKILL, MAC_INTEL_DOWNLOAD, SIDELOADLY, TESTFLIGHT, TESTFLIGHT_APP, TF_SLOTS } from "./controls";
 import { AppleTVIcon, IPhoneIPadIcon, MacIcon } from "./icons-devices";
 import { Device } from "./Device";
 import { IPadWatchNow, IPhoneWatchNow, MacWatchNow } from "./mock-apple";
@@ -172,8 +172,8 @@ export function Install() {
           <p className="product-req">{copy.req[platform]}</p>
           <div className="product-actions">
             {testflight ? (
-              <a className="btn-blue" href={TESTFLIGHT[platform]} target="_blank" rel="noreferrer">
-                {copy.tf.join}
+              <a className="btn-blue" href={platform === "ios" ? BOT : TESTFLIGHT[platform]} target="_blank" rel="noreferrer">
+                {platform === "ios" ? copy.tf.slots.ask : copy.tf.join}
               </a>
             ) : (
               <a className="btn-blue" href={DOWNLOADS[platform]}>
@@ -329,23 +329,35 @@ function TerminalCard({ copy, platform }: { copy: InstallCopy; platform: Sideloa
 }
 
 /** TestFlight: the invite's QR code (with the app icon in the middle) beside the steps.
- * On an iPhone or iPad there's nothing to scan, so it shows the steps and the link. */
+ * On an iPhone or iPad there's nothing to scan, so it shows the steps and the link.
+ * iPhone and iPad: the public link is full, so people ask the bot (/tf) for an invitation to Yingxia Beta instead, and
+ * the QR code's place shows how many of today's places are left. */
 function TestFlightPanel({ copy, platform, onDevice }: { copy: InstallCopy; platform: Sideload; onDevice: boolean }) {
-  const link = TESTFLIGHT[platform];
+  const bot = platform === "ios";
+  const slots = useSlots(bot);
+  const link = bot ? BOT : TESTFLIGHT[platform];
   return (
-    <div className={onDevice ? "tf-panel here" : "tf-panel"} key={platform}>
-      {!onDevice && (
-        <div className="tf-scan">
-          <div className="tf-qr">
-            <img className="tf-code" src={`/testflight/${platform}.svg`} alt={link} width={232} height={232} />
-            <img className="tf-logo" src="/assets/icon-192.png" alt="" width={52} height={52} />
-          </div>
-          <p className="tf-scan-title">
-            <SFSymbol name="qrcode" />
-            {copy.tf.t}
-          </p>
-          <p className="tf-url">{link.replace("https://", "")}</p>
+    <div className={onDevice && !bot ? "tf-panel here" : "tf-panel"} key={platform}>
+      {bot ? (
+        <div className="tf-slots-count" aria-live="polite">
+          <span className="tf-slots-n">{slots ? slots.left : "–"}</span>
+          <span className="tf-slots-of">{slots ? `/ ${slots.total}` : "\u00a0"}</span>
+          <span className="tf-slots-label">{copy.tf.slots.left}</span>
         </div>
+      ) : (
+        !onDevice && (
+          <div className="tf-scan">
+            <div className="tf-qr">
+              <img className="tf-code" src={`/testflight/${platform}.svg`} alt={link} width={232} height={232} />
+              <img className="tf-logo" src="/assets/icon-192.png" alt="" width={52} height={52} />
+            </div>
+            <p className="tf-scan-title">
+              <SFSymbol name="qrcode" />
+              {copy.tf.t}
+            </p>
+            <p className="tf-url">{link.replace("https://", "")}</p>
+          </div>
+        )
       )}
       <div className="tf-side">
         <ol className="tf-steps">
@@ -358,10 +370,12 @@ function TestFlightPanel({ copy, platform, onDevice }: { copy: InstallCopy; plat
           ))}
         </ol>
         {onDevice && <p className="tf-here">{copy.tf.here[platform]}</p>}
+        {bot && slots?.left === 0 && <p className="tf-slots-full">{copy.tf.slots.full}</p>}
         <div className="tf-actions">
           <a className="btn-blue" href={link} target="_blank" rel="noreferrer">
-            {copy.tf.open}
+            {bot ? copy.tf.slots.bot : copy.tf.open}
           </a>
+          {bot && <code className="tf-slots-cmd">/tf you@icloud.com</code>}
           <a className="link-blue" href={TESTFLIGHT_APP} target="_blank" rel="noreferrer">
             {copy.tf.app} <SFSymbol name="chevron.right" />
           </a>
@@ -369,6 +383,24 @@ function TestFlightPanel({ copy, platform, onDevice }: { copy: InstallCopy; plat
       </div>
     </div>
   );
+}
+
+/** Today's Yingxia Beta places from the accounts Worker, every minute; null until known (or when it can't be reached). */
+function useSlots(on: boolean) {
+  const [slots, setSlots] = useState<{ left: number; total: number } | null>(null);
+  useEffect(() => {
+    if (!on) return;
+    let live = true;
+    const load = () =>
+      fetch(TF_SLOTS)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((value) => { if (live && typeof value?.left === "number") setSlots({ left: value.left, total: value.total }); })
+        .catch(() => {});
+    load();
+    const timer = window.setInterval(load, 60_000);
+    return () => { live = false; window.clearInterval(timer); };
+  }, [on]);
+  return slots;
 }
 
 function AppsCard({ copy }: { copy: InstallCopy }) {
