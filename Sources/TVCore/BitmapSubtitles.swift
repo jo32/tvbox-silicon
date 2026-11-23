@@ -9,7 +9,30 @@ public final class BitmapSubtitleTrack: @unchecked Sendable {
     public struct Picture: @unchecked Sendable {
         /// Where it goes on the cue's canvas, in the canvas's pixels.
         public let rect: CGRect
-        public let image: CGImage
+        /// Its premultiplied BGRA pixels, LZFSE-compressed: subtitle pictures are mostly transparent and a few
+        /// colors, so a whole film's fit in the budget (#1383). Unpacked when drawn, once per change on screen.
+        let packed: Data
+        let compressed: Bool
+
+        init(rect: CGRect, pixels: Data) {
+            self.rect = rect
+            let small = try? (pixels as NSData).compressed(using: .lzfse) as Data
+            packed = small ?? pixels
+            compressed = small != nil
+        }
+
+        public init?(rect: CGRect, image: CGImage) {
+            guard image.bitsPerPixel == 32, image.bytesPerRow == image.width * 4, let data = image.dataProvider?.data as Data? else { return nil }
+            self.init(rect: rect, pixels: data)
+        }
+
+        public var image: CGImage? {
+            let pixels = compressed ? (try? (packed as NSData).decompressed(using: .lzfse) as Data) : packed
+            guard let pixels, pixels.count == Int(rect.width) * Int(rect.height) * 4 else { return nil }
+            return pixels.withUnsafeBytes { raw in
+                raw.bindMemory(to: UInt8.self).baseAddress.flatMap { BitmapSubtitleTrack.image($0, width: Int(rect.width), height: Int(rect.height)) }
+            }
+        }
     }
     public struct Cue: @unchecked Sendable {
         /// Microseconds of the item's clock. `end` is nil until the stream says; the next cue ends it.
@@ -19,7 +42,7 @@ public final class BitmapSubtitleTrack: @unchecked Sendable {
         public let canvas: CGSize
         /// None for a cue that clears the screen.
         public let pictures: [Picture]
-        var bytes: Int { pictures.reduce(64) { $0 + Int($1.rect.width * $1.rect.height) * 4 } }
+        var bytes: Int { pictures.reduce(64) { $0 + $1.packed.count } }
     }
 
     /// The rendition's NAME in the master playlist.
@@ -30,14 +53,17 @@ public final class BitmapSubtitleTrack: @unchecked Sendable {
     public let videoSize: CGSize
     /// A cue with no known end shows at most this long.
     static let longest: Int64 = 10_000_000
-    /// Pictures beyond this are let go from the earliest; a segment made again brings them back.
-    static let budget = 96 << 20
+    /// Pictures beyond this are let go, those farthest from the one on screen first; a segment made again brings
+    /// them back.
+    let budget: Int
     private let lock = NSLock()
     private var cues: [Cue] = []
     private var bytes = 0
+    /// The time last asked for: where the player is.
+    private var playhead: Int64?
 
-    public init(name: String, position: Int = 0, videoSize: CGSize) {
-        self.name = name; self.position = position; self.videoSize = videoSize
+    public init(name: String, position: Int = 0, videoSize: CGSize, budget: Int = 96 << 20) {
+        self.name = name; self.position = position; self.videoSize = videoSize; self.budget = budget
     }
 
     public var count: Int { lock.withLock { cues.count } }
@@ -49,8 +75,12 @@ public final class BitmapSubtitleTrack: @unchecked Sendable {
             if index < cues.count, cues[index].start == cue.start { return }
             cues.insert(cue, at: index)
             bytes += cue.bytes
-            while bytes > Self.budget, cues.count > 1 {
-                bytes -= cues.removeFirst().bytes
+            // AVPlayer reads the subtitle renditions far ahead of the picture, so letting the earliest go threw away
+            // the lines being watched, for good (#1383, #1381, #1566): the end farther from the playhead goes.
+            while bytes > budget, cues.count > 1 {
+                let behind = playhead.map { $0 - cues[0].start } ?? .max
+                let ahead = playhead.map { cues[cues.count - 1].start - $0 } ?? .min
+                bytes -= (behind >= ahead ? cues.removeFirst() : cues.removeLast()).bytes
             }
         }
     }
@@ -58,6 +88,7 @@ public final class BitmapSubtitleTrack: @unchecked Sendable {
     /// The cues on screen at `time`, by start: a cue lasts to its end, else to the next cue, else `longest`.
     public func cues(at time: Int64) -> [Cue] {
         lock.withLock {
+            playhead = time
             let after = cues.firstIndex { $0.start > time } ?? cues.count
             var showing: [Cue] = []
             for index in cues[..<after].indices.reversed() {
@@ -79,8 +110,9 @@ public final class BitmapSubtitleTrack: @unchecked Sendable {
             ? CGSize(width: Int(subtitle.canvasWidth), height: Int(subtitle.canvasHeight)) : videoSize
         let pictures = withUnsafeBytes(of: &subtitle.rects) { raw in
             raw.bindMemory(to: TVMBitmapRect.self).prefix(Int(subtitle.count)).compactMap { rect -> Picture? in
-                guard let pixels = rect.pixels, let image = Self.image(pixels, width: Int(rect.width), height: Int(rect.height)) else { return nil }
-                return Picture(rect: CGRect(x: Int(rect.x), y: Int(rect.y), width: Int(rect.width), height: Int(rect.height)), image: image)
+                guard let pixels = rect.pixels, rect.width > 0, rect.height > 0 else { return nil }
+                return Picture(rect: CGRect(x: Int(rect.x), y: Int(rect.y), width: Int(rect.width), height: Int(rect.height)),
+                               pixels: Data(bytes: pixels, count: Int(rect.width) * Int(rect.height) * 4))
             }
         }
         add(Cue(start: subtitle.start - offset, end: subtitle.end >= 0 ? subtitle.end - offset : nil, canvas: canvas, pictures: pictures))
@@ -125,9 +157,10 @@ public final class BitmapSubtitleRenderer: StyledSubtitleSource, @unchecked Send
                                       space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                       bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue) else { return nil }
         for picture in pictures {
+            guard let image = picture.image else { continue }
             // Core Graphics counts from the bottom.
             let rect = CGRect(x: picture.rect.minX - union.minX, y: union.maxY - picture.rect.maxY, width: picture.rect.width, height: picture.rect.height)
-            context.draw(picture.image, in: rect)
+            context.draw(image, in: rect)
         }
         return StyledSubtitleFrame(image: context.makeImage(), rect: union, size: canvas)
     }

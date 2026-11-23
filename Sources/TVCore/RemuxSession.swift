@@ -184,7 +184,9 @@ final class RemuxSession: @unchecked Sendable {
         segment.join()
         if plan.tracks[track].kind == .audio { asked[track] = Date() }
         if plan.tracks[track].kind == .subtitle { subtitlesAsked = Date() }
-        latest = index
+        // Where AVPlayer plays: its picture and sound. It reads subtitle renditions far ahead (#1383), which would
+        // send the segments made ahead, and those kept, there instead.
+        else { latest = index }
         // A segment no one waits for gives way to this one, unless this one is made already: AVPlayer catching up
         // with the segments made ahead doesn't throw away the one being made.
         if let producing, producing != index, segment.state != .done, !segments.contains(where: { $0.key.segment == producing && $0.value.readers > 0 }) { abandon = true }
