@@ -1917,6 +1917,7 @@
 "Contents" = "目次";
 "Explore" = "探索あり";
 "Filter book sources" = "ブックソースを絞り込む";
+"Filter comic sources" = "コミックソースを絞り込む";
 "Latest: %@" = "最新：%@";
 "No Book Sources" = "ブックソースがありません";
 "No Books" = "本がありません";
