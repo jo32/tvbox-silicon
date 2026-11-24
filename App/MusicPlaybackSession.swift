@@ -87,6 +87,10 @@ typealias MusicTrack = TVCore.MusicTrack
     private var recordedPlay = false
     private var lyricsFor: String?
     private var lastSavedPosition: Double = -10
+    /// The next song's channel, found while this one ends (#834), and the song it was asked for: once for each song.
+    private var prepared: MusicPreparedSelection?
+    private var preparedFor: String?
+    private var prepareTask: Task<Void, Never>?
     /// AVPlayer gets this long from a stream being set to sound playing before the stream counts as failed.
     static let startWindow: Duration = .seconds(10)
 
@@ -370,7 +374,45 @@ typealias MusicTrack = TVCore.MusicTrack
         queue = nil; selection = nil; attempts = []; phase = .idle; failureDetail = nil; notice = nil; presentsPlayer = false; cued = false
         sourceStream = nil; givenStream = nil
         position = 0; duration = nil; seekingTo = nil; lyrics = nil; lyricsFor = nil
+        dropPrepared()
         library.flush()
+    }
+
+    // MARK: - The next song, ready early (#834)
+
+    /// Finds the next song's channel during the last seconds of this one, so it plays as soon as this one ends: the search
+    /// of the channels took seconds of silence between songs. Once for each next song; not when this song repeats, and
+    /// not for a downloaded song (its file), a TVBox episode (its source) or when the Sleep Timer stops at this song's end.
+    private func prepareNextIfDue() {
+        guard phase == .playing, selection != nil, repeatMode != .one,
+              MusicPreparedSelection.isDue(position: position, duration: duration),
+              let next = upcoming, preparedFor != next.id else { return }
+        prepareTask?.cancel(); prepareTask = nil; prepared = nil
+        preparedFor = next.id
+        guard next.source == nil, !SleepTimer.shared.endsWithItem, MusicDownloadLibrary.shared.localSelection(for: next) == nil else { return }
+        let resolver = MusicResolver(preferences: preferences), preference = preferences.quality, cache = MusicStreamCache()
+        prepareTask = Task { [weak self] in
+            let started = Date()
+            let selection = try? await resolver.select(next, preference: preference, cache: cache)
+            guard let self, !Task.isCancelled, self.preparedFor == next.id else { return }
+            self.prepareTask = nil
+            // Nothing found now: the song is searched for again when it starts, and fails or is skipped then as before.
+            guard let selection else { Diagnostics.shared.record(.info, "music", "next song not ready"); return }
+            self.prepared = MusicPreparedSelection(trackID: next.id, selection: selection, cache: cache)
+            Diagnostics.shared.record(.info, "music", String(format: "next song ready after %.1fs", Date().timeIntervalSince(started)))
+        }
+    }
+
+    /// The song `next()` plays after this one.
+    private var upcoming: MusicTrack? {
+        guard let queue else { return nil }
+        if queue.hasNext { return queue.tracks[queue.index + 1] }
+        return repeatMode == .all && queue.tracks.count > 1 ? queue.tracks.first : nil
+    }
+
+    private func dropPrepared() {
+        prepareTask?.cancel(); prepareTask = nil
+        prepared = nil; preparedFor = nil
     }
 
     // MARK: - Playback
@@ -386,6 +428,9 @@ typealias MusicTrack = TVCore.MusicTrack
         let run = UUID(); generation = run
         cued = false
         task?.cancel(); startWatch?.cancel(); lyricsTask?.cancel()
+        // The channel found for this song while the last one ended, if it still holds (#834).
+        let ready = prepared.flatMap { $0.usable(for: track.id) ? $0 : nil }
+        dropPrepared()
         tearDownItem()
         selection = nil; attempts = []; failureDetail = nil; sourceStream = nil
         position = resumeAt ?? 0; duration = track.duration; seekingTo = nil
@@ -403,6 +448,14 @@ typealias MusicTrack = TVCore.MusicTrack
             Diagnostics.shared.record(.info, "music", "play downloaded \(saved.probe.format.label)")
             let length = saved.probe.duration ?? track.duration
             start(saved, at: resumeAt.flatMap { seconds in length.map { seconds < $0 - 5 } == true ? seconds : nil }, run: run)
+            return
+        }
+        if let ready {
+            Diagnostics.shared.record(.info, "music", "play prepared \(ready.selection.candidate.provider.rawValue) \(ready.selection.probe.format.label)")
+            self.cache = ready.cache
+            attempts = ready.selection.attempts
+            let length = ready.selection.probe.duration ?? track.duration
+            start(ready.selection, at: resumeAt.flatMap { seconds in length.map { seconds < $0 - 5 } == true ? seconds : nil }, run: run)
             return
         }
         Diagnostics.shared.record(.info, "music", "play \(track.ids.keys.map(\.rawValue).sorted().joined(separator: "+")) preference=\(preference.rawValue)")
@@ -717,6 +770,7 @@ typealias MusicTrack = TVCore.MusicTrack
         if sourceStream != nil, let track, lyricsFor != track.id, let duration { loadSourceLyrics(for: track, duration: duration) }
         saveResumePoint(force: false)
         skipIfDue(time.seconds)
+        prepareNextIfDue()
     }
 
     /// The book's intro skipped as a chapter starts, and its outro as the end: the next chapter, as when one ends.
