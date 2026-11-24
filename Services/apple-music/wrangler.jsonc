@@ -1,0 +1,15 @@
+// Apple Music catalog data for the app's music pages (Sources/TVCore/AppleMusicCatalog.swift). See README.md.
+// Deploy: ../../website/node_modules/.bin/wrangler deploy (from this folder).
+{
+  "$schema": "../../website/node_modules/wrangler/config-schema.json",
+  "name": "yingxia-music",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-22",
+  "routes": [{ "pattern": "yingxia-music.getmegaportal.com", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false,
+  // Per IP address, in memory only, for questions not already answered at the edge. A song change asks once.
+  "ratelimits": [{ "name": "LIMITER", "namespace_id": "4301", "simple": { "limit": 60, "period": 60 } }],
+  // Secrets: MUSICKIT_KEY (the AuthKey_XXXX.p8 text), MUSICKIT_KEY_ID, APPLE_TEAM_ID (wrangler secret put).
+  "observability": { "enabled": false }
+}

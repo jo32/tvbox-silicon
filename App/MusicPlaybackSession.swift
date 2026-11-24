@@ -546,6 +546,21 @@ typealias MusicTrack = TVCore.MusicTrack
         }
     }
 
+    /// A source's song has no catalog entry: its lyrics are found from its name and length once the stream says how
+    /// long it is (#491). Once per song; nothing for a book's chapter.
+    private func loadSourceLyrics(for track: MusicTrack, duration: Double) {
+        lyricsFor = track.id
+        lyricsTask?.cancel()
+        guard !MusicSourceSong.guesses(for: track).isEmpty else { return }
+        lyricsLoading = true
+        let songID = track.id
+        lyricsTask = Task {
+            let found = await MusicSourceSong.lyrics(for: track, duration: duration)
+            guard !Task.isCancelled, self.track?.id == songID else { return }
+            self.lyrics = found; self.lyricsLoading = false
+        }
+    }
+
     private func songEnded(run: UUID) {
         guard generation == run else { return }
         // Sleep Timer, End of Song: stop here, with the next song ready to play in the morning.
@@ -699,6 +714,7 @@ typealias MusicTrack = TVCore.MusicTrack
         guard time.seconds.isFinite, track != nil, seekingTo == nil else { return }
         position = time.seconds
         if let itemDuration = player.currentItem?.duration.seconds, itemDuration.isFinite, itemDuration > 0 { duration = itemDuration }
+        if sourceStream != nil, let track, lyricsFor != track.id, let duration { loadSourceLyrics(for: track, duration: duration) }
         saveResumePoint(force: false)
         skipIfDue(time.seconds)
     }
