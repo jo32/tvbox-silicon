@@ -1256,7 +1256,10 @@ struct PlaybackSettingsView: View {
     @AppStorage(DanmakuPreference.key) private var showsDanmaku = true
     @AppStorage(SpeedBoost.key) private var holdSpeed = SpeedBoost.standard
     @AppStorage(PictureLevel.key) private var slidesLevels = true
-    @AppStorage(PictureDoubleTap.key) private var doubleTapSkips = true
+    @AppStorage(PictureDoubleTap.key) private var doubleTapSkips = PictureDoubleTap.standard
+    @AppStorage(LockButtonSide.key) private var lockSide = LockButtonSide.left.rawValue
+    @AppStorage(PlaybackTags.key) private var showsTags = true
+    @AppStorage(PictureInPicturePreference.key) private var allowsPictureInPicture = true
     @AppStorage(SkipInterval.key) private var skipInterval = SkipInterval.standard
     @AppStorage(VideoEnhancement.upscaleKey) private var upscalesVideo = false
     @AppStorage(VideoEnhancement.smoothKey) private var smoothsVideo = false
@@ -1282,7 +1285,7 @@ struct PlaybackSettingsView: View {
             // fragments, and a long title pushed the switch's row to two lines.
             SettingsGroup(title: L10n.text("Gestures"), footer: L10n.text("Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go.")
                           + " " + L10n.text("Slide up or down on the left of the video to change the brightness, or on the right to change the volume.")
-                          + " " + L10n.text("Double-tap the left or right of the video to skip forward or back. Turn this off and a double tap plays or pauses instead.")) {
+                          + " " + L10n.text("Double-tap the video to play or pause. With Double-Tap to Skip on, a double tap on the left or right skips back or forward instead.")) {
                 // Off for those who'd rather a hold did nothing (#1149).
                 Picker(selection: $holdSpeed) {
                     Text(L10n.text("Off")).tag(SpeedBoost.off)
@@ -1331,13 +1334,35 @@ struct PlaybackSettingsView: View {
                     .accessibilityIdentifier("settings.watchAutoPlay")
                 }
             }
-            SettingsGroup(footer: SettingsNote.playbackInfo) {
+            // The full-screen controls: which edge the lock is on (#1922), and Picture in Picture for those who
+            // never want it (#1731).
+            SettingsGroup(title: L10n.text("Controls"), footer: L10n.text("With Picture in Picture on, a video carries on in a small window when you leave the app.")) {
+                Picker(selection: Binding(get: { LockButtonSide.side(lockSide) }, set: { lockSide = $0.rawValue })) {
+                    Text(L10n.text("Left")).tag(LockButtonSide.left)
+                    Text(L10n.text("Right")).tag(LockButtonSide.right)
+                } label: {
+                    FormLabel(symbol: "lock.fill", tint: .gray, title: L10n.text("Lock Button"))
+                }
+                .accessibilityIdentifier("settings.lockSide")
+                Toggle(isOn: $allowsPictureInPicture) {
+                    FormLabel(symbol: "pip.fill", tint: .purple, title: L10n.text("Picture in Picture"))
+                }
+                .settingsSwitch()
+                .accessibilityIdentifier("settings.pictureInPicture")
+            }
+            SettingsGroup(footer: SettingsNote.playbackInfo + " " + L10n.text("Video Tags are the short labels above the progress bar in full screen, such as 4K and H265.")) {
                 FormLink(symbol: "captions.bubble.fill", tint: .orange, title: L10n.text("Subtitle Style")) { SubtitleStyleView() }
                 FormLink(symbol: "text.magnifyingglass", tint: .orange, title: L10n.text("Subtitle Sources")) { SubtitleSourcesView() }
                 Toggle(isOn: $showsPlaybackInfo) {
                     FormLabel(symbol: "info.circle.fill", tint: .blue, title: L10n.text("Show Video Info"))
                 }
                 .settingsSwitch()
+                // On unless turned off (#1534): the tags were always there, and some find them clutter.
+                Toggle(isOn: $showsTags) {
+                    FormLabel(symbol: "tag.fill", tint: .blue, title: L10n.text("Show Video Tags"))
+                }
+                .settingsSwitch()
+                .accessibilityIdentifier("settings.videoTags")
                 Toggle(isOn: $skipsAds) {
                     FormLabel(symbol: "forward.end.fill", tint: .red, title: L10n.text("Skip Ad Segments"))
                 }
