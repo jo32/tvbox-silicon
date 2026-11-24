@@ -275,6 +275,7 @@ private struct MusicSongCell: View {
             Divider()
             Button { store.music.playNext([track]) } label: { Label(L10n.text("Play Next"), systemImage: "text.line.first.and.arrowtriangle.forward") }
             Button { store.music.addToUpNext([track]) } label: { Label(L10n.text("Add to Up Next"), systemImage: "text.line.last.and.arrowtriangle.forward") }
+            MusicPlaylistMenu(tracks: [track])
             MusicArtistMenu(track: track)
             Divider()
             MusicDownloadMenuItems(tracks: [track])
@@ -334,6 +335,7 @@ struct MusicTrackMenu: View {
             }
             Button { store.music.playNext(tracks) } label: { Label(L10n.text("Play Next"), systemImage: "text.line.first.and.arrowtriangle.forward") }
             Button { store.music.addToUpNext(tracks) } label: { Label(L10n.text("Add to Up Next"), systemImage: "text.line.last.and.arrowtriangle.forward") }
+            MusicPlaylistMenu(tracks: tracks)
             if tracks.count == 1, let track = tracks.first { MusicArtistMenu(track: track) }
             Divider()
             MusicDownloadMenuItems(tracks: tracks)

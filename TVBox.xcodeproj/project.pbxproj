@@ -108,6 +108,7 @@
 		38395AAE5193EB91CF33602A /* DiscoverDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28110209CF4DBB819A2F3C74 /* DiscoverDetailView.swift */; };
 		38BF027CC7866E805A20DDD1 /* StyledSubtitleOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61C44303B4662294C11176AB /* StyledSubtitleOverlay.swift */; };
 		3917D120CB9602531FA0D44E /* Updates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D706229ED242AE96AE52F8 /* Updates.swift */; };
+		3A22BAB93FEFE89FD385DB58 /* MusicPlaylistViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4E18FFBEC57A458AA99025D /* MusicPlaylistViews.swift */; };
 		3A6251EF1A83DCA0F38A1235 /* MusicMacBrowse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D442D4FB2D2EB656FBBCB2C /* MusicMacBrowse.swift */; };
 		3AAEF47B755581ED6BE517CF /* OpenJDK-additional.txt in Resources */ = {isa = PBXBuildFile; fileRef = 49F3577BBD5630331F34E84E /* OpenJDK-additional.txt */; };
 		3ABC036DB97EAE1D5C4A76F5 /* XunleiSignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00C471D2D671003876D2A4F9 /* XunleiSignInView.swift */; };
@@ -139,6 +140,7 @@
 		4BAF0943739F85C530148F50 /* LivePluginSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79ABEF8CC3883B021CEF3CEE /* LivePluginSignIn.swift */; };
 		4C10AE29307F2F5C354403A3 /* SourceAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 575633259B74E3A953F65F95 /* SourceAccountView.swift */; };
 		4C65106175D517040E98330B /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D1010816125FBC3792AF838 /* Store.swift */; };
+		4CB7F9A005FA6FAC3BD2C962 /* MusicPlaylistViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4E18FFBEC57A458AA99025D /* MusicPlaylistViews.swift */; };
 		4D24EB78DDDCF156FD4A3E62 /* DiscoverFollowing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51C2CCCBC2CD58D4D132DE14 /* DiscoverFollowing.swift */; };
 		4EAAD9E59129B744D0008135 /* ExternalSubtitles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75B036EC33AB3F0991E78CDD /* ExternalSubtitles.swift */; };
 		4ECE8586E27A017017F26EDC /* DiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 181C983C0018A97F2A086298 /* DiscoveryView.swift */; };
@@ -231,6 +233,7 @@
 		7FB9AB1705559DD6C22EEFAE /* LiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7459A3EBEF2E7C346B508738 /* LiveView.swift */; };
 		7FBF6A9CDB139D618BC92504 /* TMDBViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F714C204B589F33E2806EDF8 /* TMDBViews.swift */; };
 		80FEC451B80F610A45D9D139 /* MusicTVPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF5733BA144503E76421BCFD /* MusicTVPlayer.swift */; };
+		8229B24F58423BB1D4B33A62 /* MusicPlaylistViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4E18FFBEC57A458AA99025D /* MusicPlaylistViews.swift */; };
 		8253F7BDC07638BD6F654962 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A90392B70C28DA6CC7497B9F /* Assets.xcassets */; };
 		827566269F191FCBF27F2FEA /* Keystone-LLVM.txt in Resources */ = {isa = PBXBuildFile; fileRef = 3A398E8AF0C7E4C94787F4B3 /* Keystone-LLVM.txt */; };
 		82933DAB592E786763C7D05B /* MusicView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 235375CC2420B76124FCEBC2 /* MusicView.swift */; };
@@ -532,6 +535,7 @@
 		A0E5BAF6D854E7CE5DA362D0 /* MangaSourcesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MangaSourcesView.swift; sourceTree = "<group>"; };
 		A0E8559808CF7D11225EB30B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A3012FC04D8DAD058B1A5168 /* ThirdPartyNotices.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = ThirdPartyNotices.txt; sourceTree = "<group>"; };
+		A4E18FFBEC57A458AA99025D /* MusicPlaylistViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicPlaylistViews.swift; sourceTree = "<group>"; };
 		A4EB0D74F8DB73E33CC129F8 /* CacheSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheSettingsView.swift; sourceTree = "<group>"; };
 		A74141D324E35BE13394BC0C /* NovelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelView.swift; sourceTree = "<group>"; };
 		A90392B70C28DA6CC7497B9F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -736,6 +740,7 @@
 				2B0131105AAF88C36366936A /* MusicNowPlayingScreen.swift */,
 				D7F15799E2A2FB8B88DCF8E4 /* MusicPlaybackSession.swift */,
 				B2CD4FD12F4DD3AAE1F8592A /* MusicPlayerViews.swift */,
+				A4E18FFBEC57A458AA99025D /* MusicPlaylistViews.swift */,
 				58E59EDBC7BE62078557E781 /* MusicRemoteControl.swift */,
 				BF5733BA144503E76421BCFD /* MusicTVPlayer.swift */,
 				66DF697EACE4307031398E5A /* MusicTVScreen.swift */,
@@ -1357,6 +1362,7 @@
 				56A6EE507B32FD9A832FB255 /* MusicNowPlayingScreen.swift in Sources */,
 				198C4FA14FB456BCAC7CBB23 /* MusicPlaybackSession.swift in Sources */,
 				D7EE47673EE419672D2347C5 /* MusicPlayerViews.swift in Sources */,
+				3A22BAB93FEFE89FD385DB58 /* MusicPlaylistViews.swift in Sources */,
 				6FB75A9CED5DEEB931AD0C9A /* MusicRemoteControl.swift in Sources */,
 				80FEC451B80F610A45D9D139 /* MusicTVPlayer.swift in Sources */,
 				1B07B20D202CF846C1709988 /* MusicTVScreen.swift in Sources */,
@@ -1482,6 +1488,7 @@
 				57920B216F4A81A901A757C8 /* MusicNowPlayingScreen.swift in Sources */,
 				B2DB0FA87761427C0C95FE91 /* MusicPlaybackSession.swift in Sources */,
 				05392A45E74A244DECCD26BB /* MusicPlayerViews.swift in Sources */,
+				8229B24F58423BB1D4B33A62 /* MusicPlaylistViews.swift in Sources */,
 				B02B784DE4DDF64B05C8FA0F /* MusicRemoteControl.swift in Sources */,
 				7EF594A9192339C8A03FB054 /* MusicTVPlayer.swift in Sources */,
 				F2B94D8E8A07F399F14CF5EC /* MusicTVScreen.swift in Sources */,
@@ -1609,6 +1616,7 @@
 				B5B9BEFC49D2638D3A92F9C0 /* MusicNowPlayingScreen.swift in Sources */,
 				697B344C9CEF446CDD596DDB /* MusicPlaybackSession.swift in Sources */,
 				455119517E0FFF07B799E98C /* MusicPlayerViews.swift in Sources */,
+				4CB7F9A005FA6FAC3BD2C962 /* MusicPlaylistViews.swift in Sources */,
 				7E01798F392A21C413011284 /* MusicRemoteControl.swift in Sources */,
 				55C41E0E739A11AA44235092 /* MusicTVPlayer.swift in Sources */,
 				2A9680486C1F040EA193F12E /* MusicTVScreen.swift in Sources */,
