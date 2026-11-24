@@ -1242,8 +1242,11 @@ private struct NativePlayerView: UIViewControllerRepresentable {
 #endif
 
 #if os(macOS)
-/// Default size of a playback window when a new video opens, like IINA's window-size choices.
+/// The size a new playback window takes for its first picture, like IINA's window-size choices. Keep Last Size (the
+/// default) is the window's remembered size, given the picture's shape; the next episode and Fill Window turned off keep
+/// the size the viewer has whatever this says.
 enum MacPlayerWindowSize: String, CaseIterable, Sendable {
+    case keep
     case fitScreen
     case half
     case one
@@ -1254,6 +1257,7 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
 
     var title: String {
         switch self {
+        case .keep: L10n.text("Keep Last Size")
         case .fitScreen: L10n.text("Fit Screen")
         case .half: "0.5×"
         case .one: "1×"
@@ -1262,10 +1266,10 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
         }
     }
 
-    /// Nil means the largest size that fits the screen; otherwise a multiple of the video's pixel size.
+    /// A multiple of the video's pixel size; nil for Keep Last Size and Fit Screen.
     var scale: CGFloat? {
         switch self {
-        case .fitScreen: nil
+        case .keep, .fitScreen: nil
         case .half: 0.5
         case .one: 1
         case .oneAndHalf: 1.5
@@ -1299,6 +1303,8 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
             target.center()
             target.setFrameAutosaveName("PlaybackWindow")
             target.session = session
+            // A new window: its first picture takes the Default Window Size; later ones keep what the viewer has.
+            target.sizesFirstPicture = true
             window = target
         }
         target.title = channel.name
@@ -1415,6 +1421,8 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
 
     /// The picture's size, once known.
     private var videoSize: NSSize?
+    /// The window is new and its first picture takes the Default Window Size (`MacPlayerWindowSize`).
+    var sizesFirstPicture = false
     /// Fill Window (#978): the picture fills whatever shape the window has, so the window resizes freely, to any
     /// shape, as in VLC. Turning it off gives the window the picture's shape again and locks it.
     var fillsFrame = false {
@@ -1469,11 +1477,16 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     }
 
     /// Sizes the window to the picture, which `resized(to:)` then keeps while it is resized (#689), so there are no black bars to
-    /// drag away. A video of the shape the window already has leaves the size the viewer chose alone; full screen and
-    /// a zoomed window are left as they are, and so is a window the picture fills (#978).
+    /// drag away. A new window's first picture takes the Default Window Size; otherwise a video of the shape the window
+    /// already has leaves the size the viewer chose alone. Full screen and a zoomed window are left as they are, and so
+    /// is a window the picture fills (#978).
     func fit(toVideo video: NSSize) {
         guard video.width > 0, video.height > 0, video.width.isFinite, video.height.isFinite else { return }
         videoSize = video
+        let sizing = sizesFirstPicture
+            ? MacPlayerWindowSize(rawValue: UserDefaults.standard.string(forKey: MacPlayerWindowSize.key) ?? "") ?? .keep
+            : .keep
+        sizesFirstPicture = false
         guard !fillsFrame else { return }
         guard !styleMask.contains(.fullScreen), !isZoomed, let contentView else { return }
         let current = contentView.bounds.size
@@ -1483,9 +1496,15 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
         let chrome = max(0, frame.height - current.height)
         let room = NSSize(width: visible.width, height: max(0, visible.height - chrome))
         guard room.width > 0, room.height > 0 else { return }
-        let preference = MacPlayerWindowSize(rawValue: UserDefaults.standard.string(forKey: MacPlayerWindowSize.key) ?? "") ?? .one
         var width: CGFloat, height: CGFloat
-        if let scale = preference.scale {
+        if sizing == .keep {
+            // Keep the width the viewer has, as far as the screen allows, and give it the picture's height.
+            if abs(current.width / current.height - ratio) / ratio < 0.01 { return }
+            width = min(current.width, visible.width * 0.9)
+            height = width / ratio
+            let fits = visible.height * 0.9 - chrome
+            if height > fits { height = fits; width = height * ratio }
+        } else if let scale = sizing.scale {
             // A multiple of the video's own pixel size, as in IINA; shrink it to fit the screen when needed.
             width = video.width * scale
             height = video.height * scale

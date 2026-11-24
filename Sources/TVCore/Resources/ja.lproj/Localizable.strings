@@ -148,7 +148,8 @@
 "Loop Playback" = "リピート再生";
 "Fill Window" = "ウインドウに合わせて拡大";
 "Default Window Size" = "既定のウィンドウサイズ";
-"Used when a new video opens. The window takes a multiple of the video's own pixel size, or the largest size that fits the screen." = "新しい動画を開くときに使用します。動画の元のピクセルサイズの倍率、または画面に収まる最大サイズに調整します。";
+"The size a new player window opens at: the size it had last time, a multiple of the video's own pixel size, or the largest size that fits the screen." = "新しい再生ウインドウを開くときのサイズ：前回のサイズ、動画の元のピクセルサイズの倍率、または画面に収まる最大サイズ。";
+"Keep Last Size" = "前回のサイズ";
 "Fit Screen" = "画面に合わせる";
 "Float on Top" = "常に手前に表示";
 "Enter / Exit Full Screen" = "フルスクリーン切り替え";

@@ -565,7 +565,7 @@ struct FormSettingsView: View {
     @AppStorage(BilibiliCastController.key) private var receivesCasts = true
     @AppStorage(PlayOnController.key) private var receivesPlayOn = true
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
-    @AppStorage(MacPlayerWindowSize.key) private var playerWindowSize = MacPlayerWindowSize.one.rawValue
+    @AppStorage(MacPlayerWindowSize.key) private var playerWindowSize = MacPlayerWindowSize.keep.rawValue
     @State private var skipsIntros = false
     /// The language picked here, "" for the system's.
     @State private var language = MacLanguage.launched
@@ -911,13 +911,13 @@ struct FormSettingsView: View {
                     FormLabel(symbol: "info.circle.fill", tint: .blue, title: L10n.text("Show Video Info"), subtitle: SettingsNote.playbackInfo)
                 }
                 .settingsSwitch()
-                Picker(selection: Binding(get: { MacPlayerWindowSize(rawValue: playerWindowSize) ?? .one },
+                Picker(selection: Binding(get: { MacPlayerWindowSize(rawValue: playerWindowSize) ?? .keep },
                                           set: { playerWindowSize = $0.rawValue })) {
                     ForEach(MacPlayerWindowSize.allCases, id: \.self) { Text($0.title).tag($0) }
                 } label: {
                     FormLabel(symbol: "rectangle.expand.vertical", tint: .indigo,
                               title: L10n.text("Default Window Size"),
-                              subtitle: L10n.text("Used when a new video opens. The window takes a multiple of the video's own pixel size, or the largest size that fits the screen."))
+                              subtitle: L10n.text("The size a new player window opens at: the size it had last time, a multiple of the video's own pixel size, or the largest size that fits the screen."))
                 }
                 .accessibilityIdentifier("settings.playerWindowSize")
                 // Where people look for it first (#1488): the switch, and where each title's times are set.
