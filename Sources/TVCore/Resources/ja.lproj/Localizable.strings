@@ -1917,6 +1917,7 @@
 "Contents" = "目次";
 "Explore" = "探索あり";
 "Filter book sources" = "ブックソースを絞り込む";
+"Filter comic sources" = "コミックソースを絞り込む";
 "Latest: %@" = "最新：%@";
 "No Book Sources" = "ブックソースがありません";
 "No Books" = "本がありません";
@@ -2348,6 +2349,9 @@
 "No Liked Albums or Playlists" = "お気に入りのアルバムやプレイリストはまだありません";
 "Like an album or playlist on its page, and it waits here." = "アルバムやプレイリストのページで「いいね」すると、ここに残ります。";
 "Search Liked Songs" = "お気に入りの曲を検索";
+"Info from Apple Music" = "情報提供：Apple Music";
+"Open in Apple Music" = "Apple Musicで開く";
+"Released %@" = "%@ リリース";
 "My Playlists" = "マイプレイリスト";
 "Add to Playlist" = "プレイリストに追加";
 "New Playlist" = "新規プレイリスト";

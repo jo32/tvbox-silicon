@@ -1422,11 +1422,14 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         }
         guard !fillsFrame, let videoSize, videoSize.width > 0, videoSize.height > 0 else { return proposed }
         let ratio = videoSize.width / videoSize.height
-        let old = contentRect(forFrameRect: frame).size
+        // Compare against the frame at drag start rather than the current snapped `frame`: AppKit computes `proposed`
+        // from the pointer's travel since drag start, so comparing against `frame` oscillated between width-led and
+        // height-led on every tick of a corner drag.
+        let reference = contentRect(forFrameRect: drag?.frame ?? frame).size
         var size = contentRect(forFrameRect: NSRect(origin: .zero, size: proposed)).size
-        guard old.width > 0, old.height > 0, size.width > 0, size.height > 0 else { return proposed }
+        guard reference.width > 0, reference.height > 0, size.width > 0, size.height > 0 else { return proposed }
         // The side the drag moves more leads and the other follows: an edge moves one side, a corner both.
-        if abs(size.width - old.width) / old.width >= abs(size.height - old.height) / old.height { size.height = size.width / ratio }
+        if abs(size.width - reference.width) / reference.width >= abs(size.height - reference.height) / reference.height { size.height = size.width / ratio }
         else { size.width = size.height * ratio }
         let minimum = contentMinSize
         if size.width < minimum.width || size.height < minimum.height {

@@ -1917,6 +1917,7 @@
 "Contents" = "Contents";
 "Explore" = "Explore";
 "Filter book sources" = "Filter book sources";
+"Filter comic sources" = "Filter comic sources";
 "Latest: %@" = "Latest: %@";
 "No Book Sources" = "No Book Sources";
 "No Books" = "No Books";
@@ -2348,6 +2349,9 @@
 "No Liked Albums or Playlists" = "No Liked Albums or Playlists";
 "Like an album or playlist on its page, and it waits here." = "Like an album or playlist on its page, and it waits here.";
 "Search Liked Songs" = "Search Liked Songs";
+"Info from Apple Music" = "Info from Apple Music";
+"Open in Apple Music" = "Open in Apple Music";
+"Released %@" = "Released %@";
 "My Playlists" = "My Playlists";
 "Add to Playlist" = "Add to Playlist";
 "New Playlist" = "New Playlist";

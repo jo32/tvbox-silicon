@@ -1917,6 +1917,7 @@
 "Contents" = "目錄";
 "Explore" = "可發現";
 "Filter book sources" = "篩選書源";
+"Filter comic sources" = "篩選漫畫源";
 "Latest: %@" = "最新：%@";
 "No Book Sources" = "沒有書源";
 "No Books" = "沒有書籍";
@@ -2348,6 +2349,9 @@
 "No Liked Albums or Playlists" = "還沒有喜歡的專輯或歌單";
 "Like an album or playlist on its page, and it waits here." = "在專輯或歌單頁面點喜歡，它就會留在這裡。";
 "Search Liked Songs" = "搜尋喜歡的歌曲";
+"Info from Apple Music" = "資料來自 Apple Music";
+"Open in Apple Music" = "在 Apple Music 中打開";
+"Released %@" = "發行於 %@";
 "My Playlists" = "我的歌單";
 "Add to Playlist" = "加入歌單";
 "New Playlist" = "新增歌單";

@@ -23,17 +23,31 @@ struct DiscoverCalendarView: View {
     private static func key(_ kind: TMDBCalendar.Kind, _ region: TMDBCalendar.Region) -> String { kind == .anime ? "anime" : "tv|\(region.rawValue)" }
     private var key: String { Self.key(kind, region) }
     private var week: TMDBCalendar.Week? { weeks[key] }
-    private var date: String? { picked[key] ?? week?.today()?.date ?? week?.days.first?.date }
+    private var date: String? {
+        // A pick from last week is not in the fresh week's days; fall back to today rather than show nothing.
+        let chosen = picked[key]
+        if let chosen, week?.days.contains(where: { $0.date == chosen }) ?? false { return chosen }
+        return week?.today()?.date ?? week?.days.first?.date
+    }
     private var day: TMDBCalendar.Day? { week?.days.first { $0.date == date } }
     private var isToday: Bool { day != nil && day?.date == week?.today()?.date }
     private var next: String? { isToday ? day.flatMap { DiscoverAiring.next($0.items) } : nil }
     private var dateBinding: Binding<String> { Binding(get: { date ?? "" }, set: { picked[key] = $0 }) }
 
+    /// Part of the load task's id: on the TV the view outlives the week rollover, so a week it kept is fetched again
+    /// once it no longer covers today. The week itself says so, in the calendar's own time zone (not the device's
+    /// week, which rolls over hours apart from it). A fresh week clears the mark; an answer that is still the old
+    /// week leaves it, so nothing is asked twice.
+    private var staleMark: String { week.map { $0.current() ? "" : "|stale" } ?? "" }
+
     var body: some View {
         content
             .background { DiscoverCanvas(poster: day?.items.first?.cover) }
             .foregroundStyle(.white).preferredColorScheme(.dark)
-            .task(id: key) { if weeks[key] == nil { await load() } }
+            .task(id: key + staleMark) {
+                if let week = weeks[key], week.current() { return }
+                await load()
+            }
     }
 
     #if os(tvOS)
