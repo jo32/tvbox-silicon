@@ -1029,7 +1029,6 @@
 "Stretch" = "引き伸ばす";
 "Show Time and Battery" = "時刻とバッテリーを表示";
 "Skip Interval" = "スキップ間隔";
-"Double-tap the left or right of the video to skip forward or back. Turn this off and a double tap plays or pauses instead." = "動画の左側または右側をダブルタップすると早送り・早戻しします。オフにすると、ダブルタップで再生/一時停止になります。";
 "Half-Speed Scrubbing" = "半速スクラブ";
 "Quarter-Speed Scrubbing" = "1/4速スクラブ";
 "Fine Scrubbing" = "微調整スクラブ";
@@ -2373,3 +2372,12 @@
 "Play Now" = "今すぐ再生";
 "Plays After Caching Finishes" = "キャッシュ完了後に再生できます";
 "This video can play once it has finished caching." = "このビデオはキャッシュが完了すると再生できます。";
+"Double-tap the video to play or pause. With Double-Tap to Skip on, a double tap on the left or right skips back or forward instead." = "動画をダブルタップすると再生/一時停止します。「ダブルタップでスキップ」をオンにすると、左側または右側のダブルタップで早戻し・早送りします。";
+"Controls" = "コントロール";
+"Left" = "左";
+"Right" = "右";
+"Lock Button" = "ロックボタン";
+"With Picture in Picture on, a video carries on in a small window when you leave the app." = "ピクチャ・イン・ピクチャがオンの場合、Appを離れても動画は小さなウインドウで再生を続けます。";
+"Video Tags are the short labels above the progress bar in full screen, such as 4K and H265." = "ビデオタグは、フルスクリーン時にシークバーの上に表示される4KやH265などの短いラベルです。";
+"Show Video Tags" = "ビデオタグを表示";
+"Battery Percentage" = "バッテリー残量（%）";

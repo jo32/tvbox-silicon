@@ -73,9 +73,48 @@ public enum VideoFill: String, CaseIterable, Sendable {
     public static let key = "player.videoFill"
 }
 
-/// Whether two taps on a side skip (the default) or, with this off, play or pause as two taps in the middle do.
+/// Whether two taps on a side skip or, with this off, play or pause as two taps in the middle do. Off unless turned
+/// on: skipping by accident was the commoner complaint (#1745).
 public enum PictureDoubleTap {
     public static let key = "player.doubleTapSkips"
+    public static let standard = false
+}
+
+/// The edge the full-screen lock button sits on: the left, as in Bilibili, or the right, for the thumb of a hand that
+/// holds the phone there (#1922).
+public enum LockButtonSide: String, CaseIterable, Sendable {
+    case left, right
+    public static let key = "player.lockSide"
+
+    /// A stored value that isn't a side is the left.
+    public static func side(_ stored: String) -> LockButtonSide { LockButtonSide(rawValue: stored) ?? .left }
+}
+
+/// Picture in Picture on iPhone and iPad (#1731): off, the player has no button for it and leaving the app while a
+/// video plays doesn't start it.
+public enum PictureInPicturePreference {
+    public static let key = "player.pictureInPicture"
+
+    public static func isOn(_ defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: key) == nil || defaults.bool(forKey: key)
+    }
+}
+
+/// The video's tags over the seek bar in full screen (HW, H265, 4K…): shown unless turned off (#1534).
+public enum PlaybackTags {
+    public static let key = "player.showsTags"
+}
+
+/// The battery in the player's status as a number instead of the gauge (#1743). iOS tells apps the level in steps of
+/// 5%, so the number is the nearest step: it can read 60% beside the system's 62%.
+public enum BatteryPercentage {
+    public static let key = "player.batteryPercentage"
+
+    /// 0 to 100 from a level of 0 to 1, whatever the device reports.
+    public static func percent(_ level: Double) -> Int {
+        guard level.isFinite else { return 0 }
+        return Int((min(max(level, 0), 1) * 100).rounded())
+    }
 }
 
 /// Sliding sideways across the picture moves through the video (Bilibili, Tencent Video): the picture's width is up
