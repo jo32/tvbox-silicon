@@ -1306,6 +1306,15 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     /// undoes it before the full-screen toggle: a double-click leaves playback as it found it.
     private var clickToggled = false
     private var clickReset: Task<Void, Never>?
+    /// The click brought the window forward (from another app or window): it only does that, as in IINA.
+    private var clickActivates = false
+    /// When the window last became key; the click that made it key can arrive a moment later.
+    private var keyAt = ContinuousClock.now
+
+    override func becomeKey() {
+        keyAt = .now
+        super.becomeKey()
+    }
 
     /// The wheel over the picture sets the volume, as in other players; AVKit's own handling scrubbed the video.
     /// A sideways swipe is still AVKit's, to scrub with (#874). Over the episode list and other panels it still
@@ -1317,6 +1326,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         if event.type == .leftMouseUp, takesMouseUp { takesMouseUp = false; return }
         if event.type == .leftMouseDown {
             pressedAt = convertPoint(toScreen: event.locationInWindow)
+            clickActivates = event.clickCount == 1 && (!isKeyWindow || !NSApp.isActive || keyAt.duration(to: .now) < .milliseconds(300))
             let bare = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
                 && isPictureClick(at: event.locationInWindow)
             clickReset?.cancel(); clickReset = nil
@@ -1329,7 +1339,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             takesMouseUp = event.clickCount == 2 && bare
             if takesMouseUp { toggleFullScreen(nil); return }
         }
-        if event.type == .leftMouseUp, event.clickCount == 1, let session,
+        if event.type == .leftMouseUp, event.clickCount == 1, !clickActivates, let session,
            event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
            isPictureClick(at: event.locationInWindow), let pressedAt {
             let up = convertPoint(toScreen: event.locationInWindow)
