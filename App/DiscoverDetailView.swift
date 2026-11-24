@@ -306,13 +306,14 @@ struct DiscoverDetailView: View {
                 Image(systemName: "chevron.down").font(.caption.weight(.semibold))
             }
             #else
-            EpisodeDropdownLabel(title: title).fixedSize()
+            EpisodeDropdownLabel(title: title, tapRoom: false).fixedSize()
             #endif
         }
         #if os(tvOS)
         .menuStyle(.button).buttonStyle(DiscoverTVChipStyle(active: false))
         #else
         .buttonStyle(.plain)
+        .frame(minHeight: 44)
         #endif
         .accessibilityIdentifier("discover.detail.season")
         #endif
