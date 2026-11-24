@@ -978,20 +978,24 @@ private struct MangaReaderChrome: View {
     #endif
 }
 
-/// The comic's chapters, the one being read marked; picking one opens it.
+/// The comic's chapters, the one being read marked and finished ones dimmed with a checkmark; picking one opens it.
 private struct MangaChapterPicker: View {
     let model: MangaReaderModel
     let pick: (Int) -> Void
+    @State private var store = MangaStore.shared
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
             ScrollViewReader { reader in
                 List(Array(model.chapters.enumerated()), id: \.offset) { index, chapter in
+                    let read = store.isChapterRead(chapter, of: model.comic)
                     Button { pick(index) } label: {
                         HStack {
-                            Text(chapter.title).foregroundStyle(.primary)
+                            Text(chapter.title)
+                                .foregroundStyle(index == model.position.chapter ? .primary : Color.primary.opacity(read ? 0.55 : 1))
                             Spacer()
                             if index == model.position.chapter { Image(systemName: "book.fill").foregroundStyle(Brand.cyan) }
+                            else if read { Image(systemName: "checkmark").font(.caption2).foregroundStyle(.secondary) }
                         }
                     }
                     .id(index)
