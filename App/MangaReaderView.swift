@@ -132,6 +132,13 @@ import TVCore
                                                        chapterCount: chapters.count, page: position.page, pageCount: currentPages.count))
     }
 
+    /// The chapter is finished: the reader reached its end, in the vertical reader's end break or past the paged
+    /// reader's last page.
+    func markChapterRead(_ chapter: Int) {
+        guard let id = chapterID(chapter) else { return }
+        MangaStore.shared.markChapterRead(id: id, of: comic)
+    }
+
     func chapterID(_ chapter: Int) -> String? { chapters.indices.contains(chapter) ? chapters[chapter].id : nil }
 
     func decodedPage(_ url: String, width: CGFloat) -> CGImage? {
@@ -420,7 +427,7 @@ private struct MangaChapterEnd: View {
             }
         }
         .padding(.vertical, 48).frame(maxWidth: .infinity)
-        .onAppear { Task { await model.loadNext() } }
+        .onAppear { model.markChapterRead(chapter); Task { await model.loadNext() } }
     }
 }
 
@@ -534,7 +541,7 @@ struct MangaPagedReader: View {
         .ignoresSafeArea()
         .onChange(of: page) { _, value in
             if value < count { model.seen(.init(chapter: model.position.chapter, page: value)) }
-            else if model.hasNext { Task { await model.open(model.position.chapter + 1) } }
+            else { model.markChapterRead(model.position.chapter); if model.hasNext { Task { await model.open(model.position.chapter + 1) } } }
         }
     }
 

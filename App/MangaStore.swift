@@ -80,6 +80,25 @@ import TVCore
     }
     func clearHistory() { history = []; MangaLibrary.save(history, as: "history.json") }
 
+    /// Chapters finished, by comic: read to the end, or marked by hand.
+    private(set) var readChapters: MangaLibrary.ReadChapters = MangaLibrary.load("read.json", as: MangaLibrary.ReadChapters.self) ?? MangaLibrary.ReadChapters()
+
+    func isChapterRead(_ chapter: MangaChapter, of comic: MangaComic) -> Bool { readChapters.isRead(chapter.id, of: comic.identity) }
+    func markChapterRead(_ chapter: MangaChapter, of comic: MangaComic) { markChapterRead(id: chapter.id, of: comic) }
+    func markChapterRead(id: String, of comic: MangaComic) {
+        guard !id.isEmpty, !readChapters.isRead(id, of: comic.identity) else { return }
+        readChapters.mark(id, of: comic.identity)
+        MangaLibrary.save(readChapters, as: "read.json")
+    }
+    func unmarkChapterRead(_ chapter: MangaChapter, of comic: MangaComic) {
+        guard readChapters.isRead(chapter.id, of: comic.identity) else { return }
+        readChapters.unmark(chapter.id, of: comic.identity)
+        MangaLibrary.save(readChapters, as: "read.json")
+    }
+    func toggleChapterRead(_ chapter: MangaChapter, of comic: MangaComic) {
+        if isChapterRead(chapter, of: comic) { unmarkChapterRead(chapter, of: comic) } else { markChapterRead(chapter, of: comic) }
+    }
+
     func mode(for comic: MangaComic) -> MangaReaderMode { modes[comic.identity].flatMap(MangaReaderMode.init(rawValue:)) ?? readerMode }
     func setMode(_ mode: MangaReaderMode, for comic: MangaComic) {
         modes[comic.identity] = mode == readerMode ? nil : mode.rawValue
