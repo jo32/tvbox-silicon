@@ -60,6 +60,11 @@ export class AppleMusic {
         await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
         continue;
       }
+      // Some of Apple's servers refuse a valid token now and then (seen for hours after a key is made): ask again.
+      if (response.status === 401 && attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        continue;
+      }
       if (response.status === 404) return null;
       if (!response.ok) throw new UpstreamError(`Apple Music ${response.status}`, response.status);
       const body = await response.text();
