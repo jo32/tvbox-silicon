@@ -309,7 +309,7 @@ private struct MusicHome: View {
         let browse = store.musicBrowse
         let resumable = store.music.track == nil ? library.resumePoint : nil
         let downloads = !MusicDownloadLibrary.shared.items.isEmpty
-        let empty = library.history.isEmpty && resumable == nil && !downloads && browse.sections.isEmpty && !browse.loading
+        let empty = library.history.isEmpty && resumable == nil && !downloads && browse.sections.isEmpty && !browse.loading && store.playlists.playlists.isEmpty
         #if os(tvOS)
         // Apple TV has no toolbar button for Music Settings (where music sources are added), so the page offers it
         // here once there is something to show; the empty page below has its own (#1024).
@@ -327,6 +327,8 @@ private struct MusicHome: View {
         if liked > 0 { MusicLikedLink(count: liked).padding(.bottom, 20) }
         let likedCollections = store.favorites.musicCollections.count
         if likedCollections > 0 { MusicLikedCollectionsLink(count: likedCollections).padding(.bottom, 20) }
+        let playlists = store.playlists.playlists.count
+        if playlists > 0 { MusicPlaylistsLink(count: playlists).padding(.bottom, 20) }
         if downloads { MusicDownloadsLink().padding(.bottom, 20) }
         if !browse.sections.isEmpty {
             MusicBrowseShelves(sections: browse.sections).padding(.bottom, 28)
@@ -408,6 +410,8 @@ struct MusicTrackRow: View {
     var showsFavoriteMark = true
     /// In Recently Played: takes this song out of it, from the row's menu.
     var removeFromHistory: (() -> Void)?
+    /// On a playlist's page: takes this song out of the playlist, from the row's menu.
+    var removeFromPlaylist: (() -> Void)?
     let action: () -> Void
 
     var body: some View {
@@ -458,10 +462,15 @@ struct MusicTrackRow: View {
             FavoriteMenuButton(item: .music(track), name: track.title)
             Button { store.music.playNext([track]) } label: { Label(L10n.text("Play Next"), systemImage: "text.line.first.and.arrowtriangle.forward") }
             Button { store.music.addToUpNext([track]) } label: { Label(L10n.text("Add to Up Next"), systemImage: "text.line.last.and.arrowtriangle.forward") }
+            MusicPlaylistMenu(tracks: [track])
             MusicArtistMenu(track: track)
             Divider()
             MusicDownloadMenuItems(tracks: [track])
             if let removeFromHistory { MusicRemoveFromHistoryButton(action: removeFromHistory) }
+            if let removeFromPlaylist {
+                Divider()
+                Button(role: .destructive, action: removeFromPlaylist) { Label(L10n.text("Remove from Playlist"), systemImage: "minus.circle") }
+            }
         }
         .accessibilityLabel(Text([track.title, track.artistLine].joined(separator: ", ")))
     }
