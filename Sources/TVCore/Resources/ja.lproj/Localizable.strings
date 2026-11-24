@@ -2341,3 +2341,6 @@
 "Telegram post" = "Telegram 投稿";
 "Latest" = "最新";
 "The video's own subtitles are under the speech bubble button." = "動画に含まれる字幕は吹き出しボタンにあります。";
+"Move “%@” to Top" = "「%@」を一番上へ移動";
+"They are asked from the top down. Control-click one to move it to the top." = "上から順に使われます。Control キーを押しながらクリックすると一番上へ移動できます。";
+"They are asked from the top down. Touch and hold one to move it to the top." = "上から順に使われます。長押しすると一番上へ移動できます。";

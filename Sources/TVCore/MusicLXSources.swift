@@ -212,6 +212,14 @@ public final class LXSourceLibrary: @unchecked Sendable {
         }
     }
 
+    /// Asked first from the next song on (#1537): sources are asked in the list's order.
+    public func moveToTop(_ id: String) {
+        update { list in
+            guard let index = list.firstIndex(where: { $0.id == id }), index > 0 else { return }
+            list.insert(list.remove(at: index), at: 0)
+        }
+    }
+
     public func remove(_ id: String) {
         update { $0.removeAll { $0.id == id } }
         try? FileManager.default.removeItem(at: file(id))

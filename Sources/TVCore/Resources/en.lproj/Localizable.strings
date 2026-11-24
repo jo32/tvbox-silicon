@@ -2341,3 +2341,6 @@
 "Telegram post" = "Telegram post";
 "Latest" = "Latest";
 "The video's own subtitles are under the speech bubble button." = "The video's own subtitles are under the speech bubble button.";
+"Move “%@” to Top" = "Move “%@” to Top";
+"They are asked from the top down. Control-click one to move it to the top." = "They are asked from the top down. Control-click one to move it to the top.";
+"They are asked from the top down. Touch and hold one to move it to the top." = "They are asked from the top down. Touch and hold one to move it to the top.";

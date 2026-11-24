@@ -189,6 +189,25 @@ private func temporaryLibrary() throws -> (LXSourceLibrary, URL, UserDefaults) {
     guard case .subscription = try await HTTPClient().subscriptionImport(spiderAddress) else { Issue.record("not a subscription"); return }
 }
 
+/// #1537: a source moved to the top is asked first from then on, and the order is kept.
+@Test func lxSourceMovedToTopIsAskedFirst() async throws {
+    let (library, folder, defaults) = try temporaryLibrary()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let runtime = LXSourceRuntime()
+    let first = try await library.add(script: fakeSource, origin: nil, runtime: runtime)
+    let second = try await library.add(script: fakeSource + "\n// second\n", origin: nil, runtime: runtime)
+    let third = try await library.add(script: fakeSource + "\n// third\n", origin: nil, runtime: runtime)
+    library.moveToTop(third.id)
+    #expect(library.sources.map(\.id) == [third.id, first.id, second.id])
+    library.moveToTop(third.id)
+    #expect(library.sources.map(\.id) == [third.id, first.id, second.id])
+    library.moveToTop("missing")
+    #expect(library.sources.count == 3)
+    let provider = try #require(LXMusicProvider(sources: library.enabled, library: library, runtime: runtime, health: MusicHealth(file: nil)))
+    #expect(await provider.ordered(for: .qq).map(\.id) == [third.id, first.id, second.id])
+    #expect(LXSourceLibrary(folder: folder, defaults: defaults).sources.map(\.id) == [third.id, first.id, second.id])
+}
+
 @Test func lxSourceAddedAgainKeepsOneEntry() async throws {
     let (library, folder, _) = try temporaryLibrary()
     defer { try? FileManager.default.removeItem(at: folder) }

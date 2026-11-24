@@ -2341,3 +2341,6 @@
 "Telegram post" = "Telegram 貼文";
 "Latest" = "最新";
 "The video's own subtitles are under the speech bubble button." = "影片自帶的字幕在對話氣泡按鈕裡。";
+"Move “%@” to Top" = "將「%@」移到最前";
+"They are asked from the top down. Control-click one to move it to the top." = "音源從上往下依序使用。按住 Control 鍵點按一個音源，可將它移到最前。";
+"They are asked from the top down. Touch and hold one to move it to the top." = "音源從上往下依序使用。長按一個音源，可將它移到最前。";

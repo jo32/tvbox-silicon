@@ -689,6 +689,14 @@ struct MusicScrubber: View {
         message = nil
     }
 
+    /// Sources are asked in the list's order; this one first from the next song on (#1537).
+    func moveToTop(_ source: LXSource) {
+        LXSourceLibrary.shared.moveToTop(source.id)
+        withAnimation(.smooth) { sources = LXSourceLibrary.shared.sources }
+    }
+
+    func isFirst(_ source: LXSource) -> Bool { sources.first?.id == source.id }
+
     static func detail(_ source: LXSource) -> String {
         ([source.info.version] + [source.platforms.map(\.name).joined(separator: ", ")]).filter { !$0.isEmpty }.joined(separator: " · ")
     }
@@ -721,6 +729,9 @@ struct MusicLXSourcesSection: View {
         TVSettingsSection(title: L10n.text("LX Music Sources"), footer: [model.message, MusicLXSourcesModel.note].compactMap { $0 }.joined(separator: "\n\n")) {
             ForEach(model.sources) { source in
                 TVSettingsToggle(title: source.info.name, detail: MusicLXSourcesModel.detail(source), isOn: model.enabled(source))
+                if !model.isFirst(source) {
+                    TVSettingsAction(title: L10n.text("Move “%@” to Top", source.info.name)) { model.moveToTop(source) }
+                }
                 TVSettingsAction(title: L10n.text("Remove “%@”", source.info.name), destructive: true) { model.remove(source) }
             }
             // Apple TV has no files to pick: sources come from an address.
@@ -756,7 +767,14 @@ struct MusicLXSourcesSection: View {
                     }
                 }
                 .settingsSwitch()
+                .contextMenu {
+                    if !model.isFirst(source) {
+                        Button { model.moveToTop(source) } label: { Label(L10n.text("Move to Top"), systemImage: "pin") }
+                    }
+                    Button(role: .destructive) { model.remove(source) } label: { Label(L10n.text("Remove"), systemImage: "trash") }
+                }
                 .accessibilityAction(named: L10n.text("Remove “%@”", source.info.name)) { model.remove(source) }
+                .accessibilityAction(named: L10n.text("Move to Top")) { model.moveToTop(source) }
             }
             HStack {
                 TextField(L10n.text("Source address"), text: $address)
@@ -775,7 +793,16 @@ struct MusicLXSourcesSection: View {
         } header: {
             Text(L10n.text("LX Music Sources"))
         } footer: {
-            Text(MusicLXSourcesModel.note)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(MusicLXSourcesModel.note)
+                if model.sources.count > 1 {
+                    #if os(macOS)
+                    Text(L10n.text("They are asked from the top down. Control-click one to move it to the top."))
+                    #else
+                    Text(L10n.text("They are asked from the top down. Touch and hold one to move it to the top."))
+                    #endif
+                }
+            }
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.javaScript, .plainText, .data]) { result in
             if case .success(let file) = result { model.add(file: file) }
