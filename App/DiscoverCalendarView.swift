@@ -23,17 +23,34 @@ struct DiscoverCalendarView: View {
     private static func key(_ kind: TMDBCalendar.Kind, _ region: TMDBCalendar.Region) -> String { kind == .anime ? "anime" : "tv|\(region.rawValue)" }
     private var key: String { Self.key(kind, region) }
     private var week: TMDBCalendar.Week? { weeks[key] }
-    private var date: String? { picked[key] ?? week?.today()?.date ?? week?.days.first?.date }
+    private var date: String? {
+        // A pick from last week is not in the fresh week's days; fall back to today rather than show nothing.
+        let chosen = picked[key]
+        if let chosen, week?.days.contains(where: { $0.date == chosen }) ?? false { return chosen }
+        return week?.today()?.date ?? week?.days.first?.date
+    }
     private var day: TMDBCalendar.Day? { week?.days.first { $0.date == date } }
     private var isToday: Bool { day != nil && day?.date == week?.today()?.date }
     private var next: String? { isToday ? day.flatMap { DiscoverAiring.next($0.items) } : nil }
     private var dateBinding: Binding<String> { Binding(get: { date ?? "" }, set: { picked[key] = $0 }) }
 
+    /// The week the clock is in, as a task id part: on the TV the view outlives the week rollover, so without
+    /// this the cached week is kept forever and the page shows last week's titles.
+    private static var weekStamp: String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.firstWeekday = 2
+        let parts = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
+        return "\(parts.yearForWeekOfYear ?? 0)-W\(parts.weekOfYear ?? 0)"
+    }
+
     var body: some View {
         content
             .background { DiscoverCanvas(poster: day?.items.first?.cover) }
             .foregroundStyle(.white).preferredColorScheme(.dark)
-            .task(id: key) { if weeks[key] == nil { await load() } }
+            .task(id: key + "|" + Self.weekStamp) {
+                if let week = weeks[key], week.current() { return }
+                await load()
+            }
     }
 
     #if os(tvOS)
