@@ -618,9 +618,11 @@ struct MusicArtistView: View {
     @Environment(Store.self) private var store
     /// Its own search, so the Music page keeps what was searched there. Made when the page first shows.
     @State private var search: MusicSearchModel?
+    /// The artist in Apple Music's catalog: picture, notes, and which songs are their best known.
+    @State private var apple: AppleMusicCatalog.Artist?
 
     var body: some View {
-        let tracks = search?.results ?? []
+        let tracks = AppleMusicCatalog.ranked(search?.results ?? [], top: apple?.topSongs ?? [])
         ScrollView {
             LazyVStack(alignment: .leading, spacing: MusicLayout.rowSpacing) {
                 #if os(tvOS)
@@ -664,6 +666,7 @@ struct MusicArtistView: View {
             let model = MusicSearchModel(catalogs: MusicSearchModel.defaultCatalogs() + [MusicExtensionCatalog()], kind: .artists)
             search = model
             model.search(name, kind: .artists, immediately: true)
+            apple = await AppleMusicCatalog.shared.artist(named: name)
         }
     }
 
@@ -673,6 +676,7 @@ struct MusicArtistView: View {
             #if os(macOS)
             Text(name).font(.largeTitle.weight(.bold))
             #endif
+            if let apple { MusicAppleArtistSummary(artist: apple) }
             HStack(spacing: 10) {
                 Group {
                     Button { store.music.play(MusicQueue(tracks: tracks, start: 0, source: name)) } label: {
@@ -699,6 +703,8 @@ struct MusicCollectionView: View {
     @State private var tracks: [MusicTrack] = []
     @State private var loading = false
     @State private var error: String?
+    /// The album in Apple Music's catalog, for its notes, release date and label.
+    @State private var apple: AppleMusicCatalog.Album?
 
     static func details(_ collection: MusicCollection) -> String {
         [collection.subtitle, collection.trackCount.map { L10n.text("%lld songs", $0) }, collection.year, collection.platform.name]
@@ -733,6 +739,7 @@ struct MusicCollectionView: View {
                     }
                 }
                 #endif
+                if let apple, MusicAppleAlbumAbout.shows(apple) { MusicAppleAlbumAbout(album: apple) }
             }
             .glassRowInsets()
             .pageContainer()
@@ -749,6 +756,9 @@ struct MusicCollectionView: View {
         #endif
         .task {
             if tracks.isEmpty { await load() }
+            if collection.kind == .album, apple == nil {
+                apple = await AppleMusicCatalog.shared.album(title: collection.title, artist: collection.subtitle)
+            }
             #if DEBUG
             if UserDefaults.standard.bool(forKey: "qaMusicPlay"), store.music.track == nil, !tracks.isEmpty {
                 store.music.play(MusicQueue(tracks: tracks, collection: collection))
