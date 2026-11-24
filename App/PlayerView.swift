@@ -1340,6 +1340,19 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     private var scroll = ScrollAxisLock()
     /// The second click of a double-click went to full screen: its mouse-up is not passed on either.
     private var takesMouseUp = false
+    /// A single click on the picture toggles playback. The first click of a double-click does too, so the second click
+    /// undoes it before the full-screen toggle: a double-click leaves playback as it found it.
+    private var clickToggled = false
+    private var clickReset: Task<Void, Never>?
+    /// The click brought the window forward (from another app or window): it only does that, as in IINA.
+    private var clickActivates = false
+    /// When the window last became key; the click that made it key can arrive a moment later.
+    private var keyAt = ContinuousClock.now
+
+    override func becomeKey() {
+        keyAt = .now
+        super.becomeKey()
+    }
 
     /// The wheel over the picture sets the volume, as in other players; AVKit's own handling scrubbed the video.
     /// A sideways swipe is still AVKit's, to scrub with (#874). Over the episode list and other panels it still
@@ -1347,13 +1360,37 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyUp, event.keyCode == 124, arrow.isDown { arrowReleased(skips: true) }
         // A double-click on the picture goes full screen and back, as in QuickTime Player and IINA (#838). Only the second
-        // click is taken, down and up, so a single click still shows or hides AVKit's controls at once, as before.
+        // click is taken, down and up. A single click on the picture plays or pauses instead of toggling AVKit's controls.
         if event.type == .leftMouseUp, takesMouseUp { takesMouseUp = false; return }
         if event.type == .leftMouseDown {
             pressedAt = convertPoint(toScreen: event.locationInWindow)
-            takesMouseUp = event.clickCount == 2 && event.modifierFlags.intersection([.command, .control, .option]).isEmpty
-                && contentView?.hitTest(event.locationInWindow).map(Self.isBarePicture) == true
+            clickActivates = event.clickCount == 1 && (!isKeyWindow || !NSApp.isActive || keyAt.duration(to: .now) < .milliseconds(300))
+            let bare = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
+                && isPictureClick(at: event.locationInWindow)
+            clickReset?.cancel(); clickReset = nil
+            if !bare || event.clickCount > 2 { clickToggled = false }
+            if event.clickCount >= 2, bare, clickToggled {
+                // The first click of this pair paused or played; put it back before going full screen.
+                session?.togglePlayback()
+                clickToggled = false
+            }
+            takesMouseUp = event.clickCount == 2 && bare
             if takesMouseUp { toggleFullScreen(nil); return }
+        }
+        if event.type == .leftMouseUp, event.clickCount == 1, !clickActivates, let session,
+           event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+           isPictureClick(at: event.locationInWindow), let pressedAt {
+            let up = convertPoint(toScreen: event.locationInWindow)
+            // A drag of the window ends in a mouse-up too; only a click in place plays or pauses.
+            if hypot(up.x - pressedAt.x, up.y - pressedAt.y) < 4 {
+                session.togglePlayback()
+                clickToggled = true
+                clickReset = Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(NSEvent.doubleClickInterval))
+                    self?.clickToggled = false
+                }
+                return
+            }
         }
         if event.type == .scrollWheel, event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
            let session, let hit = contentView?.hitTest(event.locationInWindow), Self.isPicture(hit),
@@ -1417,6 +1454,13 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
             current = v.superview
         }
         return false
+    }
+
+    /// A click in the picture, not in the title bar: `fullSizeContentView` lays the content under the traffic lights,
+    /// so hit-testing alone still finds the picture above `contentLayoutRect`.
+    private func isPictureClick(at point: NSPoint) -> Bool {
+        guard point.y <= contentLayoutRect.maxY else { return false }
+        return contentView?.hitTest(point).map(Self.isBarePicture) == true
     }
 
     /// The picture's size, once known.
