@@ -1242,6 +1242,38 @@ private struct NativePlayerView: UIViewControllerRepresentable {
 #endif
 
 #if os(macOS)
+/// Default size of a playback window when a new video opens, like IINA's window-size choices.
+enum MacPlayerWindowSize: String, CaseIterable, Sendable {
+    case fitScreen
+    case half
+    case one
+    case oneAndHalf
+    case double
+
+    static let key = "macPlayerWindowSize"
+
+    var title: String {
+        switch self {
+        case .fitScreen: L10n.text("Fit Screen")
+        case .half: "0.5×"
+        case .one: "1×"
+        case .oneAndHalf: "1.5×"
+        case .double: "2×"
+        }
+    }
+
+    /// Nil means the largest size that fits the screen; otherwise a multiple of the video's pixel size.
+    var scale: CGFloat? {
+        switch self {
+        case .fitScreen: nil
+        case .half: 0.5
+        case .one: 1
+        case .oneAndHalf: 1.5
+        case .double: 2
+        }
+    }
+}
+
 /// A real document-style window: playback remains independent of library navigation.
 @MainActor final class PlayerWindowController: NSObject, NSWindowDelegate {
     private var window: PlaybackWindow?
@@ -1447,20 +1479,33 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         let current = contentView.bounds.size
         guard current.width > 0, current.height > 0 else { return }
         let ratio = video.width / video.height
-        if abs(current.width / current.height - ratio) / ratio < 0.01 { return }
         let visible = (screen ?? NSScreen.main)?.visibleFrame ?? frame
-        // Keep the width the viewer has, as far as the screen allows, and give it the picture's height.
-        let chrome = frame.height - current.height
-        var width = min(current.width, visible.width * 0.9)
-        var height = width / ratio
-        let room = visible.height * 0.9 - chrome
-        if height > room { height = room; width = height * ratio }
+        let chrome = max(0, frame.height - current.height)
+        let room = NSSize(width: visible.width, height: max(0, visible.height - chrome))
+        guard room.width > 0, room.height > 0 else { return }
+        let preference = MacPlayerWindowSize(rawValue: UserDefaults.standard.string(forKey: MacPlayerWindowSize.key) ?? "") ?? .one
+        var width: CGFloat, height: CGFloat
+        if let scale = preference.scale {
+            // A multiple of the video's own pixel size, as in IINA; shrink it to fit the screen when needed.
+            width = video.width * scale
+            height = video.height * scale
+            if width > room.width || height > room.height {
+                let down = min(room.width / width, room.height / height)
+                width *= down; height *= down
+            }
+        } else {
+            // Fit Screen: the largest size that keeps the video's shape inside the visible frame.
+            width = room.width
+            height = width / ratio
+            if height > room.height { height = room.height; width = height * ratio }
+        }
         let minimum = contentMinSize
         if width < minimum.width || height < minimum.height {
             let up = max(minimum.width / width, minimum.height / height)
             width *= up; height *= up
         }
         var target = frameRect(forContentRect: NSRect(origin: .zero, size: NSSize(width: width.rounded(), height: height.rounded())))
+        if abs(target.width - frame.width) < 1, abs(target.height - frame.height) < 1 { return }
         target.origin = NSPoint(x: frame.midX - target.width / 2, y: frame.midY - target.height / 2)
         target.origin.x = min(max(visible.minX, target.origin.x), max(visible.minX, visible.maxX - target.width))
         target.origin.y = min(max(visible.minY, target.origin.y), max(visible.minY, visible.maxY - target.height))

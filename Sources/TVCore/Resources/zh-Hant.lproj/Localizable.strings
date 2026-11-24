@@ -147,6 +147,9 @@
 "Forward 10 seconds (→)" = "快轉 10 秒（→）";
 "Loop Playback" = "循環播放";
 "Fill Window" = "填滿視窗";
+"Default Window Size" = "預設視窗大小";
+"Used when a new video opens. The window takes a multiple of the video's own pixel size, or the largest size that fits the screen." = "新影片開啟時使用。視窗會依影片原始像素大小的倍率調整，或自動縮放到符合螢幕的最大尺寸。";
+"Fit Screen" = "符合螢幕";
 "Float on Top" = "視窗置頂";
 "Enter / Exit Full Screen" = "進入 / 離開全螢幕";
 "Space: Play / Pause" = "空白鍵：播放 / 暫停";

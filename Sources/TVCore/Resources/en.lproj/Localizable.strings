@@ -148,6 +148,9 @@
 "Forward 10 seconds (→)" = "Forward 10 seconds (→)";
 "Loop Playback" = "Loop Playback";
 "Fill Window" = "Fill Window";
+"Default Window Size" = "Default Window Size";
+"Used when a new video opens. The window takes a multiple of the video's own pixel size, or the largest size that fits the screen." = "Used when a new video opens. The window takes a multiple of the video's own pixel size, or the largest size that fits the screen.";
+"Fit Screen" = "Fit Screen";
 "Float on Top" = "Float on Top";
 "Enter / Exit Full Screen" = "Enter / Exit Full Screen";
 "Space: Play / Pause" = "Space: Play / Pause";
