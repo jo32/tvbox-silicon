@@ -142,6 +142,12 @@ with open(exits, 'w') as stream:
     stream.write('import sys\nfrom base.spider import Spider\nclass Spider(Spider):\n    def searchContent(self, key, quick):\n        sys.exit(3)\n')
 exited = json.loads(host.handle(json.dumps(dict(session='d', script=exits, cache=job + '/d', api='x', key='d', params={'wd': 'k'}))))
 assert exited.get('errorCode') == 'script_error' and 'SystemExit' in exited['error'], exited
+# Some scripts declare a bare `class Spider:` without the base class; the base's defaults fill the gaps.
+plain = job + '/plain.py'
+with open(plain, 'w') as stream:
+    stream.write('class Spider:\n    def init(self, extend):\n        self.ext = extend\n    def homeContent(self, filter):\n        return {"class": [{"type_id": self.ext}]}\n')
+bare = json.loads(host.handle(json.dumps(dict(session='e', script=plain, cache=job + '/e', api='x', key='e', ext='plain', params={}))))
+assert json.loads(bare['result'])['class'][0]['type_id'] == 'plain', bare
 assert host.handle('{"command":"cancel","request":"r"}') == '{}'
 print('embedded ok')
 '''

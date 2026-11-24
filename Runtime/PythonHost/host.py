@@ -242,7 +242,12 @@ class Session:
         module = load_source('tvbox_spider_' + sha256(request['api'].encode()).hexdigest()[:16], request['script'])
         if not hasattr(module, 'Spider'):
             raise RuntimeError('The script defines no Spider class')
-        instance = module.Spider()
+        spider_class = module.Spider
+        # Some scripts declare a bare `class Spider:` instead of extending base.spider's. Put the base class
+        # behind theirs, so the calls a script leaves out (getDependence, homeVideoContent…) get its defaults.
+        if isinstance(spider_class, type) and not issubclass(spider_class, base.Spider):
+            spider_class = type(spider_class.__name__, (spider_class, base.Spider), {'__module__': spider_class.__module__})
+        instance = spider_class()
         instance._tvbox_runtime = self.runtime
         extension = request.get('ext') or ''
         if not extension:
