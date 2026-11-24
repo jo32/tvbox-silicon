@@ -74,6 +74,16 @@ public struct MusicTrack: Identifiable, Hashable, Codable, Sendable {
     }
 
     public var artistLine: String { artists.joined(separator: " / ") }
+
+    /// Whether every word typed is in the title, an artist or the album, ignoring case and width: what searching
+    /// Liked Songs keeps (#1854).
+    public func matches(_ text: String) -> Bool {
+        let words = text.split(whereSeparator: \.isWhitespace)
+        let fields = [title, album ?? ""] + artists
+        return words.allSatisfy { word in
+            fields.contains { $0.range(of: word, options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive]) != nil }
+        }
+    }
 }
 
 public enum MusicCodec: String, Codable, Sendable, Hashable {

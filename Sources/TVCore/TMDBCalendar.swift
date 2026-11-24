@@ -91,11 +91,21 @@ public enum TMDBCalendar {
 
         /// Today's day of the week, in the calendar's time zone.
         public func today(_ now: Date = Date()) -> Day? {
+            days.first { $0.date == dayString(now) }
+        }
+
+        /// Whether this week still covers today. A week cached before the Monday rollover no longer does,
+        /// so a view that kept one should fetch a fresh copy instead of showing last week's titles.
+        public func current(_ now: Date = Date()) -> Bool {
+            days.contains { $0.date == dayString(now) }
+        }
+
+        /// YYYY-MM-DD for `now`, in the calendar's time zone.
+        private func dayString(_ now: Date) -> String {
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = TimeZone(identifier: timeZone) ?? .current
             let parts = calendar.dateComponents([.year, .month, .day], from: now)
-            let date = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
-            return days.first { $0.date == date }
+            return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
         }
     }
 
