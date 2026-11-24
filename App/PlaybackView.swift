@@ -8,6 +8,14 @@ import IOKit.pwr_mgt
 @MainActor @Observable final class PlaybackSession: SkipTimesEditing {
     /// A queue, so the next episode can wait behind this one and play straight on.
     let player: AVQueuePlayer
+    /// The video player's volume, remembered across launches. Every change goes through the KVO observer below:
+    /// AVKit's own slider, the Mac wheel and arrow keys, and the Sleep Timer's fade (which restores its starting level).
+    private static func storedVolume() -> Float {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: "playerVolume") != nil else { return 1 }
+        return Float(min(1, max(0, defaults.double(forKey: "playerVolume"))))
+    }
+
     /// Upscaling and 60 fps smoothing, drawn over AVKit's picture when switched on in Settings.
     let enhancer: VideoEnhancer
     let catalogDanmaku = CatalogDanmakuModel()
@@ -340,6 +348,7 @@ import IOKit.pwr_mgt
     private var endObserver: NSObjectProtocol?
     private var timeObservation: NSKeyValueObservation?
     private var muteObservation: NSKeyValueObservation?
+    private var volumeObservation: NSKeyValueObservation?
 
     func togglePlayback() {
         if player.timeControlStatus == .paused {
@@ -657,6 +666,7 @@ import IOKit.pwr_mgt
     private var generation = UUID()
     init() {
         let player = AVQueuePlayer()
+        player.volume = PlaybackSession.storedVolume()
         // An episode ends paused on its last frame; only a queued next episode makes the queue move on.
         player.actionAtItemEnd = .pause
         #if DEBUG
@@ -1316,6 +1326,12 @@ import IOKit.pwr_mgt
             let muted = player.isMuted
             Task { @MainActor [weak self] in self?.muted = muted }
         }
+        // Every way of changing the player's sound goes through this property: AVKit's own slider, the Mac wheel
+        // and arrow keys, and the Sleep Timer's fade. Keep the last level for the next launch.
+        volumeObservation = player.observe(\.volume, options: [.new]) { _, change in
+            guard let level = change.newValue else { return }
+            UserDefaults.standard.set(Double(level), forKey: "playerVolume")
+        }
         sampler = Task { [weak self] in
             var history: [(date: Date, bytes: Int64)] = []
             var tick = 0
@@ -1488,6 +1504,7 @@ import IOKit.pwr_mgt
         observation = nil
         timeObservation = nil
         muteObservation = nil
+        volumeObservation = nil
         buffering = false
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         endObserver = nil
