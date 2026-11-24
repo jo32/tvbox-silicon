@@ -24,7 +24,7 @@
 
 <p align="center">
   <img alt="SwiftUI" src="https://img.shields.io/badge/SwiftUI-native-0A84FF?logo=swift&logoColor=white">
-  <img alt="Platforms" src="https://img.shields.io/badge/tvOS%2017%20·%20iOS%2018%20·%20macOS%2015-1c1c1e?logo=apple&logoColor=white">
+  <img alt="Platforms" src="https://img.shields.io/badge/tvOS%2017%20·%20iOS%2017%20·%20macOS%2015-1c1c1e?logo=apple&logoColor=white">
   <a href="https://yingxia.getmegaportal.com/releases.json"><img alt="Latest version" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fyingxia.getmegaportal.com%2Freleases.json&query=%24.releases%5B0%5D.version&label=version&color=2dd4bf"></a>
   <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-8e8e93"></a>
 </p>
