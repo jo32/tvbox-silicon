@@ -155,6 +155,31 @@ private func expectKind(_ kind: String, _ body: () async throws -> Void) async {
         await reopened.remove("fixture")
         #expect(await reopened.items().count == 2)
     }
+
+    /// tvOS keeps added scripts in Caches (#1350), which it may clear: the script comes back from its address.
+    @Test func aClearedScriptIsFetchedAgainFromItsAddress() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let origin = try #require(URL(string: "https://fixture.invalid/s.js"))
+        let script = try fixtureScript()
+        let library = SubtitleSourceLibrary(folder: folder, credentials: MemorySubtitleCredentials())
+        _ = try await library.add(script: script, origin: origin)
+        try FileManager.default.removeItem(at: folder.appendingPathComponent("fixture.js"))
+        let asked = Asked()
+        let reopened = SubtitleSourceLibrary(folder: folder, credentials: MemorySubtitleCredentials()) { url in
+            await asked.add(url)
+            return Data(script.utf8)
+        }
+        #expect(try await reopened.provider("fixture").manifest.id == "fixture")
+        #expect(await asked.urls == [origin])
+        #expect(FileManager.default.fileExists(atPath: folder.appendingPathComponent("fixture.js").path))
+        #expect(SubtitleSourceLibrary.defaultFolder.lastPathComponent == "SubtitleSources")
+    }
+}
+
+private actor Asked {
+    var urls: [URL] = []
+    func add(_ url: URL) { urls.append(url) }
 }
 
 /// A source in Swift whose answers and timing a test sets.

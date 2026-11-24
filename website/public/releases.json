@@ -1,6 +1,101 @@
 {
   "releases": [
     {
+      "version": "1.8.29",
+      "build": 67,
+      "date": "2026-11-24",
+      "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.29/Yingxia-1.8.29-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.29/Yingxia-1.8.29-macos-x86_64.dmg",
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "captions.bubble",
+          "title": {
+            "en": "Subtitles that stay and are easy to find",
+            "zh-Hans": "字幕更稳、更好找",
+            "zh-Hant": "字幕更穩、更好找",
+            "ja": "字幕が消えず、見つけやすく"
+          },
+          "detail": {
+            "en": "Blu-ray (PGS) subtitles in MKV files no longer vanish partway through. On Apple TV, Subtitle Files says that the video's own subtitles are under the speech bubble button, and subtitle source scripts can be added. When a large Quark file plays as Quark's transcoded copy, which has no subtitles, the player says so.",
+            "zh-Hans": "MKV 里的蓝光（PGS）字幕不会再播到一半消失。在 Apple TV 上，“字幕文件”会提示视频自带的字幕在对话气泡按钮里，也可以添加字幕源脚本了。夸克的大文件按转码版播放时（转码版没有字幕），播放器会说明原因。",
+            "zh-Hant": "MKV 裡的藍光（PGS）字幕不會再播到一半消失。在 Apple TV 上，「字幕檔案」會提示影片自帶的字幕在對話氣泡按鈕裡，也可以加入字幕源腳本了。夸克的大檔案以轉碼版播放時（轉碼版沒有字幕），播放器會說明原因。",
+            "ja": "MKV の Blu-ray（PGS）字幕が途中で消えなくなりました。Apple TV では「字幕ファイル」に、動画に含まれる字幕は吹き出しボタンにあると表示され、字幕ソースのスクリプトも追加できるようになりました。Quark の大きなファイルが変換版（字幕なし）で再生されるときは、その理由を表示します。"
+          }
+        },
+        {
+          "symbol": "music.mic",
+          "title": {
+            "en": "Find singers by pinyin",
+            "zh-Hans": "用拼音找歌手",
+            "zh-Hant": "用拼音找歌手",
+            "ja": "ピンインで歌手を検索"
+          },
+          "detail": {
+            "en": "In Music, the Artists filter also matches Chinese names typed in pinyin: \"xufei\" finds 许飞 and \"zhoujielun\" finds 周杰伦.",
+            "zh-Hans": "在音乐的“歌手”筛选里，可以用拼音搜中文名字：输入“xufei”能找到许飞，“zhoujielun”能找到周杰伦。",
+            "zh-Hant": "在音樂的「歌手」篩選裡，可以用拼音搜尋中文名字：輸入「xufei」能找到許飛，「zhoujielun」能找到周杰倫。",
+            "ja": "ミュージックの「アーティスト」フィルタで、中国語の名前をピンインで検索できます。「xufei」で許飛、「zhoujielun」で周杰倫が見つかります。"
+          },
+          "platforms": [
+            "ios",
+            "tvos"
+          ]
+        },
+        {
+          "symbol": "keyboard",
+          "title": {
+            "en": "Keyboard controls on iPad",
+            "zh-Hans": "iPad 键盘控制播放",
+            "zh-Hant": "iPad 鍵盤控制播放",
+            "ja": "iPad のキーボードで再生操作"
+          },
+          "detail": {
+            "en": "With a keyboard attached to an iPad: Space plays and pauses, Left and Right skip 10 seconds (60 with Shift), Up and Down change the volume, and M mutes. Holding Right plays at your hold speed until you let go.",
+            "zh-Hans": "iPad 连接键盘时：空格播放或暂停，左右方向键快退或快进 10 秒（按住 Shift 为 60 秒），上下方向键调音量，M 键静音。按住右方向键会按长按倍速播放，松开即恢复。",
+            "zh-Hant": "iPad 連接鍵盤時：空白鍵播放或暫停，左右方向鍵倒轉或快轉 10 秒（按住 Shift 為 60 秒），上下方向鍵調音量，M 鍵靜音。按住右方向鍵會以長按倍速播放，放開即恢復。",
+            "ja": "iPad にキーボードをつなぐと、スペースで再生／一時停止、左右キーで 10 秒戻る／進む（Shift で 60 秒）、上下キーで音量、M で消音。右キーを押し続けると長押しの速度で再生し、離すと戻ります。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "star.circle",
+          "title": {
+            "en": "Points show up right away",
+            "zh-Hans": "积分马上到账",
+            "zh-Hant": "積分馬上到帳",
+            "ja": "ポイントがすぐ反映"
+          },
+          "detail": {
+            "en": "Feedback you send counts toward your points as soon as it's sent, and many more people can send feedback each day. On Apple TV, How Points Work can be scrolled and Back returns to the page you came from.",
+            "zh-Hans": "发出的反馈马上计入积分，每天能发反馈的人也多了很多。在 Apple TV 上，“积分规则”可以滚动了，按返回会回到上一页。",
+            "zh-Hant": "送出的回饋馬上計入積分，每天能送回饋的人也多了很多。在 Apple TV 上，「積分規則」可以捲動了，按返回會回到上一頁。",
+            "ja": "送ったフィードバックがすぐにポイントに反映され、1 日にフィードバックを送れる人数も大幅に増えました。Apple TV では「ポイントの仕組み」をスクロールでき、戻ると元のページに戻ります。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "Continue Watching checks the source again before saying a saved episode is gone. The iPhone player's top icons are the same size, with the standard full-screen arrows. The iPhone and iPad app on a Mac no longer gets stopped in the background after opening Discover, and its blurred backdrops are smooth.",
+            "zh-Hans": "“继续观看”会先重新查询源，再提示保存的剧集不在了。iPhone 播放器顶部的图标大小一致，全屏按钮换成标准的箭头。在 Mac 上运行的 iPhone/iPad 版打开“发现”后不会再在后台被结束，模糊背景也更细腻。",
+            "zh-Hant": "「繼續觀看」會先重新查詢源，再提示儲存的劇集不在了。iPhone 播放器頂部的圖示大小一致，全螢幕按鈕換成標準的箭頭。在 Mac 上執行的 iPhone/iPad 版打開「探索」後不會再在背景被結束，模糊背景也更細膩。",
+            "ja": "「視聴を続ける」は、保存した話がないと表示する前にソースを取得し直すようになりました。iPhone のプレーヤー上部のアイコンの大きさがそろい、フルスクリーンは標準の矢印になりました。Mac で動く iPhone／iPad 版は「見つける」を開いた後にバックグラウンドで終了されなくなり、ぼかした背景も滑らかになりました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.28",
       "build": 66,
       "date": "2026-11-22",
@@ -5542,11 +5637,11 @@
   ],
   "testflight": {
     "ios": {
-      "build": 65,
+      "build": 67,
       "link": "https://testflight.apple.com/join/dU6UNbzp"
     },
     "tvos": {
-      "build": 65,
+      "build": 67,
       "link": "https://testflight.apple.com/join/SSgWEwSr"
     }
   }

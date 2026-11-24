@@ -1916,6 +1916,7 @@
 "Change Source" = "Change Source";
 "Contents" = "Contents";
 "Explore" = "Explore";
+"Filter book sources" = "Filter book sources";
 "Latest: %@" = "Latest: %@";
 "No Book Sources" = "No Book Sources";
 "No Books" = "No Books";
@@ -2339,3 +2340,4 @@
 "This Telegram post has no playable video." = "This Telegram post has no playable video.";
 "Telegram post" = "Telegram post";
 "Latest" = "Latest";
+"The video's own subtitles are under the speech bubble button." = "The video's own subtitles are under the speech bubble button.";

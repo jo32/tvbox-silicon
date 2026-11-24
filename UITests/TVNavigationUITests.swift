@@ -104,6 +104,37 @@ final class TVNavigationUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Can't play this right now"].exists, "The stream failed before Back was pressed")
     }
 
+    /// Subtitle Files lists files only; it says where the video's own subtitles are, which people looked for here (#1524).
+    func testSubtitleFilesSaysWhereTheVideosOwnSubtitlesAre() throws {
+        let app = XCUIApplication()
+        // A stream with subtitle tracks of its own, served on port 8777 (an HLS stream from the remuxer, say); the plain QA
+        // clip has none, and then there is no note.
+        let stream = "http://127.0.0.1:8777/master.m3u8"
+        guard (try? Data(contentsOf: URL(string: stream)!)) != nil else { throw XCTSkip("Serve a stream with subtitle tracks at \(stream)") }
+        app.launchArguments = ["-qaSection", "home", "-qaPlayURL", stream, "-qaIsolatedData", "1",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let remote = XCUIRemote.shared
+        let focused = app.descendants(matching: .any).matching(NSPredicate(format: "hasFocus == true")).firstMatch
+        func focus() -> String { focused.exists ? focused.label : "none" }
+        func snap(_ name: String) { let shot = XCTAttachment(screenshot: app.screenshot()); shot.name = name; shot.lifetime = .keepAlways; add(shot) }
+        let waiting = app.descendants(matching: .any)["player.waiting"]
+        _ = waiting.waitForExistence(timeout: 15)
+        for _ in 0..<30 where waiting.exists { sleep(1) }
+        sleep(2)
+        // The bar's buttons are above the timeline: Up reaches them, Right walks along them.
+        remote.press(.up); sleep(2)
+        var trail = [focus()]
+        for _ in 0..<12 where !focus().hasPrefix("Subtitle Files") { remote.press(.right); sleep(1); trail.append(focus()) }
+        snap("bar")
+        XCTAssertTrue(focus().hasPrefix("Subtitle Files"), "Subtitle Files was not reached: \(trail)")
+        remote.press(.select); sleep(2)
+        snap("subtitle-files")
+        let note = "The video's own subtitles are under the speech bubble button."
+        XCTAssertTrue(app.descendants(matching: .any)[note].exists || app.staticTexts.containing(NSPredicate(format: "label == %@", note)).count > 0,
+                      "The note is missing")
+    }
+
     /// A source page searches from the remote: the search keyboard has no return key, so a Search
     /// button below it runs the query that was typed, and typing alone does not search.
     func testSourcePageSearchesWithTheSearchButton() throws {

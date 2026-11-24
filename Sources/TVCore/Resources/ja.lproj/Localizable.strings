@@ -1916,6 +1916,7 @@
 "Change Source" = "ソースを切り替え";
 "Contents" = "目次";
 "Explore" = "探索あり";
+"Filter book sources" = "ブックソースを絞り込む";
 "Latest: %@" = "最新：%@";
 "No Book Sources" = "ブックソースがありません";
 "No Books" = "本がありません";
@@ -2339,3 +2340,4 @@
 "This Telegram post has no playable video." = "この Telegram 投稿には再生できる動画がありません。";
 "Telegram post" = "Telegram 投稿";
 "Latest" = "最新";
+"The video's own subtitles are under the speech bubble button." = "動画に含まれる字幕は吹き出しボタンにあります。";

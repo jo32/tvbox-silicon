@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.29",
+          "buildVersion": "67",
+          "date": "2026-11-24",
+          "localizedDescription": "• 字幕更稳、更好找\n• 用拼音找歌手\n• iPad 键盘控制播放\n• 积分马上到账\n• 其他修复\n\n• Subtitles that stay and are easy to find\n• Find singers by pinyin\n• Keyboard controls on iPad\n• Points show up right away\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.29/Yingxia-1.8.29-ios.ipa",
+          "size": 185759887,
+          "sha256": "0b2791b65e51a3cf696808f626fa170ef928731a76ef8d81e0798f28f2ae2c98",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.28",
           "buildVersion": "66",
           "date": "2026-11-22",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.25/Yingxia-1.8.25-ios.ipa",
           "size": 184481371,
           "sha256": "b69147bbad53babcd369f4aa1f02e27c4d3e7e61da6a072b12ef94252d4e5342",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.24",
-          "buildVersion": "62",
-          "date": "2026-11-18",
-          "localizedDescription": "• 追剧\n• 选季\n• 洛雪音源\n• 起播和拖动更快\n• iPhone 和 iPad 播放器\n• 两个新图标\n• 其他修复\n\n• Follow series\n• Pick another season\n• LX Music sources\n• Faster start and seeking\n• Player on iPhone and iPad\n• Two new app icons\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.24/Yingxia-1.8.24-ios.ipa",
-          "size": 184383585,
-          "sha256": "40280296b7f65fd0756dca8f876e7cfb5a8ff9978d6dfda775a69e63466d91ff",
           "minOSVersion": "17.0"
         }
       ],

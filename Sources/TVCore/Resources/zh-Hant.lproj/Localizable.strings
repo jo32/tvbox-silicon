@@ -1916,6 +1916,7 @@
 "Change Source" = "換源";
 "Contents" = "目錄";
 "Explore" = "可發現";
+"Filter book sources" = "篩選書源";
 "Latest: %@" = "最新：%@";
 "No Book Sources" = "沒有書源";
 "No Books" = "沒有書籍";
@@ -2339,3 +2340,4 @@
 "This Telegram post has no playable video." = "這則 Telegram 貼文沒有可播放的影片。";
 "Telegram post" = "Telegram 貼文";
 "Latest" = "最新";
+"The video's own subtitles are under the speech bubble button." = "影片自帶的字幕在對話氣泡按鈕裡。";
