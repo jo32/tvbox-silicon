@@ -34,20 +34,17 @@ struct DiscoverCalendarView: View {
     private var next: String? { isToday ? day.flatMap { DiscoverAiring.next($0.items) } : nil }
     private var dateBinding: Binding<String> { Binding(get: { date ?? "" }, set: { picked[key] = $0 }) }
 
-    /// The week the clock is in, as a task id part: on the TV the view outlives the week rollover, so without
-    /// this the cached week is kept forever and the page shows last week's titles.
-    private static var weekStamp: String {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.firstWeekday = 2
-        let parts = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date())
-        return "\(parts.yearForWeekOfYear ?? 0)-W\(parts.weekOfYear ?? 0)"
-    }
+    /// Part of the load task's id: on the TV the view outlives the week rollover, so a week it kept is fetched again
+    /// once it no longer covers today. The week itself says so, in the calendar's own time zone (not the device's
+    /// week, which rolls over hours apart from it). A fresh week clears the mark; an answer that is still the old
+    /// week leaves it, so nothing is asked twice.
+    private var staleMark: String { week.map { $0.current() ? "" : "|stale" } ?? "" }
 
     var body: some View {
         content
             .background { DiscoverCanvas(poster: day?.items.first?.cover) }
             .foregroundStyle(.white).preferredColorScheme(.dark)
-            .task(id: key + "|" + Self.weekStamp) {
+            .task(id: key + staleMark) {
                 if let week = weeks[key], week.current() { return }
                 await load()
             }

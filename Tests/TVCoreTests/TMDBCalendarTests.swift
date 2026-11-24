@@ -16,9 +16,9 @@ import Testing
         return calendar.date(from: DateComponents(year: 2026, month: 11, day: day, hour: 12))!
     }
     // The days run Monday 23 to Sunday 29; the 30th already belongs to the next week.
-    #expect(week.current(now: at(23)))
-    #expect(week.current(now: at(29)))
-    #expect(!week.current(now: at(30)))
-    #expect(week.today(now: at(29))?.weekday == 7)
-    #expect(week.today(now: at(30)) == nil)
+    #expect(week.current(at(23)))
+    #expect(week.current(at(29)))
+    #expect(!week.current(at(30)))
+    #expect(week.today(at(29))?.weekday == 7)
+    #expect(week.today(at(30)) == nil)
 }
