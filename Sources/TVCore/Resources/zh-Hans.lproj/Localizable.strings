@@ -147,6 +147,10 @@
 "Forward 10 seconds (→)" = "前进 10 秒（→）";
 "Loop Playback" = "循环播放";
 "Fill Window" = "填满窗口";
+"Default Window Size" = "默认窗口大小";
+"The size a new player window opens at: the size it had last time, a multiple of the video's own pixel size, or the largest size that fits the screen." = "新的播放窗口打开时的大小：上次的大小、视频原始像素大小的倍数，或适合屏幕的最大尺寸。";
+"Keep Last Size" = "保持上次大小";
+"Fit Screen" = "适合屏幕";
 "Float on Top" = "窗口置顶";
 "Enter / Exit Full Screen" = "进入 / 退出全屏";
 "Space: Play / Pause" = "空格：播放 / 暂停";
