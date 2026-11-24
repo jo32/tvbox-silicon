@@ -82,7 +82,7 @@ extension Site {
     var yingxia: [String: JSONValue] { raw["yingxia"]?.object ?? [:] }
     /// A source the app provides itself: Yingxia's own (from its subscription) or a drive in Cloud Files.
     /// It never falls back to a subscription's JAR.
-    public var isBuiltIn: Bool { isCloudFiles || yingxia["builtin"].map { if case .bool(true) = $0 { true } else { false } } == true }
+    public var isBuiltIn: Bool { isCloudFiles || isTelegram || yingxia["builtin"].map { if case .bool(true) = $0 { true } else { false } } == true }
     public var isBilibili: Bool { key == Bilibili.siteKey }
     /// The service account whose sign-in the source uses ("bilibili"), if any.
     public var account: String? { yingxia["account"]?.string }

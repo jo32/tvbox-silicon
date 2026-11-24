@@ -177,6 +177,8 @@ extension HTTPClient {
     /// becomes the one its source runs. Adding a script again is how people get its new version (#1431).
     public func subscriptionImport(_ address: URL, fresh: Bool = false) async throws -> SubscriptionImport {
         let (url, headers) = Subscription.headerSuffix(address)
+        // A public Telegram channel's address is a subscription of its own; its page is not fetched as one.
+        if let channel = TelegramSource.channel(url) { return .subscription(TelegramSource.subscription(channel, origin: url)) }
         let (data, finalURL) = try await get(url, headers: ["User-Agent": Self.subscriptionUserAgent].merging(headers) { $1 },
                                              fresh: fresh, limit: Self.subscriptionLimit)
         if let bundle = CatPawOpen.bundle(data, at: finalURL) { return .subscription(try await CatPawOpen.subscription(bundle: bundle, origin: finalURL, http: self)) }

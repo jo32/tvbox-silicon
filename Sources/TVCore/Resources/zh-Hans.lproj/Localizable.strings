@@ -2335,4 +2335,9 @@
 "Each series and audiobook keeps its own times. While one plays, open the menu in the playback controls, choose Skip intro / outro, and pick Intro Ends Here when the intro ends." = "每部剧和每本有声书各自记住时间。播放时打开播放控制里的菜单，选择“跳过片头片尾”，在片头结束时选“片头到此结束”。";
 "Each series and audiobook keeps its own times. While one plays, choose Skip intro / outro in the player's settings menu, or in an audiobook's More menu." = "每部剧和每本有声书各自记住时间。播放时在播放器的设置菜单里选择“跳过片头片尾”；有声书在“更多”菜单里。";
 "The drive plays only a compressed copy of this video for this account, without its own subtitles. Use Search Online to add some." = "网盘只给这个账号播放这部视频的压缩副本，不含视频自带的字幕。可以用“在线搜索”添加字幕。";
+"Telegram returned a page Yingxia can't read." = "Telegram 返回了映匣无法读取的页面。";
+"This Telegram post is no longer in the channel's public preview." = "这条 Telegram 帖子已不在频道的公开预览中。";
+"This Telegram post has no playable video." = "这条 Telegram 帖子没有可播放的视频。";
+"Telegram post" = "Telegram 帖子";
+"Latest" = "最新";
 "The video's own subtitles are under the speech bubble button." = "视频自带的字幕在对话气泡按钮里。";
