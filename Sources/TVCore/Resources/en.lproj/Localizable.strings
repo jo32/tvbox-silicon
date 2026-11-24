@@ -1030,7 +1030,6 @@
 "Stretch" = "Stretch";
 "Show Time and Battery" = "Show Time and Battery";
 "Skip Interval" = "Skip Interval";
-"Double-tap the left or right of the video to skip forward or back. Turn this off and a double tap plays or pauses instead." = "Double-tap the left or right of the video to skip forward or back. Turn this off and a double tap plays or pauses instead.";
 "Half-Speed Scrubbing" = "Half-Speed Scrubbing";
 "Quarter-Speed Scrubbing" = "Quarter-Speed Scrubbing";
 "Fine Scrubbing" = "Fine Scrubbing";
@@ -2370,3 +2369,12 @@
 "Move “%@” to Top" = "Move “%@” to Top";
 "They are asked from the top down. Control-click one to move it to the top." = "They are asked from the top down. Control-click one to move it to the top.";
 "They are asked from the top down. Touch and hold one to move it to the top." = "They are asked from the top down. Touch and hold one to move it to the top.";
+"Double-tap the video to play or pause. With Double-Tap to Skip on, a double tap on the left or right skips back or forward instead." = "Double-tap the video to play or pause. With Double-Tap to Skip on, a double tap on the left or right skips back or forward instead.";
+"Controls" = "Controls";
+"Left" = "Left";
+"Right" = "Right";
+"Lock Button" = "Lock Button";
+"With Picture in Picture on, a video carries on in a small window when you leave the app." = "With Picture in Picture on, a video carries on in a small window when you leave the app.";
+"Video Tags are the short labels above the progress bar in full screen, such as 4K and H265." = "Video Tags are the short labels above the progress bar in full screen, such as 4K and H265.";
+"Show Video Tags" = "Show Video Tags";
+"Battery Percentage" = "Battery Percentage";

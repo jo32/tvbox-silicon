@@ -48,6 +48,7 @@ struct MobilePlayerView: View {
     @AppStorage(VideoFill.key) private var videoFill = VideoFill.fit
     /// The time and battery in the full-screen controls (#996).
     @AppStorage(PlayerStatusBadge.key) private var showsStatus = true
+    @AppStorage(BatteryPercentage.key) private var batteryPercentage = false
     @AppStorage(SkipInterval.key) private var skipInterval = SkipInterval.standard
     @State private var speed: Float = 1
     @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
@@ -88,8 +89,12 @@ struct MobilePlayerView: View {
     @State private var swipeStart: Double?
     /// Sliding up or down: the brightness on the left, the volume on the right, from where the slide began.
     @AppStorage(PictureLevel.key) private var slidesLevels = true
-    /// Off: two taps anywhere play or pause, and the sides don't skip.
-    @AppStorage(PictureDoubleTap.key) private var doubleTapSkips = true
+    /// Off, as it starts (#1745): two taps anywhere play or pause, and the sides don't skip.
+    @AppStorage(PictureDoubleTap.key) private var doubleTapSkips = PictureDoubleTap.standard
+    /// The lock button's edge (#1922), the tags over the seek bar (#1534) and Picture in Picture (#1731), from Settings.
+    @AppStorage(LockButtonSide.key) private var lockSide = LockButtonSide.left.rawValue
+    @AppStorage(PlaybackTags.key) private var showsTags = true
+    @AppStorage(PictureInPicturePreference.key) private var allowsPictureInPicture = true
     @State private var level: (volume: Bool, start: Double, value: Double)?
     @State private var leveling = false
     @State private var levelTask: Task<Void, Never>?
@@ -115,6 +120,7 @@ struct MobilePlayerView: View {
             PlayerLayerView(player: session.player, gravity: videoFill.gravity, pip: pip).playerBleed(!inline)
                 // Picture in Picture shows only the player's layer, so AVPlayer draws the subtitles there.
                 .onChange(of: pip.active) { _, active in session.subtitles.native = active }
+                .onChange(of: allowsPictureInPicture, initial: true) { _, allowed in pip.startsWhenLeaving = allowed }
                 // A connected display (USB-C, HDMI) takes the same Picture Size: Fill covers a monitor of another
                 // shape, as asked in #1151.
                 .onChange(of: videoFill, initial: true) { _, fill in ExternalDisplay.shared.gravity = fill.gravity }
@@ -542,10 +548,11 @@ struct MobilePlayerView: View {
 
     // MARK: Lock
 
-    /// On the left edge, halfway down, as in Bilibili: with the controls while unlocked, alone for a moment after a tap
-    /// while locked.
+    /// On the left edge, halfway down, as in Bilibili, or on the right when Settings says so (#1922): with the controls
+    /// while unlocked, alone for a moment after a tap while locked.
     @ViewBuilder private var lockButton: some View {
         let visible = locked ? showsLock : chromeVisible && showsTransport
+        let right = LockButtonSide.side(lockSide) == .right
         Button {
             setLocked(!locked)
         } label: {
@@ -562,8 +569,8 @@ struct MobilePlayerView: View {
         .environment(\.colorScheme, .dark)
         .accessibilityLabel(L10n.text(locked ? "Unlock Controls" : "Lock Controls"))
         .accessibilityIdentifier("player.lock")
-        .padding(.leading, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .padding(right ? .trailing : .leading, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: right ? .trailing : .leading)
         .opacity(visible ? 1 : 0)
         .allowsHitTesting(visible && !settling)
         .animation(.easeOut(duration: 0.2), value: visible)
@@ -762,9 +769,11 @@ struct MobilePlayerView: View {
         HStack(alignment: .bottom, spacing: 12) {
             PlayerTitleLogo(channel: channel, compact: verticalSizeClass != .compact && horizontalSizeClass == .compact)
             Spacer(minLength: 0)
-            PlaybackBadges(session: session, active: chromeVisible) {
-                withAnimation(.smooth(duration: 0.25)) { showsPlaybackInfo.toggle() }
-                poke()
+            if showsTags {
+                PlaybackBadges(session: session, active: chromeVisible) {
+                    withAnimation(.smooth(duration: 0.25)) { showsPlaybackInfo.toggle() }
+                    poke()
+                }
             }
         }
         .padding(.bottom, 2)
@@ -782,7 +791,7 @@ struct MobilePlayerView: View {
                     playingOn = receiver
                 }
             }
-            if pip.supported {
+            if pip.supported && allowsPictureInPicture {
                 Button { pip.toggle() } label: {
                     Image(systemName: pip.active ? "pip.exit" : "pip.enter").font(.headline).frame(width: 22, height: 22)
                 }
@@ -910,7 +919,11 @@ struct MobilePlayerView: View {
                 .disabled(!session.showsPicture || frames.busy || playingOn != nil)
                 .accessibilityIdentifier("player.saveFrame")
             Toggle(L10n.text("Show Video Info"), isOn: $showsPlaybackInfo)
-            if !inline { Toggle(L10n.text("Show Time and Battery"), isOn: $showsStatus) }
+            if !inline {
+                Toggle(L10n.text("Show Video Tags"), isOn: $showsTags)
+                Toggle(L10n.text("Show Time and Battery"), isOn: $showsStatus)
+                if showsStatus { Toggle(L10n.text("Battery Percentage"), isOn: $batteryPercentage) }
+            }
         } label: {
             Image(systemName: "slider.horizontal.3").font(.headline).frame(width: 22, height: 22)
                 .symbolVariant(pictureSwitches && (upscalesVideo || smoothsVideo) ? .fill : .none)
@@ -1594,12 +1607,14 @@ extension VideoFill {
 
 /// The time and the battery at the start of the full-screen buttons (#996). The battery is watched only while it
 /// shows; the simulator, which has none, shows the time alone. The battery is a gauge without a number: iOS tells apps
-/// the level in steps of 5%, so a number read 60% beside the system's 62% (#1366).
+/// the level in steps of 5%, so a number read 60% beside the system's 62% (#1366). Those who'd rather read that
+/// number choose Battery Percentage in the player's options (#1743).
 struct PlayerStatusBadge: View {
     static let key = "player.showsTimeAndBattery"
     /// In the buttons' glass capsule, or bare on the title's row.
     var grouped = true
     @State private var battery = PlayerBattery()
+    @AppStorage(BatteryPercentage.key) private var showsPercentage = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -1608,7 +1623,15 @@ struct PlayerStatusBadge: View {
                 Text(context.date, format: .dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
             }
             if let level = battery.level {
-                BatteryGauge(level: level, charging: battery.charging)
+                if showsPercentage {
+                    // The gauge's colors: green while charging, red when low.
+                    Text(Double(BatteryPercentage.percent(level)) / 100, format: .percent.precision(.fractionLength(0)))
+                        .foregroundStyle(battery.charging ? Color.green : level <= 0.2 ? .red : .white)
+                        .accessibilityLabel(L10n.text(battery.charging ? "Battery, charging" : "Battery"))
+                        .accessibilityValue(Text(level, format: .percent.precision(.fractionLength(0))))
+                } else {
+                    BatteryGauge(level: level, charging: battery.charging)
+                }
             }
         }
         .font(.system(size: 14, weight: .semibold)).monospacedDigit()
@@ -1697,6 +1720,10 @@ private struct BatteryGauge: View {
     @ObservationIgnored private(set) var layerView: PlayerLayerUIView?
     @ObservationIgnored private var controller: AVPictureInPictureController?
     @ObservationIgnored private var observation: NSKeyValueObservation?
+    /// Settings › Playback › Picture in Picture: off, leaving the app doesn't start it.
+    @ObservationIgnored var startsWhenLeaving = PictureInPicturePreference.isOn() {
+        didSet { controller?.canStartPictureInPictureAutomaticallyFromInline = startsWhenLeaving }
+    }
 
     func attach(_ view: PlayerLayerUIView) {
         guard supported else { return }
@@ -1711,8 +1738,9 @@ private struct BatteryGauge: View {
         }
         let controller = AVPictureInPictureController(contentSource: .init(playerLayer: layer))
         controller.delegate = self
-        // Leaving the app while a video plays carries on in Picture in Picture, as AVKit's own player did.
-        controller.canStartPictureInPictureAutomaticallyFromInline = true
+        // Leaving the app while a video plays carries on in Picture in Picture, as AVKit's own player did, unless
+        // Settings turned Picture in Picture off (#1731).
+        controller.canStartPictureInPictureAutomaticallyFromInline = startsWhenLeaving
         observation = controller.observe(\.isPictureInPicturePossible, options: [.initial, .new]) { [weak self] controller, _ in
             let possible = controller.isPictureInPicturePossible
             Task { @MainActor [weak self] in self?.possible = possible }
