@@ -260,7 +260,7 @@ struct NovelListView: View {
                 if let message { Text(message) } else { Text(url.absoluteString).textSelection(.enabled) }
             }
         }
-        .searchable(text: $filter, prompt: Text(L10n.text("Filter sources")))
+        .searchable(text: $filter, prompt: Text(L10n.text("Filter book sources")))
         .screenTitle(store.title(of: url))
         .onDisappear { store.renameList(url, to: name) }
         #endif
