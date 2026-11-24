@@ -34,20 +34,28 @@ struct MusicArtwork: View {
 struct MusicMiniPlayer: View {
     @Environment(Store.self) private var store
     var inline = false
+    /// How far the cover and title follow a sideways swipe, which changes the song.
+    @State private var swipe: CGFloat = 0
 
     var body: some View {
         let music = store.music
         HStack(spacing: inline ? 10 : 12) {
-            MusicArtwork(url: music.track?.artwork, size: inline ? 28 : 34, fades: true)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(music.track?.title ?? "").font(.subheadline.weight(.semibold)).lineLimit(1)
-                if let failure = music.failure {
-                    Text(failure).font(.caption).foregroundStyle(Brand.amber).lineLimit(1)
-                } else if !inline {
-                    Text(music.track?.artistLine ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            HStack(spacing: inline ? 10 : 12) {
+                MusicArtwork(url: music.track?.artwork, size: inline ? 28 : 34, fades: true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(music.track?.title ?? "").font(.subheadline.weight(.semibold)).lineLimit(1)
+                    if let failure = music.failure {
+                        Text(failure).font(.caption).foregroundStyle(Brand.amber).lineLimit(1)
+                    } else if !inline {
+                        Text(music.track?.artistLine ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .offset(x: swipe)
+            .opacity(1 - min(abs(swipe) / 120, 0.7))
             .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
             Group {
                 if music.failure != nil {
                     button("arrow.clockwise", label: "Retry") { music.retry() }
@@ -72,16 +80,32 @@ struct MusicMiniPlayer: View {
         .contentShape(.rect)
         .modifier(NowPlayingZoomSource())
         .onTapGesture { music.presentsPlayer = true }
-        // A swipe across the strip closes it too, as the × does.
-        .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { drag in
-            if abs(drag.translation.width) > 80, abs(drag.translation.width) > abs(drag.translation.height) * 2 { music.stop() }
-        })
+        // A swipe across the strip changes the song, as in Music (#1569): left for the next, right for the one before.
+        // The × and the menu close it.
+        .simultaneousGesture(DragGesture(minimumDistance: 16)
+            .onChanged { drag in
+                let width = drag.translation.width
+                guard abs(width) > abs(drag.translation.height) else { return }
+                // Past the last song (or before the first) it only gives a little.
+                let moves = width < 0 ? music.canAdvance : music.queue?.hasPrevious == true
+                swipe = moves ? width : width / 4
+            }
+            .onEnded { drag in
+                let width = drag.translation.width
+                if abs(width) > 60, abs(width) > abs(drag.translation.height) * 2 {
+                    if width < 0 { if music.canAdvance { music.next() } }
+                    else if let index = music.queue?.index, index > 0 { music.jump(to: index - 1) }
+                }
+                withAnimation(.spring(duration: 0.3)) { swipe = 0 }
+            })
         .contextMenu {
             Button(role: .destructive) { music.stop() } label: { Label(L10n.text("Stop"), systemImage: "xmark") }
         }
         .accessibilityElement(children: .contain)
         .accessibilityAction(named: L10n.text("Now Playing")) { music.presentsPlayer = true }
         .accessibilityAction(named: L10n.text("Stop")) { music.stop() }
+        .accessibilityAction(named: L10n.text("Next")) { music.next() }
+        .accessibilityAction(named: L10n.text("Previous")) { music.previous() }
         #if DEBUG
         // `-qaNowPlaying artwork|lyrics|queue` opens Now Playing on that panel, for screenshots.
         .task { if UserDefaults.standard.string(forKey: "qaNowPlaying") != nil { music.presentsPlayer = true } }
