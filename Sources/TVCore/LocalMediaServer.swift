@@ -82,29 +82,71 @@ public actor LocalMediaServer {
         guard parts.first == token, parts.count > 1, !parts.contains("..") else { send(connection, status: 404); return }
         parts.removeFirst()
         let file = parts.reduce(root) { $0.appending(path: $1) }.standardizedFileURL
-        guard file.path.hasPrefix(root.path + "/"),
-              let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init),
-              let handle = try? FileHandle(forReadingFrom: file) else { send(connection, status: 404); return }
-        defer { try? handle.close() }
-        var range: ClosedRange<Int64> = 0...max(0, size - 1)
-        var status = 200
-        if let header = lines.first(where: { $0.lowercased().hasPrefix("range: bytes=") }), size > 0 {
-            let spec = header.dropFirst("range: bytes=".count).split(separator: "-", omittingEmptySubsequences: false)
-            if spec.count == 2 {
-                let low = Int64(spec[0]), high = Int64(spec[1])
-                let start = low ?? max(0, size - (high ?? 0)), end = low == nil ? size - 1 : min(high ?? size - 1, size - 1)
-                guard start <= end, start < size else { send(connection, status: 416, extra: "Content-Range: bytes */\(size)\r\n"); return }
-                range = start...end; status = 206
-            }
-        }
+        guard file.path.hasPrefix(root.path + "/") else { send(connection, status: 404); return }
+        let header = lines.first { $0.lowercased().hasPrefix("range: bytes=") }
         let head = fields[0] == "HEAD"
-        var body = Data()
-        if !head, size > 0 {
-            try? handle.seek(toOffset: UInt64(range.lowerBound))
-            body = (try? handle.read(upToCount: Int(range.count))) ?? Data()
+        // A download still being fetched, played meanwhile (#1264): a file comes chunk by chunk, from disk or its
+        // source; a playlist or piece that isn't on disk yet comes from the download's plan or its source.
+        if let pending = DownloadStream.file(file) {
+            Task { await stream(connection, pending, header: header, head: head) }
+            return
         }
+        guard let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init),
+              let handle = try? FileHandle(forReadingFrom: file) else {
+            Task {
+                guard let data = await DownloadStream.missing(file) else { send(connection, status: 404); return }
+                answer(connection, size: Int64(data.count), header: header, head: head, name: file.pathExtension) { range in
+                    Data(data[data.startIndex + Int(range.lowerBound)...data.startIndex + Int(range.upperBound)])
+                }
+            }
+            return
+        }
+        defer { try? handle.close() }
+        answer(connection, size: size, header: header, head: head, name: file.pathExtension) { range in
+            try? handle.seek(toOffset: UInt64(range.lowerBound))
+            return (try? handle.read(upToCount: Int(range.count))) ?? Data()
+        }
+    }
+
+    /// The bytes a `Range` header asks for out of `size`, and the status that answers it; nil when it asks for none.
+    nonisolated static func span(_ header: String?, size: Int64) -> (range: ClosedRange<Int64>, status: Int)? {
+        guard let header, size > 0 else { return (0...max(0, size - 1), 200) }
+        let spec = header.dropFirst("range: bytes=".count).split(separator: "-", omittingEmptySubsequences: false)
+        guard spec.count == 2 else { return (0...size - 1, 200) }
+        let low = Int64(spec[0]), high = Int64(spec[1])
+        let start = low ?? max(0, size - (high ?? 0)), end = low == nil ? size - 1 : min(high ?? size - 1, size - 1)
+        guard start <= end, start < size else { return nil }
+        return (start...end, 206)
+    }
+
+    private nonisolated static func answer(_ connection: NWConnection, size: Int64, header: String?, head: Bool, name: String, read: (ClosedRange<Int64>) -> Data) {
+        guard let (range, status) = span(header, size: size) else { send(connection, status: 416, extra: "Content-Range: bytes */\(size)\r\n"); return }
+        let body = !head && size > 0 ? read(range) : Data()
         let extra = status == 206 ? "Content-Range: bytes \(range.lowerBound)-\(range.upperBound)/\(size)\r\n" : ""
-        send(connection, status: status, body: body, length: size == 0 ? 0 : range.count, mime: mime(file.pathExtension), extra: extra)
+        send(connection, status: status, body: body, length: size == 0 ? 0 : range.count, mime: mime(name), extra: extra)
+    }
+
+    /// An unfinished file, sent as it is read: the player may ask for all of it from wherever it is.
+    private nonisolated static func stream(_ connection: NWConnection, _ file: PendingFile, header: String?, head: Bool) async {
+        guard let (range, status) = span(header, size: file.length) else { send(connection, status: 416, extra: "Content-Range: bytes */\(file.length)\r\n"); return }
+        let extra = status == 206 ? "Content-Range: bytes \(range.lowerBound)-\(range.upperBound)/\(file.length)\r\n" : ""
+        let reason = status == 206 ? "Partial Content" : "OK"
+        let top = "HTTP/1.1 \(status) \(reason)\r\nContent-Type: \(mime(file.fileExtension))\r\nContent-Length: \(range.count)\r\nAccept-Ranges: bytes\r\n\(extra)Connection: close\r\n\r\n"
+        defer { connection.cancel() }
+        guard await write(connection, Data(top.utf8)), !head else { return }
+        var position = range.lowerBound
+        while position <= range.upperBound {
+            // Short pieces: a player that jumps elsewhere closes the connection, and the next write says so.
+            guard let data = try? await file.read(position...min(range.upperBound, position + (1 << 19) - 1)), !data.isEmpty,
+                  await write(connection, data) else { return }
+            position += Int64(data.count)
+        }
+    }
+
+    private nonisolated static func write(_ connection: NWConnection, _ data: Data) async -> Bool {
+        await withCheckedContinuation { continuation in
+            connection.send(content: data, completion: .contentProcessed { error in continuation.resume(returning: error == nil) })
+        }
     }
 
     private nonisolated static func mime(_ name: String) -> String {
@@ -116,6 +158,7 @@ public actor LocalMediaServer {
         case "mp3": "audio/mpeg"
         case "vtt", "webvtt": "text/vtt"
         case "mp4", "m4s", "m4v", "cmfv": "video/mp4"
+        case "mov": "video/quicktime"
         default: "application/octet-stream"
         }
     }

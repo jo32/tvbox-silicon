@@ -230,6 +230,22 @@ enum QALaunch {
                 } catch { store.error = error.localizedDescription }
             }
         }
+        // `-qaPlayCaching <seconds>` plays, that long after launch, the first video still being cached that can play
+        // meanwhile (#1264); `-qaPlayCachingEpisode <text>` picks the one whose episode name contains it.
+        if let wait = Double(UserDefaults.standard.string(forKey: "qaPlayCaching") ?? "") {
+            let wanted = UserDefaults.standard.string(forKey: "qaPlayCachingEpisode")
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(wait))
+                if let item = DownloadLibrary.shared.items.first(where: { $0.playsWhileCaching && (wanted == nil || $0.episode.contains(wanted!)) }) {
+                    store.playing = store.savedChannel(item)
+                }
+            }
+        }
+        // `-qaPlayCached <text>` plays the cached video whose episode name contains it.
+        if let wanted = UserDefaults.standard.string(forKey: "qaPlayCached"),
+           let item = DownloadLibrary.shared.items.first(where: { $0.status == .completed && $0.episode.contains(wanted) }) {
+            store.playing = store.savedChannel(item)
+        }
         if let page, page.hasPrefix("play-source:"), let config = store.subscription {
             let key = String(page.dropFirst("play-source:".count))
             do {

@@ -1403,7 +1403,8 @@ import IOKit.pwr_mgt
         transfer = next
         #if DEBUG
         if QALaunch.page?.hasPrefix("play-source:") == true || QALaunch.page == "resume-last" || UserDefaults.standard.string(forKey: "qaPlay") != nil
-            || UserDefaults.standard.string(forKey: "qaPlayURL") != nil {
+            || UserDefaults.standard.string(forKey: "qaPlayURL") != nil || UserDefaults.standard.string(forKey: "qaPlayCaching") != nil
+            || UserDefaults.standard.string(forKey: "qaPlayCached") != nil {
             let report: [String: Any] = ["seconds": position, "duration": duration, "ready": item.status == .readyToPlay,
                 "rate": player.rate, "error": error ?? "", "danmakuCount": danmaku.count,
                 "errorDetail": item.error.map(Self.describe) ?? "", "videoWidth": item.presentationSize.width, "videoHeight": item.presentationSize.height,

@@ -110,13 +110,18 @@ struct Transfer: Sendable {
         if let data = try? Data(contentsOf: planFile), let saved = try? JSONDecoder().decode(TransferPlan.self, from: data) { plan = saved }
         else { plan = try await prepare(try await resolve()); try save(plan) }
         var renewals = 0
+        // What the player reads while this runs (`DownloadStream`).
+        let live = LiveTransfer()
+        DownloadStream.began(live, in: folder)
+        defer { DownloadStream.ended(live, in: folder) }
         while finishedFile(plan) == nil {
             try Task.checkCancellation()
             try begin(plan)
             await note(.prepared(plan))
             let box = PlanBox(plan, file: planFile)
             do {
-                try await fetch(box)
+                defer { live.stopped() }
+                try await fetch(box, live: live)
                 plan = box.plan
                 try save(plan)
                 break
@@ -248,24 +253,32 @@ struct Transfer: Sendable {
 
     // MARK: Fetching
 
-    private func fetch(_ box: PlanBox) async throws {
+    private func fetch(_ box: PlanBox, live: LiveTransfer) async throws {
         let plan = box.plan
         switch plan.kind {
         case .file, .dash:
-            for index in plan.files.indices { try await fetch(file: index, box: box) }
+            for index in plan.files.indices { try await fetch(file: index, box: box, live: plan.kind == .file ? live : nil) }
         case .hls:
             let pending = plan.parts.filter { !FileManager.default.fileExists(atPath: folder.appending(path: $0.name).path) }
             let queue = WorkQueue(pending)
+            live.fetching(box, parts: queue)
             try await withThrowingTaskGroup(of: Void.self) { group in
                 for _ in 0..<min(Self.connections, pending.count) {
                     group.addTask {
                         while let part = queue.next() {
                             try Task.checkCancellation()
-                            var (data, _) = try await get([part.url], headers: plan.headers, range: part.range)
-                            if part.transportStream { data = MediaPayload.transportStream(data) }
                             let target = folder.appending(path: part.name)
-                            try Self.writing { try data.write(to: target, options: .atomic) }
-                            meter.finishedPart()
+                            try await DownloadStream.exclusive(target.path) {
+                                // The player, playing this download, asked for the piece first and saved it.
+                                if let size = try? target.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                                    meter.add(Int64(size))
+                                } else {
+                                    var (data, _) = try await get([part.url], headers: plan.headers, range: part.range)
+                                    if part.transportStream { data = MediaPayload.transportStream(data) }
+                                    try Self.writing { try data.write(to: target, options: .atomic) }
+                                }
+                                meter.finishedPart()
+                            }
                         }
                     }
                 }
@@ -274,7 +287,7 @@ struct Transfer: Sendable {
         }
     }
 
-    private func fetch(file index: Int, box: PlanBox) async throws {
+    private func fetch(file index: Int, box: PlanBox, live: LiveTransfer?) async throws {
         let file = box.plan.files[index], headers = box.plan.headers
         let target = folder.appending(path: "parts").appending(path: file.name)
         guard file.ranged, let length = file.length else {
@@ -304,17 +317,26 @@ struct Transfer: Sendable {
         try writer.truncate(length)
         let pending = (0..<file.chunks).filter { !box.plan.files[index].done.contains($0) }
         let queue = WorkQueue(pending)
+        live?.fetching(box, writer: writer, chunks: queue)
+        defer { live?.stopped() }
         try await withThrowingTaskGroup(of: Void.self) { group in
             for _ in 0..<min(Self.connections, pending.count) {
                 group.addTask {
                     while let chunk = queue.next() {
                         try Task.checkCancellation()
                         let range = file.range(chunk)
-                        let (data, _) = try await get(box.plan.files[index].urls, headers: headers, range: range)
-                        guard data.count == range.count else { meter.add(-Int64(data.count)); throw TransferError.incomplete }
-                        try writer.write(data, at: UInt64(range.lowerBound))
-                        box.mark(index, chunk: chunk)
-                        meter.finishedPart()
+                        try await DownloadStream.exclusive(target.path + "#\(chunk)") {
+                            // The player, playing this download, asked for the chunk first and it is in the file.
+                            if box.plan.files[index].done.contains(chunk) {
+                                meter.add(Int64(range.count))
+                            } else {
+                                let (data, _) = try await get(box.plan.files[index].urls, headers: headers, range: range)
+                                guard data.count == range.count else { meter.add(-Int64(data.count)); throw TransferError.incomplete }
+                                try writer.write(data, at: UInt64(range.lowerBound))
+                                box.mark(index, chunk: chunk)
+                            }
+                            meter.finishedPart()
+                        }
                     }
                 }
             }
@@ -393,6 +415,9 @@ struct Transfer: Sendable {
             try? FileManager.default.removeItem(at: folder.appending(path: name))
             try FileManager.default.moveItem(at: parts.appending(path: plan.files[0].name), to: folder.appending(path: name))
             try? FileManager.default.removeItem(at: parts)
+            // Being played as it finished (#1264): the file stays as it is under the player, and is rewrapped the
+            // next time it opens (`DownloadLibrary.playbackAddress`).
+            if DownloadStream.isPlaying(folder) { return name }
             return await DownloadLibrary.rewrap(name, in: folder)
         case .hls:
             try Self.writing { try Data((plan.playlist ?? "").utf8).write(to: folder.appending(path: "index.m3u8"), options: .atomic) }
@@ -620,6 +645,15 @@ final class WorkQueue<Item: Sendable>: @unchecked Sendable {
             guard position < items.count else { return nil }
             defer { position += 1 }
             return items[position]
+        }
+    }
+    /// Goes on from the item left whose `value` is the lowest at or past `key`; the ones before it wait behind the
+    /// rest. A download being played carries on from where the player is (#1264).
+    func advance<Key: Comparable>(to key: Key, by value: (Item) -> Key) {
+        lock.withLock {
+            let left = items.indices[position...].filter { value(items[$0]) >= key }
+            guard let target = left.min(by: { value(items[$0]) < value(items[$1]) }), target > position else { return }
+            items = Array(items[..<position]) + Array(items[target...]) + Array(items[position..<target])
         }
     }
 }
