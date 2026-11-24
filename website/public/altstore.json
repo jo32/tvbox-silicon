@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.30",
+          "buildVersion": "68",
+          "date": "2026-11-25",
+          "localizedDescription": "• 属于你的音乐库\n• 歌曲衔接更顺\n• 边缓存边看\n• 拖动进度条时看到画面\n• 播放器按你的习惯来\n• Telegram 公开频道\n• 其他修复\n\n• Your own music library\n• Songs flow into each other\n• Watch while it caches\n• See where you're seeking\n• A player that works your way\n• Public Telegram channels\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.30/Yingxia-1.8.30-ios.ipa",
+          "size": 186083388,
+          "sha256": "84614b6ee8d5f3d5b9af3f82070de935e7973e297a20126012a9d39855ab3f95",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.29",
           "buildVersion": "67",
           "date": "2026-11-24",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.26/Yingxia-1.8.26-ios.ipa",
           "size": 184765358,
           "sha256": "9f9265033d4446dedc16fcf5ce7dd1ea5dac01844915ce71aaa49580552067b5",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.25",
-          "buildVersion": "63",
-          "date": "2026-11-19",
-          "localizedDescription": "• 定时关闭\n• 调整订阅顺序\n• 长篇小说快速翻目录\n• Emby 和 Jellyfin\n• 其他修复\n\n• Sleep Timer\n• Arrange subscriptions\n• Jump through long novels\n• Emby and Jellyfin\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.25/Yingxia-1.8.25-ios.ipa",
-          "size": 184481371,
-          "sha256": "b69147bbad53babcd369f4aa1f02e27c4d3e7e61da6a072b12ef94252d4e5342",
           "minOSVersion": "17.0"
         }
       ],
