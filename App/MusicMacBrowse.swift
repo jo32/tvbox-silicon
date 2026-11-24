@@ -108,6 +108,7 @@ struct MusicCollectionTile: View {
                             square: true, symbol: collection.kind == .album ? "square.stack" : "music.note.list")
         }
         .cardButton()
+        .contextMenu { MusicCollectionLikeButton(collection: collection) }
         #else
         let link = RouteLink { MusicCollectionView(collection: collection) } label: {
             VStack(alignment: .leading, spacing: 7) {
@@ -125,6 +126,8 @@ struct MusicCollectionTile: View {
         link.buttonStyle(.plain)
             .onHover { hovering = $0 }
             .animation(.easeOut(duration: 0.15), value: hovering)
+            // A right click (a long press on iPhone) likes the whole album or playlist (#720).
+            .contextMenu { MusicCollectionLikeButton(collection: collection) }
         #endif
     }
 
@@ -272,6 +275,7 @@ private struct MusicSongCell: View {
             Divider()
             Button { store.music.playNext([track]) } label: { Label(L10n.text("Play Next"), systemImage: "text.line.first.and.arrowtriangle.forward") }
             Button { store.music.addToUpNext([track]) } label: { Label(L10n.text("Add to Up Next"), systemImage: "text.line.last.and.arrowtriangle.forward") }
+            MusicArtistMenu(track: track)
             Divider()
             MusicDownloadMenuItems(tracks: [track])
         }
@@ -330,6 +334,7 @@ struct MusicTrackMenu: View {
             }
             Button { store.music.playNext(tracks) } label: { Label(L10n.text("Play Next"), systemImage: "text.line.first.and.arrowtriangle.forward") }
             Button { store.music.addToUpNext(tracks) } label: { Label(L10n.text("Add to Up Next"), systemImage: "text.line.last.and.arrowtriangle.forward") }
+            if tracks.count == 1, let track = tracks.first { MusicArtistMenu(track: track) }
             Divider()
             MusicDownloadMenuItems(tracks: tracks)
         } label: {
@@ -477,6 +482,8 @@ struct MusicCollectionHeader: View {
                     }
                     .buttonStyle(MusicHeaderButtonStyle()).help(L10n.text("Add to Up Next")).accessibilityLabel(L10n.text("Add to Up Next"))
                     MusicDownloadButton(tracks: tracks, collection: collection, side: 34).buttonStyle(MusicHeaderButtonStyle())
+                    MusicCollectionLikeButton(collection: collection, iconOnly: true, side: 34).buttonStyle(MusicHeaderButtonStyle())
+                        .help(L10n.text(store.favorites.contains(collection) ? "Unlike" : "Like"))
                 }
                 .disabled(tracks.isEmpty)
             }

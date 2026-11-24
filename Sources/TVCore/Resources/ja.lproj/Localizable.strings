@@ -2342,3 +2342,10 @@
 "Telegram post" = "Telegram 投稿";
 "Latest" = "最新";
 "The video's own subtitles are under the speech bubble button." = "動画に含まれる字幕は吹き出しボタンにあります。";
+"Remove from Recently Played" = "最近再生した項目から削除";
+"Go to Artist" = "アーティストを表示";
+"Liked Albums & Playlists" = "お気に入りのアルバムとプレイリスト";
+"%lld albums and playlists" = "%lld 件のアルバムとプレイリスト";
+"No Liked Albums or Playlists" = "お気に入りのアルバムやプレイリストはまだありません";
+"Like an album or playlist on its page, and it waits here." = "アルバムやプレイリストのページで「いいね」すると、ここに残ります。";
+"Search Liked Songs" = "お気に入りの曲を検索";

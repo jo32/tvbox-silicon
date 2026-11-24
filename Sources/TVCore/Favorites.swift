@@ -155,11 +155,18 @@ struct FavoriteDocument: Codable {
     public private(set) var persistenceError: String?
     private let defaults: UserDefaults
     private static let storageKey = "favorites"
+    /// Albums and playlists liked from their pages, newest first (#720). Kept apart from `items`: a new `FavoriteItem`
+    /// case would make an older build, or another device on one, fail to read the whole list.
+    public private(set) var musicCollections: [MusicCollection] = []
+    private static let collectionsKey = "favoriteMusicCollections"
     /// Called after the viewer changes the list (not after `adopt`), for iCloud sync.
     @ObservationIgnored public var onChange: (@MainActor () -> Void)?
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        if let data = defaults.data(forKey: Self.collectionsKey), let saved = try? JSONDecoder().decode([MusicCollection].self, from: data) {
+            musicCollections = saved
+        }
         var migrated = false
         if let data = defaults.data(forKey: Self.storageKey) {
             if let document = try? JSONDecoder().decode(FavoriteDocument.self, from: data), document.version == 2 {
@@ -252,6 +259,15 @@ struct FavoriteDocument: Codable {
     /// The songs saved with Like, newest first, which Liked Songs plays as one list.
     public var musicTracks: [MusicTrack] {
         items.compactMap { if case .music(let track) = $0 { track } else { nil } }
+    }
+
+    public func contains(_ collection: MusicCollection) -> Bool { musicCollections.contains { $0.id == collection.id } }
+
+    /// Likes an album or playlist, to the top, or unlikes it.
+    public func toggle(_ collection: MusicCollection) {
+        if let index = musicCollections.firstIndex(where: { $0.id == collection.id }) { musicCollections.remove(at: index) }
+        else { musicCollections.insert(collection, at: 0) }
+        if let data = try? JSONEncoder().encode(musicCollections) { defaults.set(data, forKey: Self.collectionsKey) }
     }
 
     private func persist() {
