@@ -2341,3 +2341,10 @@
 "Telegram post" = "Telegram 帖子";
 "Latest" = "最新";
 "The video's own subtitles are under the speech bubble button." = "视频自带的字幕在对话气泡按钮里。";
+"Remove from Recently Played" = "从最近播放中移除";
+"Go to Artist" = "查看歌手";
+"Liked Albums & Playlists" = "喜欢的专辑和歌单";
+"%lld albums and playlists" = "%lld 个专辑和歌单";
+"No Liked Albums or Playlists" = "还没有喜欢的专辑或歌单";
+"Like an album or playlist on its page, and it waits here." = "在专辑或歌单页面点喜欢，它就会留在这里。";
+"Search Liked Songs" = "搜索喜欢的歌曲";

@@ -325,6 +325,8 @@ private struct MusicHome: View {
         }
         let liked = store.favorites.musicTracks.count
         if liked > 0 { MusicLikedLink(count: liked).padding(.bottom, 20) }
+        let likedCollections = store.favorites.musicCollections.count
+        if likedCollections > 0 { MusicLikedCollectionsLink(count: likedCollections).padding(.bottom, 20) }
         if downloads { MusicDownloadsLink().padding(.bottom, 20) }
         if !browse.sections.isEmpty {
             MusicBrowseShelves(sections: browse.sections).padding(.bottom, 28)
@@ -354,10 +356,11 @@ private struct MusicHome: View {
             .padding(.bottom, 8)
             .tvFocusSection()
             ForEach(library.history.prefix(100)) { entry in
+                // One entry can go on its own, from its menu, besides Clear for all of them (#1742).
                 if let collection = entry.collection {
-                    MusicCollectionRow(collection: collection)
+                    MusicCollectionRow(collection: collection) { library.remove(entry) }
                 } else if let track = entry.track {
-                    MusicTrackRow(track: track) { store.music.play(track) }
+                    MusicTrackRow(track: track, removeFromHistory: { library.remove(entry) }) { store.music.play(track) }
                 }
             }
         } else if empty {
@@ -403,6 +406,8 @@ struct MusicTrackRow: View {
     var number: Int?
     /// Off when a heart beside the row removes the favorite, so the row does not show a second heart.
     var showsFavoriteMark = true
+    /// In Recently Played: takes this song out of it, from the row's menu.
+    var removeFromHistory: (() -> Void)?
     let action: () -> Void
 
     var body: some View {
@@ -453,15 +458,71 @@ struct MusicTrackRow: View {
             FavoriteMenuButton(item: .music(track), name: track.title)
             Button { store.music.playNext([track]) } label: { Label(L10n.text("Play Next"), systemImage: "text.line.first.and.arrowtriangle.forward") }
             Button { store.music.addToUpNext([track]) } label: { Label(L10n.text("Add to Up Next"), systemImage: "text.line.last.and.arrowtriangle.forward") }
+            MusicArtistMenu(track: track)
             Divider()
             MusicDownloadMenuItems(tracks: [track])
+            if let removeFromHistory { MusicRemoveFromHistoryButton(action: removeFromHistory) }
         }
         .accessibilityLabel(Text([track.title, track.artistLine].joined(separator: ", ")))
     }
 }
 
+private struct MusicRemoveFromHistoryButton: View {
+    let action: () -> Void
+    var body: some View {
+        Divider()
+        Button(role: .destructive, action: action) { Label(L10n.text("Remove from Recently Played"), systemImage: "minus.circle") }
+    }
+}
+
+/// "Go to Artist" in a song's menu (#1755): the artist's songs on a page of their own, one item for each artist
+/// when several sing it. Left out where no stack can take the page.
+struct MusicArtistMenu: View {
+    @Environment(\.openRoute) private var openRoute
+    let track: MusicTrack
+
+    var body: some View {
+        let artists = track.artists.filter { !$0.isEmpty }
+        if let openRoute, let first = artists.first {
+            if artists.count == 1 {
+                button(first, label: L10n.text("Go to Artist"), openRoute)
+            } else {
+                Menu {
+                    ForEach(artists, id: \.self) { button($0, label: $0, openRoute) }
+                } label: {
+                    Label(L10n.text("Go to Artist"), systemImage: "music.mic")
+                }
+            }
+        }
+    }
+
+    private func button(_ artist: String, label: String, _ openRoute: RouteOpener) -> some View {
+        Button { openRoute(Route { AnyView(MusicArtistView(name: artist)) }) } label: { Label(label, systemImage: "music.mic") }
+    }
+}
+
+/// Likes an album or playlist, or unlikes it: Liked Albums & Playlists on the Music page keeps them (#720).
+struct MusicCollectionLikeButton: View {
+    @Environment(Store.self) private var store
+    let collection: MusicCollection
+    /// Only the heart, for a row of round buttons, in a square this wide when given.
+    var iconOnly = false
+    var side: CGFloat?
+
+    var body: some View {
+        let on = store.favorites.contains(collection)
+        Button { store.favorites.toggle(collection) } label: {
+            let label = Label(L10n.text(on ? "Unlike" : "Like"), systemImage: on ? (iconOnly ? "heart.fill" : "heart.slash") : "heart")
+            if iconOnly { label.labelStyle(.iconOnly).frame(width: side, height: side) } else { label }
+        }
+        .accessibilityLabel(on ? L10n.text("Remove %@ from favorites", collection.title) : L10n.text("Add %@ to favorites", collection.title))
+    }
+}
+
 private struct MusicCollectionRow: View {
     let collection: MusicCollection
+    /// In Recently Played: takes this album or playlist out of it, from the row's menu.
+    var removeFromHistory: (() -> Void)?
 
     var body: some View {
         RouteLink {
@@ -480,6 +541,154 @@ private struct MusicCollectionRow: View {
             .contentShape(Rectangle())
         }
         .glassRow()
+        // On Apple TV, a long press.
+        .contextMenu {
+            MusicCollectionLikeButton(collection: collection)
+            if let removeFromHistory { MusicRemoveFromHistoryButton(action: removeFromHistory) }
+        }
+    }
+}
+
+/// The way to liked albums and playlists, under Liked Songs on the Music page.
+private struct MusicLikedCollectionsLink: View {
+    let count: Int
+
+    var body: some View {
+        RouteLink { MusicLikedCollectionsView() } label: {
+            HStack(spacing: MusicLayout.gap) {
+                Image(systemName: "square.stack.fill")
+                    .font(.system(size: MusicLayout.art * 0.42, weight: .semibold)).foregroundStyle(.white)
+                    .frame(width: MusicLayout.art, height: MusicLayout.art)
+                    .background(Brand.rose.gradient, in: RoundedRectangle(cornerRadius: MusicLayout.art * 0.3, style: .continuous))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(MusicLikedCollectionsView.title).font(.headline).lineLimit(1).foregroundStyle(.primary)
+                    Text(L10n.text("%lld albums and playlists", count)).font(.subheadline).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right").font(.subheadline.weight(.semibold)).foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .glassRow()
+    }
+}
+
+/// Albums and playlists liked from their pages, newest first (#720). Unlike one from its menu, or on its page.
+struct MusicLikedCollectionsView: View {
+    @Environment(Store.self) private var store
+
+    static var title: String { L10n.text("Liked Albums & Playlists") }
+
+    var body: some View {
+        let collections = store.favorites.musicCollections
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: MusicLayout.rowSpacing) {
+                #if os(tvOS)
+                MusicNowPlayingButton()
+                #endif
+                #if os(macOS)
+                Text(Self.title).font(.largeTitle.weight(.bold)).padding(.bottom, 20)
+                #endif
+                if collections.isEmpty {
+                    EmptyResults(symbol: "heart", title: L10n.text("No Liked Albums or Playlists"),
+                                 message: L10n.text("Like an album or playlist on its page, and it waits here."))
+                }
+                ForEach(collections) { MusicCollectionRow(collection: $0) }
+            }
+            .glassRowInsets()
+            .pageContainer()
+        }
+        .screenBackdrop()
+        .screenTitle(Self.title)
+        #if os(macOS)
+        .toolbar(removing: .title)
+        #endif
+        .musicPlayerInset()
+        #if os(tvOS)
+        .onPlayPauseCommand { store.music.toggle() }
+        #endif
+    }
+}
+
+/// An artist's songs (#1755): what searching the catalogs by the artist's name finds, the best known first.
+struct MusicArtistView: View {
+    let name: String
+    @Environment(Store.self) private var store
+    /// Its own search, so the Music page keeps what was searched there. Made when the page first shows.
+    @State private var search: MusicSearchModel?
+
+    var body: some View {
+        let tracks = search?.results ?? []
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: MusicLayout.rowSpacing) {
+                #if os(tvOS)
+                MusicNowPlayingButton()
+                #endif
+                header(tracks).padding(.bottom, 20)
+                if let search {
+                    if tracks.isEmpty && (search.busy || search.query.isEmpty) {
+                        ProgressView().frame(maxWidth: .infinity).padding(.vertical, 60)
+                    } else if search.failed {
+                        ErrorState(title: L10n.text("Unable to Search Music"), message: L10n.text("Check your network connection and try again."),
+                                   details: search.failures.map { "\($0.key.name): \($0.value.localizedDescription) (\($0.value.detail))" }.sorted().joined(separator: "\n"),
+                                   retry: { search.search(name, kind: .artists, immediately: true) }, busy: search.busy)
+                            .padding(.vertical, 24).tvFocusSection()
+                    } else if search.empty {
+                        EmptyResults(symbol: "music.mic", title: L10n.text("No Matching Songs"))
+                    }
+                }
+                #if os(macOS)
+                MusicSongTable(tracks: tracks) { store.music.play(MusicQueue(tracks: tracks, start: $0, source: name)) }
+                #else
+                ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
+                    MusicTrackRow(track: track) { store.music.play(MusicQueue(tracks: tracks, start: index, source: name)) }
+                }
+                #endif
+            }
+            .glassRowInsets()
+            .pageContainer()
+        }
+        .screenBackdrop()
+        .screenTitle(name)
+        #if os(macOS)
+        .toolbar(removing: .title)
+        #endif
+        .musicPlayerInset()
+        #if os(tvOS)
+        .onPlayPauseCommand { store.music.toggle() }
+        #endif
+        .task {
+            guard search == nil else { return }
+            let model = MusicSearchModel(catalogs: MusicSearchModel.defaultCatalogs() + [MusicExtensionCatalog()], kind: .artists)
+            search = model
+            model.search(name, kind: .artists, immediately: true)
+        }
+    }
+
+    private func header(_ tracks: [MusicTrack]) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(L10n.text("Artist")).font(.caption.weight(.semibold)).foregroundStyle(Brand.accent)
+            #if os(macOS)
+            Text(name).font(.largeTitle.weight(.bold))
+            #endif
+            HStack(spacing: 10) {
+                Group {
+                    Button { store.music.play(MusicQueue(tracks: tracks, start: 0, source: name)) } label: {
+                        Label(L10n.text("Play"), systemImage: "play.fill")
+                    }
+                    .controlButton(prominent: true)
+                    Button { store.music.play(MusicQueue.shuffled(tracks, source: name)) } label: {
+                        Label(L10n.text("Shuffle"), systemImage: "shuffle")
+                    }
+                    .controlButton()
+                }
+                .disabled(tracks.isEmpty)
+            }
+            .fixedSize()
+            .tvFocusSection()
+        }
     }
 }
 
@@ -572,6 +781,7 @@ struct MusicCollectionView: View {
                     }
                     .controlButton()
                     MusicDownloadButton(tracks: tracks, collection: collection).controlButton()
+                    MusicCollectionLikeButton(collection: collection, iconOnly: true).controlButton()
             }
             .fixedSize()
             .disabled(tracks.isEmpty)
@@ -624,15 +834,20 @@ struct MusicLikedView: View {
     @Environment(Store.self) private var store
 
     static var title: String { L10n.text("Liked Songs") }
+    /// Narrows the list by title, artist or album (#1854); Play and Shuffle then take what shows.
+    @State private var filter = ""
 
     var body: some View {
-        let tracks = store.favorites.musicTracks
+        let liked = store.favorites.musicTracks
+        let tracks = filter.isEmpty ? liked : liked.filter { $0.matches(filter) }
         ScrollView {
             LazyVStack(alignment: .leading, spacing: MusicLayout.rowSpacing) {
                 header(tracks).padding(.bottom, 20)
-                if tracks.isEmpty {
+                if liked.isEmpty {
                     EmptyResults(symbol: "heart", title: L10n.text("No Liked Songs"),
                                  message: L10n.text("Like a song from its menu, and it waits here, ready to play as one list."))
+                } else if tracks.isEmpty {
+                    EmptyResults(symbol: "magnifyingglass", title: L10n.text("No Matching Songs"))
                 }
                 ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                     HStack(spacing: 10) {
@@ -651,6 +866,10 @@ struct MusicLikedView: View {
             .glassRowInsets()
             .pageContainer()
         }
+        // Not on Apple TV: the system search there takes the top of the page for its keyboard row.
+        #if !os(tvOS)
+        .catalogSearchable(text: $filter, prompt: L10n.text("Search Liked Songs"), endsWhenIdle: true)
+        #endif
         .screenBackdrop()
         .screenTitle(Self.title)
         #if os(macOS)
