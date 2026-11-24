@@ -2369,6 +2369,9 @@
 "Move “%@” to Top" = "Move “%@” to Top";
 "They are asked from the top down. Control-click one to move it to the top." = "They are asked from the top down. Control-click one to move it to the top.";
 "They are asked from the top down. Touch and hold one to move it to the top." = "They are asked from the top down. Touch and hold one to move it to the top.";
+"Play Now" = "Play Now";
+"Plays After Caching Finishes" = "Plays After Caching Finishes";
+"This video can play once it has finished caching." = "This video can play once it has finished caching.";
 "Double-tap the video to play or pause. With Double-Tap to Skip on, a double tap on the left or right skips back or forward instead." = "Double-tap the video to play or pause. With Double-Tap to Skip on, a double tap on the left or right skips back or forward instead.";
 "Controls" = "Controls";
 "Left" = "Left";

@@ -447,6 +447,7 @@ private struct QueueRow: View {
     let item: DownloadItem
     let rate: Double?
     let position: Int?
+    @Environment(Store.self) private var store
     private var library: DownloadLibrary { .shared }
     var body: some View {
         #if os(macOS)
@@ -456,7 +457,16 @@ private struct QueueRow: View {
         #endif
     }
 
+    /// Plays what is cached so far and fetches the rest as it goes, while the caching carries on (#1264).
+    private func play() { store.playing = store.savedChannel(item) }
+
     @ViewBuilder private var menu: some View {
+        if item.playsWhileCaching {
+            Button(L10n.text("Play Now"), systemImage: "play.fill", action: play)
+        } else if item.streams == false {
+            // A file its server sends whole, or one in two halves: nothing of it plays until all of it is here.
+            Button(L10n.text("Plays After Caching Finishes"), systemImage: "play.slash") {}.disabled(true)
+        }
         if item.status == .queued, (position ?? 1) > 1 {
             Button(L10n.text("Cache Next"), systemImage: "arrow.up.to.line") { library.prioritize(item.id) }
         }
@@ -470,10 +480,8 @@ private struct QueueRow: View {
         let detail = [item.episode == item.title ? nil : item.episode, item.quality].compactMap { $0?.isEmpty == false ? $0 : nil }
         let tint = item.status == .failed ? Brand.rose : item.status == .paused || item.status == .queued ? Color.secondary : Brand.accent
         return HStack(spacing: 14) {
-            Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit).frame(width: 40)
-                .overlay { PosterImage(url: item.poster, headers: item.posterHeaders) }
-                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                .overlay { RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(Color.primary.opacity(0.1)) }
+            poster(width: 40, corner: 5)
+                .overlay { RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(Color.primary.opacity(0.1)).allowsHitTesting(false) }
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.title).font(.body.weight(.semibold)).lineLimit(1).help(item.title)
                 if !detail.isEmpty {
@@ -521,9 +529,7 @@ private struct QueueRow: View {
 
     private var regularRow: some View {
         HStack(spacing: 14) {
-            Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit).frame(width: DownloadMetrics.thumb)
-                .overlay { PosterImage(url: item.poster, headers: item.posterHeaders) }
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            poster(width: DownloadMetrics.thumb, corner: 8)
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(item.title).font(.headline).lineLimit(1)
@@ -542,6 +548,10 @@ private struct QueueRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 8) {
+                #if os(tvOS)
+                // The remote can't reach a poster in the row, so Play Now is a control of its own there.
+                if item.playsWhileCaching { control("play.rectangle.fill", L10n.text("Play Now"), action: play).accessibilityIdentifier("downloads.playNow") }
+                #endif
                 switch item.status {
                 case .paused, .failed:
                     control(item.status == .failed ? "arrow.clockwise" : "play.fill", L10n.text(item.status == .failed ? "Retry" : "Resume")) { library.resume(item.id) }
@@ -554,6 +564,33 @@ private struct QueueRow: View {
         }
         .padding(DownloadMetrics.thumb > 60 ? 18 : 12)
         .contentPanel(cornerRadius: 18)
+    }
+
+    /// The poster: once the download can play while it is cached (#1264), a button with a play mark over it.
+    @ViewBuilder private func poster(width: CGFloat, corner: CGFloat) -> some View {
+        let art = Color.clear.aspectRatio(2.0 / 3.0, contentMode: .fit).frame(width: width)
+            .overlay { PosterImage(url: item.poster, headers: item.posterHeaders) }
+            .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+        #if os(tvOS)
+        art
+        #else
+        if item.playsWhileCaching {
+            Button(action: play) {
+                art.overlay {
+                    Image(systemName: "play.fill").font(.system(size: width * 0.28, weight: .semibold)).foregroundStyle(.white)
+                        .frame(width: width * 0.62, height: width * 0.62)
+                        .background(.black.opacity(0.55), in: Circle())
+                }
+                .contentShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.text("Play Now"))
+            .accessibilityIdentifier("downloads.playNow")
+            .help(L10n.text("Play Now"))
+        } else {
+            art
+        }
+        #endif
     }
 
     private func status(compact: Bool) -> String {

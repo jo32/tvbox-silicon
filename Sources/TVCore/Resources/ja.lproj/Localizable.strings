@@ -2369,6 +2369,9 @@
 "Move “%@” to Top" = "「%@」を一番上へ移動";
 "They are asked from the top down. Control-click one to move it to the top." = "上から順に使われます。Control キーを押しながらクリックすると一番上へ移動できます。";
 "They are asked from the top down. Touch and hold one to move it to the top." = "上から順に使われます。長押しすると一番上へ移動できます。";
+"Play Now" = "今すぐ再生";
+"Plays After Caching Finishes" = "キャッシュ完了後に再生できます";
+"This video can play once it has finished caching." = "このビデオはキャッシュが完了すると再生できます。";
 "Double-tap the video to play or pause. With Double-Tap to Skip on, a double tap on the left or right skips back or forward instead." = "動画をダブルタップすると再生/一時停止します。「ダブルタップでスキップ」をオンにすると、左側または右側のダブルタップで早戻し・早送りします。";
 "Controls" = "コントロール";
 "Left" = "左";

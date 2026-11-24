@@ -2369,6 +2369,9 @@
 "Move “%@” to Top" = "將「%@」移到最前";
 "They are asked from the top down. Control-click one to move it to the top." = "音源從上往下依序使用。按住 Control 鍵點按一個音源，可將它移到最前。";
 "They are asked from the top down. Touch and hold one to move it to the top." = "音源從上往下依序使用。長按一個音源，可將它移到最前。";
+"Play Now" = "立即播放";
+"Plays After Caching Finishes" = "快取完成後才能播放";
+"This video can play once it has finished caching." = "此影片快取完成後才能播放。";
 "Double-tap the video to play or pause. With Double-Tap to Skip on, a double tap on the left or right skips back or forward instead." = "雙擊影片可播放或暫停。打開「雙擊快轉倒轉」後，雙擊左側或右側將改為倒轉或快轉。";
 "Controls" = "控制按鈕";
 "Left" = "左側";
