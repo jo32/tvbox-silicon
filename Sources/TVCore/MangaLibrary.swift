@@ -50,6 +50,14 @@ public enum MangaLibrary {
             read[comic]?.remove(chapter)
             if read[comic]?.isEmpty == true { read[comic] = nil }
         }
+        /// Drop a comic's marks, as when it leaves the history. Says whether anything went.
+        @discardableResult public mutating func forget(_ comic: String) -> Bool { read.removeValue(forKey: comic) != nil }
+        /// Keep only these comics' marks, so the file doesn't outgrow the history. Says whether anything went.
+        @discardableResult public mutating func keep(only comics: Set<String>) -> Bool {
+            let before = read.count
+            read = read.filter { comics.contains($0.key) }
+            return read.count != before
+        }
     }
 
     public static func load<T: Decodable>(_ name: String, as type: T.Type) -> T? {
