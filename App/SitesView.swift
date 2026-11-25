@@ -3949,11 +3949,18 @@ private struct AppColorScheme: ViewModifier {
 
 /// Opens a scroll view of episodes at one of them (#1173). `scrollTo` from the sheet's onAppear, or its first task,
 /// came before the sheet had laid out its lazy grid and left it at the top. The position is this modifier's own
-/// state, so scrolling redraws only it, not the page behind the sheet.
+/// state, so scrolling redraws only it, not the page behind the sheet. It is set once the scroll view appears rather
+/// than as the state's initial value: on iOS 17 an initial `scrollPosition(id:)` ran before the sheet's geometry and
+/// navigation bar inset settled, shifting the padded grid 16 pt to the left until the viewer scrolled and tucking
+/// the first row under the bar (#2203).
 struct OpensAtEpisode: ViewModifier {
+    let episode: Episode.ID?
     @State private var position: Episode.ID?
-    init(_ episode: Episode.ID?) { _position = State(initialValue: episode) }
-    func body(content: Content) -> some View { content.scrollPosition(id: $position, anchor: .center) }
+    init(_ episode: Episode.ID?) { self.episode = episode }
+    func body(content: Content) -> some View {
+        content.scrollPosition(id: $position, anchor: .center)
+            .task { if let episode { position = episode } }
+    }
 }
 
 /// The watch page's episode row, kept at the episode playing. Its position is this modifier's own state: as the page's
