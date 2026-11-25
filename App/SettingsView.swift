@@ -578,6 +578,9 @@ struct FormSettingsView: View {
     /// A source list, LX Music source or live plugin its menu asked to remove, waiting for the confirmation.
     @State private var removingExtra: SubscriptionExtra?
     @State private var searchQuery = ""
+    @State private var searching = false
+    /// The row a search result asked for, scrolled to once the page shows again.
+    @State private var jumpTarget: String?
 
     /// A live plugin, LX Music source, or comic or book source list, in its kind's section: its page, and in its menu
     /// on or off (music) and Remove.
@@ -613,7 +616,7 @@ struct FormSettingsView: View {
             heroSection
 
             // Who is signed in: their feedback points, and Pro.
-            Section { AccountSettingsRow() }
+            Section { AccountSettingsRow().settingsAnchor(.account) }
 
             // Right under the app, so a problem or an idea is never more than one click away.
             #if os(iOS)
@@ -633,13 +636,16 @@ struct FormSettingsView: View {
                 .buttonStyle(PressableStyle())
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
+                .settingsAnchor(.feedback)
             }
             #else
             Section {
                 SettingsLinkRow(symbol: "bubble.left.and.text.bubble.right.fill", tint: Brand.indigo, title: L10n.text("Send Feedback"),
                                 subtitle: L10n.text("Report a problem or share an idea")) { FeedbackView() }
+                    .settingsAnchor(.feedback)
                 SettingsWebRow(symbol: "paperplane.fill", tint: Brand.cyan, title: L10n.text("Telegram Group"),
                                subtitle: L10n.text("Chat with the developer and other users"), url: Support.telegram)
+                    .settingsAnchor(.telegram)
             }
             #endif
 
@@ -666,6 +672,7 @@ struct FormSettingsView: View {
                         Button(role: .destructive) { removingSubscription = entry } label: { Label(L10n.text("Remove"), systemImage: "trash") }
                             .tint(.red)
                     }
+                    .settingsAnchor(.subscription(entry.address))
                 }
                 // Next to the subscriptions they come from: hiding a source that stopped working, and showing again
                 // one hidden by mistake (#669, #704). The same list as the Sources page's Edit.
@@ -688,6 +695,7 @@ struct FormSettingsView: View {
                     // A row like the subscriptions above it, not the accent the form gives a button.
                     .tint(.primary)
                     .accessibilityIdentifier("settings.hiddenSources")
+                    .settingsAnchor(.hiddenSources)
                 }
                 // The same for Live TV: the built-in platforms aren't in any subscription that can be removed (#837).
                 if !store.allLiveSources.isEmpty {
@@ -707,19 +715,23 @@ struct FormSettingsView: View {
                     .formRowButton()
                     .tint(.primary)
                     .accessibilityIdentifier("settings.hiddenLive")
+                    .settingsAnchor(.hiddenLive)
                 }
                 // Dragging, rather than Move Up and Move Down on each one's page (#1184).
                 if store.subscriptions.count > 1 {
                     FormLink(symbol: "arrow.up.arrow.down", tint: .indigo, title: L10n.text("Arrange Subscriptions")) { ArrangeSubscriptionsView() }
+                    .settingsAnchor(.arrangeSubscriptions)
                 }
                 if store.subscriptions.count + SubscriptionExtra.all(store).count > 1 {
                     FormLink(symbol: "trash.fill", tint: .red, title: L10n.text("Remove Subscriptions")) { RemoveSubscriptionsView() }
+                    .settingsAnchor(.removeSubscriptions)
                 }
                 #if os(iOS)
                 // One row instead of an always-open field and three text buttons; the address goes in a sheet.
                 Button { addingSubscription = true } label: {
                     FormLabel(symbol: "plus", tint: .green, title: L10n.text("Add Subscription")).foregroundStyle(.primary)
                 }
+                .settingsAnchor(.addSubscription)
                 #else
                 TextField(L10n.text("Subscription URL (TVBox JSON, M3U or TXT)"), text: $store.subscriptionAddress, prompt: Text(L10n.text("Subscription URL (TVBox JSON, M3U or TXT)")))
                     .labelsHidden()
@@ -756,7 +768,7 @@ struct FormSettingsView: View {
             // its own kind's section rather than mixed in with the subscriptions (#1261), and managed and removed there.
             if store.extrasUnlocked || !store.livePlugins.isEmpty {
                 Section {
-                    ForEach(store.livePlugins.map(SubscriptionExtra.livePlugin)) { extraRow($0) }
+                    ForEach(store.livePlugins.map(SubscriptionExtra.livePlugin)) { extraRow($0).settingsAnchor(.extra($0)) }
                     let count = store.livePluginPlatforms.count
                     FormLink(symbol: "dot.radiowaves.left.and.right", tint: .red, title: L10n.text("Live Plugins"),
                              value: count == 0 ? nil : String(count)) { LivePluginsView() }
@@ -768,16 +780,17 @@ struct FormSettingsView: View {
 
             if !store.lxSources.isEmpty {
                 Section(L10n.text("Music")) {
-                    ForEach(store.lxSources.map(SubscriptionExtra.lxSource)) { extraRow($0) }
+                    ForEach(store.lxSources.map(SubscriptionExtra.lxSource)) { extraRow($0).settingsAnchor(.extra($0)) }
                 }
             }
 
             if !MangaStore.shared.repositories.isEmpty {
                 Section {
-                    ForEach(MangaStore.shared.repositories.map(SubscriptionExtra.manga)) { extraRow($0) }
+                    ForEach(MangaStore.shared.repositories.map(SubscriptionExtra.manga)) { extraRow($0).settingsAnchor(.extra($0)) }
                     let sources = MangaStore.shared.sources
                     FormLink(symbol: "books.vertical.fill", tint: .orange, title: L10n.text("Comic Sources"),
                              value: sources.isEmpty ? nil : String(sources.count)) { MangaSourcesView() }
+                        .settingsAnchor(.comicSources)
                 } header: {
                     Text(L10n.text("Manga"))
                 } footer: {
@@ -787,10 +800,11 @@ struct FormSettingsView: View {
 
             if !NovelStore.shared.lists.isEmpty || !NovelStore.shared.offers.isEmpty {
                 Section {
-                    ForEach(NovelStore.shared.lists.map { SubscriptionExtra.novel($0.address) }) { extraRow($0) }
+                    ForEach(NovelStore.shared.lists.map { SubscriptionExtra.novel($0.address) }) { extraRow($0).settingsAnchor(.extra($0)) }
                     let store = NovelStore.shared
                     FormLink(symbol: "text.book.closed.fill", tint: .green, title: L10n.text("Book Sources"),
                              value: L10n.text("%lld on", store.enabledKeys.count)) { NovelSourcesView() }
+                        .settingsAnchor(.bookSources)
                 } header: {
                     Text(L10n.text("Novels"))
                 } footer: {
@@ -801,12 +815,16 @@ struct FormSettingsView: View {
             Section(L10n.text("Accounts")) {
                 if store.extrasUnlocked {
                     FormLink(symbol: "play.tv.fill", tint: .pink, title: L10n.text("Bilibili"), value: bilibiliSummary) { BilibiliAccountView() }
+                        .settingsAnchor(.bilibili)
                     FormLink(symbol: "music.note", tint: .black, title: L10n.text("Douyin"), value: douyinSummary) { DouyinAccountView() }
+                        .settingsAnchor(.douyin)
                     ForEach(sourceSignIns, id: \.signIn.id) { entry in
                         FormLink(symbol: "play.rectangle.on.rectangle.fill", tint: .red, title: entry.signIn.name, value: entry.summary) { SourceAccountView(signIn: entry.signIn) }
+                            .settingsAnchor(.sourceSignIn(entry.signIn.id))
                     }
                 }
                 FormLink(symbol: "externaldrive.fill.badge.person.crop", tint: .brown, title: L10n.text("Cloud Drive Accounts"), value: cloudSummary) { CloudDriveView() }
+                    .settingsAnchor(.cloudDrive)
             }
 
             Section {
@@ -822,6 +840,7 @@ struct FormSettingsView: View {
                     }
                     .settingsSwitch()
                     .onChange(of: syncsWithICloud) { _, on in store.cloudSync?.setEnabled(on) }
+                    .settingsAnchor(.iCloudSync)
                 } footer: {
                     Text(SettingsNote.iCloud)
                 }
@@ -832,40 +851,50 @@ struct FormSettingsView: View {
             // deeper, so this page stays a short list of places.
             Section {
                 FormLink(symbol: AppSection.home.icon, tint: Brand.cyan, title: L10n.text("Watch Now")) { WatchNowSettingsView() }
+                    .settingsAnchor(.watchNow)
                 if AppIcons.isAvailable {
                     FormLink(symbol: "paintpalette.fill", tint: .pink, title: L10n.text("App Icon"), value: AppIcons.shared.title) { AppIconSettingsView() }
                         .accessibilityIdentifier("settings.appIcon")
+                        .settingsAnchor(.appIcon)
                 }
                 FormLink(symbol: "swatchpalette.fill", tint: .purple, title: L10n.text("Color Theme"), value: ColorThemes.shared.current.title) {
                     ColorThemeSettingsView()
                 }
                 .accessibilityIdentifier("settings.colorTheme")
+                .settingsAnchor(.colorTheme)
                 FormLink(symbol: "slider.horizontal.below.rectangle", tint: .orange, title: L10n.text("Playback")) { PlaybackSettingsView() }
+                    .settingsAnchor(.playback)
                 FormLink(symbol: "play.fill", tint: Brand.indigo, title: L10n.text("Play a URL")) { PlayURLView() }
-                EditTabBarRow()
+                    .settingsAnchor(.playURL)
+                EditTabBarRow().settingsAnchor(.editTabBar)
                 Toggle(isOn: $showsTabLabels) {
                     FormLabel(symbol: "dock.rectangle", tint: .gray, title: L10n.text("Tab Bar Labels"))
                 }
                 .settingsSwitch()
+                .settingsAnchor(.tabBarLabels)
                 if #available(iOS 26, *) {
                     Toggle(isOn: $collapsesTabBar) {
                         FormLabel(symbol: "arrow.down.right.and.arrow.up.left", tint: .gray, title: L10n.text("Collapse Tab Bar When Scrolling"))
                     }
                     .settingsSwitch()
                     .accessibilityIdentifier("settings.collapseTabBar")
+                    .settingsAnchor(.collapseTabBar)
                 }
             }
             #else
             Section {
                 FormLink(symbol: AppSection.home.icon, tint: Brand.cyan, title: L10n.text("Watch Now")) { WatchNowSettingsView() }
+                    .settingsAnchor(.watchNow)
                 if AppIcons.isAvailable {
                     FormLink(symbol: "paintpalette.fill", tint: .pink, title: L10n.text("App Icon"), value: AppIcons.shared.title) { AppIconSettingsView() }
                         .accessibilityIdentifier("settings.appIcon")
+                        .settingsAnchor(.appIcon)
                 }
                 FormLink(symbol: "swatchpalette.fill", tint: .purple, title: L10n.text("Color Theme"), value: ColorThemes.shared.current.title) {
                     ColorThemeSettingsView()
                 }
                 .accessibilityIdentifier("settings.colorTheme")
+                .settingsAnchor(.colorTheme)
                 // iPhone and iPad list the app's language in the Settings app; on the Mac it is hidden deep in System
                 // Settings, so it is picked here.
                 languagePickerRows
@@ -879,8 +908,10 @@ struct FormSettingsView: View {
                         FormLabel(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Show Danmaku"), subtitle: danmakuNote)
                     }
                     .settingsSwitch()
+                    .settingsAnchor(.showDanmaku)
                     FormLink(symbol: "slider.horizontal.3", tint: .teal, title: L10n.text("Danmaku Settings")) { DanmakuSettingsView() }
                         .accessibilityIdentifier("settings.danmakuSettings")
+                        .settingsAnchor(.danmakuSettings)
                     Toggle(isOn: $receivesCasts) {
                         FormLabel(symbol: "tv.and.mediabox.fill", tint: BilibiliMark.blue, title: L10n.text("Cast from the Bilibili App"),
                                   subtitle: L10n.text("With your phone on the same network, tap the TV button in a Bilibili video and choose %@.", L10n.text("Yingxia")))
@@ -888,6 +919,7 @@ struct FormSettingsView: View {
                     .onChange(of: receivesCasts) { _, on in
                         if on { BilibiliCastController.shared.start(store) } else { BilibiliCastController.shared.stop() }
                     }
+                    .settingsAnchor(.bilibiliCast)
                 }
                 Toggle(isOn: $receivesPlayOn) {
                     FormLabel(symbol: "play.tv.fill", tint: Brand.indigo, title: L10n.text("Play from Other Devices"),
@@ -897,10 +929,12 @@ struct FormSettingsView: View {
                 .onChange(of: receivesPlayOn) { _, on in
                     if on { PlayOnController.shared.start(store) } else { PlayOnController.shared.stop() }
                 }
+                .settingsAnchor(.playOn)
                 Toggle(isOn: $showsPlaybackInfo) {
                     FormLabel(symbol: "info.circle.fill", tint: .blue, title: L10n.text("Show Video Info"), subtitle: SettingsNote.playbackInfo)
                 }
                 .settingsSwitch()
+                .settingsAnchor(.showVideoInfo)
                 Picker(selection: Binding(get: { MacPlayerWindowSize(rawValue: playerWindowSize) ?? .keep },
                                           set: { playerWindowSize = $0.rawValue })) {
                     ForEach(MacPlayerWindowSize.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -910,6 +944,7 @@ struct FormSettingsView: View {
                               subtitle: L10n.text("The size a new player window opens at: the size it had last time, a multiple of the video's own pixel size, or the largest size that fits the screen."))
                 }
                 .accessibilityIdentifier("settings.playerWindowSize")
+                .settingsAnchor(.playerWindowSize)
                 // Where people look for it first (#1488): the switch, and where each title's times are set.
                 Toggle(isOn: $skipsIntros) {
                     FormLabel(symbol: "arrow.right.to.line", tint: .mint, title: L10n.text("Automatically skip intro and outro"), subtitle: SettingsNote.introOutro)
@@ -917,9 +952,13 @@ struct FormSettingsView: View {
                 .settingsSwitch()
                 .onAppear { skipsIntros = EpisodeSkipSettings.isAutomatic(defaults: store.playbackDefaults) }
                 .onChange(of: skipsIntros) { _, on in EpisodeSkipSettings.setAutomatic(on, defaults: store.playbackDefaults) }
+                .settingsAnchor(.skipIntroOutro)
                 FormLink(symbol: "captions.bubble.fill", tint: .orange, title: L10n.text("Subtitle Style")) { SubtitleStyleView() }
+                    .settingsAnchor(.subtitleStyle)
                 FormLink(symbol: "text.magnifyingglass", tint: .orange, title: L10n.text("Subtitle Sources")) { SubtitleSourcesView() }
+                    .settingsAnchor(.subtitleSources)
                 FormLink(symbol: "play.fill", tint: Brand.indigo, title: L10n.text("Play a URL")) { PlayURLView() }
+                    .settingsAnchor(.playURL)
             } header: {
                 Text(L10n.text("Playback"))
             }
@@ -930,12 +969,14 @@ struct FormSettingsView: View {
                             FormLabel(symbol: "wand.and.sparkles", tint: .purple, title: L10n.text("Sharper Picture"), subtitle: upscaleNote)
                         }
                         .settingsSwitch()
+                        .settingsAnchor(.sharperPicture)
                     }
                     if VideoEnhancement.canSmooth {
                         Toggle(isOn: $smoothsVideo) {
                             FormLabel(symbol: "film.stack", tint: .indigo, title: L10n.text("Smooth Motion (60 fps)"), subtitle: smoothNote)
                         }
                         .settingsSwitch()
+                        .settingsAnchor(.smoothMotion)
                     }
                 } header: {
                     Text(L10n.text("Picture"))
@@ -945,23 +986,29 @@ struct FormSettingsView: View {
 
             Section {
                 FormLink(symbol: "internaldrive", tint: .blue, title: L10n.text("Local Cache")) { CacheSettingsView() }
+                    .settingsAnchor(.localCache)
                 if store.extrasUnlocked {
                     FormLink(symbol: "cpu.fill", tint: .orange, title: L10n.text("JAR Runtime and Compatibility")) { RuntimeView() }
+                        .settingsAnchor(.jarRuntime)
                 }
                 FormLink(symbol: "doc.text.magnifyingglass", tint: .gray, title: L10n.text("Diagnostic Logs")) { DiagnosticsView() }
+                    .settingsAnchor(.diagnostics)
                 #if os(iOS)
                 // The two switches that send something off the device, with their notes, on a page of their own.
                 FormLink(symbol: "hand.raised.fill", tint: .blue, title: L10n.text("Privacy")) { PrivacySettingsView() }
+                    .settingsAnchor(.privacy)
                 #else
                 Toggle(isOn: $sendsErrorReports) {
                     FormLabel(symbol: "ladybug.fill", tint: .red, title: L10n.text("Send Error Reports"), subtitle: errorReportsNote)
                 }
                 .settingsSwitch()
                 .onChange(of: sendsErrorReports) { _, on in if !on { ErrorReports.shared.discard() } }
+                .settingsAnchor(.errorReports)
                 Toggle(isOn: $looksUpTMDB) {
                     FormLabel(symbol: "film.stack.fill", tint: .teal, title: L10n.text("Look Up Titles on TMDB"), subtitle: tmdbNote)
                 }
                 .settingsSwitch()
+                .settingsAnchor(.tmdbLookup)
                 #endif
             } header: {
                 Text(L10n.text("Advanced"))
@@ -993,6 +1040,7 @@ struct FormSettingsView: View {
                 // Rows that act in place still read like the rows around them, not like links.
                 .tint(.primary)
                 .disabled(updates.checking)
+                .settingsAnchor(.softwareUpdate)
                 }
                 if !updates.currentNotes.isEmpty {
                     Button(action: updates.showCurrentNotes) {
@@ -1004,6 +1052,7 @@ struct FormSettingsView: View {
                         }
                     }
                     .tint(.primary)
+                    .settingsAnchor(.releaseNotes)
                 }
                 FormLink(symbol: "doc.plaintext.fill", tint: .gray, title: L10n.text("Open Source Licenses")) { LicensesView() }
                     .id("settings.end")
@@ -1032,6 +1081,7 @@ struct FormSettingsView: View {
                         FormLabel(symbol: "checkmark.circle.fill", tint: .green, title: L10n.text("Yingxia is up to date"),
                                   subtitle: updates.lastChecked.map { L10n.text("Last checked %@", $0.formatted(date: .abbreviated, time: .shortened)) })
                     }
+                    .settingsAnchor(.softwareUpdate)
                 }
                 #if os(macOS)
                 if let installer = updates.installer {
@@ -1040,6 +1090,7 @@ struct FormSettingsView: View {
                                   subtitle: L10n.text("Yingxia downloads updates in the background and installs them the next time it quits."))
                     }
                     .settingsSwitch()
+                    .settingsAnchor(.autoInstallUpdates)
                 }
                 #endif
                 if !updates.currentNotes.isEmpty {
@@ -1047,6 +1098,7 @@ struct FormSettingsView: View {
                         FormLabel(symbol: "sparkles", tint: .purple, title: L10n.text("What's New in Version %@", updates.displayVersion))
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }.formRowButton()
+                    .settingsAnchor(.releaseNotes)
                 }
                 FormLink(symbol: "doc.plaintext.fill", tint: .gray, title: L10n.text("Open Source Licenses")) { LicensesView() }
                     .id("settings.end")
@@ -1058,6 +1110,15 @@ struct FormSettingsView: View {
             #endif
             }
         }.settingsRows() }
+        .task(id: jumpTarget) {
+            guard let target = jumpTarget else { return }
+            // Twice, as for `-qaScrollTo`: the first lands by estimated row heights, the second once they're laid out.
+            for delay in [0.15, 0.35] {
+                try? await Task.sleep(for: .seconds(delay))
+                withAnimation { proxy.scrollTo(target, anchor: .center) }
+            }
+            jumpTarget = nil
+        }
         #if DEBUG
         // `-qaScrollBottom 1` opens Settings at its end for screenshots; `-qaScrollTo <id>` at a group with that id.
         .task {
@@ -1073,7 +1134,7 @@ struct FormSettingsView: View {
         #endif
         }
         .settingsForm(L10n.text("Settings"))
-        .searchable(text: $searchQuery, prompt: Text(L10n.text("Search settings")))
+        .searchable(text: $searchQuery, isPresented: $searching, prompt: Text(L10n.text("Search settings")))
         .sheet(isPresented: $editingSources) { HiddenSourcesEditor() }
         .sheet(isPresented: $editingLive) { LiveSourcesEditor() }
         // An alert rather than a dialog: a dialog on the row never appeared after a swipe, and on the page it pointed
@@ -1224,6 +1285,9 @@ private enum SettingsSearchTarget: Hashable, Sendable {
     case colorTheme
     case playback
     case playURL
+    case editTabBar
+    case tabBarLabels
+    case collapseTabBar
     case language
     case showDanmaku
     case danmakuSettings
@@ -1246,6 +1310,30 @@ private enum SettingsSearchTarget: Hashable, Sendable {
     case autoInstallUpdates
     case releaseNotes
     case licenses
+
+    /// The id of its row on the page, which a search result scrolls to. Each setting is drawn once, on the page;
+    /// results only point at it. Rows that already had an id for `-qaScrollTo` keep it.
+    var anchor: String {
+        switch self {
+        case .subscription(let address): return "settings.subscription " + address
+        case .extra(let extra): return "settings.extra " + extra.id
+        case .sourceSignIn(let id): return "settings.signIn " + id
+        case .language: return "settings.language"
+        case .livePlugins: return "settings.livePlugins"
+        case .profiles: return "settings.profiles"
+        case .licenses: return "settings.end"
+        #if os(iOS)
+        // One row of two tiles on iPhone and iPad.
+        case .telegram: return Self.feedback.anchor
+        #endif
+        default: return "settings.search \(self)"
+        }
+    }
+}
+
+private extension View {
+    /// Marks the row a search result for `target` scrolls to.
+    func settingsAnchor(_ target: SettingsSearchTarget) -> some View { id(target.anchor) }
 }
 
 private extension FormSettingsView {
@@ -1279,12 +1367,28 @@ private extension FormSettingsView {
         } else {
             Section {
                 ForEach(matches) { item in
-                    searchRow(for: item.id)
+                    // The result takes you to the setting itself, as System Settings does: the page shows again,
+                    // scrolled to that row, so a setting has one row to keep up to date, not a second copy here.
+                    Button { jump(to: item.id) } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.title).foregroundStyle(.primary).lineLimit(1)
+                            Text(item.section).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .formRowButton()
+                    .tint(.primary)
                 }
-            } header: {
-                Text(L10n.text("Settings"))
             }
         }
+    }
+
+    /// Leaves the search and scrolls the page to `target`'s row (the `.task(id: jumpTarget)` on the page).
+    func jump(to target: SettingsSearchTarget) {
+        searching = false
+        searchQuery = ""
+        jumpTarget = target.anchor
     }
 
     var searchItems: [SettingsSearchItem<SettingsSearchTarget>] {
@@ -1399,6 +1503,14 @@ private extension FormSettingsView {
             keywords: ["playback", "player", "pip", "danmaku", "subtitle", "skip", "intro", "outro", "speed", "播放", "弹幕", "字幕", "画中画", "倍速", "跳过", "片头", "片尾"])
         add(.playURL, title: L10n.text("Play a URL"), section: secPlayback,
             keywords: ["url", "stream", "link", "播放链接", "串流"])
+        add(.editTabBar, title: L10n.text("Edit Tab Bar"), section: secGeneral, subtitle: L10n.text("Choose your tabs and their order."),
+            keywords: ["tab", "tabs", "order", "标签栏", "底部", "菜单"])
+        add(.tabBarLabels, title: L10n.text("Tab Bar Labels"), section: secGeneral,
+            keywords: ["tab", "labels", "标签栏", "文字"])
+        if #available(iOS 26, *) {
+            add(.collapseTabBar, title: L10n.text("Collapse Tab Bar When Scrolling"), section: secGeneral,
+                keywords: ["tab", "collapse", "scroll", "标签栏", "收起", "滚动"])
+        }
         #else
         add(.language, title: L10n.text("Language"), section: secGeneral,
             keywords: ["language", "locale", "chinese", "english", "japanese", "语言", "中文", "英文"])
@@ -1474,237 +1586,6 @@ private extension FormSettingsView {
             keywords: ["license", "open source", "third party", "开源", "协议", "许可"])
 
         return items
-    }
-
-    @ViewBuilder func searchRow(for target: SettingsSearchTarget) -> some View {
-        switch target {
-        case .account:
-            AccountSettingsRow()
-        case .feedback:
-            #if os(iOS)
-            Button { showsFeedback = true } label: {
-                FormLabel(symbol: "bubble.left.and.text.bubble.right.fill", tint: Brand.indigo, title: L10n.text("Send Feedback"),
-                          subtitle: L10n.text("Report a problem or share an idea"))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }.formRowButton()
-            #else
-            SettingsLinkRow(symbol: "bubble.left.and.text.bubble.right.fill", tint: Brand.indigo, title: L10n.text("Send Feedback"),
-                            subtitle: L10n.text("Report a problem or share an idea")) { FeedbackView() }
-            #endif
-        case .telegram:
-            SettingsWebRow(symbol: "paperplane.fill", tint: Brand.cyan, title: L10n.text("Telegram Group"),
-                           subtitle: L10n.text("Chat with the developer and other users"), url: Support.telegram)
-        case .subscription(let address):
-            if let entry = store.subscriptions.first(where: { $0.address == address }) {
-                let failure = store.subscriptionErrors[entry.address]
-                FormLink(symbol: failure == nil ? "list.bullet.rectangle.fill" : "exclamationmark.triangle.fill",
-                         tint: failure != nil ? .orange : entry.enabled ? .blue : .gray,
-                         title: entry.title, value: store.subscriptionValue(entry), warning: failure != nil) {
-                    SubscriptionDetailView(entry: entry)
-                }
-            }
-        case .hiddenSources:
-            Button { editingSources = true } label: {
-                FormLabel(symbol: "eye.slash.fill", tint: .teal, title: L10n.text("Hide or Show Sources"))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }.formRowButton()
-        case .hiddenLive:
-            Button { editingLive = true } label: {
-                FormLabel(symbol: "tv.fill", tint: .red, title: L10n.text("Hide or Show Live TV"))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }.formRowButton()
-        case .arrangeSubscriptions:
-            FormLink(symbol: "arrow.up.arrow.down", tint: .indigo, title: L10n.text("Arrange Subscriptions")) { ArrangeSubscriptionsView() }
-        case .removeSubscriptions:
-            FormLink(symbol: "trash.fill", tint: .red, title: L10n.text("Remove Subscriptions")) { RemoveSubscriptionsView() }
-        case .addSubscription:
-            #if os(iOS)
-            Button { addingSubscription = true } label: {
-                FormLabel(symbol: "plus", tint: .green, title: L10n.text("Add Subscription")).foregroundStyle(.primary)
-            }
-            #endif
-        case .livePlugins:
-            let count = store.livePluginPlatforms.count
-            FormLink(symbol: "dot.radiowaves.left.and.right", tint: .red, title: L10n.text("Live Plugins"),
-                     value: count == 0 ? nil : String(count)) { LivePluginsView() }
-        case .comicSources:
-            let sources = MangaStore.shared.sources
-            FormLink(symbol: "books.vertical.fill", tint: .orange, title: L10n.text("Comic Sources"),
-                     value: sources.isEmpty ? nil : String(sources.count)) { MangaSourcesView() }
-        case .bookSources:
-            FormLink(symbol: "text.book.closed.fill", tint: .green, title: L10n.text("Book Sources"),
-                     value: L10n.text("%lld on", NovelStore.shared.enabledKeys.count)) { NovelSourcesView() }
-        case .extra(let extra):
-            extraRow(extra)
-        case .bilibili:
-            FormLink(symbol: "play.tv.fill", tint: .pink, title: L10n.text("Bilibili"), value: bilibiliSummary) { BilibiliAccountView() }
-        case .douyin:
-            FormLink(symbol: "music.note", tint: .black, title: L10n.text("Douyin"), value: douyinSummary) { DouyinAccountView() }
-        case .sourceSignIn(let id):
-            if let entry = sourceSignIns.first(where: { $0.signIn.id == id }) {
-                FormLink(symbol: "play.rectangle.on.rectangle.fill", tint: .red, title: entry.signIn.name, value: entry.summary) {
-                    SourceAccountView(signIn: entry.signIn)
-                }
-            }
-        case .cloudDrive:
-            FormLink(symbol: "externaldrive.fill.badge.person.crop", tint: .brown, title: L10n.text("Cloud Drive Accounts"), value: cloudSummary) {
-                CloudDriveView()
-            }
-        case .profiles:
-            FormLink(symbol: "person.2.fill", tint: .teal, title: L10n.text("Profiles"), value: store.profile.title) { ProfilesView() }
-        case .iCloudSync:
-            Toggle(isOn: $syncsWithICloud) {
-                FormLabel(symbol: "icloud.fill", tint: .blue, title: L10n.text("iCloud Sync"), subtitle: SettingsNote.iCloud)
-            }
-            .settingsSwitch()
-            .onChange(of: syncsWithICloud) { _, on in store.cloudSync?.setEnabled(on) }
-        case .watchNow:
-            FormLink(symbol: AppSection.home.icon, tint: Brand.cyan, title: L10n.text("Watch Now")) { WatchNowSettingsView() }
-        case .appIcon:
-            FormLink(symbol: "paintpalette.fill", tint: .pink, title: L10n.text("App Icon"), value: AppIcons.shared.title) { AppIconSettingsView() }
-        case .colorTheme:
-            FormLink(symbol: "swatchpalette.fill", tint: .purple, title: L10n.text("Color Theme"), value: ColorThemes.shared.current.title) {
-                ColorThemeSettingsView()
-            }
-        case .playback:
-            #if os(iOS)
-            FormLink(symbol: "slider.horizontal.below.rectangle", tint: .orange, title: L10n.text("Playback")) { PlaybackSettingsView() }
-            #endif
-        case .playURL:
-            FormLink(symbol: "play.fill", tint: Brand.indigo, title: L10n.text("Play a URL")) { PlayURLView() }
-        case .language:
-            #if os(macOS)
-            languagePickerRows
-            #endif
-        case .showDanmaku:
-            #if os(macOS)
-            Toggle(isOn: $showsDanmaku) {
-                FormLabel(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Show Danmaku"), subtitle: danmakuNote)
-            }
-            .settingsSwitch()
-            #endif
-        case .danmakuSettings:
-            #if os(macOS)
-            FormLink(symbol: "slider.horizontal.3", tint: .teal, title: L10n.text("Danmaku Settings")) { DanmakuSettingsView() }
-            #endif
-        case .bilibiliCast:
-            #if os(macOS)
-            Toggle(isOn: $receivesCasts) {
-                FormLabel(symbol: "tv.and.mediabox.fill", tint: BilibiliMark.blue, title: L10n.text("Cast from the Bilibili App"),
-                          subtitle: L10n.text("With your phone on the same network, tap the TV button in a Bilibili video and choose %@.", L10n.text("Yingxia")))
-            }
-            .onChange(of: receivesCasts) { _, on in
-                if on { BilibiliCastController.shared.start(store) } else { BilibiliCastController.shared.stop() }
-            }
-            #endif
-        case .playOn:
-            #if os(macOS)
-            Toggle(isOn: $receivesPlayOn) {
-                FormLabel(symbol: "play.tv.fill", tint: Brand.indigo, title: L10n.text("Play from Other Devices"))
-            }
-            .settingsSwitch()
-            .onChange(of: receivesPlayOn) { _, on in
-                if on { PlayOnController.shared.start(store) } else { PlayOnController.shared.stop() }
-            }
-            #endif
-        case .showVideoInfo:
-            #if os(macOS)
-            Toggle(isOn: $showsPlaybackInfo) {
-                FormLabel(symbol: "info.circle.fill", tint: .blue, title: L10n.text("Show Video Info"), subtitle: SettingsNote.playbackInfo)
-            }
-            .settingsSwitch()
-            #endif
-        case .playerWindowSize:
-            #if os(macOS)
-            Picker(selection: Binding(get: { MacPlayerWindowSize(rawValue: playerWindowSize) ?? .keep },
-                                      set: { playerWindowSize = $0.rawValue })) {
-                ForEach(MacPlayerWindowSize.allCases, id: \.self) { Text($0.title).tag($0) }
-            } label: {
-                FormLabel(symbol: "rectangle.expand.vertical", tint: .indigo, title: L10n.text("Default Window Size"))
-            }
-            #endif
-        case .skipIntroOutro:
-            #if os(macOS)
-            Toggle(isOn: $skipsIntros) {
-                FormLabel(symbol: "arrow.right.to.line", tint: .mint, title: L10n.text("Automatically skip intro and outro"), subtitle: SettingsNote.introOutro)
-            }
-            .settingsSwitch()
-            .onAppear { skipsIntros = EpisodeSkipSettings.isAutomatic(defaults: store.playbackDefaults) }
-            .onChange(of: skipsIntros) { _, on in EpisodeSkipSettings.setAutomatic(on, defaults: store.playbackDefaults) }
-            #endif
-        case .subtitleStyle:
-            #if os(macOS)
-            FormLink(symbol: "captions.bubble.fill", tint: .orange, title: L10n.text("Subtitle Style")) { SubtitleStyleView() }
-            #endif
-        case .subtitleSources:
-            #if os(macOS)
-            FormLink(symbol: "text.magnifyingglass", tint: .orange, title: L10n.text("Subtitle Sources")) { SubtitleSourcesView() }
-            #endif
-        case .sharperPicture:
-            #if os(macOS)
-            Toggle(isOn: $upscalesVideo) {
-                FormLabel(symbol: "wand.and.sparkles", tint: .purple, title: L10n.text("Sharper Picture"), subtitle: upscaleNote)
-            }
-            .settingsSwitch()
-            #endif
-        case .smoothMotion:
-            #if os(macOS)
-            Toggle(isOn: $smoothsVideo) {
-                FormLabel(symbol: "film.stack", tint: .indigo, title: L10n.text("Smooth Motion (60 fps)"), subtitle: smoothNote)
-            }
-            .settingsSwitch()
-            #endif
-        case .localCache:
-            FormLink(symbol: "internaldrive", tint: .blue, title: L10n.text("Local Cache")) { CacheSettingsView() }
-        case .jarRuntime:
-            FormLink(symbol: "cpu.fill", tint: .orange, title: L10n.text("JAR Runtime and Compatibility")) { RuntimeView() }
-        case .diagnostics:
-            FormLink(symbol: "doc.text.magnifyingglass", tint: .gray, title: L10n.text("Diagnostic Logs")) { DiagnosticsView() }
-        case .privacy:
-            #if os(iOS)
-            FormLink(symbol: "hand.raised.fill", tint: .blue, title: L10n.text("Privacy")) { PrivacySettingsView() }
-            #endif
-        case .errorReports:
-            #if os(macOS)
-            Toggle(isOn: $sendsErrorReports) {
-                FormLabel(symbol: "ladybug.fill", tint: .red, title: L10n.text("Send Error Reports"), subtitle: errorReportsNote)
-            }
-            .settingsSwitch()
-            .onChange(of: sendsErrorReports) { _, on in if !on { ErrorReports.shared.discard() } }
-            #endif
-        case .tmdbLookup:
-            #if os(macOS)
-            Toggle(isOn: $looksUpTMDB) {
-                FormLabel(symbol: "film.stack.fill", tint: .teal, title: L10n.text("Look Up Titles on TMDB"), subtitle: tmdbNote)
-            }
-            .settingsSwitch()
-            #endif
-        case .softwareUpdate:
-            Button {
-                if updates.available.isEmpty { Task { await updates.check(manual: true) } } else { updates.show() }
-            } label: {
-                FormLabel(symbol: "arrow.triangle.2.circlepath", tint: .gray, title: L10n.text("Software Update"))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .formRowButton()
-            .disabled(updates.checking)
-        case .autoInstallUpdates:
-            #if os(macOS)
-            if let installer = updates.installer {
-                Toggle(isOn: Binding(get: { installer.automaticallyInstalls }, set: { installer.automaticallyInstalls = $0 })) {
-                    FormLabel(symbol: "arrow.down.circle.fill", tint: .blue, title: L10n.text("Install Updates Automatically"))
-                }
-                .settingsSwitch()
-            }
-            #endif
-        case .releaseNotes:
-            Button(action: updates.showCurrentNotes) {
-                FormLabel(symbol: "sparkles", tint: .purple, title: L10n.text("What's New in Version %@", updates.displayVersion))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }.formRowButton()
-        case .licenses:
-            FormLink(symbol: "doc.plaintext.fill", tint: .gray, title: L10n.text("Open Source Licenses")) { LicensesView() }
-        }
     }
 }
 
