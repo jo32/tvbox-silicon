@@ -128,6 +128,27 @@ private func temporaryLibrary() throws -> (LXSourceLibrary, URL, UserDefaults) {
     #expect(library.sources.isEmpty)
 }
 
+/// Some published sources (野草, 小花) compare the MD5 of their own text, `currentScriptInfo.rawScript`, with
+/// their server's before they send `inited`; with no text they never start.
+@Test func lxSourceReadsItsOwnText() async throws {
+    let (library, folder, _) = try temporaryLibrary()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let script = """
+    /*!
+     * @name 自校验音源
+     * @version 1
+     */
+    const { rawScript } = globalThis.lx.currentScriptInfo;
+    setTimeout(() => {
+        if (!rawScript.trim().startsWith('/*!') || !rawScript.includes('const { rawScript }')) throw new Error('服务器异常');
+        globalThis.lx.on('request', async () => 'https://a.example/1.mp3');
+        globalThis.lx.send('inited', { sources: { tx: { type: 'music', actions: ['musicUrl'], qualitys: ['128k'] } } });
+    }, 0);
+    """
+    let source = try await library.add(script: script, origin: nil, runtime: LXSourceRuntime())
+    #expect(source.sources == ["tx": ["128k"]] && source.info.name == "自校验音源")
+}
+
 @Test func lxChannelComesAfterTheSubscriptionsChannels() {
     struct Stub: MusicStreamProvider {
         let id: MusicProviderID; let platforms: Set<MusicPlatform>
