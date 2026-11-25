@@ -23,6 +23,26 @@ public actor LocalMediaServer {
         return base.appending(path: String(path.dropFirst(root.path.count + 1)))
     }
 
+    /// Whether `url` is one of this server's addresses: loopback, behind its token.
+    public nonisolated func serves(_ url: URL) -> Bool {
+        url.scheme == "http" && url.host() == "127.0.0.1" && url.pathComponents.dropFirst().first == token
+    }
+
+    /// `stale` on a new listener, on a new port: iOS and tvOS take back a suspended app's listening sockets, and the
+    /// old listener may still say it is ready while it refuses AVPlayer (-1004), so every saved download would
+    /// fail until the app was quit (#1761, #1905). Addresses that fail together share one new listener. Nil when
+    /// `stale` isn't one of this server's addresses.
+    public func relisten(_ stale: URL) async throws -> URL? {
+        guard serves(stale), let root else { return nil }
+        if starting == nil, base == nil || base?.port == stale.port {
+            listener?.cancel(); listener = nil; base = nil
+        }
+        let fresh = try await start(root: root)
+        var address = URLComponents(url: stale, resolvingAgainstBaseURL: false)
+        address?.port = fresh.port
+        return address?.url
+    }
+
     private func start(root: URL) async throws -> URL {
         // A suspended iOS app loses its sockets; a listener that is no longer ready is replaced.
         if let base, listener?.state == .ready { return base }

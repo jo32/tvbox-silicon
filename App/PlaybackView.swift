@@ -479,12 +479,13 @@ import IOKit.pwr_mgt
     }
 
     /// iOS and tvOS take back a suspended app's listening sockets: after a pause in the background, AVPlayer finds
-    /// the loopback server behind a repackaged file or a plugin's proxy refusing (-1004) and gives up 30 s later.
+    /// the loopback server behind a repackaged file, a plugin's proxy or a saved download refusing (-1004) and gives
+    /// up 30 s later.
     /// The server listens again, on a new port, and the episode opens there where it was. At most once a minute, so
     /// a server that stays down shows its error.
     private func recoverLoopback(_ code: Int?, channel: Channel, url: URL, generation active: UUID) -> Bool {
         guard let code, [NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost].contains(code),
-              Remux.isRemuxed(url) || EmbeddedJarHost.isPluginProxy(url),
+              Remux.isRemuxed(url) || EmbeddedJarHost.isPluginProxy(url) || LocalMediaServer.shared.serves(url),
               loopbackRecovered.map({ $0.duration(to: .now) > .seconds(60) }) ?? true else { return false }
         loopbackRecovered = .now
         let position = player.currentTime().seconds
@@ -492,7 +493,11 @@ import IOKit.pwr_mgt
         Diagnostics.shared.record(.warning, "player", "loopback refused code=\(code) at=\(position.isFinite ? Int(position) : -1)s; listening again")
         preparation = Task { [weak self] in
             var fresh: URL?, failure: Error?
-            do { fresh = Remux.isRemuxed(url) ? try await Remux.relisten(url) : try await EmbeddedJarHost.shared.recoverProxy(url) }
+            do {
+                fresh = Remux.isRemuxed(url) ? try await Remux.relisten(url)
+                    : LocalMediaServer.shared.serves(url) ? try await LocalMediaServer.shared.relisten(url)
+                    : try await EmbeddedJarHost.shared.recoverProxy(url)
+            }
             catch { failure = error }
             guard let self, self.generation == active, !Task.isCancelled else { return }
             guard let fresh else {
