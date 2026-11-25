@@ -1220,7 +1220,7 @@ struct SiteView: View {
     /// A drive source's folder: the page lists it in place of the source's home.
     var folder: Video? = nil
     /// The source's home as another page already has it (Watch Now's recommendations): shown at once, then refreshed.
-    var preview: (videos: [Video], categories: [TVCore.Category])? = nil
+    var preview: (videos: [Video], categories: [TVCore.Category], hasRecommendations: Bool)? = nil
     /// The category to open on (a Watch Now category row's heading) instead of the source's home.
     var category: TVCore.Category? = nil
     private var canLoad: Bool { site.canBrowse(jarURL: jarURL) }
@@ -1375,7 +1375,7 @@ struct SiteView: View {
         .screenTitle(isBilibiliSpace ? "" : folder?.name ?? site.name, shown: showsTopTitle).task {
             store.searchModel.suspend()
             if let preview, folder == nil, initialQuery.isEmpty {
-                if category != nil { browser.seed(categories: preview.categories) }
+                if category != nil { browser.seed(categories: preview.categories, hasRecommendations: preview.hasRecommendations) }
                 else { browser.seed(videos: preview.videos, categories: preview.categories) }
             }
             if canLoad && !browser.loaded {
@@ -1413,7 +1413,9 @@ struct SiteView: View {
         ChipRow {
             GlassGroup(spacing: 8) {
                 HStack(spacing: 8) {
-                    Chip(title: L10n.text("Recommendations"), selected: browser.query.isEmpty && browser.category.isEmpty) { query = ""; startRequest { await home() } }
+                    if browser.hasRecommendations {
+                        Chip(title: L10n.text("Recommendations"), selected: browser.query.isEmpty && browser.category.isEmpty) { query = ""; startRequest { await home() } }
+                    }
                     ForEach(browser.categories) { item in
                         Chip(title: item.name, selected: browser.query.isEmpty && browser.category == item.id) {
                             query = ""
