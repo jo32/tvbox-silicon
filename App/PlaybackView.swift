@@ -286,7 +286,7 @@ import IOKit.pwr_mgt
     /// The item is ready and has a finite duration, so there is a timeline to scrub. A live stream that
     /// isn't a platform room (an IPTV channel, say) only shows itself here, as an indefinite duration.
     private(set) var hasTimeline = false
-    /// 鏡像播放器狀態，供 AVKit 控制列以外的播放、靜音與音量控制使用。
+    /// Mirrors the player, for play, mute and volume controls drawn outside AVKit's controls.
     private(set) var paused = false
     private(set) var muted = false
     private(set) var volume: Float = 1
