@@ -89,10 +89,23 @@ public enum TelegramSource {
     private static func post(channel: String, id: Int, http: HTTPClient) async throws -> Post {
         if let html = try? await fetch(URL(string: "https://t.me/\(channel)/\(id)?embed=1")!, http: http),
            let post = posts(in: html, channel: channel).first(where: { $0.id == id }) { return post }
-        guard let post = try await latest(channel: channel, http: http).first(where: { $0.id == id }) else {
-            throw TVError.unsupported(L10n.text("This Telegram post is no longer in the channel's public preview."))
+        // The embed page didn't carry it: walk the preview pages until it shows up or they run out.
+        // The preview only holds about twenty posts, so looking at just the newest page misses older ones.
+        var before: Int? = nil
+        while true {
+            let url: URL
+            if let before {
+                url = URL(string: "https://t.me/s/\(channel)?before=\(before)")!
+            } else {
+                url = URL(string: "https://t.me/s/\(channel)")!
+            }
+            let html = try await fetch(url, http: http)
+            let page = Array(posts(in: html, channel: channel).reversed())
+            if let post = page.first(where: { $0.id == id }) { return post }
+            guard let oldest = page.last?.id, before.map({ oldest < $0 }) ?? true else { break }
+            before = oldest
         }
-        return post
+        throw TVError.unsupported(L10n.text("This Telegram post is no longer in the channel's public preview."))
     }
 
     private static func fetch(_ url: URL, http: HTTPClient) async throws -> String {
