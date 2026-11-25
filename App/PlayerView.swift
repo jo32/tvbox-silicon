@@ -1280,12 +1280,36 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
 
 /// A real document-style window: playback remains independent of library navigation.
 @MainActor final class PlayerWindowController: NSObject, NSWindowDelegate {
+    /// One for the app: the player window outlives the library window that opened it.
+    static let shared = PlayerWindowController()
     private var window: PlaybackWindow?
     private let session = PlaybackSession()
     private var onClose: (() -> Void)?
+    private weak var store: Store?
+    /// The channel the window was given last, so the store setting the same one again doesn't start it over.
+    private var presented: Channel?
 
-    func present(_ channel: Channel, store: Store, onClose: @escaping () -> Void) {
+    /// Opens, changes and closes the window as `store.playing` changes, for as long as the app runs. The library
+    /// window did this, so once it was closed while a video played, the episode the queue moved on to never reached
+    /// the player window: its Next and episode list did nothing, and auto-play stopped an episode later (#2107).
+    func follow(_ store: Store) {
+        guard self.store !== store else { return }
+        self.store = store
+        track()
+    }
+
+    private func track() {
+        guard let store else { return }
+        let channel = withObservationTracking { store.playing } onChange: { [weak self] in
+            Task { @MainActor [weak self] in self?.track() }
+        }
+        guard channel != presented else { return }
+        if let channel { present(channel, store: store) { [weak store] in store?.playing = nil } } else { close() }
+    }
+
+    private func present(_ channel: Channel, store: Store, onClose: @escaping () -> Void) {
         self.onClose = onClose
+        presented = channel
         let target: PlaybackWindow
         if let window { target = window }
         else {
@@ -1316,7 +1340,7 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
         target.makeKeyAndOrderFront(nil)
     }
 
-    func close() { window?.close() }
+    private func close() { window?.close() }
 
     func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
         (sender as? PlaybackWindow)?.resized(to: frameSize) ?? frameSize
@@ -1325,6 +1349,7 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     func windowWillStartLiveResize(_ notification: Notification) { window?.startsDrag() }
 
     func windowWillClose(_ notification: Notification) {
+        presented = nil
         session.stop()
         window?.contentView = nil
         window = nil
