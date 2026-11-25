@@ -281,9 +281,10 @@ import IOKit.pwr_mgt
     /// The item is ready and has a finite duration, so there is a timeline to scrub. A live stream that
     /// isn't a platform room (an IPTV channel, say) only shows itself here, as an indefinite duration.
     private(set) var hasTimeline = false
-    /// Mirrors the player, for play and mute buttons drawn outside AVKit's controls.
+    /// 鏡像播放器狀態，供 AVKit 控制列以外的播放、靜音與音量控制使用。
     private(set) var paused = false
     private(set) var muted = false
+    private(set) var volume: Float = 1
     private(set) var quality: Int?
     private var playing: Channel?
     /// What plays now, its live room or plugin address already resolved: what a TV is sent (#749).
@@ -667,6 +668,7 @@ import IOKit.pwr_mgt
     init() {
         let player = AVQueuePlayer()
         player.volume = PlaybackSession.storedVolume()
+        volume = player.volume
         // An episode ends paused on its last frame; only a queued next episode makes the queue move on.
         player.actionAtItemEnd = .pause
         #if DEBUG
@@ -1328,9 +1330,10 @@ import IOKit.pwr_mgt
         }
         // Every way of changing the player's sound goes through this property: AVKit's own slider, the Mac wheel
         // and arrow keys, and the Sleep Timer's fade. Keep the last level for the next launch.
-        volumeObservation = player.observe(\.volume, options: [.new]) { _, change in
+        volumeObservation = player.observe(\.volume, options: [.new]) { [weak self] _, change in
             guard let level = change.newValue else { return }
             UserDefaults.standard.set(Double(level), forKey: "playerVolume")
+            Task { @MainActor [weak self] in self?.volume = level }
         }
         sampler = Task { [weak self] in
             var history: [(date: Date, bytes: Int64)] = []
