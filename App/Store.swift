@@ -973,15 +973,20 @@ import TVCore
     /// The next episode's stream, resolved ahead so the player can queue it behind this one; nil when
     /// auto-play is off, there is no next episode, or the source can't resolve it now.
     func upcomingEpisode(after channel: Channel) async -> Channel? {
+        await upcomingEpisode(after: channel) { [weak self] in self?.playing == $0 }
+    }
+
+    /// `isCurrent` says whether `channel` still plays: a video floating in Picture in Picture plays with no `playing`.
+    func upcomingEpisode(after channel: Channel, isCurrent: (Channel) -> Bool) async -> Channel? {
         // Only while `channel` still plays: once the queue moves on, this was asked about the one before.
         if CloudFiles.isFile(channel.url) || channel.url.scheme == DownloadLibrary.scheme {
-            return autoPlayNext && playing == channel ? nextFile(after: channel) : nil
+            return autoPlayNext && isCurrent(channel) ? nextFile(after: channel) : nil
         }
         guard autoPlayNext, let catalog = catalog(for: channel), let next = nextEpisode(after: channel) else { return nil }
         do {
             let resolved: Channel
             if let ahead = await nextAhead(for: next) { resolved = ahead } else { resolved = try await catalog.client.playback(next) }
-            guard !Task.isCancelled, playing == channel else { return nil }
+            guard !Task.isCancelled, isCurrent(channel) else { return nil }
             return episodeChannel(resolved, video: catalog.video, episode: next, client: catalog.client)
         } catch {
             if !(error is CancellationError) { Diagnostics.shared.failure("catalog", "upcoming episode \(catalog.client.reportContext) flag=\(next.flag)", error) }
@@ -1029,6 +1034,13 @@ import TVCore
         cancelEpisodeSelection()
         remember(catalog.video, client: catalog.client, for: next)
         playing = next
+    }
+
+    /// The queue moved a video floating in Picture in Picture on to its next episode: the episode list follows, so the
+    /// one after can be queued too, and nothing opens over the app (#1719).
+    func followFloating(to next: Channel, from channel: Channel) {
+        guard let catalog = catalog(for: channel) else { return }
+        remember(catalog.video, client: catalog.client, for: next)
     }
 
     func catalog(for channel: Channel) -> PlaybackCatalog? {

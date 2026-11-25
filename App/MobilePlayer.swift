@@ -1832,8 +1832,19 @@ private struct BatteryGauge: View {
         if let parked, parked.session !== session { end() }
         parked = Parked(channel: channel, session: session, pip: pip)
         self.store = store
-        // Nothing comes next by itself while no player is open: the next episode would open the player over the app.
-        session.onPlaybackEnded = nil; session.onAdvance = nil; session.upcomingEpisode = nil; session.playsOn = { false }
+        // The window plays on into the next episode as the player does (#1719, #2127), but nothing opens over the app:
+        // the queue moves on inside the window, and the window's return to the app opens the player on the episode it
+        // reached. An episode that can't be queued (one the player converts as it plays) ends there.
+        session.onPlaybackEnded = nil
+        session.upcomingEpisode = { [weak self, weak store] in
+            guard let store, let channel = self?.parked?.channel else { return nil }
+            return await store.upcomingEpisode(after: channel) { [weak self] in self?.parked?.channel == $0 }
+        }
+        session.onAdvance = { [weak self, weak store, weak session] next in
+            guard let self, let parked = self.parked, parked.session === session else { return }
+            store?.followFloating(to: next, from: parked.channel)
+            self.parked = Parked(channel: next, session: parked.session, pip: parked.pip)
+        }
     }
 
     func holds(_ session: PlaybackSession) -> Bool { parked?.session === session }
