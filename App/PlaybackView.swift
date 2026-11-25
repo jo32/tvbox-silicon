@@ -1769,6 +1769,19 @@ extension PlaybackSession {
             else {
                 do { source = try await Remux.httpSource(address, headers: channel.headers) }
                 catch {
+                    if FLVLive.names(address), error is Remux.NoByteRanges {
+                        // CatPawOpen returns Huya and Douyu as HTTP-FLV streams whose servers ignore Range.
+                        // Keep seekable FLV files on the file path and repackage live streams as local HLS.
+                        do {
+                            prepared.url = try await FLVLive.open(address, headers: channel.headers)
+                            return prepared
+                        } catch is FLVLive.NotFLV {
+                            // Let the normal file path report the original conversion failure below.
+                        } catch {
+                            if !Task.isCancelled { Diagnostics.shared.failure("player", "flv live host=\(address.host() ?? "-")", error) }
+                            throw error
+                        }
+                    }
                     if !Task.isCancelled { Diagnostics.shared.failure("player", "remux link host=\(address.host() ?? "-")", error) }
                     source = nil
                 }
