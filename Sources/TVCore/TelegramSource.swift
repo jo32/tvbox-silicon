@@ -57,13 +57,17 @@ public enum TelegramSource {
         if let ids = params["ids"], let id = Int(ids) {
             return ["list": .array([.object(try details(try await post(channel: channel, id: id, http: http), channel: channel))])]
         }
-        let posts = try await latest(channel: channel, http: http)
+        let page = max(1, Int(params["pg"] ?? "") ?? 1)
+        let posts = try await fetchPage(channel: channel, page: page, http: http)
         if let query = params["wd"]?.trimmingCharacters(in: .whitespacesAndNewlines), !query.isEmpty {
             let found = posts.filter { $0.title.localizedCaseInsensitiveContains(query) || $0.text.localizedCaseInsensitiveContains(query) }
             return ["list": .array(found.map { .object(videoFields($0)) }), "pagecount": .number(1)]
         }
+        // The preview page holds about twenty posts; a non-empty page may have older ones, so the count
+        // stays high until a page comes back empty (#2234).
+        let pageCount = posts.isEmpty ? page : 1000
         return ["class": .array([.object(["type_id": .string("latest"), "type_name": .string(L10n.text("Latest"))])]),
-                "list": .array(posts.map { .object(videoFields($0)) }), "pagecount": .number(1)]
+                "list": .array(posts.map { .object(videoFields($0)) }), "pagecount": .number(pageCount)]
     }
 
     /// A direct media address plays as-is. A Telegram embed or comment page is read for the
@@ -80,8 +84,29 @@ public enum TelegramSource {
 
     /// The preview page's posts, newest first.
     private static func latest(channel: String, http: HTTPClient) async throws -> [Post] {
-        let html = try await fetch(URL(string: "https://t.me/s/\(channel)")!, http: http)
-        return Array(posts(in: html, channel: channel).reversed())
+        try await fetchPage(channel: channel, page: 1, http: http)
+    }
+
+    /// One page of the channel's posts, newest first. The preview page holds about twenty posts;
+    /// older ones come from `?before=<oldest id>`, so page N walks from the newest page down to it.
+    private static func fetchPage(channel: String, page: Int, http: HTTPClient) async throws -> [Post] {
+        var before: Int? = nil
+        var posts: [Post] = []
+        for _ in 1...page {
+            let html = try await fetch(previewURL(channel: channel, before: before), http: http)
+            posts = Array(posts(in: html, channel: channel).reversed())
+            guard let oldest = posts.last?.id else { return [] }
+            before = oldest
+        }
+        return posts
+    }
+
+    /// The preview page, or the older posts before a post id.
+    static func previewURL(channel: String, before: Int?) -> URL {
+        if let before {
+            return URL(string: "https://t.me/s/\(channel)?before=\(before)")!
+        }
+        return URL(string: "https://t.me/s/\(channel)")!
     }
 
     /// One post, from its embed page; the preview page is the fallback when the embed
