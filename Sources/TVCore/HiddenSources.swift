@@ -25,11 +25,23 @@ import Observation
         lookup = Set(saved)
     }
 
-    private func key(_ site: Site, origin: URL) -> String {
-        EpisodeSkipSettings.scope(origin: site.origin(or: origin), source: site.sourceKey, video: "")
+    public var isEmpty: Bool { lookup.isEmpty }
+
+    private func key(origin: URL, sourceKey: String) -> String {
+        EpisodeSkipSettings.scope(origin: origin, source: sourceKey, video: "")
     }
 
-    public func contains(_ site: Site, origin: URL) -> Bool { lookup.contains(key(site, origin: origin)) }
+    private func key(_ site: Site, origin: URL) -> String {
+        key(origin: site.origin(or: origin), sourceKey: site.sourceKey)
+    }
+
+    public func contains(_ site: Site, origin: URL) -> Bool {
+        !lookup.isEmpty && lookup.contains(key(site, origin: origin))
+    }
+
+    public func contains(_ context: PlaybackHistoryContext) -> Bool {
+        !lookup.isEmpty && lookup.contains(key(origin: context.origin, sourceKey: context.sourceKey))
+    }
 
     public func toggle(_ site: Site, origin: URL) {
         let key = key(site, origin: origin)

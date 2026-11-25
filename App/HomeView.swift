@@ -105,7 +105,7 @@ struct HomeView: View {
 
     /// A section that will be on the page once it is built. Empty data is skipped so a placeholder does not appear and then vanish.
     private func showsPlaceholder(_ config: Subscription) -> Bool {
-        (showsContinueWatching && !store.playbackHistory.entries.isEmpty)
+        (showsContinueWatching && !store.visibleHistory.isEmpty)
             || (showsPinnedSources && !store.pinnedSources.isEmpty)
             || showsRecommendations
             || (showsFavorites && !store.favorites.items.isEmpty)
@@ -113,8 +113,9 @@ struct HomeView: View {
     }
 
     @ViewBuilder private var sections: some View {
+        let history = showsContinueWatching ? store.visibleHistory : []
         VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-            if showsContinueWatching, !store.playbackHistory.entries.isEmpty { continueWatching }
+            if !history.isEmpty { continueWatching(history) }
             if let config = store.subscription {
                 if showsPinnedSources, store.orderedSites(config).contains(where: { store.pinnedSources.contains($0, origin: config.origin) }) {
                     pinnedSources(config)
@@ -131,7 +132,7 @@ struct HomeView: View {
 
     private func placeholders(_ config: Subscription) -> some View {
         VStack(alignment: .leading, spacing: Layout.sectionSpacing) {
-            if showsContinueWatching, !store.playbackHistory.entries.isEmpty {
+            if showsContinueWatching, !store.visibleHistory.isEmpty {
                 loadingSection(HomeSection.continueWatching.title, action: { openSection(.history) }) { cardRow }
             }
             if showsPinnedSources, !store.pinnedSources.isEmpty {
@@ -292,12 +293,12 @@ struct HomeView: View {
         }.accessibilityIdentifier("home.pinnedSources")
     }
 
-    private var continueWatching: some View {
+    private func continueWatching(_ entries: [PlaybackHistoryEntry]) -> some View {
         VStack(alignment: .leading, spacing: Layout.headerSpacing) {
             SectionHeader(title: L10n.text("Continue Watching")) { openSection(.history) }
             ChipRow {
                 HStack(spacing: Layout.cardSpacing) {
-                    ForEach(store.playbackHistory.entries.prefix(12)) { HistoryCard(entry: $0) }
+                    ForEach(entries.prefix(12)) { HistoryCard(entry: $0) }
                 }.padding(.vertical, 6)
             }
         }

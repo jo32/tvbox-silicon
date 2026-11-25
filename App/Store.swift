@@ -159,6 +159,8 @@ import TVCore
     var allLiveSources: [LiveSource] { subscription?.lives ?? livePluginPlatforms.map(\.source) }
     /// Live TV's sources: the ones the viewer hasn't hidden.
     var liveSources: [LiveSource] { allLiveSources.filter { !hiddenLiveSources.contains($0) } }
+    /// Playback history whose source is not hidden.
+    var visibleHistory: [PlaybackHistoryEntry] { playbackHistory.visibleEntries(hiding: hiddenSources) }
     /// The live playlists among `sources` by the subscription that lists them (#815).
     func livePlaylistGroups(_ sources: [LiveSource]) -> [LivePlaylistGroup] {
         LivePlaylistGroup.make(sources, subscriptions: subscriptions.filter(\.enabled).compactMap { entry in documents[entry.address].map { (entry, $0) } })

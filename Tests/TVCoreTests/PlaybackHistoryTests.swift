@@ -167,3 +167,54 @@ private func historyContext(video: String = "series", episode: String = "1", sou
     let twice = [Episode(id: "2-1", name: "Episode 2", address: "d1", flag: "third"), Episode(id: "2-2", name: "Episode 2", address: "d2", flag: "third")]
     #expect(entry.resumePosition(for: twice[0], among: line + twice) == nil)
 }
+
+@Test @MainActor func hiddenSourcesStayOutOfVisiblePlaybackHistoryUntilUnhidden() throws {
+    let suite = "history.hidden." + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let file = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".json")
+    defer { try? FileManager.default.removeItem(at: file) }
+
+    let subA = URL(string: "https://one.example/a.json")!
+    let subB = URL(string: "https://two.example/b.json")!
+    let mergedOrigin = subA
+    let siteA = Site(key: "dup", name: "Source A", type: 1, api: "https://a.example/api", raw: ["key": .string("dup")],
+                     provenance: SourceProvenance(origin: subA, spider: nil))
+    let siteB = Site(key: "dup@subB", name: "Source B", type: 1, api: "https://b.example/api", raw: ["key": .string("dup")],
+                     provenance: SourceProvenance(origin: subB, spider: nil))
+    let siteC = Site(key: "other", name: "Other", type: 1, api: "https://a.example/other", raw: ["key": .string("other")],
+                     provenance: SourceProvenance(origin: subA, spider: nil))
+
+    let episode = Episode(id: "1", name: "Episode 1", address: "a", flag: "line")
+    let history = PlaybackHistory(file: file, defaults: defaults)
+    history.record(PlaybackHistoryContext(origin: mergedOrigin, site: siteA, video: Video(id: "vA", name: "Show A"), episode: episode),
+                   position: 60, duration: 600, now: Date(timeIntervalSince1970: 10))
+    history.record(PlaybackHistoryContext(origin: mergedOrigin, site: siteB, video: Video(id: "vB", name: "Show B"), episode: episode),
+                   position: 60, duration: 600, now: Date(timeIntervalSince1970: 20))
+    history.record(PlaybackHistoryContext(origin: mergedOrigin, site: siteC, video: Video(id: "vC", name: "Show C"), episode: episode),
+                   position: 60, duration: 600, now: Date(timeIntervalSince1970: 30))
+
+    let hidden = HiddenSources(defaults: defaults)
+    #expect(history.visibleEntries(hiding: hidden).map(\.context.videoID) == ["vC", "vB", "vA"])
+
+    // Hiding siteA hides only its history, not another subscription's source with the same sourceKey.
+    hidden.insert(siteA, origin: mergedOrigin)
+    #expect(history.visibleEntries(hiding: hidden).map(\.context.videoID) == ["vC", "vB"])
+    #expect(history.entries.count == 3)
+
+    // Hiding a merged site whose key was renamed still matches its original sourceKey and provenance origin.
+    hidden.insert(siteB, origin: mergedOrigin)
+    #expect(history.visibleEntries(hiding: hidden).map(\.context.videoID) == ["vC"])
+
+    // Moving a subscription's address keeps its hidden source's history hidden.
+    let movedA = URL(string: "https://mirror.example/a.json")!
+    hidden.moveOrigin(from: subA, to: movedA)
+    history.moveOrigin(from: subA, to: movedA)
+    #expect(history.visibleEntries(hiding: hidden).map(\.context.videoID) == ["vC"])
+
+    // Unhiding brings the saved history back intact.
+    let movedSiteA = Site(key: "dup", name: "Source A", type: 1, api: "https://a.example/api", raw: ["key": .string("dup")],
+                          provenance: SourceProvenance(origin: movedA, spider: nil))
+    hidden.toggle(movedSiteA, origin: mergedOrigin)
+    #expect(history.visibleEntries(hiding: hidden).map(\.context.videoID) == ["vC", "vA"])
+}

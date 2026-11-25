@@ -10,13 +10,14 @@ struct PlaybackHistoryView: View {
     @State private var confirmsDelete = false
     @State private var deletionIDs = Set<String>()
     private var history: PlaybackHistory { store.playbackHistory }
+    private var visibleEntries: [PlaybackHistoryEntry] { store.visibleHistory }
     private var entries: [PlaybackHistoryEntry] {
-        history.entries.filter { query.isEmpty || $0.context.videoName.localizedCaseInsensitiveContains(query) || $0.context.sourceName.localizedCaseInsensitiveContains(query) }
+        visibleEntries.filter { query.isEmpty || $0.context.videoName.localizedCaseInsensitiveContains(query) || $0.context.sourceName.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
         Group {
-            if history.entries.isEmpty {
+            if visibleEntries.isEmpty {
                 EmptyPage(symbol: AppSection.history.icon, title: L10n.text("No Playback History Yet"),
                           message: L10n.text("Videos you watch appear here, ready to pick up where you left off."),
                           action: L10n.text("Browse Sources"), actionSymbol: AppSection.sites.icon, perform: { store.section = .sites })
@@ -29,11 +30,11 @@ struct PlaybackHistoryView: View {
         .tabTitle(L10n.text("Playback History"))
         #if !os(tvOS)
         // The page's actions live in the bar and, while managing, on a floating bar: both are the system's Liquid Glass.
-        .toolbar { if !history.entries.isEmpty { barActions } }
+        .toolbar { if !visibleEntries.isEmpty { barActions } }
         .safeAreaInset(edge: .bottom, spacing: 0) { if managing { selectionBar.transition(.move(edge: .bottom).combined(with: .opacity)) } }
         .animation(.smooth(duration: 0.25), value: managing)
         #endif
-        .onChange(of: history.entries.isEmpty) { _, empty in if empty { managing = false; selected.removeAll() } }
+        .onChange(of: visibleEntries.isEmpty) { _, empty in if empty { managing = false; selected.removeAll() } }
         #if DEBUG
         // `-qaManageHistory 1` opens the page already managing, with the first two titles selected.
         .onAppear {
@@ -108,7 +109,7 @@ struct PlaybackHistoryView: View {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button(L10n.text("Clear history"), systemImage: "trash", role: .destructive) {
-                        deletionIDs = Set(history.entries.map(\.id)); confirmsDelete = true
+                        deletionIDs = Set(visibleEntries.map(\.id)); confirmsDelete = true
                     }
                 } label: { Label(L10n.text("More"), systemImage: "ellipsis") }
             }
@@ -150,7 +151,7 @@ struct PlaybackHistoryView: View {
                     Label(L10n.text("Manage history"), systemImage: "checklist").lineLimit(1).fixedSize()
                 }
                 .controlButton().accessibilityIdentifier("history.manage")
-                Button { deletionIDs = Set(history.entries.map(\.id)); confirmsDelete = true } label: {
+                Button { deletionIDs = Set(visibleEntries.map(\.id)); confirmsDelete = true } label: {
                     Label(L10n.text("Clear history"), systemImage: "trash").lineLimit(1).fixedSize()
                 }
                 .controlButton()
