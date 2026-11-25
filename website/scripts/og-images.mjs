@@ -1,5 +1,5 @@
-// Renders the social preview images public/og/<lang>.jpg (1200x675): the Apple TV mockup's screen from the
-// install section, in each page language. Rerun after changing the mockups:
+// Renders the social preview images public/og/<lang>.jpg (1200x675): the first feature card's Apple TV
+// mockup screen, in each page language. Rerun after changing the mockups:
 //   npm run build:site && npx vite preview --port 4199   (in another terminal)
 //   node scripts/og-images.mjs [http://localhost:4199]
 // Needs Google Chrome; it drives headless Chrome over the DevTools protocol.
@@ -42,17 +42,16 @@ try {
   await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
   for (const [lang, path] of Object.entries(PAGES)) {
     // A saved language would redirect the page, so start each one clean.
-    await send("Page.navigate", { url: `${BASE}${path}#install-tv` });
+    await send("Page.navigate", { url: `${BASE}${path}` });
     await sleep(2500);
     const box = await evaluate(`(async () => {
       localStorage.clear();
-      document.getElementById('install-tv').click();
       document.querySelectorAll('.reveal').forEach((e) => e.classList.add('in'));
       await new Promise((r) => setTimeout(r, 900));
       document.querySelectorAll('img').forEach((i) => (i.loading = 'eager'));
       await Promise.all([...document.images].map((i) => i.decode().catch(() => 0)));
       await document.fonts.ready;
-      const r = document.querySelector('.showcase-art .screen').getBoundingClientRect();
+      const r = document.querySelector('.card .screen').getBoundingClientRect();
       return { x: r.left + scrollX, y: r.top + scrollY, w: r.width, h: r.height, lang: document.documentElement.lang };
     })()`);
     if (box.lang !== lang) throw new Error(`${path} rendered in ${box.lang}, not ${lang}`);

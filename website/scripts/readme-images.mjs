@@ -15,9 +15,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // [file, install tab to open first (or null), selector, index]
 const SHOTS = [
-  ["apple-tv.webp", "tv", ".showcase-art .device", 0],
-  ["mac.webp", "mac", ".showcase-art .device", 0],
-  ["iphone-ipad.webp", "ios", ".showcase-art .ios-pair", 0],
+  // apple-tv.webp, mac.webp and iphone-ipad.webp came from the install section's device mockups, which the site
+  // no longer shows (2026-11-24); the files in Docs/images stay as they are.
   ["live.webp", null, ".card .device", 0],
   ["search.webp", null, ".card .device", 1],
   ["source.webp", null, ".card .device", 2],
