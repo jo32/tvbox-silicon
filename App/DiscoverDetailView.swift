@@ -969,10 +969,17 @@ struct DiscoverSearchPresentation: ViewModifier {
     @Binding var isPresented: Bool
     @Environment(\.openRoute) private var openRoute
     @Environment(Store.self) private var store
+    /// This sheet's own name: the topmost catalog search sheet presents the player, so a sheet opened from
+    /// another one does not tear the player down (#1618).
+    @State private var token = UUID()
     func body(content: Content) -> some View {
         #if os(iOS)
         // Store handed in: the iPad app on a Mac presents a full-screen cover without the presenter's environment objects.
-        content.fullScreenCover(isPresented: $isPresented) { DiscoverSearchView().environment(store) }
+        content.fullScreenCover(isPresented: $isPresented) {
+            DiscoverSearchView(token: token).environment(store)
+                .onAppear { store.catalogSearchSheets.append(token) }
+                .onDisappear { store.catalogSearchSheets.removeAll { $0 == token } }
+        }
             // Search Sources on a detail page opened from here switches to the Search tab, which is behind this
             // full-screen sheet: close it so the source results show instead of the catalog search.
             .onChange(of: store.section) { if isPresented { isPresented = false } }
