@@ -93,6 +93,16 @@ public actor EmbeddedNodeHost {
         return moved
     }
 
+    /// Ends the bundle behind a media proxy address when it has run for `age` or longer, so that its next call starts it
+    /// afresh without the drive links it kept (`CatPawOpen.forgetLinks`). True when it was ended.
+    public func restart(behind url: URL, olderThan age: TimeInterval) async -> Bool {
+        guard Self.available, let control = try? await start(),
+              let body = try? JSONEncoder().encode(["restartBehind": JSONValue.string(url.absoluteString), "olderThan": .number(age * 1000)]),
+              let answer = try? await send(body, to: control),
+              let envelope = try? JSONDecoder().decode([String: JSONValue].self, from: answer) else { return false }
+        return envelope["result"] == .bool(true)
+    }
+
     private func send(_ body: Data, to control: Control) async throws -> Data {
         guard let port = control.port, let token = control.token else {
             throw TVError.unsupported(control.error ?? L10n.text("The CatPawOpen runtime stopped. Quit and reopen the app to use these sources."))
