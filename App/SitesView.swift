@@ -3759,6 +3759,9 @@ extension VideoDetailView {
 #if !os(tvOS)
 struct EpisodeDropdownLabel: View {
     let title: String
+    /// The 44 pt tap room around the capsule. Off in a `Menu`'s label: iOS 27 stretches the label's glass to the whole
+    /// label, which drew that capsule taller than the ones beside it (#1628). The menu takes the room outside instead.
+    var tapRoom = true
 
     var body: some View {
         HStack(spacing: 3) {
@@ -3773,7 +3776,7 @@ struct EpisodeDropdownLabel: View {
         .frame(minHeight: 32)
         #endif
         .glassOrFill(.regular.interactive(), Color.clear, in: Capsule())
-        .frame(minHeight: 44).contentShape(Rectangle())
+        .frame(minHeight: tapRoom ? 44 : nil).contentShape(Rectangle())
     }
 }
 #endif
