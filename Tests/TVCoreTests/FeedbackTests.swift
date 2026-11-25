@@ -23,14 +23,15 @@ import Testing
     let played = PlaybackHistoryContext(origin: origin, sourceKey: "lz", sourceName: "量子资源", videoID: "42",
                                         videoName: "庆余年", episodeID: "2", episodeName: "第2集", episodeFlag: "lzm3u8")
     let entry = PlaybackHistoryEntry(context: played, position: 754, duration: 3723, updatedAt: Date(timeIntervalSince1970: 1_792_843_200))
-    let text = Feedback.context(subscriptions: [SubscriptionEntry(address: "https://example.com/tv.json", name: "Home"),
+    let text = Feedback.context(subscriptions: [SubscriptionEntry(address: "https://example.com/u/secret/tv.json", name: "Home"),
                                                 SubscriptionEntry(address: "https://a.example/sub?token=abc&page=1", enabled: false)],
-                                errors: ["https://example.com/tv.json": "Timed out"], history: [entry], timeZone: .gmt)
+                                errors: ["https://example.com/u/secret/tv.json": "Timed out fetching https://example.com/u/secret/tv.json"],
+                                history: [entry], timeZone: .gmt)
     #expect(text == """
     Subscriptions:
-    - Home: https://example.com/tv.json
-      - failed: Timed out
-    - https://a.example/sub?token=***&page=1 (off)
+    - Home: https://example.com
+      - failed: Timed out fetching https://example.com
+    - https://a.example (off)
 
     Recently played:
     - 庆余年 · 第2集, 量子资源 (lz), 12:34 / 1:02:03, 2026-10-24 12:00:00Z
@@ -38,10 +39,15 @@ import Testing
     #expect(Feedback.context(subscriptions: [], history: []) == "Subscriptions:\n- none\n\nRecently played:\n- nothing")
 }
 
-@Test func feedbackMasksSignInsInAddresses() {
-    #expect(Feedback.shareable("http://me:secret@host.example/a.json") == "http://***@host.example/a.json")
-    #expect(Feedback.shareable("https://h.example/s?Key=1&sign=2&name=x") == "https://h.example/s?Key=***&sign=***&name=x")
+@Test func feedbackKeepsOnlyTheDomainInAddresses() {
+    #expect(Feedback.shareable("http://me:secret@host.example/a.json") == "http://host.example")
+    #expect(Feedback.shareable("http://me:secret@host.example:8080/u/secret-token/a.json?k=1#frag") == "http://host.example:8080")
+    #expect(Feedback.shareable("http://[::1]:8080/secret/tv.json") == "http://[::1]:8080")
+    #expect(Feedback.shareable("https://h.example/u/9f8e7d6c/s?t=1&name=x#sec") == "https://h.example")
+    #expect(Feedback.shareable("https://example.com/猫源/tv.json?t=secret") == "https://example.com")
+    #expect(Feedback.shareable("example.com/u/secret/tv.json?t=123") == "http://example.com")
     #expect(Feedback.shareable("file:///Users/someone/Documents/tv.json") == "file: tv.json")
+    #expect(Feedback.shareable("https://files.yingxia.invalid/%E7%8C%AB%E6%BA%90.json") == "file: 猫源.json")
     #expect(Feedback.shareable("not a url") == "not a url")
 }
 
