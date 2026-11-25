@@ -1322,7 +1322,7 @@ struct PlaybackSettingsView: View {
                 .settingsSwitch()
             }
             // The speed every video starts at, chosen here so it sticks across relaunches.
-            SettingsGroup(title: L10n.text("Playback Speed"), footer: L10n.text("Videos open at this speed. The in-player speed menu changes it for the video you're watching.")) {
+            SettingsGroup(title: L10n.text("Playback Speed"), footer: L10n.text("Each new title starts at this speed. A speed you pick in the player stays for that title's next episodes.")) {
                 Picker(selection: Binding(get: { playbackSpeed }, set: { playbackSpeed = $0; PlaybackSpeed.save($0) })) {
                     ForEach(PlaybackSpeed.speeds, id: \.self) { Text(PlaybackSpeed.speedLabel($0)).tag($0) }
                 } label: {
