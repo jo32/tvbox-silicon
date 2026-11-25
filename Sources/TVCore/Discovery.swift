@@ -5,7 +5,8 @@ extension Site {
     /// TVBox's `hide: 1` keeps a search-only source out of the source lists.
     public var hidden: Bool { raw["hide"]?.int == 1 }
     public func canBrowse(jarURL: URL?) -> Bool {
-        if isCloudFiles { return true }
+        // Cloud Files and Telegram channels are answered by the app itself, not by a spider.
+        if isCloudFiles || isTelegram { return true }
         let jarURL = spider(or: jarURL)
         if native { return true }
         if runsLitePort { return true }

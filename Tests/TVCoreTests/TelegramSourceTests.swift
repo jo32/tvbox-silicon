@@ -25,6 +25,19 @@ import Testing
     #expect(TelegramSource.channel(of: site) == "RMDJ33")
 }
 
+// The channel's subscription carries no spider, and its `csp_` api reads as a JAR class, so the
+// source lists, the home row and search left it out (#2012).
+@Test func telegramChannelIsBrowsableWithoutASpider() {
+    let origin = URL(string: "https://t.me/RMDJ33")!
+    let site = TelegramSource.subscription("RMDJ33", origin: origin).sites[0]
+    #expect(site.canBrowse(jarURL: nil))
+    // Merged with another subscription that has a JAR: the channel's own subscription still has none.
+    var merged = site
+    merged.provenance = SourceProvenance(origin: origin, spider: nil)
+    #expect(merged.canBrowse(jarURL: URL(string: "https://example.com/spider.jar")))
+    #expect(SourceLists.browsable([merged], jarURL: nil, userHidden: { _ in false }).map(\.key) == [site.key])
+}
+
 @Test func telegramPreviewPostsCarryTitlesPostersAndEpisodeLinks() {
     let posts = TelegramSource.posts(in: telegramPreview, channel: "RMDJ33")
     #expect(posts.count == 2)
