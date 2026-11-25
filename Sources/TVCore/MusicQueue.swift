@@ -55,6 +55,13 @@ public struct MusicQueue: Codable, Equatable, Sendable {
     /// Puts `new` at the end.
     public mutating func append(_ new: [MusicTrack]) { tracks.append(contentsOf: new) }
 
+    /// `list` already ends with the songs of `new`, a list of two or more: the album or playlist playing, or one just
+    /// added. Adding it to Up Next again adds nothing, since a second tap on a list's add button queued it twice (#1896).
+    /// One song may still go in again, to hear it once more.
+    public static func ends(_ list: [MusicTrack], with new: [MusicTrack]) -> Bool {
+        new.count > 1 && list.count >= new.count && list.suffix(new.count).map(\.id) == new.map(\.id)
+    }
+
     /// After a song that would not play, move on, unless several in a row failed: then the
     /// channels are down, and skipping on would only spend requests.
     public static let failuresBeforeStopping = 3
