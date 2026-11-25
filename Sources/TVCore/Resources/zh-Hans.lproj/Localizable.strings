@@ -1056,6 +1056,8 @@
 "Play from Other Devices" = "接收其他设备的播放";
 "With Yingxia open here, your other devices on the same network can send it what they play: tap Play On in their player." = "在这里打开映匣后，同一网络中你的其他设备可以把正在播放的内容发送到这里：在它们的播放器中轻点“在其他设备上播放”。";
 "Touch and Hold Speed" = "长按倍速";
+"Start Speed" = "默认倍速";
+"Each new title starts at this speed. A speed you pick in the player stays for that title's next episodes." = "每部新的影片都以此倍速开始播放。在播放器中选的倍速会沿用到这部影片的后续剧集。";
 "Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go." = "长按视频画面以此速度播放。按住时左右滑动可调整倍速，向下滑动可在松手后保持。";
 "Slide sideways to change the speed, or down to keep it" = "左右滑动调整倍速，向下滑动锁定";
 "Slowed down to keep up with the connection" = "网速跟不上，已自动降低倍速";

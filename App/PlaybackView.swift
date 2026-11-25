@@ -36,6 +36,8 @@ import IOKit.pwr_mgt
     private(set) var position: Double = 0
     private(set) var duration: Double = 0
     private var skipScope: String?
+    /// The title whose speed the player keeps: another title starts at the speed set in Settings › Playback.
+    @ObservationIgnored private var speedScope: String?
     private var skipPass = EpisodeSkipPass()
     private var editingSkip = false
     private var resumeAfterEditing = false
@@ -906,8 +908,9 @@ import IOKit.pwr_mgt
     private func open(_ channel: Channel) {
         savedDownload = channel.url.scheme == DownloadLibrary.scheme
         stop(); error = nil; errorSymbol = "play.slash.fill"; loading = true; showsPicture = false; openedAt = .now; sourceDanmaku = []; qualities = []; quality = nil; switchNotice = nil
-        begin(channel)
-        isLive = LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live")
+        let live = LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live")
+        begin(channel, live: live)
+        isLive = live
         liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false
         loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false
         ErrorReports.shared.playing(live: isLive, format: channel.url.pathExtension, source: channel.historyContext?.sourceKey,
@@ -1524,13 +1527,24 @@ import IOKit.pwr_mgt
     }
 
     /// Per-episode state: where its history goes, where it resumes, the intro and outro to skip, its danmaku.
-    private func begin(_ channel: Channel) {
+    /// `live` is a live room: it always plays at 1×.
+    private func begin(_ channel: Channel, live: Bool) {
         historyContext = channel.historyContext
         requestedResumePosition = channel.resumePosition
         pendingResume = channel.resumePosition.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
         restoringPosition = false; restoredPosition = nil; checkingPicture = false; soughtAhead = nil
         skipScope = channel.skipScope
         skipSettings = skipScope.map { EpisodeSkipSettings.load(scope: $0, defaults: skipDefaults) } ?? EpisodeSkipSettings()
+        // A new title starts at the speed set in Settings › Playback, when one is set. Its next episodes and other
+        // lines keep the speed picked in the player (#1015, #1076). Channels without a title (live playlists, a
+        // pasted address) keep the speed as before; live rooms play at 1×.
+        if live {
+            player.defaultRate = 1
+        } else if let scope = channel.skipScope, scope != speedScope, let start = PlaybackSpeed.chosen() {
+            player.defaultRate = start
+        }
+        if channel.skipScope != nil { speedScope = channel.skipScope }
+        if player.rate != 0, boost == nil, player.rate != player.defaultRate { player.rate = player.defaultRate }
         skipPass = EpisodeSkipPass(); seekingSegment = false
         skipNotice = nil; introNoticeUntil = nil
         sourceSkips = channel.skips; skipOffer = nil; skippedSource = []; chapters = []
@@ -1934,7 +1948,8 @@ extension PlaybackSession {
         transfer = Transfer(); steps = []
         catalogDanmaku.clear(); sourceDanmaku = []
         error = nil; switchNotice = nil; quality = nil
-        begin(channel)
+        // A queued next episode is a point video, never live.
+        begin(channel, live: false)
         loading = upcoming.item.status != .readyToPlay
         playing = channel; automatic = upcoming.prepared.url
         externalSubtitles.begin(channel, playing: upcoming.prepared.url)

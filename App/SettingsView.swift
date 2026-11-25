@@ -1661,6 +1661,8 @@ struct PlaybackSettingsView: View {
     @AppStorage(WatchPage.fullScreenKey) private var startsFullScreen = false
     /// The profile's switch for intros and outros, kept with its times rather than in the app's own defaults.
     @State private var skipsIntros = false
+    /// The speed every video starts at (Settings › Playback), saved on change.
+    @State private var playbackSpeed = PlaybackSpeed.standard
     var body: some View {
         SettingsPage(title: L10n.text("Playback"), symbol: "slider.horizontal.below.rectangle") {
             // Where people look for it first (#1488): the switch, and where each title's times are set.
@@ -1700,6 +1702,16 @@ struct PlaybackSettingsView: View {
                     FormLabel(symbol: "sun.max.fill", tint: .yellow, title: L10n.text("Brightness and Volume"))
                 }
                 .settingsSwitch()
+            }
+            // The speed every video starts at, chosen here so it sticks across relaunches.
+            SettingsGroup(title: L10n.text("Playback Speed"), footer: L10n.text("Each new title starts at this speed. A speed you pick in the player stays for that title's next episodes.")) {
+                Picker(selection: Binding(get: { playbackSpeed }, set: { playbackSpeed = $0; PlaybackSpeed.save($0) })) {
+                    ForEach(PlaybackSpeed.speeds, id: \.self) { Text(PlaybackSpeed.speedLabel($0)).tag($0) }
+                } label: {
+                    FormLabel(symbol: "speedometer", tint: .orange, title: L10n.text("Start Speed"))
+                }
+                .accessibilityIdentifier("settings.playbackSpeed")
+                .onAppear { playbackSpeed = PlaybackSpeed.load() }
             }
             // The iPhone's video page, with the player at its top (#885, #1065); iPad's player opens full screen.
             if UIDevice.current.userInterfaceIdiom == .phone {
