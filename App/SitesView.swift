@@ -2163,11 +2163,10 @@ struct VideoDetailView: View {
     /// Discover's title page shows only the episodes, in its own rows (`embedded`).
     var embed: DetailEmbed? = nil
     #if !os(tvOS)
-    /// The episode row's All sheet, and where the row is scrolled to.
+    /// The episode row's All sheet.
     @State private var showsAllEpisodes = false
     /// The page of a long series the All sheet shows (#1464); nil for the one with the episode being watched.
     @State private var episodePage: Int?
-    @State private var episodeScroll: Episode.ID?
     #endif
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -3545,12 +3544,10 @@ extension VideoDetailView {
         // scroll view, which pushed the title under the player.
         ScrollView(.horizontal) { cards }
             .scrollIndicators(.never)
-            .scrollPosition(id: $episodeScroll, anchor: .center)
+            .modifier(FollowsEpisode(currentEpisodeID))
             // Edge to edge, unclipped: the tiles' glass shadow ran past the row and was cut off in a band (#293).
             .scrollClipDisabled()
             .padding(.horizontal, -rowInset)
-            .onAppear { episodeScroll = currentEpisodeID }
-            .onChange(of: currentEpisodeID) { _, id in if let id { withAnimation { episodeScroll = id } } }
         #endif
     }
 
@@ -3957,6 +3954,19 @@ struct OpensAtEpisode: ViewModifier {
     @State private var position: Episode.ID?
     init(_ episode: Episode.ID?) { _position = State(initialValue: episode) }
     func body(content: Content) -> some View { content.scrollPosition(id: $position, anchor: .center) }
+}
+
+/// The watch page's episode row, kept at the episode playing. Its position is this modifier's own state: as the page's
+/// it re-ran the whole page, every episode of the row included, for each episode scrolled past, and a row of thousands
+/// (an audiobook's chapters) stuttered too much to use (#2099).
+struct FollowsEpisode: ViewModifier {
+    let episode: Episode.ID?
+    @State private var position: Episode.ID?
+    init(_ episode: Episode.ID?) { self.episode = episode; _position = State(initialValue: episode) }
+    func body(content: Content) -> some View {
+        content.scrollPosition(id: $position, anchor: .center)
+            .onChange(of: episode) { _, id in if let id { withAnimation { position = id } } }
+    }
 }
 #endif
 
