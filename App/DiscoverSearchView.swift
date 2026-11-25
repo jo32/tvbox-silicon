@@ -5,6 +5,9 @@ import TVCore
 /// 30-point section headers, horizontal 136-point cards and circular people rails.
 struct DiscoverSearchView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(Store.self) private var store
+    /// This sheet's own name, so that the topmost catalog search sheet presents the player (#1618).
+    let token: UUID
     @State private var model = DiscoverSearchModel()
     @State private var path = NavigationPath()
     @State private var query = ""
@@ -66,6 +69,15 @@ struct DiscoverSearchView: View {
         .tint(.primary)
         .task(id: request) { expanded.removeAll(); await model.load(request) }
         .onChange(of: path.count) { _, value in if value > 0 { focused = false; filterSection = nil } }
+        #if os(iOS)
+        // The player over this sheet: the app's own cover is under the sheet, and a presentation from there
+        // tears the sheet down, so the viewer lands back on the page under it (#1618). The topmost sheet
+        // presents it, so a sheet opened from this one leaves the player alone.
+        .fullScreenCover(item: Binding(get: { store.catalogSearchSheets.last == token ? store.playing.map(PlayerSlot.init) : nil },
+                                         set: { if $0 == nil { store.playing = nil } })) {
+            PlaybackView(channel: $0.channel).environment(store)
+        }
+        #endif
     }
 
     private var topChrome: some View {

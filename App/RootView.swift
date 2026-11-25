@@ -434,7 +434,7 @@ private struct TVMoreView: View {
 
 #if !os(macOS)
 /// What the player cover shows; the same presentation whichever channel it holds.
-private struct PlayerSlot: Identifiable {
+struct PlayerSlot: Identifiable {
     let channel: Channel
     var id: String { "player" }
 }
@@ -460,7 +460,9 @@ private struct PlayerPresentation: ViewModifier {
         // Keyed by the channel, every change dismissed the player and presented a new one, so even a
         // queued episode would stop and load.
         // An iPhone watch page plays its own video at the top of the page (`VideoDetailView`).
-        content.fullScreenCover(item: Binding(get: { store.playsInWatchPage(playing) ? nil : playing.map(PlayerSlot.init) },
+        // A catalog search sheet on screen presents the player itself: a cover from here is under that sheet,
+        // and presenting over it tears the sheet down, so the viewer lands back on the page under it (#1618).
+        content.fullScreenCover(item: Binding(get: { store.playsInWatchPage(playing) || !store.catalogSearchSheets.isEmpty ? nil : playing.map(PlayerSlot.init) },
                                               set: { if $0 == nil, !store.playsInWatchPage(playing) { playing = nil } })) {
             // Handed in: the iPad app on a Mac presents a full-screen cover without the presenter's environment
             // objects, and every video stopped the app there ("No Observable object of type Store found").

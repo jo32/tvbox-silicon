@@ -95,6 +95,10 @@ import TVCore
         guard let scope = channel?.historyContext?.id else { return false }
         return watchPageScopes.contains(scope)
     }
+    /// The catalog search sheets on screen, the topmost last: a video picked in one plays in that sheet, so the
+    /// sheet presents the player itself. The app's own cover is under the sheet, and a second presentation from
+    /// there tears the sheet down (#1618).
+    var catalogSearchSheets: [UUID] = []
     var playbackCatalog: PlaybackCatalog?
     /// The Cloud Files folder the playing file came from; its next file plays after it.
     var filesFolder: CloudFilesFolder?
