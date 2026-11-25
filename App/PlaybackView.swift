@@ -25,6 +25,7 @@ import IOKit.pwr_mgt
     #endif
     var history = PlaybackHistory.shared
     var skipDefaults = UserDefaults.standard
+    @ObservationIgnored var recordCachedPlayback: ((Channel, Double, Double) -> Void)?
     private var historyContext: PlaybackHistoryContext?
     private var pendingResume: Double?
     /// Where the item was asked to open (`seekAhead`), until it is ready.
@@ -1515,10 +1516,12 @@ import IOKit.pwr_mgt
     }
     /// Records where the episode is; `item` is the episode's own, which the queue may already have moved past.
     func saveHistory(completed: Bool = false, item: AVPlayerItem? = nil) {
-        guard let context = historyContext, let item = item ?? self.item, item.status == .readyToPlay,
+        guard let item = item ?? self.item, item.status == .readyToPlay,
               pendingResume == nil, !restoringPosition, !seekingSegment else { return }
         let length = item.duration.seconds
         let time = completed && length.isFinite ? length : item.currentTime().seconds
+        if let playing { recordCachedPlayback?(playing, time, length.isFinite ? length : 0) }
+        guard let context = historyContext else { return }
         history.record(context, position: time, duration: length.isFinite ? length : 0)
         if let part = bilibiliPart { Task { await BilibiliHeartbeat.shared.report(part, seconds: time, final: completed) } }
     }

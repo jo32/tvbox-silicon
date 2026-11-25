@@ -36,6 +36,7 @@ struct MobilePlayerView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.scenePhase) private var scenePhase
+    @State private var decidedCacheOrientation = false
     @State private var clock = PlayerClock()
     @State private var tracks = MediaTracks()
     @State private var importsSubtitleFile = false
@@ -205,6 +206,13 @@ struct MobilePlayerView: View {
         // In with a fade; out at once, so the first frame replaces the wait with no pause or crossfade.
         .animation(waiting == nil ? nil : .easeInOut(duration: 0.7), value: waiting == nil)
         .animation(waiting == nil ? nil : .easeInOut(duration: 0.4), value: waiting?.starting)
+        .onChange(of: session.showsPicture ? session.subtitles.pictureSize : .zero, initial: true) { _, size in
+            guard !decidedCacheOrientation, layout == .screen, channel.url.scheme == DownloadLibrary.scheme,
+                  PlayerOrientation.available, horizontalSizeClass == .compact || verticalSizeClass == .compact,
+                  size.width > 0, size.height > 0 else { return }
+            decidedCacheOrientation = true
+            if size.width != size.height { PlayerOrientation.set(landscape: size.width > size.height) }
+        }
         .onAppear {
             clock.attach(session.player)
             speed = session.player.defaultRate
@@ -828,7 +836,10 @@ struct MobilePlayerView: View {
             // Only on a phone-sized screen: iPhone Duo's inner display (regular both ways) ignores orientations.
             if !inline, PlayerOrientation.available, horizontalSizeClass == .compact || verticalSizeClass == .compact {
                 let landscape = verticalSizeClass == .compact
-                Button { PlayerOrientation.set(landscape: !landscape) } label: {
+                Button {
+                    decidedCacheOrientation = true
+                    PlayerOrientation.set(landscape: !landscape)
+                } label: {
                     Image(systemName: landscape ? "rectangle.portrait.rotate" : "rectangle.landscape.rotate").font(.headline).frame(width: 22, height: 22)
                 }
                 .chromeButton()
