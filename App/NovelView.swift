@@ -262,7 +262,12 @@ struct NovelSearchView: View {
     @State private var failed = 0
     @State private var total = 0
     @State private var running = false
+    /// Set by Stop until the next search. Part of the search task's id, so Stop cancels it at once: it used to wait for
+    /// the next source to answer, and with every slot on a slow source that was up to half a minute (#1841).
     @State private var stopping = false
+    /// Which search is the current one: a cancelled search ends after the next one started, and must not clear its
+    /// `running`.
+    @State private var generation = 0
     @Environment(\.openRoute) private var openRoute
     /// Bumped to search the same words again (after the scope changes).
     @State private var round = 0
@@ -297,6 +302,13 @@ struct NovelSearchView: View {
         .background { Backdrop() }
         .catalogSearchable(text: $query, prompt: L10n.text("Title or author"))
         .onSubmit(of: .search) { submit(query) }
+        // Emptied, the field ends the search, and the page and the next visit start empty: the words used to come back
+        // whenever the page opened again (#1841).
+        .onChange(of: query) { _, text in
+            guard text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !submitted.isEmpty else { return }
+            submitted = ""; hits = []; searched = 0; failed = 0; submittedFromMemory = false
+            store.lastSearch = ("", [])
+        }
         #if os(tvOS)
         // The tvOS keyboard has no return key that submits: search as the text settles.
         .task(id: query) {
@@ -308,8 +320,8 @@ struct NovelSearchView: View {
         #if !os(tvOS)
         .toolbar { ToolbarItem { scopeMenu } }
         #endif
-        .onChange(of: store.searchGroup) { _, _ in if !submitted.isEmpty { submittedFromMemory = false; round += 1 } }
-        .task(id: "\(submitted)#\(round)") { await search() }
+        .onChange(of: store.searchGroup) { _, _ in if !submitted.isEmpty { submittedFromMemory = false; stopping = false; round += 1 } }
+        .task(id: "\(submitted)#\(round)#\(stopping)") { await search() }
         .onAppear {
             if submitted.isEmpty, !store.lastSearch.keyword.isEmpty {
                 query = store.lastSearch.keyword; hits = store.lastSearch.hits; submittedFromMemory = true; submitted = store.lastSearch.keyword
@@ -326,8 +338,9 @@ struct NovelSearchView: View {
 
     private func submit(_ text: String) {
         let keyword = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !keyword.isEmpty, keyword != submitted else { return }
+        guard !keyword.isEmpty, keyword != submitted || stopping else { return }
         submittedFromMemory = false
+        stopping = false
         submitted = keyword
     }
 
@@ -390,15 +403,18 @@ struct NovelSearchView: View {
     #endif
 
     private func search() async {
-        guard !submitted.isEmpty else { return }
+        guard !submitted.isEmpty, !stopping else { return }
         if submittedFromMemory { submittedFromMemory = false; return }
         let keyword = submitted
         let sources = store.searchScope
-        hits = []; searched = 0; failed = 0; total = sources.count; running = true; stopping = false
-        defer { running = false; stopping = false }
+        generation += 1
+        let mine = generation
+        hits = []; searched = 0; failed = 0; total = sources.count; running = true
+        defer { if generation == mine { running = false } }
+        // Cancelling this task (Stop, new words, leaving the page) ends the loop and drops the stream, which cancels the
+        // searches still running.
         for await answer in NovelBooks.search(keyword, in: sources) {
-            // Leaving the loop drops the stream, which cancels the searches still running.
-            if stopping { break }
+            if Task.isCancelled { break }
             searched += 1
             switch answer.result {
             case .success(let books): NovelBooks.merge(books, into: &hits, keyword: keyword)
