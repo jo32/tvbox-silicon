@@ -1,6 +1,7 @@
 #if os(iOS)
 import SwiftUI
 import TVCore
+import UIKit
 
 /// The phone's tab bar: up to four sections in the user's order, then More with the rest.
 /// Stored as "bar|more", each half a comma-separated list of `AppSection` raw values.
@@ -277,27 +278,15 @@ struct EditTabBarRow: View {
     }
 }
 
-/// One draggable list: the tab bar's sections, an "In More" divider, then More's. Dragging a section
-/// above the divider puts it in the tab bar; a fifth pushes the bar's last section down into More.
-/// Dragging one below it leaves the bar shorter, down to one section besides More.
-/// For the iPad's sidebar there is no divider: every section is listed, in order.
+/// Two draggable sections (Tab Bar and In More) on phone / compact screens, backed by a real two-section
+/// `UICollectionView` list so sections can be dragged across the boundary into any position—including the
+/// bar's last slot and More's first slot—without SwiftUI's `.moveDisabled` divider rejecting adjacent drops
+/// (#2208). Dragging a section into a full bar pushes the bar's previous last section down into More; dragging
+/// one into More leaves the bar shorter, down to one section besides More.
+/// For the iPad's sidebar there is no More section: every section is listed in one SwiftUI list.
 private struct TabBarEditor: View {
-    private enum Row: Hashable, Identifiable {
-        case section(AppSection), divider
-        var id: Self { self }
-        static func rows(_ tabs: PhoneTabs, sidebar: Bool) -> [Row] {
-            sidebar ? (tabs.bar + tabs.more).map(Row.section) : tabs.bar.map(Row.section) + [.divider] + tabs.more.map(Row.section)
-        }
-        static func tabs(_ rows: [Row], slots: Int) -> PhoneTabs {
-            let split = rows.firstIndex(of: .divider) ?? rows.count
-            let sections: (ArraySlice<Row>) -> [AppSection] = { $0.compactMap { if case .section(let s) = $0 { s } else { nil } } }
-            let above = sections(rows[..<split]), below = sections(rows[split...])
-            return PhoneTabs(bar: Array(above.prefix(slots)), more: Array(above.dropFirst(slots)) + below)
-        }
-    }
-
     @Environment(\.dismiss) private var dismiss
-    @State private var rows: [Row]
+    @State private var tabs: PhoneTabs
     @State private var done = false
     private let slots: Int
     private let sidebar: Bool
@@ -305,7 +294,7 @@ private struct TabBarEditor: View {
     private let save: (PhoneTabs) -> Void
 
     init(tabs: PhoneTabs, slots: Int, save: @escaping (PhoneTabs) -> Void) {
-        _rows = State(initialValue: Row.rows(tabs, sidebar: false))
+        _tabs = State(initialValue: tabs)
         self.slots = slots
         sidebar = false
         standard = PhoneTabs.standard.arranged(slots: slots)
@@ -314,54 +303,48 @@ private struct TabBarEditor: View {
 
     /// The iPad sidebar's sections in their order.
     init(sidebar order: [AppSection], save: @escaping (PhoneTabs) -> Void) {
-        _rows = State(initialValue: Row.rows(PhoneTabs(order: order), sidebar: true))
+        _tabs = State(initialValue: PhoneTabs(order: order))
         slots = PhoneTabs.wideBarSlots
         sidebar = true
         standard = PhoneTabs(order: PhoneTabs.sidebarStandard.filter(order.contains))
         self.save = save
     }
 
-    private var tabs: PhoneTabs { Row.tabs(rows, slots: slots) }
+    private var footerText: String {
+        L10n.text(sidebar ? "Drag to reorder. The tab bar and the sidebar show sections in this order."
+                  : slots > PhoneTabs.barSlots
+                  ? "Drag to reorder. Up to seven sections fit in the tab bar here, and four when the phone is closed; the rest stay in More."
+                  : "Drag to reorder. Up to four sections fit in the tab bar; the rest stay in More.")
+    }
 
     var body: some View {
-        List {
-            if !sidebar {
-                Section {
-                    TabBarPreview(bar: tabs.bar)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                }
-            }
-            Section {
-                ForEach(rows) { row in
-                    switch row {
-                    case .section(let section):
-                        HStack(spacing: 12) {
-                            SectionGlyph(section: section, size: 30)
-                            Text(section.title).font(.body.weight(.medium)).lineLimit(1)
+        Group {
+            if sidebar {
+                List {
+                    Section {
+                        ForEach(tabs.bar + tabs.more) { section in
+                            HStack(spacing: 12) {
+                                SectionGlyph(section: section, size: 30)
+                                Text(section.title).font(.body.weight(.medium)).lineLimit(1)
+                            }
+                            .padding(.vertical, 3)
+                            .listRowBackground(Surface().clipShape(.rect(cornerRadius: 16, style: .continuous)))
                         }
-                        .padding(.vertical, 3)
-                        .listRowBackground(Surface().clipShape(.rect(cornerRadius: 16, style: .continuous)))
-                    case .divider:
-                        heading(L10n.text("In More"), symbol: AppSection.more.icon)
-                            .padding(.top, 10)
-                            .listRowBackground(Color.clear)
-                            .moveDisabled(true)
+                        .onMove(perform: moveSidebar)
+                    } header: {
+                        heading(L10n.text("Tab Bar"), symbol: "dock.rectangle")
+                    } footer: {
+                        Text(footerText)
                     }
                 }
-                .onMove(perform: move)
-            } header: {
-                heading(L10n.text("Tab Bar"), symbol: "dock.rectangle")
-            } footer: {
-                Text(L10n.text(sidebar ? "Drag to reorder. The tab bar and the sidebar show sections in this order."
-                               : slots > PhoneTabs.barSlots
-                               ? "Drag to reorder. Up to seven sections fit in the tab bar here, and four when the phone is closed; the rest stay in More."
-                               : "Drag to reorder. Up to four sections fit in the tab bar; the rest stay in More."))
+                .listRowSpacing(8)
+                .environment(\.editMode, .constant(.active))
+                .scrollContentBackground(.hidden)
+            } else {
+                TabBarCollectionView(tabs: $tabs, slots: slots, footerText: footerText)
+                    .ignoresSafeArea()
             }
         }
-        .listRowSpacing(8)
-        .environment(\.editMode, .constant(.active))
-        .scrollContentBackground(.hidden)
         .background { Backdrop() }
         .navigationTitle(L10n.text("Edit Tab Bar"))
         .navigationBarTitleDisplayMode(.inline)
@@ -382,7 +365,7 @@ private struct TabBarEditor: View {
                 Button(L10n.text("Done")) { done = true; dismiss() }.fontWeight(.semibold)
             }
             ToolbarItem(placement: .bottomBar) {
-                Button(L10n.text("Reset")) { withAnimation(.smooth) { rows = Row.rows(standard, sidebar: sidebar) } }
+                Button(L10n.text("Reset")) { withAnimation(.smooth) { tabs = standard } }
                     .disabled(tabs == standard)
             }
         }
@@ -394,12 +377,254 @@ private struct TabBarEditor: View {
             .textCase(nil)
     }
 
-    private func move(from source: IndexSet, to destination: Int) {
-        var next = rows
-        next.move(fromOffsets: source, toOffset: destination)
-        let tabs = Row.tabs(next, slots: slots)
-        guard !tabs.bar.isEmpty else { return } // The tab bar keeps at least one section besides More.
-        withAnimation(.smooth) { rows = Row.rows(tabs, sidebar: sidebar) }
+    private func moveSidebar(from source: IndexSet, to destination: Int) {
+        var order = tabs.bar + tabs.more
+        order.move(fromOffsets: source, toOffset: destination)
+        withAnimation(.smooth) { tabs = PhoneTabs(order: order) }
+    }
+}
+
+@MainActor @Observable private final class TabBarPreviewModel {
+    var bar: [AppSection]
+    init(bar: [AppSection]) { self.bar = bar }
+}
+
+private struct LiveTabBarPreview: View {
+    let model: TabBarPreviewModel
+    var body: some View { TabBarPreview(bar: model.bar) }
+}
+
+/// Real two-section `UICollectionView` list for editing the phone's tab bar and More sections.
+private struct TabBarCollectionView: UIViewControllerRepresentable {
+    @Binding var tabs: PhoneTabs
+    let slots: Int
+    let footerText: String
+
+    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
+
+    func makeUIViewController(context: Context) -> ContainerController {
+        let collectionView = UICollectionView(frame: .zero, collectionViewLayout: Self.makeLayout())
+        collectionView.backgroundColor = .clear
+        collectionView.allowsSelection = false
+        collectionView.delegate = context.coordinator
+        context.coordinator.configure(collectionView)
+        context.coordinator.apply(tabs, animated: false)
+        return ContainerController(collectionView: collectionView)
+    }
+
+    func updateUIViewController(_ controller: ContainerController, context: Context) {
+        context.coordinator.parent = self
+        context.coordinator.previewModel.bar = tabs.bar
+        context.coordinator.apply(tabs, animated: true)
+    }
+
+    private static func makeLayout() -> UICollectionViewCompositionalLayout {
+        UICollectionViewCompositionalLayout { sectionIndex, environment in
+            var config = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
+            config.backgroundColor = .clear
+            config.showsSeparators = false
+            switch Section(rawValue: sectionIndex) {
+            case .preview:
+                config.headerMode = .none
+                config.footerMode = .none
+            case .bar:
+                config.headerMode = .supplementary
+                config.footerMode = .none
+            case .more:
+                config.headerMode = .supplementary
+                config.footerMode = .supplementary
+            case nil:
+                break
+            }
+            let section = NSCollectionLayoutSection.list(using: config, layoutEnvironment: environment)
+            if sectionIndex != Section.preview.rawValue {
+                section.interGroupSpacing = 8
+            }
+            return section
+        }
+    }
+
+    enum Section: Int, Hashable, Sendable {
+        case preview = 0, bar = 1, more = 2
+    }
+
+    enum Item: Hashable, Sendable {
+        case preview
+        case section(AppSection)
+        var section: AppSection? {
+            if case .section(let value) = self { value } else { nil }
+        }
+    }
+
+    final class ContainerController: UIViewController {
+        let collectionView: UICollectionView
+        init(collectionView: UICollectionView) {
+            self.collectionView = collectionView
+            super.init(nibName: nil, bundle: nil)
+        }
+        @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
+        override func loadView() {
+            view = collectionView
+            setContentScrollView(collectionView)
+        }
+    }
+
+    @MainActor final class Coordinator: NSObject, UICollectionViewDelegate {
+        var parent: TabBarCollectionView
+        let previewModel: TabBarPreviewModel
+        private var dataSource: UICollectionViewDiffableDataSource<Section, Item>?
+
+        init(parent: TabBarCollectionView) {
+            self.parent = parent
+            previewModel = TabBarPreviewModel(bar: parent.tabs.bar)
+        }
+
+        func configure(_ collectionView: UICollectionView) {
+            let previewReg = UICollectionView.CellRegistration<UICollectionViewListCell, Void> { [previewModel] cell, _, _ in
+                cell.contentConfiguration = UIHostingConfiguration {
+                    LiveTabBarPreview(model: previewModel)
+                }
+                .margins(.horizontal, 0)
+                .margins(.vertical, 4)
+                cell.automaticallyUpdatesBackgroundConfiguration = false
+                cell.backgroundConfiguration = .clear()
+            }
+
+            let sectionReg = UICollectionView.CellRegistration<UICollectionViewListCell, AppSection> { cell, _, section in
+                cell.contentConfiguration = UIHostingConfiguration {
+                    HStack(spacing: 12) {
+                        SectionGlyph(section: section, size: 30)
+                        Text(section.title).font(.body.weight(.medium)).lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 3)
+                }
+                .margins(.horizontal, 16)
+                .margins(.vertical, 8)
+                cell.accessories = [.reorder(displayed: .always, options: .init(showsVerticalSeparator: false))]
+                cell.automaticallyUpdatesBackgroundConfiguration = false
+                var bg = UIBackgroundConfiguration.clear()
+                bg.backgroundColor = UIColor { traits in
+                    let palette = ColorThemes.shared.current.palette
+                    return UIColor(traits.userInterfaceStyle == .dark ? palette.surfaceDark : palette.surfaceLight)
+                }
+                bg.cornerRadius = 16
+                cell.backgroundConfiguration = bg
+            }
+
+            let headerReg = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
+                elementKind: UICollectionView.elementKindSectionHeader
+            ) { cell, _, indexPath in
+                let isMore = indexPath.section == Section.more.rawValue
+                let title = L10n.text(isMore ? "In More" : "Tab Bar")
+                let symbol = isMore ? AppSection.more.icon : "dock.rectangle"
+                cell.contentConfiguration = UIHostingConfiguration {
+                    Label(title, systemImage: symbol)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .margins(.horizontal, 16)
+                .margins(.top, isMore ? 10 : 0)
+                .margins(.bottom, 6)
+                cell.automaticallyUpdatesBackgroundConfiguration = false
+                cell.backgroundConfiguration = .clear()
+            }
+
+            let footerReg = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
+                elementKind: UICollectionView.elementKindSectionFooter
+            ) { [weak self] cell, _, _ in
+                let text = self?.parent.footerText ?? ""
+                cell.contentConfiguration = UIHostingConfiguration {
+                    Text(text)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .margins(.horizontal, 16)
+                .margins(.top, 8)
+                cell.automaticallyUpdatesBackgroundConfiguration = false
+                cell.backgroundConfiguration = .clear()
+            }
+
+            let dataSource = UICollectionViewDiffableDataSource<Section, Item>(collectionView: collectionView) { collectionView, indexPath, item in
+                switch item {
+                case .preview:
+                    collectionView.dequeueConfiguredReusableCell(using: previewReg, for: indexPath, item: ())
+                case .section(let section):
+                    collectionView.dequeueConfiguredReusableCell(using: sectionReg, for: indexPath, item: section)
+                }
+            }
+            dataSource.supplementaryViewProvider = { collectionView, kind, indexPath in
+                if kind == UICollectionView.elementKindSectionHeader {
+                    return collectionView.dequeueConfiguredReusableSupplementary(using: headerReg, for: indexPath)
+                }
+                return collectionView.dequeueConfiguredReusableSupplementary(using: footerReg, for: indexPath)
+            }
+            dataSource.reorderingHandlers.canReorderItem = { item in
+                if case .section = item { return true }
+                return false
+            }
+            dataSource.reorderingHandlers.didReorder = { [weak self] transaction in
+                self?.handleReorder(transaction)
+            }
+            self.dataSource = dataSource
+        }
+
+        func apply(_ tabs: PhoneTabs, animated: Bool) {
+            guard let dataSource else { return }
+            let current = dataSource.snapshot()
+            if current.sectionIdentifiers == [.preview, .bar, .more],
+               current.itemIdentifiers(inSection: .bar).compactMap(\.section) == tabs.bar,
+               current.itemIdentifiers(inSection: .more).compactMap(\.section) == tabs.more {
+                return
+            }
+            var snapshot = NSDiffableDataSourceSnapshot<Section, Item>()
+            snapshot.appendSections([.preview, .bar, .more])
+            snapshot.appendItems([.preview], toSection: .preview)
+            snapshot.appendItems(tabs.bar.map(Item.section), toSection: .bar)
+            snapshot.appendItems(tabs.more.map(Item.section), toSection: .more)
+            dataSource.apply(snapshot, animatingDifferences: animated)
+        }
+
+        private func handleReorder(_ transaction: NSDiffableDataSourceTransaction<Section, Item>) {
+            let final = transaction.finalSnapshot
+            let proposedBar = final.itemIdentifiers(inSection: .bar).compactMap(\.section)
+            let proposedMore = final.itemIdentifiers(inSection: .more).compactMap(\.section)
+            let previous = parent.tabs
+            let (bar, more) = TabBarReorder.reconcile(
+                previousBar: previous.bar,
+                previousMore: previous.more,
+                proposedBar: proposedBar,
+                proposedMore: proposedMore,
+                slots: parent.slots
+            )
+            let next = PhoneTabs(bar: bar, more: more)
+            previewModel.bar = next.bar
+            parent.tabs = next
+            if proposedBar != next.bar || proposedMore != next.more {
+                Task { @MainActor [weak self] in
+                    self?.apply(next, animated: true)
+                }
+            }
+        }
+
+        func collectionView(
+            _ collectionView: UICollectionView,
+            targetIndexPathForMoveOfItemFromOriginalIndexPath originalIndexPath: IndexPath,
+            atCurrentIndexPath currentIndexPath: IndexPath,
+            toProposedIndexPath proposedIndexPath: IndexPath
+        ) -> IndexPath {
+            if proposedIndexPath.section == Section.preview.rawValue {
+                return IndexPath(item: 0, section: Section.bar.rawValue)
+            }
+            if originalIndexPath.section == Section.bar.rawValue,
+               parent.tabs.bar.count <= 1,
+               proposedIndexPath.section != Section.bar.rawValue {
+                return IndexPath(item: 0, section: Section.bar.rawValue)
+            }
+            return proposedIndexPath
+        }
     }
 }
 #endif
