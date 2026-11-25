@@ -1,6 +1,148 @@
 {
   "releases": [
     {
+      "version": "1.8.30",
+      "build": 68,
+      "date": "2026-11-25",
+      "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.30/Yingxia-1.8.30-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.30/Yingxia-1.8.30-macos-x86_64.dmg",
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "music.note.list",
+          "title": {
+            "en": "Your own music library",
+            "zh-Hans": "属于你的音乐库",
+            "zh-Hant": "屬於你的音樂庫",
+            "ja": "自分だけの音楽ライブラリ"
+          },
+          "detail": {
+            "en": "Make your own playlists with Add to Playlist in any song's menu. Like albums and playlists, search Liked Songs, open Go to Artist, and remove one entry from Recently Played. Artist and album pages show photos, notes and top songs from Apple Music, and songs from your sources get synced lyrics.",
+            "zh-Hans": "在任意歌曲的菜单里用“添加到歌单”建立自己的歌单。可以收藏专辑和歌单、在“我喜欢的歌曲”里搜索、用“查看歌手”打开歌手页，也能从“最近播放”里删除单条记录。歌手页和专辑页会显示来自 Apple Music 的照片、简介和热门歌曲，来自订阅源的歌曲也有同步歌词了。",
+            "zh-Hant": "在任一歌曲的選單裡用「加入歌單」建立自己的歌單。可以收藏專輯和歌單、在「我喜歡的歌曲」裡搜尋、用「查看歌手」打開歌手頁，也能從「最近播放」裡刪除單筆紀錄。歌手頁和專輯頁會顯示來自 Apple Music 的照片、簡介和熱門歌曲，來自訂閱源的歌曲也有同步歌詞了。",
+            "ja": "曲のメニューの「プレイリストに追加」で自分のプレイリストを作れます。アルバムやプレイリストのお気に入り登録、「お気に入りの曲」の検索、「アーティストを表示」、「最近再生した曲」から 1 件だけ削除することもできます。アーティストとアルバムのページには Apple Music の写真・紹介・人気曲が表示され、ソースの曲にも同期歌詞が付きます。"
+          }
+        },
+        {
+          "symbol": "forward.end",
+          "title": {
+            "en": "Songs flow into each other",
+            "zh-Hans": "歌曲衔接更顺",
+            "zh-Hant": "歌曲銜接更順",
+            "ja": "曲が途切れずにつながる"
+          },
+          "detail": {
+            "en": "The next song is found before the current one ends, so there is no more silence between songs. On iPhone, swipe the mini player sideways to change songs, and Siri and Shortcuts can play your Liked Songs. LX Music sources can be moved to the top in Music Settings.",
+            "zh-Hans": "当前歌曲结束前就会找好下一首，歌曲之间不再有空白。在 iPhone 上左右滑动迷你播放器即可切歌，Siri 和快捷指令也能播放“我喜欢的歌曲”。洛雪音乐自定义源可以在音乐设置里“移到最前”。",
+            "zh-Hant": "目前歌曲結束前就會找好下一首，歌曲之間不再有空白。在 iPhone 上左右滑動迷你播放器即可切歌，Siri 和捷徑也能播放「我喜歡的歌曲」。洛雪音樂自訂源可以在音樂設定裡「移到最前」。",
+            "ja": "今の曲が終わる前に次の曲を探しておくので、曲の間に無音が入らなくなりました。iPhone ではミニプレーヤーを横にスワイプして曲を切り替えられ、Siri とショートカットで「お気に入りの曲」を再生できます。LX Music のカスタムソースはミュージック設定で「一番上へ移動」できます。"
+          }
+        },
+        {
+          "symbol": "arrow.down.circle",
+          "title": {
+            "en": "Watch while it caches",
+            "zh-Hans": "边缓存边看",
+            "zh-Hant": "邊快取邊看",
+            "ja": "キャッシュしながら再生"
+          },
+          "detail": {
+            "en": "A video in Offline Cache plays before it has finished caching: tap its poster, or Play Now in its menu. What's already saved plays from the device, the rest comes from the source as you watch, and the cache keeps going.",
+            "zh-Hans": "离线缓存里的视频不用等缓存完成就能播放：点它的海报，或菜单里的“立即播放”。已缓存的部分从本机播放，其余部分边看边从源获取，缓存也会继续进行。",
+            "zh-Hant": "離線快取裡的影片不用等快取完成就能播放：點它的海報，或選單裡的「立即播放」。已快取的部分從本機播放，其餘部分邊看邊從源取得，快取也會繼續進行。",
+            "ja": "オフラインキャッシュの動画は、キャッシュが終わる前に再生できます。ポスターをタップするか、メニューの「今すぐ再生」を選んでください。保存済みの部分は端末から、残りは見ながらソースから取得し、キャッシュはそのまま続きます。"
+          }
+        },
+        {
+          "symbol": "photo.on.rectangle",
+          "title": {
+            "en": "See where you're seeking",
+            "zh-Hans": "拖动进度条时看到画面",
+            "zh-Hant": "拖動進度條時看到畫面",
+            "ja": "シーク中に場面を表示"
+          },
+          "detail": {
+            "en": "Dragging the seek bar shows a picture of that moment above the handle for streamed videos too, not just files, and a light tap marks each chapter and the start and end.",
+            "zh-Hans": "拖动进度条时，在线播放的视频也会在拖动点上方显示那一刻的画面（以前只有文件才有），经过章节和片头片尾时会有轻微震动。",
+            "zh-Hant": "拖動進度條時，線上播放的影片也會在拖動點上方顯示那一刻的畫面（以前只有檔案才有），經過章節和片頭片尾時會有輕微震動。",
+            "ja": "シークバーをドラッグすると、ファイルだけでなくストリーミング動画でもその場面の画像がつまみの上に表示され、チャプターや最初と最後で軽い振動が伝わります。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "hand.tap",
+          "title": {
+            "en": "A player that works your way",
+            "zh-Hans": "播放器按你的习惯来",
+            "zh-Hant": "播放器照你的習慣來",
+            "ja": "自分好みのプレーヤー"
+          },
+          "detail": {
+            "en": "Double-tapping the video now plays and pauses; turn on Double-Tap to Skip in Settings › Playback to skip instead. The Lock Button can sit on the right, the video tags above the seek bar can be hidden, the battery can show a percentage, and Picture in Picture can be turned off.",
+            "zh-Hans": "双击画面现在是播放或暂停；想快进快退的话，在“设置 › 播放”里打开“双击快进快退”。锁定按钮可以放在右边，进度条上方的视频标签可以隐藏，电量可以显示百分比，画中画也可以关闭。",
+            "zh-Hant": "雙擊畫面現在是播放或暫停；想快轉倒轉的話，在「設定 › 播放」裡打開「雙擊快轉倒轉」。鎖定按鈕可以放在右邊，進度條上方的影片標籤可以隱藏，電量可以顯示百分比，子母畫面也可以關閉。",
+            "ja": "動画をダブルタップすると再生／一時停止するようになりました。スキップしたい場合は「設定 › 再生」で「ダブルタップでスキップ」をオンにしてください。ロックボタンを右側に置いたり、シークバー上のビデオタグを隠したり、バッテリーを % で表示したり、ピクチャ・イン・ピクチャをオフにしたりできます。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "macwindow",
+          "title": {
+            "en": "Mac player window",
+            "zh-Hans": "Mac 播放窗口",
+            "zh-Hant": "Mac 播放視窗",
+            "ja": "Mac のプレーヤーウインドウ"
+          },
+          "detail": {
+            "en": "Click the picture to play or pause. Default Window Size in Settings opens new videos at 0.5× to 2× their size or to fit the screen; Keep Last Size stays the default. Resizing from a corner no longer flickers.",
+            "zh-Hans": "点一下画面即可播放或暂停。设置里的“默认窗口大小”可以让新视频按原始大小的 0.5× 到 2× 打开，或适合屏幕；默认仍是“保持上次大小”。拖动窗口边角缩放时不再闪烁。",
+            "zh-Hant": "點一下畫面即可播放或暫停。設定裡的「預設視窗大小」可以讓新影片以原始大小的 0.5× 到 2× 開啟，或符合螢幕；預設仍是「保持上次大小」。拖動視窗邊角縮放時不再閃爍。",
+            "ja": "画面をクリックすると再生／一時停止します。設定の「既定のウィンドウサイズ」で、新しい動画を元のサイズの 0.5×〜2× または画面に合わせて開けます（既定は「前回のサイズ」）。角をドラッグしてサイズを変えてもちらつかなくなりました。"
+          },
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "symbol": "paperplane",
+          "title": {
+            "en": "Public Telegram channels",
+            "zh-Hans": "Telegram 公开频道",
+            "zh-Hant": "Telegram 公開頻道",
+            "ja": "Telegram の公開チャンネル"
+          },
+          "detail": {
+            "en": "Add a public Telegram channel by pasting its t.me link as a subscription address. Its posts become a source you can browse and search, and their videos play in the app, without signing in to Telegram.",
+            "zh-Hans": "把 Telegram 公开频道的 t.me 链接当作订阅地址粘贴进来，就能添加这个频道。频道里的帖子会成为可浏览、可搜索的源，视频直接在 App 里播放，无需登录 Telegram。",
+            "zh-Hant": "把 Telegram 公開頻道的 t.me 連結當作訂閱位址貼上，就能加入這個頻道。頻道裡的貼文會成為可瀏覽、可搜尋的源，影片直接在 App 裡播放，不必登入 Telegram。",
+            "ja": "Telegram の公開チャンネルの t.me リンクを購読アドレスとして貼り付けると、そのチャンネルを追加できます。投稿は閲覧・検索できるソースになり、動画は Telegram にサインインせずにアプリ内で再生できます。"
+          }
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "The video player remembers its volume between launches. More Python sources load (those that declare a plain Spider class). The airing calendar moves on to the new week by itself. The book and comic source pages say which kind of source they filter.",
+            "zh-Hans": "视频播放器会记住音量，重新打开 App 也不变。更多 Python 源可以加载了（直接声明 Spider 类的那种）。追剧日历到了新的一周会自动更新。书源和漫画源页面的搜索框会写明筛选的是哪种源。",
+            "zh-Hant": "影片播放器會記住音量，重新打開 App 也不變。更多 Python 源可以載入了（直接宣告 Spider 類別的那種）。追劇日曆到了新的一週會自動更新。書源和漫畫源頁面的搜尋框會寫明篩選的是哪種源。",
+            "ja": "動画プレーヤーは音量を覚え、アプリを開き直しても変わりません。より多くの Python ソース（Spider クラスをそのまま宣言するもの）が読み込めるようになりました。放送カレンダーは新しい週になると自動で更新されます。書籍ソースと漫画ソースのページの検索欄に、どちらのソースを絞り込むかが表示されます。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.29",
       "build": 67,
       "date": "2026-11-24",
@@ -5637,11 +5779,11 @@
   ],
   "testflight": {
     "ios": {
-      "build": 67,
+      "build": 68,
       "link": "https://testflight.apple.com/join/dU6UNbzp"
     },
     "tvos": {
-      "build": 67,
+      "build": 68,
       "link": "https://testflight.apple.com/join/SSgWEwSr"
     }
   }

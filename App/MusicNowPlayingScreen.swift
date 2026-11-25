@@ -123,6 +123,7 @@ struct MusicNowPlayingScreen: View {
             Menu {
                 if let track = music.track {
                     FavoriteMenuButton(item: .music(track), name: track.title)
+                MusicPlaylistMenu(tracks: [track])
                     Divider()
                 }
                 if music.sourceStream != nil {

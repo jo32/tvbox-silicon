@@ -311,3 +311,18 @@ private struct PagedSongs: MusicCatalogSource {
     #expect(!MusicQueue(tracks: [tracks[0]]).skipsAfterFailure(consecutive: 0, wraps: true))
     #expect(MusicRepeatMode.off.next == .all && MusicRepeatMode.all.next == .one && MusicRepeatMode.one.next == .off)
 }
+
+// MARK: - Searching Liked Songs (#1854)
+
+@Test func likedSongsMatchEveryWordInTheTitleArtistsOrAlbum() {
+    let song = MusicTrack(platform: .qq, songID: "1", title: "晴天", artists: ["周杰伦", "Guest"], album: "叶惠美")
+    #expect(song.matches("晴天"))
+    #expect(song.matches("周杰伦 晴天"))
+    #expect(song.matches("guest"))
+    #expect(song.matches("叶惠美"))
+    #expect(song.matches("  "))
+    #expect(!song.matches("晴天 稻香"))
+    let latin = MusicTrack(platform: .netease, songID: "2", title: "Bohemian Rhapsody", artists: ["Queen"])
+    #expect(latin.matches("QUEEN rhap"))
+    #expect(latin.matches("Ｑｕｅｅｎ"))
+}

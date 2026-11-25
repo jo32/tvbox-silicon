@@ -67,6 +67,8 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
     public internal(set) var finished: Date?
     public internal(set) var cid: String?
     public internal(set) var duration: Double?
+    /// Whether it can play before it is whole (`TransferPlan.streams`); nil until its link has been looked at.
+    public internal(set) var streams: Bool?
 
     /// 0...1, by bytes where the total is known, else by pieces.
     public var fraction: Double {
@@ -77,6 +79,9 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
     public var isActive: Bool { status == .downloading || status == .finishing }
     /// Not finished: running, waiting, paused or failed.
     public var isPending: Bool { status != .completed }
+    /// Not finished, and it can play meanwhile (#1264): what is on the device plays from there, the rest from the
+    /// source as it is needed.
+    public var playsWhileCaching: Bool { isPending && streams == true }
 
     /// One show's episodes in episode order, by name without what drive sources put around it: a size tag first
     /// ("[2.3GB]Show.S09E16.mkv" sorted before "[2.9GB]Show.S09E15.mkv", so 14 played on into 16, #1022), the share's tag
@@ -289,6 +294,7 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
                 $0.kind = DownloadItem.Kind(rawValue: plan.kind.rawValue)
                 $0.quality = plan.label; $0.cid = plan.cid; $0.duration = plan.duration
                 $0.expected = plan.expected
+                $0.streams = plan.streams
             }
             tick()
         case .finishing:
@@ -356,11 +362,21 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
     }
 
     /// The file (or, for HLS, the loopback address) that plays a `tvbox-download://` address. An HDR MKV saved
-    /// before downloads became MP4s is rewrapped first, which `progress` follows (0...1).
+    /// before downloads became MP4s is rewrapped first, which `progress` follows (0...1). An unfinished download
+    /// that `playsWhileCaching` plays from the loopback server (`DownloadStream`).
     public func playbackAddress(for url: URL, progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws -> URL {
-        guard url.scheme == Self.scheme, let id = url.host(), let item = item(id: id), item.status == .completed, var media = item.media else {
+        guard url.scheme == Self.scheme, let id = url.host(), let item = item(id: id) else {
             throw TVError.unsupported(L10n.text("This cached video is no longer on this device."))
         }
+        if item.status != .completed {
+            // Still being fetched (#1264): the loopback server reads what is here and fetches the rest as it plays.
+            guard let address = try await DownloadStream.address(in: folder(id), root: root) else {
+                throw TVError.unsupported(L10n.text("This video can play once it has finished caching."))
+            }
+            Diagnostics.shared.record(.info, "download", "playing while caching id=\(id) kind=\(item.kind?.rawValue ?? "-") done=\(Int(item.fraction * 100))%")
+            return address
+        }
+        guard var media = item.media else { throw TVError.unsupported(L10n.text("This cached video is no longer on this device.")) }
         var file = folder(id).appending(path: media)
         guard FileManager.default.fileExists(atPath: file.path) else {
             // Deleted or moved away in Finder: stop listing it as downloaded.

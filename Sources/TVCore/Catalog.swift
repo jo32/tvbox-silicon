@@ -329,6 +329,7 @@ public struct CatalogClient: Sendable {
     }
     private func perform(_ params: [String: String]) async throws -> [String: JSONValue] {
         if site.isCloudFiles { return try await CloudFilesSource.request(site, params: params) }
+        if site.isTelegram { return try await TelegramSource.request(site, params: params, http: http) }
         // Yingxia's own sources run in-process on every platform, the Mac's included.
         if site.runsInProcess {
             return try await ScriptRuntime.shared.request(site: site, scriptURL: site.scriptURL(origin: origin), params: params, http: http, origin: origin)

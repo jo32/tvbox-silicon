@@ -1,0 +1,6 @@
+/* Siri and Shortcuts titles (App/MusicIntents.swift). The app's own text is in Sources/TVCore/Resources. */
+"Play Music" = "ミュージックを再生";
+"Carries on with the music you were listening to, or plays your liked songs." = "前回聴いていた曲の続きを再生します。なければお気に入りの曲を再生します。";
+"Shuffle Liked Songs" = "お気に入りの曲をシャッフル";
+"Shuffles the songs you liked." = "「いいね」した曲をシャッフル再生します。";
+"You have no liked songs yet. Like a song from its menu first." = "お気に入りの曲はまだありません。曲のメニューから「いいね」してください。";

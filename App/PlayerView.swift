@@ -24,8 +24,8 @@ struct PlaybackView: View {
         self.channel = channel
         self.watch = watch
         let parked = FloatingPlayback.shared.parked(for: channel)
-        _session = State(initialValue: parked?.session ?? PlaybackSession())
-        _pip = State(initialValue: parked?.pip ?? PictureInPicture())
+        _session = StateObject(wrappedValue: parked?.session ?? PlaybackSession())
+        _pip = StateObject(wrappedValue: parked?.pip ?? PictureInPicture())
     }
     #else
     @StateObject private var session = PlaybackSession()
@@ -1242,6 +1242,42 @@ private struct NativePlayerView: UIViewControllerRepresentable {
 #endif
 
 #if os(macOS)
+/// The size a new playback window takes for its first picture, like IINA's window-size choices. Keep Last Size (the
+/// default) is the window's remembered size, given the picture's shape; the next episode and Fill Window turned off keep
+/// the size the viewer has whatever this says.
+enum MacPlayerWindowSize: String, CaseIterable, Sendable {
+    case keep
+    case fitScreen
+    case half
+    case one
+    case oneAndHalf
+    case double
+
+    static let key = "macPlayerWindowSize"
+
+    var title: String {
+        switch self {
+        case .keep: L10n.text("Keep Last Size")
+        case .fitScreen: L10n.text("Fit Screen")
+        case .half: "0.5×"
+        case .one: "1×"
+        case .oneAndHalf: "1.5×"
+        case .double: "2×"
+        }
+    }
+
+    /// A multiple of the video's pixel size; nil for Keep Last Size and Fit Screen.
+    var scale: CGFloat? {
+        switch self {
+        case .keep, .fitScreen: nil
+        case .half: 0.5
+        case .one: 1
+        case .oneAndHalf: 1.5
+        case .double: 2
+        }
+    }
+}
+
 /// A real document-style window: playback remains independent of library navigation.
 @MainActor final class PlayerWindowController: NSObject, NSWindowDelegate {
     private var window: PlaybackWindow?
@@ -1267,6 +1303,8 @@ private struct NativePlayerView: UIViewControllerRepresentable {
             target.center()
             target.setFrameAutosaveName("PlaybackWindow")
             target.session = session
+            // A new window: its first picture takes the Default Window Size; later ones keep what the viewer has.
+            target.sizesFirstPicture = true
             window = target
         }
         target.title = channel.name
@@ -1302,6 +1340,19 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     private var scroll = ScrollAxisLock()
     /// The second click of a double-click went to full screen: its mouse-up is not passed on either.
     private var takesMouseUp = false
+    /// A single click on the picture toggles playback. The first click of a double-click does too, so the second click
+    /// undoes it before the full-screen toggle: a double-click leaves playback as it found it.
+    private var clickToggled = false
+    private var clickReset: Task<Void, Never>?
+    /// The click brought the window forward (from another app or window): it only does that, as in IINA.
+    private var clickActivates = false
+    /// When the window last became key; the click that made it key can arrive a moment later.
+    private var keyAt = ContinuousClock.now
+
+    override func becomeKey() {
+        keyAt = .now
+        super.becomeKey()
+    }
 
     /// The wheel over the picture sets the volume, as in other players; AVKit's own handling scrubbed the video.
     /// A sideways swipe is still AVKit's, to scrub with (#874). Over the episode list and other panels it still
@@ -1309,13 +1360,37 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyUp, event.keyCode == 124, arrow.isDown { arrowReleased(skips: true) }
         // A double-click on the picture goes full screen and back, as in QuickTime Player and IINA (#838). Only the second
-        // click is taken, down and up, so a single click still shows or hides AVKit's controls at once, as before.
+        // click is taken, down and up. A single click on the picture plays or pauses instead of toggling AVKit's controls.
         if event.type == .leftMouseUp, takesMouseUp { takesMouseUp = false; return }
         if event.type == .leftMouseDown {
             pressedAt = convertPoint(toScreen: event.locationInWindow)
-            takesMouseUp = event.clickCount == 2 && event.modifierFlags.intersection([.command, .control, .option]).isEmpty
-                && contentView?.hitTest(event.locationInWindow).map(Self.isBarePicture) == true
+            clickActivates = event.clickCount == 1 && (!isKeyWindow || !NSApp.isActive || keyAt.duration(to: .now) < .milliseconds(300))
+            let bare = event.modifierFlags.intersection([.command, .control, .option]).isEmpty
+                && isPictureClick(at: event.locationInWindow)
+            clickReset?.cancel(); clickReset = nil
+            if !bare || event.clickCount > 2 { clickToggled = false }
+            if event.clickCount >= 2, bare, clickToggled {
+                // The first click of this pair paused or played; put it back before going full screen.
+                session?.togglePlayback()
+                clickToggled = false
+            }
+            takesMouseUp = event.clickCount == 2 && bare
             if takesMouseUp { toggleFullScreen(nil); return }
+        }
+        if event.type == .leftMouseUp, event.clickCount == 1, !clickActivates, let session,
+           event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+           isPictureClick(at: event.locationInWindow), let pressedAt {
+            let up = convertPoint(toScreen: event.locationInWindow)
+            // A drag of the window ends in a mouse-up too; only a click in place plays or pauses.
+            if hypot(up.x - pressedAt.x, up.y - pressedAt.y) < 4 {
+                session.togglePlayback()
+                clickToggled = true
+                clickReset = Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(NSEvent.doubleClickInterval))
+                    self?.clickToggled = false
+                }
+                return
+            }
         }
         if event.type == .scrollWheel, event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
            let session, let hit = contentView?.hitTest(event.locationInWindow), Self.isPicture(hit),
@@ -1381,8 +1456,17 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         return false
     }
 
+    /// A click in the picture, not in the title bar: `fullSizeContentView` lays the content under the traffic lights,
+    /// so hit-testing alone still finds the picture above `contentLayoutRect`.
+    private func isPictureClick(at point: NSPoint) -> Bool {
+        guard point.y <= contentLayoutRect.maxY else { return false }
+        return contentView?.hitTest(point).map(Self.isBarePicture) == true
+    }
+
     /// The picture's size, once known.
     private var videoSize: NSSize?
+    /// The window is new and its first picture takes the Default Window Size (`MacPlayerWindowSize`).
+    var sizesFirstPicture = false
     /// Fill Window (#978): the picture fills whatever shape the window has, so the window resizes freely, to any
     /// shape, as in VLC. Turning it off gives the window the picture's shape again and locks it.
     var fillsFrame = false {
@@ -1422,11 +1506,14 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         }
         guard !fillsFrame, let videoSize, videoSize.width > 0, videoSize.height > 0 else { return proposed }
         let ratio = videoSize.width / videoSize.height
-        let old = contentRect(forFrameRect: frame).size
+        // Compare against the frame at drag start rather than the current snapped `frame`: AppKit computes `proposed`
+        // from the pointer's travel since drag start, so comparing against `frame` oscillated between width-led and
+        // height-led on every tick of a corner drag.
+        let reference = contentRect(forFrameRect: drag?.frame ?? frame).size
         var size = contentRect(forFrameRect: NSRect(origin: .zero, size: proposed)).size
-        guard old.width > 0, old.height > 0, size.width > 0, size.height > 0 else { return proposed }
+        guard reference.width > 0, reference.height > 0, size.width > 0, size.height > 0 else { return proposed }
         // The side the drag moves more leads and the other follows: an edge moves one side, a corner both.
-        if abs(size.width - old.width) / old.width >= abs(size.height - old.height) / old.height { size.height = size.width / ratio }
+        if abs(size.width - reference.width) / reference.width >= abs(size.height - reference.height) / reference.height { size.height = size.width / ratio }
         else { size.width = size.height * ratio }
         let minimum = contentMinSize
         if size.width < minimum.width || size.height < minimum.height {
@@ -1437,30 +1524,54 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     }
 
     /// Sizes the window to the picture, which `resized(to:)` then keeps while it is resized (#689), so there are no black bars to
-    /// drag away. A video of the shape the window already has leaves the size the viewer chose alone; full screen and
-    /// a zoomed window are left as they are, and so is a window the picture fills (#978).
+    /// drag away. A new window's first picture takes the Default Window Size; otherwise a video of the shape the window
+    /// already has leaves the size the viewer chose alone. Full screen and a zoomed window are left as they are, and so
+    /// is a window the picture fills (#978).
     func fit(toVideo video: NSSize) {
         guard video.width > 0, video.height > 0, video.width.isFinite, video.height.isFinite else { return }
         videoSize = video
+        let sizing = sizesFirstPicture
+            ? MacPlayerWindowSize(rawValue: UserDefaults.standard.string(forKey: MacPlayerWindowSize.key) ?? "") ?? .keep
+            : .keep
+        sizesFirstPicture = false
         guard !fillsFrame else { return }
         guard !styleMask.contains(.fullScreen), !isZoomed, let contentView else { return }
         let current = contentView.bounds.size
         guard current.width > 0, current.height > 0 else { return }
         let ratio = video.width / video.height
-        if abs(current.width / current.height - ratio) / ratio < 0.01 { return }
         let visible = (screen ?? NSScreen.main)?.visibleFrame ?? frame
-        // Keep the width the viewer has, as far as the screen allows, and give it the picture's height.
-        let chrome = frame.height - current.height
-        var width = min(current.width, visible.width * 0.9)
-        var height = width / ratio
-        let room = visible.height * 0.9 - chrome
-        if height > room { height = room; width = height * ratio }
+        let chrome = max(0, frame.height - current.height)
+        let room = NSSize(width: visible.width, height: max(0, visible.height - chrome))
+        guard room.width > 0, room.height > 0 else { return }
+        var width: CGFloat, height: CGFloat
+        if sizing == .keep {
+            // Keep the width the viewer has, as far as the screen allows, and give it the picture's height.
+            if abs(current.width / current.height - ratio) / ratio < 0.01 { return }
+            width = min(current.width, visible.width * 0.9)
+            height = width / ratio
+            let fits = visible.height * 0.9 - chrome
+            if height > fits { height = fits; width = height * ratio }
+        } else if let scale = sizing.scale {
+            // A multiple of the video's own pixel size, as in IINA; shrink it to fit the screen when needed.
+            width = video.width * scale
+            height = video.height * scale
+            if width > room.width || height > room.height {
+                let down = min(room.width / width, room.height / height)
+                width *= down; height *= down
+            }
+        } else {
+            // Fit Screen: the largest size that keeps the video's shape inside the visible frame.
+            width = room.width
+            height = width / ratio
+            if height > room.height { height = room.height; width = height * ratio }
+        }
         let minimum = contentMinSize
         if width < minimum.width || height < minimum.height {
             let up = max(minimum.width / width, minimum.height / height)
             width *= up; height *= up
         }
         var target = frameRect(forContentRect: NSRect(origin: .zero, size: NSSize(width: width.rounded(), height: height.rounded())))
+        if abs(target.width - frame.width) < 1, abs(target.height - frame.height) < 1 { return }
         target.origin = NSPoint(x: frame.midX - target.width / 2, y: frame.midY - target.height / 2)
         target.origin.x = min(max(visible.minX, target.origin.x), max(visible.minX, visible.maxX - target.width))
         target.origin.y = min(max(visible.minY, target.origin.y), max(visible.minY, visible.maxY - target.height))

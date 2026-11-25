@@ -240,6 +240,38 @@ public actor MusicStreamCache {
     public func invalidate(_ id: String) { entries[id] = nil }
 }
 
+/// The next song's channel, found during the last seconds of the song playing, so the next one starts as this one
+/// ends rather than after the channels are searched again (#834). Used only for a short while: addresses expire.
+public struct MusicPreparedSelection: Sendable {
+    /// The queue's track it was found for; the selection's own track can be a wider match of it.
+    public let trackID: String
+    public let selection: MusicPlaybackSelection
+    /// The addresses found, which recovering and switching channels reuse.
+    public let cache: MusicStreamCache
+    public let preparedAt: Date
+    /// Seconds before a song's end when finding the next one starts: longer than most channel searches take.
+    public static let lead: Double = 25
+    /// How long a found channel is used without asking again, as when playback was paused near the end.
+    public static let lifetime: TimeInterval = 120
+
+    public init(trackID: String, selection: MusicPlaybackSelection, cache: MusicStreamCache, preparedAt: Date = Date()) {
+        self.trackID = trackID; self.selection = selection; self.cache = cache; self.preparedAt = preparedAt
+    }
+
+    /// Whether the song at `position` of `duration` seconds is close enough to its end.
+    public static func isDue(position: Double, duration: Double?) -> Bool {
+        guard let duration, duration > 0, position.isFinite else { return false }
+        return duration - position <= lead
+    }
+
+    /// Whether it may play `trackID` now: the same song, found recently, and its address not about to expire.
+    public func usable(for trackID: String, now: Date = Date()) -> Bool {
+        guard trackID == self.trackID, now.timeIntervalSince(preparedAt) < Self.lifetime else { return false }
+        if let expires = selection.stream.expiresAt, expires.timeIntervalSince(now) < 30 { return false }
+        return true
+    }
+}
+
 /// Picks the channel a track plays from: candidates in order (each catalog's primary provider,
 /// then fallbacks), at most two at a time, each resolved and probed. The first complete,
 /// playable lossless stream wins at once; otherwise, when the budget or the candidates run out,

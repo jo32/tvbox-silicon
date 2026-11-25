@@ -45,6 +45,8 @@ import TVCore
     /// The last good copy of each subscription, by address.
     @Published private(set) var documents: [String: Subscription] = [:]
     @Published private(set) var favorites: Favorites
+    /// 聽眾自己的播放清單（#1568）。
+    @Published private(set) var playlists: MusicPlaylists
     /// The series followed from Discover (追剧, #1186).
     @Published private(set) var followedShows: FollowedShows
     @Published var importing = false
@@ -214,6 +216,7 @@ import TVCore
         sourceOrder = SourceOrder(defaults: library.playback)
         cloudSync = defaults === UserDefaults.standard && !Self.isolated(defaults) ? CloudSync() : nil
         favorites = Favorites(defaults: library.defaults)
+        playlists = MusicPlaylists(defaults: library.defaults)
         followedShows = FollowedShows(defaults: library.defaults)
         autoPlayNext = library.defaults.object(forKey: "autoPlayNextEpisode") == nil || library.defaults.bool(forKey: "autoPlayNextEpisode")
         guideAddresses = library.defaults.dictionary(forKey: "liveGuideAddresses") as? [String: String] ?? [:]
@@ -300,6 +303,7 @@ import TVCore
         hiddenLiveSources = HiddenLiveSources(defaults: library.playback)
         sourceOrder = SourceOrder(defaults: library.playback)
         favorites = Favorites(defaults: library.defaults)
+        playlists = MusicPlaylists(defaults: library.defaults)
         followedShows = FollowedShows(defaults: library.defaults)
         searchModel.order = sourceOrder
         autoPlayNext = library.defaults.object(forKey: "autoPlayNextEpisode") == nil || library.defaults.bool(forKey: "autoPlayNextEpisode")

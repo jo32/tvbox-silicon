@@ -48,6 +48,7 @@ struct MobilePlayerView: View {
     @AppStorage(VideoFill.key) private var videoFill = VideoFill.fit
     /// The time and battery in the full-screen controls (#996).
     @AppStorage(PlayerStatusBadge.key) private var showsStatus = true
+    @AppStorage(BatteryPercentage.key) private var batteryPercentage = false
     @AppStorage(SkipInterval.key) private var skipInterval = SkipInterval.standard
     @State private var speed: Float = 1
     @AppStorage(DanmakuArea.key) private var danmakuArea = DanmakuArea.standard
@@ -73,6 +74,9 @@ struct MobilePlayerView: View {
     @State private var boost: SpeedBoost?
     @State private var keyboardBoost = false
     @State private var holding = false
+    /// The seek bar's handle is held: the row above it, the middle buttons and the lock make way for the frame from
+    /// that point (#1600), which reaches them on an iPhone held sideways.
+    @State private var scrubbingBar = false
     @AppStorage(SpeedBoost.key) private var holdSpeed = SpeedBoost.standard
     @AppStorage(PlaybackInfo.key) private var showsPlaybackInfo = false
     /// The full-screen top row's height, which the info panel keeps clear of while the controls show.
@@ -88,8 +92,12 @@ struct MobilePlayerView: View {
     @State private var swipeStart: Double?
     /// Sliding up or down: the brightness on the left, the volume on the right, from where the slide began.
     @AppStorage(PictureLevel.key) private var slidesLevels = true
-    /// Off: two taps anywhere play or pause, and the sides don't skip.
-    @AppStorage(PictureDoubleTap.key) private var doubleTapSkips = true
+    /// Off, as it starts (#1745): two taps anywhere play or pause, and the sides don't skip.
+    @AppStorage(PictureDoubleTap.key) private var doubleTapSkips = PictureDoubleTap.standard
+    /// The lock button's edge (#1922), the tags over the seek bar (#1534) and Picture in Picture (#1731), from Settings.
+    @AppStorage(LockButtonSide.key) private var lockSide = LockButtonSide.left.rawValue
+    @AppStorage(PlaybackTags.key) private var showsTags = true
+    @AppStorage(PictureInPicturePreference.key) private var allowsPictureInPicture = true
     @State private var level: (volume: Bool, start: Double, value: Double)?
     @State private var leveling = false
     @State private var levelTask: Task<Void, Never>?
@@ -115,6 +123,9 @@ struct MobilePlayerView: View {
             PlayerLayerView(player: session.player, gravity: videoFill.gravity, pip: pip).playerBleed(!inline)
                 // Picture in Picture shows only the player's layer, so AVPlayer draws the subtitles there.
                 .compatOnChange(of: pip.active) { _, active in session.subtitles.native = active }
+                // 在自己的視窗或另一台裝置播放時，進度條預覽不會再開一個讀取器（#1600）。
+                .compatOnChange(of: pip.active || playingOn != nil, initial: true) { _, away in clock.streamPreviews = !away }
+                .compatOnChange(of: allowsPictureInPicture, initial: true) { _, allowed in pip.startsWhenLeaving = allowed }
                 // A connected display (USB-C, HDMI) takes the same Picture Size: Fill covers a monitor of another
                 // shape, as asked in #1151.
                 .compatOnChange(of: videoFill, initial: true) { _, fill in ExternalDisplay.shared.gravity = fill.gravity }
@@ -216,7 +227,7 @@ struct MobilePlayerView: View {
             // Played here again (the Lock Screen, say): the TV stops, as Play Here would.
             if CastController.shared.device != nil { Task { await CastController.shared.stop() } }
         }
-        .compatOnChange(of: nowPlayingState, initial: true) { nowPlaying.update(title: channel.name, session: session) }
+        .compatOnChange(of: nowPlayingState, initial: true) { _, _ in nowPlaying.update(title: channel.name, session: session) }
         .compatOnChange(of: nowPlayingArtwork, initial: true) { _, artwork in nowPlaying.show(artwork, session: session) }
         // Pausing ends the faster speed in the session; another episode or quality plays at the chosen one.
         .compatOnChange(of: session.boost == nil) { _, ended in if ended { boost = nil; keyboardBoost = false } }
@@ -247,12 +258,12 @@ struct MobilePlayerView: View {
         .playerChannelsSheet(isPresented: $showsChannels, channel: channel, session: session)
         .sheet(isPresented: $showsDanmakuList) {
             DanmakuListView(player: session.player, comments: session.danmaku) { showsDanmakuList = false }
-                .danmakuListPresentation().environment(store)
+                .danmakuListPresentation().environmentObject(store)
         }
         .sheet(isPresented: $showsDanmakuSettings) {
-            CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet().environment(store)
+            CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet().environmentObject(store)
         }
-        .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).playerSheet().environment(store) }
+        .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).playerSheet().environmentObject(store) }
     }
 
     // MARK: Hardware keyboard
@@ -542,10 +553,11 @@ struct MobilePlayerView: View {
 
     // MARK: Lock
 
-    /// On the left edge, halfway down, as in Bilibili: with the controls while unlocked, alone for a moment after a tap
-    /// while locked.
+    /// On the left edge, halfway down, as in Bilibili, or on the right when Settings says so (#1922): with the controls
+    /// while unlocked, alone for a moment after a tap while locked.
     @ViewBuilder private var lockButton: some View {
-        let visible = locked ? showsLock : chromeVisible && showsTransport
+        let visible = locked ? showsLock : chromeVisible && showsTransport && !scrubbingBar
+        let right = LockButtonSide.side(lockSide) == .right
         Button {
             setLocked(!locked)
         } label: {
@@ -562,8 +574,8 @@ struct MobilePlayerView: View {
         .environment(\.colorScheme, .dark)
         .accessibilityLabel(L10n.text(locked ? "Unlock Controls" : "Lock Controls"))
         .accessibilityIdentifier("player.lock")
-        .padding(.leading, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .padding(right ? .trailing : .leading, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: right ? .trailing : .leading)
         .opacity(visible ? 1 : 0)
         .allowsHitTesting(visible && !settling)
         .animation(.easeOut(duration: 0.2), value: visible)
@@ -695,12 +707,12 @@ struct MobilePlayerView: View {
                 topRow
                 Spacer(minLength: 0)
                 if showsTransport {
-                    if !inline { infoRow }
+                    if !inline { infoRow.opacity(scrubbingBar ? 0 : 1).animation(.easeOut(duration: 0.15), value: scrubbingBar) }
                     bottomRow
                 }
             }
             .padding(inline ? 8 : 16)
-            if showsTransport { centerRow }
+            if showsTransport { centerRow.opacity(scrubbingBar ? 0 : 1).animation(.easeOut(duration: 0.15), value: scrubbingBar) }
         }
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
@@ -762,9 +774,11 @@ struct MobilePlayerView: View {
         HStack(alignment: .bottom, spacing: 12) {
             PlayerTitleLogo(channel: channel, compact: verticalSizeClass != .compact && horizontalSizeClass == .compact)
             Spacer(minLength: 0)
-            PlaybackBadges(session: session, active: chromeVisible) {
-                withAnimation(.smooth(duration: 0.25)) { showsPlaybackInfo.toggle() }
-                poke()
+            if showsTags {
+                PlaybackBadges(session: session, active: chromeVisible) {
+                    withAnimation(.smooth(duration: 0.25)) { showsPlaybackInfo.toggle() }
+                    poke()
+                }
             }
         }
         .padding(.bottom, 2)
@@ -782,7 +796,7 @@ struct MobilePlayerView: View {
                     playingOn = receiver
                 }
             }
-            if pip.supported {
+            if pip.supported && allowsPictureInPicture {
                 Button { pip.toggle() } label: {
                     Image(systemName: pip.active ? "pip.exit" : "pip.enter").font(.headline).frame(width: 22, height: 22)
                 }
@@ -910,7 +924,11 @@ struct MobilePlayerView: View {
                 .disabled(!session.showsPicture || frames.busy || playingOn != nil)
                 .accessibilityIdentifier("player.saveFrame")
             Toggle(L10n.text("Show Video Info"), isOn: $showsPlaybackInfo)
-            if !inline { Toggle(L10n.text("Show Time and Battery"), isOn: $showsStatus) }
+            if !inline {
+                Toggle(L10n.text("Show Video Tags"), isOn: $showsTags)
+                Toggle(L10n.text("Show Time and Battery"), isOn: $showsStatus)
+                if showsStatus { Toggle(L10n.text("Battery Percentage"), isOn: $batteryPercentage) }
+            }
         } label: {
             Image(systemName: "slider.horizontal.3").font(.headline).frame(width: 22, height: 22)
                 .symbolVariant(pictureSwitches && (upscalesVideo || smoothsVideo) ? .fill : .none)
@@ -1060,7 +1078,10 @@ struct MobilePlayerView: View {
             }
         } else if session.hasTimeline {
             // Dragging holds the controls up itself (`hold`); a tap gesture here would compete with the scrubber's drag.
-            SeekBar(clock: clock, moving: chromeVisible && !session.paused, hold: hold, sought: sought) { stepButtons }
+            SeekBar(clock: clock, moving: chromeVisible && !session.paused, hold: { scrubbingBar = $0; hold($0) }, sought: sought,
+                    marks: session.chapters.map(\.start)) { stepButtons }
+                // Gone mid-drag (the next episode began): what made way for the frame comes back.
+                .onDisappear { scrubbingBar = false }
         } else {
             HStack {
                 Spacer(minLength: 0)
@@ -1215,6 +1236,8 @@ private struct SeekBar<Accessory: View>: View {
     let moving: Bool
     let hold: (Bool) -> Void
     let sought: () -> Void
+    /// Where the chapters start, in seconds: the handle ticks as it crosses one (#1600).
+    var marks: [Double] = []
     /// At the right of the time: the episode buttons.
     @ViewBuilder let accessory: () -> Accessory
     /// Where a drag began: the position then and the finger's start. The handle moves by as much as the finger does
@@ -1222,6 +1245,8 @@ private struct SeekBar<Accessory: View>: View {
     @State private var drag: (position: Double, location: CGPoint)?
     /// Slower scrubbing while the finger moves away from the bar: half, a quarter and a tenth of the speed (Telegram).
     @State private var fineness = 1.0
+    /// Counts the chapter starts and ends of the video the handle has reached, one tick each (`ScrubPreview.ticks`).
+    @State private var ticks = 0
     @State private var width: CGFloat = 0
 
     var body: some View {
@@ -1237,6 +1262,9 @@ private struct SeekBar<Accessory: View>: View {
         }
         .animation(.easeOut(duration: 0.15), value: drag == nil)
         .sensoryFeedback(.selection, trigger: fineness)
+        // The handle taken hold of, then a tick at each chapter and at either end (#1600): nothing while it only slides.
+        .sensoryFeedback(trigger: drag != nil) { _, held in held ? .impact(flexibility: .soft, intensity: 0.6) : nil }
+        .sensoryFeedback(.selection, trigger: ticks)
     }
 
     /// How often the playing bar is drawn: each time its handle moves about half a point, at most 60 times a second, and
@@ -1287,14 +1315,15 @@ private struct SeekBar<Accessory: View>: View {
         // The frame at the finger, above the time, centred on the handle and kept on screen.
         .overlay(alignment: .topLeading) {
             if held, let preview = clock.preview {
-                let previewWidth: CGFloat = 160
-                Image(decorative: preview, scale: 1).resizable().aspectRatio(contentMode: .fit)
-                    .frame(width: previewWidth)
+                // Sized here rather than by the overlay, which offered the bar's own height: the frame then sat on
+                // the bar and its handle, not above them. An upright video's frame is as tall as a wide one's is wide.
+                let size = Self.previewSize(width: preview.width, height: preview.height)
+                Image(decorative: preview, scale: 1).resizable()
+                    .frame(width: size.width, height: size.height)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.8), lineWidth: 1))
                     .shadow(color: .black.opacity(0.4), radius: 6)
-                    .alignmentGuide(.top) { $0[.bottom] + 8 }
-                    .offset(x: min(max(0, x - previewWidth / 2), max(0, width - previewWidth)))
+                    .offset(x: min(max(0, x - size.width / 2), max(0, width - size.width)), y: -size.height - 8)
                     .transition(.opacity)
                     .allowsHitTesting(false)
             }
@@ -1329,7 +1358,9 @@ private struct SeekBar<Accessory: View>: View {
             return
         }
         let moved = Double((gesture.location.x - begin.location.x) / width) * duration * fineness
-        clock.scrub(to: min(max(0, begin.position + moved), duration), secondsPerPoint: duration / Double(width) * fineness)
+        let target = min(max(0, begin.position + moved), duration)
+        if ScrubPreview.ticks(from: clock.scrubbing ?? begin.position, to: target, marks: marks, duration: duration) { ticks += 1 }
+        clock.scrub(to: target, secondsPerPoint: duration / Double(width) * fineness)
     }
 
     private func ended(_ gesture: DragGesture.Value) {
@@ -1343,6 +1374,13 @@ private struct SeekBar<Accessory: View>: View {
         hold(false)
         clock.endScrub()
         sought()
+    }
+
+    /// The preview's size in points: the frame's shape, 160 wide for a wide picture and 160 tall for an upright one.
+    static func previewSize(width: Int, height: Int) -> CGSize {
+        guard width > 0, height > 0 else { return CGSize(width: 160, height: 90) }
+        let scale = 160 / CGFloat(max(width, height))
+        return CGSize(width: (CGFloat(width) * scale).rounded(), height: (CGFloat(height) * scale).rounded())
     }
 
     private static func fineLabel(_ fineness: Double) -> String? {
@@ -1594,12 +1632,14 @@ extension VideoFill {
 
 /// The time and the battery at the start of the full-screen buttons (#996). The battery is watched only while it
 /// shows; the simulator, which has none, shows the time alone. The battery is a gauge without a number: iOS tells apps
-/// the level in steps of 5%, so a number read 60% beside the system's 62% (#1366).
+/// the level in steps of 5%, so a number read 60% beside the system's 62% (#1366). Those who'd rather read that
+/// number choose Battery Percentage in the player's options (#1743).
 struct PlayerStatusBadge: View {
     static let key = "player.showsTimeAndBattery"
     /// In the buttons' glass capsule, or bare on the title's row.
     var grouped = true
     @StateObject private var battery = PlayerBattery()
+    @AppStorage(BatteryPercentage.key) private var showsPercentage = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -1608,7 +1648,15 @@ struct PlayerStatusBadge: View {
                 Text(context.date, format: .dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
             }
             if let level = battery.level {
-                BatteryGauge(level: level, charging: battery.charging)
+                if showsPercentage {
+                    // The gauge's colors: green while charging, red when low.
+                    Text(Double(BatteryPercentage.percent(level)) / 100, format: .percent.precision(.fractionLength(0)))
+                        .foregroundStyle(battery.charging ? Color.green : level <= 0.2 ? .red : .white)
+                        .accessibilityLabel(L10n.text(battery.charging ? "Battery, charging" : "Battery"))
+                        .accessibilityValue(Text(level, format: .percent.precision(.fractionLength(0))))
+                } else {
+                    BatteryGauge(level: level, charging: battery.charging)
+                }
             }
         }
         .font(.system(size: 14, weight: .semibold)).monospacedDigit()
@@ -1697,6 +1745,10 @@ private struct BatteryGauge: View {
     private(set) var layerView: PlayerLayerUIView?
     private var controller: AVPictureInPictureController?
     private var observation: NSKeyValueObservation?
+    /// 設定 › 播放 › 畫中畫：關閉後離開 App 不會自動啟動。
+    var startsWhenLeaving = PictureInPicturePreference.isOn() {
+        didSet { controller?.canStartPictureInPictureAutomaticallyFromInline = startsWhenLeaving }
+    }
 
     func attach(_ view: PlayerLayerUIView) {
         guard supported else { return }
@@ -1711,8 +1763,9 @@ private struct BatteryGauge: View {
         }
         let controller = AVPictureInPictureController(contentSource: .init(playerLayer: layer))
         controller.delegate = self
-        // Leaving the app while a video plays carries on in Picture in Picture, as AVKit's own player did.
-        controller.canStartPictureInPictureAutomaticallyFromInline = true
+        // Leaving the app while a video plays carries on in Picture in Picture, as AVKit's own player did, unless
+        // Settings turned Picture in Picture off (#1731).
+        controller.canStartPictureInPictureAutomaticallyFromInline = startsWhenLeaving
         observation = controller.observe(\.isPictureInPicturePossible, options: [.initial, .new]) { [weak self] controller, _ in
             let possible = controller.isPictureInPicturePossible
             Task { @MainActor [weak self] in self?.possible = possible }
@@ -1861,6 +1914,7 @@ private struct BatteryGauge: View {
         if let token { player?.removeTimeObserver(token) }
         token = nil
         loading = nil
+        dropReader()
     }
 
     /// The player's position now, read without waiting for the next tick.
@@ -1877,6 +1931,17 @@ private struct BatteryGauge: View {
     private var previewless: ObjectIdentifier?
     private var generating = false
     private var nextPreview: Double?
+    /// 串流的畫面由第二個讀取器產生（StreamPreviewReader, #1600）：第一次拖曳時建立，放開後短暫保留再放掉。
+    private var reader: (item: ObjectIdentifier, reader: StreamPreviewReader)?
+    private var readerIdle: Task<Void, Never>?
+    /// 產生不到畫面的項目，改由讀取器補上。
+    private var streamed: ObjectIdentifier?
+    /// 正在顯示或讀取的串流畫面時間，避免手指幾乎沒移動就抓取。
+    private var streamFrame: Double?
+    /// 手指還在進度條或畫面上：放開後才抵達的畫面不顯示。
+    private var held = false
+    /// 影片在別處播放時（另一台裝置、畫中畫）不開第二個讀取器。
+    var streamPreviews = true { didSet { if !streamPreviews { dropReader() } } }
 
     /// How much time one point of the drag moves (at its scrubbing speed): how close to the target the seek it ends
     /// with has to land (`SeekTolerance.release`).
@@ -1887,6 +1952,8 @@ private struct BatteryGauge: View {
     func scrub(to seconds: Double, secondsPerPoint: Double = 0) {
         scrubbing = seconds
         if secondsPerPoint > 0 { scrubPrecision = secondsPerPoint }
+        held = true
+        readerIdle?.cancel()
         nextPreview = seconds
         makePreview()
     }
@@ -1896,6 +1963,16 @@ private struct BatteryGauge: View {
     func endScrub() {
         nextPreview = nil
         preview = nil
+        held = false
+        streamFrame = nil
+        // The next drag often follows at once; a reader left open any longer would only hold its connection.
+        readerIdle?.cancel()
+        if reader != nil {
+            readerIdle = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(4))
+                if !Task.isCancelled { self?.dropReader() }
+            }
+        }
         let tolerance = SeekTolerance.release(secondsPerPoint: scrubPrecision)
         scrubPrecision = 0
         if let target = scrubbing { seek(to: target, tolerance: tolerance) }
@@ -1923,6 +2000,11 @@ private struct BatteryGauge: View {
         guard !generating, let seconds = nextPreview, let item = player?.currentItem else { return }
         let identity = ObjectIdentifier(item)
         guard previewless != identity else { nextPreview = nil; return }
+        // An item the generator made nothing from: its reader, opened again if the last drag's was let go.
+        if streamed == identity {
+            guard reader?.item == identity || openReader(for: item), let reader else { nextPreview = nil; return }
+            return readStream(seconds, from: reader.reader, of: identity)
+        }
         if generatorItem != identity {
             let generator = AVAssetImageGenerator(asset: item.asset)
             generator.appliesPreferredTrackTransform = true
@@ -1941,10 +2023,63 @@ private struct BatteryGauge: View {
                 guard let self else { return }
                 self.generating = false
                 if let frame { if self.scrubbing != nil { self.preview = frame } }
-                else if self.preview == nil { self.previewless = identity }
+                else if self.preview == nil {
+                    // No frame from the generator: a stream. Its second reader takes over where one may open.
+                    self.streamed = identity
+                    if self.held, self.player?.currentItem === item, self.openReader(for: item) {
+                        self.nextPreview = self.nextPreview ?? seconds
+                    }
+                }
                 self.makePreview()
             }
         }
+    }
+
+    /// A reader for a finite stream playing on this device, at an address a second one may open (`ScrubPreview.reads`);
+    /// false, and no preview for the item from then on, where it may not.
+    private func openReader(for item: AVPlayerItem) -> Bool {
+        let identity = ObjectIdentifier(item)
+        guard streamPreviews, player?.isExternalPlaybackActive == false else { return false }
+        guard duration > 0, let url = (item.asset as? AVURLAsset)?.url, ScrubPreview.reads(url, repackaged: Remux.isRemuxed(url)) else {
+            previewless = identity
+            return false
+        }
+        dropReader()
+        reader = (identity, StreamPreviewReader(asset: item.asset))
+        Diagnostics.shared.record(.info, "player", "scrub preview: second reader host=\(url.host() ?? "-")")
+        return true
+    }
+
+    /// One seek of the reader at a time, then the latest place asked for. A reader that fails once is let go, and
+    /// the item has no preview from then on: the playing video keeps the server to itself.
+    private func readStream(_ seconds: Double, from stream: StreamPreviewReader, of identity: ObjectIdentifier) {
+        nextPreview = nil
+        let target = ScrubPreview.snapped(seconds, duration: duration)
+        guard target != streamFrame else { return }
+        streamFrame = target
+        generating = true
+        Task { [weak self] in
+            let frame = await stream.frame(at: target)
+            // Let go meanwhile (`dropReader`), which also cleared `generating`.
+            guard let self, self.reader?.reader === stream else { return }
+            self.generating = false
+            if let frame { if self.held { self.preview = frame } }
+            else if stream.failed {
+                Diagnostics.shared.record(.info, "player", "scrub preview: no frame from the second reader; off for this video")
+                self.previewless = identity; self.dropReader()
+            }
+            else { self.streamFrame = nil }
+            self.makePreview()
+        }
+    }
+
+    private func dropReader() {
+        readerIdle?.cancel(); readerIdle = nil
+        guard let reader else { return }
+        self.reader = nil
+        streamFrame = nil
+        generating = false
+        reader.reader.stop()
     }
 
     private func tick(_ time: CMTime) {
@@ -1952,6 +2087,7 @@ private struct BatteryGauge: View {
         if item !== player.currentItem {
             item = player.currentItem
             buffered = 0
+            dropReader()
             loading = item?.observe(\.loadedTimeRanges, options: [.new]) { [weak self] _, _ in
                 Task { @MainActor [weak self] in self?.measureLoaded() }
             }

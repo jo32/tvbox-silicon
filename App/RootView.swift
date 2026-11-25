@@ -464,7 +464,7 @@ private struct PlayerPresentation: ViewModifier {
                                               set: { if $0 == nil, !store.playsInWatchPage(playing) { playing = nil } })) {
             // Handed in: the iPad app on a Mac presents a full-screen cover without the presenter's environment
             // objects, and every video stopped the app there ("No Observable object of type Store found").
-            PlaybackView(channel: $0.channel).environment(store)
+            PlaybackView(channel: $0.channel).environmentObject(store)
         }
         #endif
     }

@@ -32,6 +32,7 @@ public struct HTTPClient: Sendable {
         }
     }
     public func subscription(_ url: URL) async throws -> Subscription {
+        if let channel = TelegramSource.channel(url) { return TelegramSource.subscription(channel, origin: url) }
         let (data, finalURL) = try await get(url, headers: ["User-Agent": Self.subscriptionUserAgent])
         if let bundle = CatPawOpen.bundle(data, at: finalURL) { return try await CatPawOpen.subscription(bundle: bundle, origin: finalURL, http: self) }
         return try await Subscription.parse(data, origin: finalURL).sniffingScripts(http: self)

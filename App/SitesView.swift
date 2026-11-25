@@ -2176,7 +2176,7 @@ struct VideoDetailView: View {
     /// The page's player shows its picture (or an error); until then the page's cover stays over it.
     @State private var playerStarted = false
     /// The page's player, whose wait the cover tells about.
-    @StateObject private var playerSession: PlaybackSession?
+    @StateObject private var playerSession = ObservableHolder<PlaybackSession>()
     /// Settings › Playback: a video of one episode plays as its page opens (#885), and a video started on its page goes
     /// Full Screen at once (#1065).
     @AppStorage(WatchPage.autoPlayKey) private var autoPlays = true
@@ -3238,7 +3238,7 @@ struct VideoDetailView: View {
         }
         .compatOnChange(of: watchChannel == nil) { _, ended in
             playerStarted = false
-            if ended { playerSession = nil }
+            if ended { playerSession.value = nil }
             if ended && fullScreen { setFullScreen(landscape: false) }
             // Started with the phone already sideways: Full Screen at once, as turning it would.
             if !ended { fullScreenOnStart = startsFullScreen && !fullScreen; phoneTurned() }
@@ -3249,7 +3249,7 @@ struct VideoDetailView: View {
         .compatOnChange(of: playerStarted) { _, started in
             guard started, fullScreenOnStart else { return }
             fullScreenOnStart = false
-            guard !fullScreen, let session = playerSession, session.error == nil else { return }
+            guard !fullScreen, let session = playerSession.value, session.error == nil else { return }
             let size = session.player.currentItem?.presentationSize ?? .zero
             setFullScreen(landscape: size.height == 0 || size.width >= size.height)
         }
@@ -3263,7 +3263,7 @@ struct VideoDetailView: View {
         ZStack {
             if let channel = watchChannel {
                 PlaybackView(channel: channel, watch: WatchPlayback(fullScreen: fullScreen, toggleFullScreen: setFullScreen, leave: { dismiss() },
-                                                                    started: { playerStarted = $0 }, opened: { playerSession = $0 }))
+                                                                    started: { playerStarted = $0 }, opened: { playerSession.value = $0 }))
             }
             if covered { watchCover.transition(.opacity) }
         }
@@ -3272,7 +3272,7 @@ struct VideoDetailView: View {
 
     /// The cover's words while it waits: the source finding the episode's link, then the page's player getting it ready.
     private func coverStatus(_ elapsed: TimeInterval) -> PlaybackWait {
-        if let session = playerSession, let channel = watchChannel, loadingEpisode == nil {
+        if let session = playerSession.value, let channel = watchChannel, loadingEpisode == nil {
             return session.wait(elapsed: elapsed, resume: channel.resumePosition, linesHint: false)
         }
         let progress = LoadingProgress.source(client.site, origin: client.origin, title: busyTitle)

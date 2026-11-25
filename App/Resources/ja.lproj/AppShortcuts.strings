@@ -1,0 +1,6 @@
+/* What to say to Siri (App/MusicIntents.swift); every phrase names the app. */
+"Play music in ${applicationName}" = "${applicationName}で音楽を再生";
+"Play music with ${applicationName}" = "${applicationName}で曲をかけて";
+"Resume music in ${applicationName}" = "${applicationName}で再生を再開";
+"Shuffle my liked songs in ${applicationName}" = "${applicationName}でお気に入りの曲をシャッフル";
+"Play my liked songs in ${applicationName}" = "${applicationName}でお気に入りの曲を再生";

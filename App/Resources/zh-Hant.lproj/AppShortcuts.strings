@@ -1,0 +1,6 @@
+/* What to say to Siri (App/MusicIntents.swift); every phrase names the app. */
+"Play music in ${applicationName}" = "用${applicationName}播放音樂";
+"Play music with ${applicationName}" = "${applicationName}播放音樂";
+"Resume music in ${applicationName}" = "${applicationName}繼續播放";
+"Shuffle my liked songs in ${applicationName}" = "用${applicationName}隨機播放我喜歡的歌曲";
+"Play my liked songs in ${applicationName}" = "用${applicationName}播放我喜歡的歌曲";

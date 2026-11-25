@@ -186,3 +186,29 @@ private func episode(_ id: String, flag: String, name: String, episodeID: String
     #expect(withoutHeaders.poster == plain.url)
     #expect(withoutHeaders.posterHeaders.isEmpty)
 }
+
+/// Liked albums and playlists (#720) keep their own list, newest first, and survive a relaunch. The favorites
+/// document stays as it was, so an older build still reads it.
+@Test @MainActor func likedAlbumsAndPlaylistsAreKeptApartFromTheFavoritesDocument() throws {
+    let suite = "favorites." + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    let album = MusicCollection(kind: .album, platform: .qq, collectionID: "a1", title: "Album", subtitle: "Artist")
+    let playlist = MusicCollection(kind: .playlist, platform: .netease, collectionID: "p1", title: "Playlist")
+    let favorites = Favorites(defaults: defaults)
+    favorites.toggle(.live(channel("News")))
+    favorites.toggle(album)
+    favorites.toggle(playlist)
+    #expect(favorites.musicCollections.map(\.id) == [playlist.id, album.id])
+    #expect(favorites.contains(album))
+
+    let reopened = Favorites(defaults: defaults)
+    #expect(reopened.musicCollections.map(\.id) == [playlist.id, album.id])
+    #expect(reopened.items.count == 1)
+    let document = try JSONDecoder().decode(FavoriteDocument.self, from: try #require(defaults.data(forKey: "favorites")))
+    #expect(document.items.count == 1)
+
+    reopened.toggle(album)
+    #expect(Favorites(defaults: defaults).musicCollections.map(\.id) == [playlist.id])
+    #expect(!Favorites(defaults: defaults).contains(album))
+}

@@ -12,8 +12,8 @@
 <p align="center">
   <a href="https://yingxia.getmegaportal.com"><b>yingxia.getmegaportal.com</b></a>
   &nbsp;·&nbsp;
-  <a href="https://download.getmegaportal.com/yingxia/1.8.29/Yingxia-1.8.29-macos-arm64.dmg">Download for Mac</a>
-  (<a href="https://download.getmegaportal.com/yingxia/1.8.29/Yingxia-1.8.29-macos-x86_64.dmg">Intel</a>)
+  <a href="https://download.getmegaportal.com/yingxia/1.8.30/Yingxia-1.8.30-macos-arm64.dmg">Download for Mac</a>
+  (<a href="https://download.getmegaportal.com/yingxia/1.8.30/Yingxia-1.8.30-macos-x86_64.dmg">Intel</a>)
   &nbsp;·&nbsp;
   <a href="#-get-it">iPhone, iPad &amp; Apple TV beta</a>
   &nbsp;·&nbsp;
@@ -24,7 +24,7 @@
 
 <p align="center">
   <img alt="SwiftUI" src="https://img.shields.io/badge/SwiftUI-native-0A84FF?logo=swift&logoColor=white">
-  <img alt="Platforms" src="https://img.shields.io/badge/tvOS%2017%20·%20iOS%2018%20·%20macOS%2015-1c1c1e?logo=apple&logoColor=white">
+  <img alt="Platforms" src="https://img.shields.io/badge/tvOS%2017%20·%20iOS%2017%20·%20macOS%2015-1c1c1e?logo=apple&logoColor=white">
   <a href="https://yingxia.getmegaportal.com/releases.json"><img alt="Latest version" src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fyingxia.getmegaportal.com%2Freleases.json&query=%24.releases%5B0%5D.version&label=version&color=2dd4bf"></a>
   <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-8e8e93"></a>
 </p>
@@ -74,9 +74,9 @@ Yingxia (映匣) plays your TVBox subscriptions the way an Apple app should: liv
 
 | Platform | How |
 | --- | --- |
-| **Mac** (macOS 13+ / Ventura, Apple silicon or Intel) | ✅ Free download for [Apple silicon](https://download.getmegaportal.com/yingxia/1.8.29/Yingxia-1.8.29-macos-arm64.dmg) or [Intel](https://download.getmegaportal.com/yingxia/1.8.29/Yingxia-1.8.29-macos-x86_64.dmg), signed and notarized. It updates itself. |
-| **iPhone & iPad** (iOS 17+) | 🧪 Public beta: [join on TestFlight](https://testflight.apple.com/join/dU6UNbzp). Or [download the IPA](https://download.getmegaportal.com/yingxia/1.8.29/Yingxia-1.8.29-ios.ipa) and [sideload it](Docs/INSTALL.md#install-on-iphone-or-ipad), or add the [AltStore source](Docs/INSTALL.md#altstore-and-sidestore). |
-| **Apple TV** (tvOS 17+) | 🧪 Public beta: [join on TestFlight](https://testflight.apple.com/join/SSgWEwSr) (open the invite on an iPhone or iPad signed in to the same Apple Account, then install from TestFlight on the TV). Or [download the IPA](https://download.getmegaportal.com/yingxia/1.8.29/Yingxia-1.8.29-tvos.ipa) and [sideload it](Docs/INSTALL.md#install-on-apple-tv). |
+| **Mac** (macOS 13+ / Ventura, Apple silicon or Intel) | ✅ Free download for [Apple silicon](https://download.getmegaportal.com/yingxia/1.8.30/Yingxia-1.8.30-macos-arm64.dmg) or [Intel](https://download.getmegaportal.com/yingxia/1.8.30/Yingxia-1.8.30-macos-x86_64.dmg), signed and notarized. It updates itself. |
+| **iPhone & iPad** (iOS 17+) | 🧪 Public beta: [join on TestFlight](https://testflight.apple.com/join/dU6UNbzp). Or [download the IPA](https://download.getmegaportal.com/yingxia/1.8.30/Yingxia-1.8.30-ios.ipa) and [sideload it](Docs/INSTALL.md#install-on-iphone-or-ipad), or add the [AltStore source](Docs/INSTALL.md#altstore-and-sidestore). |
+| **Apple TV** (tvOS 17+) | 🧪 Public beta: [join on TestFlight](https://testflight.apple.com/join/SSgWEwSr) (open the invite on an iPhone or iPad signed in to the same Apple Account, then install from TestFlight on the TV). Or [download the IPA](https://download.getmegaportal.com/yingxia/1.8.30/Yingxia-1.8.30-tvos.ipa) and [sideload it](Docs/INSTALL.md#install-on-apple-tv). |
 
 TestFlight is the easiest way: no computer needed, and new builds arrive on their own. TestFlight builds are always numbered 1.7.7 with the release's build number, for example 1.7.7 (31) for 1.7.12. The beta and a sideloaded copy use the same app ID, so keep one or the other. The [install guide](Docs/INSTALL.md) covers sideloading with your own Apple Account (a free one works), keeping the app signed, and fixing common problems.
 

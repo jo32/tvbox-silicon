@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import TVCore
 
@@ -69,4 +70,32 @@ import Testing
     #expect(SkipInterval.seconds(7) == 10)
     #expect(SkipInterval.symbol(forward: true, seconds: 5) == "goforward.5")
     #expect(SkipInterval.symbol(forward: false, seconds: 0) == "gobackward.10")
+}
+
+@Test func aDoubleTapPlaysOrPausesUnlessSkippingIsTurnedOn() {
+    // Off as it starts (#1745): with no side to skip on, two taps anywhere are two in the middle.
+    #expect(!PictureDoubleTap.standard)
+    var taps = PictureTaps()
+    let side = PictureTaps.zone(x: 10, width: 300, seekable: PictureDoubleTap.standard)
+    #expect(taps.tap(at: 0, in: side) == .toggleControls)
+    #expect(taps.tap(at: 0.2, in: side) == .togglePlayback)
+}
+
+@Test func thePlayerOptionsReadTheirStoredChoices() {
+    #expect(LockButtonSide.side("right") == .right)
+    #expect(LockButtonSide.side("") == .left)
+    #expect(LockButtonSide.side("middle") == .left)
+    // The battery as iOS reports it, in steps of 5%.
+    #expect(BatteryPercentage.percent(0.6) == 60)
+    #expect(BatteryPercentage.percent(0.05) == 5)
+    #expect(BatteryPercentage.percent(1.2) == 100)
+    #expect(BatteryPercentage.percent(-1) == 0)
+    #expect(BatteryPercentage.percent(.nan) == 0)
+    // Picture in Picture is on until turned off.
+    let name = "player-options-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: name)!
+    defer { defaults.removePersistentDomain(forName: name) }
+    #expect(PictureInPicturePreference.isOn(defaults))
+    defaults.set(false, forKey: PictureInPicturePreference.key)
+    #expect(!PictureInPicturePreference.isOn(defaults))
 }

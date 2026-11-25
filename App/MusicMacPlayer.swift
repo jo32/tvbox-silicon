@@ -272,6 +272,7 @@ private struct MusicMacMenu: View {
             if let credit = MusicMacNowPlaying.credit(music) { Text(credit) }
             if let track = music.track {
                 FavoriteMenuButton(item: .music(track), name: track.title)
+                MusicPlaylistMenu(tracks: [track])
                 Divider()
             }
             if music.sourceStream != nil {

@@ -545,6 +545,30 @@ private final class Counter: @unchecked Sendable {
     #expect(!MusicRecovery.canResume(from: short, to: unknown))
 }
 
+@Test func theNextSongIsPreparedNearTheEndAndUsedOnlyWhileFresh() {
+    #expect(!MusicPreparedSelection.isDue(position: 100, duration: 240))
+    #expect(MusicPreparedSelection.isDue(position: 216, duration: 240))
+    #expect(!MusicPreparedSelection.isDue(position: 230, duration: nil))
+    #expect(!MusicPreparedSelection.isDue(position: .nan, duration: 240))
+
+    let track = MusicTrack(platform: .qq, songID: "n", title: "晴天", artists: ["周杰伦"], duration: 269)
+    let probe = MusicProbeResult(format: MusicAudioFormat(codec: .flac), duration: 269, evidence: [.header])
+    let now = Date()
+    func prepared(expires: Date?) -> MusicPreparedSelection {
+        let stream = ResolvedMusicStream(url: URL(string: "https://example.com/a.flac")!, expiresAt: expires)
+        let selection = MusicPlaybackSelection(track: track, candidate: MusicCandidate(platform: .qq, songID: "n", provider: .vkeys),
+                                               stream: stream, probe: probe, degraded: false, attempts: [], untried: [])
+        return MusicPreparedSelection(trackID: track.id, selection: selection, cache: MusicStreamCache(), preparedAt: now)
+    }
+    let ready = prepared(expires: nil)
+    #expect(ready.usable(for: track.id, now: now.addingTimeInterval(30)))
+    #expect(!ready.usable(for: "other", now: now))
+    // Paused near the end for minutes: the song is searched for again.
+    #expect(!ready.usable(for: track.id, now: now.addingTimeInterval(MusicPreparedSelection.lifetime + 1)))
+    // An address about to expire is not used.
+    #expect(!prepared(expires: now.addingTimeInterval(40)).usable(for: track.id, now: now.addingTimeInterval(20)))
+}
+
 // MARK: - Health and budgets
 
 @Test func gdBudgetAllowsFiftyRequestsPerFiveMinutes() async throws {
