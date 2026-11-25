@@ -84,3 +84,11 @@ The spider libraries are pinned in `Runtime/PythonHost/requirements.txt`. Each o
 | typing-extensions | PSF-2.0 |
 
 `Runtime/PythonHost/base/spider.py` is an original implementation of the CatVod Python spider interface. It contains no TVBox source code. Subscription spiders are downloaded on demand and are not bundled.
+
+## Mac updater (Sparkle)
+
+[Sparkle](https://sparkle-project.org) 2.10.0 (MIT) updates the Mac app in place (`App/MacUpdater.swift`): it reads the release feed, downloads and installs signed updates in the background, and relaunches the app. The app includes its license text in `App/Resources/ThirdPartyNotices.txt`.
+
+## Mac detail aurora (ColorfulX)
+
+[ColorfulX](https://github.com/Lakr233/ColorfulX) 6.2.1 (MIT) draws the aurora backdrop on the Mac detail page (`App/DetailAurora.swift`). The app includes its license text in `App/Resources/ThirdPartyNotices.txt`.
