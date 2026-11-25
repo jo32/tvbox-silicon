@@ -3235,7 +3235,7 @@ struct ProfilesView: View {
         }
         .alert(L10n.text("Delete “%@”?", removing?.title ?? ""), isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
             Button(L10n.text("Cancel"), role: .cancel) {}
-            Button(L10n.text("Delete Profile"), role: .destructive) { if let removing { profiles.remove(removing) } }
+            Button(L10n.text("Delete Profile"), role: .destructive) { if let removing { profiles.remove(removing); store.profileRemoved() } }
         } message: {
             Text(L10n.text("Its subscriptions, favorites, Continue Watching and search history are deleted from this device."))
         }
