@@ -976,7 +976,10 @@ private struct NativePlayerView: UIViewControllerRepresentable {
                 tabs.append(list)
             }
             if !comments.isEmpty {
-                let list = UIHostingController(rootView: DanmakuListView(player: player, comments: comments))
+                // Capped in the view as well: AVKit can size a tab by its content, and a scroll view's content is all of its
+                // rows, so the panel ran thousands of points past the top of the screen, its tabs and the focused row out of
+                // sight, and the remote seemed to do nothing (#1836).
+                let list = UIHostingController(rootView: DanmakuListView(player: player, comments: comments).frame(maxHeight: 480))
                 list.title = L10n.text("Danmaku")
                 list.preferredContentSize = CGSize(width: 0, height: 480)
                 tabs.append(list)
