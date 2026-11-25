@@ -186,16 +186,24 @@ public enum SettingsSearchEngine {
     }
 
     private static func pinyinVariants(of text: String) -> (full: String, initials: String, syllables: [String]) {
-        guard let latin = text.applyingTransform(.toLatin, reverse: false)?
-            .applyingTransform(.stripDiacritics, reverse: false)?
-            .lowercased()
-        else { return ("", "", []) }
+        let latin: String
+        if let known = transliterations.object(forKey: text as NSString) {
+            latin = known as String
+        } else {
+            latin = text.applyingTransform(.toLatin, reverse: false)?
+                .applyingTransform(.stripDiacritics, reverse: false)?
+                .lowercased() ?? ""
+            transliterations.setObject(latin as NSString, forKey: text as NSString)
+        }
 
         let syllables = latin.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
         let full = syllables.joined()
         let initials = String(syllables.compactMap(\.first))
         return (full, initials, syllables)
     }
+    /// Transliterating takes milliseconds a title, too slow to redo for every title on every keystroke; the titles
+    /// are the same each time.
+    nonisolated(unsafe) private static let transliterations = NSCache<NSString, NSString>()
 
     private static func subsequenceScore(token: String, in text: String) -> Double {
         let queryChars = Array(token)
