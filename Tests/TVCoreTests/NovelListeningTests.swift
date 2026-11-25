@@ -101,3 +101,21 @@ private func prepareNovelListeningTests() {
         NovelRuntime.profilesRoot = FileManager.default.temporaryDirectory.appendingPathComponent("novel-listening-tests-\(UUID().uuidString)")
     }
 }
+
+/// A saved table of contents' chapter, asked of its source again (#1840): played on from when its address there is new.
+@Test func audiobookChapterRenewedFromFreshChapters() {
+    let old = NovelChapter(index: 2, title: "第2集", url: "https://vod.example/2.m4a?sign=old")
+    let fresh = [NovelChapter(index: 0, title: "第一卷", url: "第一卷", isVolume: true),
+                 NovelChapter(index: 1, title: "第1集", url: "https://vod.example/1.m4a?sign=new"),
+                 NovelChapter(index: 2, title: "第2集", url: "https://vod.example/2.m4a?sign=new")]
+    #expect(NovelListening.renewed(old, in: fresh) == 2)
+    // The same address again (the source is down, or the saved copy came back offline): nothing newer to try.
+    #expect(NovelListening.renewed(fresh[2], in: fresh) == nil)
+    // A chapter added before it: found by its title.
+    let moved = [NovelChapter(index: 0, title: "序", url: "https://vod.example/0.m4a")] + fresh.map {
+        NovelChapter(index: $0.index + 1, title: $0.title, url: $0.url, isVolume: $0.isVolume)
+    }
+    #expect(NovelListening.renewed(old, in: moved) == 3)
+    // No longer listed.
+    #expect(NovelListening.renewed(NovelChapter(index: 9, title: "第9集", url: "x"), in: fresh) == nil)
+}
