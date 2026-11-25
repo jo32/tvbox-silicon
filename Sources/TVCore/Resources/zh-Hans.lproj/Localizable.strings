@@ -1445,6 +1445,7 @@
 
 // Manga (Venera comic sources)
 "%@, last read" = "%@，上次读到";
+"%@, read" = "%@，已读";
 "%d Chapters" = "%d 话";
 "Account" = "账号";
 "Add Source List" = "添加源列表";
@@ -1469,6 +1470,8 @@
 "Left to Right" = "从左到右";
 "Manga" = "漫画";
 "Manga reads comics through Venera comic sources. Add a source list, such as Venera's, then install the sources you want." = "漫画通过 Venera 漫画源阅读。先添加一个源列表（例如 Venera 的），再安装需要的漫画源。";
+"Mark as read" = "标为已读";
+"Mark as unread" = "标为未读";
 "Next Chapter" = "下一话";
 "Next: %@" = "下一话：%@";
 "No Comic Sources" = "没有漫画源";

@@ -1445,6 +1445,7 @@
 
 // Manga (Venera comic sources)
 "%@, last read" = "%@, last read";
+"%@, read" = "%@, read";
 "%d Chapters" = "%d Chapters";
 "Account" = "Account";
 "Add Source List" = "Add Source List";
@@ -1469,6 +1470,8 @@
 "Left to Right" = "Left to Right";
 "Manga" = "Manga";
 "Manga reads comics through Venera comic sources. Add a source list, such as Venera's, then install the sources you want." = "Manga reads comics through Venera comic sources. Add a source list, such as Venera's, then install the sources you want.";
+"Mark as read" = "Mark as read";
+"Mark as unread" = "Mark as unread";
 "Next Chapter" = "Next Chapter";
 "Next: %@" = "Next: %@";
 "No Comic Sources" = "No Comic Sources";

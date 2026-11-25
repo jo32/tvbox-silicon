@@ -38,6 +38,20 @@ public enum MangaLibrary {
         public init(comic: MangaComic, added: Date = Date()) { self.comic = comic; self.added = added }
     }
 
+    /// Chapters the viewer has finished, by comic: read to the end of a chapter, or marked by hand. The progress
+    /// only keeps one position, so earlier chapters need a set of their own to show as read.
+    public struct ReadChapters: Codable, Equatable, Sendable {
+        /// Finished chapter IDs, by comic identity.
+        public var read: [String: Set<String>] = [:]
+        public init() {}
+        public func isRead(_ chapter: String, of comic: String) -> Bool { read[comic]?.contains(chapter) ?? false }
+        public mutating func mark(_ chapter: String, of comic: String) { read[comic, default: []].insert(chapter) }
+        public mutating func unmark(_ chapter: String, of comic: String) {
+            read[comic]?.remove(chapter)
+            if read[comic]?.isEmpty == true { read[comic] = nil }
+        }
+    }
+
     public static func load<T: Decodable>(_ name: String, as type: T.Type) -> T? {
         try? JSONDecoder().decode(type, from: Data(contentsOf: root.appendingPathComponent(name)))
     }
