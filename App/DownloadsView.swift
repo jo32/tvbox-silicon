@@ -103,7 +103,7 @@ struct DownloadsView: View {
         .accessibilityIdentifier((show.items.count == 1 ? "downloads.single." : "downloads.show.") + show.videoID)
         .contextMenu {
             if let first = show.items.first {
-                Button(L10n.text("Download More"), systemImage: "arrow.down.circle") { action = .more(first) }
+                Button(L10n.text("Cache More"), systemImage: "arrow.down.circle") { action = .more(first) }
             }
             Button(L10n.text("Delete Cached Items"), systemImage: "trash", role: .destructive) { action = .remove(show) }
         }
@@ -923,7 +923,7 @@ struct DownloadShowPage: View {
             }
             if let first = show.items.first {
                 Button { action = .more(first) } label: {
-                    FittingLabel(title: L10n.text("Download More"), symbol: "arrow.down.circle")
+                    FittingLabel(title: L10n.text("Cache More"), symbol: "arrow.down.circle")
                 }.controlButton().accessibilityIdentifier("downloads.more")
             }
             Button(role: .destructive) { action = .remove(show) } label: {

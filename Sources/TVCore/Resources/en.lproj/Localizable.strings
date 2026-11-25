@@ -2390,7 +2390,7 @@
 "Video Tags are the short labels above the progress bar in full screen, such as 4K and H265." = "Video Tags are the short labels above the progress bar in full screen, such as 4K and H265.";
 "Show Video Tags" = "Show Video Tags";
 "Battery Percentage" = "Battery Percentage";
-"Download More" = "Download More";
+"Cache More" = "Cache More";
 "Watched to %@" = "Watched to %@";
 "Select episodes to delete" = "Select episodes to delete";
 "Delete %lld episodes" = "Delete %lld episodes";

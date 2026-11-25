@@ -2390,7 +2390,7 @@
 "Video Tags are the short labels above the progress bar in full screen, such as 4K and H265." = "影片標籤是全螢幕時進度列上方的簡短標籤，例如 4K 和 H265。";
 "Show Video Tags" = "顯示影片標籤";
 "Battery Percentage" = "電量百分比";
-"Download More" = "下載更多";
+"Cache More" = "快取更多";
 "Watched to %@" = "看到 %@";
 "Select episodes to delete" = "選擇要刪除的劇集";
 "Delete %lld episodes" = "刪除 %lld 集";
