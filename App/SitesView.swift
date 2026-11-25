@@ -91,7 +91,7 @@ struct SitesView: View {
                                                 PinSourceButton(site: site, origin: config.origin)
                                                 HideSourceButton(site: site, origin: config.origin)
                                                 if store.sourceOrder.enabled { MoveSourceButtons(site: site, sites: sites) }
-                                                if let entry = store.subscriptionEntry(of: site) {
+                                                if let entry = store.subscriptionEntry(of: site, in: group) {
                                                     Button { openSubscription(entry) } label: {
                                                         Label(L10n.text("Open Subscription"), systemImage: "list.bullet.rectangle")
                                                     }
@@ -450,6 +450,18 @@ extension Store {
     func subscriptionEntry(of site: Site) -> SubscriptionEntry? {
         guard !site.isBuiltIn, let origin = site.provenance?.origin else { return nil }
         return subscriptions.first { $0.enabled && documents[$0.address]?.origin == origin }
+    }
+
+    /// The subscription a source is shown under: its group's, when the group came from one, so opening it (and
+    /// removing it there) takes the subscription the viewer is looking at. A source two subscriptions share shows
+    /// in both groups, and guessing by origin always took the first one — removing it from the second group's page
+    /// then left the second subscription in Settings (#2230). Pinned and hidden groups fall back to the origin.
+    func subscriptionEntry(of site: Site, in group: SourceGroup) -> SubscriptionEntry? {
+        if case .subscription(let address) = group.kind,
+           let entry = subscriptions.first(where: { $0.address == address }) {
+            return entry
+        }
+        return subscriptionEntry(of: site)
     }
 
     /// How a source has been answering lately; see `SourceHealth`.
