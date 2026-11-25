@@ -1823,10 +1823,10 @@ private struct DesktopPlaybackView: View {
             // One glass capsule holds the buttons, like a toolbar group: a glass circle each read as loose bubbles.
             HStack(spacing: 2) {
                 if session.isLive || !session.hasTimeline {
-                    // AVKit 的控制列在沒有時間軸時會被隱藏（見 DesktopNativePlayer），所以播放、靜音與音量在這裡自繪。
+                    // AVKit's controls are hidden without a timeline (see DesktopNativePlayer), so play, mute and volume live here.
                     barButton(session.paused ? "play.fill" : "pause.fill", L10n.text("Play / Pause (Space)")) { session.togglePlayback() }
                     barButton(session.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", L10n.text("Mute (M)")) { session.player.isMuted.toggle() }
-                    // 直播沒有 AVKit 的音量滑桿；與滾輪、方向鍵共用同一個 player.volume，拖動時順便取消靜音。
+                    // The same player.volume the wheel and arrow keys change; dragging it also unmutes.
                     Slider(value: Binding(
                         get: { session.volume },
                         set: { level in
