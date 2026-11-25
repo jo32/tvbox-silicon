@@ -76,6 +76,11 @@ public enum CloudStreams {
         return (stream.counter.value, stream.host)
     }
 
+    /// Seconds of video already cached ahead of AVPlayer's reads in memory (#2175).
+    public static func bufferedAhead(for url: URL) -> Double {
+        CloudStreamStore.shared.stream(url)?.bufferedAhead.withLock { $0 } ?? 0
+    }
+
     /// Whether the file is one AVFoundation can't open but `Remux` can (MKV, AVI, FLV, disc images, ...), judged from its
     /// first bytes. False when they can't be read: the player reports network failures itself.
     public static func needsRemux(_ url: URL) async -> Bool {
@@ -246,6 +251,9 @@ actor CloudByteStream {
 
     nonisolated let counter = CloudCounter()
     nonisolated let host: String?
+    /// Seconds of cached bytes ahead of the player's latest read, readable without hopping onto the actor (#2175).
+    nonisolated let bufferedAhead = OSAllocatedUnfairLock<Double>(initialState: 0)
+    private var lastReadEnd: Int?
     private var source: CloudStreams.Source
     private let refresh: @Sendable () async -> CloudStreams.Source?
     /// When the address was last resolved again, and whether that gave a new one.
@@ -394,6 +402,8 @@ actor CloudByteStream {
                 }
             }
         }
+        lastReadEnd = offset
+        updateBufferedAhead()
         let start = offset - index * Self.chunkSize
         let bytes = try await available(index, from: start)
         considerEndingBurst(at: index)
@@ -401,7 +411,10 @@ actor CloudByteStream {
         // chunks the jump let go.
         if readers.contains(where: near) { prefetch(after: index) }
         // A copy, not a slice: AVFoundation misread slices of a cached chunk as damaged media.
-        return Data(bytes[start..<min(bytes.count, start + count)])
+        let result = Data(bytes[start..<min(bytes.count, start + count)])
+        lastReadEnd = offset + result.count
+        updateBufferedAhead()
+        return result
     }
 
     private func chunk(_ index: Int) async throws -> Data {
@@ -643,6 +656,7 @@ actor CloudByteStream {
                 cache[index] = playable
                 recent.removeAll { $0 == index }; recent.append(index)
                 while recent.count > cacheLimit { cache[recent.removeFirst()] = nil }
+                updateBufferedAhead()
                 return playable
             } catch let error as URLError where error.code != .cancelled && attempt < 3 {
                 // A loopback proxy (a CatPawOpen bundle's) refuses once iOS took back the suspended app's sockets, and
@@ -672,6 +686,7 @@ actor CloudByteStream {
         let plan = CloudBufferPlan.make(length: source.length, duration: seconds, budget: CloudDevice.cacheBudget, chunkSize: Self.chunkSize)
         readAheadChunks = plan.readAhead; cacheLimit = plan.cacheChunks
         growth = (Date(), 0)
+        updateBufferedAhead()
         Diagnostics.shared.record(.info, "cloud.stream", "plan bitrate=\(Int(bytesPerSecond ?? 0) * 8 / 1000)kbps readAhead=\(plan.readAhead) chunks (~\(Int(plan.seconds)) s) cache=\(plan.cacheChunks) chunks connections=\(connections)...\(ceiling) device=\(CloudDevice.current.label)")
     }
 
@@ -715,9 +730,36 @@ actor CloudByteStream {
         return true
     }
 
+    /// Contiguous bytes already in memory past `lastReadEnd`, converted to seconds at the file's average bitrate.
+    private func updateBufferedAhead() {
+        guard let end = lastReadEnd, let bytesPerSecond, bytesPerSecond > 0 else {
+            bufferedAhead.withLock { $0 = 0 }
+            return
+        }
+        var bytes = 0
+        var index = end / Self.chunkSize
+        var offset = end - index * Self.chunkSize
+        while index < chunks {
+            if let data = cache[index] {
+                bytes += max(0, data.count - offset)
+                index += 1
+                offset = 0
+            } else if let part = partial[index]?.bytes {
+                bytes += max(0, part.count - offset)
+                break
+            } else {
+                break
+            }
+        }
+        let seconds = Double(bytes) / bytesPerSecond
+        bufferedAhead.withLock { $0 = seconds }
+    }
+
     func clear() {
         for task in inflight.values { task.cancel() }
         inflight.removeAll(); cache.removeAll(); recent.removeAll(); readers.removeAll(); waiting.removeAll(); partial.removeAll()
+        lastReadEnd = nil
+        bufferedAhead.withLock { $0 = 0 }
         for index in Array(arrivals.keys) { wake(index) }
     }
 }
