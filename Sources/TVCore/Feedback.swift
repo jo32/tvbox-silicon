@@ -93,9 +93,12 @@ public enum Feedback {
                        system: "\(system) \(ErrorReports.osVersion)", model: ErrorReports.model, language: L10n.resolvedLanguage())
     }
 
+    /// UserDefaults key for whether Included Details is sent with feedback.
+    public static let includeDetailsKey = "feedbackIncludeDetails"
+
     /// What the app was set up with and played lately, as text the page puts under the message for
-    /// the viewer to edit or delete before sending: the subscriptions (with why one last failed) and
-    /// the latest playback history. Sign-in parts of addresses are masked; the rest is public.
+    /// the viewer to edit or switch off before sending: the subscriptions (domain only, with why one
+    /// last failed) and the latest playback history.
     public static func context(subscriptions: [SubscriptionEntry], errors: [String: String] = [:],
                                history: [PlaybackHistoryEntry], timeZone: TimeZone = .current) -> String {
         var lines = ["Subscriptions:"]
@@ -103,7 +106,10 @@ public enum Feedback {
         for entry in subscriptions.prefix(contextItems) {
             let address = shareable(entry.address)
             lines.append("- " + (entry.name.isEmpty ? address : "\(entry.name): \(address)") + (entry.enabled ? "" : " (off)"))
-            if let error = errors[entry.address] { lines.append("  - failed: " + error.prefix(200)) }
+            if let error = errors[entry.address] {
+                let masked = entry.address.isEmpty ? error : error.replacingOccurrences(of: entry.address, with: address)
+                lines.append("  - failed: " + Diagnostics.redact(masked).prefix(200))
+            }
         }
         if subscriptions.count > contextItems { lines.append("- and \(subscriptions.count - contextItems) more") }
         lines += ["", "Recently played:"]
@@ -122,18 +128,24 @@ public enum Feedback {
 
     static let contextItems = 5
 
-    /// An address without what signs in with it: the user and password, and query values named
-    /// like a key or token. A local file keeps only its name.
+    /// The subscription's origin (scheme, host and optional port) only: credentials, path, query and
+    /// fragment stay off the public issue, because private subscriptions often carry tokens in the
+    /// path or under arbitrary query names. Local and imported files keep only their file name.
     static func shareable(_ address: String) -> String {
-        guard var parts = URLComponents(string: address), let scheme = parts.scheme?.lowercased() else { return address }
-        if scheme == "file" { return "file: " + (parts.path.split(separator: "/").last.map(String.init) ?? "") }
-        if parts.user != nil || parts.password != nil { parts.user = "***"; parts.password = nil }
-        let secret = ["token", "key", "pass", "pwd", "auth", "sign", "secret", "cookie", "session", "sid", "ticket", "uid", "user"]
-        parts.queryItems = parts.queryItems?.map { item in
-            let name = item.name.lowercased()
-            return secret.contains(where: name.contains) && item.value?.isEmpty == false ? URLQueryItem(name: item.name, value: "***") : item
+        let components = URLComponents(string: address).flatMap { $0.scheme != nil ? $0 : nil }
+            ?? (try? WebAddress.resolve(typed: address)).flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
+        guard var parts = components, let scheme = parts.scheme?.lowercased() else { return Diagnostics.redact(address) }
+        if scheme == "file" || parts.host?.lowercased() == ImportedFiles.host {
+            return "file: " + (parts.path.split(separator: "/").last.map(String.init) ?? "")
         }
-        return parts.string ?? address
+        guard let host = parts.host, !host.isEmpty else { return Diagnostics.redact(address) }
+        parts.scheme = scheme
+        parts.user = nil
+        parts.password = nil
+        parts.path = ""
+        parts.query = nil
+        parts.fragment = nil
+        return parts.string ?? "\(scheme)://\(host)"
     }
 
     private static func clock(_ seconds: Double) -> String {
