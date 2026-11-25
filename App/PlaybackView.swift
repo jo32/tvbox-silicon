@@ -906,8 +906,9 @@ import IOKit.pwr_mgt
     private func open(_ channel: Channel) {
         savedDownload = channel.url.scheme == DownloadLibrary.scheme
         stop(); error = nil; errorSymbol = "play.slash.fill"; loading = true; showsPicture = false; openedAt = .now; sourceDanmaku = []; qualities = []; quality = nil; switchNotice = nil
-        begin(channel)
-        isLive = LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live")
+        let live = LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live")
+        begin(channel, live: live)
+        isLive = live
         liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false
         loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false
         ErrorReports.shared.playing(live: isLive, format: channel.url.pathExtension, source: channel.historyContext?.sourceKey,
@@ -1524,13 +1525,20 @@ import IOKit.pwr_mgt
     }
 
     /// Per-episode state: where its history goes, where it resumes, the intro and outro to skip, its danmaku.
-    private func begin(_ channel: Channel) {
+    /// `live` is a live channel (or stream): those always start at 1×, as the global playback speed in
+    /// Settings › Playback is for point videos only, never live or music.
+    private func begin(_ channel: Channel, live: Bool) {
         historyContext = channel.historyContext
         requestedResumePosition = channel.resumePosition
         pendingResume = channel.resumePosition.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
         restoringPosition = false; restoredPosition = nil; checkingPicture = false; soughtAhead = nil
         skipScope = channel.skipScope
         skipSettings = skipScope.map { EpisodeSkipSettings.load(scope: $0, defaults: skipDefaults) } ?? EpisodeSkipSettings()
+        // Point videos start at the speed chosen in Settings › Playback, so the in-player menu's
+        // temporary choice does not stick to the next episode. Live channels always start at 1×:
+        // the global speed is for videos only, and a live menu can still change that stream.
+        player.defaultRate = live ? 1 : PlaybackSpeed.load()
+        if player.rate != 0 { player.rate = player.defaultRate }
         skipPass = EpisodeSkipPass(); seekingSegment = false
         skipNotice = nil; introNoticeUntil = nil
         sourceSkips = channel.skips; skipOffer = nil; skippedSource = []; chapters = []
@@ -1934,7 +1942,8 @@ extension PlaybackSession {
         transfer = Transfer(); steps = []
         catalogDanmaku.clear(); sourceDanmaku = []
         error = nil; switchNotice = nil; quality = nil
-        begin(channel)
+        // A queued next episode is a point video, never live.
+        begin(channel, live: false)
         loading = upcoming.item.status != .readyToPlay
         playing = channel; automatic = upcoming.prepared.url
         externalSubtitles.begin(channel, playing: upcoming.prepared.url)
