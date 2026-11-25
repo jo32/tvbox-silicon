@@ -104,9 +104,10 @@ struct NovelChapterList: View {
     @State private var query = ""
     @State private var newestFirst = false
     @State private var scrolled = false
-    /// Where the list is (0 at the top, 1 at the bottom) and whether it moves, for the fast-scroll handle (#1199).
-    @State private var scrollProgress: Double = 0
-    @State private var scrollMoving = false
+    /// Where the list is and whether it moves, for the fast-scroll handle (#1199). Only the handle reads it: kept as
+    /// state of this view, every frame of a scroll ran this body again, and with thousands of chapters dragging the
+    /// handle stuttered (#1989).
+    @State private var scroll = NovelScrollState()
 
     private var count: Int { sections.reduce(0) { $0 + $1.rows.count } }
     #if os(tvOS)
@@ -254,13 +255,18 @@ struct NovelChapterList: View {
                 .padding(.horizontal, Layout.gutter)
                 .padding(.bottom, 30)
                 .frame(maxWidth: 820).frame(maxWidth: .infinity)
+                #if os(iOS)
+                .modifier(NovelContentFrameProbe())
+                #endif
             }
             .catalogSearchable(text: $query, prompt: L10n.text("Search Chapters"))
             #if os(iOS)
-            .modifier(NovelScrollTracking(progress: $scrollProgress, moving: $scrollMoving))
+            .modifier(NovelScrollTracking(scroll: scroll))
+            // The handle is the list's scroll bar: with the system's as well there were two (#1927).
+            .scrollIndicators(count >= NovelChapterScrubber.minimumRows ? .hidden : .automatic)
             .overlay(alignment: .trailing) {
                 if count >= NovelChapterScrubber.minimumRows {
-                    NovelChapterScrubber(rows: shown.flatMap(\.rows), progress: scrollProgress, moving: scrollMoving, colors: colors) { index in
+                    NovelChapterScrubber(rows: shown.flatMap(\.rows), scroll: scroll, colors: colors) { index in
                         proxy.scrollTo(index, anchor: .top)
                     }
                 }
@@ -386,21 +392,61 @@ struct NovelChapterList: View {
     }
 }
 
+/// Where a table of contents is (0 at the top, 1 at the bottom) and whether it moves. Read only by the handle (iOS).
+@MainActor @Observable final class NovelScrollState {
+    var progress: Double = 0
+    var moving = false
+    /// iOS 17: the scroll view's height, for working out `progress` from where the content is.
+    @ObservationIgnored var viewport: CGFloat = 0
+    static let space = "novelChapterList"
+
+    /// iOS 17: the content's frame in the scroll view. Off by the bars' insets at most, which the ends clamp away.
+    func follow(_ content: CGRect) {
+        let range = content.height - viewport
+        let value = range > 0 ? min(1, max(0, -content.minY / range)) : 0
+        if abs(value - progress) > 0.0005 { progress = value }
+    }
+}
+
 #if os(iOS)
-/// Where a scroll view is and whether it moves; iOS 17 can't tell, and the handle then stays in view.
+/// Where a scroll view is and whether it moves. iOS 17 has no scroll geometry: the content reports its frame
+/// (`NovelContentFrameProbe`), and the handle, which can't tell when the list stops, stays in view. It used to stay at
+/// the top there whatever the list showed, and went back to it when let go (#1927).
 private struct NovelScrollTracking: ViewModifier {
-    @Binding var progress: Double
-    @Binding var moving: Bool
+    let scroll: NovelScrollState
     func body(content: Content) -> some View {
         if #available(iOS 18, *) {
             content
                 .onScrollGeometryChange(for: Double.self) { geometry in
                     let range = geometry.contentSize.height - geometry.containerSize.height + geometry.contentInsets.top + geometry.contentInsets.bottom
                     return range > 0 ? min(1, max(0, (geometry.contentOffset.y + geometry.contentInsets.top) / range)) : 0
-                } action: { _, value in progress = value }
-                .onScrollPhaseChange { _, phase in moving = phase != .idle }
+                } action: { _, value in scroll.progress = value }
+                .onScrollPhaseChange { _, phase in scroll.moving = phase != .idle }
         } else {
             content
+                .coordinateSpace(.named(NovelScrollState.space))
+                .onGeometryChange(for: CGFloat.self, of: \.size.height) { scroll.viewport = $0 }
+                .onPreferenceChange(NovelContentFrameKey.self) { frame in MainActor.assumeIsolated { scroll.follow(frame) } }
+        }
+    }
+}
+
+private struct NovelContentFrameKey: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
+}
+
+/// iOS 17: the table of contents' frame in its scroll view, for `NovelScrollTracking`. Nothing on later systems.
+private struct NovelContentFrameProbe: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content
+        } else {
+            content.background {
+                GeometryReader { geometry in
+                    Color.clear.preference(key: NovelContentFrameKey.self, value: geometry.frame(in: .named(NovelScrollState.space)))
+                }
+            }
         }
     }
 }
@@ -411,11 +457,12 @@ private struct NovelChapterScrubber: View {
     /// Shorter lists scroll well enough by themselves.
     static let minimumRows = 80
     let rows: [NovelChapterRow]
-    let progress: Double
-    let moving: Bool
+    let scroll: NovelScrollState
     let colors: NovelListColors
     let jump: (Int) -> Void
     @State private var dragging: Double?
+    /// The row the list was last sent to in this drag: a finger's small moves land on the same row.
+    @State private var jumped: Int?
     @State private var shown = false
     @State private var hide: Task<Void, Never>?
     private let handle = CGSize(width: 6, height: 46)
@@ -427,7 +474,7 @@ private struct NovelChapterScrubber: View {
     var body: some View {
         GeometryReader { geometry in
             let track = max(1, geometry.size.height - handle.height)
-            let y = track * (dragging ?? progress)
+            let y = track * (dragging ?? scroll.progress)
             ZStack(alignment: .topTrailing) {
                 if let dragging, let row = row(at: dragging) {
                     bubble(row)
@@ -447,9 +494,10 @@ private struct NovelChapterScrubber: View {
                             let fraction = min(1, max(0, (value.location.y - handle.height / 2) / track))
                             if dragging == nil { hide?.cancel(); shown = true }
                             dragging = fraction
-                            if let row = row(at: fraction) { jump(row.index) }
+                            if let row = row(at: fraction), row.index != jumped { jumped = row.index; jump(row.index) }
                         }
                         .onEnded { _ in
+                            jumped = nil
                             withAnimation(.easeOut(duration: 0.2)) { dragging = nil }
                             scheduleHide()
                         })
@@ -462,7 +510,7 @@ private struct NovelChapterScrubber: View {
         .allowsHitTesting(visible)
         .animation(.easeOut(duration: 0.25), value: visible)
         .sensoryFeedback(.selection, trigger: dragging.flatMap { row(at: $0)?.index })
-        .onChange(of: moving) { _, now in
+        .onChange(of: scroll.moving) { _, now in
             if now { hide?.cancel(); shown = true } else { scheduleHide() }
         }
         #if DEBUG
@@ -498,7 +546,7 @@ private struct NovelChapterScrubber: View {
         hide?.cancel()
         hide = Task {
             try? await Task.sleep(for: .seconds(1.4))
-            guard !Task.isCancelled, !moving, dragging == nil else { return }
+            guard !Task.isCancelled, !scroll.moving, dragging == nil else { return }
             shown = false
         }
     }
