@@ -25,6 +25,7 @@ import IOKit.pwr_mgt
     #endif
     var history = PlaybackHistory.shared
     var skipDefaults = UserDefaults.standard
+    @ObservationIgnored var recordCachedPlayback: ((Channel, Double, Double) -> Void)?
     private var historyContext: PlaybackHistoryContext?
     /// This player's last saved position, independent of history imported from another device. A paused player
     /// must not write its old episode back just because iCloud replaced the shared history entry meanwhile.
@@ -1524,11 +1525,13 @@ import IOKit.pwr_mgt
     }
     /// Records where the episode is; `item` is the episode's own, which the queue may already have moved past.
     func saveHistory(completed: Bool = false, item: AVPlayerItem? = nil) {
-        guard let context = historyContext, let item = item ?? self.item, item.status == .readyToPlay,
+        guard let item = item ?? self.item, item.status == .readyToPlay,
               pendingResume == nil, !restoringPosition, !seekingSegment else { return }
         let length = item.duration.seconds
         let time = completed && length.isFinite ? length : item.currentTime().seconds
         guard time.isFinite, time >= 1 else { return }
+        if let playing { recordCachedPlayback?(playing, time, length.isFinite ? length : 0) }
+        guard let context = historyContext else { return }
         if lastHistoryPosition.map({ abs($0 - time) >= 0.25 }) ?? true {
             lastHistoryPosition = time
             history.record(context, position: time, duration: length.isFinite ? length : 0)

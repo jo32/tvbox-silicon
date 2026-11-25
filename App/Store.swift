@@ -422,15 +422,19 @@ import TVCore
                        headers: resolved.headers, skipScope: context.id, historyContext: context, subtitles: resolved.subtitles)
     }
 
-    /// The current media address of a downloading episode, from its source; the queue asks again when a link expires.
-    private func resolveDownload(_ item: DownloadItem) async throws -> Channel {
+    /// Reopen the download’s source with its subscription settings for both episode lists and refreshed media links.
+    func downloadClient(for item: DownloadItem) throws -> CatalogClient {
         let config = subscription
         guard let site = config?.sites.first(where: { $0.key == item.source.siteKey })
                 ?? CloudSources.current?.sites.first(where: { $0.key == item.source.siteKey }) else {
             throw TVError.unsupported(L10n.text("%@ is no longer in your subscription, so caching can't continue.", item.source.siteName))
         }
         let base = CatalogClient(site: site, origin: config?.origin ?? URL(string: "https://example.invalid/")!, jarURL: config?.spiderURL)
-        let client = config.map { base.applying($0) } ?? base
+        return config.map { base.applying($0) } ?? base
+    }
+
+    private func resolveDownload(_ item: DownloadItem) async throws -> Channel {
+        let client = try downloadClient(for: item)
         let plan = try await client.preparePlayback(item.source.episode, forDownload: true)
         let channel = try await client.resolvePlayback(plan, choice: plan.choices[0])
         // A cloud-drive file downloads straight from its CDN, as it plays: through the plugin's
@@ -805,6 +809,14 @@ import TVCore
         CloudSources.current = enabled.first(where: CloudSources.accepts)
         subscription = Subscription.merge(enabled)?.withCloudFiles().withLivePlugins()
         if let subscription {
+            // Older downloads only had the last episode in Continue Watching. Keep that position before the
+            // viewer moves on to another episode and the show-level entry is replaced.
+            for item in DownloadLibrary.shared.items where item.status == .completed && item.watchProgress?[profile.id] == nil {
+                if let progress = cachedProgress(item) {
+                    DownloadLibrary.shared.recordPlayback(id: item.id, profile: profile.id, position: progress.position,
+                                                          duration: progress.duration, now: progress.updatedAt)
+                }
+            }
             Self.registerPlugins(subscription)
             hiddenSources.restoreBuiltIns(subscription.sites, origin: subscription.origin)
             hiddenSources.restoreAutoHidden(subscription.sites, origin: subscription.origin, health: .shared)
@@ -936,7 +948,9 @@ import TVCore
 
     func catalogChannel(_ resolved: Channel, video: Video, episode: Episode, client: CatalogClient,
                         resumePosition: Double? = nil) -> Channel {
-        let channel = episodeChannel(resolved, video: video, episode: episode, client: client, resumePosition: resumePosition)
+        let saved = DownloadLibrary.shared.item(for: DownloadSource(site: client.site, videoID: video.id, episode: episode))
+        let position = resumePosition ?? saved.flatMap { cachedProgress($0)?.resumePosition }
+        let channel = episodeChannel(resolved, video: video, episode: episode, client: client, resumePosition: position)
         remember(video, client: client.with(parses: subscription?.parseServices ?? client.parses), for: channel)
         return channel
     }
@@ -1245,13 +1259,36 @@ extension Store {
                                                  subtitles: folder.subtitles) } ?? channel
     }
 
-    /// A saved episode, under the history entry it has online: its progress and Continue Watching are the same
-    /// whether it streams or plays from the device, and it opens where it stopped (#960).
+    /// Use an exact episode match, including its source and line. Another episode's newer history belongs to that episode.
+    func cachedProgress(_ item: DownloadItem) -> DownloadWatchProgress? {
+        let local = item.watchProgress?[profile.id]
+        guard let context = item.historyContext(in: subscription),
+              let entry = playbackHistory.entries.first(where: { $0.id == context.id }),
+              entry.context.episodeID == item.source.episodeID, entry.context.episodeFlag == item.source.flag,
+              local.map({ $0.updatedAt < entry.updatedAt }) ?? true else { return local }
+        return DownloadWatchProgress(position: entry.position, duration: entry.duration, updatedAt: entry.updatedAt)
+    }
+
+    func recordCachedPlayback(_ channel: Channel, position: Double, duration: Double) {
+        let library = DownloadLibrary.shared
+        guard !library.items.isEmpty else { return }
+        let id: String?
+        if channel.url.scheme == DownloadLibrary.scheme {
+            id = channel.url.host()
+        } else if let context = channel.historyContext, let config = subscription,
+                  let site = config.sites.first(where: { $0.sourceKey == context.sourceKey && $0.origin(or: config.origin) == context.origin }) {
+            let episode = Episode(id: context.episodeID, name: context.episodeName, address: "", flag: context.episodeFlag)
+            id = library.item(for: DownloadSource(site: site, videoID: context.videoID, episode: episode))?.id
+        } else { return }
+        if let id { library.recordPlayback(id: id, profile: profile.id, position: position, duration: duration) }
+    }
+
     func savedChannel(_ item: DownloadItem) -> Channel {
-        guard var context = item.historyContext(in: subscription) else { return DownloadLibrary.shared.channel(for: item) }
+        let resume = cachedProgress(item)?.resumePosition
+        guard var context = item.historyContext(in: subscription) else { return DownloadLibrary.shared.channel(for: item, resumePosition: resume) }
         let entry = playbackHistory.entries.first { $0.id == context.id }
         if context.year == nil { context.year = entry?.context.year }
-        return DownloadLibrary.shared.channel(for: item, context: context, resumePosition: entry?.resumePosition(for: item.source.episode))
+        return DownloadLibrary.shared.channel(for: item, context: context, resumePosition: resume)
     }
 
     func nextFile(after channel: Channel) -> Channel? { file(1, from: channel) }

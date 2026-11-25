@@ -81,8 +81,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send('\n'.join(lines),mime='audio/x-mpegurl')
         if path == '/poster.png':
             return self.send((root/'Design/yingxia-icon.png').read_bytes(),mime='image/png')
-        if path in ['/clip.mp4','/slow.mp4']:
-            media=args.media
+        if path in ['/clip.mp4','/slow.mp4','/portrait.mp4']:
+            media = args.media.with_name('portrait.mp4') if path == '/portrait.mp4' else args.media
             if not media.exists(): return self.send('Generate clip with Scripts/test-player.sh first',404,'text/plain')
             size=media.stat().st_size
             match=re.match(r'bytes=(\d+)-(\d*)',self.headers.get('Range',''))
@@ -99,7 +99,7 @@ class Handler(BaseHTTPRequestHandler):
                 stream.seek(start)
                 body=stream.read(end-start+1)
                 try:
-                    if path=='/clip.mp4':self.wfile.write(body)
+                    if path!='/slow.mp4':self.wfile.write(body)
                     # About 16 KB/s: minutes for the clip.
                     else:
                         for offset in range(0,len(body),4096):self.wfile.write(body[offset:offset+4096]);self.wfile.flush();time.sleep(0.25)
@@ -122,8 +122,12 @@ class Handler(BaseHTTPRequestHandler):
             categories=[{'type_id':'movies','type_name':'电影'},{'type_id':'series','type_name':'电视剧'},{'type_id':'empty','type_name':'空分类'}]
             # qa-stream-stall: episodes whose stream never answers, so the player opens with episode buttons and no picture.
             if 'play' in q:
+                if q['play'] == 'qa-portrait': return self.send({'parse':0,'url':base+'/portrait.mp4'})
                 if q.get('stream')=='download':return self.send({'parse':0,'url':base+('/clip.mp4' if q['play'] in ['episode-1','episode-2'] else '/slow.mp4')})
                 return self.send({'parse':0,'url':base+('/stall.m3u8' if q.get('stream')=='stall' else '/clip.mp4')})
+            if q.get('ids', '').startswith('qa-cache-ui-'):
+                return self.send({'list':[{'vod_id':q['ids'],'vod_name':'Cached episode fixture',
+                    'vod_play_from':'Main','vod_play_url':'Wide$episode-1#Portrait$qa-portrait#Third$episode-3#Fourth$episode-4'}]})
             if q.get('ids')=='drive':
                 return self.send({'list':[{'vod_id':'drive','vod_name':'玩具总动员 5','vod_pic':base+'/poster.png','vod_remarks':'4K HDR',
                     'vod_content':'这是一段用于检查详情页布局的简介。 '*24,

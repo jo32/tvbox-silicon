@@ -2151,6 +2151,9 @@ extension Store {
 /// `resuming`: the session already plays the channel (back from Picture in Picture), and only its links to the store are
 /// made again.
 @MainActor private func startCatalogPlayback(_ session: PlaybackSession, channel: Channel, store: Store, resuming: Bool = false) {
+    session.recordCachedPlayback = { [weak store] channel, position, duration in
+        store?.recordCachedPlayback(channel, position: position, duration: duration)
+    }
     session.history = store.playbackHistory
     // The video page's TMDB match names the video for subtitle sources (#576 M2).
     session.externalSubtitles.tmdbKey = { [weak store] channel in

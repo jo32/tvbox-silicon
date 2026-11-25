@@ -2390,4 +2390,8 @@
 "Video Tags are the short labels above the progress bar in full screen, such as 4K and H265." = "ビデオタグは、フルスクリーン時にシークバーの上に表示される4KやH265などの短いラベルです。";
 "Show Video Tags" = "ビデオタグを表示";
 "Battery Percentage" = "バッテリー残量（%）";
+"Download More" = "さらにダウンロード";
+"Watched to %@" = "%@ まで視聴";
+"Select episodes to delete" = "削除するエピソードを選択";
+"Delete %lld episodes" = "%lld 話を削除";
 "Search settings" = "設定を検索";

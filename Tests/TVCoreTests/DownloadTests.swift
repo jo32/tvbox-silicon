@@ -265,3 +265,36 @@ import Testing
     #expect(next?.id == "e15")
     #expect(library.neighbor(of: URL(string: "tvbox-download://e16")!, offset: -1)?.id == "e15")
 }
+
+@MainActor @Test func cachedEpisodeProgressSurvivesRelaunchAndSelectiveRemoval() throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let site = Site(key: "site", name: "Site", type: 1, api: "", raw: [:])
+    let items = try (1...3).map { number in
+        let episode = Episode(id: String(number), name: "Episode \(number)", address: "", flag: "line")
+        let id = "e\(number)", folder = root.appending(path: id)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data().write(to: folder.appending(path: "movie.mp4"))
+        return DownloadItem(id: id, title: "Series", episode: episode.name, poster: nil, posterHeaders: [:],
+                            source: DownloadSource(site: site, videoID: "show", episode: episode), created: Date(),
+                            status: .completed, media: "movie.mp4")
+    }
+    // The pre-checkpoint index has no watchProgress field.
+    try JSONEncoder().encode(items).write(to: root.appending(path: "downloads.json"))
+    let library = DownloadLibrary(root: root)
+    for (offset, item) in items.enumerated() {
+        library.recordPlayback(id: item.id, profile: "main", position: Double(offset + 1) * 20, duration: 120)
+    }
+    library.recordPlayback(id: "e2", profile: "guest", position: 120, duration: 120)
+    library.recordPlayback(id: "e2", profile: "main", position: 15, duration: 120)
+    library.remove(["e1", "e3"])
+    let restored = DownloadLibrary(root: root)
+    #expect(restored.items.map(\.id) == ["e2"])
+    let kept = try #require(restored.item(id: "e2"))
+    #expect(kept.watchProgress?["main"]?.resumePosition == 15)
+    #expect(kept.watchProgress?["guest"]?.completed == true)
+    #expect(kept.watchProgress?["guest"]?.resumePosition == nil)
+    #expect(restored.file(for: kept) != nil)
+    #expect(!FileManager.default.fileExists(atPath: root.appending(path: "e1").path))
+    #expect(!FileManager.default.fileExists(atPath: root.appending(path: "e3").path))
+}

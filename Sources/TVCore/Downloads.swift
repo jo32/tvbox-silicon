@@ -34,6 +34,18 @@ extension DownloadItem {
     }
 }
 
+/// Device-local viewing progress; a completed episode starts over when opened again.
+public struct DownloadWatchProgress: Codable, Hashable, Sendable {
+    public let position: Double
+    public let duration: Double
+    public let updatedAt: Date
+    public init(position: Double, duration: Double, updatedAt: Date) {
+        self.position = position; self.duration = duration; self.updatedAt = updatedAt
+    }
+    public var completed: Bool { duration > 0 && position >= duration - 1 }
+    public var resumePosition: Double? { !completed && position >= 1 ? position : nil }
+}
+
 public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
     public enum Status: String, Codable, Sendable {
         /// Waiting for a free slot in the queue.
@@ -70,6 +82,9 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
     public internal(set) var duration: Double?
     /// Whether it can play before it is whole (`TransferPlan.streams`); nil until its link has been looked at.
     public internal(set) var streams: Bool?
+
+    /// Shared download files can be watched by different local profiles. Older indexes have no checkpoints.
+    public internal(set) var watchProgress: [String: DownloadWatchProgress]?
 
     /// 0...1, by bytes where the total is known, else by pieces.
     public var fraction: Double {
@@ -188,6 +203,17 @@ public struct DownloadItem: Codable, Identifiable, Hashable, Sendable {
 
     public func item(for source: DownloadSource) -> DownloadItem? { items.first { $0.source.key == source.key } }
     public func item(id: String) -> DownloadItem? { items.first { $0.id == id } }
+
+    public func recordPlayback(id: String, profile: String, position: Double, duration: Double, now: Date = Date()) {
+        guard position.isFinite, position >= 1, duration.isFinite, duration >= 0,
+              let index = items.firstIndex(where: { $0.id == id && $0.status == .completed }) else { return }
+        let position = duration > 0 ? min(position, duration) : position
+        var checkpoints = items[index].watchProgress ?? [:]
+        if let previous = checkpoints[profile], abs(previous.position - position) < 0.25, previous.duration == duration { return }
+        checkpoints[profile] = DownloadWatchProgress(position: position, duration: duration, updatedAt: now)
+        items[index].watchProgress = checkpoints
+        save()
+    }
 
     public func pause(_ id: String) {
         guard let item = item(id: id), item.isPending, item.status != .failed else { return }
