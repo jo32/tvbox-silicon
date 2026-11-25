@@ -1699,7 +1699,7 @@ extension PlaybackSession {
                 try Task.checkCancellation()
                 // A drive file whose link the bundle's proxy reveals streams straight from the drive, like the plugins'
                 // (above): through the bundle, a 4K file filled the heap of the phone's Node until it stopped (#530).
-                address = CloudStreams.register(direct) { await CatPawOpen.directMedia(media) }
+                address = CloudStreams.register(direct) { await CatPawOpen.renewedDirectMedia(media) }
                 Diagnostics.shared.record(.info, "player", "catpaw direct host=\(direct.url.host() ?? "-") length=\(direct.length)")
             } else {
                 // The bundle downloads each request with 10 to 16 threads of its own: reading ahead on six at once ran its

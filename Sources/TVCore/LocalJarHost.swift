@@ -20,10 +20,16 @@ public actor LocalJarHost {
     private final class Entry {
         let task: Task<LocalJarProcess, Error>
         let sourceKey: String
+        let catPawOpen: Bool
+        let created = Date()
+        /// The ports of the media proxy addresses a CatPawOpen bundle's plays answered.
+        var proxyPorts: Set<Int> = []
         var ready = false
         var lastUse = Date()
         var active = 0
-        init(_ task: Task<LocalJarProcess, Error>, sourceKey: String) { self.task = task; self.sourceKey = sourceKey }
+        init(_ task: Task<LocalJarProcess, Error>, sourceKey: String, catPawOpen: Bool) {
+            self.task = task; self.sourceKey = sourceKey; self.catPawOpen = catPawOpen
+        }
     }
     private var sessions: [String: Entry] = [:]
 
@@ -104,7 +110,7 @@ public actor LocalJarHost {
                     return try LocalJarProcess(host: host, job: job, request: request, cacheRoot: root, profile: root.appendingPathComponent("Profiles/" + profileKey), context: "source=\(site.key) session=\(job.lastPathComponent)", runtime: runtime)
                 } catch { try? FileManager.default.removeItem(at: job); throw error }
             }
-            entry = Entry(task, sourceKey: site.key); sessions[key] = entry
+            entry = Entry(task, sourceKey: site.key, catPawOpen: catPawOpen != nil); sessions[key] = entry
         }
         entry.active += 1; entry.lastUse = Date()
         defer { entry.active -= 1; entry.lastUse = Date() }
@@ -129,6 +135,9 @@ public actor LocalJarHost {
                 throw TVError.unsupported(L10n.text("The plugin returned no content. Try another source."))
             }
             let result = try JSONDecoder().decode([String: JSONValue].self, from: payload)
+            if entry.catPawOpen, params["play"] != nil, let port = result["url"]?.string.flatMap(URL.init(string:)).flatMap({ CatPawOpen.isMediaProxy($0) ? $0.port : nil }) {
+                entry.proxyPorts.insert(port)
+            }
             Diagnostics.shared.record(.info, "jar.request", "\(context) complete duration=\(started.duration(to: .now)) bytes=\(payload.count)")
             return result
         } catch {
@@ -140,6 +149,18 @@ public actor LocalJarHost {
             }
             throw error
         }
+    }
+
+    /// Stops the CatPawOpen bundle behind a media proxy address when it has run for `age` or longer, so that its next
+    /// call starts it afresh without the drive links it kept (`CatPawOpen.forgetLinks`). True when it was stopped.
+    public func restartCatPawOpen(behind url: URL, olderThan age: TimeInterval) -> Bool {
+        guard let port = url.port,
+              let found = sessions.first(where: { $0.value.catPawOpen && $0.value.proxyPorts.contains(port) }),
+              found.value.active == 0, Date().timeIntervalSince(found.value.created) >= age else { return false }
+        sessions.removeValue(forKey: found.key)
+        let retired = found.value.task
+        Task { if let process = try? await retired.value { process.stop() } }
+        return true
     }
 
     public func reloadCloudAccounts() async {

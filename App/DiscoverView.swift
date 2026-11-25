@@ -8,6 +8,8 @@ import TVCore
     private(set) var collections: TMDBCatalog.Collections?
     private(set) var collectionsFailed = false
     private(set) var loading = false
+    /// The first load finished. Before it the page is still loading, not empty: its first frame comes before `load` starts.
+    private(set) var loaded = false
     /// The featured charts answered once, with titles or not: until then the carousel doesn't fall back to trending.
     private(set) var featuredAnswered = false
     /// Douban's hot lists, only fetched while their section is shown. A list that fails is just left out.
@@ -23,7 +25,7 @@ import TVCore
     func load(refresh: Bool = false) async {
         guard !loading else { return }
         loading = true
-        defer { loading = false }
+        defer { loading = false; loaded = true }
         let pending = Self.feeds.filter { refresh || pages[$0] == nil }
         async let metadata = try? TMDBCatalog.collections()
         async let anime = try? TMDBCalendar.week(.anime)
@@ -110,6 +112,9 @@ struct DiscoverView: View {
     var body: some View {
         // Turning Featured Titles off in Edit Layout also drops its backdrop, trailer and colours (#447).
         let heroShown = visible(.hero)
+        // Edit Layout and the TMDB note sit at the foot of the page: under the spinner they showed for a moment on every
+        // first visit, then the shelves pushed them away (#2036).
+        let waiting = featured.isEmpty && (model.loading || !model.loaded)
         GeometryReader { proxy in
             let heroHeight = DiscoverLayout.heroHeight(proxy.size.width)
             ZStack(alignment: .top) {
@@ -121,7 +126,7 @@ struct DiscoverView: View {
                 }
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 30) {
-                        if featured.isEmpty, model.loading {
+                        if waiting {
                             ProgressView().frame(maxWidth: .infinity).frame(height: heroShown ? min(proxy.size.width * 1.5, 660) : 160)
                         }
                         ForEach(DiscoverSection.allCases.filter(visible)) { section in
@@ -141,29 +146,31 @@ struct DiscoverView: View {
                             #endif
                             .accessibilityIdentifier("discover.retry")
                         }
-                        if !model.loading, model.pages.values.allSatisfy({ $0.items.isEmpty }) {
+                        if !model.loading, model.loaded, model.pages.values.allSatisfy({ $0.items.isEmpty }) {
                             EmptyResults(symbol: "film", title: L10n.text("No Titles Available"), message: L10n.text("Please try again later."),
                                          // The failure row above already offers a retry.
                                          action: model.failures.isEmpty && !model.collectionsFailed ? L10n.text("Try Again") : nil) { Task { await model.load() } }
                         }
-                        Button { editing = true } label: {
-                            Label(L10n.text("Edit Layout"), systemImage: "slider.horizontal.3")
-                                #if !os(tvOS)
-                                .font(.subheadline).padding(18).glassSurface(.regular, in: Capsule())
-                                #endif
+                        if !waiting {
+                            Button { editing = true } label: {
+                                Label(L10n.text("Edit Layout"), systemImage: "slider.horizontal.3")
+                                    #if !os(tvOS)
+                                    .font(.subheadline).padding(18).glassSurface(.regular, in: Capsule())
+                                    #endif
+                            }
+                            // On tvOS .plain lays its focus platter under the glass capsule; one glass control instead.
+                            #if os(tvOS)
+                            .controlButton()
+                            #else
+                            .buttonStyle(.plain)
+                            #endif
+                            .frame(maxWidth: .infinity).padding(.top, 10)
+                            HStack(spacing: 8) {
+                                TMDBBadge()
+                                Text(L10n.text("This product uses the TMDB API but is not endorsed or certified by TMDB."))
+                                    .font(.caption2).foregroundStyle(.white.opacity(0.5))
+                            }.padding(.horizontal, DiscoverLayout.gutter).padding(.vertical, 20)
                         }
-                        // On tvOS .plain lays its focus platter under the glass capsule; one glass control instead.
-                        #if os(tvOS)
-                        .controlButton()
-                        #else
-                        .buttonStyle(.plain)
-                        #endif
-                        .frame(maxWidth: .infinity).padding(.top, 10)
-                        HStack(spacing: 8) {
-                            TMDBBadge()
-                            Text(L10n.text("This product uses the TMDB API but is not endorsed or certified by TMDB."))
-                                .font(.caption2).foregroundStyle(.white.opacity(0.5))
-                        }.padding(.horizontal, DiscoverLayout.gutter).padding(.vertical, 20)
                     }
                     .padding(.bottom, 28)
                     #if os(tvOS)

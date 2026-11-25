@@ -12,7 +12,6 @@ import TVCore
 struct MusicNowPlayingScreen: View {
     enum Panel: Hashable { case lyrics, queue }
     @Environment(Store.self) private var store
-    @Environment(\.dismiss) private var dismiss
     @State private var panel: Panel?
     @State private var tint = Color(white: 0.24)
     @State private var showsChannels = false
@@ -64,7 +63,10 @@ struct MusicNowPlayingScreen: View {
                 _ = await PosterPalette.image(next)
             }
         }
-        .onChange(of: music.track == nil) { _, gone in if gone { dismiss() } }
+        // Closed through what presents it, not `dismiss`: on iOS 17 the sheet's dismiss action came back changed on
+        // every update, so this page was read again without end, frozen with its memory climbing until the system
+        // stopped the app (#1813, #1215).
+        .onChange(of: music.track == nil) { _, gone in if gone { music.presentsPlayer = false } }
         #if DEBUG
         .onAppear {
             switch UserDefaults.standard.string(forKey: "qaNowPlaying") {

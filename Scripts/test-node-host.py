@@ -104,6 +104,22 @@ exports.start = async () => {
   server.listen();
 };
 ''')
+    # A bundle that keeps what it answered for as long as it runs, as the 9280.kstore.vip bundle keeps drive links (#2135).
+    # Its answer names its own port, where its media proxy addresses point.
+    (job / 'links').mkdir()
+    (job / 'links' / 'index.js').write_text('''
+let calls = 0;
+exports.start = async () => {
+  const server = globalThis.catServerFactory(async (req, res) => {
+    for await (const ignored of req) {}
+    if (req.url.endsWith('/init')) { res.end('{}'); return; }
+    calls += 1;
+    res.writeHead(200, {'content-type': 'application/json'});
+    res.end(JSON.stringify({list: [{vod_id: String(calls), vod_name: String(server.address().port)}]}));
+  });
+  server.listen();
+};
+''')
     control = job / 'control.json'
     with (job / 'host.log').open('w') as log:
         process = subprocess.Popen([node, str(job / 'runner.mjs'), str(root / 'Runtime/NodeHost/main.mjs'),
@@ -116,13 +132,14 @@ exports.start = async () => {
                     raise AssertionError((job / 'host.log').read_text())
                 time.sleep(.02)
             config = json.loads(control.read_text())
-            def call(bundle, api):
-                data = dict(bundle=str(bundle), api='http://127.0.0.1:1/index.js',
-                            profile=str(job / 'profile'), params={'catPawOpen': api, 'wd': 'test'})
+            def send(data):
                 req = urllib.request.Request(f'http://127.0.0.1:{config["port"]}/call',
                                              data=json.dumps(data).encode(),
                                              headers={'x-yingxia-token': config['token'], 'content-type':'application/json'})
                 return json.load(urllib.request.urlopen(req, timeout=60))
+            def call(bundle, api):
+                return send(dict(bundle=str(bundle), api='http://127.0.0.1:1/index.js',
+                                 profile=str(job / 'profile'), params={'catPawOpen': api, 'wd': 'test'}))
             for scheme in ('http', 'https'):
                 envelope = call(job / 'index.js', f'/spider/{scheme}/3')
                 assert 'error' not in envelope, envelope
@@ -144,8 +161,26 @@ exports.start = async () => {
                 time.sleep(.3)
             assert process.poll() is None, (job / 'host.log').read_text()
             assert f"CATPAW_WORKER_EXIT {job / 'noisy' / 'index.js'}" not in (job / 'host.log').read_text(), (job / 'host.log').read_text()
+            # A media proxy address the drive refused restarts the bundle behind it, once it has run long enough: its next call
+            # starts it afresh, without what it kept. A younger bundle, or an address of no bundle, is left alone.
+            def links():
+                envelope = call(job / 'links' / 'index.js', '/spider/links/3')
+                assert 'error' not in envelope, envelope
+                video = json.loads(envelope['result'])['list'][0]
+                return video['vod_id'], video['vod_name']
+            assert links()[0] == '1'
+            count, port = links()
+            assert count == '2'
+            proxy = f'http://127.0.0.1:{port}/spider/links/3/proxy/baidu/session?pst=x'
+            assert send({'restartBehind': proxy, 'olderThan': 3_600_000}) == {'result': False}
+            assert send({'restartBehind': 'http://127.0.0.1:1/spider/links/3/proxy/x', 'olderThan': 0}) == {'result': False}
+            assert links()[0] == '3'
+            assert send({'restartBehind': proxy, 'olderThan': 0}) == {'result': True}
+            assert links()[0] == '1', 'the restarted bundle kept its state'
+            assert process.poll() is None, (job / 'host.log').read_text()
         finally:
             process.terminate()
             process.wait(timeout=5)
 print('Embedded Node host checks passed: HTTP and HTTPS source requests reuse upstream connections; '
-      'a bundle that runs out of memory ends alone and starts again; logging never ends a bundle.')
+      'a bundle that runs out of memory ends alone and starts again; logging never ends a bundle; '
+      'a refused media proxy restarts the bundle behind it.')
