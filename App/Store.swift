@@ -61,6 +61,8 @@ import TVCore
     }
     /// Set while a listening source's episode goes to the video player on purpose.
     @ObservationIgnored private var playsAsVideo = false
+    /// When each audiobook chapter's source was last asked for a new address (`renewAudiobook`).
+    @ObservationIgnored private var audiobookRenewals: [String: Date] = [:]
     /// The channels the live channel playing was picked from, in order (its playlist, or the favorites): the player's
     /// Previous and Next Channel and its channel list go through them (#1010).
     var liveLineup: LiveLineup?
@@ -393,6 +395,7 @@ import TVCore
             }
             self?.playbackHistory.record(source.context, position: position, duration: duration)
         }
+        music.renewAudiobook = { [weak self] source, position in self?.renewAudiobook(source, at: position) ?? false }
         music.handOffSource = { [weak self] stream, position, picture, covered in
             guard let self, let context = stream.historyContext else { return }
             if picture { AudioSourceVerdicts(defaults: self.playbackDefaults).recordVideo(context) }
@@ -408,6 +411,28 @@ import TVCore
                 self.playsAsVideo = false
             }
         }
+    }
+
+    /// An audiobook chapter that didn't play: its source lists the book's chapters again and listening goes on from them
+    /// when the chapter has a new address there. Some sources put signed sound addresses, which expire, in the table of
+    /// contents, and after the app was closed Continue failed until the book was found again (#1840). Once a chapter in
+    /// five minutes, so an address that fails fresh isn't asked for over and over.
+    private func renewAudiobook(_ source: MusicSourceEpisode, at position: Double) -> Bool {
+        guard let item = NovelListening.item(source) else { return false }
+        let key = item.book.id + "#\(item.chapter.index)"
+        if let last = audiobookRenewals[key], Date().timeIntervalSince(last) < 300 { return false }
+        audiobookRenewals[key] = Date()
+        Task { @MainActor [weak self] in
+            let chapters = try? await NovelBooks.shared.chapters(item.book, refresh: true)
+            guard let self, self.music.queue?.current?.source == source else { return }
+            guard let chapters, let index = NovelListening.renewed(item.chapter, in: chapters) else {
+                Diagnostics.shared.record(.info, "music", "audiobook source gave no new address")
+                self.music.stop()
+                return
+            }
+            self.music.play(NovelListening.queue(book: item.book, chapters: chapters, from: index), at: position > 1 ? position : nil)
+        }
+        return true
     }
 
     /// A chapter's stream from its source, as Continue Watching gets an episode's.

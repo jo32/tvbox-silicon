@@ -101,6 +101,9 @@ typealias MusicTrack = TVCore.MusicTrack
     /// Opens a TVBox episode in the video player at a second: its stream has a picture (`true`), or this player
     /// can't play it and the video player, with more ways to play, might. The last is whether Now Playing was open.
     @ObservationIgnored var handOffSource: ((Channel, Double, Bool, Bool) -> Void)?
+    /// An audiobook's chapter that didn't play, at a second: true when the store asks its source for the chapters again
+    /// and plays on from them (#1840).
+    @ObservationIgnored var renewAudiobook: ((MusicSourceEpisode, Double) -> Bool)?
     /// Saves where a TVBox episode is under its book, as the video player saves a series.
     @ObservationIgnored var recordSource: ((MusicSourceEpisode, Double, Double) -> Void)?
     /// The stream of the TVBox episode playing.
@@ -702,7 +705,16 @@ typealias MusicTrack = TVCore.MusicTrack
     /// A stream that stopped working: refresh it, then try another channel, then give up.
     private func playbackFailed(_ reason: String, run: UUID) {
         // The video player has more ways to play a source's stream (its own demuxer, proxies).
-        if generation == run, let stream = sourceStream { handOff(stream, reason: reason, picture: false); return }
+        if generation == run, let stream = sourceStream {
+            // An audiobook's saved chapter address may have expired; the video player has no more ways for it (#1840).
+            if let source = queue?.current?.source, let renew = renewAudiobook, renew(source, currentSeconds > 1 ? currentSeconds : position) {
+                Diagnostics.shared.record(.info, "music", "audiobook chapter failed: \(reason); asking its source again")
+                startWatch?.cancel(); tearDownItem(); sourceStream = nil
+                phase = .resolving
+                return
+            }
+            handOff(stream, reason: reason, picture: false); return
+        }
         guard generation == run, let selection, let track else { return }
         Diagnostics.shared.record(.warning, "music", "playback failed \(selection.candidate.provider.rawValue): \(reason)")
         let at = currentSeconds, previous = selection.probe
