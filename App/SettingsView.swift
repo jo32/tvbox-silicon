@@ -577,6 +577,7 @@ struct FormSettingsView: View {
     @State private var removingSubscription: SubscriptionEntry?
     /// A source list, LX Music source or live plugin its menu asked to remove, waiting for the confirmation.
     @State private var removingExtra: SubscriptionExtra?
+    @State private var searchQuery = ""
 
     /// A live plugin, LX Music source, or comic or book source list, in its kind's section: its page, and in its menu
     /// on or off (music) and Remove.
@@ -603,8 +604,12 @@ struct FormSettingsView: View {
 
     var body: some View {
         @Bindable var store = store
+        let trimmedQuery = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         ScrollViewReader { proxy in
         Form { Group {
+            if !trimmedQuery.isEmpty {
+                searchResultsContent(query: trimmedQuery)
+            } else {
             heroSection
 
             // Who is signed in: their feedback points, and Pro.
@@ -863,22 +868,7 @@ struct FormSettingsView: View {
                 .accessibilityIdentifier("settings.colorTheme")
                 // iPhone and iPad list the app's language in the Settings app; on the Mac it is hidden deep in System
                 // Settings, so it is picked here.
-                Picker(selection: $language) {
-                    Text(L10n.text("System Language")).tag("")
-                    ForEach(MacLanguage.choices, id: \.code) { Text($0.name).tag($0.code) }
-                } label: {
-                    FormLabel(symbol: "globe", tint: .blue, title: L10n.text("Language"))
-                }
-                .onChange(of: language) { _, code in MacLanguage.choose(code) }
-                .accessibilityIdentifier("settings.language")
-                .id("settings.language")
-                if language != MacLanguage.launched {
-                    HStack {
-                        Text(L10n.text("Restart Yingxia to use the new language.")).foregroundStyle(.secondary)
-                        Spacer(minLength: 8)
-                        Button(L10n.text("Restart Now")) { MacLanguage.relaunch() }
-                    }
-                }
+                languagePickerRows
             }
             #endif
 
@@ -1066,6 +1056,7 @@ struct FormSettingsView: View {
                 if store.extrasUnlocked { Text(supportNote) }
             }
             #endif
+            }
         }.settingsRows() }
         #if DEBUG
         // `-qaScrollBottom 1` opens Settings at its end for screenshots; `-qaScrollTo <id>` at a group with that id.
@@ -1082,6 +1073,7 @@ struct FormSettingsView: View {
         #endif
         }
         .settingsForm(L10n.text("Settings"))
+        .searchable(text: $searchQuery, prompt: Text(L10n.text("Search settings")))
         .sheet(isPresented: $editingSources) { HiddenSourcesEditor() }
         .sheet(isPresented: $editingLive) { LiveSourcesEditor() }
         // An alert rather than a dialog: a dialog on the row never appeared after a swipe, and on the page it pointed
@@ -1207,6 +1199,515 @@ struct FormSettingsView: View {
     #endif
 }
 
+private enum SettingsSearchTarget: Hashable, Sendable {
+    case account
+    case feedback
+    case telegram
+    case subscription(String)
+    case hiddenSources
+    case hiddenLive
+    case arrangeSubscriptions
+    case removeSubscriptions
+    case addSubscription
+    case livePlugins
+    case comicSources
+    case bookSources
+    case extra(SubscriptionExtra)
+    case bilibili
+    case douyin
+    case sourceSignIn(String)
+    case cloudDrive
+    case profiles
+    case iCloudSync
+    case watchNow
+    case appIcon
+    case colorTheme
+    case playback
+    case playURL
+    case language
+    case showDanmaku
+    case danmakuSettings
+    case bilibiliCast
+    case playOn
+    case showVideoInfo
+    case playerWindowSize
+    case skipIntroOutro
+    case subtitleStyle
+    case subtitleSources
+    case sharperPicture
+    case smoothMotion
+    case localCache
+    case jarRuntime
+    case diagnostics
+    case privacy
+    case errorReports
+    case tmdbLookup
+    case softwareUpdate
+    case autoInstallUpdates
+    case releaseNotes
+    case licenses
+}
+
+private extension FormSettingsView {
+    #if os(macOS)
+    @ViewBuilder var languagePickerRows: some View {
+        Picker(selection: $language) {
+            Text(L10n.text("System Language")).tag("")
+            ForEach(MacLanguage.choices, id: \.code) { Text($0.name).tag($0.code) }
+        } label: {
+            FormLabel(symbol: "globe", tint: .blue, title: L10n.text("Language"))
+        }
+        .onChange(of: language) { _, code in MacLanguage.choose(code) }
+        .accessibilityIdentifier("settings.language")
+        .id("settings.language")
+        if language != MacLanguage.launched {
+            HStack {
+                Text(L10n.text("Restart Yingxia to use the new language.")).foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                Button(L10n.text("Restart Now")) { MacLanguage.relaunch() }
+            }
+        }
+    }
+    #endif
+
+    @ViewBuilder func searchResultsContent(query: String) -> some View {
+        let matches = SettingsSearchEngine.search(query: query, in: searchItems)
+        if matches.isEmpty {
+            ContentUnavailableView.search(text: query)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 32)
+        } else {
+            Section {
+                ForEach(matches) { item in
+                    searchRow(for: item.id)
+                }
+            } header: {
+                Text(L10n.text("Settings"))
+            }
+        }
+    }
+
+    var searchItems: [SettingsSearchItem<SettingsSearchTarget>] {
+        var items: [SettingsSearchItem<SettingsSearchTarget>] = []
+        var order = 0
+        func add(_ id: SettingsSearchTarget, title: String, section: String, subtitle: String = "", keywords: [String] = []) {
+            items.append(SettingsSearchItem(id: id, title: title, section: section, subtitle: subtitle, keywords: keywords, order: order))
+            order += 1
+        }
+
+        let secGeneral = L10n.text("Settings")
+        let secSubs = L10n.text("Subscriptions")
+        let secAccounts = L10n.text("Accounts")
+        let secPlayback = L10n.text("Playback")
+        let secPicture = L10n.text("Picture")
+        let secAdvanced = L10n.text("Advanced")
+        let secAbout = L10n.text("About")
+
+        add(.account, title: L10n.text("Sign In"), section: secAccounts, subtitle: L10n.text("Feedback points and Pro codes"),
+            keywords: ["account", "pro", "points", "login", "账号", "登录", "积分", "会员"])
+        add(.feedback, title: L10n.text("Send Feedback"), section: secGeneral, subtitle: L10n.text("Report a problem or share an idea"),
+            keywords: ["feedback", "bug", "issue", "report", "反馈", "建议"])
+        add(.telegram, title: L10n.text("Telegram Group"), section: secGeneral, subtitle: L10n.text("Chat with the developer and other users"),
+            keywords: ["telegram", "tg", "group", "chat", "电报", "群组"])
+
+        for entry in store.subscriptions {
+            add(.subscription(entry.address), title: entry.title, section: secSubs, subtitle: store.subscriptionValue(entry),
+                keywords: ["subscription", "source", "tvbox", "m3u", "订阅", "源", entry.address])
+        }
+        if store.subscription != nil {
+            add(.hiddenSources, title: L10n.text("Hide or Show Sources"), section: secSubs,
+                keywords: ["hide", "show", "sources", "隐藏", "显示", "片源"])
+        }
+        if !store.allLiveSources.isEmpty {
+            add(.hiddenLive, title: L10n.text("Hide or Show Live TV"), section: secSubs,
+                keywords: ["live", "tv", "hide", "直播", "频道"])
+        }
+        if store.subscriptions.count > 1 {
+            add(.arrangeSubscriptions, title: L10n.text("Arrange Subscriptions"), section: secSubs,
+                keywords: ["arrange", "reorder", "sort", "排序", "订阅"])
+        }
+        if store.subscriptions.count + SubscriptionExtra.all(store).count > 1 {
+            add(.removeSubscriptions, title: L10n.text("Remove Subscriptions"), section: secSubs,
+                keywords: ["remove", "delete", "删除", "移除", "订阅"])
+        }
+        #if os(iOS)
+        add(.addSubscription, title: L10n.text("Add Subscription"), section: secSubs,
+            keywords: ["add", "url", "import", "添加", "导入", "订阅"])
+        #endif
+
+        if store.extrasUnlocked || !store.livePlugins.isEmpty {
+            for plugin in store.livePlugins {
+                add(.extra(.livePlugin(plugin)), title: plugin.name, section: L10n.text("Live Plugins"),
+                    keywords: ["live", "plugin", "直播", "插件"])
+            }
+            add(.livePlugins, title: L10n.text("Live Plugins"), section: L10n.text("Live Plugins"),
+                keywords: ["live", "plugin", "angellive", "直播", "插件"])
+        }
+        for source in store.lxSources {
+            add(.extra(.lxSource(source)), title: source.info.name, section: L10n.text("Music"),
+                keywords: ["music", "lx", "洛雪", "音乐"])
+        }
+        if !MangaStore.shared.repositories.isEmpty {
+            for repo in MangaStore.shared.repositories {
+                add(.extra(.manga(repo)), title: MangaSources.title(of: repo), section: L10n.text("Manga"),
+                    keywords: ["manga", "comic", "漫画"])
+            }
+            add(.comicSources, title: L10n.text("Comic Sources"), section: L10n.text("Manga"),
+                keywords: ["manga", "comic", "venera", "漫画", "书源"])
+        }
+        if !NovelStore.shared.lists.isEmpty || !NovelStore.shared.offers.isEmpty {
+            for list in NovelStore.shared.lists {
+                add(.extra(.novel(list.address)), title: NovelStore.shared.title(of: list.address), section: L10n.text("Novels"),
+                    keywords: ["novel", "book", "小说", "书源"])
+            }
+            add(.bookSources, title: L10n.text("Book Sources"), section: L10n.text("Novels"),
+                keywords: ["novel", "book", "legado", "小说", "书源"])
+        }
+
+        if store.extrasUnlocked {
+            add(.bilibili, title: L10n.text("Bilibili"), section: secAccounts, subtitle: bilibiliSummary,
+                keywords: ["bilibili", "b站", "哔哩哔哩", "大会员"])
+            add(.douyin, title: L10n.text("Douyin"), section: secAccounts, subtitle: douyinSummary,
+                keywords: ["douyin", "抖音", "直播"])
+            for entry in sourceSignIns {
+                add(.sourceSignIn(entry.signIn.id), title: entry.signIn.name, section: secAccounts, subtitle: entry.summary,
+                    keywords: ["account", "sign in", "登录", "账号"])
+            }
+        }
+        add(.cloudDrive, title: L10n.text("Cloud Drive Accounts"), section: secAccounts, subtitle: cloudSummary,
+            keywords: ["cloud", "drive", "quark", "baidu", "aliyun", "uc", "115", "webdav", "alist", "网盘", "云盘", "夸克", "百度", "阿里"])
+
+        add(.profiles, title: L10n.text("Profiles"), section: secGeneral, subtitle: store.profile.title,
+            keywords: ["profile", "user", "switch", "多用户", "档案", "切换"])
+
+        if store.profile.isMain {
+            add(.iCloudSync, title: L10n.text("iCloud Sync"), section: secGeneral, subtitle: SettingsNote.iCloud,
+                keywords: ["icloud", "sync", "cloudkit", "同步"])
+        }
+
+        add(.watchNow, title: L10n.text("Watch Now"), section: secGeneral,
+            keywords: ["home", "watch now", "recommendations", "首页", "推荐", "立即观看"])
+        if AppIcons.isAvailable {
+            add(.appIcon, title: L10n.text("App Icon"), section: secGeneral, subtitle: AppIcons.shared.title,
+                keywords: ["icon", "logo", "图标"])
+        }
+        add(.colorTheme, title: L10n.text("Color Theme"), section: secGeneral, subtitle: ColorThemes.shared.current.title,
+            keywords: ["color", "theme", "appearance", "dark", "主题", "配色", "外观"])
+
+        #if os(iOS)
+        add(.playback, title: L10n.text("Playback"), section: secPlayback,
+            keywords: ["playback", "player", "pip", "danmaku", "subtitle", "skip", "intro", "outro", "speed", "播放", "弹幕", "字幕", "画中画", "倍速", "跳过", "片头", "片尾"])
+        add(.playURL, title: L10n.text("Play a URL"), section: secPlayback,
+            keywords: ["url", "stream", "link", "播放链接", "串流"])
+        #else
+        add(.language, title: L10n.text("Language"), section: secGeneral,
+            keywords: ["language", "locale", "chinese", "english", "japanese", "语言", "中文", "英文"])
+        #endif
+
+        #if os(macOS)
+        if store.extrasUnlocked {
+            add(.showDanmaku, title: L10n.text("Show Danmaku"), section: secPlayback, subtitle: danmakuNote,
+                keywords: ["danmaku", "bullet", "comments", "弹幕"])
+            add(.danmakuSettings, title: L10n.text("Danmaku Settings"), section: secPlayback,
+                keywords: ["danmaku", "font", "opacity", "speed", "area", "弹幕", "透明度", "速度", "区域"])
+            add(.bilibiliCast, title: L10n.text("Cast from the Bilibili App"), section: secPlayback,
+                keywords: ["bilibili", "cast", "tv", "b站", "投屏"])
+        }
+        add(.playOn, title: L10n.text("Play from Other Devices"), section: secPlayback,
+            keywords: ["play on", "handoff", "cast", "dlna", "接力", "投屏", "设备"])
+        add(.showVideoInfo, title: L10n.text("Show Video Info"), section: secPlayback, subtitle: SettingsNote.playbackInfo,
+            keywords: ["info", "fps", "bitrate", "codec", "resolution", "信息", "码率", "帧率", "分辨率"])
+        add(.playerWindowSize, title: L10n.text("Default Window Size"), section: secPlayback,
+            keywords: ["window", "size", "default", "resize", "窗口", "大小", "默认尺寸"])
+        add(.skipIntroOutro, title: L10n.text("Automatically skip intro and outro"), section: secPlayback, subtitle: SettingsNote.introOutro,
+            keywords: ["skip", "intro", "outro", "跳过", "片头", "片尾"])
+        add(.subtitleStyle, title: L10n.text("Subtitle Style"), section: secPlayback,
+            keywords: ["subtitle", "font", "size", "color", "ass", "srt", "字幕", "样式", "字体"])
+        add(.subtitleSources, title: L10n.text("Subtitle Sources"), section: secPlayback,
+            keywords: ["subtitle", "search", "shooter", "opensubtitles", "字幕", "刮削", "搜索"])
+        add(.playURL, title: L10n.text("Play a URL"), section: secPlayback,
+            keywords: ["url", "stream", "link", "播放链接", "串流"])
+
+        if VideoEnhancement.canUpscale {
+            add(.sharperPicture, title: L10n.text("Sharper Picture"), section: secPicture, subtitle: upscaleNote,
+                keywords: ["upscale", "sharp", "metal", "ai", "超分", "锐化", "画质"])
+        }
+        if VideoEnhancement.canSmooth {
+            add(.smoothMotion, title: L10n.text("Smooth Motion (60 fps)"), section: secPicture, subtitle: smoothNote,
+                keywords: ["smooth", "60", "fps", "motion", "interpolation", "补帧", "流畅", "帧率"])
+        }
+        #endif
+
+        add(.localCache, title: L10n.text("Local Cache"), section: secAdvanced,
+            keywords: ["cache", "storage", "clear", "clean", "disk", "缓存", "清理", "空间"])
+        if store.extrasUnlocked {
+            add(.jarRuntime, title: L10n.text("JAR Runtime and Compatibility"), section: secAdvanced,
+                keywords: ["jar", "java", "jvm", "python", "node", "js", "runtime", "运行时", "兼容"])
+        }
+        add(.diagnostics, title: L10n.text("Diagnostic Logs"), section: secAdvanced,
+            keywords: ["log", "diagnostic", "debug", "日志", "诊断"])
+        #if os(iOS)
+        add(.privacy, title: L10n.text("Privacy"), section: secAdvanced,
+            keywords: ["privacy", "error", "tmdb", "隐私", "报错", "刮削"])
+        #else
+        add(.errorReports, title: L10n.text("Send Error Reports"), section: secAdvanced, subtitle: errorReportsNote,
+            keywords: ["error", "crash", "report", "privacy", "错误报告", "崩溃", "隐私"])
+        add(.tmdbLookup, title: L10n.text("Look Up Titles on TMDB"), section: secAdvanced, subtitle: tmdbNote,
+            keywords: ["tmdb", "metadata", "poster", "cast", "刮削", "海报", "演员"])
+        #endif
+
+        if Updates.channel != .none {
+            add(.softwareUpdate, title: L10n.text("Software Update"), section: secAbout,
+                keywords: ["update", "version", "check", "升级", "更新", "版本"])
+            #if os(macOS)
+            if updates.installer != nil {
+                add(.autoInstallUpdates, title: L10n.text("Install Updates Automatically"), section: secAbout,
+                    keywords: ["auto", "update", "install", "自动更新", "自动安装"])
+            }
+            #endif
+        }
+        if !updates.currentNotes.isEmpty {
+            add(.releaseNotes, title: L10n.text("What's New in Version %@", updates.displayVersion), section: secAbout,
+                keywords: ["release", "notes", "changelog", "what's new", "更新日志"])
+        }
+        add(.licenses, title: L10n.text("Open Source Licenses"), section: secAbout,
+            keywords: ["license", "open source", "third party", "开源", "协议", "许可"])
+
+        return items
+    }
+
+    @ViewBuilder func searchRow(for target: SettingsSearchTarget) -> some View {
+        switch target {
+        case .account:
+            AccountSettingsRow()
+        case .feedback:
+            #if os(iOS)
+            Button { showsFeedback = true } label: {
+                FormLabel(symbol: "bubble.left.and.text.bubble.right.fill", tint: Brand.indigo, title: L10n.text("Send Feedback"),
+                          subtitle: L10n.text("Report a problem or share an idea"))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }.formRowButton()
+            #else
+            SettingsLinkRow(symbol: "bubble.left.and.text.bubble.right.fill", tint: Brand.indigo, title: L10n.text("Send Feedback"),
+                            subtitle: L10n.text("Report a problem or share an idea")) { FeedbackView() }
+            #endif
+        case .telegram:
+            SettingsWebRow(symbol: "paperplane.fill", tint: Brand.cyan, title: L10n.text("Telegram Group"),
+                           subtitle: L10n.text("Chat with the developer and other users"), url: Support.telegram)
+        case .subscription(let address):
+            if let entry = store.subscriptions.first(where: { $0.address == address }) {
+                let failure = store.subscriptionErrors[entry.address]
+                FormLink(symbol: failure == nil ? "list.bullet.rectangle.fill" : "exclamationmark.triangle.fill",
+                         tint: failure != nil ? .orange : entry.enabled ? .blue : .gray,
+                         title: entry.title, value: store.subscriptionValue(entry), warning: failure != nil) {
+                    SubscriptionDetailView(entry: entry)
+                }
+            }
+        case .hiddenSources:
+            Button { editingSources = true } label: {
+                FormLabel(symbol: "eye.slash.fill", tint: .teal, title: L10n.text("Hide or Show Sources"))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }.formRowButton()
+        case .hiddenLive:
+            Button { editingLive = true } label: {
+                FormLabel(symbol: "tv.fill", tint: .red, title: L10n.text("Hide or Show Live TV"))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }.formRowButton()
+        case .arrangeSubscriptions:
+            FormLink(symbol: "arrow.up.arrow.down", tint: .indigo, title: L10n.text("Arrange Subscriptions")) { ArrangeSubscriptionsView() }
+        case .removeSubscriptions:
+            FormLink(symbol: "trash.fill", tint: .red, title: L10n.text("Remove Subscriptions")) { RemoveSubscriptionsView() }
+        case .addSubscription:
+            #if os(iOS)
+            Button { addingSubscription = true } label: {
+                FormLabel(symbol: "plus", tint: .green, title: L10n.text("Add Subscription")).foregroundStyle(.primary)
+            }
+            #endif
+        case .livePlugins:
+            let count = store.livePluginPlatforms.count
+            FormLink(symbol: "dot.radiowaves.left.and.right", tint: .red, title: L10n.text("Live Plugins"),
+                     value: count == 0 ? nil : String(count)) { LivePluginsView() }
+        case .comicSources:
+            let sources = MangaStore.shared.sources
+            FormLink(symbol: "books.vertical.fill", tint: .orange, title: L10n.text("Comic Sources"),
+                     value: sources.isEmpty ? nil : String(sources.count)) { MangaSourcesView() }
+        case .bookSources:
+            FormLink(symbol: "text.book.closed.fill", tint: .green, title: L10n.text("Book Sources"),
+                     value: L10n.text("%lld on", NovelStore.shared.enabledKeys.count)) { NovelSourcesView() }
+        case .extra(let extra):
+            extraRow(extra)
+        case .bilibili:
+            FormLink(symbol: "play.tv.fill", tint: .pink, title: L10n.text("Bilibili"), value: bilibiliSummary) { BilibiliAccountView() }
+        case .douyin:
+            FormLink(symbol: "music.note", tint: .black, title: L10n.text("Douyin"), value: douyinSummary) { DouyinAccountView() }
+        case .sourceSignIn(let id):
+            if let entry = sourceSignIns.first(where: { $0.signIn.id == id }) {
+                FormLink(symbol: "play.rectangle.on.rectangle.fill", tint: .red, title: entry.signIn.name, value: entry.summary) {
+                    SourceAccountView(signIn: entry.signIn)
+                }
+            }
+        case .cloudDrive:
+            FormLink(symbol: "externaldrive.fill.badge.person.crop", tint: .brown, title: L10n.text("Cloud Drive Accounts"), value: cloudSummary) {
+                CloudDriveView()
+            }
+        case .profiles:
+            FormLink(symbol: "person.2.fill", tint: .teal, title: L10n.text("Profiles"), value: store.profile.title) { ProfilesView() }
+        case .iCloudSync:
+            Toggle(isOn: $syncsWithICloud) {
+                FormLabel(symbol: "icloud.fill", tint: .blue, title: L10n.text("iCloud Sync"), subtitle: SettingsNote.iCloud)
+            }
+            .settingsSwitch()
+            .onChange(of: syncsWithICloud) { _, on in store.cloudSync?.setEnabled(on) }
+        case .watchNow:
+            FormLink(symbol: AppSection.home.icon, tint: Brand.cyan, title: L10n.text("Watch Now")) { WatchNowSettingsView() }
+        case .appIcon:
+            FormLink(symbol: "paintpalette.fill", tint: .pink, title: L10n.text("App Icon"), value: AppIcons.shared.title) { AppIconSettingsView() }
+        case .colorTheme:
+            FormLink(symbol: "swatchpalette.fill", tint: .purple, title: L10n.text("Color Theme"), value: ColorThemes.shared.current.title) {
+                ColorThemeSettingsView()
+            }
+        case .playback:
+            #if os(iOS)
+            FormLink(symbol: "slider.horizontal.below.rectangle", tint: .orange, title: L10n.text("Playback")) { PlaybackSettingsView() }
+            #endif
+        case .playURL:
+            FormLink(symbol: "play.fill", tint: Brand.indigo, title: L10n.text("Play a URL")) { PlayURLView() }
+        case .language:
+            #if os(macOS)
+            languagePickerRows
+            #endif
+        case .showDanmaku:
+            #if os(macOS)
+            Toggle(isOn: $showsDanmaku) {
+                FormLabel(symbol: "text.bubble.fill", tint: .teal, title: L10n.text("Show Danmaku"), subtitle: danmakuNote)
+            }
+            .settingsSwitch()
+            #endif
+        case .danmakuSettings:
+            #if os(macOS)
+            FormLink(symbol: "slider.horizontal.3", tint: .teal, title: L10n.text("Danmaku Settings")) { DanmakuSettingsView() }
+            #endif
+        case .bilibiliCast:
+            #if os(macOS)
+            Toggle(isOn: $receivesCasts) {
+                FormLabel(symbol: "tv.and.mediabox.fill", tint: BilibiliMark.blue, title: L10n.text("Cast from the Bilibili App"),
+                          subtitle: L10n.text("With your phone on the same network, tap the TV button in a Bilibili video and choose %@.", L10n.text("Yingxia")))
+            }
+            .onChange(of: receivesCasts) { _, on in
+                if on { BilibiliCastController.shared.start(store) } else { BilibiliCastController.shared.stop() }
+            }
+            #endif
+        case .playOn:
+            #if os(macOS)
+            Toggle(isOn: $receivesPlayOn) {
+                FormLabel(symbol: "play.tv.fill", tint: Brand.indigo, title: L10n.text("Play from Other Devices"))
+            }
+            .settingsSwitch()
+            .onChange(of: receivesPlayOn) { _, on in
+                if on { PlayOnController.shared.start(store) } else { PlayOnController.shared.stop() }
+            }
+            #endif
+        case .showVideoInfo:
+            #if os(macOS)
+            Toggle(isOn: $showsPlaybackInfo) {
+                FormLabel(symbol: "info.circle.fill", tint: .blue, title: L10n.text("Show Video Info"), subtitle: SettingsNote.playbackInfo)
+            }
+            .settingsSwitch()
+            #endif
+        case .playerWindowSize:
+            #if os(macOS)
+            Picker(selection: Binding(get: { MacPlayerWindowSize(rawValue: playerWindowSize) ?? .keep },
+                                      set: { playerWindowSize = $0.rawValue })) {
+                ForEach(MacPlayerWindowSize.allCases, id: \.self) { Text($0.title).tag($0) }
+            } label: {
+                FormLabel(symbol: "rectangle.expand.vertical", tint: .indigo, title: L10n.text("Default Window Size"))
+            }
+            #endif
+        case .skipIntroOutro:
+            #if os(macOS)
+            Toggle(isOn: $skipsIntros) {
+                FormLabel(symbol: "arrow.right.to.line", tint: .mint, title: L10n.text("Automatically skip intro and outro"), subtitle: SettingsNote.introOutro)
+            }
+            .settingsSwitch()
+            .onAppear { skipsIntros = EpisodeSkipSettings.isAutomatic(defaults: store.playbackDefaults) }
+            .onChange(of: skipsIntros) { _, on in EpisodeSkipSettings.setAutomatic(on, defaults: store.playbackDefaults) }
+            #endif
+        case .subtitleStyle:
+            #if os(macOS)
+            FormLink(symbol: "captions.bubble.fill", tint: .orange, title: L10n.text("Subtitle Style")) { SubtitleStyleView() }
+            #endif
+        case .subtitleSources:
+            #if os(macOS)
+            FormLink(symbol: "text.magnifyingglass", tint: .orange, title: L10n.text("Subtitle Sources")) { SubtitleSourcesView() }
+            #endif
+        case .sharperPicture:
+            #if os(macOS)
+            Toggle(isOn: $upscalesVideo) {
+                FormLabel(symbol: "wand.and.sparkles", tint: .purple, title: L10n.text("Sharper Picture"), subtitle: upscaleNote)
+            }
+            .settingsSwitch()
+            #endif
+        case .smoothMotion:
+            #if os(macOS)
+            Toggle(isOn: $smoothsVideo) {
+                FormLabel(symbol: "film.stack", tint: .indigo, title: L10n.text("Smooth Motion (60 fps)"), subtitle: smoothNote)
+            }
+            .settingsSwitch()
+            #endif
+        case .localCache:
+            FormLink(symbol: "internaldrive", tint: .blue, title: L10n.text("Local Cache")) { CacheSettingsView() }
+        case .jarRuntime:
+            FormLink(symbol: "cpu.fill", tint: .orange, title: L10n.text("JAR Runtime and Compatibility")) { RuntimeView() }
+        case .diagnostics:
+            FormLink(symbol: "doc.text.magnifyingglass", tint: .gray, title: L10n.text("Diagnostic Logs")) { DiagnosticsView() }
+        case .privacy:
+            #if os(iOS)
+            FormLink(symbol: "hand.raised.fill", tint: .blue, title: L10n.text("Privacy")) { PrivacySettingsView() }
+            #endif
+        case .errorReports:
+            #if os(macOS)
+            Toggle(isOn: $sendsErrorReports) {
+                FormLabel(symbol: "ladybug.fill", tint: .red, title: L10n.text("Send Error Reports"), subtitle: errorReportsNote)
+            }
+            .settingsSwitch()
+            .onChange(of: sendsErrorReports) { _, on in if !on { ErrorReports.shared.discard() } }
+            #endif
+        case .tmdbLookup:
+            #if os(macOS)
+            Toggle(isOn: $looksUpTMDB) {
+                FormLabel(symbol: "film.stack.fill", tint: .teal, title: L10n.text("Look Up Titles on TMDB"), subtitle: tmdbNote)
+            }
+            .settingsSwitch()
+            #endif
+        case .softwareUpdate:
+            Button {
+                if updates.available.isEmpty { Task { await updates.check(manual: true) } } else { updates.show() }
+            } label: {
+                FormLabel(symbol: "arrow.triangle.2.circlepath", tint: .gray, title: L10n.text("Software Update"))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .formRowButton()
+            .disabled(updates.checking)
+        case .autoInstallUpdates:
+            #if os(macOS)
+            if let installer = updates.installer {
+                Toggle(isOn: Binding(get: { installer.automaticallyInstalls }, set: { installer.automaticallyInstalls = $0 })) {
+                    FormLabel(symbol: "arrow.down.circle.fill", tint: .blue, title: L10n.text("Install Updates Automatically"))
+                }
+                .settingsSwitch()
+            }
+            #endif
+        case .releaseNotes:
+            Button(action: updates.showCurrentNotes) {
+                FormLabel(symbol: "sparkles", tint: .purple, title: L10n.text("What's New in Version %@", updates.displayVersion))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }.formRowButton()
+        case .licenses:
+            FormLink(symbol: "doc.plaintext.fill", tint: .gray, title: L10n.text("Open Source Licenses")) { LicensesView() }
+        }
+    }
+}
+
 #if os(iOS)
 /// The hero card's fill: the row colour lit from above by the icon's cyan and indigo.
 private struct SettingsHeroGlow: View {
@@ -1279,6 +1780,8 @@ struct PlaybackSettingsView: View {
     @AppStorage(WatchPage.fullScreenKey) private var startsFullScreen = false
     /// The profile's switch for intros and outros, kept with its times rather than in the app's own defaults.
     @State private var skipsIntros = false
+    /// The speed every video starts at (Settings › Playback), saved on change.
+    @State private var playbackSpeed = PlaybackSpeed.standard
     var body: some View {
         SettingsPage(title: L10n.text("Playback"), symbol: "slider.horizontal.below.rectangle") {
             // Where people look for it first (#1488): the switch, and where each title's times are set.
@@ -1318,6 +1821,16 @@ struct PlaybackSettingsView: View {
                     FormLabel(symbol: "sun.max.fill", tint: .yellow, title: L10n.text("Brightness and Volume"))
                 }
                 .settingsSwitch()
+            }
+            // The speed every video starts at, chosen here so it sticks across relaunches.
+            SettingsGroup(title: L10n.text("Playback Speed"), footer: L10n.text("Each new title starts at this speed. A speed you pick in the player stays for that title's next episodes.")) {
+                Picker(selection: Binding(get: { playbackSpeed }, set: { playbackSpeed = $0; PlaybackSpeed.save($0) })) {
+                    ForEach(PlaybackSpeed.speeds, id: \.self) { Text(PlaybackSpeed.speedLabel($0)).tag($0) }
+                } label: {
+                    FormLabel(symbol: "speedometer", tint: .orange, title: L10n.text("Start Speed"))
+                }
+                .accessibilityIdentifier("settings.playbackSpeed")
+                .onAppear { playbackSpeed = PlaybackSpeed.load() }
             }
             // The iPhone's video page, with the player at its top (#885, #1065); iPad's player opens full screen.
             if UIDevice.current.userInterfaceIdiom == .phone {

@@ -181,6 +181,8 @@ Scripts/verify.sh
 
 The localization check verifies translation coverage, format arguments, and static Swift key references. `Scripts/verify.sh` runs the Swift tests, native JNI bridge tests, Java host tests, and unsigned macOS, iOS device-SDK, and tvOS device-SDK builds. The native bridge tests (`Scripts/test-apple-runtime-bridge.sh`) use the installed JDK and controlled Java responses to exercise malformed Unicode, exceptions, and concurrent requests through the production bridge. Successful builds do not establish plugin compatibility or device playback support.
 
+`Scripts/test-playback-history.sh macOS` runs the production player's history regression tests in an isolated app. Use `iOS <simulator UUID>` for either an iPhone or iPad, or `tvOS <simulator UUID>` for Apple TV. It needs XcodeGen and ffmpeg, generates a local movie, and checks that a paused player cannot undo imported history on its timer or on close, while deliberate rewinds, resumed playback and episode changes still save. The Mac host uses its own sandbox; the tests use temporary history files and no iCloud account. `CloudSyncTests` separately exercises delayed uploads, legacy timestamps and deletions with two simulated devices.
+
 `Scripts/test-tv-ui.sh <tvOS simulator UUID>` drives the Siri Remote in a separate tvOS bundle (no JAR runtime, isolated data) against `Scripts/qa-server.py`: `TVNavigationUITests` opens a video page whose details never arrive (`-qaPage open-detail:qa-stall:1`) and checks that Back returns to the previous page instead of leaving the app. Focus starts in the tab sidebar, so the test moves right into the page.
 
 The command-line probe supports controlled static DEX execution and live-playlist inspection:

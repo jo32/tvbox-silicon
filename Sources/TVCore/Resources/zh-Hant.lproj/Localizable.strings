@@ -1056,6 +1056,8 @@
 "Play from Other Devices" = "接收其他裝置的播放";
 "With Yingxia open here, your other devices on the same network can send it what they play: tap Play On in their player." = "在這裡打開映匣後，同一個網路中你的其他裝置可以把正在播放的內容傳到這裡：在它們的播放器中點一下「在其他裝置上播放」。";
 "Touch and Hold Speed" = "長按倍速";
+"Start Speed" = "預設倍速";
+"Each new title starts at this speed. A speed you pick in the player stays for that title's next episodes." = "每部新的影片都以此倍速開始播放。在播放器中選的倍速會沿用到這部影片的後續集數。";
 "Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go." = "長按影片畫面以此速度播放。按住時左右滑動可調整倍速，向下滑動可在放開後保持。";
 "Slide sideways to change the speed, or down to keep it" = "左右滑動調整倍速，向下滑動鎖定";
 "Slowed down to keep up with the connection" = "網速跟不上，已自動降低倍速";
@@ -2389,3 +2391,4 @@
 "Watched to %@" = "看到 %@";
 "Select episodes to delete" = "選擇要刪除的劇集";
 "Delete %lld episodes" = "刪除 %lld 集";
+"Search settings" = "搜尋設定";

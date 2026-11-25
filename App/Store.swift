@@ -752,7 +752,8 @@ import TVCore
         let followed = followedShows
         sync.register("favorites", current: { favorites.syncValues }, apply: { favorites.adopt($0) })
         sync.register("followedShows", current: { followed.syncValues }, apply: { followed.adopt($0) })
-        sync.register("history", delay: .seconds(30), current: { Dictionary(history.entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }) },
+        sync.register("history", delay: .seconds(30), modifiedAt: { $0.updatedAt },
+                      current: { Dictionary(history.entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }) },
                       apply: { history.adopt($0.map(\.value)) })
         sync.register("subscriptions", current: { [weak self] in self?.syncedSubscriptions ?? [:] }, apply: { [weak self] in self?.adoptSubscriptions($0) })
         // After the list, so a file arrives in the same merge as the subscription that names it (#1235).

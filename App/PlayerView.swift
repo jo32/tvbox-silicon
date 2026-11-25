@@ -1823,9 +1823,20 @@ private struct DesktopPlaybackView: View {
             // One glass capsule holds the buttons, like a toolbar group: a glass circle each read as loose bubbles.
             HStack(spacing: 2) {
                 if session.isLive || !session.hasTimeline {
-                    // AVKit's controls are hidden without a timeline (see DesktopNativePlayer), so play and mute live here.
+                    // AVKit's controls are hidden without a timeline (see DesktopNativePlayer), so play, mute and volume live here.
                     barButton(session.paused ? "play.fill" : "pause.fill", L10n.text("Play / Pause (Space)")) { session.togglePlayback() }
                     barButton(session.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", L10n.text("Mute (M)")) { session.player.isMuted.toggle() }
+                    // The same player.volume the wheel and arrow keys change; dragging it also unmutes.
+                    Slider(value: Binding(
+                        get: { session.volume },
+                        set: { level in
+                            session.player.isMuted = false
+                            session.player.volume = level
+                        }
+                    ), in: 0...1)
+                    .frame(width: 72)
+                    .help(L10n.text("Volume"))
+                    .accessibilityLabel(L10n.text("Volume"))
                 } else {
                     barButton("gobackward.10", L10n.text("Back 10 seconds (←)")) { session.skip(-10) }
                     barButton("goforward.10", L10n.text("Forward 10 seconds (→)")) { session.skip(10) }

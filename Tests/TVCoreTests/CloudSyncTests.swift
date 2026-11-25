@@ -70,6 +70,106 @@ import Testing
     #expect(mac.names == ["a": "Renamed"])
 }
 
+/// A player's history and sync ledger are separate: going offline can delay a saved position's upload.
+@MainActor private final class HistoryDevice {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let history: PlaybackHistory
+    let sync: CloudSync
+    private let suite = "history-sync." + UUID().uuidString
+
+    init(_ cloud: MemoryCloud) {
+        history = PlaybackHistory(file: directory.appending(path: "history.json"))
+        sync = CloudSync(cloud: cloud, directory: directory.appending(path: "sync"), defaults: UserDefaults(suiteName: suite)!)
+        let history = history
+        sync.register("history", modifiedAt: { $0.updatedAt }, current: { Dictionary(uniqueKeysWithValues: history.entries.map { ($0.id, $0) }) },
+                      apply: { history.adopt($0.map(\.value)) })
+    }
+
+    func record(_ episode: String, position: Double = 60, at date: Date) {
+        let context = PlaybackHistoryContext(origin: URL(string: "https://example.com/sub.json")!, sourceKey: "source", sourceName: "Source",
+                                             videoID: "series", videoName: "Series", episodeID: episode, episodeName: "Episode " + episode, episodeFlag: "line")
+        history.record(context, position: position, duration: 1800, now: date)
+    }
+
+    func clean() {
+        try? FileManager.default.removeItem(at: directory)
+        UserDefaults.standard.removePersistentDomain(forName: suite)
+    }
+}
+
+@Test @MainActor func aDelayedHistoryUploadDoesNotReplaceMoreRecentViewing() {
+    let cloud = MemoryCloud(), start = Date(timeIntervalSince1970: 4_000_000)
+    let mac = HistoryDevice(cloud), phone = HistoryDevice(cloud)
+    defer { mac.clean(); phone.clean() }
+    mac.record("17", at: start)
+    // The Mac's upload is delayed until after the phone has watched and uploaded episode 18.
+    phone.record("18", at: start.addingTimeInterval(60))
+    phone.sync.flush(now: start.addingTimeInterval(90))
+    mac.sync.flush(now: start.addingTimeInterval(120))
+    phone.sync.flush(now: start.addingTimeInterval(150))
+    #expect(mac.history.entries.first?.context.episodeID == "18")
+    #expect(phone.history.entries.first?.context.episodeID == "18")
+    #expect(PlaybackHistory(file: phone.directory.appending(path: "history.json")).entries.first?.context.episodeID == "18")
+}
+
+@Test @MainActor func deliberatelyRewatchingAnEarlierEpisodeStillSyncsWithAClockBehind() {
+    let cloud = MemoryCloud(), start = Date(timeIntervalSince1970: 4_000_000)
+    let mac = HistoryDevice(cloud), phone = HistoryDevice(cloud)
+    defer { mac.clean(); phone.clean() }
+    phone.record("18", at: start)
+    phone.sync.flush(now: start)
+    mac.sync.flush(now: start)
+    // Having seen episode 18, the viewer deliberately goes back on a device whose clock is behind.
+    mac.record("17", at: start.addingTimeInterval(-60))
+    mac.sync.flush(now: start.addingTimeInterval(30))
+    phone.sync.flush(now: start.addingTimeInterval(60))
+    #expect(phone.history.entries.first?.context.episodeID == "17")
+    #expect((phone.history.entries.first?.updatedAt ?? .distantPast) > start)
+    // Rewinding within the same episode is also a new viewing event, not a maximum-position merge.
+    phone.record("17", position: 20, at: start.addingTimeInterval(90))
+    phone.sync.flush(now: start.addingTimeInterval(120))
+    mac.sync.flush(now: start.addingTimeInterval(150))
+    #expect(mac.history.entries.first?.position == 20)
+}
+
+@Test @MainActor func oldUploadTimeStampsDoNotMakeStaleHistoryNewer() throws {
+    let cloud = MemoryCloud(), start = Date(timeIntervalSince1970: 4_000_000)
+    let mac = HistoryDevice(cloud), phone = HistoryDevice(cloud)
+    defer { mac.clean(); phone.clean() }
+    mac.record("17", at: start)
+    phone.record("18", at: start.addingTimeInterval(60))
+    phone.sync.flush(now: start.addingTimeInterval(90))
+    // An old app version stamped its delayed upload at upload time rather than viewing time.
+    let old = mac.history.entries[0]
+    var legacy = CloudSyncLedger<PlaybackHistoryEntry>()
+    legacy.note([old.id: old], now: start.addingTimeInterval(120))
+    cloud.values["sync.history"] = try #require(CloudSync.encode(legacy))
+    phone.sync.flush(now: start.addingTimeInterval(150))
+    mac.sync.flush(now: start.addingTimeInterval(180))
+    #expect(phone.history.entries.first?.context.episodeID == "18")
+    #expect(mac.history.entries.first?.context.episodeID == "18")
+}
+
+@Test @MainActor func delayedHistoryDoesNotResurrectARemovedShow() {
+    let cloud = MemoryCloud(), start = Date(timeIntervalSince1970: 4_000_000)
+    let mac = HistoryDevice(cloud), phone = HistoryDevice(cloud)
+    defer { mac.clean(); phone.clean() }
+    mac.record("17", at: start)
+    phone.record("18", at: start.addingTimeInterval(60))
+    phone.sync.flush(now: start.addingTimeInterval(90))
+    phone.history.clear()
+    phone.sync.flush(now: start.addingTimeInterval(120))
+    mac.sync.flush(now: start.addingTimeInterval(150))
+    phone.sync.flush(now: start.addingTimeInterval(180))
+    #expect(mac.history.entries.isEmpty)
+    #expect(phone.history.entries.isEmpty)
+    // Deliberate playback after the deletion is still allowed to add the show again.
+    mac.record("17", at: start.addingTimeInterval(200))
+    mac.sync.flush(now: start.addingTimeInterval(230))
+    phone.sync.flush(now: start.addingTimeInterval(260))
+    #expect(phone.history.entries.first?.context.episodeID == "17")
+}
+
 @Test func aLocalEditIsStampedAfterWhatItReplacesEvenWithAClockBehind() {
     let ahead = Date(timeIntervalSince1970: 2_000_000)
     var ledger = CloudSyncLedger<String>()
