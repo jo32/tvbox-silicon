@@ -26,6 +26,9 @@ import IOKit.pwr_mgt
     var history = PlaybackHistory.shared
     var skipDefaults = UserDefaults.standard
     private var historyContext: PlaybackHistoryContext?
+    /// This player's last saved position, independent of history imported from another device. A paused player
+    /// must not write its old episode back just because iCloud replaced the shared history entry meanwhile.
+    @ObservationIgnored private var lastHistoryPosition: Double?
     private var pendingResume: Double?
     /// Where the item was asked to open (`seekAhead`), until it is ready.
     @ObservationIgnored private var soughtAhead: Double?
@@ -1308,7 +1311,7 @@ import IOKit.pwr_mgt
                 #if os(macOS)
                 self.displayAwake.hold(!paused)
                 #endif
-                if paused { self.clearBoost() }
+                if paused { self.clearBoost(); self.saveHistory() }
                 // The first frame lands a beat after playback starts; keep the artwork until then, so no black flashes between.
                 if playing, !self.showsPicture {
                     Task { @MainActor [weak self] in
@@ -1519,13 +1522,18 @@ import IOKit.pwr_mgt
               pendingResume == nil, !restoringPosition, !seekingSegment else { return }
         let length = item.duration.seconds
         let time = completed && length.isFinite ? length : item.currentTime().seconds
-        history.record(context, position: time, duration: length.isFinite ? length : 0)
+        guard time.isFinite, time >= 1 else { return }
+        if lastHistoryPosition.map({ abs($0 - time) >= 0.25 }) ?? true {
+            lastHistoryPosition = time
+            history.record(context, position: time, duration: length.isFinite ? length : 0)
+        }
         if let part = bilibiliPart { Task { await BilibiliHeartbeat.shared.report(part, seconds: time, final: completed) } }
     }
 
     /// Per-episode state: where its history goes, where it resumes, the intro and outro to skip, its danmaku.
     private func begin(_ channel: Channel) {
         historyContext = channel.historyContext
+        lastHistoryPosition = nil
         requestedResumePosition = channel.resumePosition
         pendingResume = channel.resumePosition.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
         restoringPosition = false; restoredPosition = nil; checkingPicture = false; soughtAhead = nil

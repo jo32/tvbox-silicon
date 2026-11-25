@@ -155,10 +155,14 @@ extension PlaybackHistoryEntry {
 
     public func record(_ context: PlaybackHistoryContext, position: Double, duration: Double, now: Date = Date()) {
         guard position.isFinite, position >= 1, duration.isFinite, duration >= 0 else { return }
+        // A real local playback change follows the history already seen, even when this device's clock is behind.
+        // Sync uses this date, not the later time at which a delayed upload happens.
+        let previous = entries.first { $0.id == context.id }
+        let changedAt = previous.map { max(now, $0.updatedAt.addingTimeInterval(0.001)) } ?? now
         let entry = PlaybackHistoryEntry(context: context, position: duration > 0 ? min(position, duration) : position,
-                                         duration: duration, updatedAt: now)
+                                         duration: duration, updatedAt: changedAt)
         guard Self.valid(entry) else { return }
-        if let old = entries.first(where: { $0.id == entry.id }), old.context == context,
+        if let old = previous, old.context == context,
            abs(old.position - entry.position) < 0.25, old.duration == duration { return }
         entries.removeAll { $0.id == entry.id }
         entries.insert(entry, at: 0)
