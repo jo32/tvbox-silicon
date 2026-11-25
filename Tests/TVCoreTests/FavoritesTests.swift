@@ -111,11 +111,17 @@ private func episode(_ id: String, flag: String, name: String, episodeID: String
     #expect(favorites.contains(.live(renamed)))
 }
 
-@Test func historyFavoriteIsTheEpisodeOrTheCloudFile() {
+@Test func historyFavoriteIsTheVideoOrTheCloudFile() {
     var context = PlaybackHistoryContext(origin: origin, sourceKey: "src", sourceName: "Source", videoID: "show", videoName: "Show", poster: nil, episodeID: "0-0", episodeName: "第1集", episodeFlag: "m3u8")
     let entry = PlaybackHistoryEntry(context: context, position: 12, duration: 0, updatedAt: Date())
     let item = entry.favoriteItem()
-    #expect(item.matches(.episode(episode("show", flag: "m3u8", name: "第1集", episodeID: "9-9"))))
+    #expect(item.matches(.video(video("show", origin: origin))))
+    // Moving on to another episode or line of the same show keeps matching the same video favorite.
+    let later = PlaybackHistoryEntry(
+        context: PlaybackHistoryContext(origin: origin, sourceKey: "src", sourceName: "Source", videoID: "show", videoName: "Show", poster: nil, episodeID: "1-4", episodeName: "第5集", episodeFlag: "other"),
+        position: 30, duration: 100, updatedAt: Date()
+    )
+    #expect(later.favoriteItem().matches(item))
     context = PlaybackHistoryContext(origin: URL(string: "tvbox-files://quark")!, sourceKey: CloudFiles.sourceKey, sourceName: "Quark", videoID: "folder", videoName: "Folder", poster: nil, episodeID: "file", episodeName: "a.mp4", episodeFlag: "quark")
     let cloud = PlaybackHistoryEntry(context: context, position: 1, duration: 0, updatedAt: Date()).favoriteItem()
     #expect(cloud.kind == .cloud)

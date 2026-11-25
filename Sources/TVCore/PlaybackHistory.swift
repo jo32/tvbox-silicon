@@ -113,13 +113,12 @@ public struct PlaybackHistoryEntry: Identifiable, Codable, Hashable, Sendable {
 }
 
 extension PlaybackHistoryEntry {
-    /// The favorite this row points at: the cloud file, or this episode. Not the whole video.
+    /// The favorite this row points at: the cloud file, or the whole video (matching the watch/detail page).
     public func favoriteItem() -> FavoriteItem {
         if context.sourceKey == CloudFiles.sourceKey {
             return .cloud(FavoriteCloudFile(driveKey: context.episodeFlag, folderID: context.videoID, folderName: context.videoName, fileID: context.episodeID, fileName: context.episodeName, size: 0))
         }
-        let video = FavoriteVideo(origin: context.origin, sourceKey: context.sourceKey, sourceName: context.sourceName, videoID: context.videoID, videoName: context.videoName, poster: context.poster, posterHeaders: context.posterHeaders ?? [:], year: context.year)
-        return .episode(FavoriteEpisode(video: video, episodeFlag: context.episodeFlag, episodeName: context.episodeName, episodeID: context.episodeID))
+        return .video(FavoriteVideo(origin: context.origin, sourceKey: context.sourceKey, sourceName: context.sourceName, videoID: context.videoID, videoName: context.videoName, poster: context.poster, posterHeaders: context.posterHeaders ?? [:], year: context.year))
     }
 }
 
