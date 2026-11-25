@@ -37,12 +37,50 @@ public enum CatPawOpen {
 
     /// A bundle's media proxy address as a cloud stream, when it answers the bytes asked for. HEVC that an MP4 tags
     /// `hev1` then shows its picture instead of playing sound only (`CloudStreams.playableSampleEntries`).
+    /// A proxy whose drive refuses the link (an expired one, most often) makes the bundle forget its links (`forgetLinks`).
     public static func proxiedMedia(_ url: URL, headers: [String: String]) async -> CloudStreams.Source? {
-        guard isMediaProxy(url), let probe = try? await RangeConnection.open(url, headers: headers, from: 0, through: 1,
-                                                                            configuration: RangeConnection.configuration, counter: CloudCounter()) else { return nil }
+        guard isMediaProxy(url) else { return nil }
+        let probe: RangeConnection
+        do { probe = try await RangeConnection.open(url, headers: headers, from: 0, through: 1, configuration: RangeConnection.configuration, counter: CloudCounter()) }
+        catch {
+            if case .http(let status)? = error as? TVError, refusals.contains(status) { await forgetLinks(behind: url) }
+            return nil
+        }
         probe.close()
         guard probe.last == 1, probe.length > 0 else { return nil }
         return CloudStreams.Source(url: url, headers: headers, length: Int(probe.length), name: url.lastPathComponent)
+    }
+
+    /// A drive's answers to a link it no longer serves.
+    static let refusals: Set<Int> = [401, 403, 404, 410]
+    /// How long a bundle runs before the drive links it kept may have expired. Baidu's last about 8 hours; a bundle
+    /// younger than this isn't started again, so a drive refusing a fresh link (a deleted file, too many connections)
+    /// doesn't restart it each time.
+    static let staleLinksAfter: TimeInterval = 30 * 60
+
+    /// Starts the bundle behind `url` again when its drive refused the link the bundle gave. The 9280.kstore.vip bundle
+    /// (玩偶, 虎斑, 多多…) keeps the link of each file it played for as long as it runs, without an expiry, so once Baidu's
+    /// expired (`31360 expire time out error`) every play of that file answered the dead link at once, and Continue
+    /// Watching couldn't open the episode again until the app quit (#2135). Started again, the bundle forgets them: the
+    /// episode's next open gets a fresh link.
+    static func forgetLinks(behind url: URL) async {
+        #if os(macOS)
+        let restarted = await LocalJarHost.shared.restartCatPawOpen(behind: url, olderThan: staleLinksAfter)
+        #elseif os(iOS) || os(tvOS)
+        let restarted = await EmbeddedNodeHost.shared.restart(behind: url, olderThan: staleLinksAfter)
+        #else
+        let restarted = false
+        #endif
+        if restarted { Diagnostics.shared.record(.warning, "player", "catpaw drive refused the bundle's link; bundle started again to forget its saved links") }
+    }
+
+    /// A drive link in place of an expired one, for a stream the app fetches itself (`directMedia`). The bundle's proxy
+    /// address carries the link it gave, so asking again gives the same one: when that is refused, the bundle starts
+    /// again (`forgetLinks`) and the episode's next open gets a fresh link.
+    public static func renewedDirectMedia(_ proxied: CloudStreams.Source) async -> CloudStreams.Source? {
+        if let direct = await directMedia(proxied) { return direct }
+        await forgetLinks(behind: proxied.url)
+        return nil
     }
 
     /// The drive file behind a bundle's media proxy, for the app to fetch itself: then Node only signs in and resolves
