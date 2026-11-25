@@ -308,11 +308,12 @@ struct NovelSearchView: View {
         #if !os(tvOS)
         .toolbar { ToolbarItem { scopeMenu } }
         #endif
-        .onChange(of: store.searchGroup) { _, _ in if !submitted.isEmpty { submittedFromMemory = false; round += 1 } }
-        .task(id: "\(submitted)#\(round)") { await search() }
+        .onChange(of: store.searchGroup) { _, _ in if !submitted.isEmpty { round += 1 } }
+        .task(id: searchKey) { await search() }
         .onAppear {
             if submitted.isEmpty, !store.lastSearch.keyword.isEmpty {
-                query = store.lastSearch.keyword; hits = store.lastSearch.hits; submittedFromMemory = true; submitted = store.lastSearch.keyword
+                let keyword = store.lastSearch.keyword
+                query = keyword; hits = store.lastSearch.hits; submitted = keyword; searchedKey = SearchKey(keyword: keyword, round: round)
             }
             #if DEBUG
             if let text = UserDefaults.standard.string(forKey: "qaNovelQuery"), submitted.isEmpty { query = text; submitted = text }
@@ -320,14 +321,20 @@ struct NovelSearchView: View {
         }
     }
 
+    private struct SearchKey: Equatable {
+        var keyword: String
+        var round: Int
+    }
+    private var searchKey: SearchKey { SearchKey(keyword: submitted, round: round) }
+
     @State private var openedFirst = false
-    /// Set when the results came back from the store: they are shown, not searched again.
-    @State private var submittedFromMemory = false
+    /// The `searchKey` whose results are already on screen (from a run or `store.lastSearch`), so returning from a
+    /// book's page does not run `.task(id:)` again (#2125).
+    @State private var searchedKey: SearchKey?
 
     private func submit(_ text: String) {
         let keyword = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !keyword.isEmpty, keyword != submitted else { return }
-        submittedFromMemory = false
         submitted = keyword
     }
 
@@ -391,15 +398,19 @@ struct NovelSearchView: View {
 
     private func search() async {
         guard !submitted.isEmpty else { return }
-        if submittedFromMemory { submittedFromMemory = false; return }
+        let key = searchKey
+        guard searchedKey != key else { return }
         let keyword = submitted
         let sources = store.searchScope
         hits = []; searched = 0; failed = 0; total = sources.count; running = true; stopping = false
-        defer { running = false; stopping = false }
+        defer {
+            if key == searchKey { running = false; stopping = false }
+        }
         for await answer in NovelBooks.search(keyword, in: sources) {
             // Leaving the loop drops the stream, which cancels the searches still running.
-            if stopping { break }
+            if stopping || Task.isCancelled || key != searchKey { break }
             searched += 1
+            searchedKey = key
             switch answer.result {
             case .success(let books): NovelBooks.merge(books, into: &hits, keyword: keyword)
             case .failure: failed += 1
@@ -413,6 +424,7 @@ struct NovelSearchView: View {
             }
             #endif
         }
+        if !Task.isCancelled, key == searchKey { searchedKey = key }
     }
 }
 
