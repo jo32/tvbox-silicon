@@ -443,18 +443,10 @@ struct PlayerSlot: Identifiable {
 private struct PlayerPresentation: ViewModifier {
     @Environment(Store.self) private var store
     @Binding var playing: Channel?
-    #if os(macOS)
-    @State private var playerWindow = PlayerWindowController()
-    #endif
     func body(content: Content) -> some View {
         #if os(macOS)
-        content.onChange(of: playing, initial: true) { _, channel in
-            if let channel {
-                playerWindow.present(channel, store: store) { playing = nil }
-            } else {
-                playerWindow.close()
-            }
-        }
+        // The window follows the store itself: a library window closed while a video plays mustn't take it along (#2107).
+        content.onAppear { PlayerWindowController.shared.follow(store) }
         #else
         // One presentation while anything plays: the next episode replaces the channel inside the player.
         // Keyed by the channel, every change dismissed the player and presented a new one, so even a
