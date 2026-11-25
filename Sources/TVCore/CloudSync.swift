@@ -30,17 +30,30 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
     public var records: [String: CloudSyncRecord<Value>] = [:]
     public init() {}
 
-    /// Stamps what changed on this device since the ledger last saw it. A change is always stamped
-    /// after the one it replaces, so a device whose clock runs behind still wins with its newer edit.
-    @discardableResult public mutating func note(_ current: [String: Value], now: Date) -> Bool {
+    /// Stamps changes when they are noticed, unless the value already records when it changed (playback history).
+    /// That date must survive delayed uploads; otherwise an idle/offline device's old position can win on reconnect.
+    @discardableResult public mutating func note(_ current: [String: Value], now: Date, modifiedAt: ((Value) -> Date)? = nil) -> Bool {
         var changed = false
         for (id, value) in current where records[id]?.value != value {
-            records[id] = CloudSyncRecord(value: value, stamp: Self.after(records[id]?.stamp, now))
+            records[id] = CloudSyncRecord(value: value, stamp: modifiedAt?(value) ?? Self.after(records[id]?.stamp, now))
             changed = true
         }
         for (id, record) in records where record.value != nil && current[id] == nil {
             records[id] = CloudSyncRecord(value: nil, stamp: Self.after(record.stamp, now))
             changed = true
+        }
+        return changed
+    }
+
+    /// Older app versions stamped history at upload time. Read their values' own dates before comparing them;
+    /// deletion dates have no value to recover and keep their original meaning.
+    @discardableResult mutating func useModificationDates(_ modifiedAt: ((Value) -> Date)?) -> Bool {
+        guard let modifiedAt else { return false }
+        var changed = false
+        for (id, record) in records {
+            guard let value = record.value else { continue }
+            let stamp = modifiedAt(value)
+            if stamp != record.stamp { records[id]?.stamp = stamp; changed = true }
         }
         return changed
     }
@@ -88,6 +101,7 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
     let key: String
     let file: URL
     let delay: Duration
+    let modifiedAt: ((Value) -> Date)?
     let current: @MainActor () -> [String: Value]
     let apply: @MainActor ([CloudSyncItem<Value>]) -> Void
     var ledger: CloudSyncLedger<Value>
@@ -95,9 +109,10 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
     /// the new account's copy.
     var adoptingAccount = false
 
-    init(key: String, file: URL, delay: Duration, current: @escaping @MainActor () -> [String: Value],
+    init(key: String, file: URL, delay: Duration, modifiedAt: ((Value) -> Date)?, current: @escaping @MainActor () -> [String: Value],
          apply: @escaping @MainActor ([CloudSyncItem<Value>]) -> Void) {
         self.key = key; self.file = file; self.delay = delay; self.current = current; self.apply = apply
+        self.modifiedAt = modifiedAt
         ledger = (try? Data(contentsOf: file)).flatMap { try? JSONDecoder().decode(CloudSyncLedger<Value>.self, from: $0) } ?? CloudSyncLedger()
     }
 
@@ -108,12 +123,14 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
             adopt(cloud, cutoff: cutoff, now: now)
             return
         }
-        let noted = ledger.note(current(), now: now)
+        let restamped = ledger.useModificationDates(modifiedAt)
+        let noted = ledger.note(current(), now: now, modifiedAt: modifiedAt)
         var remote = cloud.data(forKey: key).flatMap { CloudSync.decode(CloudSyncLedger<Value>.self, from: $0) } ?? CloudSyncLedger()
+        remote.useModificationDates(modifiedAt)
         remote.prune(before: cutoff)
         let incoming = ledger.merge(remote)
         ledger.prune(before: cutoff)
-        if noted || incoming { save() }
+        if restamped || noted || incoming { save() }
         if incoming { apply(ledger.live) }
         guard ledger != remote else { return }
         push(cloud)
@@ -130,12 +147,13 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
             // account that has never synced keeps the subscriptions, favorites and history instead of
             // emptying them.
             ledger = CloudSyncLedger()
-            guard ledger.note(current(), now: now) else { return }
+            guard ledger.note(current(), now: now, modifiedAt: modifiedAt) else { return }
             save()
             push(cloud)
             return
         }
         guard var remote = CloudSync.decode(CloudSyncLedger<Value>.self, from: data) else { return }
+        remote.useModificationDates(modifiedAt)
         remote.prune(before: cutoff)
         ledger = remote
         save()
@@ -203,13 +221,15 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
     }
 
     /// `current` is what this device holds now, by id; `apply` replaces it with the merged result.
-    /// `delay` is how long a change waits for the next one before it goes up.
+    /// `delay` batches changes before upload. `modifiedAt`, when supplied, orders values by their actual change
+    /// date instead of upload time; it also reads that date from older versions' ledger records.
     public func register<Value: Codable & Equatable & Sendable>(_ key: String, delay: Duration = .seconds(3),
+                                                                modifiedAt: ((Value) -> Date)? = nil,
                                                                 current: @escaping @MainActor () -> [String: Value],
                                                                 apply: @escaping @MainActor ([CloudSyncItem<Value>]) -> Void) {
         let cloudKey = "sync." + key
         if channels[cloudKey] == nil { order.append(cloudKey) }
-        channels[cloudKey] = SyncChannel(key: cloudKey, file: directory.appending(path: key + ".json"), delay: delay, current: current, apply: apply)
+        channels[cloudKey] = SyncChannel(key: cloudKey, file: directory.appending(path: key + ".json"), delay: delay, modifiedAt: modifiedAt, current: current, apply: apply)
     }
 
     /// Listens for other devices' changes and merges everything once.
