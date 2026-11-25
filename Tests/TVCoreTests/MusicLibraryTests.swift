@@ -111,6 +111,19 @@ private struct FakeLyrics: MusicLyricsSource {
     #expect(MusicQueue(tracks: tracks, start: 99).current == tracks[3])
 }
 
+/// #1896: adding the playlist that plays, or the one just added, to Up Next again adds nothing; other lists, the same
+/// list after other songs, and a single song again still go in.
+@Test func upNextSkipsTheListThatAlreadyEndsTheQueue() {
+    let list = (1...3).map { song("S\($0)", "\($0)") }
+    let other = (4...5).map { song("S\($0)", "\($0)") }
+    #expect(MusicQueue.ends(list, with: list))
+    #expect(MusicQueue.ends(other + list, with: list))
+    #expect(!MusicQueue.ends(list + other, with: list))
+    #expect(!MusicQueue.ends(list, with: other))
+    #expect(!MusicQueue.ends(list, with: [list[2]]))
+    #expect(!MusicQueue.ends([list[2]], with: list))
+}
+
 @MainActor @Test func historyAndResumePointSurviveRelaunch() throws {
     let file = FileManager.default.temporaryDirectory.appending(path: "music-library-\(UUID().uuidString).json")
     defer { try? FileManager.default.removeItem(at: file) }

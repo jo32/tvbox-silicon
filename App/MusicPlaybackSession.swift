@@ -279,6 +279,8 @@ typealias MusicTrack = TVCore.MusicTrack
     func addToUpNext(_ tracks: [MusicTrack]) {
         guard !tracks.isEmpty else { return }
         guard var queue else { play(MusicQueue(tracks: tracks)); return }
+        // The list that plays, or the one just added, again: nothing to add (#1896). Shuffled, its order is `unshuffled`.
+        if MusicQueue.ends(unshuffled ?? queue.tracks, with: tracks) { return }
         queue.append(tracks)
         self.queue = queue
         unshuffled?.append(contentsOf: tracks)
