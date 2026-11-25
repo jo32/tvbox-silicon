@@ -1957,6 +1957,11 @@ struct SubscriptionDetailView: View {
                             Spacer()
                             if changing { ProgressView() } else { Button(L10n.text("Cancel")) { draft = current.address; changeError = nil } }
                         }
+                        // Two buttons in one row: on iOS a row's plain buttons all take its tap, so Use New Address
+                        // also ran Cancel, which put the old address back before the change read it (#2075).
+                        #if os(iOS)
+                        .buttonStyle(.borderless)
+                        #endif
                     }
                 }
             } footer: {
@@ -1993,9 +1998,9 @@ struct SubscriptionDetailView: View {
         guard !changing else { return }
         changing = true; changeError = nil
         // The entry keeps its place, so its new address is found there.
-        let index = store.subscriptions.firstIndex { $0.address == address }
+        let index = store.subscriptions.firstIndex { $0.address == address }, typed = draft
         Task {
-            if let error = await store.changeSubscriptionAddress(current, to: draft) { changeError = error }
+            if let error = await store.changeSubscriptionAddress(current, to: typed) { changeError = error }
             else if let index, store.subscriptions.indices.contains(index) {
                 address = store.subscriptions[index].address; draft = address
             }
