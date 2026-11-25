@@ -1057,7 +1057,7 @@
 "With Yingxia open here, your other devices on the same network can send it what they play: tap Play On in their player." = "ここで映匣を開いているあいだ、同じネットワークにあるほかのデバイスから再生中のものを送れます。そのプレーヤーで「ほかのデバイスで再生」をタップしてください。";
 "Touch and Hold Speed" = "長押しの再生速度";
 "Start Speed" = "再生開始速度";
-"Videos open at this speed. The in-player speed menu changes it for the video you're watching." = "動画はこの速度で再生を開始します。プレイヤー内の速度メニューで、視聴中の動画に限り一時的に変更できます。";
+"Each new title starts at this speed. A speed you pick in the player stays for that title's next episodes." = "新しい作品はこの速度で再生を始めます。プレーヤーで選んだ速度は、その作品の次のエピソードにも引き継がれます。";
 "Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go." = "動画を長押しするとこの速度で再生します。押したまま左右にスライドすると速度を変更、下にスライドすると指を離しても維持します。";
 "Slide sideways to change the speed, or down to keep it" = "左右にスライドで速度を変更、下にスライドで固定";
 "Slowed down to keep up with the connection" = "通信速度に合わせて速度を下げています";

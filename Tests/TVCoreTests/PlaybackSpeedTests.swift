@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import TVCore
 
@@ -27,6 +28,20 @@ import Testing
     #expect(PlaybackSpeed.load(defaults: defaults) == PlaybackSpeed.standard)
     PlaybackSpeed.save(.infinity, defaults: defaults)
     #expect(PlaybackSpeed.load(defaults: defaults) == PlaybackSpeed.standard)
+}
+
+@Test func playbackSpeedIsChosenOnlyOnceSet() throws {
+    let suite = "playback-speed-tests." + UUID().uuidString
+    let defaults = try #require(UserDefaults(suiteName: suite))
+    defer { defaults.removePersistentDomain(forName: suite) }
+    // Never set: the player keeps its speed, as before the setting existed.
+    #expect(PlaybackSpeed.chosen(defaults: defaults) == nil)
+    PlaybackSpeed.save(1, defaults: defaults)
+    #expect(PlaybackSpeed.chosen(defaults: defaults) == 1)
+    PlaybackSpeed.save(1.5, defaults: defaults)
+    #expect(PlaybackSpeed.chosen(defaults: defaults) == 1.5)
+    defaults.set(Float(1.4), forKey: PlaybackSpeed.key)
+    #expect(PlaybackSpeed.chosen(defaults: defaults) == nil)
 }
 
 @Test func playbackSpeedLabelsTheMenuOptions() {

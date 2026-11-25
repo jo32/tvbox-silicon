@@ -36,6 +36,8 @@ import IOKit.pwr_mgt
     private(set) var position: Double = 0
     private(set) var duration: Double = 0
     private var skipScope: String?
+    /// The title whose speed the player keeps: another title starts at the speed set in Settings › Playback.
+    @ObservationIgnored private var speedScope: String?
     private var skipPass = EpisodeSkipPass()
     private var editingSkip = false
     private var resumeAfterEditing = false
@@ -1525,8 +1527,7 @@ import IOKit.pwr_mgt
     }
 
     /// Per-episode state: where its history goes, where it resumes, the intro and outro to skip, its danmaku.
-    /// `live` is a live channel (or stream): those always start at 1×, as the global playback speed in
-    /// Settings › Playback is for point videos only, never live or music.
+    /// `live` is a live room: it always plays at 1×.
     private func begin(_ channel: Channel, live: Bool) {
         historyContext = channel.historyContext
         requestedResumePosition = channel.resumePosition
@@ -1534,11 +1535,16 @@ import IOKit.pwr_mgt
         restoringPosition = false; restoredPosition = nil; checkingPicture = false; soughtAhead = nil
         skipScope = channel.skipScope
         skipSettings = skipScope.map { EpisodeSkipSettings.load(scope: $0, defaults: skipDefaults) } ?? EpisodeSkipSettings()
-        // Point videos start at the speed chosen in Settings › Playback, so the in-player menu's
-        // temporary choice does not stick to the next episode. Live channels always start at 1×:
-        // the global speed is for videos only, and a live menu can still change that stream.
-        player.defaultRate = live ? 1 : PlaybackSpeed.load()
-        if player.rate != 0 { player.rate = player.defaultRate }
+        // A new title starts at the speed set in Settings › Playback, when one is set. Its next episodes and other
+        // lines keep the speed picked in the player (#1015, #1076). Channels without a title (live playlists, a
+        // pasted address) keep the speed as before; live rooms play at 1×.
+        if live {
+            player.defaultRate = 1
+        } else if let scope = channel.skipScope, scope != speedScope, let start = PlaybackSpeed.chosen() {
+            player.defaultRate = start
+        }
+        if channel.skipScope != nil { speedScope = channel.skipScope }
+        if player.rate != 0, boost == nil, player.rate != player.defaultRate { player.rate = player.defaultRate }
         skipPass = EpisodeSkipPass(); seekingSegment = false
         skipNotice = nil; introNoticeUntil = nil
         sourceSkips = channel.skips; skipOffer = nil; skippedSource = []; chapters = []
