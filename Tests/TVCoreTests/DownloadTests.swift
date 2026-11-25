@@ -75,6 +75,28 @@ import Testing
     #expect((refused as? HTTPURLResponse)?.statusCode == 404)
 }
 
+@Test func aSavedDownloadListensAgainOnANewPortAfterItsListenerIsTakenBack() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: "downloads-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: root.appending(path: "item"), withIntermediateDirectories: true)
+    try Data("#EXTM3U\n".utf8).write(to: root.appending(path: "item/index.m3u8"))
+    defer { try? FileManager.default.removeItem(at: root) }
+    let server = LocalMediaServer()
+    let stale = try await server.address(of: root.appending(path: "item/index.m3u8"), root: root)
+    #expect(server.serves(stale))
+    #expect(!server.serves(URL(string: "http://127.0.0.1:\(stale.port ?? 0)/other/item/index.m3u8")!))
+    #expect(!server.serves(URL(string: "https://example.com\(stale.path())")!))
+    // Both addresses of one stale listener share the new one; the path and token stay.
+    let fresh = try #require(try await server.relisten(stale))
+    let again = try #require(try await server.relisten(stale))
+    #expect(again.port == fresh.port && fresh.path() == stale.path())
+    let (data, response) = try await URLSession.shared.data(from: fresh)
+    #expect((response as? HTTPURLResponse)?.statusCode == 200)
+    #expect(String(decoding: data, as: UTF8.self) == "#EXTM3U\n")
+    // Addresses asked for afterwards come from the new listener.
+    #expect(try await server.address(of: root.appending(path: "item/index.m3u8"), root: root).port == fresh.port)
+    #expect(try await server.relisten(URL(string: "http://example.com/x")!) == nil)
+}
+
 @Test func songFilesAreNamedByTheirFirstBytes() {
     let bare = URL(string: "https://music.example.com/stream?id=1")!
     #expect(Transfer.fileExtension(bare, mime: "application/octet-stream", head: Data("fLaC\0\0\0\"".utf8)) == "flac")
