@@ -100,8 +100,12 @@ import Observation
                 let client = CatalogClient(site: result.site, origin: config.origin, http: http, jarURL: config.spiderURL)
                 let answer = try? await client.list(category: nil, query: keyword, page: page)
                 guard !Task.isCancelled, self.runID == run, self.pageGeneration == pageToken else { break }
+                // A failed page is not the end of the source: leave its next page alone so
+                // another tap retries it, instead of silently giving up on it for this search
+                // (the catalog browser already retries the same page after a failure).
+                guard let answer else { continue }
                 let known = Set(self.videos(for: result.id).map(\.id))
-                let fresh = (answer?.videos ?? []).filter { !known.contains($0.id) }
+                let fresh = answer.videos.filter { !known.contains($0.id) }
                 self.nextPage[result.id] = fresh.isEmpty ? Int.max : page + 1
                 if !fresh.isEmpty { self.batches.append(SearchBatch(source: result.id, page: page, videos: fresh)) }
             }
