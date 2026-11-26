@@ -11,11 +11,17 @@ import os
 /// Crashes come from MetricKit on iPhone, iPad and Mac, and uncaught exceptions on every platform (CrashReports); on iPhone, iPad and Apple TV an
 /// exit while on screen (a crash, or the system ending the app for memory) is noticed on the next launch,
 /// with what that launch was doing (QuitContext).
+/// Plays are counted too, for the play success rate: only how many started, failed or were left, split by
+/// coarse fields (`PlayAttempt`), as `player.stats` items in the same upload.
 public final class ErrorReports: @unchecked Sendable {
     public static let shared = ErrorReports()
     /// UserDefaults switch; missing means on.
     public static let key = "sendsErrorReports"
     static let endpoint = URL(string: "https://yingxia-reports.getmegaportal.com/v1/reports")!
+    /// Play counters' category: each message is one counter, kept and sent exactly as written.
+    static let statsCategory = "player.stats"
+    /// At most this many play counters are kept, and sent in one upload ahead of the errors.
+    static let statsLimit = 30
 
     struct Group: Codable, Equatable, Sendable {
         var category: String
@@ -177,14 +183,40 @@ public final class ErrorReports: @unchecked Sendable {
             if var group = groups[key] {
                 group.count += 1; group.last = time; group.message = message
                 groups[key] = group
-            } else if groups.count < 100 {
+            } else if size(stats: false) < 100 {
                 groups[key] = Group(category: entry.category, message: message, count: 1, first: time, last: time)
             }
         }
+        changed()
+    }
+
+    /// Adds one to a play counter (`PlayAttempt`). Its message is the counter: never grouped like an error's, so
+    /// counters that differ only in a field stay apart.
+    func count(_ message: String) {
+        guard enabled else { return }
+        let time = Int(Date().timeIntervalSince1970)
+        lock.lock()
+        guard started else { lock.unlock(); return }
+        let key = Self.statsCategory + "\n" + message
+        if var group = groups[key] {
+            group.count += 1; group.last = time
+            groups[key] = group
+        } else if size(stats: true) < Self.statsLimit {
+            groups[key] = Group(category: Self.statsCategory, message: message, count: 1, first: time, last: time)
+        }
+        changed()
+    }
+
+    private static func isStats(_ key: String) -> Bool { key.hasPrefix(statsCategory + "\n") }
+
+    /// Guarded by `lock`: how many play counters, or error groups, are kept.
+    private func size(stats: Bool) -> Int { groups.keys.reduce(0) { $0 + (Self.isStats($1) == stats ? 1 : 0) } }
+
+    /// Called with `lock` held, which it releases: saves the file once for each burst and sends when due.
+    private func changed() {
         let save = !saveScheduled
         saveScheduled = true
         lock.unlock()
-        // Errors can come in bursts; write the file once for each burst.
         if save { DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 5) { self.save() } }
         if due { Task { await sendIfDue() } }
     }
@@ -223,7 +255,10 @@ public final class ErrorReports: @unchecked Sendable {
         let batch: [(String, Group)]? = lock.withLock {
             guard !sending else { return nil }
             sending = true
-            return groups.sorted { $0.value.count > $1.value.count }.prefix(50).map { ($0.key, $0.value) }
+            // Play counters first (the server keeps 50 items an upload), then the most frequent errors.
+            let sorted = groups.sorted { $0.value.count > $1.value.count }
+            let stats = sorted.filter { Self.isStats($0.key) }.prefix(Self.statsLimit)
+            return (stats + sorted.filter { !Self.isStats($0.key) }.prefix(50 - stats.count)).map { ($0.key, $0.value) }
         }
         guard let batch else { return }
         defer { lock.withLock { sending = false } }
