@@ -62,6 +62,7 @@ struct WatchNowPhonePage: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         .toolbarBackground(entries.isEmpty ? .automatic : .hidden, for: .navigationBar)
+        .toolbarBackground(.visible, for: .tabBar)
         .toolbarColorScheme(entries.isEmpty || pastHero || hero.paint == nil ? nil : hero.paint?.isDark == false ? .light : .dark, for: .navigationBar)
         #endif
         .ignoresSafeArea(edges: entries.isEmpty ? [] : .top)
