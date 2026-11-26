@@ -7,6 +7,7 @@ import TVCore
     let address: GuideAddress
     private(set) var guide: ProgramGuide?
     private(set) var perChannel: [String: [Programme]] = [:]
+    @ObservationIgnored private var channels: [Channel] = []
     @ObservationIgnored private var asked = Set<String>()
 
     init(address: GuideAddress) { self.address = address }
@@ -23,13 +24,14 @@ import TVCore
 
     func schedule(for channel: Channel) -> [Programme]? {
         switch address {
-        case .xmltv: guide?.schedule(for: channel)
+        case .xmltv: guide?.schedule(for: channel, among: channels)
         case .perChannel: perChannel[channel.name]
         }
     }
 
     /// Loads an XMLTV guide for the playlist's channels.
     func load(_ channels: [Channel]) async {
+        self.channels = channels
         guard case let .xmltv(url) = address else { return }
         do { guide = try await ProgramGuides.shared.guide(url, for: channels) }
         catch {
@@ -62,7 +64,7 @@ struct NowOnText: View {
     var otherwise: String? = nil
     @Environment(LiveGuide.self) private var guide: LiveGuide?
     var body: some View {
-        let schedule = guide?.schedule(for: channel) ?? []
+        let schedule = guide?.schedule(for: channel, among: channels) ?? []
         Group {
             if schedule.isEmpty {
                 if let otherwise { Text(otherwise) }
@@ -82,7 +84,7 @@ struct NowAndNext: View {
     let channel: Channel
     @Environment(LiveGuide.self) private var guide: LiveGuide?
     var body: some View {
-        let schedule = guide?.schedule(for: channel) ?? []
+        let schedule = guide?.schedule(for: channel, among: channels) ?? []
         Group {
             if !schedule.isEmpty {
                 TimelineView(.everyMinute) { context in
