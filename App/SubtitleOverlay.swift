@@ -395,16 +395,21 @@ extension View {
         return Group(group: group, options: group.options.filter { !$0.hasMediaCharacteristic(.containsOnlyForcedSubtitles) }, details: details)
     }
 
+    static func audioGroup(_ item: AVPlayerItem) async -> Group? {
+        guard let group = try? await item.asset.loadMediaSelectionGroup(for: .audible) else { return nil }
+        let details = (item.asset as? AVURLAsset).map { Remux.trackDetails($0.url).audio } ?? [:]
+        return Group(group: group, options: group.options, details: details)
+    }
+
     func load(_ item: AVPlayerItem) async {
         let subtitles = await Self.subtitleGroup(item)
         guard self.item === item else { return }
         legible = subtitles
         // AVKit's native tvOS Audio menu only shows each option's display name. The transport bar also gets
         // our detailed, selectable Audio Tracks menu, using the same labels as iOS and macOS (#2388).
-        let group = try? await item.asset.loadMediaSelectionGroup(for: .audible)
+        let audio = await Self.audioGroup(item)
         guard self.item === item else { return }
-        let details = (item.asset as? AVURLAsset).map { Remux.trackDetails($0.url).audio } ?? [:]
-        audio = group.map { Group(group: $0, options: $0.options, details: details) }
+        self.audio = audio
     }
 
     func selectionChanged() { revision += 1 }

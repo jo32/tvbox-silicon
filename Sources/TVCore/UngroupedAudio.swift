@@ -9,6 +9,8 @@ public enum UngroupedAudio {
     public struct Choice: Identifiable, Equatable, Sendable {
         public let id: CMPersistentTrackID
         public let name: String
+        /// Its language tag; nil when it has none. Kept so a picked dub is found again in the next episode (#2184).
+        public let language: String?
     }
 
     /// Leaves only the first enabled sound track playing when the item plays more than one at once; true when it
@@ -33,7 +35,9 @@ public enum UngroupedAudio {
             let title = loaded?.2.first { $0.commonKey == .commonKeyTitle }
             titles.append(try? await title?.load(.stringValue))
         }
-        return zip(tracks, names(titles: titles, languages: languages)).map { Choice(id: $0.trackID, name: $1) }
+        return zip(tracks, zip(names(titles: titles, languages: languages), languages)).map {
+            Choice(id: $0.trackID, name: $1.0, language: $1.1)
+        }
     }
 
     /// The sound track playing now.

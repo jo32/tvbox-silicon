@@ -421,6 +421,9 @@ import IOKit.pwr_mgt
         guard let item else { return }
         UngroupedAudio.play(id, in: item)
         audioChoice = UngroupedAudio.playing(item)
+        if let id = audioChoice, let choice = audioChoices.first(where: { $0.id == id }) {
+            AudioChoice.remember(choice, for: subtitleScope)
+        }
     }
 
     /// Plays the stream at `quality` (nil: automatic) from where it is now.
@@ -1145,7 +1148,9 @@ import IOKit.pwr_mgt
         guard let item, player.currentItem === item, let tracks = mediaTracks.audio, tracks.group == group,
               tracks.options.contains(option) else { return }
         guard item.currentMediaSelection.selectedMediaOption(in: group) != option else { return }
+        let description = tracks.options.firstIndex(of: option).map { tracks.descriptions[$0] }
         mediaTracks.select(option, in: tracks)
+        AudioChoice.remember(description, for: subtitleScope)
     }
 
     /// A menu action, including one from AVKit's tvOS delegate. Automatic selections never write a preference.
@@ -1180,6 +1185,27 @@ import IOKit.pwr_mgt
         if let group = tracks?.group, item.currentMediaSelection.selectedMediaOption(in: group) != option {
             item.select(option, in: group)
         }
+        return true
+    }
+
+    /// A missing track may fall back for this episode. Only the viewer can change the remembered choice.
+    private func restoreAudioChoice(_ item: AVPlayerItem, tracks: MediaTracks.Group?, scope: String?) -> Bool {
+        guard let choice = AudioChoice.preference(for: scope) else { return false }
+        guard let tracks, let index = choice.match(tracks.descriptions, in: scope) else { return false }
+        let option = tracks.options[index]
+        if item.currentMediaSelection.selectedMediaOption(in: tracks.group) != option {
+            item.select(option, in: tracks.group)
+        }
+        return true
+    }
+
+    /// The remembered dub of a file whose tracks AVFoundation offers no choice between. Only the viewer can change
+    /// the remembered choice; `audioChoice` follows only the item playing, not one queued for later.
+    private func restoreUngroupedAudioChoice(_ item: AVPlayerItem, choices: [UngroupedAudio.Choice], scope: String?) -> Bool {
+        guard let choice = AudioChoice.preference(for: scope), let id = choice.match(choices, in: scope) else { return false }
+        guard UngroupedAudio.playing(item) != id else { return true }
+        UngroupedAudio.play(id, in: item)
+        if item === self.item { audioChoice = id }
         return true
     }
 
@@ -1564,14 +1590,17 @@ import IOKit.pwr_mgt
                         guard let self, self.generation == activeGeneration, self.item === item else { return }
                         self.audioChoices = choices
                         self.audioChoice = choices.isEmpty ? nil : UngroupedAudio.playing(item)
+                        if !choices.isEmpty { _ = self.restoreUngroupedAudioChoice(item, choices: choices, scope: self.subtitleScope) }
                     }
                     Task { [weak self] in
                         guard let self, self.item === item else { return }
                         await self.mediaTracks.load(item)
-                        guard self.generation == activeGeneration, self.item === item, !self.externalSubtitles.manuallyChoseFile else { return }
-                        if self.restoreSubtitleChoice(item, tracks: self.mediaTracks.legible, scope: self.subtitleScope) {
+                        guard self.generation == activeGeneration, self.item === item else { return }
+                        if !self.externalSubtitles.manuallyChoseFile,
+                           self.restoreSubtitleChoice(item, tracks: self.mediaTracks.legible, scope: self.subtitleScope) {
                             self.externalSubtitles.nativeChosen()
                         }
+                        _ = self.restoreAudioChoice(item, tracks: self.mediaTracks.audio, scope: self.subtitleScope)
                     }
                     self.checkingPicture = Self.repackagable(url)
                     self.restorePositionIfNeeded(item)
@@ -2269,6 +2298,13 @@ extension PlaybackSession {
                             let tracks = await MediaTracks.subtitleGroup(queued)
                             guard let self, self.upcoming?.item === queued else { return }
                             _ = self.restoreSubtitleChoice(queued, tracks: tracks, scope: Self.subtitleScope(for: next))
+                            if let audio = await MediaTracks.audioGroup(queued), self.upcoming?.item === queued {
+                                _ = self.restoreAudioChoice(queued, tracks: audio, scope: Self.subtitleScope(for: next))
+                            }
+                            let choices = await UngroupedAudio.choices(queued)
+                            if !choices.isEmpty, self.upcoming?.item === queued {
+                                _ = self.restoreUngroupedAudioChoice(queued, choices: choices, scope: Self.subtitleScope(for: next))
+                            }
                         }
                         if let intro, intro.enabled, intro.introEnd > 0,
                            intro.validationError(duration: queued.duration.seconds) == nil, queued.currentTime().seconds < intro.introEnd {
