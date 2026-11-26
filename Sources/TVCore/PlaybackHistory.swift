@@ -175,7 +175,6 @@ extension PlaybackHistoryEntry {
         let dropped = entries.dropFirst(Self.limit)
         for entry in dropped { clean(entry) }
         entries = Array(entries.prefix(Self.limit))
-        prioritizeCaches()
         persist()
         onChange?()
     }
@@ -189,7 +188,7 @@ extension PlaybackHistoryEntry {
         let kept = Set(next.map(\.id))
         for entry in entries where !kept.contains(entry.id) { clean(entry) }
         entries = next
-        prioritizeCaches(); persist()
+        persist()
     }
 
     /// Continue Watching of a subscription whose address changed (#982), under the new address.
@@ -202,16 +201,16 @@ extension PlaybackHistoryEntry {
             return PlaybackHistoryEntry(context: entry.context.moved(to: new), position: entry.position,
                                         duration: entry.duration, updatedAt: entry.updatedAt)
         }.filter { seen.insert($0.id).inserted }
-        prioritizeCaches(); persist(); onChange?()
+        persist(); onChange?()
     }
 
     public func remove(_ id: String) { remove(Set([id])) }
     public func remove(_ ids: Set<String>) {
         refreshPendingEntries()
         for entry in entries where ids.contains(entry.id) { clean(entry) }
-        entries.removeAll { ids.contains($0.id) }; prioritizeCaches(); persist(); onChange?()
+        entries.removeAll { ids.contains($0.id) }; persist(); onChange?()
     }
-    public func clear() { refreshPendingEntries(); for entry in entries { clean(entry) }; entries.removeAll(); prioritizeCaches(); persist(); onChange?() }
+    public func clear() { refreshPendingEntries(); for entry in entries { clean(entry) }; entries.removeAll(); persist(); onChange?() }
 
     /// Watched titles whose source is not hidden.
     public func visibleEntries(hiding hidden: HiddenSources) -> [PlaybackHistoryEntry] {

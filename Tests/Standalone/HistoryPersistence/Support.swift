@@ -20,6 +20,8 @@ enum WriteProbe {
     nonisolated(unsafe) static var writes = 0
     nonisolated(unsafe) static var mainWrites = 0
     nonisolated(unsafe) static var fail = false
+    nonisolated(unsafe) static var queuedPriorityJobs = 0
+    static func prioritySubmitted() { lock.withLock { queuedPriorityJobs += 1 } }
     static func beforeWrite() throws {
         let shouldFail = lock.withLock { writes += 1; if Thread.isMainThread { mainWrites += 1 }; return fail }
         Thread.sleep(forTimeInterval: 0.15)

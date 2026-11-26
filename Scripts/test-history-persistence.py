@@ -12,6 +12,7 @@ with tempfile.TemporaryDirectory(prefix='history-regression-') as temp:
         if not source.exists():
             continue
         body = source.read_text().replace('try data.write(to: file, options: .atomic)', 'try WriteProbe.beforeWrite(); try data.write(to: file, options: .atomic)')
+        body = body.replace('queue.async { self.updatePriority', 'WriteProbe.prioritySubmitted(); queue.async { self.updatePriority')
         if name == 'PlaybackHistory.swift' and 'func flushPersistence()' not in body:
             body += '\nextension PlaybackHistory { func flushPersistence() async -> Bool { persistenceError == nil } }\n'
         target = folder / name

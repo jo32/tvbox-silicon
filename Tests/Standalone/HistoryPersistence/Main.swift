@@ -15,6 +15,7 @@ import Foundation
         let second = PlaybackHistory(file: file)
         check(second.entries.first?.position == 10, "new instance missed pending snapshot")
         for i in 11...50 { history.record(context("first"), position: Double(i), duration: 100) }
+        check(WriteProbe.lock.withLock { WriteProbe.queuedPriorityJobs } <= 2, "each progress update queued another retained priority snapshot")
         second.record(context("second"), position: 20, duration: 100)
         check(second.entries.count == 2, "same-file instance lost newer entries")
         history.remove(context("first").id)
