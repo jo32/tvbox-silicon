@@ -14,7 +14,7 @@
   "d1_databases": [{ "binding": "DB", "database_name": "yingxia-tmdb", "database_id": "1128f19d-e5bc-4263-9b2c-8dfa802db320" }],
   // Per IP address, in memory only. Each viewer opens a title once; a run is a few model turns.
   "ratelimits": [
-    { "name": "MATCH_LIMITER", "namespace_id": "4201", "simple": { "limit": 20, "period": 60 } },
+    { "name": "MATCH_LIMITER", "namespace_id": "4201", "simple": { "limit": 200, "period": 60 } },
     { "name": "DETAILS_LIMITER", "namespace_id": "4202", "simple": { "limit": 60, "period": 60 } },
     { "name": "CATALOG_SEARCH_LIMITER", "namespace_id": "4203", "simple": { "limit": 120, "period": 60 } }
   ],
