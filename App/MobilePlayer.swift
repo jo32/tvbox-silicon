@@ -2001,6 +2001,7 @@ private struct BatteryGauge: View {
         token = nil
         loading = nil
         dropReader()
+        dropPreviewAsset()
     }
 
     /// The player's position now, read without waiting for the next tick.
@@ -2013,6 +2014,8 @@ private struct BatteryGauge: View {
     private(set) var preview: CGImage?
     @ObservationIgnored private var generator: AVAssetImageGenerator?
     @ObservationIgnored private var generatorItem: ObjectIdentifier?
+    /// The generator's asset when it is a drive file's preview asset (`dropPreviewAsset`).
+    @ObservationIgnored private var previewAsset: AVAsset?
     /// An item AVFoundation made no frame from (an HLS stream, say): no more tries for it.
     @ObservationIgnored private var previewless: ObjectIdentifier?
     @ObservationIgnored private var generating = false
@@ -2060,6 +2063,7 @@ private struct BatteryGauge: View {
                 if !Task.isCancelled { self?.dropReader() }
             }
         }
+        dropPreviewAsset()
         let tolerance = SeekTolerance.release(secondsPerPoint: scrubPrecision)
         scrubPrecision = 0
         if let target = scrubbing { seek(to: target, tolerance: tolerance) }
@@ -2093,7 +2097,11 @@ private struct BatteryGauge: View {
             return readStream(seconds, from: reader.reader, of: identity)
         }
         if generatorItem != identity {
-            let generator = AVAssetImageGenerator(asset: item.asset)
+            dropPreviewAsset()
+            // A drive file's frames come from an asset of their own, which reads only what they show (`CloudStreams.previewAsset`).
+            let cloud = (item.asset as? AVURLAsset).flatMap { CloudStreams.previewAsset(for: $0.url) }
+            previewAsset = cloud
+            let generator = AVAssetImageGenerator(asset: cloud ?? item.asset)
             generator.appliesPreferredTrackTransform = true
             generator.maximumSize = CGSize(width: 320, height: 320)
             generator.requestedTimeToleranceBefore = CMTime(seconds: 2, preferredTimescale: 600)
@@ -2104,11 +2112,14 @@ private struct BatteryGauge: View {
         guard let generator else { return }
         nextPreview = nil
         generating = true
+        let asked = ObjectIdentifier(generator)
         generator.generateCGImageAsynchronously(for: CMTime(seconds: seconds, preferredTimescale: 600)) { [weak self] image, _, _ in
             nonisolated(unsafe) let frame = image
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.generating = false
+                // Let go at the end of the drag (`dropPreviewAsset`), which calls off what it was reading.
+                guard self.generator.map(ObjectIdentifier.init) == asked else { return self.makePreview() }
                 if let frame { if self.scrubbing != nil { self.preview = frame } }
                 else if self.preview == nil {
                     // No frame from the generator: a stream. Its second reader takes over where one may open.
@@ -2160,6 +2171,17 @@ private struct BatteryGauge: View {
         }
     }
 
+    /// A drive file's preview asset and its generator, let go when the finger lifts: its reads are called off, so none
+    /// goes on downloading from a dragged place while the video waits for the place it landed. The next drag opens
+    /// another (its index is still in the stream's cache).
+    private func dropPreviewAsset() {
+        guard let asset = previewAsset else { return }
+        previewAsset = nil
+        generator = nil
+        generatorItem = nil
+        CloudStreams.endPreview(asset)
+    }
+
     private func dropReader() {
         readerIdle?.cancel(); readerIdle = nil
         guard let reader else { return }
@@ -2175,6 +2197,7 @@ private struct BatteryGauge: View {
             item = player.currentItem
             buffered = 0
             dropReader()
+            dropPreviewAsset()
             loading = item?.observe(\.loadedTimeRanges, options: [.new]) { [weak self] _, _ in
                 Task { @MainActor [weak self] in self?.measureLoaded() }
             }
