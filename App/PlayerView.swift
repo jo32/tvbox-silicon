@@ -82,6 +82,9 @@ struct PlaybackView: View {
             if session.error == nil {
                 NativePlayerView(player: session.player, comments: session.danmaku, showsDanmaku: $showsDanmaku, opacity: session.danmakuOpacity, revision: session.danmakuRevision,
                                  subtitles: session.subtitles, qualities: session.qualities, quality: session.quality, choose: { session.choose(quality: $0) },
+                                 audioTracks: session.mediaTracks.audio,
+                                 selectedAudioTrack: session.mediaTracks.audio.flatMap { session.mediaTracks.selected(in: $0) },
+                                 chooseAudioTrack: { session.chooseAudioTrack($0, in: $1) },
                                  audio: session.audioChoices, audioChoice: session.audioChoice, chooseAudio: { session.chooseAudio($0) },
                                  live: session.isLive, previous: episodeAction(store.step(back: true, from: channel, session: session)),
                                  next: episodeAction(store.step(back: false, from: channel, session: session)), waiting: waitContent,
@@ -838,6 +841,10 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     var qualities: [StreamQuality] = []
     var quality: Int? = nil
     var choose: @MainActor (Int?) -> Void = { _ in }
+    /// The item's selectable audio tracks, with `TrackLabel` names (the system Audio menu only shows languages).
+    var audioTracks: MediaTracks.Group? = nil
+    var selectedAudioTrack: AVMediaSelectionOption? = nil
+    var chooseAudioTrack: @MainActor (AVMediaSelectionOption, AVMediaSelectionGroup) -> Void = { _, _ in }
     /// The sound tracks AVKit's own Audio menu can't offer (`PlaybackSession.audioChoices`), and the one playing.
     var audio: [UngroupedAudio.Choice] = []
     var audioChoice: CMPersistentTrackID? = nil
@@ -1056,10 +1063,22 @@ private struct NativePlayerView: UIViewControllerRepresentable {
                 + qualities.map { option in UIAction(title: option.label, state: quality == option.id ? .on : .off) { _ in choose(option.id) } }
             items.append(UIMenu(title: L10n.text("Quality") + " · " + current, image: UIImage(systemName: "sparkles.tv"), children: options))
         }
+        if let audioTracks, audioTracks.options.count > 1 {
+            let chooseAudioTrack = chooseAudioTrack
+            let selected = selectedAudioTrack
+            let options = audioTracks.options.map { option in
+                UIAction(title: audioTracks.name(option), state: option == selected ? .on : .off) { _ in
+                    chooseAudioTrack(option, audioTracks.group)
+                }
+            }
+            let title = selected.map { L10n.text("Audio") + " · " + audioTracks.name($0) } ?? L10n.text("Audio")
+            items.append(UIMenu(title: title, image: UIImage(systemName: "speaker.wave.2"), children: options))
+        }
         if audio.count > 1 {
             let chooseAudio = chooseAudio
             let options = audio.map { option in UIAction(title: option.name, state: option.id == audioChoice ? .on : .off) { _ in chooseAudio(option.id) } }
-            items.append(UIMenu(title: L10n.text("Audio"), image: UIImage(systemName: "speaker.wave.2"), children: options))
+            let title = (audioTracks?.options.count ?? 0) > 1 ? L10n.text("Other Audio") : L10n.text("Audio")
+            items.append(UIMenu(title: title, image: UIImage(systemName: "speaker.wave.2"), children: options))
         }
         // Always there (but for live): adding a file by its address starts here (#576).
         if let external, !live { items.append(Self.subtitleFilesMenu(external, ownSubtitles: ownSubtitles, presenter: controller)) }
