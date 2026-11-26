@@ -67,7 +67,7 @@ public enum TelegramSource {
         // stays high until a page comes back empty (#2234).
         let pageCount = posts.isEmpty ? page : 1000
         return ["class": .array([.object(["type_id": .string("latest"), "type_name": .string(L10n.text("Latest"))])]),
-                "list": .array(posts.map { .object(videoFields($0)) }), "pagecount": .number(pageCount)]
+                "list": .array(posts.map { .object(videoFields($0)) }), "pagecount": .number(Double(pageCount))]
     }
 
     /// A direct media address plays as-is. A Telegram embed or comment page is read for the
@@ -91,14 +91,14 @@ public enum TelegramSource {
     /// older ones come from `?before=<oldest id>`, so page N walks from the newest page down to it.
     private static func fetchPage(channel: String, page: Int, http: HTTPClient) async throws -> [Post] {
         var before: Int? = nil
-        var posts: [Post] = []
+        var shown: [Post] = []
         for _ in 1...page {
             let html = try await fetch(previewURL(channel: channel, before: before), http: http)
-            posts = Array(posts(in: html, channel: channel).reversed())
-            guard let oldest = posts.last?.id else { return [] }
+            shown = Array(posts(in: html, channel: channel).reversed())
+            guard let oldest = shown.last?.id else { return [] }
             before = oldest
         }
-        return posts
+        return shown
     }
 
     /// The preview page, or the older posts before a post id.
