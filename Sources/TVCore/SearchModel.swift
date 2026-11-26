@@ -28,6 +28,8 @@ import Observation
     public private(set) var loadingMore = false
     /// The next page to ask each source for; `Int.max` once a source has no more.
     private var nextPage: [String: Int] = [:]
+    /// Next pages that failed in a row, per source: one more try, then the source is done for this search.
+    @ObservationIgnored private var pageFailures: [String: Int] = [:]
     private(set) var moreTask: Task<Void, Never>?
     private var pageGeneration = UUID()
     private var resultsVisible = true
@@ -100,10 +102,16 @@ import Observation
                 let client = CatalogClient(site: result.site, origin: config.origin, http: http, jarURL: config.spiderURL)
                 let answer = try? await client.list(category: nil, query: keyword, page: page)
                 guard !Task.isCancelled, self.runID == run, self.pageGeneration == pageToken else { break }
-                // A failed page is not the end of the source: leave its next page alone so
-                // another tap retries it, instead of silently giving up on it for this search
-                // (the catalog browser already retries the same page after a failure).
-                guard let answer else { continue }
+                // A failed page is not the end of the source: it is asked once more. The end of the list asks for
+                // more as soon as a pass ends while it is on screen, so a source that keeps failing would be asked
+                // forever: a second failure in a row ends it for this search.
+                guard let answer else {
+                    let failures = (self.pageFailures[result.id] ?? 0) + 1
+                    self.pageFailures[result.id] = failures
+                    if failures >= 2 { self.nextPage[result.id] = .max }
+                    continue
+                }
+                self.pageFailures[result.id] = nil
                 let known = Set(self.videos(for: result.id).map(\.id))
                 let fresh = answer.videos.filter { !known.contains($0.id) }
                 self.nextPage[result.id] = fresh.isEmpty ? Int.max : page + 1
@@ -122,7 +130,7 @@ import Observation
 
     private func clearPages() {
         cancelPages()
-        batches = []; nextPage = [:]; loadingMore = false; runID = UUID()
+        batches = []; nextPage = [:]; pageFailures = [:]; loadingMore = false; runID = UUID()
     }
 
     public func stop() {
