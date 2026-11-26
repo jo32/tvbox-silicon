@@ -272,6 +272,8 @@ struct MobilePlayerView: View {
             CatalogDanmakuSettingsView(model: session.catalogDanmaku, channelName: channel.name).playerSheet().environment(store)
         }
         .sheet(isPresented: $showsSkip) { EpisodeSkipSettingsView(session: session).playerSheet().environment(store) }
+        // A sheet or prompt over the player holds the controls, as the seek bar does while held (#2341).
+        .onChange(of: presentationOpen) { _, open in hold(open) }
     }
 
     // MARK: Hardware keyboard
@@ -280,6 +282,15 @@ struct MobilePlayerView: View {
         UIDevice.current.userInterfaceIdiom == .pad && scenePhase == .active && !locked && !pip.active && playingOn == nil
             && !importsSubtitleFile && !asksSubtitleAddress && !searchesSubtitles && !showsEpisodes && !showsChannels
             && !showsDanmakuList && !showsDanmakuSettings && !showsSkip
+    }
+
+    /// A sheet or prompt opened from the controls: the controls stay until it closes, then count down again (#2341).
+    /// The hide timer only knows the context menu (`OpenMenu`); a sheet over the player left the controls to fade
+    /// under it, so the viewer came back to a bare picture. The same set the hardware keyboard treats as "something
+    /// is presented" (`keyboardEnabled`).
+    private var presentationOpen: Bool {
+        showsDanmakuList || showsDanmakuSettings || showsSkip || showsEpisodes || showsChannels
+            || importsSubtitleFile || asksSubtitleAddress || searchesSubtitles
     }
 
     private func keyboardAction(_ action: PlaybackKeyboard.Action) {
@@ -1184,12 +1195,22 @@ struct WaitSpinner: View {
 }
 
 /// Whether a menu is open: SwiftUI's `Menu` opens UIKit's context menu, whose container joins the window while it
-/// shows. Read only when the player's controls are about to fade (#1500).
+/// shows. Read only when the player's controls are about to fade (#1500). The container is not always a subview of
+/// the window itself, so looking only at the window's own subviews can miss it, and the menu shut a few seconds
+/// after the last tap (#2341): the whole subtree is walked instead.
 @MainActor enum OpenMenu {
     static var showing: Bool {
         UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).contains { window in
-            !window.isHidden && window.subviews.contains { String(describing: type(of: $0)).contains("ContextMenuContainer") }
+            !window.isHidden && containsContextMenu(in: window)
         }
+    }
+
+    private static func containsContextMenu(in view: UIView) -> Bool {
+        for subview in view.subviews where !subview.isHidden {
+            if String(describing: type(of: subview)).contains("ContextMenuContainer") { return true }
+            if containsContextMenu(in: subview) { return true }
+        }
+        return false
     }
 }
 

@@ -10,7 +10,9 @@ import Network
 ///   -1008/-12884; ExoPlayer asks again), within a time budget for the whole start;
 /// - repairs playlists AVPlayer refuses (`HLSSanitizer`) and cuts spliced-in ads (`AdSkip`);
 /// - drops the picture some hosts put before each MPEG-TS segment (`MediaPayload`);
-/// - asks once more after a dropped connection or a 502, 503 or 504, and otherwise passes the server's own status on.
+/// - asks once more after a dropped connection or a 502, 503 or 504, and otherwise passes the server's own status on;
+/// - renews a live playlist whose reload is refused (an expired signature) from a fresh address of the same stream, under
+///   the names AVPlayer already knows (`renewsLive(with:)`), so the item plays on instead of opening again.
 ///
 /// Memory stays bounded: a playlist is read to at most 16 MB and given up on as soon as its first bytes are a stream
 /// (an `.m3u8` address that sends endless MPEG-TS), and segments are passed through as they come, not held whole.
@@ -85,6 +87,21 @@ public actor HLSProxy {
     private var startup: CheckedContinuation<Void, Error>?
     /// Playlists fetched before AVPlayer asked for them, each served once while fresh.
     private var prefetched: [String: (reply: Upstream, at: Date)] = [:]
+    /// A fresh address of the stream, and the headers it is asked with, for a live playlist whose reload was refused.
+    public typealias Renew = @Sendable () async -> (url: URL, headers: [String: String])?
+    private var renew: Renew?
+    /// The key of the stream's own address (`start`).
+    private var root: String?
+    /// What each live media playlist last showed AVPlayer, by key: a refused one is renewed only into a window that
+    /// carries on from it.
+    private var windows: [String: LiveHLSRenewal.Window] = [:]
+    /// Playlists read from a renewed address: their segments keep the names AVPlayer knows them by (`noteWindow`).
+    private var renewedKeys: Set<String> = []
+    private var renewing: Task<[String: Upstream]?, Never>?
+    private var renewals = 0
+    private var renewalFailed = false
+    private var lastRenewal: ContinuousClock.Instant?
+    private var cooldown = LiveHLSRenewal.cooldown
     static let playlistLimit = 16 << 20
     /// How much of a segment is looked at before it is passed on: enough to find a picture put before it.
     static let headLimit = 64 << 10
@@ -93,11 +110,20 @@ public actor HLSProxy {
     #endif
     public init(headers: [String: String]) { self.headers = headers }
 
+    /// Where a fresh address of the stream comes from when the server refuses a reload of a live playlist AVPlayer is
+    /// reading (401, 403, 404, 410, or a short answer that isn't a playlist): the room's platform or the episode's
+    /// source. The fresh playlist is served under the refused one's name, and the item plays on, when it is the same
+    /// stream: the same address but for its signature, the same headers, and a window that carries on from the last one
+    /// (`LiveHLSRenewal`). Otherwise, or when a renewal failed once, AVPlayer gets the refusal, as without this.
+    /// Renewals are at least `LiveHLSRenewal.cooldown` apart and at most `LiveHLSRenewal.limit`; nothing is polled.
+    public func renewsLive(with renew: Renew?, cooldown: Duration = LiveHLSRenewal.cooldown) { self.renew = renew; self.cooldown = cooldown }
+
     /// The loopback address of `url`'s playlist, once that playlist (and a master playlist's variants) is in: AVPlayer's
     /// own wait for it starts only then.
     public func start(url: URL, patience: Patience = .opening) async throws -> URL {
         try await bind()
         let address = register(url, kind: .playlist)
+        root = address.lastPathComponent
         let clock = ContinuousClock()
         let deadline = clock.now + patience.budget
         let started = clock.now
@@ -173,6 +199,7 @@ public actor HLSProxy {
     }
     public func stop() {
         listener?.cancel(); listener = nil; routes.removeAll(); keys.removeAll(); prefetched.removeAll()
+        windows.removeAll(); renewedKeys.removeAll(); renewing?.cancel(); renewing = nil; renew = nil
         startup?.resume(throwing: CancellationError()); startup = nil
     }
 
@@ -395,11 +422,114 @@ public actor HLSProxy {
         let range = text.components(separatedBy: "\r\n").first { $0.lowercased().hasPrefix("range: bytes=") }
             .map { String($0.drop { $0 != "=" }.dropFirst()) }
         if let early = prefetched.removeValue(forKey: key), Date().timeIntervalSince(early.at) < 20 {
-            respond(connection, reply: early.reply, url: url, range: range, head: head); return
+            respond(connection, reply: early.reply, url: url, range: range, head: head, key: key); return
         }
         guard key.hasSuffix(".m3u8") else { await relay(connection, url: url, range: range, head: head); return }
-        do { respond(connection, reply: try await fetchPlaylist(url), url: url, range: range, head: head) }
+        do {
+            var reply = try await fetchPlaylist(url)
+            if refused(reply, key: key), let renewed = await renewed(key) { reply = renewed }
+            respond(connection, reply: reply, url: routes[key] ?? url, range: range, head: head, key: key)
+        }
         catch { fail(connection, url: url, error) }
+    }
+
+    // MARK: Live renewal
+
+    /// A reload of a live playlist AVPlayer already reads, refused as an expired signature is.
+    private func refused(_ reply: Upstream, key: String) -> Bool {
+        guard renew != nil, windows[key] != nil else { return false }
+        if [401, 403, 404, 410].contains(reply.status) { return true }
+        // "Token expired" in a 200.
+        return (200..<300).contains(reply.status) && reply.data.count < 4096 && HLSSanitizer.text(reply.data) == nil
+    }
+
+    /// The refused playlist `key`, read from a fresh address of the stream, or nil to pass the refusal on. One renewal
+    /// runs at a time; a playlist refused meanwhile (an audio rendition) waits for it and reads its own fresh address.
+    private func renewed(_ key: String) async -> Upstream? {
+        let task: Task<[String: Upstream]?, Never>
+        if let running = renewing { task = running } else {
+            guard !renewalFailed, renewals < LiveHLSRenewal.limit,
+                  lastRenewal.map({ $0.duration(to: .now) >= cooldown }) ?? true else {
+                Diagnostics.shared.record(.info, "player", "hls proxy live renewal skipped failed=\(renewalFailed) renewals=\(renewals)")
+                return nil
+            }
+            task = Task { await self.renewal(refused: key) }
+            renewing = task
+        }
+        let replies = await task.value
+        if renewing == task { renewing = nil }
+        guard let replies else { return nil }
+        if let reply = replies[key] { return reply }
+        guard renewedKeys.contains(key), let url = routes[key], let previous = windows[key],
+              let reply = try? await fetchPlaylist(url), (200..<300).contains(reply.status),
+              let text = servedText(reply, quiet: true), let window = LiveHLSRenewal.Window(text, origin: reply.url),
+              previous.continues(to: window) else { return nil }
+        return reply
+    }
+
+    /// Asks `renew` for a fresh address and, when it is the same stream, moves the stream's playlists to it. Returns the
+    /// refused playlist read there; nil (and no more renewals) when it isn't the same stream or can't be read.
+    private func renewal(refused key: String) async -> [String: Upstream]? {
+        func refuse(_ reason: String) -> [String: Upstream]? {
+            renewalFailed = true
+            Diagnostics.shared.record(.warning, "player", "hls proxy live renewal failed reason=\(reason) renewals=\(renewals)")
+            return nil
+        }
+        guard let renew, let root, let rootURL = routes[root], let previous = windows[key] else { return refuse("no-source") }
+        let fresh = await renew()
+        guard listener != nil, !Task.isCancelled, routes[root] == rootURL else { return nil }
+        guard let fresh else { return refuse("no-address") }
+        guard Self.normalized(fresh.headers) == Self.normalized(headers) else { return refuse("headers") }
+        guard fresh.url != rootURL else { return refuse("same-address") }
+        guard LiveHLSRenewal.compatible(rootURL, fresh.url) else { return refuse("other-stream") }
+        // The fresh address is the refused playlist itself, or the master playlist that lists it.
+        guard let top = try? await download(fresh.url, timeout: 10), (200..<300).contains(top.status),
+              let topText = servedText(top, quiet: true) else { return refuse("fresh-refused") }
+        var moved: [String: URL] = [root: fresh.url]
+        var candidate = top
+        if key != root {
+            guard topText.contains("#EXT-X-STREAM-INF") else { return refuse("not-master") }
+            let listed = Self.addresses(in: topText, origin: top.url).filter(\.playlist).map(\.url)
+            for (name, url) in routes where name != root && name.hasSuffix(".m3u8") {
+                let matches = Set(listed.filter { LiveHLSRenewal.compatible(url, $0) })
+                if matches.count == 1, let match = matches.first { moved[name] = match }
+            }
+            guard let address = moved[key] else { return refuse("variant-missing") }
+            guard let reply = try? await download(address, timeout: 10), (200..<300).contains(reply.status) else { return refuse("fresh-refused") }
+            candidate = reply
+        }
+        guard let text = servedText(candidate, quiet: true), let window = LiveHLSRenewal.Window(text, origin: candidate.url) else { return refuse("not-live") }
+        guard previous.continues(to: window) else { return refuse("discontinuous") }
+        guard listener != nil, !Task.isCancelled, routes[root] == rootURL else { return nil }
+        for (name, url) in moved { routes[name] = url; keys[url] = name; renewedKeys.insert(name); prefetched[name] = nil }
+        renewals += 1; lastRenewal = .now
+        Diagnostics.shared.record(.info, "player", "hls proxy live renewal host=\(fresh.url.host() ?? "-") renewals=\(renewals) playlists=\(moved.count) window=\(window.first)-\(window.last)")
+        return [key: candidate]
+    }
+
+    /// Notes the window of live playlist `key` as AVPlayer gets it. After a renewal, a segment, key or map whose new
+    /// address differs from the old only by its signature keeps its old name (now fetched from the new address): the
+    /// window reads on with nothing fetched twice, skipped or contradicted (-12312, "Media Entry URL not match").
+    private func noteWindow(_ key: String, _ text: String, origin: URL) {
+        guard let window = LiveHLSRenewal.Window(text, origin: origin) else { windows[key] = nil; return }
+        if renewedKeys.contains(key), let previous = windows[key] {
+            for (number, segment) in window.segments where keys[segment.url] == nil {
+                guard let old = previous.segments[number], LiveHLSRenewal.compatible(old.url, segment.url), let name = keys[old.url] else { continue }
+                routes[name] = segment.url; keys[segment.url] = name
+            }
+            let tags = Set(window.tags), oldTags = Set(previous.tags)
+            for tag in tags where keys[tag] == nil {
+                let matches = oldTags.filter { LiveHLSRenewal.compatible($0, tag) }
+                guard matches.count == 1, let old = matches.first, tags.filter({ LiveHLSRenewal.compatible(old, $0) }).count == 1,
+                      let name = keys[old] else { continue }
+                routes[name] = tag; keys[tag] = name
+            }
+        }
+        windows[key] = window
+    }
+
+    private static func normalized(_ headers: [String: String]) -> [String: String] {
+        Dictionary(headers.map { ($0.key.lowercased(), $0.value) }, uniquingKeysWith: { first, _ in first })
     }
 
     private func fail(_ connection: NWConnection, url: URL, _ error: Error) {
@@ -408,7 +538,7 @@ public actor HLSProxy {
     }
 
     /// A whole answer: a playlist, sanitized and pointing here, or the body as it came.
-    private func respond(_ connection: NWConnection, reply: Upstream, url: URL, range: String?, head: Bool) {
+    private func respond(_ connection: NWConnection, reply: Upstream, url: URL, range: String?, head: Bool, key: String? = nil) {
         guard (200..<300).contains(reply.status) else {
             // Pass the real status on, so AVPlayer and the loading card can tell an expired link from a dead server.
             if reply.failure != nil { stats.failed(url.host(), status: nil, message: reply.failure, code: reply.code) }
@@ -421,15 +551,9 @@ public actor HLSProxy {
         }
         var data = reply.data
         var mime = reply.mime ?? "application/octet-stream"
-        if let original = HLSSanitizer.text(data) {
+        if let playlistText = servedText(reply, quiet: false) {
             mime = "application/vnd.apple.mpegurl"
-            let sanitized = HLSSanitizer.sanitize(original)
-            for fix in sanitized.fixes { repaired(fix, host: url.host(), detail: nil) }
-            var playlistText = sanitized.text
-            if AdSkip.enabled, let cleaned = AdSkip.clean(playlistText, origin: reply.url) {
-                Diagnostics.shared.record(.info, "player", "ads removed runs=\(cleaned.runs) seconds=\(Int(cleaned.seconds)) host=\(cleaned.host)")
-                playlistText = cleaned.text
-            }
+            if let key, renew != nil { noteWindow(key, playlistText, origin: reply.url) }
             data = Data(rewrite(playlistText, origin: reply.url).utf8)
         } else {
             let cleaned = MediaPayload.transportStream(data)
@@ -443,6 +567,20 @@ public actor HLSProxy {
             if high >= low { extra = "Content-Range: bytes \(low)-\(high)/\(data.count)\r\n"; data = Data(data[low...high]); code = 206 }
         }
         send(connection, code: code, data: data, mime: mime, extra: extra, head: head)
+    }
+
+    /// A playlist's text as AVPlayer gets it, before its addresses point here: repaired (`HLSSanitizer`), its ads cut
+    /// (`AdSkip`). Nil for a body that isn't a playlist. `quiet` leaves the repairs unlogged (a renewal's check).
+    private func servedText(_ reply: Upstream, quiet: Bool) -> String? {
+        guard let original = HLSSanitizer.text(reply.data) else { return nil }
+        let sanitized = HLSSanitizer.sanitize(original)
+        if !quiet { for fix in sanitized.fixes { repaired(fix, host: reply.url.host(), detail: nil) } }
+        var text = sanitized.text
+        if AdSkip.enabled, let cleaned = AdSkip.clean(text, origin: reply.url) {
+            if !quiet { Diagnostics.shared.record(.info, "player", "ads removed runs=\(cleaned.runs) seconds=\(Int(cleaned.seconds)) host=\(cleaned.host)") }
+            text = cleaned.text
+        }
+        return text
     }
 
     /// A segment, passed on as it comes. Its first 64 KB are looked at first: a picture before the MPEG-TS is dropped
