@@ -1513,16 +1513,60 @@ private struct PlayerCircleStyle: ButtonStyle {
     }
 }
 
-/// The system's AirPlay button, which presents the route picker itself. Its own glyph is the one people know; drawing
-/// our own `airplay.video` symbol here in the capsule left this, the first button, blank on a device (#2466).
+/// AirPlay, drawn like the buttons beside it: the 15 pt mark, not the system's bigger, heavier one (#1560). All of it is
+/// UIKit: the system's button, all but invisible, takes the tap and opens its picker itself, with our mark on top. A
+/// SwiftUI mark over the hidden picker drew nothing on iPhones, only the picker's own faint mark (#2466).
 private struct AirPlayButton: UIViewRepresentable {
-    func makeUIView(context: Context) -> AVRoutePickerView {
-        let view = AVRoutePickerView()
-        view.prioritizesVideoDevices = true
-        view.tintColor = .white
-        return view
+    func makeUIView(context: Context) -> AirPlayMarkView { AirPlayMarkView() }
+    func updateUIView(_ view: AirPlayMarkView, context: Context) {}
+}
+
+private final class AirPlayMarkView: UIView {
+    private let picker = AVRoutePickerView()
+    private let mark = UIImageView(image: UIImage(systemName: "airplay.video",
+                                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .semibold)))
+    /// As `ChromeButtonStyle` in a button group: a faint circle while pressed.
+    private let pressed = UIView()
+    private weak var button: UIButton?
+
+    init() {
+        super.init(frame: .zero)
+        picker.prioritizesVideoDevices = true
+        // 0.02, not 0: a view under 0.01 takes no touches.
+        picker.alpha = 0.02
+        pressed.backgroundColor = UIColor.white.withAlphaComponent(0.2)
+        pressed.alpha = 0
+        pressed.isUserInteractionEnabled = false
+        mark.tintColor = .white
+        mark.contentMode = .center
+        mark.isUserInteractionEnabled = false
+        for view in [pressed, picker, mark] as [UIView] {
+            view.frame = bounds
+            view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            addSubview(view)
+        }
     }
-    func updateUIView(_ view: AVRoutePickerView, context: Context) {}
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        pressed.layer.cornerRadius = min(bounds.width, bounds.height) / 2
+        guard button == nil else { return }
+        func find(in view: UIView) -> UIButton? { view as? UIButton ?? view.subviews.lazy.compactMap(find).first }
+        guard let found = find(in: picker) else { return }
+        button = found
+        found.accessibilityIdentifier = "player.airPlay"
+        found.addTarget(self, action: #selector(touchDown), for: [.touchDown, .touchDragEnter])
+        found.addTarget(self, action: #selector(touchEnded), for: [.touchUpInside, .touchUpOutside, .touchDragExit, .touchCancel])
+    }
+
+    // Not press()/release(): -release is NSObject's own, and overriding it recursed at once.
+    @objc private func touchDown() { highlight(true) }
+    @objc private func touchEnded() { highlight(false) }
+    private func highlight(_ on: Bool) {
+        pressed.alpha = on ? 1 : 0
+        mark.alpha = on ? 0.72 : 1
+    }
 }
 
 /// The picture's own gestures, in UIKit: taps, a touch and hold followed while the finger moves, slides and a pinch.
