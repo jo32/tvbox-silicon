@@ -374,8 +374,20 @@ struct AccountView: View {
 
     @ViewBuilder private func feedbackSection(_ account: Account) -> some View {
         if !account.feedback.issues.isEmpty {
-            SettingsGroup(title: L10n.text("Your Feedback")) {
-                ForEach(account.feedback.issues) { issue in
+            // One summary row: the list of messages opens on its own page, so a member with many
+            // feedback items doesn't scroll past the whole list to reach the rest of the account (#2419).
+            SettingsLinkRow(symbol: "paperplane.fill", title: L10n.text("Your Feedback"),
+                            subtitle: L10n.text("%lld sent · %lld adopted", account.feedback.sent, account.feedback.adopted)) {
+                feedbackPage(account.feedback)
+            }
+        }
+    }
+
+    private func feedbackPage(_ feedback: Account.Feedback) -> some View {
+        SettingsPage(title: L10n.text("Your Feedback"), symbol: "paperplane.fill",
+                     subtitle: L10n.text("%lld sent · %lld adopted", feedback.sent, feedback.adopted)) {
+            SettingsGroup {
+                ForEach(feedback.issues) { issue in
                     issueRow(issue)
                 }
             }
