@@ -971,9 +971,11 @@ struct MobilePlayerView: View {
 
     // MARK: Middle and bottom
 
+    /// The middle row: play/pause, with skip buttons beside it — unless two taps on a side already skip (#2061),
+    /// in which case the buttons would only duplicate the gesture.
     private var centerRow: some View {
         HStack(spacing: 20) {
-            if seekable && !inline {
+            if seekable && !inline && !doubleTapSkips {
                 let step = SkipInterval.seconds(skipInterval)
                 Button { session.skip(-step); sought() } label: { Image(systemName: SkipInterval.symbol(forward: false, seconds: step)) }
                     .buttonStyle(PlayerCircleStyle(size: 52))
@@ -986,7 +988,7 @@ struct MobilePlayerView: View {
                 .buttonStyle(PlayerCircleStyle(size: inline ? 50 : 68))
                 .accessibilityLabel(L10n.text(session.paused ? "Play" : "Pause"))
                 .accessibilityIdentifier("player.playPause")
-            if seekable && !inline {
+            if seekable && !inline && !doubleTapSkips {
                 let step = SkipInterval.seconds(skipInterval)
                 Button { session.skip(step); sought() } label: { Image(systemName: SkipInterval.symbol(forward: true, seconds: step)) }
                     .buttonStyle(PlayerCircleStyle(size: 52))
