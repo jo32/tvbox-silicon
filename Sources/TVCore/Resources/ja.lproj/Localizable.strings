@@ -2395,3 +2395,10 @@
 "Select episodes to delete" = "削除するエピソードを選択";
 "Delete %lld episodes" = "%lld 話を削除";
 "Search settings" = "設定を検索";
+
+// Provider-declared programme replay.
+"Replay Programmes" = "番組を見逃し再生";
+"Back to Live" = "ライブに戻る";
+"Date" = "日付";
+"No replayable programmes on this date." = "この日付に再生できる番組はありません。";
+"This programme is no longer available for replay." = "この番組の見逃し配信期間は終了しました。";

@@ -163,7 +163,7 @@ struct TVPlayerChannelsPanel: View {
 
     var body: some View {
         Group {
-            if let lineup = store.lineup(for: playing) { content(lineup) } else { Color.clear }
+            if let lineup = store.lineup(for: playing) ?? (store.guide(for: playing) != nil ? store.liveLineup : nil) { content(lineup) } else { Color.clear }
         }
         .environment(store.guide(for: playing))
         .glassSurface(.regular, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
@@ -177,6 +177,13 @@ struct TVPlayerChannelsPanel: View {
         let group = selectedGroup.flatMap { groups.contains($0) ? $0 : nil } ?? playing.group
         let items = groups.count > 1 ? lineup.channels.filter { $0.group == group } : lineup.channels
         return VStack(alignment: .leading, spacing: 14) {
+            if let live = store.liveChannel(for: playing) {
+                HStack {
+                    ProgrammeCatchupButton(channel: live) { store.playing = $0 }
+                    if playing.replay != nil { Button(L10n.text("Back to Live")) { store.playing = live } }
+                }
+                .padding(.horizontal, 40)
+            }
             if groups.count > 1 {
                 ScrollViewReader { proxy in
                     ScrollView(.horizontal) {

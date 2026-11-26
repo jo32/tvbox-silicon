@@ -80,14 +80,21 @@ import TVCore
         watch(channel, in: LiveLineup(title: L10n.text("Favorites"), channels: favorites.liveChannels))
     }
     /// The guide of the list the channel was picked from.
-    func guide(for channel: Channel) -> LiveGuide? { lineup(for: channel) != nil ? liveGuide : nil }
+    func guide(for channel: Channel) -> LiveGuide? {
+        liveLineup?.channels.contains(where: { $0.id == (channel.replay?.channelID ?? channel.id) }) == true ? liveGuide : nil
+    }
+    /// Keeps replay out of channel navigation while allowing an explicit return to its source channel.
+    func liveChannel(for channel: Channel) -> Channel? {
+        guard let id = channel.replay?.channelID else { return channel }
+        return liveLineup?.channels.first { $0.id == id }
+    }
     /// Program guide addresses the viewer typed in for live playlists, by playlist address (#802).
     var guideAddresses: [String: String] {
         didSet { if persistsChanges { defaults.set(guideAddresses, forKey: "liveGuideAddresses") } }
     }
     /// The list the channel was picked from, when it holds others to switch to.
     func lineup(for channel: Channel) -> LiveLineup? {
-        guard let lineup = liveLineup, lineup.channels.count > 1, lineup.position(of: channel) != nil else { return nil }
+        guard channel.replay == nil, let lineup = liveLineup, lineup.channels.count > 1, lineup.position(of: channel) != nil else { return nil }
         return lineup
     }
     /// The videos whose iPhone watch page is on screen (`PlaybackHistoryContext.id`): their episodes play at the top

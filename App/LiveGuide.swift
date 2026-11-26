@@ -47,6 +47,18 @@ import TVCore
             asked.remove(channel.name)
         }
     }
+
+    /// A historical day for the replay sheet. XMLTV shares its bounded history with Now/Next; DIYP is asked
+    /// for this date, retaining the provider's existing China-time date semantics.
+    func programmes(for channel: Channel, on date: Date) async -> [Programme] {
+        switch address {
+        case .xmltv:
+            await load([channel])
+            return guide?.schedule(for: channel) ?? []
+        case .perChannel:
+            return await ProgramGuides.shared.schedule(address, name: channel.name, on: date) ?? []
+        }
+    }
 }
 
 /// Redraws a programme line when a programme ends, and at no other time.
