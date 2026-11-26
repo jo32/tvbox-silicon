@@ -23,6 +23,8 @@ import TVCore
     @ObservationIgnored var timing = SubtitleTiming() {
         didSet { if let lastAdvanced, document != nil { advance(to: lastAdvanced) } }
     }
+    /// Refreshes menu checkmarks when AVKit or automatic restoration changes the selected track.
+    @ObservationIgnored var mediaSelectionChanged: () -> Void = {}
     /// Runs when one of the item's own subtitles is chosen while a file shows: the file makes way.
     @ObservationIgnored var nativeChosen: () -> Void = {}
     /// ASS/SSA the app draws itself through libass (#576 M3): a chosen ASS file, or the item's own ASS track of a
@@ -246,6 +248,7 @@ import TVCore
     }
     /// Clears the lines once no subtitle is chosen. A newly chosen one sends its own lines, sometimes before this.
     @objc private func selectionChanged() {
+        mediaSelectionChanged()
         guard let item else { return }
         Task { [weak self, weak item] in
             guard let item, let group = try? await item.asset.loadMediaSelectionGroup(for: .legible),
@@ -273,7 +276,9 @@ struct SubtitleOverlay: View {
     var body: some View {
         GeometryReader { proxy in
             if !cues.native, cues.styled.isActive {
-                StyledSubtitleCanvas(styled: cues.styled, picture: cues.videoRect(in: proxy.size, fills: fills, stretches: stretches), video: cues.pictureSize)
+                let picture = cues.videoRect(in: proxy.size, fills: fills, stretches: stretches)
+                let canvas = cues.styled.frame?.canvasRect(in: picture, visible: CGRect(origin: .zero, size: proxy.size)) ?? picture
+                StyledSubtitleCanvas(styled: cues.styled, picture: canvas, video: cues.pictureSize)
             }
             if !cues.native, !cues.lines.isEmpty {
                 let picture = cues.pictureRect(in: proxy.size, fills: fills || stretches)
@@ -347,6 +352,90 @@ extension View {
                 .shadow(color: .black, radius: 0, x: 0, y: step).shadow(color: .black, radius: 0, x: 0, y: -step)
         case .raised: shadow(color: .black.opacity(0.85), radius: 0, x: step, y: step)
         case .depressed: shadow(color: .black.opacity(0.85), radius: 0, x: -step, y: -step)
+        }
+    }
+}
+
+/// The item's audio tracks and subtitles, for the options menu.
+@MainActor @Observable final class MediaTracks {
+    struct Group {
+        let group: AVMediaSelectionGroup
+        let options: [AVMediaSelectionOption]
+        /// The menu's names for them (`TrackLabel`): the language and what else is known, not just the language.
+        let names: [AVMediaSelectionOption: String]
+        let descriptions: [TrackLabel.Option]
+        init(group: AVMediaSelectionGroup, options: [AVMediaSelectionOption], details: [String: TrackDetail]) {
+            self.group = group; self.options = options
+            descriptions = options.map { option in
+                let title = AVMetadataItem.metadataItems(from: option.commonMetadata, filteredByIdentifier: .commonIdentifierTitle).first?.stringValue
+                let detail = title.flatMap { details[$0] }
+                // A file that wasn't repackaged has no details: its audio codec comes from the option itself (#2204).
+                let format = detail?.format ?? (detail == nil ? TrackLabel.format(subTypes: option.mediaSubTypes.map(\.uint32Value)) : nil)
+                return TrackLabel.Option(displayName: option.displayName, language: option.extendedLanguageTag ?? option.locale?.identifier,
+                                         title: detail?.title.isEmpty == false ? detail?.title : title, format: format, rendition: title)
+            }
+            names = Dictionary(zip(options, TrackLabel.names(descriptions))) { first, _ in first }
+        }
+        func name(_ option: AVMediaSelectionOption) -> String { names[option] ?? option.displayName }
+    }
+    private(set) var audio: Group?
+    private(set) var legible: Group?
+    /// Bumped by a selection, so the menus show the new choice.
+    private var revision = 0
+    @ObservationIgnored private weak var item: AVPlayerItem?
+
+    func follow(_ item: AVPlayerItem?) {
+        self.item = item
+        audio = nil; legible = nil
+    }
+
+    static func subtitleGroup(_ item: AVPlayerItem) async -> Group? {
+        guard let group = try? await item.asset.loadMediaSelectionGroup(for: .legible) else { return nil }
+        let details = (item.asset as? AVURLAsset).map { Remux.trackDetails($0.url).subtitles } ?? [:]
+        return Group(group: group, options: group.options.filter { !$0.hasMediaCharacteristic(.containsOnlyForcedSubtitles) }, details: details)
+    }
+
+    func load(_ item: AVPlayerItem) async {
+        let subtitles = await Self.subtitleGroup(item)
+        guard self.item === item else { return }
+        legible = subtitles
+        #if !os(tvOS)
+        let group = try? await item.asset.loadMediaSelectionGroup(for: .audible)
+        guard self.item === item else { return }
+        let details = (item.asset as? AVURLAsset).map { Remux.trackDetails($0.url).audio } ?? [:]
+        audio = group.map { Group(group: $0, options: $0.options, details: details) }
+        #endif
+    }
+
+    func selectionChanged() { revision += 1 }
+
+    func selected(in group: Group) -> AVMediaSelectionOption? {
+        _ = revision
+        return item?.currentMediaSelection.selectedMediaOption(in: group.group)
+    }
+
+    func select(_ option: AVMediaSelectionOption?, in group: Group) {
+        item?.select(option, in: group.group)
+        revision += 1
+    }
+}
+
+/// The same explicit track choices on Mac, iPhone and iPad, including same-language renditions.
+struct EmbeddedSubtitlePicker: View {
+    let session: PlaybackSession
+
+    var body: some View {
+        if let group = session.mediaTracks.legible, !group.options.isEmpty {
+            Picker(L10n.text("Subtitles"), selection: Binding(
+                get: { session.externalSubtitles.selected == nil ? session.mediaTracks.selected(in: group) : nil },
+                set: { session.chooseSubtitle($0, in: group.group) }
+            )) {
+                if group.group.allowsEmptySelection { Text(L10n.text("Off")).tag(AVMediaSelectionOption?.none) }
+                ForEach(group.options, id: \.self) { Text(group.name($0)).tag(Optional($0)) }
+            }
+            .pickerStyle(.inline)
+        } else if session.externalSubtitles.selected != nil {
+            Button(L10n.text("Off")) { session.externalSubtitles.select(nil) }
         }
     }
 }

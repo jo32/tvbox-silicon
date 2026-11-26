@@ -51,6 +51,7 @@ public final class BitmapSubtitleTrack: @unchecked Sendable {
     public let position: Int
     /// The video's size, for a stream that names no canvas.
     public let videoSize: CGSize
+    let isPGS: Bool
     /// A cue with no known end shows at most this long.
     static let longest: Int64 = 10_000_000
     /// Pictures beyond this are let go, those farthest from the one on screen first; a segment made again brings
@@ -62,8 +63,8 @@ public final class BitmapSubtitleTrack: @unchecked Sendable {
     /// The time last asked for: where the player is.
     private var playhead: Int64?
 
-    public init(name: String, position: Int = 0, videoSize: CGSize, budget: Int = 96 << 20) {
-        self.name = name; self.position = position; self.videoSize = videoSize; self.budget = budget
+    public init(name: String, position: Int = 0, videoSize: CGSize, isPGS: Bool = false, budget: Int = 96 << 20) {
+        self.name = name; self.position = position; self.videoSize = videoSize; self.isPGS = isPGS; self.budget = budget
     }
 
     public var count: Int { lock.withLock { cues.count } }
@@ -152,7 +153,7 @@ public final class BitmapSubtitleRenderer: StyledSubtitleSource, @unchecked Send
             return StyledSubtitleFrame(image: nil, rect: .zero, size: canvas)
         }
         let union = pictures.dropFirst().reduce(first.rect) { $0.union($1.rect) }
-        if pictures.count == 1 { return StyledSubtitleFrame(image: first.image, rect: union, size: canvas) }
+        if pictures.count == 1 { return StyledSubtitleFrame(image: first.image, rect: union, size: canvas, fitsCanvas: track.isPGS) }
         guard let context = CGContext(data: nil, width: Int(union.width), height: Int(union.height), bitsPerComponent: 8, bytesPerRow: 0,
                                       space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                       bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue) else { return nil }
@@ -162,7 +163,7 @@ public final class BitmapSubtitleRenderer: StyledSubtitleSource, @unchecked Send
             let rect = CGRect(x: picture.rect.minX - union.minX, y: union.maxY - picture.rect.maxY, width: picture.rect.width, height: picture.rect.height)
             context.draw(image, in: rect)
         }
-        return StyledSubtitleFrame(image: context.makeImage(), rect: union, size: canvas)
+        return StyledSubtitleFrame(image: context.makeImage(), rect: union, size: canvas, fitsCanvas: track.isPGS)
     }
 }
 

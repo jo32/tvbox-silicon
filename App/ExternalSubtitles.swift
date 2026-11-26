@@ -169,18 +169,18 @@ import UniformTypeIdentifiers
         generation = UUID()
         loading?.cancel(); loading = nil
         retries.values.forEach { $0.cancel() }; retries = [:]
-        entries = []; automatic = true; importFailure = nil
+        entries = []; automatic = true; manuallyChoseFile = false; importFailure = nil
         searching?.cancel(); searching = nil
         hashing?.cancel(); hashing = nil; fileHash = nil; hashTarget = nil; video = nil
         online = SubtitleSearchProgress(); onlineState = .idle; sources = []
         if selected != nil { selected = nil; show() }
     }
 
-    /// The viewer picked a subtitle file: the track picked in an earlier episode is no longer the wish (#779).
-    @ObservationIgnored var fileChosen: (() -> Void)?
+    /// An explicit file selection wins over an embedded track still loading for this episode.
+    private(set) var manuallyChoseFile = false
 
     func select(_ id: String?) {
-        if id != nil { fileChosen?() }
+        manuallyChoseFile = true
         choose(id)
     }
 
@@ -194,6 +194,7 @@ import UniformTypeIdentifiers
 
     /// One of the item's own subtitles was chosen (or Off), here or in the system's menu.
     func nativeChosen() {
+        manuallyChoseFile = false
         automatic = false
         guard selected != nil else { return }
         selected = nil
@@ -374,10 +375,9 @@ import UniformTypeIdentifiers
     /// subtitles or the viewer chose. One that failed gives way to the next.
     private func chooseAutomatically() {
         guard automatic, let best = entries.first(where: { if case .failed = $0.state { false } else { true } }), best.document != nil else { return }
-        automatic = false
         let active = generation
         Task {
-            guard await self.nativeShowing() != true, self.generation == active, self.selected == nil else { return }
+            guard await self.nativeShowing() != true, self.generation == active, self.automatic, self.selected == nil else { return }
             self.choose(best.id)
         }
     }
@@ -396,7 +396,7 @@ import UniformTypeIdentifiers
     /// The item's own subtitles off, so the two don't show at once.
     private func nativeOff() async {
         guard let item = player?.currentItem, let group = try? await item.asset.loadMediaSelectionGroup(for: .legible),
-              group.allowsEmptySelection, item.currentMediaSelection.selectedMediaOption(in: group) != nil else { return }
+              player?.currentItem === item, selected != nil, group.allowsEmptySelection, item.currentMediaSelection.selectedMediaOption(in: group) != nil else { return }
         item.select(nil, in: group)
     }
 

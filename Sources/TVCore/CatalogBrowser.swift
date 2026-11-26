@@ -10,6 +10,8 @@ import Observation
     }
     public private(set) var categories: [Category] = []
     public private(set) var videos: [Video] = []
+    /// Whether the source's home returned recommendations of its own, rather than falling straight into its first category.
+    public private(set) var hasRecommendations = false
     public private(set) var category = ""
     /// The shown category's filter choices; kept when paging.
     public private(set) var filters: [String: String] = [:]
@@ -73,27 +75,34 @@ import Observation
         var seen = Set<String>()
         self.videos = videos.filter { seen.insert($0.id).inserted }
         self.categories = categories
+        hasRecommendations = true
         request = .home; category = ""; query = ""; page = 1; pageCount = 1; filters = [:]
         seeded = true
     }
 
     /// The category bar another page already has (Watch Now's rows), for a page that opens on one of its categories.
-    public func seed(categories: [Category]) {
+    public func seed(categories: [Category], hasRecommendations: Bool = false) {
         guard !loaded, !busy, self.categories.isEmpty else { return }
         self.categories = categories
+        self.hasRecommendations = hasRecommendations
     }
 
     /// The category bar for a page that opened on a search: categories only come with the home
     /// answer, so fetch it without touching the videos on screen.
     public func loadCategories(client: CatalogClient) async {
+        await loadCategories { try await client.home() }
+    }
+
+    public func loadCategories(fetch: @escaping @Sendable () async throws -> CatalogPage) async {
         guard !Task.isCancelled, categories.isEmpty, pendingCategories == nil else { return }
         let current = generation
-        let task = Task { try await client.home() }
+        let task = Task { try await fetch() }
         pendingCategories = task
         defer { if generation == current { pendingCategories = nil } }
         let home = try? await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
         guard generation == current, !Task.isCancelled, !task.isCancelled, categories.isEmpty, let home else { return }
         categories = home.categories
+        hasRecommendations = !home.videos.isEmpty
     }
 
     public func load(_ request: Request, context: String = "-", fetch: @escaping @Sendable (Request) async throws -> CatalogPage) async {
@@ -125,6 +134,7 @@ import Observation
             guard generation == current, !Task.isCancelled else { return }
             if request == .home {
                 if !refreshing || !result.categories.isEmpty { categories = result.categories }
+                hasRecommendations = !result.videos.isEmpty
                 if result.videos.isEmpty, let first = categories.first {
                     category = first.id
                     filters = CategoryFilter.initialChoices(first.filters)

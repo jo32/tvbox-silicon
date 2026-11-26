@@ -97,8 +97,8 @@ public enum Feedback {
     public static let includeDetailsKey = "feedbackIncludeDetails"
 
     /// What the app was set up with and played lately, as text the page puts under the message for
-    /// the viewer to edit or switch off before sending: the subscriptions (domain only, with why one
-    /// last failed) and the latest playback history.
+    /// the viewer to edit or switch off before sending: the subscriptions (domain only, plus a
+    /// public Telegram channel's handle, with why one last failed) and the latest playback history.
     public static func context(subscriptions: [SubscriptionEntry], errors: [String: String] = [:],
                                history: [PlaybackHistoryEntry], timeZone: TimeZone = .current) -> String {
         var lines = ["Subscriptions:"]
@@ -131,6 +131,11 @@ public enum Feedback {
     /// The subscription's origin (scheme, host and optional port) only: credentials, path, query and
     /// fragment stay off the public issue, because private subscriptions often carry tokens in the
     /// path or under arbitrary query names. Local and imported files keep only their file name.
+    /// A public Telegram subscription keeps its channel handle as well: the handle is the public
+    /// address of the channel, every recent play already names the channel it played from, and
+    /// without it every Telegram subscription reads as the same bare `https://t.me`, which is no
+    /// help with a Telegram bug (#2251). Invite links and private channels name no public handle,
+    /// so their paths stay cut like every other address (see `TelegramSource.channel`).
     static func shareable(_ address: String) -> String {
         let components = URLComponents(string: address).flatMap { $0.scheme != nil ? $0 : nil }
             ?? (try? WebAddress.resolve(typed: address)).flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
@@ -139,6 +144,7 @@ public enum Feedback {
             return "file: " + (parts.path.split(separator: "/").last.map(String.init) ?? "")
         }
         guard let host = parts.host, !host.isEmpty else { return Diagnostics.redact(address) }
+        if let channel = parts.url.flatMap(TelegramSource.channel) { return "\(scheme)://\(host)/\(channel)" }
         parts.scheme = scheme
         parts.user = nil
         parts.password = nil

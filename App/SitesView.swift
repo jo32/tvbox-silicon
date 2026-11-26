@@ -91,7 +91,7 @@ struct SitesView: View {
                                                 PinSourceButton(site: site, origin: config.origin)
                                                 HideSourceButton(site: site, origin: config.origin)
                                                 if store.sourceOrder.enabled { MoveSourceButtons(site: site, sites: sites) }
-                                                if let entry = store.subscriptionEntry(of: site) {
+                                                if let entry = store.subscriptionEntry(of: site, in: group) {
                                                     Button { openSubscription(entry) } label: {
                                                         Label(L10n.text("Open Subscription"), systemImage: "list.bullet.rectangle")
                                                     }
@@ -450,6 +450,18 @@ extension Store {
     func subscriptionEntry(of site: Site) -> SubscriptionEntry? {
         guard !site.isBuiltIn, let origin = site.provenance?.origin else { return nil }
         return subscriptions.first { $0.enabled && documents[$0.address]?.origin == origin }
+    }
+
+    /// The subscription a source is shown under: its group's, when the group came from one, so opening it (and
+    /// removing it there) takes the subscription the viewer is looking at. A source two subscriptions share shows
+    /// in both groups, and guessing by origin always took the first one — removing it from the second group's page
+    /// then left the second subscription in Settings (#2230). Pinned and hidden groups fall back to the origin.
+    func subscriptionEntry(of site: Site, in group: SourceGroup) -> SubscriptionEntry? {
+        if case .subscription(let address) = group.kind,
+           let entry = subscriptions.first(where: { $0.address == address }) {
+            return entry
+        }
+        return subscriptionEntry(of: site)
     }
 
     /// How a source has been answering lately; see `SourceHealth`.
@@ -1220,7 +1232,7 @@ struct SiteView: View {
     /// A drive source's folder: the page lists it in place of the source's home.
     var folder: Video? = nil
     /// The source's home as another page already has it (Watch Now's recommendations): shown at once, then refreshed.
-    var preview: (videos: [Video], categories: [TVCore.Category])? = nil
+    var preview: (videos: [Video], categories: [TVCore.Category], hasRecommendations: Bool)? = nil
     /// The category to open on (a Watch Now category row's heading) instead of the source's home.
     var category: TVCore.Category? = nil
     private var canLoad: Bool { site.canBrowse(jarURL: jarURL) }
@@ -1375,7 +1387,7 @@ struct SiteView: View {
         .screenTitle(isBilibiliSpace ? "" : folder?.name ?? site.name, shown: showsTopTitle).task {
             store.searchModel.suspend()
             if let preview, folder == nil, initialQuery.isEmpty {
-                if category != nil { browser.seed(categories: preview.categories) }
+                if category != nil { browser.seed(categories: preview.categories, hasRecommendations: preview.hasRecommendations) }
                 else { browser.seed(videos: preview.videos, categories: preview.categories) }
             }
             if canLoad && !browser.loaded {
@@ -1413,8 +1425,13 @@ struct SiteView: View {
         ChipRow {
             GlassGroup(spacing: 8) {
                 HStack(spacing: 8) {
-                    Chip(title: L10n.text("Recommendations"), selected: browser.query.isEmpty && browser.category.isEmpty) { query = ""; startRequest { await home() } }
-                    ForEach(browser.categories) { item in
+                    if browser.hasRecommendations {
+                        Chip(title: L10n.text("Recommendations"), selected: browser.query.isEmpty && browser.category.isEmpty) { query = ""; startRequest { await home() } }
+                    }
+                    // The source's own "推荐" category beside the chip above would be a second chip with the same name
+                    // (#2209). Without home videos there is no chip above, and the source's category stays: the page
+                    // opens on it.
+                    ForEach(browser.categories.filter { !($0.isRecommendations && browser.hasRecommendations) }) { item in
                         Chip(title: item.name, selected: browser.query.isEmpty && browser.category == item.id) {
                             query = ""
                             let filters = CategoryFilter.initialChoices(item.filters)
@@ -3949,11 +3966,18 @@ private struct AppColorScheme: ViewModifier {
 
 /// Opens a scroll view of episodes at one of them (#1173). `scrollTo` from the sheet's onAppear, or its first task,
 /// came before the sheet had laid out its lazy grid and left it at the top. The position is this modifier's own
-/// state, so scrolling redraws only it, not the page behind the sheet.
+/// state, so scrolling redraws only it, not the page behind the sheet. It is set once the scroll view appears rather
+/// than as the state's initial value: on iOS 17 an initial `scrollPosition(id:)` ran before the sheet's geometry and
+/// navigation bar inset settled, shifting the padded grid 16 pt to the left until the viewer scrolled and tucking
+/// the first row under the bar (#2203).
 struct OpensAtEpisode: ViewModifier {
+    let episode: Episode.ID?
     @State private var position: Episode.ID?
-    init(_ episode: Episode.ID?) { _position = State(initialValue: episode) }
-    func body(content: Content) -> some View { content.scrollPosition(id: $position, anchor: .center) }
+    init(_ episode: Episode.ID?) { self.episode = episode }
+    func body(content: Content) -> some View {
+        content.scrollPosition(id: $position, anchor: .center)
+            .task { if let episode { position = episode } }
+    }
 }
 
 /// The watch page's episode row, kept at the episode playing. Its position is this modifier's own state: as the page's

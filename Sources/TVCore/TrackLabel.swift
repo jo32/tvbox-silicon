@@ -29,8 +29,10 @@ public enum TrackLabel {
         /// Its title (the HLS NAME, or the repackaged stream's own title).
         public var title: String?
         public var format: String?
-        public init(displayName: String, language: String?, title: String?, format: String? = nil) {
-            self.displayName = displayName; self.language = language; self.title = title; self.format = format
+        /// The playlist NAME can distinguish renditions with the same source title and codec.
+        public var rendition: String?
+        public init(displayName: String, language: String?, title: String?, format: String? = nil, rendition: String? = nil) {
+            self.displayName = displayName; self.language = language; self.title = title; self.format = format; self.rendition = rendition
         }
     }
 

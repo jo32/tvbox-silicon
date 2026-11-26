@@ -38,6 +38,7 @@ struct MobilePlayerView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var decidedCacheOrientation = false
     @State private var clock = PlayerClock()
+    private var tracks: MediaTracks { session.mediaTracks }
     @State private var importsSubtitleFile = false
     @State private var asksSubtitleAddress = false
     @State private var searchesSubtitles = false
@@ -860,8 +861,48 @@ struct MobilePlayerView: View {
                     if VideoEnhancement.canUpscale { Toggle(L10n.text("Sharper Picture"), isOn: $upscalesVideo) }
                 }
             }
-            MediaTrackMenus(session: session, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
-                            searchOnline: { searchesSubtitles = true })
+            if let audio = tracks.audio, audio.options.count > 1 {
+                Menu(L10n.text("Audio")) {
+                    Picker(L10n.text("Audio"), selection: Binding(get: { tracks.selected(in: audio) }, set: { tracks.select($0, in: audio) })) {
+                        ForEach(audio.options, id: \.self) { Text(audio.name($0)).tag(Optional($0)) }
+                    }
+                    .pickerStyle(.inline)
+                }
+            }
+            // A file whose sound tracks AVFoundation offers no choice between (#428).
+            if session.audioChoices.count > 1 {
+                Menu(L10n.text("Audio")) {
+                    Picker(L10n.text("Audio"), selection: Binding(get: { session.audioChoice }, set: { if let id = $0 { session.chooseAudio(id) } })) {
+                        ForEach(session.audioChoices) { Text($0.name).tag(Optional($0.id)) }
+                    }
+                    .pickerStyle(.inline)
+                }
+            }
+            // The item's own subtitles, then subtitle files beside the video or added now (#576). A drive's transcoded
+            // copy has none of the file's: the menu says why (#1343).
+            Menu(L10n.text("Subtitles")) {
+                EmbeddedSubtitlePicker(session: session)
+                ExternalSubtitleMenu(subtitles: session.externalSubtitles, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
+                                     searchOnline: { searchesSubtitles = true })
+                if session.playsDriveCopy { Text(L10n.text(ExternalSubtitles.driveCopyNote)) }
+            }
+            if session.externalSubtitles.selected == nil, let legible = tracks.legible, !legible.options.isEmpty {
+                // A subtitle file that runs ahead of its picture (#599): each step holds it back half a second.
+                Menu(L10n.text("Subtitle Delay")) {
+                    Text(SubtitleDelay.title(session.subtitles.delay))
+                    Button(String(format: "%+.1f s", -SubtitleDelay.step)) {
+                        SubtitleDelay.save(session.subtitles.delay - SubtitleDelay.step)
+                    }
+                    .disabled(session.subtitles.delay <= SubtitleDelay.range.lowerBound)
+                    Button(String(format: "%+.1f s", SubtitleDelay.step)) {
+                        SubtitleDelay.save(session.subtitles.delay + SubtitleDelay.step)
+                    }
+                    .disabled(session.subtitles.delay >= SubtitleDelay.range.upperBound)
+                    if session.subtitles.delay != 0 {
+                        Button(L10n.text("Reset")) { SubtitleDelay.save(0) }
+                    }
+                }
+            }
             // With a seek bar the speed has its own button beside it (`speedButton`).
             if !session.isLive, !session.hasTimeline {
                 Menu(L10n.text("Playback Speed")) {

@@ -10,6 +10,15 @@ public struct Category: Identifiable, Sendable {
     }
 }
 
+extension Category {
+    /// The source's own recommendations category: a TVBox source lists "推荐" among its categories, and the app
+    /// shows the home's recommendations under a chip of its own, so the source's copy would be a second chip with
+    /// the same name (#2209).
+    public var isRecommendations: Bool {
+        name == "推荐" || name == L10n.text("Recommendations")
+    }
+}
+
 /// One of a category's filters: a group of values (TVBox `{key, name, init, value: [{n, v}]}`) of which the chosen one
 /// goes to the source's category request in `extend`, under `key`.
 public struct CategoryFilter: Identifiable, Hashable, Sendable {

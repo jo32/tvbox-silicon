@@ -84,7 +84,7 @@ struct PlaybackView: View {
                                  next: episodeAction(store.step(back: false, from: channel, session: session)), waiting: waitContent,
                                  enhancer: session.enhancer, upscale: $upscalesVideo, smooth: $smoothsVideo, info: $showsPlaybackInfo,
                                  speed: playbackSpeed, setSpeed: { playbackSpeed = $0; session.setSpeed($0) }, fills: $fillsScreen, danmakuArea: $danmakuArea,
-                                 external: session.externalSubtitles, ownSubtitles: session.hasOwnSubtitles, skip: session.skipOffer, skipSource: { session.skipSourceSegment() },
+                                 external: session.externalSubtitles, ownSubtitles: session.hasOwnSubtitles, chooseSubtitle: session.chooseSubtitle, skip: session.skipOffer, skipSource: { session.skipSourceSegment() },
                                  skipping: session.canSkip ? session.skipSettings : nil, setSkipping: { session.applySkipSettings($0) },
                                  markSkip: { session.markSkip(intro: $0) },
                                  chapters: session.chapters,
@@ -368,15 +368,15 @@ struct PlaybackView: View {
                 .chromeButton()
                 .accessibilityLabel(L10n.text("Audio"))
             }
-            // Subtitle files beside the video, or added now (#576); the item's own are in AVKit's menu.
+            // Individual embedded tracks as well as subtitle files beside the video.
             Menu {
-                MacSubtitleFiles(subtitles: session.externalSubtitles, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
+                MacSubtitleFiles(session: session, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
                                  searchOnline: { searchesSubtitles = true })
             } label: {
                 Image(systemName: session.externalSubtitles.selected == nil ? "captions.bubble" : "captions.bubble.fill").font(.headline).frame(width: 22, height: 22)
             }
             .chromeButton()
-            .accessibilityLabel(L10n.text("Subtitle Files"))
+            .accessibilityLabel(L10n.text("Subtitles"))
             // Settings stay reachable before comments load, including when automatic matching found none.
             Menu {
                 Toggle(isOn: $showsDanmaku) { Label(L10n.text("Show Danmaku"), systemImage: "text.bubble") }
@@ -857,6 +857,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
     var external: ExternalSubtitles? = nil
     /// The item has subtitle tracks of its own: Subtitle Files says where they are (#1524).
     var ownSubtitles = false
+    var chooseSubtitle: ((AVMediaSelectionOption?, AVMediaSelectionGroup) -> Void)?
     /// The source's opening or ending credits playing now, offered as AVKit's Skip button (#256).
     var skip: PlaybackSkip? = nil
     var skipSource: @MainActor () -> Void = {}
@@ -890,6 +891,13 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         var exit: (() -> Void)?
         var subtitles: SubtitleCues?
         var transportBar: TransportBarVisibility?
+        var chooseSubtitle: ((AVMediaSelectionOption?, AVMediaSelectionGroup) -> Void)?
+        #if os(tvOS)
+        func playerViewController(_ playerViewController: AVPlayerViewController, didSelect mediaSelectionOption: AVMediaSelectionOption?,
+                                  in mediaSelectionGroup: AVMediaSelectionGroup) {
+            chooseSubtitle?(mediaSelectionOption, mediaSelectionGroup)
+        }
+        #endif
         func playerViewController(_ controller: AVPlayerViewController, willTransitionToVisibilityOfTransportBar visible: Bool,
                                   with coordinator: AVPlayerViewControllerAnimationCoordinator) {
             transportBar?.visible = visible
@@ -942,6 +950,7 @@ private struct NativePlayerView: UIViewControllerRepresentable {
         let gravity: AVLayerVideoGravity = fills.wrappedValue ? .resizeAspectFill : .resizeAspect
         if controller.videoGravity != gravity { controller.videoGravity = gravity }
         context.coordinator.host?.rootView = overlay
+        context.coordinator.chooseSubtitle = chooseSubtitle
         context.coordinator.exit = exitWhileWaiting
         context.coordinator.back.isEnabled = exitWhileWaiting != nil
         // The episodes, the chapters and the comment list are tabs in the info panel (swipe down), beside the video's own info.
@@ -1977,10 +1986,13 @@ private struct DesktopOptionsMenu: View, Equatable {
             if session.qualities.count > 1 {
                 Menu(L10n.text("Quality")) { QualityPicker(session: session) }
             }
-            // Audio and Subtitles with full TrackLabel details (language, title, format): AVPlayerView's own menu
-            // names options by language alone, so several Chinese tracks all read "中文" (#2204).
-            MediaTrackMenus(session: session, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
-                            searchOnline: { searchesSubtitles = true })
+            // Audio with full TrackLabel details: AVPlayerView's own menu names tracks by language alone, so several
+            // Chinese tracks all read "中文" (#2204).
+            MediaAudioMenus(session: session)
+            Menu(L10n.text("Subtitles")) {
+                MacSubtitleFiles(session: session, addFile: { importsSubtitleFile = true }, addAddress: { asksSubtitleAddress = true },
+                                 searchOnline: { searchesSubtitles = true })
+            }
             Menu(L10n.text("Danmaku")) {
                 Toggle(L10n.text("Show Danmaku"), isOn: $showsDanmaku)
                 Picker(L10n.text("Danmaku Area"), selection: $danmakuArea) {
@@ -2014,15 +2026,15 @@ private struct DesktopOptionsMenu: View, Equatable {
     }
 }
 
-/// The Mac's subtitle-file menu: AVKit's own menu has the item's subtitles, so this one has Off and the files.
+/// Embedded tracks and external files share one menu in both Mac player windows.
 private struct MacSubtitleFiles: View {
-    let subtitles: ExternalSubtitles
+    let session: PlaybackSession
     let addFile: () -> Void
     let addAddress: () -> Void
     let searchOnline: () -> Void
     var body: some View {
-        if subtitles.selected != nil { Button(L10n.text("Off")) { subtitles.select(nil) } }
-        ExternalSubtitleMenu(subtitles: subtitles, addFile: addFile, addAddress: addAddress, searchOnline: searchOnline)
+        EmbeddedSubtitlePicker(session: session)
+        ExternalSubtitleMenu(subtitles: session.externalSubtitles, addFile: addFile, addAddress: addAddress, searchOnline: searchOnline)
     }
 }
 
@@ -2136,63 +2148,27 @@ struct QualityPicker: View {
     }
 }
 
-/// Audio, Subtitles (the item's own tracks with `TrackLabel` details plus subtitle files) and Subtitle Delay, shared
-/// by the iPhone, iPad and Mac options menus (#884, #2204).
-struct MediaTrackMenus: View {
+/// The Audio menus for the Mac options menu (#2204): the item's own tracks with `TrackLabel` details, or the choices a
+/// file offers that AVFoundation can't switch between (#428). iPhone and iPad have the same in their own menu.
+struct MediaAudioMenus: View {
     let session: PlaybackSession
-    let addFile: () -> Void
-    let addAddress: () -> Void
-    let searchOnline: () -> Void
 
     var body: some View {
-        if let audio = session.tracks.audio, audio.options.count > 1 {
+        if let audio = session.mediaTracks.audio, audio.options.count > 1 {
             Menu(L10n.text("Audio")) {
-                Picker(L10n.text("Audio"), selection: Binding(get: { session.tracks.selected(in: audio) }, set: { session.tracks.select($0, in: audio) })) {
+                Picker(L10n.text("Audio"), selection: Binding(get: { session.mediaTracks.selected(in: audio) },
+                                                              set: { session.mediaTracks.select($0, in: audio) })) {
                     ForEach(audio.options, id: \.self) { Text(audio.name($0)).tag(Optional($0)) }
                 }
                 .pickerStyle(.inline)
             }
         }
-        // A file whose sound tracks AVFoundation offers no choice between (#428).
         if session.audioChoices.count > 1 {
             Menu(L10n.text("Audio")) {
                 Picker(L10n.text("Audio"), selection: Binding(get: { session.audioChoice }, set: { if let id = $0 { session.chooseAudio(id) } })) {
                     ForEach(session.audioChoices) { Text($0.name).tag(Optional($0.id)) }
                 }
                 .pickerStyle(.inline)
-            }
-        }
-        // The item's own subtitles, then subtitle files beside the video or added now (#576). A drive's transcoded
-        // copy has none of the file's: the menu says why (#1343).
-        Menu(L10n.text("Subtitles")) {
-            if let legible = session.tracks.legible, !legible.options.isEmpty {
-                Picker(L10n.text("Subtitles"), selection: Binding(get: { session.externalSubtitles.selected == nil ? session.tracks.selected(in: legible) : nil },
-                                                                  set: { session.tracks.select($0, in: legible); session.choseSubtitle($0); session.externalSubtitles.nativeChosen() })) {
-                    if legible.group.allowsEmptySelection { Text(L10n.text("Off")).tag(AVMediaSelectionOption?.none) }
-                    ForEach(legible.options, id: \.self) { Text(legible.name($0)).tag(Optional($0)) }
-                }
-                .pickerStyle(.inline)
-            } else if session.externalSubtitles.selected != nil {
-                Button(L10n.text("Off")) { session.externalSubtitles.select(nil) }
-            }
-            ExternalSubtitleMenu(subtitles: session.externalSubtitles, addFile: addFile, addAddress: addAddress, searchOnline: searchOnline)
-            if session.playsDriveCopy { Text(L10n.text(ExternalSubtitles.driveCopyNote)) }
-        }
-        if session.externalSubtitles.selected == nil, let legible = session.tracks.legible, !legible.options.isEmpty {
-            // A subtitle track that runs ahead of its picture (#599): each step holds it back half a second.
-            Menu(L10n.text("Subtitle Delay")) {
-                Text(SubtitleDelay.title(session.subtitles.delay))
-                Button(String(format: "%+.1f s", -SubtitleDelay.step)) {
-                    SubtitleDelay.save(session.subtitles.delay - SubtitleDelay.step)
-                }
-                .disabled(session.subtitles.delay <= SubtitleDelay.range.lowerBound)
-                Button(String(format: "%+.1f s", SubtitleDelay.step)) {
-                    SubtitleDelay.save(session.subtitles.delay + SubtitleDelay.step)
-                }
-                .disabled(session.subtitles.delay >= SubtitleDelay.range.upperBound)
-                if session.subtitles.delay != 0 {
-                    Button(L10n.text("Reset")) { SubtitleDelay.save(0) }
-                }
             }
         }
     }

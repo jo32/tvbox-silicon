@@ -51,6 +51,20 @@ import Testing
     #expect(Feedback.shareable("not a url") == "not a url")
 }
 
+@Test func feedbackKeepsTheChannelOfAPublicTelegramSubscription() {
+    // The handle is the channel's public address; recent plays already name it.
+    #expect(Feedback.shareable("https://t.me/Quark_Movies") == "https://t.me/Quark_Movies")
+    #expect(Feedback.shareable("t.me/Quark_Movies") == "http://t.me/Quark_Movies")
+    #expect(Feedback.shareable("https://t.me/s/Aliyun_4K_Movies/posts/1234") == "https://t.me/Aliyun_4K_Movies")
+    #expect(Feedback.shareable("https://telegram.me/Some_Channel") == "https://telegram.me/Some_Channel")
+    // Private and reserved forms name no public handle: the path stays cut.
+    #expect(Feedback.shareable("https://t.me/+abCdEf123") == "https://t.me")
+    #expect(Feedback.shareable("https://t.me/joinchat/secretcode") == "https://t.me")
+    #expect(Feedback.shareable("https://t.me/c/1234567890/42") == "https://t.me")
+    #expect(Feedback.shareable("https://t.me/abc") == "https://t.me")
+    #expect(Feedback.shareable("https://t.me") == "https://t.me")
+}
+
 @Test func feedbackSendsTheMessageThenWhatIsLeftOfTheDetails() {
     #expect(Feedback.combined(" It stutters \n", context: "Subscriptions:\n- none\n") == "It stutters\n\nSubscriptions:\n- none")
     #expect(Feedback.combined("It stutters", context: " \n") == "It stutters")

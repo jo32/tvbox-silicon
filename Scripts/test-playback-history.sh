@@ -16,7 +16,7 @@ MAC_DEPENDENCIES=''
 MAC_ENTITLEMENTS=''
 if [[ "$PLATFORM" == macOS ]]; then
   MAC_DEPENDENCIES=$'      - package: Sparkle\n      - package: ColorfulX'
-  MAC_ENTITLEMENTS=$'    entitlements:\n      path: TestApp.entitlements\n      properties:\n        com.apple.security.app-sandbox: true\n        com.apple.security.network.client: true'
+  MAC_ENTITLEMENTS=$'    entitlements:\n      path: TestApp.entitlements\n      properties:\n        com.apple.security.app-sandbox: true\n        com.apple.security.network.client: true\n        com.apple.security.network.server: true'
 fi
 mkdir -p "$OUT"
 if [[ ! -f "$OUT/clip.mp4" ]]; then
@@ -24,6 +24,17 @@ if [[ ! -f "$OUT/clip.mp4" ]]; then
     -f lavfi -i 'anullsrc=r=44100:cl=stereo' -t 120 -c:v libx264 -preset ultrafast \
     -g 2 -c:a aac -movflags +faststart "$OUT/clip.mp4"
 fi
+# Three Chinese tracks on a cropped picture, then the same renditions reordered and one episode without SRT.
+FIXTURES=Tests/TVCoreTests/Fixtures
+printf '1\n00:00:00,100 --> 00:00:08,000\n简体中文字幕\n' > "$OUT/simplified.srt"
+ffmpeg -hide_banner -loglevel error -y -i "$OUT/clip.mp4" -i "$FIXTURES/remux-bitmap.mkv" \
+  -i "$FIXTURES/remux-ass.mkv" -i "$OUT/simplified.srt" -t 20 \
+  -map 0:v -map 0:a -map 1:s:0 -map 2:s:0 -map 3:s:0 -c copy -vf crop=320:132 -c:v libx264 -preset ultrafast -g 2 \
+  -metadata:s:s:0 language=chi -metadata:s:s:0 title=Bilingual \
+  -metadata:s:s:1 language=chi -metadata:s:s:1 title=Bilingual \
+  -metadata:s:s:2 language=chi -metadata:s:s:2 title=Simplified "$OUT/subtitles.mkv"
+ffmpeg -hide_banner -loglevel error -y -i "$OUT/subtitles.mkv" -map 0:v -map 0:a -map 0:s:2 -map 0:s:1 -map 0:s:0 -c copy "$OUT/reordered.mkv"
+ffmpeg -hide_banner -loglevel error -y -i "$OUT/subtitles.mkv" -map 0:v -map 0:a -map 0:s:0 -c copy "$OUT/missing.mkv"
 cat > "$OUT/RuntimeUnavailable.c" <<'C'
 #include <string.h>
 char *TVAppleRuntimeRequest(const char *resources, const char *request) {
@@ -83,6 +94,13 @@ $MAC_DEPENDENCIES
     platform: $PLATFORM
     sources:
       - path: ../../AppTests/PlaybackHistoryTests.swift
+      - path: ../../AppTests/SubtitlePlaybackTests.swift
+      - path: subtitles.mkv
+        buildPhase: resources
+      - path: reordered.mkv
+        buildPhase: resources
+      - path: missing.mkv
+        buildPhase: resources
       - path: clip.mp4
         buildPhase: resources
     dependencies:
