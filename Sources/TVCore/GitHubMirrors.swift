@@ -18,14 +18,21 @@ final class GitHubMirrors: @unchecked Sendable {
     private var gitHubFailed: Date?
 
     /// The file on raw.githubusercontent.com, also when a configuration wraps it in its own proxy
-    /// (`https://proxy.example/https://raw.githubusercontent.com/...`). Nil for anything else, and for
-    /// addresses with a query, which can carry access tokens that must not reach a mirror.
+    /// (`https://proxy.example/https://raw.githubusercontent.com/...`, or without the inner `https://` as
+    /// ghp.ci-style proxies take it), and a repository file's page on github.com (`/<owner>/<repo>/raw|blob/…`)
+    /// behind such a proxy. Nil for anything else, and for addresses with a query, which can carry access tokens
+    /// that must not reach a mirror.
     static func gitHubFile(_ url: URL) -> URL? {
         guard url.query == nil, url.fragment == nil, url.user == nil else { return nil }
         if url.scheme == "https", url.host() == "raw.githubusercontent.com" { return url }
         let text = url.absoluteString
-        guard let match = text.range(of: #"^https?://[^/]+/https:/+raw\.githubusercontent\.com/"#, options: .regularExpression) else { return nil }
-        return URL(string: "https://raw.githubusercontent.com/" + text[match.upperBound...])
+        if let match = text.range(of: #"^https?://[^/]+/(https?:/+)?raw\.githubusercontent\.com/"#, options: .regularExpression) {
+            return URL(string: "https://raw.githubusercontent.com/" + text[match.upperBound...])
+        }
+        if let match = text.firstMatch(of: #/^https?://(?:[^/]+/(?:https?:/+)?)?github\.com/([^/]+)/([^/]+)/(?:raw|blob)/(.+)$/#) {
+            return URL(string: "https://raw.githubusercontent.com/\(match.1)/\(match.2)/\(match.3)")
+        }
+        return nil
     }
 
     static func mirrors(of file: URL) -> [URL] {
