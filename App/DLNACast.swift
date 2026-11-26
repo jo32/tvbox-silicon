@@ -31,6 +31,10 @@ import UIKit
     private(set) var volume: Int?
     var failure: String?
     @ObservationIgnored private var poll: Task<Void, Never>?
+    @ObservationIgnored private var cleanup: Task<Void, Never>?
+    @ObservationIgnored private var loading: Task<Void, Error>?
+    @ObservationIgnored private var loadingTarget: DLNADevice?
+    @ObservationIgnored private var operation = UUID()
     /// A seek just sent: the TV's old position isn't shown meanwhile, so the bar doesn't jump back.
     @ObservationIgnored private var heldUntil = Date.distantPast
     #if os(iOS)
@@ -61,24 +65,43 @@ import UIKit
 
     /// Sends `channel` to the TV and starts it there, from `start` when the TV allows seeking.
     func cast(_ channel: Channel, title: String, from start: Double?, to target: DLNADevice) async throws {
-        let stream = try await CastStream.resolve(channel)
-        let address: URL
-        if stream.direct {
-            address = stream.url
-        } else {
-            await CastRelay.shared.reset()
-            address = try await CastRelay.shared.address(for: stream.url, headers: stream.headers, playlist: stream.playlist,
-                                                         towards: target.location.host())
+        let pending = enqueueStop().work
+        let active = operation
+        await pending.value
+        try Task.checkCancellation()
+        guard operation == active else { throw CancellationError() }
+        do {
+            let stream = try await CastStream.resolve(channel)
+            try Task.checkCancellation()
+            guard operation == active else { throw CancellationError() }
+            let address: URL
+            if stream.direct {
+                address = stream.url
+            } else {
+                address = try await CastRelay.shared.address(for: stream.url, headers: stream.headers, playlist: stream.playlist,
+                                                             towards: target.location.host())
+            }
+            try Task.checkCancellation()
+            guard operation == active else { throw CancellationError() }
+            let mime = stream.playlist ? DLNA.mime(for: URL(string: "x.m3u8")!) : DLNA.mime(for: stream.url)
+            Diagnostics.shared.record(.info, "cast", "send model=\(target.model) relayed=\(!stream.direct) playlist=\(stream.playlist) host=\(stream.url.host() ?? "-")")
+            // SetAVTransportURI/Play can be accepted before their HTTP response arrives.
+            loadingTarget = target
+            let load = Task { try await DLNARenderer(target).load(address, title: title, mime: mime) }
+            loading = load
+            try await withTaskCancellationHandler { try await load.value } onCancel: { load.cancel() }
+            try Task.checkCancellation()
+            guard operation == active else { throw CancellationError() }
+            loading = nil; loadingTarget = nil
+            device = target; relayed = !stream.direct; position = start ?? 0; duration = 0; paused = false; failure = nil; volume = nil
+            #if os(iOS)
+            if relayed, idleBefore == nil { idleBefore = UIApplication.shared.isIdleTimerDisabled; UIApplication.shared.isIdleTimerDisabled = true }
+            #endif
+            follow(target, operation: active, resumeAt: start ?? 0)
+        } catch {
+            if operation == active { await stop() }
+            throw error
         }
-        let mime = stream.playlist ? DLNA.mime(for: URL(string: "x.m3u8")!) : DLNA.mime(for: stream.url)
-        Diagnostics.shared.record(.info, "cast", "send model=\(target.model) relayed=\(!stream.direct) playlist=\(stream.playlist) host=\(stream.url.host() ?? "-")")
-        try await DLNARenderer(target).load(address, title: title, mime: mime)
-        poll?.cancel()
-        device = target; relayed = !stream.direct; position = start ?? 0; duration = 0; paused = false; failure = nil; volume = nil
-        #if os(iOS)
-        if relayed, idleBefore == nil { idleBefore = UIApplication.shared.isIdleTimerDisabled; UIApplication.shared.isIdleTimerDisabled = true }
-        #endif
-        follow(target, resumeAt: start ?? 0)
     }
 
     func togglePause() {
@@ -108,18 +131,34 @@ import UIKit
     /// Stops the TV and gives back where it was, for the player here to carry on from.
     @discardableResult
     func stop() async -> Double? {
-        guard let device else { return nil }
-        let reached = position
-        end()
-        try? await DLNARenderer(device).stop()
-        Diagnostics.shared.record(.info, "cast", "stopped at=\(Int(reached))")
-        return reached
+        let pending = enqueueStop()
+        await pending.work.value
+        return pending.reached
     }
 
-    /// The player closed: the TV plays on by itself, and nothing here keeps asking it.
-    func detach() { end() }
+    /// Queue cleanup independently of the canceled caller. A new load awaits this queue before it sends any SOAP.
+    private func enqueueStop() -> (work: Task<Void, Never>, reached: Double?) {
+        let target = device ?? loadingTarget, reached = device == nil ? nil : position
+        let previous = cleanup, load = loading
+        end()
+        let work = Task { @MainActor in
+            await previous?.value
+            _ = await load?.result
+            await CastRelay.shared.stop()
+            if let target { try? await DLNARenderer(target).stop() }
+        }
+        cleanup = work
+        return (work, reached)
+    }
+
+    /// Direct streams keep playing independently; relayed and in-flight casts need their owner cleaned up.
+    func detach() {
+        if relayed || loadingTarget != nil { _ = enqueueStop() } else { end() }
+    }
 
     private func end() {
+        operation = UUID()
+        loading?.cancel(); loading = nil; loadingTarget = nil
         poll?.cancel(); poll = nil
         device = nil; relayed = false; failure = nil
         #if os(iOS)
@@ -128,25 +167,29 @@ import UIKit
     }
 
     private func act(_ action: @escaping @Sendable () async throws -> Void) {
+        let active = operation
         Task {
-            do { try await action(); failure = nil }
-            catch { failure = error.localizedDescription }
+            guard operation == active else { return }
+            do { try await action(); if operation == active { failure = nil } }
+            catch { if operation == active { failure = error.localizedDescription } }
         }
     }
 
     /// Asks the TV where it is every 1.5 s while it plays what was sent; seeks to `resumeAt` once it has started.
-    private func follow(_ target: DLNADevice, resumeAt: Double) {
+    private func follow(_ target: DLNADevice, operation active: UUID, resumeAt: Double) {
         let renderer = DLNARenderer(target)
         poll = Task { [weak self] in
             var started = false, misses = 0
             let deadline = Date().addingTimeInterval(20)
-            if let level = try? await renderer.volume() { self?.volume = level }
+            if let level = try? await renderer.volume(), self?.operation == active { self?.volume = level }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(1500))
-                guard !Task.isCancelled, let self, self.device == target else { return }
+                guard !Task.isCancelled, let self, operation == active else { return }
                 do {
                     let state = try await renderer.state()
+                    guard operation == active, !Task.isCancelled else { return }
                     let (position, duration) = try await renderer.position()
+                    guard operation == active, !Task.isCancelled else { return }
                     misses = 0
                     if Date() > heldUntil { self.position = position }
                     if duration > 0 { self.duration = duration }
@@ -161,6 +204,7 @@ import UIKit
                         }
                     } else if !started, Date() > deadline { started = true }
                 } catch {
+                    guard operation == active, !Task.isCancelled else { return }
                     misses += 1
                     if misses == 4 { self.failure = error.localizedDescription }
                 }

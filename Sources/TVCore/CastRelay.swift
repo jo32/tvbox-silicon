@@ -26,6 +26,8 @@ public actor CastRelay {
     private var next = 0
     private var listener: NWListener?
     private var port: UInt16?
+    private var connections: [UUID: NWConnection] = [:]
+    private var transfers: [UUID: Task<Void, Never>] = [:]
     private let queue = DispatchQueue(label: "tvbox.cast.relay")
     private nonisolated let session: URLSession = {
         let configuration = URLSessionConfiguration.default
@@ -49,10 +51,20 @@ public actor CastRelay {
         routes = [:]; ids = [:]; order = []
     }
 
+    /// Ends an app-dependent cast, including downloads still feeding a disconnected TV.
+    public func stop() {
+        listener?.cancel(); listener = nil; port = nil
+        for connection in connections.values { connection.cancel() }
+        for transfer in transfers.values { transfer.cancel() }
+        connections = [:]; transfers = [:]
+        reset()
+    }
+
     private func start() async throws -> UInt16 {
         if let port, listener?.state == .ready { return port }
         listener?.cancel(); listener = nil; port = nil
         let listener = try NWListener(using: .tcp)
+        self.listener = listener
         listener.newConnectionHandler = { [weak self] connection in self?.accept(connection) }
         let ready: UInt16 = try await withCheckedThrowingContinuation { continuation in
             let once = Once()
@@ -66,7 +78,8 @@ public actor CastRelay {
             }
             listener.start(queue: queue)
         }
-        self.listener = listener
+        guard self.listener === listener else { listener.cancel(); throw CancellationError() }
+        try Task.checkCancellation()
         port = ready
         Diagnostics.shared.record(.info, "cast", "relay listening port=\(ready)")
         return ready
@@ -155,13 +168,32 @@ public actor CastRelay {
             if let chunk { buffer.append(chunk) }
             if let end = buffer.range(of: Data("\r\n\r\n".utf8)) {
                 let head = String(decoding: buffer[..<end.lowerBound], as: UTF8.self)
-                Task { await self?.serve(connection, head: head) }
+                Task { await self?.begin(connection, head: head) }
                 return
             }
             guard !complete, error == nil, buffer.count < 16 << 10 else { return connection.cancel() }
             self?.readHead(connection, buffer: buffer)
         }
     }
+
+    private func begin(_ connection: NWConnection, head: String) {
+        let id = UUID()
+        connections[id] = connection
+        let transfer = Task { [weak self] in
+            await self?.serve(connection, head: head)
+            await self?.finished(id)
+        }
+        transfers[id] = transfer
+        connection.stateUpdateHandler = { @Sendable [weak self] state in
+            switch state {
+            case .cancelled, .failed: Task { [weak self] in await self?.cancel(id) }
+            default: break
+            }
+        }
+    }
+
+    private func cancel(_ id: UUID) { transfers.removeValue(forKey: id)?.cancel(); connections[id] = nil }
+    private func finished(_ id: UUID) { transfers[id] = nil; connections[id] = nil }
 
     private func serve(_ connection: NWConnection, head: String) async {
         let lines = head.components(separatedBy: "\r\n")
@@ -204,7 +236,7 @@ public actor CastRelay {
         let upstream = Upstream(session: session, request: request)
         defer { upstream.cancel() }
         do {
-            let response = try await upstream.start()
+            let response = try await withTaskCancellationHandler { try await upstream.start() } onCancel: { upstream.cancel() }
             guard (200..<300).contains(response.statusCode) else {
                 Diagnostics.shared.record(.warning, "cast", "relay media status=\(response.statusCode) host=\(route.url.host() ?? "-")")
                 return Self.reply(connection, status: response.statusCode == 416 ? "416 Range Not Satisfiable" : "502 Bad Gateway")
@@ -232,6 +264,7 @@ public actor CastRelay {
             upstream.consumed(first.count)
             try await Self.send(connection, first)
             while let chunk = try await iterator.next() {
+                try Task.checkCancellation()
                 // Each piece goes out before the next is taken, so a slow TV slows the download instead of filling memory.
                 try await Self.send(connection, chunk)
                 upstream.consumed(chunk.count)
@@ -285,6 +318,7 @@ private final class Upstream: NSObject, URLSessionDataDelegate, @unchecked Senda
     private var answered = false
     private var pending = 0
     private var paused = false
+    private var cancelled = false
     private static let high = 8 << 20, low = 2 << 20
 
     init(session: URLSession, request: URLRequest) {
@@ -296,8 +330,11 @@ private final class Upstream: NSObject, URLSessionDataDelegate, @unchecked Senda
 
     func start() async throws -> HTTPURLResponse {
         try await withCheckedThrowingContinuation { continuation in
-            lock.withLock { answer = continuation }
-            task.resume()
+            let stopped = lock.withLock { () -> Bool in
+                guard !cancelled else { return true }
+                answer = continuation; return false
+            }
+            if stopped { continuation.resume(throwing: CancellationError()) } else { task.resume() }
         }
     }
 
@@ -308,7 +345,14 @@ private final class Upstream: NSObject, URLSessionDataDelegate, @unchecked Senda
         }
     }
 
-    func cancel() { task.cancel(); continuation.finish() }
+    func cancel() {
+        let waiting: CheckedContinuation<HTTPURLResponse, Error>? = lock.withLock {
+            cancelled = true
+            defer { answer = nil; answered = true }
+            return answered ? nil : answer
+        }
+        task.cancel(); waiting?.resume(throwing: CancellationError()); continuation.finish(throwing: CancellationError())
+    }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
                     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
