@@ -374,29 +374,46 @@ struct SubscriptionImportView: View {
 #endif
 
 #if os(macOS)
-/// Gives the main window a frame autosave name: AppKit then saves where it was and brings it back
-/// the same size and in the same place on the next launch, which the scene's own restoration does
-/// not keep (#1060). `.defaultSize` still decides the first one, before anything is saved.
+/// Brings the main window back the size and in the place it was left at (#1060). `.defaultSize` still decides the
+/// very first launch.
 private struct MacWindowFrameAutosave: NSViewRepresentable {
-    static let name = "YingxiaMainWindow"
+    func makeNSView(context: Context) -> NSView { MainWindowFrameView() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
 
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        attach(from: view, tries: 0)
-        return view
+/// Keeps the main window's frame itself. A frame autosave name isn't enough: SwiftUI's windows save their frame only
+/// under SwiftUI's own name (made from the content's type, so it changes from build to build) and never read it back;
+/// `saveFrame(usingName:)` writes nothing for them. Their frame comes back only through state restoration, which
+/// macOS skips while "Close windows when quitting an application" is on, as it is by default.
+private final class MainWindowFrameView: NSView {
+    private static let key = "mainWindow.frame"
+    /// The window whose frame is kept: the first main window. Another one (⌘N) opens where macOS puts it.
+    private static weak var owner: NSWindow?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        NotificationCenter.default.removeObserver(self)
+        guard let window else { return }
+        if let owner = Self.owner, owner !== window, owner.isVisible || owner.isMiniaturized { return }
+        Self.owner = window
+        // A turn later: SwiftUI gives the new window its default size after this view joins it.
+        DispatchQueue.main.async { [weak self] in self?.restore() }
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
-
-    /// A window joins its view a beat after the view is made; a few quiet tries cover that, and a
-    /// window that never comes is not this view's business.
-    private func attach(from view: NSView, tries: Int) {
-        if let window = view.window {
-            if window.frameAutosaveName != Self.name { window.setFrameAutosaveName(Self.name) }
-            return
+    private func restore() {
+        guard let window, Self.owner === window else { return }
+        // AppKit moves a frame saved on a display that's no longer connected onto one that is. When macOS has
+        // restored the window itself, this is the frame it already has.
+        if let saved = UserDefaults.standard.string(forKey: Self.key) { window.setFrame(from: saved) }
+        for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
+            NotificationCenter.default.addObserver(self, selector: #selector(save), name: name, object: window)
         }
-        guard tries < 10 else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { self.attach(from: view, tries: tries + 1) }
+    }
+
+    @objc private func save(_ notification: Notification) {
+        // Full screen ends with the window back at its own frame, which is saved then.
+        guard let window, Self.owner === window, !window.styleMask.contains(.fullScreen) else { return }
+        UserDefaults.standard.set(window.frameDescriptor, forKey: Self.key)
     }
 }
 #endif
