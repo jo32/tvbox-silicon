@@ -30,6 +30,9 @@ public actor CastRelay {
     private struct Ticket: Codable { let url: URL; let headers: String; let playlist: Bool }
     private var listener: NWListener?
     private var port: UInt16?
+    private var connections: [UUID: NWConnection] = [:]
+    private var transfers: [UUID: Task<Void, Never>] = [:]
+    private var headerDeadlines: [UUID: Task<Void, Never>] = [:]
     private let queue = DispatchQueue(label: "tvbox.cast.relay")
     private nonisolated let session: URLSession = {
         let configuration = URLSessionConfiguration.default
@@ -53,11 +56,28 @@ public actor CastRelay {
         headerContexts = [:]; headerBytes = 0; routeKey = SymmetricKey(size: .bits256); nonceKey = SymmetricKey(size: .bits256)
     }
 
+    /// Ends an app-dependent cast, including downloads still feeding a disconnected TV.
+    public func stop() {
+        listener?.cancel(); listener = nil; port = nil
+        for connection in connections.values { connection.cancel() }
+        for transfer in transfers.values { transfer.cancel() }
+        for deadline in headerDeadlines.values { deadline.cancel() }
+        connections = [:]; transfers = [:]; headerDeadlines = [:]
+        reset()
+    }
+
     private func start() async throws -> UInt16 {
         if let port, listener?.state == .ready { return port }
         listener?.cancel(); listener = nil; port = nil
         let listener = try NWListener(using: .tcp)
-        listener.newConnectionHandler = { [weak self] connection in self?.accept(connection) }
+        self.listener = listener
+        listener.newConnectionHandler = { [weak self, weak listener] connection in
+            guard let listener else { connection.cancel(); return }
+            Task {
+                guard let self else { connection.cancel(); return }
+                await self.accept(connection, listener: listener)
+            }
+        }
         let ready: UInt16 = try await withCheckedThrowingContinuation { continuation in
             let once = Once()
             listener.stateUpdateHandler = { [weak listener] state in
@@ -70,7 +90,8 @@ public actor CastRelay {
             }
             listener.start(queue: queue)
         }
-        self.listener = listener
+        guard self.listener === listener else { listener.cancel(); throw CancellationError() }
+        try Task.checkCancellation()
         port = ready
         Diagnostics.shared.record(.info, "cast", "relay listening port=\(ready)")
         return ready
@@ -172,24 +193,61 @@ public actor CastRelay {
 
     // MARK: Serving
 
-    private nonisolated func accept(_ connection: NWConnection) {
+    private func accept(_ connection: NWConnection, listener: NWListener) {
+        // The listener may have stopped while its callback was waiting to enter this actor.
+        guard self.listener === listener else { connection.cancel(); return }
+        let id = UUID()
+        connections[id] = connection
+        connection.stateUpdateHandler = { @Sendable [weak self] state in
+            switch state {
+            case .cancelled, .failed: Task { await self?.cancel(id) }
+            default: break
+            }
+        }
+        headerDeadlines[id] = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(10)) } catch { return }
+            await self?.cancel(id)
+        }
         connection.start(queue: queue)
-        readHead(connection, buffer: Data())
+        readHead(id, buffer: Data())
     }
 
-    private nonisolated func readHead(_ connection: NWConnection, buffer: Data) {
+    private func readHead(_ id: UUID, buffer: Data) {
+        guard let connection = connections[id] else { return }
         connection.receive(minimumIncompleteLength: 1, maximumLength: 16 << 10) { [weak self] chunk, _, complete, error in
-            var buffer = buffer
-            if let chunk { buffer.append(chunk) }
-            if let end = buffer.range(of: Data("\r\n\r\n".utf8)) {
-                let head = String(decoding: buffer[..<end.lowerBound], as: UTF8.self)
-                Task { await self?.serve(connection, head: head) }
-                return
-            }
-            guard !complete, error == nil, buffer.count < 16 << 10 else { return connection.cancel() }
-            self?.readHead(connection, buffer: buffer)
+            Task { await self?.receivedHead(id, buffer: buffer, chunk: chunk, complete: complete, failed: error != nil) }
         }
     }
+
+    private func receivedHead(_ id: UUID, buffer: Data, chunk: Data?, complete: Bool, failed: Bool) {
+        guard connections[id] != nil else { return }
+        var buffer = buffer
+        if let chunk { buffer.append(chunk) }
+        guard buffer.count <= 16 << 10 else { cancel(id); return }
+        if let end = buffer.range(of: Data("\r\n\r\n".utf8)) {
+            let head = String(decoding: buffer[..<end.lowerBound], as: UTF8.self)
+            begin(id, head: head)
+        } else if complete || failed { cancel(id) }
+        else { readHead(id, buffer: buffer) }
+    }
+
+    private func begin(_ id: UUID, head: String) {
+        guard let connection = connections[id] else { return }
+        headerDeadlines.removeValue(forKey: id)?.cancel()
+        transfers[id] = Task { [weak self] in
+            await self?.serve(connection, head: head)
+            await self?.finished(id)
+        }
+    }
+
+    private func cancel(_ id: UUID) {
+        headerDeadlines.removeValue(forKey: id)?.cancel()
+        transfers.removeValue(forKey: id)?.cancel()
+        connections.removeValue(forKey: id)?.cancel()
+    }
+
+    // Some responses schedule their final send before returning. Retain the socket until its close callback.
+    private func finished(_ id: UUID) { transfers[id] = nil }
 
     private func serve(_ connection: NWConnection, head: String) async {
         let lines = head.components(separatedBy: "\r\n")
@@ -233,7 +291,7 @@ public actor CastRelay {
         let upstream = Upstream(session: session, request: request)
         defer { upstream.cancel() }
         do {
-            let response = try await upstream.start()
+            let response = try await withTaskCancellationHandler { try await upstream.start() } onCancel: { upstream.cancel() }
             guard (200..<300).contains(response.statusCode) else {
                 Diagnostics.shared.record(.warning, "cast", "relay media status=\(response.statusCode) host=\(route.url.host() ?? "-")")
                 return Self.reply(connection, status: response.statusCode == 416 ? "416 Range Not Satisfiable" : "502 Bad Gateway")
@@ -262,6 +320,7 @@ public actor CastRelay {
             upstream.consumed(first.count)
             try await Self.send(connection, first)
             while let chunk = try await iterator.next() {
+                try Task.checkCancellation()
                 // Each piece goes out before the next is taken, so a slow TV slows the download instead of filling memory.
                 try await Self.send(connection, chunk)
                 upstream.consumed(chunk.count)
@@ -315,6 +374,7 @@ private final class Upstream: NSObject, URLSessionDataDelegate, @unchecked Senda
     private var answered = false
     private var pending = 0
     private var paused = false
+    private var cancelled = false
     private static let high = 8 << 20, low = 2 << 20
 
     init(session: URLSession, request: URLRequest) {
@@ -326,8 +386,11 @@ private final class Upstream: NSObject, URLSessionDataDelegate, @unchecked Senda
 
     func start() async throws -> HTTPURLResponse {
         try await withCheckedThrowingContinuation { continuation in
-            lock.withLock { answer = continuation }
-            task.resume()
+            let stopped = lock.withLock { () -> Bool in
+                guard !cancelled else { return true }
+                answer = continuation; return false
+            }
+            if stopped { continuation.resume(throwing: CancellationError()) } else { task.resume() }
         }
     }
 
@@ -338,7 +401,14 @@ private final class Upstream: NSObject, URLSessionDataDelegate, @unchecked Senda
         }
     }
 
-    func cancel() { task.cancel(); continuation.finish() }
+    func cancel() {
+        let waiting: CheckedContinuation<HTTPURLResponse, Error>? = lock.withLock {
+            cancelled = true
+            defer { answer = nil; answered = true }
+            return answered ? nil : answer
+        }
+        task.cancel(); waiting?.resume(throwing: CancellationError()); continuation.finish(throwing: CancellationError())
+    }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
                     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {

@@ -300,6 +300,8 @@ struct PlayOnButton: View {
             do {
                 try await cast.cast(playing, title: title, from: position, to: device)
                 sent(device.name)
+            } catch is CancellationError {
+                // Another cast, Play Here or the player closing called this one off: nothing went wrong.
             } catch {
                 Diagnostics.shared.failure("cast", "send model=\(device.model)", error)
                 failure = (device.name, error.localizedDescription)
