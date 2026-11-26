@@ -10,7 +10,6 @@ with tempfile.TemporaryDirectory(prefix='flv-renewal-') as temp:
     source = source.replace('configuration.urlCache = nil', 'configuration.urlCache = nil\n        configuration.protocolClasses = [FixtureProtocol.self]')
     main = (root / 'Tests/Standalone/FLVRenewal/Main.swift').read_text()
     (folder / 'FLVLive.swift').write_text(source)
-    main = main.replace("        let resolver = Resolver()", "        try await checkCatalogSource()\n        let resolver = Resolver()", 1)
     (folder / 'Main.swift').write_text(main)
     catalog = (root / 'Sources/TVCore/Catalog.swift').read_text()
     def method(marker):
@@ -22,8 +21,8 @@ with tempfile.TemporaryDirectory(prefix='flv-renewal-') as temp:
             end += 1
         return catalog[start:end].replace('public func', 'func')
     wrappers = '\n'.join(method(marker) for marker in ['    public func preparePlayback(', '    public func resolvePlayback('])
-    (folder / 'Catalog.swift').write_text('import Foundation\nstruct CatalogClient: Sendable {\n let backend: CatalogFixture\n' + wrappers + '''
-    private func preparePlaybackPlan(_ episode: Episode, forDownload: Bool) async throws -> PlaybackPlan { await backend.prepare(episode) }
+    (folder / 'Catalog.swift').write_text('import Foundation\nstruct CatalogClient: Sendable {\n let backend: CatalogFixture\n var site = CatalogSite()\n' + wrappers + '''
+    private func preparePlaybackPlan(_ episode: Episode, forDownload: Bool, fresh: Bool = false) async throws -> PlaybackPlan { await backend.prepare(episode, fresh: fresh) }
     private func resolvePlaybackChannel(_ plan: PlaybackPlan, choice: PlaybackChoice) async throws -> Channel { Channel(url: URL(string: choice.address)!, headers: plan.headers) }
 }
 ''')

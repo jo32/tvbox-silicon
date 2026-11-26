@@ -35,6 +35,10 @@ private final class MockProtocol: URLProtocol, @unchecked Sendable {
             status = 200; body = #"{"parse":0,"url":"","errMsg":"未扫码登录无法观看"}"#
         } else if path == "/qualities" {
             status = 200; body = #"{"parse":0,"url":["480P","https://example.com/480.mp4","360P","https://example.com/360.mp4"]}"#
+        } else if path == "/renew-play" {
+            status = query.contains { $0.name == "play" && $0.value == "fixture-room" } ? 200 : 404
+            let generation = request.cachePolicy == .reloadIgnoringLocalCacheData ? "renewed" : "original"
+            body = #"{"parse":0,"url":"https://example.com/\#(generation).flv","header":{"X-Fixture":"\#(generation)"}}"#
         } else if path == "/subs" {
             status = 200
             body = #"{"parse":0,"url":"https://cdn.example.com/film.mkv","subs":[{"name":"film.chs.srt","url":"http://127.0.0.1:9978/proxy?do=quark&type=sub","lang":"chs","format":"application/x-subrip"}]}"#
@@ -138,6 +142,20 @@ private func client() -> HTTPClient {
     #expect(plan.choices.map(\.name) == ["480P", "360P"])
     let channel = try await api.resolvePlayback(plan, choice: plan.choices[1])
     #expect(channel.url.absoluteString == "https://example.com/360.mp4")
+}
+
+@Test func renewableCatalogBypassesCachedPlayAnswers() async throws {
+    let base = URL(string: "https://example.com/config.json")!
+    let sub = try Subscription.parse(Data(#"{"sites":[{"key":"a","type":4,"api":"/renew-play"}]}"#.utf8), origin: base)
+    let api = CatalogClient(site: sub.sites[0], origin: base, http: client())
+    let episode = Episode(id: "example", name: "Room", address: "fixture-room", flag: "line")
+    let plan = try await api.preparePlayback(episode)
+    let channel = try await api.resolvePlayback(plan, choice: plan.choices[0])
+    #expect(channel.url.lastPathComponent == "original.flv")
+    let source = try #require(channel.flvSource)
+    let refreshed = try await source.refresh()
+    #expect(refreshed.url.lastPathComponent == "renewed.flv")
+    #expect(refreshed.headers["X-Fixture"] == "renewed")
 }
 
 @Test func playResultSubtitleFilesReachThePlayer() async throws {

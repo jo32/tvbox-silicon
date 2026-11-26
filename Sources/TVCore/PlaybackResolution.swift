@@ -5,11 +5,12 @@ public struct PlaybackChoice: Identifiable, Sendable {
     public let name: String
     public let address: String
 
-    /// Reordered qualities keep their name. Only two single-choice plans may use the sole-choice fallback.
-    func renewed(in choices: [PlaybackChoice], originalCount: Int) -> PlaybackChoice? {
+    /// Reordered qualities need a unique name in both plans; two single-choice plans need no name.
+    func renewed(in choices: [PlaybackChoice], from original: [PlaybackChoice]) -> PlaybackChoice? {
+        if original.count == 1 && choices.count == 1 { return choices[0] }
+        guard original.filter({ $0.name == name }).count == 1 else { return nil }
         let matches = choices.filter { $0.name == name }
-        if matches.count == 1 { return matches[0] }
-        return originalCount == 1 && choices.count == 1 ? choices[0] : nil
+        return matches.count == 1 ? matches[0] : nil
     }
     static func parse(_ value: JSONValue?, prefix: String = "", fallbackName: String) -> [PlaybackChoice] {
         if let text = value?.string, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

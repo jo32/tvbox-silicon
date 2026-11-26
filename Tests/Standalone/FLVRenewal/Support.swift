@@ -10,9 +10,11 @@ actor RemuxServer { static let shared = RemuxServer(); func base() throws -> URL
 // Only the native FFmpeg conversion boundary is substituted; parser, segmenter, session,
 // URLSession HTTP callbacks, retry ownership and HLS playlist/retention are production code.
 enum HLSRemux {
+    static let blockedOutput = DispatchSemaphore(value: 0)
     struct Output: Sendable { var video = "h264", audio: String? = "aac", width = 10, height = 10, transfer = 0; var initializations: [Int: Data]; var media: [Int: Data] }
     static func repackage(_ file: Data, device: RemuxPlan.Device) throws -> Output {
         var reader = FLVTagReader(); let tags = try reader.append(file)
+        if tags.first?.body.last == 0x42, tags.first?.time == 2000 { blockedOutput.wait() }
         return Output(initializations: [0: tags.first!.body, 1: Data([1])], media: [0: file, 1: file])
     }
 }

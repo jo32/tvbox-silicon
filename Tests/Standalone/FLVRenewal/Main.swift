@@ -11,21 +11,40 @@ final class FixtureProtocol: URLProtocol, @unchecked Sendable {
             Self.requests.append(request)
             return Self.requests.filter { $0.url!.deletingLastPathComponent().lastPathComponent == mode }.count
         }
-        let count = mode == "continuous" ? 7 : mode == "normal" ? 3 : mode == "codec" ? 2 : 1
-        let status = mode == "empty" ? 200 : index == count + 1 ? 403 : index == count + 2 ? 429 : index == count + 3 ? 503 : 200
+        let count = mode == "continuous" ? 7 : mode == "normal" ? 3 : ["codec", "tail", "shorter"].contains(mode) ? 2 : 1
+        let status: Int
+        if ["tail", "shorter"].contains(mode), index > count { status = 410 }
+        else if mode == "empty" { status = 200 }
+        else {
+            switch index - count {
+            case 1: status = 403
+            case 2: status = 429
+            case 3: status = 503
+            default: status = 200
+            }
+        }
         client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: ["Content-Type":"video/x-flv"])!, cacheStoragePolicy: .notAllowed)
-        if status == 200 {
+        if mode == "shorter", index <= 2 {
+            client?.urlProtocol(self, didLoad: Self.file(until: index == 1 ? 5000 : 4000))
+        } else if mode == "tail", index <= 2 {
+            let first = index == 1
+            let stream = Self.file(until: first ? 4000 : 8000, from: first ? 0 : 6000)
+            client?.urlProtocol(self, didLoad: stream)
+        } else if status == 200 {
             // First 0..6 seconds, then cached 0..10, then cached 0..14. Later empty EOFs must exhaust the budget.
-            if index <= count { client?.urlProtocol(self, didLoad: Self.file(until: UInt32(2 + index * 4) * 1000, config: mode == "codec" && index > 1 ? 8 : 3)) }
+            if index <= count {
+                let config: UInt8 = mode == "slow-output" ? 0x42 : mode == "codec" && index > 1 ? 8 : 3
+                client?.urlProtocol(self, didLoad: Self.file(until: UInt32(2 + index * 4) * 1000, config: config))
+            }
         }
         client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() {}
-    static func file(until: UInt32, config: UInt8 = 3) -> Data {
+    static func file(until: UInt32, config: UInt8 = 3, from: UInt32 = 0) -> Data {
         var file = Data([0x46,0x4c,0x56,1,5,0,0,0,9,0,0,0,0])
         FLVSegmenter.write(.init(type: 9, time: 0, body: Data([0x17,0,0,0,0,1,2,config])), to: &file)
         FLVSegmenter.write(.init(type: 8, time: 0, body: Data([0xaf,0,0x12,0x10])), to: &file)
-        for time in stride(from: UInt32(0), through: until, by: 1000) {
+        for time in stride(from: from, through: until, by: 1000) {
             FLVSegmenter.write(.init(type: 9, time: time, body: Data([time % 2000 == 0 ? 0x17 : 0x27,1,0,0,0,9,9])), to: &file)
             FLVSegmenter.write(.init(type: 8, time: time + 10, body: Data([0xaf,1,7,7])), to: &file)
         }
@@ -42,11 +61,62 @@ actor Resolver {
     func next() async -> (url: URL, headers: [String: String]) {
         calls += 1
         if waits { await withCheckedContinuation { gate = $0 } }
-        return (URL(string: "https://flv.fixture/\(mode)/live.flv?token=\(calls)")!, ["X-Renewal":String(calls)])
+        return (URL(string: "https://flv.fixture/\(mode)/live.flv?token=\(calls)")!,
+                ["X-Renewal": String(calls), "Range": "bytes=0-99", "Accept-Encoding": "gzip"])
     }
 }
 @main struct Check {
+    static func checkOutputDeadline() async throws {
+        let resolver = Resolver(mode: "slow-output")
+        let session = FLVLiveSession(url: URL(string: "https://flv.fixture/slow-output/live.flv")!, headers: [:], device: .init(), source: .init { await resolver.next() })
+        defer { session.close(); HLSRemux.blockedOutput.signal() }
+        try await session.start()
+        let deadline = ContinuousClock.now + .seconds(11)
+        repeat {
+            if (await session.playlist(0) ?? "").contains("#EXT-X-ENDLIST") {
+                let calls = await resolver.calls
+                precondition(calls == 0)
+                print("PASS: the EOF deadline includes time waiting for a blocked remux")
+                return
+            }
+            try await Task.sleep(for: .milliseconds(25))
+        } while ContinuousClock.now < deadline
+        throw TVError.unsupported("unbounded wait for the last remux at EOF")
+    }
+
+    static func checkBufferedEOF(_ mode: String, expected: [UInt32], boundaries: Int) async throws {
+        let resolver = Resolver(mode: mode)
+        let session = FLVLiveSession(url: URL(string: "https://flv.fixture/\(mode)/live.flv")!, headers: [:], device: .init(), source: .init { await resolver.next() })
+        defer { session.close() }
+        try await session.start()
+        let deadline = ContinuousClock.now + .seconds(5)
+        var playlist = ""
+        repeat {
+            playlist = await session.playlist(0) ?? ""
+            if playlist.contains("#EXT-X-ENDLIST") { break }
+            try await Task.sleep(for: .milliseconds(10))
+        } while ContinuousClock.now < deadline
+        let names = playlist.split(separator: "\n").filter { $0.hasSuffix(".m4s") }
+        var pictures: [UInt32] = [], sound: [UInt32] = []
+        for index in names.indices {
+            var reader = FLVTagReader()
+            let tags = try reader.append(try await session.segment(track: 0, index: index))
+            pictures += tags.filter { $0.type == 9 && !FLVSegmenter.isVideoConfig($0.body) }.map(\.time)
+            sound += tags.filter { $0.type == 8 && !FLVSegmenter.isAudioConfig($0.body) }.map(\.time)
+        }
+        guard playlist.contains("#EXT-X-ENDLIST"), pictures == expected, sound == expected.map({ $0 + 10 }) else {
+            throw TVError.unsupported("EOF lost buffered media: video=\(pictures), audio=\(sound)")
+        }
+        let calls = await resolver.calls
+        precondition(calls == 2 && playlist.components(separatedBy: "#EXT-X-DISCONTINUITY\n").count - 1 == boundaries)
+        print("PASS: \(mode) reconnect preserves each available A/V packet exactly once")
+    }
+
     static func main() async throws {
+        if CommandLine.arguments.contains("--output-deadline") { try await checkOutputDeadline(); return }
+        try await checkCatalogSource()
+        try await checkBufferedEOF("tail", expected: [0, 1000, 2000, 3000, 4000, 6000, 7000, 8000], boundaries: 1)
+        try await checkBufferedEOF("shorter", expected: [0, 1000, 2000, 3000, 4000, 5000], boundaries: 0)
         let resolver = Resolver()
         let source = FLVLive.Source { await resolver.next() }
         let session = FLVLiveSession(url: URL(string: "https://flv.fixture/normal/live.flv")!, headers: ["X-Renewal":"0"], device: .init(), source: source)
@@ -74,7 +144,12 @@ actor Resolver {
         let calls = await resolver.calls
         precondition(calls == 5, "new media did not reset one bounded recovery budget")
         let requests = FixtureProtocol.lock.withLock { FixtureProtocol.requests.filter { $0.url!.path.hasPrefix("/normal/") } }
-        precondition(requests.dropFirst().allSatisfy { $0.value(forHTTPHeaderField: "X-Renewal") != "0" })
+        for (index, request) in requests.dropFirst().enumerated() {
+            precondition(request.value(forHTTPHeaderField: "X-Renewal") == String(index + 1))
+            precondition(request.url?.query == "token=\(index + 1)")
+            precondition(request.value(forHTTPHeaderField: "Range") == nil)
+            precondition(request.value(forHTTPHeaderField: "Accept-Encoding") == "identity")
+        }
         session.close()
         // More than three independent EOFs remain recoverable only while new media is published.
         let continuous = Resolver(mode: "continuous")
@@ -85,7 +160,11 @@ actor Resolver {
         let progressed = await continuous.calls
         precondition(progressed == 9, "healthy short connections lost renewal credit")
         let longPlaylist = await long.playlist(0) ?? ""
-        precondition(longPlaylist.contains("#EXT-X-MEDIA-SEQUENCE:"))
+        let audioPlaylist = await long.playlist(1) ?? ""
+        let discontinuities = longPlaylist.split(separator: "\n").filter { $0.hasPrefix("#EXT-X-DISCONTINUITY") }
+        precondition(discontinuities == audioPlaylist.split(separator: "\n").filter { $0.hasPrefix("#EXT-X-DISCONTINUITY") })
+        precondition(discontinuities.contains { $0.hasPrefix("#EXT-X-DISCONTINUITY-SEQUENCE:") && !$0.hasSuffix(":0") })
+        precondition(longPlaylist.split(separator: "\n").filter { $0.hasSuffix(".m4s") }.count == FLVLiveSession.listed)
         long.close()
         // A resolver ignoring cancellation can return after close; its old owner must not revive HTTP.
         let late = Resolver(waits: true, mode: "late")
@@ -129,6 +208,7 @@ actor Resolver {
         empty.close()
         // A resolver which never completes cannot hold a dead stream open beyond the recovery window.
         let stalled = Resolver(waits: true, mode: "deadline")
+        async let outputDeadline: Void = checkOutputDeadline()
         let expiring = FLVLiveSession(url: URL(string: "https://flv.fixture/deadline/live.flv")!, headers: [:], device: .init(), source: .init { await stalled.next() })
         try await expiring.start()
         let expiry = Date().addingTimeInterval(11)
@@ -142,6 +222,7 @@ actor Resolver {
         try await Task.sleep(for: .milliseconds(30))
         precondition(FixtureProtocol.lock.withLock { FixtureProtocol.requests.filter { $0.url!.path.hasPrefix("/deadline/") }.count } == 1)
         expiring.close()
+        try await outputDeadline
         print("PASS: no-source EOF and stalled resolver deadline")
         print("PASS: advancing EOF credit, close/late resolver fencing and per-run codec initialization")
         print("PASS: stable owner, repeated EOF, cached GOP floor, discontinuity, refreshed headers and bounded empty/HTTP failure recovery (\(calls) resolver calls)")

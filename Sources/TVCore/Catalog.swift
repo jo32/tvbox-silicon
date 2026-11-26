@@ -323,10 +323,10 @@ public struct CatalogClient: Sendable {
         return url
     }
     /// Every answer, or failure, feeds the source's `SourceHealth`.
-    private func request(_ params: [String: String]) async throws -> [String: JSONValue] {
+    private func request(_ params: [String: String], fresh: Bool = false) async throws -> [String: JSONValue] {
         let started = ContinuousClock.now
         do {
-            let json = try await perform(params)
+            let json = try await perform(params, fresh: fresh)
             await SourceHealth.shared.record(site, origin: origin, seconds: started.duration(to: .now).seconds, error: nil)
             return json
         } catch {
@@ -336,7 +336,7 @@ public struct CatalogClient: Sendable {
             throw error
         }
     }
-    private func perform(_ params: [String: String]) async throws -> [String: JSONValue] {
+    private func perform(_ params: [String: String], fresh: Bool = false) async throws -> [String: JSONValue] {
         if site.isCloudFiles { return try await CloudFilesSource.request(site, params: params) }
         if site.isTelegram { return try await TelegramSource.request(site, params: params, http: http) }
         // Yingxia's own sources run in-process on every platform, the Mac's included.
@@ -413,7 +413,7 @@ public struct CatalogClient: Sendable {
                 throw crashed
             }
         }
-        let (data, _) = try await http.get(requestURL(params), headers: site.raw["header"]?.object?.compactMapValues(\.string) ?? [:])
+        let (data, _) = try await http.get(requestURL(params), headers: site.raw["header"]?.object?.compactMapValues(\.string) ?? [:], fresh: fresh)
         do { return try JSONDecoder().decode([String: JSONValue].self, from: data) }
         catch {
             // Dead or bot-protected sites answer with a web page; say that rather than a decoding error.
@@ -544,17 +544,17 @@ public struct CatalogClient: Sendable {
 
     public func preparePlayback(_ episode: Episode, forDownload: Bool = false) async throws -> PlaybackPlan {
         var plan = try await preparePlaybackPlan(episode, forDownload: forDownload)
-        if !forDownload { plan.sourceEpisode = episode }
+        if !forDownload && (site.type == 3 || site.type == 4 || plan.requiresWebDetection) { plan.sourceEpisode = episode }
         return plan
     }
 
-    private func preparePlaybackPlan(_ episode: Episode, forDownload: Bool) async throws -> PlaybackPlan {
+    private func preparePlaybackPlan(_ episode: Episode, forDownload: Bool, fresh: Bool = false) async throws -> PlaybackPlan {
         var headers = site.raw["header"]?.object?.compactMapValues(\.string) ?? [:]
         if site.type == 4 || site.type == 3 {
             if !forDownload { CatPawDanmaku.remember(self) }
             var params = ["play": episode.address, "flag": episode.flag]
             if site.type == 3 { params["detailID"] = episode.videoID }
-            let result = try await request(params)
+            let result = try await request(params, fresh: fresh)
             if let message = Self.providerError(result) { throw TVError.unsupported(message) }
             if let fields = result["header"]?.object { headers.merge(fields.compactMapValues(\.string)) { _, new in new } }
             else if let text = result["header"]?.string, let data = text.data(using: .utf8),
@@ -637,8 +637,8 @@ public struct CatalogClient: Sendable {
         if FLVLive.names(channel.url), let episode = plan.sourceEpisode {
             channel.flvSource = FLVLive.Source {
                 try Task.checkCancellation()
-                let fresh = try await self.preparePlayback(episode)
-                guard let selected = choice.renewed(in: fresh.choices, originalCount: plan.choices.count) else {
+                let fresh = try await self.preparePlaybackPlan(episode, forDownload: false, fresh: true)
+                guard let selected = choice.renewed(in: fresh.choices, from: plan.choices) else {
                     throw TVError.unsupported(L10n.text("The selected live quality is no longer available."))
                 }
                 let renewed = try await self.resolvePlaybackChannel(fresh, choice: selected)

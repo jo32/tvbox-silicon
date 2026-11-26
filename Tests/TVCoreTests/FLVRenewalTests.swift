@@ -28,8 +28,11 @@ import Testing
 
 @Test func liveQualityRenewalUsesNamesAndRejectsAmbiguity() {
     let selected = PlaybackChoice(id: 1, name: "1080p", address: "old")
-    #expect(selected.renewed(in: [.init(id: 0, name: "1080p", address: "fresh"), .init(id: 1, name: "720p", address: "other")], originalCount: 2)?.address == "fresh")
-    #expect(selected.renewed(in: [.init(id: 0, name: "720p", address: "other")], originalCount: 2) == nil)
-    #expect(selected.renewed(in: [.init(id: 0, name: "1080p", address: "one"), .init(id: 1, name: "1080p", address: "two")], originalCount: 2) == nil)
-    #expect(selected.renewed(in: [.init(id: 0, name: "sole", address: "fresh")], originalCount: 1)?.address == "fresh")
+    let other = PlaybackChoice(id: 0, name: "720p", address: "other")
+    let fresh = PlaybackChoice(id: 0, name: "1080p", address: "fresh")
+    #expect(selected.renewed(in: [fresh, other], from: [other, selected])?.address == "fresh")
+    #expect(selected.renewed(in: [other], from: [other, selected]) == nil)
+    #expect(selected.renewed(in: [fresh, selected], from: [other, selected]) == nil)
+    #expect(selected.renewed(in: [fresh, other], from: [fresh, selected]) == nil)
+    #expect(selected.renewed(in: [.init(id: 0, name: "sole", address: "fresh")], from: [selected])?.address == "fresh")
 }
