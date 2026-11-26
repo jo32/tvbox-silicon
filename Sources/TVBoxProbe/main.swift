@@ -345,10 +345,19 @@ import TVCore
                 guard HLSProxy.recovers(failure) else { print("RESULT failed direct; not a failure the proxy gets past"); return }
             }
             let proxy = HLSProxy(headers: [:])
-            let local = try await proxy.start(url: address)
-            print("proxy \(local.absoluteString)")
+            let started = Date()
+            let local: URL
+            do { local = try await proxy.start(url: address, patience: args[1] == "--hls-play" ? .retry : .opening) }
+            catch {
+                let snapshot = proxy.stats.snapshot
+                print("RESULT proxy gave up after=\(Int(Date().timeIntervalSince(started)))s \(error.localizedDescription) status=\(snapshot.status.map(String.init) ?? "-") code=\(snapshot.code.map(String.init) ?? "-")")
+                return
+            }
+            print("proxy \(local.absoluteString) after=\(Int(Date().timeIntervalSince(started)))s")
             let failure = await play(local)
             print("repairs \(await proxy.repairs)")
+            let snapshot = proxy.stats.snapshot
+            if let code = snapshot.code ?? snapshot.status { print("upstream status=\(snapshot.status.map(String.init) ?? "-") code=\(snapshot.code.map(String.init) ?? "-") \(snapshot.failure ?? "-") (\(code))") }
             print(failure == nil ? "RESULT played through proxy" : "RESULT failed through proxy")
             await proxy.stop()
             return
