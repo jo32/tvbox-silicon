@@ -70,7 +70,9 @@ import Observation
 
     /// A source's results so far: its first page, then each later page.
     public func videos(for source: String) -> [Video] {
-        (results.first { $0.id == source }?.page?.videos ?? []) + batches.filter { $0.source == source }.flatMap(\.videos)
+        var seen = Set<String>()
+        return ((results.first { $0.id == source }?.page?.videos ?? []) + batches.filter { $0.source == source }.flatMap(\.videos))
+            .filter { seen.insert($0.id).inserted }
     }
 
     /// Shows one source's results (nil: every source). The choice carries over to later searches.
@@ -112,8 +114,8 @@ import Observation
                     continue
                 }
                 self.pageFailures[result.id] = nil
-                let known = Set(self.videos(for: result.id).map(\.id))
-                let fresh = answer.videos.filter { !known.contains($0.id) }
+                var known = Set(self.videos(for: result.id).map(\.id))
+                let fresh = answer.videos.filter { known.insert($0.id).inserted }
                 self.nextPage[result.id] = fresh.isEmpty ? Int.max : page + 1
                 if !fresh.isEmpty { self.batches.append(SearchBatch(source: result.id, page: page, videos: fresh)) }
             }
@@ -171,7 +173,8 @@ import Observation
     }
 
     public static func eligible(_ sites: [Site], jarURL: URL?, excluding hidden: (Site) -> Bool) -> [Site] {
-        sites.filter { $0.searchable && $0.canBrowse(jarURL: jarURL) && !hidden($0) }
+        var seen = Set<String>()
+        return sites.filter { $0.searchable && $0.canBrowse(jarURL: jarURL) && !hidden($0) && seen.insert($0.id).inserted }
     }
 
     public static func visible(_ results: [SearchSourceResult], excluding hidden: (Site) -> Bool) -> [SearchSourceResult] {
@@ -278,12 +281,20 @@ import Observation
 
     private func started(_ site: Site, token: UUID) {
         guard generation == token else { return }
+        guard !activeSources.contains(where: { $0.id == site.id }), !results.contains(where: { $0.id == site.id }) else { return }
         activeSources.append(SearchSourceActivity(site: site, started: Date()))
         waitingSources.removeAll { $0.id == site.id }
     }
 
     private func receive(_ result: SearchSourceResult, token: UUID) {
         guard generation == token else { return }
+        record(result)
+    }
+
+    /// First answer wins within a run, including callbacks from a resumed source. Retrying failures
+    /// removes their old answers before dispatch, so an explicit retry can still replace them.
+    func record(_ result: SearchSourceResult) {
+        guard !results.contains(where: { $0.id == result.id }) else { return }
         activeSources.removeAll { $0.id == result.id }
         completed += 1
         results.append(result)

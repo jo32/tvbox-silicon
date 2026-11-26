@@ -1617,7 +1617,7 @@ extension View {
     private static func current() -> String? {
         let videos = DownloadLibrary.shared.items, songs = MusicDownloadLibrary.shared.items
         if let item = videos.first(where: \.isActive) ?? videos.first(where: { $0.status == .queued }) {
-            return item.episode.isEmpty ? item.title : "\(item.title) · \(item.episode)"
+            return item.displayName
         }
         return (songs.first(where: \.isActive) ?? songs.first(where: { $0.status == .queued }))?.track.title
     }
