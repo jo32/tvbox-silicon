@@ -155,9 +155,10 @@ import UIKit
         return (work, reached)
     }
 
-    /// Direct streams keep playing independently; relayed and in-flight casts need their owner cleaned up.
+    /// The player closed: the TV plays on by itself, and nothing here keeps asking it. A cast still being sent is
+    /// called off, and the TV told to stop whatever it may already have accepted.
     func detach() {
-        if relayed || loadingTarget != nil { _ = enqueueStop() } else { end() }
+        if loadingTarget != nil { _ = enqueueStop() } else { end() }
     }
 
     private func end() {
