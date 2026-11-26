@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import AVKit
 import VideoToolbox
 import CoreImage
@@ -976,7 +977,10 @@ private struct NativePlayerView: UIViewControllerRepresentable {
                 tabs.append(list)
             }
             if !comments.isEmpty {
-                let list = UIHostingController(rootView: DanmakuListView(player: player, comments: comments))
+                // Capped in the view as well: AVKit can size a tab by its content, and a scroll view's content is all of its
+                // rows, so the panel ran thousands of points past the top of the screen, its tabs and the focused row out of
+                // sight, and the remote seemed to do nothing (#1836).
+                let list = UIHostingController(rootView: DanmakuListView(player: player, comments: comments).frame(maxHeight: 480))
                 list.title = L10n.text("Danmaku")
                 list.preferredContentSize = CGSize(width: 0, height: 480)
                 tabs.append(list)
@@ -1280,12 +1284,40 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
 
 /// A real document-style window: playback remains independent of library navigation.
 @MainActor final class PlayerWindowController: NSObject, NSWindowDelegate {
+    /// One for the app: the player window outlives the library window that opened it.
+    static let shared = PlayerWindowController()
     private var window: PlaybackWindow?
     private let session = PlaybackSession()
     private var onClose: (() -> Void)?
+    private weak var store: Store?
+    private var storeCancellation: AnyCancellable?
+    /// The channel the window was given last, so the store setting the same one again doesn't start it over.
+    private var presented: Channel?
 
-    func present(_ channel: Channel, store: Store, onClose: @escaping () -> Void) {
+    /// Opens, changes and closes the window as `store.playing` changes, for as long as the app runs. The library
+    /// window did this, so once it was closed while a video played, the episode the queue moved on to never reached
+    /// the player window: its Next and episode list did nothing, and auto-play stopped an episode later (#2107).
+    func follow(_ store: Store) {
+        guard self.store !== store else { return }
+        self.store = store
+        // macOS 13 沒有 Observation，改訂閱 ObservableObject 的 objectWillChange。
+        storeCancellation?.cancel()
+        storeCancellation = store.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.track() }
+        track()
+    }
+
+    private func track() {
+        guard let store else { return }
+        let channel = store.playing
+        guard channel != presented else { return }
+        if let channel { present(channel, store: store) { [weak store] in store?.playing = nil } } else { close() }
+    }
+
+    private func present(_ channel: Channel, store: Store, onClose: @escaping () -> Void) {
         self.onClose = onClose
+        presented = channel
         let target: PlaybackWindow
         if let window { target = window }
         else {
@@ -1316,7 +1348,7 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
         target.makeKeyAndOrderFront(nil)
     }
 
-    func close() { window?.close() }
+    private func close() { window?.close() }
 
     func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
         (sender as? PlaybackWindow)?.resized(to: frameSize) ?? frameSize
@@ -1325,6 +1357,7 @@ enum MacPlayerWindowSize: String, CaseIterable, Sendable {
     func windowWillStartLiveResize(_ notification: Notification) { window?.startsDrag() }
 
     func windowWillClose(_ notification: Notification) {
+        presented = nil
         session.stop()
         window?.contentView = nil
         window = nil
@@ -1823,9 +1856,20 @@ private struct DesktopPlaybackView: View {
             // One glass capsule holds the buttons, like a toolbar group: a glass circle each read as loose bubbles.
             HStack(spacing: 2) {
                 if session.isLive || !session.hasTimeline {
-                    // AVKit's controls are hidden without a timeline (see DesktopNativePlayer), so play and mute live here.
+                    // AVKit's controls are hidden without a timeline (see DesktopNativePlayer), so play, mute and volume live here.
                     barButton(session.paused ? "play.fill" : "pause.fill", L10n.text("Play / Pause (Space)")) { session.togglePlayback() }
                     barButton(session.muted ? "speaker.slash.fill" : "speaker.wave.2.fill", L10n.text("Mute (M)")) { session.player.isMuted.toggle() }
+                    // The same player.volume the wheel and arrow keys change; dragging it also unmutes.
+                    Slider(value: Binding(
+                        get: { session.volume },
+                        set: { level in
+                            session.player.isMuted = false
+                            session.player.volume = level
+                        }
+                    ), in: 0...1)
+                    .frame(width: 72)
+                    .help(L10n.text("Volume"))
+                    .accessibilityLabel(L10n.text("Volume"))
                 } else {
                     barButton("gobackward.10", L10n.text("Back 10 seconds (←)")) { session.skip(-10) }
                     barButton("goforward.10", L10n.text("Forward 10 seconds (→)")) { session.skip(10) }
@@ -2140,6 +2184,9 @@ extension Store {
 /// `resuming`: the session already plays the channel (back from Picture in Picture), and only its links to the store are
 /// made again.
 @MainActor private func startCatalogPlayback(_ session: PlaybackSession, channel: Channel, store: Store, resuming: Bool = false) {
+    session.recordCachedPlayback = { [weak store] channel, position, duration in
+        store?.recordCachedPlayback(channel, position: position, duration: duration)
+    }
     session.history = store.playbackHistory
     // The video page's TMDB match names the video for subtitle sources (#576 M2).
     session.externalSubtitles.tmdbKey = { [weak store] channel in

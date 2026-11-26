@@ -535,8 +535,10 @@ final class NovelStore: @unchecked Sendable {
     private var view: WKWebView?
     private var finished: CheckedContinuation<Void, Never>?
     private var loaded = false
+    /// The HTTP status of the page the view shows (the last one the main frame loaded); none for HTML handed in.
+    private var status: Int?
 
-    /// {url, html, js, ua, headers, jar, timeout (s), challenge} → {content, url} or {failed}
+    /// {url, html, js, ua, headers, jar, timeout (s), challenge} → {content, url, code} or {failed}
     static func run(_ options: [String: Any]) async -> [String: Any] {
         await NovelWebView().load(options)
     }
@@ -587,7 +589,9 @@ final class NovelStore: @unchecked Sendable {
         // A check's own scripts may still be setting cookies once the page is there.
         if challenge { try? await Task.sleep(for: .milliseconds(1500)) }
         for cookie in await store.allCookies() { NovelHTTP.shared.keep(cookie, jar: jar) }
-        return ["content": content, "url": view.url?.absoluteString ?? address?.absoluteString ?? ""]
+        var answer: [String: Any] = ["content": content, "url": view.url?.absoluteString ?? address?.absoluteString ?? ""]
+        if let status { answer["code"] = status }
+        return answer
     }
 
     static func isChallenge(_ html: String) -> Bool {
@@ -608,6 +612,11 @@ final class NovelStore: @unchecked Sendable {
         finished?.resume(); finished = nil
     }
 
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
+                 decisionHandler: @escaping @MainActor @Sendable (WKNavigationResponsePolicy) -> Void) {
+        if navigationResponse.isForMainFrame, let response = navigationResponse.response as? HTTPURLResponse { status = response.statusCode }
+        decisionHandler(.allow)
+    }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { finish() }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { finish() }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { finish() }

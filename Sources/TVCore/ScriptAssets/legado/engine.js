@@ -470,13 +470,14 @@ function webView({ url = null, html = null, js = null, headers = {}, challenge =
     if (tracing) log(`webview ${url ?? '(html)'}${js ? ' js' : ''}${challenge ? ' (check)' : ''}`);
     const answer = JSON.parse(host('novel.webview', JSON.stringify({ url, html, js, ua: agent, headers, jar: String(S?.bookSourceUrl ?? ''), timeout: Math.min(25, left / 1000 - 2), challenge })));
     if (answer.failed) fail(answer.failed);
-    return { content: String(answer.content ?? ''), url: String(answer.url || url || '') };
+    return { content: String(answer.content ?? ''), url: String(answer.url || url || ''), code: Number(answer.code) || 0 };
 }
 function perform(request) {
     if (request.webView && !isDataUrl(request.url)) {
         const url = request.encodedQuery != null ? request.urlNoQuery + '?' + request.encodedQuery : request.url;
         const page = webView({ url, js: request.webJs, headers: request.headers });
-        return new StrResponse(page.url || url, page.content, 200, {});
+        // The page's own status, so that an error page (a 502 from Cloudflare) reads as no books, not as one (#2126).
+        return new StrResponse(page.url || url, page.content, page.code || 200, {});
     }
     let lastError;
     const tries = Math.min(Math.max(request.retry || 0, 0), 3) + 1;

@@ -65,4 +65,23 @@ struct MangaSpreadsTests {
         #expect(decoded == updates)
         #expect(decoded.newChapters("x") == 2)
     }
+
+    @Test func readChaptersAreKeptPerComicAndGoWithIt() throws {
+        var read = MangaLibrary.ReadChapters()
+        read.mark("c1", of: "a"); read.mark("c2", of: "a"); read.mark("c1", of: "b")
+        #expect(read.isRead("c1", of: "a") && read.isRead("c2", of: "a") && read.isRead("c1", of: "b"))
+        #expect(!read.isRead("c2", of: "b"))
+        read.unmark("c1", of: "b")
+        #expect(read.read["b"] == nil)
+        // Saved and read back the same.
+        #expect(try JSONDecoder().decode(MangaLibrary.ReadChapters.self, from: JSONEncoder().encode(read)) == read)
+        // A comic leaving the history takes its marks along.
+        read.mark("c9", of: "z")
+        let trimmed = read.keep(only: ["a"]), trimmedAgain = read.keep(only: ["a"])
+        #expect(trimmed && !trimmedAgain)
+        #expect(read.read.keys.sorted() == ["a"])
+        let forgot = read.forget("a"), forgotAgain = read.forget("a")
+        #expect(forgot && !forgotAgain)
+        #expect(read.read.isEmpty)
+    }
 }

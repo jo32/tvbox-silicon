@@ -64,7 +64,9 @@ struct MusicNowPlayingScreen: View {
                 _ = await PosterPalette.image(next)
             }
         }
-        .compatOnChange(of: music.track == nil) { _, gone in if gone { dismiss() } }
+        // 透過呈現者關閉，而不是 `dismiss`：iOS 17 上 sheet 的 dismiss action 每次更新都會變，
+        // 讓這頁不停重讀、記憶體一直上升直到系統殺掉 App（#1813、#1215）。
+        .compatOnChange(of: music.track == nil) { _, gone in if gone { music.presentsPlayer = false } }
         #if DEBUG
         .onAppear {
             switch UserDefaults.standard.string(forKey: "qaNowPlaying") {

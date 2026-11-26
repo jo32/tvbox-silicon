@@ -170,7 +170,7 @@ async function start({ bundle, api, profile }) {
         env: { ...process.env, NODE_PATH: profile },
         resourceLimits: { maxOldGenerationSizeMb: heapLimit },
     });
-    const instance = { worker, port: 0, ports: [], started: new Set(), exited: false, failure: null };
+    const instance = { worker, port: 0, ports: [], started: new Set(), exited: false, failure: null, startedAt: Date.now() };
     worker.on('error', error => { instance.failure = error; log('CATPAW_WORKER', bundle, error?.code || '', error?.stack || String(error)); });
     instance.ended = new Promise(resolve => worker.once('exit', code => { instance.exited = true; log('CATPAW_WORKER_EXIT', bundle, code); resolve(); }));
     try {
@@ -360,6 +360,25 @@ async function relocate(address) {
     return address;
 }
 
+// Bundles keep the drive link of each file they played for as long as they run (the 9280.kstore.vip bundle's Baidu,
+// Quark and UC lines cache them without an expiry), and the drives' links expire: Baidu's after about 8 hours. Every
+// later play of that file then answers the expired link and the drive refuses it, until the app quits (#2135). The app
+// asks for the bundle behind a refused media proxy address to start again; one that has run at least `olderThan` ms
+// is ended, and its next call starts it afresh, without those links. True when it was ended.
+async function restartBehind(address, olderThan) {
+    const port = Number(new URL(address).port);
+    for (const [bundle, pending] of bundles) {
+        const instance = await pending.catch(() => null);
+        if (!instance?.ports.includes(port)) continue;
+        if (instance.exited || Date.now() - instance.startedAt < olderThan) return false;
+        if (bundles.get(bundle) === pending) bundles.delete(bundle);
+        log('CATPAW_RESTART', bundle);
+        await instance.worker.terminate();
+        return true;
+    }
+    return false;
+}
+
 const control = http.createServer(async (req, res) => {
     const reply = body => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
     if (req.method !== 'POST' || req.url !== '/call' || req.headers['x-yingxia-token'] !== token) { res.writeHead(403); res.end(); return; }
@@ -368,6 +387,7 @@ const control = http.createServer(async (req, res) => {
         for await (const chunk of req) chunks.push(chunk);
         const input = JSON.parse(Buffer.concat(chunks).toString('utf8'));
         if (input.relocate) { reply({ result: await relocate(String(input.relocate)) }); return; }
+        if (input.restartBehind) { reply({ result: await restartBehind(String(input.restartBehind), Number(input.olderThan) || 0) }); return; }
         useProxy(input.proxy);
         let instance = bundles.get(input.bundle);
         if (!instance) {

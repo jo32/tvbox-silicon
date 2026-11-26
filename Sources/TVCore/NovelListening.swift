@@ -41,6 +41,15 @@ public enum NovelListening {
     }
     public static func isAudiobook(_ context: PlaybackHistoryContext) -> Bool { context.origin == origin }
 
+    /// Where a chapter is in its book's chapters as the source lists them again, when it gives the chapter a new
+    /// address there: some sources put each chapter's signed sound address in the table of contents, and the saved copy's
+    /// expire (#1840). Nil when the source gave the same address (nothing newer to try) or no longer lists the chapter.
+    public static func renewed(_ chapter: NovelChapter, in chapters: [NovelChapter]) -> Int? {
+        let same = chapters.first { $0.index == chapter.index && $0.title == chapter.title } ?? chapters.first { $0.title == chapter.title && !$0.isVolume }
+        guard let same, same.url != chapter.url else { return nil }
+        return same.index
+    }
+
     /// Where a chapter plays from, asked of its source each time (sound addresses expire).
     public static func channel(for item: Item, runtime: NovelRuntime = .shared, sources: NovelSources = .shared) async throws -> Channel {
         await sources.loaded()

@@ -1056,6 +1056,8 @@
 "Play from Other Devices" = "ほかのデバイスからの再生を受け付ける";
 "With Yingxia open here, your other devices on the same network can send it what they play: tap Play On in their player." = "ここで映匣を開いているあいだ、同じネットワークにあるほかのデバイスから再生中のものを送れます。そのプレーヤーで「ほかのデバイスで再生」をタップしてください。";
 "Touch and Hold Speed" = "長押しの再生速度";
+"Start Speed" = "再生開始速度";
+"Each new title starts at this speed. A speed you pick in the player stays for that title's next episodes." = "新しい作品はこの速度で再生を始めます。プレーヤーで選んだ速度は、その作品の次のエピソードにも引き継がれます。";
 "Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go." = "動画を長押しするとこの速度で再生します。押したまま左右にスライドすると速度を変更、下にスライドすると指を離しても維持します。";
 "Slide sideways to change the speed, or down to keep it" = "左右にスライドで速度を変更、下にスライドで固定";
 "Slowed down to keep up with the connection" = "通信速度に合わせて速度を下げています";
@@ -1443,6 +1445,7 @@
 
 // Manga (Venera comic sources)
 "%@, last read" = "%@、前回ここまで";
+"%@, read" = "%@、既読";
 "%d Chapters" = "%d 話";
 "Account" = "アカウント";
 "Add Source List" = "ソースリストを追加";
@@ -1467,6 +1470,8 @@
 "Left to Right" = "左から右";
 "Manga" = "漫画";
 "Manga reads comics through Venera comic sources. Add a source list, such as Venera's, then install the sources you want." = "漫画は Venera のコミックソースで読みます。Venera などのソースリストを追加し、使いたいソースをインストールしてください。";
+"Mark as read" = "既読にする";
+"Mark as unread" = "未読にする";
 "Next Chapter" = "次の話";
 "Next: %@" = "次：%@";
 "No Comic Sources" = "コミックソースがありません";
@@ -2385,3 +2390,8 @@
 "Video Tags are the short labels above the progress bar in full screen, such as 4K and H265." = "ビデオタグは、フルスクリーン時にシークバーの上に表示される4KやH265などの短いラベルです。";
 "Show Video Tags" = "ビデオタグを表示";
 "Battery Percentage" = "バッテリー残量（%）";
+"Cache More" = "さらにキャッシュ";
+"Watched to %@" = "%@ まで視聴";
+"Select episodes to delete" = "削除するエピソードを選択";
+"Delete %lld episodes" = "%lld 話を削除";
+"Search settings" = "設定を検索";

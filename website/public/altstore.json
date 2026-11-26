@@ -19,6 +19,16 @@
       "category": "entertainment",
       "versions": [
         {
+          "version": "1.8.31",
+          "buildVersion": "69",
+          "date": "2026-11-25",
+          "localizedDescription": "• 在设置里搜索\n• 自选默认倍速\n• 离线缓存按集管理\n• 漫画已读标记\n• Telegram 频道正常显示\n• 其他修复\n\n• Search in Settings\n• Pick the speed videos start at\n• Offline Cache, episode by episode\n• Read marks for manga\n• Telegram channels show up\n• Other fixes",
+          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.31/Yingxia-1.8.31-ios.ipa",
+          "size": 186266299,
+          "sha256": "60bdadba378613c249d30fbe259448fde2cb6f23c4c7580c255231b667fdf7ae",
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "1.8.30",
           "buildVersion": "68",
           "date": "2026-11-25",
@@ -56,16 +66,6 @@
           "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.27/Yingxia-1.8.27-ios.ipa",
           "size": 185065395,
           "sha256": "3db7ec3168f89e87d9377f3fde59a0c3048ca8a2a61c2f4ade835980141841f5",
-          "minOSVersion": "17.0"
-        },
-        {
-          "version": "1.8.26",
-          "buildVersion": "64",
-          "date": "2026-11-20",
-          "localizedDescription": "• 发现页自动找片源\n• 整理直播\n• 订阅按类型分开\n• 直播插件可以登录\n• 其他修复\n\n• Discover finds it on your sources\n• Tidy up Live TV\n• Subscriptions sorted by kind\n• Sign in to live plugins\n• Other fixes",
-          "downloadURL": "https://download.getmegaportal.com/yingxia/1.8.26/Yingxia-1.8.26-ios.ipa",
-          "size": 184765358,
-          "sha256": "9f9265033d4446dedc16fcf5ce7dd1ea5dac01844915ce71aaa49580552067b5",
           "minOSVersion": "17.0"
         }
       ],

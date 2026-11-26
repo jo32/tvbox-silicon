@@ -2162,11 +2162,10 @@ struct VideoDetailView: View {
     /// Discover's title page shows only the episodes, in its own rows (`embedded`).
     var embed: DetailEmbed? = nil
     #if !os(tvOS)
-    /// The episode row's All sheet, and where the row is scrolled to.
+    /// The episode row's All sheet.
     @State private var showsAllEpisodes = false
     /// The page of a long series the All sheet shows (#1464); nil for the one with the episode being watched.
     @State private var episodePage: Int?
-    @State private var episodeScroll: Episode.ID?
     #endif
     #if os(iOS)
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -3544,12 +3543,10 @@ extension VideoDetailView {
         // scroll view, which pushed the title under the player.
         ScrollView(.horizontal) { cards }
             .scrollIndicators(.never)
-            .compatScrollPosition(id: $episodeScroll, anchor: .center)
+            .modifier(FollowsEpisode(currentEpisodeID))
             // Edge to edge, unclipped: the tiles' glass shadow ran past the row and was cut off in a band (#293).
             .compatScrollClipDisabled()
             .padding(.horizontal, -rowInset)
-            .onAppear { episodeScroll = currentEpisodeID }
-            .compatOnChange(of: currentEpisodeID) { _, id in if let id { withAnimation { episodeScroll = id } } }
         #endif
     }
 
@@ -3758,6 +3755,9 @@ extension VideoDetailView {
 #if !os(tvOS)
 struct EpisodeDropdownLabel: View {
     let title: String
+    /// The 44 pt tap room around the capsule. Off in a `Menu`'s label: iOS 27 stretches the label's glass to the whole
+    /// label, which drew that capsule taller than the ones beside it (#1628). The menu takes the room outside instead.
+    var tapRoom = true
 
     var body: some View {
         HStack(spacing: 3) {
@@ -3772,7 +3772,7 @@ struct EpisodeDropdownLabel: View {
         .frame(minHeight: 32)
         #endif
         .glassOrFill(.regular.interactive(), Color.clear, in: Capsule())
-        .frame(minHeight: 44).contentShape(Rectangle())
+        .frame(minHeight: tapRoom ? 44 : nil).contentShape(Rectangle())
     }
 }
 #endif
@@ -3953,6 +3953,19 @@ struct OpensAtEpisode: ViewModifier {
     @State private var position: Episode.ID?
     init(_ episode: Episode.ID?) { _position = State(initialValue: episode) }
     func body(content: Content) -> some View { content.compatScrollPosition(id: $position, anchor: .center) }
+}
+
+/// The watch page's episode row, kept at the episode playing. Its position is this modifier's own state: as the page's
+/// it re-ran the whole page, every episode of the row included, for each episode scrolled past, and a row of thousands
+/// (an audiobook's chapters) stuttered too much to use (#2099).
+struct FollowsEpisode: ViewModifier {
+    let episode: Episode.ID?
+    @State private var position: Episode.ID?
+    init(_ episode: Episode.ID?) { self.episode = episode; _position = State(initialValue: episode) }
+    func body(content: Content) -> some View {
+        content.compatScrollPosition(id: $position, anchor: .center)
+            .compatOnChange(of: episode) { _, id in if let id { withAnimation { position = id } } }
+    }
 }
 #endif
 

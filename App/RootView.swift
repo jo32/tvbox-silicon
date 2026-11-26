@@ -434,7 +434,7 @@ private struct TVMoreView: View {
 
 #if !os(macOS)
 /// What the player cover shows; the same presentation whichever channel it holds.
-private struct PlayerSlot: Identifiable {
+struct PlayerSlot: Identifiable {
     let channel: Channel
     var id: String { "player" }
 }
@@ -443,24 +443,18 @@ private struct PlayerSlot: Identifiable {
 private struct PlayerPresentation: ViewModifier {
     @EnvironmentObject private var store: Store
     @Binding var playing: Channel?
-    #if os(macOS)
-    @State private var playerWindow = PlayerWindowController()
-    #endif
     func body(content: Content) -> some View {
         #if os(macOS)
-        content.compatOnChange(of: playing, initial: true) { _, channel in
-            if let channel {
-                playerWindow.present(channel, store: store) { playing = nil }
-            } else {
-                playerWindow.close()
-            }
-        }
+        // 播放器視窗直接跟著 Store：關掉正在播放影片的資料夾視窗不該把播放器一起帶走（#2107）。
+        content.onAppear { PlayerWindowController.shared.follow(store) }
         #else
         // One presentation while anything plays: the next episode replaces the channel inside the player.
         // Keyed by the channel, every change dismissed the player and presented a new one, so even a
         // queued episode would stop and load.
         // An iPhone watch page plays its own video at the top of the page (`VideoDetailView`).
-        content.fullScreenCover(item: Binding(get: { store.playsInWatchPage(playing) ? nil : playing.map(PlayerSlot.init) },
+        // A catalog search sheet on screen presents the player itself: a cover from here is under that sheet,
+        // and presenting over it tears the sheet down, so the viewer lands back on the page under it (#1618).
+        content.fullScreenCover(item: Binding(get: { store.playsInWatchPage(playing) || !store.catalogSearchSheets.isEmpty ? nil : playing.map(PlayerSlot.init) },
                                               set: { if $0 == nil, !store.playsInWatchPage(playing) { playing = nil } })) {
             // Handed in: the iPad app on a Mac presents a full-screen cover without the presenter's environment
             // objects, and every video stopped the app there ("No Observable object of type Store found").

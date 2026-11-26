@@ -112,13 +112,12 @@ public struct PlaybackHistoryEntry: Identifiable, Codable, Hashable, Sendable {
 }
 
 extension PlaybackHistoryEntry {
-    /// The favorite this row points at: the cloud file, or this episode. Not the whole video.
+    /// The favorite this row points at: the cloud file, or the whole video (matching the watch/detail page).
     public func favoriteItem() -> FavoriteItem {
         if context.sourceKey == CloudFiles.sourceKey {
             return .cloud(FavoriteCloudFile(driveKey: context.episodeFlag, folderID: context.videoID, folderName: context.videoName, fileID: context.episodeID, fileName: context.episodeName, size: 0))
         }
-        let video = FavoriteVideo(origin: context.origin, sourceKey: context.sourceKey, sourceName: context.sourceName, videoID: context.videoID, videoName: context.videoName, poster: context.poster, posterHeaders: context.posterHeaders ?? [:], year: context.year)
-        return .episode(FavoriteEpisode(video: video, episodeFlag: context.episodeFlag, episodeName: context.episodeName, episodeID: context.episodeID))
+        return .video(FavoriteVideo(origin: context.origin, sourceKey: context.sourceKey, sourceName: context.sourceName, videoID: context.videoID, videoName: context.videoName, poster: context.poster, posterHeaders: context.posterHeaders ?? [:], year: context.year))
     }
 }
 
@@ -154,10 +153,14 @@ extension PlaybackHistoryEntry {
 
     public func record(_ context: PlaybackHistoryContext, position: Double, duration: Double, now: Date = Date()) {
         guard position.isFinite, position >= 1, duration.isFinite, duration >= 0 else { return }
+        // A real local playback change follows the history already seen, even when this device's clock is behind.
+        // Sync uses this date, not the later time at which a delayed upload happens.
+        let previous = entries.first { $0.id == context.id }
+        let changedAt = previous.map { max(now, $0.updatedAt.addingTimeInterval(0.001)) } ?? now
         let entry = PlaybackHistoryEntry(context: context, position: duration > 0 ? min(position, duration) : position,
-                                         duration: duration, updatedAt: now)
+                                         duration: duration, updatedAt: changedAt)
         guard Self.valid(entry) else { return }
-        if let old = entries.first(where: { $0.id == entry.id }), old.context == context,
+        if let old = previous, old.context == context,
            abs(old.position - entry.position) < 0.25, old.duration == duration { return }
         entries.removeAll { $0.id == entry.id }
         entries.insert(entry, at: 0)

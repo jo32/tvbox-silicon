@@ -25,7 +25,12 @@ import IOKit.pwr_mgt
     #endif
     @Published var history = PlaybackHistory.shared
     @Published var skipDefaults = UserDefaults.standard
+    /// 已快取播放的回呼，由 Store 帶入。
+    var recordCachedPlayback: ((Channel, Double, Double) -> Void)?
     @Published private var historyContext: PlaybackHistoryContext?
+    /// 這個播放器自己最後儲存的進度，與其他裝置同步過來的歷史分開：iCloud 更新時暫停中的播放器
+    /// 不會把舊進度寫回去。
+    private var lastHistoryPosition: Double?
     @Published private var pendingResume: Double?
     /// Where the item was asked to open (`seekAhead`), until it is ready.
     private var soughtAhead: Double?
@@ -36,6 +41,8 @@ import IOKit.pwr_mgt
     @Published private(set) var position: Double = 0
     @Published private(set) var duration: Double = 0
     @Published private var skipScope: String?
+    /// 記住速度的節目：換一部時從設定裡的速度開始。
+    private var speedScope: String?
     @Published private var skipPass = EpisodeSkipPass()
     @Published private var editingSkip = false
     @Published private var resumeAfterEditing = false
@@ -281,9 +288,10 @@ import IOKit.pwr_mgt
     /// The item is ready and has a finite duration, so there is a timeline to scrub. A live stream that
     /// isn't a platform room (an IPTV channel, say) only shows itself here, as an indefinite duration.
     @Published private(set) var hasTimeline = false
-    /// Mirrors the player, for play and mute buttons drawn outside AVKit's controls.
+    /// 鏡像播放器狀態，供 AVKit 控制列以外的播放、靜音與音量控制使用。
     @Published private(set) var paused = false
     @Published private(set) var muted = false
+    @Published private(set) var volume: Float = 1
     @Published private(set) var quality: Int?
     @Published private var playing: Channel?
     /// What plays now, its live room or plugin address already resolved: what a TV is sent (#749).
@@ -472,12 +480,13 @@ import IOKit.pwr_mgt
     }
 
     /// iOS and tvOS take back a suspended app's listening sockets: after a pause in the background, AVPlayer finds
-    /// the loopback server behind a repackaged file or a plugin's proxy refusing (-1004) and gives up 30 s later.
+    /// the loopback server behind a repackaged file, a plugin's proxy or a saved download refusing (-1004) and gives
+    /// up 30 s later.
     /// The server listens again, on a new port, and the episode opens there where it was. At most once a minute, so
     /// a server that stays down shows its error.
     private func recoverLoopback(_ code: Int?, channel: Channel, url: URL, generation active: UUID) -> Bool {
         guard let code, [NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost].contains(code),
-              Remux.isRemuxed(url) || EmbeddedJarHost.isPluginProxy(url),
+              Remux.isRemuxed(url) || EmbeddedJarHost.isPluginProxy(url) || LocalMediaServer.shared.serves(url),
               loopbackRecovered.map({ $0.duration(to: .now) > .seconds(60) }) ?? true else { return false }
         loopbackRecovered = .now
         let position = player.currentTime().seconds
@@ -485,7 +494,11 @@ import IOKit.pwr_mgt
         Diagnostics.shared.record(.warning, "player", "loopback refused code=\(code) at=\(position.isFinite ? Int(position) : -1)s; listening again")
         preparation = Task { [weak self] in
             var fresh: URL?, failure: Error?
-            do { fresh = Remux.isRemuxed(url) ? try await Remux.relisten(url) : try await EmbeddedJarHost.shared.recoverProxy(url) }
+            do {
+                fresh = Remux.isRemuxed(url) ? try await Remux.relisten(url)
+                    : LocalMediaServer.shared.serves(url) ? try await LocalMediaServer.shared.relisten(url)
+                    : try await EmbeddedJarHost.shared.recoverProxy(url)
+            }
             catch { failure = error }
             guard let self, self.generation == active, !Task.isCancelled else { return }
             guard let fresh else {
@@ -667,6 +680,7 @@ import IOKit.pwr_mgt
     init() {
         let player = AVQueuePlayer()
         player.volume = PlaybackSession.storedVolume()
+        volume = player.volume
         // An episode ends paused on its last frame; only a queued next episode makes the queue move on.
         player.actionAtItemEnd = .pause
         #if DEBUG
@@ -906,8 +920,9 @@ import IOKit.pwr_mgt
     private func open(_ channel: Channel) {
         savedDownload = channel.url.scheme == DownloadLibrary.scheme
         stop(); error = nil; errorSymbol = "play.slash.fill"; loading = true; showsPicture = false; openedAt = .now; sourceDanmaku = []; qualities = []; quality = nil; switchNotice = nil
-        begin(channel)
-        isLive = LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live")
+        let live = LiveCatalog.isRoom(channel.url) || channel.group == L10n.text("Bilibili Live")
+        begin(channel, live: live)
+        isLive = live
         liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false
         loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false
         ErrorReports.shared.playing(live: isLive, format: channel.url.pathExtension, source: channel.historyContext?.sourceKey,
@@ -1308,7 +1323,7 @@ import IOKit.pwr_mgt
                 #if os(macOS)
                 self.displayAwake.hold(!paused)
                 #endif
-                if paused { self.clearBoost() }
+                if paused { self.clearBoost(); self.saveHistory() }
                 // The first frame lands a beat after playback starts; keep the artwork until then, so no black flashes between.
                 if playing, !self.showsPicture {
                     Task { @MainActor [weak self] in
@@ -1328,9 +1343,10 @@ import IOKit.pwr_mgt
         }
         // Every way of changing the player's sound goes through this property: AVKit's own slider, the Mac wheel
         // and arrow keys, and the Sleep Timer's fade. Keep the last level for the next launch.
-        volumeObservation = player.observe(\.volume, options: [.new]) { _, change in
+        volumeObservation = player.observe(\.volume, options: [.new]) { [weak self] _, change in
             guard let level = change.newValue else { return }
             UserDefaults.standard.set(Double(level), forKey: "playerVolume")
+            Task { @MainActor [weak self] in self?.volume = level }
         }
         sampler = Task { [weak self] in
             var history: [(date: Date, bytes: Int64)] = []
@@ -1515,22 +1531,40 @@ import IOKit.pwr_mgt
     }
     /// Records where the episode is; `item` is the episode's own, which the queue may already have moved past.
     func saveHistory(completed: Bool = false, item: AVPlayerItem? = nil) {
-        guard let context = historyContext, let item = item ?? self.item, item.status == .readyToPlay,
+        guard let item = item ?? self.item, item.status == .readyToPlay,
               pendingResume == nil, !restoringPosition, !seekingSegment else { return }
         let length = item.duration.seconds
         let time = completed && length.isFinite ? length : item.currentTime().seconds
-        history.record(context, position: time, duration: length.isFinite ? length : 0)
+        guard time.isFinite, time >= 1 else { return }
+        if let playing { recordCachedPlayback?(playing, time, length.isFinite ? length : 0) }
+        guard let context = historyContext else { return }
+        if lastHistoryPosition.map({ abs($0 - time) >= 0.25 }) ?? true {
+            lastHistoryPosition = time
+            history.record(context, position: time, duration: length.isFinite ? length : 0)
+        }
         if let part = bilibiliPart { Task { await BilibiliHeartbeat.shared.report(part, seconds: time, final: completed) } }
     }
 
     /// Per-episode state: where its history goes, where it resumes, the intro and outro to skip, its danmaku.
-    private func begin(_ channel: Channel) {
+    /// `live` is a live room: it always plays at 1×.
+    private func begin(_ channel: Channel, live: Bool) {
         historyContext = channel.historyContext
+        lastHistoryPosition = nil
         requestedResumePosition = channel.resumePosition
         pendingResume = channel.resumePosition.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
         restoringPosition = false; restoredPosition = nil; checkingPicture = false; soughtAhead = nil
         skipScope = channel.skipScope
         skipSettings = skipScope.map { EpisodeSkipSettings.load(scope: $0, defaults: skipDefaults) } ?? EpisodeSkipSettings()
+        // A new title starts at the speed set in Settings › Playback, when one is set. Its next episodes and other
+        // lines keep the speed picked in the player (#1015, #1076). Channels without a title (live playlists, a
+        // pasted address) keep the speed as before; live rooms play at 1×.
+        if live {
+            player.defaultRate = 1
+        } else if let scope = channel.skipScope, scope != speedScope, let start = PlaybackSpeed.chosen() {
+            player.defaultRate = start
+        }
+        if channel.skipScope != nil { speedScope = channel.skipScope }
+        if player.rate != 0, boost == nil, player.rate != player.defaultRate { player.rate = player.defaultRate }
         skipPass = EpisodeSkipPass(); seekingSegment = false
         skipNotice = nil; introNoticeUntil = nil
         sourceSkips = channel.skips; skipOffer = nil; skippedSource = []; chapters = []
@@ -1671,7 +1705,7 @@ extension PlaybackSession {
                 try Task.checkCancellation()
                 // A drive file whose link the bundle's proxy reveals streams straight from the drive, like the plugins'
                 // (above): through the bundle, a 4K file filled the heap of the phone's Node until it stopped (#530).
-                address = CloudStreams.register(direct) { await CatPawOpen.directMedia(media) }
+                address = CloudStreams.register(direct) { await CatPawOpen.renewedDirectMedia(media) }
                 Diagnostics.shared.record(.info, "player", "catpaw direct host=\(direct.url.host() ?? "-") length=\(direct.length)")
             } else {
                 // The bundle downloads each request with 10 to 16 threads of its own: reading ahead on six at once ran its
@@ -1934,7 +1968,8 @@ extension PlaybackSession {
         transfer = Transfer(); steps = []
         catalogDanmaku.clear(); sourceDanmaku = []
         error = nil; switchNotice = nil; quality = nil
-        begin(channel)
+        // A queued next episode is a point video, never live.
+        begin(channel, live: false)
         loading = upcoming.item.status != .readyToPlay
         playing = channel; automatic = upcoming.prepared.url
         externalSubtitles.begin(channel, playing: upcoming.prepared.url)

@@ -5,6 +5,12 @@ import TVCore
 /// 30-point section headers, horizontal 136-point cards and circular people rails.
 struct DiscoverSearchView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var store: Store
+    /// 這張表自己的識別，讓最上層的搜尋表呈現播放器（#1618）。
+    let token: UUID
+
+    init(token: UUID = UUID()) { self.token = token }
+
     @StateObject private var model = DiscoverSearchModel()
     @State private var path = NavigationPath()
     @State private var query = ""
@@ -66,6 +72,14 @@ struct DiscoverSearchView: View {
         .tint(.primary)
         .task(id: request) { expanded.removeAll(); await model.load(request) }
         .compatOnChange(of: path.count) { _, value in if value > 0 { focused = false; filterSection = nil } }
+        #if os(iOS)
+        // 播放器要蓋在這張表上：App 自己的 cover 在表底下，從那裡呈現會把表拆掉（#1618）。
+        // 由最上層的表呈現，所以從這張表再開一張不會影響播放器。
+        .fullScreenCover(item: Binding(get: { store.catalogSearchSheets.last == token ? store.playing.map(PlayerSlot.init) : nil },
+                                         set: { if $0 == nil { store.playing = nil } })) {
+            PlaybackView(channel: $0.channel).environmentObject(store)
+        }
+        #endif
     }
 
     private var topChrome: some View {

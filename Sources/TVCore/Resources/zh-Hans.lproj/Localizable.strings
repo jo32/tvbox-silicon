@@ -1056,6 +1056,8 @@
 "Play from Other Devices" = "接收其他设备的播放";
 "With Yingxia open here, your other devices on the same network can send it what they play: tap Play On in their player." = "在这里打开映匣后，同一网络中你的其他设备可以把正在播放的内容发送到这里：在它们的播放器中轻点“在其他设备上播放”。";
 "Touch and Hold Speed" = "长按倍速";
+"Start Speed" = "默认倍速";
+"Each new title starts at this speed. A speed you pick in the player stays for that title's next episodes." = "每部新的影片都以此倍速开始播放。在播放器中选的倍速会沿用到这部影片的后续剧集。";
 "Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go." = "长按视频画面以此速度播放。按住时左右滑动可调整倍速，向下滑动可在松手后保持。";
 "Slide sideways to change the speed, or down to keep it" = "左右滑动调整倍速，向下滑动锁定";
 "Slowed down to keep up with the connection" = "网速跟不上，已自动降低倍速";
@@ -1443,6 +1445,7 @@
 
 // Manga (Venera comic sources)
 "%@, last read" = "%@，上次读到";
+"%@, read" = "%@，已读";
 "%d Chapters" = "%d 话";
 "Account" = "账号";
 "Add Source List" = "添加源列表";
@@ -1467,6 +1470,8 @@
 "Left to Right" = "从左到右";
 "Manga" = "漫画";
 "Manga reads comics through Venera comic sources. Add a source list, such as Venera's, then install the sources you want." = "漫画通过 Venera 漫画源阅读。先添加一个源列表（例如 Venera 的），再安装需要的漫画源。";
+"Mark as read" = "标为已读";
+"Mark as unread" = "标为未读";
 "Next Chapter" = "下一话";
 "Next: %@" = "下一话：%@";
 "No Comic Sources" = "没有漫画源";
@@ -2385,3 +2390,8 @@
 "Video Tags are the short labels above the progress bar in full screen, such as 4K and H265." = "视频标签是全屏时进度条上方的简短标签，例如 4K 和 H265。";
 "Show Video Tags" = "显示视频标签";
 "Battery Percentage" = "电量百分比";
+"Cache More" = "缓存更多";
+"Watched to %@" = "看到 %@";
+"Select episodes to delete" = "选择要删除的剧集";
+"Delete %lld episodes" = "删除 %lld 集";
+"Search settings" = "搜索设置";

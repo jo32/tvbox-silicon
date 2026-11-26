@@ -132,6 +132,13 @@ import TVCore
                                                        chapterCount: chapters.count, page: position.page, pageCount: currentPages.count))
     }
 
+    /// The chapter is finished: the reader reached its end, in the vertical reader's end break or past the paged
+    /// reader's last page.
+    func markChapterRead(_ chapter: Int) {
+        guard let id = chapterID(chapter) else { return }
+        MangaStore.shared.markChapterRead(id: id, of: comic)
+    }
+
     func chapterID(_ chapter: Int) -> String? { chapters.indices.contains(chapter) ? chapters[chapter].id : nil }
 
     func decodedPage(_ url: String, width: CGFloat) -> CGImage? {
@@ -418,7 +425,7 @@ private struct MangaChapterEnd: View {
             }
         }
         .padding(.vertical, 48).frame(maxWidth: .infinity)
-        .onAppear { Task { await model.loadNext() } }
+        .onAppear { model.markChapterRead(chapter); Task { await model.loadNext() } }
     }
 }
 
@@ -532,7 +539,7 @@ struct MangaPagedReader: View {
         .ignoresSafeArea()
         .compatOnChange(of: page) { _, value in
             if value < count { model.seen(.init(chapter: model.position.chapter, page: value)) }
-            else if model.hasNext { Task { await model.open(model.position.chapter + 1) } }
+            else { model.markChapterRead(model.position.chapter); if model.hasNext { Task { await model.open(model.position.chapter + 1) } } }
         }
     }
 
@@ -969,20 +976,24 @@ private struct MangaReaderChrome: View {
     #endif
 }
 
-/// The comic's chapters, the one being read marked; picking one opens it.
+/// The comic's chapters, the one being read marked and finished ones dimmed with a checkmark; picking one opens it.
 private struct MangaChapterPicker: View {
     let model: MangaReaderModel
     let pick: (Int) -> Void
+    @State private var store = MangaStore.shared
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         NavigationStack {
             ScrollViewReader { reader in
                 List(Array(model.chapters.enumerated()), id: \.offset) { index, chapter in
+                    let read = store.isChapterRead(chapter, of: model.comic)
                     Button { pick(index) } label: {
                         HStack {
-                            Text(chapter.title).foregroundStyle(.primary)
+                            Text(chapter.title)
+                                .foregroundStyle(index == model.position.chapter ? .primary : Color.primary.opacity(read ? 0.55 : 1))
                             Spacer()
                             if index == model.position.chapter { Image(systemName: "book.fill").foregroundStyle(Brand.cyan) }
+                            else if read { Image(systemName: "checkmark").font(.caption2).foregroundStyle(.secondary) }
                         }
                     }
                     .id(index)

@@ -248,6 +248,7 @@ struct NovelListView: View {
                             Text(detail(source)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
+                    .settingsSwitch()
                 }
             } header: { Text(L10n.text("%lld sources", sources.count)) }
             Section {

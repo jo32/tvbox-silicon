@@ -253,8 +253,10 @@ struct MangaDetailView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: longNames ? 320 : 170), spacing: 8)], spacing: 8) {
                     ForEach(newestFirst ? shown.reversed() : shown) { chapter in
                         let last = chapter.id == progress?.chapterID
-                        Chip(title: chapter.title, selected: last, fill: true) { open(chapter, last: last) }
-                            .accessibilityLabel(last ? L10n.text("%@, last read", chapter.title) : chapter.title)
+                        let read = store.isChapterRead(chapter, of: comic)
+                        Chip(title: chapter.title, selected: last, fill: true, read: read) { open(chapter, last: last) }
+                            .contextMenu { chapterReadMenu(chapter, read: read) }
+                            .accessibilityLabel(accessibilityLabel(for: chapter, last: last, read: read))
                     }
                 }
                 // Room for the focused chip, which grows toward the trailing edge.
@@ -302,9 +304,11 @@ struct MangaDetailView: View {
                     LazyVGrid(columns: chapterColumns, spacing: 10) {
                         ForEach(newestFirst ? shown.reversed() : shown) { chapter in
                             let last = chapter.id == progress?.chapterID
-                            Button { open(chapter, last: last) } label: { chapterLabel(chapter.title, last: last) }
+                            let read = store.isChapterRead(chapter, of: comic)
+                            Button { open(chapter, last: last) } label: { chapterLabel(chapter.title, last: last, read: read) }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel(last ? L10n.text("%@, last read", chapter.title) : chapter.title)
+                                .contextMenu { chapterReadMenu(chapter, read: read) }
+                                .accessibilityLabel(accessibilityLabel(for: chapter, last: last, read: read))
                         }
                     }
                 }
@@ -312,20 +316,37 @@ struct MangaDetailView: View {
         }
     }
 
-    /// A chapter as a glass capsule; the one last read is filled with the accent.
-    private func chapterLabel(_ title: String, last: Bool) -> some View {
+    /// A chapter as a glass capsule; the one last read is filled with the accent, a finished one is dimmed with a
+    /// small checkmark, as the novel list dims the chapters before the one being read.
+    private func chapterLabel(_ title: String, last: Bool, read: Bool = false) -> some View {
         HStack(spacing: 5) {
             if last { Image(systemName: "book.fill").font(.caption2) }
+            else if read { Image(systemName: "checkmark").font(.caption2).foregroundStyle(.secondary) }
             Text(title).lineLimit(1).minimumScaleFactor(0.85)
         }
         .font(.subheadline.weight(last ? .semibold : .regular))
-        .foregroundStyle(last ? Brand.onAccent : Color.primary)
+        .foregroundStyle(last ? Brand.onAccent : Color.primary.opacity(read ? 0.55 : 1))
         .padding(.horizontal, 10).frame(maxWidth: .infinity).frame(height: 42)
         .glassOrFill(last ? .regular.tint(Brand.accent).interactive() : .regular.interactive(),
                      last ? AnyShapeStyle(Brand.accent) : AnyShapeStyle(Color.primary.opacity(0.07)), in: Capsule())
         .contentShape(Capsule())
     }
     #endif
+
+    /// What VoiceOver says for a chapter: its title, and whether it was read or is the one last read.
+    private func accessibilityLabel(for chapter: MangaChapter, last: Bool, read: Bool) -> String {
+        if last { return L10n.text("%@, last read", chapter.title) }
+        if read { return L10n.text("%@, read", chapter.title) }
+        return chapter.title
+    }
+
+    /// Mark a chapter read, or unmark it: the chapter list's context menu.
+    @ViewBuilder private func chapterReadMenu(_ chapter: MangaChapter, read: Bool) -> some View {
+        Button(read ? L10n.text("Mark as unread") : L10n.text("Mark as read"),
+               systemImage: read ? "xmark.circle" : "checkmark.circle") {
+            store.toggleChapterRead(chapter, of: comic)
+        }
+    }
 
     #if os(iOS)
     // MARK: The iPhone's page

@@ -1057,6 +1057,8 @@
 "Play from Other Devices" = "Play from Other Devices";
 "With Yingxia open here, your other devices on the same network can send it what they play: tap Play On in their player." = "With Yingxia open here, your other devices on the same network can send it what they play: tap Play On in their player.";
 "Touch and Hold Speed" = "Touch and Hold Speed";
+"Start Speed" = "Start Speed";
+"Each new title starts at this speed. A speed you pick in the player stays for that title's next episodes." = "Each new title starts at this speed. A speed you pick in the player stays for that title's next episodes.";
 "Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go." = "Touch and hold the video to play at this speed. Slide sideways to change it, or slide down to keep it after you let go.";
 "Slide sideways to change the speed, or down to keep it" = "Slide sideways to change the speed, or down to keep it";
 "Slowed down to keep up with the connection" = "Slowed down to keep up with the connection";
@@ -1443,6 +1445,7 @@
 
 // Manga (Venera comic sources)
 "%@, last read" = "%@, last read";
+"%@, read" = "%@, read";
 "%d Chapters" = "%d Chapters";
 "Account" = "Account";
 "Add Source List" = "Add Source List";
@@ -1467,6 +1470,8 @@
 "Left to Right" = "Left to Right";
 "Manga" = "Manga";
 "Manga reads comics through Venera comic sources. Add a source list, such as Venera's, then install the sources you want." = "Manga reads comics through Venera comic sources. Add a source list, such as Venera's, then install the sources you want.";
+"Mark as read" = "Mark as read";
+"Mark as unread" = "Mark as unread";
 "Next Chapter" = "Next Chapter";
 "Next: %@" = "Next: %@";
 "No Comic Sources" = "No Comic Sources";
@@ -2385,3 +2390,8 @@
 "Video Tags are the short labels above the progress bar in full screen, such as 4K and H265." = "Video Tags are the short labels above the progress bar in full screen, such as 4K and H265.";
 "Show Video Tags" = "Show Video Tags";
 "Battery Percentage" = "Battery Percentage";
+"Cache More" = "Cache More";
+"Watched to %@" = "Watched to %@";
+"Select episodes to delete" = "Select episodes to delete";
+"Delete %lld episodes" = "Delete %lld episodes";
+"Search settings" = "Search settings";

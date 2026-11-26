@@ -805,16 +805,19 @@ struct Chip: View {
     var dot: Color? = nil
     /// A small line under the title, such as an episode's file (4K · 5.2G).
     var subtitle: String? = nil
+    /// Finished, such as a comic chapter read to the end: a small checkmark, and a dimmed title unless selected.
+    var read = false
     let action: () -> Void
     @Environment(\.stripDrag) private var drag
     var body: some View {
         let button = Button { if drag?.active != true { action() } } label: {
             HStack(spacing: 5) {
                 if mark { BilibiliGlyph(size: 22).foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(BilibiliMark.blue)) }
+                if read { Image(systemName: "checkmark").font(.system(size: 14, weight: .semibold)) }
                 if let subtitle {
                     VStack(spacing: 0) { Text(title).lineLimit(1); EpisodeFileDetail(text: subtitle) }
                 } else {
-                    Text(title).lineLimit(1)
+                    Text(title).lineLimit(1).opacity(read && !selected ? 0.6 : 1)
                 }
                 if let dot { Image(systemName: "circle.fill").font(.system(size: 12)).foregroundStyle(dot) }
             }.padding(.horizontal, 4).frame(maxWidth: fill ? .infinity : nil)

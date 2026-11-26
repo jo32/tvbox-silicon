@@ -61,6 +61,8 @@ import TVCore
     }
     /// Set while a listening source's episode goes to the video player on purpose.
     private var playsAsVideo = false
+    /// 每個有聲書章節最後一次向來源要新位址的時間（`renewAudiobook`）。
+    private var audiobookRenewals: [String: Date] = [:]
     /// The channels the live channel playing was picked from, in order (its playlist, or the favorites): the player's
     /// Previous and Next Channel and its channel list go through them (#1010).
     @Published var liveLineup: LiveLineup?
@@ -95,6 +97,8 @@ import TVCore
         guard let scope = channel?.historyContext?.id else { return false }
         return watchPageScopes.contains(scope)
     }
+    /// 畫面上的目錄搜尋表，最上層在最後：在其中選影片時由該表呈現播放器（#1618）。
+    @Published var catalogSearchSheets: [UUID] = []
     @Published var playbackCatalog: PlaybackCatalog?
     /// The Cloud Files folder the playing file came from; its next file plays after it.
     @Published var filesFolder: CloudFilesFolder?
@@ -389,6 +393,7 @@ import TVCore
             }
             self?.playbackHistory.record(source.context, position: position, duration: duration)
         }
+        music.renewAudiobook = { [weak self] source, position in self?.renewAudiobook(source, at: position) ?? false }
         music.handOffSource = { [weak self] stream, position, picture, covered in
             guard let self, let context = stream.historyContext else { return }
             if picture { AudioSourceVerdicts(defaults: self.playbackDefaults).recordVideo(context) }
@@ -406,6 +411,28 @@ import TVCore
         }
     }
 
+    /// An audiobook chapter that didn't play: its source lists the book's chapters again and listening goes on from them
+    /// when the chapter has a new address there. Some sources put signed sound addresses, which expire, in the table of
+    /// contents, and after the app was closed Continue failed until the book was found again (#1840). Once a chapter in
+    /// five minutes, so an address that fails fresh isn't asked for over and over.
+    private func renewAudiobook(_ source: MusicSourceEpisode, at position: Double) -> Bool {
+        guard let item = NovelListening.item(source) else { return false }
+        let key = item.book.id + "#\(item.chapter.index)"
+        if let last = audiobookRenewals[key], Date().timeIntervalSince(last) < 300 { return false }
+        audiobookRenewals[key] = Date()
+        Task { @MainActor [weak self] in
+            let chapters = try? await NovelBooks.shared.chapters(item.book, refresh: true)
+            guard let self, self.music.queue?.current?.source == source else { return }
+            guard let chapters, let index = NovelListening.renewed(item.chapter, in: chapters) else {
+                Diagnostics.shared.record(.info, "music", "audiobook source gave no new address")
+                self.music.stop()
+                return
+            }
+            self.music.play(NovelListening.queue(book: item.book, chapters: chapters, from: index), at: position > 1 ? position : nil)
+        }
+        return true
+    }
+
     /// A chapter's stream from its source, as Continue Watching gets an episode's.
     private func resolveListening(_ source: MusicSourceEpisode) async throws -> Channel {
         if let item = NovelListening.item(source) { return try await NovelListening.channel(for: item) }
@@ -418,15 +445,19 @@ import TVCore
                        headers: resolved.headers, skipScope: context.id, historyContext: context, subtitles: resolved.subtitles)
     }
 
-    /// The current media address of a downloading episode, from its source; the queue asks again when a link expires.
-    private func resolveDownload(_ item: DownloadItem) async throws -> Channel {
+    /// Reopen the download’s source with its subscription settings for both episode lists and refreshed media links.
+    func downloadClient(for item: DownloadItem) throws -> CatalogClient {
         let config = subscription
         guard let site = config?.sites.first(where: { $0.key == item.source.siteKey })
                 ?? CloudSources.current?.sites.first(where: { $0.key == item.source.siteKey }) else {
             throw TVError.unsupported(L10n.text("%@ is no longer in your subscription, so caching can't continue.", item.source.siteName))
         }
         let base = CatalogClient(site: site, origin: config?.origin ?? URL(string: "https://example.invalid/")!, jarURL: config?.spiderURL)
-        let client = config.map { base.applying($0) } ?? base
+        return config.map { base.applying($0) } ?? base
+    }
+
+    private func resolveDownload(_ item: DownloadItem) async throws -> Channel {
+        let client = try downloadClient(for: item)
         let plan = try await client.preparePlayback(item.source.episode, forDownload: true)
         let channel = try await client.resolvePlayback(plan, choice: plan.choices[0])
         // A cloud-drive file downloads straight from its CDN, as it plays: through the plugin's
@@ -748,7 +779,8 @@ import TVCore
         let followed = followedShows
         sync.register("favorites", current: { favorites.syncValues }, apply: { favorites.adopt($0) })
         sync.register("followedShows", current: { followed.syncValues }, apply: { followed.adopt($0) })
-        sync.register("history", delay: .seconds(30), current: { Dictionary(history.entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }) },
+        sync.register("history", delay: .seconds(30), modifiedAt: { $0.updatedAt },
+                      current: { Dictionary(history.entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }) },
                       apply: { history.adopt($0.map(\.value)) })
         sync.register("subscriptions", current: { [weak self] in self?.syncedSubscriptions ?? [:] }, apply: { [weak self] in self?.adoptSubscriptions($0) })
         // After the list, so a file arrives in the same merge as the subscription that names it (#1235).
@@ -800,6 +832,14 @@ import TVCore
         CloudSources.current = enabled.first(where: CloudSources.accepts)
         subscription = Subscription.merge(enabled)?.withCloudFiles().withLivePlugins()
         if let subscription {
+            // Older downloads only had the last episode in Continue Watching. Keep that position before the
+            // viewer moves on to another episode and the show-level entry is replaced.
+            for item in DownloadLibrary.shared.items where item.status == .completed && item.watchProgress?[profile.id] == nil {
+                if let progress = cachedProgress(item) {
+                    DownloadLibrary.shared.recordPlayback(id: item.id, profile: profile.id, position: progress.position,
+                                                          duration: progress.duration, now: progress.updatedAt)
+                }
+            }
             Self.registerPlugins(subscription)
             hiddenSources.restoreBuiltIns(subscription.sites, origin: subscription.origin)
             hiddenSources.restoreAutoHidden(subscription.sites, origin: subscription.origin, health: .shared)
@@ -931,7 +971,9 @@ import TVCore
 
     func catalogChannel(_ resolved: Channel, video: Video, episode: Episode, client: CatalogClient,
                         resumePosition: Double? = nil) -> Channel {
-        let channel = episodeChannel(resolved, video: video, episode: episode, client: client, resumePosition: resumePosition)
+        let saved = DownloadLibrary.shared.item(for: DownloadSource(site: client.site, videoID: video.id, episode: episode))
+        let position = resumePosition ?? saved.flatMap { cachedProgress($0)?.resumePosition }
+        let channel = episodeChannel(resolved, video: video, episode: episode, client: client, resumePosition: position)
         remember(video, client: client.with(parses: subscription?.parseServices ?? client.parses), for: channel)
         return channel
     }
@@ -973,15 +1015,20 @@ import TVCore
     /// The next episode's stream, resolved ahead so the player can queue it behind this one; nil when
     /// auto-play is off, there is no next episode, or the source can't resolve it now.
     func upcomingEpisode(after channel: Channel) async -> Channel? {
+        await upcomingEpisode(after: channel) { [weak self] in self?.playing == $0 }
+    }
+
+    /// `isCurrent` says whether `channel` still plays: a video floating in Picture in Picture plays with no `playing`.
+    func upcomingEpisode(after channel: Channel, isCurrent: (Channel) -> Bool) async -> Channel? {
         // Only while `channel` still plays: once the queue moves on, this was asked about the one before.
         if CloudFiles.isFile(channel.url) || channel.url.scheme == DownloadLibrary.scheme {
-            return autoPlayNext && playing == channel ? nextFile(after: channel) : nil
+            return autoPlayNext && isCurrent(channel) ? nextFile(after: channel) : nil
         }
         guard autoPlayNext, let catalog = catalog(for: channel), let next = nextEpisode(after: channel) else { return nil }
         do {
             let resolved: Channel
             if let ahead = await nextAhead(for: next) { resolved = ahead } else { resolved = try await catalog.client.playback(next) }
-            guard !Task.isCancelled, playing == channel else { return nil }
+            guard !Task.isCancelled, isCurrent(channel) else { return nil }
             return episodeChannel(resolved, video: catalog.video, episode: next, client: catalog.client)
         } catch {
             if !(error is CancellationError) { Diagnostics.shared.failure("catalog", "upcoming episode \(catalog.client.reportContext) flag=\(next.flag)", error) }
@@ -1029,6 +1076,13 @@ import TVCore
         cancelEpisodeSelection()
         remember(catalog.video, client: catalog.client, for: next)
         playing = next
+    }
+
+    /// The queue moved a video floating in Picture in Picture on to its next episode: the episode list follows, so the
+    /// one after can be queued too, and nothing opens over the app (#1719).
+    func followFloating(to next: Channel, from channel: Channel) {
+        guard let catalog = catalog(for: channel) else { return }
+        remember(catalog.video, client: catalog.client, for: next)
     }
 
     func catalog(for channel: Channel) -> PlaybackCatalog? {
@@ -1240,13 +1294,36 @@ extension Store {
                                                  subtitles: folder.subtitles) } ?? channel
     }
 
-    /// A saved episode, under the history entry it has online: its progress and Continue Watching are the same
-    /// whether it streams or plays from the device, and it opens where it stopped (#960).
+    /// Use an exact episode match, including its source and line. Another episode's newer history belongs to that episode.
+    func cachedProgress(_ item: DownloadItem) -> DownloadWatchProgress? {
+        let local = item.watchProgress?[profile.id]
+        guard let context = item.historyContext(in: subscription),
+              let entry = playbackHistory.entries.first(where: { $0.id == context.id }),
+              entry.context.episodeID == item.source.episodeID, entry.context.episodeFlag == item.source.flag,
+              local.map({ $0.updatedAt < entry.updatedAt }) ?? true else { return local }
+        return DownloadWatchProgress(position: entry.position, duration: entry.duration, updatedAt: entry.updatedAt)
+    }
+
+    func recordCachedPlayback(_ channel: Channel, position: Double, duration: Double) {
+        let library = DownloadLibrary.shared
+        guard !library.items.isEmpty else { return }
+        let id: String?
+        if channel.url.scheme == DownloadLibrary.scheme {
+            id = channel.url.host()
+        } else if let context = channel.historyContext, let config = subscription,
+                  let site = config.sites.first(where: { $0.sourceKey == context.sourceKey && $0.origin(or: config.origin) == context.origin }) {
+            let episode = Episode(id: context.episodeID, name: context.episodeName, address: "", flag: context.episodeFlag)
+            id = library.item(for: DownloadSource(site: site, videoID: context.videoID, episode: episode))?.id
+        } else { return }
+        if let id { library.recordPlayback(id: id, profile: profile.id, position: position, duration: duration) }
+    }
+
     func savedChannel(_ item: DownloadItem) -> Channel {
-        guard var context = item.historyContext(in: subscription) else { return DownloadLibrary.shared.channel(for: item) }
+        let resume = cachedProgress(item)?.resumePosition
+        guard var context = item.historyContext(in: subscription) else { return DownloadLibrary.shared.channel(for: item, resumePosition: resume) }
         let entry = playbackHistory.entries.first { $0.id == context.id }
         if context.year == nil { context.year = entry?.context.year }
-        return DownloadLibrary.shared.channel(for: item, context: context, resumePosition: entry?.resumePosition(for: item.source.episode))
+        return DownloadLibrary.shared.channel(for: item, context: context, resumePosition: resume)
     }
 
     func nextFile(after channel: Channel) -> Channel? { file(1, from: channel) }

@@ -101,6 +101,8 @@ typealias MusicTrack = TVCore.MusicTrack
     /// Opens a TVBox episode in the video player at a second: its stream has a picture (`true`), or this player
     /// can't play it and the video player, with more ways to play, might. The last is whether Now Playing was open.
     var handOffSource: ((Channel, Double, Bool, Bool) -> Void)?
+    /// 沒播成的有聲書章節與時間：回傳 true 表示 Store 重新向來源要章節並接著播（#1840）。
+    var renewAudiobook: ((MusicSourceEpisode, Double) -> Bool)?
     /// Saves where a TVBox episode is under its book, as the video player saves a series.
     var recordSource: ((MusicSourceEpisode, Double, Double) -> Void)?
     /// The stream of the TVBox episode playing.
@@ -279,6 +281,8 @@ typealias MusicTrack = TVCore.MusicTrack
     func addToUpNext(_ tracks: [MusicTrack]) {
         guard !tracks.isEmpty else { return }
         guard var queue else { play(MusicQueue(tracks: tracks)); return }
+        // The list that plays, or the one just added, again: nothing to add (#1896). Shuffled, its order is `unshuffled`.
+        if MusicQueue.ends(unshuffled ?? queue.tracks, with: tracks) { return }
         queue.append(tracks)
         self.queue = queue
         unshuffled?.append(contentsOf: tracks)
@@ -702,7 +706,16 @@ typealias MusicTrack = TVCore.MusicTrack
     /// A stream that stopped working: refresh it, then try another channel, then give up.
     private func playbackFailed(_ reason: String, run: UUID) {
         // The video player has more ways to play a source's stream (its own demuxer, proxies).
-        if generation == run, let stream = sourceStream { handOff(stream, reason: reason, picture: false); return }
+        if generation == run, let stream = sourceStream {
+            // An audiobook's saved chapter address may have expired; the video player has no more ways for it (#1840).
+            if let source = queue?.current?.source, let renew = renewAudiobook, renew(source, currentSeconds > 1 ? currentSeconds : position) {
+                Diagnostics.shared.record(.info, "music", "audiobook chapter failed: \(reason); asking its source again")
+                startWatch?.cancel(); tearDownItem(); sourceStream = nil
+                phase = .resolving
+                return
+            }
+            handOff(stream, reason: reason, picture: false); return
+        }
         guard generation == run, let selection, let track else { return }
         Diagnostics.shared.record(.warning, "music", "playback failed \(selection.candidate.provider.rawValue): \(reason)")
         let at = currentSeconds, previous = selection.probe

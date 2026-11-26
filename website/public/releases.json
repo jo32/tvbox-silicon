@@ -1,6 +1,134 @@
 {
   "releases": [
     {
+      "version": "1.8.31",
+      "build": 69,
+      "date": "2026-11-25",
+      "links": {
+        "macos": "https://download.getmegaportal.com/yingxia/1.8.31/Yingxia-1.8.31-macos-arm64.dmg",
+        "macos-x86_64": "https://download.getmegaportal.com/yingxia/1.8.31/Yingxia-1.8.31-macos-x86_64.dmg",
+        "ios": "https://yingxia.getmegaportal.com/#install-ios",
+        "tvos": "https://yingxia.getmegaportal.com/#install-tv"
+      },
+      "features": [
+        {
+          "symbol": "magnifyingglass",
+          "title": {
+            "en": "Search in Settings",
+            "zh-Hans": "在设置里搜索",
+            "zh-Hant": "在設定裡搜尋",
+            "ja": "設定を検索"
+          },
+          "detail": {
+            "en": "Type in the search field at the top of Settings to find any setting. The best matches come first, and a tap takes you straight to that setting's row.",
+            "zh-Hans": "在设置顶部的搜索框里输入，就能找到任意设置项。最匹配的结果排在最前，轻点即可直接跳到那一行。",
+            "zh-Hant": "在設定頂部的搜尋欄位輸入，就能找到任何設定項目。最相符的結果排在最前，點一下即可直接跳到那一列。",
+            "ja": "設定の上部にある検索フィールドに入力すると、どの設定項目でも見つかります。いちばん近い結果が先頭に並び、タップするとその項目の行へ直接移動します。"
+          },
+          "platforms": [
+            "macos",
+            "ios"
+          ]
+        },
+        {
+          "symbol": "speedometer",
+          "title": {
+            "en": "Pick the speed videos start at",
+            "zh-Hans": "自选默认倍速",
+            "zh-Hant": "自選預設倍速",
+            "ja": "再生開始速度を選べる"
+          },
+          "detail": {
+            "en": "Settings › Playback › Start Speed sets the speed a new title starts at, and it stays after you relaunch the app. A speed you pick in the player carries on to the next episodes, and live channels still play at 1x.",
+            "zh-Hans": "在“设置 › 播放 › 默认倍速”里选好新影片开始播放的速度，重启 App 后依然有效。在播放器里改的速度会沿用到后面几集，直播仍以 1 倍速播放。",
+            "zh-Hant": "在「設定 › 播放 › 預設倍速」裡選好新影片開始播放的速度，重新啟動 App 後依然有效。在播放器裡改的速度會沿用到後面幾集，直播仍以 1 倍速播放。",
+            "ja": "「設定 › 再生 › 再生開始速度」で、新しい作品を再生し始めるときの速度を選べます。アプリを再起動しても保たれます。プレーヤーで変えた速度は次のエピソードにも引き継がれ、ライブは引き続き等速で再生されます。"
+          },
+          "platforms": [
+            "ios"
+          ]
+        },
+        {
+          "symbol": "arrow.down.circle",
+          "title": {
+            "en": "Offline Cache, episode by episode",
+            "zh-Hans": "离线缓存按集管理",
+            "zh-Hant": "離線快取按集管理",
+            "ja": "オフラインキャッシュをエピソードごとに管理"
+          },
+          "detail": {
+            "en": "Each cached episode shows where you stopped watching and picks up from there. Cache More adds more episodes of the same show, and you can pick exactly which episodes to delete.",
+            "zh-Hans": "每一集缓存都会显示你看到哪里，并从那里接着播放。用“缓存更多”继续缓存同一部剧的其他集，删除时也可以只选你想删的那几集。",
+            "zh-Hant": "每一集快取都會顯示你看到哪裡，並從那裡接著播放。用「快取更多」繼續快取同一部劇的其他集，刪除時也可以只選你想刪的那幾集。",
+            "ja": "キャッシュしたエピソードごとに、どこまで見たかが表示され、そこから再生を続けられます。「さらにキャッシュ」で同じ作品の別のエピソードを追加でき、削除するエピソードも選べます。"
+          }
+        },
+        {
+          "symbol": "book.pages",
+          "title": {
+            "en": "Read marks for manga",
+            "zh-Hans": "漫画已读标记",
+            "zh-Hant": "漫畫已讀標記",
+            "ja": "マンガの既読マーク"
+          },
+          "detail": {
+            "en": "The chapter list and the chapter picker in the reader mark the chapters you've already read, so you can see where to go next. Clearing a comic's history clears its marks too.",
+            "zh-Hans": "章节列表和阅读器里的章节选择都会标出你已经读过的章节，一眼就知道接下来该看哪一章。清除某部漫画的历史记录时，它的已读标记也会一起清除。",
+            "zh-Hant": "章節列表和閱讀器裡的章節選擇都會標出你已經讀過的章節，一眼就知道接下來該看哪一章。清除某部漫畫的歷史紀錄時，它的已讀標記也會一起清除。",
+            "ja": "チャプター一覧とリーダー内のチャプター選択に、読んだチャプターの印が付くので、次にどれを読むかすぐ分かります。作品の履歴を消すと、既読マークも一緒に消えます。"
+          }
+        },
+        {
+          "symbol": "paperplane",
+          "title": {
+            "en": "Telegram channels show up",
+            "zh-Hans": "Telegram 频道正常显示",
+            "zh-Hant": "Telegram 頻道正常顯示",
+            "ja": "Telegram チャンネルが表示されるように"
+          },
+          "detail": {
+            "en": "A public Telegram channel added as a subscription now appears in Sources, on the home row and in search. Before, it was imported but stayed hidden.",
+            "zh-Hans": "作为订阅添加的公开 Telegram 频道，现在会出现在点播源、首页的行和搜索里。之前它虽然导入成功，却一直不显示。",
+            "zh-Hant": "作為訂閱加入的公開 Telegram 頻道，現在會出現在隨選來源、首頁的列和搜尋裡。之前它雖然匯入成功，卻一直不顯示。",
+            "ja": "サブスクリプションとして追加した公開 Telegram チャンネルが、配信ソース、ホームの行、検索に表示されるようになりました。これまでは読み込まれても表示されませんでした。"
+          }
+        },
+        {
+          "symbol": "speaker.wave.2",
+          "title": {
+            "en": "Volume slider for live TV",
+            "zh-Hans": "直播音量滑块",
+            "zh-Hant": "直播音量滑桿",
+            "ja": "ライブに音量スライダー"
+          },
+          "detail": {
+            "en": "Live streams on the Mac now have a volume slider in the top bar, next to play and mute. It follows the scroll wheel and the arrow keys.",
+            "zh-Hans": "Mac 上的直播在顶部栏的播放和静音按钮旁边多了音量滑块，会随滚轮和方向键同步变化。",
+            "zh-Hant": "Mac 上的直播在頂部列的播放和靜音按鈕旁邊多了音量滑桿，會隨滾輪和方向鍵同步變化。",
+            "ja": "Mac のライブ再生で、上部バーの再生・消音ボタンの横に音量スライダーが付きました。スクロールホイールや矢印キーにも連動します。"
+          },
+          "platforms": [
+            "macos"
+          ]
+        },
+        {
+          "symbol": "wrench.and.screwdriver",
+          "title": {
+            "en": "Other fixes",
+            "zh-Hans": "其他修复",
+            "zh-Hant": "其他修正",
+            "ja": "その他の修正"
+          },
+          "detail": {
+            "en": "Picture in Picture plays on into the next episode. Send Feedback keeps only your subscription's domain, and Included Details can stay switched off. Watch history no longer jumps back when another device paused earlier. On iPhone, the search sheet in Discover stays open while a video plays. Novel search keeps its results when you come back from a book, and Stop stops at once. Opening Now Playing no longer freezes the app on iOS 17. Plus fixes for music Up Next, audiobook chapters and saved downloads.",
+            "zh-Hans": "画中画会接着播放下一集。反馈问题只会附上订阅的域名，“附带信息”也可以保持关闭。观看记录不再因为另一台设备较早暂停而倒退。在 iPhone 上，发现页的搜索面板在播放视频时不再被关掉。小说搜索从书页返回后保留结果，“停止”也会立刻生效。在 iOS 17 上打开“正在播放”不再卡死 App。另外修复了音乐“待播清单”、有声书章节和已下载内容的问题。",
+            "zh-Hant": "子母畫面會接著播放下一集。意見回饋只會附上訂閱的網域，「附帶資訊」也可以保持關閉。觀看紀錄不再因為另一台裝置較早暫停而倒退。在 iPhone 上，探索頁的搜尋面板在播放影片時不再被關掉。小說搜尋從書頁返回後保留結果，「停止」也會立刻生效。在 iOS 17 上打開「正在播放」不再讓 App 卡住。另外修正了音樂「待播清單」、有聲書章節和已下載內容的問題。",
+            "ja": "ピクチャ・イン・ピクチャで次のエピソードも続けて再生されます。フィードバックにはサブスクリプションのドメインだけが含まれ、「添付情報」をオフのままにできます。別のデバイスが先に一時停止していても、視聴履歴が巻き戻らなくなりました。iPhone では、ビデオを再生しても「見つける」の検索シートが閉じなくなりました。小説の検索は本から戻っても結果が残り、「停止」もすぐに効きます。iOS 17 で「再生中」を開くとアプリが固まる問題を修正しました。ミュージックの「次に再生」、オーディオブックのチャプター、保存したダウンロードの問題も修正しました。"
+          }
+        }
+      ]
+    },
+    {
       "version": "1.8.30",
       "build": 68,
       "date": "2026-11-25",
@@ -5779,11 +5907,11 @@
   ],
   "testflight": {
     "ios": {
-      "build": 68,
+      "build": 69,
       "link": "https://testflight.apple.com/join/dU6UNbzp"
     },
     "tvos": {
-      "build": 68,
+      "build": 69,
       "link": "https://testflight.apple.com/join/SSgWEwSr"
     }
   }

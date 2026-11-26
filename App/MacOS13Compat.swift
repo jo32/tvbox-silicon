@@ -1,5 +1,6 @@
 import Combine
 import SwiftUI
+import TVCore
 
 /// 相容層自己的 placement 列舉，避免 macOS 13 上參照 ContentMarginPlacement。
 enum CompatMarginPlacement {
@@ -88,6 +89,23 @@ extension View {
         else { self.searchable(text: text) }
         #else
         self.searchable(text: text, isPresented: isPresented)
+        #endif
+    }
+
+    /// macOS 13 沒有 ContentUnavailableView，改用同樣語意的簡易空狀態。
+    @ViewBuilder
+    func compatSearchUnavailable(text: String) -> some View {
+        #if os(macOS)
+        if #available(macOS 14, *) { ContentUnavailableView.search(text: text) }
+        else {
+            VStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.largeTitle).foregroundStyle(.secondary)
+                Text(L10n.text("No Results")).font(.headline)
+                Text(text).font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+        #else
+        ContentUnavailableView.search(text: text)
         #endif
     }
 

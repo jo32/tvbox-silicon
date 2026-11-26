@@ -18,6 +18,8 @@ fi
 ffmpeg -hide_banner -loglevel error -y -f lavfi -i 'testsrc2=size=320x180:rate=2' \
   -f lavfi -i 'anullsrc=r=44100:cl=stereo' -t 300 -c:v libx264 -preset ultrafast \
   -g 2 -c:a aac -movflags +faststart "$OUT/clip.mp4"
+# A landscape-encoded movie whose display transform makes it portrait.
+ffmpeg -hide_banner -loglevel error -y -display_rotation 90 -i "$OUT/clip.mp4" -c copy "$OUT/portrait.mp4"
 python3 Scripts/qa-server.py --port 8776 --media "$OUT/clip.mp4" > "$OUT/server.log" 2>&1 &
 QA_SERVER_PID=$!
 trap 'kill "$QA_SERVER_PID" 2>/dev/null || true' EXIT
@@ -35,7 +37,7 @@ options:
     iOS: '26.0'
 packages:
   TVCore:
-    path: ../..
+    path: ../../Packages/TVCore
 targets:
   LibraryUI:
     type: application
@@ -60,6 +62,8 @@ targets:
       properties:
         CFBundleDisplayName: Playback UI QA
         UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
   LibraryUITests:

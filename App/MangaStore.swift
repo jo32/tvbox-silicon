@@ -67,7 +67,11 @@ import TVCore
     func record(_ progress: MangaLibrary.Progress) {
         history.removeAll { $0.id == progress.id }
         history.insert(progress, at: 0)
-        if history.count > 300 { history.removeLast(history.count - 300) }
+        if history.count > 300 {
+            history.removeLast(history.count - 300)
+            // Read marks go with the comics that fell out of the history, unless they're favorites.
+            if readChapters.keep(only: Set(history.map(\.id) + favorites.map(\.id))) { MangaLibrary.save(readChapters, as: "read.json") }
+        }
         MangaLibrary.save(history, as: "history.json")
         // A favorite's cover and title follow what the source last showed.
         if let index = favorites.firstIndex(where: { $0.id == progress.id }) { favorites[index].comic = progress.comic; MangaLibrary.save(favorites, as: "favorites.json") }
@@ -77,8 +81,34 @@ import TVCore
     func forget(_ progress: MangaLibrary.Progress) {
         history.removeAll { $0.id == progress.id }
         MangaLibrary.save(history, as: "history.json")
+        // Removing a comic from the history removes what was read of it too.
+        if readChapters.forget(progress.id) { MangaLibrary.save(readChapters, as: "read.json") }
     }
-    func clearHistory() { history = []; MangaLibrary.save(history, as: "history.json") }
+    func clearHistory() {
+        history = []
+        MangaLibrary.save(history, as: "history.json")
+        readChapters = MangaLibrary.ReadChapters()
+        MangaLibrary.save(readChapters, as: "read.json")
+    }
+
+    /// Chapters finished, by comic: read to the end, or marked by hand.
+    private(set) var readChapters: MangaLibrary.ReadChapters = MangaLibrary.load("read.json", as: MangaLibrary.ReadChapters.self) ?? MangaLibrary.ReadChapters()
+
+    func isChapterRead(_ chapter: MangaChapter, of comic: MangaComic) -> Bool { readChapters.isRead(chapter.id, of: comic.identity) }
+    func markChapterRead(_ chapter: MangaChapter, of comic: MangaComic) { markChapterRead(id: chapter.id, of: comic) }
+    func markChapterRead(id: String, of comic: MangaComic) {
+        guard !id.isEmpty, !readChapters.isRead(id, of: comic.identity) else { return }
+        readChapters.mark(id, of: comic.identity)
+        MangaLibrary.save(readChapters, as: "read.json")
+    }
+    func unmarkChapterRead(_ chapter: MangaChapter, of comic: MangaComic) {
+        guard readChapters.isRead(chapter.id, of: comic.identity) else { return }
+        readChapters.unmark(chapter.id, of: comic.identity)
+        MangaLibrary.save(readChapters, as: "read.json")
+    }
+    func toggleChapterRead(_ chapter: MangaChapter, of comic: MangaComic) {
+        if isChapterRead(chapter, of: comic) { unmarkChapterRead(chapter, of: comic) } else { markChapterRead(chapter, of: comic) }
+    }
 
     func mode(for comic: MangaComic) -> MangaReaderMode { modes[comic.identity].flatMap(MangaReaderMode.init(rawValue:)) ?? readerMode }
     func setMode(_ mode: MangaReaderMode, for comic: MangaComic) {

@@ -310,13 +310,14 @@ struct DiscoverDetailView: View {
                 Image(systemName: "chevron.down").font(.caption.weight(.semibold))
             }
             #else
-            EpisodeDropdownLabel(title: title).fixedSize()
+            EpisodeDropdownLabel(title: title, tapRoom: false).fixedSize()
             #endif
         }
         #if os(tvOS)
         .menuStyle(.button).buttonStyle(DiscoverTVChipStyle(active: false))
         #else
         .buttonStyle(.plain)
+        .frame(minHeight: 44)
         #endif
         .accessibilityIdentifier("discover.detail.season")
         #endif
@@ -973,10 +974,16 @@ struct DiscoverSearchPresentation: ViewModifier {
     @Binding var isPresented: Bool
     @Environment(\.openRoute) private var openRoute
     @EnvironmentObject private var store: Store
+    /// 這張搜尋表自己的識別：最上層的表負責呈現播放器，從另一張表再開的表才不會把播放器拆掉（#1618）。
+    @State private var token = UUID()
     func body(content: Content) -> some View {
         #if os(iOS)
         // Store handed in: the iPad app on a Mac presents a full-screen cover without the presenter's environment objects.
-        content.fullScreenCover(isPresented: $isPresented) { DiscoverSearchView().environmentObject(store) }
+        content.fullScreenCover(isPresented: $isPresented) {
+            DiscoverSearchView(token: token).environmentObject(store)
+                .onAppear { store.catalogSearchSheets.append(token) }
+                .onDisappear { store.catalogSearchSheets.removeAll { $0 == token } }
+        }
             // Search Sources on a detail page opened from here switches to the Search tab, which is behind this
             // full-screen sheet: close it so the source results show instead of the catalog search.
             .compatOnChange(of: store.section) { if isPresented { isPresented = false } }

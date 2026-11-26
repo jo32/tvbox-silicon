@@ -11,8 +11,8 @@ enum Support {
 }
 
 /// Settings › Send Feedback: a problem or an idea in the user's own words, posted as a public GitHub
-/// issue (Feedback). Under the message go the subscriptions and what was played lately
-/// (Feedback.context), filled in when the page opens, for the viewer to edit or remove. Once the issue
+/// issue (Feedback). Under the message go the subscriptions (domain only) and what was played lately
+/// (Feedback.context), filled in when the page opens, for the viewer to edit or switch off. Once the issue
 /// is up, the page shows its number and, off Apple TV, a link to it. Under it, Your Feedback lists what
 /// was sent from this device with how each issue is doing and the developer's replies, asked from the
 /// server each time the page opens or sends. Pictures and videos can go with the message (not on Apple
@@ -24,6 +24,7 @@ struct FeedbackView: View {
     @State private var message = ""
     @State private var context = ""
     @State private var contextLoaded = false
+    @AppStorage(Feedback.includeDetailsKey) private var includeDetails = true
     @State private var sending = false
     @State private var sent: Feedback.Issue?
     @State private var error: String?
@@ -74,6 +75,9 @@ struct FeedbackView: View {
                 // Copies left by a page that closed without sending.
                 Feedback.discardStale()
             }
+            .compatOnChange(of: includeDetails) { _, on in
+                if on, context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { context = freshContext }
+            }
             .task(id: sent?.number) { await check() }
             #if DEBUG
             // `-qaFeedbackDraft <text>` fills in the message (typing on the TV's keyboard is slow), and
@@ -111,10 +115,8 @@ struct FeedbackView: View {
             // Typing a dozen lines with the remote is no way to edit them: the TV shows the details
             // and sends them or not.
             TVSettingsSection(title: L10n.text("Included Details"),
-                              footer: [context, Self.contextNote, Self.logNote].filter { !$0.isEmpty }.joined(separator: "\n\n")) {
-                TVSettingsToggle(title: L10n.text("Include Details"), isOn: Binding {
-                    !context.isEmpty
-                } set: { context = $0 ? freshContext : "" })
+                              footer: [includeDetails ? context : "", Self.contextNote, Self.logNote].filter { !$0.isEmpty }.joined(separator: "\n\n")) {
+                TVSettingsToggle(title: L10n.text("Include Details"), isOn: $includeDetails)
                 TVSettingsToggle(title: L10n.text("Attach Diagnostic Log"), isOn: $attachLog)
             }
             if !history.isEmpty {
@@ -132,9 +134,9 @@ struct FeedbackView: View {
             }
         }
         #else
-        FeedbackPage(kind: $kind, message: $message, context: $context, freshContext: freshContext, sending: sending,
-                     sent: $sent, error: error, send: send, attachments: $attachments, attachLog: $attachLog, progress: progress,
-                     history: history, statuses: statuses, checking: checking, checkFailed: checkFailed, read: read)
+        FeedbackPage(kind: $kind, message: $message, context: $context, includeDetails: $includeDetails, freshContext: freshContext,
+                     sending: sending, sent: $sent, error: error, send: send, attachments: $attachments, attachLog: $attachLog,
+                     progress: progress, history: history, statuses: statuses, checking: checking, checkFailed: checkFailed, read: read)
         #endif
     }
 
@@ -181,7 +183,7 @@ struct FeedbackView: View {
             let log = attachLog ? await Feedback.diagnosticLog() : nil
             let files = attachments + (log.map { [$0] } ?? [])
             do {
-                sent = try await Feedback.send(Feedback.combined(message, context: context), kind: kind, attachments: files) { value in
+                sent = try await Feedback.send(Feedback.combined(message, context: includeDetails ? context : ""), kind: kind, attachments: files) { value in
                     Task { @MainActor in show(value) }
                 }
                 Feedback.discard(files)
@@ -222,6 +224,7 @@ private struct FeedbackPage: View {
     @Binding var kind: Feedback.Kind
     @Binding var message: String
     @Binding var context: String
+    @Binding var includeDetails: Bool
     let freshContext: String
     let sending: Bool
     @Binding var sent: Feedback.Issue?
@@ -387,7 +390,7 @@ private struct FeedbackPage: View {
                 // What is sent: the message and the included details. Not while sending: on a phone the
                 // row has no room for it next to the progress and the button (#363).
                 if !sending {
-                    let count = Feedback.combined(message, context: context).count
+                    let count = Feedback.combined(message, context: includeDetails ? context : "").count
                     Text(verbatim: "\(count.formatted()) / \(Feedback.limit.formatted())")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(count > Feedback.limit ? AnyShapeStyle(Brand.amber) : AnyShapeStyle(.tertiary))
@@ -500,18 +503,25 @@ private struct FeedbackPage: View {
         }
     }
 
-    /// The subscriptions and recent plays, sent after the message as they read here.
+    /// The subscriptions and recent plays, sent after the message when enabled.
     private var included: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
                 Label(L10n.text("Included Details"), systemImage: "list.bullet.rectangle.portrait")
                     .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
                 Spacer()
-                if context != freshContext { Button(L10n.text("Reset")) { context = freshContext } }
-                if !context.isEmpty { Button(L10n.text("Remove"), role: .destructive) { context = "" } }
+                if includeDetails, context != freshContext {
+                    Button(L10n.text("Reset")) { context = freshContext }
+                        .buttonStyle(.borderless).font(.subheadline)
+                }
+                Toggle(L10n.text("Included Details"), isOn: $includeDetails)
+                    .labelsHidden()
+                    #if os(macOS)
+                    .toggleStyle(.switch).appControlSize(.small)
+                    #endif
+                    .settingsSwitch()
             }
-            .buttonStyle(.borderless).font(.subheadline)
-            if !context.isEmpty {
+            if includeDetails {
                 TextEditor(text: $context)
                     .font(.system(compact ? .footnote : .callout, design: .monospaced))
                     .scrollContentBackground(.hidden)
@@ -535,7 +545,7 @@ private struct FeedbackPage: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 4)
-        .animation(.easeOut(duration: 0.2), value: context.isEmpty)
+        .animation(.easeOut(duration: 0.2), value: includeDetails)
     }
 
     private var details: some View {

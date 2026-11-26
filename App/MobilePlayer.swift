@@ -36,6 +36,7 @@ struct MobilePlayerView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.scenePhase) private var scenePhase
+    @State private var decidedCacheOrientation = false
     @StateObject private var clock = PlayerClock()
     @StateObject private var tracks = MediaTracks()
     @State private var importsSubtitleFile = false
@@ -205,6 +206,13 @@ struct MobilePlayerView: View {
         // In with a fade; out at once, so the first frame replaces the wait with no pause or crossfade.
         .animation(waiting == nil ? nil : .easeInOut(duration: 0.7), value: waiting == nil)
         .animation(waiting == nil ? nil : .easeInOut(duration: 0.4), value: waiting?.starting)
+        .onChange(of: session.showsPicture ? session.subtitles.pictureSize : .zero, initial: true) { _, size in
+            guard !decidedCacheOrientation, layout == .screen, channel.url.scheme == DownloadLibrary.scheme,
+                  PlayerOrientation.available, horizontalSizeClass == .compact || verticalSizeClass == .compact,
+                  size.width > 0, size.height > 0 else { return }
+            decidedCacheOrientation = true
+            if size.width != size.height { PlayerOrientation.set(landscape: size.width > size.height) }
+        }
         .onAppear {
             clock.attach(session.player)
             speed = session.player.defaultRate
@@ -828,7 +836,10 @@ struct MobilePlayerView: View {
             // Only on a phone-sized screen: iPhone Duo's inner display (regular both ways) ignores orientations.
             if !inline, PlayerOrientation.available, horizontalSizeClass == .compact || verticalSizeClass == .compact {
                 let landscape = verticalSizeClass == .compact
-                Button { PlayerOrientation.set(landscape: !landscape) } label: {
+                Button {
+                    decidedCacheOrientation = true
+                    PlayerOrientation.set(landscape: !landscape)
+                } label: {
                     Image(systemName: landscape ? "rectangle.portrait.rotate" : "rectangle.landscape.rotate").font(.headline).frame(width: 22, height: 22)
                 }
                 .chromeButton()
@@ -1832,8 +1843,19 @@ private struct BatteryGauge: View {
         if let parked, parked.session !== session { end() }
         parked = Parked(channel: channel, session: session, pip: pip)
         self.store = store
-        // Nothing comes next by itself while no player is open: the next episode would open the player over the app.
-        session.onPlaybackEnded = nil; session.onAdvance = nil; session.upcomingEpisode = nil; session.playsOn = { false }
+        // The window plays on into the next episode as the player does (#1719, #2127), but nothing opens over the app:
+        // the queue moves on inside the window, and the window's return to the app opens the player on the episode it
+        // reached. An episode that can't be queued (one the player converts as it plays) ends there.
+        session.onPlaybackEnded = nil
+        session.upcomingEpisode = { [weak self, weak store] in
+            guard let store, let channel = self?.parked?.channel else { return nil }
+            return await store.upcomingEpisode(after: channel) { [weak self] in self?.parked?.channel == $0 }
+        }
+        session.onAdvance = { [weak self, weak store, weak session] next in
+            guard let self, let parked = self.parked, parked.session === session else { return }
+            store?.followFloating(to: next, from: parked.channel)
+            self.parked = Parked(channel: next, session: parked.session, pip: parked.pip)
+        }
     }
 
     func holds(_ session: PlaybackSession) -> Bool { parked?.session === session }

@@ -11,6 +11,7 @@ import BackgroundTasks
 struct DownloadsView: View {
     @EnvironmentObject private var store: Store
     @State private var deleting: DownloadShow?
+    @State private var action: CachedShowAction?
     /// Videos or songs, once there are songs; videos first unless only songs are saved.
     @State private var kind = Kind.videos
     /// How the downloaded shows are listed, and 倒序 (#653): the other way round.
@@ -47,13 +48,7 @@ struct DownloadsView: View {
             Task { await library.measure() }
         }
         #endif
-        .confirmationDialog(L10n.text("Delete all cached episodes of %@?", deleting?.title ?? ""),
-                            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
-            Button(L10n.text("Delete Cached Items"), role: .destructive) {
-                if let deleting { library.remove(deleting.items.map(\.id)) }
-                deleting = nil
-            }
-        }
+        .cachedShowAction($action)
     }
 
     /// Songs are saved apart, in Music; this page leads there too.
@@ -106,8 +101,12 @@ struct DownloadsView: View {
             }
         }
         .downloadCardButton()
+        .accessibilityIdentifier((show.items.count == 1 ? "downloads.single." : "downloads.show.") + show.videoID)
         .contextMenu {
-            Button(L10n.text("Delete Cached Items"), systemImage: "trash", role: .destructive) { deleting = show }
+            if let first = show.items.first {
+                Button(L10n.text("Cache More"), systemImage: "arrow.down.circle") { action = .more(first) }
+            }
+            Button(L10n.text("Delete Cached Items"), systemImage: "trash", role: .destructive) { action = .remove(show) }
         }
     }
 
@@ -760,6 +759,7 @@ extension View {
 
 /// A downloaded show on the Downloads page: its picture with TMDB's logo over it, then the name and what is saved.
 private struct DownloadShowCard: View {
+    @EnvironmentObject private var store: Store
     let show: DownloadShow
     let details: TMDBMatch.Details?
     var body: some View {
@@ -772,6 +772,9 @@ private struct DownloadShowCard: View {
                 .overlay { shape.strokeBorder(Color.white.opacity(0.12)) }
             VStack(alignment: .leading, spacing: 3) {
                 Text(details?.name ?? show.title).font(.headline).lineLimit(1)
+                if show.items.count == 1, let item = show.items.first, let progress = store.cachedProgress(item) {
+                    Text(progress.label).font(.caption).monospacedDigit()
+                }
                 Text(caption).font(.caption).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
             }
             .padding(.horizontal, 4)
@@ -849,7 +852,7 @@ struct DownloadShowPage: View {
     @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
     @AppStorage("downloads.episodesReversed") private var reversed = false
-    @State private var deleting = false
+    @State private var action: CachedShowAction?
     @State private var coverAspect: CGFloat?
     private var library: DownloadLibrary { .shared }
     private var artwork: DownloadArtwork { .shared }
@@ -864,11 +867,7 @@ struct DownloadShowPage: View {
         // Its last episode deleted: back to Downloads.
         .compatOnChange(of: show == nil) { _, gone in if gone { dismiss() } }
         .task { if let show { await artwork.load([show]) } }
-        .confirmationDialog(L10n.text("Delete all cached episodes of %@?", show?.title ?? ""), isPresented: $deleting, titleVisibility: .visible) {
-            Button(L10n.text("Delete Cached Items"), role: .destructive) {
-                if let show { library.remove(show.items.map(\.id)) }
-            }
-        }
+        .cachedShowAction($action)
     }
 
     private func content(_ show: DownloadShow) -> some View {
@@ -914,7 +913,7 @@ struct DownloadShowPage: View {
         .frame(height: DownloadMetrics.banner)
     }
 
-    /// Play from the first episode, or delete them all: Liquid Glass over the banner.
+    /// Actions on the cached show, above its episode grid.
     private func actions(_ show: DownloadShow) -> some View {
         HStack(spacing: 10) {
             if let first = show.items.first {
@@ -923,10 +922,15 @@ struct DownloadShowPage: View {
                 }
                 .controlButton(prominent: true)
             }
-            Button(role: .destructive) { deleting = true } label: {
-                Label(L10n.text("Delete Cached Items"), systemImage: "trash").lineLimit(1).fixedSize()
+            if let first = show.items.first {
+                Button { action = .more(first) } label: {
+                    FittingLabel(title: L10n.text("Cache More"), symbol: "arrow.down.circle")
+                }.controlButton().accessibilityIdentifier("downloads.more")
             }
-            .controlButton()
+            Button(role: .destructive) { action = .remove(show) } label: {
+                FittingLabel(title: L10n.text("Delete Cached Items"), symbol: "trash")
+            }
+            .controlButton().accessibilityIdentifier("downloads.manage")
         }
         .environment(\.glassControls, true)
     }
@@ -954,14 +958,139 @@ struct DownloadShowPage: View {
     }
 
     private func tile(_ item: DownloadItem, info: TMDBMatch.EpisodeInfo?, backdrops: [URL]) -> some View {
-        let detail = [item.quality, DownloadFormat.size(item.size)].compactMap { $0 }.joined(separator: " · ")
+        let progress = store.cachedProgress(item)?.label
+        let detail = [progress, item.quality, DownloadFormat.size(item.size)].compactMap { $0 }.joined(separator: " · ")
         return Button { store.playing = store.savedChannel(item) } label: {
             TMDBEpisodeTile(name: EpisodeRow.title(item.episode), info: info, detail: detail, width: nil, backdrops: backdrops)
         }
         .cardButton()
         .accessibilityLabel(L10n.text("Play %@", item.episode))
+        .accessibilityValue(progress ?? "")
+        .accessibilityIdentifier("downloads.play." + item.source.episodeID)
         .contextMenu {
             Button(L10n.text("Delete from Cache"), systemImage: "trash", role: .destructive) { library.remove([item.id]) }
+        }
+    }
+}
+
+private extension DownloadWatchProgress {
+    var label: String {
+        if completed { return L10n.text("Finished · Watch again") }
+        let time = EpisodeSkipSettings.formatTime(position)
+        return L10n.text("Watched to %@", duration > 0 ? time + " / " + EpisodeSkipSettings.formatTime(duration) : time)
+    }
+}
+
+private enum CachedShowAction: Identifiable {
+    case more(DownloadItem)
+    case remove(DownloadShow)
+    var id: String {
+        switch self {
+        case .more(let item): "more-" + item.id
+        case .remove(let show): "remove-" + show.id
+        }
+    }
+
+    @ViewBuilder var content: some View {
+        switch self {
+        case .more(let item): MoreCachedEpisodes(item: item)
+        case .remove(let show): RemoveCachedEpisodes(show: show)
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder func cachedShowAction(_ action: Binding<CachedShowAction?>) -> some View {
+        #if os(tvOS)
+        fullScreenCover(item: action) { $0.content }
+        #else
+        sheet(item: action) { $0.content }
+        #endif
+    }
+}
+
+private struct MoreCachedEpisodes: View {
+    let item: DownloadItem
+    @EnvironmentObject private var store: Store
+    @Environment(\.dismiss) private var dismiss
+    @State private var listing: (video: Video, site: Site, flag: String, episodes: [Episode])?
+    @State private var failure: String?
+    @State private var attempt = 0
+
+    var body: some View {
+        Group {
+            if let listing {
+                DownloadPicker(video: listing.video, site: listing.site, flag: listing.flag, episodes: listing.episodes)
+            } else {
+                VStack(spacing: 16) {
+                    if let failure {
+                        Text(failure)
+                        Button(L10n.text("Retry")) { attempt += 1 }
+                    } else { ProgressView(L10n.text("Loading…")) }
+                    Button(L10n.text("Cancel")) { dismiss() }
+                }.padding()
+            }
+        }
+        .task(id: attempt) {
+            failure = nil
+            do {
+                let client = try store.downloadClient(for: item)
+                let video = try await client.detail(item.source.videoID)
+                try Task.checkCancellation()
+                guard video.id == item.source.videoID, !video.episodes.isEmpty else {
+                    throw TVError.unsupported(L10n.text("The API did not return video details."))
+                }
+                let flag = video.episodes.contains { $0.flag == item.source.flag } ? item.source.flag : video.episodes[0].flag
+                listing = (video, client.site, flag, video.episodes.filter { $0.flag == flag })
+            } catch { if !Task.isCancelled { failure = error.localizedDescription } }
+        }
+    }
+}
+
+private struct RemoveCachedEpisodes: View {
+    let show: DownloadShow
+    @Environment(\.dismiss) private var dismiss
+    @State private var selection: Set<String> = []
+    @State private var confirming = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(show.title).font(.headline)
+            Text(L10n.text("Select episodes to delete")).font(.title2.bold())
+            Button(L10n.text(selection.count == show.items.count ? "Deselect All" : "Select All")) {
+                selection = selection.count == show.items.count ? [] : Set(show.items.map(\.id))
+            }.controlButton()
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(show.items) { item in
+                        Button {
+                            if !selection.insert(item.id).inserted { selection.remove(item.id) }
+                        } label: {
+                            Label(item.episode, systemImage: selection.contains(item.id) ? "checkmark.circle.fill" : "circle")
+                                .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                        }
+                        .controlButton()
+                        .accessibilityAddTraits(selection.contains(item.id) ? [.isSelected] : [])
+                        .accessibilityIdentifier("downloads.select." + item.source.episodeID)
+                    }
+                }.padding(8)
+            }.tvFocusSection()
+            HStack {
+                Button(L10n.text("Cancel")) { dismiss() }.controlButton()
+                Button(L10n.text("Delete %lld episodes", selection.count), role: .destructive) { confirming = true }
+                    .controlButton().disabled(selection.isEmpty)
+                    .accessibilityIdentifier("downloads.deleteSelection")
+            }.tvFocusSection()
+        }
+        .padding()
+        #if os(macOS)
+        .frame(minWidth: 400, minHeight: 320)
+        #endif
+        .confirmationDialog(L10n.text("Delete %lld episodes", selection.count), isPresented: $confirming, titleVisibility: .visible) {
+            Button(L10n.text("Delete from Cache"), role: .destructive) {
+                DownloadLibrary.shared.remove(Array(selection))
+                dismiss()
+            }
         }
     }
 }

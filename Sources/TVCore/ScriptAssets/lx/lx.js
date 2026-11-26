@@ -117,13 +117,16 @@ const utils = {
 };
 
 const info = JSON.parse(host('module', 'lx://info'));
+// The script's own text, as LX Music gives it: some sources check its MD5 against their server's before
+// they send `inited`.
+const rawScript = host('module', 'lx://script');
 const silent = () => {};
 // Scripts print their requests, keys included; none of it reaches the app's logs. Every console method
 // (group, groupEnd, table, time...) exists, as in a browser.
 globalThis.console = new Proxy({}, { get: () => silent });
 globalThis.lx = Object.freeze({
     EVENT_NAMES, request, send, on, utils, version: '2.0.0', env: 'desktop',
-    currentScriptInfo: Object.freeze({ ...info, rawScript: '' })
+    currentScriptInfo: Object.freeze({ ...info, rawScript })
 });
 
 globalThis.__lx = {
@@ -131,7 +134,7 @@ globalThis.__lx = {
     /// Answers {sources: {tx: ['128k', ...], ...}} with the sources that resolve music URLs.
     async load() {
         try {
-            (0, eval)(host('module', 'lx://script'));
+            (0, eval)(rawScript);
             await initedPromise;
             const sources = {};
             for (const key of sourceKeys) {
