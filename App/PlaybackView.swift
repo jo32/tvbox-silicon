@@ -486,25 +486,102 @@ import IOKit.pwr_mgt
         return true
     }
 
+    /// A stream AVPlayer gave up on opens once more another way, once per playback:
+    /// - a direct HLS stream it can't get past (`HLSProxy.recovers`: a first playlist that took 20 s, one it can't read)
+    ///   through the local proxy, which asks again, waits at most 30 s in all and repairs the playlist and segments;
+    /// - a plugin's loopback server that answered 502, 503 or 504 (the plugin's own fetch failed) is asked again.
+    /// Not a live room: its platform gives a fresh address sooner (`retryLive`). When the proxy can't get the playlist
+    /// either, `giveUp` reports the stream's own failure (with the proxy's reason) and moves on to the next line.
+    private func retryThroughProxy(after failure: Error?, channel: Channel, url: URL, generation active: UUID,
+                                   otherwise giveUp: @escaping @MainActor (String?) -> Void) -> Bool {
+        guard !rungTried, proxy == nil, liveRoom == nil, ["http", "https"].contains(url.scheme), !Remux.isRemuxed(url),
+              !LocalMediaServer.shared.serves(url) else { return false }
+        let loopback = ["127.0.0.1", "localhost"].contains(url.host() ?? "")
+        let status = transfer.httpStatus ?? item?.errorLog()?.events.last?.errorStatusCode
+        let chosen: String
+        if HLSProxy.recovers(failure) { chosen = "hls-proxy" }
+        else if loopback, HLSProxy.gatewayFailure(failure) || [502, 503, 504].contains(status ?? 0) { chosen = "plugin-again" }
+        else { return false }
+        rungTried = true; rung = chosen
+        detachItem(); observation = nil; loading = true
+        Diagnostics.shared.record(.warning, "player", "retry rung=\(chosen) host=\(url.host() ?? "-") \(failure.map(Self.describe) ?? "-")")
+        preparation = Task { [weak self] in
+            guard chosen == "hls-proxy" else {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self, self.generation == active, !Task.isCancelled else { return }
+                self.configure(channel, url: url, generation: active)
+                return
+            }
+            let adapter = HLSProxy(headers: channel.headers.merging(CloudStreams.playlistHeaders(for: url) ?? [:]) { $1 })
+            let address: URL
+            do { address = try await adapter.start(url: url, patience: .retry) }
+            catch {
+                guard let self, self.generation == active, !Task.isCancelled else { return }
+                Diagnostics.shared.record(.warning, "player", "retry rung=hls-proxy gave up host=\(url.host() ?? "-") \(error.localizedDescription)")
+                giveUp(error.localizedDescription)
+                return
+            }
+            guard let self, self.generation == active, !Task.isCancelled else { await adapter.stop(); return }
+            self.proxy = adapter
+            if self.automatic == url { self.automatic = address }
+            self.configure(channel, url: address, generation: active)
+        }
+        return true
+    }
+    /// The end of a playback that failed for good: the failure line for the reports (the stream's own failure; when the
+    /// proxy rung couldn't get past it either, its reason as the upstream one), then a live room's fresh address or
+    /// the next line, else the error on screen.
+    private func giveUp(_ failure: Error?, item: AVPlayerItem, channel: Channel, url: URL, refused: Bool, network: Bool, proxyReason: String?) {
+        rung = nil
+        let detail = failure.map(Self.describe) ?? "-"
+        // The proxy's own last failure when the once-a-second sample missed it (a lookup that failed at once).
+        let upstream = transfer.failure ?? proxy?.stats.snapshot.failure ?? proxyReason
+        Diagnostics.shared.record(.error, "player", "failed host=\(transfer.host ?? proxy?.stats.snapshot.host ?? channel.url.host() ?? "-") \(upstream.map { "upstream=\($0) " } ?? "")\(detail) \(failureContext(channel, url: url, item: item))")
+        if retryLive(after: failure) { return }
+        if tryNextLine(after: failure) { return }
+        // A refused link is usually an expired one: say so in plain words rather than the system's.
+        let expired = refused || [401, 403, 404, 410].contains(transfer.httpStatus ?? 0)
+        loading = false
+        errorSymbol = expired ? "clock.badge.exclamationmark" : network ? "wifi.exclamationmark" : "play.slash.fill"
+        error = expired ? L10n.text("This episode's link may have expired. Open it again, or try another line.")
+            : Remux.isDolbyVision(url) && Self.refusedContent(failure) ? Self.dolbyVisionRefused
+            : failure?.localizedDescription ?? L10n.text("This media cannot be played. Try another channel or source.")
+    }
+
+    /// The rung that got the stream playing, in the log: which one, and what the proxy repaired.
+    private func noteRungRecovered(_ url: URL) {
+        guard let rung else { return }
+        self.rung = nil
+        let proxy = proxy
+        Task {
+            let repairs = await proxy?.repairs ?? []
+            Diagnostics.shared.record(.warning, "player", "recovered rung=\(rung) host=\(proxy?.stats.snapshot.host ?? url.host() ?? "-") repairs=\(repairs.isEmpty ? "-" : repairs.joined(separator: ","))")
+        }
+    }
+
     /// iOS and tvOS take back a suspended app's listening sockets: after a pause in the background, AVPlayer finds
-    /// the loopback server behind a repackaged file, a plugin's proxy or a saved download refusing (-1004) and gives
-    /// up 30 s later.
+    /// the loopback server behind a repackaged file, a plugin's proxy, the HLS proxy or a saved download refusing
+    /// (-1004) and gives up 30 s later.
     /// The server listens again, on a new port, and the episode opens there where it was. At most once a minute, so
     /// a server that stays down shows its error.
     private func recoverLoopback(_ code: Int?, channel: Channel, url: URL, generation active: UUID) -> Bool {
         guard let code, [NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost].contains(code),
-              Remux.isRemuxed(url) || EmbeddedJarHost.isPluginProxy(url) || LocalMediaServer.shared.serves(url),
+              Remux.isRemuxed(url) || EmbeddedJarHost.isPluginProxy(url) || LocalMediaServer.shared.serves(url) || proxy?.serves(url) == true,
               loopbackRecovered.map({ $0.duration(to: .now) > .seconds(60) }) ?? true else { return false }
         loopbackRecovered = .now; retrying(via: "loopback")
         let position = player.currentTime().seconds
         detachItem(); observation = nil; loading = true
         Diagnostics.shared.record(.warning, "player", "loopback refused code=\(code) at=\(position.isFinite ? Int(position) : -1)s; listening again")
+        let adapter = proxy.flatMap { $0.serves(url) ? $0 : nil }
         preparation = Task { [weak self] in
             var fresh: URL?, failure: Error?
             do {
-                fresh = Remux.isRemuxed(url) ? try await Remux.relisten(url)
-                    : LocalMediaServer.shared.serves(url) ? try await LocalMediaServer.shared.relisten(url)
-                    : try await EmbeddedJarHost.shared.recoverProxy(url)
+                if let adapter { fresh = try await adapter.relisten(url) }
+                else {
+                    fresh = Remux.isRemuxed(url) ? try await Remux.relisten(url)
+                        : LocalMediaServer.shared.serves(url) ? try await LocalMediaServer.shared.relisten(url)
+                        : try await EmbeddedJarHost.shared.recoverProxy(url)
+                }
             }
             catch { failure = error }
             guard let self, self.generation == active, !Task.isCancelled else { return }
@@ -922,9 +999,11 @@ import IOKit.pwr_mgt
     private var observation: NSKeyValueObservation?
     private var failureObserver: NSObjectProtocol?
     private var preparation: Task<Void, Never>?
-    #if os(macOS)
+    /// The local HLS proxy the stream plays through: always on the Mac, elsewhere after a direct failure (`retryThroughProxy`).
     private var proxy: HLSProxy?
-    #endif
+    /// The retry rung this playback took (`retryThroughProxy`), until it plays or fails.
+    private var rung: String?
+    private var rungTried = false
     /// The session on screen, which casts from the Bilibili app control.
     static weak var current: PlaybackSession?
     func start(_ channel: Channel) {
@@ -970,7 +1049,7 @@ import IOKit.pwr_mgt
         isLive = live
         // Live: a live room, or a channel of a live playlist (only on-demand episodes have a history context).
         attempt = PlayAttempt(live: live || channel.historyContext == nil, address: channel.url)
-        liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false
+        liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false; rung = nil; rungTried = false
         loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false
         ErrorReports.shared.playing(live: isLive, format: channel.url.pathExtension, source: channel.historyContext?.sourceKey,
                                     danmaku: UserDefaults.standard.object(forKey: DanmakuPreference.key) == nil || UserDefaults.standard.bool(forKey: DanmakuPreference.key),
@@ -1269,8 +1348,6 @@ import IOKit.pwr_mgt
             let status = item.status
             let timeline = status == .readyToPlay && item.duration.isNumeric
             let failure = item.error
-            let message = failure?.localizedDescription
-            let detail = failure.map(Self.describe) ?? "-"
             let refused = Self.refusedLink(failure, log: item.errorLog())
             let network = Self.networkFailure(failure)
             Task { @MainActor [weak self] in
@@ -1279,6 +1356,7 @@ import IOKit.pwr_mgt
                 if status == .readyToPlay {
                     if self.isLive { self.liveReadyAt = .now }
                     self.lineReadyAt = .now; self.lineWatch?.cancel(); self.lineWatch = nil
+                    self.noteRungRecovered(url)
                     if UngroupedAudio.playOne(item) { Diagnostics.shared.record(.info, "player", "ungrouped audio tracks; playing the first") }
                     Task { [weak self] in
                         let choices = await UngroupedAudio.choices(item)
@@ -1314,16 +1392,12 @@ import IOKit.pwr_mgt
                     if self.retryConvertingAudio(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
                     if self.reopenedAfterDrop, self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
-                    Diagnostics.shared.record(.error, "player", "failed host=\(self.transfer.host ?? channel.url.host() ?? "-") \(self.transfer.failure.map { "upstream=\($0) " } ?? "")\(detail) \(self.failureContext(channel, url: url, item: item))")
-                    if self.retryLive(after: failure) { return }
-                    if self.tryNextLine(after: failure) { return }
-                    // A refused link is usually an expired one: say so in plain words rather than the system's.
-                    let expired = refused || [401, 403, 404, 410].contains(self.transfer.httpStatus ?? 0)
-                    self.loading = false
-                    self.errorSymbol = expired ? "clock.badge.exclamationmark" : network ? "wifi.exclamationmark" : "play.slash.fill"
-                    self.error = expired ? L10n.text("This episode's link may have expired. Open it again, or try another line.")
-                        : Remux.isDolbyVision(url) && Self.refusedContent(failure) ? Self.dolbyVisionRefused
-                        : message ?? L10n.text("This media cannot be played. Try another channel or source.")
+                    let giveUp = { @MainActor [weak self] (reason: String?) -> Void in
+                        guard let self else { return }
+                        self.giveUp(failure, item: item, channel: channel, url: url, refused: refused, network: network, proxyReason: reason)
+                    }
+                    if self.retryThroughProxy(after: failure, channel: channel, url: url, generation: activeGeneration, otherwise: giveUp) { return }
+                    giveUp(nil)
                 }
             }
         }
@@ -1428,11 +1502,9 @@ import IOKit.pwr_mgt
         // A resource-loader stream's bytes never reach the access log.
         let cloud = automatic.flatMap { CloudStreams.transfer(for: $0) ?? Remux.transfer(for: $0) }
         if let cloud { next.received = max(next.received, cloud.received) }
-        #if os(macOS)
-        // HLS goes through the local proxy, which sees upstream bytes as they arrive.
+        // HLS through the local proxy: it sees upstream bytes as they arrive.
         let upstream = proxy?.stats.snapshot
         if let upstream { next.received = max(next.received, upstream.received) }
-        #endif
         history.append((now, next.received))
         history.removeAll { now.timeIntervalSince($0.date) > 5 }
         if let first = history.first, now.timeIntervalSince(first.date) >= 1 {
@@ -1451,13 +1523,11 @@ import IOKit.pwr_mgt
         // The Mac plays HLS through a local proxy; name the real server instead.
         let segmentHost = events.last?.uri.flatMap { URL(string: $0)?.host() }
         next.host = segmentHost.flatMap { ["127.0.0.1", "localhost"].contains($0) ? nil : $0 } ?? cloud?.host ?? origin
-        #if os(macOS)
         if let upstream {
             next.host = upstream.host ?? next.host
             next.httpStatus = upstream.status.flatMap { (400..<600).contains($0) ? $0 : nil }
             next.failure = upstream.failure ?? upstream.status.map { "HTTP \($0)" }
         }
-        #endif
         if next.failure == nil, let error = item.errorLog()?.events.last, let date = error.date, now.timeIntervalSince(date) < 30 {
             // The loopback server behind the episode stopped listening: AVPlayer would keep trying it for 30 s.
             if error.errorDomain == NSURLErrorDomain,
@@ -1569,9 +1639,7 @@ import IOKit.pwr_mgt
         lineWatch?.cancel(); lineWatch = nil
         sampler?.cancel(); sampler = nil
         transfer = Transfer(); steps = []
-        #if os(macOS)
         if let proxy { Task { await proxy.stop() } }; proxy = nil
-        #endif
         observation = nil
         timeObservation = nil
         muteObservation = nil
@@ -1851,12 +1919,15 @@ extension PlaybackSession {
         #if os(macOS)
         if address.pathExtension.lowercased() == "m3u8", ["http", "https"].contains(address.scheme), channel.url.scheme != DownloadLibrary.scheme {
             let adapter = HLSProxy(headers: channel.headers.merging(CloudStreams.playlistHeaders(for: address) ?? [:]) { $1 })
-            do { prepared.url = try await adapter.start(url: address) }
+            do { prepared.url = try await adapter.start(url: address); prepared.adapter = adapter }
+            catch let failure as HLSProxy.Failure {
+                // Not a playlist (an .m3u8 address that sends MPEG-TS, say): AVPlayer gets it as it is, as on iPhone.
+                Diagnostics.shared.record(.info, "player", "hls proxy skipped host=\(channel.url.host() ?? "-") \(failure.localizedDescription)")
+            }
             catch {
                 if !Task.isCancelled { Diagnostics.shared.record(.error, "player", "proxy failed host=\(channel.url.host() ?? "-") \(Self.describe(error))") }
                 throw error
             }
-            prepared.adapter = adapter
         }
         #else
         // A video whose playlist carries spliced-in ads opens through the loader that cuts them (#567); any other plays as it is.
@@ -2028,9 +2099,11 @@ extension PlaybackSession {
         // Let go of the finished episode's stream; the queued one's becomes the session's.
         if let url = playing?.url { CENCStreams.stop(url) }
         if let automatic { CloudStreams.stop(automatic); Remux.stop(automatic) }
-        #if os(macOS)
         if let proxy { Task { await proxy.stop() } }
+        #if os(macOS)
         proxy = upcoming.prepared.adapter
+        #else
+        proxy = nil
         #endif
         detachItem(); observation = nil
         upcomingObservation = nil; upcomingTask = nil; self.upcoming = nil
