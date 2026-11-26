@@ -33,7 +33,7 @@ actor Pan123Files {
         try await listing(folder: "0", search: keywords, page: page, pages: 1, limit: size)
     }
 
-    private func listing(folder: String, search: String, page first: Int = 1, pages: Int = 50, limit: Int = Self.pageSize) async throws -> (files: [CloudFile], total: Int) {
+    private func listing(folder: String, search: String, page first: Int = 1, pages: Int = 50, limit: Int = Pan123Files.pageSize) async throws -> (files: [CloudFile], total: Int) {
         var files: [CloudFile] = [], total = 0
         for page in first..<(first + pages) {
             let answer = try await call("/file/list/new", query: [
