@@ -1414,7 +1414,9 @@ struct SiteView: View {
             GlassGroup(spacing: 8) {
                 HStack(spacing: 8) {
                     Chip(title: L10n.text("Recommendations"), selected: browser.query.isEmpty && browser.category.isEmpty) { query = ""; startRequest { await home() } }
-                    ForEach(browser.categories) { item in
+                    // The source's own "推荐" category: the chip above shows the home's recommendations, so the
+                    // source's copy would be a second chip with the same name (#2209).
+                    ForEach(browser.categories.filter { !$0.isRecommendations }) { item in
                         Chip(title: item.name, selected: browser.query.isEmpty && browser.category == item.id) {
                             query = ""
                             let filters = CategoryFilter.initialChoices(item.filters)
