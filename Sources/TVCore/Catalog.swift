@@ -427,7 +427,10 @@ public struct CatalogClient: Sendable {
                 throw crashed
             }
         }
-        let (data, _) = try await http.get(requestURL(params), headers: site.raw["header"]?.object?.compactMapValues(\.string) ?? [:])
+        // A play answer is a link that may expire: never one from this device's HTTP cache (a renewal would get the
+        // expired link again).
+        let (data, _) = try await http.get(requestURL(params), headers: site.raw["header"]?.object?.compactMapValues(\.string) ?? [:],
+                                           fresh: params["play"] != nil)
         do { return try await CatalogResponseParser.decode(data) }
         catch {
             // Dead or bot-protected sites answer with a web page; say that rather than a decoding error.
