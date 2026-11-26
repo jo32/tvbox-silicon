@@ -27,9 +27,12 @@ public struct PlaybackHistoryContext: Codable, Hashable, Sendable {
 
     /// The title the player shows: the video and its episode, except when the two
     /// are the same and would read twice ("第1集 · 第1集", #2363).
-    public var displayName: String {
-        let video = videoName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let episode = episodeName.trimmingCharacters(in: .whitespacesAndNewlines)
+    public var displayName: String { Self.displayName(video: videoName, episode: episodeName) }
+
+    /// "video · episode", or one of them when the other is empty or the two are the same name.
+    public static func displayName(video: String, episode: String) -> String {
+        let video = video.trimmingCharacters(in: .whitespacesAndNewlines)
+        let episode = episode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !episode.isEmpty else { return video }
         guard video.lowercased() != episode.lowercased() else { return video }
         return video.isEmpty ? episode : "\(video) · \(episode)"
