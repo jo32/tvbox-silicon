@@ -15,6 +15,7 @@ public actor CastRelay {
     struct Route: Sendable {
         let url: URL
         let headers: [String: String]
+        let headerContext: String
         var playlist: Bool
     }
 
@@ -106,7 +107,7 @@ public actor CastRelay {
               let clear = try? AES.GCM.open(box, using: routeKey),
               let ticket = try? JSONDecoder().decode(Ticket.self, from: clear),
               let headers = headerContexts[ticket.headers] else { return nil }
-        return Route(url: ticket.url, headers: headers, playlist: ticket.playlist)
+        return Route(url: ticket.url, headers: headers, headerContext: ticket.headers, playlist: ticket.playlist)
     }
 
     /// A playlist with every address it names registered here, given as paths on this server.
@@ -209,6 +210,7 @@ public actor CastRelay {
                 Diagnostics.shared.record(.warning, "cast", "relay playlist status=\((response as? HTTPURLResponse)?.statusCode ?? 0) host=\(route.url.host() ?? "-")")
                 return Self.reply(connection, status: "502 Bad Gateway")
             }
+            guard headerContexts[route.headerContext] != nil else { return Self.reply(connection, status: "410 Gone") }
             let text = try rewrite(String(decoding: data, as: UTF8.self), base: http.url ?? route.url, headers: route.headers)
             let body = Data(text.utf8)
             let header = Self.header(status: "200 OK", fields: [("Content-Type", "application/vnd.apple.mpegurl"),
@@ -235,6 +237,7 @@ public actor CastRelay {
             // An address that turns out to be a playlist (no extension, a plugin's route) is rewritten as one.
             if type.lowercased().contains("mpegurl") || first.starts(with: Data("#EXTM3U".utf8)) {
                 while first.count < 4 << 20, let more = try await iterator.next() { first.append(more) }
+                guard headerContexts[route.headerContext] != nil else { return Self.reply(connection, status: "410 Gone") }
                 let text = try rewrite(String(decoding: first, as: UTF8.self), base: response.url ?? route.url, headers: route.headers)
                 let body = Data(text.utf8)
                 let header = Self.header(status: "200 OK", fields: [("Content-Type", "application/vnd.apple.mpegurl"), ("Content-Length", String(body.count))])

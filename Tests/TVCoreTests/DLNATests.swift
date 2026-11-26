@@ -380,6 +380,35 @@ private final class FixtureServer: @unchecked Sendable {
     #expect(original == Data("first".utf8))
 }
 
+@Test(arguments: [true, false])
+func castRelayDoesNotIssuePlaylistRoutesAcrossReset(declaredPlaylist: Bool) async throws {
+    let (requests, received) = AsyncStream<Void>.makeStream()
+    let release = DispatchSemaphore(value: 0)
+    let upstream = try await FixtureServer.start { _, _ in
+        received.yield(())
+        guard release.wait(timeout: .now() + 10) == .success else { return (503, "text/plain", Data()) }
+        return (200, "application/octet-stream", Data("#EXTM3U\n#EXTINF:2,\nsegment.ts\n".utf8))
+    }
+    defer { release.signal(); upstream.stop() }
+    let relay = CastRelay()
+    let source = URL(string: "http://127.0.0.1:\(upstream.port)/dispatch")!
+    let address = try await relay.address(for: source, headers: [:], playlist: declaredPlaylist, towards: nil)
+    let response = Task {
+        defer { received.finish() }
+        return try await URLSession.shared.data(from: address)
+    }
+    var arrivals = requests.makeAsyncIterator()
+    try #require(await arrivals.next() != nil)
+    await relay.reset()
+    let current = try await relay.register(source, headers: [:], playlist: declaredPlaylist)
+    let currentID = try #require(current.split(separator: "/").dropFirst().first)
+    release.signal()
+    let (body, reply) = try await response.value
+    #expect((reply as? HTTPURLResponse)?.statusCode == 410)
+    #expect(body.isEmpty)
+    #expect(await relay.route(String(currentID))?.url == source)
+}
+
 @Test func castRelayTicketsAreAuthenticatedAndBounded() async throws {
     let relay = CastRelay()
     let url = URL(string: "https://cdn.example/segment.ts")!
