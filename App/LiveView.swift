@@ -302,7 +302,9 @@ struct ChannelListView: View {
         catch is CancellationError { }
         catch {
             guard !Task.isCancelled else { return }
-            Diagnostics.shared.failure("live", "playlist host=\(source.url.host() ?? "-")", error)
+            // A loopback playlist says which kind it is (`LoopbackPlaylist.label`), never its address.
+            let route = LoopbackPlaylist.label(source.url).map { " " + $0 } ?? ""
+            Diagnostics.shared.failure("live", "playlist host=\(source.url.host() ?? "-")\(route)", error)
             self.error = error.localizedDescription
         }
     }

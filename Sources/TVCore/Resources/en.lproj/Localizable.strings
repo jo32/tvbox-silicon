@@ -2395,4 +2395,9 @@
 "Select episodes to delete" = "Select episodes to delete";
 "Delete %lld episodes" = "Delete %lld episodes";
 "Search settings" = "Search settings";
+"This live playlist comes from its subscription's plugin, which this device can't run." = "This live playlist comes from its subscription's plugin, which this device can't run.";
+"This live playlist is a file on an Android device (127.0.0.1:9978/file), which Yingxia can't open. Add the playlist's web address instead." = "This live playlist is a file on an Android device (127.0.0.1:9978/file), which Yingxia can't open. Add the playlist's web address instead.";
+"This playlist only has %@ channels, which Apple's player can't play." = "This playlist only has %@ channels, which Apple's player can't play.";
+"The playlist address returned a web page instead of a playlist. Its host may be offline." = "The playlist address returned a web page instead of a playlist. Its host may be offline.";
+"This playlist's channel addresses are relative to the Android player that served it, so they can't be opened here." = "This playlist's channel addresses are relative to the Android player that served it, so they can't be opened here.";
 "This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line." = "This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line.";
