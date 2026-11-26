@@ -69,6 +69,10 @@ final class PlaybackHistoryPersistence: @unchecked Sendable {
             if start { queue.async { self.drain() } }
         }
     }
+    /// Blocks until every save submitted before this call is on disk or failed. `enqueue` starts a drain on
+    /// `queue` unless one is running, and a running drain takes the newest pending save before it ends, so an
+    /// empty block queued behind them runs after the last write. Never call on `queue`.
+    func waitForWrites() { queue.sync {} }
     private func updatePriority(_ entries: [PlaybackHistoryEntry], cache: MediaCache) {
         let scopes = Set(entries.flatMap { entry in
             [entry.context.id] + (entry.context.poster.map { [PosterResource.artworkScope($0)] } ?? [])

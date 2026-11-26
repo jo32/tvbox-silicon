@@ -46,6 +46,10 @@ import TVCore
                 .modifier(ThemeTint())
                 #endif
                 .task { Diagnostics.shared.record(.info, "app", "Application scene opened") }
+                #if os(macOS)
+                // History is written in the background; quitting waits for the last position to reach the disk.
+                .onAppear { [store] in PlaybackHistoryLifecycle.saveOnTermination { store.playbackHistory } }
+                #endif
                 .task { await ErrorReports.shared.start() }
                 .task {
                     #if DEBUG
@@ -111,7 +115,7 @@ import TVCore
                 }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background {
-                        #if os(iOS)
+                        #if os(iOS) || os(tvOS)
                         PlaybackHistoryLifecycle.enterBackground(history: store.playbackHistory)
                         #else
                         Task { await store.playbackHistory.flushPersistence() }

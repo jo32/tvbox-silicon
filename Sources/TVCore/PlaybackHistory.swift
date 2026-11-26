@@ -260,6 +260,10 @@ extension PlaybackHistoryEntry {
         entriesRevision = revision
     }
 
+    /// Blocks until the snapshots submitted so far are written (or failed): for a Mac app that is quitting, which
+    /// can't await `flushPersistence()`. Doesn't retry a failed write or update `persistenceError`.
+    public func waitForPendingWrites() { persistence.waitForWrites() }
+
     /// Close/background/restore callers can await durable latest state without blocking rendering.
     /// Entries change immediately; `persistenceError` is updated when this drain completes.
     @discardableResult public func flushPersistence() async -> Bool {

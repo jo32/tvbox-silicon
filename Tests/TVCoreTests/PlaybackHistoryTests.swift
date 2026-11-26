@@ -235,3 +235,15 @@ private func historyContext(video: String = "series", episode: String = "1", sou
     #expect(history.visibleEntries(hiding: hidden).map(\.context.videoID) == ["vC", "vA"])
     #expect(await history.flushPersistence())
 }
+
+@Test @MainActor func playbackHistoryWaitsForItsBackgroundWritesWhenQuitting() throws {
+    let file = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".json")
+    defer { try? FileManager.default.removeItem(at: file) }
+    let history = PlaybackHistory(file: file)
+    for second in 10...40 { history.record(historyContext(video: "quit"), position: Double(second), duration: 1200) }
+    history.waitForPendingWrites()
+    // Read from disk, not through the shared writer's pending snapshot.
+    let saved = try JSONDecoder().decode([PlaybackHistoryEntry].self, from: Data(contentsOf: file))
+    #expect(saved.map(\.context.videoID) == ["quit"])
+    #expect(saved.first?.position == 40)
+}
