@@ -189,6 +189,17 @@ enum QALaunch {
                 ?? UserDefaults.standard.string(forKey: "qaPlayHeaders").flatMap { try? JSONDecoder().decode([String: String].self, from: Data($0.utf8)) } ?? [:]
             store.playing = Channel(name: url.lastPathComponent, group: "QA", url: url, headers: headers, resumePosition: resume > 0 ? resume : nil, subtitles: subtitles)
         }
+        // `-qaLiveCheck 1` loads every live playlist of the subscription, as the Live tab does, and logs each result.
+        if UserDefaults.standard.bool(forKey: "qaLiveCheck") {
+            for source in store.liveSources where !source.isBuiltIn {
+                do {
+                    let playlist = try await HTTPClient().playlist(source)
+                    Diagnostics.shared.record(.info, "qa", "live-check \(source.name): \(playlist.channels.count) channels, first=\(playlist.channels.first?.name ?? "-")")
+                } catch {
+                    Diagnostics.shared.record(.warning, "qa", "live-check \(source.name): \(error.localizedDescription)")
+                }
+            }
+        }
         // `-qaPlayChannel <index>` plays that channel of the subscription's first live playlist, picked from its list as
         // the Live tab does: Previous and Next Channel and the channel list go through the playlist (#1010).
         if let index = UserDefaults.standard.string(forKey: "qaPlayChannel").flatMap(Int.init),
