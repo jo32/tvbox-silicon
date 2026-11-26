@@ -58,6 +58,9 @@ struct PlaybackView: View {
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    /// With Start in Full Screen on, a player that opens as its own screen (a Discover search, say, rather than a
+    /// watch page) turns for the video the moment its picture appears. Watch pages apply it on their own.
+    @AppStorage(WatchPage.fullScreenKey) private var startsFullScreen = false
     #endif
 
     private var chromeVisible: Bool {
@@ -214,6 +217,13 @@ struct PlaybackView: View {
         .onChange(of: channel) { _, channel in startCatalogPlayback(session, channel: channel, store: store); showOnStart(opening: false) }
         #if os(iOS)
         .onChange(of: session.showsPicture || session.error != nil, initial: true) { _, started in watch?.started(started) }
+        // Start in Full Screen (#2097): a player that opened as its own screen turns as soon as its picture appears,
+        // as the watch page's player does. Watch pages apply the setting themselves, so only the standalone player.
+        .onChange(of: session.showsPicture) { _, showing in
+            guard showing, startsFullScreen, playerLayout == .screen, session.error == nil else { return }
+            let size = session.player.currentItem?.presentationSize ?? .zero
+            PlayerOrientation.set(landscape: size.height == 0 || size.width >= size.height)
+        }
         .onAppear { watch?.opened(session) }
         #endif
         .onChange(of: showsDanmaku) { _, value in session.catalogDanmaku.enabled = value }
