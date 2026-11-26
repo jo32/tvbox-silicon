@@ -55,6 +55,19 @@ private func historyContext(video: String = "series", episode: String = "1", sou
     #expect(context.episode(in: [otherLine, next, original])?.flag == "line")
 }
 
+@Test func playerTitleShowsADuplicatedNameOnlyOnce() {
+    func context(video: String, episode: String) -> PlaybackHistoryContext {
+        PlaybackHistoryContext(origin: URL(string: "https://example.com/sub.json")!, sourceKey: "source", sourceName: "Movies",
+            videoID: "v", videoName: video, episodeID: "e", episodeName: episode, episodeFlag: "line")
+    }
+    // The same name twice reads once, not "第1集 · 第1集" (#2363).
+    #expect(context(video: "第1集", episode: "第1集").displayName == "第1集")
+    #expect(context(video: "第1集 ", episode: " 第1集").displayName == "第1集")
+    // Different names still read as "video · episode".
+    #expect(context(video: "Series", episode: "Episode 2").displayName == "Series · Episode 2")
+    #expect(context(video: "Series", episode: "").displayName == "Series")
+}
+
 @Test func anEpisodePickedFromAListResumesWhereItStopped() {
     let entry = PlaybackHistoryEntry(context: historyContext(episode: "2"), position: 163, duration: 327,
                                      updatedAt: Date(timeIntervalSince1970: 0))
