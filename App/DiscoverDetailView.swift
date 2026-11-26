@@ -159,7 +159,7 @@ struct DiscoverDetailView: View {
         .ignoresSafeArea(edges: .top)
         .navigationTitle("")
         #if os(macOS)
-        .artUnderToolbar()
+        .artUnderToolbar(dark ? .dark : .light)
         #else
         .toolbar(.visible, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)

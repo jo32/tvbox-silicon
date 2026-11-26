@@ -66,7 +66,7 @@ struct WatchNowPhonePage: View {
         #endif
         .ignoresSafeArea(edges: entries.isEmpty ? [] : .top)
         #if os(macOS)
-        .heroUnderToolbar(!entries.isEmpty && !pastHero)
+        .heroUnderToolbar(!entries.isEmpty && !pastHero, scheme: hero.paint.map { $0.isDark ? .dark : .light })
         #endif
     }
 

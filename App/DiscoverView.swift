@@ -251,7 +251,7 @@ struct DiscoverView: View {
         .ignoresSafeArea(edges: heroShown ? .top : [])
         #endif
         #if os(macOS)
-        .heroUnderToolbar(heroShown && !pastHero)
+        .heroUnderToolbar(heroShown && !pastHero, scheme: heroState.paint?.isDark == false ? .light : .dark)
         #endif
         .onAppear { onScreen = true }
         .onDisappear { onScreen = false }
