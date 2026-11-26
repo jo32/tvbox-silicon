@@ -953,6 +953,7 @@
 "Your feedback is now issue #%lld on GitHub." = "你的反馈已成为 GitHub 上的问题 #%lld。";
 "Send Another" = "再发一条";
 "Your Feedback" = "我的反馈";
+"%lld sent · %lld adopted" = "已发送 %lld 条 · 已采纳 %lld 条";
 "Received" = "已收到";
 "Replied" = "已回复";
 "Resolved" = "已解决";
