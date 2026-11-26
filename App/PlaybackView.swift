@@ -316,6 +316,12 @@ import IOKit.pwr_mgt
     private var liveRetrying = false
     /// The episode was already asked for again after its server ignored AVPlayer's byte range.
     private var rangeRetried = false
+    /// How often a link AVPlayer refused to open was looked at again (`retryUnopened`).
+    private var rescues = 0
+    /// An episode resolved again by its source, for a fresh link when the one playing expires; set for catalog episodes.
+    var renewLink: (@MainActor (Channel) async -> Channel?)?
+    /// Fresh links for the episodes playing and queued (`LinkRenewal`), by address.
+    private var linkRenewals: [URL: LinkRenewal] = [:]
     /// When the loopback server behind the episode last listened again (`recoverLoopback`).
     private var loopbackRecovered: ContinuousClock.Instant?
     /// How often the episode opened again after its connection dropped (`resumeAfterDrop`), and whether it did yet.
@@ -704,6 +710,63 @@ import IOKit.pwr_mgt
         return true
     }
 
+    /// A link AVPlayer can't open (-11828 "Cannot Open") or calls damaged (-11829): an MP4 served as
+    /// application/octet-stream without an extension (drives' object storage, plugins' proxies), an MKV, FLV, AVI or
+    /// MPEG-PS behind a name or type that says nothing or MP4, a DASH manifest. Its first bytes say what it is
+    /// (`ContainerRescue`): AVPlayer is told the container, a manifest plays as HLS, FFmpeg repackages the rest. Twice at
+    /// most: told the container, then repackaged. A web page says it is one instead of failing as a player error; when
+    /// the bytes show nothing to try (a refused status, an image), the failure goes on through the rest of the chain
+    /// (`otherwise`: the loopback, drop, live and line recoveries).
+    private func retryUnopened(after failure: Error?, channel: Channel, url: URL, generation active: UUID,
+                               otherwise rest: @escaping @MainActor () -> Void) -> Bool {
+        guard rescues < 2, ContainerRescue.refusedContainer(failure), ContainerRescue.handles(url) else { return false }
+        rescues += 1
+        let hinted = MediaTypeHint.mimeType(for: url) != nil, renewal = renewal(for: channel, length: nil, name: url.lastPathComponent)
+        observation = nil; loading = true
+        Diagnostics.shared.record(.warning, "player", "unopened; reading its first bytes host=\(url.host() ?? "-") \(failure.map(Self.describe) ?? "-")")
+        preparation = Task { [weak self] in
+            let plan = await ContainerRescue.plan(for: url, headers: channel.headers, hinted: hinted, renewal: renewal)
+            guard let self, self.generation == active, !Task.isCancelled else {
+                if case .repackage(let source) = plan { await source.close() }
+                return
+            }
+            var next: URL?
+            switch plan {
+            case .mimeType(let type): MediaTypeHint.set(type, for: url); next = url
+            case .dash(let master): next = master
+            case .live(let stream): next = stream
+            case .repackage(let source):
+                self.note(L10n.text("Repackaging the video for this device"))
+                next = try? await Self.remux(source, channel: channel)
+                guard self.generation == active, !Task.isCancelled else { if let next { Remux.stop(next) }; return }
+            case .webPage:
+                Diagnostics.shared.record(.warning, "player.webpage", "a web page, not a video host=\(url.host() ?? "-") source=\(channel.historyContext?.sourceKey ?? "-")")
+                if self.tryNextLine(after: failure) { return }
+                self.loading = false; self.errorSymbol = "safari"
+                self.error = L10n.text("This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line.")
+                return
+            case .nothing(let reason): Diagnostics.shared.record(.info, "player", "unopened link not rescued: \(reason)")
+            }
+            guard let next else { return rest() }
+            self.detachItem()
+            self.configure(channel, url: next, generation: active)
+            if next != url { self.externalSubtitles.playing(next); self.automatic = next }
+        }
+        return true
+    }
+
+    /// Fresh links to the file of `channel`, a catalog episode playing or queued, once its link expires (`LinkRenewal`).
+    private func renewal(for channel: Channel, length: Int?, name: String) -> (@Sendable () async -> CloudStreams.Source?)? {
+        guard renewLink != nil, channel.historyContext != nil, !LiveCatalog.isRoom(channel.url) else { return nil }
+        let renewal = linkRenewals[channel.url] ?? LinkRenewal { [weak self] in
+            guard let fresh = await self?.renewLink?(channel) else { return nil }
+            return (fresh.url, fresh.headers)
+        }
+        if linkRenewals.count > 4 { linkRenewals.removeAll() }
+        linkRenewals[channel.url] = renewal
+        return renewal.renewal(length: length, name: name)
+    }
+
     /// The other line could not be resolved either: show why instead of loading forever.
     func lineSwitchFailed(_ message: String) {
         guard switchNotice != nil else { return }
@@ -1049,7 +1112,7 @@ import IOKit.pwr_mgt
         isLive = live
         // Live: a live room, or a channel of a live playlist (only on-demand episodes have a history context).
         attempt = PlayAttempt(live: live || channel.historyContext == nil, address: channel.url)
-        liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false; rung = nil; rungTried = false
+        liveRoom = LiveCatalog.isRoom(channel.url) ? channel : nil; liveReopen = LiveReopen(); liveRetrying = false; rangeRetried = false; rung = nil; rungTried = false; rescues = 0
         loopbackRecovered = nil; dropRecovery = PlaybackDropRecovery(); reopenedAfterDrop = false
         ErrorReports.shared.playing(live: isLive, format: channel.url.pathExtension, source: channel.historyContext?.sourceKey,
                                     danmaku: UserDefaults.standard.object(forKey: DanmakuPreference.key) == nil || UserDefaults.standard.bool(forKey: DanmakuPreference.key),
@@ -1178,7 +1241,8 @@ import IOKit.pwr_mgt
         // Some providers require request headers. AVURLAsset's HTTP-header option is
         // best-effort and is not a guarantee for every redirected HLS segment.
         let asset = CloudStreams.asset(for: url) ?? CENCStreams.asset(for: url) ?? DashStreams.asset(for: url) ?? LiveRepair.asset(for: url)
-            ?? AVURLAsset(url: url, options: Self.assetOptions(headers: channel.headers))
+            ?? AVURLAsset(url: url, options: Self.assetOptions(headers: channel.headers)
+                .merging(MediaTypeHint.mimeType(for: url).map { [AVURLAssetOverrideMIMETypeKey: $0] } ?? [:]) { $1 })
         let item = AVPlayerItem(asset: asset)
         if url.scheme == CloudStreams.scheme {
             // The duration sets how far ahead the file is read, on this device and for this bitrate (#702).
@@ -1390,14 +1454,20 @@ import IOKit.pwr_mgt
                     if self.retryRange(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.retryHDR(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
                     if self.retryConvertingAudio(after: failure, channel: channel, url: url, generation: activeGeneration) { return }
-                    if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
-                    if self.reopenedAfterDrop, self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
                     let giveUp = { @MainActor [weak self] (reason: String?) -> Void in
                         guard let self else { return }
                         self.giveUp(failure, item: item, channel: channel, url: url, refused: refused, network: network, proxyReason: reason)
                     }
-                    if self.retryThroughProxy(after: failure, channel: channel, url: url, generation: activeGeneration, otherwise: giveUp) { return }
-                    giveUp(nil)
+                    // The rest of the chain; a link the container rescue finds nothing for comes back here. One tail: `giveUp`.
+                    let rest: @MainActor () -> Void = { [weak self] in
+                        guard let self, self.generation == activeGeneration else { return }
+                        if self.recoverLoopback(Self.urlErrorCode(failure), channel: channel, url: url, generation: activeGeneration) { return }
+                        if self.reopenedAfterDrop, self.resumeAfterDrop(failure, channel: channel, url: url, generation: activeGeneration) { return }
+                        if self.retryThroughProxy(after: failure, channel: channel, url: url, generation: activeGeneration, otherwise: giveUp) { return }
+                        giveUp(nil)
+                    }
+                    if self.retryUnopened(after: failure, channel: channel, url: url, generation: activeGeneration, otherwise: rest) { return }
+                    rest()
                 }
             }
         }
@@ -1819,7 +1889,9 @@ extension PlaybackSession {
         if let media = await EmbeddedJarHost.shared.directMedia(address) {
             try Task.checkCancellation()
             let proxied = address
-            address = CloudStreams.register(media) { await EmbeddedJarHost.shared.directMedia(proxied) }
+            address = CloudStreams.register(media, renewal: renewal(for: channel, length: media.length, name: media.name)) {
+                await EmbeddedJarHost.shared.directMedia(proxied)
+            }
             prepared.url = address
             Diagnostics.shared.record(.info, "player", "cloud direct host=\(media.url.host() ?? "-") length=\(media.length)")
         } else if let media = await CatPawOpen.proxiedMedia(address, headers: channel.headers) {
@@ -1828,13 +1900,17 @@ extension PlaybackSession {
                 try Task.checkCancellation()
                 // A drive file whose link the bundle's proxy reveals streams straight from the drive, like the plugins'
                 // (above): through the bundle, a 4K file filled the heap of the phone's Node until it stopped (#530).
-                address = CloudStreams.register(direct) { await CatPawOpen.renewedDirectMedia(media) }
+                address = CloudStreams.register(direct, renewal: renewal(for: channel, length: direct.length, name: direct.name)) {
+                    await CatPawOpen.renewedDirectMedia(media)
+                }
                 Diagnostics.shared.record(.info, "player", "catpaw direct host=\(direct.url.host() ?? "-") length=\(direct.length)")
             } else {
                 // The bundle downloads each request with 10 to 16 threads of its own: reading ahead on six at once ran its
                 // Node out of memory, and on one a 4K episode stalled whenever the drive slowed.
                 // Its proxy moves to a new port when iOS took back the sockets of the suspended app (#485).
-                address = CloudStreams.register(media, parallel: 2) { await CatPawOpen.relocated(media) }
+                address = CloudStreams.register(media, parallel: 2, renewal: renewal(for: channel, length: media.length, name: media.name)) {
+                    await CatPawOpen.relocated(media)
+                }
                 Diagnostics.shared.record(.info, "player", "catpaw stream length=\(media.length)")
             }
             prepared.url = address
@@ -1873,7 +1949,7 @@ extension PlaybackSession {
         // A plugin's own loopback server names no file (`/chunk?…`), so its first bytes say whether it is an MKV
         // or the like to repackage (#776); anything else goes to AVPlayer as before.
         if !prepared.pluginProxy, channel.url.scheme == "http", Remux.hidesName(address),
-           let source = await Remux.sniffedSource(address, headers: channel.headers) {
+           let source = await Remux.sniffedSource(address, headers: channel.headers, renewal: renewal(for: channel, length: nil, name: address.lastPathComponent)) {
             if Task.isCancelled { await source.close(); throw CancellationError() }
             note(L10n.text("Repackaging the video for this device"))
             Diagnostics.shared.record(.info, "player", "plugin server sends a file to repackage")
@@ -1891,9 +1967,10 @@ extension PlaybackSession {
             let source: RemuxSource?
             if address.isFileURL { source = try? Remux.fileSource(address) }
             else {
-                do { source = try await Remux.httpSource(address, headers: channel.headers) }
+                do { source = try await Remux.httpSource(address, headers: channel.headers, renewal: renewal(for: channel, length: nil, name: address.lastPathComponent)) }
                 catch {
-                    if FLVLive.names(address), error is Remux.NoByteRanges {
+                    // A stream that answers no byte ranges is live: an FLV one, whatever its name, plays as live HLS.
+                    if error is Remux.NoByteRanges {
                         // CatPawOpen returns Huya and Douyu as HTTP-FLV streams whose servers ignore Range.
                         // Keep seekable FLV files on the file path and repackage live streams as local HLS.
                         do {
@@ -1915,6 +1992,12 @@ extension PlaybackSession {
                 prepared.url = url
                 return prepared
             }
+        }
+        if address.pathExtension.lowercased() == "mpd", ["http", "https"].contains(address.scheme),
+           let master = await ContainerRescue.dashManifest(address, headers: channel.headers) {
+            try Task.checkCancellation()
+            prepared.url = master
+            return prepared
         }
         #if os(macOS)
         if address.pathExtension.lowercased() == "m3u8", ["http", "https"].contains(address.scheme), channel.url.scheme != DownloadLibrary.scheme {
