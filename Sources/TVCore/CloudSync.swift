@@ -119,8 +119,9 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
     func flush(_ cloud: any CloudValueStore, now: Date) {
         let cutoff = now.addingTimeInterval(-CloudSync.removalLifetime)
         if adoptingAccount {
-            adoptingAccount = false
-            adopt(cloud, cutoff: cutoff, now: now)
+            // Nothing goes up until the new account's own copy has been read: one this build cannot read is
+            // left alone and tried again, never replaced with what the old account left here (#2347).
+            if adopt(cloud, cutoff: cutoff, now: now) { adoptingAccount = false }
             return
         }
         let restamped = ledger.useModificationDates(modifiedAt)
@@ -139,25 +140,26 @@ public struct CloudSyncLedger<Value: Codable & Equatable & Sendable>: Codable, E
     func adoptAccount() { adoptingAccount = true }
 
     /// Another iCloud account: its items are the ones to show, and this device's items for the old account must
-    /// not travel into it.
-    private func adopt(_ cloud: any CloudValueStore, cutoff: Date, now: Date) {
+    /// not travel into it. False while its copy cannot be read, so the next flush tries again instead of pushing.
+    private func adopt(_ cloud: any CloudValueStore, cutoff: Date, now: Date) -> Bool {
         // A copy this build cannot read is left alone rather than overwritten with the old account's items.
         guard let data = cloud.data(forKey: key) else {
             // A key the new account has never had starts from what the device holds, so switching to an
             // account that has never synced keeps the subscriptions, favorites and history instead of
             // emptying them.
             ledger = CloudSyncLedger()
-            guard ledger.note(current(), now: now, modifiedAt: modifiedAt) else { return }
+            guard ledger.note(current(), now: now, modifiedAt: modifiedAt) else { return true }
             save()
             push(cloud)
-            return
+            return true
         }
-        guard var remote = CloudSync.decode(CloudSyncLedger<Value>.self, from: data) else { return }
+        guard var remote = CloudSync.decode(CloudSyncLedger<Value>.self, from: data) else { return false }
         remote.useModificationDates(modifiedAt)
         remote.prune(before: cutoff)
         ledger = remote
         save()
         apply(ledger.live)
+        return true
     }
 
     private func push(_ cloud: any CloudValueStore) {

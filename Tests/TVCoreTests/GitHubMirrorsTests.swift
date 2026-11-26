@@ -16,6 +16,14 @@ private actor Hosts {
     // A configuration's own GitHub proxy (饭太硬 uses git.yylx.win) still names the GitHub file.
     #expect(GitHubMirrors.gitHubFile(URL(string: "https://git.yylx.win/https://raw.githubusercontent.com/o/r/main/a.js")!)?.absoluteString
             == "https://raw.githubusercontent.com/o/r/main/a.js")
+    // Proxies that take the GitHub address without its scheme (ghp.ci, gh.llkk.cc), and github.com file pages.
+    #expect(GitHubMirrors.gitHubFile(URL(string: "https://ghp.ci/raw.githubusercontent.com/o/r/master/live.txt")!)?.absoluteString
+            == "https://raw.githubusercontent.com/o/r/master/live.txt")
+    #expect(GitHubMirrors.gitHubFile(URL(string: "https://ghfast.top/https://github.com/o/r/blob/main/tv/a.m3u")!)?.absoluteString
+            == "https://raw.githubusercontent.com/o/r/main/tv/a.m3u")
+    #expect(GitHubMirrors.gitHubFile(URL(string: "https://github.com/o/r/raw/refs/heads/main/a.txt")!)?.absoluteString
+            == "https://raw.githubusercontent.com/o/r/refs/heads/main/a.txt")
+    #expect(GitHubMirrors.gitHubFile(URL(string: "https://github.com/o/r/releases/download/v1/a.txt")!) == nil)
     #expect(GitHubMirrors.gitHubFile(URL(string: "https://raw.githubusercontent.com/o/r/main/a.json?token=secret")!) == nil)
     #expect(GitHubMirrors.gitHubFile(URL(string: "https://example.com/o/r/main/a.json")!) == nil)
 }

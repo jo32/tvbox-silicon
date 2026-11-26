@@ -336,6 +336,17 @@ public struct CatalogClient: Sendable {
             throw error
         }
     }
+    /// The source's JAR spider's answer to a query on Android TVBox's local proxy (`do=live&…`), which a
+    /// subscription's live playlists can point at (`LoopbackPlaylist`). FongMi hands these to the archive's
+    /// `Proxy.proxy`, and to the spider's own `proxy` for `do=jar`; the plugin runtime does the same.
+    func spiderProxy(_ query: String) async throws -> LoopbackPlaylist.Answer {
+        guard site.runtime == .jar, EmbeddedJarHost.available, let archive = try site.pluginURL(origin: origin, fallback: jarURL) else {
+            throw LoopbackPlaylist.needsPlugin
+        }
+        let json = try await EmbeddedJarHost.shared.request(site: site, jarURL: archive, params: ["proxy": query], http: http, configurationOrigin: origin)
+        return try LoopbackPlaylist.Answer(json)
+    }
+
     private func perform(_ params: [String: String]) async throws -> [String: JSONValue] {
         if site.isCloudFiles { return try await CloudFilesSource.request(site, params: params) }
         if site.isTelegram { return try await TelegramSource.request(site, params: params, http: http) }

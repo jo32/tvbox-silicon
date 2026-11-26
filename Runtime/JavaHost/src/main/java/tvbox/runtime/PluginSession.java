@@ -41,7 +41,7 @@ public final class PluginSession {
             long deadline = System.currentTimeMillis() + seconds * 1000;
             stopAt.accumulateAndGet(deadline, (current, next) -> current == 0 ? next : Math.min(current, next));
         }
-        String kind = params.has("spiderAction") ? "action " + params.optString("spiderAction")
+        String kind = params.has("proxy") ? "proxy" : params.has("spiderAction") ? "action " + params.optString("spiderAction")
             : params.has("spiderUI") ? "window"
             : params.has("play") ? "play flag=" + params.optString("flag") : params.has("ids") ? "detail"
             : params.has("wd") ? "search" : params.has("t") ? "category" : "home";
@@ -53,6 +53,7 @@ public final class PluginSession {
     }
 
     private String performRequest(JSONObject params) throws Exception {
+        if (params.has("proxy")) return proxy(params.getString("proxy"));
         if (params.has("spiderAction")) return action(params.getString("spiderAction"));
         // The app sends string parameters, so the event arrives as JSON text.
         if (params.has("spiderUI")) return window(params.get("spiderUI") instanceof JSONObject event ? event : new JSONObject(params.getString("spiderUI")));
@@ -127,6 +128,16 @@ public final class PluginSession {
             Thread.sleep(300);
         }
         return new JSONObject().put("notices", new org.json.JSONArray(PluginNotices.take())).put("ui", PluginWindows.state()).toString();
+    }
+
+    /**
+     * The plugin's answer to a query on Android TVBox's local proxy ({@code do=live&type=txt&ext=…}), which
+     * configurations' live playlists point at as {@code http://127.0.0.1:9978/proxy?…}: what FongMi's server
+     * would send back for it.
+     */
+    private String proxy(String query) throws Exception {
+        if (bridge == null) throw new IllegalStateException("This plugin has no local proxy");
+        return bridge.proxyAnswer(CloudDriveBridge.queryParameters(query)).toString();
     }
 
     /** A list the plugin may change, as TVBox passes it: 小雅's AListSh rewrites ids.set(0, …) in detailContent, which

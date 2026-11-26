@@ -92,6 +92,8 @@ final class RemuxSession: @unchecked Sendable {
     private let budget: Int
     /// Segments given up part-way for another one AVPlayer asked for.
     private(set) var abandoned = 0
+    /// Reads of the source that failed in a row; only the FFmpeg thread reads.
+    private var readFailures = FailureStreak(threshold: 3, base: 1, ceiling: 8)
 
     private struct Key: Hashable { var track: Int, segment: Int }
 
@@ -542,11 +544,18 @@ final class RemuxSession: @unchecked Sendable {
             if interrupted { task.cancel(); return -1 }
         }
         guard let data = result.data, !data.isEmpty else {
-            if let error = result.error, !interrupted, !(error is CancellationError) {
-                Diagnostics.shared.failure("remux", "read offset=\(offset)", error)
+            if let error = result.error, !interrupted, !TransientRetry.isCancellation(error) {
+                // Reported once per run of failures, not once per read: AVPlayer asks for a failed segment again at
+                // once, and each try read the same dead link again (41 installs, 3,928 reports of one -1004 in a week).
+                // After a few in a row the next read waits, so a link that stays dead costs seconds, not a storm.
+                let (report, wait) = readFailures.fail()
+                if report { Diagnostics.shared.failure("remux", "read offset=\(offset) run=\(readFailures.count)", error) }
+                let until = Date().addingTimeInterval(wait)
+                while Date() < until, !interrupted { Thread.sleep(forTimeInterval: 0.1) }
             }
             return result.error == nil ? 0 : -1
         }
+        if let run = readFailures.succeed() { Diagnostics.shared.record(.info, "remux", "reads again after \(run) failed") }
         let count = min(size, data.count)
         data.copyBytes(to: buffer, count: count)
         return Int32(count)
