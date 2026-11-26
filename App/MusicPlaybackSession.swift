@@ -57,7 +57,7 @@ typealias MusicTrack = TVCore.MusicTrack
     private var unshuffled: [MusicTrack]?
     /// The player's own volume, under the system's; remembered across launches.
     var volume: Double = UserDefaults.standard.object(forKey: "musicVolume") == nil ? 1 : UserDefaults.standard.double(forKey: "musicVolume") {
-        didSet { player.volume = Float(volume); UserDefaults.standard.set(volume, forKey: "musicVolume") }
+        didSet { cancelSleepFade(); player.volume = Float(volume); UserDefaults.standard.set(volume, forKey: "musicVolume") }
     }
     var preferences = MusicPreferences.load() {
         didSet { if preferences != oldValue { preferences.save() } }
@@ -124,6 +124,9 @@ typealias MusicTrack = TVCore.MusicTrack
     private var skipPass = EpisodeSkipPass()
     private var editingSkip = false
     private var resumeAfterEditing = false
+    private let sleepFade = PlaybackSleepFade()
+    private var sleepFadeRevision: UUID?
+    private var sleepChangedObserver: NSObjectProtocol?
     private var sleepObserver: NSObjectProtocol?
 
     init(library: MusicLibrary = .shared) {
@@ -149,6 +152,12 @@ typealias MusicTrack = TVCore.MusicTrack
         #endif
         sleepObserver = NotificationCenter.default.addObserver(forName: SleepTimer.fired, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.sleepTimerFired() }
+        }
+        sleepChangedObserver = NotificationCenter.default.addObserver(forName: SleepTimer.changed, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.sleepFadeRevision != SleepTimer.shared.revision else { return }
+                self.cancelSleepFade()
+            }
         }
         #if !os(macOS)
         // An alarm, a call or Siri pauses the player; it plays again when the system says it may (#803).
@@ -231,6 +240,9 @@ typealias MusicTrack = TVCore.MusicTrack
     func resume() {
         guard let point = library.resumePoint else { return }
         play(point.queue, at: point.position)
+        // `play` clears the shuffle flag, so put back what the point saved (#1728):
+        // without this the queue stays shuffled but the App and CarPlay show it off.
+        shuffled = point.shuffled; unshuffled = point.unshuffled
     }
 
     /// The next song, or the first again when the whole queue repeats.
@@ -334,6 +346,7 @@ typealias MusicTrack = TVCore.MusicTrack
     }
 
     func toggle() {
+        cancelSleepFade()
         switch phase {
         case .playing, .loading: pause()
         case .paused:
@@ -345,6 +358,7 @@ typealias MusicTrack = TVCore.MusicTrack
     }
 
     func pause() {
+        cancelSleepFade()
         guard phase == .playing || phase == .loading else { return }
         interruption.viewerPaused()
         player.pause(); phase = .paused
@@ -429,6 +443,7 @@ typealias MusicTrack = TVCore.MusicTrack
 
     /// Finds a channel for the queue's current song and plays it.
     private func loadCurrent(at resumeAt: Double?) {
+        cancelSleepFade()
         guard let track else { return }
         let run = UUID(); generation = run
         cued = false
@@ -627,6 +642,7 @@ typealias MusicTrack = TVCore.MusicTrack
             _ = SleepTimer.shared.itemEnded()
             return
         }
+        if sleepFadeRevision != nil { cueNext(); return }
         if repeatMode == .one || repeatMode == .all && queue?.tracks.count == 1 {
             skipPass = EpisodeSkipPass()
             seek(to: 0); activateAudioSession(); player.play(); phase = .loading
@@ -653,7 +669,7 @@ typealias MusicTrack = TVCore.MusicTrack
         position = 0; duration = queue.current?.duration; seekingTo = nil
         lyrics = nil; lyricsLoading = false; lyricsFor = nil
         lastSavedPosition = 0
-        library.saveResumePoint(MusicResumePoint(queue: queue, position: 0))
+        library.saveResumePoint(MusicResumePoint(queue: queue, position: 0, shuffled: shuffled, unshuffled: unshuffled))
         phase = .paused
         cued = true
     }
@@ -661,7 +677,13 @@ typealias MusicTrack = TVCore.MusicTrack
     /// The Sleep Timer ran out: the song fades away and pauses.
     private func sleepTimerFired() {
         guard phase == .playing || phase == .loading else { return }
-        SleepTimer.fadeOut(player) { [weak self] in self?.pause() }
+        guard sleepFadeRevision != SleepTimer.shared.revision else { return }
+        sleepFadeRevision = SleepTimer.shared.revision
+        sleepFade.start(player) { [weak self] in self?.pause() }
+    }
+
+    private func cancelSleepFade() {
+        sleepFade.cancel(); sleepFadeRevision = nil
     }
 
     /// What the Sleep Timer's "end" is here: a song, or a source's episode.
@@ -839,7 +861,7 @@ typealias MusicTrack = TVCore.MusicTrack
         guard let queue, selection != nil || sourceStream != nil else { return }
         guard force || abs(position - lastSavedPosition) >= 5 else { return }
         lastSavedPosition = position
-        library.saveResumePoint(MusicResumePoint(queue: queue, position: position))
+        library.saveResumePoint(MusicResumePoint(queue: queue, position: position, shuffled: shuffled, unshuffled: unshuffled))
         if let source = queue.current?.source { recordSource?(source, position, duration ?? 0) }
     }
 
@@ -847,6 +869,7 @@ typealias MusicTrack = TVCore.MusicTrack
         guard track != nil else { return }
         switch status {
         case .playing:
+            if !sleepFade.isActive, sleepFadeRevision != nil { cancelSleepFade() }
             if phase == .loading || phase == .paused { phase = .playing; startWatch?.cancel() }
             if let set = streamSetAt {
                 streamSetAt = nil
@@ -879,6 +902,7 @@ typealias MusicTrack = TVCore.MusicTrack
     #endif
 
     private func tearDownItem() {
+        cancelSleepFade()
         itemObservation = nil; pictureObservation = nil
         for observer in observers { NotificationCenter.default.removeObserver(observer) }
         observers = []

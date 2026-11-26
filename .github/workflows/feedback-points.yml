@@ -1,0 +1,19 @@
+# A feedback issue closed by a merged fix gets `fixed` (or `adopted`), so its reporter gets the points without
+# anyone having to remember the label. See .github/scripts/label-fixed-feedback.sh.
+name: Feedback points
+on:
+  issues:
+    types: [closed]
+permissions:
+  issues: write
+jobs:
+  label:
+    if: github.event.issue.state_reason == 'completed' && contains(github.event.issue.labels.*.name, 'feedback')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - run: .github/scripts/label-fixed-feedback.sh "${{ github.event.issue.number }}"
+        env:
+          GH_TOKEN: ${{ github.token }}

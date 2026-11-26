@@ -29,9 +29,9 @@ PYTHON="$DEST/python/bin/python3"
 uv pip install --quiet --python "$PYTHON" --target "$DEST/site-packages" --only-binary ':all:' \
   -r Runtime/PythonHost/requirements.txt
 rm -rf "$DEST/site-packages/bin"
-cp Runtime/PythonHost/host.py "$DEST/"
+cp Runtime/PythonHost/host.py Runtime/PythonHost/cancellation.py "$DEST/"
 cp Runtime/sandbox/spider.sb "$DEST/"
 cp -R Runtime/PythonHost/base "$DEST/"
 # The app bundle is read-only and signed; precompile once so -B startups still use bytecode.
-"$PYTHON" -I -m compileall -q -j 0 "$DEST/python/lib" "$DEST/site-packages" "$DEST/base" "$DEST/host.py" >/dev/null
+"$PYTHON" -I -m compileall -q -j 0 "$DEST/python/lib" "$DEST/site-packages" "$DEST/base" "$DEST/host.py" "$DEST/cancellation.py" >/dev/null
 "$PYTHON" -I -B -c "import sys; sys.path[:0] = ['$DEST', '$DEST/site-packages']; import requests, lxml.etree, bs4, pyquery, Crypto.Cipher.AES, cryptography.hazmat.primitives.ciphers, base.spider; print('Python host ready:', sys.version.split()[0])"

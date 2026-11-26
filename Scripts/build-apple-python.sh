@@ -90,7 +90,7 @@ open(path, 'w', encoding='utf-8').write(source.replace(anchor, anchor + '''     
                     full_name = os.path.join(os.path.dirname(sys.executable), stream.read().strip())
 '''))
 PATCH
-cp Runtime/PythonHost/host.py "$DEST/PythonHost/"
+cp Runtime/PythonHost/host.py Runtime/PythonHost/cancellation.py "$DEST/PythonHost/"
 cp -R Runtime/PythonHost/base "$DEST/PythonHost/"
 
 # The bundle is read-only and signed, and installing may change file times: precompile with hashes
