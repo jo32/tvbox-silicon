@@ -13,7 +13,9 @@ import Testing
     let server = try await BoundedBodyServer.start()
     defer { server.stop() }
     await #expect(throws: (any Error).self) { try await boundedLoad(server.url) }
-    #expect(server.chunks <= 3)
+    // The read stops at the third of 16 chunks; how many more the server sends before it sees the closed
+    // connection depends on load (a parallel `swift test` once let it reach 4), so this only rules out the whole body.
+    #expect(server.chunks < 16)
 }
 @Test func acceptsExactlyTheLimit() async throws {
     let server = try await BoundedBodyServer.start(count: 2)
@@ -36,6 +38,34 @@ import Testing
     await #expect(throws: (any Error).self) { try await task.value }
     #expect(server.chunks == 0)
 }
+@Test func refusedRequestReportsItsStatusBeforeItsSize() async throws {
+    // A 404 whose error page is far past the limit: the caller hears the 404 (HTTPClient.get's check), and
+    // the page isn't read.
+    struct Refused: Error { let status: Int }
+    let server = try await BoundedBodyServer.start(declared: 4096, count: 512, status: "404 Not Found")
+    defer { server.stop() }
+    let session = URLSession(configuration: .ephemeral)
+    defer { session.invalidateAndCancel() }
+    do {
+        _ = try await BoundedHTTPData.load(URLRequest(url: server.url), session: session, maximumBytes: 16) { response in
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200..<300).contains(status) else { throw Refused(status: status) }
+        }
+        Issue.record("refused request succeeded")
+    } catch {
+        #expect((error as? Refused)?.status == 404)
+    }
+    #expect(server.chunks <= 1)
+}
+@Test func largeBodiesArriveWholeAcrossBufferBoundaries() async throws {
+    let body = Data((0..<(BoundedHTTPData.chunk + 1000)).map { UInt8($0 % 251) })
+    let server = try await BoundedBodyServer.start(declared: body.count * 3, count: 3, body: body)
+    defer { server.stop() }
+    let session = URLSession(configuration: .ephemeral)
+    defer { session.invalidateAndCancel() }
+    let data = try await BoundedHTTPData.load(URLRequest(url: server.url), session: session, maximumBytes: body.count * 3).0
+    #expect(data == body + body + body)
+}
 
 private func boundedLoad(_ url: URL) async throws -> Data {
     let session = URLSession(configuration: .ephemeral)
@@ -52,7 +82,7 @@ private final class BoundedBodyServer: @unchecked Sendable {
     var chunks: Int { lock.withLock { sent } }
     var url: URL { URL(string: "http://127.0.0.1:\(listener.port!.rawValue)/")! }
     private init(_ listener: NWListener) { self.listener = listener }
-    static func start(declared: Int? = nil, count: Int = 16, body: Data = Data(repeating: 1, count: 8), encoding: String? = nil, redirect: Bool = false) async throws -> BoundedBodyServer {
+    static func start(declared: Int? = nil, count: Int = 16, body: Data = Data(repeating: 1, count: 8), encoding: String? = nil, redirect: Bool = false, status: String = "200 OK") async throws -> BoundedBodyServer {
         let listener = try NWListener(using: .tcp, on: .any)
         let server = BoundedBodyServer(listener)
         let queue = DispatchQueue(label: "bounded.body.fixture")
@@ -66,7 +96,7 @@ private final class BoundedBodyServer: @unchecked Sendable {
                 }
                 let length = declared.map { "Content-Length: \($0)\r\n" } ?? ""
                 let compression = encoding.map { "Content-Encoding: \($0)\r\n" } ?? ""
-                let header = "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n\(length)\(compression)Connection: close\r\n\r\n"
+                let header = "HTTP/1.1 \(status)\r\nContent-Type: application/octet-stream\r\n\(length)\(compression)Connection: close\r\n\r\n"
                 connection.send(content: Data(header.utf8), completion: .contentProcessed { _ in
                     Task {
                         guard count > 0 else { return }
