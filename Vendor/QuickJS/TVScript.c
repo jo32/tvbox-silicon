@@ -7,14 +7,20 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 
-struct TVScriptCancellation { atomic_bool cancelled; };
+struct TVScriptCancellation { atomic_bool cancelled; atomic_uint owners; };
 TVScriptCancellation *tv_script_cancellation_create(void) {
     TVScriptCancellation *token = calloc(1, sizeof(TVScriptCancellation));
-    if (token) atomic_init(&token->cancelled, false);
+    if (token) {
+        atomic_init(&token->cancelled, false);
+        atomic_init(&token->owners, 1);
+    }
     return token;
 }
 void tv_script_cancellation_cancel(TVScriptCancellation *token) { if (token) atomic_store(&token->cancelled, true); }
-void tv_script_cancellation_free(TVScriptCancellation *token) { free(token); }
+bool tv_script_cancellation_is_cancelled(const TVScriptCancellation *token) { return token && atomic_load(&token->cancelled); }
+void tv_script_cancellation_free(TVScriptCancellation *token) {
+    if (token && atomic_fetch_sub(&token->owners, 1) == 1) free(token);
+}
 
 struct TVScript {
     JSRuntime *runtime;
@@ -23,6 +29,8 @@ struct TVScript {
     TVScriptHost host;
     double deadline;
     TVScriptCancellation *cancellation;
+    uint64_t job_scope;
+    JSValue timer_scope;
 };
 
 static double now_seconds(void) {
@@ -33,7 +41,21 @@ static double now_seconds(void) {
 
 static int interrupt(JSRuntime *runtime, void *opaque) {
     TVScript *script = opaque;
-    return (script->cancellation && atomic_load(&script->cancellation->cancelled)) || (script->deadline > 0 && now_seconds() > script->deadline);
+    return tv_script_cancellation_is_cancelled(script->cancellation) || (script->deadline > 0 && now_seconds() >= script->deadline);
+}
+
+static JSValue current_timer_scope(JSContext *context, JSValueConst self, int argc, JSValueConst *argv) {
+    TVScript *script = JS_GetContextOpaque(context);
+    if (JS_IsUndefined(script->timer_scope)) {
+        JSValue scope = JS_NewObjectProto(context, JS_NULL);
+        if (JS_IsException(scope)) return scope;
+        if (JS_DefinePropertyValueStr(context, scope, "cancelled", JS_FALSE, JS_PROP_WRITABLE) < 0) {
+            JS_FreeValue(context, scope);
+            return JS_EXCEPTION;
+        }
+        script->timer_scope = scope;
+    }
+    return JS_DupValue(context, script->timer_scope);
 }
 
 static char *copy(const char *text) {
@@ -45,11 +67,14 @@ static char *copy(const char *text) {
 }
 
 /// "message\nstack" of the pending exception, malloc'd.
-static char *exception_text(JSContext *context) {
+static char *exception_text(TVScript *script) {
+    JSContext *context = script->context;
     JSValue exception = JS_GetException(context);
-    const char *message = JS_ToCString(context, exception);
-    JSValue stack = JS_IsObject(exception) ? JS_GetPropertyStr(context, exception, "stack") : JS_UNDEFINED;
-    const char *trace = JS_IsUndefined(stack) ? NULL : JS_ToCString(context, stack);
+    const char *message = !interrupt(script->runtime, script) ? JS_ToCString(context, exception) : NULL;
+    JSValue stack = message && JS_IsObject(exception) && !interrupt(script->runtime, script)
+        ? JS_GetPropertyStr(context, exception, "stack") : JS_UNDEFINED;
+    const char *trace = !JS_IsUndefined(stack) && !JS_IsException(stack) && !interrupt(script->runtime, script)
+        ? JS_ToCString(context, stack) : NULL;
     size_t length = (message ? strlen(message) : 9) + (trace ? strlen(trace) : 0) + 2;
     char *result = malloc(length);
     if (result) snprintf(result, length, "%s%s%s", message ? message : "exception", trace ? "\n" : "", trace ? trace : "");
@@ -57,6 +82,7 @@ static char *exception_text(JSContext *context) {
     if (trace) JS_FreeCString(context, trace);
     JS_FreeValue(context, stack);
     JS_FreeValue(context, exception);
+    if (JS_HasException(context)) JS_FreeValue(context, JS_GetException(context));
     return result;
 }
 
@@ -115,6 +141,7 @@ TVScript *tv_script_create(void *opaque, TVScriptHost host, size_t memory_limit,
     if (!script) return NULL;
     script->opaque = opaque;
     script->host = host;
+    script->timer_scope = JS_UNDEFINED;
     script->runtime = JS_NewRuntime();
     if (!script->runtime) { free(script); return NULL; }
     if (memory_limit) JS_SetMemoryLimit(script->runtime, memory_limit);
@@ -126,12 +153,15 @@ TVScript *tv_script_create(void *opaque, TVScriptHost host, size_t memory_limit,
     JS_SetContextOpaque(script->context, script);
     JSValue global = JS_GetGlobalObject(script->context);
     JS_SetPropertyStr(script->context, global, "__host", JS_NewCFunction(script->context, host_call, "__host", 2));
+    JS_SetPropertyStr(script->context, global, "__tvboxTimerScope", JS_NewCFunction(script->context, current_timer_scope, "__tvboxTimerScope", 0));
     JS_FreeValue(script->context, global);
     return script;
 }
 
 void tv_script_free(TVScript *script) {
     if (!script) return;
+    JS_FreeValue(script->context, script->timer_scope);
+    tv_script_cancellation_free(script->cancellation);
     JS_FreeContext(script->context);
     JS_FreeRuntime(script->runtime);
     free(script);
@@ -181,38 +211,58 @@ static JSValue settle(TVScript *script, JSValue value) {
     }
 }
 
-char *tv_script_module(TVScript *script, const char *name, const char *source, double seconds) {
-    script->deadline = seconds > 0 ? now_seconds() + seconds : 0;
-    JSValue result = settle(script, JS_Eval(script->context, source, strlen(source), name, JS_EVAL_TYPE_MODULE));
-    script->deadline = 0;
+static void finish_operation(TVScript *script, bool stopped) {
+    if (!JS_IsUndefined(script->timer_scope)) {
+        if (stopped) JS_SetPropertyStr(script->context, script->timer_scope, "cancelled", JS_TRUE);
+        JS_FreeValue(script->context, script->timer_scope);
+        script->timer_scope = JS_UNDEFINED;
+    }
+    JS_EndJobScope(script->runtime, script->job_scope, stopped);
+    script->job_scope = 0;
+    tv_script_cancellation_free(script->cancellation);
     script->cancellation = NULL;
-    if (JS_IsException(result)) return exception_text(script->context);
-    JS_FreeValue(script->context, result);
-    return NULL;
 }
 
-char *tv_script_call(TVScript *script, const char *expression, double seconds) {
-    JSContext *context = script->context;
+static bool begin_operation(TVScript *script, double seconds, TVScriptCancellation *cancellation) {
+    if (script->job_scope && script->cancellation != cancellation)
+        finish_operation(script, tv_script_cancellation_is_cancelled(script->cancellation));
+    if (!script->job_scope) {
+        script->job_scope = JS_BeginJobScope(script->runtime);
+        script->cancellation = cancellation;
+        if (cancellation) atomic_fetch_add(&cancellation->owners, 1);
+    }
     script->deadline = seconds > 0 ? now_seconds() + seconds : 0;
+    return !interrupt(script->runtime, script);
+}
+
+void tv_script_operation_finish(TVScript *script, TVScriptCancellation *cancellation) {
+    if (script->job_scope && script->cancellation == cancellation)
+        finish_operation(script, tv_script_cancellation_is_cancelled(cancellation));
+}
+
+static bool end_call(TVScript *script) {
+    bool stopped = interrupt(script->runtime, script);
+    if (stopped) tv_script_cancellation_cancel(script->cancellation);
+    if (stopped || !script->cancellation) finish_operation(script, stopped);
+    script->deadline = 0;
+    return stopped;
+}
+
+static char *call_result(TVScript *script, const char *expression) {
+    JSContext *context = script->context;
     JSValue result = settle(script, JS_Eval(context, expression, strlen(expression), "<call>", JS_EVAL_TYPE_GLOBAL));
-    JSValue envelope = JS_NewObject(context);
+    JSValue envelope = JS_NewObjectProto(context, JS_NULL);
     if (JS_IsException(result)) {
-        // Only native strings are serialized on this branch. Successful objects may execute
-        // arbitrary toJSON/getter code, so keep their interrupt active through serialization.
-        script->deadline = 0;
-        script->cancellation = NULL;
-        char *error = exception_text(context);
+        char *error = exception_text(script);
         JS_SetPropertyStr(context, envelope, "error", JS_NewString(context, error ? error : "exception"));
         free(error);
     } else {
         JS_SetPropertyStr(context, envelope, "value", result);
     }
     JSValue json = JS_JSONStringify(context, envelope, JS_UNDEFINED, JS_UNDEFINED);
-    script->deadline = 0;
-    script->cancellation = NULL;
     JS_FreeValue(context, envelope);
     if (JS_IsException(json)) {
-        free(exception_text(context));
+        JS_FreeValue(context, JS_GetException(context));
         return copy("{\"error\":\"the script returned a value that cannot be converted to JSON\"}");
     }
     const char *text = JS_ToCString(context, json);
@@ -223,15 +273,33 @@ char *tv_script_call(TVScript *script, const char *expression, double seconds) {
 }
 
 char *tv_script_call_cancellable(TVScript *script, const char *expression, double seconds, TVScriptCancellation *cancellation) {
-    script->cancellation = cancellation;
-    char *answer = tv_script_call(script, expression, seconds);
-    script->cancellation = NULL;
+    char *answer = begin_operation(script, seconds, cancellation) ? call_result(script, expression) : NULL;
+    if (end_call(script)) {
+        free(answer);
+        return copy("{\"error\":\"interrupted: the script operation stopped\"}");
+    }
     return answer;
 }
 
 char *tv_script_module_cancellable(TVScript *script, const char *name, const char *source, double seconds, TVScriptCancellation *cancellation) {
-    script->cancellation = cancellation;
-    char *answer = tv_script_module(script, name, source, seconds);
-    script->cancellation = NULL;
-    return answer;
+    char *error = NULL;
+    if (begin_operation(script, seconds, cancellation)) {
+        JSContext *context = script->context;
+        JSValue result = settle(script, JS_Eval(context, source, strlen(source), name, JS_EVAL_TYPE_MODULE));
+        if (JS_IsException(result)) error = exception_text(script);
+        JS_FreeValue(context, result);
+    }
+    if (end_call(script)) {
+        free(error);
+        return copy("interrupted: the script operation stopped");
+    }
+    return error;
+}
+
+char *tv_script_call(TVScript *script, const char *expression, double seconds) {
+    return tv_script_call_cancellable(script, expression, seconds, NULL);
+}
+
+char *tv_script_module(TVScript *script, const char *name, const char *source, double seconds) {
+    return tv_script_module_cancellable(script, name, source, seconds, NULL);
 }

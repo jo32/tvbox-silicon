@@ -141,25 +141,25 @@ final class ScriptSession: @unchecked Sendable {
             guard !closed else { return false }
             operations[id] = (token, scope); return true
         }) else { return stopped }
-        let expiry = DispatchWorkItem { token.cancel(); scope.cancel() }
+        let expiry = DispatchWorkItem { if token.cancel() { scope.cancel() } }
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + max(0, seconds), execute: expiry)
         defer { expiry.cancel(); _ = stateLock.withLock { operations.removeValue(forKey: id) } }
         return await withTaskCancellationHandler {
-            if Task.isCancelled { token.cancel(); scope.cancel() }
+            if Task.isCancelled, token.cancel() { scope.cancel() }
             return await thread.run(stopped: stopped) {
-                guard !token.cancelled, scope.deadline.timeIntervalSinceNow > 0 else { return stopped }
+                guard token.isActive, scope.deadline.timeIntervalSinceNow > 0 else { return stopped }
                 self.bridge.beginRequest(scope)
-                defer {
-                    if token.cancelled { scope.cancel() }
-                    self.bridge.endRequest(scope)
-                    if scope.cancelled, let script = self.script {
-                        if let result = tv_script_call(script, "__tvbox.cancelTimers()", 0.2) { free(result) }
-                    }
-                }
                 let result = body(token)
-                return token.cancelled ? stopped : result
+                if scope.deadline.timeIntervalSinceNow <= 0 { token.cancel() }
+                let completed = token.finish()
+                if !completed { scope.cancel() }
+                if let script = self.script {
+                    tv_script_operation_finish(script, token.pointer)
+                }
+                self.bridge.endRequest(scope)
+                return completed ? result : stopped
             }
-        } onCancel: { token.cancel(); scope.cancel() }
+        } onCancel: { if token.cancel() { scope.cancel() } }
     }
 
     private func boot(_ token: ScriptCancellation) -> String? {
@@ -195,7 +195,7 @@ final class ScriptSession: @unchecked Sendable {
             return Array(operations.values)
         }
         guard let active else { return }
-        for (token, scope) in active { token.cancel(); scope.cancel() }
+        for (token, scope) in active where token.cancel() { scope.cancel() }
         thread.run {
             self.bridge.cancelPending()
             if let script = self.script { tv_script_free(script); self.script = nil }
@@ -206,10 +206,24 @@ final class ScriptSession: @unchecked Sendable {
 private final class ScriptCancellation: @unchecked Sendable {
     let pointer: OpaquePointer?
     private let lock = NSLock()
-    private var stopped = false
+    private enum State { case active, cancelled, finished }
+    private var state = State.active
     init() { pointer = tv_script_cancellation_create() }
-    var cancelled: Bool { lock.withLock { stopped } }
-    func cancel() { lock.withLock { stopped = true; tv_script_cancellation_cancel(pointer) } }
+    var isActive: Bool { lock.withLock { state == .active } }
+    @discardableResult func cancel() -> Bool {
+        lock.withLock {
+            guard state == .active else { return false }
+            state = .cancelled
+            tv_script_cancellation_cancel(pointer)
+            return true
+        }
+    }
+    func finish() -> Bool {
+        lock.withLock {
+            defer { state = .finished }
+            return state == .active && !tv_script_cancellation_is_cancelled(pointer)
+        }
+    }
     deinit { tv_script_cancellation_free(pointer) }
 }
 

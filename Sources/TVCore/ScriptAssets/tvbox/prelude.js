@@ -159,10 +159,12 @@ const local = {
 
 // --- Timers (run by the native loop through __tvbox.tick) -----------------------------------
 const timers = new Map();
+const timerScope = globalThis.__tvboxTimerScope;
+delete globalThis.__tvboxTimerScope;
 let nextTimer = 1;
 function addTimer(callback, delay, args, repeat) {
     const id = nextTimer++;
-    timers.set(id, { callback, args, delay: Math.max(0, Number(delay) || 0), due: Date.now() + Math.max(0, Number(delay) || 0), repeat });
+    timers.set(id, { scope: timerScope(), callback, args, delay: Math.max(0, Number(delay) || 0), due: Date.now() + Math.max(0, Number(delay) || 0), repeat });
     return id;
 }
 
@@ -227,11 +229,11 @@ function envelope(error) {
     return { error: String(error), errorCode: 'script_error' };
 }
 globalThis.__tvbox = {
-    cancelTimers() { timers.clear(); },
     tick() {
         const now = Date.now();
         let next = -1;
         for (const [id, timer] of [...timers]) {
+            if (timer.scope.cancelled) { timers.delete(id); continue; }
             if (timer.due <= now) {
                 if (timer.repeat) timer.due = now + Math.max(1, timer.delay); else timers.delete(id);
                 try { timer.callback(...timer.args); } catch (error) { log('timer', String(error)); }

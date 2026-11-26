@@ -34,6 +34,10 @@ with tempfile.TemporaryDirectory() as temporary:
         output = work / (name + '.o'); objects.append(str(output))
         subprocess.run(['xcrun', 'clang', '-O1', '-D_GNU_SOURCE', '-DQUICKJS_NG_BUILD', '-DNDEBUG',
                         '-c', str(ROOT / f'Vendor/QuickJS/{name}.c'), '-o', str(output)], check=True)
+    bridge_check = work / 'bridge-check'
+    subprocess.run(['xcrun', 'clang', '-I', str(header.parent), str(ROOT / 'Scripts/Fixtures/quickjs-cancellation.c'),
+                    *objects, '-o', str(bridge_check)], check=True)
+    subprocess.run([str(bridge_check)], check=True, timeout=10)
     production = (ROOT / 'Sources/TVCore/ScriptRuntime.swift').read_text()
     production = 'import Foundation\nimport CryptoKit\nimport QuickJS\n' + production[production.index('/// One QuickJS runtime pinned'):]
     (work / 'Runtime.swift').write_text(production)
@@ -62,17 +66,21 @@ func check(_ value: @autoclosure () -> Bool, _ message: String) { if !value() { 
     static func main() async throws {
         let session = try await ScriptSession.start(module: "assets://fixture.js", supplied: [:], profile: ScriptAssets.cache, label: "cancellation-fixture")
         let url = CommandLine.arguments[3]
-        let expressions = ["(() => { while (true) {} })()", "({toJSON() { while (true) {} }})", "new Promise(resolve => setTimeout(() => resolve(1), 3000))",
-            "__host('http', JSON.stringify({url:'" + url + "', timeout:3000}))",
-            "(() => { __host('httpStart', JSON.stringify({url:'" + url + "', timeout:3000})); return new Promise(resolve => setTimeout(resolve, 3000)); })()"]
-        for expression in expressions {
-            FileHandle.standardOutput.write(Data(("RUN: " + expression + "\n").utf8))
+        let boundedWork = "const end = Date.now() + 1500; while (Date.now() < end) {}"
+        let expressions = [("bounded execution", "(() => { " + boundedWork + " })()"),
+            ("return serialization", "({toJSON() { " + boundedWork + " }})"),
+            ("error formatting", "(() => { throw {toString() { " + boundedWork + "; return 'fixture'; }}; })()"),
+            ("promise wait", "new Promise(resolve => setTimeout(() => resolve(1), 3000))"),
+            ("synchronous HTTP", "__host('http', JSON.stringify({url:'" + url + "', timeout:3000}))"),
+            ("async HTTP", "(() => { __host('httpStart', JSON.stringify({url:'" + url + "', timeout:3000})); return new Promise(resolve => setTimeout(resolve, 3000)); })()")]
+        for (label, expression) in expressions {
+            FileHandle.standardOutput.write(Data(("RUN: " + label + "\n").utf8))
             let started = Date()
             let task = Task { await session.evaluate(expression, within: 2) }
             try await Task.sleep(for: .milliseconds(100))
             task.cancel()
             let answer = await task.value
-            check(Date().timeIntervalSince(started) < 1.0, "cancelled VM/HTTP kept executing: " + expression)
+            check(Date().timeIntervalSince(started) < 1.0, "cancellation took too long: " + label)
             check(answer["error"] != nil, "cancelled evaluation succeeded")
             let next = await session.evaluate("40 + 2", within: 1)
             check(next["value"]?.int == 42, "following call inherited cancellation")
@@ -80,20 +88,34 @@ func check(_ value: @autoclosure () -> Bool, _ message: String) { if !value() { 
         let began = Date()
         let expired = await session.evaluate("__host('http', JSON.stringify({url:'" + url + "', timeout:3000}))", within: 0.15)
         check(expired["error"] != nil && Date().timeIntervalSince(began) < 0.8, "operation deadline failed to interrupt synchronous HTTP")
+        let kept = await session.evaluate("globalThis.earlier = 0; setTimeout(() => earlier++, 180); 42", within: 1)
+        check(kept["value"]?.int == 42, "failed to schedule a session timer")
         let timer = Task { await session.evaluate("globalThis.stale = 0; new Promise(resolve => setTimeout(() => { stale++; resolve(1); }, 200))", within: 2) }
         try await Task.sleep(for: .milliseconds(40)); timer.cancel(); _ = await timer.value
         let afterTimer = await session.evaluate("new Promise(resolve => setTimeout(() => resolve(globalThis.stale), 300))", within: 1)
         check(afterTimer["value"]?.int == 0, "cancelled timer ran during the next operation: \(afterTimer)")
+        let earlier = await session.evaluate("earlier", within: 1)
+        check(earlier["value"]?.int == 1, "a cancelled operation cleared a successful call's timer")
         FileHandle.standardOutput.write(Data("RUN: init\n".utf8))
         let initializing = Task { () -> Bool in
             do {
-                let value = try await ScriptSession.start(api: "https://fixture.invalid/init.js", key: "k", ext: "", profile: ScriptAssets.cache, label: "init", source: "export default { init() { while (true) {} } };")
+                let value = try await ScriptSession.start(api: "https://fixture.invalid/init.js", key: "k", ext: "", profile: ScriptAssets.cache, label: "init", source: "export default { init() { " + boundedWork + " } };")
                 value.close(); return false
             } catch is CancellationError { return true } catch { return false }
         }
         try await Task.sleep(for: .milliseconds(100)); initializing.cancel()
         let initCancelled = await initializing.value
         check(initCancelled, "cancelled source initialization did not unwind")
+        let reusable = try await ScriptSession.start(api: "https://fixture.invalid/reuse.js", key: "fixture", ext: "",
+            profile: ScriptAssets.cache, label: "reuse", source: "let calls = 0; export default { home() { return String(++calls); } };")
+        let first = try await reusable.call([:])
+        let paused = Task { await reusable.evaluate("new Promise(resolve => setTimeout(resolve, 1000))", within: 2) }
+        try await Task.sleep(for: .milliseconds(50)); paused.cancel()
+        let stopped = await paused.value
+        let second = try await reusable.call([:])
+        reusable.close()
+        check(first["result"]?.string == "1" && stopped["error"] != nil && second["result"]?.string == "2",
+              "a normal module lost its state across cancellation")
         FileHandle.standardOutput.write(Data("RUN: pending\n".utf8))
         let pending = PendingRequests()
         let id = pending.add()
@@ -118,7 +140,7 @@ func check(_ value: @autoclosure () -> Bool, _ message: String) { if !value() { 
         check(Date().timeIntervalSince(fenced) >= 0.1 && callback.wait(timeout: .now()) == .success,
               "scope released before its cancellation callback finished")
         FileHandle.standardOutput.write(Data("RUN: close\n".utf8))
-        let running = Task { await session.evaluate("(() => { while (true) {} })()", within: 2) }
+        let running = Task { await session.evaluate("(() => { " + boundedWork + " })()", within: 2) }
         try await Task.sleep(for: .milliseconds(50))
         let queued = Task { await session.evaluate("42", within: 1) }
         session.close()
@@ -127,7 +149,7 @@ func check(_ value: @autoclosure () -> Bool, _ message: String) { if !value() { 
         check(closedRunning["error"] != nil && closedQueued["error"] != nil, "close lost a running or queued operation")
         let afterClose = await session.evaluate("42", within: 1)
         check(afterClose["error"] != nil, "closed session accepted new work")
-        print("QuickJS cancellation checks passed: loop, promise, synchronous/async HTTP, deadlines, timers, init, next operation, pending/callback fences, running/queued close")
+        print("QuickJS cancellation checks passed: bounded execution, formatting, promise, loopback HTTP, deadlines, timer isolation, init, module reuse, callback fences, close")
     }
 }
 '''
