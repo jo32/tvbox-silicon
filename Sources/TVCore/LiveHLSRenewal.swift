@@ -4,10 +4,15 @@ import Foundation
 /// replacing an HLS input. Masters, finished media and changed stream identities
 /// need the normal playback preparation path instead.
 public enum LiveHLSRenewal {
-    public struct Endpoint: Equatable, Sendable {
+    public struct Endpoint: Hashable, Sendable {
         public let url: URL
         public let headers: [String: String]
-        public init(url: URL, headers: [String: String]) { self.url = url; self.headers = headers }
+        public init(url: URL, headers: [String: String]) {
+            self.url = url
+            var normalized: [String: String] = [:]
+            for name in headers.keys.sorted() { normalized[name.lowercased()] = headers[name] }
+            self.headers = normalized
+        }
     }
 
     public static func directMedia(_ text: String) -> Bool {
@@ -33,9 +38,8 @@ public enum LiveHLSRenewal {
 
     private static func port(_ url: URLComponents) -> Int { url.port ?? (url.scheme?.lowercased() == "https" ? 443 : 80) }
     private static let authentication: Set<String> = ["wssecret", "wstime", "txsecret", "txtime", "seqid", "u", "uid", "token", "sign", "signature", "expire", "expires", "timestamp", "ts", "nonce", "auth_key", "auth"]
-    private static func identity(_ url: URLComponents) -> [[String]] {
-        (url.queryItems ?? []).filter { !authentication.contains($0.name.lowercased()) }
-            .map { [$0.name, $0.value == nil ? "absent" : "value", $0.value ?? ""] }
-            .sorted { $0.lexicographicallyPrecedes($1) }
+    private static func identity(_ url: URLComponents) -> [String: [String?]] {
+        let fields = (url.percentEncodedQueryItems ?? []).filter { !authentication.contains($0.name.lowercased()) }
+        return Dictionary(grouping: fields, by: \.name).mapValues { $0.map(\.value) }
     }
 }

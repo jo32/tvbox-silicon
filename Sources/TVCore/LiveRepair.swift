@@ -39,11 +39,13 @@ public enum LiveRepair {
     /// The source behind the repair route, for a playback-owned HTTP adapter.
     public static func sourceURL(for url: URL) -> URL? { upstream(url) }
 
-    /// Keep the existing repair and sequence-address policy when a live input
-    /// uses a private HTTP adapter. Masters are routed by that adapter itself.
-    public static func repairedMediaPlaylist(_ text: String, origin: URL, identity: String) -> String {
-        guard !text.contains("#EXT-X-STREAM-INF") else { return text }
-        return steady(rewrite(text, origin: origin), playlist: identity)
+    public static func repairedMediaPlaylist(_ text: String, identity: String?, rewriteLine: (String) -> String) -> String {
+        var lines = text.components(separatedBy: .newlines)
+        if text.contains("#EXT-X-STREAM-INF") { return lines.map(rewriteLine).joined(separator: "\n") }
+        let first = sequenceStart(lines)
+        lines = droppingInitialDiscontinuity(lines, first: first)
+        guard let identity, !text.contains("#EXT-X-ENDLIST") else { return lines.map(rewriteLine).joined(separator: "\n") }
+        return stableLines(lines, first: first, playlist: identity, rewriteLine: rewriteLine)
     }
 
     /// An asset for an address from `address`, or nil for any other address.
@@ -79,9 +81,26 @@ public enum LiveRepair {
     /// `playlist` names the playlist across its reloads.
     static func steady(_ text: String, playlist: String) -> String {
         guard !text.contains("#EXT-X-STREAM-INF"), !text.contains("#EXT-X-ENDLIST") else { return text }
-        var lines = text.components(separatedBy: "\n")
+        let lines = text.components(separatedBy: "\n")
+        return stableLines(lines, first: sequenceStart(lines), playlist: playlist) { $0 }
+    }
+
+    private static func sequenceStart(_ lines: [String]) -> Int {
         let sequenceTag = "#EXT-X-MEDIA-SEQUENCE:"
-        let first = lines.first { $0.hasPrefix(sequenceTag) }.flatMap { Int($0.dropFirst(sequenceTag.count).trimmingCharacters(in: .whitespaces)) } ?? 0
+        return lines.first { $0.hasPrefix(sequenceTag) }.flatMap { Int($0.dropFirst(sequenceTag.count).trimmingCharacters(in: .whitespaces)) } ?? 0
+    }
+
+    private static func droppingInitialDiscontinuity(_ lines: [String], first: Int) -> [String] {
+        guard first == 0 else { return lines }
+        let boundary = lines.firstIndex { $0.hasPrefix("#EXTINF") } ?? lines.endIndex
+        return lines[..<boundary].filter { $0.trimmingCharacters(in: .whitespaces) != "#EXT-X-DISCONTINUITY" } + lines[boundary...]
+    }
+
+    private static func stableLines(_ input: [String], first: Int, playlist: String, rewriteLine: (String) -> String) -> String {
+        var lines = input
+        for index in lines.indices where lines[index].trimmingCharacters(in: .whitespaces).hasPrefix("#") {
+            lines[index] = rewriteLine(lines[index])
+        }
         return lock.withLock {
             if segmentNames[playlist] == nil, segmentNames.count >= 16 { segmentNames.removeAll() }
             var names = segmentNames[playlist] ?? [:]
@@ -92,7 +111,10 @@ public enum LiveRepair {
             for index in lines.indices {
                 let value = lines[index].trimmingCharacters(in: .whitespaces)
                 guard !value.isEmpty, !value.hasPrefix("#") else { continue }
-                if let known = names[number] { lines[index] = known } else { names[number] = value }
+                if let known = names[number] { lines[index] = known } else {
+                    lines[index] = rewriteLine(value)
+                    names[number] = lines[index]
+                }
                 number += 1
             }
             segmentNames[playlist] = names
@@ -114,14 +136,9 @@ public enum LiveRepair {
             return (master ? address(url, skipsAds: skipsAds) : url).absoluteString
         }
         let lines = text.components(separatedBy: .newlines)
-        let firstSegment = lines.firstIndex { $0.hasPrefix("#EXTINF") } ?? lines.endIndex
-        let sequenceTag = "#EXT-X-MEDIA-SEQUENCE:"
-        let sequence = lines.first { $0.hasPrefix(sequenceTag) }.flatMap { Int($0.dropFirst(sequenceTag.count).trimmingCharacters(in: .whitespaces)) } ?? 0
-        return lines.indices.compactMap { index -> String? in
-            let line = lines[index]
+        return droppingInitialDiscontinuity(lines, first: sequenceStart(lines)).map { line in
             let value = line.trimmingCharacters(in: .whitespaces)
             if value.isEmpty { return line }
-            if value == "#EXT-X-DISCONTINUITY", sequence == 0, index < firstSegment { return nil }
             if !value.hasPrefix("#") { return resolve(value) }
             guard let match = line.firstMatch(of: /URI="([^"]+)"/) else { return line }
             return line.replacingCharacters(in: match.1.startIndex..<match.1.endIndex, with: resolve(String(match.1)))
