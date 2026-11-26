@@ -282,7 +282,8 @@ struct ChannelListView: View {
     /// Uses the guide the viewer typed in, the subscription names or the playlist names, and loads it if it's XMLTV.
     private func applyGuide() {
         let address = LiveGuide.address(for: source, playlist: playlistGuide, in: store)
-        if address != guide?.address { guide = address.map(LiveGuide.init) }
+        let context = GuideRequestContext(sourceID: source.id, origin: source.url, headers: source.headers)
+        if address != guide?.address || context != guide?.context { guide = address.map { LiveGuide(address: $0, context: context) } }
         if let guide, !channels.isEmpty, case .xmltv = guide.address {
             let channels = channels
             Task { await guide.load(channels) }
