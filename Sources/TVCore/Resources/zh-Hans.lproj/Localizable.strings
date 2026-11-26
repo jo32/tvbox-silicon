@@ -2400,3 +2400,4 @@
 "This playlist only has %@ channels, which Apple's player can't play." = "这个列表只有 %@ 频道，苹果的播放器无法播放。";
 "The playlist address returned a web page instead of a playlist. Its host may be offline." = "列表地址返回的是网页而不是直播列表，它的服务器可能已下线。";
 "This playlist's channel addresses are relative to the Android player that served it, so they can't be opened here." = "这个直播列表的频道地址是相对于提供它的安卓播放器的，在这里无法打开。";
+"This link opens a web page, not a video: the source didn't turn it into a playable address. Try another line." = "这个链接打开的是网页，不是视频：片源没有把它解析成可播放的地址。请换一条线路。";

@@ -1063,6 +1063,19 @@ import TVCore
         }
     }
 
+    /// The episode `channel` plays, resolved again by its source: a fresh link for one that expired while it played
+    /// (`LinkRenewal`). Nil for anything but a catalog episode, or when the source answers nothing.
+    func renewedChannel(for channel: Channel) async -> Channel? {
+        guard let context = channel.historyContext, let catalog = catalog(for: channel),
+              let episode = catalog.video.episodes.first(where: { $0.id == context.episodeID && $0.flag == context.episodeFlag })
+                ?? catalog.video.episodes.first(where: { $0.id == context.episodeID }) else { return nil }
+        do { return try await catalog.client.playback(episode) }
+        catch {
+            if !(error is CancellationError) { Diagnostics.shared.failure("catalog", "renew episode \(catalog.client.reportContext) flag=\(episode.flag)", error) }
+            return nil
+        }
+    }
+
     /// Resolves the episode after `channel` while it plays, when it lasts `nextAheadLength` or less, once per episode.
     func resolveNextAhead(after channel: Channel, duration: Double) {
         guard duration > 0, duration <= Self.nextAheadLength, playing == channel,
