@@ -64,6 +64,24 @@ public enum CloudStreams {
         return asset
     }
 
+    /// A second asset on `url`'s stream, for the seek bar's frames. Its reads fetch just the chunks they touch: they
+    /// never count as a place the movie plays, so nothing is read ahead from there, and `endPreview` stops them. A
+    /// generator on the playing asset read ahead from every dragged place like the movie itself (16 of 20 chunks for
+    /// three frames), and on a 4K drive file those downloads took half the bandwidth for 40 s after the finger lifted.
+    public static func previewAsset(for url: URL) -> AVURLAsset? {
+        guard let alias = CloudStreamStore.shared.preview(of: url) else { return nil }
+        let asset = AVURLAsset(url: alias)
+        asset.resourceLoader.setDelegate(CloudResourceLoader.shared, queue: CloudResourceLoader.shared.queue)
+        return asset
+    }
+
+    /// Calls off a preview asset's reads (the drag ended); nothing for any other asset.
+    public static func endPreview(_ asset: AVAsset) {
+        guard let url = (asset as? AVURLAsset)?.url, CloudStreamStore.shared.isPreview(url) else { return }
+        CloudResourceLoader.shared.cancel(url)
+        CloudStreamStore.shared.endPreview(url)
+    }
+
     /// Whether the drive has brought in at least three times what playback eats since its first bytes: enough to
     /// start playing without first building a cushion.
     public static func keepsUp(_ url: URL) async -> Bool {
@@ -222,19 +240,37 @@ private final class CloudStreamStore: @unchecked Sendable {
     private let lock = NSLock()
     private var streams: [URL: CloudByteStream] = [:]
     private var order: [URL] = []
+    /// Preview addresses (`CloudStreams.previewAsset`) and the stream address each reads.
+    private var previews: [URL: URL] = [:]
 
     func add(_ stream: CloudByteStream) -> URL {
         let url = URL(string: "\(CloudStreams.scheme)://\(UUID().uuidString.lowercased())/video")!
-        let retired: [(URL, CloudByteStream)] = lock.withLock {
+        let retired: [(URL, CloudByteStream?)] = lock.withLock {
             streams[url] = stream; order.append(url)
-            var old: [(URL, CloudByteStream)] = []
-            while order.count > 3 { let first = order.removeFirst(); if let value = streams.removeValue(forKey: first) { old.append((first, value)) } }
+            var old: [(URL, CloudByteStream?)] = []
+            while order.count > 3 {
+                let first = order.removeFirst()
+                if let value = streams.removeValue(forKey: first) { old.append((first, value)) }
+                for (alias, target) in previews where target == first { previews[alias] = nil; old.append((alias, nil)) }
+            }
             return old
         }
-        for (old, stream) in retired { CloudResourceLoader.shared.cancel(old); Task { await stream.clear() } }
+        for (old, stream) in retired { CloudResourceLoader.shared.cancel(old); if let stream { Task { await stream.clear() } } }
         return url
     }
-    func stream(_ url: URL) -> CloudByteStream? { lock.withLock { streams[url] } }
+    func stream(_ url: URL) -> CloudByteStream? { lock.withLock { streams[url] ?? previews[url].flatMap { streams[$0] } } }
+
+    /// A new preview address for the stream at `url`, nil when there is none.
+    func preview(of url: URL) -> URL? {
+        lock.withLock {
+            guard streams[url] != nil else { return nil }
+            let alias = URL(string: "\(CloudStreams.scheme)://\(UUID().uuidString.lowercased())/preview")!
+            previews[alias] = url
+            return alias
+        }
+    }
+    func isPreview(_ url: URL) -> Bool { lock.withLock { previews[url] != nil } }
+    func endPreview(_ url: URL) { lock.withLock { _ = previews.removeValue(forKey: url) } }
 }
 
 actor CloudByteStream {
@@ -431,6 +467,16 @@ actor CloudByteStream {
         lastReadEnd = offset + result.count
         updateBufferedAhead()
         return result
+    }
+
+    /// Up to `count` bytes at `offset` for a preview frame: the chunk that holds them, fetched by itself if need be. A
+    /// peek is not a reader: it reads nothing ahead, starts no burst and lets no reader's chunks go.
+    func peek(at offset: Int, count: Int) async throws -> Data {
+        guard offset >= 0, offset < source.length, count > 0 else { throw TVError.unsupported("Invalid range") }
+        let index = offset / Self.chunkSize
+        let start = offset - index * Self.chunkSize
+        let bytes = try await available(index, from: start)
+        return Data(bytes[start..<min(bytes.count, start + count)])
     }
 
     private func chunk(_ index: Int) async throws -> Data {
@@ -874,6 +920,8 @@ private final class CloudResourceLoader: NSObject, AVAssetResourceLoaderDelegate
     /// handed to the old request in between made it report the movie as damaged.
     private var sequence = 0
     private var newest: [URL: Int] = [:]
+    /// The most one preview request is given (`CloudStreams.previewAsset`).
+    static let previewBytes = 4 * CloudByteStream.chunkSize
 
     /// The request, if it still wants data.
     private func active(_ id: ObjectIdentifier) -> AVAssetResourceLoadingRequest? {
@@ -892,6 +940,7 @@ private final class CloudResourceLoader: NSObject, AVAssetResourceLoaderDelegate
         let offset = request.dataRequest.map { max($0.requestedOffset, $0.currentOffset) }
         let length = request.dataRequest?.requestedLength ?? 0
         let toEnd = request.dataRequest?.requestsAllDataToEndOfResource ?? false
+        let preview = CloudStreamStore.shared.isPreview(url)
         let task = Task { [weak self] in
             do {
                 let type = try await stream.contentType()
@@ -906,7 +955,13 @@ private final class CloudResourceLoader: NSObject, AVAssetResourceLoaderDelegate
                     let end = toEnd ? total : min(total, at + length)
                     while at < end {
                         try Task.checkCancellation()
-                        let bytes = try await stream.read(at: at, count: end - at)
+                        if preview, at - Int(offset) >= Self.previewBytes {
+                            // A frame needs a keyframe or so: past that a preview request waits to be called off
+                            // (by AVFoundation, or `endPreview`) instead of downloading on to the end of the file.
+                            while self.active(id) != nil { try await Task.sleep(for: .milliseconds(500)) }
+                            return
+                        }
+                        let bytes = try await preview ? stream.peek(at: at, count: end - at) : stream.read(at: at, count: end - at)
                         // Small pieces, like AVFoundation's own HTTP loader: a cancelled request
                         // stops within one piece instead of receiving a whole chunk.
                         var piece = bytes.startIndex

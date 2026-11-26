@@ -2410,6 +2410,9 @@ struct PlayerTitleLogo: View {
     var compact = false
     @Environment(Store.self) private var store
     @State private var tmdb = TMDBLookup()
+    /// The logo of a match older than the week `prepare` trusts: a title's logo doesn't change, and the video's page
+    /// may not have asked again (on Apple TV the 11-07 match of a show played on 11-26 gave no logo at all).
+    @State private var keptLogo: URL?
     @State private var aspect: CGFloat?
 
     var body: some View {
@@ -2421,7 +2424,7 @@ struct PlayerTitleLogo: View {
         // A view even before there is a logo, so the lookup below runs.
         ZStack(alignment: .bottomLeading) {
             Color.clear.frame(width: 0, height: 0)
-            if let logo = tmdb.details?.logo {
+            if let logo = tmdb.details?.logo ?? keptLogo {
                 let size = Self.fit(aspect ?? 3, in: box)
                 TMDBArtwork(url: logo, maxPixels: 800, fill: false, aspect: $aspect)
                     .frame(width: size.width, height: size.height, alignment: .bottomLeading)
@@ -2433,8 +2436,10 @@ struct PlayerTitleLogo: View {
         }
         .allowsHitTesting(false)
         .task(id: store.catalog(for: channel)?.video.id) {
+            keptLogo = nil
             guard let catalog = store.catalog(for: channel), TMDBLookup.applies(to: catalog.client.site) else { return }
-            _ = await tmdb.prepare(key: TMDBMatchStore.key(source: catalog.client.site.key, video: catalog.video.id))
+            let key = TMDBMatchStore.key(source: catalog.client.site.key, video: catalog.video.id)
+            if !(await tmdb.prepare(key: key)) { keptLogo = await TMDBMatchStore.shared.kept(for: key)?.details?.logo }
         }
     }
 
