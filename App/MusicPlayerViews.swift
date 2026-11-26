@@ -71,6 +71,9 @@ struct MusicNowPlaying: View {
     @State private var showsLyrics = false
     @State private var showsSkip = false
     @State private var scrubbing: Double?
+    /// Where a drag began: the position it started from and the finger's x. Seeking from that position by the
+    /// finger's travel (not jumping to wherever the finger first landed) matches the video player's seek bar.
+    @State private var scrubOrigin: (position: Double, x: CGFloat)?
     #if os(tvOS)
     private let art: CGFloat = 96
     #else
@@ -269,14 +272,37 @@ struct MusicNowPlaying: View {
             #if os(tvOS)
             ProgressView(value: min(music.seekingTo ?? music.position, total), total: total).tint(Brand.accent)
             #else
-            // While dragging the thumb follows the pointer; on release it stays at the target, since
-            // the session holds its position there until the seek lands.
-            Slider(value: Binding(get: { scrubbing ?? min(music.seekingTo ?? music.position, total) }, set: { scrubbing = $0 }), in: 0...total) { editing in
-                if !editing, let target = scrubbing { music.seek(to: target); scrubbing = nil }
+            // Seek like the video player's bar: a drag starts from where the song is and follows the finger's
+            // travel, so a touch away from the thumb no longer jumps there; only a tap goes to that point.
+            GeometryReader { proxy in
+                let width = proxy.size.width
+                let value = scrubbing ?? min(music.seekingTo ?? music.position, total)
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.quaternary)
+                    Capsule().fill(Brand.accent).frame(width: max(0, width * CGFloat(value / total)))
+                }
+                .frame(height: 8)
+                .frame(maxHeight: .infinity)
+                .contentShape(.rect)
+                .gesture(DragGesture(minimumDistance: 0)
+                    .onChanged { g in
+                        guard width > 0, music.duration != nil else { return }
+                        if scrubOrigin == nil {
+                            scrubOrigin = (value, g.startLocation.x)
+                        }
+                        let moved = Double((g.location.x - scrubOrigin!.x) / width) * total
+                        scrubbing = min(max(0, scrubOrigin!.position + moved), total)
+                    }
+                    .onEnded { g in
+                        let isTap = hypot(g.translation.width, g.translation.height) < 6
+                        let target = isTap ? total * Double(min(max(0, g.startLocation.x / width), 1)) : (scrubbing ?? value)
+                        scrubOrigin = nil
+                        scrubbing = nil
+                        music.seek(to: target)
+                    })
             }
-            .tint(Brand.accent)
-            .transaction { $0.animation = nil }
-            .disabled(!music.hasStream || music.duration == nil)
+            .frame(height: 22)
+            .opacity(music.hasStream && music.duration != nil ? 1 : 0.5)
             #endif
             Text(music.duration.map(MusicTime.text) ?? "--:--").font(.caption).monospacedDigit().foregroundStyle(.secondary)
         }
