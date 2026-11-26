@@ -1,257 +1,155 @@
-"""Cooperative request cancellation for the embedded Python host.
+"""Cancelling a request of the embedded Python host (iOS and tvOS).
 
-Hooks are installed once, and only act on the calling thread's request scope. They do not kill
-threads, interrupt arbitrary native extensions, or change network calls made outside a request.
+The app gives up on a request it no longer waits for (`{"command": "cancel"}`), and each request has a
+deadline. Running Python can't be stopped from outside, so a request stops where it waits on the host: an
+HTTP call through requests (host.py's `send`) and the source module's own `time.sleep`. Both return at once
+with `RequestStopped`. Anything else runs to its end. Nothing is traced and no library is patched: a request's
+scope is local to its thread, and the Mac's one-source processes never open one.
 """
-import http.client
-import os
-import re
-import socket
-import sys
 import threading
 import time
-import urllib.request
-import weakref
-from concurrent.futures import ThreadPoolExecutor
+import types
 
 _local = threading.local()
 _lock = threading.Lock()
 _active = {}
-_cancelled = {}
-_sleep = time.sleep
-_begin = http.client.HTTPResponse.begin
-_open = urllib.request.OpenerDirector.open
-_submit = ThreadPoolExecutor.submit
+_early = {}  # cancels that came before their request started: id -> when to forget it
 
 
 class RequestStopped(BaseException):
-    """Pass through a spider's `except Exception: retry` handler."""
+    """A BaseException, so a source's `except Exception:` retry loop doesn't swallow it. `source_timeout` is the
+    app's (localized) "took too long" error, as the Java host's; nobody waits for a cancelled request's answer."""
     def __init__(self, code):
         self.code = code
-        super().__init__('The source took too long to respond.' if code == 'request_timeout'
+        super().__init__('The source took too long to respond.' if code == 'source_timeout'
                          else 'The source request was cancelled.')
 
 
-def current_request():
+def current():
     return getattr(_local, 'scope', None)
 
 
-def interrupt_body(body):
-    # Buffered reads hold a file lock, so close alone may block the cancel sender.
-    try:
-        body.fp.raw._sock.shutdown(socket.SHUT_RDWR)
-    except (AttributeError, OSError):
-        pass
-
-
 class RequestScope:
-    def __init__(self, request):
-        self.id = str(request.get('request') or '')
-        try:
-            timeout = min(140, max(.05, float(request.get('timeoutSeconds', 140))))
-        except (TypeError, ValueError):
-            timeout = 140
+    """One request on its thread: `id` is the app's request id (empty: not cancellable), `timeout` in seconds."""
+
+    def __init__(self, ident, timeout):
+        self.id = ident
         self.deadline = time.monotonic() + timeout
-        self.event = threading.Event()
-        self.lock = threading.Lock()
         self.code = None
-        self.bodies = weakref.WeakSet()
-        self.children = set()
-        self.condition = threading.Condition()
-        self.timer = threading.Timer(timeout, self.stop, args=('request_timeout',))
-        self.timer.daemon = True
-        source = os.path.abspath(os.path.dirname(request.get('script') or __file__))
-        modules = os.path.abspath(os.path.join(request.get('profile') or source, 'modules'))
-        self.folders = (source + os.sep, os.path.realpath(source) + os.sep, modules + os.sep)
-        self.dynamic_files = {}
+        self.changed = threading.Condition()
 
     def __enter__(self):
-        self.previous, self.previous_trace = current_request(), sys.gettrace()
+        self.previous = current()
         _local.scope = self
         with _lock:
-            early = _cancelled.pop(self.id, 0)
             if self.id:
+                if _early.pop(self.id, 0) > time.monotonic():
+                    self.code = 'request_cancelled'
                 _active[self.id] = self
-        if early > time.monotonic():
-            self.stop('request_cancelled')
-        self.timer.start()
-        sys.settrace(self.trace)
         return self
 
     def __exit__(self, *_):
-        sys.settrace(self.previous_trace)
         _local.scope = self.previous
-        self.finish_children()
-        self.timer.cancel()
         with _lock:
             if _active.get(self.id) is self:
-                _active.pop(self.id, None)
-        if self.event.is_set():
-            for body in tuple(self.bodies):
-                try:
-                    body.close()
-                except (OSError, ValueError):
-                    pass
+                del _active[self.id]
 
-    def finish_children(self):
-        # Child executor work keeps the same native execution fence. Never release a slot while
-        # a cancelled child can still touch the spider. Native extensions may delay this cleanup.
-        with self.condition:
-            if self.children:
-                self.stop(self.code or 'request_cancelled')
-                for future in tuple(self.children):
-                    future.cancel()
-                while self.children:
-                    self.condition.wait(.05)
-
-    def trace(self, frame, event, arg):
-        filename = frame.f_code.co_filename
-        source = filename.startswith(self.folders)
-        if not source:
-            # exec/eval/compile normally use <string>, but may name a virtual file. Classify
-            # once per filename, then require a traced source ancestor. Host/framework cleanup
-            # keeps its own real filename and is never interrupted by the source trace.
-            dynamic = self.dynamic_files.get(filename)
-            if dynamic is None:
-                dynamic = not os.path.isfile(filename)
-                self.dynamic_files[filename] = dynamic
-            if dynamic:
-                parent = frame.f_back
-                while parent is not None:
-                    if parent.f_trace == self.trace:
-                        source = True
-                        break
-                    parent = parent.f_back
-        if source:
-            self.check()
-            return self.trace
-        return None
+    def remaining(self):
+        return self.deadline - time.monotonic()
 
     def check(self):
-        if self.event.is_set():
+        if self.code is None and self.remaining() <= 0:
+            self.code = 'source_timeout'
+        if self.code:
             raise RequestStopped(self.code)
-        if time.monotonic() >= self.deadline:
-            self.stop('request_timeout')
-            raise RequestStopped(self.code)
 
-    def stop(self, code):
-        with self.lock:
-            if self.code is not None:
-                return
-            self.code = code
-            self.event.set()
-            bodies = tuple(self.bodies)
-        for body in bodies:
-            interrupt_body(body)
+    def stop(self, code='request_cancelled'):
+        with self.changed:
+            if self.code is None:
+                self.code = code
+            self.changed.notify_all()
 
-    def track(self, body):
-        with self.lock:
-            self.bodies.add(body)
-            stopped = self.code is not None
-        if stopped:
-            interrupt_body(body)
-            self.check()
-
-    def timeout(self, value=None):
-        self.check()
-        remaining = max(.001, self.deadline - time.monotonic())
+    def timeout(self, value):
+        """An HTTP call's timeout: the source's, or 20 s as outside a request, never past the deadline."""
+        remaining = max(0.001, self.remaining())
+        if value is None:
+            return min(20, remaining)
         if isinstance(value, tuple):
-            return tuple(min(float(part), remaining) if part is not None else remaining for part in value)
-        if value is None or value is socket._GLOBAL_DEFAULT_TIMEOUT:
-            return remaining
-        try:
-            return min(float(value), remaining)
-        except (TypeError, ValueError):
-            # requests also accepts urllib3 Timeout objects.
-            import urllib3
-            return urllib3.util.Timeout(total=remaining, connect=remaining, read=remaining)
+            return tuple(remaining if part is None else min(part, remaining) for part in value)
+        if isinstance(value, (int, float)):
+            return min(value, remaining)
+        return value  # urllib3's Timeout: the source's own
+
+    def sleep(self, seconds):
+        self.check()
+        with self.changed:
+            self.changed.wait_for(lambda: self.code is not None, max(0, min(seconds, self.remaining())))
+        self.check()
+
+    def run(self, function, *args, **kwargs):
+        """Calls a blocking function on its own thread and waits for it, or for a cancel or the deadline. A call
+        given up on finishes by itself (its timeout bounds it) and its answer is dropped."""
+        self.check()
+        outcome = {}
+
+        def call():
+            try:
+                outcome['value'] = function(*args, **kwargs)
+            except BaseException as error:
+                outcome['error'] = error
+            with self.changed:
+                outcome['done'] = True
+                self.changed.notify_all()
+
+        threading.Thread(target=call, daemon=True, name='Python source request').start()
+        with self.changed:
+            while 'done' not in outcome and self.code is None and self.remaining() > 0:
+                self.changed.wait(self.remaining())
+        if 'done' not in outcome:
+            self.check()
+        if 'error' in outcome:
+            raise outcome['error']
+        return outcome['value']
 
 
-def cancel_request(ident):
-    if not re.fullmatch(r'[A-Za-z0-9-]{1,80}', ident):
-        return
+def cancel(ident):
+    """Stops the request `ident` at its next wait, also when its cancel comes before it starts."""
     with _lock:
         scope = _active.get(ident)
-        if scope is None:
+        if scope is None and ident:
             now = time.monotonic()
-            for key, deadline in tuple(_cancelled.items()):
-                if deadline < now:
-                    _cancelled.pop(key, None)
-            _cancelled[ident] = now + 60
-            while len(_cancelled) > 256:
-                _cancelled.pop(next(iter(_cancelled)))
+            for key in [key for key, expiry in _early.items() if expiry < now]:
+                del _early[key]
+            _early[ident] = now + 60
+            while len(_early) > 256:
+                del _early[next(iter(_early))]
     if scope:
-        scope.stop('request_cancelled')
+        scope.stop()
 
 
 def sleep(seconds):
-    scope = current_request()
-    if scope is None or seconds < 0:
-        return _sleep(seconds)
-    scope.check()
-    scope.event.wait(min(seconds, max(0, scope.deadline - time.monotonic())))
-    scope.check()
-
-
-def response_begin(response):
-    scope = current_request()
-    if scope:
-        scope.track(response)
-    try:
-        result = _begin(response)
-    except BaseException:
-        if scope:
-            scope.check()
-        raise
-    if scope:
-        scope.check()
-    return result
-
-
-def urlopen(opener, url, data=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT):
-    scope = current_request()
-    if scope:
-        timeout = scope.timeout(timeout)
-    try:
-        return _open(opener, url, data, timeout)
-    except BaseException:
-        if scope:
-            scope.check()
-        raise
-
-
-def executor_submit(executor, function, /, *args, **kwargs):
-    scope = current_request()
+    """`time.sleep` for a source module: a request's wait ends when it is cancelled."""
+    scope = current()
     if scope is None:
-        return _submit(executor, function, *args, **kwargs)
-    scope.check()
-
-    def run():
-        previous, previous_trace = current_request(), sys.gettrace()
-        _local.scope = scope
-        sys.settrace(scope.trace)
-        try:
-            scope.check()
-            result = function(*args, **kwargs)
-            scope.check()
-            return result
-        finally:
-            sys.settrace(previous_trace)
-            _local.scope = previous
-
-    def done(future):
-        with scope.condition:
-            scope.children.discard(future)
-            scope.condition.notify_all()
-
-    with scope.condition:
-        future = _submit(executor, run)
-        scope.children.add(future)
-        future.add_done_callback(done)
-    return future
+        return time.sleep(seconds)
+    scope.sleep(seconds)
 
 
-time.sleep = sleep
-http.client.HTTPResponse.begin = response_begin
-urllib.request.OpenerDirector.open = urlopen
-ThreadPoolExecutor.submit = executor_submit
+class _SourceTime(types.ModuleType):
+    """The `time` module as a source module sees it: everything is time's, except `sleep`."""
+    sleep = staticmethod(sleep)
+
+    def __getattr__(self, name):
+        return getattr(time, name)
+
+
+_source_time = _SourceTime('time')
+
+
+def bind(module):
+    """Gives a source module the cancellable sleep: its `import time` and `from time import sleep`."""
+    if getattr(module, 'time', None) is time:
+        module.time = _source_time
+    if getattr(module, 'sleep', None) is time.sleep:
+        module.sleep = sleep
+    return module

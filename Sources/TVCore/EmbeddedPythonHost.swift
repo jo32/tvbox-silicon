@@ -7,8 +7,9 @@ private func pythonRequest(_ resources: UnsafePointer<CChar>, _ request: UnsafeP
 /// Python sources on iOS and tvOS. One CPython embedded in the app (`ApplePython.c`) runs the same
 /// `host.py` and `base/` as the Mac's sandboxed Python process. Each source keeps its own spider,
 /// profile and media proxy; a spider answers one request at a time, and sources run side by side.
-/// Cancellation cooperatively stops source bytecode and supported sleep/HTTP waits. The worker
-/// keeps its execution slot until Python returns, including uninterruptible native extension calls.
+/// A cancelled or overdue request stops where the source waits on the host: an HTTP call through requests or
+/// its own `time.sleep` (Runtime/PythonHost/cancellation.py). Other code runs to its end; the worker keeps the
+/// execution slot until Python returns.
 public actor EmbeddedPythonHost {
     public static let shared = EmbeddedPythonHost()
     /// Only builds that embedded `Scripts/build-apple-python.sh`'s output have Python.

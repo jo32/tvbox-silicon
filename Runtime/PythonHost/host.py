@@ -30,7 +30,8 @@ except ImportError:
 import requests
 import urllib3
 from base import spider as base
-from cancellation import RequestScope, RequestStopped, cancel_request, current_request
+import cancellation
+from cancellation import RequestScope, RequestStopped
 
 urllib3.disable_warnings()
 
@@ -75,21 +76,18 @@ def recorded_failure():
 def send(session, prepared, **options):
     """Record the last upstream failure, and bound waits."""
     host = urlsplit(prepared.url).netloc
-    scope = current_request()
+    # In an embedded request, the call also ends when the app gives up on the request (cancellation.py).
+    scope = cancellation.current()
     if scope:
         options['timeout'] = scope.timeout(options.get('timeout'))
     elif options.get('timeout') is None:
         options['timeout'] = 20
     try:
-        response = _send(session, prepared, **options)
+        response = scope.run(_send, session, prepared, **options) if scope else _send(session, prepared, **options)
     except requests.RequestException as error:
-        if scope:
-            scope.check()
         record_failure(RemoteFailure(host, 0, f'Network request failed: {error}'))
         log('PY_HTTP_FAILED', host, error)
         raise
-    if scope:
-        scope.check()
     log('PY_HTTP', host + urlsplit(prepared.url).path, response.status_code)
     if response.status_code >= 400:
         record_failure(RemoteFailure(host, response.status_code, f'The source {host} returned HTTP {response.status_code}'))
@@ -117,7 +115,7 @@ def load_source(name, path):
     module = module_from_spec(spec_from_loader(name, loader))
     sys.modules[name] = module
     loader.exec_module(module)
-    return module
+    return cancellation.bind(module)
 
 
 def proxy_failure_status(error):
@@ -465,24 +463,23 @@ def handle(text):
     try:
         request = json.loads(text)
         if request.get('command') == 'cancel':
-            cancel_request(str(request.get('request') or ''))
+            cancellation.cancel(str(request.get('request') or ''))
             return '{}'
         if request.get('command'):
             return '{}'
-        with RequestScope(request) as scope:
+        try:
+            timeout = min(140, max(.05, float(request.get('timeoutSeconds', 140))))
+        except (TypeError, ValueError):
+            timeout = 140
+        with RequestScope(str(request.get('request') or ''), timeout) as scope:
             scope.check()
             key = str(request['session'])
             with _slots_lock:
                 _uses += 1
-                slot = _slots.get(key)
-                retired = []
-                if slot is None:
-                    retired = _retire(keep=None, limit=MAX_SESSIONS - 1)
-                    if len(_slots) >= MAX_SESSIONS:
-                        raise RuntimeError('The Python runtime is busy. Wait for the current source.')
-                    slot = _slots.setdefault(key, _Slot())
+                slot = _slots.get(key) or _slots.setdefault(key, _Slot())
                 slot.used = _uses
                 slot.users += 1
+                retired = _retire(keep=slot)
             try:
                 for session in retired:
                     session.close()
@@ -493,9 +490,7 @@ def handle(text):
                     if slot.session is None:
                         slot.session = Session(request)
                     response = slot.session.call(request.get('params') or {})
-                    scope.check()
                 finally:
-                    scope.finish_children()
                     slot.lock.release()
             finally:
                 with _slots_lock:
@@ -507,11 +502,12 @@ def handle(text):
     return json.dumps(response, ensure_ascii=False)
 
 
-def _retire(keep, limit=MAX_SESSIONS):
-    """Closes the least recently used idle sources past MAX_SESSIONS. Call with `_slots_lock` held."""
+def _retire(keep):
+    """Closes the least recently used idle sources past MAX_SESSIONS; one a caller waits for isn't idle. Call with
+    `_slots_lock` held."""
     retired = []
     for key, slot in sorted(_slots.items(), key=lambda item: item[1].used):
-        if len(_slots) <= limit:
+        if len(_slots) <= MAX_SESSIONS:
             break
         if slot is keep or slot.users or not slot.lock.acquire(blocking=False):
             continue
