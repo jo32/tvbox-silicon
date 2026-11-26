@@ -376,8 +376,10 @@ public struct DLNARenderer: Sendable {
     public func load(_ url: URL, title: String, mime: String) async throws {
         // Some TVs keep the last video until told to stop; a TV that isn't playing anything says so, which is fine.
         _ = try? await transport("Stop", [])
+        try Task.checkCancellation()
         try await transport("SetAVTransportURI", [("CurrentURI", url.absoluteString),
                                                   ("CurrentURIMetaData", DLNA.didl(title: title, url: url, mime: mime))])
+        try Task.checkCancellation()
         try await play()
     }
     public func play() async throws { try await transport("Play", [("Speed", "1")]) }

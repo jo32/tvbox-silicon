@@ -80,7 +80,7 @@ import AVKit
         let route = switch plan { case .source: "source"; case .channel(let channel): CloudFiles.isFile(channel.url) ? "file" : "direct" }
         Diagnostics.shared.record(.info, "play-on", "request source=\(sent.historyContext?.sourceKey ?? "-") route=\(route)")
         task?.cancel()
-        incoming = (sent.historyContext.map { "\($0.videoName) · \($0.episodeName)" } ?? sent.name, request.sender)
+        incoming = (sent.historyContext.map(\.displayName) ?? sent.name, request.sender)
         task = Task { [weak self] in
             guard let self else { return }
             defer { if !Task.isCancelled { self.incoming = nil } }
@@ -300,6 +300,8 @@ struct PlayOnButton: View {
             do {
                 try await cast.cast(playing, title: title, from: position, to: device)
                 sent(device.name)
+            } catch is CancellationError {
+                // Another cast, Play Here or the player closing called this one off: nothing went wrong.
             } catch {
                 Diagnostics.shared.failure("cast", "send model=\(device.model)", error)
                 failure = (device.name, error.localizedDescription)

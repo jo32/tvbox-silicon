@@ -323,10 +323,10 @@ public struct CatalogClient: Sendable {
         return url
     }
     /// Every answer, or failure, feeds the source's `SourceHealth`.
-    private func request(_ params: [String: String], fresh: Bool = false) async throws -> [String: JSONValue] {
+    private func request(_ params: [String: String]) async throws -> [String: JSONValue] {
         let started = ContinuousClock.now
         do {
-            let json = try await perform(params, fresh: fresh)
+            let json = try await perform(params)
             await SourceHealth.shared.record(site, origin: origin, seconds: started.duration(to: .now).seconds, error: nil)
             return json
         } catch {
@@ -336,7 +336,18 @@ public struct CatalogClient: Sendable {
             throw error
         }
     }
-    private func perform(_ params: [String: String], fresh: Bool = false) async throws -> [String: JSONValue] {
+    /// The source's JAR spider's answer to a query on Android TVBox's local proxy (`do=live&…`), which a
+    /// subscription's live playlists can point at (`LoopbackPlaylist`). FongMi hands these to the archive's
+    /// `Proxy.proxy`, and to the spider's own `proxy` for `do=jar`; the plugin runtime does the same.
+    func spiderProxy(_ query: String) async throws -> LoopbackPlaylist.Answer {
+        guard site.runtime == .jar, EmbeddedJarHost.available, let archive = try site.pluginURL(origin: origin, fallback: jarURL) else {
+            throw LoopbackPlaylist.needsPlugin
+        }
+        let json = try await EmbeddedJarHost.shared.request(site: site, jarURL: archive, params: ["proxy": query], http: http, configurationOrigin: origin)
+        return try LoopbackPlaylist.Answer(json)
+    }
+
+    private func perform(_ params: [String: String]) async throws -> [String: JSONValue] {
         if site.isCloudFiles { return try await CloudFilesSource.request(site, params: params) }
         if site.isTelegram { return try await TelegramSource.request(site, params: params, http: http) }
         // Yingxia's own sources run in-process on every platform, the Mac's included.
@@ -413,7 +424,7 @@ public struct CatalogClient: Sendable {
                 throw crashed
             }
         }
-        let (data, _) = try await http.get(requestURL(params), headers: site.raw["header"]?.object?.compactMapValues(\.string) ?? [:], fresh: fresh)
+        let (data, _) = try await http.get(requestURL(params), headers: site.raw["header"]?.object?.compactMapValues(\.string) ?? [:])
         do { return try JSONDecoder().decode([String: JSONValue].self, from: data) }
         catch {
             // Dead or bot-protected sites answer with a web page; say that rather than a decoding error.
@@ -543,18 +554,12 @@ public struct CatalogClient: Sendable {
     }
 
     public func preparePlayback(_ episode: Episode, forDownload: Bool = false) async throws -> PlaybackPlan {
-        var plan = try await preparePlaybackPlan(episode, forDownload: forDownload)
-        if !forDownload && (site.type == 3 || site.type == 4 || plan.requiresWebDetection) { plan.sourceEpisode = episode }
-        return plan
-    }
-
-    private func preparePlaybackPlan(_ episode: Episode, forDownload: Bool, fresh: Bool = false) async throws -> PlaybackPlan {
         var headers = site.raw["header"]?.object?.compactMapValues(\.string) ?? [:]
         if site.type == 4 || site.type == 3 {
             if !forDownload { CatPawDanmaku.remember(self) }
             var params = ["play": episode.address, "flag": episode.flag]
             if site.type == 3 { params["detailID"] = episode.videoID }
-            let result = try await request(params, fresh: fresh)
+            let result = try await request(params)
             if let message = Self.providerError(result) { throw TVError.unsupported(message) }
             if let fields = result["header"]?.object { headers.merge(fields.compactMapValues(\.string)) { _, new in new } }
             else if let text = result["header"]?.string, let data = text.data(using: .utf8),
@@ -633,23 +638,6 @@ public struct CatalogClient: Sendable {
     /// Neither exists on Apple TV, which throws the existing web-detection error.
     /// This does not call a spider `isVideoFormat`.
     public func resolvePlayback(_ plan: PlaybackPlan, choice: PlaybackChoice) async throws -> Channel {
-        var channel = try await resolvePlaybackChannel(plan, choice: choice)
-        if FLVLive.names(channel.url), let episode = plan.sourceEpisode {
-            channel.flvSource = FLVLive.Source {
-                try Task.checkCancellation()
-                let fresh = try await self.preparePlaybackPlan(episode, forDownload: false, fresh: true)
-                guard let selected = choice.renewed(in: fresh.choices, from: plan.choices) else {
-                    throw TVError.unsupported(L10n.text("The selected live quality is no longer available."))
-                }
-                let renewed = try await self.resolvePlaybackChannel(fresh, choice: selected)
-                try Task.checkCancellation()
-                return (renewed.url, renewed.headers)
-            }
-        }
-        return channel
-    }
-
-    private func resolvePlaybackChannel(_ plan: PlaybackPlan, choice: PlaybackChoice) async throws -> Channel {
         // Addresses the app made itself from the play result: a keyed MP4 or DASH described as HLS.
         if let url = URL(string: choice.address), url.scheme == CENCStreams.scheme || url.scheme == DashStreams.scheme {
             return Channel(name: choice.name, group: plan.group, url: url, headers: url.scheme == DashStreams.scheme ? plan.headers : [:],

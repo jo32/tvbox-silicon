@@ -258,9 +258,12 @@ public struct LiveSource: Identifiable, Codable, Hashable, Sendable {
     public let headers: [String: String]
     /// The program guide its subscription entry names (`epg`): an XMLTV file, or an address with `{name}` (#802).
     public let guide: String?
+    /// The subscription's JAR spider, for a playlist on Android TVBox's local server that only it can answer
+    /// (`LoopbackPlaylist`).
+    public var spider: LiveSpider?
     public var id: String { name + "|" + url.absoluteString }
-    public init(name: String, url: URL, headers: [String: String] = [:], guide: String? = nil) {
-        self.name = name; self.url = url; self.headers = headers; self.guide = guide
+    public init(name: String, url: URL, headers: [String: String] = [:], guide: String? = nil, spider: LiveSpider? = nil) {
+        self.name = name; self.url = url; self.headers = headers; self.guide = guide; self.spider = spider
     }
 }
 
@@ -295,13 +298,32 @@ public struct Subscription: Codable, Sendable {
                   let api = v["api"]?.string, let type = v["type"]?.int, seen.insert(key).inserted else { return nil }
             return Site(key: key, name: Site.localizedName(v) ?? v["name"]?.string ?? key, type: type, api: api, raw: v)
         }
-        let lives = (raw["lives"]?.array ?? []).compactMap { entry -> LiveSource? in
-            guard let v = entry.object, let address = v["url"]?.string,
-                  let url = (try? WebAddress.resolve(address, relativeTo: origin)) ?? LiveCatalog.platformAddress(address) else { return nil }
+        // A playlist on Android TVBox's local server may need the subscription's spider to answer it.
+        func spider() -> LiveSpider? {
+            LiveSpider.pick(sites, origin: origin, spider: raw["spider"]?.string?.components(separatedBy: ";md5;").first
+                .flatMap { try? WebAddress.resolve($0, relativeTo: origin) })
+        }
+        func live(_ v: [String: JSONValue], address: String, name: String?) -> LiveSource? {
+            let address = LoopbackPlaylist.normalize(address)
+            guard let url = (try? WebAddress.resolve(address, relativeTo: origin)) ?? LiveCatalog.platformAddress(address) else { return nil }
             var headers = v["header"]?.object?.compactMapValues(\.string) ?? [:]
             if let ua = v["ua"]?.string { headers["User-Agent"] = ua }
             let guide = v["epg"]?.string.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
-            return LiveSource(name: Site.localizedName(v) ?? v["name"]?.string ?? L10n.text("Live TV"), url: url, headers: headers, guide: guide)
+            return LiveSource(name: name ?? L10n.text("Live TV"), url: url, headers: headers, guide: guide,
+                              spider: LoopbackPlaylist.isLoopback(url) ? spider() : nil)
+        }
+        let lives = (raw["lives"]?.array ?? []).flatMap { entry -> [LiveSource] in
+            guard let v = entry.object else { return [] }
+            if let address = v["url"]?.string {
+                return live(v, address: address, name: Site.localizedName(v) ?? v["name"]?.string).map { [$0] } ?? []
+            }
+            // TVBox's first format: `{"group":"redirect","channels":[{"name":…,"urls":["proxy://do=live&…"]}]}`, where
+            // each channel is a playlist.
+            return (v["channels"]?.array ?? []).compactMap { channel -> LiveSource? in
+                guard let item = channel.object, let address = item["urls"]?.array?.first?.string,
+                      v["group"]?.string == "redirect" || address.lowercased().hasPrefix("proxy://") else { return nil }
+                return live(v, address: address, name: item["name"]?.string)
+            }
         }
         guard !sites.isEmpty || !lives.isEmpty else { throw TVError.invalidConfiguration }
         return Subscription(origin: origin, importedAt: Date(), sites: sites, lives: lives, raw: raw)
@@ -323,7 +345,10 @@ public struct Subscription: Codable, Sendable {
 public struct ChannelLine: Codable, Hashable, Sendable {
     public let url: URL
     public let headers: [String: String]
-    public init(url: URL, headers: [String: String] = [:]) { self.url = url; self.headers = headers }
+    public var catchup: ChannelCatchup?
+    public init(url: URL, headers: [String: String] = [:], catchup: ChannelCatchup? = nil) {
+        self.url = url; self.headers = headers; self.catchup = catchup
+    }
 }
 
 public struct Channel: Identifiable, Codable, Hashable, Sendable {
@@ -349,11 +374,16 @@ public struct Channel: Identifiable, Codable, Hashable, Sendable {
     public var alternates: [ChannelLine] = []
     /// The playlist's `tvg-id` (or `tvg-name`) for the channel, to find it in a program guide (#802). Saved.
     public var guideID: String? = nil
+    /// Provider-declared history support for this address, saved with favorites.
+    public var catchup: ChannelCatchup? = nil
+    /// A finite programme generated from a catchup declaration; never a live-room or automatic next-channel item.
+    public var replay: ProgrammeReplay? = nil
     /// Every address of the channel as a channel of its own, `url` first; just the channel when it has one.
     public var lines: [Channel] {
         [self] + alternates.map {
             var line = Channel(name: name, group: group, url: $0.url, logo: logo, headers: $0.headers)
             line.guideID = guideID
+            line.catchup = $0.catchup
             return line
         }
     }
@@ -366,7 +396,7 @@ public struct Channel: Identifiable, Codable, Hashable, Sendable {
         self.historyContext = historyContext; self.resumePosition = resumePosition; self.subtitles = subtitles
         self.skips = skips; self.bilibiliPart = bilibiliPart
     }
-    private enum CodingKeys: String, CodingKey { case name, group, url, logo, headers, skipScope, historyContext, resumePosition, alternates, guideID }
+    private enum CodingKeys: String, CodingKey { case name, group, url, logo, headers, skipScope, historyContext, resumePosition, alternates, guideID, catchup, replay }
     /// Favorites saved before channels had lines have none.
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
@@ -380,5 +410,7 @@ public struct Channel: Identifiable, Codable, Hashable, Sendable {
         resumePosition = try values.decodeIfPresent(Double.self, forKey: .resumePosition)
         alternates = try values.decodeIfPresent([ChannelLine].self, forKey: .alternates) ?? []
         guideID = try values.decodeIfPresent(String.self, forKey: .guideID)
+        catchup = try values.decodeIfPresent(ChannelCatchup.self, forKey: .catchup)
+        replay = try values.decodeIfPresent(ProgrammeReplay.self, forKey: .replay)
     }
 }

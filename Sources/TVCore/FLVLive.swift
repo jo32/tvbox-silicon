@@ -8,15 +8,6 @@ import Foundation
 /// discontinuity with its own initialization segment. Nothing is kept beyond a short window, and the stream
 /// closes when AVPlayer stops asking for the playlist.
 public enum FLVLive {
-    /// Session-only catalog provenance. It is never encoded with favorites or history.
-    public final class Source: Hashable, Sendable {
-        public typealias Refresh = @Sendable () async throws -> (url: URL, headers: [String: String])
-        let refresh: Refresh
-        public init(_ refresh: @escaping Refresh) { self.refresh = refresh }
-        public static func == (left: Source, right: Source) -> Bool { left === right }
-        public func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(self)) }
-    }
-
     /// Whether `url` names an FLV stream by its path (`.flv`), the way the platforms' addresses do.
     public static func names(_ url: URL) -> Bool { url.pathExtension.lowercased() == "flv" }
 
@@ -27,16 +18,14 @@ public enum FLVLive {
 
     /// Starts reading the stream and returns the address of its HLS master playlist once its first run is
     /// repackaged. Throws when the stream answers with an error, isn't FLV (`NotFLV`), or carries no H.264/HEVC picture.
-    public static func open(_ url: URL, headers: [String: String], source: Source? = nil) async throws -> URL {
-        let session = FLVLiveSession(url: url, headers: headers, device: RemuxSession.device(), source: source)
+    /// `trusting` accepts the server's certificate whatever it is (`PlaybackRescue`).
+    public static func open(_ url: URL, headers: [String: String], trusting: Bool = false) async throws -> URL {
+        let session = FLVLiveSession(url: url, headers: headers, device: RemuxSession.device(), trusting: trusting)
         RemuxStore.shared.add(session)
         do {
-            return try await withTaskCancellationHandler {
-                try await session.start()
-                let base = try await RemuxServer.shared.base()
-                try Task.checkCancellation()
-                return base.appending(path: "\(session.id)/master.m3u8")
-            } onCancel: { session.close() }
+            try await session.start()
+            let base = try await RemuxServer.shared.base()
+            return base.appending(path: "\(session.id)/master.m3u8")
         } catch {
             RemuxStore.shared.remove(session.id)?.close()
             throw error
@@ -94,7 +83,6 @@ struct FLVSegmenter {
         /// A complete FLV file: header, codec configurations, then the run's tags.
         var file: Data
         var start: UInt32
-        var lastTimestamp: UInt32
         var duration: Double
         /// It begins a discontinuity: other codec configurations, or times that jumped.
         var discontinuity: Bool
@@ -110,20 +98,6 @@ struct FLVSegmenter {
     private var last: UInt32?
     private var pendingDiscontinuity = false
     private var sawKeyframe = false
-    private var minimumTimestamp: UInt32?
-    var bufferedStart: UInt32? { start }
-
-    /// A new HTTP response can repeat the CDN's cached GOPs. Keep only a new keyframe at/after
-    /// the last published boundary; a distant reset/wrap is a new HLS discontinuity.
-    init(minimumTimestamp: UInt32? = nil) {
-        self.minimumTimestamp = minimumTimestamp
-        pendingDiscontinuity = minimumTimestamp != nil
-    }
-
-    mutating func finish() -> Run? {
-        guard let start, let last else { return nil }
-        return cut(end: last == .max ? last : last + 1, begun: start)
-    }
 
     /// The run the tag closes, if it does. Tags before the first keyframe are dropped.
     mutating func add(_ raw: FLVTagReader.Tag) -> Run? {
@@ -155,7 +129,6 @@ struct FLVSegmenter {
         let key = tag.type == 9 && Self.isKeyframe(tag.body)
         if !sawKeyframe {
             guard key, videoConfig != nil else { return closed }
-            if let minimumTimestamp, tag.time < minimumTimestamp, minimumTimestamp - tag.time <= 120_000 { return closed }
             sawKeyframe = true
         }
         if let begun = start, !tags.isEmpty, closed == nil {
@@ -177,7 +150,7 @@ struct FLVSegmenter {
         if let audioConfig { Self.write(FLVTagReader.Tag(type: 8, time: begun, body: audioConfig), to: &file) }
         for tag in tags where tag.type == 9 || audioConfig != nil { Self.write(tag, to: &file) }
         let duration = max(0.04, Double(Int64(end) - Int64(begun)) / 1000)
-        let run = Run(file: file, start: begun, lastTimestamp: last ?? begun, duration: duration, discontinuity: pendingDiscontinuity)
+        let run = Run(file: file, start: begun, duration: duration, discontinuity: pendingDiscontinuity)
         pendingDiscontinuity = false
         return run
     }
@@ -225,7 +198,7 @@ struct FLVSegmenter {
     }
 }
 
-/// One live FLV stream played as HLS (`FLVLive`).
+/// One live stream played as HLS: FLV (`FLVLive`), or MPEG-TS (`TSLive`), cut by its `LiveCutter`.
 final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @unchecked Sendable {
     struct Segment {
         var index: Int
@@ -247,11 +220,13 @@ final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @
     private(set) var master = ""
     private let url: URL
     private let headers: [String: String]
-    private let source: FLVLive.Source?
     private let device: RemuxPlan.Device
     private let lock = NSLock()
-    private var reader = FLVTagReader()
-    private var segmenter = FLVSegmenter()
+    private var cutter: any LiveCutter
+    /// What the log lines call the stream: `flv` or `ts`.
+    private let kind: String
+    /// The server's certificate is accepted whatever it is (`PlaybackRescue`).
+    private let trusting: Bool
     private var segments: [Segment] = []
     private var next = 0
     private var discontinuities = 0
@@ -269,24 +244,14 @@ final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @
     private var task: URLSessionDataTask?
     private var response: CheckedContinuation<Void, Error>?
     private var watchdog: Task<Void, Never>?
-    private var refreshing: Task<Void, Never>?
-    private var recoveryDeadline: Task<Void, Never>?
-    private var refreshID = UUID()
-    private var attempts = 0
-    private var connection = 0
-    private var connectionDuration: Double = 0
-    private var lastMediaEnd: UInt32?
-    private var heldTail: FLVSegmenter.Run?
-    private var responseError: Error?
-    private var deadlineID = UUID()
 
-    init(url: URL, headers: [String: String], device: RemuxPlan.Device, source: FLVLive.Source? = nil) {
-        self.url = url; self.headers = headers; self.device = device; self.source = source
+    init(url: URL, headers: [String: String], device: RemuxPlan.Device, cutter: any LiveCutter = FLVCutter(), trusting: Bool = false) {
+        self.url = url; self.headers = headers; self.device = device
+        self.cutter = cutter; kind = cutter.name; self.trusting = trusting
     }
 
     /// Connects, then waits for the first run's repackaging, which describes the master playlist.
     func start() async throws {
-        try Task.checkCancellation()
         began = Date()
         let queue = OperationQueue()
         queue.maxConcurrentOperationCount = 1
@@ -299,48 +264,32 @@ final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @
         var request = URLRequest(url: url)
         headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         let task = network.dataTask(with: request)
-        let accepted = lock.withLock { () -> Bool in
-            guard !closed else { return false }
-            self.network = network; self.task = task
-            return true
-        }
-        guard accepted else { network.invalidateAndCancel(); throw CancellationError() }
+        lock.withLock { self.network = network; self.task = task }
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            let accepted = lock.withLock { () -> Bool in
-                guard !closed else { return false }
-                response = continuation
-                return true
-            }
-            if accepted { task.resume() } else { continuation.resume(throwing: CancellationError()) }
+            lock.withLock { response = continuation }
+            task.resume()
         }
-        try Task.checkCancellation()
         let first = try await firstSegment()
         let output = try await first.output.value
-        try Task.checkCancellation()
-        guard !lock.withLock({ closed }) else { throw CancellationError() }
         describe(output, at: first.index)
-        Diagnostics.shared.record(.info, "remux", "flv live open host=\(url.host() ?? "-") video=\(output.video) audio=\(output.audio ?? "-") size=\(output.width)x\(output.height) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
-        let watchdog = Task { [weak self] in
+        Diagnostics.shared.record(.info, "remux", "\(kind) live open host=\(url.host() ?? "-") video=\(output.video) audio=\(output.audio ?? "-") size=\(output.width)x\(output.height) ms=\(Int(Date().timeIntervalSince(began) * 1000))")
+        watchdog = Task { [weak self] in
             while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+                try? await Task.sleep(for: .seconds(5))
                 guard let self else { return }
                 let idle = self.lock.withLock { Date().timeIntervalSince(self.asked) }
                 if idle > Self.idle {
-                    Diagnostics.shared.record(.info, "remux", "flv live idle; closing")
+                    Diagnostics.shared.record(.info, "remux", "\(self.kind) live idle; closing")
                     RemuxStore.shared.remove(self.id)?.close()
                     return
                 }
             }
-        }
-        lock.withLock {
-            if closed { watchdog.cancel() } else { self.watchdog = watchdog }
         }
     }
 
     private func firstSegment() async throws -> Segment {
         let deadline = Date().addingTimeInterval(20)
         while true {
-            try Task.checkCancellation()
             let (segment, failure) = lock.withLock { (segments.first, ended) }
             if let segment { return segment }
             if let failure { throw failure }
@@ -370,23 +319,18 @@ final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @
 
     // MARK: Reading the stream
 
-    private func active(_ session: URLSession, _ task: URLSessionTask) -> Bool {
-        lock.withLock { !closed && !finished && network === session && self.task === task }
-    }
-
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
                     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
-        guard active(session, dataTask) else { completionHandler(.cancel); return }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 200
         let waiting = lock.withLock { () -> CheckedContinuation<Void, Error>? in
             defer { self.response = nil }
             return self.response
         }
         guard (200..<300).contains(status) else {
-            let error = TVError.http(status)
-            lock.withLock { responseError = error }
-            waiting?.resume(throwing: error)
             completionHandler(.cancel)
+            let error = TVError.http(status)
+            lock.withLock { ended = error }
+            waiting?.resume(throwing: error)
             return
         }
         completionHandler(.allow)
@@ -394,173 +338,67 @@ final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        guard active(session, dataTask) else { return }
+        let runs: [FLVSegmenter.Run]
         do {
-            let added = try lock.withLock { () throws -> Bool in
-                guard !closed, !finished else { return false }
+            runs = try lock.withLock { () throws -> [FLVSegmenter.Run] in
                 received += Int64(data.count)
-                var added = false
-                for tag in try reader.append(data) {
-                    let run = segmenter.add(tag)
-                    if let heldTail {
-                        if let run, run.start == heldTail.start {
-                            self.heldTail = nil
-                        } else if let start = segmenter.bufferedStart, start != heldTail.start {
-                            var tail = heldTail
-                            if start > tail.lastTimestamp, start - tail.lastTimestamp <= 15_000 {
-                                tail.duration = Double(start - tail.start) / 1000
-                            }
-                            appendSegment(tail, earnsCredit: false)
-                            self.heldTail = nil
-                            added = true
-                        }
-                    }
-                    if let run { appendSegment(run, earnsCredit: true); added = true }
-                }
-                return added
+                return try cutter.feed(data)
             }
-            if added { wake() }
         } catch {
-            let failure: Error = error as? FLVTagReader.Failure == .notFLV ? FLVLive.NotFLV() : TVError.unsupported(L10n.text("This live stream isn't FLV."))
-            fail(failure)
+            Diagnostics.shared.record(.warning, "remux", "\(kind) live \(error)")
+            let failure: Error = error is FLVLive.NotFLV || error is TSLive.NotTS ? error : TVError.unsupported(L10n.text("This live stream isn't FLV."))
+            lock.withLock { ended = failure }
+            dataTask.cancel(); wake()
+            return
         }
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard active(session, task) else { return }
-        let state = lock.withLock { () -> (Error?, [Task<HLSRemux.Output, Error>], UUID) in
-            if let tail = segmenter.finish() { retainTail(tail) }
-            self.task = nil // Fence this connection's late callbacks before resolving again.
-            let failure = responseError ?? error
-            responseError = nil
-            return (failure, segments.map(\.output), refreshID)
-        }
-        let (failure, outputs, token) = state
-        let retryable: Bool
-        if let failure, case TVError.http(let status) = failure { retryable = status == 403 || status == 429 || (500...599).contains(status) }
-        else { retryable = failure == nil || failure is URLError }
-        guard source != nil, retryable, lock.withLock({ next > 0 || heldTail != nil }) else {
-            fail(failure ?? TVError.unsupported(L10n.text("The live stream ended."))); return
-        }
-        // Repackaging must actually succeed before its new media earns retry credit. Keep serving old
-        // segments during this wait and the refresh; neither the HLS owner nor player item is replaced.
-        lock.withLock {
-            guard !closed, !finished, refreshID == token else { return }
-            startRecoveryDeadline()
-            refreshing = Task { [weak self] in
-                guard let self else { return }
-                do {
-                    for output in outputs { _ = try await output.value }
-                    try Task.checkCancellation()
-                    await self.reconnect(token: token)
-                } catch { if !Task.isCancelled { self.fail(error) } }
-            }
-        }
-    }
-
-    private func startRecoveryDeadline() {
-        guard recoveryDeadline == nil else { return }
-        let deadline = UUID()
-        deadlineID = deadline
-        recoveryDeadline = Task { [weak self] in
-            do { try await Task.sleep(for: .seconds(10)) } catch { return }
-            self?.fail(URLError(.timedOut), deadline: deadline)
-        }
-    }
-
-    private func reconnect(token: UUID) async {
-        while !Task.isCancelled {
-            let state = lock.withLock { () -> (FLVLive.Source, Int)? in
-                guard !closed, !finished, refreshID == token, let source else { return nil }
-                attempts += 1
-                startRecoveryDeadline()
-                return (source, attempts)
-            }
-            guard let (source, attempt) = state else { return }
-            guard attempt <= 3 else { fail(TVError.unsupported(L10n.text("The live stream could not reconnect."))); return }
-            do {
-                if attempt > 1 { try await Task.sleep(for: .seconds(attempt == 2 ? 1 : 3)) }
-                let fresh = try await source.refresh()
-                try Task.checkCancellation()
-                guard FLVLive.names(fresh.url), ["https", "http"].contains(fresh.url.scheme) else {
-                    fail(TVError.unsupported(L10n.text("The live source changed its stream format."))); return
-                }
-                let task = lock.withLock { () -> URLSessionDataTask? in
-                    guard !closed, !finished, refreshID == token, let network else { return nil }
-                    var request = URLRequest(url: fresh.url, timeoutInterval: 8)
-                    fresh.headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
-                    request.setValue(nil, forHTTPHeaderField: "Range")
-                    request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
-                    let task = network.dataTask(with: request)
-                    reader = FLVTagReader(); segmenter = FLVSegmenter(minimumTimestamp: heldTail?.start ?? lastMediaEnd)
-                    connection += 1; connectionDuration = 0
-                    self.task = task
-                    return task
-                }
-                task?.resume()
-                return
-            } catch {
-                if Task.isCancelled { return }
-                if error is CancellationError { fail(error); return }
-                if attempt == 3 { fail(error); return }
-            }
-        }
-    }
-
-    private func fail(_ error: Error, deadline: UUID? = nil) {
-        let state = lock.withLock { () -> (URLSessionDataTask?, CheckedContinuation<Void, Error>?, Task<Void, Never>?, Task<Void, Never>?)? in
-            guard !closed, !finished, deadline == nil || deadline == deadlineID else { return nil }
-            if let tail = segmenter.finish() { retainTail(tail) }
-            if let heldTail { appendSegment(heldTail, earnsCredit: false); self.heldTail = nil }
-            finished = true; ended = error; refreshID = UUID()
-            defer { response = nil; task = nil }
-            return (task, response, refreshing, recoveryDeadline)
-        }
-        guard let (task, response, refresh, deadline) = state else { return }
-        task?.cancel(); refresh?.cancel(); deadline?.cancel()
-        response?.resume(throwing: error)
+        guard !runs.isEmpty else { return }
+        runs.forEach(add)
         wake()
     }
 
-    private func retainTail(_ tail: FLVSegmenter.Run) {
-        if let heldTail, heldTail.start == tail.start, heldTail.lastTimestamp >= tail.lastTimestamp { return }
-        heldTail = tail
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        let waiting = lock.withLock { () -> CheckedContinuation<Void, Error>? in
+            defer { response = nil }
+            finished = true
+            if ended == nil { ended = error ?? TVError.unsupported(L10n.text("The live stream ended.")) }
+            return response
+        }
+        waiting?.resume(throwing: error ?? TVError.unsupported(L10n.text("The live stream ended.")))
+        if !closed { Diagnostics.shared.record(.info, "remux", "\(kind) live ended bytes=\(received) \(error.map(Diagnostics.describe) ?? "eof")") }
+        wake()
     }
 
-    private func appendSegment(_ run: FLVSegmenter.Run, earnsCredit: Bool) {
-        let device = device, file = run.file
-        let activeConnection = connection
-        let output = Task.detached(priority: .userInitiated) { [weak self] in
-            let output = try HLSRemux.repackage(file, device: device)
-            guard output.media[0]?.isEmpty == false else { throw TVError.unsupported("FLV has no picture") }
-            if earnsCredit {
-                self?.lock.withLock {
-                    guard let self, !self.closed, !self.finished, self.connection == activeConnection else { return }
-                    self.connectionDuration += run.duration
-                    if self.connectionDuration >= 2 {
-                        self.attempts = 0
-                        if self.task != nil {
-                            self.deadlineID = UUID()
-                            self.recoveryDeadline?.cancel(); self.recoveryDeadline = nil
-                        }
-                    }
-                }
+    /// A link AVPlayer refused over its certificate is read anyway, when `trusting`, from its own host.
+    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge,
+                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        // Only the link's own host: a redirect elsewhere is checked as usual.
+        if trusting, challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+           challenge.protectionSpace.host.lowercased() == url.host()?.lowercased(), let trust = challenge.protectionSpace.serverTrust {
+            completionHandler(.useCredential, URLCredential(trust: trust))
+        } else {
+            completionHandler(.performDefaultHandling, nil)
+        }
+    }
+
+    private func add(_ run: FLVSegmenter.Run) {
+        let device = device
+        let file = run.file
+        let output = Task.detached(priority: .userInitiated) { try HLSRemux.repackage(file, device: device) }
+        lock.withLock {
+            guard !closed else { return }
+            let index = next
+            next += 1
+            let runStart = run.discontinuity || segments.isEmpty ? index : (segments.last?.run ?? index)
+            segments.append(Segment(index: index, duration: run.duration, discontinuity: run.discontinuity && index > 0, run: runStart, output: output))
+            target = max(target, Int(run.duration.rounded(.up)))
+            while segments.count > Self.kept {
+                let gone = segments.removeFirst()
+                if gone.discontinuity { discontinuities += 1 }
+                gone.output.cancel()
             }
-            return output
+            let runs = Set(segments.map(\.run))
+            initializations = initializations.filter { runs.contains($0.key) }
         }
-        let index = next
-        next += 1
-        lastMediaEnd = run.start &+ UInt32((run.duration * 1000).rounded())
-        let runStart = run.discontinuity || segments.isEmpty ? index : (segments.last?.run ?? index)
-        segments.append(Segment(index: index, duration: run.duration, discontinuity: run.discontinuity && index > 0, run: runStart, output: output))
-        target = max(target, Int(run.duration.rounded(.up)))
-        while segments.count > Self.kept {
-            let gone = segments.removeFirst()
-            if gone.discontinuity { discontinuities += 1 }
-            gone.output.cancel()
-        }
-        let runs = Set(segments.map(\.run))
-        initializations = initializations.filter { runs.contains($0.key) }
     }
 
     // MARK: Serving
@@ -626,16 +464,14 @@ final class FLVLiveSession: NSObject, SegmentedStream, URLSessionDataDelegate, @
     }
 
     func close() {
-        let state = lock.withLock { () -> (URLSessionDataTask?, URLSession?, [Task<HLSRemux.Output, Error>],
-                                          CheckedContinuation<Void, Error>?, [Task<Void, Never>]) in
-            closed = true; finished = true; ended = CancellationError(); refreshID = UUID(); deadlineID = UUID()
-            defer { segments = []; initializations = [:]; heldTail = nil; self.response = nil; self.task = nil }
-            return (self.task, self.network, segments.map(\.output), self.response, [watchdog, refreshing, recoveryDeadline].compactMap { $0 })
+        let (task, network, outputs) = lock.withLock { () -> (URLSessionDataTask?, URLSession?, [Task<HLSRemux.Output, Error>]) in
+            closed = true
+            defer { segments = []; initializations = [:] }
+            return (self.task, self.network, segments.map(\.output))
         }
-        let (task, network, outputs, response, work) = state
-        work.forEach { $0.cancel() }
-        response?.resume(throwing: CancellationError())
-        task?.cancel(); network?.invalidateAndCancel()
+        watchdog?.cancel()
+        task?.cancel()
+        network?.invalidateAndCancel()
         outputs.forEach { $0.cancel() }
         wake()
     }
