@@ -85,77 +85,103 @@ enum ScriptAssets {
     }
 }
 
-/// One QuickJS runtime pinned to one thread.
+/// One QuickJS runtime pinned to one thread. Cancellation retains the native execution fence.
 final class ScriptSession: @unchecked Sendable {
     private let thread: ScriptThread
     private let bridge: ScriptBridge
     private var script: OpaquePointer?
+    private let stateLock = NSLock()
+    private var closed = false
+    private var operations: [UUID: (ScriptCancellation, ScriptRequestScope)] = [:]
 
     private init(thread: ScriptThread, bridge: ScriptBridge) { self.thread = thread; self.bridge = bridge }
 
-    /// `source`, when given, is served for `api` instead of downloading it.
     static func start(api: String, key: String, ext: String, profile: URL, label: String, source: String? = nil) async throws -> ScriptSession {
+        try Task.checkCancellation()
         let session = ScriptSession(thread: ScriptThread(label: label), bridge: ScriptBridge(profile: profile, label: label, supplied: source.map { [api: $0] } ?? [:]))
         session.thread.start()
-        let failure: String? = await session.thread.run {
-            if let failure = session.boot() { return failure }
+        let failure: String? = await session.perform(seconds: 60, stopped: "The script runtime stopped") { token in
+            if let failure = session.boot(token) { return failure }
             let input = (try? String(decoding: JSONSerialization.data(withJSONObject: ["api": api, "key": key, "ext": ext]), as: UTF8.self)) ?? "{}"
-            guard let envelope = session.evaluate("__tvbox.init(\(input))", seconds: 60) else { return "The script runtime stopped" }
+            guard let envelope = session.evaluate("__tvbox.init(\(input))", seconds: 60, token: token) else { return "The script runtime stopped" }
             if envelope["value"]?.object?["ready"] != nil { return nil }
             return envelope["value"]?.object?["error"]?.string ?? envelope["error"]?.string ?? "The script did not start"
         }
-        if let failure {
-            session.close()
-            throw TVError.unsupported(L10n.text("Plugin error: %@", String(failure.prefix(300))))
-        }
+        if Task.isCancelled { session.close(); throw CancellationError() }
+        if let failure { session.close(); throw TVError.unsupported(L10n.text("Plugin error: %@", String(failure.prefix(300)))) }
         return session
     }
 
-    /// A runtime for a script that is not a TVBox spider: the prelude, then the bundled `module`, which
-    /// reads the script and anything else it needs from `supplied` (`__host('module', key)`).
     static func start(module: String, supplied: [String: String], profile: URL, label: String, extension handler: ScriptHostExtension? = nil) async throws -> ScriptSession {
+        try Task.checkCancellation()
         let session = ScriptSession(thread: ScriptThread(label: label), bridge: ScriptBridge(profile: profile, label: label, supplied: supplied, extension: handler))
         session.thread.start()
-        let failure: String? = await session.thread.run {
-            if let failure = session.boot() { return failure }
+        let failure: String? = await session.perform(seconds: 60, stopped: "The script runtime stopped") { token in
+            if let failure = session.boot(token) { return failure }
             guard let source = ScriptAssets.bundled(module), let script = session.script else { return "The script module is missing from this build" }
-            if let error = tv_script_module(script, module, source, 30) { defer { free(error) }; return String(cString: error) }
+            if let error = tv_script_module_cancellable(script, module, source, 30, token.pointer) { defer { free(error) }; return String(cString: error) }
             return nil
         }
-        if let failure {
-            session.close()
-            throw TVError.unsupported(L10n.text("Plugin error: %@", String(failure.prefix(300))))
-        }
+        if Task.isCancelled { session.close(); throw CancellationError() }
+        if let failure { session.close(); throw TVError.unsupported(L10n.text("Plugin error: %@", String(failure.prefix(300)))) }
         return session
     }
 
-    /// Evaluates a global expression, waiting up to `seconds` for a promise: {"value": ...} or {"error": ...}.
     func evaluate(_ expression: String, within seconds: Double) async -> [String: JSONValue] {
-        await thread.run { self.evaluate(expression, seconds: seconds) } ?? ["error": .string("The script runtime stopped")]
+        let stopped: [String: JSONValue] = ["error": .string("The script operation stopped")]
+        return await perform(seconds: seconds, stopped: stopped) { token in
+            self.evaluate(expression, seconds: seconds, token: token) ?? stopped
+        }
     }
 
-    /// Runs on the session thread: QuickJS with the TVBox prelude loaded.
-    private func boot() -> String? {
+    private func perform<T: Sendable>(seconds: Double, stopped: T, _ body: @escaping (ScriptCancellation) -> T) async -> T {
+        let token = ScriptCancellation(), scope = ScriptRequestScope(deadline: Date().addingTimeInterval(seconds))
+        let id = UUID()
+        guard token.pointer != nil, stateLock.withLock({
+            guard !closed else { return false }
+            operations[id] = (token, scope); return true
+        }) else { return stopped }
+        let expiry = DispatchWorkItem { token.cancel(); scope.cancel() }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + max(0, seconds), execute: expiry)
+        defer { expiry.cancel(); _ = stateLock.withLock { operations.removeValue(forKey: id) } }
+        return await withTaskCancellationHandler {
+            if Task.isCancelled { token.cancel(); scope.cancel() }
+            return await thread.run(stopped: stopped) {
+                guard !token.cancelled, scope.deadline.timeIntervalSinceNow > 0 else { return stopped }
+                self.bridge.beginRequest(scope)
+                defer {
+                    if token.cancelled { scope.cancel() }
+                    self.bridge.endRequest(scope)
+                    if scope.cancelled, let script = self.script {
+                        if let result = tv_script_call(script, "__tvbox.cancelTimers()", 0.2) { free(result) }
+                    }
+                }
+                let result = body(token)
+                return token.cancelled ? stopped : result
+            }
+        } onCancel: { token.cancel(); scope.cancel() }
+    }
+
+    private func boot(_ token: ScriptCancellation) -> String? {
         let opaque = Unmanaged.passUnretained(bridge).toOpaque()
         guard let script = tv_script_create(opaque, scriptHost, 256 << 20, 12 << 20) else { return "QuickJS could not start" }
         self.script = script
         guard let prelude = ScriptAssets.bundled("assets://tvbox/prelude.js") else { return "The script prelude is missing from this build" }
-        if let error = tv_script_module(script, "assets://tvbox/prelude.js", prelude, 60) { defer { free(error) }; return String(cString: error) }
+        if let error = tv_script_module_cancellable(script, "assets://tvbox/prelude.js", prelude, 60, token.pointer) { defer { free(error) }; return String(cString: error) }
         return nil
     }
 
-    /// The spider's answer envelope: {"result": ...} or a PluginFailure envelope.
     func call(_ params: [String: String]) async throws -> [String: JSONValue] {
+        try Task.checkCancellation()
         let json = (try? String(decoding: JSONSerialization.data(withJSONObject: params), as: UTF8.self)) ?? "{}"
-        let envelope = await thread.run { self.evaluate("__tvbox.call(\(json))", seconds: 60) }
-        guard let envelope else { return ["error": .string("The script runtime stopped"), "errorCode": .string("script_error")] }
+        let envelope = await evaluate("__tvbox.call(\(json))", within: 60)
+        try Task.checkCancellation()
         if let value = envelope["value"]?.object { return value }
         return ["error": .string(envelope["error"]?.string ?? "The script failed"), "errorCode": .string("script_error")]
     }
 
-    /// Runs on the session thread.
-    private func evaluate(_ expression: String, seconds: Double) -> [String: JSONValue]? {
-        guard let script, let output = tv_script_call(script, expression, seconds) else { return nil }
+    private func evaluate(_ expression: String, seconds: Double, token: ScriptCancellation) -> [String: JSONValue]? {
+        guard let script, let output = tv_script_call_cancellable(script, expression, seconds, token.pointer) else { return nil }
         defer { free(output) }
         let text = String(cString: output)
         if let envelope = try? JSONDecoder().decode([String: JSONValue].self, from: Data(text.utf8)) { return envelope }
@@ -163,10 +189,28 @@ final class ScriptSession: @unchecked Sendable {
     }
 
     func close() {
+        let active: [(ScriptCancellation, ScriptRequestScope)]? = stateLock.withLock {
+            guard !closed else { return nil }
+            closed = true
+            return Array(operations.values)
+        }
+        guard let active else { return }
+        for (token, scope) in active { token.cancel(); scope.cancel() }
         thread.run {
+            self.bridge.cancelPending()
             if let script = self.script { tv_script_free(script); self.script = nil }
         } then: { self.thread.cancel() }
     }
+}
+
+private final class ScriptCancellation: @unchecked Sendable {
+    let pointer: OpaquePointer?
+    private let lock = NSLock()
+    private var stopped = false
+    init() { pointer = tv_script_cancellation_create() }
+    var cancelled: Bool { lock.withLock { stopped } }
+    func cancel() { lock.withLock { stopped = true; tv_script_cancellation_cancel(pointer) } }
+    deinit { tv_script_cancellation_free(pointer) }
 }
 
 /// QuickJS keeps deep native recursion (cheerio, large regular expressions), so each runtime
@@ -191,20 +235,34 @@ final class ScriptThread: Thread, @unchecked Sendable {
         }
     }
 
-    private func enqueue(_ job: @escaping () -> Void) {
-        condition.lock(); work.append(job); condition.signal(); condition.unlock()
-    }
-
-    func run<T: Sendable>(_ body: @escaping () -> T) async -> T {
-        await withCheckedContinuation { continuation in enqueue { continuation.resume(returning: body()) } }
+    /// A session operation with an explicit stopped result. Close can race an actor's last
+    /// session lookup; queued callers must resume when the worker exits, even after close.
+    func run<T: Sendable>(stopped: T, _ body: @escaping () -> T) async -> T {
+        await withCheckedContinuation { continuation in
+            condition.lock()
+            if isCancelled {
+                condition.unlock(); continuation.resume(returning: stopped)
+            } else {
+                work.append { continuation.resume(returning: self.isCancelled ? stopped : body()) }
+                condition.signal(); condition.unlock()
+            }
+        }
     }
 
     func run(_ body: @escaping () -> Void, then finish: @escaping () -> Void) {
-        enqueue { body(); finish() }
+        condition.lock()
+        if isCancelled { condition.unlock(); return }
+        work.append { if !self.isCancelled { body(); finish() } }
+        condition.signal(); condition.unlock()
     }
 
     override func cancel() {
-        condition.lock(); super.cancel(); condition.signal(); condition.unlock()
+        condition.lock(); super.cancel()
+        let queued = work; work.removeAll()
+        condition.signal(); condition.unlock()
+        // Stop is requested by the final close job on this worker, after freeing the VM.
+        // Operations using the stopped overload only resume their continuation here.
+        queued.forEach { $0() }
     }
 }
 
@@ -218,7 +276,14 @@ final class ScriptBridge: @unchecked Sendable {
     private let pending = PendingRequests()
     private let handler: ScriptHostExtension?
 
+    private var request: ScriptRequestScope?
     deinit { pending.cancelAll() }
+    func beginRequest(_ request: ScriptRequestScope) { self.request = request }
+    func endRequest(_ request: ScriptRequestScope) {
+        if request.cancelled { request.cancelAndWait(); pending.cancelAllAndWait(); handler?.cancelPending() }
+        self.request = nil
+    }
+    func cancelPending() { request?.cancelAndWait(); pending.cancelAllAndWait(); handler?.cancelPending() }
 
     init(profile: URL, label: String, supplied: [String: String] = [:], extension handler: ScriptHostExtension? = nil) {
         self.handler = handler
@@ -239,12 +304,14 @@ final class ScriptBridge: @unchecked Sendable {
             guard parts.count == 2, let resolved = ScriptAssets.resolve(parts[1], from: parts[0]) else { throw ScriptHostError("invalid module specifier") }
             return resolved
         case "module": return try module(argument)
-        case "http": return try ScriptHTTP.perform(argument)
+        case "http": return try ScriptHTTP.perform(argument, scope: request)
         // Requests that don't block the script: start one, then poll for its answer from a timer.
         case "httpStart":
             let id = pending.add()
-            let cancel = try ScriptHTTP.start(argument) { [pending] answer in pending.finish(id, answer) }
-            pending.setCancel(id, cancel)
+            do {
+                let cancel = try ScriptHTTP.start(argument, scope: request) { [pending] answer in pending.finish(id, answer) }
+                pending.setCancel(id, cancel)
+            } catch { pending.finish(id, ""); throw error }
             return String(id)
         case "httpPoll": return pending.take(Int(argument) ?? -1)
         case "httpCancel": pending.cancel(Int(argument) ?? -1); return nil
@@ -288,7 +355,7 @@ final class ScriptBridge: @unchecked Sendable {
         let file = folder.appendingPathComponent(PluginChecksum.sha256(Data(address.utf8)) + ".js")
         let age = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate).map { Date().timeIntervalSince($0) }
         if let age, age < 300, let cached = try? String(contentsOf: file, encoding: .utf8) { return cached }
-        let answer = try JSONDecoder().decode([String: JSONValue].self, from: Data(try ScriptHTTP.perform(String(decoding: JSONSerialization.data(withJSONObject: ["url": address, "timeout": 20000]), as: UTF8.self)).utf8))
+        let answer = try JSONDecoder().decode([String: JSONValue].self, from: Data(try ScriptHTTP.perform(String(decoding: JSONSerialization.data(withJSONObject: ["url": address, "timeout": 20000]), as: UTF8.self), scope: request).utf8))
         if let code = answer["code"]?.int, (200..<300).contains(code), let source = answer["content"]?.string, !source.isEmpty {
             try? Data(source.utf8).write(to: file, options: .atomic)
             return source
@@ -302,38 +369,108 @@ final class ScriptBridge: @unchecked Sendable {
 /// the operation isn't one of its own.
 protocol ScriptHostExtension: AnyObject, Sendable {
     func answer(_ operation: String, _ argument: String) throws -> String??
+    /// Called on the VM thread before a cancelled operation or VM close releases its fence.
+    func cancelPending()
     /// Whether the script may load modules from the network or the device's files.
     var allowsRemoteModules: Bool { get }
 }
 
 extension ScriptHostExtension {
+    func cancelPending() {}
     var allowsRemoteModules: Bool { true }
 }
 
 /// Requests started with `httpStart`, until their answers are taken.
 final class PendingRequests: @unchecked Sendable {
-    private let lock = NSLock()
+    private let lock = NSCondition()
     private var next = 1
     private var answers: [Int: String] = [:]
     private var cancels: [Int: () -> Void] = [:]
+    private var active = Set<Int>()
+    private var discarded = Set<Int>()
 
-    func add() -> Int { lock.withLock { defer { next += 1 }; return next } }
+    func add() -> Int { lock.withLock { defer { next += 1 }; active.insert(next); return next } }
     func setCancel(_ id: Int, _ cancel: @escaping () -> Void) {
-        lock.withLock { if answers[id] == nil { cancels[id] = cancel } }
+        let stop = lock.withLock {
+            guard active.contains(id) else { return false }
+            if discarded.contains(id) { return true }
+            cancels[id] = cancel
+            return false
+        }
+        if stop { cancel() }
     }
-    func finish(_ id: Int, _ answer: String) { lock.withLock { cancels[id] = nil; answers[id] = answer } }
+    func finish(_ id: Int, _ answer: String) {
+        lock.withLock {
+            cancels[id] = nil; active.remove(id)
+            if discarded.remove(id) == nil { answers[id] = answer }
+            lock.broadcast()
+        }
+    }
     func take(_ id: Int) -> String? { lock.withLock { answers.removeValue(forKey: id) } }
     func cancel(_ id: Int) {
-        let cancel = lock.withLock { answers[id] = nil; return cancels.removeValue(forKey: id) }
+        let cancel = lock.withLock {
+            answers[id] = nil
+            if active.contains(id) { discarded.insert(id) }
+            return cancels.removeValue(forKey: id)
+        }
         cancel?()
     }
     func cancelAll() {
-        let all = lock.withLock { defer { cancels = [:]; answers = [:] }; return Array(cancels.values) }
+        let all = lock.withLock {
+            defer { cancels = [:]; answers = [:] }
+            discarded.formUnion(active)
+            return Array(cancels.values)
+        }
         all.forEach { $0() }
+    }
+    func cancelAllAndWait() {
+        cancelAll()
+        lock.lock()
+        while !active.isEmpty { lock.wait() }
+        lock.unlock()
     }
 }
 
 struct ScriptHostError: Error { let message: String; init(_ message: String) { self.message = message } }
+
+/// A VM call may synchronously enter HTTP, where the bytecode interrupt cannot run.
+/// Keep that transport cancellable and retain the execution fence through its callback.
+final class ScriptRequestScope: @unchecked Sendable {
+    let deadline: Date
+    private let condition = NSCondition()
+    private var stopped = false
+    private var next = 0
+    private var active: [Int: (() -> Void)?] = [:]
+    init(deadline: Date) { self.deadline = deadline }
+    var cancelled: Bool { condition.withLock { stopped } }
+    func begin() throws -> Int {
+        try condition.withLock {
+            guard !stopped, deadline.timeIntervalSinceNow > 0 else { throw CancellationError() }
+            defer { next += 1 }
+            active[next] = .some(nil)
+            return next
+        }
+    }
+    func attach(_ id: Int, cancel: @escaping () -> Void) {
+        let stop = condition.withLock {
+            guard active.keys.contains(id) else { return false }
+            active[id] = cancel
+            return stopped
+        }
+        if stop { cancel() }
+    }
+    func finish(_ id: Int) { condition.withLock { active.removeValue(forKey: id); condition.broadcast() } }
+    func cancel() {
+        let cancels = condition.withLock { stopped = true; return active.values.compactMap { $0 } }
+        cancels.forEach { $0() }
+    }
+    func cancelAndWait() {
+        cancel()
+        condition.lock()
+        while !active.isEmpty { condition.wait() }
+        condition.unlock()
+    }
+}
 
 /// The C callback behind `__host`; errors become JavaScript exceptions.
 private let scriptHost: TVScriptHost = { opaque, operation, argument in
@@ -417,9 +554,14 @@ enum ScriptHTTP {
         return state.lock.withLock { state.winner ?? state.last ?? (nil, nil, URLError(.unknown)) }
     }
 
-    static func perform(_ json: String) throws -> String {
+    static func perform(_ json: String, scope: ScriptRequestScope? = nil) throws -> String {
         let options = try JSONDecoder().decode([String: JSONValue].self, from: Data(json.utf8))
-        let (request, stopsRedirects) = try prepare(options)
+        let (prepared, stopsRedirects) = try prepare(options)
+        let request: URLRequest = {
+            var value = prepared
+            if let scope { value.timeoutInterval = min(value.timeoutInterval, max(0.05, scope.deadline.timeIntervalSinceNow)) }
+            return value
+        }()
         let jar = options["jar"]?.string.flatMap { $0.isEmpty || $0.count > 80 ? nil : Jars.shared.jar($0) }
         let racers = jar == nil ? min(4, max(1, options["racers"]?.int ?? 1)) : 1
         let result: Reply
@@ -428,14 +570,28 @@ enum ScriptHTTP {
             result = race(racers: racers, hedge: hedge > 0 ? hedge : 2.5) { finish in
                 // Each try gets its own connection: a stalled HTTP/2 connection must not carry the next one.
                 let session = URLSession(configuration: .ephemeral, delegate: stopsRedirects ? Redirects() : nil, delegateQueue: nil)
-                session.dataTask(with: request) { data, response, error in finish((data, response, error)) }.resume()
-                return { session.invalidateAndCancel() }
+                do {
+                    let id = try scope?.begin()
+                    let task = session.dataTask(with: request) { data, response, error in
+                        defer { if let id { scope?.finish(id) }; session.finishTasksAndInvalidate() }
+                        finish((data, response, error))
+                    }
+                    if let id { scope?.attach(id, cancel: { task.cancel() }) }
+                    task.resume()
+                    return { session.invalidateAndCancel() }
+                } catch { session.invalidateAndCancel(); finish((nil, nil, error)); return {} }
             }
         } else {
             let semaphore = DispatchSemaphore(value: 0)
             nonisolated(unsafe) var reply: Reply = (nil, nil, nil)
             let session = stopsRedirects ? jar?.stopping ?? stopping : jar?.following ?? following
-            session.dataTask(with: request) { data, response, error in reply = (data, response, error); semaphore.signal() }.resume()
+            let id = try scope?.begin()
+            let task = session.dataTask(with: request) { data, response, error in
+                defer { if let id { scope?.finish(id) } }
+                reply = (data, response, error); semaphore.signal()
+            }
+            if let id { scope?.attach(id, cancel: { task.cancel() }) }
+            task.resume()
             semaphore.wait()
             result = reply
         }
@@ -444,12 +600,20 @@ enum ScriptHTTP {
 
     /// Starts a request without waiting for it (`httpStart`): `finish` gets the same answer `perform` returns.
     /// Returns how to cancel it.
-    static func start(_ json: String, finish: @escaping @Sendable (String) -> Void) throws -> () -> Void {
+    static func start(_ json: String, scope: ScriptRequestScope? = nil, finish: @escaping @Sendable (String) -> Void) throws -> () -> Void {
         let options = try JSONDecoder().decode([String: JSONValue].self, from: Data(json.utf8))
-        let (request, stopsRedirects) = try prepare(options)
+        let (prepared, stopsRedirects) = try prepare(options)
+        let request: URLRequest = {
+            var value = prepared
+            if let scope { value.timeoutInterval = min(value.timeoutInterval, max(0.05, scope.deadline.timeIntervalSinceNow)) }
+            return value
+        }()
+        let id = try scope?.begin()
         let task = (stopsRedirects ? stopping : following).dataTask(with: request) { data, response, error in
+            defer { if let id { scope?.finish(id) } }
             finish((try? answer((data, response, error), request: request, options: options)) ?? #"{"code":0,"content":"","failed":"Network request failed"}"#)
         }
+        if let id { scope?.attach(id, cancel: { task.cancel() }) }
         task.resume()
         return { task.cancel() }
     }

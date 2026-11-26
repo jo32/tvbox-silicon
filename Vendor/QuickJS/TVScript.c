@@ -4,6 +4,17 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdatomic.h>
+#include <stdbool.h>
+
+struct TVScriptCancellation { atomic_bool cancelled; };
+TVScriptCancellation *tv_script_cancellation_create(void) {
+    TVScriptCancellation *token = calloc(1, sizeof(TVScriptCancellation));
+    if (token) atomic_init(&token->cancelled, false);
+    return token;
+}
+void tv_script_cancellation_cancel(TVScriptCancellation *token) { if (token) atomic_store(&token->cancelled, true); }
+void tv_script_cancellation_free(TVScriptCancellation *token) { free(token); }
 
 struct TVScript {
     JSRuntime *runtime;
@@ -11,6 +22,7 @@ struct TVScript {
     void *opaque;
     TVScriptHost host;
     double deadline;
+    TVScriptCancellation *cancellation;
 };
 
 static double now_seconds(void) {
@@ -21,7 +33,7 @@ static double now_seconds(void) {
 
 static int interrupt(JSRuntime *runtime, void *opaque) {
     TVScript *script = opaque;
-    return script->deadline > 0 && now_seconds() > script->deadline;
+    return (script->cancellation && atomic_load(&script->cancellation->cancelled)) || (script->deadline > 0 && now_seconds() > script->deadline);
 }
 
 static char *copy(const char *text) {
@@ -130,6 +142,10 @@ void tv_script_free(TVScript *script) {
 static JSValue settle(TVScript *script, JSValue value) {
     JSContext *context = script->context;
     for (;;) {
+        if (interrupt(script->runtime, script)) {
+            JS_FreeValue(context, value);
+            return JS_ThrowInternalError(context, "interrupted: the script operation stopped");
+        }
         if (JS_IsException(value)) return value;
         JSPromiseStateEnum state = JS_PromiseState(context, value);
         if (state == JS_PROMISE_FULFILLED || state == JS_PROMISE_REJECTED) {
@@ -155,14 +171,11 @@ static JSValue settle(TVScript *script, JSValue value) {
             JS_FreeValue(context, next);
         }
         JS_FreeValue(context, tick); JS_FreeValue(context, tvbox); JS_FreeValue(context, global);
-        if (JS_IsJobPending(script->runtime)) continue;
+        // A timer may settle this promise directly without queuing another job.
+        if (JS_IsJobPending(script->runtime) || JS_PromiseState(context, value) != JS_PROMISE_PENDING) continue;
         if (wait < 0) {
             JS_FreeValue(context, value);
             return JS_ThrowInternalError(context, "the script is waiting for something that never happens");
-        }
-        if (script->deadline > 0 && now_seconds() + wait / 1000 > script->deadline) {
-            JS_FreeValue(context, value);
-            return JS_ThrowInternalError(context, "interrupted: the script did not finish in time");
         }
         if (wait > 0) usleep((useconds_t)(wait > 50 ? 50000 : wait * 1000));
     }
@@ -172,6 +185,7 @@ char *tv_script_module(TVScript *script, const char *name, const char *source, d
     script->deadline = seconds > 0 ? now_seconds() + seconds : 0;
     JSValue result = settle(script, JS_Eval(script->context, source, strlen(source), name, JS_EVAL_TYPE_MODULE));
     script->deadline = 0;
+    script->cancellation = NULL;
     if (JS_IsException(result)) return exception_text(script->context);
     JS_FreeValue(script->context, result);
     return NULL;
@@ -181,9 +195,12 @@ char *tv_script_call(TVScript *script, const char *expression, double seconds) {
     JSContext *context = script->context;
     script->deadline = seconds > 0 ? now_seconds() + seconds : 0;
     JSValue result = settle(script, JS_Eval(context, expression, strlen(expression), "<call>", JS_EVAL_TYPE_GLOBAL));
-    script->deadline = 0;
     JSValue envelope = JS_NewObject(context);
     if (JS_IsException(result)) {
+        // Only native strings are serialized on this branch. Successful objects may execute
+        // arbitrary toJSON/getter code, so keep their interrupt active through serialization.
+        script->deadline = 0;
+        script->cancellation = NULL;
         char *error = exception_text(context);
         JS_SetPropertyStr(context, envelope, "error", JS_NewString(context, error ? error : "exception"));
         free(error);
@@ -191,6 +208,8 @@ char *tv_script_call(TVScript *script, const char *expression, double seconds) {
         JS_SetPropertyStr(context, envelope, "value", result);
     }
     JSValue json = JS_JSONStringify(context, envelope, JS_UNDEFINED, JS_UNDEFINED);
+    script->deadline = 0;
+    script->cancellation = NULL;
     JS_FreeValue(context, envelope);
     if (JS_IsException(json)) {
         free(exception_text(context));
@@ -200,5 +219,19 @@ char *tv_script_call(TVScript *script, const char *expression, double seconds) {
     char *answer = copy(text);
     JS_FreeCString(context, text);
     JS_FreeValue(context, json);
+    return answer;
+}
+
+char *tv_script_call_cancellable(TVScript *script, const char *expression, double seconds, TVScriptCancellation *cancellation) {
+    script->cancellation = cancellation;
+    char *answer = tv_script_call(script, expression, seconds);
+    script->cancellation = NULL;
+    return answer;
+}
+
+char *tv_script_module_cancellable(TVScript *script, const char *name, const char *source, double seconds, TVScriptCancellation *cancellation) {
+    script->cancellation = cancellation;
+    char *answer = tv_script_module(script, name, source, seconds);
+    script->cancellation = NULL;
     return answer;
 }

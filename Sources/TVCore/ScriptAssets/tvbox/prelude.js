@@ -227,6 +227,7 @@ function envelope(error) {
     return { error: String(error), errorCode: 'script_error' };
 }
 globalThis.__tvbox = {
+    cancelTimers() { timers.clear(); },
     tick() {
         const now = Date.now();
         let next = -1;
